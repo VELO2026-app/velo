@@ -72,6 +72,7 @@ from app.modules.bookings.service import (
 )
 from app.modules.masters.service import get_master_display_name
 from app.modules.payments.purchase import create_purchase_for_booking
+from app.modules.practices.audience_service import assert_viewer_can_access_practice
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.users.models import User
 from app.modules.waitlist.models import (
@@ -355,6 +356,17 @@ async def confirm_waitlist(
             expires_at=entry.expires_at.isoformat(),
         )
         return entry, None
+
+    # P5 (ПРОМТ №594, the carried seam from P1): reject a viewer blocked by
+    # this practice's master, or outside its configured audience. This is
+    # the OTHER booking-creation path besides create_booking -- a waitlist
+    # notification is a HELD spot; without this check here, a user blocked
+    # (or audience-narrowed out) after joining the waitlist but before being
+    # notified could still convert that hold into a real booking. Raises
+    # (not the soft (entry, None) return the expiry/capacity cases below
+    # use) -- this is a rejection, not a business state to route back to
+    # the queue.
+    await assert_viewer_can_access_practice(user.id, practice, session)
 
     # Recheck capacity (overbooking prevention) -- practice already locked
     # above. Between cancel_booking (which freed a spot) and now, a

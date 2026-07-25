@@ -352,7 +352,7 @@ describe('AdminMethodRequestsView', () => {
       btnByText(cardByName('Мастер Совпавший'), 'Одобрить')?.click()
       await flush()
 
-      expect(adminApi.approveMethodChange).toHaveBeenCalledWith('m_matched', undefined)
+      expect(adminApi.approveMethodChange).toHaveBeenCalledWith('m_matched', undefined, undefined)
       expect(modalIsOpen()).toBe(false)
       expect(toastSuccess).toHaveBeenCalledWith('Методы обновлены')
     })
@@ -385,10 +385,16 @@ describe('AdminMethodRequestsView', () => {
       btnByText(document.body, 'Добавить в каталог')?.click()
       await flush()
 
-      expect(adminApi.approveMethodChange).toHaveBeenCalledWith('m_custom', ['Мой уникальный метод'])
+      expect(adminApi.approveMethodChange).toHaveBeenCalledWith(
+        'm_custom', ['Мой уникальный метод'], undefined,
+      )
     })
 
-    it('«Только этому мастеру» approves WITHOUT promote (undefined -- this master only)', async () => {
+    it('«Только этому мастеру» approves scoped to THIS master only (T22-6, ПРОМТ №561)', async () => {
+      // Was "approves WITHOUT promote (undefined)": that used to mean the
+      // label vanished entirely -- no catalog write anywhere (T22-6). Now it
+      // takes the OTHER branch, master_only, so the direction gets a real
+      // (master-scoped) row instead of nothing.
       vi.mocked(adminApi.approveMethodChange).mockResolvedValue({
         user_id: 'm_custom',
         status: 'approved',
@@ -401,7 +407,9 @@ describe('AdminMethodRequestsView', () => {
       btnByText(document.body, 'Только этому мастеру')?.click()
       await flush()
 
-      expect(adminApi.approveMethodChange).toHaveBeenCalledWith('m_custom', undefined)
+      expect(adminApi.approveMethodChange).toHaveBeenCalledWith(
+        'm_custom', undefined, ['Мой уникальный метод'],
+      )
     })
   })
 

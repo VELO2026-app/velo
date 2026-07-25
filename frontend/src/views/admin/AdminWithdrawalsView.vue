@@ -95,7 +95,7 @@ import { IconPending, IconCheck, IconClose } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { getAdminWithdrawals } from '@/api/admin'
 import type { AdminWithdrawalResponse, WithdrawalStatus, PayoutDetails } from '@/api/admin'
-import { ApiResponseError } from '@/api/client'
+import { extractApiError } from '@/composables/useApiError'
 import { formatMoney } from '@/utils/format'
 import { formatRelative } from '@/utils/adminHelpers'
 
@@ -188,8 +188,7 @@ async function loadInitial(): Promise<void> {
   } catch (e) {
     if (myGeneration !== generation) return
     error.value = true
-    const msg = e instanceof ApiResponseError ? e.detail : 'Ошибка загрузки выплат'
-    toast.error(msg)
+    toast.error(extractApiError(e, 'Ошибка загрузки выплат'))
   } finally {
     if (myGeneration === generation) loading.value = false
   }
@@ -202,8 +201,7 @@ async function loadMore(): Promise<void> {
     items.value.push(...res.items)
     hasMore.value = items.value.length < res.total
   } catch (e) {
-    const msg = e instanceof ApiResponseError ? e.detail : 'Ошибка загрузки'
-    toast.error(msg)
+    toast.error(extractApiError(e, 'Ошибка загрузки'))
   } finally {
     loadingMore.value = false
   }

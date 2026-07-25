@@ -56,6 +56,8 @@ import AdminMastersView from '@/views/admin/AdminMastersView.vue'
 import * as adminApi from '@/api/admin'
 import { ApiResponseError } from '@/api/client'
 import type { AdminMasterListItem } from '@/api/admin'
+import { applyTaxonomyCatalog } from '@/utils/methodTaxonomy'
+import type { TaxonomyListResponse } from '@/api/taxonomy'
 
 vi.mock('@/api/admin')
 
@@ -143,6 +145,19 @@ const M_SUSPENDED = master({
   last_name: 'Заблокированная',
   master_status: 'suspended',
   methods: [],
+})
+
+// T21-10 (ПРОМТ №546): a promoted custom direction+style pair, exact shape as
+// the bug report (custom_xxxxxxxx slugs, minted by admin/masters/service.py's
+// _promote_custom_methods) -- resolvable ONLY via the catalog, never the
+// hardcoded DIRECTION_LABEL/STYLE_LABEL maps. Kept OUT of FULL_LIST so it
+// never affects the other list/pagination/ordering tests; used standalone.
+const M_CUSTOM_TAXONOMY = master({
+  id: 'm_custom_taxonomy',
+  first_name: 'Ирина',
+  last_name: 'Кастомная',
+  master_status: 'verified',
+  methods: ['IFS — Ifstest'],
 })
 
 const FULL_LIST = [M_VERIFIED, M_PENDING_1, M_PENDING_2, M_REJECTED, M_SUSPENDED]
@@ -258,6 +273,20 @@ describe('AdminMastersView', () => {
 
       expect(host?.querySelector('.v-loader')).toBeNull()
       expect(cards()).toHaveLength(5)
+    })
+
+    // ПРОМТ №523 (T20-3 recon): pins the exact call args. Before ПРОМТ №289
+    // (commit e579c17) this call sent `limit=200`, which the backend's
+    // `le=100` constraint (admin/users/router.py:94) 422-rejected with
+    // literally "Input should be less than or equal to 100" -- this test
+    // mocks the api module, so it can only catch a regression in the value
+    // .vue:248 passes, NOT a real backend-constraint mismatch (that needs a
+    // real request; see the pytest/deploy battery, not this suite).
+    it('requests exactly the backend page cap (limit=100, offset=0)', async () => {
+      mount()
+      await flush()
+
+      expect(adminApi.getMastersList).toHaveBeenCalledWith(undefined, 100, 0)
     })
 
     it('failure (generic error): shows the error rung and toasts the fallback message', async () => {
@@ -408,6 +437,58 @@ describe('AdminMastersView', () => {
       const card = cardByName('Дарья Заблокированная')!
       expect(card.querySelectorAll('.v-chip')).toHaveLength(0)
       expect(card.querySelector('.mcard__muted')?.textContent).toBe('Направления не указаны')
+    })
+  })
+
+  // ===========================================================================
+  // T21-10 (ПРОМТ №546): the collapsed card's STYLE half used to read
+  // STYLE_LABEL[st] ?? st (hardcoded map only) -- a catalog-only style (e.g.
+  // under a promoted custom direction) fell through to its raw
+  // custom_xxxxxxxx slug. Fixed by switching to resolveStyleLabel, which
+  // also checks the catalog. This test MUST seed the REAL catalog
+  // (applyTaxonomyCatalog, imported un-mocked) -- this file's
+  // primeMethodTaxonomyCatalog mock is a no-op that never populates it, so a
+  // test written only against that mock would pass with the bug present
+  // (confirmed: every OTHER test in this describe block runs with an empty
+  // catalog and only exercises the hardcoded-map/verbatim-fallback paths).
+  describe('taxonomyChips: catalog-only custom direction+style (T21-10)', () => {
+    afterEach(() => {
+      // Module-level cache in methodTaxonomy.ts is a plain ref, not reset by
+      // vi.clearAllMocks() -- clear it back to empty so this seed never
+      // leaks into a sibling test that assumes an unprimed catalog.
+      applyTaxonomyCatalog({ directions: [] } as TaxonomyListResponse)
+    })
+
+    it('resolves a catalog-only style label instead of printing the raw custom_ slug', async () => {
+      applyTaxonomyCatalog({
+        directions: [
+          {
+            id: 'd_custom',
+            value: 'custom_9kzhq6f2',
+            label: 'IFS',
+            source: 'custom',
+            is_active: true,
+            styles: [
+              {
+                id: 's_custom',
+                value: 'custom_orwj5nsl',
+                label: 'Ifstest',
+                is_active: true,
+              },
+            ],
+          },
+        ],
+      } as unknown as TaxonomyListResponse)
+      vi.mocked(adminApi.getMastersList).mockResolvedValue(paginated([M_CUSTOM_TAXONOMY], 1))
+      mount()
+      await flush()
+
+      const card = cardByName('Ирина Кастомная')!
+      const chips = Array.from(card.querySelectorAll('.v-chip'))
+      expect(chips.map((c) => c.textContent?.trim())).toEqual(['IFS', 'Ifstest'])
+      // The bug's exact symptom, pinned as a negative assertion:
+      expect(card.textContent).not.toContain('custom_orwj5nsl')
+      expect(card.textContent).not.toContain('custom_9kzhq6f2')
     })
   })
 

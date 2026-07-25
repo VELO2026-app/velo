@@ -30,11 +30,12 @@
 // pendingDeepLink is cleared after first use to prevent stale redirects.
 // =============================================================================
 
-import type { NavigationGuardWithThis } from 'vue-router'
+import type { NavigationGuardWithThis, RouteLocationNormalized } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useMasterStore } from '@/stores/master'
 import { waitUntilReady, pendingDeepLink } from '@/composables/useAuth'
 import type { ReadyResult } from '@/composables/useAuth'
+import { refreshRoleIfStale } from '@/composables/useRoleFreshness'
 import type { UserRole } from '@/api/types'
 import { MASTER_APPLIED_KEY, masterRejectionSeenKey } from '@/utils/constants'
 
@@ -100,6 +101,84 @@ export const roleRedirect: NavigationGuardWithThis<undefined> = async () => {
     default:
       return { path: '/user/dashboard' }
   }
+}
+
+/**
+ * T21-4/T21-5 (ПРОМТ №546, cost fixed ПРОМТ №550): keeps role/master-
+ * application state fresh across in-app navigation and catches an unseen
+ * rejection verdict on ANY route. roleRedirect's own rejection branch above
+ * only ever fires for a fresh navigation to '/' -- for a session that's
+ * already open and simply navigating around (dashboard -> calendar ->
+ * settings), nothing previously re-checked this at all (ПРОМТ №545 recon,
+ * B1's actual root cause). Called directly from router/index.ts's global
+ * beforeEach rather than registered as its own router.beforeEach, so it
+ * composes with the existing P-1 logic in one guard chain instead of two
+ * independent ones racing on order.
+ *
+ * refreshRoleIfStale() is deliberately NOT awaited (ПРОМТ №550, ПРОМТ №549
+ * regression finding): this guard runs on EVERY navigation, for EVERY role
+ * -- awaiting it made every navigation, app-wide, periodically block on a
+ * real GET /users/me round trip (roughly once per NAV_REFRESH_DEBOUNCE_MS of
+ * active use), even for admin/master navigations that have nothing to do
+ * with the rejection screen this guard exists for. The only thing that
+ * genuinely must resolve WITH this navigation is the redirect check below,
+ * which reads whatever is ALREADY in the store -- the refetch itself only
+ * needs to land before some FUTURE check, not this one. Fired here
+ * (fire-and-forget, matching the same idiom already used by this module's
+ * own visibilitychange resume handler) so it still updates the store in the
+ * background for the next navigation/poll tick to see.
+ *
+ * Scope is deliberately UNCHANGED (still called for every role, not gated to
+ * role==='user'): the obvious-looking fix of only refreshing for a
+ * rejection-eligible role would blind the SYMMETRIC case --
+ * AdminMasterReviewView.vue's «Отозвать мастера» revoke flips a master's
+ * server-side role straight to 'user' (admin/masters/service.py's
+ * revoke_master), and a master who is never refreshed would keep the stale
+ * client-side role until a cold boot, same bug class as T21-4, pointed the
+ * other way.
+ *
+ * COST, stated plainly (not assumed): a rejected user -- or, symmetrically,
+ * a just-revoked master -- can complete ONE MORE navigation on stale data
+ * before the now-in-flight refresh lands and the NEXT check catches it,
+ * where previously a debounce-eligible navigation would sometimes block and
+ * catch it immediately. Bounded by the same debounce window as before (not
+ * unbounded), and backed by two independent safety nets this cost doesn't
+ * touch: the foreground poll (useRoleFreshness.ts, every
+ * FOREGROUND_POLL_INTERVAL_MS while parked on one screen) and the backend's
+ * OWN per-request role check (auth/dependencies.py's get_current_master
+ * reads the CURRENT DB row every call, never the client's cached role) --
+ * so a revoked master's UI may show master chrome for one extra navigation,
+ * but no master-only backend action is actually reachable in that window.
+ * Judged acceptable on that basis, not by default.
+ *
+ * Skips when `to` is already the verdict screen itself -- masterPendingGuard
+ * owns that route's own access rules, this must not redirect a navigation
+ * that's already headed there.
+ *
+ * Deliberately NOT typed as NavigationGuardWithThis (unlike every guard
+ * above) -- it is never registered via router.beforeEach directly, only
+ * called manually from inside the already-registered global beforeEach
+ * (router/index.ts), which passes just `to`. That type's call signature
+ * requires (to, from, next), which a direct 1-arg call does not satisfy.
+ */
+export async function roleFreshnessGuard(
+  to: Pick<RouteLocationNormalized, 'name'>,
+): Promise<true | { path: string }> {
+  void refreshRoleIfStale()
+
+  const auth = useAuthStore()
+
+  if (
+    to.name !== 'master-pending' &&
+    auth.role === 'user' &&
+    auth.masterApplication?.status === 'rejected' &&
+    auth.user?.id &&
+    !localStorage.getItem(masterRejectionSeenKey(auth.user.id))
+  ) {
+    return { path: '/master/pending' }
+  }
+
+  return true
 }
 
 /**

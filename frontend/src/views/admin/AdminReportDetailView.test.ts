@@ -21,20 +21,22 @@
 // `window.history.replaceState()` BEFORE mount (the screen reads it during
 // setup, same technique as AdminWithdrawalDetailView.test.ts's precedent).
 //
-// LADDER CLASSIFICATION: only TWO rungs, not three. A fetch FAILURE and a
-// genuinely NOT-FOUND state render the EXACT SAME UI -- .vue:210's catch
-// block never sets any error/not-found flag, `report.value` simply stays
-// null, so `v-else-if="report"` falls through to the same final `v-else`
-// (.vue:137, "Жалоба не найдена"). The only observable difference on failure
-// is the toast that fires alongside it. Asserted below, not a 3-rung ladder
-// as a generic list screen would have.
+// LADDER CLASSIFICATION (SW8, fixed ПРОМТ №577): FOUR rungs now --
+// loading / error / not-found / content. Previously a fetch FAILURE and a
+// genuinely NOT-FOUND state rendered the EXACT SAME UI (.vue's old catch
+// block never set any error/not-found flag, `report.value` simply stayed
+// null, so `v-else-if="report"` fell through to the same final `v-else`,
+// "Жалоба не найдена", with only a toast -- easy to miss -- as the sole
+// signal something was actually wrong, and no retry). The catch now sets a
+// distinct `error` ref with its own rung + "Повторить", matching sibling
+// admin detail screens (AdminPracticeDetailView, AdminMasterReviewView,
+// AdminWithdrawalDetailView). The old not-found `v-else` fallback is kept
+// (matching those same siblings' own defensive fallback) but is not
+// reachable via any fetch failure anymore -- getReportById either resolves
+// or throws, never resolves to a falsy report.
 //
-// formatDateTime (adminHelpers.ts:99-107) formats via
-// `toLocaleString('ru-RU', {...})` with NO explicit `timeZone` -- it uses the
-// SYSTEM timezone, which differs between machines/CI. No exact string is
-// asserted for it (same portability caution as the Date.now-dependent
-// utilities in prior admin coverage) -- only that the value renders and
-// contains the year.
+// formatDateTime (adminHelpers.ts:99-107, fixed SW10 same round) now pins
+// `timeZone: 'UTC'` explicitly -- deterministic across machines/CI.
 //
 // Cyrillic fixtures/expected strings below were typed via the Write tool,
 // never a shell heredoc.
@@ -201,7 +203,7 @@ describe('AdminReportDetailView', () => {
   })
 
   // ===========================================================================
-  describe('ladder (only TWO rungs -- see banner)', () => {
+  describe('ladder (SW8: error rung distinct from not-found -- see banner)', () => {
     it('loading -> content for a valid id', async () => {
       let resolveGet!: (v: ReportResponse) => void
       vi.mocked(adminApi.getReportById).mockReset().mockImplementation(
@@ -222,32 +224,49 @@ describe('AdminReportDetailView', () => {
       expect(text()).toContain('Практика не состоялась')
     })
 
-    it('failure: toasts the fallback AND lands in the SAME not-found rung as a genuine 404', async () => {
+    it('SW8: a fetch failure lands in a DISTINCT error rung, not "not found" -- with a retry button', async () => {
       vi.mocked(adminApi.getReportById).mockRejectedValue(new Error('ECONNRESET'))
       mount('r_missing')
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Ошибка загрузки жалобы')
-      expect(host?.querySelector('.report-detail__not-found')).not.toBeNull()
-      expect(text()).toContain('Жалоба не найдена')
+      expect(host?.querySelector('.report-detail__not-found')).toBeNull()
+      expect(text()).not.toContain('Жалоба не найдена')
+      expect(text()).toContain('Ошибка загрузки')
+      expect(btnByText('Повторить')).toBeDefined()
     })
 
-    it('failure (ApiResponseError): the toast carries the real backend detail', async () => {
+    it('failure (ApiResponseError): the error rung carries the real backend detail', async () => {
       vi.mocked(adminApi.getReportById).mockRejectedValue(
         new ApiResponseError(500, 'Сервер недоступен', 'server_error'),
       )
       mount('r_missing')
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Сервер недоступен')
+      expect(text()).toContain('Сервер недоступен')
     })
 
-    it('«Назад» calls router.back()', async () => {
+    it('SW8: «Повторить» recovers to content after a failure', async () => {
+      vi.mocked(adminApi.getReportById).mockRejectedValueOnce(new Error('ECONNRESET'))
+      mount('r_missing')
+      await flush()
+
+      expect(btnByText('Повторить')).toBeDefined()
+
+      vi.mocked(adminApi.getReportById).mockResolvedValueOnce(REPORT_PENDING)
+      btnByText('Повторить')?.click()
+      await flush()
+
+      expect(text()).not.toContain('Ошибка загрузки')
+      expect(text()).toContain('Практика не состоялась')
+      expect(adminApi.getReportById).toHaveBeenCalledTimes(2)
+    })
+
+    it('the header back arrow calls router.back() regardless of ladder state', async () => {
       vi.mocked(adminApi.getReportById).mockRejectedValue(new Error('ECONNRESET'))
       mount('r_missing')
       await flush()
 
-      btnByText('Назад')?.click()
+      host?.querySelector<HTMLButtonElement>('.v-back')?.click()
       await flush()
 
       expect(back).toHaveBeenCalledTimes(1)

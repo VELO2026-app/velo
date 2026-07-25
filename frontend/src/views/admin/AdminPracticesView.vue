@@ -72,7 +72,7 @@ import PracticeListCard from '@/components/shared/PracticeListCard.vue'
 import { IconGroup } from '@/components/icons'
 import { useAdminStore } from '@/stores/admin'
 import { getAdminPractices, type AdminPracticeScope } from '@/api/admin'
-import { ApiResponseError } from '@/api/client'
+import { extractApiError } from '@/composables/useApiError'
 import { formatDateShort, formatTime } from '@/utils/format'
 import type { AdminPracticeListItem } from '@/api/types'
 
@@ -125,7 +125,7 @@ async function load(): Promise<void> {
     practices.value = res.items
     total.value = res.total
   } catch (e) {
-    error.value = e instanceof ApiResponseError ? e.detail : 'Ошибка загрузки'
+    error.value = extractApiError(e, 'Ошибка загрузки')
   } finally {
     loading.value = false
   }

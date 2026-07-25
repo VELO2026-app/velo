@@ -11,6 +11,7 @@
 #
 # telegram_id range (56600-56699 -- this module owns this sub-range):
 #   56601        -- verified master (default)
+#   56602, 56603 -- "other master" isolation checks (A4 V8, ПРОМТ №571)
 #   56690        -- admin (ADMIN_TID)
 # =============================================================================
 
@@ -98,8 +99,18 @@ async def _make_verified_master(
     client: AsyncClient,
     db_session: AsyncSession,
     telegram_id: int = 56601,
+    admin_auth: dict | None = None,
 ) -> dict:
-    """Create user, apply, verify via admin. Returns master auth (post-verify)."""
+    """Create user, apply, verify via admin. Returns master auth (post-verify).
+
+    admin_auth (ПРОМТ №583): pass an already-obtained admin session to reuse
+    it instead of logging in fresh here. Each _make_admin_auth() call burns
+    2 of the 5-per-60s auth-rate-limit budget for ADMIN_TID (CRITICAL-4);
+    tests that build several masters and/or also call _make_admin_auth
+    themselves for an approve/reject action can exceed that budget within a
+    single test otherwise. Default (None) preserves the original behavior
+    for every other call site in this file.
+    """
     auth = await login_user(client, telegram_id=telegram_id, first_name="Master")
     await client.post(
         APPLY_URL,
@@ -107,7 +118,8 @@ async def _make_verified_master(
         headers=auth_headers(auth["session_token"]),
     )
 
-    admin_auth = await _make_admin_auth(client, db_session)
+    if admin_auth is None:
+        admin_auth = await _make_admin_auth(client, db_session)
     user_id = auth["user"]["id"]
     verify_resp = await client.post(
         VERIFY_URL.format(user_id=user_id),
@@ -371,6 +383,143 @@ async def test_approve_with_promote_creates_custom_direction(
     assert row.source == "custom"
     assert row.is_active is True
     assert row.value.startswith("custom_")
+
+
+async def test_approve_with_master_only_creates_scoped_direction(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """A4 V8 / ПРОМТ №571: master_only=[label] on the approve_method_change
+    flow inserts a new source='custom' direction scoped to THIS master
+    (master_id = the requesting master's own user id), not a global
+    (master_id=NULL) row -- the same fix T22-6 (ПРОМТ №561) already proved
+    for verify_master (test_admin_masters.py's
+    test_verify_with_master_only_creates_scoped_direction), but never
+    exercised on approve_method_change's OWN wiring
+    (router.py:255 -> service.py's approve_method_change -> the same
+    _scope_custom_methods_to_master helper). A router-level parameter typo
+    or a missed pass-through on this specific endpoint would stay invisible
+    without a test hitting THIS path directly."""
+    label = "Синтетическое направление ПРОМТ-571 (approve master_only)"
+    premise = (
+        await db_session.execute(
+            select(TaxonomyDirection.id).where(TaxonomyDirection.label == label)
+        )
+    ).scalars().all()
+    assert premise == [], f"premise violated: {label!r} already exists"
+
+    # ПРОМТ №583: one admin session, reused for every admin action below --
+    # this test builds TWO masters (via _make_verified_master) plus its own
+    # approve call, which at 2 fresh logins each would otherwise burn 6 of
+    # the 5-per-60s ADMIN_TID auth-rate-limit budget within a single test.
+    admin_auth = await _make_admin_auth(client, db_session)
+    master = await _make_verified_master(client, db_session, admin_auth=admin_auth)
+    master_id = master["user"]["id"]
+    master_headers = auth_headers(master["session_token"])
+    await client.post(
+        SUBMIT_URL,
+        json={"proposed_methods": [label]},
+        headers=master_headers,
+    )
+
+    approve = await client.post(
+        APPROVE_URL.format(user_id=master_id),
+        json={"master_only": [label]},
+        headers=auth_headers(admin_auth["session_token"]),
+    )
+    assert approve.status_code == 200
+    assert approve.json()["status"] == "approved"
+
+    me = await client.get(ME_URL, headers=master_headers)
+    assert me.json()["methods"] == [label]
+
+    row = (
+        await db_session.execute(
+            select(TaxonomyDirection).where(TaxonomyDirection.label == label)
+        )
+    ).scalar_one()
+    assert row.source == "custom"
+    assert row.value.startswith("custom_")
+    assert str(row.master_id) == master_id
+
+    # Same isolation guarantee T22-6 proved for verify_master: a DIFFERENT
+    # master's own catalog fetch must never see this scoped row.
+    other = await _make_verified_master(
+        client, db_session, telegram_id=56602, admin_auth=admin_auth,
+    )
+    other_taxonomy = await client.get(
+        "/api/v1/taxonomy", headers=auth_headers(other["session_token"]),
+    )
+    assert other_taxonomy.status_code == 200
+    other_labels = {d["label"] for d in other_taxonomy.json()["directions"]}
+    assert label not in other_labels
+
+
+async def test_approve_with_master_only_and_promote_together(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """A4 V8 / ПРОМТ №571: a single approve call carrying BOTH promote and
+    master_only -- the admin picking "add to catalog" for one proposed
+    label and "only this master" for another in the same dialog submit --
+    must route each label to its own branch: the promoted label becomes a
+    GLOBAL row (master_id IS NULL, visible to every master), the
+    master_only label becomes a SCOPED row (master_id = this master),
+    and both end up in the master's live methods. Neither existing
+    promote-only nor master_only-only test exercises this combination, so
+    a wire-crossing bug (e.g. both lists routed to the same helper) would
+    stay invisible without it.
+    """
+    global_label = "Синтетическое направление ПРОМТ-571 (approve promote combo)"
+    scoped_label = "Синтетическое направление ПРОМТ-571 (approve scoped combo)"
+
+    # ПРОМТ №583: one admin session, reused for setup and the approve call --
+    # keeps this test comfortably under the 5-per-60s ADMIN_TID auth-rate-
+    # limit budget (see the sibling master_only test above for the full count).
+    admin_auth = await _make_admin_auth(client, db_session)
+    master = await _make_verified_master(client, db_session, admin_auth=admin_auth)
+    master_id = master["user"]["id"]
+    master_headers = auth_headers(master["session_token"])
+    await client.post(
+        SUBMIT_URL,
+        json={"proposed_methods": [global_label, scoped_label]},
+        headers=master_headers,
+    )
+
+    approve = await client.post(
+        APPROVE_URL.format(user_id=master_id),
+        json={"promote": [global_label], "master_only": [scoped_label]},
+        headers=auth_headers(admin_auth["session_token"]),
+    )
+    assert approve.status_code == 200
+    assert approve.json()["status"] == "approved"
+
+    me = await client.get(ME_URL, headers=master_headers)
+    assert me.json()["methods"] == [global_label, scoped_label]
+
+    global_row = (
+        await db_session.execute(
+            select(TaxonomyDirection).where(TaxonomyDirection.label == global_label)
+        )
+    ).scalar_one()
+    assert global_row.master_id is None
+
+    scoped_row = (
+        await db_session.execute(
+            select(TaxonomyDirection).where(TaxonomyDirection.label == scoped_label)
+        )
+    ).scalar_one()
+    assert str(scoped_row.master_id) == master_id
+
+    # The global label reaches every master's catalog; the scoped one only
+    # reaches its owner's.
+    other = await _make_verified_master(client, db_session, telegram_id=56603)
+    other_taxonomy = await client.get(
+        "/api/v1/taxonomy", headers=auth_headers(other["session_token"]),
+    )
+    other_labels = {d["label"] for d in other_taxonomy.json()["directions"]}
+    assert global_label in other_labels
+    assert scoped_label not in other_labels
 
 
 async def test_approve_with_promote_dedups_existing_label(

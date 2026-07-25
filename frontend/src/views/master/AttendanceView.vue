@@ -102,7 +102,7 @@ import { useMasterStore } from '@/stores/master'
 import { getAttendance, getPractice } from '@/api/practices'
 import { formatDateShort, formatTime } from '@/utils/format'
 import { practiceIconFor } from '@/utils/displayHelpers'
-import { ApiResponseError } from '@/api/client'
+import { extractApiError } from '@/composables/useApiError'
 import type { AttendanceResponse, AttendanceItemResponse, PracticeResponse } from '@/api/types'
 
 const route = useRoute()
@@ -164,7 +164,7 @@ async function load(): Promise<void> {
     const [attendanceData] = await Promise.all([getAttendance(practiceId), loadPractice()])
     attendance.value = attendanceData
   } catch (e) {
-    error.value = e instanceof ApiResponseError ? e.detail : 'Ошибка загрузки'
+    error.value = extractApiError(e, 'Ошибка загрузки')
   } finally {
     loading.value = false
   }

@@ -83,6 +83,7 @@ import FormShell from '@/components/shared/FormShell.vue'
 import MoodSlider from '@/components/shared/MoodSlider.vue'
 import { IconCalendar, IconCheck, IconMoodLow, IconMoodMid, IconMoodHigh } from '@/components/icons'
 import { formatDate } from '@/utils/format'
+import { useViewerTimezone } from '@/composables/useViewerTimezone'
 
 // Three slider zones (low -> high), passed to MoodSlider. Icons are .vue
 // components, so this stays in the view (not in the utils layer). Labels
@@ -101,6 +102,7 @@ const diaryStore = useDiaryStore()
 const toast = useToast()
 
 const practiceId = route.params.practiceId as string
+const viewerTz = useViewerTimezone()
 
 const practice = computed(() => practicesStore.selected)
 const practiceLoading = computed(() => practicesStore.selectedLoading)
@@ -149,8 +151,10 @@ const alreadyCheckedIn = computed<boolean>(() =>
   bookingsStore.bookings.some((b) => b.practice_id === practiceId && b.has_checkin),
 )
 
+// SW4: viewer's own profile timezone, matching flow siblings
+// PracticeDetailView.vue and EntryView.vue -- not the practice's own.
 const formattedDate = computed(() =>
-  practice.value ? formatDate(practice.value.scheduled_at, practice.value.timezone) : '',
+  practice.value ? formatDate(practice.value.scheduled_at, viewerTz.value) : '',
 )
 
 async function onSubmit(): Promise<void> {
@@ -174,8 +178,31 @@ async function onSubmit(): Promise<void> {
     // full reload (fetchMyBookings is a no-op while the list is non-empty).
     void bookingsStore.refreshBookings()
   } else {
-    toast.error(result.error)
+    toast.error(closedPracticeMessage(result.code) ?? result.error)
   }
+}
+
+// P5 (ПРОМТ №594): the check-in gate (audience_service.py, via
+// upsert_checkin) rejects a viewer who is blocked, or no longer in the
+// practice's audience (the retroactive case -- a booking made before the
+// master narrowed the audience or blocked this viewer). Maps the backend's
+// machine code to the app's own Russian message; the groups case is
+// composed from the practice response's own audience_group_names (already
+// loaded, no second round-trip) -- never a raw backend string.
+function closedPracticeMessage(code: string | undefined): string | null {
+  if (code === 'blocked_by_master') {
+    return 'Мастер ограничил вам доступ к этой практике'
+  }
+  if (code === 'not_a_student') {
+    return 'Эта практика доступна только ученикам мастера'
+  }
+  if (code === 'not_in_audience') {
+    const names = practice.value?.audience_group_names ?? []
+    return names.length
+      ? `Вы не состоите в группе «${names.join('», «')}»`
+      : 'Вы не состоите в группе, которой открыта эта практика'
+  }
+  return null
 }
 
 function onSkip(): void {

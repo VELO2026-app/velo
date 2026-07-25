@@ -77,7 +77,7 @@ import { createApp, nextTick, type App } from 'vue'
 import EditPracticeView from '@/views/master/EditPracticeView.vue'
 import * as practicesApi from '@/api/practices'
 import { ApiResponseError } from '@/api/client'
-import type { PracticeResponse, UpdatePracticeRequest } from '@/api/types'
+import type { MasterProfileResponse, PracticeResponse, UpdatePracticeRequest } from '@/api/types'
 
 vi.mock('@/api/practices')
 
@@ -107,12 +107,26 @@ vi.mock('@/composables/useToast', () => ({
 // The master store is a DEPENDENCY: the screen reads its practices cache and
 // asks it to invalidate after a mutation. Getters over a mutable object so tests
 // mutate state instead of re-mocking (velo-idiom §5).
-const masterState: { practices: PracticeResponse[] } = { practices: [] }
+//
+// A4 V3 (ПРОМТ №571): profile/profileLoaded added -- directionOptions/
+// styleOptionsForForm now filter to the master's own confirmed methods,
+// same as CreatePracticeView.test.ts's masterState.
+const masterState: {
+  practices: PracticeResponse[]
+  profile: MasterProfileResponse | null
+  profileLoaded: boolean
+} = { practices: [], profile: null, profileLoaded: true }
 const refreshMyPractices = vi.fn()
 vi.mock('@/stores/master', () => ({
   useMasterStore: () => ({
     get practices() {
       return masterState.practices
+    },
+    get profile() {
+      return masterState.profile
+    },
+    get profileLoaded() {
+      return masterState.profileLoaded
     },
     refreshMyPractices,
   }),
@@ -205,6 +219,24 @@ function typeInto(el: HTMLInputElement | null, value: string): void {
   el.dispatchEvent(new Event('input'))
 }
 
+// A4 V3: this screen's VSelects carry no `placeholder` prop (unlike
+// CreatePracticeView's), so there is no first placeholder <option> to key
+// off of (VSelect.vue:23) -- identify by the rendered <label> text instead.
+function selectByLabel(label: string): HTMLSelectElement | undefined {
+  const wrappers = Array.from(host?.querySelectorAll('.v-select') ?? [])
+  const wrapper = wrappers.find(
+    (w) => w.querySelector('.v-select__label')?.textContent?.trim() === label,
+  )
+  return wrapper?.querySelector<HTMLSelectElement>('select.v-select__field') ?? undefined
+}
+
+function choose(el: HTMLSelectElement | undefined, value: string): void {
+  if (!el) throw new Error('select not rendered')
+  el.value = value
+  if (el.value !== value) throw new Error(`option "${value}" is not offered`)
+  el.dispatchEvent(new Event('change'))
+}
+
 // -- Teleported overlays (VModal.vue:20, VBottomSheet.vue:18) live on
 //    document.body, NOT under host (SC-07). Each is scoped to its OWN dialog:
 //    VConfirmDialog and CancelPracticeDialog are BOTH always in the tree (only
@@ -263,6 +295,13 @@ function sentBody(): UpdatePracticeRequest {
 beforeEach(() => {
   vi.setSystemTime(NOW)
   masterState.practices = []
+  // A4 V3: matches the default practice() fixture's direction='yoga'/
+  // style='hatha' -- keeps every pre-existing test (none of which cares
+  // about taxonomy) on a CONFIRMED value, so directionOptions/
+  // styleOptionsForForm never empty out from under them. The tests that
+  // specifically exercise the filter/rejection override this per-test.
+  masterState.profile = { methods: ['Йога', 'Йога — Хатха-йога'] } as MasterProfileResponse
+  masterState.profileLoaded = true
   routeParams.id = 'p1'
   vi.mocked(ensureTaxonomyCatalog).mockReset().mockResolvedValue(null)
   vi.mocked(practicesApi.getPractice).mockReset().mockResolvedValue(practice())
@@ -420,6 +459,74 @@ describe('EditPracticeView', () => {
       const areas = Array.from(host?.querySelectorAll('textarea') ?? [])
       expect(areas.map((a) => (a as HTMLTextAreaElement).value)).toContain('Травмы спины')
       expect(field('input[type="url"]')?.value).toBe('https://zoom.us/j/1')
+    })
+  })
+
+  describe('Направление/Вид: confirmed-methods parity with CreatePracticeView (A4 V3, ПРОМТ №571)', () => {
+    it('offers NOTHING (not the whole catalogue) while the master profile has not loaded yet', async () => {
+      // Mirrors CreatePracticeView's identical test (ПРОМТ №556, OWNER-2).
+      // Before this fix, EditPracticeView's directionOptions was
+      // catalogDirectionOptions(catalog.value) unconditionally -- it never
+      // consulted profileLoaded/confirmedMethods at all, so this state was
+      // indistinguishable from "profile loaded, everything confirmed".
+      masterState.profile = null
+      masterState.profileLoaded = false
+      mountCached(practice())
+      await flush()
+
+      const opts = Array.from(selectByLabel('Направление')?.options ?? []).map((o) =>
+        o.textContent?.trim(),
+      )
+      expect(opts).not.toContain('Йога')
+      expect(opts).not.toContain('Медитация')
+      expect(opts).toHaveLength(0)
+    })
+
+    it('narrows Направление to the master\'s own confirmed methods, not the whole catalogue', async () => {
+      // The real break this closes: before the fix, a master confirmed for
+      // ONLY "Йога" still saw the full catalogue (Медитация, Дыхательные
+      // практики, ...) on the edit screen, unlike CreatePracticeView which
+      // already narrows this (T21-6, ПРОМТ №546).
+      masterState.profile = { methods: ['Йога', 'Йога — Хатха-йога'] } as MasterProfileResponse
+      mountCached(practice())
+      await flush()
+
+      const opts = Array.from(selectByLabel('Направление')?.options ?? []).map((o) =>
+        o.textContent?.trim(),
+      )
+      expect(opts).toContain('Йога')
+      expect(opts).not.toContain('Медитация')
+    })
+
+    it('narrows Вид практики to the confirmed styles for the CURRENT direction', async () => {
+      masterState.profile = { methods: ['Йога', 'Йога — Хатха-йога'] } as MasterProfileResponse
+      mountCached(practice({ direction: 'yoga', style: 'hatha' }))
+      await flush()
+
+      const opts = Array.from(selectByLabel('Вид практики')?.options ?? []).map((o) =>
+        o.textContent?.trim(),
+      )
+      expect(opts).toContain('Хатха-йога')
+      // "Йога — Кундалини" is NOT in this master's confirmed methods.
+      expect(opts).not.toContain('Кундалини-йога')
+    })
+
+    it('picking a different CONFIRMED direction reaches the PATCH body', async () => {
+      // Exercises the filtered select through a REAL interaction, not just
+      // its option list -- confirms the fix actually WIRES into form.direction
+      // and onDirectionChange still resets the now-stale style.
+      masterState.profile = { methods: ['Йога', 'Медитация'] } as MasterProfileResponse
+      mountCached(practice({ direction: 'yoga', style: 'hatha' }))
+      await flush()
+
+      choose(selectByLabel('Направление'), 'meditation')
+      await flush()
+
+      button('Сохранить')?.click()
+      await flush()
+
+      expect(sentBody().direction).toBe('meditation')
+      expect(sentBody().style).toBeNull()
     })
   })
 
@@ -1027,6 +1134,39 @@ describe('EditPracticeView', () => {
       await flush()
 
       expect(toastError).toHaveBeenCalledWith('Ошибка сохранения')
+    })
+
+    it('A4 V3: translates direction_not_confirmed into Russian, not the raw backend detail', async () => {
+      // Mirrors CreatePracticeView's submit() catch (ПРОМТ №556, OWNER-2).
+      // Before this fix, EVERY rejection on this screen -- including this
+      // code -- fell through to the raw e.detail branch, showing the master
+      // the backend's raw English, API-shaped message.
+      vi.mocked(practicesApi.updatePractice).mockRejectedValue(
+        new ApiResponseError(400, "direction 'yoga' is not among your confirmed methods", 'direction_not_confirmed'),
+      )
+      mountCached(practice())
+      await flush()
+
+      button('Сохранить')?.click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Это направление ещё не подтверждено в вашем профиле')
+      expect(toastError).not.toHaveBeenCalledWith(
+        expect.stringContaining('is not among your confirmed methods'),
+      )
+    })
+
+    it('A4 V3: translates style_not_confirmed into Russian, not the raw backend detail', async () => {
+      vi.mocked(practicesApi.updatePractice).mockRejectedValue(
+        new ApiResponseError(400, "style 'kundalini' is not among your confirmed methods", 'style_not_confirmed'),
+      )
+      mountCached(practice())
+      await flush()
+
+      button('Сохранить')?.click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Этот вид практики ещё не подтверждён в вашем профиле')
     })
 
     it('does NOT save twice when the button is hit twice in flight', async () => {

@@ -31,5 +31,10 @@ async def get_active_taxonomy_endpoint(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_reader),
 ) -> TaxonomyListResponse:
-    """Active direction/style catalog (is_active=true only)."""
-    return await list_active_taxonomy(session)
+    """Active direction/style catalog (is_active=true only).
+
+    T22-6 (ПРОМТ №561): scoped to the requesting user -- global rows plus
+    their OWN master-scoped rows, if any. Every other master's private
+    entries are excluded.
+    """
+    return await list_active_taxonomy(session, master_id=user.id)

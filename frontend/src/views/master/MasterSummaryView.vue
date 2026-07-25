@@ -128,20 +128,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, type Component } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import { VCard, VAvatar, VLoader, VEmptyState, VButton } from '@/components/ui'
-import {
-  IconMessages,
-  IconWarning,
-  IconRatingFire,
-  IconRatingGood,
-  IconRatingConfused,
-} from '@/components/icons'
+import { IconMessages, IconWarning } from '@/components/icons'
 import SendMessageModal from '@/components/shared/SendMessageModal.vue'
 import { getStudents, getMasterReviews } from '@/api/masters'
 import { RATING_ICON_COLOR } from '@/utils/displayHelpers'
+import { RATING_ICON } from '@/utils/ratingIcons'
 import type { StudentListItem, MasterReviewItem, FeedbackRating } from '@/api/types'
 
 const router = useRouter()
@@ -155,13 +150,7 @@ const insight = ref('Сводка появится, когда подключи�
 //    cross-practice named feed AnalyticsView's «Требуют внимания» uses, but
 //    WITHOUT the attention=true filter -- this section is a highlight reel
 //    (positive included), not only the negative bucket. Rating icon + color
-//    mirror AnalyticsView's RATING_ICON map (kept local, only 3 entries). --
-const RATING_ICON: Record<FeedbackRating, Component> = {
-  fire: IconRatingFire,
-  good: IconRatingGood,
-  confused: IconRatingConfused,
-}
-
+//    via the shared utils/ratingIcons + RATING_ICON_COLOR. --
 const FEEDBACKS_PAGE = 3
 const keyFeedbacks = ref<MasterReviewItem[]>([])
 const feedbacksLoading = ref(true)

@@ -77,6 +77,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.core.config import settings
 from app.modules.practices.models import (
+    AudienceKind,
     Practice,
     PracticeStatus,
     PracticeType,
@@ -223,6 +224,43 @@ class CreatePracticeRequest(BaseModel):
     # stays a single tagged practice (e.g. the seed's demo series); generation
     # simply no-ops. Persisted into data.recurrence by the service layer.
     recurrence: RecurrenceSpec | None = None
+
+    # -- Audience (Master GROUPS P5, ПРОМТ №594) --
+    # Default 'public' -- matches every practice's behavior before this
+    # feature existed (see the migration's backfill note). group_ids is
+    # required (non-empty) only when audience_kind='groups'; the service
+    # verifies each id is one of THIS master's own CUSTOM groups (rejects
+    # another master's group / a system slug with a 400).
+    audience_kind: AudienceKind = AudienceKind.PUBLIC
+    group_ids: list[UUID] = Field(default_factory=list)
+
+    @field_validator("audience_kind")
+    @classmethod
+    def audience_kind_must_be_valid(cls, v: str) -> str:
+        """Validate audience_kind against the fixed AudienceKind enum."""
+        allowed = {k.value for k in AudienceKind}
+        if v not in allowed:
+            raise ValueError(
+                f"audience_kind must be one of {sorted(allowed)}, got '{v}'"
+            )
+        return v
+
+    @model_validator(mode="after")
+    def _check_group_ids_match_audience_kind(self) -> "CreatePracticeRequest":
+        """group_ids only makes sense (and is required) when audience_kind
+        ='groups' -- reject a contradiction (group_ids sent with a
+        different kind, or 'groups' with an empty list) at the schema
+        level, same posture as _check_recurrence_requires_series above."""
+        if self.audience_kind == AudienceKind.GROUPS.value:
+            if not self.group_ids:
+                raise ValueError(
+                    "group_ids must be non-empty when audience_kind='groups'"
+                )
+        elif self.group_ids:
+            raise ValueError(
+                "group_ids is only allowed when audience_kind='groups'"
+            )
+        return self
 
     @field_validator("practice_type")
     @classmethod
@@ -375,6 +413,51 @@ class UpdatePracticeRequest(BaseModel):
     style: str | None = Field(
         default=None, max_length=settings.practice_style_max_length,
     )
+
+    # -- Audience (Master GROUPS P5, ПРОМТ №594) --
+    # Both optional (PATCH semantics): omitted = unchanged. group_ids, when
+    # SENT, REPLACES the practice's full target-group set (an empty list
+    # clears it). Cross-field consistency (audience_kind vs group_ids) is
+    # only checked here when BOTH are sent in the SAME request -- when only
+    # one is sent, the service validates it against the practice's current
+    # STORED audience_kind (same "sent value vs stored value" posture as
+    # style's own W-1 note below).
+    audience_kind: AudienceKind | None = None
+    group_ids: list[UUID] | None = None
+
+    @field_validator("audience_kind")
+    @classmethod
+    def audience_kind_must_be_valid(
+        cls, v: str | None,
+    ) -> str | None:
+        """Validate audience_kind against the fixed AudienceKind enum."""
+        if v is None:
+            return v
+        allowed = {k.value for k in AudienceKind}
+        if v not in allowed:
+            raise ValueError(
+                f"audience_kind must be one of {sorted(allowed)}, got '{v}'"
+            )
+        return v
+
+    @model_validator(mode="after")
+    def _check_group_ids_match_audience_kind(self) -> "UpdatePracticeRequest":
+        """Only rejects an outright CONTRADICTION sent in this same request
+        -- audience_kind explicitly changed away from 'groups' while
+        group_ids is also (non-emptily) sent, or explicitly set TO 'groups'
+        with an empty group_ids. See the fields' own docstring for why a
+        one-sided send (only audience_kind, or only group_ids) is left to
+        the service instead."""
+        if self.audience_kind is not None and self.group_ids is not None:
+            if self.audience_kind == AudienceKind.GROUPS.value and not self.group_ids:
+                raise ValueError(
+                    "group_ids must be non-empty when audience_kind='groups'"
+                )
+            if self.audience_kind != AudienceKind.GROUPS.value and self.group_ids:
+                raise ValueError(
+                    "group_ids is only allowed when audience_kind='groups'"
+                )
+        return self
 
     @field_validator("practice_type")
     @classmethod
@@ -565,6 +648,18 @@ class PracticeResponse(BaseModel):
     style: str | None = None
     difficulty: str | None = None
 
+    # -- Audience (Master GROUPS P5, ПРОМТ №594) --
+    # audience_kind: model_validate() auto-populates this from the ORM
+    # column (default 'public', same as every practice before this feature).
+    # audience_group_names: NOT auto-populated (no ORM relationship) -- the
+    # service fills it from practice_audience_group only when audience_kind
+    # ='groups'; empty otherwise. Static per-practice data (which groups
+    # this practice targets), not a per-viewer flag -- the frontend uses it
+    # to compose the "Вы не состоите в группе «...»" check-in error message
+    # without a second round-trip.
+    audience_kind: AudienceKind = AudienceKind.PUBLIC
+    audience_group_names: list[str] = []
+
     # -- Series meta (E3 batch 2; computed by the service for series roots) --
     # Populated only for a `series` practice whose ROOT carries a recurrence
     # spec; None otherwise (a non-series practice, or a series tag without a
@@ -603,6 +698,38 @@ class PracticeResponse(BaseModel):
 
     created_at: datetime
     updated_at: datetime | None
+
+    # T21-1: the practice OWNER's own Zoom host-registrant join_url (role=
+    # 'host' on ZoomRegistrant) -- never a student's. Populated by the
+    # service only on owner-facing responses (create/update/delete/cancel,
+    # the owner's own detail view, the master's own list); every other
+    # caller leaves it at the default None, same posture as checkin_count/
+    # attended/no_show above.
+    zoom_host_join_url: str | None = None
+
+    # A4 V2 (ПРОМТ №572): this practice's ZoomMeeting.status verbatim
+    # ('active' | 'pending_creation' | 'create_failed' | 'deleted'), or None
+    # if no ZoomMeeting row exists at all. UNLIKE zoom_host_join_url above,
+    # this is NOT owner-gated -- the value carries no secret material (same
+    # zero-masking posture as the admin zoom-attendance endpoint's identical
+    # field). Lets the frontend Zoom-link ladder (utils/zoomLink.ts) tell a
+    # meeting that is still being created apart from one that permanently
+    # failed, for BOTH the master and a booked participant -- previously
+    # both rendered the identical "готовится" spinner in both cases.
+    zoom_meeting_status: str | None = None
+
+    # A4 V6 (ПРОМТ №572): True when create_practice returned an EXISTING
+    # practice instead of creating a new one -- either the window-scoped
+    # duplicate-submit check (_find_recent_duplicate_practice, ПРОМТ №559)
+    # or the TOCTOU race-lost path (uq_practice_master_title_scheduled_
+    # recurrence, A4 V7). Before this field existed, both paths returned a
+    # bare PracticeResponse indistinguishable from a freshly created one --
+    # the master had no signal that their second submission (a timeout
+    # retry, or the losing side of a genuine concurrent double-tap) did NOT
+    # create anything new. Only ever True on the create endpoint's
+    # response; every other builder call site (update/delete/cancel/list/
+    # detail) leaves the schema default.
+    deduplicated: bool = False
 
     # zoom_link (M-3 access gate) is handled at the response-building layer,
     # NOT with a model_validator: FastAPI re-validates the returned model
@@ -677,6 +804,15 @@ class PracticeSummary(BaseModel):
     # builder set.
     zoom_link: str | None = None
 
+    # A4 V2 (ПРОМТ №572): same field, same NOT-owner-gated posture as
+    # PracticeResponse.zoom_meeting_status above -- powers the SAME
+    # pending-vs-failed distinction on list-view Zoom buttons (dashboard
+    # nearest card, my-bookings). Set by from_practice() below; no ORM
+    # source on Practice itself (ZoomMeeting is a separate table), so
+    # model_validate() alone cannot populate it -- callers must pass it in,
+    # the same shape as zoom_link_visible.
+    zoom_meeting_status: str | None = None
+
     model_config = {"from_attributes": True}
 
     @classmethod
@@ -686,6 +822,7 @@ class PracticeSummary(BaseModel):
         *,
         master_name: str | None = None,
         zoom_link_visible: bool = False,
+        zoom_meeting_status: str | None = None,
     ) -> "PracticeSummary":
         """Build a summary from a Practice ORM row -- the single construction
         point for all list-view consumers (bookings / waitlist / purchases).
@@ -699,4 +836,14 @@ class PracticeSummary(BaseModel):
         summary = cls.model_validate(practice)
         summary.master_name = master_name
         summary.zoom_link = practice.zoom_link if zoom_link_visible else None
+        summary.zoom_meeting_status = zoom_meeting_status
         return summary
+
+
+class ZoomStartTicketResponse(BaseModel):
+    """POST /api/v1/practices/{id}/zoom/start-ticket (ПРОМТ №556, OWNER-1).
+
+    Deliberately carries a one-time ticket, never a start_url -- see
+    zoom/service.py's ticket-issuance docstring for why."""
+
+    ticket: str

@@ -39,11 +39,12 @@
 //
 // THE RUNNER'S TIMEZONE CANNOT LEAK either, and that is a property of the
 // FIXTURES, not of the config: this screen renders each practice in the
-// practice's OWN zone (`formatDateShort(p.scheduled_at, p.timezone)`, .vue:319-320)
-// and sorts on `localSortKey(a.scheduled_at, a.timezone)` (.vue:312), so every
-// fixture below carries an explicit `timezone` and no formatter is ever left to
-// default to the host. TZ_SORT_A / TZ_SORT_B deliberately carry NON-UTC zones,
-// which is the only way the CR-1 local-order sort is observable at all.
+// practice's OWN zone (`formatDateShort(p.scheduled_at, p.timezone)`, .vue:319-320),
+// so every fixture below carries an explicit `timezone` and no formatter is
+// ever left to default to the host. TZ_SORT_A / TZ_SORT_B deliberately carry
+// NON-UTC zones whose local-wall-clock order disagrees with their absolute
+// order -- the only way to prove ordering is server-owned (T22-3, ПРОМТ №561:
+// the old client-side localSortKey re-sort is retired) rather than re-derived.
 //
 // v-if, not v-show (SC-14): grepped -- this template has no v-show, so a pane
 // that is not on screen is genuinely absent from the DOM and host.textContent
@@ -75,9 +76,9 @@
 //     visual-only». Untrue since E7: loadStats really calls
 //     GET /masters/me/stats?period and watch(period) really refetches
 //     (.vue:258-260,288-292). Asserted as the live behaviour it is.
-//   - .vue:21,78 «Мои ученики (stub — no screen yet)». Untrue: onStudents()
-//     pushes to 'master-students' (.vue:328-330) and that route exists and
-//     resolves MasterStudentsView (router/index.ts:324-329). It navigates.
+//   - «Мои ученики (stub — no screen yet)». Untrue: onGroups() pushes to
+//     'master-groups' (P2, ПРОМТ №591 -- was onStudents/'master-students')
+//     and that route exists and resolves MasterGroupsView. It navigates.
 // Both reported. Neither faked.
 //
 // No order dependence: every test mounts its own app, beforeEach builds a fresh
@@ -91,6 +92,7 @@ import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import MasterDashboardView from '@/views/master/MasterDashboardView.vue'
 import * as mastersApi from '@/api/masters'
 import * as usersApi from '@/api/users'
+import * as practicesApi from '@/api/practices'
 import { useMasterStore } from '@/stores/master'
 import { useAuthStore } from '@/stores/auth'
 import { ApiResponseError } from '@/api/client'
@@ -107,14 +109,26 @@ import type {
 vi.mock('@/api/masters')
 vi.mock('@/api/users')
 
+// ПРОМТ №565: "Zoom", for kind==='personal', now goes through the same
+// ticket flow "Начать" used before the two buttons merged -- only
+// createZoomStartTicket is a network call worth mocking. zoomStartRedirectUrl
+// is left REAL (a pure function over import.meta.env.VITE_API_BASE_URL,
+// stubbed per-test via vi.stubEnv where the exact url matters).
+vi.mock('@/api/practices', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/practices')>()
+  return { ...actual, createZoomStartTicket: vi.fn(), retryZoomMeeting: vi.fn() }
+})
+
 const push = vi.fn()
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push, back: vi.fn() }),
 }))
 
 const toastInfo = vi.fn()
+const toastError = vi.fn()
+const toastSuccess = vi.fn()
 vi.mock('@/composables/useToast', () => ({
-  useToast: () => ({ info: toastInfo, success: vi.fn(), error: vi.fn() }),
+  useToast: () => ({ info: toastInfo, success: toastSuccess, error: toastError }),
 }))
 
 // The Zoom button routes through the platform abstraction (.vue:339-345), not
@@ -329,6 +343,33 @@ function page(items: PracticeResponse[], total = items.length, offset = 0) {
   return { items, total, limit: 20, offset }
 }
 
+// T22-3 (ПРОМТ №561): the server now owns both the filter AND the ordering
+// per bucket -- nearestPractices no longer re-sorts client-side (.vue), so
+// the fake server must actually behave like one. Mirrors
+// listing_service.py's bucket semantics: "upcoming" = draft/scheduled/live,
+// nearest first BY ABSOLUTE INSTANT (not local wall-clock -- that re-sort is
+// retired, see the CR-1 test below); "past" = completed only, most-recent
+// first. fetchMyPractices() fetches BOTH buckets, so every test that mocks
+// getMyPractices needs a bucket-aware response regardless of which bucket
+// the test cares about.
+function mockBucketedPractices(items: PracticeResponse[]): void {
+  vi.mocked(mastersApi.getMyPractices).mockImplementation(
+    async (bucket: 'upcoming' | 'past', limit = 20, offset = 0) => {
+      const filtered = items
+        .filter((p) =>
+          bucket === 'upcoming'
+            ? p.status === 'draft' || p.status === 'scheduled' || p.status === 'live'
+            : p.status === 'completed',
+        )
+        .sort((a, b) => {
+          const diff = new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
+          return bucket === 'upcoming' ? diff : -diff
+        })
+      return page(filtered.slice(offset, offset + limit), filtered.length, offset)
+    },
+  )
+}
+
 // -----------------------------------------------------------------------------
 // Mount
 // -----------------------------------------------------------------------------
@@ -473,9 +514,8 @@ beforeEach(() => {
   setActivePinia(pinia)
 
   vi.mocked(mastersApi.getMyMasterProfile).mockReset().mockResolvedValue(PROFILE)
-  vi.mocked(mastersApi.getMyPractices)
-    .mockReset()
-    .mockResolvedValue(page([P_LATER, P_SOON, P_THIRD]))
+  vi.mocked(mastersApi.getMyPractices).mockReset()
+  mockBucketedPractices([P_LATER, P_SOON, P_THIRD])
   vi.mocked(mastersApi.getMasterStats)
     .mockReset()
     .mockImplementation(async (period) => (period === 'month' ? STATS_MONTH : STATS_WEEK))
@@ -487,10 +527,15 @@ beforeEach(() => {
 
   push.mockReset()
   toastInfo.mockReset()
+  toastError.mockReset()
+  toastSuccess.mockReset()
   platformState.openLink.mockReset()
+  vi.mocked(practicesApi.createZoomStartTicket).mockReset()
+  vi.mocked(practicesApi.retryZoomMeeting).mockReset()
 })
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   app?.unmount()
   host?.remove()
   app = null
@@ -541,7 +586,7 @@ describe('MasterDashboardView', () => {
     })
 
     it('empty: a brand-new master gets the zero state, not an empty list', async () => {
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(page([]))
+      mockBucketedPractices([])
       mount()
       await flush()
 
@@ -584,7 +629,7 @@ describe('MasterDashboardView', () => {
     })
 
     it('content: a series adds its weekday list and its remaining-sessions row', async () => {
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(page([P_SERIES]))
+      mockBucketedPractices([P_SERIES])
       mount()
       await flush()
 
@@ -639,9 +684,7 @@ describe('MasterDashboardView', () => {
   // ===========================================================================
   describe('nearestPractices -- which practices survive the filter', () => {
     it('keeps only scheduled and live, dropping draft / cancelled / completed', async () => {
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
-        page([P_DRAFT, P_CANCELLED, P_COMPLETED, P_SOON]),
-      )
+      mockBucketedPractices([P_DRAFT, P_CANCELLED, P_COMPLETED, P_SOON])
       mount()
       await flush()
 
@@ -649,7 +692,7 @@ describe('MasterDashboardView', () => {
     })
 
     it('keeps a LIVE practice and sorts it ahead of the next scheduled one', async () => {
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(page([P_SOON, P_LIVE]))
+      mockBucketedPractices([P_SOON, P_LIVE])
       mount()
       await flush()
 
@@ -659,27 +702,40 @@ describe('MasterDashboardView', () => {
     it('drops a practice the instant it ends -- boundary is inclusive', async () => {
       // P_JUST_ENDED ends at EXACTLY the frozen instant. practiceHasEnded is
       // `now >= end`, so it is over; P_LIVE ends 45 min later and stays.
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(page([P_JUST_ENDED, P_LIVE]))
+      mockBucketedPractices([P_JUST_ENDED, P_LIVE])
       mount()
       await flush()
 
       expect(titles()).toEqual(['Идёт сейчас'])
     })
 
-    it('sorts by LOCAL wall clock, not by the absolute instant (CR-1)', async () => {
-      // The visible times are 21 July 18:00 (Нью-Йорк) and 22 July 05:00 (Токио);
-      // in UTC the Tokyo one is EARLIER. Order must match what the cards show.
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(page([TZ_SORT_A, TZ_SORT_B]))
+    it('renders the SERVER order verbatim -- no client re-sort (T22-3, ПРОМТ №561)', async () => {
+      // Was CR-1 ("sorts by LOCAL wall clock, not by the absolute instant"):
+      // nearestPractices used to re-derive its own order via localSortKey. That
+      // client-side re-sort is gone by owner decision -- the server now owns
+      // ordering entirely (listing_service.py's bucket ordering), so this
+      // proves the negative: the two practices' absolute (UTC) order and their
+      // local-wall-clock order DISAGREE, and the dashboard renders whatever
+      // order the (correctly UTC-ascending) server response gave it.
+      //   TZ_SORT_A (Токио)     20:00Z -> local wall-clock 22 July 05:00
+      //   TZ_SORT_B (Нью-Йорк)  22:00Z -> local wall-clock 21 July 18:00
+      // By local wall-clock, Нью-Йорк would sort first (21 July before 22 July)
+      // -- the old CR-1 assertion. The server orders ascending by the absolute
+      // instant instead (TZ_SORT_A 20:00Z < TZ_SORT_B 22:00Z), and the
+      // dashboard must preserve exactly that order.
+      mockBucketedPractices([TZ_SORT_A, TZ_SORT_B])
       mount()
       await flush()
 
-      expect(titles()).toEqual(['Нью-Йорк', 'Токио'])
-      expect(subOf(blocks()[0]!)).toBe('Завтра, 18:00 • 1 час')
-      expect(subOf(blocks()[1]!)).toBe('22 июля, 05:00 • 1 час')
+      expect(titles()).toEqual(['Токио', 'Нью-Йорк'])
+      // Proof the premise holds -- the rendered times really are the ones the
+      // local-wall-clock ordering (now retired) would have disagreed on.
+      expect(subOf(blocks()[0]!)).toBe('22 июля, 05:00 • 1 час')
+      expect(subOf(blocks()[1]!)).toBe('Завтра, 18:00 • 1 час')
     })
 
     it('caps the preview at 2, regardless of how many are upcoming', async () => {
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(page([P_THIRD, P_LATER, P_SOON]))
+      mockBucketedPractices([P_THIRD, P_LATER, P_SOON])
       mount()
       await flush()
 
@@ -693,7 +749,7 @@ describe('MasterDashboardView', () => {
       // (.vue:302-303,384-386) rather than a value read once at setup: a master
       // who leaves the dashboard open must not keep seeing a finished practice.
       // P_LIVE ends at 12:45Z.
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(page([P_LIVE, P_LATER]))
+      mockBucketedPractices([P_LIVE, P_LATER])
       mount()
       await flush()
       expect(titles()).toEqual(['Идёт сейчас', 'Вечерняя практика'])
@@ -706,7 +762,7 @@ describe('MasterDashboardView', () => {
     })
 
     it('the heading follows the count: singular for one, plural for two', async () => {
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(page([P_SOON]))
+      mockBucketedPractices([P_SOON])
       mount()
       await flush()
       expect(sectionTitles()).toEqual(['Саммари недели', 'Ближайшая практика'])
@@ -716,7 +772,7 @@ describe('MasterDashboardView', () => {
       pinia = createPinia()
       setActivePinia(pinia)
       useAuthStore().user = user()
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(page([P_SOON, P_LATER]))
+      mockBucketedPractices([P_SOON, P_LATER])
       mount()
       await flush()
 
@@ -746,7 +802,7 @@ describe('MasterDashboardView', () => {
     it('but still offers «Создать практику» -- the CTA tracks UPCOMING, not ever', async () => {
       // .vue:87-88: shown whenever there is no upcoming practice, not only to
       // brand-new masters. The «первую» wording was dropped for exactly this.
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(page([P_COMPLETED]))
+      mockBucketedPractices([P_COMPLETED])
       mount()
       await flush()
 
@@ -755,7 +811,7 @@ describe('MasterDashboardView', () => {
     })
 
     it('a brand-new master gets «Моя статистика» and an inert summary card', async () => {
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(page([]))
+      mockBucketedPractices([])
       mount()
       await flush()
 
@@ -922,7 +978,7 @@ describe('MasterDashboardView', () => {
     })
 
     it('«Создать практику» opens the create form', async () => {
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(page([]))
+      mockBucketedPractices([])
       mount()
       await flush()
 
@@ -932,17 +988,14 @@ describe('MasterDashboardView', () => {
       expect(push).toHaveBeenCalledWith({ name: 'master-practice-new' })
     })
 
-    it('«Мои ученики» NAVIGATES -- the «stub» comment is stale', async () => {
-      // .vue:21,78 call this a stub with no screen. onStudents (.vue:328-330)
-      // pushes 'master-students', and router/index.ts:324-329 resolves it to a
-      // real MasterStudentsView. The code is the behaviour; the comment is wrong.
+    it('«Мои группы» navigates to master-groups (P2, ПРОМТ №591)', async () => {
       mount()
       await flush()
 
       host?.querySelector<HTMLElement>('.v-menu-row')?.click()
       await flush()
 
-      expect(push).toHaveBeenCalledWith({ name: 'master-students' })
+      expect(push).toHaveBeenCalledWith({ name: 'master-groups' })
       expect(toastInfo).not.toHaveBeenCalled()
     })
 
@@ -984,22 +1037,62 @@ describe('MasterDashboardView', () => {
       expect(toastInfo).not.toHaveBeenCalled()
     })
 
-    it('nudges the master instead of opening nothing when there is no link', async () => {
+    it('T21-1: with no link on either rung, the Zoom button is disabled (not just a nudge on click)', async () => {
       mount()
       await flush()
 
-      actionIn(blocks()[1]!, 'Zoom')?.click()
+      // blocks()[1] carries no zoom_link and no host registrant link (T21-1
+      // ПРОМТ №541 supersedes the old "click a live button, get a toast"
+      // behaviour -- the button itself is now disabled, same posture as the
+      // user-facing screens).
+      const zoomBtn = actionIn(blocks()[1]!, 'Zoom')
+      expect(zoomBtn?.disabled).toBe(true)
+      zoomBtn?.click() // a disabled <button> fires no click handler in happy-dom
       await flush()
-
       expect(platformState.openLink).not.toHaveBeenCalled()
-      expect(toastInfo).toHaveBeenCalledWith('Добавьте ссылку на Zoom в настройках практики')
     })
 
-    it('refuses a non-https link rather than handing it to the platform', async () => {
-      // `startsWith('https://')` (.vue:340). A stored `http://` or a
-      // `javascript:` string must never reach openLink -- the guard is the point.
+    it('T21-1/ПРОМТ №565: a personal host registrant link (kind===personal) takes priority over the manual zoom_link, and starts the meeting as host via the ticket flow -- NOT by opening the raw registrant link', async () => {
+      // zoom_host_join_url is a plain Zoom REGISTRANT join_url (see
+      // MasterDashboardView.vue's onZoom comment) -- opening it directly, as
+      // this test used to assert, lands the master on Zoom's "waiting for
+      // the host" screen. kind==='personal' must now go through
+      // createZoomStartTicket + zoomStartRedirectUrl instead.
+      vi.stubEnv('VITE_API_BASE_URL', 'https://velo-backend.test')
       vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
-        page([practice('bad', { title: 'Плохая ссылка', zoom_link: 'http://zoom.us/j/222' })]),
+        page([
+          practice('withHost', {
+            title: 'С хост-ссылкой',
+            zoom_link: 'https://zoom.us/j/manual',
+            zoom_host_join_url: 'https://zoom.us/w/host?tk=xyz',
+          }),
+        ]),
+      )
+      vi.mocked(practicesApi.createZoomStartTicket).mockResolvedValue({ ticket: 'tkt_abc' })
+      mount()
+      await flush()
+
+      actionIn(blocks()[0]!, 'Zoom')?.click()
+      await flush()
+
+      expect(practicesApi.createZoomStartTicket).toHaveBeenCalledWith('withHost')
+      expect(platformState.openLink).not.toHaveBeenCalledWith('https://zoom.us/w/host?tk=xyz')
+      expect(platformState.openLink).toHaveBeenCalledWith(
+        'https://velo-backend.test/api/v1/practices/zoom/start?ticket=tkt_abc',
+      )
+    })
+
+    it('ПРОМТ №565: kind===personal, but no active meeting anymore (zoom_meeting_not_active) -- honest error, no crash', async () => {
+      vi.stubEnv('VITE_API_BASE_URL', 'https://velo-backend.test')
+      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
+        page([practice('withHost', { zoom_host_join_url: 'https://zoom.us/w/host?tk=xyz' })]),
+      )
+      vi.mocked(practicesApi.createZoomStartTicket).mockRejectedValue(
+        new ApiResponseError(
+          400,
+          'No active Zoom meeting for this practice',
+          'zoom_meeting_not_active',
+        ),
       )
       mount()
       await flush()
@@ -1007,8 +1100,182 @@ describe('MasterDashboardView', () => {
       actionIn(blocks()[0]!, 'Zoom')?.click()
       await flush()
 
+      expect(toastError).toHaveBeenCalledWith('Встреча Zoom для этой практики недоступна')
       expect(platformState.openLink).not.toHaveBeenCalled()
-      expect(toastInfo).toHaveBeenCalledWith('Добавьте ссылку на Zoom в настройках практики')
+    })
+
+    it('ПРОМТ №565/№557: kind===personal, VITE_API_BASE_URL not configured -- fails closed, no foreign redirect', async () => {
+      vi.stubEnv('VITE_API_BASE_URL', '')
+      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
+        page([practice('withHost', { zoom_host_join_url: 'https://zoom.us/w/host?tk=xyz' })]),
+      )
+      vi.mocked(practicesApi.createZoomStartTicket).mockResolvedValue({ ticket: 'tkt_abc' })
+      mount()
+      await flush()
+
+      actionIn(blocks()[0]!, 'Zoom')?.click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Функция временно недоступна')
+      expect(platformState.openLink).not.toHaveBeenCalled()
+    })
+
+    it('ПРОМТ №565: the Zoom button is disabled while a start-ticket request is in flight', async () => {
+      vi.stubEnv('VITE_API_BASE_URL', 'https://velo-backend.test')
+      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
+        page([practice('withHost', { zoom_host_join_url: 'https://zoom.us/w/host?tk=xyz' })]),
+      )
+      let resolveTicket!: (v: { ticket: string }) => void
+      vi.mocked(practicesApi.createZoomStartTicket).mockReturnValue(
+        new Promise((resolve) => {
+          resolveTicket = resolve
+        }),
+      )
+      mount()
+      await flush()
+
+      const zoomBtn = actionIn(blocks()[0]!, 'Zoom')
+      zoomBtn?.click()
+      await flush()
+
+      expect(actionIn(blocks()[0]!, 'Zoom')?.disabled).toBe(true)
+
+      resolveTicket({ ticket: 'tkt_abc' })
+      await flush()
+
+      expect(actionIn(blocks()[0]!, 'Zoom')?.disabled).toBe(false)
+    })
+
+    it('T21-1: no host link but a valid manual zoom_link -- button enabled, "not counted" mark shown', async () => {
+      mount()
+      await flush()
+
+      // blocks()[0] is P_SOON: https zoom_link, no host link set.
+      expect(actionIn(blocks()[0]!, 'Zoom')?.disabled).toBe(false)
+      expect(host?.textContent).toContain('посещение не засчитается')
+    })
+
+    // =========================================================================
+    // A4 V2 (ПРОМТ №572): create_failed replaces "Zoom" with "Повторить".
+    // Before this, create_failed and pending_creation both rendered the
+    // identical disabled "Zoom" button -- indistinguishable to the master,
+    // and no way to act on the permanent one.
+    // =========================================================================
+    describe('create_failed: "Повторить" (A4 V2, ПРОМТ №572)', () => {
+      it('shows "Повторить" instead of "Zoom", plus the honest failed badge', async () => {
+        vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
+          page([practice('failed1', { zoom_meeting_status: 'create_failed' })]),
+        )
+        mount()
+        await flush()
+
+        expect(actionIn(blocks()[0]!, 'Zoom')).toBeUndefined()
+        expect(actionIn(blocks()[0]!, 'Повторить')).toBeDefined()
+        expect(host?.textContent).toContain('Не удалось создать встречу Zoom')
+      })
+
+      it('pending_creation (still queued) keeps the disabled "Zoom" button -- no "Повторить"', async () => {
+        // The discriminator: pending_creation must NOT get the retry button.
+        vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
+          page([practice('pending1', { zoom_meeting_status: 'pending_creation' })]),
+        )
+        mount()
+        await flush()
+
+        expect(actionIn(blocks()[0]!, 'Повторить')).toBeUndefined()
+        expect(actionIn(blocks()[0]!, 'Zoom')?.disabled).toBe(true)
+      })
+
+      it('a successful retry toasts success and refreshes the list', async () => {
+        vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
+          page([
+            practice('failed1', { title: 'Провалившаяся', zoom_meeting_status: 'create_failed' }),
+          ]),
+        )
+        vi.mocked(practicesApi.retryZoomMeeting).mockResolvedValue(
+          practice('failed1', { title: 'Провалившаяся', zoom_meeting_status: 'active' }),
+        )
+        mount()
+        await flush()
+        const callsBefore = vi.mocked(mastersApi.getMyPractices).mock.calls.length
+
+        actionIn(blocks()[0]!, 'Повторить')?.click()
+        await flush()
+
+        expect(practicesApi.retryZoomMeeting).toHaveBeenCalledWith('failed1')
+        expect(toastSuccess).toHaveBeenCalledWith('Встреча Zoom создана')
+        expect(toastError).not.toHaveBeenCalled()
+        // refreshMyPractices() re-fetches both buckets -- proof the list
+        // was actually invalidated, not just the toast fired.
+        expect(vi.mocked(mastersApi.getMyPractices).mock.calls.length).toBeGreaterThan(callsBefore)
+      })
+
+      it('a retry that fails AGAIN reports it honestly -- the endpoint resolves 200 either way', async () => {
+        // attempt_zoom_meeting_create never raises (backend "never blocks"
+        // contract) -- the endpoint itself returns 200 whether Zoom's own
+        // attempt succeeded or not, so success/failure must be read off the
+        // RETURNED zoom_meeting_status, not off a thrown error.
+        vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
+          page([practice('failed1', { zoom_meeting_status: 'create_failed' })]),
+        )
+        vi.mocked(practicesApi.retryZoomMeeting).mockResolvedValue(
+          practice('failed1', { zoom_meeting_status: 'create_failed' }),
+        )
+        mount()
+        await flush()
+
+        actionIn(blocks()[0]!, 'Повторить')?.click()
+        await flush()
+
+        expect(toastError).toHaveBeenCalledWith(
+          'Всё ещё не удалось создать встречу. Попробуйте позже',
+        )
+        expect(toastSuccess).not.toHaveBeenCalled()
+      })
+
+      it('the button is disabled while a retry is in flight, and does not double-submit', async () => {
+        vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
+          page([practice('failed1', { zoom_meeting_status: 'create_failed' })]),
+        )
+        let resolveRetry!: (v: PracticeResponse) => void
+        vi.mocked(practicesApi.retryZoomMeeting).mockReturnValue(
+          new Promise((resolve) => {
+            resolveRetry = resolve
+          }),
+        )
+        mount()
+        await flush()
+
+        const btn = actionIn(blocks()[0]!, 'Повторить')
+        btn?.click()
+        await nextTick()
+        expect(actionIn(blocks()[0]!, 'Повторить')?.disabled).toBe(true)
+        btn?.click()
+        await nextTick()
+
+        expect(practicesApi.retryZoomMeeting).toHaveBeenCalledTimes(1)
+
+        resolveRetry(practice('failed1', { zoom_meeting_status: 'active' }))
+        await flush()
+      })
+    })
+
+    it('refuses a non-https link on EITHER rung rather than handing it to the platform', async () => {
+      // resolveZoomLink's https guard (utils/zoomLink.ts). A stored `http://`
+      // or a `javascript:` string must never reach openLink on either rung --
+      // the guard is the point.
+      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
+        page([practice('bad', { title: 'Плохая ссылка', zoom_link: 'http://zoom.us/j/222' })]),
+      )
+      mount()
+      await flush()
+
+      const zoomBtn = actionIn(blocks()[0]!, 'Zoom')
+      expect(zoomBtn?.disabled).toBe(true)
+      zoomBtn?.click()
+      await flush()
+
+      expect(platformState.openLink).not.toHaveBeenCalled()
     })
 
     it('tapping Zoom does not also open the practice', async () => {

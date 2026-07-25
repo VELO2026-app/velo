@@ -43,7 +43,7 @@ import { VHeader } from '@/components/layout'
 import { VSwitch } from '@/components/ui'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
-import { ApiResponseError } from '@/api/client'
+import { extractApiError } from '@/composables/useApiError'
 
 const router = useRouter()
 const toast = useToast()
@@ -89,11 +89,7 @@ async function onToggle(key: NotificationKey, value: boolean): Promise<void> {
   } catch (error) {
     // Revert on failure so the UI matches the server.
     settings[key] = previous
-    const message =
-      error instanceof ApiResponseError
-        ? error.detail || 'Не удалось сохранить настройку'
-        : 'Не удалось сохранить настройку'
-    toast.error(message)
+    toast.error(extractApiError(error, 'Не удалось сохранить настройку'))
   } finally {
     savingKey.value = ''
   }

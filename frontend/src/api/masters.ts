@@ -108,9 +108,18 @@ export function getPublicMaster(userId: string): Promise<MasterPublicResponse> {
 /**
  * Fetch paginated list of practices owned by the current master.
  * Only callable by users with role='master'.
+ *
+ * bucket (T22-3/T22-5, ПРОМТ №561): "upcoming" (draft/scheduled/live, nearest
+ * first) or "past" (completed, most-recent first) -- the server now owns both
+ * the filter and the ordering per tab, replacing the old single futures-first
+ * cursor the client used to split and re-sort itself.
  */
-export function getMyPractices(limit = 20, offset = 0): Promise<PaginatedPracticesResponse> {
-  const query = buildQuery({ limit, offset })
+export function getMyPractices(
+  bucket: 'upcoming' | 'past',
+  limit = 20,
+  offset = 0,
+): Promise<PaginatedPracticesResponse> {
+  const query = buildQuery({ bucket, limit, offset })
   return api.get<PaginatedPracticesResponse>(`/api/v1/masters/me/practices${query}`)
 }
 

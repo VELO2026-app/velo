@@ -108,7 +108,8 @@ async def verify_master_endpoint(
     empty writes nothing, identical to before this field existed.
     """
     profile = await verify_master(
-        user_id, admin, body.notes, session, promote=body.promote
+        user_id, admin, body.notes, session,
+        promote=body.promote, master_only=body.master_only,
     )
 
     await session.flush()
@@ -249,7 +250,10 @@ async def approve_method_change_endpoint(
     body.promote (R5 stage 4): optional custom method labels to add to the
     taxonomy catalog -- absent/empty is identical to pre-stage-4 behavior.
     """
-    await approve_method_change(user_id, admin, session, promote=body.promote)
+    await approve_method_change(
+        user_id, admin, session,
+        promote=body.promote, master_only=body.master_only,
+    )
 
     await session.flush()
 

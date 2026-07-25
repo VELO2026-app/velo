@@ -110,6 +110,14 @@ class BookingWithPracticeResponse(BaseModel):
     has_feedback: bool
     has_checkin: bool
     practice: PracticeSummary
+    # T21-1: this booking's OWN Zoom registrant link (the personal ?tk= URL),
+    # never anyone else's -- these two endpoints (GET /me, GET /me/upcoming)
+    # are already hard-scoped to Booking.user_id == the requesting user, so
+    # "this booking" and "this user's own booking" are the same thing here.
+    # None whenever the M-3 gate would also null zoom_link (not confirmed/
+    # attended yet), or when create_registrant_for_booking hasn't succeeded
+    # yet (best-effort, create_failed -- bookings/service.py:311-312).
+    zoom_registrant_join_url: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -192,6 +200,10 @@ class AttendanceResponse(BaseModel):
     no_show: int
     pending: int
     items: list[AttendanceItemResponse]
+    # E21 step G: size of the Zoom unmatched bucket, count only (no PII --
+    # the master is not an admin; see admin/practices' zoom-attendance
+    # endpoint for the raw rows). 0 when there's no Zoom meeting at all.
+    unmatched_count: int = 0
 
 
 # -- Screen A: profile stats --

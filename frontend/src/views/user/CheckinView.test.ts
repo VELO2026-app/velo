@@ -26,10 +26,12 @@
 // One pinia instance goes to both setActivePinia and app.use (SC-03).
 //
 // PINNED INSTANT: 2026-07-20T12:00:00.000Z. Every fixture is a literal against
-// it (SC-04) -- no `Date.now() + 86400000`. Timezone is pinned too, but NOT via
-// a mocked composable: this screen passes `practice.timezone` straight into
-// formatDate (.vue:133), so the fixture's own `timezone: 'UTC'` IS the pin and
-// the runner's local zone cannot drift the rendered date.
+// it (SC-04) -- no `Date.now() + 86400000`. Timezone is pinned via
+// useAuthStore().user.timezone (SW4 fix, ПРОМТ №577): this screen renders the
+// scheduled date via formatDate(scheduled_at, viewerTz.value), matching its
+// flow siblings PracticeDetailView/EntryView -- so the viewer's profile
+// timezone, not the practice's own, is what the runner's local zone could
+// otherwise drift.
 //
 // FAKE TIMERS are on for the whole file (not just setSystemTime). They are
 // load-bearing for exactly one test -- "the tick race" below -- which fires the
@@ -110,7 +112,8 @@ import { ApiResponseError } from '@/api/client'
 import { upsertCheckin, listDiaryFeed } from '@/api/diary'
 import { getMyBookings, skipCheckin } from '@/api/bookings'
 import { getPractice } from '@/api/practices'
-import type { BookingWithPracticeResponse, PracticeResponse } from '@/api/types'
+import { useAuthStore } from '@/stores/auth'
+import type { BookingWithPracticeResponse, PracticeResponse, UserResponse } from '@/api/types'
 
 // -- seams: the api wrappers the three real stores import (velo-idiom §4).
 // importActual + spread keeps every other export real; only the network
@@ -177,7 +180,40 @@ function practice(overrides: Partial<PracticeResponse> = {}): PracticeResponse {
   } as PracticeResponse
 }
 
-function booking(overrides: Partial<BookingWithPracticeResponse> = {}): BookingWithPracticeResponse {
+// SW4: the viewer's profile timezone, distinct from every fixture's own
+// practice.timezone (default 'UTC') -- proves formattedDate reads the
+// VIEWER's tz, not the practice's own.
+const VIEWER_TZ = 'Europe/Moscow' // UTC+3
+
+function user(overrides: Partial<UserResponse> = {}): UserResponse {
+  return {
+    id: 'u1',
+    telegram_id: 1,
+    role: 'user',
+    first_name: 'Аня',
+    last_name: null,
+    avatar_url: null,
+    timezone: VIEWER_TZ,
+    language: 'ru',
+    is_active: true,
+    balance_cents: 0,
+    created_at: '2026-01-01T00:00:00Z',
+    last_login_at: null,
+    onboarding_completed: true,
+    master_onboarding_completed: false,
+    phone: null,
+    bio: null,
+    email: null,
+    notifications: {} as UserResponse['notifications'],
+    master_notifications: null,
+    role_switch: null,
+    ...overrides,
+  }
+}
+
+function booking(
+  overrides: Partial<BookingWithPracticeResponse> = {},
+): BookingWithPracticeResponse {
   return {
     id: 'b1',
     practice_id: 'p1',
@@ -269,6 +305,7 @@ beforeEach(() => {
   vi.setSystemTime(NOW)
   pinia = createPinia()
   setActivePinia(pinia)
+  useAuthStore().user = user()
   routeParams.practiceId = 'p1'
 
   getPracticeMock.mockReset().mockResolvedValue(practice())
@@ -360,16 +397,25 @@ describe('CheckinView', () => {
       expect(text()).toContain('Мастер Лена')
     })
 
-    it('content: the date is rendered in the PRACTICE\'s timezone, not the runner\'s', async () => {
-      // formatDate(scheduled_at, practice.timezone) -- .vue:133. Split into two
-      // toContain so an ICU separator change between Node builds cannot break a
-      // test that is really about the timezone and the instant.
-      getPracticeMock.mockResolvedValue(practice({ scheduled_at: '2026-07-20T13:00:00.000Z' }))
+    it("SW4: the date is rendered in the VIEWER's timezone, not the practice's own", async () => {
+      // formatDate(scheduled_at, viewerTz.value) -- .vue:153-154 (ПРОМТ №577
+      // fix), matching PracticeDetailView/EntryView, this flow's siblings. The
+      // fixture's practice.timezone (America/New_York, UTC-4 in July) is
+      // deliberately DIFFERENT from the viewer's profile tz (Europe/Moscow,
+      // UTC+3, set in beforeEach) so the two branches render different
+      // HH:MM -- 13:00 UTC is "09:00" in the practice's own tz (the OLD buggy
+      // value) but "16:00" in the viewer's (the correct one). Split into two
+      // toContain so an ICU separator change between Node builds cannot break
+      // a test that is really about the timezone and the instant.
+      getPracticeMock.mockResolvedValue(
+        practice({ scheduled_at: '2026-07-20T13:00:00.000Z', timezone: 'America/New_York' }),
+      )
       mount()
       await flush()
 
       expect(text()).toContain('20 июля')
-      expect(text()).toContain('13:00')
+      expect(text()).toContain('16:00')
+      expect(text()).not.toContain('09:00')
     })
 
     it('falls back to «Мастером» when the practice carries no master name', async () => {
@@ -647,7 +693,7 @@ describe('CheckinView', () => {
       await flush()
     })
 
-    it('the VIEW\'s own guard is what blocks the second tap -- not the store\'s', async () => {
+    it("the VIEW's own guard is what blocks the second tap -- not the store's", async () => {
       // `upsertCheckin` called once proves only that ONE of the two guards held:
       // the view's (.vue:137) or the store's (diary.ts:70). $onAction counts the
       // calls the VIEW makes, so this isolates .vue:137. Delete that line and
@@ -839,7 +885,7 @@ describe('CheckinView', () => {
       expect(getMyBookingsMock).toHaveBeenCalledTimes(1)
     })
 
-    it('a non-API failure falls back to the store\'s own message', async () => {
+    it("a non-API failure falls back to the store's own message", async () => {
       upsertCheckinMock.mockRejectedValue(new TypeError('boom'))
       mount()
       await flush()
@@ -849,6 +895,71 @@ describe('CheckinView', () => {
 
       expect(toastError).toHaveBeenCalledWith('Не удалось отправить check-in')
       expect(successTitle()).toBe('')
+    })
+
+    // P5 (ПРОМТ №594): the audience/block gate on POST .../checkin
+    // (upsert_checkin, audience_service.py) -- covers the retroactive case
+    // (a booking made before the master narrowed the audience or blocked
+    // this viewer). The store surfaces the machine `code`; the view maps it
+    // to the app's own Russian message, composing the groups case from the
+    // ALREADY-LOADED practice's own audience_group_names (no raw backend
+    // string, no second round-trip).
+    describe('the closed-practice gate (P5, ПРОМТ №594)', () => {
+      it('blocked_by_master shows the exact copy', async () => {
+        upsertCheckinMock.mockRejectedValue(
+          new ApiResponseError(403, 'You are blocked', 'blocked_by_master'),
+        )
+        mount()
+        await flush()
+
+        submitBtn()?.click()
+        await flush()
+
+        expect(toastError).toHaveBeenCalledWith('Мастер ограничил вам доступ к этой практике')
+      })
+
+      it('not_a_student shows the exact copy', async () => {
+        upsertCheckinMock.mockRejectedValue(
+          new ApiResponseError(403, 'Students only', 'not_a_student'),
+        )
+        mount()
+        await flush()
+
+        submitBtn()?.click()
+        await flush()
+
+        expect(toastError).toHaveBeenCalledWith('Эта практика доступна только ученикам мастера')
+      })
+
+      it('not_in_audience composes the group name(s) from the loaded practice', async () => {
+        getPracticeMock.mockResolvedValue(practice({ audience_group_names: ['VIP', 'Утро'] }))
+        upsertCheckinMock.mockRejectedValue(
+          new ApiResponseError(403, 'Not a group member', 'not_in_audience'),
+        )
+        mount()
+        await flush()
+
+        submitBtn()?.click()
+        await flush()
+
+        expect(toastError).toHaveBeenCalledWith('Вы не состоите в группе «VIP», «Утро»')
+      })
+
+      it('not_in_audience with no group names on the practice falls back to a generic phrasing', async () => {
+        getPracticeMock.mockResolvedValue(practice({ audience_group_names: [] }))
+        upsertCheckinMock.mockRejectedValue(
+          new ApiResponseError(403, 'Not a group member', 'not_in_audience'),
+        )
+        mount()
+        await flush()
+
+        submitBtn()?.click()
+        await flush()
+
+        expect(toastError).toHaveBeenCalledWith(
+          'Вы не состоите в группе, которой открыта эта практика',
+        )
+      })
     })
 
     it('the form is submittable again after a failure -- the ref is released', async () => {
@@ -880,9 +991,7 @@ describe('CheckinView', () => {
       // booking.id -- two different ids one line apart. Sending the practiceId
       // here would 404 (or worse, hit another resource) while the optimistic
       // dismiss still made it look like it worked.
-      getMyBookingsMock.mockResolvedValue(
-        bookingsPage([booking({ id: 'b77', practice_id: 'p1' })]),
-      )
+      getMyBookingsMock.mockResolvedValue(bookingsPage([booking({ id: 'b77', practice_id: 'p1' })]))
       mount()
       await flush()
 

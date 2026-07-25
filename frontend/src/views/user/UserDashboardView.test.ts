@@ -547,6 +547,87 @@ describe('UserDashboardView', () => {
       expect(platformState.openLink).not.toHaveBeenCalled()
     })
 
+    // -- D3 link ladder (T21-1, ПРОМТ №541) --
+    it('Zoom: a personal registrant link takes priority over the manual zoom_link', async () => {
+      const withPersonal = booking(
+        'up_personal',
+        { status: 'confirmed', zoom_registrant_join_url: 'https://zoom.us/w/personal?tk=abc' },
+        { scheduled_at: '2026-07-20T11:50:00Z', duration_minutes: 60, zoom_link: 'https://zoom.us/j/live1' },
+      )
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([withPersonal])
+      mount()
+      await flush()
+
+      actionIn(nearestBlocks()[0]!, 'Zoom')?.click()
+      await flush()
+
+      expect(platformState.openLink).toHaveBeenCalledWith('https://zoom.us/w/personal?tk=abc')
+    })
+
+    it('Zoom: no personal link but a valid manual zoom_link -- button enabled, "not counted" mark shown', async () => {
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([UP_LIVE]) // no zoom_registrant_join_url
+      mount()
+      await flush()
+
+      expect(actionIn(nearestBlocks()[0]!, 'Zoom')?.disabled).toBe(false)
+      expect(host?.textContent).toContain('посещение не засчитается')
+    })
+
+    it('Zoom: a personal link present -- the "not counted" mark does not show', async () => {
+      const withPersonal = booking(
+        'up_personal2',
+        { status: 'confirmed', zoom_registrant_join_url: 'https://zoom.us/w/personal?tk=abc' },
+        { scheduled_at: '2026-07-20T11:50:00Z', duration_minutes: 60, zoom_link: 'https://zoom.us/j/live1' },
+      )
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([withPersonal])
+      mount()
+      await flush()
+
+      expect(host?.textContent).not.toContain('посещение не засчитается')
+    })
+
+    // A4 V2 (ПРОМТ №572): before this, create_failed and pending_creation
+    // both rendered as the SAME disabled Zoom button with no explanation --
+    // a participant could not tell "still preparing" from "will never
+    // happen unless the master acts".
+    it('Zoom: create_failed -- disabled AND the honest failure badge shows, distinct from a plain unlinked practice', async () => {
+      const failedMeeting = booking(
+        'up_failed',
+        { status: 'confirmed', zoom_registrant_join_url: null },
+        {
+          scheduled_at: '2026-07-20T11:50:00Z',
+          duration_minutes: 60,
+          zoom_link: null,
+          zoom_meeting_status: 'create_failed',
+        },
+      )
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([failedMeeting])
+      mount()
+      await flush()
+
+      expect(actionIn(nearestBlocks()[0]!, 'Zoom')?.disabled).toBe(true)
+      expect(host?.textContent).toContain('Не удалось создать встречу')
+    })
+
+    it('Zoom: pending_creation stays a plain disabled button -- no failure badge', async () => {
+      const pending = booking(
+        'up_pending',
+        { status: 'confirmed', zoom_registrant_join_url: null },
+        {
+          scheduled_at: '2026-07-20T11:50:00Z',
+          duration_minutes: 60,
+          zoom_link: null,
+          zoom_meeting_status: 'pending_creation',
+        },
+      )
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([pending])
+      mount()
+      await flush()
+
+      expect(actionIn(nearestBlocks()[0]!, 'Zoom')?.disabled).toBe(true)
+      expect(host?.textContent).not.toContain('Не удалось создать встречу')
+    })
+
     it('Check-in: disabled when the booking already has one, enabled otherwise', async () => {
       vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([UP_SOON, UP_LIVE])
       mount()

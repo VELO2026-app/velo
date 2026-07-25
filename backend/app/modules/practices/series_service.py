@@ -201,8 +201,56 @@ async def generate_series_occurrences(
             "after the first occurrence; choose a later date"
         )
 
+    # E21 (ПРОМТ №520, closing the series hole): children are created
+    # already SCHEDULED (_build_child_occurrence sets status=SCHEDULED at
+    # construction) and never pass through update_practice()'s
+    # draft->scheduled branch, which is where meeting creation is wired for
+    # a non-series practice -- so without this, no recurring practice ever
+    # gets a Zoom meeting. ПРОМТ №527: child.id (app-side uuid4) is only
+    # populated at flush time, not at `Practice(...)` construction, so each
+    # child is flushed before its ZoomMeeting row is built (that row's FK
+    # needs a real id).
+    #
+    # ПРОМТ №559 (OWNER-3): each child's Zoom meeting used to be created
+    # HERE, synchronously, one real Zoom API call per child, all inside this
+    # one request/transaction. MEASURED on prod: the parent and every child
+    # PRACTICE row land within 194ms of each other (occurrence layout is
+    # instant) -- the only candidate for the actual delay is exactly this
+    # per-child Zoom call, sequential, up to 39 of them. The frontend's own
+    # 15s AbortController gives up long before that finishes; the backend
+    # keeps running and commits successfully regardless, so the master saw
+    # a timeout, believed publish had failed, and pressed the button again
+    # -- three complete duplicate "Сказки" series in four minutes on prod
+    # today, not a cosmetic double-click.
+    #
+    # DECIDED DESIGN (owner): the ROOT still gets its meeting synchronously
+    # (update_practice's existing publish branch, immediately after this
+    # function returns, UNCHANGED -- the root is always the nearest
+    # occurrence in time, since children are only ever LATER dates, so "the
+    # link is there right now" is preserved exactly where a human actually
+    # needs it first). Every CHILD's meeting is deferred: only a ZoomMeeting
+    # row is created here, status=PENDING_CREATION (never ATTEMPTED, not a
+    # failure -- retry_poller.py claims this status the same as
+    # create_failed and makes the real Zoom call in the background, same
+    # per-row isolation and 429 handling as any other retried meeting). A
+    # student CAN still book a pending child before its meeting exists --
+    # zoom/service.py's create_registrant_for_booking already anticipated
+    # exactly this ("series-child edge case" in its own docstring) and
+    # queues the registrant as pending until the meeting goes active.
+    from app.modules.zoom.models import ZoomMeeting, ZoomMeetingStatus
+
+    children: list[Practice] = []
     for start_utc in starts:
-        session.add(_build_child_occurrence(root, start_utc))
+        child = _build_child_occurrence(root, start_utc)
+        session.add(child)
+        await session.flush()
+        children.append(child)
+        session.add(
+            ZoomMeeting(
+                practice_id=child.id,
+                status=ZoomMeetingStatus.PENDING_CREATION.value,
+            )
+        )
 
     logger.info(
         "series_occurrences_generated",

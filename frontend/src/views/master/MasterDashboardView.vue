@@ -8,7 +8,8 @@
     - Greeting + notification bell (badge only when unread > 0).
     - Stats: label + period toggle (Неделя / Месяц) + 3 VStatCard with optional
       delta trend. Period toggle = the user-dashboard pattern (NOT VSegment).
-    - "Мои ученики" row (VMenuRow).
+    - "Мои группы" row (VMenuRow) -> master-groups (P2, ПРОМТ №591; was
+      "Мои ученики" -> master-students).
     - Zero state only: "Создать первую практику" (VButton) -> create.
     - "Саммари недели" (VCard placeholder).
     - "Ближайшие практики": up to 2 upcoming practice cards, each with
@@ -17,9 +18,9 @@
   STUBS (no backend yet -> roadmap for Zod; non-working taps show a toast):
     - Stats: only the practices total is real; participants/income + all deltas
       and the Неделя/Месяц period scoping have no API -> "—", toggle visual-only.
-    - Notification bell (no feed), "Мои ученики" (no screen), AI summary
-      "Подробнее" (no master-AI), practice checkin-count + recurrence meta
-      (no fields) -> rendered only when the data exists (v-if), absent for now.
+    - Notification bell (no feed), AI summary "Подробнее" (no master-AI),
+      practice checkin-count + recurrence meta (no fields) -> rendered only
+      when the data exists (v-if), absent for now.
 -->
 
 <template>
@@ -75,9 +76,9 @@
       </div>
 
       <!-- ================================================================
-           МОИ УЧЕНИКИ (stub — no screen yet)
+           МОИ ГРУППЫ (P2, ПРОМТ №591 -- was «Мои ученики» / master-students)
            ================================================================ -->
-      <VMenuRow label="Мои ученики" @click="onStudents">
+      <VMenuRow label="Мои группы" @click="onGroups">
         <template #icon><IconGroup :size="24" /></template>
       </VMenuRow>
 
@@ -117,7 +118,7 @@
         {{ nearestPractices.length > 1 ? 'Ближайшие практики' : 'Ближайшая практика' }}
       </h2>
 
-      <template v-if="masterStore.practicesLoading && nearestPractices.length === 0">
+      <template v-if="masterStore.practicesUpcomingLoading && nearestPractices.length === 0">
         <div class="master-dashboard__loading-row">
           <VLoader size="sm" />
         </div>
@@ -169,11 +170,46 @@
               </span>
             </div>
           </article>
-          <!-- Like the user dashboard: left = Zoom (1-click launch; stub toast
-               until Zoom ships), right = Check-ins. Edit/delete moved to the
-               practice screen, reached by tapping the card (openPractice). -->
+          <!-- Like the user dashboard: left = Zoom, right = Check-ins.
+               Edit/delete moved to the practice screen, reached by tapping
+               the card (openPractice).
+               ПРОМТ №565 (T23-1): there used to be a SEPARATE "Начать"
+               button next to "Zoom" for kind==='personal' -- pressing "Zoom"
+               itself opened zoom_host_join_url (a plain Zoom REGISTRANT
+               join_url, see zoomLinkFor below) and landed the master on
+               Zoom's "waiting for the host" screen, because a registrant
+               join_url carries no host authority in Zoom's own system
+               regardless of our own DB labelling the row role='host'
+               (zoom/service.py's ensure_host_registrant creates it via the
+               exact same create_registrant() call used for a participant).
+               Only start_url actually starts a meeting as host, and that is
+               exactly what "Начать" already redeemed via the ticket flow
+               (ПРОМТ №556/557). Owner decision: no second button -- "Zoom"
+               itself now does what "Начать" did, for kind==='personal'. -->
           <div class="master-dashboard__practice-actions">
-            <VButton variant="secondary" block @click="onZoom(practice)">Zoom</VButton>
+            <!-- A4 V2 (ПРОМТ №572): create_failed replaces "Zoom" with
+                 "Повторить" -- before this, a permanently-failed meeting
+                 showed the SAME disabled "Zoom" button as one still being
+                 created, with no way for the master to act on it. -->
+            <VButton
+              v-if="zoomLinkFor(practice).kind === 'failed'"
+              variant="danger"
+              block
+              :loading="retryingId === practice.id"
+              :disabled="retryingId === practice.id"
+              @click="onRetryZoom(practice)"
+            >
+              Повторить
+            </VButton>
+            <VButton
+              v-else
+              variant="secondary"
+              block
+              :disabled="zoomLinkFor(practice).kind === 'pending' || startingId === practice.id"
+              @click="onZoom(practice)"
+            >
+              Zoom
+            </VButton>
             <VButton
               variant="primary"
               block
@@ -182,6 +218,20 @@
               Check-ins
             </VButton>
           </div>
+          <VBadge
+            v-if="zoomLinkFor(practice).kind === 'manual'"
+            variant="warning"
+            class="master-dashboard__zoom-note"
+          >
+            Ручная ссылка — посещение не засчитается автоматически
+          </VBadge>
+          <VBadge
+            v-if="zoomLinkFor(practice).kind === 'failed'"
+            variant="error"
+            class="master-dashboard__zoom-note"
+          >
+            Не удалось создать встречу Zoom
+          </VBadge>
         </div>
       </template>
 
@@ -214,20 +264,37 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { VButton, VLoader, VStatCard, VCard, VMenuRow, VSegmentTrack } from '@/components/ui'
-import { IconBellPlain, IconGroup, IconCheckin, IconRepeat, IconHourglass } from '@/components/icons'
+import {
+  VButton,
+  VLoader,
+  VStatCard,
+  VCard,
+  VMenuRow,
+  VSegmentTrack,
+  VBadge,
+} from '@/components/ui'
+import {
+  IconBellPlain,
+  IconGroup,
+  IconCheckin,
+  IconRepeat,
+  IconHourglass,
+} from '@/components/icons'
 import { useMasterStore } from '@/stores/master'
 import { useAuthStore } from '@/stores/auth'
 import { useSafeArea } from '@/composables/useSafeArea'
 import MasterOnboardingView from '@/views/master/MasterOnboardingView.vue'
 import { isMasterOnboardingCompleted, shouldShowMasterOnboarding } from '@/utils/masterOnboarding'
 import { useToast } from '@/composables/useToast'
-import { formatDateShort, formatTime, formatDuration, formatParticipants, localSortKey } from '@/utils/format'
+import { formatDateShort, formatTime, formatDuration, formatParticipants } from '@/utils/format'
 import { platform } from '@/platform'
 import { practiceIconFor } from '@/utils/displayHelpers'
 import { checkinLabel, recurrenceLabel, remainingSessionsLabel } from '@/utils/practiceCardMeta'
 import { practiceHasEnded } from '@/utils/practiceStatus'
+import { resolveZoomLink, type ZoomLinkResolution } from '@/utils/zoomLink'
 import { getMasterStats } from '@/api/masters'
+import { createZoomStartTicket, zoomStartRedirectUrl, retryZoomMeeting } from '@/api/practices'
+import { ApiResponseError } from '@/api/client'
 import type { PracticeResponse, MasterStatsResponse } from '@/api/types'
 
 const router = useRouter()
@@ -302,14 +369,17 @@ const unreadCount = computed((): number => 0)
 const now = ref(Date.now())
 let clockInterval: ReturnType<typeof setInterval> | null = null
 
+// T22-3 (ПРОМТ №561): practicesUpcoming is already server-ordered nearest
+// first (draft/scheduled/live) -- no client re-sort left to hide the next
+// ordering bug. Draft and already-ended occurrences are filtered out of the
+// (small, already-in-order) loaded window; a genuinely correct "nearest 2"
+// no longer depends on how many pages happen to be loaded, the way the old
+// single futures-first cursor did.
 const nearestPractices = computed((): PracticeResponse[] =>
-  masterStore.practices
+  masterStore.practicesUpcoming
     .filter(
       (p) => (p.status === 'scheduled' || p.status === 'live') && !practiceHasEnded(p, now.value),
     )
-    // LOCAL wall-clock order (each card renders in its own p.timezone), so the
-    // top-2 slice matches the times shown across differing timezones (CR-1/CR-2).
-    .sort((a, b) => localSortKey(a.scheduled_at, a.timezone) - localSortKey(b.scheduled_at, b.timezone))
     .slice(0, 2),
 )
 
@@ -325,22 +395,99 @@ function practiceWhen(p: PracticeResponse): string {
 function onBell(): void {
   toast.info('Уведомления пока недоступны')
 }
-function onStudents(): void {
-  router.push({ name: 'master-students' })
+function onGroups(): void {
+  router.push({ name: 'master-groups' })
 }
 // Tap the card → the practice screen (edit/cancel/delete live there via «…»).
 function openPractice(p: PracticeResponse): void {
   router.push({ name: 'master-practice-detail', params: { id: p.id } })
 }
-// Zoom — open the practice's link via the platform abstraction (routes
-// Telegram-SDK openLink vs window.open). Master screens carry the full
-// PracticeResponse, so zoom_link is available; guard for a real https URL
-// (mirrors PracticeLiveView's hasValidZoom), else nudge the master to add one.
-function onZoom(p: PracticeResponse): void {
-  if (p.zoom_link && p.zoom_link.startsWith('https://')) {
-    platform.openLink(p.zoom_link)
-  } else {
-    toast.info('Добавьте ссылку на Zoom в настройках практики')
+// Zoom — D3 ladder (T21-1, ПРОМТ №541): the master's own host registrant
+// link first, else the manual practice.zoom_link (marked in the template),
+// else nudge -- via the platform abstraction (Telegram-SDK openLink vs
+// window.open). A4 V2 (ПРОМТ №572): meeting status distinguishes "still
+// preparing" from "permanently failed".
+function zoomLinkFor(p: PracticeResponse): ZoomLinkResolution {
+  return resolveZoomLink(p.zoom_host_join_url, p.zoom_link, p.zoom_meeting_status)
+}
+
+// ПРОМТ №565 (T23-1): "Zoom" for the master's OWN practice (every card on
+// this dashboard is the current master's own -- masterStore.practicesUpcoming
+// is already scoped server-side to this master) means START the meeting as
+// host, not join via the host-role registrant's join_url -- see the template
+// comment above zoomLinkFor's kind==='personal' branch for why that link
+// never actually granted host authority. start_url itself never reaches this
+// frontend -- we ask the backend for a one-time ticket, then open a plain
+// link to the backend's redirect endpoint (platform.openLink), which
+// redeems the ticket and 302s the browser straight to Zoom. Never fetch()
+// that URL. kind==='manual' has no real meeting to start -- the master's
+// own pasted fallback link opens directly, exactly as before.
+const startingId = ref<string | null>(null)
+
+async function onZoom(p: PracticeResponse): Promise<void> {
+  const resolved = zoomLinkFor(p)
+  if (resolved.kind === 'manual') {
+    platform.openLink(resolved.url as string)
+    return
+  }
+  if (resolved.kind === 'pending') {
+    toast.info('Ссылка на Zoom ещё готовится')
+    return
+  }
+  // kind === 'personal' -- start as host via the ticket flow.
+  if (startingId.value) return
+  startingId.value = p.id
+  try {
+    const { ticket } = await createZoomStartTicket(p.id)
+    // ПРОМТ №557: FAILS CLOSED -- zoomStartRedirectUrl returns null when
+    // VITE_API_BASE_URL is not configured (no foreign-domain fallback). A
+    // one-time start-ticket must never be navigated to some other server.
+    const url = zoomStartRedirectUrl(ticket)
+    if (!url) {
+      toast.error('Функция временно недоступна')
+      return
+    }
+    platform.openLink(url)
+  } catch (e) {
+    if (e instanceof ApiResponseError && e.code === 'zoom_meeting_not_active') {
+      toast.error('Встреча Zoom для этой практики недоступна')
+    } else {
+      toast.error('Не удалось начать встречу. Попробуйте ещё раз')
+    }
+  } finally {
+    startingId.value = null
+  }
+}
+
+// A4 V2 (ПРОМТ №572): "Повторить" on a create_failed meeting. The endpoint
+// itself never raises for a Zoom-side failure (same "never blocks"
+// contract as publish) -- it resolves 200 either way, so success/failure
+// is read off the RETURNED zoom_meeting_status, not off a thrown error.
+// Thrown errors here mean the REQUEST itself couldn't be honored (already
+// recovered, ownership, network), not that Zoom said no again.
+const retryingId = ref<string | null>(null)
+
+async function onRetryZoom(p: PracticeResponse): Promise<void> {
+  if (retryingId.value) return
+  retryingId.value = p.id
+  try {
+    const updated = await retryZoomMeeting(p.id)
+    if (updated.zoom_meeting_status === 'active') {
+      toast.success('Встреча Zoom создана')
+    } else {
+      toast.error('Всё ещё не удалось создать встречу. Попробуйте позже')
+    }
+    await masterStore.refreshMyPractices()
+  } catch (e) {
+    if (e instanceof ApiResponseError && e.code === 'zoom_meeting_not_failed') {
+      // Recovered by itself (poller won the race) -- refresh, no error tone.
+      toast.info('Статус встречи уже обновился')
+      await masterStore.refreshMyPractices()
+    } else {
+      toast.error('Не удалось повторить попытку')
+    }
+  } finally {
+    retryingId.value = null
   }
 }
 
@@ -646,6 +793,13 @@ onUnmounted(() => {
   /* Side inset so the buttons land at the design width (~145px) instead of
      full-bleed to the rail (design «1 Dashboard»). */
   padding: 0 var(--space-4);
+}
+
+.master-dashboard__zoom-note {
+  display: block;
+  width: fit-content;
+  margin: var(--space-2) auto 0;
+  text-align: center;
 }
 
 /* Card action buttons: 20px label (design); secondary action is a light glass

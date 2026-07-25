@@ -252,13 +252,13 @@ def main() -> None:
     input_path = Path(sys.argv[1])
     output_path = Path(sys.argv[2])
 
-    with input_path.open() as f:
+    with input_path.open(encoding="utf-8") as f:
         openapi = json.load(f)
 
     result = generate(openapi)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(result)
+    output_path.write_text(result, encoding="utf-8")
 
     # Stats for CI output.
     schemas = openapi.get("components", {}).get("schemas", {})

@@ -65,8 +65,9 @@ const READY_TIMEOUT_MS = 10_000
  * Supported formats:
  *   open_practice__{uuid}       -> { name: 'practice-detail', params: { id } }
  *   master_onboarding__{token}  -> { name: 'master-invite', params: { token } }
+ *   group_invite__{token}       -> { name: 'group-join', params: { token } } (P4, ПРОМТ №593)
  */
-function parseStartParam(
+export function parseStartParam(
   startParam: string | null,
 ): { name: string; params?: Record<string, string> } | null {
   if (!startParam) return null
@@ -82,6 +83,14 @@ function parseStartParam(
   const inviteMatch = startParam.match(/^master_onboarding__([A-Za-z0-9_-]{16,128})$/)
   if (inviteMatch?.[1]) {
     return { name: 'master-invite', params: { token: inviteMatch[1] } }
+  }
+
+  // Group invite (P4, №593): a master's reusable group link. Same token
+  // charset/length bound as above -- both are secrets.token_urlsafe(32)
+  // outputs, matching JoinGroupRequest.token (groups_schemas.py: 16..128).
+  const groupInviteMatch = startParam.match(/^group_invite__([A-Za-z0-9_-]{16,128})$/)
+  if (groupInviteMatch?.[1]) {
+    return { name: 'group-join', params: { token: groupInviteMatch[1] } }
   }
 
   return null

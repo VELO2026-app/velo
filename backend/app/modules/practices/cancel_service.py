@@ -117,6 +117,13 @@ async def _cancel_one(
         ),
     )
 
+    # E21: best-effort delete the practice's Zoom meeting so a cancelled
+    # session can't still be joined via a still-live personal link. Skips
+    # meetings that already have attendance segments, and never raises --
+    # refunds/cancellation must proceed regardless of Zoom's outcome.
+    from app.modules.zoom.service import delete_meeting_for_practice
+    await delete_meeting_for_practice(practice, session)
+
     return refunded_count
 
 

@@ -28,12 +28,18 @@
 // Date.now-independent -- it reads `new Date()` internally (format.ts:67) to
 // decide the "Сегодня"/"Завтра" relative labels vs a plain "28 февраля" date.
 // A fixture dated near the real run date would make this suite flaky
-// depending on WHEN it runs. Sidestepped by picking a fixture date far enough
-// in the future (2030) that it can never collide with "today"/"tomorrow" for
-// the lifetime of this file, rather than mocking Date -- confirmed the exact
-// rendered strings ("15 марта" / "12:30" for 2030-03-15T09:30:00Z in
-// Europe/Moscow) directly via node before writing the assertions below, so
-// nothing here is guessed.
+// depending on WHEN it runs.
+//
+// ПРОМТ №563 (flagged by 137bd8c, fixed here): the ORIGINAL fixture picked
+// 2030-03-15 as "far enough in the future to never collide" -- true only
+// until 2030 itself, a long fuse, not a fix. Same root-cause treatment as
+// AttendanceView.test.ts/AttendanceRosterView.test.ts (137bd8c): the clock
+// is now FAKED and frozen at NOW (beforeEach below), and the fixture date is
+// derived as NOW + 30 days, so the relationship holds by construction
+// regardless of which day the suite runs on. Exact rendered strings ("21
+// августа" / "13:00" for NOW=2026-07-22T10:00:00Z + 30 days, in
+// Europe/Moscow) verified directly via node before writing the assertions
+// below, not guessed.
 //
 // MONEY: none on this screen. Cyrillic fixtures/expected strings below were
 // still typed via the Write tool, not a shell heredoc, per house habit.
@@ -59,6 +65,13 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ back, push }),
 }))
 
+// ПРОМТ №563: clock is FAKED and frozen at NOW (beforeEach below), same
+// pattern as AttendanceView.test.ts/AttendanceRosterView.test.ts (137bd8c).
+// STABLE_SCHEDULED_AT is NOW + 30 days, so formatDateShort's Сегодня/Завтра
+// branch can never collide with it regardless of when this suite runs.
+const NOW = new Date('2026-07-22T10:00:00Z')
+const STABLE_SCHEDULED_AT = new Date(NOW.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
+
 // -----------------------------------------------------------------------------
 // Fixtures
 // -----------------------------------------------------------------------------
@@ -70,7 +83,7 @@ function practice(overrides: Partial<AdminPracticeListItem> = {}): AdminPractice
     direction: 'meditation',
     master_name: 'Анна Мастерова',
     master_verified: true,
-    scheduled_at: '2030-03-15T09:30:00Z',
+    scheduled_at: STABLE_SCHEDULED_AT,
     duration_minutes: 60,
     booked: 5,
     capacity: 10,
@@ -147,6 +160,12 @@ function buttonByText(t: string): HTMLButtonElement | undefined {
 // -----------------------------------------------------------------------------
 
 beforeEach(() => {
+  // ПРОМТ №563: freeze the clock this screen's Date.now-dependent
+  // formatDateShort sees, so its outcome no longer depends on the real
+  // calendar date at all (same pattern as AttendanceView.test.ts).
+  vi.useFakeTimers()
+  vi.setSystemTime(NOW)
+
   pinia = createPinia()
   setActivePinia(pinia)
 
@@ -159,6 +178,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   app?.unmount()
   host?.remove()
   app = null
@@ -321,13 +341,13 @@ describe('AdminPracticesView', () => {
       expect(card.querySelector('.practice-list-card__dur')?.textContent).toContain('60 мин')
     })
 
-    it('when/whenTime render via the real (non-Date.now-dependent for this fixture) formatters', async () => {
+    it('when/whenTime render via the real formatters, against the frozen clock', async () => {
       mount()
       await flush()
 
       const card = cardByTitle('Утренняя медитация')!
-      expect(card.querySelector('.practice-list-card__when')?.textContent?.trim()).toBe('15 марта')
-      expect(card.querySelector('.practice-list-card__dur span')?.textContent?.trim()).toBe('12:30')
+      expect(card.querySelector('.practice-list-card__when')?.textContent?.trim()).toBe('21 августа')
+      expect(card.querySelector('.practice-list-card__dur span')?.textContent?.trim()).toBe('13:00')
     })
 
     it('capacity shows "booked/capacity"; not full renders without the rose class', async () => {

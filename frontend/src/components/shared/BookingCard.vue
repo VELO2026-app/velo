@@ -43,7 +43,7 @@ import type { BookingWithPracticeResponse } from '@/api/types'
 /** Badge descriptor passed by the parent (null = no badge). */
 export interface BookingBadge {
   label: string
-  variant: 'live' | 'today' | 'tomorrow' | 'done' | 'cancelled' | 'no_show'
+  variant: 'live' | 'today' | 'tomorrow' | 'done' | 'cancelled' | 'no_show' | 'calculating'
 }
 
 const props = withDefaults(
@@ -74,13 +74,14 @@ const badgeIcon = computed(() => {
     case 'cancelled':
       return IconClose
     default:
-      return null // no_show («Не состоялась») / live → no icon
+      return null // no_show («Не состоялась») / live / calculating → no icon
   }
 })
 
 // Map the booking status to a DS VBadge variant (no hand-rolled badge styling).
 // live / today / done -> success (teal), tomorrow -> warning (peach),
-// cancelled / no_show -> error (pink). teal aligns to the DS canon (teal-600).
+// cancelled / no_show / calculating -> error/muted. teal aligns to the DS
+// canon (teal-600).
 const vbadgeVariant = computed<'success' | 'warning' | 'error' | 'muted'>(() => {
   switch (props.badge?.variant) {
     case 'tomorrow':
@@ -89,6 +90,8 @@ const vbadgeVariant = computed<'success' | 'warning' | 'error' | 'muted'>(() => 
       return 'error'
     case 'no_show':
       return 'muted' // «Не состоялась» — low-key blue-grey, no drama
+    case 'calculating':
+      return 'muted' // AT-2: «Подсчитывается» — same low-key tone, not a verdict yet
     default:
       return 'success'
   }

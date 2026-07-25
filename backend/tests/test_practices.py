@@ -8,13 +8,14 @@
 #   60900-60999 -- admin users
 # =============================================================================
 
+import asyncio
 from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.users.models import User, UserRole
@@ -86,7 +87,21 @@ def _valid_apply_body() -> dict:
             "email": "master@test.com",
         },
         "experience": {
-            "methods": ["meditation"],
+            # T21-6/T21-7 (ПРОМТ №547/548): _assert_master_confirmed_taxonomy
+            # requires the calling master to hold the exact direction/style
+            # being created or updated. Widened to cover exactly what THIS
+            # file's own tests exercise (bare yoga + its 3 styles used here,
+            # bare breathwork) -- raw VALUES, matching this fixture's own
+            # pre-existing style and the value-canonical comparison chosen in
+            # ПРОМТ №547, not "every direction in the catalog".
+            "methods": [
+                "meditation",
+                "yoga",
+                "yoga — kundalini",
+                "yoga — hatha",
+                "yoga — vinyasa",
+                "breathwork",
+            ],
             "experience_years": 5,
             "bio": "Experienced practitioner",
         },
@@ -382,6 +397,124 @@ async def test_create_practice_invalid_duration(
         headers=auth_headers(auth["session_token"]),
     )
     assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# POST /practices -- concurrent double-submit (A4 V7 / ПРОМТ №571)
+# ---------------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_concurrent_duplicate_creates_yield_exactly_one_practice(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """A4 V7: two genuinely CONCURRENT POST /practices for the same
+    (master, title, scheduled_at, recurrence) -- the double-tap / two-tabs
+    shape -- must yield exactly one Practice row, not two.
+
+    Before the fix, create_practice's dedup check
+    (_find_recent_duplicate_practice) is a pure in-app SELECT-then-INSERT:
+    both requests' SELECT can run before either commits, so both see
+    nothing and both INSERT -- each independently triggering Zoom meeting
+    creation under the single shared S2S host identity (A4 finding #1,
+    platform-wide Zoom-quota blast radius). This discriminates the real
+    break specifically: it is indifferent to the window-check's own
+    time-based logic (both requests fire in the same instant, trivially
+    inside any window) and fails ONLY if the concurrency itself -- not the
+    dedup key matching -- is left open. A sequential double-call (await
+    then await) would stay green even on the broken code, because the
+    second call's SELECT would see the first call's already-committed row;
+    this test relies on asyncio.gather to make the two requests genuinely
+    overlap.
+
+    asyncio.gather against the SAME AsyncClient genuinely races at the DB
+    level: each request resolves get_db_session independently (a fresh
+    session/transaction per request, see core/database.py), so neither
+    request's SELECT can see the other's uncommitted INSERT -- this is not
+    a serialized double-call dressed up as concurrent.
+    """
+    master = await _make_verified_master(client, db_session, telegram_id=60051)
+    body = _valid_practice_body(title="Concurrent Race Practice")
+
+    responses = await asyncio.gather(
+        client.post(
+            PRACTICES_URL, json=body, headers=auth_headers(master["session_token"]),
+        ),
+        client.post(
+            PRACTICES_URL, json=body, headers=auth_headers(master["session_token"]),
+        ),
+    )
+    for resp in responses:
+        assert resp.status_code == 201, resp.text
+
+    practice_ids = {r.json()["id"] for r in responses}
+    assert len(practice_ids) == 1, (
+        f"expected both concurrent creates to resolve to the SAME practice "
+        f"id, got {len(practice_ids)} distinct ids -- the TOCTOU race was "
+        f"not closed"
+    )
+
+    count = (
+        await db_session.execute(
+            select(func.count()).select_from(Practice).where(
+                Practice.master_id == UUID(master["user"]["id"]),
+                Practice.title == "Concurrent Race Practice",
+            )
+        )
+    ).scalar_one()
+    assert count == 1, (
+        f"expected exactly one Practice row after the concurrent double-"
+        f"submit, found {count}"
+    )
+
+    # A4 V6: the LOSING side of the race must be told it lost -- exactly one
+    # of the two responses is honestly marked deduplicated, never both
+    # (that would mean nothing was ever actually created) and never neither
+    # (that would mean the race-lost path forgot to set the flag).
+    deduplicated_flags = [r.json()["deduplicated"] for r in responses]
+    assert deduplicated_flags.count(True) == 1, (
+        f"expected exactly one response marked deduplicated=true, got {deduplicated_flags}"
+    )
+    assert deduplicated_flags.count(False) == 1
+
+
+@pytest.mark.asyncio
+async def test_create_practice_window_dedup_marks_the_second_response(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """A4 V6: a SEQUENTIAL retry within practice_duplicate_submit_window_
+    minutes (the ПРОМТ №559 case this dedup check was built for -- a
+    frontend timeout, not a race) must be marked deduplicated=true on the
+    SECOND response. Before this field existed, the second POST returned
+    200-shaped success with no way for the master to tell it apart from a
+    genuine new practice -- they would believe two practices/series exist
+    when only one does.
+    """
+    master = await _make_verified_master(client, db_session, telegram_id=60052)
+    body = _valid_practice_body(title="Sequential Retry Practice")
+
+    first = await client.post(
+        PRACTICES_URL, json=body, headers=auth_headers(master["session_token"]),
+    )
+    assert first.status_code == 201
+    assert first.json()["deduplicated"] is False
+
+    second = await client.post(
+        PRACTICES_URL, json=body, headers=auth_headers(master["session_token"]),
+    )
+    assert second.status_code == 201
+    assert second.json()["id"] == first.json()["id"]
+    assert second.json()["deduplicated"] is True
+
+    count = (
+        await db_session.execute(
+            select(func.count()).select_from(Practice).where(
+                Practice.master_id == UUID(master["user"]["id"]),
+                Practice.title == "Sequential Retry Practice",
+            )
+        )
+    ).scalar_one()
+    assert count == 1
 
 
 # ---------------------------------------------------------------------------
@@ -774,6 +907,161 @@ async def test_list_master_practices_status_filter(
     scheduled_data = scheduled_only.json()
     assert scheduled_data["total"] == 1
     assert scheduled_data["items"][0]["id"] == scheduled_id
+
+
+# ---------------------------------------------------------------------------
+# GET /masters/me/practices -- T22-3/T22-5 bucket ordering (ПРОМТ №561)
+# ---------------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_list_master_practices_bucket_upcoming_nearest_first(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """?bucket=upcoming orders NEAREST FIRST -- including against a real
+    series and a standalone occurrence stretching years out (T22-3: the old
+    shared futures-first cursor put the far-future tail on page 1, making a
+    far-future occurrence read as "nearest").
+    """
+    auth = await _make_verified_master(client, db_session)
+    master_id = auth["user"]["id"]
+    now = datetime.now(timezone.utc)
+
+    # Real weekly series (cap=40, ~39 weeks out) -- exercises the actual
+    # generation engine, not just direct inserts.
+    await _create_and_publish(
+        client, auth,
+        practice_type="series",
+        direction="yoga",
+        scheduled_at=(now + timedelta(days=30)).isoformat(),
+        recurrence={"period": "weekly", "days": [1], "end": "after_count", "count": 40},
+    )
+    # A standalone occurrence genuinely years out (beyond any series cap),
+    # covering the literal "stretching years out" production shape.
+    await _insert_practice_at(
+        db_session, master_id,
+        scheduled_at=now + timedelta(days=730), title="YearsOut",
+    )
+    # The nearest of everything -- must be item [0].
+    nearest = await _insert_practice_at(
+        db_session, master_id,
+        scheduled_at=now + timedelta(days=1), title="Nearest",
+    )
+    # The direct inserts above live in db_session's OWN transaction/connection
+    # (tests/conftest.py's db_session fixture is a real, separate AsyncSession
+    # against the real Postgres DB -- not a transaction shared with `client`,
+    # which gets its own session per request via get_db_session()). Without
+    # committing here, "YearsOut" and "Nearest" are invisible to the request
+    # below and only the series root/children (committed inside the API calls
+    # above) come back -- exactly the missing-commit bug this test had.
+    await db_session.commit()
+
+    resp = await client.get(
+        MY_PRACTICES_URL,
+        params={"bucket": "upcoming", "limit": 100},
+        headers=auth_headers(auth["session_token"]),
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+
+    scheduled_ats = [item["scheduled_at"] for item in data["items"]]
+    assert scheduled_ats == sorted(scheduled_ats), "upcoming bucket must be ascending (nearest first)"
+    assert data["items"][0]["id"] == str(nearest.id)
+    # The 2-years-out occurrence is present but sorts LAST, not first.
+    assert data["items"][-1]["title"] == "YearsOut"
+
+
+@pytest.mark.asyncio
+async def test_list_master_practices_bucket_past_most_recent_first(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """?bucket=past orders MOST RECENT FIRST and includes completed only
+    (T22-5: the old shared cursor buried every completed practice behind the
+    whole future backlog, needing many "Показать ещё" taps before any showed).
+    """
+    auth = await _make_verified_master(client, db_session)
+    master_id = auth["user"]["id"]
+    now = datetime.now(timezone.utc)
+
+    oldest = await _insert_practice_at(
+        db_session, master_id,
+        scheduled_at=now - timedelta(days=60),
+        status=PracticeStatus.COMPLETED.value,
+        title="Oldest",
+    )
+    most_recent = await _insert_practice_at(
+        db_session, master_id,
+        scheduled_at=now - timedelta(days=1),
+        status=PracticeStatus.COMPLETED.value,
+        title="MostRecent",
+    )
+    await _insert_practice_at(
+        db_session, master_id,
+        scheduled_at=now - timedelta(days=30),
+        status=PracticeStatus.COMPLETED.value,
+        title="Middle",
+    )
+    # A far-future scheduled practice must NEVER appear in "past".
+    await _insert_practice_at(
+        db_session, master_id,
+        scheduled_at=now + timedelta(days=30), title="StillUpcoming",
+    )
+    # See the "upcoming" bucket test above: db_session is its own real
+    # transaction, separate from the request's session -- without a commit
+    # here the request sees none of these rows (total would read 0).
+    await db_session.commit()
+
+    resp = await client.get(
+        MY_PRACTICES_URL,
+        params={"bucket": "past", "limit": 100},
+        headers=auth_headers(auth["session_token"]),
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+
+    assert data["total"] == 3
+    assert all(item["status"] == "completed" for item in data["items"])
+    assert data["items"][0]["id"] == str(most_recent.id)
+    assert data["items"][-1]["id"] == str(oldest.id)
+
+
+@pytest.mark.asyncio
+async def test_list_master_practices_bucket_excludes_cancelled(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """A cancelled practice appears in NEITHER bucket (it did not happen) --
+    server-side enforcement of the rule the client used to apply by omission.
+    """
+    auth = await _make_verified_master(client, db_session)
+    master_id = auth["user"]["id"]
+    now = datetime.now(timezone.utc)
+
+    await _insert_practice_at(
+        db_session, master_id,
+        scheduled_at=now + timedelta(days=5),
+        status=PracticeStatus.CANCELLED.value,
+        title="CancelledFuture",
+    )
+    await _insert_practice_at(
+        db_session, master_id,
+        scheduled_at=now - timedelta(days=5),
+        status=PracticeStatus.CANCELLED.value,
+        title="CancelledPast",
+    )
+
+    upcoming = await client.get(
+        MY_PRACTICES_URL,
+        params={"bucket": "upcoming"},
+        headers=auth_headers(auth["session_token"]),
+    )
+    past = await client.get(
+        MY_PRACTICES_URL,
+        params={"bucket": "past"},
+        headers=auth_headers(auth["session_token"]),
+    )
+    assert upcoming.json()["total"] == 0
+    assert past.json()["total"] == 0
 
 
 # ===================================================================

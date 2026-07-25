@@ -17,7 +17,8 @@
 # CRITICAL-6 fix: removed redundant flush() in upsert endpoints.
 #   refresh() only on update path (to fetch server-side updated_at).
 #
-# AUTH: get_current_user on all endpoints.
+# AUTH: get_current_user on all endpoints, except the two master-only ones
+#   (insights, reviews) which use get_current_master.
 # SESSION: write endpoints use get_db_session, read use get_db_reader.
 # =============================================================================
 
@@ -30,7 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db_reader, get_db_session
-from app.modules.auth.dependencies import get_current_user
+from app.modules.auth.dependencies import get_current_master, get_current_user
 from app.modules.diary.checkins_service import (
     get_checkin,
     list_user_checkins,
@@ -69,6 +70,7 @@ from app.modules.diary.service import (
     update_diary_entry,
     upsert_feedback,
 )
+from app.modules.masters.models import MasterProfile
 from app.modules.users.models import User
 
 practices_checkin_router = APIRouter(
@@ -489,7 +491,9 @@ async def list_diary_feed_endpoint(
 )
 async def get_practice_insights_endpoint(
     practice_id: UUID,
-    user: User = Depends(get_current_user),
+    master_tuple: tuple[User, MasterProfile] = Depends(
+        get_current_master,
+    ),
     session: AsyncSession = Depends(get_db_reader),
 ) -> PracticeInsightsResponse:
     """Get aggregated anonymous insights for a completed practice.
@@ -497,7 +501,12 @@ async def get_practice_insights_endpoint(
     Master-only: returns mood distribution, rating distribution,
     participant count, and feedback comments count.
     No individual user data is exposed.
+
+    get_current_master gates role (non-master -> 403); the ownership check
+    in get_practice_insights (practice.master_id != user.id -> 404) stays
+    as the layer that hides which practices exist to a DIFFERENT master.
     """
+    user, _profile = master_tuple
     data = await get_practice_insights(user, practice_id, session)
     return PracticeInsightsResponse(**data)
 
@@ -513,7 +522,9 @@ async def get_practice_insights_endpoint(
 )
 async def list_practice_reviews_endpoint(
     practice_id: UUID,
-    user: User = Depends(get_current_user),
+    master_tuple: tuple[User, MasterProfile] = Depends(
+        get_current_master,
+    ),
     session: AsyncSession = Depends(get_db_reader),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
@@ -527,12 +538,14 @@ async def list_practice_reviews_endpoint(
 ) -> PaginatedReviewsResponse:
     """Master-only: named reviews for a completed practice.
 
-    The de-anonymised counterpart to /insights: same ownership and
-    completed-practice guards (404 to a non-owner), but exposes who left each
+    The de-anonymised counterpart to /insights: same role gate
+    (get_current_master -> 403 to a non-master) and ownership check (404 to
+    a master who doesn't own this practice), but exposes who left each
     review and what they wrote (name + avatar + comment). Serves both the full
     per-practice list and, with attention=true, the dashboard
     "needs attention" feed.
     """
+    user, _profile = master_tuple
     items, total = await list_practice_reviews(
         user,
         practice_id,

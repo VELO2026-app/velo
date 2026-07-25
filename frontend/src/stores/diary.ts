@@ -26,6 +26,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, reactive } from 'vue'
+import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
 import { useCursorPagination } from '@/composables/useCursorPagination'
 import {
@@ -53,6 +54,11 @@ import type {
 export interface SubmitResult {
   ok: boolean
   error: string
+  /** P5 (ПРОМТ №594): ApiResponseError.code when the failure is one, so a
+   *  caller (CheckinView.vue) can switch on it for a specific message
+   *  instead of the generic `error` string. Undefined on success or a
+   *  non-ApiResponseError failure. */
+  code?: string
 }
 
 export const useDiaryStore = defineStore('diary', () => {
@@ -77,7 +83,8 @@ export const useDiaryStore = defineStore('diary', () => {
       return { ok: true, error: '' }
     } catch (e) {
       const message = extractApiError(e, 'Не удалось отправить check-in')
-      return { ok: false, error: message }
+      const code = e instanceof ApiResponseError ? e.code : undefined
+      return { ok: false, error: message, code }
     } finally {
       checkinSubmitting.value = false
     }

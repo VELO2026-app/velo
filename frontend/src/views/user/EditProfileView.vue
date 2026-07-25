@@ -214,7 +214,7 @@ import { IconWarning } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { useMasterStore } from '@/stores/master'
-import { ApiResponseError } from '@/api/client'
+import { extractApiError } from '@/composables/useApiError'
 import { submitMethodChangeRequest, updateMasterLanguages } from '@/api/masters'
 import { formatMoney } from '@/utils/format'
 import { LANGUAGES } from '@/utils/languages'
@@ -292,11 +292,7 @@ async function onSubmitMethods(): Promise<void> {
     await masterStore.fetchMyProfile(true)
     toast.info('Запрос на смену методов отправлен на проверку')
   } catch (error) {
-    const message =
-      error instanceof ApiResponseError
-        ? error.detail || 'Не удалось отправить запрос'
-        : 'Не удалось отправить запрос'
-    toast.error(message)
+    toast.error(extractApiError(error, 'Не удалось отправить запрос'))
   } finally {
     submittingMethods.value = false
   }
@@ -337,11 +333,7 @@ async function onSaveLanguages(): Promise<void> {
     await masterStore.fetchMyProfile(true)
     toast.info('Языки сохранены')
   } catch (error) {
-    const message =
-      error instanceof ApiResponseError
-        ? error.detail || 'Не удалось сохранить языки'
-        : 'Не удалось сохранить языки'
-    toast.error(message)
+    toast.error(extractApiError(error, 'Не удалось сохранить языки'))
   } finally {
     savingLanguages.value = false
   }
@@ -434,11 +426,7 @@ async function onSave(): Promise<void> {
     toast.info('Профиль сохранён')
     router.back()
   } catch (error) {
-    const message =
-      error instanceof ApiResponseError
-        ? error.detail || 'Не удалось сохранить профиль'
-        : 'Не удалось сохранить профиль'
-    toast.error(message)
+    toast.error(extractApiError(error, 'Не удалось сохранить профиль'))
   } finally {
     saving.value = false
   }

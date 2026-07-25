@@ -64,7 +64,7 @@ import {
 } from '@/components/ui'
 import { IconCheck } from '@/components/icons'
 import { getCheckinMetric } from '@/api/admin'
-import { ApiResponseError } from '@/api/client'
+import { extractApiError } from '@/composables/useApiError'
 import { formatPeriodRange } from '@/utils/periodRange'
 import type { CheckinMetricResponse, SeriesPoint } from '@/api/types'
 
@@ -100,7 +100,7 @@ async function load(): Promise<void> {
   try {
     data.value = await getCheckinMetric(period, offset)
   } catch (e) {
-    error.value = e instanceof ApiResponseError ? e.detail : 'Ошибка загрузки'
+    error.value = extractApiError(e, 'Ошибка загрузки')
   } finally {
     loading.value = false
   }

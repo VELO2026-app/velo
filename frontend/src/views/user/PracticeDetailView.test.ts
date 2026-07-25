@@ -433,6 +433,24 @@ describe('PracticeDetailView', () => {
       expect(button('Забронировать')).toBeUndefined()
     })
 
+    it('AT-2: a confirmed booking whose practice already ended shows "being calculated", not «Вы записаны»', async () => {
+      // bookings/service.py deliberately leaves a Zoom-tracked booking
+      // CONFIRMED after the practice ends until the attendance report ripens
+      // or the deadline fallback fires. Without this, a user who sat through
+      // the class sees the exact same «Вы записаны» as before it started --
+      // indistinguishable from a no-show at a glance.
+      const ended = new Date(NOW_MS - 3 * HOUR).toISOString()
+      practicesState.selected = practice({ scheduled_at: ended, duration_minutes: 60 })
+      bookingsState.bookings = [
+        booking({ status: 'confirmed' }, { scheduled_at: ended, duration_minutes: 60 }),
+      ]
+      mount()
+      await flush()
+
+      expect(text()).toContain('Посещаемость подсчитывается')
+      expect(text()).not.toContain('Вы записаны')
+    })
+
     it('a booking for a DIFFERENT practice does not count as booked', async () => {
       // The whole `booked` computed keys on practice_id. A mismatch here would
       // either block a purchase or fake one.

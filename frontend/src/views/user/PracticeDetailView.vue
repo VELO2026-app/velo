@@ -361,14 +361,31 @@ const STATUS_VARIANT: Record<BookingStatus, 'success' | 'warning' | 'error' | 'i
   cancelled: 'error',
 }
 
-const statusLabel = computed(() =>
-  myAnyBooking.value ? STATUS_LABEL[myAnyBooking.value.status] : '',
-)
-const statusVariant = computed(() =>
-  myAnyBooking.value ? STATUS_VARIANT[myAnyBooking.value.status] : 'info',
-)
+/**
+ * AT-2: a CONFIRMED booking whose practice has already ended is NOT "still
+ * booked" -- it's a Zoom-tracked practice awaiting its attendance report
+ * (bookings/service.py deliberately leaves it CONFIRMED until the report
+ * ripens or the deadline fallback fires). Without this, a user who sat
+ * through the class and checks right after sees the exact same «Вы
+ * записаны» they saw before it started -- indistinguishable from a no-show
+ * at a glance. hasEnded is already imported/used by canCancel above.
+ */
+const attendancePending = computed((): boolean => {
+  const b = myAnyBooking.value
+  return !!b && b.status === 'confirmed' && hasEnded(b, now.value)
+})
+
+const statusLabel = computed(() => {
+  if (attendancePending.value) return 'Посещаемость подсчитывается'
+  return myAnyBooking.value ? STATUS_LABEL[myAnyBooking.value.status] : ''
+})
+const statusVariant = computed(() => {
+  if (attendancePending.value) return 'muted'
+  return myAnyBooking.value ? STATUS_VARIANT[myAnyBooking.value.status] : 'info'
+})
 const statusIcon = computed(() => {
   if (!myAnyBooking.value) return null
+  if (attendancePending.value) return null
   switch (myAnyBooking.value.status) {
     case 'confirmed':
     case 'attended':

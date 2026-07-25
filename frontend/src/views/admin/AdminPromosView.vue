@@ -122,7 +122,7 @@ import { IconPromo } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { getAdminPromos, deactivateAdminPromo } from '@/api/admin'
 import type { AdminPromoResponse, AdminPromoTypeFilter } from '@/api/admin'
-import { ApiResponseError } from '@/api/client'
+import { extractApiError } from '@/composables/useApiError'
 import { formatShortDate } from '@/utils/format'
 
 const LIMIT = 20
@@ -202,8 +202,7 @@ async function loadInitial(): Promise<void> {
   } catch (e) {
     if (myGeneration !== generation) return
     error.value = true
-    const msg = e instanceof ApiResponseError ? e.detail : 'Ошибка загрузки промокодов'
-    toast.error(msg)
+    toast.error(extractApiError(e, 'Ошибка загрузки промокодов'))
   } finally {
     if (myGeneration === generation) loading.value = false
   }
@@ -217,8 +216,7 @@ async function loadMore(): Promise<void> {
     items.value.push(...res.items)
     hasMore.value = items.value.length < res.total
   } catch (e) {
-    const msg = e instanceof ApiResponseError ? e.detail : 'Ошибка загрузки'
-    toast.error(msg)
+    toast.error(extractApiError(e, 'Ошибка загрузки'))
   } finally {
     loadingMore.value = false
   }
@@ -251,8 +249,7 @@ async function onConfirmDeactivate(): Promise<void> {
     // removal needed there. Any other tab just flips the badge in place.
     toast.success('Промокод деактивирован')
   } catch (e) {
-    const msg = e instanceof ApiResponseError ? e.detail : 'Не удалось деактивировать промокод'
-    toast.error(msg)
+    toast.error(extractApiError(e, 'Не удалось деактивировать промокод'))
   } finally {
     deactivatingId.value = null
     confirmTarget.value = null

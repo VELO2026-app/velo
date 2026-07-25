@@ -22,7 +22,7 @@
 from uuid import UUID
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -63,19 +63,38 @@ async def list_taxonomy(session: AsyncSession) -> TaxonomyListResponse:
     )
 
 
-async def list_active_taxonomy(session: AsyncSession) -> TaxonomyListResponse:
+async def list_active_taxonomy(
+    session: AsyncSession,
+    *,
+    master_id: UUID | None = None,
+) -> TaxonomyListResponse:
     """Active-only catalog, for authenticated non-admin consumers (R5 stage 3a
     -- the master methods picker). An inactive direction is dropped entirely
     (its styles too); an active direction keeps only its active styles.
+
+    master_id (T22-6, ПРОМТ №561): the requesting user's own id. A direction
+    row scoped to a DIFFERENT master (or to no one, if master_id is None --
+    e.g. a non-master user) is excluded -- global rows (master_id IS NULL)
+    are always included regardless. This is the enforcement point for "a
+    master-only custom method never appears in another master's picker":
+    the row exists in the DB, but only its owner's fetch ever sees it.
 
     Reused by GET /api/v1/taxonomy (practices/taxonomy_router.py) -- that
     route lives outside the admin package (any authenticated user, not just
     admins, needs to read the active catalog) but imports this function
     directly rather than duplicating the query.
     """
+    scope = (
+        TaxonomyDirection.master_id.is_(None)
+        if master_id is None
+        else or_(
+            TaxonomyDirection.master_id.is_(None),
+            TaxonomyDirection.master_id == master_id,
+        )
+    )
     stmt = (
         select(TaxonomyDirection)
-        .where(TaxonomyDirection.is_active.is_(True))
+        .where(TaxonomyDirection.is_active.is_(True), scope)
         .options(selectinload(TaxonomyDirection.styles))
         .order_by(TaxonomyDirection.display_order)
     )

@@ -51,6 +51,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     text,
@@ -126,6 +127,25 @@ class Booking(UUIDMixin, TimestampMixin, Base):
     checkin_skipped: Mapped[bool] = mapped_column(
         default=False,
         server_default=text("false"),
+    )
+
+    # -- Zoom attendance (E21) --
+    # Nullable: populated only once the Zoom report has been ingested for
+    # this booking. NULL means "not decided via Zoom yet" -- the finalize
+    # choke point (bookings/service.py) falls back to the legacy join_at/
+    # checkin_skipped proxy above when this stays NULL, so a Zoom outage
+    # never leaves a booking undecided forever. Summed across every matched
+    # ZoomAttendanceSegment row (Zoom returns multiple rows per person on
+    # rejoin and does not sum them itself).
+    zoom_minutes_present: Mapped[int | None] = mapped_column(
+        Integer, default=None,
+    )
+    # 'zoom_report' | 'legacy_proxy' -- which mechanism actually decided
+    # attended/no_show for this booking. Not an enum type (matches this
+    # model's own `status` column convention -- plain string, validated in
+    # the service layer).
+    attendance_decided_via: Mapped[str | None] = mapped_column(
+        String(20), default=None,
     )
 
     __table_args__ = (

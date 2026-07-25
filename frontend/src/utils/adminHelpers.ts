@@ -11,6 +11,7 @@
 // =============================================================================
 
 import type { AdminMasterListItem } from '@/api/admin'
+import { dayKeyOf } from '@/utils/format'
 
 // ============================================================================
 // Master helpers
@@ -95,6 +96,10 @@ export function reportTargetLabel(type: string): string {
 
 /**
  * Format ISO date string to Russian locale datetime.
+ *
+ * SW10: pinned to UTC (like every other date function in the codebase --
+ * see utils/format.ts) so two admins, or the same admin on two devices,
+ * see the same absolute time for the same event.
  */
 export function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString('ru-RU', {
@@ -103,6 +108,7 @@ export function formatDateTime(iso: string): string {
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: 'UTC',
   })
 }
 
@@ -111,6 +117,11 @@ export function formatDateTime(iso: string): string {
  * «1 Moderation»): «только что» / «N мин назад» / «N ч назад» / «Вчера», then
  * the absolute «DD MMM» for older items. Abbreviated units sidestep Russian
  * plural forms while staying readable.
+ *
+ * SW10: the day comparisons are pinned to UTC via dayKeyOf (utils/format.ts)
+ * instead of the device's own local calendar fields -- otherwise "Вчера"
+ * itself could misfire (or fail to fire) depending on which machine renders
+ * the page, not just the displayed string's format.
  */
 export function formatRelative(iso: string): string {
   const then = new Date(iso).getTime()
@@ -119,13 +130,7 @@ export function formatRelative(iso: string): string {
   if (diffMin < 60) return `${diffMin} мин назад`
   const diffH = Math.floor(diffMin / 60)
   if (diffH < 24) return `${diffH} ч назад`
-  const d = new Date(iso)
-  const yesterday = new Date()
-  yesterday.setDate(yesterday.getDate() - 1)
-  const sameDay = (a: Date, b: Date): boolean =>
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  if (sameDay(d, yesterday)) return 'Вчера'
-  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+  const yesterdayKey = dayKeyOf(new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), 'UTC')
+  if (dayKeyOf(iso, 'UTC') === yesterdayKey) return 'Вчера'
+  return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', timeZone: 'UTC' })
 }

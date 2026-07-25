@@ -78,6 +78,7 @@ from app.modules.payments.refund import (
     early_finalize_booking,
     refund_booking,
 )
+from app.modules.practices.audience_service import assert_viewer_can_access_practice
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.promos.models import Promo
 from app.modules.users.models import User
@@ -239,6 +240,13 @@ async def create_booking(
     if practice.master_id == user.id:
         raise BadRequestError("Cannot book your own practice")
 
+    # P5 (ПРОМТ №594, the carried seam from P1): reject a viewer blocked by
+    # this practice's master, or outside its configured audience. Shared
+    # with confirm_waitlist (waitlist/service.py, the OTHER booking-creation
+    # path) and upsert_checkin (diary/checkins_service.py) -- one predicate,
+    # not reimplemented per call site.
+    await assert_viewer_can_access_practice(user.id, practice, session)
+
     active_count = await _get_active_booking_count(session, practice_id)
     # max_participants=None means unlimited capacity -- skip the check.
     if (
@@ -301,6 +309,15 @@ async def create_booking(
         master_name=master_name,
         occurred_at=booking.created_at,
     )
+
+    # E21 step E: create the Zoom registrant for this booking. Best-effort,
+    # never raises, never blocks -- if the meeting isn't active yet or the
+    # Zoom call fails, the booking above has ALREADY succeeded; the
+    # registrant is queued for the retry poller (ПРОМТ №520 amendment,
+    # restated explicitly: not softened into "usually"). Lazy import, same
+    # one-way-dependency pattern as diary above.
+    from app.modules.zoom.service import create_registrant_for_booking
+    await create_registrant_for_booking(booking, user, session)
 
     return booking
 
@@ -460,6 +477,12 @@ async def cancel_booking(
         occurred_at=booking.cancelled_at,
     )
 
+    # E21 step E: best-effort Zoom-side registrant cancel. Our own row's
+    # status is the authority regardless of Zoom's outcome -- see
+    # cancel_registrant_for_booking's docstring.
+    from app.modules.zoom.service import cancel_registrant_for_booking
+    await cancel_registrant_for_booking(booking, session)
+
     return booking
 
 
@@ -582,6 +605,51 @@ async def leave_booking(
     return booking
 
 
+async def resolve_bookings_via_legacy_proxy(
+    bookings: list[Booking],
+    practice_id: UUID,
+    session: AsyncSession,
+) -> list[tuple[UUID, UUID, str]]:
+    """Decide a batch of CONFIRMED bookings via the join_at/PRE-checkin
+    proxy, tagged attendance_decided_via='legacy_proxy'. THE ONE PLACE that
+    knows how the proxy decides -- used both by _finalize_practice_core
+    (practices with no active Zoom meeting, decided immediately) and by
+    zoom/attendance_service.py's deadline fallback (Zoom-tracked practices
+    whose report never arrived in time). Returns (user_id, booking_id,
+    status) outcomes for the caller's own diary projection -- this function
+    does not project anything itself, since the two callers project at
+    different moments (immediately vs. later).
+
+    W-1: presence is proven by a Zoom join OR a PRE check-in. Callers pass
+    already FOR-UPDATE-locked, already-CONFIRMED bookings; this does not
+    re-check either.
+    """
+    # Runtime-local import keeps the bookings -> diary dependency one-way.
+    from app.modules.diary.models import Checkin, CheckType
+
+    checkin_rows = await session.execute(
+        select(Checkin.booking_id).where(
+            Checkin.practice_id == practice_id,
+            Checkin.check_type == CheckType.PRE.value,
+        )
+    )
+    checked_in_booking_ids = set(checkin_rows.scalars().all())
+
+    outcomes: list[tuple[UUID, UUID, str]] = []
+    for booking in bookings:
+        attended = (
+            booking.joined_at is not None
+            or booking.id in checked_in_booking_ids
+        )
+        booking.status = (
+            BookingStatus.ATTENDED.value if attended else BookingStatus.NO_SHOW.value
+        )
+        booking.attendance_decided_via = "legacy_proxy"
+        outcomes.append((booking.user_id, booking.id, booking.status))
+
+    return outcomes
+
+
 async def _finalize_practice_core(
     practice: Practice,
     session: AsyncSession,
@@ -599,11 +667,29 @@ async def _finalize_practice_core(
     Keeping one core means attendance, money, and the diary are always settled
     the same way.
 
-    Transitions (W-1: presence is proven by a Zoom join OR a PRE check-in):
-    - confirmed + (joined_at IS NOT NULL OR has PRE check-in) -> attended
-    - confirmed + neither                                     -> no_show
-    - Practice status -> completed
-    - All pending purchases -> completed (unfreeze + commission)
+    Transitions:
+    - NO active Zoom meeting, OR an active meeting created in Zoom STUB mode
+      (ПРОМТ №530, settings.is_zoom_stub -- no real credentials configured):
+      confirmed + (joined_at IS NOT NULL OR PRE check-in) -> attended, else
+      -> no_show. Decided HERE, immediately, tagged legacy_proxy (unchanged
+      from before E21 step F -- covers practices published before Zoom
+      shipped, AND every practice on a server with no real Zoom credentials
+      today, since a stub meeting can never produce a real report).
+    - HAS an active meeting AND real credentials are configured (E21 step
+      F): confirmed bookings are DEFERRED -- left exactly as CONFIRMED, NOT
+      flipped here, NOT included in this call's diary projection or
+      feedback push. They are decided later by zoom/report_poller.py
+      (Zoom's report ripens ~15 min after a meeting ends, so deciding at
+      THIS moment would almost always just be "not ready yet"), or by that
+      module's deadline fallback if Zoom's report never arrives within
+      settings.zoom_attendance_decision_deadline_minutes. See
+      zoom/attendance_service.py's module docstring for the full mechanism
+      this defers to.
+    - Practice status -> completed (UNCONDITIONALLY, regardless of the above)
+    - All pending purchases -> completed (unfreeze + commission) --
+      UNCONDITIONALLY. Money settlement was never gated on attended/no_show
+      in this codebase and E21 does not change that; deferring the
+      attendance decision does not defer the money.
 
     `actor` is logged only (currently always "system") -- it does not change
     behavior. Session rules unchanged (P-01): no commit here.
@@ -622,43 +708,61 @@ async def _finalize_practice_core(
     bookings_result = await session.execute(bookings_stmt)
     bookings = bookings_result.scalars().all()
 
-    # W-1: presence is proven by a Zoom join OR a PRE check-in. joined_at is
-    # set only through the Zoom "join" flow; while Zoom is disabled it stays
-    # null, which would otherwise send every confirmed booking to no_show and
-    # block feedback / named reviews (E1). So a confirmed booking that left a
-    # PRE check-in counts as attended too. Runtime-local import keeps the
-    # bookings -> diary dependency one-way (diary imports from bookings).
-    from app.modules.diary.models import Checkin, CheckType
+    # E21 step F: an active Zoom meeting means these bookings' attendance is
+    # decided by zoom/report_poller.py, not here. Local import (zoom is a
+    # separate bounded context -- one-way dependency, same pattern as the
+    # diary/notifications imports elsewhere in this function).
+    from app.modules.zoom.models import ZoomMeeting, ZoomMeetingStatus
 
-    checkin_rows = await session.execute(
-        select(Checkin.booking_id).where(
-            Checkin.practice_id == practice_id,
-            Checkin.check_type == CheckType.PRE.value,
+    zoom_meeting = (
+        await session.execute(
+            select(ZoomMeeting).where(
+                ZoomMeeting.practice_id == practice_id,
+                ZoomMeeting.status == ZoomMeetingStatus.ACTIVE.value,
+            )
         )
-    )
-    checked_in_booking_ids = set(checkin_rows.scalars().all())
+    ).scalar_one_or_none()
+    # ПРОМТ №530: an active meeting created in Zoom STUB mode (no real
+    # credentials configured -- true on every server today) can never
+    # produce a real attendance report; zoom/report_poller.py would poll
+    # forever and the deadline fallback (settings.
+    # zoom_attendance_decision_deadline_minutes, 120) would be the ONLY
+    # thing that ever decided it -- a two-hour delay on the diary card,
+    # accrued hours, practice counts, and feedback eligibility for every
+    # single practice, a live regression the deploy battery's green run
+    # would not have caught (see test_diary_feed.py's finalize test). A
+    # stub meeting still gets created and exercised normally everywhere
+    # else (reschedule, retry, registrant creation, report ingestion all
+    # stay fully covered by stub mode, per zoom_client.py's own docstring --
+    # only THIS decision treats it as untracked). The moment real
+    # credentials are configured, settings.is_zoom_stub flips to False and
+    # the deferral switches itself back on with no other code change.
+    zoom_tracked = zoom_meeting is not None and not settings.is_zoom_stub
 
     attended_count = 0
     no_show_count = 0
+    deferred_count = 0
     # Collect (user_id, booking_id, status) for the diary feed projection.
     # We capture the resolved outcome per booking so each booker gets a card
-    # showing Done (attended) or "Не состоялась" (no_show).
+    # showing Done (attended) or "Не состоялась" (no_show). Deferred bookings
+    # are NOT added here -- their card is projected later, when decided.
     outcomes: list[tuple[UUID, UUID, str]] = []
 
-    for booking in bookings:
-        attended = (
-            booking.joined_at is not None
-            or booking.id in checked_in_booking_ids
+    if zoom_tracked:
+        deferred_count = len(bookings)
+        logger.info(
+            "practice_finalize_attendance_deferred_to_zoom",
+            practice_id=str(practice_id),
+            deferred_bookings=deferred_count,
         )
-        if attended:
-            booking.status = BookingStatus.ATTENDED.value
-            attended_count += 1
-        else:
-            booking.status = BookingStatus.NO_SHOW.value
-            no_show_count += 1
-        outcomes.append(
-            (booking.user_id, booking.id, booking.status)
+    else:
+        outcomes = await resolve_bookings_via_legacy_proxy(
+            list(bookings), practice_id, session,
         )
+        attended_count = sum(
+            1 for _, _, status in outcomes if status == BookingStatus.ATTENDED.value
+        )
+        no_show_count = len(outcomes) - attended_count
 
     practice.status = PracticeStatus.COMPLETED.value
 
@@ -679,6 +783,7 @@ async def _finalize_practice_core(
         actor=actor,
         attended=attended_count,
         no_show=no_show_count,
+        deferred_to_zoom=deferred_count,
         purchases_finalized=len(finalized),
     )
 
@@ -811,7 +916,9 @@ async def get_attendance(
     practice_id: UUID,
     user: User,
     session: AsyncSession,
-) -> tuple[Practice, list[Booking], dict[UUID, User], dict[UUID, "Checkin"]]:
+) -> tuple[
+    Practice, list[Booking], dict[UUID, User], dict[UUID, "Checkin"], int,
+]:
     """Get attendance list for a practice (master-only), enriched for prep.
 
     Returns all non-cancelled bookings with attendance data, plus two lookup
@@ -820,6 +927,9 @@ async def get_attendance(
                   instead of a bare user_id.
       - checkins: booking_id -> PRE Checkin, the participant's pre-practice
                   check-in (mood + comment), when they left one.
+    ...and unmatched_count: the size of the Zoom unmatched bucket for this
+    practice (E21 plan sec 6) -- COUNT only, no PII, since the master is
+    not an admin. 0 if there's no Zoom meeting for this practice at all.
 
     Both maps are built with one batch query each (id IN (...)), so the
     endpoint stays N+1-free no matter how many participants there are.
@@ -872,7 +982,28 @@ async def get_attendance(
         booking_ids, session,
     )
 
-    return practice, bookings, users, checkins
+    # E21 step G: unmatched-bucket count for the master's roster (count
+    # only, no raw rows -- the master is not an admin). Local import keeps
+    # the bookings -> zoom dependency one-way, same pattern as diary above.
+    from app.modules.zoom.models import ZoomAttendanceSegment, ZoomMeeting
+
+    zoom_meeting = (
+        await session.execute(
+            select(ZoomMeeting.id).where(ZoomMeeting.practice_id == practice_id)
+        )
+    ).scalar_one_or_none()
+    unmatched_count = 0
+    if zoom_meeting is not None:
+        unmatched_count = (
+            await session.execute(
+                select(func.count(ZoomAttendanceSegment.id)).where(
+                    ZoomAttendanceSegment.zoom_meeting_id == zoom_meeting,
+                    ZoomAttendanceSegment.matched_registrant_row_id.is_(None),
+                )
+            )
+        ).scalar_one()
+
+    return practice, bookings, users, checkins, unmatched_count
 
 
 # ===================================================================
@@ -887,7 +1018,7 @@ async def list_user_bookings(
     status_filter: str | None = None,
     limit: int = 20,
     offset: int = 0,
-) -> tuple[list[tuple[Booking, Practice, bool, bool]], int]:
+) -> tuple[list[tuple[Booking, Practice, bool, bool, str | None]], int]:
     """List bookings for a user with practice details (paginated).
 
     B-05: count derived from base query subquery instead of maintaining
@@ -902,12 +1033,18 @@ async def list_user_bookings(
     with two set-membership queries over the current page -- no N+1.
 
     Returns:
-        Tuple of (list of (Booking, Practice, has_feedback, has_checkin)
-        tuples, total count).
+        Tuple of (list of (Booking, Practice, has_feedback, has_checkin,
+        zoom_registrant_join_url) tuples, total count).
     """
     # Local import keeps the bookings -> diary dependency one-way and avoids
     # any import-order surprise (diary.projections imports bookings lazily).
     from app.modules.diary.models import Checkin, CheckType, Feedback
+    from app.modules.zoom.models import (
+        ZoomMeeting,
+        ZoomMeetingStatus,
+        ZoomRegistrant,
+        ZoomRegistrantStatus,
+    )
 
     base = (
         select(Booking, Practice)
@@ -968,12 +1105,46 @@ async def list_user_bookings(
             ).scalars().all()
         )
 
+    # T21-1: this user's own registrant join_url per booking (set membership,
+    # same no-N+1 pattern as the two diary flags above). role='student' is
+    # implicit -- booking_id is NULL for the master's own host row (see
+    # ZoomRegistrant model docstring).
+    #
+    # ПРОМТ №563: joined to ZoomMeeting.status == ACTIVE, same posture as the
+    # host path (zoom/service.py's get_host_join_url[s]). Without this, a
+    # registrant row whose join_url was set while the meeting was active
+    # keeps being handed out after the meeting is deleted outside the normal
+    # cancel flow (get_host_join_url's own docstring: the registrant row is
+    # not touched on delete, only the meeting -- status must be checked
+    # here). A PENDING_CREATION series child is unaffected either way: its
+    # registrant row (if any) has join_url IS NULL until the poller actually
+    # succeeds (zoom/service.py's create_registrant_for_booking queues it as
+    # PENDING with no join_url), so it was already excluded by the
+    # `join_url.is_not(None)` filter and still reads as the honest "ссылка
+    # готовится" empty state, not broken by this join.
+    join_urls: dict[UUID, str] = {}
+    if booking_ids:
+        rows = (
+            await session.execute(
+                select(ZoomRegistrant.booking_id, ZoomRegistrant.join_url)
+                .join(ZoomMeeting, ZoomRegistrant.zoom_meeting_id == ZoomMeeting.id)
+                .where(
+                    ZoomRegistrant.booking_id.in_(booking_ids),
+                    ZoomRegistrant.status != ZoomRegistrantStatus.CANCELLED.value,
+                    ZoomRegistrant.join_url.is_not(None),
+                    ZoomMeeting.status == ZoomMeetingStatus.ACTIVE.value,
+                )
+            )
+        ).all()
+        join_urls = {row[0]: row[1] for row in rows}
+
     items = [
         (
             booking,
             practice,
             booking.practice_id in feedback_practice_ids,
             booking.id in checkin_booking_ids,
+            join_urls.get(booking.id),
         )
         for booking, practice in page
     ]
@@ -986,7 +1157,7 @@ async def list_upcoming_bookings(
     session: AsyncSession,
     *,
     limit: int = 10,
-) -> list[tuple[Booking, Practice, bool, bool]]:
+) -> list[tuple[Booking, Practice, bool, bool, str | None]]:
     """Confirmed bookings that are live-or-upcoming, soonest first.
 
     Feeds the dashboard «Ближайшая практика» widget. Unlike list_user_bookings
@@ -1000,10 +1171,17 @@ async def list_upcoming_bookings(
     ``now - max_duration`` may still be live. The client applies the exact
     per-row ``scheduled_at + duration_minutes`` ceiling (nearestBookings.ts).
 
-    Returns the same (Booking, Practice, has_feedback, has_checkin) row shape as
-    list_user_bookings so the router reuses one response builder.
+    Returns the same (Booking, Practice, has_feedback, has_checkin,
+    zoom_registrant_join_url) row shape as list_user_bookings so the router
+    reuses one response builder.
     """
     from app.modules.diary.models import Checkin, CheckType, Feedback
+    from app.modules.zoom.models import (
+        ZoomMeeting,
+        ZoomMeetingStatus,
+        ZoomRegistrant,
+        ZoomRegistrantStatus,
+    )
 
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(minutes=settings.practice_max_duration_minutes)
@@ -1055,12 +1233,31 @@ async def list_upcoming_bookings(
             ).scalars().all()
         )
 
+    # ПРОМТ №563: same meeting-state join as list_user_bookings above -- see
+    # that function's comment for the full reasoning.
+    join_urls: dict[UUID, str] = {}
+    if booking_ids:
+        rows = (
+            await session.execute(
+                select(ZoomRegistrant.booking_id, ZoomRegistrant.join_url)
+                .join(ZoomMeeting, ZoomRegistrant.zoom_meeting_id == ZoomMeeting.id)
+                .where(
+                    ZoomRegistrant.booking_id.in_(booking_ids),
+                    ZoomRegistrant.status != ZoomRegistrantStatus.CANCELLED.value,
+                    ZoomRegistrant.join_url.is_not(None),
+                    ZoomMeeting.status == ZoomMeetingStatus.ACTIVE.value,
+                )
+            )
+        ).all()
+        join_urls = {row[0]: row[1] for row in rows}
+
     return [
         (
             booking,
             practice,
             booking.practice_id in feedback_practice_ids,
             booking.id in checkin_booking_ids,
+            join_urls.get(booking.id),
         )
         for booking, practice in page
     ]

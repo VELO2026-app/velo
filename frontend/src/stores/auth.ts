@@ -120,10 +120,34 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /**
+   * Refetch /users/me and write the result into the store -- UNLESS the
+   * session this call started under is no longer the current one by the
+   * time it resolves (ПРОМТ №550, closing a ПРОМТ №549 adversarial finding).
+   *
+   * Pre-existing gap, only reachable in practice since T21-4/T21-5: before
+   * useRoleFreshness.ts (ПРОМТ №546) started calling this on every
+   * navigation and every 30s while foregrounded, fetchMe() ran rarely enough
+   * (app boot, one screen mounting) that a call landing after logout was a
+   * near-impossible timing coincidence. Promoting it to a routine background
+   * call is what makes the race actually reachable: logout() stops FUTURE
+   * poll ticks (stopRoleFreshnessPoll) but cannot cancel a request already
+   * in flight, and this function used to check the token only at entry --
+   * an in-flight call that resolved after `_clearSession()` ran would still
+   * unconditionally `_setUser(me)`, resurrecting a stale user (and the role/
+   * masterApplication computeds derived from it) into a session that had
+   * already logged out or moved on.
+   */
   async function fetchMe(): Promise<void> {
     if (!token.value) return
+    const requestToken = token.value
     try {
       const me = await getMe()
+      // The token changed (cleared by logout, or a new session started)
+      // while this request was in flight -- the session it was fetched for
+      // is gone. Discard the result instead of writing it into whatever
+      // session is current now.
+      if (token.value !== requestToken) return
       _setUser(me)
     } catch (error) {
       if (error instanceof ApiResponseError && error.status === 401) {
@@ -162,6 +186,12 @@ export const useAuthStore = defineStore('auth', () => {
     // Dynamic import breaks the potential circular dep auth -> master -> auth.
     const { useMasterStore } = await import('@/stores/master')
     useMasterStore().$reset()
+
+    // T21-4/T21-5 (ПРОМТ №546): stop the foreground role-freshness poll so it
+    // doesn't keep ticking a fetchMe() against a session that's about to be
+    // cleared. Dynamic import, same circular-dep reasoning as above.
+    const { stopRoleFreshnessPoll } = await import('@/composables/useRoleFreshness')
+    stopRoleFreshnessPoll()
 
     // In Telegram, "logout" closes the Mini App (product decision): on the
     // next open it starts fresh -> LoadingView -> auto re-login via initData.

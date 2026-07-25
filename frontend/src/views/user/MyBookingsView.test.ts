@@ -33,7 +33,8 @@ import * as bookingsApi from '@/api/bookings'
 // The REAL store, read where the assertion is about which error ref a failure
 // landed in -- the distinction the №442 root fix introduced.
 import { useBookingsStore } from '@/stores/bookings'
-import type { BookingWithPracticeResponse } from '@/api/types'
+import { useAuthStore } from '@/stores/auth'
+import type { BookingWithPracticeResponse, UserResponse } from '@/api/types'
 
 vi.mock('@/api/bookings')
 
@@ -103,6 +104,37 @@ function page(items: BookingWithPracticeResponse[], total = items.length) {
   return { items, total, limit: 20, offset: 0 }
 }
 
+// SW3: the viewer's profile timezone, distinct from every fixture's own
+// practice.timezone (default 'UTC') -- used to prove isToday/isTomorrow/
+// badgeFor read the VIEWER's tz, not the practice's own.
+const VIEWER_TZ = 'Europe/Moscow' // UTC+3
+
+function user(overrides: Partial<UserResponse> = {}): UserResponse {
+  return {
+    id: 'user_1',
+    telegram_id: 1,
+    role: 'user',
+    first_name: 'Аня',
+    last_name: null,
+    avatar_url: null,
+    timezone: VIEWER_TZ,
+    language: 'ru',
+    is_active: true,
+    balance_cents: 0,
+    created_at: '2026-01-01T00:00:00Z',
+    last_login_at: null,
+    onboarding_completed: true,
+    master_onboarding_completed: false,
+    phone: null,
+    bio: null,
+    email: null,
+    notifications: {} as UserResponse['notifications'],
+    master_notifications: null,
+    role_switch: null,
+    ...overrides,
+  }
+}
+
 let app: App | null = null
 let host: HTMLElement | null = null
 let pinia: Pinia
@@ -134,6 +166,7 @@ beforeEach(() => {
   pinia = createPinia()
   setActivePinia(pinia)
   vi.mocked(bookingsApi.getMyBookings).mockReset().mockResolvedValue(page([]))
+  useAuthStore().user = user()
   push.mockReset()
   back.mockReset()
 })
@@ -294,10 +327,13 @@ describe('MyBookingsView', () => {
       expect(text()).toContain('Завершена')
     })
 
-    it('a confirmed booking whose practice already ended is past and carries NO upcoming badge', async () => {
+    it('a confirmed booking whose practice already ended is past and badged «Подсчитывается», not an upcoming badge', async () => {
       // MyBookingsView.vue:198-201: the backend keeps confirmed until finalize
       // (settlement grace window), so status alone would mis-file it as upcoming
       // and paint a misleading «Сегодня» on a practice that is over.
+      // AT-2 (ПРОМТ №585): it's ALSO not silent any more -- a Zoom-tracked
+      // practice awaiting its attendance report gets an honest "still being
+      // decided" badge instead of no badge at all.
       vi.mocked(bookingsApi.getMyBookings).mockResolvedValue(
         page([
           booking(
@@ -314,6 +350,7 @@ describe('MyBookingsView', () => {
       expect(text()).not.toContain('Предстоящие')
       expect(text()).not.toContain('Сегодня')
       expect(text()).not.toContain('В эфире')
+      expect(text()).toContain('Подсчитывается')
     })
 
     it('a practice in progress is upcoming and badged «В эфире»', async () => {
@@ -331,6 +368,72 @@ describe('MyBookingsView', () => {
 
       expect(text()).toContain('Предстоящие')
       expect(text()).toContain('В эфире')
+    })
+
+    it('SW3: badge uses the VIEWER profile timezone, not the practice\'s own -- distinguishing fixture', async () => {
+      // Same distinguishing instant/tz pair as CalendarView's SW2 test: 20:00
+      // UTC on the 20th (after NOW=12:00Z, not live, not ended). In the
+      // VIEWER's Moscow (UTC+3) that's 23:00 on the 20th -- same calendar day
+      // as NOW there (15:00) -- so the correct badge is "Сегодня". In the
+      // practice's OWN tz (Asia/Yekaterinburg, UTC+5, no DST) the same instant
+      // is 01:00 on the 21st while NOW there is 17:00 on the 20th, so the OLD
+      // buggy behaviour (reading b.practice.timezone) badges it "Завтра"
+      // instead -- a genuinely different label, not a coincidental match.
+      vi.mocked(bookingsApi.getMyBookings).mockResolvedValue(
+        page([
+          booking(
+            'tzcheck',
+            { status: 'confirmed' },
+            { scheduled_at: '2026-07-20T20:00:00Z', duration_minutes: 60, timezone: 'Asia/Yekaterinburg' },
+          ),
+        ]),
+      )
+      mount()
+      await flush()
+
+      expect(text()).toContain('Сегодня')
+      expect(text()).not.toContain('Завтра')
+    })
+
+    // SW9 (found while grepping for other sites during ПРОМТ №577's
+    // comparison task): isTomorrow's OWN `tomorrow.setDate(getDate()+1)` is
+    // device-local Date math, unlike the fix applied to utils/format.ts's
+    // formatDateShort/dayLabelOf. Fixing SW3's "which timezone to compare
+    // in" left this local mutation in place -- on a day the DEVICE's own OS
+    // timezone crosses a DST transition, it does not land exactly +24h,
+    // which can resolve to the wrong calendar day once compared against the
+    // viewer's timezone, independent of whether the viewer's timezone itself
+    // observes DST.
+    it('SW9: "Завтра" is unaffected by the DEVICE\'s own DST transition', async () => {
+      vi.stubEnv('TZ', 'America/New_York') // US spring-forward 2026: Mar 8.
+      try {
+        // "Now" = Mar 7, 8pm EST (the evening before the device's own DST
+        // jump). setDate(getDate()+1) resolves to Mar 8, 8pm -- by then EDT
+        // has started, so that instant is only +23h from "now", not +24h.
+        vi.setSystemTime(new Date('2026-03-08T01:00:00.000Z'))
+        // Viewer profile tz Cape Verde (UTC-1, no DST, ever) straddles a
+        // local midnight between the OLD (buggy, +23h) and the CORRECT
+        // (+24h) "tomorrow" instant -- same fixture as format.test.ts's SW9
+        // coverage for formatDateShort.
+        useAuthStore().user = user({ timezone: 'Atlantic/Cape_Verde' })
+
+        vi.mocked(bookingsApi.getMyBookings).mockResolvedValue(
+          page([
+            booking(
+              'dstcheck',
+              { status: 'confirmed' },
+              { scheduled_at: '2026-03-09T12:00:00Z', duration_minutes: 60, timezone: 'UTC' },
+            ),
+          ]),
+        )
+        mount()
+        await flush()
+
+        expect(text()).toContain('Завтра')
+      } finally {
+        vi.unstubAllEnvs()
+        vi.setSystemTime(NOW)
+      }
     })
   })
 

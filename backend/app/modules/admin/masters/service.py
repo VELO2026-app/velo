@@ -37,7 +37,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 import structlog
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -98,6 +98,7 @@ async def verify_master(
     notes: str | None,
     session: AsyncSession,
     promote: list[str] | None = None,
+    master_only: list[str] | None = None,
 ) -> MasterProfile:
     """Verify a pending master application (T4, ПРОМТ №295).
 
@@ -119,6 +120,13 @@ async def verify_master(
     untouched; parseMethods/directionLabel (frontend, ПРОМТ №503 commits 1-2)
     now resolve it to the promoted chip on the strength of the catalog label
     matching, the same as any other catalog-matched value.
+
+    master_only (T22-6, ПРОМТ №561): mirrors approve_method_change's own
+    parameter -- the admin's "Только этому мастеру" choice on this same
+    initial-application dialog. Each label gets a MASTER-SCOPED
+    TaxonomyDirection row (_scope_custom_methods_to_master), so the new
+    master's own create-practice picker offers it even though no other
+    master ever sees it.
     """
     profile = await _load_pending_profile(user_id, session)
 
@@ -133,6 +141,7 @@ async def verify_master(
     profile.set_jsonb("data", new_data)
 
     promoted = await _promote_custom_methods(promote or [], session)
+    scoped = await _scope_custom_methods_to_master(master_only or [], user_id, session)
 
     # M-01: audit trail for master verification.
     await record_audit(
@@ -141,7 +150,11 @@ async def verify_master(
         actor_type="admin",
         target_type="master_profile",
         target_id=user_id,
-        data={"notes": notes, "promoted_to_catalog": promoted},
+        data={
+            "notes": notes,
+            "promoted_to_catalog": promoted,
+            "scoped_to_master": scoped,
+        },
         session=session,
     )
 
@@ -150,6 +163,7 @@ async def verify_master(
         user_id=str(user_id),
         admin_id=str(admin.id),
         promoted_to_catalog=promoted,
+        scoped_to_master=scoped,
     )
 
     return profile
@@ -490,11 +504,74 @@ async def _promote_custom_methods(
     return promoted
 
 
+async def _scope_custom_methods_to_master(
+    labels: list[str],
+    master_id: UUID,
+    session: AsyncSession,
+) -> list[str]:
+    """Insert each label as a new MASTER-SCOPED TaxonomyDirection (T22-6,
+    ПРОМТ №561): the admin's "Только этому мастеру" choice.
+
+    Sibling of _promote_custom_methods, same insert shape (synthetic
+    value, source='custom'), except master_id=master_id -- invisible to
+    every OTHER master's catalog fetch (list_active_taxonomy's scope
+    filter), visible only to this one. This is what closes T22-6: before
+    this, "for this master only" wrote the raw label into
+    data.profile.methods and created NOTHING, so the direction had zero
+    catalog representation anywhere a practice could reference it.
+
+    Dedup is case-insensitive against every label THIS MASTER could
+    actually collide with -- every global row (master_id IS NULL) plus this
+    master's own previously-scoped rows -- not against every other
+    master's private rows, which are none of this master's business and
+    must not block them from getting their own row with the same text.
+    Returns the labels actually inserted (skips the rest).
+    """
+    if not labels:
+        return []
+
+    existing_labels = (
+        await session.execute(
+            select(TaxonomyDirection.label).where(
+                or_(
+                    TaxonomyDirection.master_id.is_(None),
+                    TaxonomyDirection.master_id == master_id,
+                )
+            )
+        )
+    ).scalars().all()
+    seen_lower = {label.lower() for label in existing_labels}
+
+    scoped: list[str] = []
+    for raw in labels:
+        label = raw.strip()
+        if not label or label.lower() in seen_lower:
+            continue
+        direction = TaxonomyDirection(
+            value=f"custom_{uuid_module.uuid4().hex[:8]}",
+            label=label,
+            source="custom",
+            master_id=master_id,
+        )
+        try:
+            async with session.begin_nested():
+                session.add(direction)
+                await session.flush()
+        except IntegrityError:
+            # Slug collision (astronomically unlikely) or a racing duplicate
+            # insert -- skip rather than fail the whole approval.
+            continue
+        seen_lower.add(label.lower())
+        scoped.append(label)
+    return scoped
+
+
 async def approve_method_change(
     user_id: UUID,
     admin: User,
     session: AsyncSession,
     promote: list[str] | None = None,
+    master_only: list[str] | None = None,
 ) -> MasterProfile:
     """Approve a pending method change-request.
 
@@ -507,6 +584,15 @@ async def approve_method_change(
     masters can pick them from MethodTaxonomyPicker instead of retyping
     free text. Absent/empty -> no catalog write, identical to pre-stage-4
     behavior. Deduped against existing rows (_promote_custom_methods).
+
+    master_only (T22-6, ПРОМТ №561): the admin's OTHER choice on the same
+    dialog -- "Только этому мастеру". Before this parameter existed, picking
+    it approved the method but wrote NOTHING to the catalog, so the
+    direction had no representation anywhere a practice could reference it
+    and silently never appeared as a create-practice option (T22-6). Each
+    label here gets its own MASTER-SCOPED row instead (_scope_custom_
+    methods_to_master) -- a real taxonomy entry, visible only in THIS
+    master's own create-practice picker.
     """
     profile = await _load_profile_with_pending_method_change(user_id, session)
 
@@ -520,6 +606,7 @@ async def approve_method_change(
     profile.set_jsonb("data", new_data)
 
     promoted = await _promote_custom_methods(promote or [], session)
+    scoped = await _scope_custom_methods_to_master(master_only or [], user_id, session)
 
     await record_audit(
         event="master_method_change_approved",
@@ -527,7 +614,11 @@ async def approve_method_change(
         actor_type="admin",
         target_type="master_profile",
         target_id=user_id,
-        data={"methods": proposed, "promoted_to_catalog": promoted},
+        data={
+            "methods": proposed,
+            "promoted_to_catalog": promoted,
+            "scoped_to_master": scoped,
+        },
         session=session,
     )
 
@@ -536,6 +627,7 @@ async def approve_method_change(
         user_id=str(user_id),
         admin_id=str(admin.id),
         promoted_to_catalog=promoted,
+        scoped_to_master=scoped,
     )
 
     return profile

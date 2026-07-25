@@ -19,15 +19,21 @@
 // getActivePinia().
 //
 // PROVEN ABSENT (do not cargo-cult onto this screen): NO loading/error ladder.
-// Grepped the template -- no VLoader, no VEmptyState import, no v-if on any
-// loading/error flag. Every field access goes through `practice?.x ?? fallback`
-// (.vue:47-48), so the screen renders its full shape immediately and swaps in
-// real values once the store resolves; there is nothing that "shows a loader"
-// to assert. NO status branching either: the "В эфире" badge (.vue:51) is
-// unconditional -- this screen trusts whatever navigated it here (only reached
-// from a dashboard/booking CTA gated on the practice actually being live) and
-// does not itself re-check practice.status. Both confirmed by reading the
-// full template, not assumed from the screen's name.
+// Grepped the template -- no VLoader, no v-if on any loading/error flag.
+// Every field access goes through `practice?.x ?? fallback` (.vue:47-48), so
+// the screen renders its full shape immediately and swaps in real values once
+// the store resolves; there is nothing that "shows a loader" to assert. NO
+// status branching either: the "В эфире" badge (.vue:51) is unconditional --
+// this screen trusts whatever navigated it here (only reached from a
+// dashboard/booking CTA gated on the practice actually being live) and does
+// not itself re-check practice.status. Both confirmed by reading the full
+// template, not assumed from the screen's name.
+//
+// N1 (ПРОМТ №587): VEmptyState WAS added, but only for one specific case --
+// no booking at all for this practice (`!myBooking`) -- replacing the
+// badges + "Войти" button block. It is not a general loading/error ladder;
+// Check-in and "Покинуть практику" stay rendered regardless (deliberately
+// out of this fix's scope, see the PROMPT).
 //
 // Because both stores are mocked getters (not reactive refs), state must be
 // set BEFORE mount() -- mutating bookingsState/practicesState mid-test does
@@ -140,7 +146,9 @@ function practice(overrides: Partial<PracticeResponse> = {}): PracticeResponse {
   }
 }
 
-function booking(overrides: Partial<BookingWithPracticeResponse> = {}): BookingWithPracticeResponse {
+function booking(
+  overrides: Partial<BookingWithPracticeResponse> = {},
+): BookingWithPracticeResponse {
   return {
     id: 'b1',
     practice_id: 'p1',
@@ -214,6 +222,9 @@ function leaveBtn(): HTMLButtonElement | null {
 function backBtn(): HTMLButtonElement | null {
   return host?.querySelector<HTMLButtonElement>('.live__back') ?? null
 }
+function emptyState(): HTMLElement | null {
+  return host?.querySelector('.v-empty') ?? null
+}
 
 beforeEach(() => {
   pinia = createPinia()
@@ -279,6 +290,40 @@ describe('PracticeLiveView', () => {
   })
 
   // ===========================================================================
+  describe('N1 (ПРОМТ №587): honest "not booked" empty state', () => {
+    it('no matching booking: the empty state renders with the exact copy, and the join button/badges are absent -- Check-in and «Покинуть практику» stay', () => {
+      practicesState.selected = practice({ zoom_link: 'https://zoom.us/j/123456' })
+      bookingsState.bookings = []
+      mount()
+
+      expect(emptyState()).not.toBeNull()
+      expect(emptyState()?.textContent).toContain('Вы не записаны на это занятие')
+      expect(emptyState()?.textContent).toContain('Чтобы войти, сначала забронируйте практику')
+      expect(enterBtn()).toBeNull()
+      expect(checkinBtn()).not.toBeNull()
+      expect(leaveBtn()).not.toBeNull()
+    })
+
+    it('with an active booking: unchanged -- no empty state, the normal join button renders instead', () => {
+      practicesState.selected = practice({ zoom_link: 'https://zoom.us/j/123456' })
+      bookingsState.bookings = [booking()]
+      mount()
+
+      expect(emptyState()).toBeNull()
+      expect(enterBtn()).not.toBeNull()
+    })
+
+    it('does not auto-redirect -- no router.push/back is called just because there is no booking', () => {
+      practicesState.selected = practice()
+      bookingsState.bookings = []
+      mount()
+
+      expect(push).not.toHaveBeenCalled()
+      expect(back).not.toHaveBeenCalled()
+    })
+  })
+
+  // ===========================================================================
   describe('⭐ the security guard (AUDIT-0520-02): Войти only for a valid https Zoom link', () => {
     it('a valid https zoom_link + an active booking: Войти is enabled', () => {
       practicesState.selected = practice({ zoom_link: 'https://zoom.us/j/123456' })
@@ -337,20 +382,126 @@ describe('PracticeLiveView', () => {
       expect(enterBtn()?.disabled).toBe(true)
     })
 
-    it('a valid https link but NO booking still disables Войти -- both conditions are required, not either', () => {
+    it('a valid https link but NO booking: N1 (ПРОМТ №587) -- "Войти" is GONE, replaced by the not-booked empty state, not merely disabled', () => {
       practicesState.selected = practice({ zoom_link: 'https://zoom.us/j/123456' })
       bookingsState.bookings = []
       mount()
 
-      expect(enterBtn()?.disabled).toBe(true)
+      expect(enterBtn()).toBeNull()
+      expect(emptyState()).not.toBeNull()
     })
 
-    it('a CANCELLED booking for this practice does not count as "my booking" -- Войти stays disabled even with a valid link', () => {
+    it('a CANCELLED booking for this practice does not count as "my booking" -- N1: the not-booked empty state shows, same as no booking at all', () => {
       practicesState.selected = practice({ zoom_link: 'https://zoom.us/j/123456' })
       bookingsState.bookings = [booking({ status: 'cancelled' })]
       mount()
 
+      expect(enterBtn()).toBeNull()
+      expect(emptyState()).not.toBeNull()
+    })
+  })
+
+  // ===========================================================================
+  describe('D3 link ladder (T21-1, ПРОМТ №541): personal link first, manual marked, else pending', () => {
+    it('a personal registrant link takes priority over the manual zoom_link -- opens the PERSONAL one', async () => {
+      practicesState.selected = practice({ zoom_link: 'https://zoom.us/j/manual' })
+      bookingsState.bookings = [
+        booking({
+          joined_at: '2026-07-20T10:01:00Z',
+          zoom_registrant_join_url: 'https://zoom.us/w/personal?tk=abc',
+        }),
+      ]
+      mount()
+
+      enterBtn()?.click()
+      await flush()
+
+      expect(openLink).toHaveBeenCalledWith('https://zoom.us/w/personal?tk=abc')
+    })
+
+    it('no personal link, but a valid manual zoom_link: Войти is enabled and shows the "not counted" mark', () => {
+      practicesState.selected = practice({ zoom_link: 'https://zoom.us/j/manual' })
+      bookingsState.bookings = [booking()] // no zoom_registrant_join_url in the fixture
+      mount()
+
+      expect(enterBtn()?.disabled).toBe(false)
+      expect(text()).toContain('посещение не засчитается')
+    })
+
+    it('a personal link present: the "not counted" mark does NOT show', () => {
+      practicesState.selected = practice({ zoom_link: 'https://zoom.us/j/manual' })
+      bookingsState.bookings = [
+        booking({ zoom_registrant_join_url: 'https://zoom.us/w/personal?tk=abc' }),
+      ]
+      mount()
+
+      expect(text()).not.toContain('посещение не засчитается')
+    })
+
+    it('neither link exists: Войти is disabled and reads "Ссылка готовится", not the default label', () => {
+      practicesState.selected = practice({ zoom_link: null })
+      bookingsState.bookings = [booking({ zoom_registrant_join_url: null, joined_at: null })]
+      mount()
+
       expect(enterBtn()?.disabled).toBe(true)
+      expect(text()).toContain('Ссылка готовится')
+    })
+
+    // A4 V2 (ПРОМТ №572): before this, create_failed and pending_creation
+    // rendered the IDENTICAL "Ссылка готовится" state -- a permanently
+    // failed meeting looked exactly like one still being created, forever.
+    it('the meeting permanently FAILED (create_failed): honest distinct state, not "готовится"', () => {
+      practicesState.selected = practice({ zoom_link: null, zoom_meeting_status: 'create_failed' })
+      bookingsState.bookings = [booking({ zoom_registrant_join_url: null, joined_at: null })]
+      mount()
+
+      expect(enterBtn()?.disabled).toBe(true)
+      expect(enterBtn()?.textContent).toContain('Ссылка недоступна')
+      expect(text()).not.toContain('Ссылка готовится')
+      expect(text()).toContain('Не удалось создать встречу')
+    })
+
+    it('pending_creation is still the honest "готовится" state, not "failed"', () => {
+      // The discriminator: pending_creation must NOT read as a failure.
+      practicesState.selected = practice({
+        zoom_link: null,
+        zoom_meeting_status: 'pending_creation',
+      })
+      bookingsState.bookings = [booking({ zoom_registrant_join_url: null, joined_at: null })]
+      mount()
+
+      expect(enterBtn()?.disabled).toBe(true)
+      expect(enterBtn()?.textContent).toContain('Ссылка готовится')
+      expect(text()).not.toContain('Не удалось создать встречу')
+    })
+
+    it('a manual zoom_link still wins over create_failed -- the link itself is the source of truth', () => {
+      practicesState.selected = practice({
+        zoom_link: 'https://zoom.us/j/manual',
+        zoom_meeting_status: 'create_failed',
+      })
+      bookingsState.bookings = [booking({ zoom_registrant_join_url: null })]
+      mount()
+
+      expect(enterBtn()?.disabled).toBe(false)
+      expect(text()).toContain('посещение не засчитается')
+      expect(text()).not.toContain('Не удалось создать встречу')
+    })
+
+    it('a non-https personal link is never opened -- falls through to the manual link instead', async () => {
+      practicesState.selected = practice({ zoom_link: 'https://zoom.us/j/manual' })
+      bookingsState.bookings = [
+        booking({
+          joined_at: '2026-07-20T10:01:00Z',
+          zoom_registrant_join_url: 'http://insecure.example/tk=abc',
+        }),
+      ]
+      mount()
+
+      enterBtn()?.click()
+      await flush()
+
+      expect(openLink).toHaveBeenCalledWith('https://zoom.us/j/manual')
     })
   })
 

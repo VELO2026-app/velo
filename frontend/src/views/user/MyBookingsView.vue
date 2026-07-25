@@ -92,11 +92,13 @@ import { useBookingsStore } from '@/stores/bookings'
 import { useToast } from '@/composables/useToast'
 import BookingCard, { type BookingBadge } from '@/components/shared/BookingCard.vue'
 import { isLiveNow, hasEnded as endedByClock } from '@/utils/bookingStatus'
+import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import type { BookingWithPracticeResponse } from '@/api/types'
 
 const router = useRouter()
 const toast = useToast()
 const store = useBookingsStore()
+const viewerTz = useViewerTimezone()
 
 // A failed «Показать ещё» keeps the list (the error rung is initial-load-only,
 // :28) -- which, until now, meant the tap did nothing and NOTHING said why.
@@ -139,10 +141,10 @@ function isLive(b: BookingWithPracticeResponse): boolean {
 }
 
 /**
- * Calendar-date comparison helpers. S-1: dates are compared in the
- * practice's own timezone (the same one formatDate renders), not the
- * browser's local timezone -- otherwise "Завтра" could disagree with the
- * shown date near midnight across timezones. Same en-CA + timeZone pattern
+ * Calendar-date comparison helpers. SW3 (ПРОМТ №577): dates are compared in
+ * the VIEWER's profile timezone (matching BookingCard's own rendered date
+ * text), not the practice's own timezone and not the browser's -- otherwise
+ * "Завтра" could disagree with the shown date. Same en-CA + timeZone pattern
  * as formatDateShort in utils/format.ts.
  */
 function calendarDate(d: Date, timezone: string): string {
@@ -159,8 +161,11 @@ function isToday(iso: string, timezone: string): boolean {
 }
 
 function isTomorrow(iso: string, timezone: string): boolean {
-  const tomorrow = new Date()
-  tomorrow.setDate(tomorrow.getDate() + 1)
+  // SW9: +24h on the epoch, NOT Date.setDate() -- setDate mutates in the
+  // DEVICE's own local timezone (unrelated to the `timezone` param), which
+  // can skew by other than 24h on a DST transition day. Same fix as
+  // utils/format.ts's formatDateShort/dayLabelOf.
+  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000)
   return calendarDate(new Date(iso), timezone) === calendarDate(tomorrow, timezone)
 }
 
@@ -170,7 +175,7 @@ function isTomorrow(iso: string, timezone: string): boolean {
  */
 function upcomingRank(b: BookingWithPracticeResponse): number {
   const iso = b.practice.scheduled_at
-  const tz = b.practice.timezone
+  const tz = viewerTz.value ?? 'UTC'
   if (isLive(b)) return 0
   if (isToday(iso, tz)) return 1
   if (isTomorrow(iso, tz)) return 2
@@ -205,16 +210,25 @@ function badgeFor(b: BookingWithPracticeResponse): BookingBadge | null {
   if (b.status === 'attended') return { label: 'Завершена', variant: 'done' }
   if (b.status === 'cancelled') return { label: 'Отменена', variant: 'cancelled' }
   if (b.status === 'no_show') return { label: 'Не состоялась', variant: 'no_show' }
-  // Confirmed/pending but the practice is already over (awaiting backend
-  // finalize): it sits in "Прошедшие" with NO upcoming badge — no misleading
+  // AT-2: confirmed AND already ended -> a Zoom-tracked practice awaiting its
+  // attendance report (bookings/service.py deliberately leaves it CONFIRMED
+  // until the report ripens or the deadline fallback fires). Distinguish
+  // this from silence so it never reads as indistinguishable from a no-show
+  // at a glance -- an honest "still being decided" badge instead.
+  if (b.status === 'confirmed' && hasEnded(b)) {
+    return { label: 'Подсчитывается', variant: 'calculating' }
+  }
+  // Pending but the practice is already over (awaiting backend finalize):
+  // it sits in "Прошедшие" with NO upcoming badge — no misleading
   // "Сегодня" / "В эфире" on a practice that has ended.
   if (hasEnded(b)) return null
   // Upcoming -> live takes priority, then today / tomorrow; later dates none.
   if (isLive(b)) return { label: 'В эфире', variant: 'live' }
-  if (isToday(b.practice.scheduled_at, b.practice.timezone)) {
+  const tz = viewerTz.value ?? 'UTC'
+  if (isToday(b.practice.scheduled_at, tz)) {
     return { label: 'Сегодня', variant: 'today' }
   }
-  if (isTomorrow(b.practice.scheduled_at, b.practice.timezone)) {
+  if (isTomorrow(b.practice.scheduled_at, tz)) {
     return { label: 'Завтра', variant: 'tomorrow' }
   }
   return null

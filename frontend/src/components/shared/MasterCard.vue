@@ -143,4 +143,17 @@ function onMore(): void {
   gap: var(--space-1);
   margin-top: var(--space-1);
 }
+
+/* T21-2 (ПРОМТ №546): a stored method is ONE flat "Направление — Вид" string
+   (methodTaxonomy.ts SEP), so a single composite tag can be long -- flex-wrap
+   above only wraps BETWEEN tags, it cannot help one tag whose own content
+   overflows. VTag's shared default is white-space:nowrap (correct everywhere
+   else it's used, short bounded labels). Same escape hatch already proven at
+   AdminCatalogView.vue's chips (ПРОМТ №503) -- scoped via :deep() so the
+   shared component's nowrap default is untouched everywhere else it's used. */
+.master-card__tags :deep(.v-tag) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
 </style>

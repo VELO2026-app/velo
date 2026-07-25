@@ -1,14 +1,24 @@
 <!--
-  VELO Frontend -- MasterStudentProfileView (Master DS, 2026-06-11)
+  VELO Frontend -- MasterStudentProfileView (Master DS, 2026-06-11; block +
+  report flow P3, ПРОМТ №592)
 
-  "Профиль ученика" — one student's card: hero, stats, recent check-ins,
-  feedbacks, and a "Написать сообщение" action. Rendered inside MasterShell.
+  "Профиль ученика" — one student's card: hero, GROUP CHIPS, stats, recent
+  check-ins, feedbacks, "Написать сообщение", and (P3) a destructive
+  «Заблокировать пользователя» at the bottom. Rendered inside MasterShell.
 
   LIVE (E5): getStudent(id) → GET /api/v1/masters/me/students/{id} →
   StudentDetailResponse { name, avatar_url, practices_count, hours,
   satisfaction_pct, recent_checkins[], feedbacks[] }. Reuses the real MoodAvatar
   (diary mood faces) for check-ins. The "Написать сообщение" action is still a
   STUB (E4 messaging pending backend).
+
+  P3 additions:
+    - Group chips (VTag): GET /masters/me/students/{id}/groups (this
+      master's CUSTOM groups the student is in). Empty -> no chips row.
+    - «Заблокировать пользователя» (VButton danger) -> block confirm
+      (VConfirmDialog, destructive) -> POST .../block (P1) -> toast -> THEN
+      the report-offer (VConfirmDialog) -> optionally ReportUserSheet
+      (POST /api/v1/reports, the EXISTING backend table -- recon #589).
 -->
 
 <template>
@@ -36,6 +46,11 @@
         <div class="profile__hero">
           <VAvatar :name="name" :url="avatarUrl" size="xl" class="profile__hero-ava" />
           <div class="profile__hero-name">{{ name }}</div>
+        </div>
+
+        <!-- Group chips (P3): this master's custom groups the student is in. -->
+        <div v-if="groupChips.length" class="profile__groups">
+          <VTag v-for="g in groupChips" :key="g.id">{{ g.name }}</VTag>
         </div>
 
         <!-- Stats (% card removed — ПРОМТ №157; two cards widen under the hero) -->
@@ -85,21 +100,64 @@
         <VButton variant="primary" block class="profile__cta" @click="msgOpen = true">
           Написать сообщение
         </VButton>
+
+        <!-- P3 (ПРОМТ №592): destructive, bottom of the screen (design variant 3). -->
+        <VButton variant="danger" block class="profile__block-cta" @click="blockConfirmOpen = true">
+          Заблокировать пользователя
+        </VButton>
       </template>
     </div>
 
     <SendMessageModal :open="msgOpen" :name="name" @close="msgOpen = false" />
+
+    <!-- Block confirm (destructive) -->
+    <VConfirmDialog
+      :open="blockConfirmOpen"
+      title="Заблокировать пользователя?"
+      message="Пользователь переместится в группу «Удаленные». Он больше не сможет видеть и бронировать ваши практики и перестанет получать ваши уведомления. Вы сможете разблокировать его в любой момент."
+      confirm-label="Заблокировать"
+      danger
+      :loading="blocking"
+      @confirm="onBlockConfirm"
+      @cancel="blockConfirmOpen = false"
+    />
+
+    <!-- Report-offer (optional step -- dismiss is fine) -->
+    <VConfirmDialog
+      :open="reportOfferOpen"
+      title="Пользователь заблокирован"
+      message="Пользователь перемещен в «Удаленные». Если он нарушал правила — например, сорвал практику или вел себя неподобающе, — вы можете сообщить об этом в поддержку."
+      confirm-label="Сообщить в поддержку"
+      cancel-label="Не сейчас"
+      @confirm="onReportOfferAccept"
+      @cancel="reportOfferOpen = false"
+    />
+
+    <ReportUserSheet
+      :open="reportFormOpen"
+      :student-id="String(route.params.id)"
+      :student-name="name"
+      @close="reportFormOpen = false"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, type Component } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
-import { VAvatar, VStatCard, VButton, VLoader, VEmptyState } from '@/components/ui'
-import { IconRatingFire, IconRatingGood, IconRatingConfused } from '@/components/icons'
+import {
+  VAvatar,
+  VStatCard,
+  VButton,
+  VLoader,
+  VEmptyState,
+  VTag,
+  VConfirmDialog,
+} from '@/components/ui'
 import MoodAvatar from '@/components/shared/MoodAvatar.vue'
 import SendMessageModal from '@/components/shared/SendMessageModal.vue'
+import ReportUserSheet from '@/components/shared/ReportUserSheet.vue'
 import VShowMore from '@/components/shared/VShowMore.vue'
 import {
   moodLabelFromScore,
@@ -107,9 +165,14 @@ import {
   ratingZoneFromScore,
   RATING_ICON_COLOR,
 } from '@/utils/displayHelpers'
+import { RATING_ICON } from '@/utils/ratingIcons'
 import { formatShortDate } from '@/utils/format'
 import { getStudent } from '@/api/masters'
+import { getStudentGroups, blockStudent } from '@/api/groups'
+import { useToast } from '@/composables/useToast'
+import { extractApiError } from '@/composables/useApiError'
 import type { StudentDetailResponse } from '@/api/types'
+import type { StudentGroupItem } from '@/api/groups'
 
 const route = useRoute()
 const router = useRouter()
@@ -142,14 +205,21 @@ async function load(): Promise<void> {
 }
 onMounted(load)
 
+// -- Group chips (P3): this master's custom groups the student is in. --
+// Non-fatal on failure -- the profile still renders without them.
+const groupChips = ref<StudentGroupItem[]>([])
+async function loadGroups(): Promise<void> {
+  try {
+    const res = await getStudentGroups(String(route.params.id))
+    groupChips.value = res.groups
+  } catch {
+    groupChips.value = []
+  }
+}
+onMounted(loadGroups)
+
 const practicesCount = computed((): number => detail.value?.practices_count ?? 0)
 const hours = computed((): number => detail.value?.hours ?? 0)
-
-const ICON_BY_ZONE: Record<'confused' | 'good' | 'fire', Component> = {
-  confused: IconRatingConfused,
-  good: IconRatingGood,
-  fire: IconRatingFire,
-}
 
 const checkinRows = computed(() =>
   (detail.value?.recent_checkins ?? []).map((ci) => ({
@@ -164,7 +234,7 @@ const feedbackRows = computed(() =>
     const zone = ratingZoneFromScore(fb.rating)
     return {
       label: ratingLabelFromScore(fb.rating),
-      icon: ICON_BY_ZONE[zone],
+      icon: RATING_ICON[zone],
       color: RATING_ICON_COLOR[zone],
       comment: fb.comment ?? '',
       date: formatShortDate(fb.created_at),
@@ -189,6 +259,33 @@ const hiddenFeedbacks = computed((): number => Math.max(0, feedbackRows.value.le
 
 // "Написать сообщение" — stub (E4 messaging not delivered).
 const msgOpen = ref(false)
+
+// -- Block -> report-offer -> report form (P3, ПРОМТ №592) --
+const toast = useToast()
+
+const blockConfirmOpen = ref(false)
+const blocking = ref(false)
+async function onBlockConfirm(): Promise<void> {
+  blocking.value = true
+  try {
+    await blockStudent(String(route.params.id))
+    toast.success('Пользователь заблокирован')
+    blockConfirmOpen.value = false
+    reportOfferOpen.value = true
+  } catch (e) {
+    toast.error(extractApiError(e, 'Не удалось заблокировать'))
+  } finally {
+    blocking.value = false
+  }
+}
+
+const reportOfferOpen = ref(false)
+function onReportOfferAccept(): void {
+  reportOfferOpen.value = false
+  reportFormOpen.value = true
+}
+
+const reportFormOpen = ref(false)
 </script>
 
 <style scoped>
@@ -241,6 +338,14 @@ const msgOpen = ref(false)
   font-family: var(--font-body);
   font-size: var(--text-base);
   color: var(--velo-text-primary);
+}
+
+/* -- Group chips (P3, ПРОМТ №592) -- */
+.profile__groups {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
 }
 
 /* -- Stats (VStatCard ×2: practices + hours) -- */
@@ -332,6 +437,10 @@ const msgOpen = ref(false)
 }
 
 .profile__cta {
+  margin-top: var(--space-2);
+}
+
+.profile__block-cta {
   margin-top: var(--space-2);
 }
 </style>

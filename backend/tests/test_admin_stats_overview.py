@@ -22,6 +22,7 @@
 #     - month period accepted
 # =============================================================================
 
+import itertools
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
@@ -117,6 +118,9 @@ async def _make_master(
     return user_id
 
 
+_practice_counter = itertools.count()
+
+
 async def _create_practice(
     db_session: AsyncSession,
     master_id: str,
@@ -124,12 +128,21 @@ async def _create_practice(
     scheduled_at: datetime,
     status: str = PracticeStatus.COMPLETED.value,
 ) -> Practice:
-    """Create a practice owned by the master with the given schedule/status."""
+    """Create a practice owned by the master with the given schedule/status.
+
+    MIG1 (uq_practice_master_title_scheduled_recurrence, ПРОМТ №583): several
+    tests in this file deliberately create multiple practices for the SAME
+    master at the SAME scheduled_at (to exercise period-window counting) --
+    a shared hardcoded title would collide with the new partial unique index
+    the moment two such rows are both non-deleted. The counter suffix keeps
+    every row unique on the index key without touching scheduled_at (which
+    the period-window assertions depend on). No test asserts an exact title.
+    """
     practice = Practice(
         master_id=UUID(master_id),
         practice_type=PracticeType.LIVE.value,
         status=status,
-        title="Overview Practice",
+        title=f"Overview Practice {next(_practice_counter)}",
         scheduled_at=scheduled_at,
         duration_minutes=60,
         timezone="UTC",
@@ -500,6 +513,73 @@ async def test_checkin_and_feedback_count_before_autofinalize(
         window_start, window_end, now, db_session,
     )
     assert (left_review, visited) == (1, 1)
+
+
+async def test_return_count_before_autofinalize(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """SW11 (Батч B, ПРОМТ №579): a check-in on a still-CONFIRMED booking
+    (autofinalize hasn't flipped it to ATTENDED yet) for a practice that has
+    already ENDED by wall-clock must still count as a "return" attendee, on
+    BOTH sides of the comparison -- the period side and the "attended
+    before" side. Before the fix, _return_counts gated on
+    Booking.status==ATTENDED, so this exact scenario (the normal state
+    during the autofinalize lag window) silently contributed 0 on both
+    sides, same class of bug already fixed for checkin/feedback rates
+    (test_checkin_and_feedback_count_before_autofinalize above).
+
+    Calls the private _return_counts directly with a razor-thin
+    [scheduled_at, scheduled_at+1s) window containing only the CURRENT
+    practice -- same pattern as the checkin/feedback W3 regression test --
+    since the public endpoint only exposes a platform-wide percentage.
+    """
+    from app.modules.admin.stats.overview_service import _return_counts
+
+    master_id = await _make_master(client, db_session, 94805)
+    participant = await login_user(client, telegram_id=94032, first_name="Ret")
+    user_id = participant["user"]["id"]
+
+    # Prior practice (well before the period window), also ended, also left
+    # deliberately CONFIRMED -- proves the "attended before start" side is
+    # equally freed from the ATTENDED gate, not just the period side.
+    prior_scheduled_at = datetime.now(UTC) - timedelta(days=30)
+    prior_practice = await _create_practice(
+        db_session, master_id, scheduled_at=prior_scheduled_at,
+    )
+    prior_booking = Booking(
+        practice_id=prior_practice.id,
+        user_id=UUID(user_id),
+        status=BookingStatus.CONFIRMED.value,  # NOT attended yet.
+    )
+    db_session.add(prior_booking)
+    await db_session.flush()
+    await db_session.commit()
+    await _add_checkin(db_session, prior_practice, user_id, prior_booking)
+
+    # Current-period practice: scheduled well in the past, 60min duration --
+    # definitely ended by now, booking deliberately left CONFIRMED.
+    scheduled_at = datetime.now(UTC) - timedelta(hours=2)
+    practice = await _create_practice(
+        db_session, master_id, scheduled_at=scheduled_at,
+    )
+    booking = Booking(
+        practice_id=practice.id,
+        user_id=UUID(user_id),
+        status=BookingStatus.CONFIRMED.value,  # NOT attended yet.
+    )
+    db_session.add(booking)
+    await db_session.flush()
+    await db_session.commit()
+    await _add_checkin(db_session, practice, user_id, booking)
+
+    window_start = scheduled_at - timedelta(seconds=1)
+    window_end = scheduled_at + timedelta(seconds=1)
+    now = datetime.now(UTC)
+
+    returning, total_users = await _return_counts(
+        window_start, window_end, now, db_session,
+    )
+    assert (returning, total_users) == (1, 1)
 
 
 # ===================================================================

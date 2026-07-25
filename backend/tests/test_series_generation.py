@@ -73,7 +73,14 @@ def _valid_apply_body() -> dict:
             "email": "series@test.com",
         },
         "experience": {
-            "methods": ["meditation"],
+            # T21-6/T21-7 (ПРОМТ №547/548): _assert_master_confirmed_taxonomy
+            # requires the calling master to hold the exact direction/style
+            # being created/updated. Widened by exactly the one pair this
+            # file's own tests exercise beyond the default (yoga+hatha, in
+            # test_series_children_inherit_root_fields) -- raw VALUE form,
+            # matching this fixture's own pre-existing style and the
+            # value-canonical comparison chosen in ПРОМТ №547.
+            "methods": ["meditation", "yoga — hatha"],
             "experience_years": 5,
             "bio": "Experienced practitioner",
         },

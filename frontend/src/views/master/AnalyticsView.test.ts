@@ -265,6 +265,30 @@ const TX_FEE = txn({
 function practicesPage(items: PracticeResponse[], total = items.length, offset = 0) {
   return { items, total, limit: 20, offset }
 }
+
+// T22-5 (ПРОМТ №561): the server now owns the completed-only, most-recent-
+// first ordering -- pastPractices no longer re-sorts client-side (.vue), so
+// the fake server must actually behave like one. This screen only ever
+// fetches the "past" bucket (fetchPastPractices), but the helper mirrors
+// both bucket semantics from listing_service.py for consistency with the
+// other master-store test files.
+function mockBucketedPractices(items: PracticeResponse[]): void {
+  vi.mocked(mastersApi.getMyPractices).mockImplementation(
+    async (bucket: 'upcoming' | 'past', limit = 20, offset = 0) => {
+      const filtered = items
+        .filter((p) =>
+          bucket === 'upcoming'
+            ? p.status === 'draft' || p.status === 'scheduled' || p.status === 'live'
+            : p.status === 'completed',
+        )
+        .sort((a, b) => {
+          const diff = new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
+          return bucket === 'upcoming' ? diff : -diff
+        })
+      return practicesPage(filtered.slice(offset, offset + limit), filtered.length, offset)
+    },
+  )
+}
 function txPage(items: MasterTransactionItem[], total = items.length, offset = 0) {
   return { items, total, limit: 20, offset }
 }
@@ -427,7 +451,8 @@ beforeEach(() => {
   pinia = createPinia()
   setActivePinia(pinia)
 
-  vi.mocked(mastersApi.getMyPractices).mockReset().mockResolvedValue(practicesPage(PRACTICES))
+  vi.mocked(mastersApi.getMyPractices).mockReset()
+  mockBucketedPractices(PRACTICES)
   vi.mocked(mastersApi.getMasterReviews)
     .mockReset()
     .mockResolvedValue(reviewsPage([RV_RECENT, RV_OLD, RV_HAPPY]))
@@ -507,7 +532,7 @@ describe('AnalyticsView', () => {
     })
 
     it('empty: a master with only FUTURE practices is told the period is empty', async () => {
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(practicesPage([P_FUTURE]))
+      mockBucketedPractices([P_FUTURE])
       mount()
       await flush()
 
@@ -518,7 +543,7 @@ describe('AnalyticsView', () => {
     it('empty: completed practices that all fall OUTSIDE the period read as empty', async () => {
       // P_ANCIENT is completed and loaded -- it is the 7-day cut that hides it,
       // which is a different thing from having no practices at all.
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(practicesPage([P_ANCIENT]))
+      mockBucketedPractices([P_ANCIENT])
       mount()
       await flush()
 
@@ -607,7 +632,7 @@ describe('AnalyticsView', () => {
     it('reads «—» rather than «0%» when the period holds no participants at all', async () => {
       // aggregateTotalParticipants === 0 (.vue:345-348,351-354). 0% would be a
       // claim that nobody checked in; the em dash says there is nothing to rate.
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(practicesPage([P_FUTURE]))
+      mockBucketedPractices([P_FUTURE])
       mount()
       await flush()
 
@@ -650,7 +675,7 @@ describe('AnalyticsView', () => {
     })
 
     it('renders 0% bars rather than nothing when the period has no feedback', async () => {
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(practicesPage([P_FUTURE]))
+      mockBucketedPractices([P_FUTURE])
       mount()
       await flush()
 
@@ -710,7 +735,7 @@ describe('AnalyticsView', () => {
     ]
 
     it('caps the list at 3 and offers «+ ещё 2 практик»', async () => {
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(practicesPage(FIVE))
+      mockBucketedPractices(FIVE)
       mount()
       await flush()
 
@@ -720,7 +745,7 @@ describe('AnalyticsView', () => {
     })
 
     it('the reveal expands to the whole period', async () => {
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(practicesPage(FIVE))
+      mockBucketedPractices(FIVE)
       mount()
       await flush()
 
@@ -742,7 +767,9 @@ describe('AnalyticsView', () => {
     it('once expanded, «Показать ещё» pages the store AND loads the new insights', async () => {
       // onLoadMore (.vue:528-531) must re-run loadVisibleInsights, or the newly
       // paged-in cards render with no badges until something else re-triggers it.
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(practicesPage(FIVE, 6))
+      // A custom mock (not mockBucketedPractices) here: total=6 while only 5
+      // are loaded, to simulate a 6th completed practice still on the server.
+      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(practicesPage(FIVE, 6, 0))
       mount()
       await flush()
       buttonIn(reviewsPane(), '+ ещё 2 практик')?.click()
@@ -755,7 +782,7 @@ describe('AnalyticsView', () => {
       buttonIn(reviewsPane(), 'Показать ещё')?.click()
       await flush()
 
-      expect(mastersApi.getMyPractices).toHaveBeenLastCalledWith(20, 5)
+      expect(mastersApi.getMyPractices).toHaveBeenLastCalledWith('past', 20, 5)
       expect(pcards()).toHaveLength(6)
       expect(pcardTitles()).toContain('Практика F')
       expect(diaryApi.getPracticeInsights).toHaveBeenCalledWith('a6')
@@ -764,7 +791,7 @@ describe('AnalyticsView', () => {
     it('changing the period collapses the reveal back to the preview', async () => {
       // watch(period) resets pastExpanded (.vue:509-515): a month's worth of
       // cards left expanded from a week's «показать все» is a different list.
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(practicesPage(FIVE))
+      mockBucketedPractices(FIVE)
       mount()
       await flush()
       buttonIn(reviewsPane(), '+ ещё 2 практик')?.click()

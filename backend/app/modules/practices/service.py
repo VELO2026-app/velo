@@ -73,11 +73,12 @@
 # =============================================================================
 
 import copy
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import structlog
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -92,7 +93,13 @@ from app.modules.practices.enrichment_service import (
     series_meta_for_practices,
     series_meta_kwargs,
 )
-from app.modules.practices.models import Practice, PracticeStatus, PracticeType
+from app.modules.practices.models import (
+    AudienceKind,
+    Practice,
+    PracticeAudienceGroup,
+    PracticeStatus,
+    PracticeType,
+)
 from app.modules.practices.schemas import (
     CreatePracticeRequest,
     PracticeResponse,
@@ -100,6 +107,7 @@ from app.modules.practices.schemas import (
 )
 from app.modules.practices.series_service import generate_series_occurrences
 from app.modules.practices.taxonomy_models import TaxonomyDirection, TaxonomyStyle
+from app.modules.masters.groups_models import MasterGroup
 from app.modules.masters.models import MasterProfile
 from app.modules.users.models import User
 
@@ -175,6 +183,72 @@ _TAXONOMY_FIELDS = ("direction", "style", "difficulty")
 # ===================================================================
 # Helpers
 # ===================================================================
+
+
+async def _owned_group_ids_or_400(
+    master_id: UUID, group_ids: list[UUID], session: AsyncSession,
+) -> None:
+    """Validate every group_id in a create/update audience payload belongs
+    to a CUSTOM group owned by master_id (Master GROUPS P5, ПРОМТ №594).
+
+    Rejects another master's group, an unknown id, or a system slug (which
+    never resolves to a real MasterGroup row in the first place) with a
+    single 400 -- P-08 does not apply here (the master is choosing among
+    THEIR OWN resources, not probing another's).
+    """
+    if not group_ids:
+        return
+    owned = (
+        await session.execute(
+            select(MasterGroup.id).where(
+                MasterGroup.id.in_(group_ids), MasterGroup.master_id == master_id,
+            )
+        )
+    ).scalars().all()
+    if set(owned) != set(group_ids):
+        raise BadRequestError(
+            "group_ids must be your own custom groups"
+        )
+
+
+async def _set_practice_audience_groups(
+    practice_id: UUID, group_ids: list[UUID], session: AsyncSession,
+) -> None:
+    """REPLACE the practice's full target-group set with group_ids
+    (delete-then-insert -- these are small sets, no need for a diff)."""
+    await session.execute(
+        delete(PracticeAudienceGroup).where(
+            PracticeAudienceGroup.practice_id == practice_id,
+        )
+    )
+    for group_id in group_ids:
+        session.add(
+            PracticeAudienceGroup(practice_id=practice_id, group_id=group_id)
+        )
+    await session.flush()
+
+
+async def group_names_for_practice(
+    practice: Practice, session: AsyncSession,
+) -> list[str]:
+    """PracticeResponse.audience_group_names -- the practice's target
+    CUSTOM groups' names, alphabetical. Empty for anything but
+    audience_kind='groups' (nothing to look up). Public (like
+    user_flags_for_practices / series_meta_for_practices) -- called from
+    both this module (get_practice_detail) and router.py (create/update
+    endpoints' owner-facing responses)."""
+    if practice.audience_kind != AudienceKind.GROUPS.value:
+        return []
+    stmt = (
+        select(MasterGroup.name)
+        .join(
+            PracticeAudienceGroup,
+            PracticeAudienceGroup.group_id == MasterGroup.id,
+        )
+        .where(PracticeAudienceGroup.practice_id == practice.id)
+        .order_by(MasterGroup.name)
+    )
+    return list((await session.execute(stmt)).scalars().all())
 
 
 def _enforce_pricing(
@@ -313,7 +387,16 @@ async def _validate_taxonomy(
     style: str | None,
     session: AsyncSession,
 ) -> None:
-    """Validate a direction + optional style pair against the union."""
+    """Validate a direction + optional style pair against the GLOBAL union
+    (config + active catalog). Deliberately does NOT check whether the
+    CALLING MASTER is confirmed for this direction/style -- that is a
+    separate, narrower question (see _assert_master_confirmed_taxonomy
+    below), checked explicitly at each call site that has a `user` to check
+    against. Kept separate rather than folded in here so this function keeps
+    its existing, reusable "is this a real taxonomy value at all" meaning
+    (master onboarding's own picker legitimately needs the unfiltered
+    catalog, and must never route through the master-confirmation check --
+    T21-6, ПРОМТ №546)."""
     if direction not in settings.practice_allowed_directions:
         if not await _direction_in_catalog(direction, session):
             raise BadRequestError(
@@ -321,6 +404,173 @@ async def _validate_taxonomy(
                 f"{settings.practice_allowed_directions}, got '{direction}'"
             )
     await _validate_style_choice(direction, style, session)
+
+
+# T21-6 (ПРОМТ №546): flat "Направление — Вид" join, byte-for-byte identical
+# to the frontend's methodTaxonomy.ts SEP -- MasterProfile.data.profile.
+# methods is a list of these frozen strings (see admin/masters/service.py's
+# approve_method_change, which copies proposed_methods verbatim with no
+# server-side value<->label resolution at all until now).
+_METHOD_LABEL_SEP = " — "
+
+
+async def _label_for_direction_value(
+    direction: str,
+    session: AsyncSession,
+) -> str | None:
+    """Current active-catalog label for a direction value, or None if it
+    isn't (or is no longer) an active catalog row."""
+    stmt = select(TaxonomyDirection.label).where(
+        TaxonomyDirection.value == direction,
+        TaxonomyDirection.is_active.is_(True),
+    )
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def _label_for_style_value(
+    direction: str,
+    style: str,
+    session: AsyncSession,
+) -> str | None:
+    """Current active-catalog label for a style value under a direction, or
+    None if it isn't (or is no longer) an active catalog row."""
+    stmt = (
+        select(TaxonomyStyle.label)
+        .join(TaxonomyDirection, TaxonomyStyle.direction_id == TaxonomyDirection.id)
+        .where(
+            TaxonomyDirection.value == direction,
+            TaxonomyDirection.is_active.is_(True),
+            TaxonomyStyle.value == style,
+            TaxonomyStyle.is_active.is_(True),
+        )
+    )
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def _assert_master_confirmed_taxonomy(
+    master_id: UUID,
+    direction: str,
+    style: str | None,
+    session: AsyncSession,
+) -> None:
+    """Reject a direction/style the calling master has not been CONFIRMED
+    for (T21-6). Confirmed = MasterProfile.data.profile.methods -- the live
+    field, overwritten only on admin approval (approve_method_change).
+    Deliberately does NOT read method_change_request.proposed_methods: a
+    pending, unapproved request must never unlock a practice in that
+    direction, or the "up to 3 working days" review the UI advertises would
+    mean nothing.
+
+    FAILS OPEN (does not restrict) when the master's confirmed methods list
+    is EMPTY -- not a loophole, a reflection of reality: a real verified
+    master always has at least one confirmed method (masters/schemas.py's
+    MasterApplicationRequest requires min_length=1 at application time), so
+    an empty list here means either a test fixture that never set up
+    profile.methods at all, or a data state that should not be reachable in
+    production. Restricting THAT case would be enforcing a rule against
+    data that predates the rule, not the rule itself.
+
+    STORED FORMAT IS MIXED (T21-7, ПРОМТ №547, MEASURED on prod): a method
+    entry is a frozen catalog LABEL ("Йога — Кундалини-йога") when it was
+    written by the wizard (flattenMethods/approve_method_change), but a raw
+    catalog VALUE ("yoga") when it was written directly against the API --
+    every seed-based master, ~30 backend test fixtures, and at least one live
+    prod master (no wizard round-trip ever touched their profile) all store
+    values, not labels. The original label-only check treated every entry as
+    a label, so it rejected every real, correctly-confirmed direction a
+    value-stored master holds.
+
+    Canonical form = VALUE, not label: `direction`/`style` here are ALREADY
+    values (the wire format for practice taxonomy), labels are just a
+    renamable display string with no version pin, and a value-stored entry
+    (the common case: raw seed/API data) needs zero catalog round-trip to
+    compare -- only a label-stored entry needs one reverse lookup (label ->
+    is this the CURRENT label for the direction/style being requested?).
+    So each stored entry is compared against BOTH representations of the
+    SAME requested (direction, style): the raw value, and -- if the
+    requested direction/style currently has an active catalog row -- its
+    current label. Mirrors the frontend's parseMethods split (same SEP,
+    same "both halves must resolve" rule for a composite entry) but compares
+    toward values instead of building a label to search for, which also
+    sidesteps parseMethods' label-drift limitation on this comparison (we
+    never resolve a STORED label into a value; we only ever check whether it
+    still equals the CURRENT label of the specific direction/style being
+    requested).
+
+    A composite entry ("Направление — Вид") is confirmation for that EXACT
+    style only -- it does NOT also confirm the bare parent direction (no
+    style), and a bare-direction entry does NOT confirm any specific style
+    under it. Deliberate, unchanged from before this fix, and matches
+    CreatePracticeView.vue's confirmedMethods filter (directionOptions/
+    styleOptionsForForm), which already documents and relies on this same
+    strict split.
+
+    A STORED entry that resolves to nothing recognizable (neither half
+    matches the requested value or label representation -- a stale/custom
+    entry, or one written against a since-deactivated/renamed catalog row)
+    simply confirms nothing: it is skipped, not an error, and does not by
+    itself cause a reject -- the request is rejected only if NO entry in the
+    whole list confirms it. If the REQUESTED direction itself has no active
+    catalog row at all (dir_label is None below), this still fails OPEN
+    exactly as before this fix -- unrelated to the mixed-format bug and
+    deliberately not touched here (out of scope for T21-7; see the fail-open
+    branch below for the original rationale).
+    """
+    profile = (
+        await session.execute(
+            select(MasterProfile).where(MasterProfile.user_id == master_id)
+        )
+    ).scalar_one_or_none()
+    methods: list[str] = (
+        (profile.data or {}).get("profile", {}).get("methods", [])
+        if profile
+        else []
+    )
+    if not methods:
+        return
+
+    dir_label = await _label_for_direction_value(direction, session)
+    if dir_label is None:
+        # Not an active catalog row at all -- _validate_taxonomy already
+        # accepted it via the config-only allow-list (a seed direction with
+        # no catalog row). Every direction in today's config is in fact
+        # mirrored into the catalog as an active row (R5 seed migration), so
+        # this only fires if a direction is later deactivated -- a separate,
+        # pre-existing gap (not introduced or widened by T21-7). Nothing to
+        # resolve a label-side match against; let the config-level
+        # validation's own verdict stand rather than raising a second,
+        # redundant error here.
+        return
+    style_label = (
+        await _label_for_style_value(direction, style, session)
+        if style is not None
+        else None
+    )
+
+    for raw in methods:
+        sep_idx = raw.find(_METHOD_LABEL_SEP)
+        entry_dir = raw if sep_idx == -1 else raw[:sep_idx]
+        entry_style = None if sep_idx == -1 else raw[sep_idx + len(_METHOD_LABEL_SEP):]
+
+        if (entry_style is None) != (style is None):
+            continue  # bare vs composite -- never cross-confirm (see above).
+        if entry_dir != direction and entry_dir != dir_label:
+            continue
+        if style is None or entry_style == style or (
+            style_label is not None and entry_style == style_label
+        ):
+            return
+
+    if style is None:
+        raise BadRequestError(
+            f"direction '{direction}' is not among your confirmed methods",
+            code="direction_not_confirmed",
+        )
+    raise BadRequestError(
+        f"style '{style}' for direction '{direction}' is not among your "
+        f"confirmed methods",
+        code="style_not_confirmed",
+    )
 
 
 async def _has_active_bookings(
@@ -374,6 +624,10 @@ def practice_to_response(
     attended: int | None = None,
     no_show: int | None = None,
     zoom_link_visible: bool = False,
+    zoom_host_join_url: str | None = None,
+    zoom_meeting_status: str | None = None,
+    deduplicated: bool = False,
+    audience_group_names: list[str] | None = None,
 ) -> PracticeResponse:
     """Build PracticeResponse from ORM object with master_name and master_methods.
 
@@ -423,6 +677,28 @@ def practice_to_response(
     # not in a schema model_validator: FastAPI re-validates the response and
     # would re-run such a validator, wiping the value set here.
     resp.zoom_link = practice.zoom_link if zoom_link_visible else None
+
+    # T21-1: host join_url -- caller decides whether to fetch/pass it (owner-
+    # facing responses only); everyone else gets the schema default (None).
+    resp.zoom_host_join_url = zoom_host_join_url
+
+    # A4 V2 (ПРОМТ №572): NOT owner-gated, unlike zoom_host_join_url above --
+    # see the schema field's own docstring for why.
+    resp.zoom_meeting_status = zoom_meeting_status
+
+    # A4 V6 (ПРОМТ №572): True only on create_practice's two dedup-return
+    # paths (see that function's own docstring). Every other caller of this
+    # builder (update/delete/cancel/list/detail) leaves the schema default
+    # (False) -- deduplication is a CREATE-time concept only.
+    resp.deduplicated = deduplicated
+
+    # audience_kind is picked up automatically via from_attributes (matches
+    # the ORM column name 1:1). audience_group_names has no ORM attribute --
+    # the caller resolves it (async, via _group_names_for_practice) and
+    # passes it through; every caller that doesn't leaves the schema
+    # default ([]).
+    if audience_group_names is not None:
+        resp.audience_group_names = audience_group_names
 
     return resp
 
@@ -474,21 +750,167 @@ async def user_flags_for_practices(
 # ===================================================================
 
 
+async def _find_duplicate_practice(
+    user_id: UUID,
+    body: CreatePracticeRequest,
+    session: AsyncSession,
+    *,
+    since: datetime | None,
+) -> Practice | None:
+    """Shared match logic behind _find_recent_duplicate_practice (the
+    pre-insert, WINDOWED check below) and create_practice's post-race
+    lookup (A4 V7, since=None -- called only after losing the INSERT race
+    to uq_practice_master_title_scheduled_recurrence, where a matching row
+    is now guaranteed to exist regardless of when it was created, so no
+    window applies).
+
+    Match key: (master_id, title, scheduled_at, recurrence). Compared in
+    Python (not a JSONB query) since recurrence needs a value-equality
+    check against a Pydantic model, not a string match.
+    """
+    stmt = select(Practice).where(
+        Practice.master_id == user_id,
+        Practice.title == body.title,
+        Practice.scheduled_at == body.scheduled_at,
+        Practice.status != PracticeStatus.DELETED.value,
+    )
+    if since is not None:
+        stmt = stmt.where(Practice.created_at >= since)
+    candidates = (
+        await session.execute(stmt.order_by(Practice.created_at.desc()))
+    ).scalars().all()
+
+    incoming_recurrence = (
+        body.recurrence.model_dump(mode="json") if body.recurrence is not None else None
+    )
+    for candidate in candidates:
+        stored_recurrence = (candidate.data or {}).get("recurrence")
+        if stored_recurrence == incoming_recurrence:
+            return candidate
+    return None
+
+
+async def _find_recent_duplicate_practice(
+    user_id: UUID,
+    body: CreatePracticeRequest,
+    session: AsyncSession,
+) -> Practice | None:
+    """ПРОМТ №559 idempotency check: a non-deleted practice this SAME master
+    created within the last practice_duplicate_submit_window_minutes, with
+    the identical title, scheduled_at, AND recurrence spec, is treated as
+    the master's earlier submission having already gone through -- not a
+    fresh, different practice.
+
+    MEASURED root cause (ПРОМТ №559): a series publish makes one Zoom API
+    call per occurrence, sequentially, inside one request; the frontend's
+    own 15s AbortController gives up well before a ~29-occurrence series
+    finishes, the master sees a timeout, and presses the button again --
+    creating a full duplicate series, not a cosmetic double-click. Since
+    (child creation is now deferred to the poller and) the ROOT publish is
+    the only synchronous Zoom call left, THIS check, at create_practice
+    time, is early enough to prevent the duplicate before any of that work
+    starts.
+
+    A4 V7: this SELECT-then-INSERT shape is TOCTOU-safe only up to the
+    point of the actual insert -- two genuinely CONCURRENT requests (double-
+    tap, two tabs) both run this SELECT before either commits, so both see
+    nothing and both proceed to insert. create_practice below closes that
+    gap at the DB level (uq_practice_master_title_scheduled_recurrence),
+    same pattern as ensure_host_registrant (zoom/service.py, ПРОМТ №525).
+    This windowed check remains the fast, common-case path (a retry inside
+    the window returns immediately, no INSERT attempted at all); the DB
+    constraint is the backstop for the race this check cannot see.
+
+    Match key is (master_id, title, scheduled_at, recurrence) -- exactly
+    what the owner specified.
+
+    DOES NOT COVER:
+      - Two GENUINELY separate series/practices with an identical title,
+        an identical scheduled_at (to the second), and identical recurrence,
+        submitted deliberately within the window -- silently merged into
+        one. Considered acceptable: two real submissions matching on all
+        three fields to the SECOND is a scenario indistinguishable from a
+        retry by any server-side signal available here.
+      - A retry more than window-minutes after the original -- intentional;
+        a stale window would block a master who genuinely re-creates the
+        same series hours or days later.
+      - Any resource other than Practice (bookings, purchases, etc.).
+      - A client whose retry recomputes scheduled_at slightly differently
+        between attempts (e.g. from a fresh "now + offset" instead of a
+        fixed picked date/time) -- the match is exact, not fuzzy.
+    """
+    window_start = datetime.now(UTC) - timedelta(
+        minutes=settings.practice_duplicate_submit_window_minutes,
+    )
+    return await _find_duplicate_practice(user_id, body, session, since=window_start)
+
+
 async def create_practice(
     user: User,
     body: CreatePracticeRequest,
     session: AsyncSession,
-) -> Practice:
+) -> tuple[Practice, bool]:
     """Create a new practice in draft status.
+
+    Returns (practice, deduplicated) -- A4 V6 (ПРОМТ №572): deduplicated is
+    True on EITHER return-the-existing-practice path below (the window
+    check or the post-race lookup), False on a genuine new insert. Before
+    this, both paths returned a bare Practice indistinguishable from a
+    freshly created one -- the caller (create_practice_endpoint) had no way
+    to tell the master "this is your EARLIER submission, not a new one",
+    so a second click after a timeout, or the losing side of a genuine
+    concurrent double-submit (A4 V7), silently looked like success with no
+    signal that nothing new was actually created.
 
     Calendar taxonomy (direction / difficulty / style) is written into the
     data.taxonomy JSONB sandbox via set_jsonb() -- direction and difficulty
     are required by the schema, style is optional. direction/style membership
     (T2, 2026-07-15) is validated here against the config+catalog union --
     difficulty stays schema-validated (config only, no catalog table).
+
+    T21-6 (ПРОМТ №546): ALSO validated against the calling master's own
+    CONFIRMED methods (_assert_master_confirmed_taxonomy) -- a master may
+    only create a practice in a direction/style their profile has been
+    approved for. This is separate from the global catalog check above and
+    does not apply anywhere master onboarding picks methods (a different
+    endpoint entirely, which correctly shows the unfiltered catalogue).
+
+    ПРОМТ №559: returns the EXISTING practice, unchanged, instead of
+    creating a new one, if _find_recent_duplicate_practice finds a match --
+    see that function's docstring for exactly what this does and does not
+    cover. No new validation runs in that case; there is nothing new to
+    validate.
+
+    A4 V7: the window check above is a fast-path optimization, not the
+    actual guarantee -- uq_practice_master_title_scheduled_recurrence (see
+    the practices table migration) is what excludes two concurrent
+    requests for the same (master, title, scheduled_at, recurrence) at the
+    DB level. The insert below runs inside session.begin_nested() (a
+    SAVEPOINT) for the same reason as ensure_host_registrant (zoom/
+    service.py, ПРОМТ №525): a plain try/except around the flush is not
+    enough by itself to keep the CALLER's own transaction usable after a
+    database-level abort (PendingRollbackError) -- something has to roll
+    back TO. On IntegrityError, the race was LOST: look up the winning row
+    (unwindowed -- it is guaranteed to exist and match exactly) and return
+    it, exactly like the window check's own duplicate-return path.
     """
+    duplicate = await _find_recent_duplicate_practice(user.id, body, session)
+    if duplicate is not None:
+        logger.info(
+            "practice_create_deduplicated",
+            master_id=str(user.id),
+            existing_practice_id=str(duplicate.id),
+            title=body.title,
+        )
+        return duplicate, True
+
     await _validate_taxonomy(body.direction, body.style, session)
+    await _assert_master_confirmed_taxonomy(user.id, body.direction, body.style, session)
     price_cents = _enforce_pricing(body.is_free, body.price_cents)
+    # P5 (ПРОМТ №594): reject a group_id that isn't one of THIS master's own
+    # custom groups (another master's group, an unknown id, or a system
+    # slug) before anything is inserted.
+    await _owned_group_ids_or_400(user.id, body.group_ids, session)
 
     practice = Practice(
         master_id=user.id,
@@ -506,6 +928,7 @@ async def create_practice(
         is_free=body.is_free,
         price_cents=price_cents,
         currency=body.currency,
+        audience_kind=body.audience_kind,
     )
 
     # Calendar taxonomy -> data.taxonomy (JSONB sandbox).
@@ -525,7 +948,29 @@ async def create_practice(
         data["recurrence"] = body.recurrence.model_dump(mode="json")
     practice.set_jsonb("data", data)
 
-    session.add(practice)
+    try:
+        async with session.begin_nested():
+            session.add(practice)
+            await session.flush()
+    except IntegrityError:
+        winner = await _find_duplicate_practice(user.id, body, session, since=None)
+        if winner is not None:
+            logger.info(
+                "practice_create_race_lost",
+                master_id=str(user.id),
+                existing_practice_id=str(winner.id),
+                title=body.title,
+            )
+            return winner, True
+        # Practically unreachable: uq_practice_master_title_scheduled_
+        # recurrence only fires on an exact (master_id, title,
+        # scheduled_at, recurrence) collision, so the winner must exist.
+        # Re-raise rather than silently returning nothing a caller isn't
+        # prepared to handle.
+        raise
+
+    if body.group_ids:
+        await _set_practice_audience_groups(practice.id, body.group_ids, session)
 
     logger.info(
         "practice_created",
@@ -538,7 +983,7 @@ async def create_practice(
         difficulty=body.difficulty,
     )
 
-    return practice
+    return practice, False
 
 
 async def get_practice(
@@ -641,6 +1086,23 @@ async def get_practice_detail(
                 .limit(1)
             )
         ).first() is not None
+    # T21-1: host join_url, owner-only -- same is_owner gate as the
+    # attendance counts above (a non-owner must never see the master's
+    # personal link either).
+    host_join_url = None
+    if is_owner:
+        from app.modules.zoom.service import get_host_join_url
+        host_join_url = await get_host_join_url(practice.id, session)
+    # A4 V2 (ПРОМТ №572): NOT owner-gated -- this is the call site behind
+    # GET /practices/{id}, which is also what PracticeLiveView reads for a
+    # booked (non-owner) participant. Both need to distinguish pending_
+    # creation from create_failed, not just the owner.
+    from app.modules.zoom.service import get_zoom_meeting_status
+    zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
+    # P5 (ПРОМТ №594): needed by CheckinView.vue to compose "Вы не состоите
+    # в группе «...»" client-side without a second round-trip -- see this
+    # endpoint's own callers for the full message-mapping story.
+    audience_group_names = await group_names_for_practice(practice, session)
     return practice_to_response(
         practice,
         master_name,
@@ -649,6 +1111,9 @@ async def get_practice_detail(
         is_booked=is_booked,
         is_paid=is_paid,
         zoom_link_visible=zoom_visible,
+        zoom_host_join_url=host_join_url,
+        zoom_meeting_status=zoom_meeting_status,
+        audience_group_names=audience_group_names,
         **series_meta_kwargs(series_meta.get(practice.id)),
         **attendance_counts_kwargs(attendance.get(practice.id)),
     )
@@ -708,6 +1173,41 @@ async def update_practice(
         if field in update_data
     }
 
+    # P5 (ПРОМТ №594): group_ids is NOT a column either (practice_audience_
+    # group is a separate table) -- pull it out before the setattr loop for
+    # the same reason as taxonomy above. audience_kind IS a real column and
+    # flows through the loop unchanged.
+    group_ids_sent = "group_ids" in update_data
+    group_ids_value: list[UUID] = update_data.pop("group_ids", None) or []
+    final_audience_kind = update_data.get("audience_kind", practice.audience_kind)
+
+    if group_ids_sent:
+        if final_audience_kind == AudienceKind.GROUPS.value and not group_ids_value:
+            raise BadRequestError(
+                "group_ids must be non-empty when audience_kind='groups'"
+            )
+        if final_audience_kind != AudienceKind.GROUPS.value and group_ids_value:
+            raise BadRequestError(
+                "group_ids is only allowed when audience_kind='groups'"
+            )
+        await _owned_group_ids_or_400(user.id, group_ids_value, session)
+    elif final_audience_kind == AudienceKind.GROUPS.value:
+        # Switching TO (or staying on) 'groups' without sending new
+        # group_ids in THIS request -- only valid if the practice already
+        # has target groups from before; otherwise it would end up
+        # audience_kind='groups' with nobody able to ever see it.
+        existing_count = (
+            await session.execute(
+                select(func.count(PracticeAudienceGroup.id)).where(
+                    PracticeAudienceGroup.practice_id == practice.id,
+                )
+            )
+        ).scalar_one()
+        if existing_count == 0:
+            raise BadRequestError(
+                "group_ids must be non-empty when audience_kind='groups'"
+            )
+
     # Guard NOT NULL fields against explicit null (P-02).
     for field in _NOT_NULL_FIELDS:
         if field in update_data and update_data[field] is None:
@@ -759,9 +1259,27 @@ async def update_practice(
     # draft -> scheduled publication and materialize series occurrences below.
     old_status = practice.status
 
+    # P5 (ПРОМТ №594): capture the PRE-update audience_kind before the
+    # setattr loop overwrites it, so the "transitioning away from groups"
+    # branch below can tell.
+    old_audience_kind = practice.audience_kind
+
     # Apply only provided column fields.
     for field, value in update_data.items():
         setattr(practice, field, value)
+
+    if group_ids_sent:
+        await _set_practice_audience_groups(practice.id, group_ids_value, session)
+    elif (
+        "audience_kind" in update_data
+        and old_audience_kind == AudienceKind.GROUPS.value
+        and final_audience_kind != AudienceKind.GROUPS.value
+    ):
+        # Switched AWAY from 'groups' without sending group_ids -- the old
+        # target-group rows are now meaningless; clear them so they don't
+        # linger as stale state a later switch BACK to 'groups' would
+        # silently resurrect.
+        await _set_practice_audience_groups(practice.id, [], session)
 
     # Apply Calendar taxonomy updates into data.taxonomy (JSONB).
     # deepcopy + set_jsonb so SQLAlchemy detects the change. Only the keys
@@ -770,26 +1288,51 @@ async def update_practice(
         # T2 (2026-07-15): direction/style membership is no longer checked by
         # Pydantic (it can't reach the async catalog), so both are validated
         # here, against the config+catalog union.
+        #
+        # T21-8 (ПРОМТ №547): EditPracticeView resends BOTH direction and
+        # style on EVERY save (not only when the master actually changes
+        # them), and exclude_unset only tells us they were PRESENT, not that
+        # they changed -- so gating re-validation on presence alone re-ran
+        # _assert_master_confirmed_taxonomy on every title-only save too,
+        # blocking a master from editing ANY field of a practice the instant
+        # their confirmed methods no longer covered its (unchanged) taxonomy.
+        # Compare against the practice's currently-stored taxonomy instead:
+        # object only when a value ACTUALLY CHANGES to something unconfirmed.
+        stored_taxonomy = (practice.data or {}).get("taxonomy", {})
+        stored_direction = stored_taxonomy.get("direction")
+        stored_style = stored_taxonomy.get("style")
+
         if "direction" in taxonomy_updates:
             new_direction = taxonomy_updates["direction"]
             # Style paired with this same request validates against the NEW
-            # direction (None if style isn't part of this update -- a no-op).
-            await _validate_taxonomy(
-                new_direction, taxonomy_updates.get("style"), session,
+            # direction (None if style isn't part of this update -- a no-op,
+            # unchanged from before T21-8: a direction-only change does not
+            # re-check the existing stored style against the new direction).
+            new_style = taxonomy_updates.get("style")
+            direction_changed = new_direction != stored_direction
+            style_changed = (
+                "style" in taxonomy_updates and new_style != stored_style
             )
+            if direction_changed or style_changed:
+                await _validate_taxonomy(new_direction, new_style, session)
+                # T21-6 (ПРОМТ №546): same master-confirmation check as
+                # create_practice -- an update can equally smuggle in a
+                # direction/style the master was never confirmed for.
+                await _assert_master_confirmed_taxonomy(
+                    user.id, new_direction, new_style, session,
+                )
         elif "style" in taxonomy_updates:
             # W-1: style changed WITHOUT direction in the same request --
             # validate against the direction actually STORED on the practice
             # (a style valid for a DIFFERENT direction, e.g. "silence" -- a
             # meditation style -- on a stored yoga practice, must still be
-            # rejected). A direction change alone, without a style in the same
-            # request, does not re-check the stored style -- unchanged from
-            # before T2.
-            stored_taxonomy = (practice.data or {}).get("taxonomy", {})
-            stored_direction = stored_taxonomy.get("direction")
-            await _validate_style_choice(
-                stored_direction, taxonomy_updates["style"], session,
-            )
+            # rejected).
+            new_style = taxonomy_updates["style"]
+            if new_style != stored_style:
+                await _validate_style_choice(stored_direction, new_style, session)
+                await _assert_master_confirmed_taxonomy(
+                    user.id, stored_direction, new_style, session,
+                )
 
         data = copy.deepcopy(practice.data) if practice.data else {}
         taxonomy = data.get("taxonomy", {})
@@ -834,6 +1377,13 @@ async def update_practice(
             occurred_at=datetime.now(UTC),
         )
 
+        # E21: keep the Zoom meeting's start time in sync, then re-fetch and
+        # overwrite stored registrant join links -- self-healing regardless
+        # of whether Zoom actually invalidates them on reschedule (unresolved
+        # question, see zoom/service.py docstring). Best-effort: never raises.
+        from app.modules.zoom.service import sync_meeting_reschedule
+        await sync_meeting_reschedule(practice, session)
+
     # E3: materialize series occurrences when a series ROOT is published
     # (draft -> scheduled). Gated inside the helper on the recurrence spec's
     # presence, so a series practice without a spec (seed demo) is a no-op. Only
@@ -846,6 +1396,22 @@ async def update_practice(
         and practice.parent_practice_id is None
     ):
         await generate_series_occurrences(practice, session)
+
+    # E21: create the practice's Zoom meeting on publish (draft -> scheduled),
+    # for ANY practice type -- not gated on series, unlike the block above.
+    # Best-effort: create_meeting_for_practice never raises, so publish
+    # always succeeds regardless of Zoom's outcome (ПРОМТ №519 amendment 2 --
+    # confirmed as the intended reading). KNOWN GAP: series CHILDREN are
+    # created directly inside generate_series_occurrences() with
+    # status=scheduled and never pass through this branch, so they do not
+    # get a Zoom meeting from this step -- out of scope for this prompt
+    # (would touch series_service.py), flagged rather than silently patched.
+    if (
+        old_status == PracticeStatus.DRAFT.value
+        and practice.status == PracticeStatus.SCHEDULED.value
+    ):
+        from app.modules.zoom.service import create_meeting_for_practice
+        await create_meeting_for_practice(practice, session)
 
     return practice
 

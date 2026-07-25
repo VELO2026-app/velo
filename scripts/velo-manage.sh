@@ -116,6 +116,41 @@ wait_for_backend() {
     return 1
 }
 
+# ПРОМТ №563: a key missing from the real .env is only genuinely DRIFT if
+# nothing in the app covers for its absence. app/core/config.py's Settings
+# class gives every field a Python-side default (grep confirms: zero fields
+# declared without one, e.g. via pydantic's `Field(...)` -- checked, none
+# exist in this file today), but those defaults are NOT uniformly "safe":
+# some are real, working values (TELEGRAM_LINK_DOMAIN = "telegram.me") and
+# some are empty-string placeholders that only LOOK like defaults
+# (SECRET_KEY = "", DATABASE_URL = "" -- "no default in production, app
+# won't start without it", per that field's own comment). Only the first
+# kind gets downgraded to informational; an empty/None default still counts
+# as drift, unchanged from before.
+#
+# Derived from the code by a regex read of config.py, not a hand-maintained
+# list -- so it tracks new fields automatically. HONEST LIMITS: this is a
+# regex over a Python source file, not a parser. It only resolves a field
+# declared as `snake_case_name: type = <literal>` on a single line (true for
+# all 93 fields in this file today, verified by grep). A future field using
+# `Field(...)`, a computed default, or a multi-line annotation would not
+# match and SAFELY falls back to being reported as drift (never silently
+# downgraded on a declaration this couldn't confidently read). It also can't
+# tell "safe in every environment" apart from "safe for local dev, wrong in
+# prod" (e.g. REDIS_URL defaults to localhost) -- that distinction exists
+# only in this file's prose comments, not as a machine-readable signal, so
+# such keys are informational too. Informational still PRINTS (with the
+# default shown) so a human doing a prod audit still sees it -- only the
+# pass/fail verdict changes, the key never goes silent.
+_config_default_for_key() {
+    local key="$1" config_file="$2"
+    local py_attr
+    py_attr=$(echo "$key" | tr '[:upper:]' '[:lower:]')
+    grep -E "^[[:space:]]*${py_attr}[[:space:]]*:.*=" "$config_file" \
+        | head -1 \
+        | sed -E 's/^[^=]*=[[:space:]]*//; s/[[:space:]]*#.*$//; s/[[:space:]]*$//'
+}
+
 # Drift watchman for backend/.env.example vs the real backend/.env: install
 # reads the ENV_FILE guard in install_velo.sh's generate_env(), which means
 # backend/.env is written exactly once and never touched again by `velo
@@ -124,6 +159,8 @@ wait_for_backend() {
 # secrets and are never read or printed.
 check_backend_env() {
     local example_file="$1" real_env_file="$2"
+    local config_file
+    config_file="$(dirname "$example_file")/app/core/config.py"
     local drift=0
     echo "--- backend/.env ---"
     if [ ! -f "$real_env_file" ]; then
@@ -135,6 +172,15 @@ check_backend_env() {
         [ -z "$key" ] && continue
         if grep -q "^${key}=" "$real_env_file"; then
             echo -e "${GREEN}✓${NC} $key present"
+            continue
+        fi
+
+        local default_val=""
+        if [ -f "$config_file" ]; then
+            default_val=$(_config_default_for_key "$key" "$config_file")
+        fi
+        if [ -n "$default_val" ] && [ "$default_val" != '""' ] && [ "$default_val" != "''" ] && [ "$default_val" != "None" ]; then
+            echo -e "${YELLOW}⚠ $key -- absent from the real file, but config.py falls back to ${default_val} (informational, not drift)${NC}"
         else
             echo -e "${RED}✗ $key -- declared in $example_file, ABSENT from the real file${NC}"
             drift=1

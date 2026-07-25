@@ -55,6 +55,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 import { useBackgroundStabilizer } from '@/composables/useBackgroundStabilizer'
 import { useKeyboardDismiss } from '@/composables/useKeyboardDismiss'
+import { startRoleFreshnessPoll } from '@/composables/useRoleFreshness'
 import { VToast } from '@/components/ui'
 import AppFrame from '@/components/layout/AppFrame.vue'
 import LoadingView from '@/views/auth/LoadingView.vue'
@@ -98,5 +99,10 @@ function onCreateAccount(): void {
 
 onMounted(() => {
   initAuth()
+  // T21-4/T21-5 (ПРОМТ №546): foreground-only poll so a role/master-
+  // application change is picked up even if the session never navigates
+  // again while parked on one screen. Safe to start before auth resolves --
+  // each tick's fetchMe() already no-ops without a session token.
+  startRoleFreshnessPoll()
 })
 </script>

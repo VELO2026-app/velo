@@ -455,23 +455,65 @@ describe('AdminMasterReviewView', () => {
       expect(text()).toContain('Анна Мастерова')
     })
 
-    it('failure: toasts the fallback and lands in the not-found rung (master stays null)', async () => {
+    it('SW7: a cold-deep-link failure lands in a DISTINCT error rung, not "not found" -- with a retry button', async () => {
+      // Previously this fell straight into the "Заявка не найдена" empty
+      // state (the SAME state a genuine 404 renders), with only a toast (easy
+      // to miss) as the sole signal something was actually wrong -- no way to
+      // retell a transient network blip from "this application doesn't exist"
+      // and no retry affordance. Matches sibling admin detail screens
+      // (AdminPracticeDetailView, AdminRevenueView, AdminWithdrawalDetailView).
       vi.mocked(adminApi.getMasterById).mockRejectedValue(new Error('ECONNRESET'))
       mount('m_missing')
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Ошибка загрузки данных')
-      expect(text()).toContain('Заявка не найдена')
+      expect(text()).toContain('Ошибка загрузки')
+      expect(text()).not.toContain('Заявка не найдена')
+      const retry = Array.from(host?.querySelectorAll('button') ?? []).find(
+        (b) => b.textContent?.trim() === 'Повторить',
+      )
+      expect(retry).toBeDefined()
     })
 
-    it('failure (ApiResponseError): the toast carries the real backend detail', async () => {
+    it('failure (ApiResponseError): the error rung carries the real backend detail', async () => {
       vi.mocked(adminApi.getMasterById).mockRejectedValue(
         new ApiResponseError(500, 'Сервер недоступен', 'server_error'),
       )
       mount('m_missing')
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Сервер недоступен')
+      expect(text()).toContain('Сервер недоступен')
+    })
+
+    it('SW7: «Повторить» recovers to content after a failure', async () => {
+      vi.mocked(adminApi.getMasterById).mockRejectedValueOnce(new Error('ECONNRESET'))
+      mount('m_missing')
+      await flush()
+
+      const retry = Array.from(host?.querySelectorAll('button') ?? []).find(
+        (b) => b.textContent?.trim() === 'Повторить',
+      )
+      expect(retry).toBeDefined()
+
+      vi.mocked(adminApi.getMasterById).mockResolvedValueOnce(MASTER_PENDING())
+      retry?.click()
+      await flush()
+
+      expect(text()).not.toContain('Ошибка загрузки')
+      expect(text()).toContain('Анна Мастерова')
+      expect(adminApi.getMasterById).toHaveBeenCalledTimes(2)
+    })
+
+    it('a fetch failure AFTER a router-state hand-off keeps showing the handed data (toast only, no error rung)', async () => {
+      // A background refine failing must not blank data the list screen
+      // already handed over -- mirrors AdminPracticeDetailView's T21-1 "don't
+      // blank a working page over a secondary failure" convention.
+      vi.mocked(adminApi.getMasterById).mockRejectedValue(new Error('ECONNRESET'))
+      mount('m_pending', MASTER_PENDING())
+      await flush()
+
+      expect(text()).toContain('Анна Мастерова')
+      expect(text()).not.toContain('Ошибка загрузки')
+      expect(toastError).toHaveBeenCalledWith('Ошибка загрузки данных')
     })
   })
 
@@ -535,7 +577,7 @@ describe('AdminMasterReviewView', () => {
       footBtn('Одобрить')?.click()
       await flush()
 
-      expect(adminApi.verifyMaster).toHaveBeenCalledWith('m_pending')
+      expect(adminApi.verifyMaster).toHaveBeenCalledWith('m_pending', undefined, undefined)
       expect(toastSuccess).toHaveBeenCalledWith('Мастер верифицирован')
       expect(push).toHaveBeenCalledWith({ name: 'admin-masters' })
     })
@@ -584,7 +626,7 @@ describe('AdminMasterReviewView', () => {
       await flush()
 
       expect(modalIsOpen()).toBe(false)
-      expect(adminApi.verifyMaster).toHaveBeenCalledWith('m_pending')
+      expect(adminApi.verifyMaster).toHaveBeenCalledWith('m_pending', undefined, undefined)
     })
 
     it('custom/unmatched text: pauses on the confirm dialog INSTEAD of calling verifyMaster', async () => {
@@ -617,13 +659,15 @@ describe('AdminMasterReviewView', () => {
       modalBtn('Добавить в каталог')?.click()
       await flush()
 
-      expect(adminApi.verifyMaster).toHaveBeenCalledWith('m_pending', ['Нестандартный метод'])
+      expect(adminApi.verifyMaster).toHaveBeenCalledWith(
+        'm_pending', ['Нестандартный метод'], undefined,
+      )
       expect(toastSuccess).toHaveBeenCalledWith('Мастер верифицирован')
       expect(push).toHaveBeenCalledWith({ name: 'admin-masters' })
       expect(modalIsOpen()).toBe(false)
     })
 
-    it('cancel ("Только этому мастеру"): STILL verifies, WITHOUT promote (never blocks)', async () => {
+    it('cancel ("Только этому мастеру"): verifies, SCOPED to this master only (T22-6, ПРОМТ №561)', async () => {
       vi.mocked(adminApi.getMasterById).mockResolvedValue(
         master({ methods: ['Нестандартный метод'] }),
       )
@@ -645,14 +689,17 @@ describe('AdminMasterReviewView', () => {
       cancelBtnEl?.click()
       await flush()
 
-      // Exactly ONE arg -- same call shape as the no-custom-text path, so
-      // every pre-existing verifyMaster call site is unaffected.
-      expect(adminApi.verifyMaster).toHaveBeenCalledWith('m_pending')
+      // Was "exactly one arg, promote never sent": that used to mean the
+      // label vanished entirely (T22-6). Now it takes the master_only
+      // branch, so the direction gets a real (master-scoped) row.
+      expect(adminApi.verifyMaster).toHaveBeenCalledWith(
+        'm_pending', undefined, ['Нестандартный метод'],
+      )
       expect(toastSuccess).toHaveBeenCalledWith('Мастер верифицирован')
       expect(push).toHaveBeenCalledWith({ name: 'admin-masters' })
     })
 
-    it('dismiss (overlay tap, NOT the cancel button): STILL verifies, WITHOUT promote -- an accidental dismiss can never fail to act', async () => {
+    it('dismiss (overlay tap, NOT the cancel button): STILL verifies, scoped to this master only', async () => {
       vi.mocked(adminApi.getMasterById).mockResolvedValue(
         master({ methods: ['Нестандартный метод'] }),
       )
@@ -670,7 +717,9 @@ describe('AdminMasterReviewView', () => {
       modalOverlay()?.click()
       await flush()
 
-      expect(adminApi.verifyMaster).toHaveBeenCalledWith('m_pending')
+      expect(adminApi.verifyMaster).toHaveBeenCalledWith(
+        'm_pending', undefined, ['Нестандартный метод'],
+      )
       expect(toastSuccess).toHaveBeenCalledWith('Мастер верифицирован')
     })
 
@@ -690,7 +739,9 @@ describe('AdminMasterReviewView', () => {
       confirmBtnEl?.click()
       await flush()
 
-      expect(adminApi.verifyMaster).toHaveBeenCalledWith('m_pending', ['Нестандартный метод'])
+      expect(adminApi.verifyMaster).toHaveBeenCalledWith(
+        'm_pending', ['Нестандартный метод'], undefined,
+      )
       expect(toastError).toHaveBeenCalledWith('Ошибка верификации')
       expect(push).not.toHaveBeenCalled()
       expect(modalIsOpen()).toBe(false)

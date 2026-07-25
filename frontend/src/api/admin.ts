@@ -23,6 +23,8 @@
 //   GET  /api/v1/admin/participants         -- global participants list (E1)
 //   GET  /api/v1/admin/practices            -- global practices list (E9)
 //   GET  /api/v1/admin/practices/{id}       -- practice detail + roster (E9)
+//   GET  /api/v1/admin/practices/{id}/zoom-attendance -- Zoom meeting status +
+//                                              unmatched bucket (T21-1, ПРОМТ №541)
 //   GET  /api/v1/admin/revenue              -- revenue/commission/payout (E9)
 // =============================================================================
 
@@ -62,8 +64,13 @@ import type {
 // types. Field-checked against the hand-written stand-in this replaced:
 // identical shape, nothing kept back.
 import type { AdminPromoResponse, AdminPaginatedPromosResponse } from '@/api/generated'
+// T21-1: AdminZoomAttendanceResponse (+ its nested types) are natively in
+// generated.ts as of the 9e1a309 regen -- same T5 convention as the promo
+// types above, imported directly rather than via api/types.
+import type { AdminZoomAttendanceResponse } from '@/api/generated'
 
 export type { AdminPromoResponse, AdminPaginatedPromosResponse }
+export type { AdminZoomAttendanceResponse }
 export type AdminPromoTypeFilter = 'company' | 'master'
 
 // Re-export for views that import from api/admin.ts directly.
@@ -221,10 +228,14 @@ export function editMasterProfile(
 export function verifyMaster(
   userId: string,
   promote?: string[],
+  masterOnly?: string[],
 ): Promise<AdminMasterActionResponse> {
+  const body: { promote?: string[]; master_only?: string[] } = {}
+  if (promote && promote.length) body.promote = promote
+  if (masterOnly && masterOnly.length) body.master_only = masterOnly
   return api.post<AdminMasterActionResponse>(
     `/api/v1/admin/masters/${userId}/verify`,
-    promote && promote.length ? { promote } : {},
+    body,
   )
 }
 
@@ -280,10 +291,14 @@ export function getMethodChangeRequests(
 export function approveMethodChange(
   userId: string,
   promote?: string[],
+  masterOnly?: string[],
 ): Promise<MethodChangeActionResponse> {
+  const body: { promote?: string[]; master_only?: string[] } = {}
+  if (promote && promote.length) body.promote = promote
+  if (masterOnly && masterOnly.length) body.master_only = masterOnly
   return api.post<MethodChangeActionResponse>(
     `/api/v1/admin/masters/${userId}/method-change-request/approve`,
-    promote && promote.length ? { promote } : {},
+    body,
   )
 }
 
@@ -411,6 +426,13 @@ export function getAdminPractices(
 
 export function getAdminPracticeDetail(id: string): Promise<AdminPracticeDetailResponse> {
   return api.get<AdminPracticeDetailResponse>(`/api/v1/admin/practices/${id}`)
+}
+
+/** T21-1 (ПРОМТ №541): meeting status, per-booking minutes present, and the
+ * unmatched bucket -- schema existed since E21 step G with zero consumers
+ * until now (ПРОМТ №540 audit). */
+export function getAdminZoomAttendance(practiceId: string): Promise<AdminZoomAttendanceResponse> {
+  return api.get<AdminZoomAttendanceResponse>(`/api/v1/admin/practices/${practiceId}/zoom-attendance`)
 }
 
 /** Platform revenue/commission/payout + per-master breakdown for the period.

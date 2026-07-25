@@ -12,11 +12,12 @@
 //      practice that falls through the partition is simply invisible to its own
 //      owner -- no error, no empty state, just a row that is not there. Both
 //      tabs are asserted for what they include AND what they must exclude.
-//   2. The order is LOCAL wall-clock, not the UTC instant (localSortKey, CR-1).
-//      Swap it for `new Date(x).getTime()` and every list still renders, still
-//      sorts, and is wrong only for masters who teach across timezones. The
-//      CR-1 test below is built so those two orderings DISAGREE -- it is the
-//      only assertion in the file that can catch that substitution.
+//   2. The order is now whatever the SERVER returns (T22-3/T22-5, ПРОМТ
+//      №561) -- the view's old client-side localSortKey re-sort is gone by
+//      owner decision. The "renders the SERVER order verbatim" test below is
+//      built so the absolute-instant order and the old local-wall-clock order
+//      DISAGREE -- it is the one assertion that can catch a re-sort creeping
+//      back in.
 //   3. goDetail pushes an id (.vue:291-293). A wrong id opens somebody else's
 //      practice; assertions are on the ROUTE OBJECT, not that push fired.
 //
@@ -171,6 +172,18 @@ const U_DRAFT = practice('u-draft', {
   scheduled_at: '2026-07-25T10:00:00Z',
 })
 
+// A4 V5 (ПРОМТ №571): status is still 'live' (the backend has not yet run its
+// autofinalize transition to 'completed') but scheduled_at + duration_minutes
+// is already BEHIND NOW -- started 11:00Z, 60 min, ends 12:00Z, frozen instant
+// is 12:00:00Z exactly. practiceHasEnded is `nowMs >= end`, so this is the
+// boundary case: ended AT this instant, not merely approaching it.
+const U_JUST_ENDED = practice('u-just-ended', {
+  title: 'Только что закончилась',
+  status: 'live',
+  scheduled_at: '2026-07-20T11:00:00Z',
+  duration_minutes: 60,
+})
+
 // -- Past: completed only.
 const P_RECENT = practice('p-recent', {
   title: 'Недавняя',
@@ -227,6 +240,30 @@ const INSIGHTS: Record<string, PracticeInsightsResponse> = {
 
 function page(items: PracticeResponse[], total = items.length, offset = 0) {
   return { items, total, limit: 20, offset }
+}
+
+// T22-3/T22-5 (ПРОМТ №561): the server now owns the filter AND the ordering
+// per bucket -- the view no longer re-filters/re-sorts client-side, so the
+// fake server must actually behave like one. Mirrors
+// listing_service.py's bucket semantics: "upcoming" = draft/scheduled/live,
+// nearest first; "past" = completed only, most-recent first. Cancelled/
+// deleted match neither filter, same as the real backend.
+function mockBucketedPractices(items: PracticeResponse[]): void {
+  vi.mocked(mastersApi.getMyPractices).mockImplementation(
+    async (bucket: 'upcoming' | 'past', limit = 20, offset = 0) => {
+      const filtered = items
+        .filter((p) =>
+          bucket === 'upcoming'
+            ? p.status === 'draft' || p.status === 'scheduled' || p.status === 'live'
+            : p.status === 'completed',
+        )
+        .sort((a, b) => {
+          const diff = new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
+          return bucket === 'upcoming' ? diff : -diff
+        })
+      return page(filtered.slice(offset, offset + limit), filtered.length, offset)
+    },
+  )
 }
 
 // -----------------------------------------------------------------------------
@@ -338,12 +375,19 @@ function loader(): HTMLElement | null | undefined {
 // -----------------------------------------------------------------------------
 
 beforeEach(() => {
+  // Fake timers, not a bare setSystemTime (A4 V5, mirrors
+  // MasterDashboardView.test.ts): the screen now installs a 60s setInterval
+  // (.vue) that the clock test below drives directly. Nothing in the mount
+  // chain awaits a timer (the API is mocked and usePagination holds none),
+  // and microtasks are not faked, so flush() is unaffected.
+  vi.useFakeTimers()
   vi.setSystemTime(NOW)
   pinia = createPinia()
   setActivePinia(pinia)
   routeQuery = {}
 
-  vi.mocked(mastersApi.getMyPractices).mockReset().mockResolvedValue(page(ALL))
+  vi.mocked(mastersApi.getMyPractices).mockReset()
+  mockBucketedPractices(ALL)
 
   // The real store writes whatever this resolves into its reactive cache; a
   // practice with no fixture REJECTS, which is the honest shape of an insights
@@ -448,7 +492,7 @@ describe('MasterPracticesView', () => {
     })
 
     it('empty: the PAST tab has its own copy, and no «Создать» way out', async () => {
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(page([U_SCHED]))
+      mockBucketedPractices([U_SCHED])
       await mountOnPast()
 
       expect(cards()).toHaveLength(0)
@@ -462,7 +506,7 @@ describe('MasterPracticesView', () => {
     it('empty is PER TAB: a master with only completed practices sees both truths', async () => {
       // The whole partition in one test: upcoming reads empty while past holds
       // the same two rows. An "empty" that spanned both tabs would fail here.
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(page([P_RECENT, P_OLD]))
+      mockBucketedPractices([P_RECENT, P_OLD])
       mount()
       await flush()
       expect(text()).toContain('Нет предстоящих практик')
@@ -564,18 +608,29 @@ describe('MasterPracticesView', () => {
       expect(replace).toHaveBeenCalledWith({ query: { from: 'dashboard', tab: 'past' } })
     })
 
-    it('does NOT re-fetch the practice list on a tab switch', async () => {
-      // watch(activeTab) calls loadTabData only (.vue:300-306). The list is one
-      // dataset partitioned client-side; re-paging it on every tap would reset
-      // the master's «Показать ещё» progress.
+    it('fetches each bucket ONCE on first activation, never again on repeat switches (T22-3/T22-5, ПРОМТ №561)', async () => {
+      // Was "does NOT re-fetch ... one dataset partitioned client-side": that
+      // premise is gone by design -- the two tabs are now two independent
+      // server queries (ensureBucketLoaded, .vue), each fetched lazily ON
+      // ACTIVATION. What must still hold is the guard: a bucket already
+      // loaded is never re-fetched, which is what protects the master's
+      // «Показать ещё» progress from being reset by a stray tab tap.
       mount()
       await flush()
-      expect(mastersApi.getMyPractices).toHaveBeenCalledTimes(1)
+      expect(mastersApi.getMyPractices).toHaveBeenCalledTimes(1) // upcoming, first activation
 
       tab('Прошедшие')?.click()
       await flush()
+      expect(mastersApi.getMyPractices).toHaveBeenCalledTimes(2) // past, first activation
+      expect(cards()).toHaveLength(2)
 
-      expect(mastersApi.getMyPractices).toHaveBeenCalledTimes(1)
+      tab('Предстоящие')?.click()
+      await flush()
+      expect(mastersApi.getMyPractices).toHaveBeenCalledTimes(2) // upcoming already loaded -- no re-fetch
+
+      tab('Прошедшие')?.click()
+      await flush()
+      expect(mastersApi.getMyPractices).toHaveBeenCalledTimes(2) // past already loaded -- no re-fetch
       expect(cards()).toHaveLength(2)
     })
   })
@@ -642,6 +697,63 @@ describe('MasterPracticesView', () => {
       expect(cardTitles()).toEqual(['Недавняя', 'Давняя'])
       expect(cardTitles()).not.toContain('Удалённая')
     })
+
+    it('A4 V5: a status=live practice whose time has already ended does not show as upcoming', async () => {
+      // The backend has not YET run autofinalize (status is still 'live'
+      // server-side) -- the frontend must not wait for that round-trip to
+      // stop calling it "Предстоящие". U_JUST_ENDED ends AT the frozen
+      // instant exactly (practiceHasEnded's own boundary: nowMs >= end).
+      mockBucketedPractices([U_LIVE, U_SCHED, U_DRAFT, U_JUST_ENDED])
+      mount()
+      await flush()
+
+      expect(cardTitles()).toEqual(['Сегодняшняя', 'Завтрашняя', 'Черновик'])
+      expect(cardTitles()).not.toContain('Только что закончилась')
+    })
+
+    it('A4 V5: a DRAFT past its scheduled_at is NOT swept by the time filter -- only scheduled/live are', async () => {
+      // The clock filter is deliberately narrower than Dashboard's: a draft's
+      // scheduled_at going stale is not something the backend's autofinalize
+      // worker ever resolves (drafts are never live), so it must stay visible
+      // until the master publishes or deletes it.
+      const staleDraft = practice('u-stale-draft', {
+        title: 'Старый черновик',
+        status: 'draft',
+        scheduled_at: '2026-07-01T09:00:00Z', // 19 days before NOW
+      })
+      mockBucketedPractices([staleDraft])
+      mount()
+      await flush()
+
+      expect(cardTitles()).toEqual(['Старый черновик'])
+    })
+
+    it('A4 V5: the 60s clock drops a card the moment its practice ends, without a re-fetch', async () => {
+      // The whole point of `now` being a REACTIVE ref on a 60s interval,
+      // mirroring MasterDashboardView's nearestPractices clock test: a master
+      // who leaves the list open must not keep seeing a practice that ended
+      // while they were looking at it -- and this must NOT require a second
+      // getMyPractices call (the store's cache is untouched; only the LOCAL
+      // filter re-evaluates).
+      const aboutToEnd = practice('u-about-to-end', {
+        title: 'Скоро закончится',
+        status: 'live',
+        scheduled_at: '2026-07-20T11:14:00Z',
+        duration_minutes: 60, // ends 12:14Z -- one minute after NOW (12:00Z)
+      })
+      mockBucketedPractices([aboutToEnd])
+      mount()
+      await flush()
+      expect(cardTitles()).toEqual(['Скоро закончится'])
+      const fetchCallsBeforeTick = vi.mocked(mastersApi.getMyPractices).mock.calls.length
+
+      vi.setSystemTime(new Date('2026-07-20T12:15:00Z'))
+      await vi.advanceTimersByTimeAsync(60_000)
+      await flush()
+
+      expect(cardTitles()).toEqual([])
+      expect(vi.mocked(mastersApi.getMyPractices).mock.calls.length).toBe(fetchCallsBeforeTick)
+    })
   })
 
   // ===========================================================================
@@ -661,15 +773,21 @@ describe('MasterPracticesView', () => {
       expect(cardTitles()).toEqual(['Недавняя', 'Давняя'])
     })
 
-    it('orders by LOCAL wall-clock, not the UTC instant (CR-1)', async () => {
-      // The ONE test that can catch localSortKey being swapped for
-      // new Date(x).getTime(). The two fixtures are built so the orderings
-      // DISAGREE:
-      //   AUCKLAND  20:00Z, tz +12 -> shows 08:00 on 23 July -> key ...23 08:00
-      //   LONDON    22:00Z, tz UTC -> shows 22:00 on 22 July -> key ...22 22:00
-      // By epoch, AUCKLAND (20:00Z) is FIRST. By the local wall-clock each card
-      // actually renders, LONDON is first -- and the list must match the times
-      // on screen (utils/format.ts:210-225), so LONDON leads.
+    it('renders the SERVER order verbatim -- no client re-sort (T22-3/T22-5, ПРОМТ №561)', async () => {
+      // Was CR-1 ("orders by LOCAL wall-clock"): the view used to re-derive its
+      // own order via localSortKey, comparing each practice's wall-clock in ITS
+      // OWN timezone. That client-side re-sort is gone by owner decision --
+      // "leaving it in place would hide the next ordering bug from us" -- the
+      // server now owns ordering entirely (listing_service.py's bucket
+      // ordering). This test proves the negative: two practices whose absolute
+      // (UTC) order and local-wall-clock order DISAGREE are rendered in
+      // whatever order the fake server returned them, unchanged.
+      //   AUCKLAND  20:00Z, tz +12 -> local wall-clock 08:00 on 23 July
+      //   LONDON    22:00Z, tz UTC -> local wall-clock 22:00 on 22 July
+      // By local wall-clock, LONDON would sort first (22 July before 23 July)
+      // -- the old CR-1 assertion. The server returns them ascending by the
+      // absolute instant instead (AUCKLAND 20:00Z < LONDON 22:00Z), and the
+      // view must preserve exactly that order.
       const AUCKLAND = practice('tz-akl', {
         title: 'Окленд',
         scheduled_at: '2026-07-22T20:00:00Z',
@@ -684,12 +802,11 @@ describe('MasterPracticesView', () => {
       mount()
       await flush()
 
-      expect(cardTitles()).toEqual(['Лондон', 'Окленд'])
+      expect(cardTitles()).toEqual(['Окленд', 'Лондон'])
       // Proof the premise holds -- the rendered times really are the ones the
-      // order above claims to follow. Without this the assertion could pass on
-      // a coincidence of fixture order.
-      expect(subOf(cardById('Лондон')!)).toContain('22:00')
+      // local-wall-clock ordering (now retired) would have disagreed on.
       expect(subOf(cardById('Окленд')!)).toContain('08:00')
+      expect(subOf(cardById('Лондон')!)).toContain('22:00')
     })
   })
 
@@ -1033,7 +1150,7 @@ describe('MasterPracticesView', () => {
       buttonWith('Показать ещё')?.click()
       await flush()
 
-      expect(mastersApi.getMyPractices).toHaveBeenLastCalledWith(20, 1)
+      expect(mastersApi.getMyPractices).toHaveBeenLastCalledWith('upcoming', 20, 1)
       expect(cardTitles()).toEqual(['Завтрашняя', 'Догруженная'])
       expect(buttonWith('Показать ещё')).toBeUndefined()
     })
@@ -1125,7 +1242,7 @@ describe('MasterPracticesView', () => {
       mount()
       await flush()
 
-      useMasterStore().practicesError = 'Сеть недоступна'
+      useMasterStore().practicesUpcomingError = 'Сеть недоступна'
       await flush()
 
       expect(cardTitles()).toEqual(['Завтрашняя'])
@@ -1138,7 +1255,7 @@ describe('MasterPracticesView', () => {
       mount()
       await flush()
 
-      useMasterStore().practicesError = 'Сеть недоступна'
+      useMasterStore().practicesUpcomingError = 'Сеть недоступна'
       await flush()
 
       expect(text()).toContain('Не удалось загрузить практики')
@@ -1162,8 +1279,8 @@ describe('MasterPracticesView', () => {
       await flush()
 
       expect(toastError).toHaveBeenCalledWith('Сеть недоступна')
-      expect(useMasterStore().practicesError).toBeNull()
-      expect(useMasterStore().practicesLoadMoreError).toBe('Сеть недоступна')
+      expect(useMasterStore().practicesUpcomingError).toBeNull()
+      expect(useMasterStore().practicesUpcomingLoadMoreError).toBe('Сеть недоступна')
     })
 
     it('clears loadMoreError on the next attempt, so a stale message cannot re-toast', async () => {
@@ -1178,7 +1295,7 @@ describe('MasterPracticesView', () => {
       )
       buttonWith('Показать ещё')?.click()
       await flush()
-      expect(useMasterStore().practicesLoadMoreError).toBe('Сеть недоступна')
+      expect(useMasterStore().practicesUpcomingLoadMoreError).toBe('Сеть недоступна')
 
       vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
         page([practice('p-ok', { title: 'Догруженная', status: 'scheduled' })], 2, 1),
@@ -1186,7 +1303,7 @@ describe('MasterPracticesView', () => {
       buttonWith('Показать ещё')?.click()
       await flush()
 
-      expect(useMasterStore().practicesLoadMoreError).toBeNull()
+      expect(useMasterStore().practicesUpcomingLoadMoreError).toBeNull()
       expect(toastError).toHaveBeenCalledTimes(1)
     })
   })

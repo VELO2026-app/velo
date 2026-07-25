@@ -86,7 +86,7 @@ import { useToast } from '@/composables/useToast'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import { formatShortDate, todayLocalISO } from '@/utils/format'
 import { createPromo } from '@/api/promos'
-import { ApiResponseError } from '@/api/client'
+import { extractApiError } from '@/composables/useApiError'
 
 const router = useRouter()
 const toast = useToast()
@@ -154,8 +154,7 @@ async function onCreate(): Promise<void> {
     toast.success('Промокод создан')
     router.push({ name: 'master-promocodes' })
   } catch (e) {
-    const msg = e instanceof ApiResponseError ? e.detail : 'Не удалось создать промокод'
-    toast.error(msg)
+    toast.error(extractApiError(e, 'Не удалось создать промокод'))
   } finally {
     creating.value = false
   }

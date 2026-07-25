@@ -24,11 +24,24 @@ import {
   masterNoProfileGuard,
   masterStatusGuard,
   masterPendingGuard,
+  roleFreshnessGuard,
 } from '@/router/guards'
 import { useAuthStore } from '@/stores/auth'
 import { resetAuthState, __setReadyForTest, pendingDeepLink } from '@/composables/useAuth'
 import { MASTER_APPLIED_KEY, masterRejectionSeenKey } from '@/utils/constants'
 import type { UserResponse } from '@/api/types'
+
+// roleFreshnessGuard calls refreshRoleIfStale() (useRoleFreshness.ts), which
+// calls the REAL authStore.fetchMe() -> a real network call happy-dom cannot
+// satisfy. refreshRoleIfStale's OWN behaviour (debounce timing, what it
+// fetches) is tested separately in useRoleFreshness.test.ts -- here only
+// roleFreshnessGuard's OWN redirect logic is under test, so the call is
+// stubbed to a no-op, same idiom as AdminMastersView.test.ts's
+// primeMethodTaxonomyCatalog mock.
+const refreshRoleIfStale = vi.fn().mockResolvedValue(undefined)
+vi.mock('@/composables/useRoleFreshness', () => ({
+  refreshRoleIfStale: (...args: unknown[]) => refreshRoleIfStale(...args),
+}))
 
 // Guards ignore (to, from, next) entirely at runtime -- call bare, matching
 // how vue-router actually invokes them. NavigationGuardWithThis's declared
@@ -78,6 +91,7 @@ describe('router/guards', () => {
     masterStoreState.profileMissing = false
     masterStoreState.profile = null
     fetchMyProfile.mockClear()
+    refreshRoleIfStale.mockClear()
   })
 
   afterEach(() => {
@@ -320,6 +334,88 @@ describe('router/guards', () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'user' })
       expect(await call(masterPendingGuard)).toEqual({ path: '/user/dashboard' })
+    })
+  })
+
+  // ===========================================================================
+  // T21-4/T21-5 (ПРОМТ №546): roleFreshnessGuard generalizes roleRedirect's
+  // rejection branch to EVERY route, not just a fresh nav to '/' -- the
+  // actual gap the recon traced (a session already open and simply
+  // navigating around never re-checked this at all). Takes `to` directly
+  // (not the bare `call()` helper above), and always calls
+  // refreshRoleIfStale() first (mocked, asserted separately below).
+  describe('roleFreshnessGuard', () => {
+    it('always calls refreshRoleIfStale before checking anything', async () => {
+      __setReadyForTest(true)
+      setAuthUser({ role: 'user' })
+      await roleFreshnessGuard({ name: 'user-dashboard' })
+      expect(refreshRoleIfStale).toHaveBeenCalledTimes(1)
+    })
+
+    it('rejected applicant, not yet seen, navigating anywhere else -> routed to /master/pending', async () => {
+      __setReadyForTest(true)
+      setAuthUser({ role: 'user', master_application: { status: 'rejected' } })
+      expect(await roleFreshnessGuard({ name: 'user-calendar' })).toEqual({ path: '/master/pending' })
+    })
+
+    it('does not redirect a navigation already headed to master-pending (avoids a loop)', async () => {
+      __setReadyForTest(true)
+      setAuthUser({ role: 'user', master_application: { status: 'rejected' } })
+      expect(await roleFreshnessGuard({ name: 'master-pending' })).toBe(true)
+    })
+
+    it('rejected applicant, already seen -> allowed through (matches roleRedirect\'s own rule)', async () => {
+      __setReadyForTest(true)
+      setAuthUser({ id: 'user_1', role: 'user', master_application: { status: 'rejected' } })
+      localStorage.setItem(masterRejectionSeenKey('user_1'), '1')
+      expect(await roleFreshnessGuard({ name: 'user-profile' })).toBe(true)
+    })
+
+    it('non-rejected user navigating around -> allowed through', async () => {
+      __setReadyForTest(true)
+      setAuthUser({ role: 'user' })
+      expect(await roleFreshnessGuard({ name: 'user-dashboard' })).toBe(true)
+    })
+
+    it('master/admin roles -> allowed through (the rejection condition requires role=user)', async () => {
+      __setReadyForTest(true)
+      setAuthUser({ role: 'master' })
+      expect(await roleFreshnessGuard({ name: 'master-dashboard' })).toBe(true)
+    })
+
+    // -- ПРОМТ №550: guard cost fix -- refreshRoleIfStale is fire-and-forget,
+    // and its scope stays every-role (not gated to role='user'). ------------
+    it('still refreshes for a master role, not only role=user -- a revoked master must keep learning about it', async () => {
+      __setReadyForTest(true)
+      setAuthUser({ role: 'master' })
+      await roleFreshnessGuard({ name: 'master-dashboard' })
+      expect(refreshRoleIfStale).toHaveBeenCalledTimes(1)
+    })
+
+    it('resolves without waiting for refreshRoleIfStale to settle -- navigation is never blocked on the network round trip', async () => {
+      __setReadyForTest(true)
+      setAuthUser({ role: 'user' })
+
+      // A refresh that is still pending 50ms after this guard is awaited --
+      // if roleFreshnessGuard still `await`ed refreshRoleIfStale (the
+      // reverted behavior), its own returned promise could not settle before
+      // this slow mock does, and `refreshSettled` would already be true by
+      // the time `result` is assigned below.
+      let refreshSettled = false
+      refreshRoleIfStale.mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            setTimeout(() => {
+              refreshSettled = true
+              resolve()
+            }, 50)
+          }),
+      )
+
+      const result = await roleFreshnessGuard({ name: 'user-dashboard' })
+
+      expect(result).toBe(true)
+      expect(refreshSettled).toBe(false)
     })
   })
 })

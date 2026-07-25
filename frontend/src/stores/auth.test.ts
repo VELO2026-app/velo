@@ -193,4 +193,55 @@ describe('useAuthStore', () => {
       expect(store.user).toBeNull()
     })
   })
+
+  // -- ПРОМТ №550: logout race (ПРОМТ №549 adversarial finding) --------------
+  // fetchMe() now runs routinely (useRoleFreshness.ts -- every navigation,
+  // every 30s foregrounded), not just at boot, so a call already in flight
+  // when logout() fires is a real, not theoretical, timing window. Before
+  // this fix, fetchMe() checked the token only at entry and wrote
+  // unconditionally on success -- a stale response landing after
+  // _clearSession() would resurrect a cleared session's user.
+  describe('fetchMe', () => {
+    it('discards a response that resolves AFTER logout -- does not repopulate the store', async () => {
+      const store = useAuthStore()
+      store.token = 'tok_1'
+      store.user = fakeUser()
+
+      // getMe() is deliberately left unresolved -- simulates a request still
+      // in flight at the moment logout() runs.
+      let resolveGetMe: (user: UserResponse) => void = () => {}
+      vi.mocked(usersApi.getMe).mockImplementation(
+        () => new Promise<UserResponse>((resolve) => { resolveGetMe = resolve }),
+      )
+      const fetchPromise = store.fetchMe()
+
+      // Logout completes WHILE the fetch above is still pending.
+      vi.mocked(api.post).mockResolvedValue(undefined)
+      await store.logout()
+      expect(store.token).toBeNull()
+      expect(store.user).toBeNull()
+
+      // NOW the stale request resolves, with a user for a session that no
+      // longer exists.
+      resolveGetMe(fakeUser({ id: 'resurrected_user' }))
+      await fetchPromise
+
+      // If fetchMe() still wrote unconditionally (the reverted behavior),
+      // user/token would be resurrected here even though logout cleared them.
+      expect(store.user).toBeNull()
+      expect(store.token).toBeNull()
+    })
+
+    it('still writes the result for a request that resolves BEFORE anything else changes the session', async () => {
+      const store = useAuthStore()
+      store.token = 'tok_1'
+      store.user = fakeUser()
+      vi.mocked(usersApi.getMe).mockResolvedValue(fakeUser({ id: 'refreshed_user' }))
+
+      await store.fetchMe()
+
+      expect(store.user).toEqual(fakeUser({ id: 'refreshed_user' }))
+      expect(store.token).toBe('tok_1')
+    })
+  })
 })

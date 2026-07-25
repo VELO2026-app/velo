@@ -16,6 +16,7 @@ import {
   masterStatusGuard,
   masterPendingGuard,
   masterNoProfileGuard,
+  roleFreshnessGuard,
 } from '@/router/guards'
 import { waitUntilReady } from '@/composables/useAuth'
 import type { ReadyResult } from '@/composables/useAuth'
@@ -335,6 +336,27 @@ const router = createRouter({
           component: () => import('@/views/master/MasterStudentProfileView.vue'),
         },
         {
+          path: 'groups',
+          name: 'master-groups',
+          beforeEnter: masterStatusGuard,
+          meta: { hideTabBar: true },
+          component: () => import('@/views/master/MasterGroupsView.vue'),
+        },
+        {
+          path: 'groups/new',
+          name: 'master-group-create',
+          beforeEnter: masterStatusGuard,
+          meta: { hideTabBar: true },
+          component: () => import('@/views/master/MasterGroupCreateView.vue'),
+        },
+        {
+          path: 'groups/:id',
+          name: 'master-group-detail',
+          beforeEnter: masterStatusGuard,
+          meta: { hideTabBar: true },
+          component: () => import('@/views/master/MasterGroupDetailView.vue'),
+        },
+        {
           path: 'summary',
           name: 'master-summary',
           beforeEnter: masterStatusGuard,
@@ -363,6 +385,17 @@ const router = createRouter({
       name: 'master-apply',
       beforeEnter: applyGuard,
       component: () => import('@/views/master/MasterApplyView.vue'),
+    },
+    {
+      // P4 (ПРОМТ №593): landing for a group's reusable invite deeplink
+      // (startapp=group_invite__<token>). Standalone, like /master/invite/:token
+      // -- but no beforeEnter guard: unlike applyGuard's master-only bounce
+      // logic, ANY authenticated user (any role) may join a group, and
+      // App.vue's own auth gate (isAuthenticated) already ensures RouterView
+      // -- and therefore this route -- never renders for a logged-out visitor.
+      path: '/groups/join/:token',
+      name: 'group-join',
+      component: () => import('@/views/master/GroupJoinView.vue'),
     },
     {
       path: '/master/pending',
@@ -553,11 +586,20 @@ router.beforeEach(async (to) => {
     }
   }
 
+  // T21-4/T21-5 (ПРОМТ №546): keeps role/master-application state fresh
+  // across in-app navigation (debounced inside), and catches an unseen
+  // rejection verdict on ANY route -- not just a fresh app boot landing on
+  // '/', which is all roleRedirect's own rejection branch ever covered.
+  // See guards.ts for the full reasoning; kept as a separate exported guard
+  // (like every other guard here) so it's directly testable.
+  const freshnessResult = await roleFreshnessGuard(to)
+  if (freshnessResult !== true) return freshnessResult
+
+  const auth = useAuthStore()
+
   if (to.name !== 'user-dashboard' && to.path !== '/user' && to.path !== '/user/') {
     return true
   }
-
-  const auth = useAuthStore()
 
   if (auth.role === 'master' || auth.role === 'admin') {
     const uiStore = useUiStore()

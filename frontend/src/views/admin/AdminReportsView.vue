@@ -112,7 +112,7 @@ import type { ModerationFilter } from '@/components/shared/ModerationFilterModal
 import { useToast } from '@/composables/useToast'
 import { getReports } from '@/api/admin'
 import type { ReportResponse, ReportStatusFilter } from '@/api/admin'
-import { ApiResponseError } from '@/api/client'
+import { extractApiError } from '@/composables/useApiError'
 import { formatRelative } from '@/utils/adminHelpers'
 
 const LIMIT = 20
@@ -191,8 +191,7 @@ async function loadInitial(): Promise<void> {
   } catch (e) {
     if (myGeneration !== generation) return
     error.value = true
-    const msg = e instanceof ApiResponseError ? e.detail : 'Ошибка загрузки обращений'
-    toast.error(msg)
+    toast.error(extractApiError(e, 'Ошибка загрузки обращений'))
   } finally {
     if (myGeneration === generation) loading.value = false
   }
@@ -205,8 +204,7 @@ async function loadMore(): Promise<void> {
     items.value.push(...res.items)
     hasMore.value = items.value.length < res.total
   } catch (e) {
-    const msg = e instanceof ApiResponseError ? e.detail : 'Ошибка загрузки'
-    toast.error(msg)
+    toast.error(extractApiError(e, 'Ошибка загрузки'))
   } finally {
     loadingMore.value = false
   }

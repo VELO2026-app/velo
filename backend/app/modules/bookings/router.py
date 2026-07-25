@@ -172,12 +172,20 @@ async def list_my_bookings_endpoint(
     # locally to match this file's cross-service import style (get_master_-
     # display_name above) and sidestep any module-load import cycle.
     from app.modules.practices.service import ZOOM_VISIBLE_BOOKING_STATUSES
+    # A4 V2 (ПРОМТ №572): batched Zoom meeting status for this page's
+    # practices -- NOT gated by ZOOM_VISIBLE_BOOKING_STATUSES (that gate is
+    # for the manual zoom_link fallback, M-3); the meeting STATUS carries no
+    # secret material, same posture as PracticeResponse.zoom_meeting_status.
+    from app.modules.zoom.service import get_zoom_meeting_statuses
 
     master_names: dict[UUID, str] = {}
     for row in items:
         mid = row[1].master_id
         if mid not in master_names:
             master_names[mid] = await get_master_display_name(mid, session)
+    zoom_meeting_statuses = await get_zoom_meeting_statuses(
+        [row[1].id for row in items], session,
+    )
 
     return PaginatedBookingsResponse(
         items=[
@@ -204,9 +212,17 @@ async def list_my_bookings_endpoint(
                     zoom_link_visible=(
                         booking.status in ZOOM_VISIBLE_BOOKING_STATUSES
                     ),
+                    zoom_meeting_status=zoom_meeting_statuses.get(practice.id),
+                ),
+                # T21-1: same M-3 gate as zoom_link above -- this booking is
+                # already this user's own (query is scoped to Booking.user_id).
+                zoom_registrant_join_url=(
+                    zoom_join_url
+                    if booking.status in ZOOM_VISIBLE_BOOKING_STATUSES
+                    else None
                 ),
             )
-            for booking, practice, has_feedback, has_checkin in items
+            for booking, practice, has_feedback, has_checkin, zoom_join_url in items
         ],
         total=total,
         limit=limit,
@@ -238,12 +254,19 @@ async def list_my_upcoming_bookings_endpoint(
 
     from app.modules.masters.service import get_master_display_name
     from app.modules.practices.service import ZOOM_VISIBLE_BOOKING_STATUSES
+    from app.modules.zoom.service import get_zoom_meeting_statuses
 
     master_names: dict[UUID, str] = {}
     for row in items:
         mid = row[1].master_id
         if mid not in master_names:
             master_names[mid] = await get_master_display_name(mid, session)
+    # A4 V2 (ПРОМТ №572): this is the exact endpoint UserDashboardView's
+    # "nearest practice" card reads -- the participant surface this fix is
+    # for.
+    zoom_meeting_statuses = await get_zoom_meeting_statuses(
+        [row[1].id for row in items], session,
+    )
 
     return [
         BookingWithPracticeResponse(
@@ -267,9 +290,15 @@ async def list_my_upcoming_bookings_endpoint(
                 zoom_link_visible=(
                     booking.status in ZOOM_VISIBLE_BOOKING_STATUSES
                 ),
+                zoom_meeting_status=zoom_meeting_statuses.get(practice.id),
+            ),
+            zoom_registrant_join_url=(
+                zoom_join_url
+                if booking.status in ZOOM_VISIBLE_BOOKING_STATUSES
+                else None
             ),
         )
-        for booking, practice, has_feedback, has_checkin in items
+        for booking, practice, has_feedback, has_checkin, zoom_join_url in items
     ]
 
 
@@ -442,7 +471,7 @@ async def get_attendance_endpoint(
     and check-ins; this endpoint only maps them onto the response schema.
     """
     user, _profile = master_tuple
-    practice, bookings, users, checkins = await get_attendance(
+    practice, bookings, users, checkins, unmatched_count = await get_attendance(
         practice_id, user, session,
     )
 
@@ -486,4 +515,5 @@ async def get_attendance_endpoint(
         no_show=no_show,
         pending=pending,
         items=items,
+        unmatched_count=unmatched_count,
     )

@@ -143,7 +143,7 @@ import {
 import { useToast } from '@/composables/useToast'
 import { getMethodChangeRequests, approveMethodChange, rejectMethodChange } from '@/api/admin'
 import type { AdminMethodChangeItem } from '@/api/admin'
-import { ApiResponseError } from '@/api/client'
+import { extractApiError } from '@/composables/useApiError'
 import { masterDisplayName, formatRelative } from '@/utils/adminHelpers'
 import { parseMethods, primeMethodTaxonomyCatalog } from '@/utils/methodTaxonomy'
 
@@ -198,8 +198,7 @@ async function loadInitial(): Promise<void> {
     hasMore.value = res.items.length < res.total
   } catch (e) {
     error.value = true
-    const msg = e instanceof ApiResponseError ? e.detail : 'Ошибка загрузки заявок'
-    toast.error(msg)
+    toast.error(extractApiError(e, 'Ошибка загрузки заявок'))
   } finally {
     loading.value = false
   }
@@ -212,8 +211,7 @@ async function loadMore(): Promise<void> {
     items.value.push(...res.items)
     hasMore.value = items.value.length < res.total
   } catch (e) {
-    const msg = e instanceof ApiResponseError ? e.detail : 'Ошибка загрузки'
-    toast.error(msg)
+    toast.error(extractApiError(e, 'Ошибка загрузки'))
   } finally {
     loadingMore.value = false
   }
@@ -238,16 +236,19 @@ function onApprove(item: AdminMethodChangeItem): void {
   void doApprove(item)
 }
 
-async function doApprove(item: AdminMethodChangeItem, promote?: string[]): Promise<void> {
+async function doApprove(
+  item: AdminMethodChangeItem,
+  promote?: string[],
+  masterOnly?: string[],
+): Promise<void> {
   if (busyId.value) return
   busyId.value = item.user_id
   try {
-    await approveMethodChange(item.user_id, promote)
+    await approveMethodChange(item.user_id, promote, masterOnly)
     toast.success('Методы обновлены')
     removeItem(item.user_id)
   } catch (e) {
-    const msg = e instanceof ApiResponseError ? e.detail : 'Ошибка при одобрении'
-    toast.error(msg)
+    toast.error(extractApiError(e, 'Ошибка при одобрении'))
   } finally {
     busyId.value = null
     promoteTarget.value = null
@@ -261,11 +262,13 @@ function onPromoteConfirm(): void {
   void doApprove(item, [promoteLabel.value])
 }
 
-/** «Только этому мастеру» (or dialog dismissed) -- approve, no promote. */
+/** «Только этому мастеру» (or dialog dismissed) -- approve, scoped to this
+ *  master only (T22-6, ПРОМТ №561): a real taxonomy row, just not a shared
+ *  one -- was silently nothing before this. */
 function onPromoteCancel(): void {
   const item = promoteTarget.value
   if (!item) return
-  void doApprove(item)
+  void doApprove(item, undefined, [promoteLabel.value])
 }
 
 function openReject(item: AdminMethodChangeItem): void {
@@ -293,8 +296,7 @@ async function onReject(): Promise<void> {
     removeItem(target.user_id)
     rejectTarget.value = null
   } catch (e) {
-    const msg = e instanceof ApiResponseError ? e.detail : 'Ошибка при отклонении'
-    toast.error(msg)
+    toast.error(extractApiError(e, 'Ошибка при отклонении'))
   } finally {
     busyId.value = null
   }

@@ -70,6 +70,11 @@ const FOG_ROUTES = [
   // Scrolling profile (check-ins + feedbacks lists) — fog so the floating header
   // doesn't collide with content on scroll (operator tester-fix 2026-06-17).
   'master-student-profile',
+  // Master GROUPS (P2, ПРОМТ №591): list + per-group member list are both
+  // long scrolling lists, same treatment as master-students. The create
+  // form stays CRISP (not listed here) per the fog rule above.
+  'master-groups',
+  'master-group-detail',
   // Notifications: long settings list — fog so the «Уведомления» header doesn't
   // overlap the rows on scroll (operator 2026-06-19).
   'master-notifications',

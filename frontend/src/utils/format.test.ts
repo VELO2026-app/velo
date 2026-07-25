@@ -12,6 +12,7 @@ import {
   formatParticipants,
   isFull,
   localSortKey,
+  dayLabelOf,
 } from '@/utils/format'
 
 // -----------------------------------------------------------------------
@@ -130,6 +131,94 @@ describe('formatDateShort', () => {
     expect(result).toContain('15')
     expect(result).not.toBe('Сегодня')
     expect(result).not.toBe('Завтра')
+  })
+
+  // SW9: "tomorrow" must be computed as a fixed +24h instant, not via
+  // `Date.setDate()`, which mutates in the DEVICE's OWN local timezone
+  // (stubbed via vi.stubEnv('TZ', ...) here, standing in for the runner's OS
+  // timezone) -- NOT the `timezone` PARAMETER this function is meant to
+  // render in. On a day the device's own timezone crosses a DST transition,
+  // `setDate(getDate()+1)` does not land exactly +24h later (it lands +23h
+  // or +25h), which can resolve to the WRONG calendar day once reformatted
+  // in the target timezone -- independent of whether the target timezone
+  // itself observes DST (Cape Verde below never has).
+  it('SW9: "tomorrow" is unaffected by the DEVICE\'s own DST transition', () => {
+    // US spring-forward 2026: clocks jump 2:00 -> 3:00 EST->EDT on Mar 8.
+    vi.stubEnv('TZ', 'America/New_York')
+    try {
+      // "Now" = Mar 7, 8pm EST (the evening before the device's own DST
+      // jump). setDate(getDate()+1) resolves to Mar 8, 8pm -- by then EDT
+      // has already started, so that instant is only +23h from "now", not
+      // +24h.
+      vi.setSystemTime(new Date('2026-03-08T01:00:00.000Z'))
+
+      // Target timezone Cape Verde (UTC-1, no DST, ever) straddles a local
+      // midnight between the OLD (buggy, +23h) and the CORRECT (+24h)
+      // "tomorrow" instant: 2026-03-09T00:00Z is still Mar 8 there, while
+      // 2026-03-09T01:00Z is already Mar 9.
+      const result = formatDateShort('2026-03-09T12:00:00Z', 'Atlantic/Cape_Verde')
+
+      expect(result).toBe('Завтра')
+    } finally {
+      vi.unstubAllEnvs()
+      vi.setSystemTime(new Date('2026-06-15T12:00:00Z'))
+    }
+  })
+})
+
+// -----------------------------------------------------------------------
+// dayLabelOf
+// -----------------------------------------------------------------------
+describe('dayLabelOf', () => {
+  beforeAll(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-15T12:00:00Z'))
+  })
+  afterAll(() => {
+    vi.useRealTimers()
+  })
+
+  it('returns "Сегодня" for today', () => {
+    const result = dayLabelOf(new Date().toISOString(), 'UTC')
+    expect(result).toBe('Сегодня')
+  })
+
+  it('returns "Вчера" for yesterday', () => {
+    const result = dayLabelOf('2026-06-14T12:00:00Z', 'UTC')
+    expect(result).toBe('Вчера')
+  })
+
+  it('returns a formatted date for older entries', () => {
+    const result = dayLabelOf('2026-06-10T12:00:00Z', 'UTC')
+    expect(result).not.toBe('Сегодня')
+    expect(result).not.toBe('Вчера')
+    expect(result).toContain('10')
+  })
+
+  // SW9: mirror of formatDateShort's "tomorrow" fix -- "yesterday" must be a
+  // fixed -24h instant, not Date.setDate(), which mutates in the DEVICE's own
+  // local timezone (not the `timezone` parameter). On a day the device's own
+  // timezone crosses a DST transition, setDate(getDate()-1) does not land
+  // exactly -24h earlier, which can resolve to the wrong calendar day once
+  // reformatted in the target timezone.
+  it('SW9: "yesterday" is unaffected by the DEVICE\'s own DST transition', () => {
+    vi.stubEnv('TZ', 'America/New_York')
+    try {
+      // "Now" = Mar 8, 8pm EDT -- the evening of the device's own DST jump
+      // (2am->3am). setDate(getDate()-1) resolves to Mar 7, 8pm EST (the day
+      // BEFORE the jump), which is only -23h from "now", not -24h.
+      vi.setSystemTime(new Date('2026-03-09T00:00:00.000Z'))
+
+      // Target timezone Cape Verde (UTC-1, no DST, ever) straddles a local
+      // midnight between the OLD (buggy, -23h) and the CORRECT (-24h)
+      // "yesterday" instant.
+      const result = dayLabelOf('2026-03-07T12:00:00Z', 'Atlantic/Cape_Verde')
+
+      expect(result).toBe('Вчера')
+    } finally {
+      vi.unstubAllEnvs()
+      vi.setSystemTime(new Date('2026-06-15T12:00:00Z'))
+    }
   })
 })
 

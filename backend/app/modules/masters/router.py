@@ -423,16 +423,23 @@ async def list_my_practices(
     status_filter: Literal[
         "draft", "scheduled", "live", "completed", "cancelled",
     ] | None = Query(default=None, alias="status"),
+    bucket: Literal["upcoming", "past"] | None = Query(default=None),
 ) -> PaginatedPracticesResponse:
-    """List practices owned by the current master (newest first).
+    """List practices owned by the current master.
 
     E3a: optional ?status= exact-match filter (never "deleted" -- that
-    status is already excluded unconditionally). Omitted -> unfiltered,
-    same as before this param existed.
+    status is already excluded unconditionally). Omitted (and no `bucket`)
+    -> unfiltered, futures-first, same as before this param existed.
+
+    ?bucket= (T22-3/T22-5, ПРОМТ №561): "upcoming" (draft/scheduled/live,
+    nearest first) or "past" (completed, most-recent first) -- the two
+    master-list tabs, each with correct server-side ordering instead of one
+    shared futures-first page split client-side. Takes priority over
+    `status` when both are given (see list_master_practices docstring).
     """
     user, _profile = master_tuple
     return await list_master_practices(
-        user, session, limit=limit, offset=offset, status=status_filter,
+        user, session, limit=limit, offset=offset, status=status_filter, bucket=bucket,
     )
 
 

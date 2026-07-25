@@ -197,7 +197,12 @@ class MethodChangeRequest(BaseModel):
 # Master profile response (updated Phase F7 + CR-01, M3)
 # ---------------------------------------------------------------------------
 class MasterProfileResponse(BaseModel):
-    """Public master profile representation.
+    """Self-only master profile representation (GET/PATCH /masters/me/*).
+
+    NOT public -- carries financial fields (frozen_cents, available_cents,
+    payout) and is only ever returned from get_current_master-gated
+    endpoints. MasterPublicResponse below is the actual public schema and
+    MUST stay financial-field-free (see its own docstring).
 
     F7: payout field added -- extracted from data.get("payout").
     None when master has not configured payout details yet.

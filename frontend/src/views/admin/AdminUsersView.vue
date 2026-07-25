@@ -99,7 +99,7 @@ import {
 } from '@/components/ui'
 import { getUsersList, makeMaster } from '@/api/admin'
 import type { UserResponse } from '@/api/admin'
-import { ApiResponseError } from '@/api/client'
+import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
@@ -165,8 +165,7 @@ async function load(reset: boolean): Promise<void> {
     total.value = res.total
   } catch (e) {
     error.value = true
-    const msg = e instanceof ApiResponseError ? e.detail : 'Ошибка загрузки пользователей'
-    toast.error(msg)
+    toast.error(extractApiError(e, 'Ошибка загрузки пользователей'))
   } finally {
     loading.value = false
     loadingMore.value = false
@@ -207,8 +206,7 @@ async function doMakeMaster(): Promise<void> {
     confirm.target = null
     await load(true)
   } catch (e) {
-    const msg = e instanceof ApiResponseError ? e.detail : 'Не удалось назначить мастером'
-    toast.error(msg)
+    toast.error(extractApiError(e, 'Не удалось назначить мастером'))
   } finally {
     confirm.loading = false
   }

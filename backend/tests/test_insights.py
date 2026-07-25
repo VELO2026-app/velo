@@ -355,7 +355,7 @@ async def test_insights_not_owner(
 
 
 # ===================================================================
-# GET /practices/{id}/insights -- regular user (404)
+# GET /practices/{id}/insights -- regular user (403)
 # ===================================================================
 
 
@@ -364,7 +364,14 @@ async def test_insights_regular_user(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """Regular user tries to access insights: 404."""
+    """Regular user tries to access insights: 403 at the role guard.
+
+    ПРОМТ №575: the endpoint switched from get_current_user to
+    get_current_master (defense-in-depth), so a non-master is now rejected
+    at the dependency before the handler (and the 404 ownership check in
+    get_practice_insights) ever runs. See test_insights_not_owner below for
+    the still-404 case of a DIFFERENT master querying this practice.
+    """
     master_auth = await _make_verified_master(
         client, db_session, telegram_id=88905,
     )
@@ -382,7 +389,7 @@ async def test_insights_regular_user(
         url,
         headers=auth_headers(user_auth["session_token"]),
     )
-    assert resp.status_code == 404
+    assert resp.status_code == 403
 
 
 # ===================================================================
@@ -440,6 +447,13 @@ async def test_insights_practice_not_found(
     master_auth = await _make_verified_master(
         client, db_session, telegram_id=88907,
     )
+    # ПРОМТ №583: _make_verified_master only flushes -- the role=MASTER
+    # change and the MasterProfile row must be COMMITTED before the request
+    # below, which hits get_current_master through a separate DB connection.
+    # Without this, the guard sees the old (non-master) role and rejects
+    # with 403 before ever reaching the 404 not-found branch this test
+    # means to exercise (mirrors test_insights_not_owner's own commit()).
+    await db_session.commit()
 
     url = INSIGHTS_URL.format(practice_id=uuid4())
     resp = await client.get(

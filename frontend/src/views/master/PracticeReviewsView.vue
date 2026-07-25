@@ -90,7 +90,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, type Component } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDiaryStore } from '@/stores/diary'
 import { getPractice, getPracticeReviews } from '@/api/practices'
@@ -98,10 +98,10 @@ import { VStatCard, VCard, VButton, VLoader, VEmptyState } from '@/components/ui
 import VRatingDistribution from '@/components/shared/VRatingDistribution.vue'
 import PracticeHeroCard from '@/components/shared/PracticeHeroCard.vue'
 import { VHeader } from '@/components/layout'
-import { IconRatingFire, IconRatingGood, IconRatingConfused } from '@/components/icons'
 import { RATING_ICON_COLOR } from '@/utils/displayHelpers'
+import { RATING_ICON } from '@/utils/ratingIcons'
 import { formatShortDate } from '@/utils/format'
-import type { PracticeResponse, FeedbackRating, ReviewItem } from '@/api/types'
+import type { PracticeResponse, ReviewItem } from '@/api/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -190,12 +190,6 @@ const reviewsTotal = ref(0)
 const reviewsLoading = ref(false)
 const reviewsError = ref(false)
 const hasMoreReviews = computed((): boolean => reviews.value.length < reviewsTotal.value)
-
-const RATING_ICON: Record<FeedbackRating, Component> = {
-  fire: IconRatingFire,
-  good: IconRatingGood,
-  confused: IconRatingConfused,
-}
 
 async function loadReviews(): Promise<void> {
   reviewsLoading.value = true

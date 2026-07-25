@@ -2,59 +2,22 @@
 // VELO Frontend -- Practices Store (Phase F3.1)
 // =============================================================================
 //
-// Pinia store for the practice catalog (public feed) and single
-// practice detail. Uses api/practices.ts for typed API calls and
-// usePagination composable for load-more logic.
+// Pinia store for single practice detail (PracticeDetailView and the
+// live/checkin/reflection/feedback flow views). Uses api/practices.ts
+// for typed API calls.
 //
-// Two independent data flows:
-//   1. Catalog (list):  filters + paginated list for Dashboard/Calendar
-//   2. Detail (single): selected practice for PracticeDetailView
-//
-// Catalog uses usePagination internally. Views call fetchPractices()
-// on mount and loadMore() on scroll/button. Filter changes trigger
-// refresh (reset + fetch).
+// The catalog (list) data flow this store originally also held has
+// moved to stores/calendar.ts and MasterPublicView.vue -- see git
+// history if you need the old paginated-catalog implementation.
 // =============================================================================
 
 import { defineStore } from 'pinia'
-import { ref, reactive, watch } from 'vue'
-import { getPractices, getPractice } from '@/api/practices'
-import { usePagination } from '@/composables/usePagination'
+import { ref } from 'vue'
+import { getPractice } from '@/api/practices'
 import { extractApiError } from '@/composables/useApiError'
-import type { PracticeResponse, PracticeFilters } from '@/api/types'
+import type { PracticeResponse } from '@/api/types'
 
 export const usePracticesStore = defineStore('practices', () => {
-  // -- Filters --
-  const filters = reactive<PracticeFilters>({
-    sort_by: 'scheduled_at',
-    sort_order: 'asc',
-  })
-
-  // -- Paginated catalog --
-  const pagination = usePagination<PracticeResponse>((limit, offset) =>
-    getPractices(filters, limit, offset),
-  )
-
-  /**
-   * Initial load. Called once from view onMounted.
-   * Skips if already loaded (e.g. navigating back).
-   */
-  async function fetchPractices(): Promise<void> {
-    if (pagination.items.value.length > 0) return
-    await pagination.refresh()
-  }
-
-  /**
-   * Apply new filters and reload from scratch.
-   */
-  function applyFilters(newFilters: Partial<PracticeFilters>): void {
-    Object.assign(filters, newFilters)
-  }
-
-  // Auto-refresh when filters change
-  watch(filters, () => {
-    pagination.refresh()
-  })
-
   // -- Single practice detail --
   const selected = ref<PracticeResponse | null>(null)
   const selectedLoading = ref(false)
@@ -69,24 +32,12 @@ export const usePracticesStore = defineStore('practices', () => {
 
   /**
    * Fetch a single practice by ID for the detail view.
-   * Tries to find it in the already-loaded catalog first (avoids
-   * extra API call when navigating from list -> detail).
    *
    * F-01: race condition guard -- if a newer fetchPractice() call was
    * made while this one was in-flight, the stale result is discarded.
    */
   async function fetchPractice(id: string): Promise<void> {
     _currentFetchId = id
-
-    // Check catalog cache first
-    const cached = pagination.items.value.find((p) => p.id === id)
-    if (cached) {
-      // Guard: only commit if this is still the latest request.
-      if (_currentFetchId === id) {
-        selected.value = cached
-      }
-      return
-    }
 
     selectedLoading.value = true
     selectedError.value = null
@@ -114,20 +65,6 @@ export const usePracticesStore = defineStore('practices', () => {
   }
 
   return {
-    // Catalog
-    practices: pagination.items,
-    total: pagination.total,
-    loading: pagination.loading,
-    error: pagination.error,
-    loadMoreError: pagination.loadMoreError,
-    hasMore: pagination.hasMore,
-    filters,
-    fetchPractices,
-    loadMore: pagination.loadMore,
-    applyFilters,
-    refreshPractices: pagination.refresh,
-
-    // Detail
     selected,
     selectedLoading,
     selectedError,

@@ -9,6 +9,9 @@
 
 // -- Enums --------------------------------------------------------------------
 
+/** Who can see/book a practice (Master GROUPS P5, ПРОМТ №594). PUBLIC: everyone (default -- matches every practice's behavior before this column existed, see the migration's backfill). STUDENTS: anyone with >= 1 non-cancelled booking on this master's practices (the same "derived «Ученики»" rule groups_service.py already uses). GROUPS: members of at least one of the practice's target CUSTOM groups (practice_audience_group). A blocked student is EXCLUDED from all three -- see practices/audience_service.py, the single shared predicate every enforcement point below reuses. */
+export type AudienceKind = 'public' | 'students' | 'groups'
+
 /** Booking lifecycle statuses. */
 export type BookingStatus = 'pending' | 'confirmed' | 'attended' | 'no_show' | 'cancelled'
 
@@ -35,6 +38,11 @@ export interface AISummaryResponse {
   summary: string
   is_mock: boolean
   generated_at: string
+}
+
+/** POST /masters/me/groups/{id}/members. */
+export interface AddGroupMemberRequest {
+  student_user_id: string
 }
 
 /** Response for verify/reject actions. */
@@ -139,6 +147,7 @@ export interface AdminPracticeDetailResponse {
   booked: number
   capacity: number | null
   status: string
+  timezone: string
   attended: number
   roster: AdminRosterEntry[]
 }
@@ -248,9 +257,39 @@ export interface AdminWithdrawalResponse {
   updated_at?: string | null
 }
 
+/** GET /api/v1/admin/practices/{id}/zoom-attendance. */
+export interface AdminZoomAttendanceResponse {
+  practice_id: string
+  zoom_meeting_status: string | null
+  report_ingested: boolean
+  bookings: AdminZoomBookingAttendance[]
+  unmatched: AdminZoomUnmatchedRow[]
+  unmatched_count: number
+}
+
+/** One booking's Zoom-derived attendance totals, for reconciliation. */
+export interface AdminZoomBookingAttendance {
+  booking_id: string
+  user_id: string
+  user_name: string
+  status: string
+  zoom_minutes_present: number | null
+  attendance_decided_via: string | null
+}
+
+/** One raw report row Zoom sent us that we could not attribute to any known registrant -- the unmatched bucket, made visible (E21 plan sec 6). Not masked: this is an authenticated admin surface, not the throwaway probe's chat-paste output. */
+export interface AdminZoomUnmatchedRow {
+  segment_id: string
+  user_email: string | null
+  join_time: string | null
+  leave_time: string | null
+  duration_seconds: number | null
+}
+
 /** POST /admin/masters/{user_id}/method-change-request/approve -- body. R5 stage 4 (operator decision 3=Б): promote is OPTIONAL and defaults to empty, so a bare `{}` body (every caller before this stage, and every approval where the admin didn't pick "add to catalog") behaves exactly as before -- no catalog write. Each entry becomes a new custom direction in the taxonomy catalog (deduped against existing rows). */
 export interface ApproveMethodChangeRequest {
   promote?: string[]
+  master_only?: string[]
 }
 
 /** POST /admin/withdrawals/{id}/approve -- optional admin note. */
@@ -284,12 +323,20 @@ export interface AttendanceResponse {
   no_show: number
   pending: number
   items: AttendanceItemResponse[]
+  unmatched_count?: number
 }
 
 /** POST /api/v1/auth/telegram — response body. */
 export interface AuthResponse {
   user: UserResponse
   session_token: string
+}
+
+/** POST /masters/me/students/{student_user_id}/block. cancelled_bookings_count: how many FUTURE confirmed bookings on this master's practices were cancelled (and refunded via the reused refund_booking() path) as a side effect of the block. */
+export interface BlockStudentResponse {
+  student_user_id: string
+  blocked_at: string
+  cancelled_bookings_count: number
 }
 
 /** Booking with full practice details for single-booking view. Used by GET /api/v1/bookings/{id}. Returns the complete PracticeResponse so the frontend can render a full detail page (deep link from notification, master dashboard, etc.). */
@@ -341,6 +388,7 @@ export interface BookingWithPracticeResponse {
   has_feedback: boolean
   has_checkin: boolean
   practice: PracticeSummary
+  zoom_registrant_join_url?: string | null
 }
 
 /** DELETE /api/v1/bookings/{id} -- optional body. */
@@ -424,6 +472,11 @@ export interface CreateDirectionRequest {
   display_order?: number
 }
 
+/** POST /masters/me/groups. */
+export interface CreateGroupRequest {
+  name: string
+}
+
 /** POST /api/v1/masters/me/promos -- create a master promo code. Master promos: master absorbs the discount from their revenue. type and master_id are set automatically by the service layer. */
 export interface CreateMasterPromoRequest {
   code: string
@@ -455,6 +508,8 @@ export interface CreatePracticeRequest {
   difficulty: string
   style?: string | null
   recurrence?: RecurrenceSpec | null
+  audience_kind?: AudienceKind
+  group_ids?: string[]
 }
 
 /** User submits a new report. */
@@ -513,6 +568,11 @@ export interface DismissReportRequest {
   resolution_note?: string | null
 }
 
+/** GET /masters/me/tags -- P3 addendum (ПРОМТ №592), closes the P2 tag-palette gap (P2 derived it client-side from the loaded page only). */
+export interface DistinctTagsResponse {
+  tags: string[]
+}
+
 /** PATCH /admin/masters/{user_id}/methods -- new flat method set (T3). Admin-authored direct edit of a master's methods during review. Mirrors the apply-side rule (min 1, max 20). Distinct from the master's own method-change request (M3). */
 export interface EditMasterMethodsRequest {
   methods: string[]
@@ -557,6 +617,39 @@ export interface FeedbackResponse {
   updated_at: string | null
 }
 
+/** POST /masters/me/groups/{id}/invite -- create-or-return the group's reusable join link. Idempotent: repeat calls return the SAME url. */
+export interface GroupInviteResponse {
+  invite_url: string
+}
+
+/** One row in GET /masters/me/groups. id: uuid string for a custom group, or the literal "students" / "deleted" for the two virtual groups. kind: "students" | "deleted" | "custom". members_count: the derived/blocked/membership count respectively. */
+export interface GroupListItem {
+  id: string
+  kind: 'students' | 'deleted' | 'custom'
+  name: string
+  members_count: number
+}
+
+/** GET /masters/me/groups. */
+export interface GroupListResponse {
+  items: GroupListItem[]
+}
+
+/** One row in GET /masters/me/groups/{id}/members. tag: this student's tag against the CURRENT master (master_student.tag), null if never tagged. Present regardless of which group (virtual or custom) is being listed -- the tag is a master<->student annotation, not a group property. */
+export interface GroupMemberItem {
+  id: string
+  name: string
+  avatar_url: string | null
+  tag: string | null
+}
+
+/** A single custom group (create/rename response). */
+export interface GroupResponse {
+  id: string
+  name: string
+  members_count: number
+}
+
 /** GET /api/v1/masters/me/income?period=week|month. income_cents -- gross booked turnover for the current calendar period: signed sum of title-tagged sale (+) / commission (-) / refund (-) movements, frozen sales included. Matches the transaction feed, not realized/available earnings. prev_income_cents -- same sum for the previous calendar period. delta_pct -- signed percent change vs the previous period, or null when the previous period had no net-positive turnover. */
 export interface IncomeResponse {
   income_cents: number
@@ -568,6 +661,18 @@ export interface IncomeResponse {
 export interface InviteMasterResponse {
   invite_link: string
   issued_at: string
+}
+
+/** POST /masters/groups/join -- the token from the group_invite__{token} deeplink. Same bound as ClaimMasterInviteRequest.token (masters/schemas.py) -- both are secrets.token_urlsafe(32) outputs. */
+export interface JoinGroupRequest {
+  token: string
+}
+
+/** POST /masters/groups/join -- the resolved group + its master, for the join confirmation screen. */
+export interface JoinGroupResponse {
+  group_id: string
+  group_name: string
+  master_name: string
 }
 
 /** A practice with a low check-in rate in the period. */
@@ -647,7 +752,7 @@ export interface MasterNotificationSettingsUpdate {
   schedule?: NotificationScheduleUpdate | null
 }
 
-/** Public master profile representation. F7: payout field added -- extracted from data.get("payout"). None when master has not configured payout details yet. CR-01: min_withdrawal_cents and withdrawal_fee_cents added from settings so frontend does not hardcode financial constants. */
+/** Self-only master profile representation (GET/PATCH /masters/me/*). NOT public -- carries financial fields (frozen_cents, available_cents, payout) and is only ever returned from get_current_master-gated endpoints. MasterPublicResponse below is the actual public schema and MUST stay financial-field-free (see its own docstring). F7: payout field added -- extracted from data.get("payout"). None when master has not configured payout details yet. CR-01: min_withdrawal_cents and withdrawal_fee_cents added from settings so frontend does not hardcode financial constants. */
 export interface MasterProfileResponse {
   user_id: string
   status: string
@@ -811,6 +916,14 @@ export interface PaginatedDiaryEntriesResponse {
 /** GET /api/v1/users/me/feedbacks -- paginated list. */
 export interface PaginatedFeedbacksResponse {
   items: FeedbackResponse[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** GET /masters/me/groups/{id}/members -- paginated, searchable. */
+export interface PaginatedGroupMembersResponse {
+  items: GroupMemberItem[]
   total: number
   limit: number
   offset: number
@@ -983,6 +1096,8 @@ export interface PracticeResponse {
   direction?: string | null
   style?: string | null
   difficulty?: string | null
+  audience_kind?: AudienceKind
+  audience_group_names?: string[]
   recurrence_days?: number[] | null
   total_sessions?: number | null
   completed_sessions?: number | null
@@ -993,6 +1108,9 @@ export interface PracticeResponse {
   is_paid?: boolean
   created_at: string
   updated_at: string | null
+  zoom_host_join_url?: string | null
+  zoom_meeting_status?: string | null
+  deduplicated?: boolean
 }
 
 /** Compact practice representation for embedding in related responses. Used inside BookingWithPracticeResponse, WaitlistWithPracticeResponse, and PurchaseWithPracticeResponse to give the frontend enough data for list-view cards without a separate GET /practices/{id} call. CR-01: timezone added -- Practice ORM has timezone as NOT NULL, model_validate() picks it up automatically via from_attributes. Without this field, frontend fell back to Europe/Berlin for all practices regardless of actual timezone. status added -- lets list views (my bookings, dashboard nearest card) tell a live practice from a scheduled one without a separate GET /practices/{id} call. Picked up automatically via from_attributes (Practice ORM status is NOT NULL with a default). */
@@ -1011,6 +1129,7 @@ export interface PracticeSummary {
   price_cents: number
   currency: string
   zoom_link?: string | null
+  zoom_meeting_status?: string | null
 }
 
 /** POST /api/v1/practices/{id}/preview-purchase -- request body. Optional promo_code for pricing preview. */
@@ -1121,6 +1240,11 @@ export interface RejectWithdrawalRequest {
   note: string
 }
 
+/** PATCH /masters/me/groups/{id}. */
+export interface RenameGroupRequest {
+  name: string
+}
+
 /** Single report -- returned to both user and admin. */
 export interface ReportResponse {
   id: string
@@ -1184,6 +1308,11 @@ export interface SeriesPoint {
   value: number
 }
 
+/** PUT /masters/me/students/{student_user_id}/tag. tag: null clears the tag (deletes the master_student row if it would otherwise be empty -- i.e. not blocked either). */
+export interface SetStudentTagRequest {
+  tag: string | null
+}
+
 /** One recent check-in by the student (on this master's practices). */
 export interface StudentCheckinItem {
   mood: number
@@ -1209,6 +1338,17 @@ export interface StudentFeedbackItem {
   created_at: string
 }
 
+/** One custom group in GET /masters/me/students/{id}/groups. */
+export interface StudentGroupItem {
+  id: string
+  name: string
+}
+
+/** GET /masters/me/students/{student_user_id}/groups -- P3 addendum (ПРОМТ №592). The CUSTOM groups this student is in for this master (powers the profile's group chips). Virtual groups ("Ученики"/ "Удалённые") are never listed here -- they aren't membership rows. */
+export interface StudentGroupsResponse {
+  groups: StudentGroupItem[]
+}
+
 /** One student in the master's students list. needs_attention is True when the student's MOST RECENT feedback on this master's practices is in the negative bucket (rating 1-3) -- the same signal that feeds the dashboard "needs attention" block (consistent with the reviews projection). */
 export interface StudentListItem {
   id: string
@@ -1216,6 +1356,12 @@ export interface StudentListItem {
   avatar_url: string | null
   practices_count: number
   needs_attention: boolean
+}
+
+/** Response for the tag upsert/clear. */
+export interface StudentTagResponse {
+  student_user_id: string
+  tag: string | null
 }
 
 /** A direction (Направление) with its nested styles. Shape matches AdminCatalogView.vue's local CatalogDirection type (value/label/styles[]) so the stage-3 FE swap is a drop-in. */
@@ -1304,6 +1450,8 @@ export interface UpdatePracticeRequest {
   direction?: string | null
   difficulty?: string | null
   style?: string | null
+  audience_kind?: AudienceKind | null
+  group_ids?: string[] | null
 }
 
 /** User edits their own pending report (reason only). */
@@ -1368,6 +1516,7 @@ export interface UserUpdate {
 export interface VerifyMasterRequest {
   notes?: string | null
   promote?: string[]
+  master_only?: string[]
 }
 
 /** Response from POST /waitlist/{id}/confirm. Returns both the converted waitlist entry and the new booking id. */
@@ -1420,4 +1569,9 @@ export interface WithdrawalResponse {
   rejected_at: string | null
   created_at: string
   updated_at: string | null
+}
+
+/** POST /api/v1/practices/{id}/zoom/start-ticket (ПРОМТ №556, OWNER-1). Deliberately carries a one-time ticket, never a start_url -- see zoom/service.py's ticket-issuance docstring for why. */
+export interface ZoomStartTicketResponse {
+  ticket: string
 }

@@ -106,6 +106,7 @@ import { useToast } from '@/composables/useToast'
 import { useBalanceStore } from '@/stores/balance'
 import { purchasePractice, previewPurchase } from '@/api/bookings'
 import { ApiResponseError } from '@/api/client'
+import { extractApiError } from '@/composables/useApiError'
 import { formatDate, formatMoney } from '@/utils/format'
 import type { PracticeResponse, PreviewPurchaseResponse } from '@/api/types'
 
@@ -200,11 +201,7 @@ async function onApplyPromo(): Promise<void> {
     preview.value = await previewPurchase(props.practice.id, promoCode.value)
   } catch (e) {
     preview.value = null
-    if (e instanceof ApiResponseError) {
-      toast.error(e.detail)
-    } else {
-      toast.error('Не удалось проверить промокод')
-    }
+    toast.error(extractApiError(e, 'Не удалось проверить промокод'))
   } finally {
     previewing.value = false
   }

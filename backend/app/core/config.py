@@ -226,6 +226,16 @@ class Settings(BaseSettings):
     # the ceiling matches that default. NO-LITERALS: tunable here, not inline.
     practice_series_max_occurrences: int = 40
 
+    # ПРОМТ №559: a duplicate practice submission (master retries after the
+    # frontend's own request timeout, believing the first attempt failed --
+    # MEASURED on prod: 09:56:48, 09:57:07, 10:00:30, three complete series)
+    # is treated as the SAME submission, not a new one, when another
+    # non-deleted practice already exists for the same master with the same
+    # title/scheduled_at/recurrence created within this many minutes.
+    # NO-LITERALS: tunable here, not inline. See create_practice's docstring
+    # for exactly what this window does and does not cover.
+    practice_duplicate_submit_window_minutes: int = 10
+
     # -- Stripe (Phase 6.3) --
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
@@ -405,6 +415,59 @@ class Settings(BaseSettings):
         ],
     }
 
+    # -- Zoom (E21) --
+    zoom_account_id: str = ""
+    zoom_client_id: str = ""
+    zoom_client_secret: str = ""
+    # VESTIGIAL (ПРОМТ №585) -- no longer decides anything. The attendance
+    # decision is now 50% of EACH PRACTICE'S OWN duration_minutes (owner
+    # decision), computed in zoom/attendance_service.py's
+    # attendance_threshold_seconds(), not read from here. This field is kept
+    # -- not deleted -- because pydantic-settings' default extra='forbid'
+    # (measured against the pinned pydantic-settings==2.14.2) means a live
+    # .env that still defines ZOOM_ATTENDANCE_THRESHOLD_MINUTES would refuse
+    # to start if the field vanished, and the deployed server's .env content
+    # is not something this change can verify (no VPS access). Safe to
+    # delete later once a measurement of the live .env confirms the key is
+    # gone from it too.
+    zoom_attendance_threshold_minutes: int = 10
+    # Meeting-creation retry poller (mirrors practice_autofinalize_* above).
+    # Background worker toggle -- same rationale as
+    # practice_autofinalize_enabled / notification_processor_enabled: tests
+    # disable it so the loop can't race manual test calls.
+    zoom_retry_enabled: bool = True
+    zoom_retry_poll_interval_seconds: int = 30
+    zoom_retry_max_backoff_seconds: int = 600
+    # Cap on ZoomMeeting.retry_count for a create_failed row. Past this many
+    # attempts the poller stops retrying that row -- it stays VISIBLY
+    # status=create_failed with last_sync_error stating the cap was hit,
+    # rather than being retried forever (its own silent-failure mode) or
+    # silently given up on with no trace of why.
+    zoom_meeting_create_max_retries: int = 5
+    # Same cap convention, for ZoomRegistrant.retry_count (E21 step E).
+    zoom_registrant_create_max_retries: int = 5
+
+    # -- Zoom report ingestion (E21 step F, ПРОМТ №521) --
+    # Background worker toggle, same rationale as the other three loops:
+    # tests disable it so the loop can't race manual test calls.
+    zoom_report_enabled: bool = True
+    zoom_report_poll_interval_seconds: int = 60
+    zoom_report_max_backoff_seconds: int = 600
+    # Zoom's participants report ripens roughly 15 minutes after a meeting
+    # ends (E21 research). A practice isn't even attempted before its
+    # scheduled end + this margin has passed -- polling earlier would just
+    # find nothing and waste a call.
+    zoom_report_ripen_margin_minutes: int = 15
+    # THE BOUND (ПРОМТ №521's trap-closer): once a practice's scheduled end
+    # + this many minutes has passed with ZoomMeeting.report_ingested_at
+    # still NULL, remaining CONFIRMED bookings on it fall back to the
+    # legacy proxy and are decided (tagged legacy_proxy) rather than sitting
+    # undecided forever. 120 minutes = the 15-minute ripen margin plus a
+    # full 105 minutes of retry headroom for a transient Zoom outage to
+    # clear -- generous enough that a normal delay never trips it, bounded
+    # enough that feedback eligibility and hours can never hang indefinitely.
+    zoom_attendance_decision_deadline_minutes: int = 120
+
     # -- Admin (Phase 2.3 / 6.6 / 3.3) --
     # Max length of admin notes on master verify/reject actions
     # and withdrawal approve/reject notes.
@@ -555,6 +618,46 @@ class Settings(BaseSettings):
         """
         is_dev = self.app_env == "development"
         return not is_dev and self.is_stripe_stub and not self.allow_stripe_stub
+
+    @property
+    def is_zoom_stub(self) -> bool:
+        """True when Zoom credentials are not configured (any of the three
+        blank), or ZOOM_CLIENT_SECRET="TEST" (explicit sentinel, mirroring
+        the Stripe stub convention above).
+
+        NO SERVER'S ACTUAL ZOOM CREDENTIAL STATE HAS BEEN OBSERVED as of
+        this writing -- this differs from is_stripe_stub, whose comment can
+        reference a specific, owner-verified reading of prod's .env
+        (ПРОМТ №509). Do not add a claim here about what TEST or prod
+        currently has configured unless you have personally read that
+        server's env; the Stripe guard's comment once asserted "prod has a
+        real key" and that assertion was false (the W6 incident, see
+        allow_stripe_stub above) -- it stayed wrong in the comment for two
+        prior revisions before someone actually checked.
+        """
+        return (
+            not self.zoom_account_id
+            or not self.zoom_client_id
+            or not self.zoom_client_secret
+            or self.zoom_client_secret.upper() == "TEST"
+        )
+
+    # NOTE: there is deliberately NO is_zoom_stub_blocked / startup-raise
+    # here, unlike is_stripe_stub_blocked. Two reasons, not one:
+    #   1. Stripe stub mode is dangerous because it free-credits real money;
+    #      Zoom stub mode just means no real meeting gets created -- the
+    #      whole E21 design (practices/service.py, cancel_service.py) treats
+    #      every Zoom call as best-effort and NEVER blocks on it succeeding.
+    #      A hard startup guard would contradict that design at the
+    #      infrastructure layer.
+    #   2. Practically: no server has real Zoom credentials configured yet
+    #      (the owner has not created the S2S app). A hard block here would
+    #      crash TEST and prod on the next restart after this code merges,
+    #      for a reason unrelated to whatever that deploy actually changed.
+    # Zoom stub mode is therefore silent-but-logged (_stub_response() below
+    # logs each stubbed call at INFO), not startup-fatal. If Zoom ever
+    # becomes launch-critical, add a real gate then -- do not backfill one
+    # here without re-deciding this trade-off explicitly.
 
 
 # Singleton: one Settings instance for the entire application.

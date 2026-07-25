@@ -515,6 +515,73 @@ describe('MasterApplyView', () => {
   })
 
   // ===========================================================================
+  // ПРОМТ №565 (T23-2): .apply-view__content (.vue:40) is ONE persistent
+  // scrolling container reused across all 3 steps -- the v-if/v-else-if chain
+  // only swaps its CHILDREN. A watch(step, ...) (.vue:249-256) resets its
+  // scrollTop to 0 on every transition. happy-dom has no real layout/overflow
+  // engine -- .scrollTop here is a plain writable numeric property, not a
+  // simulation of an actual scrollable viewport, so this proves the WATCHER
+  // fires on every direction, not that a real browser visually scrolls to
+  // the top (that half is unverifiable by this harness -- see the report).
+  describe('scroll reset on step transition (ПРОМТ №565, T23-2)', () => {
+    function contentEl(): HTMLElement {
+      const el = host?.querySelector<HTMLElement>('.apply-view__content')
+      if (!el) throw new Error('.apply-view__content did not render')
+      return el
+    }
+
+    it('1 -> 2 (goToStep2): scrollTop resets to 0', async () => {
+      mount()
+      await flush()
+      contentEl().scrollTop = 240
+
+      await fillStep1()
+
+      expect(stepTitle()).toBe('Шаг 2: Опыт')
+      expect(contentEl().scrollTop).toBe(0)
+    })
+
+    it('2 -> 3 (goToStep3, the reported case): scrollTop resets to 0', async () => {
+      mount()
+      await flush()
+      await fillStep1()
+      contentEl().scrollTop = 180
+
+      await fillStep2()
+
+      expect(stepTitle()).toBe('Шаг 3: Документы')
+      expect(contentEl().scrollTop).toBe(0)
+    })
+
+    it('2 -> 1 (onBack): scrollTop resets to 0', async () => {
+      mount()
+      await flush()
+      await fillStep1()
+      contentEl().scrollTop = 150
+
+      headerBackBtn().click()
+      await flush()
+
+      expect(stepTitle()).toBe('Шаг 1: Профиль')
+      expect(contentEl().scrollTop).toBe(0)
+    })
+
+    it('3 -> 2 (onBack): scrollTop resets to 0', async () => {
+      mount()
+      await flush()
+      await fillStep1()
+      await fillStep2()
+      contentEl().scrollTop = 300
+
+      headerBackBtn().click()
+      await flush()
+
+      expect(stepTitle()).toBe('Шаг 2: Опыт')
+      expect(contentEl().scrollTop).toBe(0)
+    })
+  })
+
+  // ===========================================================================
   describe('submit payload shape (.vue:381-395)', () => {
     it('assembles the exact payload: methods, default language (Русский only), mapped experience_years, trimmed bio, empty certifications/documents', async () => {
       mount()

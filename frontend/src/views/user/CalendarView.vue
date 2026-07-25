@@ -166,6 +166,7 @@ import CalendarPracticeCard from '@/components/shared/CalendarPracticeCard.vue'
 import CalendarFilterModal from '@/components/shared/CalendarFilterModal.vue'
 import { IconCheck, IconClock } from '@/components/icons'
 import { formatDateShort } from '@/utils/format'
+import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import {
   DIFFICULTY_LABEL,
   DURATION_BUCKET_LABEL,
@@ -183,6 +184,7 @@ import type { CalendarFacetFilters } from '@/stores/calendar'
 
 const router = useRouter()
 const store = useCalendarStore()
+const viewerTz = useViewerTimezone()
 
 // Title + week strip float as an island (G-1): the date nav stays in place while
 // the practice list scrolls under it.
@@ -199,12 +201,14 @@ function openFilter(): void {
 const dayPractices = computed<PracticeResponse[]>(() => store.selectedDayPractices)
 
 // Section header for the selected day ("Сегодня" / "Завтра" / "28 января"),
-// derived from the first practice's own timezone. dayLabel is only read from
-// the template's content branch (v-else, gated on dayPractices.length > 0),
-// so a first practice is always present here.
+// derived from the VIEWER's profile timezone (SW2) -- matching the store's
+// own viewer-tz bucketing (store.ts selectedDayPractices) and the cards'
+// rendered time, never the first practice's own timezone. dayLabel is only
+// read from the template's content branch (v-else, gated on
+// dayPractices.length > 0), so a first practice is always present here.
 const dayLabel = computed<string>(() => {
   const first = dayPractices.value[0]!
-  return formatDateShort(first.scheduled_at, first.timezone)
+  return formatDateShort(first.scheduled_at, viewerTz.value)
 })
 
 // -- Active filter chips (display + removal) --

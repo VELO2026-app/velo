@@ -249,7 +249,7 @@ import { useToast } from '@/composables/useToast'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import { useMasterStore } from '@/stores/master'
 import { getMyWithdrawals, createWithdrawal, updatePayoutDetails, deletePayout } from '@/api/masters'
-import { ApiResponseError } from '@/api/client'
+import { extractApiError } from '@/composables/useApiError'
 import { formatMoney, formatDateShort } from '@/utils/format'
 import { eurStringToCents, centsToEurString } from '@/utils/currency'
 import type { WithdrawalResponse, WithdrawalStatus, PayoutDetails } from '@/api/types'
@@ -402,8 +402,7 @@ async function savePayout(): Promise<void> {
     showPayoutForm.value = false
     toast.success('Реквизиты сохранены')
   } catch (e) {
-    const msg = e instanceof ApiResponseError ? e.detail : 'Не удалось сохранить реквизиты'
-    toast.error(msg)
+    toast.error(extractApiError(e, 'Не удалось сохранить реквизиты'))
   } finally {
     savingPayout.value = false
   }
@@ -452,8 +451,7 @@ async function removePayout(): Promise<void> {
     if (masterStore.profile) masterStore.profile.payout = null
     toast.success('Способ выплаты удалён')
   } catch (e) {
-    const msg = e instanceof ApiResponseError ? e.detail : 'Не удалось удалить способ выплаты'
-    toast.error(msg)
+    toast.error(extractApiError(e, 'Не удалось удалить способ выплаты'))
   } finally {
     savingPayout.value = false
   }
@@ -513,8 +511,7 @@ async function submitWithdrawal(): Promise<void> {
     // Reload withdrawal history from start.
     await reloadHistory()
   } catch (e) {
-    const msg = e instanceof ApiResponseError ? e.detail : 'Не удалось создать запрос'
-    toast.error(msg)
+    toast.error(extractApiError(e, 'Не удалось создать запрос'))
   } finally {
     submitting.value = false
   }

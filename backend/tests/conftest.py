@@ -53,6 +53,25 @@ async def setup_infrastructure():
     # from under an assertion).
     settings.notification_processor_enabled = False
     settings.practice_autofinalize_enabled = False
+    settings.zoom_retry_enabled = False
+    settings.zoom_report_enabled = False
+    # ПРОМТ №543: pin Zoom to stub mode for the whole suite. Until now every
+    # test server happened to have no real Zoom credentials, so
+    # settings.is_zoom_stub was True by ambient accident -- several tests
+    # asserted on that accident instead of pinning it (see the four tests
+    # named in the ПРОМТ №543 postmortem). The day the deploy container
+    # gained real credentials (owner connected them), is_zoom_stub flipped
+    # to False mid-suite and those tests took the opposite branch. Setting
+    # the secret to the "TEST" sentinel is_zoom_stub already checks for
+    # mirrors the existing is_stripe_stub convention (config.py) and reads
+    # honestly: this is a deliberate stub marker, not a blanked-out real
+    # value that could be misread as "never configured". A test that
+    # explicitly wants non-stub Zoom (e.g.
+    # test_zoom_attendance_decision.py's
+    # test_zoom_tracked_practice_defers_instead_of_deciding_immediately)
+    # monkeypatches all three credential fields itself and is unaffected --
+    # monkeypatch snapshots and restores whatever was here before it ran.
+    settings.zoom_client_secret = "TEST"
 
     # Run Alembic migrations (ensures tables exist).
     result = subprocess.run(

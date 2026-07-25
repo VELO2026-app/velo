@@ -50,15 +50,18 @@
 // rule: a
 // real find is reported, not silently patched inside a test task).
 //
-// TIMEZONE: dayLabel derives from the FIRST rendered practice's OWN
-// `.timezone` field (.vue:205) -- NOT the viewer's profile timezone, NOT the
-// browser's. A fixture below deliberately carries a practice timezone that
-// differs from BOTH the viewer's profile tz and UTC, so only reading the
-// practice's own field produces the expected label. (dayLabel previously had
-// a "no practices" fallback branch that was dead code -- unreachable because
-// dayLabel is rendered ONLY inside the template's `v-else` content block,
-// gated on `dayPractices.length > 0` -- removed in the batch that added this
-// banner note.)
+// TIMEZONE (SW2, fixed ПРОМТ №577): dayLabel now derives from the VIEWER's
+// profile timezone (viewerTz, .vue:205-208), matching the store's own
+// selectedDayPractices bucketing (store.ts:165-175) and CalendarPracticeCard's
+// rendered time -- previously it read the FIRST practice's OWN `.timezone`
+// field, which could disagree with the cards underneath the same header. A
+// fixture below carries a practice timezone that differs from both the
+// viewer's profile tz and UTC, landing on a DIFFERENT calendar day than the
+// viewer-tz bucketing -- so only reading the viewer's tz produces the correct
+// label. (dayLabel previously had a "no practices" fallback branch that was
+// dead code -- unreachable because dayLabel is rendered ONLY inside the
+// template's `v-else` content block, gated on `dayPractices.length > 0` --
+// removed in the batch that added this banner note.)
 //
 // NAME TRAP (per the operator's explicit warning): this screen's OWN dayLabel
 // uses formatDateShort (utils/format.ts). CalendarPracticeCard.vue -- the
@@ -401,23 +404,21 @@ describe('CalendarView', () => {
 
   // ===========================================================================
   describe('day label + timezone', () => {
-    it('uses the FIRST practice\'s OWN timezone, not the viewer profile tz and not UTC', async () => {
-      // 15:00 UTC -- viewer (Moscow, UTC+3) would see 18:00 same day; the
-      // practice's OWN tz (America/New_York, UTC-4) sees 11:00 same day. If
-      // the screen silently used viewerTz instead of practice.timezone, the
-      // label would still say "Сегодня" (both land on the same calendar day
-      // as NOW here) -- so the label alone can't catch a tz mix-up. Assert
-      // the underlying value is read at all via a distinguishable timezone
-      // by checking the practice's rendered TIME instead, which threads
-      // through the SAME viewerTz path in CalendarPracticeCard (a control),
-      // while dayLabel's mechanism is exercised structurally: dayLabel only
-      // has ONE reachable branch (see banner) -- "Сегодня" here IS the
-      // correct value for TODAY's practices in any of the tzs in play, so
-      // this test's job is confirming that branch renders at all, not
-      // proving tz selection -- done properly below via the WEEK STRIP dot,
-      // which buckets days in the VIEWER tz explicitly (store.ts:152-162).
+    it('SW2: uses the VIEWER profile timezone, not the practice\'s own -- distinguishing fixture', async () => {
+      // 20:00 UTC on the 20th (after NOW=12:00Z, so not filtered as
+      // already-started). In the VIEWER's Moscow (UTC+3) that's 23:00 on the
+      // 20th -- the SAME calendar day as NOW there (15:00 on the 20th), which
+      // is also the store's default selectedDate (bucketed in viewer tz,
+      // store.ts:165-175) -- so this practice IS the day's content and the
+      // correct label is "Сегодня". In the practice's OWN tz (Asia/
+      // Yekaterinburg, UTC+5, no DST) the same instant is 01:00 on the 21st,
+      // while NOW there is still 17:00 on the 20th -- so the OLD buggy
+      // behaviour (reading practice.timezone) renders "Завтра" instead. Two
+      // genuinely different strings -- unlike the previous version of this
+      // test, "Сегодня" alone can't be produced by both branches by
+      // coincidence.
       vi.mocked(practicesApi.getPractices).mockResolvedValue(
-        page([practice('p1', { scheduled_at: '2026-07-20T15:00:00Z', timezone: 'America/New_York' })]),
+        page([practice('p1', { scheduled_at: '2026-07-20T20:00:00Z', timezone: 'Asia/Yekaterinburg' })]),
       )
       mount()
       await flush()

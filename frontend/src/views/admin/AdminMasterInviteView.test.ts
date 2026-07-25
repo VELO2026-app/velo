@@ -187,9 +187,14 @@ describe('AdminMasterInviteView', () => {
       expect(host?.querySelector('.invite__link')).toBeNull()
     })
 
-    it('failure (ApiResponseError, e.g. bot_url_not_configured): toasts the real backend detail', async () => {
+    it('failure (bot_url_not_configured): toasts a human message, NOT the raw backend detail', async () => {
+      // ПРОМТ №523: the raw detail ("telegram_bot_url is not configured") is a
+      // server misconfiguration string, not something an admin can act on --
+      // this code now gets its own human Russian message (BookingPopup.vue's
+      // e.code hand-branch pattern). 503 status and the code itself are
+      // test-pinned server-side and unchanged here.
       vi.mocked(adminApi.inviteMaster).mockRejectedValue(
-        new ApiResponseError(503, 'Бот не настроен', 'bot_url_not_configured'),
+        new ApiResponseError(503, 'telegram_bot_url is not configured', 'bot_url_not_configured'),
       )
       mount()
       await flush()
@@ -197,7 +202,22 @@ describe('AdminMasterInviteView', () => {
       createBtn().click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Бот не настроен')
+      expect(toastError).toHaveBeenCalledWith(
+        'Ссылки для приглашений временно недоступны. Сообщите в поддержку.',
+      )
+    })
+
+    it('failure (ApiResponseError, unrecognized code): falls back to the real backend detail', async () => {
+      vi.mocked(adminApi.inviteMaster).mockRejectedValue(
+        new ApiResponseError(500, 'Что-то пошло не так', 'internal_error'),
+      )
+      mount()
+      await flush()
+
+      createBtn().click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Что-то пошло не так')
     })
 
     it('re-generating replaces the result card in place with a NEW link', async () => {

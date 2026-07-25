@@ -81,7 +81,7 @@ import TimezoneCityPicker from '@/components/shared/TimezoneCityPicker.vue'
 import { VPaginationDots } from '@/components/ui'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
-import { ApiResponseError } from '@/api/client'
+import { extractApiError } from '@/composables/useApiError'
 
 const emit = defineEmits<{
   /** Onboarding finished (completed or skipped); flag is already persisted. */
@@ -248,9 +248,7 @@ async function finish(): Promise<void> {
     })
     emit('done')
   } catch (error) {
-    const message =
-      error instanceof ApiResponseError ? error.detail : 'Не удалось сохранить. Попробуйте ещё раз.'
-    toast.error(message)
+    toast.error(extractApiError(error, 'Не удалось сохранить. Попробуйте ещё раз.'))
   } finally {
     submitting.value = false
   }

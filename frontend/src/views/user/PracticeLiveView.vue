@@ -10,20 +10,25 @@
     - Video placeholder (no real video in MVP; Zoom is external)
     - Info card: title + master + "В эфире" badge
     - Actions:
+        no booking for this practice -- N1 (ПРОМТ №587): honest inline
+          "Вы не записаны" empty state instead of the badges/"Войти" button
         "Войти"            -- join (sets joined_at) + open Zoom link
         "Check-in"         -- go to the check-in form
         "Покинуть практику" -- leave (sets left_at) + back to dashboard
 
   Data:
-    - practicesStore.fetchPractice(practiceId) -> zoom_link, title, master_name, status
-    - bookingsStore -> the user's booking for this practice (booking.id, joined_at)
+    - practicesStore.fetchPractice(practiceId) -> zoom_link (fallback), title, master_name, status
+    - bookingsStore -> the user's booking (booking.id, joined_at, zoom_registrant_join_url)
 
   Backend (Phase 5.4, ready):
     POST /bookings/{id}/join   -- confirmed + scheduled/live, 409 if already joined
     POST /bookings/{id}/leave  -- requires joined_at, 400 if not joined
 
-  Security (AUDIT-0520-02): the Zoom link is only opened when it starts with
-  "https://". Otherwise "Войти" is disabled.
+  Zoom link (T21-1, ПРОМТ №541): resolveZoomLink() ladder -- the booking's
+  own registrant link first, else the manual practice.zoom_link visibly
+  marked (attendance not counted), else "Ссылка готовится". Security
+  (AUDIT-0520-02, now inside resolveZoomLink): only an https:// URL is ever
+  opened, on either rung.
 
   Route: /user/practice-live/:practiceId
 -->
@@ -54,16 +59,48 @@
 
     <!-- Actions -->
     <div class="live__actions">
-      <VButton
-        variant="primary"
-        size="lg"
-        block
-        :disabled="!canJoin || joining"
-        :loading="joining"
-        @click="onEnter"
-      >
-        Войти
-      </VButton>
+      <!-- N1 (ПРОМТ №587, recon №586): no booking for THIS practice at all --
+           canJoin (below) already permanently disables "Войти" in this case
+           (not a security hole: the backend also fail-closes the zoom_link),
+           but a disabled button with no explanation was a UX dead end. An
+           honest inline state instead -- no auto-redirect, no surprise
+           navigation. -->
+      <VEmptyState
+        v-if="!myBooking"
+        icon="warning"
+        title="Вы не записаны на это занятие"
+        description="Чтобы войти, сначала забронируйте практику"
+      />
+      <template v-else>
+        <!-- D3 ladder (ПРОМТ №541): the manual-link state must be visibly
+             distinct from a real personal link -- silent fall-through is the
+             defect being fixed, so this badge is never optional decoration. -->
+        <VBadge v-if="zoomLink.kind === 'manual'" variant="warning" class="live__zoom-note">
+          Ссылка от мастера — посещение не засчитается автоматически
+        </VBadge>
+
+        <!-- A4 V2 (ПРОМТ №572): honest permanent-failure state, distinct from
+             "still preparing" -- before this, create_failed rendered the
+             identical "Ссылка готовится" spinner forever. A participant has
+             no retry action (only the master does, MasterDashboardView) --
+             this just tells the truth instead of hiding it. -->
+        <VBadge v-if="zoomLink.kind === 'failed'" variant="error" class="live__zoom-note">
+          Не удалось создать встречу — обратитесь к мастеру
+        </VBadge>
+
+        <VButton
+          variant="primary"
+          size="lg"
+          block
+          :disabled="!canJoin || joining"
+          :loading="joining"
+          @click="onEnter"
+        >
+          <template v-if="zoomLink.kind === 'failed'">Ссылка недоступна</template>
+          <template v-else-if="zoomLink.kind === 'pending'">Ссылка готовится</template>
+          <template v-else>Войти</template>
+        </VButton>
+      </template>
 
       <!-- One check-in per practice: once done, the button locks and shows
            why (so it does not read as a random disabled control). -->
@@ -86,8 +123,9 @@ import { usePracticesStore } from '@/stores/practices'
 import { useBookingsStore } from '@/stores/bookings'
 import { useToast } from '@/composables/useToast'
 import { platform } from '@/platform'
-import { VButton, VBackButton, VCard } from '@/components/ui'
+import { VButton, VBackButton, VCard, VBadge, VEmptyState } from '@/components/ui'
 import PracticePlaceholder from '@/components/shared/PracticePlaceholder.vue'
+import { resolveZoomLink } from '@/utils/zoomLink'
 
 const route = useRoute()
 const router = useRouter()
@@ -110,11 +148,27 @@ const myBooking = computed(() =>
 /** One check-in per practice: once the booking has it, the button locks. */
 const alreadyCheckedIn = computed(() => !!myBooking.value?.has_checkin)
 
-/** A Zoom link is usable only if it is an https URL (AUDIT-0520-02). */
-const hasValidZoom = computed(() => !!practice.value?.zoom_link?.startsWith('https://'))
+/**
+ * D3 ladder (ПРОМТ №541): the booking's own registrant link first, the
+ * manual practice.zoom_link only as a visibly-marked fallback, otherwise
+ * "being prepared" -- or, since A4 V2 (ПРОМТ №572), the honest "failed"
+ * state when practice.zoom_meeting_status is create_failed. Never a silent
+ * fall-through (AUDIT-0520-02's https guard is now inside resolveZoomLink
+ * for both rungs).
+ */
+const zoomLink = computed(() =>
+  resolveZoomLink(
+    myBooking.value?.zoom_registrant_join_url,
+    practice.value?.zoom_link,
+    practice.value?.zoom_meeting_status,
+  ),
+)
 
-/** "Войти" is enabled only with a booking and a valid Zoom link. */
-const canJoin = computed(() => !!myBooking.value && hasValidZoom.value)
+/** "Войти" is enabled only with a booking and a usable link (neither
+ * pending nor permanently failed). */
+const canJoin = computed(
+  () => !!myBooking.value && zoomLink.value.kind !== 'pending' && zoomLink.value.kind !== 'failed',
+)
 
 // -- Actions --
 
@@ -123,12 +177,12 @@ const canJoin = computed(() => !!myBooking.value && hasValidZoom.value)
  * A 409 "Already joined" is treated as a no-op -- we still open Zoom.
  */
 async function onEnter(): Promise<void> {
-  if (!practice.value?.zoom_link || !hasValidZoom.value) return
+  if (zoomLink.value.kind === 'pending' || !zoomLink.value.url) return
   if (joining.value) return
 
   // Capture the link now: the guard above narrows it to a string, but the await
-  // below resets that narrowing (practice is a computed ref).
-  const zoomUrl = practice.value.zoom_link
+  // below resets that narrowing (zoomLink is a computed ref).
+  const zoomUrl = zoomLink.value.url
   joining.value = true
   try {
     const booking = myBooking.value
@@ -266,5 +320,10 @@ onMounted(() => {
   flex-direction: column;
   gap: var(--space-3);
   margin-top: auto;
+}
+
+.live__zoom-note {
+  align-self: center;
+  text-align: center;
 }
 </style>

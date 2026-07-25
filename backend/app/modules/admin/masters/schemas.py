@@ -46,6 +46,14 @@ class VerifyMasterRequest(BaseModel):
         description="Optional admin notes about verification decision",
     )
     promote: list[str] = Field(default_factory=list)
+    master_only: list[str] = Field(
+        default_factory=list,
+        description=(
+            "T22-6 (ПРОМТ №561): custom method labels approved for THIS "
+            "master only -- each gets a master-scoped taxonomy row, never "
+            "visible to another master's picker."
+        ),
+    )
 
 
 class RejectMasterRequest(BaseModel):
@@ -200,6 +208,14 @@ class ApproveMethodChangeRequest(BaseModel):
     """
 
     promote: list[str] = Field(default_factory=list)
+    master_only: list[str] = Field(
+        default_factory=list,
+        description=(
+            "T22-6 (ПРОМТ №561): custom method labels approved for THIS "
+            "master only -- each gets a master-scoped taxonomy row, never "
+            "visible to another master's picker."
+        ),
+    )
 
 
 class MethodChangeActionResponse(BaseModel):

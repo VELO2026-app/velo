@@ -217,8 +217,14 @@ function resolveStyleValue(dirValue: PracticeDirection, label: string): string |
 }
 
 /** Style value -> label under a direction, hardcoded first, catalog second
- *  (bug 5 leak 2 fix), falling back to the raw value if neither knows it. */
-function resolveStyleLabel(dirValue: string, styleValue: string): string {
+ *  (bug 5 leak 2 fix), falling back to the raw value if neither knows it.
+ *  Exported (T21-10, ПРОМТ №546): AdminMastersView's collapsed master card
+ *  had no catalog-aware style helper available and hand-rolled a
+ *  hardcoded-only version (STYLE_LABEL[st] ?? st) -- a catalog-only style
+ *  (e.g. under a promoted custom direction) fell through to its raw slug,
+ *  unlike directionLabel (already exported) which the same card uses
+ *  correctly for the direction half of each chip. */
+export function resolveStyleLabel(dirValue: string, styleValue: string): string {
   return STYLE_LABEL[styleValue] ?? catalogStyleLabelByValue.value?.[dirValue]?.[styleValue] ?? styleValue
 }
 

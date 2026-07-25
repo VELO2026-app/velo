@@ -189,7 +189,11 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
         ? rawDetail.map((e) => e.msg).join('; ')
         : `Request failed (${response.status})`
 
-  throw new ApiResponseError(response.status, suffixWithTraceId(detail, traceId), 'validation_error')
+  throw new ApiResponseError(
+    response.status,
+    suffixWithTraceId(detail, traceId),
+    'validation_error',
+  )
 }
 
 // W29-trimmed: append a greppable diagnostic key to a user-facing error
@@ -222,6 +226,10 @@ export const api = {
 
   patch<T>(path: string, body?: unknown): Promise<T> {
     return request<T>('PATCH', path, body)
+  },
+
+  put<T>(path: string, body?: unknown): Promise<T> {
+    return request<T>('PUT', path, body)
   },
 
   delete(path: string): Promise<void> {

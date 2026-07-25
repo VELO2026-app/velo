@@ -221,6 +221,7 @@ import { useAdminStore } from '@/stores/admin'
 import { getCheckinMetric, getFeedbackMetric, getReturnMetric, getAdminRevenue } from '@/api/admin'
 import { formatMoney } from '@/utils/format'
 import { formatPeriodRange } from '@/utils/periodRange'
+import { plural } from '@/utils/plural'
 import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
@@ -257,22 +258,13 @@ const pendingModeration = computed((): number => adminStore.pendingModeration)
 // A2: unread indicator for incoming master method-change requests.
 const pendingMethodChanges = computed((): number => adminStore.pendingMethodChanges)
 
-// Russian plural picker: [one, few, many].
-function plural(n: number, forms: [string, string, string]): string {
-  const m10 = n % 10
-  const m100 = n % 100
-  if (m10 === 1 && m100 !== 11) return forms[0]
-  if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return forms[1]
-  return forms[2]
-}
-
 const verificationTitle = computed(
   (): string =>
-    `${pendingVerifications.value} ${plural(pendingVerifications.value, ['мастер', 'мастера', 'мастеров'])} на верификации`,
+    `${pendingVerifications.value} ${plural(pendingVerifications.value, 'мастер', 'мастера', 'мастеров')} на верификации`,
 )
 const moderationTitle = computed(
   (): string =>
-    `${pendingModeration.value} ${plural(pendingModeration.value, ['обращение', 'обращения', 'обращений'])} на модерации`,
+    `${pendingModeration.value} ${plural(pendingModeration.value, 'обращение', 'обращения', 'обращений')} на модерации`,
 )
 
 // =========================================================================

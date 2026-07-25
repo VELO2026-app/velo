@@ -187,6 +187,32 @@ async def _past_practice_ids_in_period(
     ]
 
 
+async def _past_practice_ids_before(
+    before: datetime, now: datetime, session: AsyncSession,
+) -> list:
+    """Practice ids scheduled before `before` that have ENDED by wall-clock.
+
+    Sibling of _past_practice_ids_in_period, without a lower bound -- used
+    by _return_counts' "attended before the period start" side, where that
+    side of the query is unbounded in the past rather than a fixed window.
+    """
+    rows = (
+        await session.execute(
+            select(
+                Practice.id, Practice.scheduled_at, Practice.duration_minutes,
+            ).where(
+                Practice.status.notin_(_HIDDEN_PRACTICE_STATUSES),
+                Practice.scheduled_at < before,
+            )
+        )
+    ).all()
+    return [
+        r.id
+        for r in rows
+        if r.scheduled_at + timedelta(minutes=r.duration_minutes) < now
+    ]
+
+
 async def _checkin_counts(
     start: datetime, end: datetime, now: datetime, session: AsyncSession,
 ) -> tuple[int, int]:
@@ -259,52 +285,59 @@ async def _feedback_counts(
 
 
 async def _return_counts(
-    start: datetime, end: datetime, session: AsyncSession,
+    start: datetime, end: datetime, now: datetime, session: AsyncSession,
 ) -> tuple[int, int]:
     """(returning, total_users) over period attendees in [start, end).
 
-    returning = period attendees who also attended a practice scheduled before
-    the period start.
+    returning = period attendees who also attended a practice that had
+    ENDED (by wall-clock) before the period start.
 
-    NOTE (W3, ПРОМТ №387): this still gates on Booking.status==ATTENDED, the
-    same autofinalize-lag class fixed in _checkin_counts/_feedback_counts
-    above -- out of this fix's explicit scope (checkin/feedback rates only),
-    flagged here rather than silently left unremarked. Candidate for the same
-    _past_practice_ids_in_period-based rewrite in a follow-up.
+    SW11 (Батч B, ПРОМТ №579): "attended" is now a Checkin row on a
+    non-cancelled booking for a practice that has ENDED by wall-clock --
+    the same signal _checkin_counts uses -- NOT Booking.status==ATTENDED,
+    which was the same autofinalize-lag class already fixed for
+    _checkin_counts/_feedback_counts (see _past_practice_ids_in_period's
+    docstring): a check-in lands on a still-CONFIRMED booking before
+    autofinalize flips it, so ATTENDED-gating undercounted here exactly
+    the way it did there.
     """
-    period_user_ids = set(
-        (
-            await session.execute(
-                select(Booking.user_id)
-                .join(Practice, Booking.practice_id == Practice.id)
-                .where(
-                    Booking.status == BookingStatus.ATTENDED.value,
-                    Practice.scheduled_at >= start,
-                    Practice.scheduled_at < end,
+    past_ids = await _past_practice_ids_in_period(start, end, now, session)
+    period_user_ids: set = set()
+    if past_ids:
+        period_user_ids = set(
+            (
+                await session.execute(
+                    select(func.distinct(Booking.user_id))
+                    .select_from(Booking)
+                    .join(Checkin, Checkin.booking_id == Booking.id)
+                    .where(
+                        Booking.practice_id.in_(past_ids),
+                        Booking.status != BookingStatus.CANCELLED.value,
+                    )
                 )
-                .distinct()
-            )
-        ).scalars().all()
-    )
+            ).scalars().all()
+        )
     total_users = len(period_user_ids)
 
     returning = 0
     if period_user_ids:
-        prior_ids = set(
-            (
-                await session.execute(
-                    select(Booking.user_id)
-                    .join(Practice, Booking.practice_id == Practice.id)
-                    .where(
-                        Booking.status == BookingStatus.ATTENDED.value,
-                        Practice.scheduled_at < start,
-                        Booking.user_id.in_(period_user_ids),
+        prior_ids = await _past_practice_ids_before(start, now, session)
+        if prior_ids:
+            returning_ids = set(
+                (
+                    await session.execute(
+                        select(func.distinct(Booking.user_id))
+                        .select_from(Booking)
+                        .join(Checkin, Checkin.booking_id == Booking.id)
+                        .where(
+                            Booking.practice_id.in_(prior_ids),
+                            Booking.status != BookingStatus.CANCELLED.value,
+                            Booking.user_id.in_(period_user_ids),
+                        )
                     )
-                    .distinct()
-                )
-            ).scalars().all()
-        )
-        returning = len(prior_ids)
+                ).scalars().all()
+            )
+            returning = len(returning_ids)
     return returning, total_users
 
 
@@ -363,8 +396,8 @@ async def get_admin_stats_overview(
         await _feedback_counts(prev_start, cur_start, now, session),
     )
     return_rate, return_delta = _rate_with_delta(
-        await _return_counts(cur_start, cur_end, session),
-        await _return_counts(prev_start, cur_start, session),
+        await _return_counts(cur_start, cur_end, now, session),
+        await _return_counts(prev_start, cur_start, now, session),
     )
 
     # -- moderation (period-independent) --

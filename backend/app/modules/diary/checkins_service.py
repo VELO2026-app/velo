@@ -24,6 +24,7 @@ from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.diary.models import CheckType, Checkin
 from app.modules.diary.projections import upsert_checkin_event
 from app.modules.masters.service import get_master_full_name
+from app.modules.practices.audience_service import assert_viewer_can_access_practice
 from app.modules.practices.models import Practice
 from app.modules.users.models import User
 
@@ -86,6 +87,19 @@ async def upsert_checkin(
     practice = await session.get(Practice, practice_id)
     if practice is None:
         raise NotFoundError("Practice not found")
+
+    # P5 (ПРОМТ №594): covers the RETROACTIVE case create_booking's own gate
+    # cannot -- a booking made while the practice was public/open, before
+    # the master narrowed the audience or blocked this viewer. Without this,
+    # that old CONFIRMED booking would still let them check in. Same shared
+    # predicate as create_booking/confirm_waitlist -- see audience_service.py.
+    # Frontend maps the raised code to one of three Russian messages
+    # (CheckinView.vue): "blocked_by_master" -> "Мастер ограничил вам доступ
+    # к этой практике"; "not_a_student" -> "Эта практика доступна только
+    # ученикам мастера"; "not_in_audience" -> "Вы не состоите в группе
+    # «{group name(s)}»" (composed client-side from the practice's own
+    # audience_group_names, already on the loaded PracticeResponse).
+    await assert_viewer_can_access_practice(user.id, practice, session)
 
     now = datetime.now(UTC)
     window_open = practice.scheduled_at - timedelta(

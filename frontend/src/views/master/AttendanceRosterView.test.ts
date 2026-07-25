@@ -48,9 +48,14 @@
 //
 // whenLabel/durationLabel (.vue:130-139): whenLabel combines formatDateShort
 // (Date.now-dependent) + formatTime (pure) -- same handling as
-// AttendanceView's practiceWhen, a fixture date far from "today" verified
-// via node beforehand. durationLabel is a PURE `${duration_minutes} мин`
-// string, no Date dependence at all.
+// AttendanceView's practiceWhen. ПРОМТ №542: the ORIGINAL fixture used a
+// literal date "verified via node beforehand" to be far from "today" --
+// that only held on the day it was written, and drifted into the Сегодня/
+// Завтра window as real time passed. The clock is now FAKED and frozen
+// (NOW, see beforeEach); STABLE_SCHEDULED_AT is NOW+30 days, so the
+// relationship is fixed by construction, not by luck of the run date.
+// durationLabel is a PURE `${duration_minutes} мин` string, no Date
+// dependence at all.
 //
 // Cyrillic fixtures/expected strings below were typed via the Write tool,
 // never a shell heredoc.
@@ -66,6 +71,18 @@ import { useMasterStore } from '@/stores/master'
 import type { AttendanceResponse, AttendanceItemResponse, PracticeResponse } from '@/api/types'
 
 vi.mock('@/api/practices')
+
+// T21-1 follow-up (ПРОМТ №542): the clock is now FAKED and frozen at NOW
+// (beforeEach below), not left to the real wall clock -- whenLabel
+// (formatDateShort, Date.now-dependent) previously read a fixture date
+// "far from today" that was only far from the day this was WRITTEN, and
+// drifted into the Сегодня/Завтра window as real time passed (it did,
+// ПРОМТ №542). STABLE_SCHEDULED_AT is derived from NOW with a fixed +30-day
+// offset, so the relationship holds regardless of what NOW is -- proven by
+// re-running this file with NOW set to several unrelated instants, not by
+// picking one date and hoping it stays far enough away.
+const NOW = new Date('2026-07-20T10:00:00Z')
+const STABLE_SCHEDULED_AT = new Date(NOW.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
 
 const back = vi.fn()
 const routeParams: { id: string } = { id: 'p_1' }
@@ -132,7 +149,7 @@ function practice(overrides: Partial<PracticeResponse> = {}): PracticeResponse {
     description: null,
     what_to_prepare: null,
     contraindications: null,
-    scheduled_at: '2026-07-22T10:00:00Z', // far from "today" -- stable "D month" branch
+    scheduled_at: STABLE_SCHEDULED_AT, // NOW + 30 days -- always outside the Сегодня/Завтра window, regardless of when this suite runs (clock is faked, see beforeEach)
     duration_minutes: 45,
     timezone: 'UTC',
     max_participants: 10,
@@ -211,6 +228,14 @@ function statValue(label: string): string {
 // -----------------------------------------------------------------------------
 
 beforeEach(() => {
+  // ПРОМТ №542: freeze the clock this screen's Date.now-dependent whenLabel
+  // sees, so its outcome no longer depends on the real calendar date at all
+  // (same pattern as MasterDashboardView.test.ts's beforeEach). Nothing in
+  // this screen's mount chain installs its own timer, so faking time here
+  // has no other side effect.
+  vi.useFakeTimers()
+  vi.setSystemTime(NOW)
+
   pinia = createPinia()
   setActivePinia(pinia)
 
@@ -221,6 +246,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   app?.unmount()
   host?.remove()
   app = null
@@ -301,7 +327,7 @@ describe('AttendanceRosterView', () => {
     })
 
     it('a cached practice in masterStore.practices is used directly -- getPractice is never called', async () => {
-      useMasterStore().practices = [practice({ id: 'p_1', title: 'Кэшированная практика' })]
+      useMasterStore().practicesUpcoming = [practice({ id: 'p_1', title: 'Кэшированная практика' })]
       mount()
       await flush()
 
@@ -387,11 +413,11 @@ describe('AttendanceRosterView', () => {
 
   // ===========================================================================
   describe('whenLabel / durationLabel (.vue:130-139, see banner)', () => {
-    it('whenLabel: a stable date renders "22 июля, 10:00" (not Сегодня/Завтра)', async () => {
+    it('whenLabel: a date 30 days out renders as an absolute date (not Сегодня/Завтра), regardless of the real calendar date', async () => {
       mount()
       await flush()
 
-      expect(text()).toContain('22 июля, 10:00')
+      expect(text()).toContain('19 августа, 10:00')
     })
 
     it('durationLabel: a pure "N мин" string, no Date dependence', async () => {
@@ -400,6 +426,28 @@ describe('AttendanceRosterView', () => {
       await flush()
 
       expect(text()).toContain('75 мин')
+    })
+  })
+
+  // ===========================================================================
+  // T21-1 (ПРОМТ №541): backend has computed unmatched_count since E21 step G
+  // (ПРОМТ №521) with zero frontend consumers until now (ПРОМТ №540 audit).
+  describe('unmatched bucket note (T21-1)', () => {
+    it('shows nothing when unmatched_count is 0 or absent (old fixtures without the field)', async () => {
+      vi.mocked(practicesApi.getAttendance).mockResolvedValue(attendanceResponse({ unmatched_count: 0 }))
+      mount()
+      await flush()
+
+      expect(text()).not.toContain('не удалось сопоставить')
+    })
+
+    it('shows a plain count when Zoom left unmatched participants, the whole point of the design', async () => {
+      vi.mocked(practicesApi.getAttendance).mockResolvedValue(attendanceResponse({ unmatched_count: 3 }))
+      mount()
+      await flush()
+
+      expect(text()).toContain('3')
+      expect(text()).toContain('не удалось сопоставить')
     })
   })
 })

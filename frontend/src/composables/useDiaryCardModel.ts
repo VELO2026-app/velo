@@ -15,15 +15,11 @@
 
 import { computed, type ComputedRef, type Component } from 'vue'
 import {
-  IconMoodLow,
-  IconMoodMid,
-  IconMoodHigh,
-  IconRatingFire,
-  IconRatingGood,
-  IconRatingConfused,
   IconPen,
   IconDreamBook,
   IconDiaryBook,
+  IconMoodMid,
+  IconRatingGood,
 } from '@/components/icons'
 import {
   FEED_KIND_TITLE,
@@ -34,6 +30,7 @@ import {
   ratingLabelFromScore,
   practiceIconFor,
 } from '@/utils/displayHelpers'
+import { MOOD_ICON, RATING_ICON } from '@/utils/ratingIcons'
 import { formatTime, formatDate, formatDuration } from '@/utils/format'
 import type { DiaryFeedItem, DiaryEventKind } from '@/api/types'
 
@@ -43,17 +40,6 @@ const BANNER_KINDS: DiaryEventKind[] = [
   'practice_rescheduled',
   'practice_cancelled_by_master',
 ]
-
-const MOOD_ICON: Record<string, Component> = {
-  low: IconMoodLow,
-  mid: IconMoodMid,
-  high: IconMoodHigh,
-}
-const RATING_ICON: Record<string, Component> = {
-  fire: IconRatingFire,
-  good: IconRatingGood,
-  confused: IconRatingConfused,
-}
 
 export interface DiaryCardModel {
   kind: ComputedRef<DiaryEventKind>

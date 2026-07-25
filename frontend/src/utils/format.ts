@@ -77,9 +77,13 @@ export function formatDateShort(isoString: string, timezone = 'UTC', locale = 'r
 
   const dateStr = fmt(date)
   const todayStr = fmt(now)
-  const tomorrow = new Date(now)
-  tomorrow.setDate(tomorrow.getDate() + 1)
-  const tomorrowStr = fmt(tomorrow)
+  // SW9: +24h on the epoch, NOT Date.setDate() -- setDate mutates in the
+  // DEVICE's own local timezone (whatever the runner's OS is set to), which
+  // is unrelated to the `timezone` param this function renders in. On a day
+  // the device's own timezone crosses a DST transition, setDate(getDate()+1)
+  // does not land exactly +24h later, which can resolve to the wrong
+  // calendar day once reformatted here.
+  const tomorrowStr = fmt(new Date(now.getTime() + 24 * 60 * 60 * 1000))
 
   if (dateStr === todayStr) return 'Сегодня'
   if (dateStr === tomorrowStr) return 'Завтра'
@@ -173,10 +177,14 @@ export function dayKeyOf(isoString: string, timezone = 'UTC'): string {
  */
 export function dayLabelOf(isoString: string, timezone = 'UTC'): string {
   const key = dayKeyOf(isoString, timezone)
-  const todayKey = dayKeyOf(new Date().toISOString(), timezone)
-  const yesterday = new Date()
-  yesterday.setDate(yesterday.getDate() - 1)
-  const yesterdayKey = dayKeyOf(yesterday.toISOString(), timezone)
+  const now = new Date()
+  const todayKey = dayKeyOf(now.toISOString(), timezone)
+  // SW9: -24h on the epoch, NOT Date.setDate() -- see formatDateShort's
+  // "tomorrow" for the same reasoning (device-local DST skew).
+  const yesterdayKey = dayKeyOf(
+    new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString(),
+    timezone,
+  )
   if (key === todayKey) return 'Сегодня'
   if (key === yesterdayKey) return 'Вчера'
   return new Intl.DateTimeFormat('ru-RU', {

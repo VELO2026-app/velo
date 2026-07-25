@@ -88,7 +88,7 @@ import { VButton, VInput } from '@/components/ui'
 import { useBalanceStore } from '@/stores/balance'
 import { useToast } from '@/composables/useToast'
 import { createTopup } from '@/api/payments'
-import { ApiResponseError } from '@/api/client'
+import { extractApiError } from '@/composables/useApiError'
 import { formatMoney } from '@/utils/format'
 import { eurStringToCents } from '@/utils/currency'
 
@@ -101,9 +101,19 @@ const MIN_CENTS = 100 // EUR 1.00 (from backend config)
 const MAX_CENTS = 50000 // EUR 500.00 (from backend config)
 
 // C-1: Allowed URL prefixes for checkout redirect.
+// FAILS CLOSED (ПРОМТ №563, same posture as api/practices.ts's
+// zoomStartRedirectUrl, ПРОМТ №557): no hardcoded fallback domain. The
+// second prefix (our own backend, used for the stub-mode success URL) is
+// only added when VITE_API_BASE_URL is actually configured -- api.talentir.
+// info belongs to a different project entirely. If the env var is missing,
+// the allowlist admits ONLY Stripe's real checkout domain; a stub-mode
+// checkout_url (which would need the second prefix) is then rejected by
+// isAllowedRedirectUrl() below, and the user sees the existing "Некорректный
+// URL платёжной системы" toast instead of the allowlist silently widening
+// to permit a foreign domain.
 const ALLOWED_REDIRECT_PREFIXES = [
   'https://checkout.stripe.com/',
-  import.meta.env.VITE_API_BASE_URL || 'https://api.talentir.info',
+  ...(import.meta.env.VITE_API_BASE_URL ? [import.meta.env.VITE_API_BASE_URL] : []),
 ]
 
 // -- State --
@@ -185,11 +195,7 @@ async function onTopup(): Promise<void> {
     // Redirect to Stripe checkout (or success URL in stub mode).
     window.location.href = response.checkout_url
   } catch (e) {
-    if (e instanceof ApiResponseError) {
-      toast.error(e.detail)
-    } else {
-      toast.error('Не удалось создать платёж')
-    }
+    toast.error(extractApiError(e, 'Не удалось создать платёж'))
   } finally {
     loading.value = false
   }

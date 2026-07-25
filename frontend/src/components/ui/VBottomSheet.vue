@@ -24,7 +24,13 @@
           <div class="v-sheet__body">
             <slot />
           </div>
-          <button v-if="saveLabel" type="button" class="v-sheet__save" @click="$emit('save')">
+          <button
+            v-if="saveLabel"
+            type="button"
+            class="v-sheet__save"
+            :disabled="saveDisabled"
+            @click="$emit('save')"
+          >
             {{ saveLabel }}
           </button>
         </div>
@@ -42,11 +48,17 @@ const props = withDefaults(
     open: boolean
     title?: string
     saveLabel?: string
+    /** Disables the save button (P3, ПРОМТ №592 -- e.g. the report form's
+     *  «Отправить» until a reason is chosen). Default false -- every
+     *  pre-existing caller renders byte-identically to before this prop
+     *  existed. */
+    saveDisabled?: boolean
     closeOnOverlay?: boolean
   }>(),
   {
     title: '',
     saveLabel: '',
+    saveDisabled: false,
     closeOnOverlay: true,
   },
 )
@@ -158,8 +170,16 @@ onUnmounted(() => {
   transition: background-color var(--transition-fast);
 }
 
-.v-sheet__save:hover {
+.v-sheet__save:hover:not(:disabled) {
   background: var(--velo-primary-dark);
+}
+
+/* Mirrors VButton's own :disabled recipe (P3, ПРОМТ №592). */
+.v-sheet__save:disabled {
+  cursor: not-allowed;
+  background: var(--velo-nav-inactive-bg);
+  color: var(--velo-text-muted);
+  box-shadow: none;
 }
 
 /* -- Slide-up transition (mirrors VModal) -- */

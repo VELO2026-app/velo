@@ -25,11 +25,14 @@
 // happy-dom would try to navigate. The stand-in also lets us prove the C-1
 // whitelist by reading back what the screen tried to navigate TO.
 //
-// import.meta.env.VITE_API_BASE_URL is EMPTY in .env (.env:15), so the
-// `|| 'https://api.talentir.info'` fallback (TopupView.vue:106) is what is
-// actually live. That `||` is load-bearing: an empty-string prefix would make
-// `url.startsWith(prefix)` true for EVERY url and silently void the whitelist.
-// The hostile-url test below is what would catch that regression.
+// ПРОМТ №563: ALLOWED_REDIRECT_PREFIXES (TopupView.vue:114-117) FAILS CLOSED --
+// the second (own-backend) prefix is only admitted when VITE_API_BASE_URL is
+// actually configured, never a hardcoded foreign domain. import.meta.env.
+// VITE_API_BASE_URL is EMPTY in .env (.env:15), so by default only Stripe's
+// own checkout domain is in the allowlist; tests that need the second prefix
+// stub the env var explicitly with vi.stubEnv (restored via
+// vi.unstubAllEnvs() in afterEach) and re-mount, since ALLOWED_REDIRECT_
+// PREFIXES is computed fresh inside <script setup> on every instantiation.
 //
 // No time pinning needed -- this screen reads no clock.
 // =============================================================================
@@ -152,6 +155,7 @@ afterEach(() => {
     value: realLocation,
   })
   vi.clearAllMocks()
+  vi.unstubAllEnvs()
 })
 
 describe('TopupView', () => {
@@ -377,7 +381,29 @@ describe('TopupView', () => {
       expect(toastError).not.toHaveBeenCalled()
     })
 
-    it('redirects to the API base url (stub mode)', async () => {
+    it('redirects to the API base url (stub mode) when VITE_API_BASE_URL is configured', async () => {
+      // ПРОМТ №563: the own-backend prefix is only ever the CONFIGURED
+      // VITE_API_BASE_URL, never a hardcoded domain -- stub it here to prove
+      // the allowlist follows the real config, not a fallback constant.
+      vi.stubEnv('VITE_API_BASE_URL', 'https://velo-backend.test')
+      vi.mocked(paymentsApi.createTopup).mockResolvedValue(topup('https://velo-backend.test/api/v1/payments/stub-success'))
+      mount()
+      await flush()
+
+      submitBtn()?.click()
+      await flush()
+
+      expect(location.href).toBe('https://velo-backend.test/api/v1/payments/stub-success')
+      expect(toastError).not.toHaveBeenCalled()
+    })
+
+    it('FAILS CLOSED: refuses the stub-mode url when VITE_API_BASE_URL is NOT configured', async () => {
+      // ПРОМТ №563: this is the exact regression the old
+      // `|| 'https://api.talentir.info'` fallback would have caused --
+      // api.talentir.info belongs to a different project. With no fallback,
+      // an unconfigured env var must REJECT a checkout_url on that foreign
+      // domain, same as any other outside-the-whitelist url.
+      vi.stubEnv('VITE_API_BASE_URL', '')
       vi.mocked(paymentsApi.createTopup).mockResolvedValue(topup('https://api.talentir.info/api/v1/payments/stub-success'))
       mount()
       await flush()
@@ -385,7 +411,8 @@ describe('TopupView', () => {
       submitBtn()?.click()
       await flush()
 
-      expect(location.href).toBe('https://api.talentir.info/api/v1/payments/stub-success')
+      expect(location.href).toBe('')
+      expect(toastError).toHaveBeenCalledWith('Некорректный URL платёжной системы')
     })
 
     it('REFUSES to navigate to a url outside the whitelist', async () => {

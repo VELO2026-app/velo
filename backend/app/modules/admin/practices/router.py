@@ -19,10 +19,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db_reader
 from app.modules.admin.practices.schemas import (
     AdminPracticeDetailResponse,
+    AdminZoomAttendanceResponse,
     PaginatedAdminPracticesResponse,
 )
 from app.modules.admin.practices.service import (
     get_admin_practice_detail,
+    get_admin_zoom_attendance,
     list_admin_practices,
 )
 from app.modules.auth.dependencies import get_current_admin
@@ -58,3 +60,22 @@ async def practice_detail_endpoint(
     404 if the practice does not exist or is soft-deleted.
     """
     return await get_admin_practice_detail(practice_id, session)
+
+
+@router.get(
+    "/practices/{practice_id}/zoom-attendance",
+    response_model=AdminZoomAttendanceResponse,
+)
+async def practice_zoom_attendance_endpoint(
+    practice_id: UUID,
+    admin: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_reader),
+) -> AdminZoomAttendanceResponse:
+    """Per-booking Zoom-derived attendance totals + the raw unmatched
+    bucket, for reconciliation (E21 step G, ПРОМТ №521).
+
+    404 if the practice does not exist or is soft-deleted. An empty
+    zoom_meeting_status (null) means no Zoom meeting was ever created for
+    this practice at all (pre-E21, or creation never succeeded).
+    """
+    return await get_admin_zoom_attendance(practice_id, session)

@@ -107,7 +107,7 @@ import TwoFactorModal from '@/components/shared/TwoFactorModal.vue'
 import { useToast } from '@/composables/useToast'
 import { approveWithdrawal, rejectWithdrawal } from '@/api/admin'
 import type { AdminWithdrawalResponse } from '@/api/admin'
-import { ApiResponseError } from '@/api/client'
+import { extractApiError } from '@/composables/useApiError'
 import { formatMoney } from '@/utils/format'
 
 const router = useRouter()
@@ -199,8 +199,7 @@ async function onApprove(): Promise<void> {
     showTwoFa.value = false
     router.back()
   } catch (e) {
-    const msg = e instanceof ApiResponseError ? e.detail : 'Ошибка одобрения выплаты'
-    toast.error(msg)
+    toast.error(extractApiError(e, 'Ошибка одобрения выплаты'))
   } finally {
     approving.value = false
   }
@@ -220,8 +219,7 @@ async function onReject(): Promise<void> {
     showReject.value = false
     router.back()
   } catch (e) {
-    const msg = e instanceof ApiResponseError ? e.detail : 'Ошибка отклонения выплаты'
-    toast.error(msg)
+    toast.error(extractApiError(e, 'Ошибка отклонения выплаты'))
   } finally {
     rejecting.value = false
   }

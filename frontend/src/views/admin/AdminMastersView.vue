@@ -128,10 +128,9 @@ import { IconCheck, IconPending, IconClose } from '@/components/icons'
 import { getMastersList } from '@/api/admin'
 import type { AdminMasterListItem } from '@/api/admin'
 import { masterDisplayName, masterStatusVariant } from '@/utils/adminHelpers'
-import { parseMethods, directionLabel, primeMethodTaxonomyCatalog } from '@/utils/methodTaxonomy'
-import { STYLE_LABEL } from '@/utils/practiceOptions'
+import { parseMethods, directionLabel, resolveStyleLabel, primeMethodTaxonomyCatalog } from '@/utils/methodTaxonomy'
 import { formatMoney } from '@/utils/format'
-import { ApiResponseError } from '@/api/client'
+import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 
 /** направление+вид as chip-language entries: filled (active) for the
@@ -150,7 +149,7 @@ function taxonomyChips(m: AdminMasterListItem): { label: string; muted: boolean 
   for (const dir of parsed.directions) {
     chips.push({ label: directionLabel(dir), muted: false })
     for (const st of parsed.styles[dir] ?? []) {
-      chips.push({ label: STYLE_LABEL[st] ?? st, muted: true })
+      chips.push({ label: resolveStyleLabel(dir, st), muted: true })
     }
   }
   if (parsed.customEnabled && parsed.customText) {
@@ -250,8 +249,7 @@ async function load(): Promise<void> {
     total.value = res.total
   } catch (e) {
     error.value = true
-    const msg = e instanceof ApiResponseError ? e.detail : 'Ошибка загрузки мастеров'
-    toast.error(msg)
+    toast.error(extractApiError(e, 'Ошибка загрузки мастеров'))
   } finally {
     loading.value = false
   }

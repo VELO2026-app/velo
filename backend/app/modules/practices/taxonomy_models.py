@@ -40,7 +40,21 @@ from app.core.mixins import TimestampMixin, UUIDMixin
 
 
 class TaxonomyDirection(UUIDMixin, TimestampMixin, Base):
-    """A practice direction (Направление) -- e.g. "meditation" / "Медитация"."""
+    """A practice direction (Направление) -- e.g. "meditation" / "Медитация".
+
+    master_id (T22-6, ПРОМТ №561): NULL for every pre-existing / globally
+    promoted row (unchanged meaning -- visible to every master's catalog
+    fetch). A value scopes the row to exactly one master: it never appears
+    in another master's or a non-owner's `GET /taxonomy` response, only in
+    the owning master's own. Existence-checks (_validate_taxonomy) and
+    value->label lookups (_label_for_direction_value) are deliberately
+    master-agnostic -- the per-master boundary is enforced at the catalog
+    READ (list_active_taxonomy) and, independently, by
+    _assert_master_confirmed_taxonomy already only ever matching against the
+    REQUESTING master's own MasterProfile.methods. Styles are never scoped
+    (see the migration docstring): the "Свой вариант" picker only ever
+    produces a bare custom direction, never a direction+style pair.
+    """
 
     __tablename__ = "practice_directions"
 
@@ -49,6 +63,10 @@ class TaxonomyDirection(UUIDMixin, TimestampMixin, Base):
     display_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     source: Mapped[str] = mapped_column(String(20), default="custom", server_default="custom")
+    master_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+    )
 
     styles: Mapped[list["TaxonomyStyle"]] = relationship(
         back_populates="direction",

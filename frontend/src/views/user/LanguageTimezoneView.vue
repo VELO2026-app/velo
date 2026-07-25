@@ -77,7 +77,7 @@ import { IconCheck, IconGlobe } from '@/components/icons'
 import TimezoneCityPicker from '@/components/shared/TimezoneCityPicker.vue'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
-import { ApiResponseError } from '@/api/client'
+import { extractApiError } from '@/composables/useApiError'
 
 const router = useRouter()
 const toast = useToast()
@@ -154,11 +154,7 @@ async function onTimezoneChange(value: string): Promise<void> {
   } catch (error) {
     // Revert the selection so the UI matches the server on failure.
     selectedTimezone.value = previous
-    const message =
-      error instanceof ApiResponseError
-        ? error.detail || 'Не удалось сохранить часовой пояс'
-        : 'Не удалось сохранить часовой пояс'
-    toast.error(message)
+    toast.error(extractApiError(error, 'Не удалось сохранить часовой пояс'))
   } finally {
     saving.value = false
   }

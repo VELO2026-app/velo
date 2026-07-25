@@ -95,11 +95,7 @@
         <!-- Вид практики = style. Показываем только если у направления есть виды
              (Q4=А: без явного «Без вида», не выбрано = null, необязательное). -->
         <div v-if="styleOptionsForForm.length > 0" class="create-practice__railed">
-          <VSelect
-            v-model="form.style"
-            placeholder="Вид практики"
-            :options="styleOptionsForForm"
-          />
+          <VSelect v-model="form.style" placeholder="Вид практики" :options="styleOptionsForForm" />
         </div>
 
         <!-- Уровень сложности = difficulty (локальные мужские лейблы, Q1=Б). -->
@@ -132,7 +128,10 @@
             >
               {{ form.date ? dateDisplay : 'Дата' }}
             </button>
-            <span class="create-practice__seal" :class="{ 'create-practice__seal--done': !!form.date }">
+            <span
+              class="create-practice__seal"
+              :class="{ 'create-practice__seal--done': !!form.date }"
+            >
               <IconRequired v-if="!form.date" :size="22" />
               <IconRequiredDone v-else :size="22" />
             </span>
@@ -154,7 +153,10 @@
             >
               {{ form.time || 'Время' }}
             </button>
-            <span class="create-practice__seal" :class="{ 'create-practice__seal--done': !!form.time }">
+            <span
+              class="create-practice__seal"
+              :class="{ 'create-practice__seal--done': !!form.time }"
+            >
               <IconRequired v-if="!form.time" :size="22" />
               <IconRequiredDone v-else :size="22" />
             </span>
@@ -288,6 +290,42 @@
       </div>
 
       <!-- ================================================================
+           Для кого практика  (P5, ПРОМТ №594): audience_kind single-select,
+           + a multi-select of the master's own custom groups when 'groups'
+           is chosen. No SVG mock exists -- MINIMAL DS-language design.
+           ================================================================ -->
+      <div class="create-practice__section">
+        <h2 class="velo-section-title">Для кого практика</h2>
+
+        <div class="create-practice__railed">
+          <VCard class="create-practice__repeat" padding="none">
+            <VRadioGroup v-model="form.audience_kind" :options="AUDIENCE_OPTIONS" />
+          </VCard>
+
+          <template v-if="form.audience_kind === 'groups'">
+            <div v-if="customGroups.length" class="create-practice__audience-chips">
+              <VChip
+                v-for="g in customGroups"
+                :key="g.id"
+                size="md"
+                clickable
+                :active="form.audience_group_ids.includes(g.id)"
+                @click="onAudienceGroupChipClick(g.id)"
+              >
+                {{ g.name }}
+              </VChip>
+            </div>
+            <p v-else class="create-practice__audience-empty">
+              Пока нет ни одной группы. Создайте группу на экране «Мои группы».
+            </p>
+            <span v-if="errors.audience_group_ids" class="create-practice__field-error">{{
+              errors.audience_group_ids
+            }}</span>
+          </template>
+        </div>
+      </div>
+
+      <!-- ================================================================
            Оплата  (платная опция убрана — пока только «Бесплатно», operator
            2026-06-18 Q2=А; «Платно» + цену вернём одной строкой при надобности)
            ================================================================ -->
@@ -338,14 +376,26 @@
       </div>
 
       <!-- ================================================================
-           Подключение  (ручной ввод Zoom-ссылки, необязательно; пусто = бэк
-           сгенерит ссылку сам — operator 2026-06-18 Q3=А; авто-генерация → Зоду)
+           Подключение (T21-1, ПРОМТ №541, owner decision D1): the backend
+           ALWAYS creates a real Zoom meeting automatically on publish -- this
+           field is now an EMERGENCY fallback only (Zoom's daily creation quota
+           can fail it), not the primary link. Kept because a master must
+           never be left with no way to run the session; the honest label
+           says what using it costs.
            ================================================================ -->
       <div class="create-practice__section">
         <h2 class="velo-section-title">Подключение</h2>
+        <p class="create-practice__hint">
+          Ссылка на Zoom создаётся автоматически. Указывайте свою только как запасной вариант —
+          посещение по ней не засчитается автоматически.
+        </p>
 
         <div class="create-practice__railed">
-          <VInput v-model="form.zoom_link" placeholder="Ссылка на Zoom" @focus="onFieldFocus" />
+          <VInput
+            v-model="form.zoom_link"
+            placeholder="Запасная ссылка на Zoom"
+            @focus="onFieldFocus"
+          />
         </div>
       </div>
 
@@ -395,23 +445,31 @@ import {
   VCheckbox,
   VRadioGroup,
   VDayPicker,
+  VChip,
 } from '@/components/ui'
 import { IconRequired, IconRequiredDone } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { useMasterStore } from '@/stores/master'
 import { createPractice, updatePractice } from '@/api/practices'
+import { getGroups } from '@/api/groups'
+import type { GroupListItem } from '@/api/groups'
 import { formatShortDate, todayLocalISO } from '@/utils/format'
 import DatePickerSheet from '@/components/shared/DatePickerSheet.vue'
 import TimePickerSheet from '@/components/shared/TimePickerSheet.vue'
 import UseTemplateBlock from '@/components/shared/UseTemplateBlock.vue'
 import Banner from '@/components/shared/Banner.vue'
 import { ApiResponseError } from '@/api/client'
-import { DURATION_OPTIONS, catalogDirectionOptions, catalogStylesForDirection } from '@/utils/practiceOptions'
-import { ensureTaxonomyCatalog } from '@/utils/methodTaxonomy'
+import { extractApiError } from '@/composables/useApiError'
+import {
+  DURATION_OPTIONS,
+  catalogDirectionOptions,
+  catalogStylesForDirection,
+} from '@/utils/practiceOptions'
+import { ensureTaxonomyCatalog, parseMethods } from '@/utils/methodTaxonomy'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import type { TaxonomyListResponse } from '@/api/taxonomy'
-import type { RecurrenceSpec, PracticeResponse } from '@/api/types'
+import type { RecurrenceSpec, PracticeResponse, PracticeDirection } from '@/api/types'
 
 const router = useRouter()
 const toast = useToast()
@@ -441,10 +499,24 @@ const masterStore = useMasterStore()
 // warmed it this session); if cold, fetched here before the master is likely
 // to have opened the Направление select.
 const catalog = ref<TaxonomyListResponse | null>(null)
+// P5 (ПРОМТ №594): the master's own custom groups (loaded in onMounted below).
+const customGroups = ref<GroupListItem[]>([])
 onMounted(() => {
   void masterStore.fetchMyPractices()
   void ensureTaxonomyCatalog().then((c) => {
     catalog.value = c
+  })
+  // T21-6 (ПРОМТ №546): needed to filter the direction/style pickers down to
+  // this master's OWN confirmed methods (see directionOptions/
+  // styleOptionsForForm below). No-op if already loaded elsewhere this
+  // session (fetchMyProfile's own cache, same as fetchMyPractices above).
+  void masterStore.fetchMyProfile()
+  // P5 (ПРОМТ №594): the master's own custom groups, for «Конкретные
+  // группы»'s multi-select. «Удалённые» is a system slug (never a real
+  // MasterGroup row) and «Ученики» isn't a target-able group either --
+  // getGroups() already returns both alongside custom ones, so filter here.
+  void getGroups().then((res) => {
+    customGroups.value = res.items.filter((g) => g.kind === 'custom')
   })
 })
 
@@ -480,6 +552,24 @@ const RECURRENCE_END_OPTIONS = [
 
 // «Платно» убрано (operator 2026-06-18 Q2=А) — пока только бесплатные практики.
 const PAYMENT_OPTIONS = [{ value: 'free', label: 'Бесплатно' }]
+
+// P5 (ПРОМТ №594): «Для кого практика» -- no SVG mock exists for this
+// control, MINIMAL DS-language design (VRadioGroup, same recipe as
+// RECURRENCE_OPTIONS/PAYMENT_OPTIONS above -- no new visual component).
+const AUDIENCE_OPTIONS = [
+  { value: 'public', label: 'Публичная' },
+  { value: 'students', label: 'Все ученики' },
+  { value: 'groups', label: 'Конкретные группы' },
+]
+
+// Named wrapper (B7-hook edge: an inline multi-statement @click handler can
+// be reformatted across lines by the pre-commit hook's prettier pass and
+// lose its semicolon, breaking the Vue template compiler).
+function onAudienceGroupChipClick(groupId: string): void {
+  const idx = form.audience_group_ids.indexOf(groupId)
+  if (idx === -1) form.audience_group_ids.push(groupId)
+  else form.audience_group_ids.splice(idx, 1)
+}
 
 // Уровень сложности — локальные мужские лейблы под слово «уровень» (Q1=Б);
 // глобальный DIFFICULTY_LABEL (женский род, под «практика») не трогаем.
@@ -517,6 +607,12 @@ const form = reactive({
   timezone: authStore.user?.timezone ?? 'Europe/Moscow',
   max_participants_raw: '', // string input, parsed to int|null on submit
   is_free: true, // «Платно» removed — practices are free for now (Q2=А)
+  // P5 (ПРОМТ №594): «Для кого практика» — single-select kind, + a
+  // multi-select of the master's OWN custom groups when kind='groups'.
+  // Default 'public' -- matches every practice's behavior before this
+  // feature existed.
+  audience_kind: 'public' as 'public' | 'students' | 'groups',
+  audience_group_ids: [] as string[],
   description: '',
   what_to_prepare: '',
   contraindications: '',
@@ -539,23 +635,95 @@ const errors = reactive({
   recurrence_days: '',
   recurrence_end_date: '',
   recurrence_count: '',
+  audience_group_ids: '',
 })
 
 // «Использовать шаблон» source: all the master's practices, newest-created
 // first (operator Q2=А — backend list order isn't guaranteed, so sort here).
-const templatePractices = computed((): PracticeResponse[] =>
-  [...masterStore.practices].sort((a, b) => b.created_at.localeCompare(a.created_at)),
-)
+//
+// T23-3 (ПРОМТ №565): a published SERIES must offer ONE entry, not one per
+// generated occurrence -- masterStore.practices carries every child
+// individually (each is its own Practice row), so an unrelated series
+// otherwise floods this list with N near-identical cards ("Свист" three
+// times for three July dates in the owner's report).
+//
+// Grouped by parent_practice_id (a series child's own group key) falling
+// back to the row's own id (a root or a non-series practice is its own
+// group of one). Within a group the ROOT (parent_practice_id === null) is
+// preferred when present. MEASURED, not assumed: series_service.py's
+// _build_child_occurrence copies title, description, what_to_prepare,
+// contraindications, duration_minutes, max_participants, zoom_link,
+// is_free, price_cents, currency and the full taxonomy (direction,
+// difficulty, style) VERBATIM from the root to every child at generation
+// time (no per-child override of any of these anywhere in that function) --
+// exactly the field set applyTemplate() below actually copies. So which
+// occurrence in a group gets offered does not change what a master
+// receives; the root is still the deliberate pick because it is guaranteed
+// to exist for as long as the series does (a child can be individually
+// cancelled/deleted without touching the root) and is the series' own
+// canonical definition (the recurrence spec itself lives only on the root,
+// series_service.py). Only WHICH entries are offered changes here --
+// applyTemplate's copy list is untouched.
+const templatePractices = computed((): PracticeResponse[] => {
+  const bestForGroup = new Map<string, PracticeResponse>()
+  for (const p of masterStore.practices) {
+    const groupKey = p.parent_practice_id ?? p.id
+    const existing = bestForGroup.get(groupKey)
+    if (!existing || (existing.parent_practice_id !== null && p.parent_practice_id === null)) {
+      bestForGroup.set(groupKey, p)
+    }
+  }
+  return [...bestForGroup.values()].sort((a, b) => b.created_at.localeCompare(a.created_at))
+})
 
-// Direction options, catalog-first (T2 stage 2) -- falls back to the
-// hardcoded DIRECTION_OPTIONS while catalog.value is cold/unreachable.
-const directionOptions = computed(() => catalogDirectionOptions(catalog.value))
+// T21-6 (ПРОМТ №546): this master's OWN CONFIRMED methods (MasterProfile.
+// methods -- the live field, only overwritten on admin approval), parsed
+// into direction/style VALUES via the same resolver every other screen
+// uses. Deliberately reads masterStore.profile?.methods, NEVER
+// method_change_request.proposed_methods -- a pending, unapproved request
+// must not unlock a direction before the "up to 3 working days" review the
+// profile screen itself advertises. null while the profile hasn't loaded.
+const confirmedMethods = computed(() => {
+  const methods = masterStore.profile?.methods
+  if (!methods) return null
+  return parseMethods(methods)
+})
 
-// Direction-conditional style options. When the direction has no styles
-// (e.g. breathwork, somatic, tantra, ...) the VSelect is hidden by v-if.
-// Catalog-first (T2 stage 2) -- falls back to the hardcoded
-// STYLE_OPTIONS_BY_DIRECTION while catalog.value is cold/unreachable.
-const styleOptionsForForm = computed(() => catalogStylesForDirection(catalog.value, form.direction))
+// ПРОМТ №556 (OWNER-2, MEASURED): this route (master-practice-new) has
+// masterStatusGuard on it (router/index.ts), which AWAITS fetchMyProfile()
+// before this component ever mounts -- so masterStore.profileLoaded is
+// already true on first render in the normal navigation case, and the
+// "not loaded yet" branch below is a defensive fallback for an abnormal
+// state, not the master line of defense. It must still fail toward
+// showing NOTHING, never the full catalogue: the previous version
+// returned the FULL unfiltered catalog for both "profile not loaded" and
+// "loaded with zero confirmed methods", which is exactly backwards --
+// an unknown or empty confirmed-set must never read as "everything is
+// allowed". A master with genuinely zero confirmed methods (documented
+// elsewhere as unreachable for a real verified master) now sees an empty
+// Направление select instead of the full catalogue.
+const directionOptions = computed(() => {
+  if (!masterStore.profileLoaded) return []
+  const confirmed = confirmedMethods.value
+  if (!confirmed) return []
+  const all = catalogDirectionOptions(catalog.value)
+  return all.filter((opt) => confirmed.directions.includes(opt.value))
+})
+
+// Direction-conditional style options, same confirmed-methods filter. A
+// direction confirmed WITHOUT a specific style (bare "Направление", no " —
+// Вид" half) offers NO styles here -- matches the backend's equally strict
+// check (practices/service.py's _assert_master_confirmed_taxonomy): picking
+// any style under a bare-confirmed direction would be rejected on submit,
+// so the picker must not offer it in the first place.
+const styleOptionsForForm = computed(() => {
+  if (!masterStore.profileLoaded) return []
+  const confirmed = confirmedMethods.value
+  if (!confirmed) return []
+  const all = catalogStylesForDirection(catalog.value, form.direction)
+  const confirmedStyleValues = confirmed.styles[form.direction as string] ?? []
+  return all.filter((opt) => confirmedStyleValues.includes(opt.value))
+})
 
 /** Reset style when direction changes — the previous value is likely
  *  invalid for the new direction. */
@@ -575,8 +743,25 @@ function applyTemplate(p: PracticeResponse): void {
   // get saved.
   suppressSave = true
   form.title = p.title
-  form.direction = p.direction ?? ''
-  form.style = p.style ?? ''
+  // ПРОМТ №556 (OWNER-2, MEASURED root cause): a template practice's
+  // direction/style were confirmed at the time IT was created -- a master's
+  // confirmed methods can have since narrowed (a method-change-request +
+  // admin approval overwrites the profile's methods verbatim). Copying the
+  // template's direction/style verbatim bypasses directionOptions/
+  // styleOptionsForForm entirely (this assignment never goes through those
+  // filtered dropdowns), which is exactly how an unconfirmed direction/
+  // style could reach submit() and hit the backend's raw rejection. Only
+  // copy a value still present in the CURRENT confirmed set; otherwise
+  // leave it blank so the master must re-pick from the live, filtered list.
+  const confirmed = confirmedMethods.value
+  const directionStillConfirmed =
+    !!confirmed && !!p.direction && confirmed.directions.includes(p.direction as PracticeDirection)
+  const styleStillConfirmed =
+    directionStillConfirmed &&
+    !!p.style &&
+    (confirmed?.styles[p.direction as string] ?? []).includes(p.style)
+  form.direction = directionStillConfirmed ? (p.direction ?? '') : ''
+  form.style = styleStillConfirmed ? (p.style ?? '') : ''
   form.difficulty = p.difficulty ?? ''
   form.duration_minutes = String(p.duration_minutes)
   form.max_participants_raw = p.max_participants != null ? String(p.max_participants) : ''
@@ -605,18 +790,18 @@ function isMeaningfulDraft(d: DraftShape | null): boolean {
   const s = (v: unknown): string => (typeof v === 'string' ? v.trim() : '')
   return Boolean(
     s(d.title) ||
-      d.direction ||
-      d.difficulty ||
-      d.style ||
-      d.date ||
-      d.time ||
-      d.duration_minutes ||
-      s(d.max_participants_raw) ||
-      s(d.description) ||
-      s(d.what_to_prepare) ||
-      s(d.contraindications) ||
-      s(d.zoom_link) ||
-      d.is_recurring,
+    d.direction ||
+    d.difficulty ||
+    d.style ||
+    d.date ||
+    d.time ||
+    d.duration_minutes ||
+    s(d.max_participants_raw) ||
+    s(d.description) ||
+    s(d.what_to_prepare) ||
+    s(d.contraindications) ||
+    s(d.zoom_link) ||
+    d.is_recurring,
   )
 }
 
@@ -766,6 +951,12 @@ function validate(): boolean {
     errors.recurrence_count = 'Укажите число повторений (не меньше 1)'
     ok = false
   }
+  // P5 (ПРОМТ №594): «Конкретные группы» needs at least one group chosen --
+  // matches the backend's own group_ids-non-empty-when-groups check.
+  if (form.audience_kind === 'groups' && form.audience_group_ids.length === 0) {
+    errors.audience_group_ids = 'Выберите хотя бы одну группу'
+    ok = false
+  }
   return ok
 }
 
@@ -845,17 +1036,49 @@ async function submit(): Promise<void> {
       currency: 'eur',
       // E3: when recurring, send the series spec; non-recurring → null.
       recurrence: form.is_recurring ? buildRecurrence() : null,
+      // P5 (ПРОМТ №594): audience_kind + group_ids (only meaningful --
+      // and only sent -- for 'groups').
+      audience_kind: form.audience_kind,
+      group_ids: form.audience_kind === 'groups' ? form.audience_group_ids : [],
     })
+
+    // A4 V6 (ПРОМТ №572): `deduplicated` is the EXPLICIT backend signal that
+    // `created` is the master's own EARLIER submission (the window-scoped
+    // retry-after-timeout check, ПРОМТ №559, or the losing side of a
+    // genuine concurrent double-tap, A4 V7) -- not a new practice. Before
+    // this field existed, the form said "Практика создана!" and navigated
+    // to the list regardless, so a master who double-tapped had no way to
+    // learn that only ONE practice/series exists, not two. Skips the
+    // publish PATCH entirely (the existing practice's own status is
+    // whatever it already is -- forcing 'scheduled' on it here would be
+    // this form silently changing a practice it did not create) and takes
+    // the master straight to that existing practice instead of the list.
+    // Draft cleared here too (this exact submission already exists, so
+    // there is nothing left for it to resurrect into) -- same drop as the
+    // normal path below, just earlier, since there is no publish step
+    // left that could still fail and need the draft preserved for a retry.
+    if (created.deduplicated) {
+      suppressSave = true
+      clearDraft()
+      toast.info('Вы уже создавали эту практику — открываем существующую')
+      router.replace({ name: 'master-practice-detail', params: { id: created.id } })
+      void masterStore.refreshMyPractices().catch(() => {})
+      return
+    }
 
     // Publish immediately: a freshly created practice must be live & bookable,
     // not a draft that needs a second edit→«Опубликовать» step (operator
     // 2026-06-17). The backend create defaults to 'draft'; we run the same
     // draft→scheduled PATCH the edit screen uses, so the practice appears on the
     // dashboard «Ближайшая практика» (scheduled/live only) right away.
-    await updatePractice(created.id, { status: 'scheduled' })
+    if (created.status !== 'scheduled') {
+      await updatePractice(created.id, { status: 'scheduled' })
+    }
 
     // Draft fulfilled — drop it (and block any late debounced save) so it can't
-    // resurrect on the next create.
+    // resurrect on the next create. Runs only AFTER a successful publish: if
+    // the PATCH above throws, control never reaches here and the draft
+    // survives for a retry (see the catch block's failed-publish test).
     suppressSave = true
     clearDraft()
 
@@ -872,7 +1095,17 @@ async function submit(): Promise<void> {
     // refresh is harmless and must not turn a successful create into an error path.
     void masterStore.refreshMyPractices().catch(() => {})
   } catch (e) {
-    toast.error(e instanceof ApiResponseError ? e.detail : 'Не удалось создать практику')
+    // ПРОМТ №556 (OWNER-2): _assert_master_confirmed_taxonomy's rejection is a
+    // raw, English, API-shaped message (e.detail) -- must never reach a human
+    // directly. Same pattern as MasterInviteClaimView's invite_invalid: switch
+    // on the machine-readable code, not the message text.
+    if (e instanceof ApiResponseError && e.code === 'direction_not_confirmed') {
+      toast.error('Это направление ещё не подтверждено в вашем профиле')
+    } else if (e instanceof ApiResponseError && e.code === 'style_not_confirmed') {
+      toast.error('Этот вид практики ещё не подтверждён в вашем профиле')
+    } else {
+      toast.error(extractApiError(e, 'Не удалось создать практику'))
+    }
   } finally {
     submitting.value = false
   }
@@ -926,6 +1159,14 @@ async function submit(): Promise<void> {
   margin-bottom: 0;
 }
 
+/* T21-1 (ПРОМТ №541): honest caption for the now-fallback Zoom field. */
+.create-practice__hint {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--velo-text-secondary);
+  line-height: 1.4;
+}
+
 /* Required-fields legend banner (DS, Phase-3) — pink glass plate, rose seal. */
 .create-practice__legend {
   display: flex;
@@ -969,7 +1210,8 @@ async function submit(): Promise<void> {
 
 .create-practice__repeat-title {
   font-family: var(--font-body);
-  font-size: var(--text-base);  color: var(--velo-text-primary);
+  font-size: var(--text-base);
+  color: var(--velo-text-primary);
 }
 
 /* -- Date/time picker trigger field (mirrors the white VInput plate) -- */
@@ -1021,6 +1263,22 @@ async function submit(): Promise<void> {
   font-size: var(--text-xs);
   color: var(--velo-error);
   margin-top: var(--space-1);
+}
+
+/* -- Для кого практика (P5, ПРОМТ №594): group multi-select chips, same
+   token recipe as AddToGroupSheet's .add-to-group__chips/__empty. -- */
+.create-practice__audience-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.create-practice__audience-empty {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--velo-text-muted);
+  margin: var(--space-3) 0 0;
 }
 
 /* -- Повторение: карточка повтора (grow) + печать обязательности справа (Q2=В). -- */

@@ -35,7 +35,6 @@ export type {
   AuthResponse,
   BookingDetailResponse,
   BookingResponse,
-  BookingWithPracticeResponse,
   CancelBookingRequest,
   CheckinMetricResponse,
   CheckinRequest,
@@ -46,7 +45,6 @@ export type {
   CreateCompanyPromoRequest,
   CreateDiaryEntryRequest,
   CreateMasterPromoRequest,
-  CreatePracticeRequest,
   CreateReportRequest,
   CreateWithdrawalRequest,
   DiaryEntryResponse,
@@ -99,8 +97,6 @@ export type {
   PayoutDetails,
   PayoutDetailsUpdate,
   PracticeInsightsResponse,
-  PracticeResponse,
-  PracticeSummary,
   PreviewPurchaseRequest,
   PreviewPurchaseResponse,
   PromoResponse,
@@ -127,7 +123,6 @@ export type {
   TopupRequest,
   TopupResponse,
   UpdateDiaryEntryRequest,
-  UpdatePracticeRequest,
   UpdateReportRequest,
   MasterApplicationInfo,
   UserResponse,
@@ -141,6 +136,93 @@ export type {
   WaitlistWithPracticeResponse,
   WithdrawalResponse,
 } from './generated'
+
+// -- T21-1 bridge: two fields the backend already returns, ahead of the next
+// `generated.ts` regen (velo-manage.sh regenerates it from a live backend on
+// deploy; never hand-edited -- see file header). Remove this block once a
+// regen picks up `zoom_registrant_join_url` / `zoom_host_join_url` natively
+// and switch these two back to the plain re-export above.
+import type {
+  BookingWithPracticeResponse as GeneratedBookingWithPracticeResponse,
+  CreatePracticeRequest as GeneratedCreatePracticeRequest,
+  PracticeResponse as GeneratedPracticeResponse,
+  PracticeSummary as GeneratedPracticeSummary,
+  UpdatePracticeRequest as GeneratedUpdatePracticeRequest,
+} from './generated'
+
+// -- P5 bridge (Master GROUPS, ПРОМТ №594): audience_kind + group_ids, ahead
+// of the next generated.ts regen -- same "never hand-edited" posture as the
+// T21-1 bridge above. Remove once a regen picks these up natively.
+export type PracticeAudienceKind = 'public' | 'students' | 'groups'
+
+export interface CreatePracticeRequest extends GeneratedCreatePracticeRequest {
+  /** Default 'public' server-side when omitted -- matches every practice's
+   * behavior before this feature existed. */
+  audience_kind?: PracticeAudienceKind
+  /** Required (non-empty) only when audience_kind='groups'; the master's
+   * OWN custom groups (rejects another master's group / a system slug with
+   * a 400). */
+  group_ids?: string[]
+}
+
+export interface UpdatePracticeRequest extends GeneratedUpdatePracticeRequest {
+  /** Both optional (PATCH semantics): omitted = unchanged. group_ids, when
+   * sent, REPLACES the practice's full target-group set. */
+  audience_kind?: PracticeAudienceKind
+  group_ids?: string[]
+}
+
+export interface PracticeResponse extends GeneratedPracticeResponse {
+  /** The practice owner's own Zoom host-registrant link. Populated only on
+   * owner-facing responses; null/undefined otherwise. Optional for the same
+   * fixture-compatibility reason as above. */
+  zoom_host_join_url?: string | null
+  /** A4 V2 (ПРОМТ №572): this practice's ZoomMeeting.status verbatim
+   * ('active' | 'pending_creation' | 'create_failed' | 'deleted'), or null/
+   * undefined if no ZoomMeeting row exists. NOT owner-gated (unlike
+   * zoom_host_join_url above) -- see the backend schema field's own
+   * docstring. Lets resolveZoomLink (utils/zoomLink.ts) tell "still
+   * preparing" apart from "permanently failed" for BOTH the master and a
+   * booked participant. */
+  zoom_meeting_status?: string | null
+  /** A4 V6 (ПРОМТ №572): True when this response is the master's own
+   * EARLIER submission returned again (a window-scoped retry-after-timeout
+   * dedup, or the losing side of a genuine concurrent double-tap) instead
+   * of a freshly created practice. Only ever meaningful on the CREATE
+   * endpoint's response -- optional/undefined everywhere else (list,
+   * detail, update, delete, cancel), same fixture-compatibility reason as
+   * the other bridged fields above. */
+  deduplicated?: boolean
+  /** P5 (ПРОМТ №594): 'public' | 'students' | 'groups'. Optional/undefined
+   * for the same fixture-compatibility reason as the other bridged fields
+   * above -- defaults to 'public' server-side, but existing test fixtures
+   * built before this field existed simply omit it. */
+  audience_kind?: PracticeAudienceKind
+  /** The practice's target CUSTOM groups' names (audience_kind='groups'
+   * only; empty/undefined otherwise). Static per-practice data, not a
+   * per-viewer flag -- CheckinView.vue composes the "Вы не состоите в
+   * группе «...»" message from this directly, no second round-trip. */
+  audience_group_names?: string[]
+}
+
+export interface PracticeSummary extends GeneratedPracticeSummary {
+  /** Same field, same posture as PracticeResponse.zoom_meeting_status
+   * above -- powers the identical pending-vs-failed distinction on
+   * list-view Zoom buttons (dashboard nearest card, my-bookings). */
+  zoom_meeting_status?: string | null
+}
+
+export interface BookingWithPracticeResponse extends GeneratedBookingWithPracticeResponse {
+  /** This booking's own Zoom registrant link (the personal ?tk= URL), or
+   * null/undefined if not yet confirmed/attended or not yet created by
+   * Zoom. Optional (not just nullable): existing test fixtures built before
+   * this field existed omit it entirely, and the ladder treats a missing
+   * field the same as an explicit null. */
+  zoom_registrant_join_url?: string | null
+  /** Overrides the generated field's type to OUR bridged PracticeSummary
+   * (zoom_meeting_status) above -- the generated one does not have it yet. */
+  practice: PracticeSummary
+}
 
 // =============================================================================
 // Frontend-only types (no backend counterpart)

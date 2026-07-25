@@ -117,14 +117,14 @@
 
           <!-- Action buttons (outside the card, per Figma) -->
           <div class="dashboard__practice-actions">
-            <!-- R1 (№263): honest state — the backend status-gates zoom_link
-                 (null unless this booking is confirmed/attended), so a dead
-                 clickable button would read as broken. Disabled mirrors the
-                 MasterDashboardView null-handling pattern. -->
+            <!-- R1 (№263): honest state — a null link (pending rung) disables
+                 the button rather than reading as broken. T21-1 (ПРОМТ №541):
+                 D3 ladder -- own registrant link first, else the manual
+                 fallback VISIBLY marked (attendance not counted, D1). -->
             <VButton
               variant="secondary"
               block
-              :disabled="!hasZoom(b)"
+              :disabled="zoomLinkFor(b).kind === 'pending' || zoomLinkFor(b).kind === 'failed'"
               @click="onZoomClick(b)"
             >
               Zoom
@@ -138,6 +138,15 @@
               Check-in
             </VButton>
           </div>
+          <VBadge v-if="zoomLinkFor(b).kind === 'manual'" variant="warning" class="dashboard__zoom-note">
+            Ссылка от мастера — посещение не засчитается автоматически
+          </VBadge>
+          <!-- A4 V2 (ПРОМТ №572): honest permanent-failure state, distinct
+               from "still preparing" -- see PracticeLiveView's identical
+               badge for the full rationale. -->
+          <VBadge v-if="zoomLinkFor(b).kind === 'failed'" variant="error" class="dashboard__zoom-note">
+            Не удалось создать встречу — обратитесь к мастеру
+          </VBadge>
         </div>
       </template>
     </section>
@@ -210,6 +219,7 @@ import { selectNearestBookings } from '@/utils/nearestBookings'
 import { pickReflectionVariant } from '@/utils/reflectionVariants'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import { CHECKIN_WINDOW_H } from '@/utils/constants'
+import { resolveZoomLink, type ZoomLinkResolution } from '@/utils/zoomLink'
 import type { BookingWithPracticeResponse, UserStatsResponse } from '@/api/types'
 
 // CHECKIN_WINDOW_H is imported but only used implicitly via isInCheckinWindow.
@@ -341,20 +351,19 @@ function practiceTitle(b: BookingWithPracticeResponse): string {
 }
 
 /**
- * Zoom button — open the nearest booking's Zoom link via the platform
- * abstraction (Telegram-SDK openLink vs window.open), guarded by an https check
- * (mirrors PracticeLiveView). `zoom_link` is now on PracticeSummary (E18), so no
- * per-click GET is needed. Empty/invalid link → truthful "link coming" toast.
+ * Zoom button — D3 ladder (T21-1, ПРОМТ №541): the booking's own registrant
+ * link first, else the manual practice.zoom_link visibly marked (attendance
+ * not counted), else disabled ("pending"). No per-click GET needed -- both
+ * rungs already come with the booking from GET /bookings/me(/upcoming).
  */
-/** R1 (№263): valid-link presence check gating the Zoom button. */
-function hasZoom(b: BookingWithPracticeResponse): boolean {
-  return !!b.practice.zoom_link?.startsWith('https://')
+function zoomLinkFor(b: BookingWithPracticeResponse): ZoomLinkResolution {
+  return resolveZoomLink(b.zoom_registrant_join_url, b.practice.zoom_link, b.practice.zoom_meeting_status)
 }
 
 function onZoomClick(b: BookingWithPracticeResponse): void {
-  const url = b.practice.zoom_link
-  if (url && url.startsWith('https://')) {
-    platform.openLink(url)
+  const resolved = zoomLinkFor(b)
+  if (resolved.url) {
+    platform.openLink(resolved.url)
   } else {
     // Backstop only — the button is disabled in this state (R1).
     toast.info('Ссылка пока не добавлена мастером')
@@ -514,6 +523,13 @@ onUnmounted(() => {
   /* Figma: 15 — близко к --space-3 (14), но точно 15 для соответствия */
   gap: var(--velo-gap-15);
   margin-top: 15px;
+}
+
+.dashboard__zoom-note {
+  display: block;
+  width: fit-content;
+  margin: var(--space-2) auto 0;
+  text-align: center;
 }
 
 /* Zoom / Check-in buttons use a larger 20px label (Figma 2266:527, 2266:530)

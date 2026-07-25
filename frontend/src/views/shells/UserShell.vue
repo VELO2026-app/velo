@@ -61,10 +61,13 @@ const isDiaryRoute = computed(() => DIARY_ROUTES.includes(route.name as string))
 // cramped, pushed-down box (G2: «Запись» скукоженный).
 const isFillRoute = computed(() => DIARY_ROUTES.includes(route.name as string))
 
-// Focused full-screen form flows (check-in / feedback) hide the tab bar too:
-// they have their own "Close" + submit/skip actions, and an in-flow tab bar
-// rides up over the textarea when the keyboard opens.
-const FORM_ROUTES = ['user-checkin', 'user-feedback']
+// Focused full-screen form flows (check-in / feedback / no-show reflection)
+// hide the tab bar too: they have their own "Close" + submit/skip actions, and
+// an in-flow tab bar rides up over the textarea when the keyboard opens.
+// user-reflection (T22-1): same FormShell full-screen contract as the other
+// two, just reached from the no-show banner instead of the feedback one --
+// omitting it here was the only thing that left its tab bar showing.
+const FORM_ROUTES = ['user-checkin', 'user-feedback', 'user-reflection']
 const isFormRoute = computed(() => FORM_ROUTES.includes(route.name as string))
 
 // Edge-to-edge fog mask: the long scrolling lists/feeds + the practice-detail

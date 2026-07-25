@@ -84,7 +84,7 @@ import {
 import type { SegmentOption } from '@/components/ui/VSegment.vue'
 import { IconFinance } from '@/components/icons'
 import { getAdminRevenue } from '@/api/admin'
-import { ApiResponseError } from '@/api/client'
+import { extractApiError } from '@/composables/useApiError'
 import { formatMoney } from '@/utils/format'
 import type { AdminRevenueResponse } from '@/api/types'
 
@@ -127,7 +127,7 @@ async function load(): Promise<void> {
   try {
     data.value = await getAdminRevenue(period.value)
   } catch (e) {
-    error.value = e instanceof ApiResponseError ? e.detail : 'Ошибка загрузки'
+    error.value = extractApiError(e, 'Ошибка загрузки')
   } finally {
     loading.value = false
   }

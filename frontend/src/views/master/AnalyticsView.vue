@@ -111,7 +111,7 @@
         <h2 class="velo-section-title">Прошедшие практики</h2>
 
         <div
-          v-if="masterStore.practicesLoading && pastPractices.length === 0"
+          v-if="masterStore.practicesPastLoading && pastPractices.length === 0"
           class="analytics__loader"
         >
           <VLoader />
@@ -160,8 +160,8 @@
             noun="практик"
             @click="pastExpanded = true"
           />
-          <div v-else-if="pastExpanded && masterStore.practicesHasMore" class="analytics__more">
-            <VButton variant="ghost" :loading="masterStore.practicesLoading" @click="onLoadMore">
+          <div v-else-if="pastExpanded && masterStore.practicesPastHasMore" class="analytics__more">
+            <VButton variant="ghost" :loading="masterStore.practicesPastLoading" @click="onLoadMore">
               Показать ещё
             </VButton>
           </div>
@@ -230,7 +230,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, type Component } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMasterStore } from '@/stores/master'
 import { useDiaryStore } from '@/stores/diary'
@@ -247,16 +247,12 @@ import { VHeader } from '@/components/layout'
 import VRatingDistribution from '@/components/shared/VRatingDistribution.vue'
 import VShowMore from '@/components/shared/VShowMore.vue'
 import SendMessageModal from '@/components/shared/SendMessageModal.vue'
-import {
-  IconRatingFire,
-  IconRatingGood,
-  IconRatingConfused,
-  IconMessages,
-} from '@/components/icons'
+import { IconMessages } from '@/components/icons'
 import { practiceIconFor, RATING_ICON_COLOR } from '@/utils/displayHelpers'
+import { RATING_ICON } from '@/utils/ratingIcons'
 import { formatMoney, formatShortDate } from '@/utils/format'
 import { getIncome, getTransactions, getMasterReviews } from '@/api/masters'
-import { ApiResponseError } from '@/api/client'
+import { extractApiError } from '@/composables/useApiError'
 import type {
   IncomeResponse,
   MasterTransactionItem,
@@ -293,11 +289,10 @@ const PERIOD_OPTIONS: ReadonlyArray<{ value: 'week' | 'month'; label: string }> 
 // Past practices (completed, newest first)
 // =========================================================================
 
-const pastPractices = computed(() =>
-  masterStore.practices
-    .filter((p) => p.status === 'completed')
-    .sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime()),
-)
+// T22-5 (ПРОМТ №561): the server now owns the completed-only, most-recent-
+// first ordering -- no client-side filter/sort left to hide the next
+// ordering bug.
+const pastPractices = computed(() => masterStore.practicesPast)
 
 // Period scoping (#1, fork В): until a period-scoped reviews API exists, filter
 // the loaded past practices client-side (Неделя = 7 days, Месяц = 30) so the
@@ -387,14 +382,6 @@ function ratingPct(practiceId: string, rating: 'fire' | 'good' | 'confused'): nu
 // =========================================================================
 // Последние отзывы (#3: GET /masters/me/reviews — cross-practice named feed)
 // =========================================================================
-
-// Per-item rating icon, reusing the same map as the per-practice reviews screen
-// (PracticeReviewsView) + the shared RATING_ICON_COLOR / RATING_LABEL.
-const RATING_ICON: Record<FeedbackRating, Component> = {
-  fire: IconRatingFire,
-  good: IconRatingGood,
-  confused: IconRatingConfused,
-}
 
 const REVIEWS_PAGE = 20
 const reviews = ref<MasterReviewItem[]>([])
@@ -492,7 +479,7 @@ async function loadPayments(): Promise<void> {
     transactions.value = txRes.items
     txTotal.value = txRes.total
   } catch (e) {
-    paymentsError.value = e instanceof ApiResponseError ? e.detail : 'Ошибка загрузки'
+    paymentsError.value = extractApiError(e, 'Ошибка загрузки')
   } finally {
     paymentsLoading.value = false
   }
@@ -526,7 +513,7 @@ function loadVisibleInsights(): Promise<void[]> {
 }
 
 async function onLoadMore(): Promise<void> {
-  await masterStore.loadMorePractices()
+  await masterStore.loadMorePastPractices()
   await loadVisibleInsights()
 }
 
@@ -542,7 +529,9 @@ function openReviews(practiceId: string): void {
 onMounted(async () => {
   void loadPayments()
   void loadReviews()
-  await masterStore.fetchMyPractices()
+  // T22-5 (ПРОМТ №561): this tab only ever needs "Прошедшие" -- fetching the
+  // combined bucket here would warm "Предстоящие" for no reason.
+  await masterStore.fetchPastPractices()
   await loadVisibleInsights()
 })
 </script>

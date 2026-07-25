@@ -8,6 +8,7 @@
 # =============================================================================
 
 from collections.abc import AsyncGenerator
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
@@ -18,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.taxonomy_models import TaxonomyDirection
 from app.modules.users.models import User, UserRole
-from tests.helpers import auth_headers, cleanup_range, login_user
+from tests.helpers import auth_headers, full_cleanup_range, login_user, switch_self_to_master
 
 
 # ---------------------------------------------------------------------------
@@ -36,15 +37,23 @@ APPLY_URL = "/api/v1/masters/apply"
 # ---------------------------------------------------------------------------
 @pytest.fixture(autouse=True)
 async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
-    """Clean master_profiles and reset roles for test range before/after."""
-    await cleanup_range(db_session, 56000, 56999)
+    """Clean test data for the 56000-56999 range before/after.
+
+    Upgraded from the lighter cleanup_range to full_cleanup_range (T22-6,
+    ПРОМТ №561): this file now creates real Practice rows too (the
+    master-only-direction confirmation test), which cleanup_range's
+    master_profiles/role-only scope never touched.
+    """
+    await full_cleanup_range(db_session, 56000, 56999, delete_users=False)
     await db_session.commit()
     yield
-    await cleanup_range(db_session, 56000, 56999)
-    # ПРОМТ №503 commit 3: verify's new promote param can insert custom
-    # TaxonomyDirection rows (same "custom_" value prefix as
-    # _promote_custom_methods' other caller, approve_method_change -- see
-    # test_master_method_change.py's identical cleanup) -- clean those up too.
+    await full_cleanup_range(db_session, 56000, 56999, delete_users=False)
+    # ПРОМТ №503 commit 3 / T22-6 (ПРОМТ №561): verify's promote AND
+    # master_only params can insert custom TaxonomyDirection rows (same
+    # "custom_" value prefix as _promote_custom_methods' other caller,
+    # approve_method_change -- see test_master_method_change.py's identical
+    # cleanup). full_cleanup_range does not cover this table -- clean it up
+    # here too.
     await db_session.execute(
         delete(TaxonomyDirection).where(TaxonomyDirection.value.like("custom_%"))
     )
@@ -380,6 +389,173 @@ async def test_verify_with_promote_dedups_existing_label(
     ).scalar_one()
     assert companion_row.source == "custom"
     assert companion_row.value.startswith("custom_")
+
+
+# ---------------------------------------------------------------------------
+# POST /admin/masters/{user_id}/verify -- master_only (T22-6, ПРОМТ №561)
+#
+# Before this, "Только этому мастеру" approved the method but wrote NOTHING
+# to the catalog -- the direction had no representation anywhere a practice
+# could reference it, so it silently never appeared as a create-practice
+# option (T22-6). These three prove the fix end to end: the row gets
+# created scoped to the master, stays invisible to a DIFFERENT master's own
+# catalog fetch, and a practice built on it clears the server-side
+# confirmed-taxonomy check exactly like any catalog-matched value.
+# ---------------------------------------------------------------------------
+_SCOPED_LABEL = "Синтетическое направление ПРОМТ-561 (только этому мастеру)"
+
+
+@pytest.mark.asyncio
+async def test_verify_with_master_only_creates_scoped_direction(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """master_only=[label] inserts a new source='custom' direction scoped to
+    THIS master (master_id = the applicant's own user id) -- not a global
+    (master_id=NULL) row. Mirrors test_verify_with_promote_creates_custom_
+    direction exactly, except for the scope column asserted at the end.
+    """
+    premise = (
+        await db_session.execute(
+            select(TaxonomyDirection.id).where(TaxonomyDirection.label == _SCOPED_LABEL)
+        )
+    ).scalars().all()
+    assert premise == [], f"premise violated: {_SCOPED_LABEL!r} already exists"
+
+    applicant_auth, _ = await _create_applicant(
+        client, telegram_id=56070, methods=[_SCOPED_LABEL]
+    )
+    _, admin_token = await _make_admin(client, db_session, telegram_id=56970)
+    user_id = applicant_auth["user"]["id"]
+
+    resp = await client.post(
+        VERIFY_URL.format(user_id=user_id),
+        json={"master_only": [_SCOPED_LABEL]},
+        headers=auth_headers(admin_token),
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "verified"
+
+    profile = await db_session.get(MasterProfile, user_id)
+    await db_session.refresh(profile)
+    assert profile.data["profile"]["methods"] == [_SCOPED_LABEL]
+
+    row = (
+        await db_session.execute(
+            select(TaxonomyDirection).where(TaxonomyDirection.label == _SCOPED_LABEL)
+        )
+    ).scalar_one()
+    assert row.source == "custom"
+    assert row.is_active is True
+    assert row.value.startswith("custom_")
+    assert str(row.master_id) == user_id
+
+
+@pytest.mark.asyncio
+async def test_master_only_direction_visible_to_owner_not_to_other_master(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """GET /api/v1/taxonomy includes the scoped direction for its OWNER's
+    own fetch, and excludes it entirely from a DIFFERENT master's fetch --
+    the enforcement point for "another master must never see it" (T22-6
+    requirement 2).
+    """
+    label = "Синтетическое направление ПРОМТ-561 (видимость владельца)"
+
+    owner_auth, _ = await _create_applicant(client, telegram_id=56071, methods=[label])
+    _, admin_token = await _make_admin(client, db_session, telegram_id=56971)
+    owner_id = owner_auth["user"]["id"]
+    verify_resp = await client.post(
+        VERIFY_URL.format(user_id=owner_id),
+        json={"master_only": [label]},
+        headers=auth_headers(admin_token),
+    )
+    assert verify_resp.status_code == 200
+
+    # A second, unrelated verified master -- confirmed for a plain seeded
+    # direction only, never touched by master_only.
+    other_auth, _ = await _create_applicant(
+        client, telegram_id=56072, methods=["meditation"]
+    )
+    other_verify = await client.post(
+        VERIFY_URL.format(user_id=other_auth["user"]["id"]),
+        json={},
+        headers=auth_headers(admin_token),
+    )
+    assert other_verify.status_code == 200
+
+    owner_taxonomy = await client.get(
+        "/api/v1/taxonomy", headers=auth_headers(owner_auth["session_token"])
+    )
+    assert owner_taxonomy.status_code == 200
+    owner_labels = {d["label"] for d in owner_taxonomy.json()["directions"]}
+    assert label in owner_labels
+
+    other_taxonomy = await client.get(
+        "/api/v1/taxonomy", headers=auth_headers(other_auth["session_token"])
+    )
+    assert other_taxonomy.status_code == 200
+    other_labels = {d["label"] for d in other_taxonomy.json()["directions"]}
+    assert label not in other_labels
+
+
+@pytest.mark.asyncio
+async def test_practice_created_on_master_only_direction_passes_confirmation(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """A practice created with direction=<the scoped value> is NOT rejected
+    by _assert_master_confirmed_taxonomy/_validate_taxonomy -- the server
+    confirmation check must accept the same option the create-practice form
+    would now offer this master (T22-6 requirement 3: skipping this would
+    rebuild the exact defect testers reported, offer-then-refuse).
+    """
+    label = "Синтетическое направление ПРОМТ-561 (создание практики)"
+
+    applicant_auth, _ = await _create_applicant(client, telegram_id=56073, methods=[label])
+    _, admin_token = await _make_admin(client, db_session, telegram_id=56973)
+    user_id = applicant_auth["user"]["id"]
+    verify_resp = await client.post(
+        VERIFY_URL.format(user_id=user_id),
+        json={"master_only": [label]},
+        headers=auth_headers(admin_token),
+    )
+    assert verify_resp.status_code == 200
+
+    row = (
+        await db_session.execute(
+            select(TaxonomyDirection).where(TaxonomyDirection.label == label)
+        )
+    ).scalar_one()
+    scoped_value = row.value
+
+    # Re-login as the now-verified master and switch into master mode.
+    await switch_self_to_master(client, applicant_auth["session_token"])
+    master_auth = await login_user(client, telegram_id=56073, first_name="Applicant")
+
+    create_resp = await client.post(
+        "/api/v1/practices",
+        json={
+            "practice_type": "live",
+            "direction": scoped_value,
+            "difficulty": "beginner",
+            "title": "Scoped-direction practice",
+            "description": "Uses a master-only custom direction",
+            "scheduled_at": (
+                datetime.now(timezone.utc) + timedelta(days=7)
+            ).isoformat(),
+            "duration_minutes": 60,
+            "timezone": "Europe/Moscow",
+            "max_participants": 20,
+            "is_free": True,
+            "price_cents": 0,
+            "currency": "eur",
+        },
+        headers=auth_headers(master_auth["session_token"]),
+    )
+    assert create_resp.status_code == 201, create_resp.text
+    assert create_resp.json()["direction"] == scoped_value
 
 
 # ---------------------------------------------------------------------------

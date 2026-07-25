@@ -30,6 +30,9 @@ from app.modules.admin.practices.schemas import (
     AdminPracticeDetailResponse,
     AdminPracticeListItem,
     AdminRosterEntry,
+    AdminZoomAttendanceResponse,
+    AdminZoomBookingAttendance,
+    AdminZoomUnmatchedRow,
     PaginatedAdminPracticesResponse,
 )
 from app.modules.bookings.models import Booking, BookingStatus
@@ -37,6 +40,7 @@ from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.users.helpers import display_name
 from app.modules.users.models import User
+from app.modules.zoom.models import ZoomAttendanceSegment, ZoomMeeting
 
 logger = structlog.get_logger()
 
@@ -213,6 +217,97 @@ async def get_admin_practice_detail(
         booked=booked,
         capacity=practice.max_participants,
         status=_temporal_status(practice.scheduled_at, now),
+        timezone=practice.timezone,
         attended=attended,
         roster=roster,
+    )
+
+
+# -- Zoom attendance (E21 step G, ПРОМТ №521) --
+
+
+async def get_admin_zoom_attendance(
+    practice_id: UUID,
+    session: AsyncSession,
+) -> AdminZoomAttendanceResponse:
+    """Per-booking Zoom-derived attendance totals + the raw unmatched bucket
+    for reconciliation. Not masked (E21 plan sec 6/7) -- an authenticated
+    admin surface, unlike the throwaway probe script's chat-paste output.
+
+    Raises:
+        NotFoundError: when the practice does not exist or is soft-deleted.
+    """
+    practice = await session.get(Practice, practice_id)
+    if practice is None or practice.status == PracticeStatus.DELETED.value:
+        raise NotFoundError("Practice not found")
+
+    zoom_meeting = (
+        await session.execute(
+            select(ZoomMeeting).where(ZoomMeeting.practice_id == practice_id)
+        )
+    ).scalar_one_or_none()
+
+    if zoom_meeting is None:
+        return AdminZoomAttendanceResponse(
+            practice_id=practice_id,
+            zoom_meeting_status=None,
+            report_ingested=False,
+            bookings=[],
+            unmatched=[],
+            unmatched_count=0,
+        )
+
+    booking_rows = (
+        await session.execute(
+            select(Booking, User.first_name, User.last_name)
+            .join(User, Booking.user_id == User.id)
+            .where(
+                Booking.practice_id == practice_id,
+                Booking.status != BookingStatus.CANCELLED.value,
+            )
+            .order_by(Booking.created_at)
+        )
+    ).all()
+
+    bookings = [
+        AdminZoomBookingAttendance(
+            booking_id=booking.id,
+            user_id=booking.user_id,
+            user_name=display_name(first_name, last_name),
+            status=booking.status,
+            zoom_minutes_present=booking.zoom_minutes_present,
+            attendance_decided_via=booking.attendance_decided_via,
+        )
+        for booking, first_name, last_name in booking_rows
+    ]
+
+    unmatched_rows = (
+        await session.execute(
+            select(ZoomAttendanceSegment)
+            .where(
+                ZoomAttendanceSegment.zoom_meeting_id == zoom_meeting.id,
+                ZoomAttendanceSegment.matched_registrant_row_id.is_(None),
+            )
+            .order_by(ZoomAttendanceSegment.created_at)
+        )
+    ).scalars().all()
+
+    unmatched = [
+        AdminZoomUnmatchedRow(
+            segment_id=seg.id,
+            user_email=(seg.raw_row or {}).get("user_email"),
+            join_time=seg.join_time,
+            leave_time=seg.leave_time,
+            duration_seconds=seg.duration_seconds,
+        )
+        for seg in unmatched_rows
+    ]
+
+    return AdminZoomAttendanceResponse(
+        practice_id=practice_id,
+        zoom_meeting_status=zoom_meeting.status,
+        report_ingested=zoom_meeting.report_ingested_at is not None,
+        bookings=bookings,
+        unmatched=unmatched,
+        unmatched_count=len(unmatched),
     )

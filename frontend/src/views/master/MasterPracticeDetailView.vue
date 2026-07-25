@@ -297,7 +297,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, type Component } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDiaryStore } from '@/stores/diary'
 import { useMasterStore } from '@/stores/master'
@@ -308,7 +308,7 @@ import {
   cancelPractice,
   getPracticeReviews,
 } from '@/api/practices'
-import { ApiResponseError } from '@/api/client'
+import { extractApiError } from '@/composables/useApiError'
 import {
   VStatCard,
   VButton,
@@ -323,7 +323,8 @@ import { VHeader } from '@/components/layout'
 import PracticeHeroCard from '@/components/shared/PracticeHeroCard.vue'
 import VShowMore from '@/components/shared/VShowMore.vue'
 import CancelPracticeDialog from '@/components/shared/CancelPracticeDialog.vue'
-import { IconRatingFire, IconRatingGood, IconRatingConfused, IconEdit } from '@/components/icons'
+import { IconEdit } from '@/components/icons'
+import { RATING_ICON } from '@/utils/ratingIcons'
 // IconTrash is not re-exported from the icons barrel; import the component
 // directly (same as EntryView).
 import IconTrash from '@/components/icons/IconTrash.vue'
@@ -339,7 +340,6 @@ import type {
   PracticeResponse,
   AttendanceResponse,
   AttendanceItemResponse,
-  FeedbackRating,
   PracticeDifficulty,
   ReviewItem,
 } from '@/api/types'
@@ -480,11 +480,6 @@ function expandReviews(): void {
   reviewsExpanded.value = true
   if (hasMoreReviews.value) loadMoreReviews()
 }
-const RATING_ICON: Record<FeedbackRating, Component> = {
-  fire: IconRatingFire,
-  good: IconRatingGood,
-  confused: IconRatingConfused,
-}
 
 async function loadReviews(): Promise<void> {
   reviewsLoading.value = true
@@ -544,7 +539,7 @@ async function doCancel(scope: 'this' | 'this_and_future'): Promise<void> {
     await masterStore.refreshMyPractices()
     router.back()
   } catch (e) {
-    toast.error(e instanceof ApiResponseError ? e.detail : 'Не удалось отменить практику')
+    toast.error(extractApiError(e, 'Не удалось отменить практику'))
   } finally {
     cancelling.value = false
     showCancel.value = false
@@ -560,7 +555,7 @@ async function doDelete(): Promise<void> {
     await masterStore.refreshMyPractices()
     router.back()
   } catch (e) {
-    toast.error(e instanceof ApiResponseError ? e.detail : 'Не удалось удалить практику')
+    toast.error(extractApiError(e, 'Не удалось удалить практику'))
   } finally {
     deleting.value = false
     showDelete.value = false
@@ -586,7 +581,7 @@ async function load(): Promise<void> {
     // Named reviews only exist for finished practices; non-fatal alongside the load.
     if (isPast.value) void loadReviews()
   } catch (e) {
-    error.value = e instanceof ApiResponseError ? e.detail : 'Ошибка загрузки'
+    error.value = extractApiError(e, 'Ошибка загрузки')
   } finally {
     loading.value = false
   }

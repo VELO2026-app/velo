@@ -26,10 +26,16 @@ from httpx import AsyncClient
 from sqlalchemy import String, cast, delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.core.audit import AuditLog
+from app.core.config import settings
 from app.modules.bookings.models import Booking
 from app.modules.diary.models import Checkin, DiaryEvent, Feedback
+from app.modules.masters.groups_models import (
+    GroupInvite,
+    MasterGroup,
+    MasterGroupMembership,
+    MasterStudent,
+)
 from app.modules.masters.models import MasterProfile
 from app.modules.notifications.models import Notification, NotificationDelivery
 from app.modules.payments.models import (
@@ -39,7 +45,7 @@ from app.modules.payments.models import (
     Purchase,
     UserLedger,
 )
-from app.modules.practices.models import Practice
+from app.modules.practices.models import Practice, PracticeAudienceGroup
 from app.modules.promos.models import Promo
 from app.modules.reports.models import Report
 from app.modules.users.models import User, UserRole
@@ -200,6 +206,9 @@ async def full_cleanup_range(
     practice_ids_subq = select(Practice.id).where(
         Practice.master_id.in_(user_ids_subq)
     )
+    group_ids_subq = select(MasterGroup.id).where(
+        MasterGroup.master_id.in_(user_ids_subq)
+    )
     purchase_ids_subq = select(Purchase.id).where(
         Purchase.user_id.in_(user_ids_subq)
     )
@@ -336,6 +345,34 @@ async def full_cleanup_range(
     )
 
     # -----------------------------------------------------------------------
+    # Master GROUPS (P1-P5, ПРОМТ №590-594): practice_audience_group and
+    # group_invite both FK -> master_group.id (CASCADE); practice_audience_
+    # group ALSO FK -> practices.id (CASCADE) -- must precede BOTH master_
+    # group (below) and practices (below). master_group_membership FK ->
+    # master_group.id + users.id (both CASCADE) -- precedes master_group too.
+    # Deleted here, ABOVE practices/master_group, for that reason.
+    # -----------------------------------------------------------------------
+    await session.execute(
+        delete(PracticeAudienceGroup).where(
+            or_(
+                PracticeAudienceGroup.practice_id.in_(practice_ids_subq),
+                PracticeAudienceGroup.group_id.in_(group_ids_subq),
+            )
+        )
+    )
+    await session.execute(
+        delete(GroupInvite).where(GroupInvite.group_id.in_(group_ids_subq))
+    )
+    await session.execute(
+        delete(MasterGroupMembership).where(
+            or_(
+                MasterGroupMembership.group_id.in_(group_ids_subq),
+                MasterGroupMembership.student_user_id.in_(user_ids_subq),
+            )
+        )
+    )
+
+    # -----------------------------------------------------------------------
     # 16. practices       FK -> users.id (master_id)
     # 17. master_profiles FK -> users.id
     # ADD NEW TABLES HERE (before master_profiles / practices)
@@ -345,6 +382,25 @@ async def full_cleanup_range(
     )
     await session.execute(
         delete(MasterProfile).where(MasterProfile.user_id.in_(user_ids_subq))
+    )
+
+    # -----------------------------------------------------------------------
+    # master_group / master_student (P1, ПРОМТ №590): both FK -> users.id
+    # only (CASCADE), no ordering dependency between them -- both must still
+    # precede nothing further downstream. master_group.id is what group_
+    # ids_subq (above) resolves, so this delete must come AFTER the three
+    # child-table deletes above, not before.
+    # -----------------------------------------------------------------------
+    await session.execute(
+        delete(MasterGroup).where(MasterGroup.master_id.in_(user_ids_subq))
+    )
+    await session.execute(
+        delete(MasterStudent).where(
+            or_(
+                MasterStudent.master_id.in_(user_ids_subq),
+                MasterStudent.student_user_id.in_(user_ids_subq),
+            )
+        )
     )
 
     # -----------------------------------------------------------------------

@@ -121,7 +121,7 @@ import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { useMasterStore } from '@/stores/master'
 import { withdrawMasterApplication } from '@/api/masters'
-import { ApiResponseError } from '@/api/client'
+import { extractApiError } from '@/composables/useApiError'
 import { MASTER_APPLIED_KEY, masterApprovedSeenKey, masterRejectionSeenKey } from '@/utils/constants'
 
 const router = useRouter()
@@ -236,11 +236,7 @@ async function onWithdraw(): Promise<void> {
     // 409 means someone else (e.g. an admin) already acted on it between
     // opening this dialog and confirming -- a generic message covers both
     // that race and any other failure without guessing which happened.
-    const msg =
-      e instanceof ApiResponseError
-        ? e.detail
-        : 'Не удалось отозвать заявку'
-    toast.error(msg)
+    toast.error(extractApiError(e, 'Не удалось отозвать заявку'))
   } finally {
     withdrawing.value = false
     confirmWithdrawOpen.value = false

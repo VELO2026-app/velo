@@ -12,10 +12,11 @@ from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID
 
-from sqlalchemy import and_, extract, func, select
+from sqlalchemy import and_, extract, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.modules.practices.audience_service import viewer_audience_clause
 from app.modules.practices.enrichment_service import (
     attendance_counts_for_practices,
     attendance_counts_kwargs,
@@ -26,8 +27,8 @@ from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.practices.schemas import PaginatedPracticesResponse
 from app.modules.practices.service import (
     master_full_name,
-    user_flags_for_practices,
     practice_to_response,
+    user_flags_for_practices,
 )
 from app.modules.users.models import User
 
@@ -38,12 +39,27 @@ _FEED_STATUSES = {
 }
 
 
+# T22-3/T22-5 (ПРОМТ №561): the two master-list tabs ask fundamentally
+# different questions ("what's next" vs "what happened"), each wanting the
+# OPPOSITE ordering -- one shared futures-first cursor can never answer both
+# without one tab drowning in the other's rows. "upcoming" = draft/scheduled/
+# live, nearest first; "past" = completed only, most-recent first. Cancelled
+# practices are excluded from BOTH (they didn't happen -- matches the prior
+# client-side behavior, now enforced server-side).
+_UPCOMING_STATUSES = (
+    PracticeStatus.DRAFT.value,
+    PracticeStatus.SCHEDULED.value,
+    PracticeStatus.LIVE.value,
+)
+
+
 async def list_master_practices(
     user: User,
     session: AsyncSession,
     limit: int = 20,
     offset: int = 0,
     status: str | None = None,
+    bucket: Literal["upcoming", "past"] | None = None,
 ) -> PaginatedPracticesResponse:
     """List practices owned by the current master.
 
@@ -54,14 +70,31 @@ async def list_master_practices(
 
     E3a: optional exact-status filter (draft/scheduled/live/completed/
     cancelled), mirroring list_public_practices' explicit `status` param.
-    None (default) keeps the prior behavior -- every non-deleted status.
+    None (default) keeps the prior behavior -- every non-deleted status,
+    futures-first.
+
+    bucket (T22-3/T22-5, ПРОМТ №561): the tab-shaped alternative to `status`.
+    "upcoming" filters to draft/scheduled/live and orders NEAREST FIRST
+    (ascending); "past" filters to completed and orders MOST RECENT FIRST
+    (descending). When given, `bucket` OWNS both the filter and the
+    ordering and `status` is ignored -- the two params serve different
+    callers (bucket: the two-tab master list; status: exact-match tooling)
+    and are not meant to compose.
     """
     base_filter = (
         Practice.master_id == user.id,
         Practice.status != PracticeStatus.DELETED.value,
     )
-    if status is not None:
-        base_filter = (*base_filter, Practice.status == status)
+    if bucket == "upcoming":
+        base_filter = (*base_filter, Practice.status.in_(_UPCOMING_STATUSES))
+        order_clause = Practice.scheduled_at.asc()
+    elif bucket == "past":
+        base_filter = (*base_filter, Practice.status == PracticeStatus.COMPLETED.value)
+        order_clause = Practice.scheduled_at.desc()
+    else:
+        if status is not None:
+            base_filter = (*base_filter, Practice.status == status)
+        order_clause = Practice.scheduled_at.desc()
 
     # -- Total count --
     count_query = select(func.count(Practice.id)).where(*base_filter)
@@ -73,7 +106,7 @@ async def list_master_practices(
         select(Practice, User.first_name, User.last_name)
         .join(User, Practice.master_id == User.id)
         .where(*base_filter)
-        .order_by(Practice.scheduled_at.desc())
+        .order_by(order_clause)
         .limit(limit)
         .offset(offset)
     )
@@ -88,6 +121,18 @@ async def list_master_practices(
     # unconditionally here -- the owner-only gate lives on the shared public
     # detail endpoint (get_practice_detail) instead.
     attendance = await attendance_counts_for_practices(page_practices, session)
+    # T21-1: host join_url for this page (one batched query, same owner-only
+    # posture as zoom_link_visible=True below -- every row here is the
+    # requester's own).
+    from app.modules.zoom.service import get_host_join_urls, get_zoom_meeting_statuses
+    host_join_urls = await get_host_join_urls([p.id for p in page_practices], session)
+    # A4 V2 (ПРОМТ №572): batched Zoom meeting status for this page --
+    # MasterDashboardView's "nearest practices" and MasterPracticesView both
+    # read practicesUpcoming (this endpoint), and their Zoom button needs to
+    # tell "готовится" apart from "не удалось создать встречу".
+    zoom_meeting_statuses = await get_zoom_meeting_statuses(
+        [p.id for p in page_practices], session,
+    )
 
     return PaginatedPracticesResponse(
         items=[
@@ -99,6 +144,8 @@ async def list_master_practices(
                 # rule get_practice_detail applies). The master dashboard's
                 # "Войти" button reads zoom_link from this list.
                 zoom_link_visible=True,
+                zoom_host_join_url=host_join_urls.get(p.id),
+                zoom_meeting_status=zoom_meeting_statuses.get(p.id),
                 **series_meta_kwargs(series_meta.get(p.id)),
                 **attendance_counts_kwargs(attendance.get(p.id)),
             )
@@ -198,6 +245,17 @@ async def list_public_practices(
     """
     # FIX 5.3: Build filter list once, apply to both queries (DRY).
     filters: list = []
+
+    # Audience + block (Master GROUPS P5, ПРОМТ №594): applies regardless of
+    # the branch below (explicit status or the default time-gated feed) --
+    # a blocked/out-of-audience viewer must not see the practice either way.
+    # The owner always sees their OWN practice here too (same posture as
+    # get_practice's draft/deleted owner-bypass) -- audience targeting is
+    # a viewer-facing gate, not something that hides a practice from its
+    # own creator.
+    filters.append(
+        or_(Practice.master_id == user.id, viewer_audience_clause(user.id))
+    )
 
     if status is not None:
         # Explicit status request (e.g. internal/master tooling): exact match,

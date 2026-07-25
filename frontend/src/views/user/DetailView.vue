@@ -85,14 +85,7 @@ import { ref, computed, onMounted, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VLoader, VEmptyState, VButton, VBackButton, VCard } from '@/components/ui'
 import PracticeListCard from '@/components/shared/PracticeListCard.vue'
-import {
-  IconMoodLow,
-  IconMoodMid,
-  IconMoodHigh,
-  IconRatingFire,
-  IconRatingGood,
-  IconRatingConfused,
-} from '@/components/icons'
+import { IconMoodMid, IconRatingGood } from '@/components/icons'
 import { useAuthStore } from '@/stores/auth'
 import { extractApiError } from '@/composables/useApiError'
 import { getCheckin, getFeedback } from '@/api/diary'
@@ -104,6 +97,7 @@ import {
   moodLabelFromScore,
   ratingLabelFromScore,
 } from '@/utils/displayHelpers'
+import { MOOD_ICON, RATING_ICON } from '@/utils/ratingIcons'
 import type { CheckinResponse, FeedbackResponse, PracticeResponse } from '@/api/types'
 
 const route = useRoute()
@@ -129,16 +123,6 @@ const loaded = computed(() => checkin.value !== null || feedback.value !== null)
 // -- icon / label maps (kind|mood|rating -> component; .vue can't live in
 //    displayHelpers, mirrors DiaryFeedCard) ----------------------------------
 
-const MOOD_ICON: Record<string, Component> = {
-  low: IconMoodLow,
-  mid: IconMoodMid,
-  high: IconMoodHigh,
-}
-const RATING_ICON: Record<string, Component> = {
-  fire: IconRatingFire,
-  good: IconRatingGood,
-  confused: IconRatingConfused,
-}
 const leadIcon = computed<Component>(() => {
   if (detailType.value === 'checkin') {
     return MOOD_ICON[moodZoneFromScore(checkin.value?.mood ?? 6)] ?? IconMoodMid

@@ -69,5 +69,44 @@ class AdminPracticeDetailResponse(BaseModel):
     booked: int
     capacity: int | None
     status: str  # "upcoming" | "past"
+    timezone: str  # IANA tz of the practice; FE renders local wall-clock time
     attended: int
     roster: list[AdminRosterEntry]
+
+
+# -- Zoom attendance (E21 step G, ПРОМТ №521) --
+
+
+class AdminZoomBookingAttendance(BaseModel):
+    """One booking's Zoom-derived attendance totals, for reconciliation."""
+
+    booking_id: UUID
+    user_id: UUID
+    user_name: str
+    status: str  # confirmed / attended / no_show / cancelled
+    zoom_minutes_present: int | None
+    attendance_decided_via: str | None  # zoom_report / legacy_proxy / null
+
+
+class AdminZoomUnmatchedRow(BaseModel):
+    """One raw report row Zoom sent us that we could not attribute to any
+    known registrant -- the unmatched bucket, made visible (E21 plan sec 6).
+    Not masked: this is an authenticated admin surface, not the throwaway
+    probe's chat-paste output."""
+
+    segment_id: UUID
+    user_email: str | None
+    join_time: datetime | None
+    leave_time: datetime | None
+    duration_seconds: int | None
+
+
+class AdminZoomAttendanceResponse(BaseModel):
+    """GET /api/v1/admin/practices/{id}/zoom-attendance."""
+
+    practice_id: UUID
+    zoom_meeting_status: str | None  # null if no ZoomMeeting row exists at all
+    report_ingested: bool
+    bookings: list[AdminZoomBookingAttendance]
+    unmatched: list[AdminZoomUnmatchedRow]
+    unmatched_count: int

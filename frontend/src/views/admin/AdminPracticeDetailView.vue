@@ -50,6 +50,26 @@
         <VStatCard v-else :value="freeLabel" label="Свободно" />
       </div>
 
+      <!-- T21-1 (ПРОМТ №541): Zoom meeting status + the unmatched bucket,
+           made VISIBLE -- per the E21 design (ПРОМТ №521), a silent bucket
+           was called out as the thing that would make the feature ship
+           inert, and until this screen it did (ПРОМТ №540 audit: zero admin
+           consumers existed at all). Best-effort: shown only once loaded,
+           never blocks the rest of the page if this secondary fetch fails. -->
+      <VCard v-if="zoomAttendance" class="admin-detail__zoom">
+        <h3 class="admin-detail__section admin-detail__section--first">Zoom</h3>
+        <div class="admin-detail__zoom-row">
+          <span class="admin-detail__zoom-label">Статус встречи</span>
+          <VBadge :variant="zoomStatusBadge.variant">{{ zoomStatusBadge.label }}</VBadge>
+        </div>
+        <div class="admin-detail__zoom-row">
+          <span class="admin-detail__zoom-label">Нераспознанные участники</span>
+          <VBadge :variant="zoomAttendance.unmatched_count > 0 ? 'warning' : 'muted'">
+            {{ zoomAttendance.unmatched_count }}
+          </VBadge>
+        </div>
+      </VCard>
+
       <!-- Upcoming: who registered -->
       <template v-if="!isPast">
         <h3 class="admin-detail__section">Записались ({{ practice.booked }}/{{ capacityText }})</h3>
@@ -114,11 +134,13 @@ import {
   VListRow,
   VLoader,
   VEmptyState,
+  VBadge,
 } from '@/components/ui'
 import PracticeHeroCard from '@/components/shared/PracticeHeroCard.vue'
 import { IconCalendar, IconProfile, IconCheck, IconClose } from '@/components/icons'
-import { getAdminPracticeDetail } from '@/api/admin'
-import { ApiResponseError } from '@/api/client'
+import { getAdminPracticeDetail, getAdminZoomAttendance } from '@/api/admin'
+import type { AdminZoomAttendanceResponse } from '@/api/admin'
+import { extractApiError } from '@/composables/useApiError'
 import { formatDateShort } from '@/utils/format'
 import type { AdminPracticeDetailResponse, AdminRosterEntry } from '@/api/types'
 
@@ -129,6 +151,9 @@ const practiceId = route.params.id as string
 const practice = ref<AdminPracticeDetailResponse | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
+// T21-1: best-effort, separate from the main loading/error state above -- a
+// failure here must never block the rest of the (already-working) page.
+const zoomAttendance = ref<AdminZoomAttendanceResponse | null>(null)
 
 const isPast = computed<boolean>(() => practice.value?.status === 'past')
 
@@ -137,7 +162,7 @@ const masterInitial = computed<string>(() =>
 )
 
 const whenLabel = computed<string>(() =>
-  practice.value ? formatDateShort(practice.value.scheduled_at) : '',
+  practice.value ? formatDateShort(practice.value.scheduled_at, practice.value.timezone) : '',
 )
 
 const bookedLabel = computed<string>(() => String(practice.value?.booked ?? '—'))
@@ -150,6 +175,24 @@ const freeLabel = computed<string>(() => {
   const p = practice.value
   if (!p) return '—'
   return p.capacity != null ? String(Math.max(0, p.capacity - p.booked)) : '∞'
+})
+
+// T21-1: zoom_meeting_status is null when no ZoomMeeting row was ever
+// created for this practice at all (pre-E21, or creation never succeeded --
+// backend docstring, admin/practices/router.py).
+// ПРОМТ №559: pending_creation added -- a series child beyond the nearest
+// occurrence, whose meeting creation is deliberately deferred to the retry
+// poller, not failed. Without an entry here the fallback below would show
+// the raw English string to the admin.
+const ZOOM_STATUS_BADGES: Record<string, { label: string; variant: 'success' | 'error' | 'muted' }> = {
+  active: { label: 'Активна', variant: 'success' },
+  pending_creation: { label: 'Ожидает создания', variant: 'muted' },
+  create_failed: { label: 'Ошибка создания', variant: 'error' },
+  deleted: { label: 'Удалена', variant: 'muted' },
+}
+const zoomStatusBadge = computed<{ label: string; variant: 'success' | 'error' | 'muted' }>(() => {
+  const status = zoomAttendance.value?.zoom_meeting_status
+  return status ? (ZOOM_STATUS_BADGES[status] ?? { label: status, variant: 'muted' }) : { label: 'Не создана', variant: 'muted' }
 })
 
 // Roster from the detail response. Past practices bucket by booking status.
@@ -168,13 +211,27 @@ async function load(): Promise<void> {
   try {
     practice.value = await getAdminPracticeDetail(practiceId)
   } catch (e) {
-    error.value = e instanceof ApiResponseError ? e.detail : 'Ошибка загрузки'
+    error.value = extractApiError(e, 'Ошибка загрузки')
   } finally {
     loading.value = false
   }
 }
 
-onMounted(load)
+// T21-1: fetched separately from load() above and never touches loading/
+// error -- a failure here (or on an old pre-E21 practice with nothing to
+// show) must not block or blank the page that already works.
+async function loadZoomAttendance(): Promise<void> {
+  try {
+    zoomAttendance.value = await getAdminZoomAttendance(practiceId)
+  } catch {
+    zoomAttendance.value = null
+  }
+}
+
+onMounted(() => {
+  load()
+  loadZoomAttendance()
+})
 </script>
 
 <style scoped>
@@ -232,6 +289,30 @@ onMounted(load)
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
   margin: var(--velo-gap-2) 0 0;
+}
+
+.admin-detail__section--first {
+  margin-top: 0;
+}
+
+/* T21-1 (ПРОМТ №541): Zoom status + unmatched-bucket visibility. */
+.admin-detail__zoom {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.admin-detail__zoom-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.admin-detail__zoom-label {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--velo-text-secondary);
 }
 
 .admin-detail__items {

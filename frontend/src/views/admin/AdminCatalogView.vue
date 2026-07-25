@@ -155,7 +155,7 @@ import { useRouter } from 'vue-router'
 import { VBackButton, VCard, VChip, VInput, VButton, VBadge, VLoader, VEmptyState } from '@/components/ui'
 import { IconEdit, IconClose, IconCheck } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
-import { ApiResponseError } from '@/api/client'
+import { extractApiError } from '@/composables/useApiError'
 import {
   getFullTaxonomy,
   createTaxonomyDirection,
@@ -207,7 +207,7 @@ async function addDirection(): Promise<void> {
     toast.success('Направление добавлено')
     await load()
   } catch (e) {
-    toast.error(e instanceof ApiResponseError ? e.detail : 'Не удалось добавить направление')
+    toast.error(extractApiError(e, 'Не удалось добавить направление'))
   } finally {
     addingDirection.value = false
   }
@@ -227,7 +227,7 @@ async function addStyle(dir: TaxonomyDirectionItem): Promise<void> {
     toast.success('Вид добавлен')
     await load()
   } catch (e) {
-    toast.error(e instanceof ApiResponseError ? e.detail : 'Не удалось добавить вид')
+    toast.error(extractApiError(e, 'Не удалось добавить вид'))
   } finally {
     addingStyleFor.value = null
   }
@@ -258,7 +258,7 @@ async function saveDirectionLabel(dir: TaxonomyDirectionItem): Promise<void> {
     toast.success('Сохранено')
     await load()
   } catch (e) {
-    toast.error(e instanceof ApiResponseError ? e.detail : 'Не удалось сохранить')
+    toast.error(extractApiError(e, 'Не удалось сохранить'))
   } finally {
     savingDirectionId.value = null
   }
@@ -274,7 +274,7 @@ async function toggleDirectionActive(dir: TaxonomyDirectionItem): Promise<void> 
     await updateTaxonomyDirection(dir.id, { is_active: !dir.is_active })
     await load()
   } catch (e) {
-    toast.error(e instanceof ApiResponseError ? e.detail : 'Не удалось изменить статус')
+    toast.error(extractApiError(e, 'Не удалось изменить статус'))
   } finally {
     togglingId.value = null
   }
@@ -287,7 +287,7 @@ async function toggleStyleActive(st: TaxonomyStyleItem): Promise<void> {
     await updateTaxonomyStyle(st.id, { is_active: !st.is_active })
     await load()
   } catch (e) {
-    toast.error(e instanceof ApiResponseError ? e.detail : 'Не удалось изменить статус')
+    toast.error(extractApiError(e, 'Не удалось изменить статус'))
   } finally {
     togglingId.value = null
   }
@@ -336,6 +336,12 @@ onMounted(load)
   display: flex;
   gap: var(--space-2);
   align-items: center;
+  /* T21-9 (ПРОМТ №546): the input can shrink to 0 (min-width:0 below) but
+     VButton is white-space:nowrap with no min-width override, so on a narrow
+     card it cannot shrink below "+ Добавить"'s full width and pokes out past
+     the card edge. Same escape hatch already used at .admin-catalog__dir-head
+     (Bug 6b, ПРОМТ №408) -- let the button drop to its own line instead. */
+  flex-wrap: wrap;
 }
 
 .admin-catalog__add-input {

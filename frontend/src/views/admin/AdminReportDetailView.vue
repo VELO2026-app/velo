@@ -18,6 +18,16 @@
         <VLoader size="lg" />
       </div>
 
+      <!-- Error (SW8): distinct from "not found" -- retry, not a dead end. -->
+      <VEmptyState
+        v-else-if="error"
+        icon="warning"
+        title="Ошибка загрузки"
+        :description="error"
+      >
+        <VButton size="sm" variant="outline" @click="loadReport">Повторить</VButton>
+      </VEmptyState>
+
       <template v-else-if="report">
         <!-- Status + type header -->
         <div class="report-detail__header">
@@ -155,7 +165,7 @@ import { VBadge, VButton, VTextarea, VEmptyState, VLoader, VCard } from '@/compo
 import { useToast } from '@/composables/useToast'
 import { getReportById, resolveReport, dismissReport } from '@/api/admin'
 import type { ReportResponse } from '@/api/admin'
-import { ApiResponseError } from '@/api/client'
+import { extractApiError } from '@/composables/useApiError'
 import {
   reportStatusVariant,
   reportStatusLabel,
@@ -171,6 +181,7 @@ const reportId = route.params.id as string
 
 const report = ref<ReportResponse | null>(null)
 const loading = ref(false)
+const error = ref<string | null>(null)
 const currentStatus = ref<string>('pending')
 
 const resolveNote = ref('')
@@ -203,13 +214,14 @@ async function loadReport(): Promise<void> {
     return
   }
   loading.value = true
+  error.value = null
   try {
     const fetched = await getReportById(reportId)
     report.value = fetched
     currentStatus.value = fetched.status
   } catch (e) {
-    const msg = e instanceof ApiResponseError ? e.detail : 'Ошибка загрузки жалобы'
-    toast.error(msg)
+    // SW8: own error rung + retry, distinct from "not found".
+    error.value = extractApiError(e, 'Ошибка загрузки жалобы')
   } finally {
     loading.value = false
   }
@@ -229,8 +241,7 @@ async function onResolve(): Promise<void> {
     // S-1/S-2: push to list instead of back() -- guarantees fresh loadInitial().
     router.push({ name: 'admin-reports' })
   } catch (e) {
-    const msg = e instanceof ApiResponseError ? e.detail : 'Ошибка при обработке'
-    toast.error(msg)
+    toast.error(extractApiError(e, 'Ошибка при обработке'))
   } finally {
     resolving.value = false
   }
@@ -245,8 +256,7 @@ async function onDismiss(): Promise<void> {
     // S-1/S-2: push to list instead of back() -- guarantees fresh loadInitial().
     router.push({ name: 'admin-reports' })
   } catch (e) {
-    const msg = e instanceof ApiResponseError ? e.detail : 'Ошибка при обработке'
-    toast.error(msg)
+    toast.error(extractApiError(e, 'Ошибка при обработке'))
   } finally {
     dismissing.value = false
   }

@@ -57,19 +57,25 @@
 // but per-section queries are still scoped because BOTH sections render the same
 // «посмотреть еще» label and «Хорошо» is BOTH the high mood label and the good
 // rating label.
+//
+// P3 ADDITIONS (ПРОМТ №592): two more seams now exist and are mocked below --
+// @/api/groups (getStudentGroups for the profile's group chips, blockStudent
+// for the block flow) and @/api/reports (createReport, imported by the REAL
+// child ReportUserSheet -- not stubbed, so its own module needs mocking here
+// too, same reasoning SendMessageModal already established for this screen).
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import MasterStudentProfileView from '@/views/master/MasterStudentProfileView.vue'
 import * as mastersApi from '@/api/masters'
-import type {
-  StudentDetailResponse,
-  StudentCheckinItem,
-  StudentFeedbackItem,
-} from '@/api/types'
+import * as groupsApi from '@/api/groups'
+import * as reportsApi from '@/api/reports'
+import type { StudentDetailResponse, StudentCheckinItem, StudentFeedbackItem } from '@/api/types'
 
 vi.mock('@/api/masters')
+vi.mock('@/api/groups')
+vi.mock('@/api/reports')
 
 const push = vi.fn()
 const back = vi.fn()
@@ -88,8 +94,10 @@ vi.mock('vue-router', () => ({
 }))
 
 const info = vi.fn()
+const success = vi.fn()
+const error = vi.fn()
 vi.mock('@/composables/useToast', () => ({
-  useToast: () => ({ info, success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }),
+  useToast: () => ({ info, success, error, dismiss: vi.fn() }),
 }))
 
 // -- fixtures ---------------------------------------------------------------
@@ -164,6 +172,11 @@ function buttonWith(label: string): HTMLElement | undefined {
   )
 }
 
+/** P3: ReportUserSheet's VBottomSheet teleport. */
+function sheetOverlay(): HTMLElement | null {
+  return document.body.querySelector<HTMLElement>('.v-sheet__overlay')
+}
+
 /**
  * Which IconRating* component ICON_BY_ZONE picked. The three glyphs are
  * otherwise identical <svg fill="currentColor"> nodes with no class or id; their
@@ -186,9 +199,14 @@ beforeEach(() => {
   routeState.params = { id: 's1' }
   routeState.query = {}
   vi.mocked(mastersApi.getStudent).mockReset().mockResolvedValue(detail())
+  vi.mocked(groupsApi.getStudentGroups).mockReset().mockResolvedValue({ groups: [] })
+  vi.mocked(groupsApi.blockStudent).mockReset()
+  vi.mocked(reportsApi.createReport).mockReset()
   push.mockReset()
   back.mockReset()
   info.mockReset()
+  success.mockReset()
+  error.mockReset()
 })
 
 afterEach(() => {
@@ -199,9 +217,10 @@ afterEach(() => {
 
   // A closed teleported overlay outlives unmount -- the <Transition> leave awaits
   // a transitionend happy-dom never fires. Without this the next test clicks a
-  // corpse. SC-13. (.v-sheet__overlay is not reachable from this screen; only
-  // VModal is used. Purging just what this screen can open.)
+  // corpse. SC-13. (P3: ReportUserSheet's VBottomSheet also teleports now, via
+  // .v-sheet__overlay -- purged alongside VModal's.)
   document.body.querySelectorAll('.v-modal__overlay').forEach((el) => el.remove())
+  document.body.querySelectorAll('.v-sheet__overlay').forEach((el) => el.remove())
 
   vi.clearAllMocks()
 })
@@ -392,9 +411,7 @@ describe('MasterStudentProfileView', () => {
     it('a missing detail renders 0, never blank or NaN', async () => {
       // The ?? 0 branch: reachable while detail is still null only via the
       // error->retry path in real use, but the derivation is the screen's own.
-      vi.mocked(mastersApi.getStudent).mockResolvedValue(
-        detail({ practices_count: 0, hours: 0 }),
-      )
+      vi.mocked(mastersApi.getStudent).mockResolvedValue(detail({ practices_count: 0, hours: 0 }))
       mount()
       await flush()
 
@@ -406,10 +423,12 @@ describe('MasterStudentProfileView', () => {
   })
 
   describe('checkinRows (.vue:154-160)', () => {
-    it('a check-in with a comment shows the comment; the date is the fixture\'s, formatted short', async () => {
+    it("a check-in with a comment shows the comment; the date is the fixture's, formatted short", async () => {
       vi.mocked(mastersApi.getStudent).mockResolvedValue(
         detail({
-          recent_checkins: [checkin({ mood: 2, comment: 'Тяжело шло', created_at: '2026-09-12T23:30:00Z' })],
+          recent_checkins: [
+            checkin({ mood: 2, comment: 'Тяжело шло', created_at: '2026-09-12T23:30:00Z' }),
+          ],
         }),
       )
       mount()
@@ -521,7 +540,9 @@ describe('MasterStudentProfileView', () => {
 
     it('paints each icon with its zone colour token (RATING_ICON_COLOR, not RATING_COLOR)', async () => {
       vi.mocked(mastersApi.getStudent).mockResolvedValue(
-        detail({ feedbacks: [feedback({ rating: 2 }), feedback({ rating: 5 }), feedback({ rating: 9 })] }),
+        detail({
+          feedbacks: [feedback({ rating: 2 }), feedback({ rating: 5 }), feedback({ rating: 9 })],
+        }),
       )
       mount()
       await flush()
@@ -717,9 +738,9 @@ describe('MasterStudentProfileView', () => {
       // Pin the negative case first, or the assertion below could always-pass.
       expect(modalDismissed()).toBe(false)
 
-      const cancel = Array.from(
-        liveModal()?.querySelectorAll<HTMLElement>('button') ?? [],
-      ).find((b) => b.textContent?.includes('Отмена'))
+      const cancel = Array.from(liveModal()?.querySelectorAll<HTMLElement>('button') ?? []).find(
+        (b) => b.textContent?.includes('Отмена'),
+      )
       cancel?.click()
       await flush()
 
@@ -746,6 +767,190 @@ describe('MasterStudentProfileView', () => {
       expect(info).toHaveBeenCalledWith('Сообщения пока недоступны')
       expect(vi.mocked(mastersApi.getStudent).mock.calls).toHaveLength(callsAfterLoad)
       expect(push).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('group chips (P3, ПРОМТ №592)', () => {
+    it('renders a VTag per custom group the student is in', async () => {
+      vi.mocked(groupsApi.getStudentGroups).mockResolvedValue({
+        groups: [
+          { id: 'g1', name: 'VIP' },
+          { id: 'g2', name: 'Утро' },
+        ],
+      })
+      mount()
+      await flush()
+
+      const chips = Array.from(host?.querySelectorAll<HTMLElement>('.profile__groups .v-tag') ?? [])
+      expect(chips.map((c) => c.textContent?.trim())).toEqual(['VIP', 'Утро'])
+    })
+
+    it('no groups: renders nothing, not an empty row', async () => {
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.profile__groups')).toBeNull()
+    })
+
+    it('a failed fetch is non-fatal -- the rest of the profile still renders', async () => {
+      vi.mocked(groupsApi.getStudentGroups).mockRejectedValue(new Error('boom'))
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.profile__groups')).toBeNull()
+      expect(host?.querySelector('.profile__hero')).not.toBeNull()
+    })
+  })
+
+  describe('block -> report-offer -> report form (P3, ПРОМТ №592)', () => {
+    // ⚠ buttonWith() only searches `host` -- VConfirmDialog/VModal and
+    // VBottomSheet both TELEPORT to document.body (same trap the file's own
+    // SendMessageModal tests already worked around with liveModal()). Two
+    // helpers below scope to each teleported container's OWN buttons, so a
+    // click never lands on the ORIGINAL "Заблокировать пользователя" CTA by
+    // accident (its label contains "Заблокировать" as a substring -- caught
+    // while first writing these: buttonWith('Заблокировать') silently
+    // matched the CTA, not the dialog's confirm button, and every test
+    // downstream of that click passed for the wrong reason).
+    function modalButtonWith(label: string): HTMLElement | undefined {
+      return Array.from(liveModal()?.querySelectorAll<HTMLElement>('button') ?? []).find((b) =>
+        b.textContent?.trim().includes(label),
+      )
+    }
+    function sheetButtonWith(label: string): HTMLElement | undefined {
+      return Array.from(sheetOverlay()?.querySelectorAll<HTMLElement>('button') ?? []).find((b) =>
+        b.textContent?.trim().includes(label),
+      )
+    }
+
+    it('the block button opens the destructive confirm with the exact copy', async () => {
+      mount()
+      await flush()
+
+      buttonWith('Заблокировать пользователя')?.click()
+      await flush()
+
+      const dialogText = liveModal()?.textContent ?? ''
+      expect(dialogText).toContain('Заблокировать пользователя?')
+      expect(dialogText).toContain('Пользователь переместится в группу «Удаленные».')
+      expect(modalButtonWith('Заблокировать')).toBeDefined()
+    })
+
+    it('confirming calls blockStudent, toasts, and opens the report-offer', async () => {
+      vi.mocked(groupsApi.blockStudent).mockResolvedValue({
+        student_user_id: 's1',
+        blocked_at: '2026-07-24T00:00:00Z',
+        cancelled_bookings_count: 0,
+      })
+      routeState.params = { id: 's1' }
+      mount()
+      await flush()
+
+      buttonWith('Заблокировать пользователя')?.click()
+      await flush()
+      const confirmBtn = Array.from(liveModal()?.querySelectorAll('button') ?? []).find(
+        (b) => b.textContent?.trim() === 'Заблокировать',
+      )
+      confirmBtn?.click()
+      await flush()
+
+      expect(groupsApi.blockStudent).toHaveBeenCalledWith('s1')
+      expect(success).toHaveBeenCalledWith('Пользователь заблокирован')
+
+      const offerText = liveModal()?.textContent ?? ''
+      expect(offerText).toContain('Пользователь заблокирован')
+      expect(offerText).toContain('Пользователь перемещен в «Удаленные».')
+      expect(modalButtonWith('Не сейчас')).toBeDefined()
+      expect(modalButtonWith('Сообщить в поддержку')).toBeDefined()
+    })
+
+    it('«Не сейчас» dismisses the offer without opening the report form', async () => {
+      vi.mocked(groupsApi.blockStudent).mockResolvedValue({
+        student_user_id: 's1',
+        blocked_at: '2026-07-24T00:00:00Z',
+        cancelled_bookings_count: 0,
+      })
+      mount()
+      await flush()
+
+      buttonWith('Заблокировать пользователя')?.click()
+      await flush()
+      modalButtonWith('Заблокировать')?.click()
+      await flush()
+
+      modalButtonWith('Не сейчас')?.click()
+      await flush()
+
+      expect(sheetOverlay()).toBeNull()
+    })
+
+    it('«Сообщить в поддержку» opens the report form; «Отправить» is disabled until a reason is chosen', async () => {
+      vi.mocked(groupsApi.blockStudent).mockResolvedValue({
+        student_user_id: 's1',
+        blocked_at: '2026-07-24T00:00:00Z',
+        cancelled_bookings_count: 0,
+      })
+      mount()
+      await flush()
+
+      buttonWith('Заблокировать пользователя')?.click()
+      await flush()
+      modalButtonWith('Заблокировать')?.click()
+      await flush()
+      modalButtonWith('Сообщить в поддержку')?.click()
+      await flush()
+
+      expect(sheetOverlay()?.textContent).toContain('Сообщить о пользователе')
+      const sendBtn = sheetOverlay()?.querySelector<HTMLButtonElement>('.v-sheet__save')
+      expect(sendBtn?.disabled).toBe(true)
+
+      const chip = Array.from(sheetOverlay()?.querySelectorAll<HTMLElement>('.v-chip') ?? []).find(
+        (c) => c.textContent?.includes('Сорвал практику'),
+      )
+      chip?.click()
+      await nextTick()
+
+      expect(sendBtn?.disabled).toBe(false)
+    })
+
+    it('sending composes the reason from the chip + comment and posts to /reports; 409-as-success (measured, not assumed)', async () => {
+      vi.mocked(groupsApi.blockStudent).mockResolvedValue({
+        student_user_id: 's1',
+        blocked_at: '2026-07-24T00:00:00Z',
+        cancelled_bookings_count: 0,
+      })
+      // MEASURED (reports/router.py): a duplicate resolves 200, never rejects --
+      // createReport() never throws for it, so an ordinary resolved mock IS the
+      // duplicate case too. Nothing extra to simulate.
+      vi.mocked(reportsApi.createReport).mockResolvedValue({ id: 'r1' })
+      routeState.params = { id: 's1' }
+      mount()
+      await flush()
+
+      buttonWith('Заблокировать пользователя')?.click()
+      await flush()
+      modalButtonWith('Заблокировать')?.click()
+      await flush()
+      modalButtonWith('Сообщить в поддержку')?.click()
+      await flush()
+
+      const chip = Array.from(sheetOverlay()?.querySelectorAll<HTMLElement>('.v-chip') ?? []).find(
+        (c) => c.textContent?.includes('Мошенничество'),
+      )
+      chip?.click()
+      await nextTick()
+      const textarea = sheetOverlay()?.querySelector<HTMLTextAreaElement>('textarea')
+      textarea!.value = 'Просил перевести деньги напрямую'
+      textarea!.dispatchEvent(new Event('input'))
+      sheetButtonWith('Отправить')?.click()
+      await flush()
+
+      expect(reportsApi.createReport).toHaveBeenCalledWith({
+        target_type: 'user',
+        target_id: 's1',
+        reason: 'Мошенничество — Просил перевести деньги напрямую',
+      })
+      expect(success).toHaveBeenCalledWith('Заявка отправлена в поддержку')
     })
   })
 })
