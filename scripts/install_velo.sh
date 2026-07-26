@@ -573,9 +573,20 @@ EOF
 
     REPO_URL="git@github.com-velo:$GITHUB_REPO.git"
 
-    # Test connection
+    # Test connection.
+    # ssh -T against GitHub exits 1 even on SUCCESS ("does not provide
+    # shell access"), and under `set -o pipefail` (top of file) the old
+    # `ssh | grep -q` form propagated that 1 through a matching grep --
+    # the test failed on a perfectly good key, every time, on every
+    # machine. Found live 2026-07-27, first fresh-box run of this path
+    # since the three installers merged (the pre-merge test-server
+    # variant had no pipefail, which is why it never fired before).
+    # The banner is captured instead; `|| true` keeps the assignment
+    # from tripping the ERR trap.
     log "Testing GitHub connection..."
-    if ssh -T git@github.com-velo 2>&1 | grep -q "successfully authenticated"; then
+    local SSH_BANNER
+    SSH_BANNER=$(ssh -T git@github.com-velo 2>&1 || true)
+    if echo "$SSH_BANNER" | grep -q "successfully authenticated"; then
         success "GitHub connection OK"
     else
         error "Cannot connect to GitHub"
@@ -640,9 +651,13 @@ EOF
 
     COMMS_REPO_URL="git@github.com-comms:$COMMS_GITHUB_REPO.git"
 
-    # Test connection
+    # Test connection -- same shape as the velo test above: the banner is
+    # captured because ssh -T exits 1 on success and pipefail would sink
+    # a piped grep (see the comment there).
     log "Testing GitHub connection (comms key)..."
-    if ssh -T git@github.com-comms 2>&1 | grep -q "successfully authenticated"; then
+    local SSH_BANNER
+    SSH_BANNER=$(ssh -T git@github.com-comms 2>&1 || true)
+    if echo "$SSH_BANNER" | grep -q "successfully authenticated"; then
         success "GitHub connection OK (comms)"
     else
         error "Cannot connect to GitHub with the comms deploy key"
