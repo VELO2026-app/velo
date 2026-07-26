@@ -71,6 +71,19 @@ cd_compose() {
     }
 }
 
+# Make sure the shared external docker network exists before any `up`.
+# docker-compose.yml declares `aivis-shared` as EXTERNAL (the comms stack
+# joins the same network) -- compose never creates external networks, it
+# requires them. On a server installed before comms orchestration existed
+# the network is absent and every `up -d` dies on it; that is exactly how
+# the 2026-07-26 stale-backend incident started (see the gate in update).
+# Idempotent -- same guard as install_velo.sh and comms-deploy.sh; any of
+# the three may create it first, the result is identical.
+ensure_shared_network() {
+    docker network inspect aivis-shared > /dev/null 2>&1 && return 0
+    docker network create aivis-shared > /dev/null
+}
+
 # Run frontend tests in a throwaway builder container.
 # Uses `docker build --target builder` to get a container with node + source,
 # then runs `npm run test` inside it.
@@ -344,6 +357,7 @@ case "${1:-}" in
     start)
         echo "Starting VELO..."
         cd_compose
+        ensure_shared_network
         $COMPOSE_CMD up -d
         echo -e "${GREEN}✓ Started${NC}"
         ;;
@@ -366,6 +380,7 @@ case "${1:-}" in
                 echo "Restarting all services..."
                 cd_compose
                 $COMPOSE_CMD down
+                ensure_shared_network
                 $COMPOSE_CMD up -d
                 ;;
         esac
@@ -632,7 +647,41 @@ case "${1:-}" in
             # now leaves the site exactly as it was a moment before.
             echo ""
             echo "Restarting backend services..."
-            $COMPOSE_CMD up -d app postgres redis
+            # THIRD instance of the same bug class (the two build gates in
+            # this file are the first two): unguarded until 2026-07-26, a
+            # failing `up -d` here fell through with the PREVIOUS app
+            # container still running -- and everything downstream
+            # (migrations, backend tests, the OpenAPI snapshot that
+            # regenerates generated.ts) silently ran against the OLD code.
+            # Found live: `up -d` died on the then-missing external network
+            # `aivis-shared`, the update "passed" all the way to the
+            # type-regen, and velo-bot pushed generated.ts stripped back to
+            # the old API surface -- breaking the frontend build fleet-wide.
+            ensure_shared_network || {
+                echo -e "${RED}✗ Cannot create docker network aivis-shared${NC}"
+                exit 1
+            }
+            if ! $COMPOSE_CMD up -d app postgres redis; then
+                echo -e "${RED}✗ BACKEND RESTART FAILED${NC}"
+                echo "The previous app container is still running. Stopping here,"
+                echo "before migrations/tests/type-regen can run against old code."
+                exit 1
+            fi
+            # Belt to the gate's braces: assert the container that will
+            # serve migrations, tests and the OpenAPI snapshot actually
+            # runs the image the build above just produced. The exit code
+            # above catches a dead recreate; this catches a silent
+            # non-recreate, whatever its future cause.
+            APP_CID=$($COMPOSE_CMD ps -q app)
+            RUNNING_IMG=$(docker inspect --format '{{.Image}}' "$APP_CID" 2>/dev/null)
+            EXPECTED_IMG=$(docker image inspect --format '{{.Id}}' \
+                "$(docker inspect --format '{{.Config.Image}}' "$APP_CID" 2>/dev/null)" 2>/dev/null)
+            if [ -z "$APP_CID" ] || [ -z "$RUNNING_IMG" ] || [ "$RUNNING_IMG" != "$EXPECTED_IMG" ]; then
+                echo -e "${RED}✗ Running app container does not match the freshly built image${NC}"
+                echo "Refusing to run migrations/tests/type-regen against a stale backend."
+                echo "Check: velo status && docker compose up -d app"
+                exit 1
+            fi
 
             # Run migrations
             echo ""
