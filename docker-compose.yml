@@ -35,6 +35,13 @@ services:
       retries: 3
       start_period: 15s
     restart: unless-stopped
+    # The backend is the ONLY velo service that talks to comms (the comms
+    # API is internal, reachable by service name on aivis-shared only).
+    # `default` is listed explicitly: once a service carries a `networks:`
+    # key, compose stops attaching it to the default network implicitly.
+    networks:
+      - default        # intra-velo traffic, unchanged
+      - aivis-shared   # reach comms-app / comms-redis by name
 
   frontend:
     build:
@@ -100,3 +107,12 @@ services:
 volumes:
   velo_postgres_data:
   velo_redis_data:
+
+networks:
+  # Shared bus between the velo stack and the comms stack. EXTERNAL: it is
+  # created idempotently by install_velo.sh (ensure_shared_network) and/or
+  # by comms-deploy.sh install -- either side may create it first, the
+  # result is identical. Compose requires it to exist before `up`.
+  # frontend/postgres/redis stay on the implicit default network only.
+  aivis-shared:
+    external: true
