@@ -957,6 +957,94 @@ describe('MasterStudentProfileView', () => {
       })
       expect(success).toHaveBeenCalledWith('Заявка отправлена в поддержку')
     })
+
+    it('G12 (ПРОМТ №609): MULTI-select -- picking two reasons joins both into one reason string', async () => {
+      vi.mocked(groupsApi.blockStudent).mockResolvedValue({
+        student_user_id: 's1',
+        blocked_at: '2026-07-24T00:00:00Z',
+        cancelled_bookings_count: 0,
+      })
+      vi.mocked(reportsApi.createReport).mockResolvedValue({ id: 'r1' })
+      routeState.params = { id: 's1' }
+      mount()
+      await flush()
+
+      buttonWith('Заблокировать пользователя')?.click()
+      await flush()
+      modalButtonWith('Заблокировать')?.click()
+      await flush()
+      modalButtonWith('Сообщить в поддержку')?.click()
+      await flush()
+
+      const chips = Array.from(sheetOverlay()?.querySelectorAll<HTMLElement>('.v-chip') ?? [])
+      chips.find((c) => c.textContent?.includes('Сорвал практику'))?.click()
+      await nextTick()
+      chips.find((c) => c.textContent?.includes('Мошенничество'))?.click()
+      await nextTick()
+      sheetButtonWith('Отправить')?.click()
+      await flush()
+
+      expect(reportsApi.createReport).toHaveBeenCalledWith({
+        target_type: 'user',
+        target_id: 's1',
+        reason: 'Сорвал практику, Мошенничество',
+      })
+    })
+
+    it('G12: tapping a selected chip again DESELECTS it (real toggle, not single-select overwrite)', async () => {
+      routeState.params = { id: 's1' }
+      mount()
+      await flush()
+
+      buttonWith('Заблокировать пользователя')?.click()
+      await flush()
+      modalButtonWith('Заблокировать')?.click()
+      await flush()
+      modalButtonWith('Сообщить в поддержку')?.click()
+      await flush()
+
+      const chip = Array.from(sheetOverlay()?.querySelectorAll<HTMLElement>('.v-chip') ?? []).find(
+        (c) => c.textContent?.includes('Сорвал практику'),
+      )
+      chip?.click()
+      await nextTick()
+      expect(chip?.classList.contains('v-chip--active')).toBe(true)
+
+      chip?.click()
+      await nextTick()
+      expect(chip?.classList.contains('v-chip--active')).toBe(false)
+      const sendBtn = sheetOverlay()?.querySelector<HTMLButtonElement>('.v-sheet__save')
+      expect(sendBtn?.disabled).toBe(true)
+    })
+
+    it('G12: a reason + comment combination over the 2000-char cap blocks submit with a clear message, never truncates silently', async () => {
+      routeState.params = { id: 's1' }
+      mount()
+      await flush()
+
+      buttonWith('Заблокировать пользователя')?.click()
+      await flush()
+      modalButtonWith('Заблокировать')?.click()
+      await flush()
+      modalButtonWith('Сообщить в поддержку')?.click()
+      await flush()
+
+      const chip = Array.from(sheetOverlay()?.querySelectorAll<HTMLElement>('.v-chip') ?? []).find(
+        (c) => c.textContent?.includes('Другое'),
+      )
+      chip?.click()
+      await nextTick()
+      const textarea = sheetOverlay()?.querySelector<HTMLTextAreaElement>('textarea')
+      textarea!.value = 'x'.repeat(2000)
+      textarea!.dispatchEvent(new Event('input'))
+      sheetButtonWith('Отправить')?.click()
+      await flush()
+
+      expect(reportsApi.createReport).not.toHaveBeenCalled()
+      expect(error).toHaveBeenCalledTimes(1)
+      const [message] = error.mock.calls[0]!
+      expect(message).toContain('сократите комментарий')
+    })
   })
 })
 

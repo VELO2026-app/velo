@@ -12,6 +12,16 @@
                   @save="commit" @close="open = false">
       ...content...
     </VBottomSheet>
+
+  Optional `compactTitle` (ПРОМТ №609, G11): steps the title font-size
+  down from --text-xl (32px) to --text-lg (20px), for a caller whose title
+  is long enough to wrap onto two lines (ReportUserSheet's «Сообщить о
+  пользователе» -- the longest title of this component's 10 callers).
+  Deliberately scoped to an opt-in prop rather than changing the shared
+  default: every other caller's title is short enough to already fit fine
+  at --text-xl, and changing the shared size would shrink 9 titles that
+  were never asked about to fix the one that needed it. Default false,
+  every pre-existing caller renders byte-identically.
 -->
 
 <template>
@@ -20,7 +30,13 @@
       <div v-if="open" class="v-sheet__overlay" @click.self="onOverlay">
         <div class="v-sheet__panel velo-kbd-scroll" role="dialog" aria-modal="true">
           <div class="v-sheet__handle" aria-hidden="true" />
-          <h2 v-if="title" class="v-sheet__title">{{ title }}</h2>
+          <h2
+            v-if="title"
+            class="v-sheet__title"
+            :class="{ 'v-sheet__title--compact': compactTitle }"
+          >
+            {{ title }}
+          </h2>
           <div class="v-sheet__body">
             <slot />
           </div>
@@ -54,12 +70,16 @@ const props = withDefaults(
      *  existed. */
     saveDisabled?: boolean
     closeOnOverlay?: boolean
+    /** Sizing-only fix for a long title (ПРОМТ №609, G11) -- see the file
+     *  header. Default false = byte-identical to before. */
+    compactTitle?: boolean
   }>(),
   {
     title: '',
     saveLabel: '',
     saveDisabled: false,
     closeOnOverlay: true,
+    compactTitle: false,
   },
 )
 
@@ -148,6 +168,12 @@ onUnmounted(() => {
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
   margin: 6px 0 18px;
+}
+
+/* Opt-in (ПРОМТ №609, G11) -- see this component's own header for why
+   this is a modifier, not a change to .v-sheet__title itself. */
+.v-sheet__title--compact {
+  font-size: var(--text-lg);
 }
 
 .v-sheet__body {
