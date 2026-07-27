@@ -298,7 +298,7 @@ function goHome(): void {
   font-size: var(--text-sm);
   color: var(--velo-text-secondary);
   line-height: 1.4;
-  max-width: 300px;
+  max-width: var(--velo-content-width-narrow);
   margin: 0;
 }
 

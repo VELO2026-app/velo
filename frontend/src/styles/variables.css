@@ -256,6 +256,12 @@
 
   /* === VELΘ: Layout === */
   --velo-content-width: 336px;
+  /* A narrower cap than --velo-content-width above -- NOT a typo of it, a
+     different constant. Used by short centered copy blocks (a subtitle +
+     an action button) on standalone auth/invite/onboarding-style screens;
+     found repeated as an untokenized `max-width: 300px` literal across 6
+     files (ПРОМТ №604 recon, swept to this token in ПРОМТ №606). */
+  --velo-content-width-narrow: 300px;
   --velo-screen-width: 402px;
   --velo-screen-padding: 33px;
   /* Content "rail" side padding for the diary (messages/composer/header/undo),

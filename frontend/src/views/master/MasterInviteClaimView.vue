@@ -31,9 +31,7 @@ Verified masters never reach here: applyGuard bounces them to the dashboard.
           Проблема с соединением. Проверьте интернет и попробуйте ещё раз.
         </p>
         <div class="invite-claim__actions">
-          <VButton variant="primary" block :loading="claiming" @click="claim">
-            Повторить
-          </VButton>
+          <VButton variant="primary" block :loading="claiming" @click="claim"> Повторить </VButton>
         </div>
       </template>
 
@@ -42,11 +40,7 @@ Verified masters never reach here: applyGuard bounces them to the dashboard.
         <h2 class="invite-claim__title">{{ errorTitle }}</h2>
         <p class="invite-claim__subtitle">{{ errorDescription }}</p>
         <div class="invite-claim__actions">
-          <VButton
-            variant="primary"
-            block
-            @click="router.replace({ name: 'user-dashboard' })"
-          >
+          <VButton variant="primary" block @click="router.replace({ name: 'user-dashboard' })">
             На главную
           </VButton>
         </div>
@@ -140,14 +134,14 @@ onMounted(claim)
   font-size: var(--text-base);
   color: var(--velo-text-secondary);
   text-align: center;
-  max-width: 300px;
+  max-width: var(--velo-content-width-narrow);
   line-height: 1.5;
   margin: 0;
 }
 
 .invite-claim__actions {
   width: 100%;
-  max-width: 300px;
+  max-width: var(--velo-content-width-narrow);
   margin-top: var(--space-4);
 }
 </style>

@@ -323,7 +323,7 @@ async function finish(): Promise<void> {
   font-size: var(--text-base);
   color: var(--velo-text-secondary);
   margin: 0;
-  max-width: 300px;
+  max-width: var(--velo-content-width-narrow);
   line-height: 1.5;
 }
 
