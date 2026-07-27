@@ -11,11 +11,40 @@
   (search) + VTag (the student's tag, if any). Tapping a row navigates to
   the EXISTING student profile screen (master-student-profile) -- not
   rebuilt here.
+
+  G2 (ПРОМТ №609, owner-ruled): invite/rename/delete MOVED here from
+  MasterGroupsView's per-card buttons -- reachable from this header's own
+  «⋯» menu for ANY custom group, empty or not (the old per-card buttons
+  only worked when the group already had ≥1 member visible in the list;
+  the empty-group invite CTA below still works too, this menu is the
+  universal path). Same VMenu/VMenuItem idiom the per-member rows on this
+  exact screen already use, just one level up (the group itself, not a
+  member). Virtual groups («Ученики»/«Удалённые») get none of the three --
+  matches the backend's 400-on-system-slug.
 -->
 
 <template>
   <div class="group-detail">
-    <VHeader :title="headerTitle" show-back @back="router.push({ name: 'master-groups' })" />
+    <VHeader :title="headerTitle" show-back @back="router.push({ name: 'master-groups' })">
+      <template v-if="kind === 'custom'" #action>
+        <VMenu ariaLabel="Меню группы">
+          <template #default="{ close }">
+            <VMenuItem
+              :icon="IconShare"
+              ariaLabel="Пригласить в группу"
+              @click="onHeaderInviteClick(close)"
+            />
+            <VMenuItem :icon="IconPen" ariaLabel="Переименовать" @click="onRenameClick(close)" />
+            <VMenuItem
+              :icon="IconTrash"
+              ariaLabel="Удалить группу"
+              danger
+              @click="onDeleteClick(close)"
+            />
+          </template>
+        </VMenu>
+      </template>
+    </VHeader>
 
     <div class="group-detail__content">
       <div class="group-detail__search">
@@ -165,6 +194,28 @@
       @confirm="onUnblockConfirm"
       @cancel="unblockTarget = null"
     />
+
+    <!-- Rename (G2, ПРОМТ №609 -- moved from MasterGroupsView's card menu) -->
+    <VBottomSheet
+      :open="renameOpen"
+      title="Переименовать группу"
+      save-label="Сохранить"
+      @save="onRenameSave"
+      @close="renameOpen = false"
+    >
+      <VInput v-model="renameName" label="Название" placeholder="Название группы" />
+    </VBottomSheet>
+
+    <!-- Delete confirm (G2, ПРОМТ №609 -- moved from MasterGroupsView's card menu) -->
+    <VConfirmDialog
+      :open="deleteConfirmOpen"
+      :message="deleteMessage"
+      confirm-label="Удалить"
+      danger
+      :loading="deleting"
+      @confirm="onDeleteConfirm"
+      @cancel="deleteConfirmOpen = false"
+    />
   </div>
 </template>
 
@@ -183,15 +234,24 @@ import {
   VMenuItem,
   VTag,
   VConfirmDialog,
+  VBottomSheet,
 } from '@/components/ui'
-import { IconSearch, IconPlus, IconPen, IconCheck } from '@/components/icons'
+import { IconSearch, IconShare, IconPlus, IconPen, IconCheck } from '@/components/icons'
 // IconTrash is not re-exported from the icons barrel (same pattern as
 // EntryView.vue's delete action) -- import the component file directly.
 import IconTrash from '@/components/icons/IconTrash.vue'
 import AddTagSheet from '@/components/shared/AddTagSheet.vue'
 import AddToGroupSheet from '@/components/shared/AddToGroupSheet.vue'
 import RemoveFromGroupSheet from '@/components/shared/RemoveFromGroupSheet.vue'
-import { getGroupMembers, getGroups, unblockStudent, createGroupInvite } from '@/api/groups'
+import {
+  getGroupMembers,
+  getGroups,
+  unblockStudent,
+  createGroupInvite,
+  renameGroup,
+  deleteGroup,
+} from '@/api/groups'
+import { ApiResponseError } from '@/api/client'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
@@ -319,7 +379,10 @@ function onUnblockClick(member: GroupMemberItem, close: () => void): void {
   openUnblock(member)
   close()
 }
-// -- Invite (P4, ПРОМТ №593; empty-group CTA) --
+// -- Invite (P4, ПРОМТ №593; empty-group CTA below AND the header menu,
+//    G2 ПРОМТ №609 -- same action, two entry points now: the CTA only
+//    shows for an actually-empty custom group, the header menu works for
+//    any custom group). --
 const inviting = ref(false)
 async function onInviteClick(): Promise<void> {
   if (inviting.value) return
@@ -336,6 +399,13 @@ async function onInviteClick(): Promise<void> {
     inviting.value = false
   }
 }
+/** Header-menu wrapper -- same B7-hook reasoning as the other close()
+ *  wrappers in this file (a semicolon-joined inline handler can be
+ *  reformatted across lines by prettier and lose its semicolon). */
+function onHeaderInviteClick(close: () => void): void {
+  void onInviteClick()
+  close()
+}
 
 async function onUnblockConfirm(): Promise<void> {
   const target = unblockTarget.value
@@ -350,6 +420,63 @@ async function onUnblockConfirm(): Promise<void> {
     toast.error(extractApiError(e, 'Не удалось разблокировать'))
   } finally {
     unblocking.value = false
+  }
+}
+
+// -- Rename (G2, ПРОМТ №609 -- moved from MasterGroupsView's card menu) --
+const renameOpen = ref(false)
+const renameName = ref('')
+function onRenameClick(close: () => void): void {
+  renameName.value = groupName.value
+  renameOpen.value = true
+  close()
+}
+async function onRenameSave(): Promise<void> {
+  const name = renameName.value.trim()
+  if (!name) return
+  try {
+    await renameGroup(groupId.value, name)
+    renameOpen.value = false
+    // headerTitle/groupName are derived from route.query.name -- update it
+    // so the header reflects the new name without a full reload.
+    await router.replace({ query: { ...route.query, name } })
+  } catch (e) {
+    toast.error(extractApiError(e, 'Не удалось переименовать группу'))
+  }
+}
+
+// -- Delete (G2, ПРОМТ №609 -- moved from MasterGroupsView's card menu) --
+const deleteConfirmOpen = ref(false)
+const deleting = ref(false)
+const deleteMessage = computed(
+  () => `Удалить группу «${groupName.value}»? Участники вернутся в группу «Ученики».`,
+)
+function onDeleteClick(close: () => void): void {
+  deleteConfirmOpen.value = true
+  close()
+}
+async function onDeleteConfirm(): Promise<void> {
+  deleting.value = true
+  try {
+    await deleteGroup(groupId.value)
+    deleteConfirmOpen.value = false
+    // The group we were viewing no longer exists -- unlike
+    // MasterGroupsView's own delete (which stays on the list and
+    // reloads), this screen has nothing left to reload.
+    router.push({ name: 'master-groups' })
+  } catch (e) {
+    // Same group_in_use translation as MasterGroupsView's own delete
+    // handler -- the backend's message names the blocking practice(s) in
+    // English, not something to relay verbatim to a human.
+    if (e instanceof ApiResponseError && e.code === 'group_in_use') {
+      toast.error(
+        'Эта группа — единственная аудитория одной из практик. Сначала измените аудиторию практики, затем удалите группу.',
+      )
+    } else {
+      toast.error(extractApiError(e, 'Не удалось удалить группу'))
+    }
+  } finally {
+    deleting.value = false
   }
 }
 </script>

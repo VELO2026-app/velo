@@ -15,7 +15,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import MasterGroupsView from '@/views/master/MasterGroupsView.vue'
 import * as groupsApi from '@/api/groups'
-import { ApiResponseError } from '@/api/client'
 import type { GroupListItem, GroupSearchMemberItem } from '@/api/groups'
 
 vi.mock('@/api/groups')
@@ -55,7 +54,6 @@ function searchItem(overrides: Partial<GroupSearchMemberItem> = {}): GroupSearch
   }
 }
 
-let writeText: ReturnType<typeof vi.fn>
 let app: App | null = null
 let host: HTMLElement | null = null
 
@@ -81,16 +79,6 @@ function rows(): HTMLElement[] {
   return Array.from(host?.querySelectorAll<HTMLElement>('.groups__row-wrap') ?? [])
 }
 
-// Two DIFFERENT teleported surfaces (VBottomSheet / VConfirmDialog's VModal)
-// -- never query `host` for either (same discipline as
-// AdminMethodRequestsView.test.ts).
-function sheetOverlay(): HTMLElement | null {
-  return document.body.querySelector<HTMLElement>('.v-sheet__overlay')
-}
-function modalOverlay(): HTMLElement | null {
-  return document.body.querySelector<HTMLElement>('.v-modal__overlay')
-}
-
 beforeEach(() => {
   vi.mocked(groupsApi.getGroups).mockReset().mockResolvedValue({ items: [] })
   vi.mocked(groupsApi.createGroup).mockReset()
@@ -105,13 +93,6 @@ beforeEach(() => {
   toastInfo.mockReset()
   toastError.mockReset()
   toastSuccess.mockReset()
-
-  writeText = vi.fn().mockResolvedValue(undefined)
-  Object.defineProperty(navigator, 'clipboard', {
-    configurable: true,
-    writable: true,
-    value: { writeText },
-  })
 })
 
 afterEach(() => {
@@ -119,9 +100,6 @@ afterEach(() => {
   host?.remove()
   app = null
   host = null
-
-  document.body.querySelectorAll('.v-sheet__overlay').forEach((el) => el.remove())
-  document.body.querySelectorAll('.v-modal__overlay').forEach((el) => el.remove())
 
   vi.useRealTimers()
   vi.clearAllMocks()
@@ -181,21 +159,6 @@ describe('MasterGroupsView', () => {
       expect(text()).toContain('Участников: 3')
       expect(rows()).toHaveLength(2)
     })
-
-    it('only custom rows get a «⋯» menu -- system rows (students/deleted) have none', async () => {
-      vi.mocked(groupsApi.getGroups).mockResolvedValue({
-        items: [
-          group('students', { kind: 'students', name: 'Ученики' }),
-          group('deleted', { kind: 'deleted', name: 'Удалённые' }),
-          group('g1', { kind: 'custom', name: 'VIP' }),
-        ],
-      })
-      mount()
-      await flush()
-
-      const menus = host?.querySelectorAll('.v-menu__trigger') ?? []
-      expect(menus).toHaveLength(1)
-    })
   })
 
   describe('preview cap + expander', () => {
@@ -254,145 +217,6 @@ describe('MasterGroupsView', () => {
       await flush()
 
       expect(push).toHaveBeenCalledWith({ name: 'master-group-create' })
-    })
-
-    it('«Пригласить в группу» creates the invite, copies it, and toasts (P4)', async () => {
-      vi.mocked(groupsApi.getGroups).mockResolvedValue({
-        items: [group('g1', { kind: 'custom', name: 'VIP' })],
-      })
-      vi.mocked(groupsApi.createGroupInvite).mockResolvedValue({
-        invite_url: 'https://t.me/velo_bot?startapp=group_invite__abc123',
-      })
-      mount()
-      await flush()
-
-      host?.querySelector<HTMLElement>('.groups__invite-btn')?.click()
-      await flush()
-
-      expect(groupsApi.createGroupInvite).toHaveBeenCalledWith('g1')
-      expect(writeText).toHaveBeenCalledWith('https://t.me/velo_bot?startapp=group_invite__abc123')
-      expect(toastSuccess).toHaveBeenCalledWith('Ссылка скопирована')
-      expect(push).not.toHaveBeenCalled()
-    })
-
-    it('a failed invite create surfaces an error toast, not a silent no-op', async () => {
-      vi.mocked(groupsApi.getGroups).mockResolvedValue({
-        items: [group('g1', { kind: 'custom', name: 'VIP' })],
-      })
-      vi.mocked(groupsApi.createGroupInvite).mockRejectedValue(new Error('boom'))
-      mount()
-      await flush()
-
-      host?.querySelector<HTMLElement>('.groups__invite-btn')?.click()
-      await flush()
-
-      expect(writeText).not.toHaveBeenCalled()
-      expect(toastError).toHaveBeenCalledWith('Не удалось создать ссылку')
-    })
-
-    it('system groups («Ученики»/«Удалённые») render no invite button', async () => {
-      vi.mocked(groupsApi.getGroups).mockResolvedValue({
-        items: [
-          group('students', { kind: 'students', name: 'Ученики' }),
-          group('deleted', { kind: 'deleted', name: 'Удалённые' }),
-        ],
-      })
-      mount()
-      await flush()
-
-      expect(host?.querySelectorAll('.groups__invite-btn')).toHaveLength(0)
-    })
-  })
-
-  describe('rename (custom groups only)', () => {
-    it('opens the sheet pre-filled with the current name and saves via renameGroup', async () => {
-      vi.mocked(groupsApi.getGroups).mockResolvedValue({
-        items: [group('g1', { kind: 'custom', name: 'Старое' })],
-      })
-      vi.mocked(groupsApi.renameGroup).mockResolvedValue({
-        id: 'g1',
-        name: 'Новое',
-        members_count: 0,
-      })
-      mount()
-      await flush()
-
-      host?.querySelector<HTMLElement>('.v-menu__trigger')?.click()
-      await flush()
-      const renameBtn = Array.from(host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? [])[0]
-      renameBtn?.click()
-      await flush()
-
-      const input = sheetOverlay()?.querySelector<HTMLInputElement>('input')
-      expect(input?.value).toBe('Старое')
-
-      input!.value = 'Новое'
-      input!.dispatchEvent(new Event('input'))
-      const saveBtn = sheetOverlay()?.querySelector<HTMLElement>('.v-sheet__save')
-      saveBtn?.click()
-      await flush()
-
-      expect(groupsApi.renameGroup).toHaveBeenCalledWith('g1', 'Новое')
-    })
-  })
-
-  describe('delete (custom groups only)', () => {
-    it('confirming the dialog calls deleteGroup and reloads', async () => {
-      vi.mocked(groupsApi.getGroups).mockResolvedValue({
-        items: [group('g1', { kind: 'custom', name: 'Временная' })],
-      })
-      vi.mocked(groupsApi.deleteGroup).mockResolvedValue(undefined)
-      mount()
-      await flush()
-
-      host?.querySelector<HTMLElement>('.v-menu__trigger')?.click()
-      await flush()
-      const deleteBtn = Array.from(host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? [])[1]
-      deleteBtn?.click()
-      await flush()
-
-      const dialogText = modalOverlay()?.textContent ?? ''
-      expect(dialogText).toContain('Удалить группу «Временная»?')
-      expect(dialogText).toContain('Участники вернутся в группу «Ученики»')
-
-      const confirmBtn = Array.from(modalOverlay()?.querySelectorAll('button') ?? []).find(
-        (b) => b.textContent?.trim() === 'Удалить',
-      )
-      confirmBtn?.click()
-      await flush()
-
-      expect(groupsApi.deleteGroup).toHaveBeenCalledWith('g1')
-    })
-
-    it('a group_in_use rejection toasts a Russian message, never the raw backend detail (P5, ПРОМТ №606)', async () => {
-      vi.mocked(groupsApi.getGroups).mockResolvedValue({
-        items: [group('g1', { kind: 'custom', name: 'VIP' })],
-      })
-      vi.mocked(groupsApi.deleteGroup).mockRejectedValue(
-        new ApiResponseError(
-          409,
-          "Cannot delete: this group is the only audience of «Утренняя практика». Change that practice's audience first.",
-          'group_in_use',
-        ),
-      )
-      mount()
-      await flush()
-
-      host?.querySelector<HTMLElement>('.v-menu__trigger')?.click()
-      await flush()
-      const deleteBtn = Array.from(host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? [])[1]
-      deleteBtn?.click()
-      await flush()
-      const confirmBtn = Array.from(modalOverlay()?.querySelectorAll('button') ?? []).find(
-        (b) => b.textContent?.trim() === 'Удалить',
-      )
-      confirmBtn?.click()
-      await flush()
-
-      expect(toastError).toHaveBeenCalledTimes(1)
-      const [message] = toastError.mock.calls[0]!
-      expect(message).not.toContain('Cannot delete')
-      expect(message).toContain('аудитория')
     })
   })
 
@@ -493,6 +317,88 @@ describe('MasterGroupsView', () => {
 
       expect(groupsApi.searchGroupMemberships).not.toHaveBeenCalled()
       expect(text()).toContain('Обычная')
+    })
+  })
+
+  describe('combined group-name + people search (G1, ПРОМТ №609)', () => {
+    async function searchFor(value: string): Promise<void> {
+      const input = host?.querySelector<HTMLInputElement>('input')
+      if (!input) throw new Error('search input not rendered')
+      input.value = value
+      input.dispatchEvent(new Event('input'))
+      await nextTick()
+      vi.advanceTimersByTime(300)
+      await flush()
+    }
+
+    it('a group-name match renders instantly under a «Группы» heading', async () => {
+      vi.useFakeTimers()
+      vi.mocked(groupsApi.getGroups).mockResolvedValue({
+        items: [
+          group('g1', { name: 'Утренняя йога' }),
+          group('g2', { name: 'Вечерняя медитация' }),
+        ],
+      })
+      mount()
+      await flush()
+
+      await searchFor('утрен')
+
+      expect(text()).toContain('Группы')
+      expect(text()).toContain('Утренняя йога')
+      expect(text()).not.toContain('Вечерняя медитация')
+      // The SAME query also drives the people search (one field, both
+      // kinds run together) -- group-name matching is client-side/instant,
+      // but the field itself is shared, so the server-side call still
+      // fires; that is the whole point of "one field", not a bug here.
+      expect(groupsApi.searchGroupMemberships).toHaveBeenCalledWith('утрен')
+    })
+
+    it('a matching group and a matching person render TOGETHER, each under its own heading', async () => {
+      vi.useFakeTimers()
+      vi.mocked(groupsApi.getGroups).mockResolvedValue({
+        items: [group('g1', { name: 'Анна и друзья' })],
+      })
+      vi.mocked(groupsApi.searchGroupMemberships).mockResolvedValue({
+        items: [searchItem({ name: 'Анна Найдётся', group_name: 'VIP' })],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      })
+      mount()
+      await flush()
+
+      await searchFor('Анна')
+
+      const headingIndex = text().indexOf('Группы')
+      const peopleHeadingIndex = text().indexOf('Участники')
+      expect(headingIndex).toBeGreaterThanOrEqual(0)
+      expect(peopleHeadingIndex).toBeGreaterThan(headingIndex)
+      expect(text()).toContain('Анна и друзья')
+      expect(text()).toContain('Анна Найдётся')
+    })
+
+    it('the combined empty state only shows when NEITHER groups nor people match', async () => {
+      vi.useFakeTimers()
+      vi.mocked(groupsApi.getGroups).mockResolvedValue({
+        items: [group('g1', { name: 'Утренняя йога' })],
+      })
+      vi.mocked(groupsApi.searchGroupMemberships).mockResolvedValue({
+        items: [],
+        total: 0,
+        limit: 20,
+        offset: 0,
+      })
+      mount()
+      await flush()
+
+      // Matches the group but no person -> NOT the "nothing found" empty state.
+      await searchFor('утрен')
+      expect(text()).not.toContain('Никого не найдено')
+
+      // Matches neither -> the combined empty state fires.
+      await searchFor('совсемничего')
+      expect(text()).toContain('Никого не найдено')
     })
   })
 })

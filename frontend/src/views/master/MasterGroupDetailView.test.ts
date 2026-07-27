@@ -17,16 +17,18 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import MasterGroupDetailView from '@/views/master/MasterGroupDetailView.vue'
 import * as groupsApi from '@/api/groups'
+import { ApiResponseError } from '@/api/client'
 import type { GroupMemberItem, GroupListItem } from '@/api/groups'
 
 vi.mock('@/api/groups')
 
 const push = vi.fn()
 const back = vi.fn()
+const replace = vi.fn()
 const routeParams: { id: string } = { id: 'g1' }
 const routeQuery: { name: string } = { name: 'VIP' }
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push, back }),
+  useRouter: () => ({ push, back, replace }),
   useRoute: () => ({ params: routeParams, query: routeQuery }),
 }))
 
@@ -97,8 +99,11 @@ beforeEach(() => {
   vi.mocked(groupsApi.removeGroupMember).mockReset()
   vi.mocked(groupsApi.unblockStudent).mockReset()
   vi.mocked(groupsApi.createGroupInvite).mockReset()
+  vi.mocked(groupsApi.renameGroup).mockReset()
+  vi.mocked(groupsApi.deleteGroup).mockReset()
   push.mockReset()
   back.mockReset()
+  replace.mockReset()
   toastError.mockReset()
   toastSuccess.mockReset()
 
@@ -196,7 +201,10 @@ describe('MasterGroupDetailView', () => {
       mount()
       await flush()
 
-      host?.querySelector<HTMLElement>('.v-menu__trigger')?.click()
+      // Scoped to a MEMBER row (not `host` globally): G2's header menu
+      // (ПРОМТ №609) also renders a `.v-menu__trigger` for custom groups,
+      // which an unscoped query would match FIRST, opening the wrong menu.
+      host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
       await flush()
 
       const items = host?.querySelectorAll('.v-menu-item') ?? []
@@ -209,7 +217,10 @@ describe('MasterGroupDetailView', () => {
       mount()
       await flush()
 
-      host?.querySelector<HTMLElement>('.v-menu__trigger')?.click()
+      // Scoped to a MEMBER row (not `host` globally): G2's header menu
+      // (ПРОМТ №609) also renders a `.v-menu__trigger` for custom groups,
+      // which an unscoped query would match FIRST, opening the wrong menu.
+      host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
       await flush()
 
       const items = host?.querySelectorAll('.v-menu-item') ?? []
@@ -222,7 +233,10 @@ describe('MasterGroupDetailView', () => {
       mount()
       await flush()
 
-      host?.querySelector<HTMLElement>('.v-menu__trigger')?.click()
+      // Scoped to a MEMBER row (not `host` globally): G2's header menu
+      // (ПРОМТ №609) also renders a `.v-menu__trigger` for custom groups,
+      // which an unscoped query would match FIRST, opening the wrong menu.
+      host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
       await flush()
 
       const items = host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? []
@@ -277,7 +291,10 @@ describe('MasterGroupDetailView', () => {
       mount()
       await flush()
 
-      host?.querySelector<HTMLElement>('.v-menu__trigger')?.click()
+      // Scoped to a MEMBER row (not `host` globally): G2's header menu
+      // (ПРОМТ №609) also renders a `.v-menu__trigger` for custom groups,
+      // which an unscoped query would match FIRST, opening the wrong menu.
+      host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
       await flush()
       const addTagBtn = Array.from(host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? [])[1]
       addTagBtn?.click()
@@ -303,7 +320,10 @@ describe('MasterGroupDetailView', () => {
       mount()
       await flush()
 
-      host?.querySelector<HTMLElement>('.v-menu__trigger')?.click()
+      // Scoped to a MEMBER row (not `host` globally): G2's header menu
+      // (ПРОМТ №609) also renders a `.v-menu__trigger` for custom groups,
+      // which an unscoped query would match FIRST, opening the wrong menu.
+      host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
       await flush()
       const addToGroupBtn = Array.from(host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? [])[0]
       addToGroupBtn?.click()
@@ -329,7 +349,10 @@ describe('MasterGroupDetailView', () => {
       mount()
       await flush()
 
-      host?.querySelector<HTMLElement>('.v-menu__trigger')?.click()
+      // Scoped to a MEMBER row (not `host` globally): G2's header menu
+      // (ПРОМТ №609) also renders a `.v-menu__trigger` for custom groups,
+      // which an unscoped query would match FIRST, opening the wrong menu.
+      host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
       await flush()
       const removeBtn = Array.from(host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? [])[2]
       removeBtn?.click()
@@ -354,7 +377,10 @@ describe('MasterGroupDetailView', () => {
       mount()
       await flush()
 
-      host?.querySelector<HTMLElement>('.v-menu__trigger')?.click()
+      // Scoped to a MEMBER row (not `host` globally): G2's header menu
+      // (ПРОМТ №609) also renders a `.v-menu__trigger` for custom groups,
+      // which an unscoped query would match FIRST, opening the wrong menu.
+      host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
       await flush()
       const removeBtn = Array.from(host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? [])[2]
       removeBtn?.click()
@@ -379,7 +405,10 @@ describe('MasterGroupDetailView', () => {
       mount()
       await flush()
 
-      host?.querySelector<HTMLElement>('.v-menu__trigger')?.click()
+      // Scoped to a MEMBER row (not `host` globally): G2's header menu
+      // (ПРОМТ №609) also renders a `.v-menu__trigger` for custom groups,
+      // which an unscoped query would match FIRST, opening the wrong menu.
+      host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
       await flush()
 
       const labels = Array.from(host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? []).map(
@@ -396,7 +425,10 @@ describe('MasterGroupDetailView', () => {
       mount()
       await flush()
 
-      host?.querySelector<HTMLElement>('.v-menu__trigger')?.click()
+      // Scoped to a MEMBER row (not `host` globally): G2's header menu
+      // (ПРОМТ №609) also renders a `.v-menu__trigger` for custom groups,
+      // which an unscoped query would match FIRST, opening the wrong menu.
+      host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
       await flush()
       host?.querySelector<HTMLElement>('.v-menu-item')?.click()
       await flush()
@@ -417,7 +449,10 @@ describe('MasterGroupDetailView', () => {
       mount()
       await flush()
 
-      host?.querySelector<HTMLElement>('.v-menu__trigger')?.click()
+      // Scoped to a MEMBER row (not `host` globally): G2's header menu
+      // (ПРОМТ №609) also renders a `.v-menu__trigger` for custom groups,
+      // which an unscoped query would match FIRST, opening the wrong menu.
+      host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
       await flush()
       host?.querySelector<HTMLElement>('.v-menu-item')?.click()
       await flush()
@@ -440,7 +475,10 @@ describe('MasterGroupDetailView', () => {
       mount()
       await flush()
 
-      host?.querySelector<HTMLElement>('.v-menu__trigger')?.click()
+      // Scoped to a MEMBER row (not `host` globally): G2's header menu
+      // (ПРОМТ №609) also renders a `.v-menu__trigger` for custom groups,
+      // which an unscoped query would match FIRST, opening the wrong menu.
+      host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
       await flush()
       host?.querySelector<HTMLElement>('.v-menu-item')?.click()
       await flush()
@@ -532,6 +570,144 @@ describe('MasterGroupDetailView', () => {
 
       expect(writeText).not.toHaveBeenCalled()
       expect(toastError).toHaveBeenCalledWith('Не удалось создать ссылку')
+    })
+  })
+
+  describe('header menu -- invite/rename/delete (G2, ПРОМТ №609)', () => {
+    /** The header's OWN menu trigger, scoped to `.v-header__right` so it
+     *  is never confused with a per-member row's own «⋯» trigger (the
+     *  opposite scoping fix from the member-row tests above, same root
+     *  cause: this screen now has two DIFFERENT `.v-menu__trigger`s). */
+    function headerMenuTrigger(): HTMLElement | null {
+      return host?.querySelector<HTMLElement>('.v-header__right .v-menu__trigger') ?? null
+    }
+
+    it('renders for a custom group, not for the virtual groups', async () => {
+      routeParams.id = 'g1' // custom
+      mount()
+      await flush()
+      expect(headerMenuTrigger()).not.toBeNull()
+      app?.unmount()
+      host?.remove()
+
+      for (const id of ['students', 'deleted']) {
+        routeParams.id = id
+        mount()
+        await flush()
+        expect(headerMenuTrigger()).toBeNull()
+        app?.unmount()
+        host?.remove()
+      }
+    })
+
+    it('«Пригласить в группу» from the header menu works for a NON-empty group too', async () => {
+      routeParams.id = 'g1'
+      vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([member('s1')]))
+      vi.mocked(groupsApi.createGroupInvite).mockResolvedValue({
+        invite_url: 'https://t.me/velo_bot?startapp=group_invite__hdr',
+      })
+      mount()
+      await flush()
+
+      headerMenuTrigger()?.click()
+      await flush()
+      const inviteItem = Array.from(host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? [])[0]
+      inviteItem?.click()
+      await flush()
+
+      expect(groupsApi.createGroupInvite).toHaveBeenCalledWith('g1')
+      expect(writeText).toHaveBeenCalledWith('https://t.me/velo_bot?startapp=group_invite__hdr')
+      expect(toastSuccess).toHaveBeenCalledWith('Ссылка скопирована')
+    })
+
+    it('«Переименовать» opens the sheet pre-filled with the CURRENT name and saves via renameGroup', async () => {
+      routeParams.id = 'g1'
+      routeQuery.name = 'Старое'
+      vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([]))
+      vi.mocked(groupsApi.renameGroup).mockResolvedValue({
+        id: 'g1',
+        name: 'Новое',
+        members_count: 0,
+      })
+      mount()
+      await flush()
+
+      headerMenuTrigger()?.click()
+      await flush()
+      const renameItem = Array.from(host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? [])[1]
+      renameItem?.click()
+      await flush()
+
+      const input = sheetOverlay()?.querySelector<HTMLInputElement>('input')
+      expect(input?.value).toBe('Старое')
+
+      input!.value = 'Новое'
+      input!.dispatchEvent(new Event('input'))
+      sheetOverlay()?.querySelector<HTMLElement>('.v-sheet__save')?.click()
+      await flush()
+
+      expect(groupsApi.renameGroup).toHaveBeenCalledWith('g1', 'Новое')
+      // headerTitle is derived from route.query.name -- the screen updates
+      // it via router.replace rather than a full reload.
+      expect(replace).toHaveBeenCalledWith({ query: { name: 'Новое' } })
+    })
+
+    it('«Удалить группу» confirms, calls deleteGroup, and navigates away (nothing left to reload)', async () => {
+      routeParams.id = 'g1'
+      routeQuery.name = 'Временная'
+      vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([]))
+      vi.mocked(groupsApi.deleteGroup).mockResolvedValue(undefined)
+      mount()
+      await flush()
+
+      headerMenuTrigger()?.click()
+      await flush()
+      const deleteItem = Array.from(host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? [])[2]
+      deleteItem?.click()
+      await flush()
+
+      const dialogText = modalOverlay()?.textContent ?? ''
+      expect(dialogText).toContain('Удалить группу «Временная»?')
+
+      const confirmBtn = Array.from(modalOverlay()?.querySelectorAll('button') ?? []).find(
+        (b) => b.textContent?.trim() === 'Удалить',
+      )
+      confirmBtn?.click()
+      await flush()
+
+      expect(groupsApi.deleteGroup).toHaveBeenCalledWith('g1')
+      expect(push).toHaveBeenCalledWith({ name: 'master-groups' })
+    })
+
+    it('a group_in_use rejection toasts a Russian message, never the raw backend detail', async () => {
+      routeParams.id = 'g1'
+      vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([]))
+      vi.mocked(groupsApi.deleteGroup).mockRejectedValue(
+        new ApiResponseError(
+          409,
+          "Cannot delete: this group is the only audience of «Утренняя практика». Change that practice's audience first.",
+          'group_in_use',
+        ),
+      )
+      mount()
+      await flush()
+
+      headerMenuTrigger()?.click()
+      await flush()
+      const deleteItem = Array.from(host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? [])[2]
+      deleteItem?.click()
+      await flush()
+      const confirmBtn = Array.from(modalOverlay()?.querySelectorAll('button') ?? []).find(
+        (b) => b.textContent?.trim() === 'Удалить',
+      )
+      confirmBtn?.click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledTimes(1)
+      const [message] = toastError.mock.calls[0]!
+      expect(message).not.toContain('Cannot delete')
+      expect(message).toContain('аудитория')
+      expect(push).not.toHaveBeenCalledWith({ name: 'master-groups' })
     })
   })
 })
