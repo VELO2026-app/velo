@@ -14,7 +14,11 @@
 #   GET /masters/me/students/{id}
 #     - practices_count, hours, satisfaction_pct, recent_checkins, feedbacks
 #     - satisfaction_pct null when no feedback
-#     - 404 when the user is not this master's student
+#     - P6 (ПРОМТ №609, owner-ruled widen): opens for a non-cancelled
+#       (not-yet-attended) booking, and for a custom-group member with NO
+#       booking at all -- both degrade to honest zero/empty aggregates.
+#       Still 404s for a real stranger (no booking of any status, no
+#       group membership) -- proves the gate was widened, not removed.
 # =============================================================================
 
 from collections.abc import AsyncGenerator
@@ -23,15 +27,15 @@ from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.diary.models import Checkin, CheckType, Feedback
+from app.modules.masters.groups_models import MasterGroup, MasterGroupMembership
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import Practice, PracticeStatus, PracticeType
 from app.modules.users.models import User, UserRole
-from tests.helpers import auth_headers, login_user
+from tests.helpers import auth_headers, full_cleanup_range, login_user
 
 STUDENTS_URL = "/api/v1/masters/me/students"
 STUDENT_DETAIL_URL = "/api/v1/masters/me/students/{student_id}"
@@ -47,49 +51,19 @@ _TID_MAX = 91999
 
 @pytest.fixture(autouse=True)
 async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
-    """Clean test data before/after each test in FK-safe order."""
-    await _do_cleanup(db_session)
+    """Clean test data before/after each test, FK-safe.
+
+    Switched to the shared full_cleanup_range (P6, ПРОМТ №609) instead of
+    this file's own ad-hoc delete list -- the new group-membership tests
+    below are the first in this file to touch master_group/
+    master_group_membership, which the old hand-rolled list never knew
+    about. full_cleanup_range is a strict superset of what the old list
+    covered (same tables plus groups/ledgers/etc.), so nothing here loses
+    coverage.
+    """
+    await full_cleanup_range(db_session, _TID_MIN, _TID_MAX, delete_users=True)
     yield
-    await _do_cleanup(db_session)
-
-
-async def _do_cleanup(session: AsyncSession) -> None:
-    """Delete all test entities for telegram_id 91000-91999."""
-    await session.rollback()
-
-    user_ids_subq = select(User.id).where(
-        User.telegram_id.between(_TID_MIN, _TID_MAX),
-    )
-
-    await session.execute(
-        Feedback.__table__.delete().where(Feedback.user_id.in_(user_ids_subq))
-    )
-    await session.execute(
-        Checkin.__table__.delete().where(Checkin.user_id.in_(user_ids_subq))
-    )
-    from app.core.audit import AuditLog
-    await session.execute(
-        AuditLog.__table__.delete().where(AuditLog.actor_id.in_(user_ids_subq))
-    )
-    await session.execute(
-        Booking.__table__.delete().where(Booking.user_id.in_(user_ids_subq))
-    )
-    await session.execute(
-        Practice.__table__.delete().where(
-            Practice.master_id.in_(user_ids_subq)
-        )
-    )
-    await session.execute(
-        MasterProfile.__table__.delete().where(
-            MasterProfile.user_id.in_(user_ids_subq)
-        )
-    )
-    await session.execute(
-        User.__table__.delete().where(
-            User.telegram_id.between(_TID_MIN, _TID_MAX)
-        )
-    )
-    await session.commit()
+    await full_cleanup_range(db_session, _TID_MIN, _TID_MAX, delete_users=True)
 
 
 # ===================================================================
@@ -469,25 +443,87 @@ async def test_student_detail_satisfaction_null_without_feedback(
 
 
 @pytest.mark.asyncio
-async def test_student_detail_not_a_student_404(
+async def test_student_detail_widened_confirmed_booking_opens(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """A user with no attended booking on this master -> 404."""
-    master = await _make_verified_master(client, db_session, telegram_id=91912)
+    """P6 (owner-ruled widen, ПРОМТ №609): a non-cancelled booking that
+    hasn't been ATTENDED yet now opens the profile -- this is the exact
+    case that was broken in production: reachable from «Мои группы»
+    (derived «Ученики» already admits any non-cancelled booking) but
+    404'd here before this fix, because this endpoint alone still gated
+    on ATTENDED-only. Aggregates stay attended/feedback-only and degrade
+    to honest zeros -- practices_count/hours are NOT fabricated for a
+    booking that hasn't happened yet.
+    """
+    master = await _make_verified_master(client, db_session, telegram_id=91913)
     practice = await _create_completed_practice(db_session, master["user"]["id"])
-    # Confirmed (not attended) -> not a student.
     uid, _b = await _attend(
-        client, db_session, practice, 91120, first_name="NotYet",
+        client, db_session, practice, 91121, first_name="NotYetAttended",
         status=BookingStatus.CONFIRMED.value,
     )
     await db_session.commit()
 
     url = STUDENT_DETAIL_URL.format(student_id=uid)
     resp = await client.get(url, headers=auth_headers(master["session_token"]))
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["practices_count"] == 0
+    assert data["hours"] == 0
+    assert data["satisfaction_pct"] is None
+    assert data["feedbacks"] == []
+    assert data["recent_checkins"] == []
+
+
+@pytest.mark.asyncio
+async def test_student_detail_custom_group_member_with_no_bookings_opens(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """P6: the SECOND admitted case -- someone the master added to one of
+    their own custom groups, with NO booking at all, also opens."""
+    master = await _make_verified_master(client, db_session, telegram_id=91914)
+    mid = master["user"]["id"]
+    group = MasterGroup(master_id=mid, name="VIP")
+    db_session.add(group)
+    await db_session.flush()
+
+    auth = await login_user(client, telegram_id=91122, first_name="NoBookingAtAll")
+    uid = auth["user"]["id"]
+    db_session.add(MasterGroupMembership(group_id=group.id, student_user_id=uid))
+    await db_session.commit()
+
+    url = STUDENT_DETAIL_URL.format(student_id=uid)
+    resp = await client.get(url, headers=auth_headers(master["session_token"]))
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["practices_count"] == 0
+    assert data["hours"] == 0
+    assert data["satisfaction_pct"] is None
+    assert data["feedbacks"] == []
+    assert data["recent_checkins"] == []
+
+
+@pytest.mark.asyncio
+async def test_student_detail_stranger_still_404s(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """A user with no booking of ANY status and no group membership still
+    404s -- the case that proves the gate was WIDENED, not removed."""
+    master = await _make_verified_master(client, db_session, telegram_id=91915)
+    await db_session.commit()
+
+    # An id that resolves to no User row at all.
+    url = STUDENT_DETAIL_URL.format(student_id=uuid4())
+    resp = await client.get(url, headers=auth_headers(master["session_token"]))
     assert resp.status_code == 404
 
-    # A totally unrelated id also 404s.
-    url2 = STUDENT_DETAIL_URL.format(student_id=uuid4())
-    resp2 = await client.get(url2, headers=auth_headers(master["session_token"]))
+    # A real registered user with zero relationship to this master.
+    stranger_auth = await login_user(client, telegram_id=91123, first_name="Stranger")
+    stranger_id = stranger_auth["user"]["id"]
+    resp2 = await client.get(
+        STUDENT_DETAIL_URL.format(student_id=stranger_id),
+        headers=auth_headers(master["session_token"]),
+    )
     assert resp2.status_code == 404

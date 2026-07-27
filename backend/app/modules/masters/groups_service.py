@@ -129,6 +129,50 @@ async def count_group_members(group_id: UUID, session: AsyncSession) -> int:
     return (await session.execute(stmt)).scalar_one()
 
 
+async def is_master_audience_member(
+    master_id: UUID, student_id: UUID, session: AsyncSession,
+) -> bool:
+    """True iff `student_id` is someone this master can already see on
+    screen: a derived "Ученики" member (_derived_students_base's own
+    rule -- any non-cancelled booking, not blocked) OR a member of one of
+    this master's own CUSTOM groups (who may have no booking at all).
+
+    Reused by students_service.get_master_student_detail's own gate (P6,
+    owner-ruled widen, ПРОМТ №609) instead of that module writing a THIRD
+    definition of "student" -- see that function's docstring.
+
+    Deliberately does NOT admit a BLOCKED ("Удалённые") student: excluded
+    from _derived_students_base by construction, and removed from every
+    custom group the moment they're blocked (block_student) -- so neither
+    branch below ever reaches them. That is a separate, undecided scope
+    question, not silently folded in here.
+    """
+    derived_hit = (
+        await session.execute(
+            select(func.count()).select_from(
+                _derived_students_base(master_id)
+                .where(User.id == student_id)
+                .order_by(None)
+                .subquery()
+            )
+        )
+    ).scalar_one()
+    if derived_hit > 0:
+        return True
+
+    group_hit = (
+        await session.execute(
+            select(func.count(MasterGroupMembership.id))
+            .join(MasterGroup, MasterGroup.id == MasterGroupMembership.group_id)
+            .where(
+                MasterGroup.master_id == master_id,
+                MasterGroupMembership.student_user_id == student_id,
+            )
+        )
+    ).scalar_one()
+    return group_hit > 0
+
+
 async def _list_derived_students(
     master_id: UUID,
     session: AsyncSession,
