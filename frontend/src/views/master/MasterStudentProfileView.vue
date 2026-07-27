@@ -122,13 +122,17 @@
       @cancel="blockConfirmOpen = false"
     />
 
-    <!-- Report-offer (optional step -- dismiss is fine) -->
+    <!-- Report-offer (optional step -- dismiss is fine). compact-actions
+         (ПРОМТ №609, G10): «Сообщить в поддержку» is long enough that the
+         default button size wraps the row onto two lines -- sizing fix,
+         label unchanged (see VConfirmDialog's own header for why). -->
     <VConfirmDialog
       :open="reportOfferOpen"
       title="Пользователь заблокирован"
       message="Пользователь перемещен в «Удаленные». Если он нарушал правила — например, сорвал практику или вел себя неподобающе, — вы можете сообщить об этом в поддержку."
       confirm-label="Сообщить в поддержку"
       cancel-label="Не сейчас"
+      compact-actions
       @confirm="onReportOfferAccept"
       @cancel="reportOfferOpen = false"
     />

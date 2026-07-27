@@ -862,6 +862,11 @@ describe('MasterStudentProfileView', () => {
       expect(offerText).toContain('Пользователь перемещен в «Удаленные».')
       expect(modalButtonWith('Не сейчас')).toBeDefined()
       expect(modalButtonWith('Сообщить в поддержку')).toBeDefined()
+      // G10 (ПРОМТ №609): compact-actions -> both buttons render at the
+      // smaller VButton size, a sizing fix (not a label change) for the
+      // long «Сообщить в поддержку» label that used to wrap the row.
+      expect(modalButtonWith('Не сейчас')?.classList.contains('v-btn--sm')).toBe(true)
+      expect(modalButtonWith('Сообщить в поддержку')?.classList.contains('v-btn--sm')).toBe(true)
     })
 
     it('«Не сейчас» dismisses the offer without opening the report form', async () => {
