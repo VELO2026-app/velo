@@ -15,6 +15,7 @@
 #   auth (401 / 403), invalid period (422), empty state
 # =============================================================================
 
+import time as _time
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 
@@ -23,6 +24,7 @@ from httpx import AsyncClient
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.periods import calendar_period_bounds
 from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.diary.models import Checkin, CheckType, Feedback
 from app.modules.masters.models import MasterProfile
@@ -36,6 +38,46 @@ RETURN_URL = "/api/v1/admin/metrics/return"
 
 _TID_MIN = 92000
 _TID_MAX = 92999
+
+
+def _period_safe_past_practice(
+    period: str = "week",
+    _now: datetime | None = None,
+) -> tuple[datetime, int]:
+    """(scheduled_at, duration_minutes) for a practice that is BOTH inside the
+    current calendar period AND already ended by wall-clock.
+
+    The naive `now - 2h` fixture silently assumed those two hours do not cross
+    a calendar boundary. They do, weekly: the 2026-07-27 00:50/00:58 UTC runs
+    (Monday night) put every fixture into the PREVIOUS week, all period deltas
+    read 0, and five tests failed -- deterministically, every Monday
+    00:00-02:00 UTC (and the month variant every 1st, same window). The
+    metrics filter on Practice.scheduled_at in [period_start, period_end)
+    (calendar UTC, core.periods) plus, for check-in/feedback, the wall-clock
+    "ended" test scheduled_at + duration < now -- so the fixture must satisfy
+    both, not just "be in the past".
+
+    scheduled_at = max(period_start, now - 2h), with the duration shrunk near
+    the boundary so the practice still ends strictly before `now`. The first
+    ~2 minutes after a boundary admit NO such practice at all (in-period +
+    >=1 minute long + already over), so that sliver is waited out -- bounded,
+    at most ~2 minutes, and only if the suite lands exactly on it.
+
+    `_now` is injectable for verifying the math; the sleep only runs live.
+    """
+    now = _now or datetime.now(UTC)
+    start, _end, _prev = calendar_period_bounds(period, now)
+    min_now = start + timedelta(minutes=2, seconds=1)
+    if now < min_now:
+        if _now is None:
+            _time.sleep((min_now - now).total_seconds())
+            now = datetime.now(UTC)
+        else:  # synthetic clock: model the post-sleep moment instead
+            now = min_now
+    scheduled_at = max(start, now - timedelta(hours=2))
+    room_minutes = int((now - scheduled_at).total_seconds() // 60)
+    duration = min(60, max(1, room_minutes - 1))
+    return scheduled_at, duration
 
 
 # ===================================================================
@@ -202,11 +244,11 @@ async def test_checkin_metric_basic(
     ).json()
 
     master_id = await _make_master(client, db_session, 92800)
-    # PAST practice (ended 1h ago: started 2h ago, 60min long) so it counts as a
-    # "past practice in period" (D5 wall-clock filter).
+    # PAST practice inside the CURRENT calendar week (D5 wall-clock filter +
+    # period window -- see _period_safe_past_practice for the Monday-night trap).
+    sched, dur = _period_safe_past_practice("week")
     practice = await _create_practice(
-        db_session, master_id,
-        scheduled_at=datetime.now(UTC) - timedelta(hours=2),
+        db_session, master_id, scheduled_at=sched, duration_minutes=dur,
     )
 
     _u1, b1 = await _attend(client, db_session, practice, 92001)
@@ -267,10 +309,11 @@ async def test_checkin_metric_month_period(
     """Month period is accepted and returns weekly buckets."""
     token = await _make_admin(client, db_session)
     master_id = await _make_master(client, db_session, 92801)
-    # PAST practice (ended) so it lands in the month's past-practice denominator.
+    # PAST practice inside the CURRENT calendar month (same boundary trap as
+    # the week tests, monthly cadence: every 1st 00:00-02:00 UTC).
+    sched, dur = _period_safe_past_practice("month")
     practice = await _create_practice(
-        db_session, master_id,
-        scheduled_at=datetime.now(UTC) - timedelta(hours=2),
+        db_session, master_id, scheduled_at=sched, duration_minutes=dur,
     )
     _u, b = await _attend(client, db_session, practice, 92010)
     await _add_checkin(db_session, practice, _u, b)
@@ -309,10 +352,10 @@ async def test_feedback_metric_basic_and_distribution(
     ).json()
 
     master_id = await _make_master(client, db_session, 92802)
-    # PAST practice (ended) -> counts as a past practice in the period.
+    # PAST practice inside the CURRENT week (see _period_safe_past_practice).
+    sched, dur = _period_safe_past_practice("week")
     practice = await _create_practice(
-        db_session, master_id,
-        scheduled_at=datetime.now(UTC) - timedelta(hours=2),
+        db_session, master_id, scheduled_at=sched, duration_minutes=dur,
     )
 
     _u1, b1 = await _attend(client, db_session, practice, 92020)
@@ -351,10 +394,10 @@ async def test_feedback_metric_good_bucket(
     ).json()
 
     master_id = await _make_master(client, db_session, 92803)
-    # PAST practice (ended) so its feedback counts in the period distribution.
+    # PAST practice inside the CURRENT week (see _period_safe_past_practice).
+    sched, dur = _period_safe_past_practice("week")
     practice = await _create_practice(
-        db_session, master_id,
-        scheduled_at=datetime.now(UTC) - timedelta(hours=2),
+        db_session, master_id, scheduled_at=sched, duration_minutes=dur,
     )
     _u, b = await _attend(client, db_session, practice, 92030)
     await _add_feedback(db_session, practice, _u, b, rating=6)
@@ -386,10 +429,10 @@ async def test_feedback_metric_rate_capped_per_practice(
     ).json()
 
     master_id = await _make_master(client, db_session, 92804)
-    # PAST practice (ended) -> one past practice in the period.
+    # PAST practice inside the CURRENT week (see _period_safe_past_practice).
+    sched, dur = _period_safe_past_practice("week")
     practice = await _create_practice(
-        db_session, master_id,
-        scheduled_at=datetime.now(UTC) - timedelta(hours=2),
+        db_session, master_id, scheduled_at=sched, duration_minutes=dur,
     )
 
     # Two feedbacks on the SAME practice (an attended and a no_show booker).
@@ -438,14 +481,17 @@ async def test_return_metric_basic(
 
     master_id = await _make_master(client, db_session, 92804)
     # Two practices scheduled IN the current period (return counts bookings in
-    # period, not "past" -- no ended filter here).
+    # period, not "past" -- no ended filter here; the period-safe anchor still
+    # matters: `now - 2h/3h` crossed into last week on Monday-night runs).
+    # p2 is shifted +1 minute: (master, title, scheduled_at) is UNIQUE, and a
+    # forward shift keeps it inside [start, end) even at the boundary sliver.
+    sched, dur = _period_safe_past_practice("week")
     p1 = await _create_practice(
-        db_session, master_id,
-        scheduled_at=datetime.now(UTC) - timedelta(hours=2),
+        db_session, master_id, scheduled_at=sched, duration_minutes=dur,
     )
     p2 = await _create_practice(
         db_session, master_id,
-        scheduled_at=datetime.now(UTC) - timedelta(hours=3),
+        scheduled_at=sched + timedelta(minutes=1), duration_minutes=dur,
     )
 
     # User A books BOTH period practices -> 2 in-period bookings -> returning.
