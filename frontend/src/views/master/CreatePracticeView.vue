@@ -463,6 +463,7 @@ import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
 import {
   DURATION_OPTIONS,
+  AUDIENCE_OPTIONS,
   catalogDirectionOptions,
   catalogStylesForDirection,
 } from '@/utils/practiceOptions'
@@ -552,15 +553,6 @@ const RECURRENCE_END_OPTIONS = [
 
 // «Платно» убрано (operator 2026-06-18 Q2=А) — пока только бесплатные практики.
 const PAYMENT_OPTIONS = [{ value: 'free', label: 'Бесплатно' }]
-
-// P5 (ПРОМТ №594): «Для кого практика» -- no SVG mock exists for this
-// control, MINIMAL DS-language design (VRadioGroup, same recipe as
-// RECURRENCE_OPTIONS/PAYMENT_OPTIONS above -- no new visual component).
-const AUDIENCE_OPTIONS = [
-  { value: 'public', label: 'Публичная' },
-  { value: 'students', label: 'Все ученики' },
-  { value: 'groups', label: 'Конкретные группы' },
-]
 
 // Named wrapper (B7-hook edge: an inline multi-statement @click handler can
 // be reformatted across lines by the pre-commit hook's prettier pass and

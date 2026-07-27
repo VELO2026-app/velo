@@ -149,6 +149,40 @@
             :error="errors.max_participants"
           />
 
+          <!-- ================================================================
+               Для кого практика (P5 port, ПРОМТ №606): mirrors
+               CreatePracticeView's audience block, adapted to Edit's FLAT
+               layout (Реш. В, above -- no velo-section-title sections here,
+               so no section wrapper is dragged in with it; a plain
+               edit-practice__field-label instead, matching the Дата/Время
+               fields above).
+               ================================================================ -->
+          <div class="edit-practice__field edit-practice__audience">
+            <label class="edit-practice__field-label">Для кого практика</label>
+            <VRadioGroup v-model="form.audience_kind" :options="AUDIENCE_OPTIONS" />
+
+            <template v-if="form.audience_kind === 'groups'">
+              <div v-if="customGroups.length" class="edit-practice__audience-chips">
+                <VChip
+                  v-for="g in customGroups"
+                  :key="g.id"
+                  size="md"
+                  clickable
+                  :active="form.audience_group_ids.includes(g.id)"
+                  @click="onAudienceGroupChipClick(g.id)"
+                >
+                  {{ g.name }}
+                </VChip>
+              </div>
+              <p v-else class="edit-practice__audience-empty">
+                Пока нет ни одной группы. Создайте группу на экране «Мои группы».
+              </p>
+              <span v-if="errors.audience_group_ids" class="edit-practice__field-error">{{
+                errors.audience_group_ids
+              }}</span>
+            </template>
+          </div>
+
           <VTextarea v-model="form.description" label="Описание" :rows="4" autogrow />
 
           <VTextarea
@@ -173,8 +207,8 @@
                quota can fail it), kept so a master is never left with no way
                to run the session. Honest label states the cost of using it. -->
           <p class="edit-practice__hint">
-            Ссылка создаётся автоматически. Указывайте свою только как запасной
-            вариант — посещение по ней не засчитается автоматически.
+            Ссылка создаётся автоматически. Указывайте свою только как запасной вариант — посещение
+            по ней не засчитается автоматически.
           </p>
           <VInput
             v-model="form.zoom_link"
@@ -309,6 +343,8 @@ import {
   VLoader,
   VEmptyState,
   VConfirmDialog,
+  VRadioGroup,
+  VChip,
 } from '@/components/ui'
 import DatePickerSheet from '@/components/shared/DatePickerSheet.vue'
 import TimePickerSheet from '@/components/shared/TimePickerSheet.vue'
@@ -316,15 +352,22 @@ import CancelPracticeDialog from '@/components/shared/CancelPracticeDialog.vue'
 import { useToast } from '@/composables/useToast'
 import { useMasterStore } from '@/stores/master'
 import { getPractice, updatePractice, deletePractice, cancelPractice } from '@/api/practices'
+import { getGroups } from '@/api/groups'
 import { formatShortDate, todayLocalISO } from '@/utils/format'
 import { masterPracticeBadge } from '@/utils/practiceStatus'
 import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
-import { DURATION_OPTIONS, catalogDirectionOptions, catalogStylesForDirection } from '@/utils/practiceOptions'
+import {
+  DURATION_OPTIONS,
+  AUDIENCE_OPTIONS,
+  catalogDirectionOptions,
+  catalogStylesForDirection,
+} from '@/utils/practiceOptions'
 import { ensureTaxonomyCatalog, parseMethods } from '@/utils/methodTaxonomy'
 import { eurStringToCents, centsToEurString } from '@/utils/currency'
 import type { TaxonomyListResponse } from '@/api/taxonomy'
 import type { PracticeResponse } from '@/api/types'
+import type { GroupListItem } from '@/api/groups'
 
 const route = useRoute()
 const router = useRouter()
@@ -337,8 +380,7 @@ const practiceId = route.params.id as string
 // detail entry that pushed us here (avoids the edit<->detail back-loop); else
 // (cold deep-link) push the detail route. Mirror of CreatePracticeView.onBack.
 function onBack(): void {
-  if (window.history.state?.back)
-    router.back()
+  if (window.history.state?.back) router.back()
   else router.push({ name: 'master-practice-detail', params: { id: practiceId } })
 }
 
@@ -407,13 +449,33 @@ const form = reactive({
   what_to_prepare: '',
   contraindications: '',
   zoom_link: '',
+  // P5 port (ПРОМТ №606): audience_kind + audience_group_ids, mirrors
+  // CreatePracticeView's own form fields exactly.
+  audience_kind: 'public' as 'public' | 'students' | 'groups',
+  audience_group_ids: [] as string[],
 })
+
+// P5 port (ПРОМТ №606): this master's own custom groups, for «Конкретные
+// группы»'s multi-select -- loaded in onMounted below, same recipe as
+// CreatePracticeView.
+const customGroups = ref<GroupListItem[]>([])
+
+// Named wrapper (same B7-hook reasoning as CreatePracticeView.
+// onAudienceGroupChipClick -- an inline multi-statement @click handler can
+// be reformatted by the pre-commit hook's prettier pass and lose its
+// semicolon, breaking the Vue template compiler).
+function onAudienceGroupChipClick(groupId: string): void {
+  const idx = form.audience_group_ids.indexOf(groupId)
+  if (idx === -1) form.audience_group_ids.push(groupId)
+  else form.audience_group_ids.splice(idx, 1)
+}
 
 const errors = reactive({
   title: '',
   direction: '',
   max_participants: '',
   zoom_link: '',
+  audience_group_ids: '',
 })
 
 // -- Derived --
@@ -496,6 +558,27 @@ function populateForm(p: PracticeResponse): void {
   form.what_to_prepare = p.what_to_prepare ?? ''
   form.contraindications = p.contraindications ?? ''
   form.zoom_link = p.zoom_link ?? ''
+  form.audience_kind = p.audience_kind ?? 'public'
+  // PracticeResponse carries audience_group_NAMES, not ids (see the field's
+  // own docstring in api/types.ts) -- CheckinView composes a message from
+  // the names directly and never needed ids, so the backend never added an
+  // id list to this response. Resolving name -> id against customGroups
+  // (loaded in onMounted, below) is safe: create_group() 409s on a
+  // duplicate name for the SAME master (groups_service.py:416-424), so a
+  // name uniquely identifies one of this master's groups. Called again from
+  // onMounted's getGroups().then() below, in case the groups fetch hasn't
+  // resolved yet when populateForm first runs (the cached-practice branch
+  // in onMounted can beat it).
+  resolveAudienceGroupIds()
+}
+
+// Resolve form.audience_kind === 'groups' names -> ids once customGroups is
+// available. A no-op (leaves the selection empty) if either side isn't
+// ready yet -- called again once customGroups.value is populated.
+function resolveAudienceGroupIds(): void {
+  if (form.audience_kind !== 'groups' || !practice.value) return
+  const names = new Set(practice.value.audience_group_names ?? [])
+  form.audience_group_ids = customGroups.value.filter((g) => names.has(g.name)).map((g) => g.id)
 }
 
 // -- Load practice --
@@ -505,6 +588,19 @@ onMounted(async () => {
   // regardless of which branch (cached vs network) the practice load takes.
   void ensureTaxonomyCatalog().then((c) => {
     catalog.value = c
+  })
+
+  // P5 port (ПРОМТ №606): this master's own custom groups, for «Конкретные
+  // группы»'s multi-select -- same fire-and-forget-before-the-cached-check
+  // placement as the taxonomy fetch above, so it runs on both branches.
+  // «Удалённые» is a system slug (never a real MasterGroup row) and
+  // «Ученики» isn't a target-able group either -- getGroups() already
+  // returns both alongside custom ones, so filter here (mirrors
+  // CreatePracticeView). Re-resolves the name->id selection afterward in
+  // case populateForm() already ran against an empty customGroups list.
+  void getGroups().then((res) => {
+    customGroups.value = res.items.filter((g) => g.kind === 'custom')
+    resolveAudienceGroupIds()
   })
 
   const cached = masterStore.practices.find((p) => p.id === practiceId)
@@ -532,6 +628,7 @@ function validate(): boolean {
   errors.direction = ''
   errors.max_participants = ''
   errors.zoom_link = ''
+  errors.audience_group_ids = ''
 
   if (!form.title.trim()) {
     errors.title = 'Введите название'
@@ -550,6 +647,10 @@ function validate(): boolean {
   }
   if (form.zoom_link && !form.zoom_link.startsWith('https://')) {
     errors.zoom_link = 'Ссылка должна начинаться с https://'
+    ok = false
+  }
+  if (form.audience_kind === 'groups' && form.audience_group_ids.length === 0) {
+    errors.audience_group_ids = 'Выберите хотя бы одну группу'
     ok = false
   }
   return ok
@@ -591,6 +692,10 @@ async function save(): Promise<void> {
       zoom_link: form.zoom_link.trim() || null,
       is_free: form.is_free,
       price_cents: form.is_free ? 0 : priceCents.value,
+      // P5 port (ПРОМТ №606): mirrors CreatePracticeView -- group_ids is
+      // only meaningful (and only sent) for audience_kind='groups'.
+      audience_kind: form.audience_kind,
+      group_ids: form.audience_kind === 'groups' ? form.audience_group_ids : [],
     })
     practice.value = updated
     toast.success('Сохранено')
@@ -707,7 +812,8 @@ async function remove(): Promise<void> {
 
 .edit-practice__readonly-text {
   font-family: var(--font-body);
-  font-size: var(--text-sm);  color: var(--velo-text-muted);
+  font-size: var(--text-sm);
+  color: var(--velo-text-muted);
 }
 
 /* -- Content -- */
@@ -747,6 +853,30 @@ async function remove(): Promise<void> {
   font-size: var(--text-base);
   color: var(--velo-text-primary);
   margin-bottom: var(--space-2);
+}
+
+/* -- Для кого практика (P5 port, ПРОМТ №606): same token recipe as
+   CreatePracticeView's .create-practice__audience-chips/__empty (itself
+   AddToGroupSheet's .add-to-group__chips/__empty recipe). -- */
+.edit-practice__audience-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.edit-practice__audience-empty {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--velo-text-muted);
+  margin: var(--space-3) 0 0;
+}
+
+.edit-practice__field-error {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--velo-error);
+  margin-top: var(--space-1);
 }
 
 /* T21-1 (ПРОМТ №541): honest caption for the now-fallback Zoom field. */
