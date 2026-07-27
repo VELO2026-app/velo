@@ -48,6 +48,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.events import emit_user_upserted  # Phase 6 / T0
 from app.core.redis import get_redis
 from app.core.telegram_links import normalize_telegram_url
 from app.modules.notifications.template_engine import normalize_language
@@ -304,6 +305,13 @@ async def upsert_user_on_login(
 
     result = await session.execute(stmt)
     user = result.scalar_one()
+
+    # Phase 6 / T0: project the identity into comms on EVERY login
+    # upsert -- creation is the mandatory point (a recipient must
+    # exist before any addressing), and re-emitting the idempotent
+    # snapshot on returning users self-heals any projection drift for
+    # the cost of one outbox row per login. Same transaction (ID-2).
+    await emit_user_upserted(session, user)
 
     logger.info(
         "user_upserted",

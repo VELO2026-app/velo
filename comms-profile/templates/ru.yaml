@@ -1,0 +1,133 @@
+# =============================================================================
+# VELO -- comms product profile: templates, locale "ru"
+# =============================================================================
+#
+# Converted from the velo donor sheet
+# (backend/app/modules/notifications/templates/ru.yaml): the donor's
+# flat {type: {title, body}} re-laid into the canonical three-level
+# comms form {type: {channel: {field: str}}} (arch doc §2.3), donor
+# type names renamed to the dot-notation dictionary §2.
+#
+# Deliberate deviations from a mechanical conversion (T0 report §1):
+#   - booking.cancelled_by_user: the donor text addressed the BOOKER
+#     ("Ваше бронирование отменено"), but per dictionary §2 the event
+#     is addressed to the MASTER -- the text is re-aimed accordingly.
+#   - master.application_received: NEW type (group:admins), no donor.
+#   - msg.*: comms-native chat types; pass-through sheets (the
+#     messaging engine supplies title/body), mirroring the smoke
+#     profile shape.
+#
+# Composition note (dispatch plan §6b): titles are NOT auto-bolded by
+# comms -- the sheet owns markup. Donor titles were plain and stay
+# plain; bodies carry their donor <b> markup as-is.
+#
+# YAML TRAP: every value containing {braces} MUST be quoted -- a bare
+# `body: {title}` parses as a flow mapping, not a string.
+# NO external domains anywhere (comms startup fence, decision 13).
+# =============================================================================
+
+# -- Bookings --
+
+booking.confirmed:
+  telegram:
+    title: "Бронирование подтверждено"
+    body: "✅ Ваше бронирование на <b>{practice_title}</b> подтверждено.\n\n📅 {scheduled_at}\n👤 Мастер: {master_name}\n💰 Оплачено: €{paid_amount}"
+
+booking.cancelled_by_user:
+  telegram:
+    title: "Участник отменил бронирование"
+    body: "❌ Участник отменил бронирование на <b>{practice_title}</b>.\n\n📅 {scheduled_at}"
+
+# -- Practices --
+
+practice.cancelled:
+  telegram:
+    title: "Практика отменена"
+    body: "❌ Практика <b>{practice_title}</b> {scheduled_at} была отменена мастером.\n\n💰 Оплата возвращена на ваш баланс."
+
+practice.rescheduled:
+  telegram:
+    title: "Практика перенесена"
+    body: "📝 Практика <b>{practice_title}</b> перенесена.\n\n📅 Новое время: {scheduled_at}\n👤 Мастер: {master_name}"
+
+# -- Waitlist --
+
+waitlist.spot_available:
+  telegram:
+    title: "Место освободилось!"
+    body: "🎉 Освободилось место на <b>{practice_title}</b>!\n\n📅 {scheduled_at}\n👤 Мастер: {master_name}\n\n⏳ У вас <b>30 минут</b> на подтверждение.\nНажмите кнопку, чтобы забронировать."
+
+waitlist.expired:
+  telegram:
+    title: "Лист ожидания истёк"
+    body: "⏳ Ваша запись в листе ожидания на <b>{practice_title}</b> истекла.\n\n📅 {scheduled_at}"
+
+# -- Master account status --
+
+master.verified:
+  telegram:
+    title: "Заявка одобрена"
+    body: "🎉 Поздравляем! Ваша заявка мастера одобрена.\n\nТеперь вы можете создавать и управлять практиками."
+
+master.rejected:
+  telegram:
+    title: "Заявка отклонена"
+    body: "Ваша заявка мастера была рассмотрена и, к сожалению, не была одобрена.\n\nВы можете подать новую заявку."
+
+master.application_received:
+  telegram:
+    title: "Новая заявка мастера"
+    body: "📨 Поступила новая заявка на статус мастера.\n\n👤 {applicant_name}"
+
+# -- Wallet --
+
+wallet.topup_confirmed:
+  telegram:
+    title: "Пополнение подтверждено"
+    body: "💰 Ваш баланс пополнен на <b>€{amount}</b>.\n\nТекущий баланс: €{balance}"
+
+wallet.withdrawal_approved:
+  telegram:
+    title: "Вывод средств одобрен"
+    body: "💸 Ваш вывод <b>€{amount}</b> одобрен и обрабатывается."
+
+wallet.withdrawal_rejected:
+  telegram:
+    title: "Вывод средств отклонён"
+    body: "Ваш запрос на вывод €{amount} не был одобрен.\n\nПричина: {reason}"
+
+# -- Post-practice prompts --
+
+prompt.leave_review:
+  telegram:
+    title: "Как прошла практика?"
+    body: "📝 Вы посетили <b>{practice_title}</b> с {master_name}.\n\nНажмите, чтобы оставить отзыв и помочь другим ученикам."
+
+prompt.leave_feedback:
+  telegram:
+    title: "Поделитесь впечатлениями"
+    body: "📝 Как вам <b>{practice_title}</b>?\n\nВаши впечатления помогают мастерам делать практики лучше."
+
+# -- System --
+
+system.announcement:
+  telegram:
+    title: "{title}"
+    body: "{body}"
+
+# -- Chat baseline (pass-through; messaging engine supplies texts) --
+
+msg.participant_message:
+  telegram:
+    title: "{title}"
+    body: "{body}"
+
+msg.support_message:
+  telegram:
+    title: "{title}"
+    body: "{body}"
+
+msg.thread_closed:
+  telegram:
+    title: "{title}"
+    body: "{body}"

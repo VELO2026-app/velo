@@ -20,7 +20,7 @@
 # =============================================================================
 
 import copy
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -28,6 +28,11 @@ import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.events import (  # Phase 6 / T0
+    GROUP_ADMINS,
+    GROUP_MASTERS,
+    sync_membership_delta,
+)
 from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
 from app.modules.admin.users.schemas import (
     AdminMasterDetail,
@@ -39,7 +44,11 @@ from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.users.models import User, UserRole
-from app.modules.users.schemas import UserResponse, credentials_without_admin_home
+from app.modules.users.schemas import (
+    UserResponse,
+    credentials_without_admin_home,
+    has_admin_home,
+)
 
 logger = structlog.get_logger()
 
@@ -304,7 +313,7 @@ def _admin_make_master_data(user: User) -> dict:
     masters/service._build_data) with account.status pre-set to 'verified'.
     Blank profile fields are stubbed; the master/admin edits them later.
     """
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     return {
         "account": {
             "status": "verified",
@@ -366,6 +375,13 @@ async def make_master(
         )
 
     profile = await session.get(MasterProfile, user_id)
+    # Phase 6 / T0: master capability BEFORE this grant -- an approved
+    # applicant who never self-switched arrives here already verified
+    # (capability held, no delta); everyone else gains it below.
+    had_master = (
+        profile is not None
+        and (profile.data or {}).get("account", {}).get("status") == "verified"
+    )
     if profile is None:
         profile = MasterProfile(
             user_id=user_id, data=_admin_make_master_data(user)
@@ -381,7 +397,7 @@ async def make_master(
             acct.setdefault(
                 "verification",
                 {
-                    "verified_at": datetime.now(timezone.utc).isoformat(),
+                    "verified_at": datetime.now(UTC).isoformat(),
                     "verified_by": "admin_make_master",
                     "notes": "re-verified via admin make-master",
                 },
@@ -391,10 +407,27 @@ async def make_master(
 
     # Set role=master and clear the switched-away-admin marker (R-1): an
     # authoritative role change makes this the account's home role.
+    # Phase 6 / T0: admin capability BEFORE the write -- clearing the
+    # marker below (or demoting an admin-role holder) IS the drop.
+    had_admin = (
+        user.role == UserRole.ADMIN.value or has_admin_home(user.credentials)
+    )
     user.role = UserRole.MASTER.value
     cleared = credentials_without_admin_home(user.credentials)
     if cleared != (user.credentials or {}):
         user.set_jsonb("credentials", cleared)
+
+    # Phase 6 / T0: project both capability deltas into the comms
+    # contact book, same transaction (ID-2). Master: only when the
+    # profile was not verified before (see had_master above). Admin:
+    # role is master now and the marker is gone -> capability is False;
+    # emit iff it was held.
+    await sync_membership_delta(
+        session, user, group_key=GROUP_MASTERS, had=had_master, has=True
+    )
+    await sync_membership_delta(
+        session, user, group_key=GROUP_ADMINS, had=had_admin, has=False
+    )
 
     logger.info(
         "admin_make_master",

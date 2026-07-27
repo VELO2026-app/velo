@@ -1,0 +1,109 @@
+# =============================================================================
+# VELO -- comms product profile: notification type dictionary
+# =============================================================================
+#
+# Contract with the comms service (Velo-Comms-Integration-Design.md,
+# locked 2026-07-27): the 15 velo domain types of dictionary §2 plus
+# the 3 comms-native msg.* chat-baseline types, each mapped to a
+# preference category of grid §3.
+#
+# Format (comms app/profile/loader.py): {type_key: {category: str}}.
+# Unknown spec keys are tolerated (additive contract); a type key is
+# <= 50 chars, a category <= 50 chars (comms core/constants.py).
+#
+# CATEGORY GRID (§3, locked as v1; customer edits = this file):
+#   bookings         -- booking.*, practice.*, waitlist.*   (mutable)
+#   reminders        -- prompt.* (+ booking reminders, T1)  (mutable)
+#   finance          -- wallet.*                            (mutable)
+#   account          -- master account status               (NON-mutable
+#                       by convention: no UI toggle is exposed for it)
+#   system           -- announcements                       (NON-mutable
+#                       by convention, §2.5 arch doc)
+#   msg_participants / msg_support -- chat baseline (UI toggles
+#                       master_messages / support_messages)
+#
+# NOTE ON NON-MUTABILITY: comms mechanics treat "type WITHOUT a
+# category" as the unmutable escape hatch (arch doc §2.5). This
+# profile still assigns `account` / `system` categories (per the
+# locked grid §3 and the T0 handoff done-when "all 15+3 types with
+# categories"); their non-mutability holds by convention -- the prefs
+# facade never exposes toggles for these categories, so no mute rows
+# appear. Flagged in the T0 report as a design seam for Master-chat.
+#
+# msg.* mapping is fixed by the dispatch plan §6b: participant_message
+# and thread_closed -> msg_participants, support_message -> msg_support.
+# The comms loader fails at startup if any msg.* key lacks a category.
+#
+# NO external domains anywhere in this file or the templates: the
+# comms startup fence over profile data rejects them (decision 13).
+# =============================================================================
+
+# -- Bookings / practices / waitlist (category: bookings) --
+
+booking.confirmed:
+  category: bookings
+
+booking.cancelled_by_user:
+  category: bookings
+
+practice.cancelled:
+  category: bookings
+
+practice.rescheduled:
+  category: bookings
+
+waitlist.spot_available:
+  category: bookings
+
+waitlist.expired:
+  category: bookings
+
+# -- Post-practice prompts (category: reminders; delivered via the
+#    comms reminder engine from T1 on, ID-6) --
+
+prompt.leave_review:
+  category: reminders
+
+prompt.leave_feedback:
+  category: reminders
+
+# -- Wallet (category: finance) --
+
+wallet.topup_confirmed:
+  category: finance
+
+wallet.withdrawal_approved:
+  category: finance
+
+wallet.withdrawal_rejected:
+  category: finance
+
+# -- Master account status (category: account, non-mutable by
+#    convention -- see header note) --
+
+master.verified:
+  category: account
+
+master.rejected:
+  category: account
+
+master.application_received:
+  category: account
+
+# -- System announcements (category: system, non-mutable by
+#    convention, §2.5) --
+
+system.announcement:
+  category: system
+
+# -- Chat baseline (comms-native msg.* types; velo never emits these,
+#    the messaging engine does; mapping fixed by dispatch plan §6b) --
+
+msg.participant_message:
+  category: msg_participants
+
+msg.support_message:
+  category: msg_support
+
+msg.thread_closed:
+  category: msg_participants

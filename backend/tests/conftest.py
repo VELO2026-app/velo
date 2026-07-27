@@ -55,6 +55,9 @@ async def setup_infrastructure():
     settings.practice_autofinalize_enabled = False
     settings.zoom_retry_enabled = False
     settings.zoom_report_enabled = False
+    # Phase 6 / T0: relay tests drive relay_pending_batch manually --
+    # the same no-background-race rationale as the workers above.
+    settings.comms_relay_enabled = False
     # ПРОМТ №543: pin Zoom to stub mode for the whole suite. Until now every
     # test server happened to have no real Zoom credentials, so
     # settings.is_zoom_stub was True by ambient accident -- several tests

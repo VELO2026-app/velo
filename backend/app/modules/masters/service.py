@@ -46,6 +46,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import record_audit
+from app.core.events import GROUP_MASTERS, sync_membership_delta  # Phase 6 / T0
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.core.redis import get_redis
 from app.modules.diary.models import Feedback
@@ -192,6 +193,12 @@ async def apply_for_master(
             raise ConflictError(
                 message="Already a master", code="already_master"
             )
+        # Phase 6 / T0: self-provision creates a VERIFIED profile out
+        # of nothing -- a master-capability gain (had none: the guard
+        # above 409s when a profile exists). Same transaction (ID-2).
+        await sync_membership_delta(
+            session, user, group_key=GROUP_MASTERS, had=False, has=True
+        )
         logger.info("master_self_provisioned", user_id=str(user.id))
         return profile
 

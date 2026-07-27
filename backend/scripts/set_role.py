@@ -46,7 +46,7 @@ import argparse
 import asyncio
 import copy
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 # -- sys.path bootstrap ------------------------------------------------------
@@ -62,11 +62,17 @@ from sqlalchemy import func, select  # noqa: E402
 from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
 
 from app.core.database import dispose_engine, get_session_factory  # noqa: E402
+from app.core.events import (  # noqa: E402  # Phase 6 / T0
+    GROUP_ADMINS,
+    GROUP_MASTERS,
+    sync_membership_delta,
+)
 from app.modules.masters.models import MasterProfile  # noqa: E402
 from app.modules.practices.models import Practice, PracticeStatus  # noqa: E402
 from app.modules.users.models import User, UserRole  # noqa: E402
 from app.modules.users.schemas import (  # noqa: E402
     credentials_without_admin_home,
+    has_admin_home,
 )
 from app.modules.withdrawals.models import Withdrawal, WithdrawalStatus  # noqa: E402
 
@@ -278,7 +284,7 @@ def _build_verified_data(fields: dict) -> dict:
     auto_confirm_bookings / max_participants_default) with account.status
     pre-set to 'verified'.
     """
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     return {
         "account": {
             "status": "verified",
@@ -332,6 +338,27 @@ def _set_role(user: User, role: UserRole) -> None:
 
 # -- Transition handlers (each returns True if a change needs committing) -----
 
+# Phase 6 / T0: every authoritative role change here projects its
+# CAPABILITY delta into the comms contact book (group:masters keys on a
+# verified MasterProfile, group:admins on role==admin OR the
+# switched-away-admin marker). emit goes through the same session --
+# the CLI's single commit at the end covers domain change + events
+# together (ID-2).
+
+
+def _admin_capability(user: User) -> bool:
+    """role==admin OR the round-trip marker -- the comms-group reading."""
+    return user.role == UserRole.ADMIN or has_admin_home(user.credentials)
+
+
+def _master_capability(profile: MasterProfile | None) -> bool:
+    """A verified MasterProfile -- the comms-group reading."""
+    return (
+        profile is not None
+        and (profile.data or {}).get("account", {}).get("status") == "verified"
+    )
+
+
 async def to_admin(session: AsyncSession, user: User, assume_yes: bool) -> bool:
     if user.role == UserRole.ADMIN:
         warn("Already admin — nothing to do.")
@@ -339,13 +366,40 @@ async def to_admin(session: AsyncSession, user: User, assume_yes: bool) -> bool:
     if not _confirm("Set role to admin?", assume_yes):
         warn("Cancelled.")
         return False
+    had_admin = _admin_capability(user)
     _set_role(user, UserRole.ADMIN)
+    # Master capability is untouched (profile not written) -- only the
+    # admins delta can fire. A marker-holder returning via CLI keeps
+    # capability across the flip -> no event, by design.
+    await sync_membership_delta(
+        session,
+        user,
+        group_key=GROUP_ADMINS,
+        had=had_admin,
+        has=_admin_capability(user),
+    )
     ok("Role set to admin.")
     return True
 
 
 async def to_master(session: AsyncSession, user: User, assume_yes: bool) -> bool:
     profile = await session.get(MasterProfile, user.id)
+    # Phase 6 / T0: capabilities at entry, deltas emitted on every
+    # True-return path below (see the block comment above to_admin).
+    had_master = _master_capability(profile)
+    had_admin = _admin_capability(user)
+
+    async def _emit_deltas() -> None:
+        await sync_membership_delta(
+            session, user, group_key=GROUP_MASTERS, had=had_master, has=True
+        )
+        await sync_membership_delta(
+            session,
+            user,
+            group_key=GROUP_ADMINS,
+            had=had_admin,
+            has=_admin_capability(user),
+        )
 
     if profile is not None:
         status = (profile.data or {}).get("account", {}).get("status")
@@ -359,6 +413,7 @@ async def to_master(session: AsyncSession, user: User, assume_yes: bool) -> bool
                 warn("Cancelled.")
                 return False
             _set_role(user, UserRole.MASTER)
+            await _emit_deltas()
             ok("Role set to master.")
             return True
 
@@ -376,7 +431,7 @@ async def to_master(session: AsyncSession, user: User, assume_yes: bool) -> bool
         acct.setdefault(
             "verification",
             {
-                "verified_at": datetime.now(timezone.utc).isoformat(),
+                "verified_at": datetime.now(UTC).isoformat(),
                 "verified_by": "cli_setrole",
                 "notes": "re-verified via velo setrole",
             },
@@ -384,6 +439,7 @@ async def to_master(session: AsyncSession, user: User, assume_yes: bool) -> bool
         data.setdefault("availability", {})["is_accepting"] = True
         profile.set_jsonb("data", data)
         _set_role(user, UserRole.MASTER)
+        await _emit_deltas()
         ok("Existing profile re-verified; role set to master.")
         return True
 
@@ -398,6 +454,7 @@ async def to_master(session: AsyncSession, user: User, assume_yes: bool) -> bool
         return False
     session.add(MasterProfile(user_id=user.id, data=_build_verified_data(fields)))
     _set_role(user, UserRole.MASTER)
+    await _emit_deltas()
     ok("Verified master profile created; role set to master.")
     return True
 
@@ -433,6 +490,10 @@ async def to_user(session: AsyncSession, user: User, assume_yes: bool) -> bool:
         warn("Cancelled.")
         return False
 
+    # Phase 6 / T0: capabilities before the writes (see to_admin block).
+    had_master = _master_capability(profile)
+    had_admin = _admin_capability(user)
+
     _set_role(user, UserRole.USER)
 
     # Soft-freeze the master side: keep every row, just park the profile.
@@ -444,6 +505,19 @@ async def to_user(session: AsyncSession, user: User, assume_yes: bool) -> bool:
         ok("Role set to user; master profile suspended (is_accepting=false).")
     else:
         ok("Role set to user.")
+
+    # verified -> suspended drops master capability; the authoritative
+    # flip cleared the admin marker -> admin capability is gone too.
+    await sync_membership_delta(
+        session, user, group_key=GROUP_MASTERS, had=had_master, has=False
+    )
+    await sync_membership_delta(
+        session,
+        user,
+        group_key=GROUP_ADMINS,
+        had=had_admin,
+        has=_admin_capability(user),
+    )
     return True
 
 

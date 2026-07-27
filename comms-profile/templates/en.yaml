@@ -1,0 +1,119 @@
+# =============================================================================
+# VELO -- comms product profile: templates, locale "en"
+# =============================================================================
+#
+# Converted from the velo donor sheet
+# (backend/app/modules/notifications/templates/en.yaml). See the ru
+# sheet header for the conversion rules and deliberate deviations
+# (booking.cancelled_by_user re-aimed at the master;
+# master.application_received is new; msg.* are pass-through).
+#
+# YAML TRAP: quote every value containing {braces}.
+# NO external domains anywhere (comms startup fence, decision 13).
+# =============================================================================
+
+# -- Bookings --
+
+booking.confirmed:
+  telegram:
+    title: "Booking confirmed"
+    body: "✅ Your booking for <b>{practice_title}</b> is confirmed.\n\n📅 {scheduled_at}\n👤 Master: {master_name}\n💰 Paid: €{paid_amount}"
+
+booking.cancelled_by_user:
+  telegram:
+    title: "Booking cancelled by participant"
+    body: "❌ A participant has cancelled their booking for <b>{practice_title}</b>.\n\n📅 {scheduled_at}"
+
+# -- Practices --
+
+practice.cancelled:
+  telegram:
+    title: "Practice cancelled"
+    body: "❌ Practice <b>{practice_title}</b> on {scheduled_at} has been cancelled by the master.\n\n💰 Your payment has been refunded."
+
+practice.rescheduled:
+  telegram:
+    title: "Practice rescheduled"
+    body: "📝 Practice <b>{practice_title}</b> has been rescheduled.\n\n📅 New time: {scheduled_at}\n👤 Master: {master_name}"
+
+# -- Waitlist --
+
+waitlist.spot_available:
+  telegram:
+    title: "Spot available!"
+    body: "🎉 A spot opened up for <b>{practice_title}</b>!\n\n📅 {scheduled_at}\n👤 Master: {master_name}\n\n⏳ You have <b>30 minutes</b> to confirm your spot.\nTap the button below to book now."
+
+waitlist.expired:
+  telegram:
+    title: "Waitlist expired"
+    body: "⏳ Your waitlist entry for <b>{practice_title}</b> has expired.\n\n📅 {scheduled_at}"
+
+# -- Master account status --
+
+master.verified:
+  telegram:
+    title: "Application approved"
+    body: "🎉 Congratulations! Your master application has been approved.\n\nYou can now create and manage practices."
+
+master.rejected:
+  telegram:
+    title: "Application rejected"
+    body: "Your master application has been reviewed and unfortunately was not approved at this time.\n\nYou can submit a new application."
+
+master.application_received:
+  telegram:
+    title: "New master application"
+    body: "📨 A new master application has been submitted.\n\n👤 {applicant_name}"
+
+# -- Wallet --
+
+wallet.topup_confirmed:
+  telegram:
+    title: "Top-up confirmed"
+    body: "💰 Your balance has been topped up by <b>€{amount}</b>.\n\nCurrent balance: €{balance}"
+
+wallet.withdrawal_approved:
+  telegram:
+    title: "Withdrawal approved"
+    body: "💸 Your withdrawal of <b>€{amount}</b> has been approved and is being processed."
+
+wallet.withdrawal_rejected:
+  telegram:
+    title: "Withdrawal rejected"
+    body: "Your withdrawal request for €{amount} was not approved.\n\nReason: {reason}"
+
+# -- Post-practice prompts --
+
+prompt.leave_review:
+  telegram:
+    title: "How was your practice?"
+    body: "📝 You attended <b>{practice_title}</b> with {master_name}.\n\nTap to leave a review and help other students."
+
+prompt.leave_feedback:
+  telegram:
+    title: "Share your feedback"
+    body: "📝 How was <b>{practice_title}</b>?\n\nYour feedback helps masters improve their practices."
+
+# -- System --
+
+system.announcement:
+  telegram:
+    title: "{title}"
+    body: "{body}"
+
+# -- Chat baseline (pass-through; messaging engine supplies texts) --
+
+msg.participant_message:
+  telegram:
+    title: "{title}"
+    body: "{body}"
+
+msg.support_message:
+  telegram:
+    title: "{title}"
+    body: "{body}"
+
+msg.thread_closed:
+  telegram:
+    title: "{title}"
+    body: "{body}"

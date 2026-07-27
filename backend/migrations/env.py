@@ -46,6 +46,7 @@ from app.modules.withdrawals.models import Withdrawal  # noqa: F401  # Phase 6.6
 from app.modules.promos.models import Promo  # noqa: F401  # Phase 6.7
 from app.modules.notifications.models import Notification, NotificationDelivery  # noqa: F401  # Phase 7.1
 from app.modules.practices.taxonomy_models import TaxonomyDirection, TaxonomyStyle  # noqa: F401  # R5
+from app.core.events.models import OutboxEvent  # noqa: F401  # Phase 6 / T0
 
 # ---------------------------------------------------------------------------
 # Alembic Config object — provides access to alembic.ini values.

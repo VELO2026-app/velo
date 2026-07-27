@@ -27,6 +27,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.events import emit_user_upserted  # Phase 6 / T0
 from app.core.exceptions import ForbiddenError
 from app.modules.masters.models import MasterProfile
 from app.modules.users.models import User, UserRole
@@ -198,6 +199,15 @@ async def update_user(
         user.set_jsonb("credentials", new_credentials)
 
     await session.flush()
+
+    # Phase 6 / T0: re-sync the comms identity projection when a field
+    # of the user_upserted snapshot changed. `language` / `timezone`
+    # are columns, `email` lives in credentials -- all three arrive
+    # through this PATCH. The event is a full snapshot (idempotent),
+    # emitted in THIS transaction (ID-2); name/bio edits do not touch
+    # the projection and stay silent.
+    if {"language", "timezone", "email"} & updates.keys():
+        await emit_user_upserted(session, user)
 
     logger.info(
         "user_profile_updated",

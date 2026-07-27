@@ -43,6 +43,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import record_audit
 from app.core.config import settings
+from app.core.events import (  # Phase 6 / T0
+    GROUP_ADMINS,
+    GROUP_MASTERS,
+    sync_membership_delta,
+)
 from app.core.exceptions import ConflictError, NotFoundError, VeloError
 from app.core.redis import get_redis
 from app.modules.admin.masters.schemas import (
@@ -55,7 +60,10 @@ from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.practices.taxonomy_models import TaxonomyDirection
 from app.modules.users.models import User, UserRole
-from app.modules.users.schemas import credentials_without_admin_home
+from app.modules.users.schemas import (
+    credentials_without_admin_home,
+    has_admin_home,
+)
 from app.modules.withdrawals.models import Withdrawal, WithdrawalStatus
 
 logger = structlog.get_logger()
@@ -139,6 +147,21 @@ async def verify_master(
         "notes": notes,
     }
     profile.set_jsonb("data", new_data)
+
+    # Phase 6 / T0: pending -> verified IS the master-capability delta
+    # (the guard above only admits pending profiles) -> project it into
+    # the comms contact book, same transaction (ID-2). The role is
+    # untouched here on purpose (capability, not mode -- see docstring),
+    # which is exactly why the sync keys on capability, not on role.
+    verified_user = await session.get(User, user_id)
+    if verified_user is not None:
+        await sync_membership_delta(
+            session,
+            verified_user,
+            group_key=GROUP_MASTERS,
+            had=False,
+            has=True,
+        )
 
     promoted = await _promote_custom_methods(promote or [], session)
     scoped = await _scope_custom_methods_to_master(master_only or [], user_id, session)
@@ -282,6 +305,13 @@ async def revoke_master(
     )
     advisory = await _build_revoke_advisory(user_id, profile, session)
 
+    # Phase 6 / T0: admin capability BEFORE the role-reset block -- the
+    # block below clears the switched-away-admin marker for a
+    # role==master holder, which IS an admin-capability drop.
+    had_admin = (
+        user.role == UserRole.ADMIN.value or has_admin_home(user.credentials)
+    )
+
     # -- role reset (mirror set_role._set_role): only if currently master --
     if user.role == UserRole.MASTER.value:
         user.role = UserRole.USER.value
@@ -294,6 +324,22 @@ async def revoke_master(
     new_data.setdefault("account", {})["status"] = "suspended"
     new_data.setdefault("availability", {})["is_accepting"] = False
     profile.set_jsonb("data", new_data)
+
+    # Phase 6 / T0: verified -> suspended IS the master-capability drop
+    # (the loader guard admits only verified) -> leave group:masters.
+    # Admin capability is re-read AFTER the blocks: an admin-role
+    # holder keeps both role and marker (untouched above) -> no event;
+    # a master with the round-trip marker just lost it -> leave
+    # group:admins too. Same transaction (ID-2).
+    await sync_membership_delta(
+        session, user, group_key=GROUP_MASTERS, had=True, has=False
+    )
+    has_admin = (
+        user.role == UserRole.ADMIN.value or has_admin_home(user.credentials)
+    )
+    await sync_membership_delta(
+        session, user, group_key=GROUP_ADMINS, had=had_admin, has=has_admin
+    )
 
     await record_audit(
         event="master_revoked",

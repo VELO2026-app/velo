@@ -308,6 +308,32 @@ class Settings(BaseSettings):
     # FOR UPDATE SKIP LOCKED and a delivery can be skipped (attempts stays 0).
     notification_processor_enabled: bool = True
 
+    # -- Comms integration: outbox relay (Phase 6 / T0) --
+    # The transactional-outbox relay ships domain events to the comms
+    # Redis Stream (core/events/relay.py). COMMS_REDIS_URL and friends
+    # are written into .env by the Phase 5 installer hand-over
+    # (comms-deploy.sh install, pass 2); an EMPTY url disables the
+    # relay with a log line -- local dev has no comms stack.
+    comms_redis_url: str = ""
+    # Stream name the relay XADDs into. The default MIRRORS the comms
+    # consumer default (comms app/core/config.py:66
+    # `comms_events_stream: str = "comms:events"`) -- mandatory review
+    # fix #2: a name mismatch means events silently land in a stream
+    # nobody reads. Override ONLY in lockstep with the comms .env.
+    comms_events_stream: str = "comms:events"
+    # Relay tick interval (seconds between passes over the outbox).
+    comms_relay_interval_seconds: float = 2.0
+    # Rows claimed per pass (FOR UPDATE SKIP LOCKED batch).
+    comms_relay_batch_size: int = 100
+    # A poison row logs WARNING every N failed publish attempts (info
+    # otherwise) -- loud enough for the operator, quiet enough not to
+    # drown the logs. Rows are never dropped.
+    comms_relay_warn_every_attempts: int = 10
+    # Background relay toggle. True in prod (lifespan task). Disabled
+    # in tests so relay tests drive relay_pending_batch manually --
+    # same rationale as notification_processor_enabled above.
+    comms_relay_enabled: bool = True
+
     # -- Practice lifecycle automation (Batch 1, extended) --
     # Practices are driven entirely by the clock -- the master no longer starts
     # or finishes a practice by hand. A single background worker

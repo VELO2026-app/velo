@@ -13,7 +13,7 @@
 
 import asyncio
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 import structlog
 from fastapi import FastAPI
@@ -98,6 +98,11 @@ from app.modules.zoom.models import (  # noqa: F401  # E21
 # Notification processor (Phase 7.2).
 from app.modules.notifications.processor import run_processor  # Phase 7.2
 
+# Comms outbox relay (Phase 6 / T0) -- a SIBLING of run_processor, not
+# its replacement: the old notifications module stays live until T1.
+from app.core.events.relay import run_relay  # Phase 6 / T0
+from app.core.events.models import OutboxEvent  # noqa: F401  # Phase 6 / T0
+
 # Practice auto-finalizer (Batch 1).
 from app.modules.bookings.autofinalize import run_autofinalizer  # Batch 1
 
@@ -156,6 +161,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
 
     processor_task: asyncio.Task | None = None
+    relay_task: asyncio.Task | None = None
     autofinalizer_task: asyncio.Task | None = None
     zoom_retry_task: asyncio.Task | None = None
     zoom_report_task: asyncio.Task | None = None
@@ -176,6 +182,23 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             )
         else:
             logger.info("notification_processor_disabled")
+
+        # Start the comms outbox relay as background task (Phase 6 / T0).
+        # A sibling of run_processor above, NOT its replacement -- the old
+        # notification pipeline keeps delivering until the T1 cutover.
+        # Gated by settings for the same test-race reason as every worker
+        # here; additionally requires a configured COMMS_REDIS_URL --
+        # local dev has no comms stack, so an empty url means "no relay".
+        if settings.comms_relay_enabled and settings.comms_redis_url:
+            relay_task = asyncio.create_task(
+                run_relay(), name="comms_outbox_relay",
+            )
+        else:
+            logger.info(
+                "comms_outbox_relay_disabled",
+                enabled=settings.comms_relay_enabled,
+                redis_url_configured=bool(settings.comms_redis_url),
+            )
 
         # Start practice auto-finalizer as background task (Batch 1).
         # Gated by settings for the same reason as the processor above:
@@ -223,6 +246,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 await processor_task
             except asyncio.CancelledError:
                 pass
+
+        # Stop comms outbox relay (Phase 6 / T0). suppress() instead of
+        # the try/except-pass of the older blocks -- lint-clean (SIM105)
+        # without touching the sibling shutdowns.
+        if relay_task is not None and not relay_task.done():
+            relay_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await relay_task
 
         # Stop practice auto-finalizer (Batch 1).
         if autofinalizer_task is not None and not autofinalizer_task.done():
