@@ -548,6 +548,85 @@ async def list_group_members(
     )
 
 
+async def search_group_memberships(
+    master_id: UUID,
+    session: AsyncSession,
+    *,
+    search: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[dict], int]:
+    """Cross-group people-search (P6, ПРОМТ №606, owner-ruled: ONE ROW PER
+    MEMBERSHIP). Every (student, CUSTOM group) membership row for this
+    master, optionally name-filtered -- a student in N groups yields N
+    rows, each carrying which group. Never «Ученики»/«Удалённые»: neither
+    is a MasterGroupMembership row (mirrors list_student_custom_groups's
+    identical exclusion) -- this is a search over actual group ASSIGNMENTS,
+    which the two virtuals, being computed rather than assigned, don't have.
+    """
+    full_name = func.concat(
+        func.coalesce(User.first_name, ""), " ", func.coalesce(User.last_name, ""),
+    )
+    base = (
+        select(
+            User,
+            MasterStudent.tag,
+            MasterGroup.id.label("group_id"),
+            MasterGroup.name.label("group_name"),
+        )
+        .select_from(MasterGroupMembership)
+        .join(User, User.id == MasterGroupMembership.student_user_id)
+        .join(MasterGroup, MasterGroup.id == MasterGroupMembership.group_id)
+        .outerjoin(
+            MasterStudent,
+            and_(
+                MasterStudent.master_id == master_id,
+                MasterStudent.student_user_id == User.id,
+            ),
+        )
+        .where(MasterGroup.master_id == master_id)
+    )
+
+    if search:
+        base = base.where(full_name.ilike(f"%{search}%"))
+
+    total = (
+        await session.execute(
+            select(func.count()).select_from(base.order_by(None).subquery())
+        )
+    ).scalar_one()
+
+    rows = (
+        await session.execute(
+            # Grouped by PERSON first: the two rows a person-in-two-groups
+            # produces land next to each other, matching the "a person
+            # appears N times" reading the search is FOR, rather than
+            # scattering them across a group-first ordering.
+            base.order_by(
+                func.coalesce(User.first_name, ""),
+                func.coalesce(User.last_name, ""),
+                User.id,
+                MasterGroup.name,
+            )
+            .limit(limit)
+            .offset(offset)
+        )
+    ).all()
+
+    items = [
+        {
+            "student_user_id": user.id,
+            "name": display_name(user.first_name, user.last_name),
+            "avatar_url": user.avatar_url,
+            "tag": tag,
+            "group_id": group_id,
+            "group_name": group_name,
+        }
+        for user, tag, group_id, group_name in rows
+    ]
+    return items, total
+
+
 async def add_group_member(
     master_id: UUID, group_id_str: str, student_user_id: UUID, session: AsyncSession,
 ) -> None:

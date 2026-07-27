@@ -84,6 +84,35 @@ class PaginatedGroupMembersResponse(BaseModel):
     offset: int
 
 
+class GroupSearchMemberItem(BaseModel):
+    """One row in GET /masters/me/groups/search.
+
+    ONE ROW PER (student, group) MEMBERSHIP, not one row per student
+    (owner-ruled, ПРОМТ №606): a student who belongs to N of this master's
+    CUSTOM groups appears N times here, each row naming a DIFFERENT group
+    -- this is a membership-management surface, so the multiplicity IS the
+    meaning, not noise to dedupe away. Never the two virtuals («Ученики»/
+    «Удалённые») -- neither is a MasterGroupMembership row (mirrors
+    list_student_custom_groups's identical exclusion).
+    """
+
+    student_user_id: UUID
+    name: str
+    avatar_url: str | None
+    tag: str | None
+    group_id: UUID
+    group_name: str
+
+
+class PaginatedGroupSearchResponse(BaseModel):
+    """GET /masters/me/groups/search -- paginated, searchable."""
+
+    items: list[GroupSearchMemberItem]
+    total: int
+    limit: int
+    offset: int
+
+
 class AddGroupMemberRequest(BaseModel):
     """POST /masters/me/groups/{id}/members."""
 

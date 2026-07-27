@@ -65,6 +65,7 @@ MY_TAGS_URL = "/api/v1/masters/me/tags"
 STUDENT_GROUPS_URL = "/api/v1/masters/me/students/{student_id}/groups"
 GROUP_INVITE_URL = "/api/v1/masters/me/groups/{group_id}/invite"
 JOIN_GROUP_URL = "/api/v1/masters/groups/join"
+GROUP_SEARCH_URL = "/api/v1/masters/me/groups/search"
 
 _TID_MIN = 99700
 _TID_MAX = 99799
@@ -1368,3 +1369,101 @@ async def test_delete_group_allowed_when_sole_audience_of_a_completed_practice(
     resp = await client.delete(GROUP_URL.format(group_id=group_id), headers=headers)
 
     assert resp.status_code == 204
+
+
+# ===================================================================
+# GET /masters/me/groups/search: cross-group people-search (P6, ПРОМТ №606)
+# ===================================================================
+
+
+@pytest.mark.asyncio
+async def test_search_group_memberships_one_row_per_membership(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """A student in TWO custom groups appears as TWO rows, each naming a
+    different group -- owner-ruled, not deduped to one row with two chips."""
+    master = await _make_verified_master(client, db_session, 99773)
+    headers = auth_headers(master["session_token"])
+    group_a = await client.post(GROUPS_URL, json={"name": "Утро"}, headers=headers)
+    group_a_id = group_a.json()["id"]
+    group_b = await client.post(GROUPS_URL, json={"name": "VIP"}, headers=headers)
+    group_b_id = group_b.json()["id"]
+
+    student_id = await _login(client, 99790, "Дважды")
+    await client.post(
+        GROUP_MEMBERS_URL.format(group_id=group_a_id),
+        json={"student_user_id": student_id},
+        headers=headers,
+    )
+    await client.post(
+        GROUP_MEMBERS_URL.format(group_id=group_b_id),
+        json={"student_user_id": student_id},
+        headers=headers,
+    )
+
+    resp = await client.get(GROUP_SEARCH_URL, headers=headers)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 2
+    rows = [item for item in body["items"] if item["student_user_id"] == student_id]
+    assert len(rows) == 2
+    group_names = {row["group_name"] for row in rows}
+    assert group_names == {"Утро", "VIP"}
+    for row in rows:
+        assert row["name"] == "Дважды"
+
+
+@pytest.mark.asyncio
+async def test_search_group_memberships_name_filter(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    master = await _make_verified_master(client, db_session, 99774)
+    headers = auth_headers(master["session_token"])
+    group = await client.post(GROUPS_URL, json={"name": "Группа"}, headers=headers)
+    group_id = group.json()["id"]
+
+    match_id = await _login(client, 99791, "Найдётся")
+    other_id = await _login(client, 99792, "Другой")
+    for sid in (match_id, other_id):
+        await client.post(
+            GROUP_MEMBERS_URL.format(group_id=group_id),
+            json={"student_user_id": sid},
+            headers=headers,
+        )
+
+    resp = await client.get(
+        GROUP_SEARCH_URL, params={"search": "Найдётся"}, headers=headers,
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 1
+    assert body["items"][0]["student_user_id"] == match_id
+
+
+@pytest.mark.asyncio
+async def test_search_group_memberships_excludes_virtual_groups(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """A student with an attended booking (derived «Ученики») but no
+    CUSTOM group membership at all must yield ZERO rows -- the virtuals
+    are computed, not MasterGroupMembership rows, and this search is over
+    real group ASSIGNMENTS."""
+    master = await _make_verified_master(client, db_session, 99775)
+    headers = auth_headers(master["session_token"])
+    master_id = master["user"]["id"]
+
+    practice = await _practice(db_session, master_id, scheduled_hours_from_now=-2)
+    student_id = await _login(client, 99793, "Ученик")
+    await _booking(
+        db_session, practice, student_id, status=BookingStatus.ATTENDED.value,
+    )
+    await db_session.commit()
+
+    resp = await client.get(GROUP_SEARCH_URL, headers=headers)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 0
+    assert body["items"] == []

@@ -9,8 +9,15 @@
 # because the path shapes differ (/me/groups/... vs /me/students/...).
 #
 # AUTH: get_current_master on all endpoints (verified master only).
-# SESSION: get_db_reader for the two GETs (read-only), get_db_session for
+# SESSION: get_db_reader for every GET (read-only), get_db_session for
 # every mutation (P-01 -- router flushes, service never commits).
+#
+# GET /me/groups/search (P6, ПРОМТ №606) is a STATIC path declared before
+# this file's DYNAMIC /me/groups/{group_id}... routes -- same static-
+# before-dynamic reasoning students_router.py's own header documents for
+# /me/students vs /me/students/{student_id}. No GET exists on the bare
+# {group_id} shape today, so there is no actual collision to avoid, but
+# the declaration order costs nothing and keeps the file consistent.
 # =============================================================================
 
 from uuid import UUID
@@ -29,9 +36,11 @@ from app.modules.masters.groups_schemas import (
     GroupListResponse,
     GroupMemberItem,
     GroupResponse,
+    GroupSearchMemberItem,
     JoinGroupRequest,
     JoinGroupResponse,
     PaginatedGroupMembersResponse,
+    PaginatedGroupSearchResponse,
     RenameGroupRequest,
 )
 from app.modules.masters.groups_service import (
@@ -45,6 +54,7 @@ from app.modules.masters.groups_service import (
     list_master_groups,
     remove_group_member,
     rename_group,
+    search_group_memberships,
 )
 from app.modules.masters.models import MasterProfile
 from app.modules.users.models import User
@@ -64,6 +74,30 @@ async def list_groups_endpoint(
     user, _profile = master_tuple
     items = await list_master_groups(user.id, session)
     return GroupListResponse(items=[GroupListItem(**item) for item in items])
+
+
+@router.get("/me/groups/search", response_model=PaginatedGroupSearchResponse)
+async def search_group_memberships_endpoint(
+    search: str | None = Query(default=None, min_length=1, max_length=100),
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_reader),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> PaginatedGroupSearchResponse:
+    """Cross-group people-search (P6, ПРОМТ №606): one row per (student,
+    CUSTOM group) membership -- a student in N groups appears N times,
+    each row naming a different group. See this file's own header for
+    the static-before-dynamic placement reasoning."""
+    user, _profile = master_tuple
+    items, total = await search_group_memberships(
+        user.id, session, search=search, limit=limit, offset=offset,
+    )
+    return PaginatedGroupSearchResponse(
+        items=[GroupSearchMemberItem(**item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post("/me/groups", response_model=GroupResponse, status_code=201)
