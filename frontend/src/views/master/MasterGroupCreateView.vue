@@ -5,6 +5,14 @@
   back to the list on success. 409 (duplicate name for this master) surfaces
   as an inline VInput error + a toast (mirrors MasterNewPromocodeView's
   create-form pattern: extractApiError + toast.error).
+
+  G17/G18 (ПРОМТ №609): «Основное» section heading added, reusing the
+  existing velo-section-title class CreatePracticeView already uses --
+  no new DS class. Placeholder shortened to «Название» (was «Название
+  группы»); the VInput label above the field already says «Название», so
+  the placeholder no longer needs to repeat it. G19 (description field),
+  G20 (button position), G21 (required-fields banner) are NOT built here
+  -- still with the owner.
 -->
 
 <template>
@@ -12,10 +20,12 @@
     <VHeader title="Новая группа" show-back @back="router.back()" />
 
     <div class="new-group__content">
+      <h2 class="velo-section-title">Основное</h2>
+
       <VInput
         v-model="name"
         label="Название"
-        placeholder="Название группы"
+        placeholder="Название"
         :error="fieldError"
         @focus="onFieldFocus"
       />

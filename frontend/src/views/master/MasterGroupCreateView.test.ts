@@ -71,6 +71,12 @@ describe('MasterGroupCreateView', () => {
     expect(submitBtn()).toBeDefined()
   })
 
+  it('G17 (ПРОМТ №609): shows the «Основное» section heading', () => {
+    mount()
+
+    expect(host?.querySelector('.velo-section-title')?.textContent).toBe('Основное')
+  })
+
   it('an empty name toasts and does not call createGroup', async () => {
     mount()
 
