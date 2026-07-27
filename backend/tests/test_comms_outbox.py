@@ -28,12 +28,13 @@
 # =============================================================================
 
 import json
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 import pytest
 from redis import asyncio as aioredis
 from redis.exceptions import ConnectionError as RedisConnectionError
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select, update
 
 from app.core.config import settings
 from app.core.events import (
@@ -71,15 +72,35 @@ TID_CLI = 89440
 
 BAND_MIN, BAND_MAX = 89400, 89499
 
+# Synthetic recipient_id prefix for rows emitted directly (not via a
+# band user): lets the cleanup fixture target OUR rows and only ours.
+SYNTH = "t89400-"
+
 
 @pytest.fixture(autouse=True)
 async def _clean_band(db_session):
-    """Reset band users + drain their outbox rows around every test."""
+    """Reset band users + drain OUR outbox rows around every test.
+
+    TARGETED cleanup only (post-T0 finding #1): outbox rows are deleted
+    iff their recipient_id belongs to a band user or carries the SYNTH
+    prefix. The rest of the (live, shared) outbox -- other suites'
+    events and the production audit trail -- is not ours to sweep.
+    """
     async def _drain() -> None:
+        # Band-user uuids BEFORE cleanup (cleanup does not delete the
+        # users themselves, but collect first to be order-proof).
+        result = await db_session.execute(
+            select(User.id).where(
+                User.telegram_id.between(BAND_MIN, BAND_MAX)
+            )
+        )
+        band_ids = [str(uid) for uid in result.scalars().all()]
         await cleanup_range(db_session, BAND_MIN, BAND_MAX)
-        # Outbox rows have no FK to users; drain everything the band's
-        # tests emitted (test DB, the table is ours to sweep).
-        await db_session.execute(delete(OutboxEvent))
+        recipient = OutboxEvent.payload["recipient_id"].astext
+        conditions = [recipient.like(f"{SYNTH}%")]
+        if band_ids:
+            conditions.append(recipient.in_(band_ids))
+        await db_session.execute(delete(OutboxEvent).where(or_(*conditions)))
         await db_session.commit()
 
     await _drain()
@@ -92,6 +113,32 @@ async def _pending_events(session) -> list[OutboxEvent]:
         select(OutboxEvent).order_by(OutboxEvent.id)
     )
     return list(result.scalars().all())
+
+
+async def _park_foreign_pending(session) -> None:
+    """Mark every currently-pending row published INSIDE the test tx.
+
+    Relay tests inject their session and must neither count nor
+    consume foreign pending rows of the shared live outbox (other
+    suites' committed events between live-relay ticks). Parking them
+    in-transaction makes the pass see OUR rows only; the test's final
+    rollback un-parks them untouched -- the live relay ships them
+    later as if we were never here.
+    """
+    await session.execute(
+        update(OutboxEvent)
+        .where(OutboxEvent.published_at.is_(None))
+        .values(published_at=datetime.now(UTC))
+    )
+
+
+async def _synth_events(session) -> list[OutboxEvent]:
+    """This suite's directly-emitted rows (SYNTH-prefixed), id order."""
+    return [
+        e
+        for e in await _pending_events(session)
+        if str(e.payload.get("recipient_id", "")).startswith(SYNTH)
+    ]
 
 
 async def _events_for(session, recipient_id: str) -> list[OutboxEvent]:
@@ -111,11 +158,11 @@ class TestEmitEvent:
     async def test_stamps_version_and_orders_ids(self, db_session):
         e1 = await emit_event(
             db_session, EVENT_GROUP_CHANGED,
-            {"group_key": "masters", "recipient_id": "x" * 8, "member": True},
+            {"group_key": "masters", "recipient_id": f"{SYNTH}x", "member": True},
         )
         e2 = await emit_event(
             db_session, EVENT_GROUP_CHANGED,
-            {"group_key": "masters", "recipient_id": "y" * 8, "member": False},
+            {"group_key": "masters", "recipient_id": f"{SYNTH}y", "member": False},
         )
         assert e1.payload["v"] == 1
         assert e2.id > e1.id  # publication order mirrors emission order
@@ -124,10 +171,12 @@ class TestEmitEvent:
     async def test_same_transaction_rollback_kills_event(self, db_session):
         await emit_event(
             db_session, EVENT_GROUP_CHANGED,
-            {"group_key": "masters", "recipient_id": "z", "member": True},
+            {"group_key": "masters", "recipient_id": f"{SYNTH}z", "member": True},
         )
         await db_session.rollback()
-        assert await _pending_events(db_session) == []
+        # Scoped to OUR rows: the shared live outbox may hold foreign
+        # events -- they are not this assertion's business.
+        assert await _synth_events(db_session) == []
 
     async def test_rejects_unknown_type_and_non_json_values(self, db_session):
         with pytest.raises(ValueError, match="unknown outbox event type"):
@@ -165,14 +214,18 @@ class TestRelay:
         self, db_session, relay_redis
     ):
         redis, stream = relay_redis
+        await _park_foreign_pending(db_session)
         for n in range(3):
             await emit_event(
                 db_session, EVENT_GROUP_CHANGED,
-                {"group_key": "masters", "recipient_id": f"r{n}", "member": True},
+                {"group_key": "masters",
+                 "recipient_id": f"{SYNTH}r{n}", "member": True},
             )
-        await db_session.commit()
-
-        published, failed = await relay_pending_batch(redis)
+        # NO commit: the rows stay invisible to the live server relay
+        # (post-T0 finding #1); the pass runs in OUR transaction.
+        published, failed = await relay_pending_batch(
+            redis, session=db_session
+        )
         assert (published, failed) == (3, 0)
 
         entries = await redis.xrange(stream)
@@ -181,34 +234,37 @@ class TestRelay:
             json.loads(fields[b"data"])["recipient_id"]
             for _, fields in entries
         ]
-        assert recipients == ["r0", "r1", "r2"]  # id order on the wire
+        assert recipients == [f"{SYNTH}r{n}" for n in range(3)]  # id order on the wire
         assert entries[0][1][b"event"] == EVENT_GROUP_CHANGED.encode()
 
-        events = await _pending_events(db_session)
+        events = await _synth_events(db_session)
+        assert len(events) == 3
         assert all(e.published_at is not None for e in events)
 
-        # Second pass: nothing pending.
-        assert await relay_pending_batch(redis) == (0, 0)
+        # Second pass: nothing pending (same transaction).
+        assert await relay_pending_batch(redis, session=db_session) == (0, 0)
+        await db_session.rollback()  # nothing persists past the test
 
     async def test_poison_event_does_not_block_batch(
         self, db_session, relay_redis
     ):
         """Mandatory review fix #1: per-event errors, not per-batch."""
         redis, stream = relay_redis
+        await _park_foreign_pending(db_session)
         ids = []
         for n in range(3):
             e = await emit_event(
                 db_session, EVENT_GROUP_CHANGED,
-                {"group_key": "masters", "recipient_id": f"p{n}", "member": True},
+                {"group_key": "masters",
+                 "recipient_id": f"{SYNTH}p{n}", "member": True},
             )
             ids.append(e.id)
-        await db_session.commit()
-        poison_id = ids[0]
+        poison_id = ids[0]  # uncommitted -- invisible to the live relay
 
         real_xadd = redis.xadd
 
         async def xadd_poisoned(stream_name, fields, *a, **kw):
-            if json.loads(fields["data"])["recipient_id"] == "p0":
+            if json.loads(fields["data"])["recipient_id"] == f"{SYNTH}p0":
                 raise RuntimeError("malformed for the wire")
             return await real_xadd(stream_name, fields, *a, **kw)
 
@@ -217,47 +273,49 @@ class TestRelay:
             patch.object(settings, "comms_relay_warn_every_attempts", 2),
         ):
             # Pass 1: poison fails (attempts=1), the other two publish.
-            assert await relay_pending_batch(redis) == (2, 1)
+            assert await relay_pending_batch(redis, session=db_session) == (2, 1)
             # Pass 2: only the poison row is pending; attempts hits the
             # threshold (2) -> the WARN branch fires.
-            assert await relay_pending_batch(redis) == (0, 1)
+            assert await relay_pending_batch(redis, session=db_session) == (0, 1)
 
         entries = await redis.xrange(stream)
         recipients = [
             json.loads(fields[b"data"])["recipient_id"]
             for _, fields in entries
         ]
-        assert recipients == ["p1", "p2"]  # the pipe kept moving
+        assert recipients == [f"{SYNTH}p1", f"{SYNTH}p2"]  # the pipe kept moving
 
-        events = await _pending_events(db_session)
+        events = await _synth_events(db_session)
         poison = next(e for e in events if e.id == poison_id)
         assert poison.published_at is None  # never dropped, still pending
         assert poison.attempts == 2
         others = [e for e in events if e.id != poison_id]
         assert all(e.published_at is not None for e in others)
         assert all(e.attempts == 0 for e in others)
+        await db_session.rollback()
 
     async def test_connection_error_aborts_without_charging_attempts(
         self, db_session, relay_redis
     ):
         redis, _stream = relay_redis
+        await _park_foreign_pending(db_session)
         await emit_event(
             db_session, EVENT_GROUP_CHANGED,
-            {"group_key": "masters", "recipient_id": "c0", "member": True},
+            {"group_key": "masters", "recipient_id": f"{SYNTH}c0", "member": True},
         )
-        await db_session.commit()
-
+        # NO commit (see the ordering test).
         with patch.object(
             redis, "xadd", side_effect=RedisConnectionError("down")
         ):
-            assert await relay_pending_batch(redis) == (0, 0)
+            assert await relay_pending_batch(redis, session=db_session) == (0, 0)
 
-        events = await _pending_events(db_session)
+        events = await _synth_events(db_session)
         assert events[0].attempts == 0  # infra, not poison
         assert events[0].published_at is None
 
         # Redis back up -> next tick ships it.
-        assert await relay_pending_batch(redis) == (1, 0)
+        assert await relay_pending_batch(redis, session=db_session) == (1, 0)
+        await db_session.rollback()
 
     async def test_envelope_shape_matches_contract(self, db_session):
         e = await emit_event(
@@ -537,21 +595,22 @@ class TestBackfill:
         await login_user(client, telegram_id=TID_BACKFILL_B)
         await _make_admin(db_session, TID_BACKFILL_B)
 
-        # Drain the login-time events: the backfill run is measured alone.
-        await db_session.execute(delete(OutboxEvent))
-        await db_session.commit()
+        # No global drain (post-T0 finding #1): measure per-user DELTAS
+        # against whatever the shared outbox already holds.
+        base_a = len(await _events_for(db_session, a["user"]["id"]))
 
         users, masters, admins = await backfill()
         assert users >= 2  # the whole test DB; ours are among them
         assert admins >= 1
 
         events_a = await _events_for(db_session, a["user"]["id"])
-        assert [e.event_type for e in events_a] == [EVENT_USER_UPSERTED]
+        assert len(events_a) == base_a + 1  # exactly one snapshot per run
+        assert events_a[-1].event_type == EVENT_USER_UPSERTED
 
         # Repeat run: fresh identical snapshots, nothing corrupted --
         # harmless by the contract's natural idempotency (comms upserts).
         users2, masters2, admins2 = await backfill()
         assert (users2, masters2, admins2) == (users, masters, admins)
         events_a2 = await _events_for(db_session, a["user"]["id"])
-        assert len(events_a2) == 2
-        assert events_a2[0].payload == events_a2[1].payload
+        assert len(events_a2) == base_a + 2
+        assert events_a2[-1].payload == events_a2[-2].payload

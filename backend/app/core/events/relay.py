@@ -49,6 +49,7 @@ from redis import asyncio as aioredis
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_session_factory
@@ -72,77 +73,93 @@ def build_envelope(event: OutboxEvent) -> dict[str, str]:
     }
 
 
-async def relay_pending_batch(redis: aioredis.Redis) -> tuple[int, int]:
-    """Publish one batch of pending outbox rows.
+async def _publish_batch(
+    session: AsyncSession, redis: aioredis.Redis
+) -> tuple[int, int]:
+    """The transaction-agnostic core of one relay pass.
 
-    Returns (published, failed) counts for the pass. Opens its own
-    session/transaction: published_at / attempts updates commit even
-    though the emitting transactions are long gone.
-
-    Raises nothing for per-event failures (counted + logged); lets
-    connection-level errors abort the pass after committing whatever
-    already published (see module header).
+    Selects pending rows FOR UPDATE SKIP LOCKED inside the CALLER'S
+    transaction, XADDs them in id order, marks published_at / charges
+    attempts. Owns NO transaction: the caller commits (production) or
+    rolls back (tests). See the module header for the error model.
     """
-    session_factory = get_session_factory()
     published = 0
     failed = 0
-    async with session_factory() as session, session.begin():
-        stmt = (
-            select(OutboxEvent)
-            .where(OutboxEvent.published_at.is_(None))
-            .order_by(OutboxEvent.id)
-            .limit(settings.comms_relay_batch_size)
-            .with_for_update(skip_locked=True)
-        )
-        result = await session.execute(stmt)
-        events = list(result.scalars().all())
-        if not events:
-            return (0, 0)
+    stmt = (
+        select(OutboxEvent)
+        .where(OutboxEvent.published_at.is_(None))
+        .order_by(OutboxEvent.id)
+        .limit(settings.comms_relay_batch_size)
+        .with_for_update(skip_locked=True)
+    )
+    result = await session.execute(stmt)
+    events = list(result.scalars().all())
 
-        connection_down = False
-        for event in events:
-            try:
-                await redis.xadd(
-                    settings.comms_events_stream,
-                    build_envelope(event),  # type: ignore[arg-type]
-                )
-            except _CONNECTION_ERRORS as exc:
-                # Infra, not poison: stop the pass, do NOT charge
-                # attempts to rows that never got a fair try.
-                logger.warning(
-                    "outbox_relay_redis_unreachable",
-                    error=str(exc),
-                    pending_from_event_id=event.id,
-                )
-                connection_down = True
-                break
-            except Exception as exc:
-                # Poison row: charge it, keep the pipe moving.
-                event.attempts += 1
-                failed += 1
-                log = logger.warning if (
-                    event.attempts
-                    % settings.comms_relay_warn_every_attempts
-                    == 0
-                ) else logger.info
-                log(
-                    "outbox_event_publish_failed",
-                    event_id=event.id,
-                    event_type=event.event_type,
-                    attempts=event.attempts,
-                    error=str(exc),
-                )
-                continue
-            event.published_at = datetime.now(UTC)
-            published += 1
+    for event in events:
+        try:
+            await redis.xadd(
+                settings.comms_events_stream,
+                build_envelope(event),  # type: ignore[arg-type]
+            )
+        except _CONNECTION_ERRORS as exc:
+            # Infra, not poison: stop the pass, do NOT charge attempts
+            # to rows that never got a fair try.
+            logger.warning(
+                "outbox_relay_redis_unreachable",
+                error=str(exc),
+                pending_from_event_id=event.id,
+            )
+            break
+        except Exception as exc:
+            # Poison row: charge it, keep the pipe moving.
+            event.attempts += 1
+            failed += 1
+            log = logger.warning if (
+                event.attempts
+                % settings.comms_relay_warn_every_attempts
+                == 0
+            ) else logger.info
+            log(
+                "outbox_event_publish_failed",
+                event_id=event.id,
+                event_type=event.event_type,
+                attempts=event.attempts,
+                error=str(exc),
+            )
+            continue
+        event.published_at = datetime.now(UTC)
+        published += 1
 
-        if connection_down and published == 0 and failed == 0:
-            # Nothing to persist; rollback keeps the rows clean.
-            await session.rollback()
-            return (0, 0)
-        # session.begin() context committed here: published_at marks
-        # and attempts increments persist together.
     return (published, failed)
+
+
+async def relay_pending_batch(
+    redis: aioredis.Redis,
+    *,
+    session: AsyncSession | None = None,
+) -> tuple[int, int]:
+    """Publish one batch of pending outbox rows.
+
+    Returns (published, failed) counts for the pass.
+
+    Production (run_relay) calls it without `session`: a fresh
+    session/transaction is opened and COMMITTED, so published_at marks
+    and attempts increments persist even though the emitting
+    transactions are long gone.
+
+    Tests inject their own `session` and emit WITHOUT committing: the
+    pass then runs entirely inside the test transaction -- the live
+    relay of a running server process cannot see (or ship) those
+    uncommitted rows, so relay tests neither race the real relay nor
+    leak synthetic events into the real comms stream (post-T0 finding
+    #1). The caller owns commit/rollback.
+    """
+    if session is not None:
+        return await _publish_batch(session, redis)
+
+    session_factory = get_session_factory()
+    async with session_factory() as own_session, own_session.begin():
+        return await _publish_batch(own_session, redis)
 
 
 async def run_relay() -> None:
