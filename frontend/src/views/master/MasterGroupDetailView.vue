@@ -56,7 +56,6 @@
             @focus="onFieldFocus"
           />
         </div>
-        <span class="group-detail__search-btn" aria-hidden="true"><IconSearch :size="20" /></span>
       </div>
 
       <!-- Loading -->
@@ -236,7 +235,7 @@ import {
   VConfirmDialog,
   VBottomSheet,
 } from '@/components/ui'
-import { IconSearch, IconShare, IconPlus, IconPen, IconCheck } from '@/components/icons'
+import { IconShare, IconPlus, IconPen, IconCheck } from '@/components/icons'
 // IconTrash is not re-exported from the icons barrel (same pattern as
 // EntryView.vue's delete action) -- import the component file directly.
 import IconTrash from '@/components/icons/IconTrash.vue'
@@ -502,7 +501,10 @@ async function onDeleteConfirm(): Promise<void> {
   padding: var(--space-6) 0;
 }
 
-/* Search: same DS pattern as MasterStudentsView (VInput glass pill + magnifier). */
+/* Search: same DS pattern as MasterStudentsView (VInput glass pill). G4
+   (ПРОМТ №609): the decorative magnifier button removed -- it was
+   aria-hidden with no click handler, the field already self-triggers via
+   its own watch()+debounce. */
 .group-detail__search {
   display: flex;
   align-items: center;
@@ -519,21 +521,14 @@ async function onDeleteConfirm(): Promise<void> {
   margin-bottom: 0;
 }
 
+/* G5 (ПРОМТ №609): white glow via the existing --velo-shadow-glow token
+   (measured from the owner's SVG as dilate 8.82 + blur 13.167 white --
+   the token is the closest existing match, used here rather than the
+   raw numbers). */
 .group-detail__search-field :deep(.v-input__field) {
   background: var(--velo-glass-blue-15);
   border-radius: var(--radius-full);
-}
-
-.group-detail__search-btn {
-  width: var(--velo-size-44);
-  height: var(--velo-size-44);
-  flex-shrink: 0;
-  border-radius: var(--radius-full);
-  background: var(--velo-primary);
-  color: var(--velo-white);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  box-shadow: var(--velo-shadow-glow);
 }
 
 .group-detail__row-wrap {
