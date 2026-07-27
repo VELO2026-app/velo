@@ -1,5 +1,4 @@
 # VELΘ Design Migration Plan v4
-# Старт от main. Никаких ссылок на старые ветки.
 
 > **Freshness (ПРОМТ №510, 2026-07-19, verified against `8d4948f` on `test`):** graded
 > ACTIVELY MISLEADING overall — NOT rewritten this round (no specific line-level correction
