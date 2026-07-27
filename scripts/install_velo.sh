@@ -1200,9 +1200,15 @@ EOF
 
     # The two values velo-manage.sh cannot get from the repo, because they
     # are not code -- they are what makes this server THIS server.
+    # Phase 6 / T0 finding #2: VELO_ROLE joined them -- the role fork used
+    # to die at install time (it only picked the branch), while `velo
+    # update` stayed role-blind and ran the pytest suite against the live
+    # DB on ANY server. Now the role persists and velo-manage.sh gates the
+    # test-only phases (pytest + comms projection resync) on it.
     cat > "$INSTALL_BASE/velo.conf" << EOF
 DOMAIN_FRONTEND=${DOMAIN_FRONTEND}
 DOMAIN_API=${DOMAIN_API}
+VELO_ROLE=${VELO_ROLE}
 EOF
 
     ln -sf "$INSTALL_BASE/scripts/manage.sh" /usr/local/bin/velo

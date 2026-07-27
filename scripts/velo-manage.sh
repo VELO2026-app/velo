@@ -63,12 +63,77 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
+# -- Server role (Phase 6 / T0 finding #2) ------------------------------------
+# test | prod, written into velo.conf by install_velo.sh. The role gates the
+# test-only phases of `velo update`: the pytest suite runs against the LIVE
+# DB and (since T0) every domain write it makes emits a real comms sync
+# event -- fine on the test server (followed by a projection resync), never
+# acceptable on prod. Prod's deploy gate is a green test server, not a
+# local suite run.
+#
+# Missing role -> assume "test" with a warning: today's fleet is exactly one
+# test server installed before the role persisted (migration: add
+# VELO_ROLE=test to /opt/velo/velo.conf); any future prod install comes from
+# the patched installer and gets the role written explicitly.
+VELO_ROLE="${VELO_ROLE:-}"
+if [ -z "$VELO_ROLE" ]; then
+    echo -e "${YELLOW}⚠ VELO_ROLE missing in $CONF_FILE -- assuming 'test'.${NC}"
+    echo -e "${YELLOW}  Persist it: echo \"VELO_ROLE=test\" >> $CONF_FILE${NC}"
+    VELO_ROLE="test"
+fi
+case "$VELO_ROLE" in
+    test|prod) ;;
+    *)
+        echo -e "${RED}FATAL: VELO_ROLE='$VELO_ROLE' in $CONF_FILE (expected test|prod)${NC}"
+        exit 1
+        ;;
+esac
+
 # Ensure we're in the right directory for docker compose
 cd_compose() {
     cd "$COMPOSE_DIR" || {
         echo -e "${RED}ERROR: $COMPOSE_DIR not found${NC}"
         exit 1
     }
+}
+
+# -- Comms projection resync (TEST CONTOUR ONLY -- Phase 6 / T0 finding #2) ---
+# The pytest suite runs against the live DB while the server's outbox relay
+# keeps shipping: every login/verify a test performs becomes a REAL
+# user_upserted / group_changed event in comms, and the raw test cleanups
+# emit nothing back -- after each suite run the comms projection holds
+# phantom recipients/memberships (measured: 1075 and 1189 recipients vs 426
+# real users on 27.07). The cure is the projection's own design: it is
+# rebuildable from velo. Drop it, backfill it, done (~10s for 426 users).
+#
+# DO NOT port this into any prod path. Prod has no phantom source (no suite
+# runs against the prod DB -- see the role gate in `update`), so prod never
+# truncates: the transactional outbox + snapshot-on-login self-healing +
+# the idempotent backfill (as a reconciliation tool, WITHOUT truncate)
+# keep the projection converged.
+resync_comms_projection() {
+    if [ "$VELO_ROLE" != "test" ]; then
+        echo -e "${RED}✗ resync-comms is a test-contour ritual; refusing on role '$VELO_ROLE'${NC}"
+        return 1
+    fi
+    if ! docker ps --format '{{.Names}}' | grep -q '^comms-postgres$'; then
+        echo -e "${YELLOW}⊘ comms-postgres not running -- comms not installed here, resync skipped${NC}"
+        return 0
+    fi
+    echo "Resyncing the comms projection (truncate + backfill)..."
+    if ! docker exec comms-postgres psql -U comms -d comms -c \
+        "TRUNCATE group_memberships, recipients CASCADE;" > /dev/null; then
+        echo -e "${RED}✗ Failed to truncate the comms projection${NC}"
+        return 1
+    fi
+    cd_compose
+    if ! $COMPOSE_CMD exec -T app python scripts/backfill_comms_sync.py \
+        | tail -n 2; then
+        echo -e "${RED}✗ Backfill failed -- projection is EMPTY until it succeeds${NC}"
+        echo "Retry by hand: velo resync-comms"
+        return 1
+    fi
+    echo -e "${GREEN}✓ Comms projection resynced (relay ships it within seconds)${NC}"
 }
 
 # Make sure the shared external docker network exists before any `up`.
@@ -458,6 +523,15 @@ case "${1:-}" in
     # === Testing & Linting ===
 
     test)
+        # Backend pytest runs against the LIVE DB (and since T0 emits real
+        # comms sync events) -- an explicit `velo test` on prod is as
+        # forbidden as the update-time run. Frontend tests are container-
+        # local, but the command keeps one rule for simplicity.
+        if [ "$VELO_ROLE" != "test" ]; then
+            echo -e "${RED}✗ 'velo test' is refused on role '$VELO_ROLE': the suite runs against the live DB.${NC}"
+            echo "The deploy gate for prod is a green TEST server."
+            exit 1
+        fi
         FAILED=0
         case "${2:-all}" in
             backend)
@@ -718,8 +792,15 @@ case "${1:-}" in
             }
             echo -e "${GREEN}✓ Migrations applied${NC}"
 
-            # Run backend tests (unless --skip-tests)
-            if [ $SKIP_TESTS -eq 0 ]; then
+            # Run backend tests (unless --skip-tests) -- TEST ROLE ONLY.
+            # The suite runs against the LIVE DB and (Phase 6 / T0) its
+            # domain writes emit real comms sync events; on prod that is
+            # forbidden by definition -- prod's deploy gate is a green
+            # TEST server, not a local suite run against prod data.
+            if [ "$VELO_ROLE" != "test" ]; then
+                echo ""
+                echo -e "${YELLOW}⊘ Backend tests skipped on role '$VELO_ROLE' (deploy gate is the test server)${NC}"
+            elif [ $SKIP_TESTS -eq 0 ]; then
                 echo ""
                 echo "Running backend tests..."
                 if ! $COMPOSE_CMD exec -T app python -m pytest tests/ -v --tb=short; then
@@ -728,6 +809,12 @@ case "${1:-}" in
                     exit 1
                 fi
                 echo -e "${GREEN}✓ All backend tests passed${NC}"
+
+                # The suite just polluted the comms projection with
+                # phantom events (T0 finding #2) -- resync it. Test
+                # contour only; see resync_comms_projection.
+                echo ""
+                resync_comms_projection || exit 1
             else
                 echo ""
                 echo -e "${YELLOW}⊘ Backend tests skipped (--skip-tests)${NC}"
@@ -858,6 +945,12 @@ Triggered by velo update on commit $NEW_COMMIT" || {
         ;;
 
     # === Backup ===
+
+    # === Comms projection resync (test contour only, T0 finding #2) ===
+
+    resync-comms)
+        resync_comms_projection || exit 1
+        ;;
 
     backup)
         TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -1193,6 +1286,9 @@ Triggered by velo update on commit $NEW_COMMIT" || {
         echo "    --skip-tests        Skip backend tests (everything else runs)"
         echo "    --frontend-only     Skip whole backend cycle; refuses if backend/ changed"
         echo "  gen-types           — Regenerate frontend types from backend"
+        echo "  resync-comms        — Rebuild the comms projection (truncate + backfill;"
+        echo "                        test server only; update runs it after tests; also"
+        echo "                        run it after 'velo seed' -- seeds bypass the emits)"
         echo ""
         echo "Database:"
         echo "  db connect          — Open psql session"
