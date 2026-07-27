@@ -45,7 +45,13 @@ from app.modules.masters.groups_models import (
 )
 from app.modules.masters.models import MasterProfile
 from app.modules.payments.models import Purchase, PurchaseStatus
-from app.modules.practices.models import Practice, PracticeStatus, PracticeType
+from app.modules.practices.models import (
+    AudienceKind,
+    Practice,
+    PracticeAudienceGroup,
+    PracticeStatus,
+    PracticeType,
+)
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 
@@ -1233,3 +1239,132 @@ async def test_join_group_invalid_token_404(
     )
 
     assert resp.status_code == 404
+
+
+# ===================================================================
+# delete_group: orphan-audience guard (P5, ПРОМТ №606)
+# ===================================================================
+
+
+async def _groups_practice(
+    db_session: AsyncSession,
+    master_id: str,
+    group_ids: list[UUID],
+    *,
+    status: str = PracticeStatus.SCHEDULED.value,
+) -> Practice:
+    """A practice targeting `group_ids` as its audience (audience_kind=
+    'groups' + one PracticeAudienceGroup row per id) -- mirrors what
+    practices/service.py's PATCH switch-matrix would have produced, built
+    directly since this file works at the groups_service layer, not
+    through the practices API."""
+    practice = await _practice(
+        db_session, master_id, scheduled_hours_from_now=5, status=status,
+    )
+    practice.audience_kind = AudienceKind.GROUPS.value
+    await db_session.flush()
+    for group_id in group_ids:
+        db_session.add(
+            PracticeAudienceGroup(practice_id=practice.id, group_id=group_id)
+        )
+    await db_session.flush()
+    return practice
+
+
+@pytest.mark.asyncio
+async def test_delete_group_blocked_when_sole_audience_of_a_practice(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    master = await _make_verified_master(client, db_session, 99770)
+    headers = auth_headers(master["session_token"])
+    created = await client.post(GROUPS_URL, json={"name": "VIP"}, headers=headers)
+    group_id = created.json()["id"]
+
+    practice = await _groups_practice(
+        db_session, master["user"]["id"], [UUID(group_id)],
+    )
+    await db_session.commit()
+
+    resp = await client.delete(GROUP_URL.format(group_id=group_id), headers=headers)
+
+    assert resp.status_code == 409
+    assert resp.json()["error"] == "group_in_use"
+
+    # The group and its audience link both survive -- the guard rejected
+    # BEFORE session.delete(), not after.
+    remaining_links = (
+        (
+            await db_session.execute(
+                select(PracticeAudienceGroup).where(
+                    PracticeAudienceGroup.practice_id == practice.id,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(remaining_links) == 1
+
+
+@pytest.mark.asyncio
+async def test_delete_group_allowed_when_practice_has_another_group_too(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """The group being deleted is NOT the practice's sole audience -- the
+    practice keeps a valid (non-empty) audience after the cascade, exactly
+    what a PATCH dropping this same group from group_ids is already
+    allowed to do. Must NOT block."""
+    master = await _make_verified_master(client, db_session, 99771)
+    headers = auth_headers(master["session_token"])
+    doomed = await client.post(GROUPS_URL, json={"name": "Doomed"}, headers=headers)
+    doomed_id = doomed.json()["id"]
+    survivor = await client.post(GROUPS_URL, json={"name": "Survivor"}, headers=headers)
+    survivor_id = survivor.json()["id"]
+
+    practice = await _groups_practice(
+        db_session, master["user"]["id"], [UUID(doomed_id), UUID(survivor_id)],
+    )
+    await db_session.commit()
+
+    resp = await client.delete(GROUP_URL.format(group_id=doomed_id), headers=headers)
+
+    assert resp.status_code == 204
+
+    remaining_links = (
+        (
+            await db_session.execute(
+                select(PracticeAudienceGroup).where(
+                    PracticeAudienceGroup.practice_id == practice.id,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(remaining_links) == 1
+    assert remaining_links[0].group_id == UUID(survivor_id)
+
+
+@pytest.mark.asyncio
+async def test_delete_group_allowed_when_sole_audience_of_a_completed_practice(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """A finished practice's audience is already inert (see
+    _sole_audience_practice_titles's own docstring) -- must NOT block a
+    cleanup."""
+    master = await _make_verified_master(client, db_session, 99772)
+    headers = auth_headers(master["session_token"])
+    created = await client.post(GROUPS_URL, json={"name": "Past"}, headers=headers)
+    group_id = created.json()["id"]
+
+    await _groups_practice(
+        db_session,
+        master["user"]["id"],
+        [UUID(group_id)],
+        status=PracticeStatus.COMPLETED.value,
+    )
+    await db_session.commit()
+
+    resp = await client.delete(GROUP_URL.format(group_id=group_id), headers=headers)
+
+    assert resp.status_code == 204

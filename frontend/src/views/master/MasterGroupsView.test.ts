@@ -15,6 +15,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import MasterGroupsView from '@/views/master/MasterGroupsView.vue'
 import * as groupsApi from '@/api/groups'
+import { ApiResponseError } from '@/api/client'
 import type { GroupListItem } from '@/api/groups'
 
 vi.mock('@/api/groups')
@@ -345,6 +346,37 @@ describe('MasterGroupsView', () => {
       await flush()
 
       expect(groupsApi.deleteGroup).toHaveBeenCalledWith('g1')
+    })
+
+    it('a group_in_use rejection toasts a Russian message, never the raw backend detail (P5, ПРОМТ №606)', async () => {
+      vi.mocked(groupsApi.getGroups).mockResolvedValue({
+        items: [group('g1', { kind: 'custom', name: 'VIP' })],
+      })
+      vi.mocked(groupsApi.deleteGroup).mockRejectedValue(
+        new ApiResponseError(
+          409,
+          "Cannot delete: this group is the only audience of «Утренняя практика». Change that practice's audience first.",
+          'group_in_use',
+        ),
+      )
+      mount()
+      await flush()
+
+      host?.querySelector<HTMLElement>('.v-menu__trigger')?.click()
+      await flush()
+      const deleteBtn = Array.from(host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? [])[1]
+      deleteBtn?.click()
+      await flush()
+      const confirmBtn = Array.from(modalOverlay()?.querySelectorAll('button') ?? []).find(
+        (b) => b.textContent?.trim() === 'Удалить',
+      )
+      confirmBtn?.click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledTimes(1)
+      const [message] = toastError.mock.calls[0]!
+      expect(message).not.toContain('Cannot delete')
+      expect(message).toContain('аудитория')
     })
   })
 })

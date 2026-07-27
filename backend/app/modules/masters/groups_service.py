@@ -42,7 +42,7 @@ from app.modules.masters.groups_models import (
     MasterStudent,
 )
 from app.modules.payments.refund import refund_booking
-from app.modules.practices.models import Practice
+from app.modules.practices.models import Practice, PracticeAudienceGroup, PracticeStatus
 from app.modules.users.helpers import display_name
 from app.modules.users.models import User
 
@@ -432,10 +432,90 @@ async def rename_group(
     return group
 
 
+async def _sole_audience_practice_titles(
+    group_id: UUID, session: AsyncSession,
+) -> list[str]:
+    """Titles of this master's practices for which `group_id` is the ONLY
+    remaining target group -- deleting the group would drop
+    practice_audience_group to zero rows for that practice while
+    audience_kind stays 'groups' (fail-closed: invisible + unbookable to
+    every new viewer, see audience_service.py's _is_group_member_clause).
+
+    Fires on the group's presence, NOT on a bare audience_kind='groups'
+    filter: PracticeAudienceGroup rows only ever exist for a groups-audience
+    practice by construction (service.py's PATCH switch-matrix clears them
+    the moment a practice switches away, so a stale row never lingers).
+
+    Deliberately SCOPED to non-terminal practices (draft/scheduled/live).
+    A completed/cancelled/deleted practice's audience is already inert: the
+    only two things audience_kind gates are the public feed (time/status-
+    filtered to upcoming scheduled/live already, listing_service.py) and
+    new booking/waitlist/checkin writes (each independently blocked on a
+    terminal practice by its OWN status check, before audience is ever
+    consulted). Orphaning a finished practice's audience changes nothing
+    reachable, so it must not block a cleanup the master is otherwise free
+    to do.
+
+    Deliberately NOT "any practice that merely references the group": a
+    practice with two target groups loses one and keeps a valid (non-empty)
+    audience -- exactly what a PATCH dropping that same group from
+    group_ids is already allowed to do (service.py:1189-1193). Blocking
+    that case would make group deletion stricter than editing the practice
+    directly for the identical resulting state.
+    """
+    other_groups_count = (
+        select(func.count(PracticeAudienceGroup.id))
+        .where(
+            PracticeAudienceGroup.practice_id == Practice.id,
+            PracticeAudienceGroup.group_id != group_id,
+        )
+        .correlate(Practice)
+        .scalar_subquery()
+    )
+    rows = (
+        await session.execute(
+            select(Practice.title)
+            .join(
+                PracticeAudienceGroup,
+                PracticeAudienceGroup.practice_id == Practice.id,
+            )
+            .where(
+                PracticeAudienceGroup.group_id == group_id,
+                Practice.status.notin_(
+                    [
+                        PracticeStatus.COMPLETED.value,
+                        PracticeStatus.CANCELLED.value,
+                        PracticeStatus.DELETED.value,
+                    ],
+                ),
+                other_groups_count == 0,
+            )
+            .order_by(Practice.scheduled_at)
+        )
+    ).scalars().all()
+    return list(rows)
+
+
 async def delete_group(
     master_id: UUID, group_id_str: str, session: AsyncSession,
 ) -> None:
     group = await _get_custom_group_or_404(master_id, group_id_str, session)
+
+    # P5 orphan-audience guard (ПРОМТ №606, owner-ruled: BLOCK, never
+    # auto-reassign or auto-unlist). group_ids is always validated as this
+    # SAME master's own custom groups at write time
+    # (_owned_group_ids_or_400), so every PracticeAudienceGroup row pointing
+    # at this group already belongs to this master -- no extra master_id
+    # filter needed on the practice side.
+    blocking_titles = await _sole_audience_practice_titles(group.id, session)
+    if blocking_titles:
+        names = ", ".join(f"«{t}»" for t in blocking_titles)
+        raise ConflictError(
+            f"Cannot delete: this group is the only audience of {names}. "
+            "Change that practice's audience first.",
+            code="group_in_use",
+        )
+
     await session.delete(group)
     await session.flush()
 

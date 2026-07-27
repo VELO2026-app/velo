@@ -145,6 +145,7 @@ import { IconShare, IconPen, IconPlus } from '@/components/icons'
 import IconTrash from '@/components/icons/IconTrash.vue'
 import VShowMore from '@/components/shared/VShowMore.vue'
 import { getGroups, renameGroup, deleteGroup, createGroupInvite } from '@/api/groups'
+import { ApiResponseError } from '@/api/client'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
 import { plural } from '@/utils/plural'
@@ -262,7 +263,19 @@ async function onDeleteConfirm(): Promise<void> {
     deleteTarget.value = null
     await load()
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось удалить группу'))
+    // P5 (ПРОМТ №606): the backend's group_in_use message is an English
+    // sentence naming the blocking practice(s) -- useful in logs, but not
+    // something to relay verbatim to a human (same posture as
+    // CreatePracticeView/EditPracticeView's direction_not_confirmed
+    // translation). A fixed Russian message instead of extractApiError's
+    // raw e.detail.
+    if (e instanceof ApiResponseError && e.code === 'group_in_use') {
+      toast.error(
+        'Эта группа — единственная аудитория одной из практик. Сначала измените аудиторию практики, затем удалите группу.',
+      )
+    } else {
+      toast.error(extractApiError(e, 'Не удалось удалить группу'))
+    }
   } finally {
     deleting.value = false
   }
