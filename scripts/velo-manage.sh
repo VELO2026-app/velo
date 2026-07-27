@@ -551,18 +551,42 @@ case "${1:-}" in
         BRANCH=$(git branch --show-current)
         echo "Current: $CURRENT_COMMIT ($BRANCH)"
 
-        # Check for uncommitted changes
+        # Check for uncommitted changes -- two tiers.
+        # Tier 1, deploy artifacts, reconciled silently: generated.ts is
+        # re-derived from the running backend by every install/update, so a
+        # tree copy differing from HEAD is business as usual (e.g. an update
+        # that died before its drift-commit step leaves one behind -- the
+        # 2026-07-27 night run did exactly that). Discarding is lossless by
+        # construction: the file is derived output and this very update
+        # re-derives it a few steps below; hand edits to a generated file
+        # would be overwritten by that step anyway.
+        # Tier 2, everything else, is presumed HUMAN work: show WHAT changed
+        # (per-file diffstat, not just names), then ask before discarding.
+        DEPLOY_ARTIFACTS="frontend/src/api/generated.ts"
+        for f in $DEPLOY_ARTIFACTS; do
+            if ! git diff --quiet HEAD -- "$f" 2>/dev/null; then
+                echo -e "${CYAN}ℹ $f differs from HEAD — deploy artifact, reconciled automatically${NC}"
+                git checkout HEAD -- "$f"
+            fi
+        done
         if ! git diff-index --quiet HEAD -- 2>/dev/null; then
             echo -e "${YELLOW}⚠ Uncommitted changes detected:${NC}"
             git status --short
             echo ""
+            echo "What changed:"
+            git --no-pager diff --stat HEAD
+            echo ""
+            echo "(full diff: cd $INSTALL_BASE/repo && git diff HEAD)"
             read -p "Discard local changes and update? (y/n): " -n 1 -r
             echo
             if [[ ! $REPLY =~ ^[Yy]$ ]]; then
                 echo "Update cancelled"
                 exit 1
             fi
-            git checkout -- .
+            # reset --hard, not `checkout -- .`: checkout restores the worktree
+            # from the INDEX, so staged edits would survive and could still
+            # break the pull below -- the prompt promises a discard, keep it.
+            git reset --hard HEAD
         fi
 
         # Fetch and check
