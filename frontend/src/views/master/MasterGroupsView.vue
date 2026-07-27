@@ -15,6 +15,16 @@
   AdminMasterInviteView/MasterPromocodesView), and toasts. CUSTOM groups only
   -- the two virtual groups never render this action (see the v-if guard
   below), matching the backend's 400-on-system-slug.
+
+  Cross-group people-search (P6, ПРОМТ №607): a search field above the
+  groups list. Empty query -> the groups list unchanged (below). Non-empty
+  query -> one row per (person, CUSTOM group) MEMBERSHIP (owner-approved
+  preview, .tmp/cross-group-search-preview.html) -- a person in N groups
+  renders N rows, each carrying a VChip naming that group; deliberately not
+  deduped. Server-side + debounced exactly like MasterGroupDetailView's own
+  member search (same 300ms, same watch+setTimeout shape) -- the backend
+  requires search to be non-empty (min_length=1), so an empty query never
+  calls it and simply falls back to the groups list.
 -->
 
 <template>
@@ -22,12 +32,67 @@
     <VHeader title="Мои группы" show-back @back="router.push({ name: 'master-dashboard' })" />
 
     <div class="groups__content">
-      <!-- Loading -->
-      <div v-if="loading" class="groups__state">
+      <!-- Cross-group search field -- same DS pattern as MasterStudentsView /
+           MasterGroupDetailView (VInput glass pill + magnifier). -->
+      <div class="groups__search">
+        <div class="groups__search-field">
+          <VInput
+            v-model="search"
+            placeholder="Искать ученика..."
+            aria-label="Искать по всем группам"
+            @focus="onFieldFocus"
+          />
+        </div>
+        <span class="groups__search-btn" aria-hidden="true"><IconSearch :size="20" /></span>
+      </div>
+
+      <template v-if="search.trim()">
+        <!-- Search: loading -->
+        <div v-if="searchLoading" class="groups__state">
+          <VLoader size="lg" />
+        </div>
+
+        <!-- Search: error -->
+        <VEmptyState
+          v-else-if="searchError"
+          icon="warning"
+          title="Не удалось выполнить поиск"
+          :description="searchError"
+        >
+          <VButton size="sm" variant="outline" @click="loadSearch">Повторить</VButton>
+        </VEmptyState>
+
+        <!-- Search: content (one row per membership) -->
+        <template v-else>
+          <VListRow
+            v-for="row in searchResults"
+            :key="`${row.student_user_id}-${row.group_id}`"
+            :title="row.name"
+          >
+            <template #lead>
+              <VAvatar :name="row.name" :url="row.avatar_url ?? undefined" size="md" />
+            </template>
+            <template #trailing>
+              <VChip>{{ row.group_name }}</VChip>
+            </template>
+          </VListRow>
+
+          <!-- Search: empty (no matches for the typed query) -->
+          <VEmptyState
+            v-if="searchResults.length === 0"
+            icon="group"
+            title="Никого не найдено"
+            description="Попробуйте изменить запрос"
+          />
+        </template>
+      </template>
+
+      <!-- Loading (groups list) -->
+      <div v-else-if="loading" class="groups__state">
         <VLoader size="lg" />
       </div>
 
-      <!-- Error -->
+      <!-- Error (groups list) -->
       <VEmptyState
         v-else-if="error"
         icon="warning"
@@ -125,7 +190,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import {
@@ -138,21 +203,31 @@ import {
   VBottomSheet,
   VInput,
   VConfirmDialog,
+  VAvatar,
+  VChip,
 } from '@/components/ui'
-import { IconShare, IconPen, IconPlus } from '@/components/icons'
+import { IconShare, IconPen, IconPlus, IconSearch } from '@/components/icons'
 // IconTrash is not re-exported from the icons barrel (same pattern as
 // EntryView.vue's delete action) -- import the component file directly.
 import IconTrash from '@/components/icons/IconTrash.vue'
 import VShowMore from '@/components/shared/VShowMore.vue'
-import { getGroups, renameGroup, deleteGroup, createGroupInvite } from '@/api/groups'
+import {
+  getGroups,
+  renameGroup,
+  deleteGroup,
+  createGroupInvite,
+  searchGroupMemberships,
+} from '@/api/groups'
 import { ApiResponseError } from '@/api/client'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
+import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import { plural } from '@/utils/plural'
-import type { GroupListItem } from '@/api/groups'
+import type { GroupListItem, GroupSearchMemberItem } from '@/api/groups'
 
 const router = useRouter()
 const toast = useToast()
+const { onFieldFocus } = useKeyboardFieldScroll()
 
 const groups = ref<GroupListItem[]>([])
 const loading = ref(true)
@@ -171,6 +246,42 @@ async function load(): Promise<void> {
   }
 }
 onMounted(load)
+
+// -- Cross-group people-search (P6, ПРОМТ №607) --
+// One row per (person, CUSTOM group) MEMBERSHIP -- owner-approved preview,
+// deliberately NOT deduped. Server-side + debounced exactly like
+// MasterGroupDetailView's own member search (same 300ms, same
+// watch+setTimeout shape). The backend requires search to be non-empty
+// (min_length=1), so an empty query is never sent -- see the early return
+// in the watcher below, which also clears any stale results.
+const search = ref('')
+const searchResults = ref<GroupSearchMemberItem[]>([])
+const searchLoading = ref(false)
+const searchError = ref('')
+
+async function loadSearch(): Promise<void> {
+  searchLoading.value = true
+  searchError.value = ''
+  try {
+    const res = await searchGroupMemberships(search.value)
+    searchResults.value = res.items
+  } catch (e) {
+    searchError.value = extractApiError(e, 'Попробуйте ещё раз')
+  } finally {
+    searchLoading.value = false
+  }
+}
+
+let searchTimer: ReturnType<typeof setTimeout> | undefined
+watch(search, (value) => {
+  clearTimeout(searchTimer)
+  if (!value.trim()) {
+    searchResults.value = []
+    searchError.value = ''
+    return
+  }
+  searchTimer = setTimeout(loadSearch, 300)
+})
 
 // Show the first 10; the rest hide behind "+ ещё N групп" (mirrors
 // MasterStudentsView's identical STUDENTS_PREVIEW pattern).
@@ -301,6 +412,42 @@ async function onDeleteConfirm(): Promise<void> {
   display: flex;
   justify-content: center;
   padding: var(--space-6) 0;
+}
+
+/* -- Cross-group search (P6, ПРОМТ №607): same DS pattern as
+   MasterStudentsView / MasterGroupDetailView (VInput glass pill +
+   magnifier), token-for-token. -- */
+.groups__search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.groups__search-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.groups__search-field :deep(.v-input) {
+  margin-bottom: 0;
+}
+
+.groups__search-field :deep(.v-input__field) {
+  background: var(--velo-glass-blue-15);
+  border-radius: var(--radius-full);
+}
+
+.groups__search-btn {
+  width: var(--velo-size-44);
+  height: var(--velo-size-44);
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  background: var(--velo-primary);
+  color: var(--velo-white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .groups__row-wrap {

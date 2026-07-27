@@ -16,7 +16,7 @@ import { createApp, nextTick, type App } from 'vue'
 import MasterGroupsView from '@/views/master/MasterGroupsView.vue'
 import * as groupsApi from '@/api/groups'
 import { ApiResponseError } from '@/api/client'
-import type { GroupListItem } from '@/api/groups'
+import type { GroupListItem, GroupSearchMemberItem } from '@/api/groups'
 
 vi.mock('@/api/groups')
 
@@ -39,6 +39,18 @@ function group(id: string, overrides: Partial<GroupListItem> = {}): GroupListIte
     kind: 'custom',
     name: `Группа ${id}`,
     members_count: 0,
+    ...overrides,
+  }
+}
+
+function searchItem(overrides: Partial<GroupSearchMemberItem> = {}): GroupSearchMemberItem {
+  return {
+    student_user_id: 's1',
+    name: 'Студент',
+    avatar_url: null,
+    tag: null,
+    group_id: 'g1',
+    group_name: 'Группа',
     ...overrides,
   }
 }
@@ -85,6 +97,9 @@ beforeEach(() => {
   vi.mocked(groupsApi.renameGroup).mockReset()
   vi.mocked(groupsApi.deleteGroup).mockReset()
   vi.mocked(groupsApi.createGroupInvite).mockReset()
+  vi.mocked(groupsApi.searchGroupMemberships)
+    .mockReset()
+    .mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0 })
   push.mockReset()
   back.mockReset()
   toastInfo.mockReset()
@@ -108,6 +123,7 @@ afterEach(() => {
   document.body.querySelectorAll('.v-sheet__overlay').forEach((el) => el.remove())
   document.body.querySelectorAll('.v-modal__overlay').forEach((el) => el.remove())
 
+  vi.useRealTimers()
   vi.clearAllMocks()
 })
 
@@ -377,6 +393,106 @@ describe('MasterGroupsView', () => {
       const [message] = toastError.mock.calls[0]!
       expect(message).not.toContain('Cannot delete')
       expect(message).toContain('аудитория')
+    })
+  })
+
+  describe('cross-group search (P6, ПРОМТ №607)', () => {
+    /** Types into the search field and advances past the 300ms debounce
+     *  (same window as MasterGroupDetailView's own member search). Requires
+     *  vi.useFakeTimers() to already be active in the calling test. */
+    async function searchFor(value: string): Promise<void> {
+      const input = host?.querySelector<HTMLInputElement>('input')
+      if (!input) throw new Error('search input not rendered')
+      input.value = value
+      input.dispatchEvent(new Event('input'))
+      // The watch(search, ...) callback registers its setTimeout on the next
+      // tick, not synchronously with the dispatched event -- must yield once
+      // BEFORE advancing fake time, or there is no timer yet to advance past
+      // (same sequencing MasterGroupDetailView's own debounce test uses).
+      await nextTick()
+      vi.advanceTimersByTime(300)
+      await flush()
+    }
+
+    it('a person in two groups renders TWO rows, each with a different group chip (owner-ruled)', async () => {
+      vi.useFakeTimers()
+      vi.mocked(groupsApi.searchGroupMemberships).mockResolvedValue({
+        items: [
+          searchItem({ student_user_id: 's1', name: 'Дважды', group_id: 'g1', group_name: 'VIP' }),
+          searchItem({ student_user_id: 's1', name: 'Дважды', group_id: 'g2', group_name: 'Утро' }),
+        ],
+        total: 2,
+        limit: 20,
+        offset: 0,
+      })
+      mount()
+      await flush()
+
+      await searchFor('Дважды')
+
+      const rows = host?.querySelectorAll<HTMLElement>('.v-list-row') ?? []
+      expect(rows).toHaveLength(2)
+      const chips = Array.from(host?.querySelectorAll<HTMLElement>('.v-chip') ?? []).map((c) =>
+        c.textContent?.trim(),
+      )
+      expect(chips).toEqual(['VIP', 'Утро'])
+    })
+
+    it('a single-membership person renders exactly one row', async () => {
+      vi.useFakeTimers()
+      vi.mocked(groupsApi.searchGroupMemberships).mockResolvedValue({
+        items: [searchItem({ name: 'Одиночка', group_name: 'Утро' })],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      })
+      mount()
+      await flush()
+
+      await searchFor('Один')
+
+      const rows = host?.querySelectorAll<HTMLElement>('.v-list-row') ?? []
+      expect(rows).toHaveLength(1)
+      expect(rows[0]?.textContent).toContain('Одиночка')
+      expect(rows[0]?.textContent).toContain('Утро')
+    })
+
+    it('shows the empty state when the search has no matches', async () => {
+      vi.useFakeTimers()
+      vi.mocked(groupsApi.searchGroupMemberships).mockResolvedValue({
+        items: [],
+        total: 0,
+        limit: 20,
+        offset: 0,
+      })
+      mount()
+      await flush()
+
+      await searchFor('Никого-такого-нет')
+
+      expect(text()).toContain('Никого не найдено')
+    })
+
+    it('shows the error state when the search fails', async () => {
+      vi.useFakeTimers()
+      vi.mocked(groupsApi.searchGroupMemberships).mockRejectedValue(new Error('boom'))
+      mount()
+      await flush()
+
+      await searchFor('Сбой')
+
+      expect(text()).toContain('Не удалось выполнить поиск')
+    })
+
+    it('an empty query never calls the search endpoint and falls back to the groups list', async () => {
+      vi.mocked(groupsApi.getGroups).mockResolvedValue({
+        items: [group('g1', { name: 'Обычная' })],
+      })
+      mount()
+      await flush()
+
+      expect(groupsApi.searchGroupMemberships).not.toHaveBeenCalled()
+      expect(text()).toContain('Обычная')
     })
   })
 })

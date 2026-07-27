@@ -13,6 +13,7 @@
 // Backend endpoints (masters/groups_router.py + students_router.py's tag/
 // block/P3-addenda additions):
 //   GET    /api/v1/masters/me/groups                          -- list
+//   GET    /api/v1/masters/me/groups/search                   -- cross-group search (P6)
 //   POST   /api/v1/masters/me/groups                          -- create custom
 //   PATCH  /api/v1/masters/me/groups/{id}                     -- rename custom
 //   DELETE /api/v1/masters/me/groups/{id}                     -- delete custom
@@ -64,6 +65,29 @@ export interface GroupMemberItem {
 
 export interface PaginatedGroupMembersResponse {
   items: GroupMemberItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** GET /api/v1/masters/me/groups/search (P6). ONE ROW PER (student, group)
+ *  MEMBERSHIP, not one row per student -- a student in N of this master's
+ *  custom groups appears N times, each row naming a DIFFERENT group. Field
+ *  shape copied field-by-field from the backend's GroupSearchMemberItem
+ *  (groups_schemas.py) -- generated.ts will carry the authoritative version
+ *  once a deploy regenerates it against this backend; this is a temporary
+ *  hand-written stand-in, same posture as every other type in this file. */
+export interface GroupSearchMemberItem {
+  student_user_id: string
+  name: string
+  avatar_url: string | null
+  tag: string | null
+  group_id: string
+  group_name: string
+}
+
+export interface PaginatedGroupSearchResponse {
+  items: GroupSearchMemberItem[]
   total: number
   limit: number
   offset: number
@@ -130,6 +154,18 @@ export function getGroupMembers(
 ): Promise<PaginatedGroupMembersResponse> {
   const query = buildQuery({ search: search || undefined, limit, offset })
   return api.get<PaginatedGroupMembersResponse>(`/api/v1/masters/me/groups/${id}/members${query}`)
+}
+
+/** GET /api/v1/masters/me/groups/search (P6) -- cross-group people-search,
+ *  one row per (student, CUSTOM group) membership. Same paginated +
+ *  searchable shape as getGroupMembers above. */
+export function searchGroupMemberships(
+  search = '',
+  limit = 20,
+  offset = 0,
+): Promise<PaginatedGroupSearchResponse> {
+  const query = buildQuery({ search: search || undefined, limit, offset })
+  return api.get<PaginatedGroupSearchResponse>(`/api/v1/masters/me/groups/search${query}`)
 }
 
 /** POST /api/v1/masters/me/groups/{id}/members -- add-access, not move
