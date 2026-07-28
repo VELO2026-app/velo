@@ -286,6 +286,13 @@ export interface AdminZoomUnmatchedRow {
   duration_seconds: number | null
 }
 
+/** Admin announcement: pre-rendered title/body + audience pick. */
+export interface AnnouncementRequest {
+  title: string
+  body: string
+  audience?: 'all' | 'masters'
+}
+
 /** POST /admin/masters/{user_id}/method-change-request/approve -- body. R5 stage 4 (operator decision 3=Б): promote is OPTIONAL and defaults to empty, so a bare `{}` body (every caller before this stage, and every approval where the admin didn't pick "add to catalog") behaves exactly as before -- no catalog write. Each entry becomes a new custom direction in the taxonomy catalog (deduped against existing rows). */
 export interface ApproveMethodChangeRequest {
   promote?: string[]
@@ -1132,6 +1139,12 @@ export interface PracticeSummary {
   zoom_meeting_status?: string | null
 }
 
+/** Partial update: only supplied parts change (mirrors comms PATCH). Unknown keys are rejected -- silently swallowing a field the client believed it set is how settings screens lie (frozen 3b wording). */
+export interface PrefsUpdate {
+  categories?: Record<string, unknown> | null
+  schedule?: ScheduleIn | null
+}
+
 /** POST /api/v1/practices/{id}/preview-purchase -- request body. Optional promo_code for pricing preview. */
 export interface PreviewPurchaseRequest {
   promo_code?: string | null
@@ -1300,6 +1313,13 @@ export interface RoleSwitchInfo {
 /** POST /api/v1/users/me/role — target role to switch into. A production endpoint (always on; A1=Б). Pydantic validates `role` against UserRole (user/master/admin); anything else is a 422. Whether the caller may actually switch to it is enforced in the service via derive_allowed_roles() -- the capability-derived policy (own role + a VERIFIED MasterProfile + the switched-away-admin marker), the single source of truth shared with the GET /users/me read path. Legacy seeded credentials.role_switch.allowed_roles lists grant nothing. */
 export interface RoleSwitchRequest {
   role: UserRole
+}
+
+/** The UI's DELIVERY window ("deliver from X to Y", day picks). */
+export interface ScheduleIn {
+  from: string
+  to: string
+  days: string[]
 }
 
 /** One bar in the check-in weekly chart (label = bucket date, value = %). */
