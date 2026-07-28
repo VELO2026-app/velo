@@ -1,5 +1,6 @@
 <!--
-  VELO Frontend -- TargetUserCard (measured, ПРОМТ №610)
+  VELO Frontend -- TargetUserCard (measured, ПРОМТ №610; owner Q11, ПРОМТ
+  №611 -- avatar reverted to the DS's own size)
 
   The "who this is about" card -- avatar + name on a tinted plate. Owner Q9:
   goes in THREE places (ReportUserSheet, and both block-flow VConfirmDialog
@@ -8,24 +9,21 @@
 
   Measured from Report a user.svg / Report a user 2.svg: full width, rx10,
   primary @15% (= --velo-glass-blue-15, the same token every other
-  primary-tinted plate in this app already uses), avatar circle Ø41
-  (--velo-size-41, an existing token -- AdminParticipantsView/
-  AdminPracticeDetailView already use it for their own hand-rolled avatar
-  circles), name Marmelad 18 (--text-base).
+  primary-tinted plate in this app already uses), name Marmelad 18
+  (--text-base).
 
-  Reuses VAvatar (image + initials-fallback logic) rather than hand-rolling
-  a third avatar implementation -- the 41px override below is scoped to
-  THIS card only, VAvatar's own size variants are untouched.
+  Owner Q11 (ПРОМТ №611): the SVG's avatar circle measured at Ø41; this
+  component originally forced VAvatar's own "md" (40px) up to that exact
+  pixel via a scoped `!important` override. Owner ruled: revert -- the
+  mockup tells us WHICH token/size to apply, it doesn't license overriding
+  a DS component for a 1px delta invisible to users but visible (and
+  copyable) to every developer who opens this file. Plain `size="md"` now,
+  no override.
 -->
 
 <template>
   <div class="target-user-card">
-    <VAvatar
-      :name="name"
-      :url="avatarUrl ?? undefined"
-      size="md"
-      class="target-user-card__avatar"
-    />
+    <VAvatar :name="name" :url="avatarUrl ?? undefined" size="md" />
     <span class="target-user-card__name">{{ name }}</span>
   </div>
 </template>
@@ -48,14 +46,6 @@ defineProps<{
   background: var(--velo-glass-blue-15);
   border-radius: var(--velo-radius-10);
   padding: var(--space-3) var(--space-4);
-}
-
-/* Measured Ø41 -- VAvatar's own "md" is 40px, close but not exact; forced
-   to the precise token here rather than adding a one-off size variant to
-   the shared component for a 1px difference nothing else needs. */
-.target-user-card__avatar {
-  width: var(--velo-size-41) !important;
-  height: var(--velo-size-41) !important;
 }
 
 .target-user-card__name {
