@@ -52,6 +52,7 @@ if [ ! -f "$CONF_FILE" ]; then
     echo "or create the file by hand with:" >&2
     echo "  DOMAIN_FRONTEND=example.com" >&2
     echo "  DOMAIN_API=api.example.com" >&2
+    echo "  VELO_ROLE=test        # or prod -- REQUIRED, gates destructive ops" >&2
     exit 1
 fi
 # shellcheck source=/dev/null
@@ -71,20 +72,28 @@ NC='\033[0m'
 # acceptable on prod. Prod's deploy gate is a green test server, not a
 # local suite run.
 #
-# Missing role -> assume "test" with a warning: today's fleet is exactly one
-# test server installed before the role persisted (migration: add
-# VELO_ROLE=test to /opt/velo/velo.conf); any future prod install comes from
-# the patched installer and gets the role written explicitly.
+# Missing role -> FATAL, never a guess. This gate stands in front of two
+# destructive, IRREVERSIBLE operations -- the pytest suite against the LIVE
+# DB and a `TRUNCATE ... CASCADE` in the comms DB -- so it MUST fail closed:
+# an absent role is an ambiguous state, and defaulting it to "test" (the
+# permissive side) is exactly how a misconfigured prod box would run pytest
+# on production and truncate the live projection. The one existing test
+# server already carries VELO_ROLE=test in velo.conf (persisted by the
+# installer), and every future install -- test or prod -- writes the role
+# explicitly, so refusing here breaks nothing legitimate; it only refuses
+# the ambiguous case that has no safe default.
 VELO_ROLE="${VELO_ROLE:-}"
-if [ -z "$VELO_ROLE" ]; then
-    echo -e "${YELLOW}⚠ VELO_ROLE missing in $CONF_FILE -- assuming 'test'.${NC}"
-    echo -e "${YELLOW}  Persist it: echo \"VELO_ROLE=test\" >> $CONF_FILE${NC}"
-    VELO_ROLE="test"
-fi
 case "$VELO_ROLE" in
     test|prod) ;;
+    "")
+        echo -e "${RED}FATAL: VELO_ROLE missing in $CONF_FILE.${NC}" >&2
+        echo -e "${RED}  Refusing to guess: this role gates pytest against the live DB${NC}" >&2
+        echo -e "${RED}  and TRUNCATE CASCADE in the comms DB. Set it explicitly:${NC}" >&2
+        echo -e "${RED}  echo \"VELO_ROLE=test\" >> $CONF_FILE   # or prod${NC}" >&2
+        exit 1
+        ;;
     *)
-        echo -e "${RED}FATAL: VELO_ROLE='$VELO_ROLE' in $CONF_FILE (expected test|prod)${NC}"
+        echo -e "${RED}FATAL: VELO_ROLE='$VELO_ROLE' in $CONF_FILE (expected test|prod)${NC}" >&2
         exit 1
         ;;
 esac

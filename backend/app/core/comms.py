@@ -45,6 +45,11 @@ _TIMEOUT = HTTPException(
     status_code=504, detail="Notification service timed out",
 )
 
+# The only comms 4xx statuses meaningful to the end client and modeled
+# by the frozen 3b contract; everything else (auth, teapots, ...) is an
+# upstream fault mapped to 502.
+_FORWARDABLE_4XX = frozenset({400, 404, 409, 422})
+
 
 async def comms_request(
     method: str,
@@ -102,10 +107,34 @@ async def comms_request(
         )
         raise _UNAVAILABLE
 
+    # 401/403 from comms mean OUR service token is wrong/expired -- an
+    # infra fault, not the end user's. Forwarding them verbatim is a
+    # foot-gun: the product frontend treats ANY 401 as "this user's
+    # session expired" (api/client.ts) and logs them out, so one
+    # misconfigured COMMS_SERVICE_TOKEN would log out every user who
+    # opens the bell. Map to 502 (upstream unavailable) and never leak
+    # the internal service's auth detail.
+    if response.status_code in (401, 403):
+        logger.error(
+            "comms_auth_error",
+            path=path,
+            status=response.status_code,
+        )
+        raise _UNAVAILABLE
+
     if response.status_code >= 400:
-        # Part of the frozen 3b contract surface (422 malformed
-        # cursor, 404 preferences of an unsynced recipient, ...) --
-        # forward the status and detail verbatim.
+        # Only the client-meaningful statuses of the frozen 3b contract
+        # are forwarded verbatim: 400 (bad request), 404 (unsynced
+        # recipient / missing delivery), 409, 422 (malformed cursor,
+        # unknown category). Anything else the boundary does not model
+        # is an upstream fault -> 502, not a leaked passthrough.
+        if response.status_code not in _FORWARDABLE_4XX:
+            logger.warning(
+                "comms_unexpected_4xx",
+                path=path,
+                status=response.status_code,
+            )
+            raise _UNAVAILABLE
         detail: Any = "Notification service rejected the request"
         try:
             body = response.json()

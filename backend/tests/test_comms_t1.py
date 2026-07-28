@@ -455,6 +455,61 @@ class TestNotificationsProxy:
             )
         assert response.status_code == 504
 
+    @pytest.mark.parametrize(
+        ("comms_status", "expected"),
+        [
+            # OUR service token is wrong/expired -> infra fault, NOT the
+            # user's session: must NOT reach the browser as 401 (which
+            # api/client.ts turns into a logout for everyone).
+            (401, 502),
+            (403, 502),
+            # Upstream fault.
+            (500, 502),
+            # Statuses the 3b contract does not model -> upstream fault.
+            (418, 502),
+            # Client-meaningful 3b statuses -> forwarded verbatim.
+            (404, 404),
+            (422, 422),
+            (409, 409),
+        ],
+    )
+    async def test_comms_status_mapping(
+        self, client, comms_status: int, expected: int,
+    ) -> None:
+        """core/comms.py must map comms auth/undefined statuses to 502
+        and only forward the client-meaningful 3b statuses."""
+        login = await login_user(client, telegram_id=TID_PROXY)
+
+        class _StatusClient:
+            def __init__(self, *args: object, **kwargs: object) -> None:
+                pass
+
+            async def __aenter__(self) -> "_StatusClient":
+                return self
+
+            async def __aexit__(self, *exc: object) -> None:
+                return None
+
+            async def request(self, *args: object, **kwargs: object):
+                return httpx.Response(
+                    comms_status, json={"detail": "comms internal detail"},
+                )
+
+        with (
+            patch.object(
+                settings, "comms_api_url", "http://comms-test.invalid",
+            ),
+            patch("app.core.comms.httpx.AsyncClient", _StatusClient),
+        ):
+            response = await client.get(
+                "/api/v1/notifications/unread-count",
+                headers=auth_headers(login["session_token"]),
+            )
+        assert response.status_code == expected
+        if expected == 502:
+            # The internal service's auth detail never leaks out.
+            assert "comms internal detail" not in response.text
+
 
 # ===========================================================================
 # 4. Admin announcements (plan fork 6 -- the system.announcement emit point)

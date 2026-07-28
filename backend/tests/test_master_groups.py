@@ -793,6 +793,57 @@ async def test_block_cancels_and_refunds_future_confirmed_bookings(
 
 
 @pytest.mark.asyncio
+async def test_block_emits_reminder_cancel_for_cancelled_bookings(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """T1: blocking refunds future bookings, so their pending reminder
+    series must be expired too (a refunded, blocked user must not still
+    get "Practice tomorrow"). Each cancelled booking emits ONE
+    reminder_cancel correlated by its booking_id -- same per-booking
+    cancel as bookings/service.py::cancel_booking."""
+    from app.core.events.models import OutboxEvent
+
+    master = await _make_verified_master(client, db_session, 99755)
+    master_id = master["user"]["id"]
+    headers = auth_headers(master["session_token"])
+    student_id = await _login(client, 99756, "Student")
+
+    future_practice = await _practice(
+        db_session, master_id, scheduled_hours_from_now=48,
+        price_cents=1000, is_free=False,
+    )
+    future_booking = await _booking(db_session, future_practice, student_id)
+    await _purchase(
+        db_session, future_practice, future_booking, student_id,
+        paid_cents=1000,
+    )
+    await db_session.commit()
+
+    resp = await client.post(
+        BLOCK_URL.format(student_id=student_id), headers=headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["cancelled_bookings_count"] == 1
+
+    # Exactly one reminder_cancel, correlated by the cancelled booking.
+    rows = (
+        await db_session.execute(
+            select(OutboxEvent).where(
+                OutboxEvent.event_type == "reminder_cancel",
+                OutboxEvent.payload["correlation_value"].astext
+                == str(future_booking.id),
+            )
+        )
+    ).scalars().all()
+    assert len(rows) == 1
+    payload = rows[0].payload
+    assert payload["correlation_key"] == "booking_id"
+    assert payload["target_type"] == "user"
+    assert payload["target_value"] == str(student_id)
+
+
+@pytest.mark.asyncio
 async def test_blocked_student_excluded_from_derived_students(
     client: AsyncClient,
     db_session: AsyncSession,
