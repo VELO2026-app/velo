@@ -1429,7 +1429,7 @@ describe('EditPracticeView', () => {
       expect(practicesApi.updatePractice).toHaveBeenCalledTimes(1)
     })
 
-    it('a stranded count above zero warns, naming the number, and does NOT save yet', async () => {
+    it('a stranded count above zero warns with the owner-picked wording (plural, N=3) and does NOT save yet', async () => {
       vi.mocked(practicesApi.previewAudienceChange).mockResolvedValue({ stranded_count: 3 })
       mountCached(practice({ audience_kind: 'public' }))
       await flush()
@@ -1440,7 +1440,26 @@ describe('EditPracticeView', () => {
       await flush()
 
       expect(practicesApi.updatePractice).not.toHaveBeenCalled()
-      expect(document.body.querySelector('.v-confirm__text')?.textContent).toContain('3')
+      expect(document.body.querySelector('.v-confirm__text')?.textContent).toBe(
+        '3 записавшихся не попадут на эту практику — они не входят в выбранную аудиторию. ' +
+          'Их запись останется, но войти они не смогут. Сохранить?',
+      )
+    })
+
+    it('a stranded count of exactly 1 uses the SINGULAR noun + agreeing verbs/pronouns (ПРОМТ №614)', async () => {
+      vi.mocked(practicesApi.previewAudienceChange).mockResolvedValue({ stranded_count: 1 })
+      mountCached(practice({ audience_kind: 'public' }))
+      await flush()
+
+      button('Все ученики')?.click()
+      await flush()
+      button('Сохранить')?.click()
+      await flush()
+
+      expect(document.body.querySelector('.v-confirm__text')?.textContent).toBe(
+        '1 записавшийся не попадёт на эту практику — он не входит в выбранную аудиторию. ' +
+          'Его запись останется, но войти он не сможет. Сохранить?',
+      )
     })
 
     it('confirming the warning proceeds to the actual save', async () => {

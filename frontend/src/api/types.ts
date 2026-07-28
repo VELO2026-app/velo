@@ -323,10 +323,13 @@ export type PurchaseStatus = 'pending' | 'completed' | 'refunded' | 'failed'
 export type MasterStatus = 'pending' | 'verified' | 'rejected'
 export type AttendanceBookingStatus = 'pending' | 'confirmed' | 'attended' | 'no_show'
 export type WithdrawalStatus = 'pending' | 'approved' | 'rejected'
-// WaitlistStatus is re-exported from generated.ts (the backend is the source
-// of truth: 'waiting' | 'notified' | 'converted' | 'left' | 'declined' |
-// 'expired'). A stale hand-written copy used to live here with 'confirmed'
-// instead of 'converted' -- removed to avoid shadowing the generated type.
+// WaitlistStatus is re-exported from generated.ts -- that file is the
+// SOURCE OF TRUTH for its values, not this comment, so its members are
+// deliberately not enumerated here (ПРОМТ №614: a REMOVED status added
+// backend-side would otherwise make a listed enumeration stale the moment
+// it reached the wire). A stale hand-written copy used to live here with
+// 'confirmed' instead of 'converted' -- removed to avoid shadowing the
+// generated type.
 //
 // Mood / FeedbackRating are UI BUCKETS, not the raw backend value. On the
 // backend a check-in mood and a feedback rating are each a 1..10 score; the

@@ -709,13 +709,27 @@ async function save(): Promise<void> {
     // Owner Q15: warn ONLY when the count is above zero -- a narrowing
     // that strands nobody saves silently, same as today.
     if (preview.stranded_count > 0) {
-      // Plain, factual copy naming the number -- owner may want to reword
-      // this (flagged in the report, not invented alarming phrasing).
+      // Owner-picked wording (ПРОМТ №614, wording B): three facts -- how
+      // many, why, and that the booking survives (the fact that stops the
+      // master over-panicking). `plural()` (@/utils/plural, the repo's one
+      // canonical Russian pluralizer, already used app-wide for counts)
+      // covers the NOUN's 1 / 2-4 / 5+ forms -- but «записавшийся» is a
+      // substantivized participle, where the 2-4 and 5+ forms happen to be
+      // IDENTICAL ("записавшихся" either way), so plural()'s 3-way split
+      // collapses to a binary one here. That same one-vs-rest split also
+      // governs the sentence's verb/pronoun agreement (попадёт/попадут,
+      // он/они, его/их, сможет/смогут), which plural() only ever returns a
+      // single word for and can't cover -- so the SENTENCE branches on
+      // count === 1 directly rather than threading three template
+      // variants through one helper call.
+      const n = preview.stranded_count
+      const noun = plural(n, 'записавшийся', 'записавшихся', 'записавшихся')
       confirmDialog.message =
-        `Практику уже забронировали ${preview.stranded_count} ` +
-        `${plural(preview.stranded_count, 'человек', 'человека', 'человек')}. ` +
-        'После сохранения они не смогут отметиться на практике (check-in), ' +
-        'хотя бронирование останется активным. Сохранить изменения?'
+        n === 1
+          ? `${n} ${noun} не попадёт на эту практику — он не входит в выбранную аудиторию. ` +
+            'Его запись останется, но войти он не сможет. Сохранить?'
+          : `${n} ${noun} не попадут на эту практику — они не входят в выбранную аудиторию. ` +
+            'Их запись останется, но войти они не смогут. Сохранить?'
       confirmDialog.confirmLabel = 'Сохранить всё равно'
       confirmDialog.danger = false
       confirmDialog.onConfirm = commitSave
