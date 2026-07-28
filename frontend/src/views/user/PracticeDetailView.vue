@@ -153,6 +153,32 @@
         Оставить feedback
       </VButton>
 
+      <!-- REC-1: watch-recording button. Shown ONLY when the API has
+           confirmed a recording exists (recordingUrl is non-null) -- no
+           disabled/placeholder state, no cutoff date, nothing stored: a
+           practice that ran before recording was switched on shows nothing
+           here, by construction (owner ruling, PROMPT №620). Sits after the
+           feedback branch on purpose: while the feedback window is open,
+           that CTA wins (rating the practice is the more time-limited ask);
+           recording outlives it (7 days) and takes over once feedback's
+           window closes, or immediately for a no_show, which never has one.
+           Gated on recordingUrl ALONE, deliberately not `booked` too --
+           `booked` (line ~262) excludes no_show on purpose for the
+           book/check-in/feedback ladder, and reusing it here would silently
+           hide this button for exactly the no_show case the owner's ruling
+           requires ("no_show gets the same access as attended"). refreshRecording
+           already re-derives its own eligibility before ever setting this ref. -->
+      <template v-else-if="recordingUrl">
+        <VButton variant="primary" size="lg" block @click="onWatchRecording">
+          Посмотреть запись
+        </VButton>
+        <!-- Proposal only -- NOT owner-approved (PROMPT №620 task d). 7 days
+             is the real Zoom-side retention (owner-set in the console);
+             phrased as a fact about the recording, not a promise from us --
+             our backend does not control when Zoom deletes the file. -->
+        <p class="detail__recording-caption">Запись доступна в течение 7 дней после практики</p>
+      </template>
+
       <!-- Booked but no active window: NO CTA here. The "записан" state is
            shown in the status row ("Вы записаны"); the old disabled button was
            dead weight and ate vertical space (operator, 2026-06-04). -->
@@ -222,6 +248,8 @@ import { IconCheck, IconClose, IconWarning } from '@/components/icons'
 import { DIFFICULTY_DOTS, DIFFICULTY_LABEL } from '@/utils/displayHelpers'
 import { hasEnded } from '@/utils/bookingStatus'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
+import { platform } from '@/platform'
+import { getBookingRecording } from '@/api/bookings'
 import type { BookingStatus, BookingWithPracticeResponse, PracticeDifficulty } from '@/api/types'
 
 const route = useRoute()
@@ -431,6 +459,66 @@ const inFeedbackWindow = computed((): boolean => {
 })
 
 // =========================================================================
+// REC-1 (PROMPT №620): watch-recording
+// =========================================================================
+
+// Mirrors the backend's RECORDING_ELIGIBLE_BOOKING_STATUSES
+// (bookings/service.py) -- entitlement is the BOOKING, never attendance, so
+// no_show gets the same access as attended. Deliberately NOT the same set
+// as _ACTIVE_BOOKING_STATUSES above (that one excludes no_show/attended-
+// after-window for OTHER reasons -- see its own comment).
+const _RECORDING_ELIGIBLE_STATUSES = ['confirmed', 'attended', 'no_show'] as const
+
+// null = nothing to show (not fetched yet, not eligible, or the API said
+// unavailable/error -- PROMPT №620 owner ruling: error renders exactly like
+// unavailable, no button either way, since a button that fails on click is
+// worse than an absent one and the state is transient).
+const recordingUrl = ref<string | null>(null)
+
+/** Fetch the recording link once per (booking, "has it ended") change --
+ * NOT a poll, NOT a retry loop. hasEnded() only gates WHETHER to call: a
+ * premature call is free (the backend just 404s and nothing renders), so
+ * this never needs a second, correctness-grade notion of "ended" -- that
+ * job stays entirely with the backend's Practice.status == COMPLETED gate
+ * (owner ruling, PROMPT №620, retracting half of the №619 clock-vs-worker
+ * flag: the other half -- never re-derive "ended" for a correctness
+ * decision -- still holds, and this design honours it by never trying). */
+async function refreshRecording(): Promise<void> {
+  recordingUrl.value = null
+  const b = myAnyBooking.value
+  if (!b) return
+  if (!(_RECORDING_ELIGIBLE_STATUSES as readonly string[]).includes(b.status)) return
+  if (!hasEnded(b, now.value)) return
+  try {
+    const res = await getBookingRecording(b.id)
+    recordingUrl.value = res.status === 'available' ? res.url : null
+  } catch {
+    // Network/auth/unexpected failure -- same rendering as 'error' above:
+    // no button. Never a toast; this is a silent "don't show", not a
+    // user-facing action that failed.
+    recordingUrl.value = null
+  }
+}
+
+// immediate: true matters beyond mount-time convenience -- it also covers
+// the case where bookingsStore already held this booking BEFORE this
+// component was created (e.g. arriving from a list that fetched it first).
+// Without it, the watch would never see a CHANGE to diff against and would
+// never fire at all for an already-cached booking.
+watch(
+  myAnyBooking,
+  () => {
+    refreshRecording()
+  },
+  { immediate: true },
+)
+
+function onWatchRecording(): void {
+  if (!recordingUrl.value) return
+  platform.openLink(recordingUrl.value)
+}
+
+// =========================================================================
 // Formatted fields
 // =========================================================================
 
@@ -579,6 +667,10 @@ watch(
       store.clearSelected()
       store.fetchPractice(newId)
       justPurchased.value = false
+      // REC-1: drop the previous practice's recording link immediately --
+      // myAnyBooking's watch will refetch for the new one, but that resolves
+      // async and this component instance is reused (not remounted).
+      recordingUrl.value = null
     }
   },
 )
@@ -735,5 +827,17 @@ onUnmounted(() => {
 
 .detail__price-value--free {
   color: var(--velo-success-text);
+}
+
+/* ===== Recording caption (REC-1) =====
+ * Same visual language as .detail__zoom-card above -- existing tokens only,
+ * no new variant minted. Centered under the full-width button it follows. */
+.detail__recording-caption {
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--velo-text-secondary);
+  line-height: 1.5;
+  text-align: center;
+  margin: 0;
 }
 </style>

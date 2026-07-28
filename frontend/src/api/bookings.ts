@@ -147,3 +147,29 @@ export function leaveBooking(bookingId: string): Promise<BookingResponse> {
 export function skipCheckin(bookingId: string): Promise<BookingResponse> {
   return api.post<BookingResponse>(`/api/v1/bookings/${bookingId}/skip-checkin`)
 }
+
+// TEMPORARY (REC-1, PROMPT №620): BookingRecordingResponse does not exist in
+// generated.ts yet -- the backend endpoint (bookings/schemas.py, commit
+// 5cc9575) has not been deployed/regenerated. Hand-typed here, scoped to
+// this one function only -- NOT added to api/types.ts, whose own header
+// says backend types "do NOT add manually -- they come from generated.ts".
+// Delete this interface and import the generated one instead the first time
+// this file is touched after the next `make gen-types` regen.
+interface BookingRecordingResponse {
+  status: 'available' | 'unavailable' | 'error'
+  url: string | null
+}
+
+/**
+ * Watch-recording link for a past practice (REC-1).
+ *
+ * Owner-only (404 for a booking that isn't the caller's own, or hasn't
+ * qualified yet -- still upcoming, or never confirmed/attended/no_show).
+ * A 200 response is one of three states -- 'available' (url set),
+ * 'unavailable' (Zoom has nothing right now), or 'error' (the Zoom call
+ * itself failed) -- never collapsed into each other on the backend; the
+ * caller decides what to render for each.
+ */
+export function getBookingRecording(bookingId: string): Promise<BookingRecordingResponse> {
+  return api.get<BookingRecordingResponse>(`/api/v1/bookings/${bookingId}/recording`)
+}

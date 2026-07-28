@@ -106,6 +106,19 @@ vi.mock('@/stores/auth', () => ({
   }),
 }))
 
+// -- REC-1 (PROMPT №620): recording link fetch + external-open, both mocked --
+const getBookingRecording = vi.fn()
+vi.mock('@/api/bookings', () => ({
+  getBookingRecording: (...args: unknown[]) => getBookingRecording(...args),
+}))
+
+const openLink = vi.fn()
+vi.mock('@/platform', () => ({
+  get platform() {
+    return { name: 'standalone' as const, openLink }
+  },
+}))
+
 const NOW = new Date('2026-07-20T12:00:00Z')
 const NOW_MS = NOW.getTime()
 const HOUR = 3600_000
@@ -238,6 +251,11 @@ beforeEach(() => {
   back.mockReset()
   toastError.mockReset()
   toastSuccess.mockReset()
+  // Default: no recording -- most tests never book a past practice at all,
+  // and for the ones that do but don't care about this feature, 'unavailable'
+  // is the harmless default (matches "nothing exists yet" for most fixtures).
+  getBookingRecording.mockReset().mockResolvedValue({ status: 'unavailable', url: null })
+  openLink.mockReset()
 })
 
 afterEach(() => {
@@ -290,7 +308,7 @@ describe('PracticeDetailView', () => {
   })
 
   describe('price', () => {
-    it('renders the price in the practice\'s OWN currency', async () => {
+    it("renders the price in the practice's OWN currency", async () => {
       practicesState.selected = practice({ price_cents: 2500, currency: 'EUR', is_free: false })
       mount()
       await flush()
@@ -652,7 +670,7 @@ describe('PracticeDetailView', () => {
       expect(toastSuccess).toHaveBeenCalledWith('Бронирование отменено')
     })
 
-    it('surfaces the store\'s REAL error and does NOT claim success', async () => {
+    it("surfaces the store's REAL error and does NOT claim success", async () => {
       // W-25: the store returns { ok, error } and raises no toast itself
       // (PracticeDetailView.vue:~318-325). Swallowing this would tell a user
       // their money-back cancel worked when it did not.
@@ -688,6 +706,131 @@ describe('PracticeDetailView', () => {
 
       resolve({ ok: true })
       await flush()
+    })
+  })
+
+  describe('watch recording (REC-1)', () => {
+    // A confirmed/attended/no_show booking on a practice that ended 3 hours
+    // ago -- past hasEnded() in every case, so refreshRecording's own gate
+    // always calls through to the mocked API.
+    const ended = new Date(NOW_MS - 3 * HOUR).toISOString()
+
+    it('status=available renders the button, opens the URL via platform.openLink', async () => {
+      getBookingRecording.mockResolvedValue({
+        status: 'available',
+        url: 'https://zoom.us/rec/share/abc?pwd=xyz',
+      })
+      practicesState.selected = practice({ scheduled_at: ended, duration_minutes: 60 })
+      // has_feedback: true -- an attended booking still inside the feedback
+      // window would show THAT button instead (recording sits after it in
+      // the ladder on purpose); already-left feedback isolates this case.
+      bookingsState.bookings = [
+        booking(
+          { id: 'b1', status: 'attended', has_feedback: true },
+          { scheduled_at: ended, duration_minutes: 60 },
+        ),
+      ]
+      mount()
+      await flush()
+
+      expect(getBookingRecording).toHaveBeenCalledWith('b1')
+      const btn = button('Посмотреть запись')
+      expect(btn).toBeDefined()
+
+      btn?.click()
+      await flush()
+      expect(openLink).toHaveBeenCalledWith('https://zoom.us/rec/share/abc?pwd=xyz')
+    })
+
+    it('a no_show booking gets the SAME button as attended -- entitlement is the booking', async () => {
+      getBookingRecording.mockResolvedValue({ status: 'available', url: 'https://zoom.us/rec/x' })
+      practicesState.selected = practice({ scheduled_at: ended, duration_minutes: 60 })
+      bookingsState.bookings = [
+        booking({ id: 'b1', status: 'no_show' }, { scheduled_at: ended, duration_minutes: 60 }),
+      ]
+      mount()
+      await flush()
+
+      expect(button('Посмотреть запись')).toBeDefined()
+    })
+
+    it('status=unavailable renders no button at all', async () => {
+      getBookingRecording.mockResolvedValue({ status: 'unavailable', url: null })
+      practicesState.selected = practice({ scheduled_at: ended, duration_minutes: 60 })
+      bookingsState.bookings = [
+        booking({ id: 'b1', status: 'attended' }, { scheduled_at: ended, duration_minutes: 60 }),
+      ]
+      mount()
+      await flush()
+
+      expect(button('Посмотреть запись')).toBeUndefined()
+    })
+
+    it('status=error renders no button either -- owner ruling: error reads exactly like unavailable', async () => {
+      getBookingRecording.mockResolvedValue({ status: 'error', url: null })
+      practicesState.selected = practice({ scheduled_at: ended, duration_minutes: 60 })
+      bookingsState.bookings = [
+        booking({ id: 'b1', status: 'attended' }, { scheduled_at: ended, duration_minutes: 60 }),
+      ]
+      mount()
+      await flush()
+
+      expect(button('Посмотреть запись')).toBeUndefined()
+    })
+
+    it('a rejected request (network/auth failure) also renders no button, never a toast', async () => {
+      getBookingRecording.mockRejectedValue(new Error('network down'))
+      practicesState.selected = practice({ scheduled_at: ended, duration_minutes: 60 })
+      bookingsState.bookings = [
+        booking({ id: 'b1', status: 'attended' }, { scheduled_at: ended, duration_minutes: 60 }),
+      ]
+      mount()
+      await flush()
+
+      expect(button('Посмотреть запись')).toBeUndefined()
+      expect(toastError).not.toHaveBeenCalled()
+    })
+
+    it('never calls the API for a booking that has not ended yet', async () => {
+      // hasEnded() gates the CALL, not just the render -- a premature call
+      // would be wasted (the backend 404s), and the button must not appear
+      // even if a stale mock were left resolving 'available'.
+      getBookingRecording.mockResolvedValue({ status: 'available', url: 'https://zoom.us/rec/x' })
+      bookingsState.bookings = [booking({ id: 'b1', status: 'confirmed' })]
+      mount()
+      await flush()
+
+      expect(getBookingRecording).not.toHaveBeenCalled()
+      expect(button('Посмотреть запись')).toBeUndefined()
+    })
+
+    it('a CONFIRMED booking past its practice (attendance still pending) still qualifies', async () => {
+      // Owner ruling: entitlement is the booking, not the attendance
+      // verdict -- confirmed-and-ended (the "Подсчитывается" state) must not
+      // be treated as ineligible just because attended/no_show isn't decided.
+      getBookingRecording.mockResolvedValue({ status: 'available', url: 'https://zoom.us/rec/x' })
+      practicesState.selected = practice({ scheduled_at: ended, duration_minutes: 60 })
+      bookingsState.bookings = [
+        booking({ id: 'b1', status: 'confirmed' }, { scheduled_at: ended, duration_minutes: 60 }),
+      ]
+      mount()
+      await flush()
+
+      expect(getBookingRecording).toHaveBeenCalledWith('b1')
+      expect(button('Посмотреть запись')).toBeDefined()
+    })
+
+    it('a CANCELLED booking never qualifies, even past end', async () => {
+      getBookingRecording.mockResolvedValue({ status: 'available', url: 'https://zoom.us/rec/x' })
+      practicesState.selected = practice({ scheduled_at: ended, duration_minutes: 60 })
+      bookingsState.bookings = [
+        booking({ id: 'b1', status: 'cancelled' }, { scheduled_at: ended, duration_minutes: 60 }),
+      ]
+      mount()
+      await flush()
+
+      expect(getBookingRecording).not.toHaveBeenCalled()
+      expect(button('Посмотреть запись')).toBeUndefined()
     })
   })
 
