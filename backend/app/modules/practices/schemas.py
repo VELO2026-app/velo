@@ -459,43 +459,6 @@ class UpdatePracticeRequest(BaseModel):
                 )
         return self
 
-
-class AudiencePreviewRequest(BaseModel):
-    """POST /api/v1/practices/{id}/audience-preview (owner Q15, ПРОМТ №613).
-
-    A PROPOSED audience the master hasn't saved yet -- unlike
-    UpdatePracticeRequest's own audience_kind/group_ids, both are REQUIRED
-    here (no partial-update ambiguity to model): the frontend always has a
-    complete proposed state in hand before it ever calls this, since it's
-    evaluating "what if I save the form as it stands right now", not a
-    partial PATCH.
-    """
-
-    audience_kind: AudienceKind
-    group_ids: list[UUID] = []
-
-    @model_validator(mode="after")
-    def _check_group_ids_match_audience_kind(self) -> "AudiencePreviewRequest":
-        if self.audience_kind == AudienceKind.GROUPS.value and not self.group_ids:
-            raise ValueError(
-                "group_ids must be non-empty when audience_kind='groups'"
-            )
-        if self.audience_kind != AudienceKind.GROUPS.value and self.group_ids:
-            raise ValueError(
-                "group_ids is only allowed when audience_kind='groups'"
-            )
-        return self
-
-
-class AudiencePreviewResponse(BaseModel):
-    """POST /api/v1/practices/{id}/audience-preview -- read-only, never
-    persists anything. `stranded_count` is how many of this practice's
-    ACTIVE (pending/confirmed) bookers would fall OUTSIDE the proposed
-    audience -- the frontend warns and requires confirmation when this is
-    above zero, saves silently when it's zero (owner-ruled)."""
-
-    stranded_count: int
-
     @field_validator("practice_type")
     @classmethod
     def practice_type_must_be_valid(
@@ -622,6 +585,43 @@ class AudiencePreviewResponse(BaseModel):
                 f"duration_minutes must be between {mn} and {mx}"
             )
         return v
+
+
+class AudiencePreviewRequest(BaseModel):
+    """POST /api/v1/practices/{id}/audience-preview (owner Q15, ПРОМТ №613).
+
+    A PROPOSED audience the master hasn't saved yet -- unlike
+    UpdatePracticeRequest's own audience_kind/group_ids, both are REQUIRED
+    here (no partial-update ambiguity to model): the frontend always has a
+    complete proposed state in hand before it ever calls this, since it's
+    evaluating "what if I save the form as it stands right now", not a
+    partial PATCH.
+    """
+
+    audience_kind: AudienceKind
+    group_ids: list[UUID] = []
+
+    @model_validator(mode="after")
+    def _check_group_ids_match_audience_kind(self) -> "AudiencePreviewRequest":
+        if self.audience_kind == AudienceKind.GROUPS.value and not self.group_ids:
+            raise ValueError(
+                "group_ids must be non-empty when audience_kind='groups'"
+            )
+        if self.audience_kind != AudienceKind.GROUPS.value and self.group_ids:
+            raise ValueError(
+                "group_ids is only allowed when audience_kind='groups'"
+            )
+        return self
+
+
+class AudiencePreviewResponse(BaseModel):
+    """POST /api/v1/practices/{id}/audience-preview -- read-only, never
+    persists anything. `stranded_count` is how many of this practice's
+    ACTIVE (pending/confirmed) bookers would fall OUTSIDE the proposed
+    audience -- the frontend warns and requires confirmation when this is
+    above zero, saves silently when it's zero (owner-ruled)."""
+
+    stranded_count: int
 
 
 class CancelPracticeRequest(BaseModel):
