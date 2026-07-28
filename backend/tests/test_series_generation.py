@@ -694,3 +694,76 @@ async def test_groups_series_children_inherit_audience_and_groups(
             )
         ).scalars().all()
         assert child_groups == [group.id]
+
+
+@pytest.mark.asyncio
+async def test_switching_root_to_groups_propagates_to_children(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """C1-propagation: a PUBLIC series published, then switched to
+    'groups' on the ROOT via PATCH, must push the new audience onto the
+    already-generated children -- otherwise they stay public and
+    bookable, exposing the now-restricted sessions (the original C1 hole
+    reached through the ordinary edit path)."""
+    from app.modules.masters.groups_models import MasterGroup
+    from app.modules.practices.models import (
+        AudienceKind,
+        Practice,
+        PracticeAudienceGroup,
+    )
+
+    auth = await _make_verified_master(client, db_session)
+    master_id = auth["user"]["id"]
+    headers = auth_headers(auth["session_token"])
+
+    # Public series with children.
+    root_id = await _create_series_and_publish(
+        client, auth,
+        recurrence={"period": "daily", "end": "after_count", "count": 4},
+    )
+    group = MasterGroup(master_id=UUID(master_id), name="Круг")
+    db_session.add(group)
+    await db_session.commit()
+
+    # Children are public right now.
+    children = (
+        await db_session.execute(
+            select(Practice).where(
+                Practice.parent_practice_id == UUID(root_id),
+            )
+        )
+    ).scalars().all()
+    assert len(children) == 3
+    assert all(
+        c.audience_kind == AudienceKind.PUBLIC.value for c in children
+    )
+
+    # Switch the ROOT to groups.
+    resp = await client.patch(
+        f"{PRACTICES_URL}/{root_id}",
+        json={"audience_kind": "groups", "group_ids": [str(group.id)]},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+
+    # Find the children via the list endpoint (audience_kind IS on the
+    # ORM row), then read each child's detail (audience_group_names is
+    # resolved only by the detail endpoint). The owner always has access.
+    listing = await client.get(
+        f"{PRACTICES_URL}?master_id={master_id}&status=scheduled&limit=100",
+        headers=headers,
+    )
+    assert listing.status_code == 200
+    kids = [
+        it for it in listing.json()["items"]
+        if it.get("parent_practice_id") == root_id
+    ]
+    assert len(kids) == 3
+    for kid in kids:
+        assert kid["audience_kind"] == "groups"
+        detail = await client.get(
+            f"{PRACTICES_URL}/{kid['id']}", headers=headers,
+        )
+        assert detail.status_code == 200
+        assert detail.json()["audience_group_names"] == ["Круг"]

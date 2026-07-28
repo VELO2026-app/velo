@@ -14,7 +14,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import structlog
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -303,3 +303,77 @@ async def generate_series_occurrences(
     )
 
     return len(starts)
+
+
+async def propagate_audience_to_children(
+    root: Practice,
+    session: AsyncSession,
+) -> int:
+    """Push a series root's CURRENT audience (audience_kind + its target
+    PracticeAudienceGroup rows) onto every child occurrence.
+
+    C1-propagation: _build_child_occurrence copies the audience at
+    GENERATION time, but a root published as public and later switched to
+    'groups' (or re-targeted) via update_practice would leave its already
+    -generated children on the OLD audience -- public, bookable, leaking
+    the restricted sessions. update_practice calls this after applying an
+    audience change to a ROOT so the children track the root.
+
+    Only meaningful for a root (parent_practice_id is None) that actually
+    has children; callers gate on that. Returns the number of children
+    updated. Idempotent: re-running with the same audience is a no-op in
+    effect (same rows rewritten).
+    """
+    child_ids = list(
+        (
+            await session.execute(
+                select(Practice.id).where(
+                    Practice.parent_practice_id == root.id,
+                )
+            )
+        ).scalars().all()
+    )
+    if not child_ids:
+        return 0
+
+    # 1. audience_kind column on every child.
+    await session.execute(
+        update(Practice)
+        .where(Practice.parent_practice_id == root.id)
+        .values(audience_kind=root.audience_kind)
+    )
+
+    # 2. Replace each child's target-group rows with a copy of the root's
+    #    (delete-then-insert -- the same shape _set_practice_audience_groups
+    #    uses for a single practice, applied per child).
+    await session.execute(
+        delete(PracticeAudienceGroup).where(
+            PracticeAudienceGroup.practice_id.in_(child_ids),
+        )
+    )
+    if root.audience_kind == AudienceKind.GROUPS.value:
+        root_group_ids = list(
+            (
+                await session.execute(
+                    select(PracticeAudienceGroup.group_id).where(
+                        PracticeAudienceGroup.practice_id == root.id,
+                    )
+                )
+            ).scalars().all()
+        )
+        for child_id in child_ids:
+            for group_id in root_group_ids:
+                session.add(
+                    PracticeAudienceGroup(
+                        practice_id=child_id,
+                        group_id=group_id,
+                    )
+                )
+
+    logger.info(
+        "series_audience_propagated",
+        root_practice_id=str(root.id),
+        children=len(child_ids),
+        audience_kind=root.audience_kind,
+    )
+    return len(child_ids)

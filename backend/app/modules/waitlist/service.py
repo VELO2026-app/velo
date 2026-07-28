@@ -350,9 +350,25 @@ async def confirm_waitlist(
     if entry.status != WaitlistStatus.NOTIFIED.value:
         raise BadRequestError("Can only confirm a notified waitlist entry")
 
+    # Practice guards -- confirm_waitlist is the OTHER path that creates a
+    # CONFIRMED booking with a real charge, so it must refuse the same
+    # states create_booking refuses (bookings/service.py). Without these,
+    # a holder could convert their offer on a CANCELLED / COMPLETED
+    # practice, or one that has already started -- taking money for a
+    # slot that no longer exists. Scheduled-only (not LIVE): the waitlist
+    # is a pre-start queue -- join_waitlist itself requires SCHEDULED.
+    now = datetime.now(UTC)
+    if practice.status != PracticeStatus.SCHEDULED.value:
+        raise BadRequestError(
+            "Practice is no longer available for confirmation"
+        )
+    if practice.scheduled_at <= now:
+        raise BadRequestError(
+            "Cannot confirm a spot on a practice that has already started"
+        )
+
     # Lazy expiration check.
     # Returns (entry, None) instead of raising -- changes must commit.
-    now = datetime.now(UTC)
     if entry.expires_at and entry.expires_at < now:
         entry.status = WaitlistStatus.EXPIRED.value
 

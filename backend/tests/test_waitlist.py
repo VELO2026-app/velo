@@ -481,6 +481,80 @@ async def test_confirm_waitlist_success(
     assert data["booking_id"] is not None
 
 
+async def _notified_entry(client, db_session, master_tid, filler_tid, waiter_tid):
+    """Drive a waitlist entry to NOTIFIED: fill a 1-slot practice, join
+    the waitlist, cancel the filler (process_waitlist notifies the next).
+    Returns (pid, wid, waiter_headers)."""
+    master = await _make_verified_master(client, db_session, telegram_id=master_tid)
+    pid = await _create_scheduled_practice(client, master, max_participants=1)
+    filler = await _fill_practice(client, pid, telegram_id=filler_tid)
+    waiter = await login_user(client, telegram_id=waiter_tid, first_name="Waiter")
+    headers = auth_headers(waiter["session_token"])
+    wid = (
+        await client.post(
+            WAITLIST_JOIN_URL.format(practice_id=pid), headers=headers,
+        )
+    ).json()["id"]
+    await client.delete(
+        f"{BOOKINGS_URL}/{filler['booking_id']}",
+        headers=auth_headers(filler["session_token"]),
+    )
+    return pid, wid, headers
+
+
+@pytest.mark.asyncio
+async def test_confirm_waitlist_on_cancelled_practice_rejected(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """A holder must not convert their offer into a charged booking on a
+    practice the master has since cancelled (C4)."""
+    from uuid import UUID as _UUID
+    from sqlalchemy import update as _update
+
+    from app.modules.practices.models import Practice, PracticeStatus
+
+    pid, wid, headers = await _notified_entry(
+        client, db_session, 62160, 62161, 62162,
+    )
+    await db_session.execute(
+        _update(Practice)
+        .where(Practice.id == _UUID(pid))
+        .values(status=PracticeStatus.CANCELLED.value)
+    )
+    await db_session.commit()
+
+    resp = await client.post(f"{WAITLIST_URL}/{wid}/confirm", headers=headers)
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_confirm_waitlist_on_started_practice_rejected(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """A holder must not convert their offer once the practice has
+    already started (C4) -- same time guard as create_booking."""
+    from uuid import UUID as _UUID
+    from datetime import UTC, datetime, timedelta
+    from sqlalchemy import update as _update
+
+    from app.modules.practices.models import Practice
+
+    pid, wid, headers = await _notified_entry(
+        client, db_session, 62163, 62164, 62165,
+    )
+    await db_session.execute(
+        _update(Practice)
+        .where(Practice.id == _UUID(pid))
+        .values(scheduled_at=datetime.now(UTC) - timedelta(minutes=5))
+    )
+    await db_session.commit()
+
+    resp = await client.post(f"{WAITLIST_URL}/{wid}/confirm", headers=headers)
+    assert resp.status_code == 400
+
+
 @pytest.mark.asyncio
 async def test_confirm_waitlist_creates_zoom_registrant(
     client: AsyncClient,

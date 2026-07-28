@@ -1351,6 +1351,25 @@ async def update_practice(
         # silently resurrect.
         await _set_practice_audience_groups(practice.id, [], session)
 
+    # C1-propagation: if this is a SERIES ROOT and the audience changed,
+    # push the new audience onto the already-generated children -- a root
+    # published public and later switched to 'groups' would otherwise
+    # leave N public, bookable children exposing the restricted sessions
+    # (the original C1 hole, reachable via the ordinary edit path rather
+    # than at generation). Root-only: children are edited via their own
+    # root, not individually, and a per-occurrence audience change is not
+    # a supported operation, so a non-root update never fans out.
+    audience_changed = (
+        group_ids_sent
+        or ("audience_kind" in update_data
+            and old_audience_kind != final_audience_kind)
+    )
+    if audience_changed and practice.parent_practice_id is None:
+        from app.modules.practices.series_service import (
+            propagate_audience_to_children,
+        )
+        await propagate_audience_to_children(practice, session)
+
     # Apply Calendar taxonomy updates into data.taxonomy (JSONB).
     # deepcopy + set_jsonb so SQLAlchemy detects the change. Only the keys
     # actually sent are overwritten; the rest of data.taxonomy is preserved.
