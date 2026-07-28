@@ -1,14 +1,14 @@
 <!--
   VELO Frontend -- ReportUserSheet (Master GROUPS P3, ПРОМТ №592; MULTI-select
-  + styling fix batch ПРОМТ №609)
+  + styling fix batch ПРОМТ №609; full rebuild to measured values ПРОМТ №610)
 
   "Сообщить о пользователе" -- the report form (step D of the block flow,
   also reachable standalone from wherever a master wants to report a
-  student). MULTI-select VChip reasons (G12, owner-ruled) + an optional
-  comment.
+  student). MULTI-select round-checkbox reasons (G12, owner-ruled) + an
+  optional comment.
 
   POST /api/v1/reports { target_type: "user", target_id, reason }, where
-  reason = every selected chip's label joined with ", ", plus " — <comment>"
+  reason = every selected reason's label joined with ", ", plus " — <comment>"
   if a comment was entered. Composed client-side because the backend Report
   table has one free-text `reason` column, no separate category/comment
   split, and NO structured multi-reason support (recon #589: Report is
@@ -23,6 +23,20 @@
   the EXISTING report, never a 409. Either way api.post() resolves without
   throwing, so there is nothing to special-case here; the success toast
   fires uniformly.
+
+  Rebuild to `Report a user.svg` / `Report a user 2.svg` (ПРОМТ №610):
+    - target-user card (TargetUserCard, shared with both block-flow
+      VConfirmDialogs on MasterStudentProfileView -- owner Q9)
+    - «Причина:» as a full-width glass band, not coloured text
+    - round 20x20 checkbox rows (multi-select unchanged, only the visual
+      changed from VChip pills)
+    - textarea: --velo-radius-4-5 (deliberately small) + --velo-border,
+      scoped to this instance
+    - support notice: --velo-warning-bg peach panel, NO icon (unlike the
+      two block-flow dialogs, which DO carry a warning icon -- see those
+      files)
+    - «Отмена» (owner Q3, VBottomSheet's new opt-in cancelLabel) + «Отправить»
+      in one row, 39/61 width, --velo-primary / --velo-error fill
 -->
 
 <template>
@@ -30,25 +44,33 @@
     :open="open"
     title="Сообщить о пользователе"
     compact-title
+    cancel-label="Отмена"
     save-label="Отправить"
     :save-disabled="selectedReasons.size === 0"
     @save="onSend"
     @close="$emit('close')"
   >
-    <p class="report-user__name">{{ studentName }}</p>
+    <TargetUserCard :name="studentName" :avatar-url="studentAvatarUrl" class="report-user__card" />
 
-    <p class="report-user__label">Причина:</p>
-    <div class="report-user__chips">
-      <VChip
+    <div class="report-user__reason-band">Причина:</div>
+    <div class="report-user__reasons">
+      <button
         v-for="r in REASONS"
         :key="r"
-        size="md"
-        clickable
-        :active="selectedReasons.has(r)"
+        type="button"
+        class="report-user__reason-row"
+        role="checkbox"
+        :aria-checked="selectedReasons.has(r)"
         @click="toggleReason(r)"
       >
-        {{ r }}
-      </VChip>
+        <span
+          class="report-user__reason-mark"
+          :class="{ 'report-user__reason-mark--on': selectedReasons.has(r) }"
+        >
+          <IconCheck v-if="selectedReasons.has(r)" class="report-user__reason-check" :size="12" />
+        </span>
+        <span class="report-user__reason-label">{{ r }}</span>
+      </button>
     </div>
 
     <VTextarea
@@ -66,7 +88,9 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { VBottomSheet, VChip, VTextarea } from '@/components/ui'
+import { VBottomSheet, VTextarea } from '@/components/ui'
+import { IconCheck } from '@/components/icons'
+import TargetUserCard from '@/components/shared/TargetUserCard.vue'
 import { createReport } from '@/api/reports'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
@@ -75,6 +99,7 @@ const props = defineProps<{
   open: boolean
   studentId: string
   studentName: string
+  studentAvatarUrl?: string | null
 }>()
 
 const emit = defineEmits<{ close: []; sent: [] }>()
@@ -138,52 +163,90 @@ async function onSend(): Promise<void> {
 </script>
 
 <style scoped>
-.report-user__name {
-  font-family: var(--font-body);
-  font-size: var(--text-base);
-  color: var(--velo-text-primary);
-  margin: 0 0 var(--space-4);
-}
-
-/* G12 (ПРОМТ №609): colour-highlighted per the mockup -- no exact value
-   was measured for this one (unlike the tokened items elsewhere in this
-   batch), so the existing brand/emphasis token is used rather than a
-   literal; flagged in the delivery report as unmeasured. */
-.report-user__label {
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
-  color: var(--velo-primary);
-  font-weight: 600;
-  margin: 0 0 var(--space-2);
-}
-
-/* G12: MULTI-select, options stacked VERTICALLY (was flex-wrap, one row) --
-   align-items: flex-start keeps each chip its own natural pill width
-   instead of stretching to fill the row. */
-.report-user__chips {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-2);
+.report-user__card {
   margin-bottom: var(--space-4);
 }
 
-/* G14 (ПРОМТ №609): visible resting border on the textarea, scoped to
-   THIS instance via :deep() (the same pattern the search-field glass
-   pills already use) rather than changing VTextarea's own default --
-   that default border color equals the focus-state color, so making it
-   always-visible app-wide would make every textarea look permanently
-   focused. --velo-border is the existing token that matches (same value
-   as --velo-border-input-focus, but that coincidence is exactly why this
-   must stay scoped, not global). */
-.report-user__textarea :deep(.v-textarea__field) {
-  border-color: var(--velo-border);
+/* «Причина:» -- full-width glass band, not coloured text (measured). */
+.report-user__reason-band {
+  width: 100%;
+  background: var(--velo-glass-blue-15);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  color: var(--velo-text-primary);
+  margin-bottom: var(--space-3);
 }
 
+/* Round 20x20 checkbox rows -- same mark recipe as VRadioGroup (circle +
+   IconCheck), copied rather than reusing that component directly: this
+   is MULTI-select (a Set), VRadioGroup is architecturally single-select
+   (one modelValue). */
+.report-user__reasons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.report-user__reason-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--font-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.report-user__reason-mark {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  border: 1.5px solid var(--velo-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color var(--transition-fast);
+}
+
+.report-user__reason-mark--on {
+  background: var(--velo-primary);
+}
+
+.report-user__reason-check {
+  color: var(--velo-white);
+}
+
+.report-user__reason-label {
+  font-size: var(--text-xs);
+  color: var(--velo-text-primary);
+}
+
+/* Measured rx4.5 -- deliberately small, NOT --radius-md. Scoped to THIS
+   instance via :deep() (the search-field glass-pill pattern), never
+   VTextarea's own default. */
+.report-user__textarea :deep(.v-textarea__field) {
+  border-color: var(--velo-border);
+  border-radius: var(--velo-radius-4-5);
+}
+
+/* Support notice: peach panel, NO icon (measured -- unlike the two
+   block-flow VConfirmDialogs, which DO carry a warning icon). Reuses
+   --velo-warning-bg (40% opacity) rather than minting a near-duplicate
+   token for the SVG's ~30% -- Navigator call, not re-litigated here. */
 .report-user__note {
+  width: 100%;
+  background: var(--velo-warning-bg);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
   font-family: var(--font-body);
   font-size: var(--text-xs);
-  color: var(--velo-text-muted);
+  color: var(--velo-peach-500);
   line-height: 1.5;
   margin: var(--space-3) 0 0;
 }

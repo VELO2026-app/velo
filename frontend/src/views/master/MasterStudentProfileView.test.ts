@@ -836,6 +836,22 @@ describe('MasterStudentProfileView', () => {
       expect(modalButtonWith('Заблокировать')).toBeDefined()
     })
 
+    it('owner Q9 (ПРОМТ №610): the block-confirm dialog carries the TargetUserCard + a warning icon', async () => {
+      mount()
+      await flush()
+
+      buttonWith('Заблокировать пользователя')?.click()
+      await flush()
+
+      const modal = liveModal()
+      expect(modal?.querySelector('.target-user-card')).not.toBeNull()
+      expect(modal?.textContent).toContain('Анна Кузнецова')
+      // warningPanel (owner Q9): icon present -- unlike the report sheet's
+      // own support notice, which deliberately has none.
+      expect(modal?.querySelector('.v-confirm__panel')).not.toBeNull()
+      expect(modal?.querySelector('.v-confirm__panel svg')).not.toBeNull()
+    })
+
     it('confirming calls blockStudent, toasts, and opens the report-offer', async () => {
       vi.mocked(groupsApi.blockStudent).mockResolvedValue({
         student_user_id: 's1',
@@ -861,12 +877,14 @@ describe('MasterStudentProfileView', () => {
       expect(offerText).toContain('Пользователь заблокирован')
       expect(offerText).toContain('Пользователь перемещен в «Удаленные».')
       expect(modalButtonWith('Не сейчас')).toBeDefined()
-      expect(modalButtonWith('Сообщить в поддержку')).toBeDefined()
+      expect(modalButtonWith('В поддержку')).toBeDefined()
       // G10 (ПРОМТ №609): compact-actions -> both buttons render at the
-      // smaller VButton size, a sizing fix (not a label change) for the
-      // long «Сообщить в поддержку» label that used to wrap the row.
+      // smaller VButton size, a sizing fix for the ORIGINAL long «Сообщить
+      // в поддержку» label. Owner Q1 (ПРОМТ №610) shortened the label
+      // itself to «В поддержку» afterward -- both changes stack; this
+      // still asserts the sizing class survives on the new label.
       expect(modalButtonWith('Не сейчас')?.classList.contains('v-btn--sm')).toBe(true)
-      expect(modalButtonWith('Сообщить в поддержку')?.classList.contains('v-btn--sm')).toBe(true)
+      expect(modalButtonWith('В поддержку')?.classList.contains('v-btn--sm')).toBe(true)
     })
 
     it('«Не сейчас» dismisses the offer without opening the report form', async () => {
@@ -889,7 +907,7 @@ describe('MasterStudentProfileView', () => {
       expect(sheetOverlay()).toBeNull()
     })
 
-    it('«Сообщить в поддержку» opens the report form; «Отправить» is disabled until a reason is chosen', async () => {
+    it('owner Q9: the report-offer dialog ALSO carries the TargetUserCard + a warning icon', async () => {
       vi.mocked(groupsApi.blockStudent).mockResolvedValue({
         student_user_id: 's1',
         blocked_at: '2026-07-24T00:00:00Z',
@@ -902,20 +920,87 @@ describe('MasterStudentProfileView', () => {
       await flush()
       modalButtonWith('Заблокировать')?.click()
       await flush()
-      modalButtonWith('Сообщить в поддержку')?.click()
+
+      const modal = liveModal()
+      expect(modal?.querySelector('.target-user-card')).not.toBeNull()
+      expect(modal?.querySelector('.v-confirm__panel')).not.toBeNull()
+      expect(modal?.querySelector('.v-confirm__panel svg')).not.toBeNull()
+    })
+
+    it('«В поддержку» opens the report form; «Отправить» is disabled until a reason is chosen', async () => {
+      vi.mocked(groupsApi.blockStudent).mockResolvedValue({
+        student_user_id: 's1',
+        blocked_at: '2026-07-24T00:00:00Z',
+        cancelled_bookings_count: 0,
+      })
+      mount()
+      await flush()
+
+      buttonWith('Заблокировать пользователя')?.click()
+      await flush()
+      modalButtonWith('Заблокировать')?.click()
+      await flush()
+      modalButtonWith('В поддержку')?.click()
       await flush()
 
       expect(sheetOverlay()?.textContent).toContain('Сообщить о пользователе')
       const sendBtn = sheetOverlay()?.querySelector<HTMLButtonElement>('.v-sheet__save')
       expect(sendBtn?.disabled).toBe(true)
 
-      const chip = Array.from(sheetOverlay()?.querySelectorAll<HTMLElement>('.v-chip') ?? []).find(
-        (c) => c.textContent?.includes('Сорвал практику'),
-      )
+      const chip = Array.from(
+        sheetOverlay()?.querySelectorAll<HTMLElement>('.report-user__reason-row') ?? [],
+      ).find((c) => c.textContent?.includes('Сорвал практику'))
       chip?.click()
       await nextTick()
 
       expect(sendBtn?.disabled).toBe(false)
+    })
+
+    it('owner Q9/G14 (ПРОМТ №610): the report sheet ALSO has the card, but its notice panel has NO icon (unlike the two dialogs)', async () => {
+      mount()
+      await flush()
+
+      buttonWith('Заблокировать пользователя')?.click()
+      await flush()
+      modalButtonWith('Заблокировать')?.click()
+      await flush()
+      modalButtonWith('В поддержку')?.click()
+      await flush()
+
+      const sheet = sheetOverlay()
+      expect(sheet?.querySelector('.target-user-card')).not.toBeNull()
+      expect(sheet?.textContent).toContain('Анна Кузнецова')
+      // The support notice exists (peach panel text) but carries no icon --
+      // contrast with the two VConfirmDialogs' warningPanel, which do.
+      expect(sheet?.textContent).toContain('Заявка уйдёт в поддержку')
+      const noteEl = Array.from(sheet?.querySelectorAll<HTMLElement>('p') ?? []).find((p) =>
+        p.textContent?.includes('Заявка уйдёт в поддержку'),
+      )
+      expect(noteEl?.querySelector('svg')).toBeNull()
+    })
+
+    it('owner Q3 (ПРОМТ №610): «Отмена» in the report sheet dismisses it without sending', async () => {
+      mount()
+      await flush()
+
+      buttonWith('Заблокировать пользователя')?.click()
+      await flush()
+      modalButtonWith('Заблокировать')?.click()
+      await flush()
+      modalButtonWith('В поддержку')?.click()
+      await flush()
+
+      sheetButtonWith('Отмена')?.click()
+      await flush()
+
+      // Scoped past the leave-transition corpse: VBottomSheet's <Transition>
+      // unmounts only after the CSS leave transition ends, which happy-dom
+      // never fires -- the overlay element lingers carrying
+      // v-sheet-leave-active (same trap documented elsewhere in this file
+      // for VConfirmDialog/VModal). A bare .v-sheet__overlay query would
+      // still find that corpse and wrongly read as "still open".
+      expect(document.body.querySelector('.v-sheet__overlay:not(.v-sheet-leave-active)')).toBeNull()
+      expect(reportsApi.createReport).not.toHaveBeenCalled()
     })
 
     it('sending composes the reason from the chip + comment and posts to /reports; 409-as-success (measured, not assumed)', async () => {
@@ -936,12 +1021,12 @@ describe('MasterStudentProfileView', () => {
       await flush()
       modalButtonWith('Заблокировать')?.click()
       await flush()
-      modalButtonWith('Сообщить в поддержку')?.click()
+      modalButtonWith('В поддержку')?.click()
       await flush()
 
-      const chip = Array.from(sheetOverlay()?.querySelectorAll<HTMLElement>('.v-chip') ?? []).find(
-        (c) => c.textContent?.includes('Мошенничество'),
-      )
+      const chip = Array.from(
+        sheetOverlay()?.querySelectorAll<HTMLElement>('.report-user__reason-row') ?? [],
+      ).find((c) => c.textContent?.includes('Мошенничество'))
       chip?.click()
       await nextTick()
       const textarea = sheetOverlay()?.querySelector<HTMLTextAreaElement>('textarea')
@@ -973,10 +1058,12 @@ describe('MasterStudentProfileView', () => {
       await flush()
       modalButtonWith('Заблокировать')?.click()
       await flush()
-      modalButtonWith('Сообщить в поддержку')?.click()
+      modalButtonWith('В поддержку')?.click()
       await flush()
 
-      const chips = Array.from(sheetOverlay()?.querySelectorAll<HTMLElement>('.v-chip') ?? [])
+      const chips = Array.from(
+        sheetOverlay()?.querySelectorAll<HTMLElement>('.report-user__reason-row') ?? [],
+      )
       chips.find((c) => c.textContent?.includes('Сорвал практику'))?.click()
       await nextTick()
       chips.find((c) => c.textContent?.includes('Мошенничество'))?.click()
@@ -1000,19 +1087,19 @@ describe('MasterStudentProfileView', () => {
       await flush()
       modalButtonWith('Заблокировать')?.click()
       await flush()
-      modalButtonWith('Сообщить в поддержку')?.click()
+      modalButtonWith('В поддержку')?.click()
       await flush()
 
-      const chip = Array.from(sheetOverlay()?.querySelectorAll<HTMLElement>('.v-chip') ?? []).find(
-        (c) => c.textContent?.includes('Сорвал практику'),
-      )
+      const chip = Array.from(
+        sheetOverlay()?.querySelectorAll<HTMLElement>('.report-user__reason-row') ?? [],
+      ).find((c) => c.textContent?.includes('Сорвал практику'))
       chip?.click()
       await nextTick()
-      expect(chip?.classList.contains('v-chip--active')).toBe(true)
+      expect(chip?.getAttribute('aria-checked')).toBe('true')
 
       chip?.click()
       await nextTick()
-      expect(chip?.classList.contains('v-chip--active')).toBe(false)
+      expect(chip?.getAttribute('aria-checked')).toBe('false')
       const sendBtn = sheetOverlay()?.querySelector<HTMLButtonElement>('.v-sheet__save')
       expect(sendBtn?.disabled).toBe(true)
     })
@@ -1026,12 +1113,12 @@ describe('MasterStudentProfileView', () => {
       await flush()
       modalButtonWith('Заблокировать')?.click()
       await flush()
-      modalButtonWith('Сообщить в поддержку')?.click()
+      modalButtonWith('В поддержку')?.click()
       await flush()
 
-      const chip = Array.from(sheetOverlay()?.querySelectorAll<HTMLElement>('.v-chip') ?? []).find(
-        (c) => c.textContent?.includes('Другое'),
-      )
+      const chip = Array.from(
+        sheetOverlay()?.querySelectorAll<HTMLElement>('.report-user__reason-row') ?? [],
+      ).find((c) => c.textContent?.includes('Другое'))
       chip?.click()
       await nextTick()
       const textarea = sheetOverlay()?.querySelector<HTMLTextAreaElement>('textarea')

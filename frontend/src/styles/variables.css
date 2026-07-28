@@ -448,6 +448,8 @@
    * ========================================================================= */
   /* Radius */
   --velo-radius-9: 9px; /* Support attach-box / thumb radius (between badge 5 / md 15) */
+  --velo-radius-10: 10px; /* Report-sheet target-user card (measured, ПРОМТ №610) */
+  --velo-radius-4-5: 4.5px; /* Report-sheet textarea -- deliberately small, not --radius-md (measured, ПРОМТ №610) */
   /* Surfaces */
   --velo-divider: rgba(98, 122, 156, 0.3); /* dashed section divider; = former glass-blue-30 (grab-handle) reused as a divider */
   --velo-divider-width: 3px; /* dashed divider stroke width */

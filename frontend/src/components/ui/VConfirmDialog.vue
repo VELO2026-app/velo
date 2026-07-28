@@ -34,12 +34,31 @@
   поддержку» + «Не сейчас»). Sizing-only fix, not a label change -- the
   row layout itself (flex, wrap-when-too-wide) is unchanged. Default false,
   every pre-existing caller renders byte-identically.
+
+  Default SLOT (ПРОМТ №610, owner Q9): optional content rendered between
+  `title` and `message` -- e.g. MasterStudentProfileView's TargetUserCard,
+  which now appears in both this component's callers there AND in
+  ReportUserSheet, all three built from the SAME shared card. Empty by
+  default (no slot content passed = renders nothing), byte-identical to
+  before for every caller that doesn't use it.
+
+  Optional `warningPanel` (ПРОМТ №610, owner Q9): renders `message` inside
+  a peach panel with a warning icon instead of plain centered text --
+  reuses the SAME --velo-warning-bg recipe ReportUserSheet's own support
+  notice uses, but WITH an icon (the report sheet's notice deliberately
+  has none -- that difference is real, not an oversight, see both files).
+  Default false, every pre-existing caller renders byte-identically.
 -->
 
 <template>
   <VModal :open="open" :show-close="false" :close-on-overlay="!loading" @close="$emit('cancel')">
     <h2 v-if="title" class="v-confirm__title">{{ title }}</h2>
-    <p class="v-confirm__text">{{ message }}</p>
+    <slot />
+    <div v-if="warningPanel" class="v-confirm__panel">
+      <IconWarning class="v-confirm__panel-icon" :size="20" />
+      <p class="v-confirm__panel-text">{{ message }}</p>
+    </div>
+    <p v-else class="v-confirm__text">{{ message }}</p>
     <div class="v-confirm__actions">
       <VButton
         variant="ghost"
@@ -64,6 +83,7 @@
 <script setup lang="ts">
 import VModal from './VModal.vue'
 import VButton from './VButton.vue'
+import { IconWarning } from '@/components/icons'
 
 withDefaults(
   defineProps<{
@@ -79,6 +99,9 @@ withDefaults(
     /** Sizing-only fix for a long confirm label (ПРОМТ №609, G10) -- see
      *  the file header. Default false = byte-identical to before. */
     compactActions?: boolean
+    /** Peach warning panel + icon around `message` (ПРОМТ №610, owner Q9)
+     *  -- see the file header. Default false = byte-identical to before. */
+    warningPanel?: boolean
   }>(),
   {
     title: '',
@@ -87,6 +110,7 @@ withDefaults(
     danger: false,
     loading: false,
     compactActions: false,
+    warningPanel: false,
   },
 )
 
@@ -118,6 +142,35 @@ defineEmits<{
   text-align: center;
   line-height: 1.5;
   margin: 0 0 var(--space-4);
+}
+
+/* warningPanel (ПРОМТ №610, owner Q9): SAME peach recipe as
+   ReportUserSheet's own support notice (--velo-warning-bg, --radius-md,
+   --velo-peach-500 text), WITH an icon -- the report sheet deliberately
+   has none, this is the real, kept difference between the two. */
+.v-confirm__panel {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  background: var(--velo-warning-bg);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  margin: 0 0 var(--space-4);
+}
+
+.v-confirm__panel-icon {
+  flex-shrink: 0;
+  color: var(--velo-peach-500);
+  margin-top: 2px;
+}
+
+.v-confirm__panel-text {
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--velo-peach-500);
+  text-align: left;
+  line-height: 1.5;
+  margin: 0;
 }
 
 .v-confirm__actions {

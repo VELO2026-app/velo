@@ -22,6 +22,15 @@
   at --text-xl, and changing the shared size would shrink 9 titles that
   were never asked about to fix the one that needed it. Default false,
   every pre-existing caller renders byte-identically.
+
+  Optional `cancelLabel` (ПРОМТ №610, owner Q3): this component had NO
+  cancel button at all -- dismissed only by tapping the scrim or Escape.
+  When set (together with saveLabel), renders a two-button ROW instead of
+  the single full-width save button: cancel at ~39% width (emits the
+  EXISTING `close` event, same as the scrim tap -- no new event needed)
+  and save at ~61% (measured, ReportUserSheet's «Отмена»/«Отправить»).
+  Default '' = byte-identical to every other caller; only ReportUserSheet
+  sets this today.
 -->
 
 <template>
@@ -40,8 +49,21 @@
           <div class="v-sheet__body">
             <slot />
           </div>
+          <div v-if="cancelLabel && saveLabel" class="v-sheet__actions">
+            <button type="button" class="v-sheet__cancel" @click="$emit('close')">
+              {{ cancelLabel }}
+            </button>
+            <button
+              type="button"
+              class="v-sheet__save v-sheet__save--paired"
+              :disabled="saveDisabled"
+              @click="$emit('save')"
+            >
+              {{ saveLabel }}
+            </button>
+          </div>
           <button
-            v-if="saveLabel"
+            v-else-if="saveLabel"
             type="button"
             class="v-sheet__save"
             :disabled="saveDisabled"
@@ -73,6 +95,9 @@ const props = withDefaults(
     /** Sizing-only fix for a long title (ПРОМТ №609, G11) -- see the file
      *  header. Default false = byte-identical to before. */
     compactTitle?: boolean
+    /** Adds a cancel button beside save (ПРОМТ №610, owner Q3) -- see the
+     *  file header. Default '' = byte-identical to before. */
+    cancelLabel?: string
   }>(),
   {
     title: '',
@@ -80,6 +105,7 @@ const props = withDefaults(
     saveDisabled: false,
     closeOnOverlay: true,
     compactTitle: false,
+    cancelLabel: '',
   },
 )
 
@@ -206,6 +232,58 @@ onUnmounted(() => {
   background: var(--velo-nav-inactive-bg);
   color: var(--velo-text-muted);
   box-shadow: none;
+}
+
+/* Cancel + save ROW (ПРОМТ №610, owner Q3) -- unitless flex-grow ratios
+   (39/61, measured) so the gap is handled correctly by the browser
+   instead of fighting percentage-basis-minus-gap arithmetic. */
+.v-sheet__actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: 18px;
+}
+
+.v-sheet__cancel {
+  flex: 39 1 0%;
+  height: 49px;
+  border-radius: 24.5px;
+  background: var(--velo-primary);
+  color: var(--velo-white);
+  border: 1px solid var(--velo-glass-border);
+  box-shadow: var(--velo-shadow-glow);
+  font-family: var(--font-body);
+  font-size: var(--text-lg);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.v-sheet__cancel:hover {
+  background: var(--velo-primary-dark);
+}
+
+/* Paired save (measured: --velo-error fill, not the lone-button's primary
+   -- ReportUserSheet's «Отправить», owner-specified, not a mistake to
+   "correct" back to primary). Same shape/size as the lone .v-sheet__save,
+   just repainted + given its own flex-grow ratio instead of the parent
+   flex-column's implicit full-width stretch. */
+.v-sheet__save--paired {
+  flex: 61 1 0%;
+  margin-top: 0;
+  background: var(--velo-error);
+}
+
+.v-sheet__save--paired:hover:not(:disabled) {
+  background: var(--velo-error);
+  opacity: 0.9;
+}
+
+.v-sheet__save--paired:disabled {
+  background: var(--velo-error);
+  color: var(--velo-white);
+  opacity: 0.5;
+  box-shadow: var(--velo-shadow-glow);
+  cursor: not-allowed;
 }
 
 /* -- Slide-up transition (mirrors VModal) -- */

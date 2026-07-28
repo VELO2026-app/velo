@@ -110,37 +110,48 @@
 
     <SendMessageModal :open="msgOpen" :name="name" @close="msgOpen = false" />
 
-    <!-- Block confirm (destructive) -->
+    <!-- Block confirm (destructive). TargetUserCard (owner Q9, ПРОМТ №610)
+         via the default slot + warning-panel for the consequences text
+         (same peach recipe as ReportUserSheet's notice, WITH an icon --
+         that dialog deliberately has none). -->
     <VConfirmDialog
       :open="blockConfirmOpen"
       title="Заблокировать пользователя?"
       message="Пользователь переместится в группу «Удаленные». Он больше не сможет видеть и бронировать ваши практики и перестанет получать ваши уведомления. Вы сможете разблокировать его в любой момент."
       confirm-label="Заблокировать"
       danger
+      warning-panel
       :loading="blocking"
       @confirm="onBlockConfirm"
       @cancel="blockConfirmOpen = false"
-    />
+    >
+      <TargetUserCard :name="name" :avatar-url="avatarUrl" class="profile__dialog-card" />
+    </VConfirmDialog>
 
     <!-- Report-offer (optional step -- dismiss is fine). compact-actions
-         (ПРОМТ №609, G10): «Сообщить в поддержку» is long enough that the
-         default button size wraps the row onto two lines -- sizing fix,
-         label unchanged (see VConfirmDialog's own header for why). -->
+         (ПРОМТ №609, G10) + confirm-label shortened to «В поддержку»
+         (owner Q1, ПРОМТ №610) -- «Сообщить в поддержку» was the label
+         still overflowing even at compact size; see the delivery report
+         for the measured fit with the new label. -->
     <VConfirmDialog
       :open="reportOfferOpen"
       title="Пользователь заблокирован"
       message="Пользователь перемещен в «Удаленные». Если он нарушал правила — например, сорвал практику или вел себя неподобающе, — вы можете сообщить об этом в поддержку."
-      confirm-label="Сообщить в поддержку"
+      confirm-label="В поддержку"
       cancel-label="Не сейчас"
       compact-actions
+      warning-panel
       @confirm="onReportOfferAccept"
       @cancel="reportOfferOpen = false"
-    />
+    >
+      <TargetUserCard :name="name" :avatar-url="avatarUrl" class="profile__dialog-card" />
+    </VConfirmDialog>
 
     <ReportUserSheet
       :open="reportFormOpen"
       :student-id="String(route.params.id)"
       :student-name="name"
+      :student-avatar-url="avatarUrl"
       @close="reportFormOpen = false"
     />
   </div>
@@ -162,6 +173,7 @@ import {
 import MoodAvatar from '@/components/shared/MoodAvatar.vue'
 import SendMessageModal from '@/components/shared/SendMessageModal.vue'
 import ReportUserSheet from '@/components/shared/ReportUserSheet.vue'
+import TargetUserCard from '@/components/shared/TargetUserCard.vue'
 import VShowMore from '@/components/shared/VShowMore.vue'
 import {
   moodLabelFromScore,
@@ -446,5 +458,10 @@ const reportFormOpen = ref(false)
 
 .profile__block-cta {
   margin-top: var(--space-2);
+}
+
+/* TargetUserCard inside the two block-flow dialogs (owner Q9, ПРОМТ №610). */
+.profile__dialog-card {
+  margin-bottom: var(--space-4);
 }
 </style>
