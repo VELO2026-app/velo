@@ -220,6 +220,16 @@ def _stub_response(method: str, path: str, json_body: dict | None) -> Any:
         return {}
     if method == "GET" and "/report/meetings/" in path:
         return {"participants": []}
+    # REC-1 (ПРОМТ №618): must come AFTER report/meetings and BEFORE the
+    # generic /meetings/ GET check below -- "/meetings/{id}/recordings"
+    # contains "/meetings/" as a substring too, same trap as the comment
+    # above already documents for /registrants and /report/meetings/.
+    if method == "GET" and path.endswith("/recordings"):
+        stub_id = path.split("/")[-2]
+        return {
+            "share_url": f"https://zoom.us/rec/share/{stub_id}",
+            "recording_play_passcode": "stubpasscode",
+        }
     # Must come AFTER both /registrants and /report/meetings/ GET checks
     # above -- both of those paths also contain "/meetings/" as a substring.
     if method == "GET" and "/meetings/" in path:
@@ -249,6 +259,16 @@ async def create_meeting(
     Registration-specific settings (approval_type etc.) are configured
     here so the meeting is ready for registrants once that wiring lands in
     a later step -- no registrant is created by this call.
+
+    auto_recording="cloud" (REC-1, ПРОМТ №618): the account-level "record
+    automatically" setting is what actually makes recording happen -- Zoom
+    applies the account setting regardless of this field, and it was OFF
+    until the owner turned it on directly in the console (2026-07-29,
+    zero code change). This field does not conflict with that: both now
+    say "record", so it is redundant today. It is set anyway so the
+    intent is recorded in code, not only in a console setting nobody
+    reading this file can see -- a future reader (or a future account
+    change) should not have to guess why recordings exist.
     """
     return await _request(
         "POST",
@@ -263,6 +283,7 @@ async def create_meeting(
                 "approval_type": 0,  # automatic approval
                 "registrants_email_notification": True,
                 "join_before_host": False,
+                "auto_recording": "cloud",
             },
         },
     )
@@ -292,6 +313,20 @@ async def get_meeting(*, zoom_meeting_id: str) -> dict:
 async def delete_meeting(*, zoom_meeting_id: str) -> None:
     """Delete a meeting."""
     await _request("DELETE", f"/meetings/{zoom_meeting_id}")
+
+
+async def get_meeting_recordings(*, zoom_meeting_id: str) -> dict:
+    """Fetch this meeting's cloud recording (REC-1, ПРОМТ №618).
+
+    Raises ZoomAPIError on any non-2xx, INCLUDING 404 -- Zoom returns 404
+    when there is no recording (never created, still processing, or
+    already deleted by Zoom's own retention). The caller distinguishes
+    "confirmed absent" (404) from "couldn't check" (anything else) by
+    reading exc.status_code; this function does not special-case 404
+    itself so that distinction stays visible to the caller instead of
+    being collapsed here.
+    """
+    return await _request("GET", f"/meetings/{zoom_meeting_id}/recordings")
 
 
 # ---------------------------------------------------------------------------

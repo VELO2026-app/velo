@@ -68,6 +68,7 @@ from app.modules.zoom.zoom_client import (
     create_registrant,
     delete_meeting,
     get_meeting,
+    get_meeting_recordings,
     list_registrants,
     patch_meeting,
     update_registrant_status,
@@ -752,3 +753,56 @@ async def get_meeting_start_url(zoom_meeting_id: str) -> str | None:
     if not isinstance(start_url, str) or not start_url.startswith("https://"):
         return None
     return start_url
+
+
+# ---------------------------------------------------------------------------
+# REC-1 (ПРОМТ №618): watch-recording link for a past practice. Owner
+# decisions this reflects: sharing is on and "must authenticate" is off (so
+# a VELO user with no Zoom account can open the link), passcode is required
+# and NOT embedded by Zoom (that account setting stays off), so WE embed it
+# -- the user never sees a raw URL or a passcode, only one ready link.
+# Retention is Zoom's own 7-day auto-delete; our side never expires
+# anything, it only reacts to the file being gone (a 404 from Zoom).
+# ---------------------------------------------------------------------------
+
+
+async def get_meeting_recording_link(zoom_meeting_id: str) -> str | None:
+    """This meeting's current recording link, passcode embedded, fetched
+    fresh from Zoom every call -- never stored, same "ask Zoom at request
+    time" posture as get_meeting_start_url above, and for the same reason:
+    a stored link would go stale the moment Zoom's own 7-day retention
+    deletes the file, and re-deriving staleness ourselves would duplicate a
+    job Zoom already does.
+
+    Returns None when Zoom has no recording for this meeting right now
+    (404 -- never created, still processing, or already deleted). Raises
+    ZoomAPIError for any other failure (network/auth/5xx) so the caller can
+    tell "confirmed absent" apart from "couldn't check" -- do not catch
+    that here and collapse the two.
+
+    Does not log `response` or the constructed link -- the link carries the
+    passcode inline once built, same "never log the credential" rule
+    get_meeting_start_url's docstring states for start_url above.
+    """
+    try:
+        response = await get_meeting_recordings(zoom_meeting_id=zoom_meeting_id)
+    except ZoomAPIError as exc:
+        if exc.status_code == 404:
+            return None
+        raise
+
+    share_url = response.get("share_url")
+    if not isinstance(share_url, str) or not share_url.startswith("https://"):
+        return None
+
+    passcode = response.get("recording_play_passcode") or response.get("password")
+    if not passcode:
+        # Share URL exists but Zoom didn't return a passcode -- still
+        # usable (Zoom will prompt), better than showing nothing. Logged
+        # without the URL itself, which carries no secret in this branch.
+        logger.warning(
+            "zoom_recording_no_passcode", zoom_meeting_id=zoom_meeting_id,
+        )
+        return share_url
+
+    return f"{share_url}?pwd={passcode}"
