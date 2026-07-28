@@ -366,6 +366,12 @@ export interface BookingDetailResponse {
   practice: PracticeResponse
 }
 
+/** GET /api/v1/bookings/{id}/recording -- REC-1 (PROMPT №618). Three states, deliberately not collapsed (owner-mandate: never conflate "we checked, nothing there" with "we couldn't check"): - available: url is set, ready to open. Passcode already embedded (see zoom/service.py::get_meeting_recording_link) -- the caller never sees a raw Zoom URL or a passcode. - unavailable: Zoom has no recording for this meeting right now. Covers three cases we deliberately do NOT distinguish (we store nothing, so we cannot and the user-facing message is identical either way): never created, still processing, or already deleted by Zoom's own 7-day retention. - error: the Zoom call itself failed (network/auth/5xx). NOT the same as unavailable -- this means we could not check, not that we checked and found nothing. A booking that does not qualify at all (wrong owner, never confirmed, or the practice hasn't ended) is a 404 (P-08), not one of these three -- that is an entitlement question, not a recording-state one. */
+export interface BookingRecordingResponse {
+  status: 'available' | 'unavailable' | 'error'
+  url?: string | null
+}
+
 /** Booking representation returned by endpoints. */
 export interface BookingResponse {
   id: string
