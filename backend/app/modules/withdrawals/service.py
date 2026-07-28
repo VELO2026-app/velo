@@ -1,190 +1,660 @@
 # =============================================================================
-# VELO Backend -- Withdrawal Service (Phase 6.6)
+# VELO Backend -- Waitlist Service (Phase 5.3, bugfix round, updated Phase 6.4)
 # =============================================================================
 #
-# Business logic for master withdrawal requests.
+# Business logic for waitlist join, leave/decline, confirm, and
+# automatic processing when a booking is cancelled.
 #
-# CREATE FLOW:
-#   1. Validate payout details exist in MasterProfile.data.payout.
-#   2. Validate amount >= min_withdrawal_cents.
-#   3. Lock MasterProfile with FOR UPDATE (P-07).
-#   4. Validate available_cents >= amount_cents.
-#   5. Create Withdrawal record with payout_details snapshot.
-#   6. Transfer available -> frozen via double-entry master_ledger.
-#   7. Audit log.
+# JOIN FLOW:
+#   1. FOR UPDATE on practice (same lock as booking -- prevents races)
+#   2. Validate: exists, scheduled, IS full, no active booking, not owner
+#   3. Check existing waitlist entry:
+#      - active (waiting/notified) -> 409
+#      - rejoinable (left/declined/expired) -> UPDATE (re-join, new position)
+#      - none -> INSERT with position = MAX+1 subquery
+#   4. IntegrityError -> savepoint rollback + 409 (P-05, FIX 2.1)
 #
-# DOUBLE-ENTRY (create):
-#   master_ledger: -amount_cents (frozen=False)  -> available decreases
-#   master_ledger: +amount_cents (frozen=True)   -> frozen increases
-#   SUM = 0
+# LEAVE/DECLINE FLOW:
+#   1. FOR UPDATE on waitlist entry (P-12)
+#   2. Owner check (P-08: 404 not 403)
+#   3. waiting -> left; notified -> declined
+#   4. If declined (was notified): process_waitlist -> notify next
+#
+# CONFIRM FLOW:
+#   1. FOR UPDATE on waitlist entry (P-12)
+#   2. Owner check, status must be notified, not expired
+#   3. Lazy expiration: if expired -> EXPIRED + process_waitlist + return None
+#      (no exception -- changes must commit)
+#   4. FOR UPDATE on practice + capacity recheck (overbooking prevention)
+#      If spot taken -> WAITING (back to queue) + return None
+#   5. Create booking + purchase (double-entry), status -> converted
+#   6. Recalculate current_participants (Frontend Backlog A-03)
+#
+# PROCESS_WAITLIST (internal):
+#   Called from cancel_booking and leave/decline.
+#   Finds first waiting entry, transitions to notified,
+#   sets expires_at = now + 30 min.
+#   FIX 3.1: creates real Notification (WAITLIST_SPOT_AVAILABLE) instead
+#   of stub logger. Template includes 30-min deadline + deep link.
 #
 # SESSION RULES:
-#   No session.commit() (P-01). Router handles flush + refresh.
+#   No session.commit() here (P-01). Router calls flush + refresh.
+#
+# BUGFIX NOTES:
+#   - confirm_waitlist returns (entry, None) instead of raising when
+#     expired or spot taken. This ensures get_db_session commits the
+#     status changes (EXPIRED/WAITING) instead of rolling them back.
+#   - confirm_waitlist locks Practice with FOR UPDATE and rechecks
+#     capacity to prevent overbooking race with create_booking.
+#   - FIX 2.1: confirm_waitlist uses begin_nested() (SAVEPOINT) instead
+#     of session.rollback() on IntegrityError. Rollback kills the entire
+#     transaction; savepoint rolls back only the failed flush.
 # =============================================================================
 
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import structlog
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.audit import record_audit
-from app.core.config import settings
-from app.core.exceptions import BadRequestError
-from app.modules.masters.models import MasterProfile
-from app.modules.payments.service import record_master_ledger
+from app.core.exceptions import (
+    BadRequestError,
+    ConflictError,
+    NotFoundError,
+)
+from app.modules.bookings.models import Booking, BookingStatus
+from app.modules.bookings.service import (
+    _ACTIVE_BOOKING_STATUSES,
+    _get_active_booking_count,
+    recalculate_participants,
+)
+from app.modules.masters.service import get_master_display_name
+from app.modules.payments.purchase import create_purchase_for_booking
+from app.modules.practices.audience_service import assert_viewer_can_access_practice
+from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.users.models import User
-from app.modules.withdrawals.models import Withdrawal, WithdrawalStatus
-from app.modules.withdrawals.schemas import (
-    PaginatedWithdrawalsResponse,
-    WithdrawalResponse,
+from app.modules.waitlist.models import (
+    ACTIVE_STATUSES,
+    REJOINABLE_STATUSES,
+    Waitlist,
+    WaitlistStatus,
 )
 
 logger = structlog.get_logger()
 
+# How long a notified user has to confirm.
+_CONFIRM_WINDOW = timedelta(minutes=30)
 
-async def create_withdrawal(
-    user: User,
-    profile: MasterProfile,
-    amount_cents: int,
-    session: AsyncSession,
-) -> Withdrawal:
-    """Create a withdrawal request and freeze the amount.
 
-    Args:
-        user: The master user.
-        profile: MasterProfile (from get_current_master, not locked).
-        amount_cents: Total withdrawal amount in EUR cents (fee deducted from this).
-        session: Active async session (caller manages transaction).
+# L-03 fix: removed async -- this function contains only synchronous
+# SQLAlchemy expression building (no I/O, no awaits).
+def _next_position_subquery(practice_id: UUID):
+    """Build a scalar subquery for next position in waitlist.
 
-    Returns:
-        Created Withdrawal record.
-
-    Raises:
-        BadRequestError: If payout details missing, amount too low,
-            or insufficient available balance.
+    Returns a correlated subquery: COALESCE(MAX(position), 0) + 1
+    filtered by practice_id.
     """
-    # 1. Validate payout details.
-    payout = profile.data.get("payout")
-    if not payout or not payout.get("method"):
-        raise BadRequestError(
-            "Payout details not configured. "
-            "Update them via PATCH /masters/me/payout first."
-        )
-
-    # 2. Validate minimum amount.
-    if amount_cents < settings.min_withdrawal_cents:
-        raise BadRequestError(
-            f"Minimum withdrawal amount is "
-            f"{settings.min_withdrawal_cents} cents"
-        )
-
-    # 3. Validate fee does not exceed amount.
-    fee_cents = settings.withdrawal_fee_cents
-    if fee_cents >= amount_cents:
-        raise BadRequestError(
-            "Withdrawal amount must exceed the platform fee "
-            f"({fee_cents} cents)"
-        )
-
-    # 4. Lock MasterProfile and check available balance (P-07).
-    locked_profile = await session.get(
-        MasterProfile, user.id, with_for_update=True,
+    return (
+        select(func.coalesce(func.max(Waitlist.position), 0) + 1)
+        .where(Waitlist.practice_id == practice_id)
+        .scalar_subquery()
     )
-    if not locked_profile:
-        raise BadRequestError("Master profile not found")
-    if locked_profile.available_cents < amount_cents:
+
+
+async def join_waitlist(
+    user: User,
+    practice_id: UUID,
+    session: AsyncSession,
+) -> Waitlist:
+    """Add user to the waitlist for a full practice.
+
+    Validates:
+    - Practice exists and is scheduled.
+    - Practice IS full (otherwise user should book directly).
+    - User is not the practice owner.
+    - No active booking for this practice.
+    - No active waitlist entry (waiting/notified).
+    - Rejoinable entry (left/declined/expired) -> re-join with new position.
+    """
+    # Lock practice (same strategy as create_booking).
+    stmt = (
+        select(Practice)
+        .where(Practice.id == practice_id)
+        .with_for_update()
+    )
+    result = await session.execute(stmt)
+    practice = result.scalar_one_or_none()
+
+    if not practice:
+        raise NotFoundError("Practice not found")
+
+    if practice.status != PracticeStatus.SCHEDULED.value:
+        raise BadRequestError("Can only join waitlist for scheduled practices")
+
+    if practice.master_id == user.id:
+        raise BadRequestError("Cannot join waitlist for your own practice")
+
+    # Audience gate at ENTRY, not just at confirm (C-audience): a
+    # blocked or out-of-audience user otherwise takes a queue slot,
+    # gets promoted, and burns the hold window (locking out a real
+    # group member for its whole duration) before being rejected at
+    # confirm_waitlist. Same gate confirm_waitlist already applies --
+    # close the OTHER door into the queue here.
+    await assert_viewer_can_access_practice(user.id, practice, session)
+
+    # Practice must be full -- otherwise user should book directly.
+    if practice.max_participants is None:
         raise BadRequestError(
-            "Insufficient available balance"
+            "Practice has no capacity limit -- book directly"
         )
 
-    # 5. Create Withdrawal with payout snapshot.
-    withdrawal = Withdrawal(
-        user_id=user.id,
-        amount_cents=amount_cents,
-        fee_cents=fee_cents,
-        currency=settings.default_currency,
-        payout_details=dict(payout),
+    active_count = await _get_active_booking_count(session, practice_id)
+    if active_count < practice.max_participants:
+        raise BadRequestError("Practice is not full -- book directly")
+
+    # Check no active booking exists.
+    booking_stmt = (
+        select(func.count(Booking.id))
+        .where(
+            Booking.practice_id == practice_id,
+            Booking.user_id == user.id,
+            Booking.status.in_(_ACTIVE_BOOKING_STATUSES),
+        )
     )
-    session.add(withdrawal)
-    await session.flush()
+    booking_result = await session.execute(booking_stmt)
+    if booking_result.scalar_one() > 0:
+        raise ConflictError("Already booked for this practice")
 
-    # 6. Double-entry: transfer available -> frozen.
-    reason = f"withdrawal_hold:{withdrawal.id}"
+    # Check existing waitlist entry.
+    existing_stmt = (
+        select(Waitlist)
+        .where(
+            Waitlist.practice_id == practice_id,
+            Waitlist.user_id == user.id,
+        )
+        .with_for_update()
+    )
+    existing_result = await session.execute(existing_stmt)
+    existing = existing_result.scalar_one_or_none()
 
-    await record_master_ledger(
+    now = datetime.now(UTC)
+    # L-03 fix: no longer awaited (sync function).
+    next_pos = _next_position_subquery(practice_id)
+
+    if existing:
+        if existing.status in ACTIVE_STATUSES:
+            raise ConflictError("Already on waitlist for this practice")
+
+        if existing.status in REJOINABLE_STATUSES:
+            # Re-join: update existing row with new position.
+            existing.status = WaitlistStatus.WAITING.value
+            existing.position = next_pos
+            existing.joined_at = now
+            existing.notified_at = None
+            existing.expires_at = None
+
+            await session.flush()
+            await session.refresh(existing)
+
+            logger.info(
+                "waitlist_rejoined",
+                waitlist_id=str(existing.id),
+                practice_id=str(practice_id),
+                user_id=str(user.id),
+                position=existing.position,
+            )
+            return existing
+
+    # New entry.
+    entry = Waitlist(
+        practice_id=practice_id,
         user_id=user.id,
-        amount_cents=-amount_cents,
-        reason=reason,
-        is_frozen=False,
+        position=next_pos,
+        status=WaitlistStatus.WAITING.value,
+        joined_at=now,
+    )
+    session.add(entry)
+
+    try:
+        async with session.begin_nested():
+            await session.flush()
+    except IntegrityError:
+        raise ConflictError(
+            "Already on waitlist for this practice"
+        ) from None
+
+    await session.refresh(entry)
+
+    logger.info(
+        "waitlist_joined",
+        waitlist_id=str(entry.id),
+        practice_id=str(practice_id),
+        user_id=str(user.id),
+        position=entry.position,
+    )
+
+    return entry
+
+
+async def leave_waitlist(
+    waitlist_id: UUID,
+    user: User,
+    session: AsyncSession,
+) -> Waitlist:
+    """Leave the waitlist or decline a notification.
+
+    Transitions:
+    - waiting -> left
+    - notified -> declined (triggers process_waitlist for next user)
+
+    Uses FOR UPDATE (P-12).
+    """
+    stmt = (
+        select(Waitlist)
+        .where(Waitlist.id == waitlist_id)
+        .with_for_update()
+    )
+    result = await session.execute(stmt)
+    entry = result.scalar_one_or_none()
+
+    if not entry:
+        raise NotFoundError("Waitlist entry not found")
+
+    # P-08: 404 not 403 for non-owner.
+    if entry.user_id != user.id:
+        raise NotFoundError("Waitlist entry not found")
+
+    was_notified = entry.status == WaitlistStatus.NOTIFIED.value
+
+    if entry.status == WaitlistStatus.WAITING.value:
+        entry.status = WaitlistStatus.LEFT.value
+    elif entry.status == WaitlistStatus.NOTIFIED.value:
+        entry.status = WaitlistStatus.DECLINED.value
+    else:
+        raise BadRequestError("Cannot leave waitlist in current status")
+
+    logger.info(
+        "waitlist_left",
+        waitlist_id=str(waitlist_id),
+        user_id=str(user.id),
+        new_status=entry.status,
+    )
+
+    # If user was notified (had a spot offer), notify next in line.
+    if was_notified:
+        await process_waitlist(entry.practice_id, session)
+
+    return entry
+
+
+async def confirm_waitlist(
+    waitlist_id: UUID,
+    user: User,
+    session: AsyncSession,
+) -> tuple[Waitlist, Booking | None]:
+    """Confirm a waitlist spot -- creates a booking + purchase.
+
+    Only works when status=notified and expires_at > now().
+    Creates a booking (confirmed), a purchase (double-entry),
+    and transitions to converted.
+
+    Returns (entry, booking) on success.
+    Returns (entry, None) when:
+    - Offer expired: entry -> EXPIRED, next user notified.
+    - Spot taken by concurrent booking: entry -> WAITING (back to queue).
+
+    IMPORTANT: Returns (entry, None) instead of raising exceptions for
+    expired/spot-taken cases. This ensures get_db_session commits the
+    status changes. If we raised, the exception would trigger rollback
+    and the changes would be lost.
+
+    W1 fix: locks Practice before Waitlist, same order as join_waitlist /
+    create_booking. An unlocked peek finds which practice the entry
+    belongs to, so Practice can be locked first; the entry itself is then
+    loaded FOR UPDATE (authoritative) for the ownership/status/expiry
+    checks below. The previous Waitlist-then-Practice order here was the
+    reverse of join_waitlist's Practice-then-Waitlist order, a lock-order
+    deadlock risk under concurrent requests.
+    """
+    peek_stmt = select(Waitlist.practice_id).where(Waitlist.id == waitlist_id)
+    practice_id = (await session.execute(peek_stmt)).scalar_one_or_none()
+    if practice_id is None:
+        raise NotFoundError("Waitlist entry not found")
+
+    practice_stmt = (
+        select(Practice)
+        .where(Practice.id == practice_id)
+        .with_for_update()
+    )
+    practice = (await session.execute(practice_stmt)).scalar_one_or_none()
+    if not practice:
+        raise NotFoundError("Waitlist entry not found")
+
+    stmt = (
+        select(Waitlist)
+        .where(Waitlist.id == waitlist_id)
+        .with_for_update()
+    )
+    result = await session.execute(stmt)
+    entry = result.scalar_one_or_none()
+
+    if not entry:
+        raise NotFoundError("Waitlist entry not found")
+
+    # P-08: 404 not 403 for non-owner.
+    if entry.user_id != user.id:
+        raise NotFoundError("Waitlist entry not found")
+
+    if entry.status != WaitlistStatus.NOTIFIED.value:
+        raise BadRequestError("Can only confirm a notified waitlist entry")
+
+    # Lazy expiration check.
+    # Returns (entry, None) instead of raising -- changes must commit.
+    now = datetime.now(UTC)
+    if entry.expires_at and entry.expires_at < now:
+        entry.status = WaitlistStatus.EXPIRED.value
+
+        # Comms (T1, dictionary §2): waitlist.expired to the holder --
+        # the held spot lapsed; process_waitlist below hands it to the
+        # next in line (who gets their own waitlist.spot_available).
+        from app.core.events.notify import emit_notification
+        await emit_notification(
+            session,
+            type="waitlist.expired",
+            target_type="user",
+            target_value=str(entry.user_id),
+            title="Бронь по листу ожидания истекла",
+            body=(
+                f"Вы не подтвердили место на практику "
+                f"«{practice.title}» вовремя -- оно передано "
+                f"следующему в очереди."
+            ),
+            action_data={
+                "action": "open_practice",
+                "params": {"practice_id": str(entry.practice_id)},
+                "practice_title": practice.title,
+            },
+        )
+
+        await process_waitlist(entry.practice_id, session)
+
+        logger.info(
+            "waitlist_confirm_expired",
+            waitlist_id=str(waitlist_id),
+            user_id=str(user.id),
+            expires_at=entry.expires_at.isoformat(),
+        )
+        return entry, None
+
+    # P5 (ПРОМТ №594, the carried seam from P1): reject a viewer blocked by
+    # this practice's master, or outside its configured audience. This is
+    # the OTHER booking-creation path besides create_booking -- a waitlist
+    # notification is a HELD spot; without this check here, a user blocked
+    # (or audience-narrowed out) after joining the waitlist but before being
+    # notified could still convert that hold into a real booking. Raises
+    # (not the soft (entry, None) return the expiry/capacity cases below
+    # use) -- this is a rejection, not a business state to route back to
+    # the queue.
+    await assert_viewer_can_access_practice(user.id, practice, session)
+
+    # Recheck capacity (overbooking prevention) -- practice already locked
+    # above. Between cancel_booking (which freed a spot) and now, a
+    # concurrent create_booking could have taken the spot.
+    if practice.max_participants is not None:
+        active = await _get_active_booking_count(
+            session, entry.practice_id,
+        )
+        if active >= practice.max_participants:
+            # Spot was taken -- return user to queue (not their fault).
+            entry.status = WaitlistStatus.WAITING.value
+            entry.notified_at = None
+            entry.expires_at = None
+
+            logger.info(
+                "waitlist_confirm_spot_taken",
+                waitlist_id=str(waitlist_id),
+                user_id=str(user.id),
+                active_bookings=active,
+                max_participants=practice.max_participants,
+            )
+            return entry, None
+
+    # Create booking (auto-confirmed).
+    booking = Booking(
+        practice_id=entry.practice_id,
+        user_id=user.id,
+        status=BookingStatus.CONFIRMED.value,
+    )
+    session.add(booking)
+
+    # FIX 2.1: begin_nested() (SAVEPOINT) instead of session.rollback().
+    # Rollback kills the entire transaction including FOR UPDATE locks
+    # and the entry status changes above. Savepoint rolls back only
+    # the failed flush, keeping the outer transaction alive.
+    try:
+        async with session.begin_nested():
+            await session.flush()
+    except IntegrityError:
+        raise ConflictError(
+            "Already booked for this practice"
+        ) from None
+
+    # Double-entry purchase (always, Semaphore 1.1).
+    # Load user for balance check inside create_purchase_for_booking.
+    user_obj = await session.get(User, user.id)
+    await create_purchase_for_booking(
+        booking=booking,
+        practice=practice,
+        user=user_obj,
         session=session,
     )
-    await record_master_ledger(
-        user_id=user.id,
-        amount_cents=amount_cents,
-        reason=reason,
-        is_frozen=True,
-        session=session,
-    )
 
-    # 7. Audit.
-    await record_audit(
-        event="withdrawal_created",
-        actor_id=user.id,
-        actor_type="user",
-        target_type="withdrawal",
-        target_id=withdrawal.id,
-        data={
-            "amount_cents": amount_cents,
-            "fee_cents": fee_cents,
-            "currency": settings.default_currency,
+    # Zoom registrant (C5): confirm_waitlist is the OTHER booking-
+    # creation path besides create_booking, which registers its booker
+    # for the meeting (bookings/service.py). Without this, a user who
+    # got in off the waitlist pays but never gets a join link -> shows
+    # up and cannot enter. create_registrant_for_booking NEVER RAISES,
+    # is idempotent, and self-handles the series-child (no meeting yet
+    # -> None) and pending-meeting (queued for the retry poller) cases,
+    # so it is safe to call unconditionally here.
+    from app.modules.zoom.service import create_registrant_for_booking
+    await create_registrant_for_booking(booking, user_obj, session)
+
+    entry.status = WaitlistStatus.CONVERTED.value
+
+    # Comms (T1): this is the OTHER booking-creation path besides
+    # create_booking (which emits for itself) -- the converted hold is
+    # a confirmed booking, so it gets the same booking.confirmed +
+    # reminder series in the same transaction (dictionary §2, ID-2).
+    from app.core.events.notify import emit_notification
+    from app.core.events.reminders import (
+        format_event_time,
+        schedule_booking_reminders,
+    )
+    master_name = await get_master_display_name(
+        practice.master_id, session,
+    )
+    when_text = format_event_time(practice.scheduled_at)
+    await emit_notification(
+        session,
+        type="booking.confirmed",
+        target_type="user",
+        target_value=str(user.id),
+        title="Бронирование подтверждено",
+        body=(
+            f"Вы записаны на практику «{practice.title}». "
+            f"Начало: {when_text}. Мастер: {master_name}."
+        ),
+        action_data={
+            "action": "open_practice",
+            "params": {"practice_id": str(entry.practice_id)},
+            "practice_title": practice.title,
+            "master_name": master_name,
+            "scheduled_at": when_text,
         },
-        session=session,
+    )
+    await schedule_booking_reminders(
+        session,
+        booking_id=str(booking.id),
+        user_id=str(user.id),
+        practice_id=str(entry.practice_id),
+        practice_title=practice.title,
+        master_name=master_name,
+        scheduled_at=practice.scheduled_at,
+    )
+
+    # Update cached participant count (Frontend Backlog A-03).
+    await recalculate_participants(entry.practice_id, session)
+
+    logger.info(
+        "waitlist_confirmed",
+        waitlist_id=str(waitlist_id),
+        booking_id=str(booking.id),
+        practice_id=str(entry.practice_id),
+        user_id=str(user.id),
+    )
+
+    return entry, booking
+
+
+async def process_waitlist(
+    practice_id: UUID,
+    session: AsyncSession,
+) -> Waitlist | None:
+    """Notify the next waiting user in the queue.
+
+    Called automatically when:
+    - A booking is cancelled (from cancel_booking)
+    - A notified user declines or expires
+
+    Finds the first 'waiting' entry by position, transitions
+    to 'notified', and sets expires_at.
+
+    FIX 3.1: Creates a real Notification (WAITLIST_SPOT_AVAILABLE)
+    instead of a stub logger call. Template tells the user they have
+    30 minutes to confirm (not "automatically booked"). Deep link
+    points to the confirm action.
+
+    Returns the notified entry, or None if queue is empty.
+    """
+    stmt = (
+        select(Waitlist)
+        .where(
+            Waitlist.practice_id == practice_id,
+            Waitlist.status == WaitlistStatus.WAITING.value,
+        )
+        .order_by(Waitlist.position)
+        .limit(1)
+        .with_for_update()
+    )
+    result = await session.execute(stmt)
+    entry = result.scalar_one_or_none()
+
+    if not entry:
+        logger.info(
+            "waitlist_empty",
+            practice_id=str(practice_id),
+        )
+        return None
+
+    now = datetime.now(UTC)
+    entry.status = WaitlistStatus.NOTIFIED.value
+    entry.notified_at = now
+    entry.expires_at = now + _CONFIRM_WINDOW
+
+    # Comms (T1): the live donor emit, switched from the old engine's
+    # create_notification to the outbox (dictionary §2:
+    # waitlist.spot_available -> the head of the queue; velo picks the
+    # holder, ID-4). Lazy import mirrors the old pattern.
+    from app.core.events.notify import emit_notification
+    from app.core.events.reminders import format_event_time
+
+    # Load practice for template variables.
+    practice = await session.get(Practice, practice_id)
+    master_name = await get_master_display_name(
+        practice.master_id, session,
+    )
+
+    when_text = format_event_time(practice.scheduled_at)
+    expires_text = format_event_time(entry.expires_at)
+    await emit_notification(
+        session,
+        type="waitlist.spot_available",
+        target_type="user",
+        target_value=str(entry.user_id),
+        title="Освободилось место",
+        body=(
+            f"Освободилось место на практику «{practice.title}» "
+            f"({when_text}, мастер: {master_name}). Подтвердите "
+            f"участие до {expires_text}."
+        ),
+        action_data={
+            "action": "confirm_waitlist",
+            "params": {"waitlist_id": str(entry.id)},
+            "practice_id": str(practice_id),
+            "practice_title": practice.title,
+            "scheduled_at": when_text,
+            "master_name": master_name,
+            "expires_at": expires_text,
+        },
+        priority=2,
+        expiry_at=entry.expires_at,
     )
 
     logger.info(
-        "withdrawal_created",
-        withdrawal_id=str(withdrawal.id),
-        user_id=str(user.id),
-        amount_cents=amount_cents,
-        fee_cents=fee_cents,
+        "waitlist_user_notified",
+        waitlist_id=str(entry.id),
+        practice_id=str(practice_id),
+        user_id=str(entry.user_id),
+        expires_at=entry.expires_at.isoformat(),
     )
 
-    return withdrawal
+    return entry
 
 
-async def list_my_withdrawals(
-    user_id: UUID,
+# ===================================================================
+# Frontend Backlog: User-facing list endpoint
+# ===================================================================
+
+
+async def list_user_waitlist(
+    user: User,
     session: AsyncSession,
     *,
+    status_filter: str | None = None,
     limit: int = 20,
     offset: int = 0,
-) -> PaginatedWithdrawalsResponse:
-    """List withdrawals for the current master (paginated)."""
-    base = select(Withdrawal).where(Withdrawal.user_id == user_id)
+) -> tuple[list[tuple[Waitlist, Practice]], int]:
+    """List waitlist entries for the current user with practice data.
+
+    Returns (items, total) where items are (Waitlist, Practice) tuples.
+    Supports filtering by waitlist status and pagination.
+
+    Used by GET /api/v1/waitlist/me.
+    """
+    filters: list = [Waitlist.user_id == user.id]
+    if status_filter:
+        filters.append(Waitlist.status == status_filter)
 
     # Total count.
-    count_stmt = select(func.count(Withdrawal.id)).where(
-        Withdrawal.user_id == user_id,
+    count_stmt = (
+        select(func.count(Waitlist.id))
+        .where(*filters)
     )
     total = (await session.execute(count_stmt)).scalar_one()
 
-    # Paginated items (newest first).
-    items_stmt = (
-        base
-        .order_by(Withdrawal.created_at.desc())
+    # Paginated items with practice JOIN.
+    stmt = (
+        select(Waitlist, Practice)
+        .join(Practice, Waitlist.practice_id == Practice.id)
+        .where(*filters)
+        .order_by(Waitlist.created_at.desc())
         .limit(limit)
         .offset(offset)
     )
-    result = await session.execute(items_stmt)
-    rows = result.scalars().all()
+    result = await session.execute(stmt)
+    items = [(row[0], row[1]) for row in result.all()]
 
-    return PaginatedWithdrawalsResponse(
-        items=[
-            WithdrawalResponse.model_validate(w, from_attributes=True)
-            for w in rows
-        ],
-        total=total,
-        limit=limit,
-        offset=offset,
-    )
+    return items, total

@@ -19,6 +19,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.users.models import User, UserRole
+from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.practices.models import (
     Practice,
     PracticeStatus,
@@ -2100,3 +2101,59 @@ async def test_update_ignores_parent_practice_id(
     ).scalar_one()
     assert practice.parent_practice_id is None
     assert practice.title == "Renamed"  # the legit field DID change
+
+
+# ---------------------------------------------------------------------------
+# max_participants cannot drop below the active headcount (waitlist safety)
+# ---------------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_update_max_participants_below_headcount_rejected(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Lowering max_participants under the number of active bookings is a
+    400: otherwise current > max reads 'full' forever and every booking
+    /waitlist confirmation is silently rejected."""
+    auth = await _make_verified_master(client, db_session)
+    pid = await _create_and_publish(client, auth)
+
+    # Two active (confirmed) bookings, inserted directly (the practice is
+    # free so no ledger flow is needed for this capacity check).
+    booker_a = await login_user(client, telegram_id=60061, first_name="A")
+    booker_b = await login_user(client, telegram_id=60062, first_name="B")
+    db_session.add_all([
+        Booking(
+            practice_id=UUID(pid),
+            user_id=UUID(booker_a["user"]["id"]),
+            status=BookingStatus.CONFIRMED.value,
+        ),
+        Booking(
+            practice_id=UUID(pid),
+            user_id=UUID(booker_b["user"]["id"]),
+            status=BookingStatus.CONFIRMED.value,
+        ),
+    ])
+    await db_session.commit()
+
+    # max=1 < 2 booked -> rejected.
+    resp = await client.patch(
+        f"{PRACTICES_URL}/{pid}",
+        json={"max_participants": 1},
+        headers=auth_headers(auth["session_token"]),
+    )
+    assert resp.status_code == 400
+
+    # max=2 == headcount is allowed (the floor is the current count).
+    ok = await client.patch(
+        f"{PRACTICES_URL}/{pid}",
+        json={"max_participants": 2},
+        headers=auth_headers(auth["session_token"]),
+    )
+    assert ok.status_code == 200
+
+    practice = (
+        await db_session.execute(
+            select(Practice).where(Practice.id == UUID(pid))
+        )
+    ).scalar_one()
+    assert practice.max_participants == 2

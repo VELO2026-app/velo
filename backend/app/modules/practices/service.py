@@ -593,6 +593,25 @@ async def _has_active_bookings(
     return result.scalar_one() > 0
 
 
+async def _active_booking_count(
+    practice_id: UUID,
+    session: AsyncSession,
+) -> int:
+    """Count active (pending/confirmed) bookings on a practice.
+
+    Used to forbid lowering max_participants below the number of people
+    already holding a slot -- otherwise current > max makes every
+    capacity check read "full" forever (new bookings and every waitlist
+    confirmation silently rejected).
+    """
+    stmt = select(func.count(Booking.id)).where(
+        Booking.practice_id == practice_id,
+        Booking.status.in_(_ACTIVE_BOOKING_STATUSES),
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one()
+
+
 def master_full_name(
     first_name: str | None,
     last_name: str | None,
@@ -1057,6 +1076,26 @@ async def get_practice_detail(
     practice, master_name, master_avatar_url, master_methods = (
         await get_practice(practice_id, user, session)
     )
+    # Audience gate on the DETAIL view (C-audience): get_practice only
+    # hides draft/deleted from non-owners -- a scheduled groups/students
+    # practice was otherwise fully readable by any authenticated user
+    # via a forwarded link, leaking audience_group_names (the master's
+    # private group names). Booking is blocked elsewhere, so this is a
+    # DISCLOSURE fix, not overbooking. Mirror get_practice's own P-08
+    # discipline: a viewer who cannot access it gets 404 (not 403), so
+    # the response does not become an "exists but private" oracle. The
+    # owner always sees their own practice.
+    if practice.master_id != user.id:
+        from app.core.exceptions import ForbiddenError
+        from app.modules.practices.audience_service import (
+            assert_viewer_can_access_practice,
+        )
+        try:
+            await assert_viewer_can_access_practice(
+                user.id, practice, session,
+            )
+        except ForbiddenError:
+            raise NotFoundError("Practice not found") from None
     flags = await user_flags_for_practices(user.id, [practice.id], session)
     is_booked, is_paid = flags.get(practice.id, (False, False))
     series_meta = await series_meta_for_practices([practice], session)
@@ -1239,6 +1278,22 @@ async def update_practice(
         raise BadRequestError(
             "Cannot change price with active bookings"
         )
+
+    # Forbid lowering capacity below the people already holding a slot.
+    # max_participants has a ge=1 bound in the schema but no floor at the
+    # current headcount -- dropping 20 bookings to max=1 leaves
+    # current > max, and every capacity check ("< max_participants")
+    # then reads "full" forever: new bookings AND every waitlist
+    # confirmation are silently rejected (confirm_waitlist even quietly
+    # returns each holder to WAITING). Reject the shrink instead.
+    if "max_participants" in update_data:
+        new_cap = update_data["max_participants"]
+        active = await _active_booking_count(practice.id, session)
+        if new_cap < active:
+            raise BadRequestError(
+                f"Cannot set max_participants to {new_cap}: "
+                f"{active} participant(s) already booked"
+            )
 
     # Enforce pricing invariant after applying updates.
     # Resolve final is_free and price_cents from mix of

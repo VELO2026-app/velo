@@ -212,6 +212,45 @@ async def test_join_waitlist_success(
 
 
 @pytest.mark.asyncio
+async def test_join_waitlist_blocked_user_rejected_at_entry(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """A user blocked by the master must be rejected when JOINING the
+    queue (403), not allowed to hold a slot until confirm. Closes the
+    OTHER door into the waitlist (confirm_waitlist already gated)."""
+    from datetime import UTC, datetime as _dt
+    from uuid import UUID as _UUID
+
+    from app.modules.masters.groups_models import MasterStudent
+
+    master = await _make_verified_master(client, db_session)
+    master_id = master["user"]["id"]
+    pid = await _create_scheduled_practice(
+        client, master, max_participants=1,
+    )
+    await _fill_practice(client, pid, telegram_id=62150)
+
+    blocked = await login_user(
+        client, telegram_id=62151, first_name="Blocked",
+    )
+    db_session.add(
+        MasterStudent(
+            master_id=_UUID(master_id),
+            student_user_id=_UUID(blocked["user"]["id"]),
+            blocked_at=_dt.now(UTC),
+        )
+    )
+    await db_session.commit()
+
+    resp = await client.post(
+        WAITLIST_JOIN_URL.format(practice_id=pid),
+        headers=auth_headers(blocked["session_token"]),
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_join_waitlist_not_full(
     client: AsyncClient,
     db_session: AsyncSession,
