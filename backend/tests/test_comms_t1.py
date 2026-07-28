@@ -408,14 +408,18 @@ class TestNotificationsProxy:
         seam.assert_not_awaited()
 
     async def test_comms_unconfigured_means_502(self, client) -> None:
-        """Empty COMMS_API_URL (local dev / comms down at install):
-        the proxy answers 502 through the REAL core/comms.py client."""
+        """Empty COMMS_API_URL -> 502 through the REAL core/comms.py
+        client. PATCHED empty, not asserted empty: on the test VPS the
+        Phase 5 installer has already written a live comms url into
+        .env, so the environment must not be assumed unconfigured
+        (post-T1 finding: this assert was env-dependent and went red
+        on the VPS while green in a bare sandbox)."""
         login = await login_user(client, telegram_id=TID_PROXY)
-        assert settings.comms_api_url == ""
-        response = await client.get(
-            "/api/v1/notifications/unread-count",
-            headers=auth_headers(login["session_token"]),
-        )
+        with patch.object(settings, "comms_api_url", ""):
+            response = await client.get(
+                "/api/v1/notifications/unread-count",
+                headers=auth_headers(login["session_token"]),
+            )
         assert response.status_code == 502
 
     async def test_comms_timeout_means_504(self, client) -> None:
