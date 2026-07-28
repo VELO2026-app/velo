@@ -463,23 +463,44 @@ async def create_group(
 
 
 async def rename_group(
-    master_id: UUID, group_id_str: str, name: str, session: AsyncSession,
+    master_id: UUID,
+    group_id_str: str,
+    name: str,
+    session: AsyncSession,
+    *,
+    description: str | None = None,
+    description_provided: bool = False,
 ) -> MasterGroup:
+    """Rename AND/OR edit description (owner Q10, ПРОМТ №611).
+
+    `description_provided` is the router's own
+    `"description" in body.model_dump(exclude_unset=True)` check -- partial
+    update, same contract as groups_router.py's RenameGroupRequest docstring
+    describes. Only touches `group.description` when True; a plain rename
+    call (description_provided=False) leaves it byte-for-byte untouched --
+    this is the regression the whole feature exists to prevent.
+    """
     group = await _get_custom_group_or_404(master_id, group_id_str, session)
-    if group.name == name:
-        return group
 
-    dup = (
-        await session.execute(
-            select(MasterGroup).where(
-                MasterGroup.master_id == master_id, MasterGroup.name == name,
+    if group.name != name:
+        dup = (
+            await session.execute(
+                select(MasterGroup).where(
+                    MasterGroup.master_id == master_id, MasterGroup.name == name,
+                )
             )
-        )
-    ).scalar_one_or_none()
-    if dup is not None:
-        raise ConflictError(f"A group named '{name}' already exists")
+        ).scalar_one_or_none()
+        if dup is not None:
+            raise ConflictError(f"A group named '{name}' already exists")
+        group.name = name
 
-    group.name = name
+    if description_provided:
+        # Same blank/whitespace-only -> NULL normalization create_group()
+        # already applies -- "no description" stays ONE unambiguous DB state.
+        group.description = (
+            description.strip() if description and description.strip() else None
+        )
+
     try:
         async with session.begin_nested():
             await session.flush()

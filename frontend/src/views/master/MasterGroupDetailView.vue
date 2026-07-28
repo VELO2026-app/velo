@@ -40,7 +40,7 @@
               ariaLabel="Пригласить в группу"
               @click="onHeaderInviteClick(close)"
             />
-            <VMenuItem :icon="IconPen" ariaLabel="Переименовать" @click="onRenameClick(close)" />
+            <VMenuItem :icon="IconPen" ariaLabel="Изменить" @click="onRenameClick(close)" />
             <VMenuItem
               :icon="IconTrash"
               ariaLabel="Удалить группу"
@@ -81,7 +81,7 @@
         title="Не удалось загрузить участников"
         :description="error"
       >
-        <VButton size="sm" variant="outline" @click="load">Повторить</VButton>
+        <VButton size="sm" variant="outline" @click="retry">Повторить</VButton>
       </VEmptyState>
 
       <template v-else>
@@ -198,15 +198,24 @@
       @cancel="unblockTarget = null"
     />
 
-    <!-- Rename (G2, ПРОМТ №609 -- moved from MasterGroupsView's card menu) -->
+    <!-- Rename + description edit (G2, ПРОМТ №609 -- moved from
+         MasterGroupsView's card menu; owner Q10, ПРОМТ №611 -- gained the
+         description field, same dialog). -->
     <VBottomSheet
       :open="renameOpen"
-      title="Переименовать группу"
+      title="Изменить название и описание"
       save-label="Сохранить"
       @save="onRenameSave"
       @close="renameOpen = false"
     >
       <VInput v-model="renameName" label="Название" placeholder="Название группы" />
+      <VTextarea
+        v-model="renameDescription"
+        label="Описание"
+        placeholder="Описание"
+        :rows="3"
+        autogrow
+      />
     </VBottomSheet>
 
     <!-- Delete confirm (G2, ПРОМТ №609 -- moved from MasterGroupsView's card menu) -->
@@ -231,6 +240,7 @@ import {
   VEmptyState,
   VButton,
   VInput,
+  VTextarea,
   VAvatar,
   VListRow,
   VMenu,
@@ -265,13 +275,22 @@ const router = useRouter()
 const { onFieldFocus } = useKeyboardFieldScroll()
 
 const groupId = computed(() => String(route.params.id))
-const groupName = computed(() => String(route.query.name ?? ''))
+
+// Owner Q12 (ПРОМТ №611): route.query is now only a FIRST-PAINT HINT so the
+// header doesn't flash empty while getGroups() is in flight -- it never
+// wins once the API has answered, even if the API's own value is empty/
+// null (a Mini App reload has NO query at all: the app is reopened, not
+// navigated, so the old query-only design rendered a permanently blank
+// «Группа ""» header on every reload). `groupMeta` is set by loadGroups()
+// below, matched by this screen's own id.
+const groupMeta = ref<GroupListItem | null>(null)
+const groupName = computed(() =>
+  groupMeta.value ? groupMeta.value.name : String(route.query.name ?? ''),
+)
 const headerTitle = computed(() => `Группа "${groupName.value}"`)
-// Owner Q4 (ПРОМТ №610): rides the same router-query mechanism as
-// `groupName` above (MasterGroupsView.openDetail passes both). Empty
-// string when absent -- the template's `v-if` below reserves NO space for
-// it (falsy string), matching "no dead space when empty" exactly.
-const groupDescription = computed(() => String(route.query.description ?? ''))
+const groupDescription = computed(() =>
+  groupMeta.value ? (groupMeta.value.description ?? '') : String(route.query.description ?? ''),
+)
 
 /** Derived purely from the id string -- "students"/"deleted" are system
  *  slugs, matching the backend's own dispatch (groups_service.py). */
@@ -289,6 +308,40 @@ const members = ref<GroupMemberItem[]>([])
 const loading = ref(true)
 const error = ref('')
 const search = ref('')
+
+// This master's custom groups -- feeds AddToGroupSheet / RemoveFromGroupSheet's
+// chip palette. Loaded once; independent of the members list/search. Also
+// where THIS group's own name/description come from now (owner Q12,
+// ПРОМТ №611) -- getGroups() already returns every group, custom AND the
+// two virtuals, so one fetch covers both needs instead of two.
+const allGroups = ref<GroupListItem[]>([])
+const customGroups = computed(() => allGroups.value.filter((g) => g.kind === 'custom'))
+
+async function loadGroups(): Promise<void> {
+  try {
+    const res = await getGroups()
+    allGroups.value = res.items
+    const match = res.items.find((g) => g.id === groupId.value)
+    if (match) {
+      groupMeta.value = match
+    } else if (kind.value !== 'deleted') {
+      // list_master_groups omits "deleted" ENTIRELY when its count is 0 --
+      // that absence is a normal empty state (zero blocked students right
+      // now), not a not-found. Every other id (a real custom UUID, or
+      // "students" which the backend always includes unconditionally)
+      // being absent means genuinely gone or invalid -- reuse this
+      // screen's own existing error state rather than leaving a blank
+      // header (owner Q12's own explicit warning).
+      error.value = 'Группа не найдена'
+    }
+  } catch {
+    // Best-effort: load() below (members) has its own independent error
+    // handling and is the authoritative failure signal for this screen --
+    // a metadata-fetch hiccup alone doesn't need a separate message, and
+    // customGroups above degrades to [] on its own via the empty allGroups
+    // fallback, matching the old loadCustomGroups()'s catch behavior.
+  }
+}
 
 async function load(): Promise<void> {
   loading.value = true
@@ -311,22 +364,23 @@ watch(search, () => {
   searchTimer = setTimeout(load, 300)
 })
 
-// This master's custom groups -- feeds AddToGroupSheet / RemoveFromGroupSheet's
-// chip palette. Loaded once; independent of the members list/search.
-const customGroups = ref<GroupListItem[]>([])
-async function loadCustomGroups(): Promise<void> {
-  try {
-    const res = await getGroups()
-    customGroups.value = res.items.filter((g) => g.kind === 'custom')
-  } catch {
-    customGroups.value = []
+// Sequenced (not parallel with load() below): a genuinely deleted/invalid
+// group must be caught BEFORE attempting the members fetch, so the error
+// state renders once, from one source, instead of racing two independent
+// writers of `error`. The retry button (template) calls this, not load()
+// alone, so a retry also re-validates the group still exists.
+async function retry(): Promise<void> {
+  loading.value = true
+  error.value = ''
+  await loadGroups()
+  if (error.value) {
+    loading.value = false
+    return
   }
+  await load()
 }
 
-onMounted(() => {
-  load()
-  loadCustomGroups()
-})
+onMounted(retry)
 
 function openProfile(member: GroupMemberItem): void {
   router.push({
@@ -431,11 +485,14 @@ async function onUnblockConfirm(): Promise<void> {
   }
 }
 
-// -- Rename (G2, ПРОМТ №609 -- moved from MasterGroupsView's card menu) --
+// -- Rename + description edit (G2, ПРОМТ №609 -- moved from
+// MasterGroupsView's card menu; owner Q10, ПРОМТ №611 -- gained description) --
 const renameOpen = ref(false)
 const renameName = ref('')
+const renameDescription = ref('')
 function onRenameClick(close: () => void): void {
   renameName.value = groupName.value
+  renameDescription.value = groupDescription.value
   renameOpen.value = true
   close()
 }
@@ -443,11 +500,12 @@ async function onRenameSave(): Promise<void> {
   const name = renameName.value.trim()
   if (!name) return
   try {
-    await renameGroup(groupId.value, name)
+    await renameGroup(groupId.value, name, renameDescription.value.trim())
     renameOpen.value = false
-    // headerTitle/groupName are derived from route.query.name -- update it
-    // so the header reflects the new name without a full reload.
-    await router.replace({ query: { ...route.query, name } })
+    // Owner Q12/Q10 (ПРОМТ №611): the screen is now API-driven (groupMeta
+    // above), not route.query -- re-read from getGroups() instead of
+    // rewriting the URL, same source of truth loadGroups() already is.
+    await loadGroups()
   } catch (e) {
     toast.error(extractApiError(e, 'Не удалось переименовать группу'))
   }

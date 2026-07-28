@@ -146,9 +146,24 @@ export function createGroup(name: string, description?: string): Promise<GroupRe
   })
 }
 
-/** PATCH /api/v1/masters/me/groups/{id} -- rename a custom group. */
-export function renameGroup(id: string, name: string): Promise<GroupResponse> {
-  return api.patch<GroupResponse>(`/api/v1/masters/me/groups/${id}`, { name })
+/** PATCH /api/v1/masters/me/groups/{id} -- rename AND/OR edit description
+ *  (Owner Q10, ПРОМТ №611). `description` is a PARTIAL UPDATE: omitting the
+ *  argument entirely (`undefined`) omits the JSON key too, so the backend's
+ *  own exclude_unset check leaves the column untouched -- passing `''`
+ *  explicitly sends the key and clears it to NULL server-side. This is the
+ *  same distinction MasterGroupDetailView's combined rename+description
+ *  dialog relies on: it always sends both, but a raw caller renaming only
+ *  must be able to omit description without wiping it. */
+export function renameGroup(
+  id: string,
+  name: string,
+  description?: string,
+): Promise<GroupResponse> {
+  const body: { name: string; description?: string } = { name }
+  if (description !== undefined) {
+    body.description = description
+  }
+  return api.patch<GroupResponse>(`/api/v1/masters/me/groups/${id}`, body)
 }
 
 /** DELETE /api/v1/masters/me/groups/{id} -- delete a custom group (its

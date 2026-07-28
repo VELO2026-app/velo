@@ -125,10 +125,23 @@ async def rename_group_endpoint(
     master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
     session: AsyncSession = Depends(get_db_session),
 ) -> GroupResponse:
-    """Rename a custom group. 400 if group_id is a system slug, 409 on a
-    duplicate name, 404 if the group doesn't exist / isn't this master's."""
+    """Rename AND/OR edit description of a custom group (owner Q10, ПРОМТ
+    №611). `description` is a partial update: body.model_dump(exclude_unset
+    =True) distinguishes "not sent" (leave the column untouched) from "sent"
+    (even "" or whitespace -- normalized to NULL in rename_group()), same
+    contract as users/service.py's update_user(). 400 if group_id is a
+    system slug, 409 on a duplicate name, 404 if the group doesn't exist /
+    isn't this master's."""
     user, _profile = master_tuple
-    group = await rename_group(user.id, group_id, body.name, session)
+    update_data = body.model_dump(exclude_unset=True)
+    group = await rename_group(
+        user.id,
+        group_id,
+        body.name,
+        session,
+        description=body.description,
+        description_provided="description" in update_data,
+    )
     await session.flush()
     count = await count_group_members(group.id, session)
     return GroupResponse(

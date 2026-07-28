@@ -59,18 +59,27 @@ class CreateGroupRequest(BaseModel):
 
 
 class RenameGroupRequest(BaseModel):
-    """PATCH /masters/me/groups/{id}.
+    """PATCH /masters/me/groups/{id} -- rename AND/OR edit description
+    (owner Q10, ПРОМТ №611; class name kept as-is despite now covering more
+    than a rename -- renaming this Pydantic class would rename the emitted
+    type in generated.ts at the next deploy regen, drifting the hand-written
+    frontend types in api/groups.ts, the exact class of failure that red the
+    gate on a prior feature).
 
-    Renames ONLY -- no `description` field. Owner Q4-Q6 (ПРОМТ №610) never
-    asked for an edit-description surface (only "Новая группа", i.e. create),
-    and rename_group() correspondingly never touches the column: a group's
-    description is fixed at creation. Deliberately NOT adding an unused
-    Optional[str]=None field here -- that shape can't distinguish "the
-    caller didn't send description" from "the caller wants to clear it",
-    which would silently wipe an existing description on every plain rename.
+    `name` is always required (a group always has one). `description` is a
+    PARTIAL UPDATE, same contract as users/service.py's update_user() and
+    admin/masters/admin_taxonomy's PATCH endpoints:
+    body.model_dump(exclude_unset=True) at the router distinguishes "the
+    key was absent" (leave the column untouched) from "the key was sent"
+    (even as "" or whitespace -- normalized to NULL in rename_group(), same
+    rule create_group() already applies). This is the fix for the exact gap
+    ПРОМТ №610 itself flagged: a bare Optional[str]=None default could not
+    tell those two cases apart and would have silently wiped an existing
+    description on every plain rename.
     """
 
     name: GroupNameStr
+    description: GroupDescriptionStr | None = None
 
 
 class GroupResponse(BaseModel):

@@ -334,6 +334,82 @@ async def test_list_groups_includes_description(
 
 
 @pytest.mark.asyncio
+async def test_edit_description_only_leaves_name_untouched(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """Owner Q10 (ПРОМТ №611): PATCH with description sent alongside the
+    SAME name updates only the description -- name-unchanged must not skip
+    the description write (the trap in the old early-return shape)."""
+    master = await _make_verified_master(client, db_session, 99780)
+    headers = auth_headers(master["session_token"])
+    created = await client.post(GROUPS_URL, json={"name": "Группа X"}, headers=headers)
+    group_id = created.json()["id"]
+    assert created.json()["description"] is None
+
+    resp = await client.patch(
+        GROUP_URL.format(group_id=group_id),
+        json={"name": "Группа X", "description": "Добавлено позже"},
+        headers=headers,
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "Группа X"
+    assert resp.json()["description"] == "Добавлено позже"
+
+
+@pytest.mark.asyncio
+async def test_edit_description_and_rename_together(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """Owner Q10: the frontend's combined dialog sends both fields at once
+    -- both must land in the same PATCH."""
+    master = await _make_verified_master(client, db_session, 99781)
+    headers = auth_headers(master["session_token"])
+    created = await client.post(
+        GROUPS_URL,
+        json={"name": "Старое имя", "description": "Старое описание"},
+        headers=headers,
+    )
+    group_id = created.json()["id"]
+
+    resp = await client.patch(
+        GROUP_URL.format(group_id=group_id),
+        json={"name": "Новое имя", "description": "Новое описание"},
+        headers=headers,
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "Новое имя"
+    assert resp.json()["description"] == "Новое описание"
+
+
+@pytest.mark.asyncio
+async def test_clearing_description_via_patch_sets_null(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """Owner Q10: an explicitly SENT blank/whitespace description clears it
+    to NULL -- distinct from omitting the key entirely (which leaves it
+    untouched, see test_rename_group_leaves_description_untouched above)."""
+    master = await _make_verified_master(client, db_session, 99782)
+    headers = auth_headers(master["session_token"])
+    created = await client.post(
+        GROUPS_URL,
+        json={"name": "Очищаемая", "description": "Будет стёрто"},
+        headers=headers,
+    )
+    group_id = created.json()["id"]
+
+    resp = await client.patch(
+        GROUP_URL.format(group_id=group_id),
+        json={"name": "Очищаемая", "description": "   "},
+        headers=headers,
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["description"] is None
+
+
+@pytest.mark.asyncio
 async def test_two_masters_can_use_the_same_group_name(
     client: AsyncClient,
     db_session: AsyncSession,

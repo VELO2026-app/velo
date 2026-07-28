@@ -69,9 +69,13 @@ function mount(): HTMLElement {
 }
 
 async function flush(): Promise<void> {
-  await nextTick()
-  await nextTick()
-  await nextTick()
+  // Owner Q12 (ПРОМТ №611): the screen's own load chain is now SEQUENTIAL
+  // (loadGroups() -- resolving name/description + existence -- awaited
+  // BEFORE the members fetch, not parallel), so it needs more ticks to
+  // settle than the previous single-round-trip flow did.
+  for (let i = 0; i < 6; i += 1) {
+    await nextTick()
+  }
 }
 
 function text(): string {
@@ -93,7 +97,20 @@ beforeEach(() => {
   routeParams.id = 'g1'
   routeQuery.name = 'VIP'
   vi.mocked(groupsApi.getGroupMembers).mockReset().mockResolvedValue(page([]))
-  vi.mocked(groupsApi.getGroups).mockReset().mockResolvedValue(customGroups([]))
+  // Owner Q12 (ПРОМТ №611): the screen now resolves its own name/description
+  // by matching THIS group's id in getGroups()' response -- the default
+  // mock must include an entry for every id the suite defaults to ('g1',
+  // 'students'), or the new "not found" path fires and blocks the members
+  // fetch. 'deleted' is exempt (list_master_groups omits it when empty,
+  // which is a normal state, not not-found) -- no entry needed for it.
+  vi.mocked(groupsApi.getGroups)
+    .mockReset()
+    .mockResolvedValue(
+      customGroups([
+        { id: 'students', kind: 'students', name: 'Ученики', members_count: 0 },
+        { id: 'g1', kind: 'custom', name: 'VIP', members_count: 0 },
+      ]),
+    )
   vi.mocked(groupsApi.setStudentTag).mockReset()
   vi.mocked(groupsApi.addGroupMember).mockReset()
   vi.mocked(groupsApi.removeGroupMember).mockReset()
@@ -127,11 +144,79 @@ afterEach(() => {
 })
 
 describe('MasterGroupDetailView', () => {
-  it('header reads Группа "{name}" from the route query', async () => {
+  it('header reads Группа "{name}" (API-resolved, matching the default mock)', async () => {
     mount()
     await flush()
 
     expect(text()).toContain('Группа "VIP"')
+  })
+
+  describe('owner Q12 (ПРОМТ №611): API-driven name/description, not the URL', () => {
+    it('shows the route.query hint on first paint, before getGroups() resolves', async () => {
+      routeQuery.name = 'Из query'
+      vi.mocked(groupsApi.getGroups).mockReturnValue(new Promise(() => {}))
+      mount()
+      await nextTick()
+
+      expect(text()).toContain('Группа "Из query"')
+    })
+
+    it('the API answer OVERWRITES the query hint once it resolves, even to a different value', async () => {
+      routeQuery.name = 'Устаревшее'
+      vi.mocked(groupsApi.getGroups).mockResolvedValue(
+        customGroups([{ id: 'g1', kind: 'custom', name: 'Актуальное', members_count: 0 }]),
+      )
+      mount()
+      await flush()
+
+      expect(text()).toContain('Группа "Актуальное"')
+      expect(text()).not.toContain('Устаревшее')
+    })
+
+    it('a cold reload with NO query at all still resolves the correct name from the API (the bug this fixes)', async () => {
+      routeQuery.name = ''
+      vi.mocked(groupsApi.getGroups).mockResolvedValue(
+        customGroups([{ id: 'g1', kind: 'custom', name: 'Из API', members_count: 0 }]),
+      )
+      mount()
+      await flush()
+
+      expect(text()).toContain('Группа "Из API"')
+    })
+
+    it('description follows the same rule -- API value wins, including clearing a stale query hint to empty', async () => {
+      routeQuery.name = 'VIP'
+      vi.mocked(groupsApi.getGroups).mockResolvedValue(
+        customGroups([
+          { id: 'g1', kind: 'custom', name: 'VIP', description: null, members_count: 0 },
+        ]),
+      )
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.group-detail__description')).toBeNull()
+    })
+
+    it('id not present in getGroups() (deleted/wrong id) shows the existing error state, not a blank header', async () => {
+      vi.mocked(groupsApi.getGroups).mockResolvedValue(customGroups([]))
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.group-detail__state')).toBeNull() // not stuck loading
+      expect(text()).toContain('Группа не найдена')
+      expect(groupsApi.getGroupMembers).not.toHaveBeenCalled()
+    })
+
+    it('an EMPTY «Удалённые» (absent from getGroups() because its count is 0) is NOT treated as not-found', async () => {
+      routeParams.id = 'deleted'
+      vi.mocked(groupsApi.getGroups).mockResolvedValue(customGroups([]))
+      vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([]))
+      mount()
+      await flush()
+
+      expect(text()).not.toContain('Группа не найдена')
+      expect(groupsApi.getGroupMembers).toHaveBeenCalledWith('deleted', '')
+    })
   })
 
   describe('state ladder', () => {
@@ -314,7 +399,10 @@ describe('MasterGroupDetailView', () => {
     it('opening "Добавить в группу", selecting a group and saving calls addGroupMember', async () => {
       vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([member('s1', { name: 'Анна' })]))
       vi.mocked(groupsApi.getGroups).mockResolvedValue(
-        customGroups([{ id: 'g2', kind: 'custom', name: 'Другая группа', members_count: 0 }]),
+        customGroups([
+          { id: 'g1', kind: 'custom', name: 'VIP', members_count: 1 },
+          { id: 'g2', kind: 'custom', name: 'Другая группа', members_count: 0 },
+        ]),
       )
       vi.mocked(groupsApi.addGroupMember).mockResolvedValue(undefined)
       mount()
@@ -599,14 +687,24 @@ describe('MasterGroupDetailView', () => {
       expect(toastSuccess).toHaveBeenCalledWith('Ссылка скопирована')
     })
 
-    it('«Переименовать» opens the sheet pre-filled with the CURRENT name and saves via renameGroup', async () => {
+    it('«Изменить» opens the sheet pre-filled with the CURRENT name + description and saves via renameGroup', async () => {
       routeParams.id = 'g1'
       routeQuery.name = 'Старое'
       vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([]))
+      // Owner Q12 (ПРОМТ №611): the screen now resolves name/description
+      // from getGroups(), not route.query -- the mock must carry the
+      // CURRENT values the dialog should prefill, and the query hint
+      // above is a red herring the API overwrites (proves that ordering).
+      vi.mocked(groupsApi.getGroups).mockResolvedValue(
+        customGroups([
+          { id: 'g1', kind: 'custom', name: 'Старое', description: 'Было', members_count: 0 },
+        ]),
+      )
       vi.mocked(groupsApi.renameGroup).mockResolvedValue({
         id: 'g1',
         name: 'Новое',
         members_count: 0,
+        description: 'Стало',
       })
       mount()
       await flush()
@@ -619,22 +717,73 @@ describe('MasterGroupDetailView', () => {
 
       const input = sheetOverlay()?.querySelector<HTMLInputElement>('input')
       expect(input?.value).toBe('Старое')
+      const descField = sheetOverlay()?.querySelector<HTMLTextAreaElement>('textarea')
+      expect(descField?.value).toBe('Было')
 
       input!.value = 'Новое'
       input!.dispatchEvent(new Event('input'))
+      descField!.value = 'Стало'
+      descField!.dispatchEvent(new Event('input'))
+      // Re-read (section 2, owner Q12): the NEXT getGroups() call is what
+      // the screen re-derives its header/description from after saving.
+      vi.mocked(groupsApi.getGroups).mockResolvedValue(
+        customGroups([
+          { id: 'g1', kind: 'custom', name: 'Новое', description: 'Стало', members_count: 0 },
+        ]),
+      )
       sheetOverlay()?.querySelector<HTMLElement>('.v-sheet__save')?.click()
       await flush()
 
-      expect(groupsApi.renameGroup).toHaveBeenCalledWith('g1', 'Новое')
-      // headerTitle is derived from route.query.name -- the screen updates
-      // it via router.replace rather than a full reload.
-      expect(replace).toHaveBeenCalledWith({ query: { name: 'Новое' } })
+      expect(groupsApi.renameGroup).toHaveBeenCalledWith('g1', 'Новое', 'Стало')
+      // Owner Q12/Q10: re-reads from the API instead of rewriting the URL.
+      expect(replace).not.toHaveBeenCalled()
+      expect(groupsApi.getGroups).toHaveBeenCalledTimes(2)
+      expect(text()).toContain('Группа "Новое"')
+    })
+
+    it('renaming ALONE (description field untouched) resends the SAME description -- does not blank it', async () => {
+      routeParams.id = 'g1'
+      vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([]))
+      vi.mocked(groupsApi.getGroups).mockResolvedValue(
+        customGroups([
+          { id: 'g1', kind: 'custom', name: 'Старое', description: 'Не трогали', members_count: 0 },
+        ]),
+      )
+      vi.mocked(groupsApi.renameGroup).mockResolvedValue({
+        id: 'g1',
+        name: 'Новое',
+        members_count: 0,
+        description: 'Не трогали',
+      })
+      mount()
+      await flush()
+
+      headerMenuTrigger()?.click()
+      await flush()
+      const renameItem = Array.from(host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? [])[1]
+      renameItem?.click()
+      await flush()
+
+      const input = sheetOverlay()?.querySelector<HTMLInputElement>('input')
+      input!.value = 'Новое'
+      input!.dispatchEvent(new Event('input'))
+      // Description field left exactly as prefilled -- never touched.
+      sheetOverlay()?.querySelector<HTMLElement>('.v-sheet__save')?.click()
+      await flush()
+
+      expect(groupsApi.renameGroup).toHaveBeenCalledWith('g1', 'Новое', 'Не трогали')
     })
 
     it('«Удалить группу» confirms, calls deleteGroup, and navigates away (nothing left to reload)', async () => {
       routeParams.id = 'g1'
+      // Owner Q12 (ПРОМТ №611): the screen now resolves the CURRENT name
+      // from getGroups(), not this stale query hint -- the mock below is
+      // what the delete-confirm message must actually reflect.
       routeQuery.name = 'Временная'
       vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([]))
+      vi.mocked(groupsApi.getGroups).mockResolvedValue(
+        customGroups([{ id: 'g1', kind: 'custom', name: 'Временная', members_count: 0 }]),
+      )
       vi.mocked(groupsApi.deleteGroup).mockResolvedValue(undefined)
       mount()
       await flush()
