@@ -1462,7 +1462,6 @@ export interface UpdatePracticeRequest {
   timezone?: string | null
   max_participants?: number | null
   zoom_link?: string | null
-  parent_practice_id?: string | null
   status?: string | null
   is_free?: boolean | null
   price_cents?: number | null
