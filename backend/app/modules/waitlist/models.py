@@ -6,12 +6,13 @@
 # When a booking is cancelled, the first waiting user is notified.
 #
 # STATE MACHINE (enforced in service.py):
-#   waiting   -> notified, left
-#   notified  -> converted, declined, expired, left
+#   waiting   -> notified, left, removed
+#   notified  -> converted, declined, expired, left, removed
 #   converted -> waiting (re-join after booking cancel)
 #   left      -> waiting (re-join: UPDATE position + joined_at + status)
 #   declined  -> waiting (re-join)
 #   expired   -> waiting (re-join)
+#   removed   -> waiting (re-join, ПРОМТ №613 -- see below)
 #
 # POSITION:
 #   Stored column, computed at INSERT/re-join via subquery:
@@ -61,6 +62,14 @@ class WaitlistStatus(enum.StrEnum):
     LEFT = "left"
     DECLINED = "declined"
     EXPIRED = "expired"
+    # ПРОМТ №613, owner Q13: the master removed this entry via block_student
+    # -- distinct from LEFT/DECLINED (both user-initiated) because the
+    # cause is different and worth keeping honest in the status history,
+    # same reasoning as Booking.cancellation_reason distinguishing
+    # "Blocked by master" from a user's own cancel within one shared
+    # CANCELLED status. No DB migration needed: `status` is a plain
+    # String(20) column, no CHECK constraint/DB-level enum backs it.
+    REMOVED = "removed"
 
 
 # H-02: converted added -- allows re-join after user cancels
@@ -68,11 +77,21 @@ class WaitlistStatus(enum.StrEnum):
 # Without this, converted entries block re-join (not in
 # REJOINABLE, not in ACTIVE) and fall through to INSERT
 # which hits UniqueConstraint.
+#
+# REMOVED added (ПРОМТ №613): a blocked-then-unblocked student must be able
+# to join this SAME practice's waitlist again like anyone else -- omitting
+# it here would permanently lock them out via the (practice_id, user_id)
+# UniqueConstraint (the terminal row can never be re-inserted, only
+# updated-in-place through this set). This does NOT restore their old
+# position -- re-join always computes a fresh MAX(position)+1 (owner-ruled:
+# no automatic restoration, matching custom-group membership already not
+# being restored on unblock).
 REJOINABLE_STATUSES = {
     WaitlistStatus.LEFT.value,
     WaitlistStatus.DECLINED.value,
     WaitlistStatus.EXPIRED.value,
     WaitlistStatus.CONVERTED.value,
+    WaitlistStatus.REMOVED.value,
 }
 
 # Statuses that mean "actively in queue".

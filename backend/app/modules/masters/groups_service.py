@@ -45,6 +45,7 @@ from app.modules.payments.refund import refund_booking
 from app.modules.practices.models import Practice, PracticeAudienceGroup, PracticeStatus
 from app.modules.users.helpers import display_name
 from app.modules.users.models import User
+from app.modules.waitlist.models import ACTIVE_STATUSES, Waitlist, WaitlistStatus
 
 logger = structlog.get_logger()
 
@@ -819,13 +820,25 @@ async def block_student(
     master_id: UUID, student_user_id: UUID, session: AsyncSession,
 ) -> dict:
     """Block a student: set blocked_at, drop them from every custom group,
-    and cancel+refund their FUTURE confirmed bookings on this master's
-    practices.
+    cancel+refund their FUTURE confirmed bookings on this master's
+    practices, and remove their ACTIVE waitlist entries for this master's
+    practices (owner Q13, ПРОМТ №613).
 
     Money movement REUSES refund_booking() (payments/refund.py) exactly as
     refund_all_bookings_for_practice() already does for a master-initiated
     cancel -- cancelled_by_master=True, unconditional 100% refund. No new
     ledger-writing code.
+
+    Waitlist (owner Q13): WITHOUT this, process_waitlist (waitlist/
+    service.py:439) would still notify a blocked student when their turn
+    comes up -- they'd get a "spot available" push from the master who
+    just blocked them, directly contradicting the block dialog's own
+    promise ("перестанет получать ваши уведомления"), and hold the freed
+    spot for the full confirm window before anyone downstream in the queue
+    gets a turn. confirm_waitlist's own P5 guard (assert_viewer_can_access_
+    practice) already stops them from converting that hold into a real
+    booking -- the leak was never a booking, it was the notification +
+    the held spot.
     """
     student = await session.get(User, student_user_id)
     if student is None:
@@ -883,13 +896,62 @@ async def block_student(
     for practice_id in touched_practice_ids:
         await recalculate_participants(practice_id, session)
 
+    # Remove ACTIVE waitlist entries for THIS master's practices only --
+    # scoped by the same Practice.master_id join as the booking cancel
+    # above, never touching this student's waitlist standing with any
+    # OTHER master. Terminal status (REMOVED), never a hard delete and
+    # never a renumbering of `position`: process_waitlist already selects
+    # the next entry via ORDER BY position + a status filter (ACTIVE_
+    # STATUSES), so a gap left by a removed entry is the exact same,
+    # already-established shape leave_waitlist's own LEFT/DECLINED
+    # transitions leave behind -- position is never reassigned there
+    # either. REMOVED is REJOINABLE (waitlist/models.py) so this student
+    # can join this same practice's queue again, fresh, if later unblocked
+    # -- see unblock_student's own docstring for why that queue spot is
+    # NOT restored automatically.
+    waitlist_rows = (
+        await session.execute(
+            select(Waitlist)
+            .join(Practice, Waitlist.practice_id == Practice.id)
+            .where(
+                Practice.master_id == master_id,
+                Waitlist.user_id == student_user_id,
+                Waitlist.status.in_(ACTIVE_STATUSES),
+            )
+            .with_for_update(of=Waitlist)
+        )
+    ).scalars().all()
+
+    notified_practice_ids = {
+        row.practice_id
+        for row in waitlist_rows
+        if row.status == WaitlistStatus.NOTIFIED.value
+    }
+    removed_waitlist_count = len(waitlist_rows)
+    for row in waitlist_rows:
+        row.status = WaitlistStatus.REMOVED.value
+
     await session.flush()
+
+    # A removed NOTIFIED entry was holding a spot for THIS student -- promote
+    # the next real person immediately instead of leaving it held until the
+    # confirm window times out on its own (same trigger leave_waitlist
+    # already uses for its own NOTIFIED -> DECLINED transition, waitlist/
+    # service.py:277-278). Lazy import: mirrors bookings/service.py's own
+    # process_waitlist import (cancel_booking) -- avoids a module-level
+    # import cycle between groups_service and waitlist/service.
+    if notified_practice_ids:
+        from app.modules.waitlist.service import process_waitlist
+
+        for practice_id in notified_practice_ids:
+            await process_waitlist(practice_id, session)
 
     logger.info(
         "master_student_blocked",
         master_id=str(master_id),
         student_user_id=str(student_user_id),
         cancelled_bookings_count=cancelled_count,
+        removed_waitlist_count=removed_waitlist_count,
     )
 
     return {"blocked_at": now, "cancelled_bookings_count": cancelled_count}
@@ -901,6 +963,16 @@ async def unblock_student(
     """Clear blocked_at. The student returns to «Ученики» automatically
     (derived). Custom-group memberships are NOT restored (owner-settled).
     The tag is kept -- the row is only deleted if there is no tag either.
+
+    Waitlist (owner Q13, ПРОМТ №613): deliberately does NOT restore any
+    entry block_student removed. Their old queue position is gone for
+    good -- the same "no restoration" rule custom-group membership already
+    follows above, for the same reason: silently handing back a spot in
+    a queue of real people who moved up while they were blocked would bump
+    someone who did nothing wrong. If they want back in, they join the
+    waitlist again like anyone else, landing at the end -- REMOVED is a
+    REJOINABLE status precisely so that path stays open (waitlist/
+    models.py), it just never fast-forwards them back to where they were.
     """
     row = await _get_or_none_master_student(master_id, student_user_id, session)
     if row is None or row.blocked_at is None:

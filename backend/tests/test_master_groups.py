@@ -53,6 +53,7 @@ from app.modules.practices.models import (
     PracticeType,
 )
 from app.modules.users.models import User, UserRole
+from app.modules.waitlist.models import Waitlist, WaitlistStatus
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 
 GROUPS_URL = "/api/v1/masters/me/groups"
@@ -190,6 +191,26 @@ async def _purchase(
     db_session.add(purchase)
     await db_session.flush()
     return purchase
+
+
+async def _waitlist_entry(
+    db_session: AsyncSession,
+    practice: Practice,
+    user_id: str,
+    *,
+    position: int,
+    status: str = WaitlistStatus.WAITING.value,
+) -> Waitlist:
+    entry = Waitlist(
+        practice_id=practice.id,
+        user_id=user_id,
+        position=position,
+        status=status,
+        joined_at=datetime.now(UTC),
+    )
+    db_session.add(entry)
+    await db_session.flush()
+    return entry
 
 
 # ===================================================================
@@ -965,6 +986,134 @@ async def test_block_cancels_and_refunds_future_confirmed_bookings(
 
 
 @pytest.mark.asyncio
+async def test_block_removes_waitlist_entries_for_this_master_only(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Owner Q13 (ПРОМТ №613): block_student removes ACTIVE (waiting/
+    notified) waitlist entries for THIS master's practices -- scoped
+    exactly like the future-booking cancel above, never touching another
+    master's queue for the same student (that's the next test)."""
+    master = await _make_verified_master(client, db_session, 99755)
+    master_id = master["user"]["id"]
+    headers = auth_headers(master["session_token"])
+    student_id = await _login(client, 99783, "Waiter")
+
+    waiting_practice = await _practice(
+        db_session, master_id, scheduled_hours_from_now=48,
+    )
+    waiting_entry = await _waitlist_entry(
+        db_session, waiting_practice, student_id, position=1,
+    )
+
+    notified_practice = await _practice(
+        db_session, master_id, scheduled_hours_from_now=72,
+    )
+    notified_entry = await _waitlist_entry(
+        db_session,
+        notified_practice,
+        student_id,
+        position=1,
+        status=WaitlistStatus.NOTIFIED.value,
+    )
+
+    # A CONVERTED entry (already resolved) -- must NOT be touched, it's not
+    # ACTIVE.
+    converted_practice = await _practice(
+        db_session, master_id, scheduled_hours_from_now=96,
+    )
+    converted_entry = await _waitlist_entry(
+        db_session,
+        converted_practice,
+        student_id,
+        position=1,
+        status=WaitlistStatus.CONVERTED.value,
+    )
+    await db_session.commit()
+
+    resp = await client.post(
+        BLOCK_URL.format(student_id=student_id), headers=headers,
+    )
+    assert resp.status_code == 200
+
+    await db_session.refresh(waiting_entry)
+    assert waiting_entry.status == WaitlistStatus.REMOVED.value
+    await db_session.refresh(notified_entry)
+    assert notified_entry.status == WaitlistStatus.REMOVED.value
+    await db_session.refresh(converted_entry)
+    assert converted_entry.status == WaitlistStatus.CONVERTED.value  # untouched
+
+
+@pytest.mark.asyncio
+async def test_block_never_touches_a_different_masters_waitlist(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The same student, waiting for a DIFFERENT master's practice, keeps
+    their spot when master A blocks them."""
+    master_a = await _make_verified_master(client, db_session, 99756)
+    headers_a = auth_headers(master_a["session_token"])
+    master_b = await _make_verified_master(client, db_session, 99757)
+    master_b_id = master_b["user"]["id"]
+    student_id = await _login(client, 99784, "Waiter")
+
+    other_practice = await _practice(
+        db_session, master_b_id, scheduled_hours_from_now=48,
+    )
+    other_entry = await _waitlist_entry(
+        db_session, other_practice, student_id, position=1,
+    )
+    await db_session.commit()
+
+    resp = await client.post(
+        BLOCK_URL.format(student_id=student_id), headers=headers_a,
+    )
+    assert resp.status_code == 200
+
+    await db_session.refresh(other_entry)
+    assert other_entry.status == WaitlistStatus.WAITING.value  # untouched
+
+
+@pytest.mark.asyncio
+async def test_block_promotes_the_next_waiting_person_not_the_blocked_one(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Owner Q13: a blocked student who was NOTIFIED (holding a freed spot)
+    must not sit on it until the confirm window times out -- the next real
+    person in line gets notified immediately, same trigger leave_waitlist's
+    own decline already uses."""
+    master = await _make_verified_master(client, db_session, 99758)
+    master_id = master["user"]["id"]
+    headers = auth_headers(master["session_token"])
+    blocked_id = await _login(client, 99785, "Blocked")
+    next_id = await _login(client, 99786, "NextInLine")
+
+    practice = await _practice(db_session, master_id, scheduled_hours_from_now=48)
+    blocked_entry = await _waitlist_entry(
+        db_session,
+        practice,
+        blocked_id,
+        position=1,
+        status=WaitlistStatus.NOTIFIED.value,
+    )
+    next_entry = await _waitlist_entry(
+        db_session, practice, next_id, position=2,
+    )
+    await db_session.commit()
+
+    resp = await client.post(
+        BLOCK_URL.format(student_id=blocked_id), headers=headers,
+    )
+    assert resp.status_code == 200
+
+    await db_session.refresh(blocked_entry)
+    assert blocked_entry.status == WaitlistStatus.REMOVED.value
+    await db_session.refresh(next_entry)
+    assert next_entry.status == WaitlistStatus.NOTIFIED.value
+
+
+@pytest.mark.asyncio
 async def test_blocked_student_excluded_from_derived_students(
     client: AsyncClient,
     db_session: AsyncSession,
@@ -1061,6 +1210,36 @@ async def test_unblock_returns_to_students_without_restoring_custom_group_but_ke
     ).scalar_one()
     assert row.blocked_at is None
     assert row.tag == "Постоянный клиент"
+
+
+@pytest.mark.asyncio
+async def test_unblock_does_not_restore_waitlist_entry(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Owner Q13: unblock_student does NOT bring back a waitlist spot
+    block_student removed -- same "no restoration" rule custom-group
+    membership already follows (test above). REMOVED stays REMOVED; the
+    student can join this practice's waitlist again like anyone else
+    (REMOVED is a REJOINABLE status, waitlist/models.py), just not at
+    their old position."""
+    master = await _make_verified_master(client, db_session, 99759)
+    master_id = master["user"]["id"]
+    headers = auth_headers(master["session_token"])
+    student_id = await _login(client, 99794, "Waiter")
+
+    practice = await _practice(db_session, master_id, scheduled_hours_from_now=48)
+    entry = await _waitlist_entry(db_session, practice, student_id, position=1)
+    await db_session.commit()
+
+    await client.post(BLOCK_URL.format(student_id=student_id), headers=headers)
+    unblock_resp = await client.delete(
+        BLOCK_URL.format(student_id=student_id), headers=headers,
+    )
+    assert unblock_resp.status_code == 204
+
+    await db_session.refresh(entry)
+    assert entry.status == WaitlistStatus.REMOVED.value  # NOT restored to waiting
 
 
 @pytest.mark.asyncio
