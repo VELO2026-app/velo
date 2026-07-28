@@ -351,10 +351,17 @@ import TimePickerSheet from '@/components/shared/TimePickerSheet.vue'
 import CancelPracticeDialog from '@/components/shared/CancelPracticeDialog.vue'
 import { useToast } from '@/composables/useToast'
 import { useMasterStore } from '@/stores/master'
-import { getPractice, updatePractice, deletePractice, cancelPractice } from '@/api/practices'
+import {
+  getPractice,
+  updatePractice,
+  deletePractice,
+  cancelPractice,
+  previewAudienceChange,
+} from '@/api/practices'
 import { getGroups } from '@/api/groups'
 import { formatShortDate, todayLocalISO } from '@/utils/format'
 import { masterPracticeBadge } from '@/utils/practiceStatus'
+import { plural } from '@/utils/plural'
 import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
 import {
@@ -656,10 +663,74 @@ function validate(): boolean {
   return ok
 }
 
+// -- Audience-narrowing warning (owner Q15, ПРОМТ №613) --
+//
+// True iff the FORM's audience differs from what's currently SAVED on
+// `practice.value` -- gates the stranded-bookers check below so it only
+// ever runs on an actual audience change, never on an unrelated save (e.g.
+// title-only) that happens to resend the same audience_kind/group_ids the
+// practice already has (this screen always sends both on every save).
+function audienceChanged(): boolean {
+  if (!practice.value) return false
+  const savedKind = practice.value.audience_kind ?? 'public'
+  if (form.audience_kind !== savedKind) return true
+  if (form.audience_kind !== 'groups') return false
+
+  // Same name -> id resolution resolveAudienceGroupIds() already uses --
+  // recomputed fresh here (not read off `form`, which may have already
+  // been edited) so this reflects what's actually SAVED, not the pending edit.
+  const savedNames = new Set(practice.value.audience_group_names ?? [])
+  const savedIds = new Set(
+    customGroups.value.filter((g) => savedNames.has(g.name)).map((g) => g.id),
+  )
+  if (form.audience_group_ids.length !== savedIds.size) return true
+  return form.audience_group_ids.some((id) => !savedIds.has(id))
+}
+
 // -- Save --
 async function save(): Promise<void> {
   if (!validate() || saving.value) return
+
+  if (audienceChanged()) {
+    saving.value = true
+    let preview
+    try {
+      preview = await previewAudienceChange(practiceId, {
+        audience_kind: form.audience_kind,
+        group_ids: form.audience_kind === 'groups' ? form.audience_group_ids : [],
+      })
+    } catch (e) {
+      saving.value = false
+      toast.error(extractApiError(e, 'Не удалось проверить аудиторию'))
+      return
+    }
+    saving.value = false
+
+    // Owner Q15: warn ONLY when the count is above zero -- a narrowing
+    // that strands nobody saves silently, same as today.
+    if (preview.stranded_count > 0) {
+      // Plain, factual copy naming the number -- owner may want to reword
+      // this (flagged in the report, not invented alarming phrasing).
+      confirmDialog.message =
+        `Практику уже забронировали ${preview.stranded_count} ` +
+        `${plural(preview.stranded_count, 'человек', 'человека', 'человек')}. ` +
+        'После сохранения они не смогут отметиться на практике (check-in), ' +
+        'хотя бронирование останется активным. Сохранить изменения?'
+      confirmDialog.confirmLabel = 'Сохранить всё равно'
+      confirmDialog.danger = false
+      confirmDialog.onConfirm = commitSave
+      confirmDialog.visible = true
+      return
+    }
+  }
+
+  await commitSave()
+}
+
+async function commitSave(): Promise<void> {
+  if (saving.value) return
   saving.value = true
+  confirmDialog.loading = true
   try {
     // Convert the wall-clock date + time back to a UTC instant in the
     // selected timezone (mirrors CreatePracticeView). undefined when either
@@ -671,7 +742,6 @@ async function save(): Promise<void> {
       })
       if (!dt.isValid) {
         toast.error('Некорректные дата или время')
-        saving.value = false
         return
       }
       scheduledAt = dt.toUTC().toISO() ?? undefined
@@ -698,6 +768,7 @@ async function save(): Promise<void> {
       group_ids: form.audience_kind === 'groups' ? form.audience_group_ids : [],
     })
     practice.value = updated
+    confirmDialog.visible = false
     toast.success('Сохранено')
     await masterStore.refreshMyPractices()
   } catch (e) {
@@ -714,6 +785,7 @@ async function save(): Promise<void> {
     }
   } finally {
     saving.value = false
+    confirmDialog.loading = false
   }
 }
 

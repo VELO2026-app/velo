@@ -761,3 +761,175 @@ async def test_rename_group_updates_targeting_practices_audience_group_names(
     detail = await client.get(f"{PRACTICES_URL}/{practice_id}", headers=headers)
     assert detail.status_code == 200
     assert detail.json()["audience_group_names"] == ["Утренняя практика"]
+
+
+# ===================================================================
+# Owner Q15 (ПРОМТ №613): POST /practices/{id}/audience-preview -- read-only
+# dry-run, reuses this file's own predicates (count_stranded_active_bookings,
+# audience_service.py) rather than a second definition of "in the audience".
+# ===================================================================
+
+AUDIENCE_PREVIEW_URL = "/api/v1/practices/{practice_id}/audience-preview"
+
+
+@pytest.mark.asyncio
+async def test_audience_preview_students_never_strands_an_existing_booker(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """Narrowing "public" -> "students" can NEVER strand an existing active
+    booker, even one with no OTHER history with this master: their own
+    active booking on THIS practice is itself a non-cancelled booking with
+    this master, which is exactly _is_student_clause's own definition of
+    "student" -- the same booking that makes them an active booker also,
+    structurally, always makes them a student. Asserting this explicitly so
+    a future change to _is_student_clause's definition can't silently
+    break it without a test noticing."""
+    master = await _make_verified_master(client, db_session, 99332)
+    master_id = master["user"]["id"]
+    headers = auth_headers(master["session_token"])
+    practice = await _create_practice(
+        db_session, master_id, audience_kind=AudienceKind.PUBLIC.value,
+    )
+    booker = await _login(client, 99333, "Booker")
+    await _confirmed_booking(db_session, booker, practice.id)
+    await db_session.commit()
+
+    resp = await client.post(
+        AUDIENCE_PREVIEW_URL.format(practice_id=practice.id),
+        json={"audience_kind": "students", "group_ids": []},
+        headers=headers,
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["stranded_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_audience_preview_zero_when_narrowing_strands_nobody(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """The booker IS already a student of this master (booked another of
+    their practices before) -- narrowing to "students" strands nobody."""
+    master = await _make_verified_master(client, db_session, 99334)
+    master_id = master["user"]["id"]
+    headers = auth_headers(master["session_token"])
+    practice = await _create_practice(
+        db_session, master_id, audience_kind=AudienceKind.PUBLIC.value,
+    )
+    other_practice = await _create_practice(
+        db_session, master_id, scheduled_hours_from_now=96,
+    )
+    booker = await _login(client, 99335, "Regular")
+    await _confirmed_booking(db_session, booker, practice.id)
+    await _confirmed_booking(db_session, booker, other_practice.id)
+    await db_session.commit()
+
+    resp = await client.post(
+        AUDIENCE_PREVIEW_URL.format(practice_id=practice.id),
+        json={"audience_kind": "students", "group_ids": []},
+        headers=headers,
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["stranded_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_audience_preview_counts_a_booker_outside_the_proposed_group(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """Narrowing to a specific group strands a booker who isn't IN that
+    group -- proposed_group_ids is evaluated directly (nothing saved to
+    PracticeAudienceGroup yet), never the practice's own (still 'public')
+    target-group rows."""
+    master = await _make_verified_master(client, db_session, 99336)
+    master_id = master["user"]["id"]
+    headers = auth_headers(master["session_token"])
+    practice = await _create_practice(
+        db_session, master_id, audience_kind=AudienceKind.PUBLIC.value,
+    )
+    group = await _custom_group(db_session, master_id, name="VIP")
+    member = await _login(client, 99337, "Member")
+    await _add_group_member(db_session, group.id, member)
+    non_member = await _login(client, 99338, "NonMember")
+    await _confirmed_booking(db_session, member, practice.id)
+    await _confirmed_booking(db_session, non_member, practice.id)
+    await db_session.commit()
+
+    resp = await client.post(
+        AUDIENCE_PREVIEW_URL.format(practice_id=practice.id),
+        json={"audience_kind": "groups", "group_ids": [str(group.id)]},
+        headers=headers,
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["stranded_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_audience_preview_never_saves_anything(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """Read-only: the practice's own audience_kind is untouched after a
+    preview call, whatever the proposed value was."""
+    master = await _make_verified_master(client, db_session, 99339)
+    master_id = master["user"]["id"]
+    headers = auth_headers(master["session_token"])
+    practice = await _create_practice(
+        db_session, master_id, audience_kind=AudienceKind.PUBLIC.value,
+    )
+    await db_session.commit()
+
+    resp = await client.post(
+        AUDIENCE_PREVIEW_URL.format(practice_id=practice.id),
+        json={"audience_kind": "students", "group_ids": []},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+
+    await db_session.refresh(practice)
+    assert practice.audience_kind == AudienceKind.PUBLIC.value
+
+
+@pytest.mark.asyncio
+async def test_audience_preview_404_for_another_masters_practice(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    owner = await _make_verified_master(client, db_session, 99340)
+    other = await _make_verified_master(client, db_session, 99341)
+    practice = await _create_practice(
+        db_session, owner["user"]["id"], audience_kind=AudienceKind.PUBLIC.value,
+    )
+    await db_session.commit()
+
+    resp = await client.post(
+        AUDIENCE_PREVIEW_URL.format(practice_id=practice.id),
+        json={"audience_kind": "students", "group_ids": []},
+        headers=auth_headers(other["session_token"]),
+    )
+
+    assert resp.status_code == 404
+    assert resp.json()["error"]
+
+
+@pytest.mark.asyncio
+async def test_audience_preview_rejects_another_masters_group_id(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    master = await _make_verified_master(client, db_session, 99342)
+    other_master = await _make_verified_master(client, db_session, 99343)
+    headers = auth_headers(master["session_token"])
+    practice = await _create_practice(
+        db_session, master["user"]["id"], audience_kind=AudienceKind.PUBLIC.value,
+    )
+    other_group = await _custom_group(db_session, other_master["user"]["id"], name="Не ваша")
+    await db_session.commit()
+
+    resp = await client.post(
+        AUDIENCE_PREVIEW_URL.format(practice_id=practice.id),
+        json={"audience_kind": "groups", "group_ids": [str(other_group.id)]},
+        headers=headers,
+    )
+
+    assert resp.status_code == 400
+    assert resp.json()["error"]

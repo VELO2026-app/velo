@@ -87,6 +87,7 @@ from app.core.exceptions import (
     NotFoundError,
 )
 from app.modules.bookings.models import Booking, BookingStatus
+from app.modules.practices.audience_service import count_stranded_active_bookings
 from app.modules.practices.enrichment_service import (
     attendance_counts_for_practices,
     attendance_counts_kwargs,
@@ -1414,6 +1415,46 @@ async def update_practice(
         await create_meeting_for_practice(practice, session)
 
     return practice
+
+
+async def preview_audience_change(
+    practice_id: UUID,
+    user: User,
+    audience_kind: str,
+    group_ids: list[UUID],
+    session: AsyncSession,
+) -> int:
+    """Owner Q15 (ПРОМТ №613): how many of this practice's ACTIVE (pending/
+    confirmed) bookers would fall OUTSIDE a PROPOSED audience -- called by
+    EditPracticeView before saving an audience change, so the master sees
+    the real number instead of finding out from upset students at check-in
+    time. Read-only: never writes audience_kind or group_ids anywhere.
+
+    Same ownership check as update_practice (404 not 403 for non-owner,
+    P-08) and the same group_ids ownership validation the real PATCH
+    applies (_owned_group_ids_or_400) -- a master can't use this to probe
+    another master's group membership by feeding in group_ids they don't
+    own.
+    """
+    practice = await session.get(Practice, practice_id)
+    if practice is None or practice.master_id != user.id:
+        raise NotFoundError("Practice not found")
+
+    if group_ids:
+        await _owned_group_ids_or_400(user.id, group_ids, session)
+
+    booker_ids = (
+        await session.execute(
+            select(Booking.user_id).where(
+                Booking.practice_id == practice_id,
+                Booking.status.in_(_ACTIVE_BOOKING_STATUSES),
+            )
+        )
+    ).scalars().all()
+
+    return await count_stranded_active_bookings(
+        practice, list(booker_ids), audience_kind, group_ids, session,
+    )
 
 
 async def delete_practice(

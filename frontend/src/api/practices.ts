@@ -31,6 +31,8 @@ import type {
   UpdatePracticeRequest,
   AttendanceResponse,
   PaginatedReviewsResponse,
+  AudiencePreviewRequest,
+  AudiencePreviewResponse,
 } from '@/api/types'
 
 // ============================================================================
@@ -105,6 +107,20 @@ export function updatePractice(id: string, body: UpdatePracticeRequest): Promise
 }
 
 /**
+ * POST /api/v1/practices/{id}/audience-preview (owner Q15, ПРОМТ №613).
+ * Read-only dry-run -- never saves anything. Returns how many of this
+ * practice's ACTIVE bookers would fall outside the proposed audience, so
+ * EditPracticeView can warn with a real count before an audience-narrowing
+ * save strands people who are already booked.
+ */
+export function previewAudienceChange(
+  id: string,
+  body: AudiencePreviewRequest,
+): Promise<AudiencePreviewResponse> {
+  return api.post<AudiencePreviewResponse>(`/api/v1/practices/${id}/audience-preview`, body)
+}
+
+/**
  * Soft-delete a practice (draft only -> status=deleted).
  * Returns 204 No Content on success.
  */
@@ -127,10 +143,7 @@ export function cancelPractice(
   id: string,
   scope?: 'this' | 'this_and_future',
 ): Promise<PracticeResponse> {
-  return api.post<PracticeResponse>(
-    `/api/v1/practices/${id}/cancel`,
-    scope ? { scope } : undefined,
-  )
+  return api.post<PracticeResponse>(`/api/v1/practices/${id}/cancel`, scope ? { scope } : undefined)
 }
 
 /**

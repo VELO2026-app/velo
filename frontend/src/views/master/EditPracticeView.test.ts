@@ -312,6 +312,11 @@ beforeEach(() => {
   vi.mocked(ensureTaxonomyCatalog).mockReset().mockResolvedValue(null)
   vi.mocked(practicesApi.getPractice).mockReset().mockResolvedValue(practice())
   vi.mocked(practicesApi.updatePractice).mockReset().mockResolvedValue(practice())
+  // Owner Q15 (ПРОМТ №613): default to "nobody stranded" so every
+  // pre-existing save test proceeds silently, same as before this dry-run
+  // check existed -- tests that specifically exercise the warning override
+  // this per-test.
+  vi.mocked(practicesApi.previewAudienceChange).mockReset().mockResolvedValue({ stranded_count: 0 })
   vi.mocked(practicesApi.deletePractice).mockReset().mockResolvedValue(undefined)
   vi.mocked(practicesApi.cancelPractice)
     .mockReset()
@@ -1312,8 +1317,8 @@ describe('EditPracticeView', () => {
       // resolution itself, not just that the radio renders.
       vi.mocked(groupsApi.getGroups).mockResolvedValue({
         items: [
-          { id: 'g1', kind: 'custom', name: 'VIP', members_count: 3 },
-          { id: 'g2', kind: 'custom', name: 'Утро', members_count: 1 },
+          { id: 'g1', kind: 'custom', name: 'VIP', members_count: 3, description: null },
+          { id: 'g2', kind: 'custom', name: 'Утро', members_count: 1, description: null },
         ],
       })
       mountCached(practice({ audience_kind: 'groups', audience_group_names: ['Утро'] }))
@@ -1337,7 +1342,7 @@ describe('EditPracticeView', () => {
 
     it('the group multi-select renders ONLY for «Конкретные группы»', async () => {
       vi.mocked(groupsApi.getGroups).mockResolvedValue({
-        items: [{ id: 'g1', kind: 'custom', name: 'VIP', members_count: 3 }],
+        items: [{ id: 'g1', kind: 'custom', name: 'VIP', members_count: 3, description: null }],
       })
       mountCached(practice({ audience_kind: 'public' }))
       await flush()
@@ -1355,7 +1360,7 @@ describe('EditPracticeView', () => {
 
     it('switching to «Конкретные группы» and picking a chip sends its id in group_ids', async () => {
       vi.mocked(groupsApi.getGroups).mockResolvedValue({
-        items: [{ id: 'g1', kind: 'custom', name: 'VIP', members_count: 3 }],
+        items: [{ id: 'g1', kind: 'custom', name: 'VIP', members_count: 3, description: null }],
       })
       mountCached(practice({ audience_kind: 'public' }))
       await flush()
@@ -1376,7 +1381,7 @@ describe('EditPracticeView', () => {
 
     it('«Конкретные группы» with nothing picked blocks Save with a field error', async () => {
       vi.mocked(groupsApi.getGroups).mockResolvedValue({
-        items: [{ id: 'g1', kind: 'custom', name: 'VIP', members_count: 3 }],
+        items: [{ id: 'g1', kind: 'custom', name: 'VIP', members_count: 3, description: null }],
       })
       mountCached(practice({ audience_kind: 'public' }))
       await flush()
@@ -1388,6 +1393,87 @@ describe('EditPracticeView', () => {
 
       expect(practicesApi.updatePractice).not.toHaveBeenCalled()
       expect(text()).toContain('Выберите хотя бы одну группу')
+    })
+  })
+
+  describe('audience-narrowing warning (owner Q15, ПРОМТ №613)', () => {
+    it('editing an UNRELATED field never calls previewAudienceChange (audience unchanged)', async () => {
+      mountCached(practice({ audience_kind: 'public' }))
+      await flush()
+
+      const titleInput = host?.querySelector<HTMLInputElement>('input')
+      titleInput!.value = 'Новое название'
+      titleInput!.dispatchEvent(new Event('input'))
+      button('Сохранить')?.click()
+      await flush()
+
+      expect(practicesApi.previewAudienceChange).not.toHaveBeenCalled()
+      expect(practicesApi.updatePractice).toHaveBeenCalledTimes(1)
+    })
+
+    it('a stranded count of ZERO saves silently, no dialog', async () => {
+      vi.mocked(practicesApi.previewAudienceChange).mockResolvedValue({ stranded_count: 0 })
+      mountCached(practice({ audience_kind: 'public' }))
+      await flush()
+
+      button('Все ученики')?.click()
+      await flush()
+      button('Сохранить')?.click()
+      await flush()
+
+      expect(practicesApi.previewAudienceChange).toHaveBeenCalledWith('p1', {
+        audience_kind: 'students',
+        group_ids: [],
+      })
+      expect(document.body.querySelector('.v-confirm__actions')).toBeNull()
+      expect(practicesApi.updatePractice).toHaveBeenCalledTimes(1)
+    })
+
+    it('a stranded count above zero warns, naming the number, and does NOT save yet', async () => {
+      vi.mocked(practicesApi.previewAudienceChange).mockResolvedValue({ stranded_count: 3 })
+      mountCached(practice({ audience_kind: 'public' }))
+      await flush()
+
+      button('Все ученики')?.click()
+      await flush()
+      button('Сохранить')?.click()
+      await flush()
+
+      expect(practicesApi.updatePractice).not.toHaveBeenCalled()
+      expect(document.body.querySelector('.v-confirm__text')?.textContent).toContain('3')
+    })
+
+    it('confirming the warning proceeds to the actual save', async () => {
+      vi.mocked(practicesApi.previewAudienceChange).mockResolvedValue({ stranded_count: 2 })
+      mountCached(practice({ audience_kind: 'public' }))
+      await flush()
+
+      button('Все ученики')?.click()
+      await flush()
+      button('Сохранить')?.click()
+      await flush()
+
+      confirmDialogConfirm('Сохранить всё равно')?.click()
+      await flush()
+
+      expect(practicesApi.updatePractice).toHaveBeenCalledTimes(1)
+      expect(sentBody().audience_kind).toBe('students')
+    })
+
+    it('cancelling the warning does NOT save', async () => {
+      vi.mocked(practicesApi.previewAudienceChange).mockResolvedValue({ stranded_count: 2 })
+      mountCached(practice({ audience_kind: 'public' }))
+      await flush()
+
+      button('Все ученики')?.click()
+      await flush()
+      button('Сохранить')?.click()
+      await flush()
+
+      confirmDialogConfirm('Отмена')?.click()
+      await flush()
+
+      expect(practicesApi.updatePractice).not.toHaveBeenCalled()
     })
   })
 

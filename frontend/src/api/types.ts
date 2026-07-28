@@ -172,6 +172,25 @@ export interface UpdatePracticeRequest extends GeneratedUpdatePracticeRequest {
   group_ids?: string[]
 }
 
+// -- Q15 bridge (ПРОМТ №613): brand-new schemas, no generated.ts base to
+// extend yet -- POST /practices/{id}/audience-preview, a read-only dry-run
+// that never saves anything. Field shape copied verbatim from the backend's
+// AudiencePreviewRequest/Response (practices/schemas.py). Unlike
+// UpdatePracticeRequest above, both request fields are REQUIRED here -- the
+// caller always has a complete proposed state in hand (it's evaluating "if
+// I save the form as it stands"), not a partial PATCH.
+export interface AudiencePreviewRequest {
+  audience_kind: PracticeAudienceKind
+  group_ids: string[]
+}
+
+export interface AudiencePreviewResponse {
+  /** How many of this practice's ACTIVE (pending/confirmed) bookers would
+   * fall outside the proposed audience. Always present on the response
+   * (no response_model_exclude_unset on the backend route). */
+  stranded_count: number
+}
+
 export interface PracticeResponse extends GeneratedPracticeResponse {
   /** The practice owner's own Zoom host-registrant link. Populated only on
    * owner-facing responses; null/undefined otherwise. Optional for the same

@@ -69,6 +69,8 @@ from app.modules.practices.cancel_service import cancel_practice
 from app.modules.practices.listing_service import list_public_practices
 from app.modules.practices.models import Practice
 from app.modules.practices.schemas import (
+    AudiencePreviewRequest,
+    AudiencePreviewResponse,
     CancelPracticeRequest,
     CreatePracticeRequest,
     PaginatedPracticesResponse,
@@ -82,6 +84,7 @@ from app.modules.practices.service import (
     get_practice_detail,
     group_names_for_practice,
     practice_to_response,
+    preview_audience_change,
     update_practice,
 )
 from app.modules.users.models import User
@@ -540,6 +543,33 @@ async def update_practice_endpoint(
         zoom_meeting_status=zoom_meeting_status,
         audience_group_names=audience_group_names,
     )
+
+
+# ------------------------------------------------------------------
+# POST /api/v1/practices/{id}/audience-preview -- dry-run (owner Q15, ПРОМТ №613)
+# ------------------------------------------------------------------
+@router.post(
+    "/{practice_id}/audience-preview",
+    response_model=AudiencePreviewResponse,
+)
+async def preview_audience_change_endpoint(
+    practice_id: UUID,
+    body: AudiencePreviewRequest,
+    master_tuple: tuple[User, MasterProfile] = Depends(
+        get_current_master,
+    ),
+    session: AsyncSession = Depends(get_db_reader),
+) -> AudiencePreviewResponse:
+    """How many of this practice's ACTIVE bookers would fall outside a
+    PROPOSED audience -- read-only, never saves anything. Called by
+    EditPracticeView before an audience-narrowing save, so the master can
+    be warned with a real count instead of finding out from upset students
+    at check-in time (owner-ruled)."""
+    user, _profile = master_tuple
+    stranded_count = await preview_audience_change(
+        practice_id, user, body.audience_kind.value, body.group_ids, session,
+    )
+    return AudiencePreviewResponse(stranded_count=stranded_count)
 
 
 # ------------------------------------------------------------------
