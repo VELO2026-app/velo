@@ -136,6 +136,14 @@ async def join_waitlist(
     if practice.master_id == user.id:
         raise BadRequestError("Cannot join waitlist for your own practice")
 
+    # Audience gate at ENTRY, not just at confirm (C-audience): a
+    # blocked or out-of-audience user otherwise takes a queue slot,
+    # gets promoted, and burns the hold window (locking out a real
+    # group member for its whole duration) before being rejected at
+    # confirm_waitlist. Same gate confirm_waitlist already applies --
+    # close the OTHER door into the queue here.
+    await assert_viewer_can_access_practice(user.id, practice, session)
+
     # Practice must be full -- otherwise user should book directly.
     if practice.max_participants is None:
         raise BadRequestError(
