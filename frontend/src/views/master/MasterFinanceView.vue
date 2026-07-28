@@ -537,7 +537,10 @@ async function reloadHistory(): Promise<void> {
     historyTotal.value = data.total
     historyOffset.value = data.items.length
   } catch {
-    // Non-critical -- history remains empty, balance card still works.
+    // Surface the failure instead of rendering an empty history as if
+    // "no withdrawals yet" -- a master with pending payouts must not be
+    // told they have none. Mirrors loadMoreWithdrawals below.
+    toast.error('Не удалось загрузить историю выводов')
   } finally {
     historyLoading.value = false
   }

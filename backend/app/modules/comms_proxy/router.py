@@ -24,9 +24,10 @@
 # the shared token authenticates the PRODUCT. This router is the sole
 # owner of that check: recipient_id is ALWAYS the authenticated velo
 # session's user id. A recipient_id smuggled in the query string is
-# rejected with 422 (never silently ignored -- silently answering for
+# rejected with 400 (never silently ignored -- silently answering for
 # the RIGHT user would mask a broken client that believes it queried
-# another one); the prefs body rejects unknown keys the same way.
+# another one); the prefs body rejects unknown keys with 422 (pydantic
+# extra="forbid").
 #
 # SCHEDULE CONVERSION (approved plan fork 4, Master-chat 2026-07-28):
 # comms stores a QUIET window ("do not deliver from/to"); the velo UI
@@ -59,7 +60,7 @@ router = APIRouter(
 
 
 def _reject_recipient_override(request: Request) -> None:
-    """422 on any attempt to name a recipient from the client side."""
+    """400 on any attempt to name a recipient from the client side."""
     if "recipient_id" in request.query_params:
         raise BadRequestError(
             "recipient_id is derived from the session and cannot be "

@@ -515,9 +515,17 @@ onMounted(() => {
   // группы»'s multi-select. «Удалённые» is a system slug (never a real
   // MasterGroup row) and «Ученики» isn't a target-able group either --
   // getGroups() already returns both alongside custom ones, so filter here.
-  void getGroups().then((res) => {
-    customGroups.value = res.items.filter((g) => g.kind === 'custom')
-  })
+  void getGroups()
+    .then((res) => {
+      customGroups.value = res.items.filter((g) => g.kind === 'custom')
+    })
+    .catch(() => {
+      // Surface the failure instead of leaving customGroups empty, which
+      // renders as "you have no groups yet" and blocks the groups-audience
+      // path for a master who actually has groups. (Also avoids an
+      // unhandled promise rejection.)
+      toast.error('Не удалось загрузить группы')
+    })
 })
 
 const submitting = ref(false)

@@ -55,6 +55,11 @@ vi.mock('@/api/notifications', () => ({
   updateNotificationPrefs: (...a: unknown[]) => prefsPut(...a),
 }))
 
+const toastError = vi.fn()
+vi.mock('@/composables/useToast', () => ({
+  useToast: () => ({ error: toastError, success: vi.fn(), info: vi.fn() }),
+}))
+
 const FACADE = {
   categories: {
     bookings: true,
@@ -146,6 +151,7 @@ beforeEach(() => {
   prefsPut.mockReset()
   prefsGet.mockResolvedValue(structuredClone(FACADE))
   prefsPut.mockResolvedValue(structuredClone(FACADE))
+  toastError.mockReset()
 })
 
 afterEach(() => {
@@ -194,6 +200,34 @@ describe('MasterNotificationsView', () => {
       expect(isOn('Новое бронирование')).toBe(false)
       expect(isOn('Отмена бронирования')).toBe(false)
       expect(prefsPut).toHaveBeenCalledWith({ categories: { bookings: false } })
+    })
+
+    it('reverts the toggle and toasts when the save FAILS', async () => {
+      prefsPut.mockRejectedValueOnce(new Error('500'))
+      mount()
+      await flush()
+      expect(isOn('Напоминание')).toBe(true) // default on
+
+      switchByRow('Напоминание').click()
+      await flush()
+
+      // Optimistic flip is rolled back to the accepted value; the user is
+      // told, rather than left looking at a state the server refused.
+      expect(isOn('Напоминание')).toBe(true)
+      expect(toastError).toHaveBeenCalledWith('Не удалось сохранить настройку')
+    })
+
+    it('reverts BOTH bookings rows together when their save fails', async () => {
+      prefsPut.mockRejectedValueOnce(new Error('500'))
+      mount()
+      await flush()
+
+      switchByRow('Новое бронирование').click()
+      await flush()
+
+      expect(isOn('Новое бронирование')).toBe(true)
+      expect(isOn('Отмена бронирования')).toBe(true)
+      expect(toastError).toHaveBeenCalledWith('Не удалось сохранить настройку')
     })
 
     it('a STUB row (Ежемесячный отчет) writes NOTHING and is lost on remount -- still the honest local stub', async () => {

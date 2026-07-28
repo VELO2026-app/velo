@@ -655,17 +655,19 @@ describe('MasterFinanceView', () => {
       expect(icons[2]?.getAttribute('title')).toBe('Отклонён')
     })
 
-    it('a history failure is swallowed -- the balance card must still work', async () => {
-      // reloadHistory's bare `catch {}` is deliberate (MasterFinanceView.vue:301-303):
-      // a broken history must not cost the master the ability to see and
-      // withdraw their balance.
+    it('a history failure surfaces a toast but keeps the balance card working', async () => {
+      // reloadHistory now toasts on failure (MasterFinanceView.vue) instead
+      // of swallowing it: an empty list must not read as "no withdrawals
+      // yet" to a master who actually has pending payouts. The balance card
+      // still works regardless -- a broken history never costs the master
+      // the ability to see and withdraw their balance.
       vi.mocked(mastersApi.getMyWithdrawals).mockRejectedValue(new TypeError('boom'))
       mount()
       await flush()
 
       expect(pick('.finance-view__balance-value')).toContain('1 000,00')
       expect(button('Запросить вывод')).toBeDefined()
-      expect(toastError).not.toHaveBeenCalled()
+      expect(toastError).toHaveBeenCalledWith('Не удалось загрузить историю выводов')
     })
 
     it('offers «Показать ещё» only while the loaded count is short of the total', async () => {

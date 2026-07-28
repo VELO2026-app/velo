@@ -91,8 +91,10 @@ import {
   getNotificationPrefs,
   updateNotificationPrefs,
 } from '@/api/notifications'
+import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
+const toast = useToast()
 
 // --- Toggle rows -----------------------------------------------------------
 // Forward-looking keys (not yet in the typed NotificationSettings contract; see
@@ -233,19 +235,36 @@ function persistSchedule(): void {
 
 // --- Handlers --------------------------------------------------------------
 function onToggle(key: ToggleKey, value: boolean): void {
-  toggles[key] = value
   const category = CATEGORY_BY_KEY[key]
   if (!category) {
     // Local stub (no comms type yet) -- see the file header disposition.
+    toggles[key] = value
     return
   }
+  // Optimistic: flip now, revert on failure so the switch never shows a
+  // state the server did not accept (the screen must not lie about
+  // whether a category is muted).
+  const prev = toggles[key]
+  const prevBookingPair =
+    category === 'bookings'
+      ? { nb: toggles.new_booking, bc: toggles.booking_cancelled }
+      : null
+  toggles[key] = value
   if (category === 'bookings') {
     // ONE category behind two rows -- keep them visually in sync.
     toggles.new_booking = value
     toggles.booking_cancelled = value
   }
   updateNotificationPrefs({ categories: { [category]: value } }).catch(
-    (error) => console.warn('preference save failed', error),
+    (error) => {
+      toggles[key] = prev
+      if (prevBookingPair) {
+        toggles.new_booking = prevBookingPair.nb
+        toggles.booking_cancelled = prevBookingPair.bc
+      }
+      toast.error('Не удалось сохранить настройку')
+      console.warn('preference save failed', error)
+    },
   )
 }
 function onScheduleDays(days: string[]): void {

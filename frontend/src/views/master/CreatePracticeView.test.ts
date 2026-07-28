@@ -1538,6 +1538,19 @@ describe('CreatePracticeView', () => {
       expect(sentBody().group_ids).toEqual([])
     })
 
+    it('a getGroups failure surfaces a toast instead of silently showing «no groups»', async () => {
+      vi.mocked(groupsApi.getGroups).mockRejectedValue(new TypeError('boom'))
+      mount()
+      await flush()
+
+      // The view still mounts and the audience selector is usable; the
+      // failure is surfaced rather than read as "you have no groups".
+      expect(toastError).toHaveBeenCalledWith('Не удалось загрузить группы')
+      button('Конкретные группы')?.click()
+      await flush()
+      expect(text()).toContain('Пока нет ни одной группы')
+    })
+
     it('the group multi-select renders ONLY for «Конкретные группы»', async () => {
       vi.mocked(groupsApi.getGroups).mockResolvedValue({
         items: [
