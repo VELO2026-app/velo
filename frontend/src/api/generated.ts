@@ -25,7 +25,7 @@ export type PracticeType = 'live' | 'series' | 'one_on_one' | 'replay'
 export type UserRole = 'user' | 'master' | 'admin'
 
 /** Waitlist entry lifecycle statuses. */
-export type WaitlistStatus = 'waiting' | 'notified' | 'converted' | 'left' | 'declined' | 'expired'
+export type WaitlistStatus = 'waiting' | 'notified' | 'converted' | 'left' | 'declined' | 'expired' | 'removed'
 
 /** Withdrawal request lifecycle statuses. */
 export type WithdrawalStatus = 'pending' | 'approved' | 'rejected'
@@ -326,6 +326,17 @@ export interface AttendanceResponse {
   unmatched_count?: number
 }
 
+/** POST /api/v1/practices/{id}/audience-preview (owner Q15, ПРОМТ №613). A PROPOSED audience the master hasn't saved yet -- unlike UpdatePracticeRequest's own audience_kind/group_ids, both are REQUIRED here (no partial-update ambiguity to model): the frontend always has a complete proposed state in hand before it ever calls this, since it's evaluating "what if I save the form as it stands right now", not a partial PATCH. */
+export interface AudiencePreviewRequest {
+  audience_kind: AudienceKind
+  group_ids?: string[]
+}
+
+/** POST /api/v1/practices/{id}/audience-preview -- read-only, never persists anything. `stranded_count` is how many of this practice's ACTIVE (pending/confirmed) bookers would fall OUTSIDE the proposed audience -- the frontend warns and requires confirmation when this is above zero, saves silently when it's zero (owner-ruled). */
+export interface AudiencePreviewResponse {
+  stranded_count: number
+}
+
 /** POST /api/v1/auth/telegram — response body. */
 export interface AuthResponse {
   user: UserResponse
@@ -475,6 +486,7 @@ export interface CreateDirectionRequest {
 /** POST /masters/me/groups. */
 export interface CreateGroupRequest {
   name: string
+  description?: string | null
 }
 
 /** POST /api/v1/masters/me/promos -- create a master promo code. Master promos: master absorbs the discount from their revenue. type and master_id are set automatically by the service layer. */
@@ -628,6 +640,7 @@ export interface GroupListItem {
   kind: 'students' | 'deleted' | 'custom'
   name: string
   members_count: number
+  description?: string | null
 }
 
 /** GET /masters/me/groups. */
@@ -648,6 +661,17 @@ export interface GroupResponse {
   id: string
   name: string
   members_count: number
+  description?: string | null
+}
+
+/** One row in GET /masters/me/groups/search. ONE ROW PER (student, group) MEMBERSHIP, not one row per student (owner-ruled, ПРОМТ №606): a student who belongs to N of this master's CUSTOM groups appears N times here, each row naming a DIFFERENT group -- this is a membership-management surface, so the multiplicity IS the meaning, not noise to dedupe away. Never the two virtuals («Ученики»/ «Удалённые») -- neither is a MasterGroupMembership row (mirrors list_student_custom_groups's identical exclusion). */
+export interface GroupSearchMemberItem {
+  student_user_id: string
+  name: string
+  avatar_url: string | null
+  tag: string | null
+  group_id: string
+  group_name: string
 }
 
 /** GET /api/v1/masters/me/income?period=week|month. income_cents -- gross booked turnover for the current calendar period: signed sum of title-tagged sale (+) / commission (-) / refund (-) movements, frozen sales included. Matches the transaction feed, not realized/available earnings. prev_income_cents -- same sum for the previous calendar period. delta_pct -- signed percent change vs the previous period, or null when the previous period had no net-positive turnover. */
@@ -924,6 +948,14 @@ export interface PaginatedFeedbacksResponse {
 /** GET /masters/me/groups/{id}/members -- paginated, searchable. */
 export interface PaginatedGroupMembersResponse {
   items: GroupMemberItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** GET /masters/me/groups/search -- paginated, searchable. */
+export interface PaginatedGroupSearchResponse {
+  items: GroupSearchMemberItem[]
   total: number
   limit: number
   offset: number
@@ -1240,9 +1272,10 @@ export interface RejectWithdrawalRequest {
   note: string
 }
 
-/** PATCH /masters/me/groups/{id}. */
+/** PATCH /masters/me/groups/{id} -- rename AND/OR edit description (owner Q10, ПРОМТ №611; class name kept as-is despite now covering more than a rename -- renaming this Pydantic class would rename the emitted type in generated.ts at the next deploy regen, drifting the hand-written frontend types in api/groups.ts, the exact class of failure that red the gate on a prior feature). `name` is always required (a group always has one). `description` is a PARTIAL UPDATE, same contract as users/service.py's update_user() and admin/masters/admin_taxonomy's PATCH endpoints: body.model_dump(exclude_unset=True) at the router distinguishes "the key was absent" (leave the column untouched) from "the key was sent" (even as "" or whitespace -- normalized to NULL in rename_group(), same rule create_group() already applies). This is the fix for the exact gap ПРОМТ №610 itself flagged: a bare Optional[str]=None default could not tell those two cases apart and would have silently wiped an existing description on every plain rename. */
 export interface RenameGroupRequest {
   name: string
+  description?: string | null
 }
 
 /** Single report -- returned to both user and admin. */
