@@ -6,6 +6,14 @@
 # _apply_env_defaults_and_validate() comms rules. kwargs override .env, so
 # these build a synthetic production config in-process.
 #
+# ENV ISOLATION (post-VPS finding): Settings normally reads .env AND the
+# process environment, both of which carry a real COMMS_API_URL on the test
+# server -- an earlier version of this test asserted defaults and went red on
+# the VPS while green in a bare sandbox. So every case here passes ALL comms
+# fields EXPLICITLY (kwargs beat both .env and os.environ) and _env_file=None
+# skips the .env read entirely. The test states the whole comms config; the
+# environment cannot leak into it.
+#
 # The gate: comms may be OFF on a box (all empty -> feature disabled, clean
 # degrade), but a PARTIAL comms config is a silent failure in production --
 # a set api_url with an empty token ships "Bearer " and 401s the bell for
@@ -19,7 +27,8 @@ from pydantic import ValidationError
 from app.core.config import Settings
 
 # A minimal VALID production base (every OTHER prod gate satisfied) so the
-# only thing under test is the comms pairing.
+# only thing under test is the comms pairing. Comms fields are NOT here --
+# each case supplies the full comms quartet explicitly via _mk().
 _PROD_BASE = dict(
     app_env="production",
     database_url="postgresql+asyncpg://u:p@h/db",
@@ -33,58 +42,61 @@ _PROD_BASE = dict(
 )
 
 
-def _settings(**comms) -> Settings:
-    return Settings(**_PROD_BASE, **comms)
+def _mk(
+    *,
+    app_env: str = "production",
+    api_url: str = "",
+    token: str = "",
+    redis_url: str = "",
+    relay_enabled: bool = False,
+) -> Settings:
+    """Build Settings with the ENTIRE comms quartet pinned explicitly and
+    the .env read disabled, so neither .env nor os.environ can leak a
+    real comms value into the assertion."""
+    base = dict(_PROD_BASE)
+    base["app_env"] = app_env
+    return Settings(
+        **base,
+        comms_api_url=api_url,
+        comms_service_token=token,
+        comms_redis_url=redis_url,
+        comms_relay_enabled=relay_enabled,
+        _env_file=None,
+    )
 
 
 def test_full_comms_config_passes() -> None:
-    s = _settings(
-        comms_api_url="http://comms-app:8000",
-        comms_service_token="tok",
-        comms_redis_url="redis://comms-redis:6379/0",
-        comms_relay_enabled=True,
+    s = _mk(
+        api_url="http://comms-app:8000",
+        token="tok",
+        redis_url="redis://comms-redis:6379/0",
+        relay_enabled=True,
     )
     assert s.comms_api_url == "http://comms-app:8000"
 
 
 def test_comms_fully_off_passes() -> None:
     """Empty everything + relay disabled = comms not installed here."""
-    s = _settings(comms_relay_enabled=False)
+    s = _mk()
     assert s.comms_api_url == ""
 
 
 def test_api_url_without_token_rejected() -> None:
     with pytest.raises(ValidationError, match="COMMS_SERVICE_TOKEN"):
-        _settings(
-            comms_api_url="http://comms-app:8000",
-            comms_service_token="",
-            comms_relay_enabled=False,
-        )
+        _mk(api_url="http://comms-app:8000", token="")
 
 
 def test_token_without_api_url_rejected() -> None:
     with pytest.raises(ValidationError, match="COMMS_API_URL"):
-        _settings(
-            comms_service_token="tok",
-            comms_relay_enabled=False,
-        )
+        _mk(token="tok", api_url="")
 
 
 def test_relay_enabled_without_redis_rejected() -> None:
     with pytest.raises(ValidationError, match="COMMS_REDIS_URL"):
-        _settings(
-            comms_redis_url="",
-            comms_relay_enabled=True,
-        )
+        _mk(redis_url="", relay_enabled=True)
 
 
 def test_dev_allows_partial_comms_config() -> None:
     """Dev stays permissive: a half-config must not block local startup."""
-    dev = dict(_PROD_BASE)
-    dev["app_env"] = "development"
-    s = Settings(
-        **dev,
-        comms_api_url="http://comms-app:8000",
-        comms_service_token="",
-    )
+    s = _mk(app_env="development", api_url="http://comms-app:8000", token="")
     assert s.comms_api_url == "http://comms-app:8000"
