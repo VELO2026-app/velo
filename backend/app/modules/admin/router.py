@@ -16,7 +16,7 @@
 #   - taxonomy/     -- direction/style catalog CRUD (R5, batch R)
 #
 # Direct endpoints on this router:
-#   - POST /templates/reload -- reload notification templates (Phase 7.3)
+#   - POST /announcements -- system.announcement via comms (Phase 6/T1)
 #
 # All sub-routers inherit the /api/v1/admin prefix and "admin" tag.
 # Auth: get_current_admin dependency is applied per-endpoint in
@@ -40,11 +40,13 @@ from app.modules.admin.stats.overview_router import (              # E7
 from app.modules.admin.taxonomy.router import router as taxonomy_router  # R5
 from app.modules.admin.users.router import router as users_router
 from app.modules.admin.withdrawals.router import router as withdrawals_router
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_db_session
 from app.modules.auth.dependencies import get_current_admin
-from app.modules.notifications.template_engine import (
-    get_cache_stats,
-    reload_templates,
-)
 from app.modules.users.models import User
 
 logger = structlog.get_logger()
@@ -66,30 +68,59 @@ router.include_router(taxonomy_router)       # R5
 
 
 # ---------------------------------------------------------------------------
-# Notification templates management (Phase 7.3)
+# System announcements (Phase 6 / T1, approved fork В6)
 # ---------------------------------------------------------------------------
+# The dictionary §2 has system.announcement (group:all / group:masters)
+# but velo had no domain feature that produces one -- this endpoint IS
+# the emit point: a thin admin-only handle over emit_notification. The
+# audience is COMMUNICATIONAL (C-boundary ID-4): one emit, comms
+# expands "all" / group:masters over its synced contact book. The type
+# is category-less (decision A) -> always delivered.
+# (The old POST /templates/reload died with modules/notifications --
+# comms owns templates now; editing them = commit to comms-profile/ +
+# comms restart, see the T1 cutover checklist.)
 
 
-@router.post("/templates/reload")
-async def reload_templates_endpoint(
+class AnnouncementRequest(BaseModel):
+    """Admin announcement: pre-rendered title/body + audience pick."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(min_length=1, max_length=200)
+    body: str = Field(min_length=1, max_length=2000)
+    audience: Literal["all", "masters"] = "all"
+
+
+@router.post("/announcements")
+async def create_announcement(
+    request: AnnouncementRequest,
     admin: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    """Reload notification templates from YAML files.
-
-    Clears the in-memory cache and re-reads all template files.
-    Use after editing YAML templates without restarting the server.
-    """
-    total = reload_templates()
-
-    logger.info(
-        "templates_reloaded_by_admin",
-        admin_id=str(admin.id),
-        total=total,
+    """Emit a system.announcement through the comms outbox."""
+    from app.core.events.notify import (
+        TARGET_ALL,
+        TARGET_GROUP_MASTERS,
+        emit_notification,
     )
 
-    stats = get_cache_stats()
-    return {
-        "reloaded": True,
-        "total_entries": stats["total_entries"],
-        "per_language": stats["per_language"],
-    }
+    target_type, target_value = (
+        TARGET_ALL if request.audience == "all" else TARGET_GROUP_MASTERS
+    )
+    event = await emit_notification(
+        session,
+        type="system.announcement",
+        target_type=target_type,
+        target_value=target_value,
+        title=request.title,
+        body=request.body,
+        action_data={"action": "open_notifications", "params": {}},
+    )
+
+    logger.info(
+        "announcement_emitted",
+        admin_id=str(admin.id),
+        audience=request.audience,
+        outbox_event_id=event.id,
+    )
+    return {"queued": True, "audience": request.audience}

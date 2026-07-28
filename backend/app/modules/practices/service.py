@@ -1377,6 +1377,65 @@ async def update_practice(
             occurred_at=datetime.now(UTC),
         )
 
+        # Comms (T1, dictionary §2): practice.rescheduled (ONLY a time
+        # move -- this branch already gates on scheduled_at actually
+        # changing) fanned out to every booked user (velo expands the
+        # domain audience, ID-4), and the reminder series is moved to
+        # the new anchor: cancel by practice_id correlation +
+        # re-schedule per active booking (donor rule: reschedule =
+        # cancel + schedule by the caller). Same transaction as the
+        # update (ID-2).
+        from app.core.events.notify import emit_notification
+        from app.core.events.reminders import (
+            cancel_practice_reminders,
+            format_event_time,
+            schedule_booking_reminders,
+        )
+        from app.modules.bookings.models import Booking, BookingStatus
+        booked_stmt = (
+            select(Booking)
+            .where(
+                Booking.practice_id == practice.id,
+                Booking.status == BookingStatus.CONFIRMED.value,
+            )
+        )
+        booked = (
+            await session.execute(booked_stmt)
+        ).scalars().all()
+        when_text = format_event_time(new_scheduled_at)
+        for booking in booked:
+            await emit_notification(
+                session,
+                type="practice.rescheduled",
+                target_type="user",
+                target_value=str(booking.user_id),
+                title="Практика перенесена",
+                body=(
+                    f"Практика «{practice.title}» перенесена. "
+                    f"Новое время: {when_text}. Мастер: {master_name}."
+                ),
+                action_data={
+                    "action": "open_practice",
+                    "params": {"practice_id": str(practice.id)},
+                    "practice_title": practice.title,
+                    "master_name": master_name,
+                    "scheduled_at": when_text,
+                },
+            )
+        await cancel_practice_reminders(
+            session, practice_id=str(practice.id),
+        )
+        for booking in booked:
+            await schedule_booking_reminders(
+                session,
+                booking_id=str(booking.id),
+                user_id=str(booking.user_id),
+                practice_id=str(practice.id),
+                practice_title=practice.title,
+                master_name=master_name,
+                scheduled_at=new_scheduled_at,
+            )
+
         # E21: keep the Zoom meeting's start time in sync, then re-fetch and
         # overwrite stored registrant join links -- self-healing regardless
         # of whether Zoom actually invalidates them on reschedule (unresolved

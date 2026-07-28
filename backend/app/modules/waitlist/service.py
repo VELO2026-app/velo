@@ -347,6 +347,29 @@ async def confirm_waitlist(
     now = datetime.now(UTC)
     if entry.expires_at and entry.expires_at < now:
         entry.status = WaitlistStatus.EXPIRED.value
+
+        # Comms (T1, dictionary §2): waitlist.expired to the holder --
+        # the held spot lapsed; process_waitlist below hands it to the
+        # next in line (who gets their own waitlist.spot_available).
+        from app.core.events.notify import emit_notification
+        await emit_notification(
+            session,
+            type="waitlist.expired",
+            target_type="user",
+            target_value=str(entry.user_id),
+            title="Бронь по листу ожидания истекла",
+            body=(
+                f"Вы не подтвердили место на практику "
+                f"«{practice.title}» вовремя -- оно передано "
+                f"следующему в очереди."
+            ),
+            action_data={
+                "action": "open_practice",
+                "params": {"practice_id": str(entry.practice_id)},
+                "practice_title": practice.title,
+            },
+        )
+
         await process_waitlist(entry.practice_id, session)
 
         logger.info(
@@ -422,6 +445,47 @@ async def confirm_waitlist(
 
     entry.status = WaitlistStatus.CONVERTED.value
 
+    # Comms (T1): this is the OTHER booking-creation path besides
+    # create_booking (which emits for itself) -- the converted hold is
+    # a confirmed booking, so it gets the same booking.confirmed +
+    # reminder series in the same transaction (dictionary §2, ID-2).
+    from app.core.events.notify import emit_notification
+    from app.core.events.reminders import (
+        format_event_time,
+        schedule_booking_reminders,
+    )
+    master_name = await get_master_display_name(
+        practice.master_id, session,
+    )
+    when_text = format_event_time(practice.scheduled_at)
+    await emit_notification(
+        session,
+        type="booking.confirmed",
+        target_type="user",
+        target_value=str(user.id),
+        title="Бронирование подтверждено",
+        body=(
+            f"Вы записаны на практику «{practice.title}». "
+            f"Начало: {when_text}. Мастер: {master_name}."
+        ),
+        action_data={
+            "action": "open_practice",
+            "params": {"practice_id": str(entry.practice_id)},
+            "practice_title": practice.title,
+            "master_name": master_name,
+            "scheduled_at": when_text,
+        },
+    )
+    await schedule_booking_reminders(
+        session,
+        booking_id=str(booking.id),
+        user_id=str(user.id),
+        practice_id=str(entry.practice_id),
+        practice_title=practice.title,
+        master_name=master_name,
+        scheduled_at=practice.scheduled_at,
+    )
+
     # Update cached participant count (Frontend Backlog A-03).
     await recalculate_participants(entry.practice_id, session)
 
@@ -481,13 +545,12 @@ async def process_waitlist(
     entry.notified_at = now
     entry.expires_at = now + _CONFIRM_WINDOW
 
-    # FIX 3.1: Create real notification instead of stub logger.
-    # Lazy imports to avoid circular dependencies.
-    from app.modules.notifications.models import (
-        NotificationType,
-        TargetType,
-    )
-    from app.modules.notifications.service import create_notification
+    # Comms (T1): the live donor emit, switched from the old engine's
+    # create_notification to the outbox (dictionary §2:
+    # waitlist.spot_available -> the head of the queue; velo picks the
+    # holder, ID-4). Lazy import mirrors the old pattern.
+    from app.core.events.notify import emit_notification
+    from app.core.events.reminders import format_event_time
 
     # Load practice for template variables.
     practice = await session.get(Practice, practice_id)
@@ -495,21 +558,27 @@ async def process_waitlist(
         practice.master_id, session,
     )
 
-    await create_notification(
-        type=NotificationType.WAITLIST_SPOT_AVAILABLE.value,
-        title="Spot available",
-        body="A spot opened up",
-        target_type=TargetType.USER.value,
+    when_text = format_event_time(practice.scheduled_at)
+    expires_text = format_event_time(entry.expires_at)
+    await emit_notification(
+        session,
+        type="waitlist.spot_available",
+        target_type="user",
         target_value=str(entry.user_id),
-        session=session,
+        title="Освободилось место",
+        body=(
+            f"Освободилось место на практику «{practice.title}» "
+            f"({when_text}, мастер: {master_name}). Подтвердите "
+            f"участие до {expires_text}."
+        ),
         action_data={
             "action": "confirm_waitlist",
             "params": {"waitlist_id": str(entry.id)},
             "practice_id": str(practice_id),
             "practice_title": practice.title,
-            "scheduled_at": practice.scheduled_at.isoformat(),
+            "scheduled_at": when_text,
             "master_name": master_name,
-            "expires_at": entry.expires_at.isoformat(),
+            "expires_at": expires_text,
         },
         priority=2,
         expiry_at=entry.expires_at,

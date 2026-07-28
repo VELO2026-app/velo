@@ -294,20 +294,6 @@ class Settings(BaseSettings):
     # Validated in service layer when creating a promo.
     promo_allowed_discounts: list[int] = [5, 25, 50, 75, 100]
 
-    # -- Notifications (Phase 7.2) --
-    # Processor polling interval in seconds (resets on work found).
-    notification_poll_interval_seconds: int = 5
-    # Max backoff when queue is empty (exponential up to this).
-    notification_max_backoff_seconds: int = 60
-    # Max delivery attempts before marking as failed.
-    notification_max_delivery_attempts: int = 3
-    # Background processor toggle. True in prod (the lifespan task polls and
-    # delivers). Disabled in tests so the manual _stage_resolve/_stage_deliver/
-    # _stage_rollup calls in test_notifications.py are the only code touching
-    # the queue -- otherwise the background loop races them via
-    # FOR UPDATE SKIP LOCKED and a delivery can be skipped (attempts stays 0).
-    notification_processor_enabled: bool = True
-
     # -- Comms integration: outbox relay (Phase 6 / T0) --
     # The transactional-outbox relay ships domain events to the comms
     # Redis Stream (core/events/relay.py). COMMS_REDIS_URL and friends
@@ -331,8 +317,37 @@ class Settings(BaseSettings):
     comms_relay_warn_every_attempts: int = 10
     # Background relay toggle. True in prod (lifespan task). Disabled
     # in tests so relay tests drive relay_pending_batch manually --
-    # same rationale as notification_processor_enabled above.
+    # same rationale as the worker toggles below (tests drive manually).
     comms_relay_enabled: bool = True
+
+    # -- Comms integration: HTTP proxy (Phase 6 / T1) --
+    # The read path of ID-9: velo proxies inbox/badge/prefs to the
+    # comms HTTP API over aivis-shared. COMMS_API_URL and
+    # COMMS_SERVICE_TOKEN are written into .env by the Phase 5
+    # installer hand-over (comms-deploy.sh install, pass 2); an EMPTY
+    # url makes the proxy answer 502 -- local dev has no comms stack.
+    comms_api_url: str = ""
+    comms_service_token: str = ""
+    # Per-request timeout to comms. The proxy maps a timeout to 504
+    # and a connection failure to 502 -- comms being down must degrade
+    # the bell, never crash velo (T1 handoff constraint).
+    comms_http_timeout_seconds: float = 5.0
+
+    # -- Comms integration: reminder orchestration (Phase 6 / T1) --
+    # Booking reminders (ID-6): velo schedules the series product-side
+    # (comms engine/reminders.py left the domain orchestration to the
+    # product) as notification_request events with a future
+    # scheduled_at anchored at practice.scheduled_at, and cancels via
+    # the reminder_cancel event. Leads mirror the dead donor series
+    # (reminders.py: 24h / 1h / 10min, min lead 5 min).
+    booking_reminder_min_lead_seconds: int = 300
+    # Post-practice prompt (ID-6): practice_outcome schedules
+    # prompt.leave_feedback at outcome + delay, expiring after the
+    # window below (Master-chat 2026-07-28: feedback only in v1;
+    # prompt.leave_review is registered in the profile but not
+    # scheduled -- enabling it is a one-liner at the outcome site).
+    prompt_feedback_delay_seconds: int = 3600
+    prompt_feedback_expiry_seconds: int = 259200
 
     # -- Practice lifecycle automation (Batch 1, extended) --
     # Practices are driven entirely by the clock -- the master no longer starts
@@ -364,7 +379,7 @@ class Settings(BaseSettings):
     # auto_finalize_practice calls are the only code touching practices --
     # otherwise the background loop races them via FOR UPDATE SKIP LOCKED and a
     # test practice can be transitioned out from under an assertion. Same
-    # rationale as notification_processor_enabled above.
+    # rationale as the worker toggles here (tests drive manually).
     practice_autofinalize_enabled: bool = True
     # How many due practices to claim per poll cycle, per phase. Throttles each
     # tick so a large backlog is drained in batches rather than one giant locked
@@ -459,7 +474,7 @@ class Settings(BaseSettings):
     zoom_attendance_threshold_minutes: int = 10
     # Meeting-creation retry poller (mirrors practice_autofinalize_* above).
     # Background worker toggle -- same rationale as
-    # practice_autofinalize_enabled / notification_processor_enabled: tests
+    # practice_autofinalize_enabled and the other worker toggles: tests
     # disable it so the loop can't race manual test calls.
     zoom_retry_enabled: bool = True
     zoom_retry_poll_interval_seconds: int = 30

@@ -69,6 +69,32 @@ async def _cancel_one(
         (await session.execute(affected_ids_stmt)).scalars().all()
     )
 
+    # Comms (T1, dictionary §2): the waitlist branch of the
+    # cancellation gets its own type (practice.cancelled_waitlist) --
+    # collect the queue BEFORE refund_all_bookings_for_practice flips
+    # every active waitlist entry to `left` (payments/refund.py), same
+    # reason the booked users are collected above. Lazy import keeps
+    # practices -> waitlist one-way at call time.
+    from app.modules.waitlist.models import (
+        ACTIVE_STATUSES as _WL_ACTIVE,
+    )
+    from app.modules.waitlist.models import Waitlist
+    waitlist_ids_stmt = (
+        select(Waitlist.user_id)
+        .where(
+            Waitlist.practice_id == practice.id,
+            Waitlist.status.in_(_WL_ACTIVE),
+        )
+        .distinct()
+    )
+    waitlisted_user_ids = [
+        uid
+        for uid in (
+            await session.execute(waitlist_ids_stmt)
+        ).scalars().all()
+        if uid not in set(affected_user_ids)
+    ]
+
     # Refund all active bookings + clear waitlist.
     refunded_count = await refund_all_bookings_for_practice(
         practice=practice,
@@ -115,6 +141,59 @@ async def _cancel_one(
         occurred_at=(
             occurred_at if occurred_at is not None else datetime.now(UTC)
         ),
+    )
+
+    # Comms (T1, dictionary §2): practice.cancelled to every booked
+    # user + practice.cancelled_waitlist (its own sheet, type #16) to
+    # the queue -- both audiences are DOMAIN relations, expanded by
+    # velo into per-user emits (C-boundary ID-4). The practice's whole
+    # pending reminder series is expired by practice_id correlation.
+    # All in the cancellation's transaction (ID-2).
+    from app.core.events.notify import emit_notification
+    from app.core.events.reminders import (
+        cancel_practice_reminders,
+        format_event_time,
+    )
+    when_text = format_event_time(practice.scheduled_at)
+    for uid in affected_user_ids:
+        await emit_notification(
+            session,
+            type="practice.cancelled",
+            target_type="user",
+            target_value=str(uid),
+            title="Практика отменена",
+            body=(
+                f"Практика «{practice.title}» ({when_text}) была "
+                f"отменена мастером. Оплата возвращена на ваш баланс."
+            ),
+            action_data={
+                "action": "open_wallet",
+                "params": {"practice_id": str(practice.id)},
+                "practice_title": practice.title,
+                "scheduled_at": when_text,
+            },
+        )
+    for uid in waitlisted_user_ids:
+        await emit_notification(
+            session,
+            type="practice.cancelled_waitlist",
+            target_type="user",
+            target_value=str(uid),
+            title="Практика отменена",
+            body=(
+                f"Практика «{practice.title}» ({when_text}), на "
+                f"которую вы стояли в листе ожидания, была отменена "
+                f"мастером."
+            ),
+            action_data={
+                "action": "open_practice",
+                "params": {"practice_id": str(practice.id)},
+                "practice_title": practice.title,
+                "scheduled_at": when_text,
+            },
+        )
+    await cancel_practice_reminders(
+        session, practice_id=str(practice.id),
     )
 
     # E21: best-effort delete the practice's Zoom meeting so a cancelled

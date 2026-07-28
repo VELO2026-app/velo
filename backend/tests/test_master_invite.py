@@ -24,8 +24,8 @@ from app.core.config import settings
 from app.modules.users.models import User
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 
-TID_MIN = 88300
-TID_MAX = 88399
+TID_MIN = 89503
+TID_MAX = 89508
 
 BOT_URL = "https://t.me/velo_testbot"
 LINK_PREFIX = f"{BOT_URL}?startapp=master_onboarding__"
@@ -66,8 +66,8 @@ async def _set_role(
 
 async def _login_admin(client: AsyncClient, db_session: AsyncSession) -> str:
     """Create + promote the acting admin, return their session token."""
-    data = await login_user(client, telegram_id=88300, first_name="Inviter")
-    await _set_role(db_session, 88300, "admin")
+    data = await login_user(client, telegram_id=89503, first_name="Inviter")
+    await _set_role(db_session, 89503, "admin")
     return data["session_token"]
 
 
@@ -101,7 +101,7 @@ async def test_issue_non_admin_403(
     client: AsyncClient,
 ) -> None:
     """A plain user cannot issue invites."""
-    data = await login_user(client, telegram_id=88301, first_name="Plain")
+    data = await login_user(client, telegram_id=89504, first_name="Plain")
     response = await _issue(client, data["session_token"])
     assert response.status_code == 403
 
@@ -151,7 +151,7 @@ async def test_claim_success_burns_single_use(
 ) -> None:
     """A valid claim returns claimed_at; the same token then 404s (burned)."""
     admin_token = await _login_admin(client, db_session)
-    opener = await login_user(client, telegram_id=88305, first_name="Claimer")
+    opener = await login_user(client, telegram_id=89505, first_name="Claimer")
     issued = await _issue(client, admin_token)
     token = _token_from_link(issued.json()["invite_link"])
 
@@ -171,7 +171,7 @@ async def test_claim_unknown_token_404(
 ) -> None:
     """A well-formed but never-issued token 404s (invite_invalid)."""
     admin_token = await _login_admin(client, db_session)
-    opener = await login_user(client, telegram_id=88308, first_name="Garbled")
+    opener = await login_user(client, telegram_id=89506, first_name="Garbled")
     # An admin exists but we never issue -> this token was never stored.
     assert admin_token
 
@@ -196,7 +196,7 @@ async def test_claim_auto_registered_opener_succeeds(
     token = _token_from_link(issued.json()["invite_link"])
 
     # A fresh opener who was never specifically invited.
-    fresh = await login_user(client, telegram_id=88310, first_name="Fresh")
+    fresh = await login_user(client, telegram_id=89507, first_name="Fresh")
     response = await _claim(client, fresh["session_token"], token)
     assert response.status_code == 200
     assert response.json()["claimed_at"] is not None

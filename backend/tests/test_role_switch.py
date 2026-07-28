@@ -34,8 +34,8 @@ from app.modules.users.models import User
 from app.modules.users.schemas import credentials_without_admin_home
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 
-TID_MIN = 88200
-TID_MAX = 88299
+TID_MIN = 89485
+TID_MAX = 89502
 
 
 @pytest.fixture(autouse=True)
@@ -134,7 +134,7 @@ async def test_switch_role_no_auth_401(client: AsyncClient) -> None:
 
 async def test_switch_invalid_role_422(client: AsyncClient) -> None:
     """An unknown role value is rejected by Pydantic → 422."""
-    data = await login_user(client, telegram_id=88207, first_name="Bogus")
+    data = await login_user(client, telegram_id=89492, first_name="Bogus")
     response = await _switch(client, data["session_token"], "superuser")
     assert response.status_code == 422
 
@@ -148,7 +148,7 @@ async def test_plain_user_cannot_switch_to_master_403(
     client: AsyncClient,
 ) -> None:
     """No master profile → MASTER is not in the derived set → 403."""
-    data = await login_user(client, telegram_id=88201, first_name="Plain")
+    data = await login_user(client, telegram_id=89486, first_name="Plain")
     response = await _switch(client, data["session_token"], "master")
     assert response.status_code == 403
     assert response.json()["error"] == "role_not_allowed"
@@ -158,7 +158,7 @@ async def test_plain_user_cannot_switch_to_admin_403(
     client: AsyncClient,
 ) -> None:
     """ADMIN-NEVER-TARGET: a non-admin can never switch to admin."""
-    data = await login_user(client, telegram_id=88202, first_name="Wannabe")
+    data = await login_user(client, telegram_id=89487, first_name="Wannabe")
     response = await _switch(client, data["session_token"], "admin")
     assert response.status_code == 403
     assert response.json()["error"] == "role_not_allowed"
@@ -169,8 +169,8 @@ async def test_unverified_profile_cannot_switch_to_master_403(
     db_session: AsyncSession,
 ) -> None:
     """A pending (unverified) profile grants no master capability → 403."""
-    data = await login_user(client, telegram_id=88203, first_name="Pending")
-    await _add_master_profile(db_session, 88203, status="pending")
+    data = await login_user(client, telegram_id=89488, first_name="Pending")
+    await _add_master_profile(db_session, 89488, status="pending")
     response = await _switch(client, data["session_token"], "master")
     assert response.status_code == 403
     assert response.json()["error"] == "role_not_allowed"
@@ -181,8 +181,8 @@ async def test_suspended_profile_cannot_switch_to_master_403(
     db_session: AsyncSession,
 ) -> None:
     """A suspended profile (CLI soft-freeze) grants no capability → 403."""
-    data = await login_user(client, telegram_id=88204, first_name="Frozen")
-    await _add_master_profile(db_session, 88204, status="suspended")
+    data = await login_user(client, telegram_id=89489, first_name="Frozen")
+    await _add_master_profile(db_session, 89489, status="suspended")
     response = await _switch(client, data["session_token"], "master")
     assert response.status_code == 403
     assert response.json()["error"] == "role_not_allowed"
@@ -193,9 +193,9 @@ async def test_verified_capability_roundtrip_user_master(
     db_session: AsyncSession,
 ) -> None:
     """A verified MasterProfile unlocks MASTER; USER is always available."""
-    data = await login_user(client, telegram_id=88205, first_name="Capable")
+    data = await login_user(client, telegram_id=89490, first_name="Capable")
     token = data["session_token"]
-    await _add_master_profile(db_session, 88205, status="verified")
+    await _add_master_profile(db_session, 89490, status="verified")
 
     response = await _switch(client, token, "master")
     assert response.status_code == 200
@@ -211,9 +211,9 @@ async def test_verified_master_cannot_switch_to_admin_403(
     db_session: AsyncSession,
 ) -> None:
     """Master capability does NOT unlock admin (ADMIN-NEVER-TARGET)."""
-    data = await login_user(client, telegram_id=88206, first_name="MasterOnly")
+    data = await login_user(client, telegram_id=89491, first_name="MasterOnly")
     token = data["session_token"]
-    await _add_master_profile(db_session, 88206, status="verified")
+    await _add_master_profile(db_session, 89491, status="verified")
     await _switch(client, token, "master")
 
     response = await _switch(client, token, "admin")
@@ -225,7 +225,7 @@ async def test_switch_to_current_role_is_noop_200(
     client: AsyncClient,
 ) -> None:
     """USER is always in the derived set: user → user is a harmless no-op."""
-    data = await login_user(client, telegram_id=88208, first_name="Same")
+    data = await login_user(client, telegram_id=89493, first_name="Same")
     response = await _switch(client, data["session_token"], "user")
     assert response.status_code == 200
     assert response.json()["role"] == "user"
@@ -241,9 +241,9 @@ async def test_admin_roundtrip_via_user(
     db_session: AsyncSession,
 ) -> None:
     """Admin → user → back to admin; the home marker is set, then cleared."""
-    data = await login_user(client, telegram_id=88210, first_name="Boss")
+    data = await login_user(client, telegram_id=89494, first_name="Boss")
     token = data["session_token"]
-    await _set_role(db_session, 88210, "admin")
+    await _set_role(db_session, 89494, "admin")
 
     response = await _switch(client, token, "user")
     assert response.status_code == 200
@@ -252,7 +252,7 @@ async def test_admin_roundtrip_via_user(
     assert response.json()["role_switch"] == {
         "allowed_roles": ["user", "master", "admin"]
     }
-    user = await _get_user(db_session, 88210)
+    user = await _get_user(db_session, 89494)
     assert (user.credentials or {}).get("role_switch", {}).get(
         "home_role"
     ) == "admin"
@@ -261,7 +261,7 @@ async def test_admin_roundtrip_via_user(
     assert response.status_code == 200
     assert response.json()["role"] == "admin"
     # Marker is cleared on return: no stale self-serve admin grant remains.
-    user = await _get_user(db_session, 88210)
+    user = await _get_user(db_session, 89494)
     assert "home_role" not in (user.credentials or {}).get("role_switch", {})
 
 
@@ -270,9 +270,9 @@ async def test_admin_without_profile_can_switch_to_master_and_back(
     db_session: AsyncSession,
 ) -> None:
     """№254 Q4=А: admin → master works WITHOUT a master profile, and back."""
-    data = await login_user(client, telegram_id=88211, first_name="AdminNoP")
+    data = await login_user(client, telegram_id=89495, first_name="AdminNoP")
     token = data["session_token"]
-    await _set_role(db_session, 88211, "admin")
+    await _set_role(db_session, 89495, "admin")
 
     response = await _switch(client, token, "master")
     assert response.status_code == 200
@@ -293,10 +293,10 @@ async def test_stale_seeded_allowlist_grants_nothing(
     db_session: AsyncSession,
 ) -> None:
     """Old seeded allowed_roles lists are ignored by the derived policy."""
-    data = await login_user(client, telegram_id=88212, first_name="Legacy")
+    data = await login_user(client, telegram_id=89496, first_name="Legacy")
     token = data["session_token"]
     await _seed_legacy_allowlist(
-        db_session, 88212, ["user", "master", "admin"]
+        db_session, 89496, ["user", "master", "admin"]
     )
 
     response = await _switch(client, token, "admin")
@@ -314,7 +314,7 @@ async def test_me_role_switch_null_for_plain_user(
     client: AsyncClient,
 ) -> None:
     """A plain user derives {USER} only → nothing to switch to → null."""
-    data = await login_user(client, telegram_id=88220, first_name="Nobody")
+    data = await login_user(client, telegram_id=89498, first_name="Nobody")
     me = await client.get(
         "/api/v1/users/me", headers=auth_headers(data["session_token"])
     )
@@ -327,8 +327,8 @@ async def test_me_role_switch_for_verified_capability(
     db_session: AsyncSession,
 ) -> None:
     """A verified MasterProfile surfaces [user, master] regardless of role."""
-    data = await login_user(client, telegram_id=88221, first_name="Exposed")
-    await _add_master_profile(db_session, 88221, status="verified")
+    data = await login_user(client, telegram_id=89499, first_name="Exposed")
+    await _add_master_profile(db_session, 89499, status="verified")
     me = await client.get(
         "/api/v1/users/me", headers=auth_headers(data["session_token"])
     )
@@ -341,8 +341,8 @@ async def test_me_role_switch_for_admin(
     db_session: AsyncSession,
 ) -> None:
     """An admin surfaces all three roles (profile not required)."""
-    data = await login_user(client, telegram_id=88222, first_name="AdminMe")
-    await _set_role(db_session, 88222, "admin")
+    data = await login_user(client, telegram_id=89500, first_name="AdminMe")
+    await _set_role(db_session, 89500, "admin")
     me = await client.get(
         "/api/v1/users/me", headers=auth_headers(data["session_token"])
     )
@@ -357,9 +357,9 @@ async def test_me_role_switch_for_switched_away_admin(
     db_session: AsyncSession,
 ) -> None:
     """A switched-away admin (home marker) still sees all three in /me."""
-    data = await login_user(client, telegram_id=88223, first_name="Away")
+    data = await login_user(client, telegram_id=89501, first_name="Away")
     token = data["session_token"]
-    await _set_role(db_session, 88223, "admin")
+    await _set_role(db_session, 89501, "admin")
     await _switch(client, token, "user")
 
     me = await client.get("/api/v1/users/me", headers=auth_headers(token))
@@ -403,21 +403,21 @@ async def test_demoted_ex_admin_cannot_self_restore_admin(
 ) -> None:
     """R-1: once the CLI demotes a switched-away admin, the home marker is
     gone, so POST /me/role {admin} no longer self-restores admin."""
-    data = await login_user(client, telegram_id=88213, first_name="ExBoss")
+    data = await login_user(client, telegram_id=89497, first_name="ExBoss")
     token = data["session_token"]
-    await _set_role(db_session, 88213, "admin")
+    await _set_role(db_session, 89497, "admin")
 
     # Admin switches away -> round-trip marker recorded.
     response = await _switch(client, token, "user")
     assert response.status_code == 200
-    user = await _get_user(db_session, 88213)
+    user = await _get_user(db_session, 89497)
     assert (user.credentials or {}).get("role_switch", {}).get(
         "home_role"
     ) == "admin"
 
     # CLI demotion (velo setrole U) clears the marker.
-    await _cli_demote_to_user(db_session, 88213)
-    user = await _get_user(db_session, 88213)
+    await _cli_demote_to_user(db_session, 89497)
+    user = await _get_user(db_session, 89497)
     assert "home_role" not in (user.credentials or {}).get("role_switch", {})
 
     # The ex-admin is now a plain user -> cannot switch back to admin.

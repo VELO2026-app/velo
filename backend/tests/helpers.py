@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import AuditLog
 from app.core.config import settings
+from app.core.events.models import OutboxEvent
 from app.modules.bookings.models import Booking
 from app.modules.diary.models import Checkin, DiaryEvent, Feedback
 from app.modules.masters.groups_models import (
@@ -37,7 +38,6 @@ from app.modules.masters.groups_models import (
     MasterStudent,
 )
 from app.modules.masters.models import MasterProfile
-from app.modules.notifications.models import Notification, NotificationDelivery
 from app.modules.payments.models import (
     CompanyLedger,
     MasterLedger,
@@ -225,28 +225,24 @@ async def full_cleanup_range(
     )
 
     # -----------------------------------------------------------------------
-    # 1. notification_deliveries
-    #    FK -> notifications.id (CASCADE), FK -> users.id (CASCADE).
+    # 1. outbox_events (Phase 6 / T1: the notifications successor).
+    #    No FK to users -- the notification_request payload carries the
+    #    target as data->>'target_value' (string user UUID); sync events
+    #    carry data->>'recipient_id'. Delete rows referencing band users so
+    #    reruns do not accumulate unpublished test events.
     # -----------------------------------------------------------------------
     await session.execute(
-        delete(NotificationDelivery).where(
-            NotificationDelivery.user_id.in_(user_ids_subq)
-        )
-    )
-
-    # -----------------------------------------------------------------------
-    # 2. notifications
-    #    No direct FK to users. Linked via:
-    #      target_value              — string UUID of the target user
-    #      action_data->>'practice_id' — JSONB reference to a practice
-    # -----------------------------------------------------------------------
-    await session.execute(
-        delete(Notification).where(
+        delete(OutboxEvent).where(
             or_(
-                Notification.target_value.in_(user_ids_str_subq),
-                Notification.action_data["practice_id"].astext.in_(
-                    practice_ids_str_subq
+                OutboxEvent.payload["target_value"].astext.in_(
+                    user_ids_str_subq
                 ),
+                OutboxEvent.payload["recipient_id"].astext.in_(
+                    user_ids_str_subq
+                ),
+                OutboxEvent.payload["action_data"][
+                    "practice_id"
+                ].astext.in_(practice_ids_str_subq),
             )
         )
     )

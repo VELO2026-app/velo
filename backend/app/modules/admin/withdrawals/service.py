@@ -115,6 +115,24 @@ async def approve_withdrawal(
     withdrawal.admin_note = note
     withdrawal.approved_at = now
 
+    # Comms (T1, dictionary §2): wallet.withdrawal_approved to the
+    # master (velo context, ID-4), same transaction as the approval.
+    from app.core.events.notify import emit_notification
+    payout_text = f"{payout_amount / 100:.2f}"
+    await emit_notification(
+        session,
+        type="wallet.withdrawal_approved",
+        target_type="user",
+        target_value=str(withdrawal.user_id),
+        title="Вывод средств одобрен",
+        body=f"Ваш запрос на вывод средств одобрен: €{payout_text}.",
+        action_data={
+            "action": "open_wallet",
+            "params": {},
+            "amount": payout_text,
+        },
+    )
+
     # Audit.
     await record_audit(
         event="withdrawal_approved",
@@ -180,6 +198,28 @@ async def reject_withdrawal(
     withdrawal.admin_id = admin.id
     withdrawal.admin_note = note
     withdrawal.rejected_at = now
+
+    # Comms (T1, dictionary §2): wallet.withdrawal_rejected to the
+    # master; the admin note travels as a pre-rendered scalar.
+    from app.core.events.notify import emit_notification
+    amount_text = f"{withdrawal.amount_cents / 100:.2f}"
+    await emit_notification(
+        session,
+        type="wallet.withdrawal_rejected",
+        target_type="user",
+        target_value=str(withdrawal.user_id),
+        title="Вывод средств отклонён",
+        body=(
+            f"Ваш запрос на вывод €{amount_text} не был одобрен."
+            + (f" Причина: {note}" if note else "")
+        ),
+        action_data={
+            "action": "open_wallet",
+            "params": {},
+            "amount": amount_text,
+            "reason": note or "",
+        },
+    )
 
     # Audit.
     await record_audit(

@@ -3,7 +3,7 @@
 # =============================================================================
 #
 # Background asyncio.Task that runs inside FastAPI lifespan, mirroring the
-# notification processor (app/modules/notifications/processor.py).
+# comms outbox relay (app/core/events/relay.py).
 #
 # WHY:
 #   Practices are driven by the clock -- the master no longer starts or finishes

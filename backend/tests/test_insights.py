@@ -2,7 +2,7 @@
 # VELO Backend -- Tests: Practice Insights (Phase 8.4)
 # =============================================================================
 #
-# telegram_id range: 88000-88999
+# telegram_id range: 89441-89519
 #
 # Coverage:
 #   - GET /practices/{id}/insights (happy path, distributions, counts)
@@ -34,8 +34,8 @@ from tests.helpers import auth_headers, login_user
 INSIGHTS_URL = "/api/v1/practices/{practice_id}/insights"
 
 # telegram_id range for this test file.
-_TID_MIN = 88000
-_TID_MAX = 88999
+_TID_MIN = 89441
+_TID_MAX = 89519
 
 
 # ===================================================================
@@ -52,7 +52,7 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
 
 
 async def _do_cleanup(session: AsyncSession) -> None:
-    """Delete all test entities for telegram_id 88000-88999."""
+    """Delete all test entities for telegram_id 89441-89519."""
     await session.rollback()
 
     user_ids_subq = (
@@ -115,7 +115,7 @@ async def _do_cleanup(session: AsyncSession) -> None:
 async def _make_verified_master(
     client: AsyncClient,
     db_session: AsyncSession,
-    telegram_id: int = 88900,
+    telegram_id: int = 89509,
 ) -> dict:
     """Create a verified master and return auth dict."""
     auth = await login_user(client, telegram_id=telegram_id, first_name="Master")
@@ -238,7 +238,7 @@ async def test_insights_full_data(
 ) -> None:
     """Master sees correct distributions and counts."""
     master_auth = await _make_verified_master(
-        client, db_session, telegram_id=88901,
+        client, db_session, telegram_id=89510,
     )
     practice = await _create_completed_practice(
         db_session, master_auth["user"]["id"],
@@ -246,24 +246,24 @@ async def test_insights_full_data(
 
     # 5 participants with varied data.
     await _add_participant(
-        client, db_session, practice, 88001,
+        client, db_session, practice, 89442,
         mood=9, rating=9, feedback_comment="Loved it!",
     )
     await _add_participant(
-        client, db_session, practice, 88002,
+        client, db_session, practice, 89443,
         mood=9, rating=9,
     )
     await _add_participant(
-        client, db_session, practice, 88003,
+        client, db_session, practice, 89444,
         mood=6, rating=6, feedback_comment="Solid session.",
     )
     await _add_participant(
-        client, db_session, practice, 88004,
+        client, db_session, practice, 89445,
         mood=2, rating=2,
     )
     # Participant 5: attended but no checkin/feedback.
     await _add_participant(
-        client, db_session, practice, 88005,
+        client, db_session, practice, 89446,
     )
     await db_session.commit()
 
@@ -302,7 +302,7 @@ async def test_insights_empty_data(
 ) -> None:
     """Completed practice with no participants: all zeros."""
     master_auth = await _make_verified_master(
-        client, db_session, telegram_id=88902,
+        client, db_session, telegram_id=89511,
     )
     practice = await _create_completed_practice(
         db_session, master_auth["user"]["id"],
@@ -335,10 +335,10 @@ async def test_insights_not_owner(
 ) -> None:
     """Another master tries to access insights: 404."""
     master1 = await _make_verified_master(
-        client, db_session, telegram_id=88903,
+        client, db_session, telegram_id=89512,
     )
     master2 = await _make_verified_master(
-        client, db_session, telegram_id=88904,
+        client, db_session, telegram_id=89513,
     )
 
     practice = await _create_completed_practice(
@@ -373,10 +373,10 @@ async def test_insights_regular_user(
     the still-404 case of a DIFFERENT master querying this practice.
     """
     master_auth = await _make_verified_master(
-        client, db_session, telegram_id=88905,
+        client, db_session, telegram_id=89514,
     )
     user_auth = await login_user(
-        client, telegram_id=88006, first_name="RegularUser",
+        client, telegram_id=89447, first_name="RegularUser",
     )
 
     practice = await _create_completed_practice(
@@ -404,7 +404,7 @@ async def test_insights_practice_not_completed(
 ) -> None:
     """Scheduled (not completed) practice: 400."""
     master_auth = await _make_verified_master(
-        client, db_session, telegram_id=88906,
+        client, db_session, telegram_id=89515,
     )
 
     practice = Practice(
@@ -445,7 +445,7 @@ async def test_insights_practice_not_found(
 ) -> None:
     """Non-existent practice ID: 404."""
     master_auth = await _make_verified_master(
-        client, db_session, telegram_id=88907,
+        client, db_session, telegram_id=89516,
     )
     # ПРОМТ №583: _make_verified_master only flushes -- the role=MASTER
     # change and the MasterProfile row must be COMMITTED before the request
@@ -490,7 +490,7 @@ async def test_insights_only_attended_participants(
 ) -> None:
     """Only attended bookings count as participants, not confirmed/no_show."""
     master_auth = await _make_verified_master(
-        client, db_session, telegram_id=88908,
+        client, db_session, telegram_id=89517,
     )
     practice = await _create_completed_practice(
         db_session, master_auth["user"]["id"],
@@ -498,13 +498,13 @@ async def test_insights_only_attended_participants(
 
     # 1 attended.
     await _add_participant(
-        client, db_session, practice, 88007,
+        client, db_session, practice, 89448,
         rating=9,
     )
 
     # 1 confirmed (not attended).
     user2 = await login_user(
-        client, telegram_id=88008, first_name="Confirmed",
+        client, telegram_id=89449, first_name="Confirmed",
     )
     booking_confirmed = Booking(
         practice_id=practice.id,
@@ -515,7 +515,7 @@ async def test_insights_only_attended_participants(
 
     # 1 no_show.
     user3 = await login_user(
-        client, telegram_id=88009, first_name="NoShow",
+        client, telegram_id=89450, first_name="NoShow",
     )
     booking_noshow = Booking(
         practice_id=practice.id,
@@ -526,7 +526,7 @@ async def test_insights_only_attended_participants(
 
     # 1 cancelled.
     user4 = await login_user(
-        client, telegram_id=88010, first_name="Cancelled",
+        client, telegram_id=89451, first_name="Cancelled",
     )
     booking_cancelled = Booking(
         practice_id=practice.id,
@@ -562,13 +562,13 @@ async def test_insights_no_user_data_exposed(
 ) -> None:
     """Response contains only aggregated numbers, no user info."""
     master_auth = await _make_verified_master(
-        client, db_session, telegram_id=88909,
+        client, db_session, telegram_id=89518,
     )
     practice = await _create_completed_practice(
         db_session, master_auth["user"]["id"],
     )
     await _add_participant(
-        client, db_session, practice, 88011,
+        client, db_session, practice, 89452,
         mood=9, rating=9, feedback_comment="Secret thoughts",
     )
     await db_session.commit()

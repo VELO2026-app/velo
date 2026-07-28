@@ -34,12 +34,8 @@ from app.modules.bookings.service import (
     auto_finalize_practice,
     auto_start_practice,
 )
+from app.core.events.models import OutboxEvent
 from app.modules.diary.models import Checkin, CheckType
-from app.modules.notifications.models import (
-    Notification,
-    NotificationType,
-    TargetType,
-)
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import (
     Practice,
@@ -352,11 +348,17 @@ async def test_claim_phases_split_running_vs_ended(
 
 
 async def _feedback_notifs(session: AsyncSession, practice_id) -> list:
-    """LEAVE_FEEDBACK notifications enqueued for this practice."""
+    """prompt.leave_feedback requests queued in the outbox for this
+    practice (T1: the old engine's practice-targeted LEAVE_FEEDBACK is
+    now one delayed prompt PER ATTENDEE via the comms reminder
+    mechanic -- see _finalize_practice_core)."""
     result = await session.execute(
-        select(Notification).where(
-            Notification.type == NotificationType.LEAVE_FEEDBACK.value,
-            Notification.target_value == str(practice_id),
+        select(OutboxEvent).where(
+            OutboxEvent.event_type == "notification_request",
+            OutboxEvent.payload["type"].astext
+            == "prompt.leave_feedback",
+            OutboxEvent.payload["action_data"]["practice_id"].astext
+            == str(practice_id),
         )
     )
     return list(result.scalars().all())
@@ -382,7 +384,11 @@ async def test_autofinalize_enqueues_feedback_when_attended(
     assert b.status == BookingStatus.ATTENDED.value
     notifs = await _feedback_notifs(db_session, practice.id)
     assert len(notifs) == 1
-    assert notifs[0].target_type == TargetType.PRACTICE.value
+    # T1: velo expands the audience (ID-4) -- the prompt targets the
+    # ATTENDEE, and rides the reminder mechanic (future scheduled_at).
+    assert notifs[0].payload["target_type"] == "user"
+    assert notifs[0].payload["target_value"] == str(b.user_id)
+    assert notifs[0].payload["scheduled_at"]
 
 
 @pytest.mark.asyncio

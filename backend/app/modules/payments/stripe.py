@@ -431,6 +431,26 @@ async def handle_checkout_completed(
         session=session,
     )
 
+    # Comms (T1, dictionary §2): wallet.topup_confirmed to the wallet
+    # owner (velo context, ID-4) -- rides the webhook's transaction,
+    # so a retried Stripe event that short-circuits on the idempotency
+    # guard above never double-emits.
+    from app.core.events.notify import emit_notification
+    amount_text = f"{payment.amount_cents / 100:.2f}"
+    await emit_notification(
+        session,
+        type="wallet.topup_confirmed",
+        target_type="user",
+        target_value=str(payment.user_id),
+        title="Баланс пополнен",
+        body=f"Ваш баланс пополнен на €{amount_text}.",
+        action_data={
+            "action": "open_wallet",
+            "params": {},
+            "amount": amount_text,
+        },
+    )
+
     # Audit.
     await record_audit(
         event="payment_topup_confirmed",

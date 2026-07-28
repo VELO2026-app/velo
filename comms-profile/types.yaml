@@ -11,24 +11,25 @@
 # Unknown spec keys are tolerated (additive contract); a type key is
 # <= 50 chars, a category <= 50 chars (comms core/constants.py).
 #
-# CATEGORY GRID (§3, locked as v1; customer edits = this file):
+# CATEGORY GRID (§3, locked as v1 + decision A of 2026-07-28;
+# customer edits = this file):
 #   bookings         -- booking.*, practice.*, waitlist.*   (mutable)
-#   reminders        -- prompt.* (+ booking reminders, T1)  (mutable)
+#   reminders        -- booking reminders + prompt.*        (mutable)
 #   finance          -- wallet.*                            (mutable)
-#   account          -- master account status               (NON-mutable
-#                       by convention: no UI toggle is exposed for it)
-#   system           -- announcements                       (NON-mutable
-#                       by convention, §2.5 arch doc)
+#   NO category      -- master account status + system
+#                       announcements: non-mutable BY MECHANISM
+#                       (comms §2.5: a type without a category
+#                       bypasses the mute gate and the prefs facade
+#                       never lists it -- nothing to mute)
 #   msg_participants / msg_support -- chat baseline (UI toggles
 #                       master_messages / support_messages)
 #
-# NOTE ON NON-MUTABILITY: comms mechanics treat "type WITHOUT a
-# category" as the unmutable escape hatch (arch doc §2.5). This
-# profile still assigns `account` / `system` categories (per the
-# locked grid §3 and the T0 handoff done-when "all 15+3 types with
-# categories"); their non-mutability holds by convention -- the prefs
-# facade never exposes toggles for these categories, so no mute rows
-# appear. Flagged in the T0 report as a design seam for Master-chat.
+# DECISION A (locked 2026-07-28, supersedes the T0 seam note): the T0
+# profile assigned `account` / `system` categories to keep every type
+# categorized; the design has since been aligned to the comms
+# mechanism -- master.* status types and system.announcement carry NO
+# category on purpose. Their former convention-only non-mutability is
+# now mechanical.
 #
 # msg.* mapping is fixed by the dispatch plan §6b: participant_message
 # and thread_closed -> msg_participants, support_message -> msg_support.
@@ -52,14 +53,41 @@ practice.cancelled:
 practice.rescheduled:
   category: bookings
 
+# T1: the dictionary §2 gives the waitlist branch of a practice
+# cancellation "its own sheet" -- in comms a type IS its sheet, so the
+# branch is a sibling type (dictionary type #16, Master-chat
+# 2026-07-28).
+practice.cancelled_waitlist:
+  category: bookings
+
 waitlist.spot_available:
   category: bookings
 
 waitlist.expired:
   category: bookings
 
-# -- Post-practice prompts (category: reminders; delivered via the
-#    comms reminder engine from T1 on, ID-6) --
+# -- Booking reminders (T1, ID-6): the donor reminder series re-keyed
+#    to the dot dictionary. Scheduled by velo as notification_request
+#    with a future scheduled_at (anchor = practice.scheduled_at),
+#    cancelled via the reminder_cancel event by booking_id /
+#    practice_id correlation. The donor's master_reminder_* series is
+#    deliberately NOT carried over -- absent from the locked
+#    dictionary §2 (deferred; trigger = dictionary amendment). --
+
+booking.reminder_24h:
+  category: reminders
+
+booking.reminder_1h:
+  category: reminders
+
+booking.reminder_10m:
+  category: reminders
+
+# -- Post-practice prompts (category: reminders; scheduled via the
+#    reminder mechanic from practice_outcome, ID-6). v1 schedules
+#    ONLY prompt.leave_feedback (the single live donor emit);
+#    prompt.leave_review stays registered but unscheduled -- enabling
+#    it is a one-liner at the outcome site (Master-chat 2026-07-28). --
 
 prompt.leave_review:
   category: reminders
@@ -78,23 +106,20 @@ wallet.withdrawal_approved:
 wallet.withdrawal_rejected:
   category: finance
 
-# -- Master account status (category: account, non-mutable by
-#    convention -- see header note) --
+# -- Master account status: NO category on purpose (decision A) --
+#    a category-less type bypasses the mute gate (§2.5) and the prefs
+#    facade never lists it -- non-mutable by mechanism. --
 
 master.verified:
-  category: account
 
 master.rejected:
-  category: account
 
 master.application_received:
-  category: account
 
-# -- System announcements (category: system, non-mutable by
-#    convention, §2.5) --
+# -- System announcements: NO category on purpose (decision A, same
+#    mechanism as master.* above) --
 
 system.announcement:
-  category: system
 
 # -- Chat baseline (comms-native msg.* types; velo never emits these,
 #    the messaging engine does; mapping fixed by dispatch plan §6b) --

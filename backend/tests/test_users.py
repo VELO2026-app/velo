@@ -15,14 +15,14 @@ from tests.helpers import auth_headers, login_user
 
 async def test_get_me_success(client: AsyncClient) -> None:
     """Authenticated user can retrieve their profile."""
-    data = await login_user(client, telegram_id=88001, first_name="UserTest")
+    data = await login_user(client, telegram_id=89442, first_name="UserTest")
     token = data["session_token"]
 
     response = await client.get("/api/v1/users/me", headers=auth_headers(token))
 
     assert response.status_code == 200
     body = response.json()
-    assert body["telegram_id"] == 88001
+    assert body["telegram_id"] == 89442
     assert body["first_name"] == "UserTest"
     assert body["role"] == "user"
     assert body["is_active"] is True
@@ -34,7 +34,7 @@ async def test_get_me_master_application_null_for_plain_user(
     client: AsyncClient,
 ) -> None:
     """T5: a user who never applied has master_application = null on /me."""
-    data = await login_user(client, telegram_id=88002, first_name="NoApp")
+    data = await login_user(client, telegram_id=89443, first_name="NoApp")
     response = await client.get(
         "/api/v1/users/me", headers=auth_headers(data["session_token"])
     )
@@ -64,7 +64,7 @@ async def test_get_me_invalid_token(client: AsyncClient) -> None:
 
 async def test_update_me_single_field(client: AsyncClient) -> None:
     """Update only first_name — other fields unchanged."""
-    data = await login_user(client, telegram_id=88010, first_name="Before")
+    data = await login_user(client, telegram_id=89451, first_name="Before")
     token = data["session_token"]
 
     response = await client.patch(
@@ -76,7 +76,7 @@ async def test_update_me_single_field(client: AsyncClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["first_name"] == "After"
-    assert body["telegram_id"] == 88010
+    assert body["telegram_id"] == 89451
 
     # Verify persistence — GET should return updated value.
     get_response = await client.get(
@@ -88,7 +88,7 @@ async def test_update_me_single_field(client: AsyncClient) -> None:
 
 async def test_update_me_multiple_fields(client: AsyncClient) -> None:
     """Update several fields at once."""
-    data = await login_user(client, telegram_id=88011)
+    data = await login_user(client, telegram_id=89452)
     token = data["session_token"]
 
     response = await client.patch(
@@ -112,7 +112,7 @@ async def test_update_me_multiple_fields(client: AsyncClient) -> None:
 
 async def test_update_me_empty_body(client: AsyncClient) -> None:
     """Empty body — no changes, still 200."""
-    data = await login_user(client, telegram_id=88012, first_name="Stable")
+    data = await login_user(client, telegram_id=89453, first_name="Stable")
     token = data["session_token"]
 
     response = await client.patch(
@@ -127,7 +127,7 @@ async def test_update_me_empty_body(client: AsyncClient) -> None:
 
 async def test_update_me_set_null(client: AsyncClient) -> None:
     """Explicitly setting a field to null clears it."""
-    data = await login_user(client, telegram_id=88013, first_name="HasName")
+    data = await login_user(client, telegram_id=89454, first_name="HasName")
     token = data["session_token"]
 
     response = await client.patch(
@@ -151,7 +151,7 @@ async def test_update_me_no_auth(client: AsyncClient) -> None:
 
 async def test_update_me_field_too_long(client: AsyncClient) -> None:
     """first_name exceeding max_length → 422."""
-    data = await login_user(client, telegram_id=88014)
+    data = await login_user(client, telegram_id=89455)
     token = data["session_token"]
 
     response = await client.patch(
@@ -170,7 +170,7 @@ async def test_update_me_field_too_long(client: AsyncClient) -> None:
 
 async def test_update_me_empty_string_first_name(client: AsyncClient) -> None:
     """Empty string for first_name → 422 (use null to clear)."""
-    data = await login_user(client, telegram_id=88020)
+    data = await login_user(client, telegram_id=89456)
     token = data["session_token"]
 
     response = await client.patch(
@@ -184,7 +184,7 @@ async def test_update_me_empty_string_first_name(client: AsyncClient) -> None:
 
 async def test_update_me_empty_string_timezone(client: AsyncClient) -> None:
     """Empty string for timezone → 422."""
-    data = await login_user(client, telegram_id=88021)
+    data = await login_user(client, telegram_id=89457)
     token = data["session_token"]
 
     response = await client.patch(
@@ -198,7 +198,7 @@ async def test_update_me_empty_string_timezone(client: AsyncClient) -> None:
 
 async def test_update_me_empty_string_language(client: AsyncClient) -> None:
     """Empty string for language → 422."""
-    data = await login_user(client, telegram_id=88022)
+    data = await login_user(client, telegram_id=89458)
     token = data["session_token"]
 
     response = await client.patch(
@@ -219,7 +219,7 @@ async def test_onboarding_completed_defaults_false_for_new_user(
     client: AsyncClient,
 ) -> None:
     """A freshly created user has onboarding_completed=False (key absent)."""
-    data = await login_user(client, telegram_id=88030, first_name="Newbie")
+    data = await login_user(client, telegram_id=89459, first_name="Newbie")
     token = data["session_token"]
 
     response = await client.get("/api/v1/users/me", headers=auth_headers(token))
@@ -232,7 +232,7 @@ async def test_onboarding_completed_can_be_set_true(
     client: AsyncClient,
 ) -> None:
     """PATCH onboarding_completed=true is persisted and returned."""
-    data = await login_user(client, telegram_id=88031, first_name="Finisher")
+    data = await login_user(client, telegram_id=89460, first_name="Finisher")
     token = data["session_token"]
 
     patch_response = await client.patch(
@@ -261,7 +261,7 @@ async def test_onboarding_completed_survives_relogin(
     Telegram user logs in again. Regression guard for the welcome flow.
     """
     # First login + finish onboarding.
-    first = await login_user(client, telegram_id=88032, first_name="Returner")
+    first = await login_user(client, telegram_id=89461, first_name="Returner")
     token1 = first["session_token"]
     await client.patch(
         "/api/v1/users/me",
@@ -271,7 +271,7 @@ async def test_onboarding_completed_survives_relogin(
 
     # Re-login with the SAME telegram_id (build_init_data adds a unique
     # query_id, so anti-replay is not triggered).
-    second = await login_user(client, telegram_id=88032, first_name="Returner")
+    second = await login_user(client, telegram_id=89461, first_name="Returner")
     token2 = second["session_token"]
 
     # The flag must still be true after the upsert (UPDATE branch / merge).
@@ -285,7 +285,7 @@ async def test_onboarding_completed_relogin_refreshes_telegram_fields(
 ) -> None:
     """Merge keeps the flag AND refreshes Telegram-sourced fields on re-login."""
     first = await login_user(
-        client, telegram_id=88033, first_name="Before", username="before",
+        client, telegram_id=89462, first_name="Before", username="before",
     )
     token1 = first["session_token"]
     await client.patch(
@@ -296,7 +296,7 @@ async def test_onboarding_completed_relogin_refreshes_telegram_fields(
 
     # Re-login with a changed first_name (Telegram profile updated).
     second = await login_user(
-        client, telegram_id=88033, first_name="After", username="after",
+        client, telegram_id=89462, first_name="After", username="after",
     )
     token2 = second["session_token"]
 
@@ -316,7 +316,7 @@ async def test_onboarding_completed_null_does_not_reset_flag(
     Service drops None for JSONB-backed fields, so a once-true flag stays
     true rather than being overwritten with null (bool(None) -> False).
     """
-    data = await login_user(client, telegram_id=88034, first_name="NullTest")
+    data = await login_user(client, telegram_id=89463, first_name="NullTest")
     token = data["session_token"]
 
     # Set it true first.
@@ -345,7 +345,7 @@ async def test_master_onboarding_completed_defaults_false_for_new_user(
     client: AsyncClient,
 ) -> None:
     """A freshly created user has master_onboarding_completed=False."""
-    data = await login_user(client, telegram_id=88047, first_name="FreshM")
+    data = await login_user(client, telegram_id=89471, first_name="FreshM")
     token = data["session_token"]
 
     response = await client.get("/api/v1/users/me", headers=auth_headers(token))
@@ -363,7 +363,7 @@ async def test_master_onboarding_completed_persists_and_survives_relogin(
     in upsert_user_on_login must keep the master flag too. The user-side
     onboarding_completed stays independent (untouched -> False).
     """
-    first = await login_user(client, telegram_id=88048, first_name="MDone")
+    first = await login_user(client, telegram_id=89472, first_name="MDone")
     token1 = first["session_token"]
 
     patch_response = await client.patch(
@@ -375,7 +375,7 @@ async def test_master_onboarding_completed_persists_and_survives_relogin(
     assert patch_response.json()["master_onboarding_completed"] is True
 
     # Re-login with the SAME telegram_id; the flag must survive the upsert.
-    second = await login_user(client, telegram_id=88048, first_name="MDone")
+    second = await login_user(client, telegram_id=89472, first_name="MDone")
     token2 = second["session_token"]
 
     me = await client.get("/api/v1/users/me", headers=auth_headers(token2))
@@ -394,7 +394,7 @@ async def test_master_onboarding_completed_null_does_not_reset_flag(
     Service drops None for JSONB-backed fields (same rule as
     onboarding_completed), so a once-true flag stays true.
     """
-    data = await login_user(client, telegram_id=88049, first_name="MNull")
+    data = await login_user(client, telegram_id=89473, first_name="MNull")
     token = data["session_token"]
 
     await client.patch(
@@ -419,7 +419,7 @@ async def test_master_onboarding_completed_null_does_not_reset_flag(
 
 async def test_phone_bio_default_none_for_new_user(client: AsyncClient) -> None:
     """A fresh user has phone=None and bio=None (keys absent)."""
-    data = await login_user(client, telegram_id=88040, first_name="NoExtra")
+    data = await login_user(client, telegram_id=89464, first_name="NoExtra")
     token = data["session_token"]
 
     response = await client.get("/api/v1/users/me", headers=auth_headers(token))
@@ -432,7 +432,7 @@ async def test_phone_bio_default_none_for_new_user(client: AsyncClient) -> None:
 
 async def test_update_phone_and_bio(client: AsyncClient) -> None:
     """PATCH phone + bio is persisted and returned (schema-on-read)."""
-    data = await login_user(client, telegram_id=88041, first_name="Filler")
+    data = await login_user(client, telegram_id=89465, first_name="Filler")
     token = data["session_token"]
 
     response = await client.patch(
@@ -462,7 +462,7 @@ async def test_clear_phone_and_bio_with_empty_string(client: AsyncClient) -> Non
     Variant (b): "" is an allowed value meaning "cleared". null is NOT used
     to clear here (the service drops null for JSONB fields).
     """
-    data = await login_user(client, telegram_id=88042, first_name="Clearer")
+    data = await login_user(client, telegram_id=89466, first_name="Clearer")
     token = data["session_token"]
 
     # Set first.
@@ -486,7 +486,7 @@ async def test_clear_phone_and_bio_with_empty_string(client: AsyncClient) -> Non
 
 async def test_phone_invalid_characters_rejected(client: AsyncClient) -> None:
     """Phone with letters → 422 (soft validation: only digits/space/+()-)."""
-    data = await login_user(client, telegram_id=88043)
+    data = await login_user(client, telegram_id=89467)
     token = data["session_token"]
 
     response = await client.patch(
@@ -500,7 +500,7 @@ async def test_phone_invalid_characters_rejected(client: AsyncClient) -> None:
 
 async def test_phone_too_few_digits_rejected(client: AsyncClient) -> None:
     """Phone with fewer than 5 digits → 422."""
-    data = await login_user(client, telegram_id=88044)
+    data = await login_user(client, telegram_id=89468)
     token = data["session_token"]
 
     response = await client.patch(
@@ -514,7 +514,7 @@ async def test_phone_too_few_digits_rejected(client: AsyncClient) -> None:
 
 async def test_bio_too_long_rejected(client: AsyncClient) -> None:
     """bio exceeding max_length (2000) → 422."""
-    data = await login_user(client, telegram_id=88045)
+    data = await login_user(client, telegram_id=89469)
     token = data["session_token"]
 
     response = await client.patch(
@@ -528,7 +528,7 @@ async def test_bio_too_long_rejected(client: AsyncClient) -> None:
 
 async def test_phone_survives_relogin(client: AsyncClient) -> None:
     """phone in credentials survives re-login (merge, like onboarding flag)."""
-    first = await login_user(client, telegram_id=88046, first_name="Keeper")
+    first = await login_user(client, telegram_id=89470, first_name="Keeper")
     token1 = first["session_token"]
     await client.patch(
         "/api/v1/users/me",
@@ -536,7 +536,7 @@ async def test_phone_survives_relogin(client: AsyncClient) -> None:
         json={"phone": "+44 20 7946 0958"},
     )
 
-    second = await login_user(client, telegram_id=88046, first_name="Keeper")
+    second = await login_user(client, telegram_id=89470, first_name="Keeper")
     token2 = second["session_token"]
 
     me = await client.get("/api/v1/users/me", headers=auth_headers(token2))
@@ -556,7 +556,7 @@ async def test_delete_me_resets_onboarding(client: AsyncClient) -> None:
     onboarding_completed reads false again; is_active stays true; previously
     saved profile data (phone) is still present.
     """
-    data = await login_user(client, telegram_id=88050, first_name="Deleter")
+    data = await login_user(client, telegram_id=89474, first_name="Deleter")
     token = data["session_token"]
 
     # Finish onboarding + set some data.
@@ -595,7 +595,7 @@ async def test_delete_me_no_auth(client: AsyncClient) -> None:
 
 async def test_notifications_default_all_true(client: AsyncClient) -> None:
     """A fresh user has all notification toggles on (defaults)."""
-    data = await login_user(client, telegram_id=88060, first_name="Notif")
+    data = await login_user(client, telegram_id=89475, first_name="Notif")
     token = data["session_token"]
 
     response = await client.get("/api/v1/users/me", headers=auth_headers(token))
@@ -618,7 +618,7 @@ async def test_notifications_partial_update_keeps_others(
     Regression guard for the nested-merge logic: a partial notifications
     payload must not wipe the flags the client did not send.
     """
-    data = await login_user(client, telegram_id=88061, first_name="Partial")
+    data = await login_user(client, telegram_id=89476, first_name="Partial")
     token = data["session_token"]
 
     response = await client.patch(
@@ -640,7 +640,7 @@ async def test_notifications_sequential_updates_accumulate(
     client: AsyncClient,
 ) -> None:
     """Two partial updates accumulate instead of overwriting each other."""
-    data = await login_user(client, telegram_id=88062, first_name="Accum")
+    data = await login_user(client, telegram_id=89477, first_name="Accum")
     token = data["session_token"]
 
     await client.patch(
@@ -667,7 +667,7 @@ async def test_notifications_persist_and_survive_relogin(
     client: AsyncClient,
 ) -> None:
     """Notification prefs persist across GET and survive re-login (merge)."""
-    first = await login_user(client, telegram_id=88063, first_name="Keeper")
+    first = await login_user(client, telegram_id=89478, first_name="Keeper")
     token1 = first["session_token"]
     await client.patch(
         "/api/v1/users/me",
@@ -676,7 +676,7 @@ async def test_notifications_persist_and_survive_relogin(
     )
 
     # Re-login with the same telegram_id.
-    second = await login_user(client, telegram_id=88063, first_name="Keeper")
+    second = await login_user(client, telegram_id=89478, first_name="Keeper")
     token2 = second["session_token"]
 
     me = await client.get("/api/v1/users/me", headers=auth_headers(token2))
@@ -692,7 +692,7 @@ async def test_notifications_coexist_with_onboarding_and_phone(
     client: AsyncClient,
 ) -> None:
     """Setting notifications must not disturb other credentials keys."""
-    data = await login_user(client, telegram_id=88064, first_name="Coexist")
+    data = await login_user(client, telegram_id=89479, first_name="Coexist")
     token = data["session_token"]
 
     # Set onboarding + phone first.
@@ -722,7 +722,7 @@ async def test_notifications_coexist_with_onboarding_and_phone(
 # ---------------------------------------------------------------------------
 async def test_update_me_set_email(client: AsyncClient) -> None:
     """A valid email is stored and exposed on the response (E11)."""
-    data = await login_user(client, telegram_id=88090, first_name="Mailer")
+    data = await login_user(client, telegram_id=89480, first_name="Mailer")
     token = data["session_token"]
 
     response = await client.patch(
@@ -740,7 +740,7 @@ async def test_update_me_set_email(client: AsyncClient) -> None:
 
 async def test_update_me_email_default_none(client: AsyncClient) -> None:
     """A user who never set an email reports email=None."""
-    data = await login_user(client, telegram_id=88091, first_name="NoMail")
+    data = await login_user(client, telegram_id=89481, first_name="NoMail")
     token = data["session_token"]
     me = await client.get("/api/v1/users/me", headers=auth_headers(token))
     body = me.json()
@@ -750,7 +750,7 @@ async def test_update_me_email_default_none(client: AsyncClient) -> None:
 
 async def test_update_me_clear_email_with_empty_string(client: AsyncClient) -> None:
     """Sending "" clears the email (phone/bio semantics), null leaves untouched."""
-    data = await login_user(client, telegram_id=88092, first_name="Clearer")
+    data = await login_user(client, telegram_id=89482, first_name="Clearer")
     token = data["session_token"]
 
     await client.patch(
@@ -769,7 +769,7 @@ async def test_update_me_clear_email_with_empty_string(client: AsyncClient) -> N
 
 async def test_update_me_invalid_email_rejected(client: AsyncClient) -> None:
     """A malformed email is rejected with 422."""
-    data = await login_user(client, telegram_id=88093, first_name="BadMail")
+    data = await login_user(client, telegram_id=89483, first_name="BadMail")
     token = data["session_token"]
 
     response = await client.patch(
@@ -782,7 +782,7 @@ async def test_update_me_invalid_email_rejected(client: AsyncClient) -> None:
 
 async def test_update_me_email_coexists_with_phone_bio(client: AsyncClient) -> None:
     """email joins phone/bio in credentials without clobbering them."""
-    data = await login_user(client, telegram_id=88094, first_name="Combo")
+    data = await login_user(client, telegram_id=89484, first_name="Combo")
     token = data["session_token"]
 
     await client.patch(

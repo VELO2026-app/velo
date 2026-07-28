@@ -36,6 +36,11 @@ practice.rescheduled:
     title: "Practice rescheduled"
     body: "📝 Practice <b>{practice_title}</b> has been rescheduled.\n\n📅 New time: {scheduled_at}\n👤 Master: {master_name}"
 
+practice.cancelled_waitlist:
+  telegram:
+    title: "Practice cancelled"
+    body: "❌ Practice <b>{practice_title}</b> {scheduled_at}, which you were waitlisted for, was cancelled by the master."
+
 # -- Waitlist --
 
 waitlist.spot_available:
@@ -81,6 +86,24 @@ wallet.withdrawal_rejected:
   telegram:
     title: "Withdrawal rejected"
     body: "Your withdrawal request for €{amount} was not approved.\n\nReason: {reason}"
+
+
+# -- Booking reminders (T1; donor reminder_* series re-keyed) --
+
+booking.reminder_24h:
+  telegram:
+    title: "Practice tomorrow"
+    body: "⏰ Reminder: <b>{practice_title}</b> starts in 24 hours.\n\n📅 {scheduled_at}\n👤 Master: {master_name}"
+
+booking.reminder_1h:
+  telegram:
+    title: "Practice in 1 hour"
+    body: "⏰ <b>{practice_title}</b> starts in 1 hour!\n\n📅 {scheduled_at}\n👤 Master: {master_name}"
+
+booking.reminder_10m:
+  telegram:
+    title: "Practice starting soon"
+    body: "🔔 <b>{practice_title}</b> starts in 10 minutes!\n\n👤 Master: {master_name}"
 
 # -- Post-practice prompts --
 

@@ -10,14 +10,20 @@
   Grouped on/off rows (label + optional sub + VSwitch) plus a «График
   уведомлений» block: a from/to delivery window (VSelect) and a VDayPicker.
 
-  BACKEND (stub → Zod): the typed contract NotificationSettings carries only the
-  four USER keys (push / practice_reminders / master_messages / support_messages)
-  — NONE of the master keys, and no schedule. So this screen holds its state
-  LOCALLY and does NOT persist yet (we don't fake a save). Zod task: extend
-  NotificationSettings(+Update) with the master keys + a `schedule {from,to,days}`
-  object, regen generated.ts, then wire persistence (a one-line updateProfile in
-  each handler below) + real push delivery / quiet-hours. Defaults below mirror
-  the operator-approved design.
+  BACKEND (Phase 6 / T1): the CATEGORY toggles and the schedule now read and
+  write the comms service through the velo proxy
+  (GET/PUT /api/v1/notifications/prefs, api/notifications.ts). Mapping, per
+  the locked grid §3 (Velo-Comms-Integration-Design.md):
+    new_booking + booking_cancelled -> category `bookings` (ONE category --
+        the two rows flip together; the split is a profile edit later)
+    reminder                        -> category `reminders`
+    msg_participants / msg_support  -> their own categories
+    schedule                        -> comms quiet hours (the proxy converts
+        the delivery-window semantics both ways)
+  The four remaining rows (new_checkin / new_feedback / ai_summary /
+  monthly_report) have NO comms types yet and stay LOCAL stubs -- explicit
+  disposition (Master-chat 2026-07-28): when their types appear, move them
+  into comms and drop the local persistence.
 
   Route: /master/profile/notifications (name 'master-notifications',
   meta.hideTabBar — back-nav settings sub-screen, no tab bar per the design).
@@ -76,11 +82,15 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import { VSwitch, VDayPicker } from '@/components/ui'
 import TimePickerSheet from '@/components/shared/TimePickerSheet.vue'
+import {
+  getNotificationPrefs,
+  updateNotificationPrefs,
+} from '@/api/notifications'
 
 const router = useRouter()
 
@@ -144,6 +154,15 @@ const GROUPS: Group[] = [
   },
 ]
 
+// toggle key -> comms category (T1). Keys absent here are local stubs.
+const CATEGORY_BY_KEY: Partial<Record<ToggleKey, string>> = {
+  new_booking: 'bookings',
+  booking_cancelled: 'bookings',
+  reminder: 'reminders',
+  msg_participants: 'msg_participants',
+  msg_support: 'msg_support',
+}
+
 // Defaults mirror the operator-approved design (all on except the monthly report).
 const toggles = reactive<Record<ToggleKey, boolean>>({
   new_booking: true,
@@ -176,20 +195,59 @@ function openTimePicker(edge: 'from' | 'to'): void {
 function onTimePicked(value: string): void {
   schedule[timePickerEdge.value] = value
   timePickerOpen.value = false
-  // TODO(Zod): persist the schedule once the contract carries it.
+  persistSchedule()
+}
+
+// --- Comms persistence (Phase 6 / T1) --------------------------------------
+// Category toggles + schedule live in comms; loading merges the server state
+// over the local defaults (stub keys keep their defaults). A failed load
+// (comms down -> 502/504, or the recipient not yet synced -> 404) leaves the
+// defaults on screen -- the settings screen degrades, it never crashes.
+async function loadPrefs(): Promise<void> {
+  try {
+    const prefs = await getNotificationPrefs()
+    for (const [key, category] of Object.entries(CATEGORY_BY_KEY)) {
+      if (category && category in prefs.categories) {
+        toggles[key as ToggleKey] = prefs.categories[category]
+      }
+    }
+    if (prefs.schedule) {
+      schedule.from = prefs.schedule.from
+      schedule.to = prefs.schedule.to
+      schedule.days = prefs.schedule.days
+    }
+  } catch (error) {
+    console.warn('notification prefs load failed', error)
+  }
+}
+onMounted(loadPrefs)
+
+function persistSchedule(): void {
+  updateNotificationPrefs({
+    schedule: { from: schedule.from, to: schedule.to, days: [...schedule.days] },
+  }).catch((error) => console.warn('schedule save failed', error))
 }
 
 // --- Handlers --------------------------------------------------------------
-// Local-only until the backend contract is extended (see file header). We do NOT
-// call updateProfile with master keys: they are not in NotificationSettingsUpdate
-// and would be a contract violation. Wiring is a one-liner once Zod lands them.
 function onToggle(key: ToggleKey, value: boolean): void {
   toggles[key] = value
-  // TODO(Zod): persist once NotificationSettings carries the master keys.
+  const category = CATEGORY_BY_KEY[key]
+  if (!category) {
+    // Local stub (no comms type yet) -- see the file header disposition.
+    return
+  }
+  if (category === 'bookings') {
+    // ONE category behind two rows -- keep them visually in sync.
+    toggles.new_booking = value
+    toggles.booking_cancelled = value
+  }
+  updateNotificationPrefs({ categories: { [category]: value } }).catch(
+    (error) => console.warn('preference save failed', error),
+  )
 }
 function onScheduleDays(days: string[]): void {
   schedule.days = days
-  // TODO(Zod): persist the schedule days once the contract carries it.
+  persistSchedule()
 }
 </script>
 

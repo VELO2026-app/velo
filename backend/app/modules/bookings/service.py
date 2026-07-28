@@ -310,6 +310,46 @@ async def create_booking(
         occurred_at=booking.created_at,
     )
 
+    # Comms (T1, dictionary §2): booking.confirmed to the booker + the
+    # reminder series anchored at practice.scheduled_at -- both ride
+    # the transactional outbox, so they exist exactly when this
+    # booking commits (ID-2). Audience expansion is velo's (ID-4): the
+    # booker is right here in the transaction context.
+    from app.core.events.notify import emit_notification
+    from app.core.events.reminders import (
+        format_event_time,
+        schedule_booking_reminders,
+    )
+    when_text = format_event_time(practice.scheduled_at)
+    await emit_notification(
+        session,
+        type="booking.confirmed",
+        target_type="user",
+        target_value=str(user.id),
+        title="Бронирование подтверждено",
+        body=(
+            f"Вы записаны на практику «{practice.title}». "
+            f"Начало: {when_text}. Мастер: {master_name}."
+        ),
+        action_data={
+            "action": "open_practice",
+            "params": {"practice_id": str(practice_id)},
+            "practice_title": practice.title,
+            "master_name": master_name,
+            "scheduled_at": when_text,
+            "paid_amount": f"{purchase.paid_cents / 100:.2f}",
+        },
+    )
+    await schedule_booking_reminders(
+        session,
+        booking_id=str(booking.id),
+        user_id=str(user.id),
+        practice_id=str(practice_id),
+        practice_title=practice.title,
+        master_name=master_name,
+        scheduled_at=practice.scheduled_at,
+    )
+
     # E21 step E: create the Zoom registrant for this booking. Best-effort,
     # never raises, never blocks -- if the meeting isn't active yet or the
     # Zoom call fails, the booking above has ALREADY succeeded; the
@@ -475,6 +515,46 @@ async def cancel_booking(
         practice=practice,
         master_name=master_name,
         occurred_at=booking.cancelled_at,
+    )
+
+    # Comms (T1, dictionary §2): booking.cancelled_by_user is
+    # addressed to the MASTER (velo expands the audience, ID-4), and
+    # the booker's pending reminder series is expired by booking_id
+    # correlation -- both in the cancellation's own transaction.
+    from app.core.events.notify import emit_notification
+    from app.core.events.reminders import (
+        cancel_booking_reminders,
+        format_event_time,
+    )
+    await emit_notification(
+        session,
+        type="booking.cancelled_by_user",
+        target_type="user",
+        target_value=str(practice.master_id),
+        title="Участник отменил бронирование",
+        body=(
+            f"Участник отменил бронирование на практику "
+            f"«{practice.title}» "
+            f"({format_event_time(practice.scheduled_at)})."
+            if practice.scheduled_at is not None
+            else f"Участник отменил бронирование на практику "
+                 f"«{practice.title}»."
+        ),
+        action_data={
+            "action": "open_practice",
+            "params": {"practice_id": str(booking.practice_id)},
+            "practice_title": practice.title,
+            "scheduled_at": (
+                format_event_time(practice.scheduled_at)
+                if practice.scheduled_at is not None
+                else ""
+            ),
+        },
+    )
+    await cancel_booking_reminders(
+        session,
+        booking_id=str(booking.id),
+        user_id=str(booking.user_id),
     )
 
     # E21 step E: best-effort Zoom-side registrant cancel. Our own row's
@@ -801,34 +881,28 @@ async def _finalize_practice_core(
         occurred_at=datetime.now(timezone.utc),
     )
 
-    # Post-practice feedback nudge: enqueue a "leave feedback" push for the
-    # attendees. Hooked here so the audience is exactly the just-resolved
-    # attendees — target=practice resolves to confirmed/attended bookings, and
-    # after this finalize the no_show/cancelled ones are excluded, leaving the
-    # attended ones. Skipped when nobody attended (no audience). The notification
-    # processor (lifespan worker) delivers it via Telegram; session commit is
-    # the caller's (P-01: no commit here).
+    # Post-practice feedback nudge (T1, ID-6): practice_outcome
+    # schedules prompt.leave_feedback via the comms reminder mechanic
+    # (a notification_request with a future scheduled_at), one per
+    # just-resolved ATTENDED booking -- velo expands the audience
+    # (ID-4; the old engine's target=practice resolver is gone with
+    # the module). Deferred (zoom-tracked) bookings never got a nudge
+    # on this path before and still do not -- parity kept, noted in
+    # the T1 report. prompt.leave_review is deliberately NOT scheduled
+    # in v1 (Master-chat 2026-07-28) -- enabling it is one more
+    # schedule call right here.
     if attended_count > 0:
-        from app.modules.notifications.models import (
-            NotificationType,
-            TargetType,
-        )
-        from app.modules.notifications.service import create_notification
+        from app.core.events.reminders import schedule_feedback_prompt
 
-        await create_notification(
-            type=NotificationType.LEAVE_FEEDBACK.value,
-            title="Как прошла практика?",
-            body=f"Поделитесь впечатлением о практике «{practice.title}».",
-            target_type=TargetType.PRACTICE.value,
-            target_value=str(practice_id),
-            session=session,
-            action_data={
-                "action": "open_feedback",
-                "params": {"practice_id": str(practice_id)},
-                "practice_title": practice.title,
-            },
-            priority=5,
-        )
+        for user_id, _booking_id, status in outcomes:
+            if status != BookingStatus.ATTENDED.value:
+                continue
+            await schedule_feedback_prompt(
+                session,
+                user_id=str(user_id),
+                practice_id=str(practice_id),
+                practice_title=practice.title,
+            )
 
     return practice
 

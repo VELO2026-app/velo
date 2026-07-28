@@ -45,13 +45,11 @@ async def setup_infrastructure():
     # Disable the background workers for the entire suite.
     # The app lifespan (started lazily by the ASGI client on first request,
     # which is always after this session-scoped fixture) reads these flags and
-    # skips create_task(run_processor) / create_task(run_autofinalizer). Tests
-    # drive the notification stages (_stage_resolve/_stage_deliver/_stage_rollup)
-    # and auto_start_practice / auto_finalize_practice manually; a live background
-    # loop would race them via FOR UPDATE SKIP LOCKED and cause flaky results
-    # (e.g. a notification stuck at processing, or a test practice finalized out
-    # from under an assertion).
-    settings.notification_processor_enabled = False
+    # skips create_task(run_autofinalizer) and friends. Tests drive
+    # auto_start_practice / auto_finalize_practice (and the comms relay's
+    # relay_pending_batch) manually; a live background loop would race them
+    # via FOR UPDATE SKIP LOCKED and cause flaky results (e.g. a test
+    # practice finalized out from under an assertion).
     settings.practice_autofinalize_enabled = False
     settings.zoom_retry_enabled = False
     settings.zoom_report_enabled = False
@@ -95,35 +93,6 @@ async def setup_infrastructure():
     # Cleanup.
     await close_redis()
     await dispose_engine()
-
-
-@pytest.fixture(scope="session", autouse=True)
-def _stub_notification_formatter():
-    """Force StubFormatter for all notification deliveries in the test suite.
-
-    After backend/.env got a real @veloappbot token (handoff §6 migration,
-    2026-05-27), the lazy-initialised TelegramFormatter in
-    app/modules/notifications/formatters.py started instantiating an aiogram
-    Bot in tests. Tests then created users with fake telegram_ids (e.g. 83050)
-    and called _stage_deliver()/_stage_rollup() — the formatter sent real HTTP
-    requests to Telegram, which replied "Bad Request: chat not found", and
-    notification tests went red.
-
-    This fixture pre-populates the module-level singletons so
-    get_formatter('telegram') short-circuits to the existing StubFormatter
-    without ever calling _init_telegram_formatter() — no real Bot, no HTTP,
-    fully deterministic.
-
-    Tests that intentionally patch get_formatter (e.g. via mock.patch in
-    TestStageDeliver.test_failed_delivery_retries) still work — they patch
-    'app.modules.notifications.processor.get_formatter' at the call site.
-    """
-    from app.modules.notifications import formatters
-    formatters._telegram_formatter = formatters._stub
-    formatters._telegram_init_attempted = True
-    yield
-    formatters._telegram_formatter = None
-    formatters._telegram_init_attempted = False
 
 
 @pytest.fixture(autouse=True)

@@ -51,7 +51,7 @@ from app.core.config import settings
 from app.core.events import emit_user_upserted  # Phase 6 / T0
 from app.core.redis import get_redis
 from app.core.telegram_links import normalize_telegram_url
-from app.modules.notifications.template_engine import normalize_language
+from app.core.i18n import normalize_language
 from app.modules.users.models import User
 
 logger = structlog.get_logger()

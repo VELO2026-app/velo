@@ -50,6 +50,11 @@ practice.rescheduled:
     title: "Практика перенесена"
     body: "📝 Практика <b>{practice_title}</b> перенесена.\n\n📅 Новое время: {scheduled_at}\n👤 Мастер: {master_name}"
 
+practice.cancelled_waitlist:
+  telegram:
+    title: "Практика отменена"
+    body: "❌ Практика <b>{practice_title}</b> {scheduled_at}, на которую вы стояли в листе ожидания, была отменена мастером."
+
 # -- Waitlist --
 
 waitlist.spot_available:
@@ -95,6 +100,24 @@ wallet.withdrawal_rejected:
   telegram:
     title: "Вывод средств отклонён"
     body: "Ваш запрос на вывод €{amount} не был одобрен.\n\nПричина: {reason}"
+
+
+# -- Booking reminders (T1; donor reminder_* series re-keyed) --
+
+booking.reminder_24h:
+  telegram:
+    title: "Практика завтра"
+    body: "⏰ Напоминание: <b>{practice_title}</b> начнётся через 24 часа.\n\n📅 {scheduled_at}\n👤 Мастер: {master_name}"
+
+booking.reminder_1h:
+  telegram:
+    title: "Практика через 1 час"
+    body: "⏰ <b>{practice_title}</b> начнётся через 1 час!\n\n📅 {scheduled_at}\n👤 Мастер: {master_name}"
+
+booking.reminder_10m:
+  telegram:
+    title: "Практика скоро начнётся"
+    body: "🔔 <b>{practice_title}</b> начнётся через 10 минут!\n\n👤 Мастер: {master_name}"
 
 # -- Post-practice prompts --
 

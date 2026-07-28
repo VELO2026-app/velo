@@ -46,12 +46,18 @@ SCHEMA_VERSION = 1
 EVENT_NOTIFICATION_REQUEST = "notification_request"
 EVENT_USER_UPSERTED = "user_upserted"
 EVENT_GROUP_CHANGED = "group_changed"
+# Additive T1 extension of the frozen 3c contract (Master-chat
+# approved 2026-07-28; ships in the comms delivery raked out FIRST --
+# provider before product, arch decision 8): expires PENDING reminders
+# by correlation, mirroring comms engine/reminders.cancel_reminders.
+EVENT_REMINDER_CANCEL = "reminder_cancel"
 
 KNOWN_EVENT_TYPES = frozenset(
     {
         EVENT_NOTIFICATION_REQUEST,
         EVENT_USER_UPSERTED,
         EVENT_GROUP_CHANGED,
+        EVENT_REMINDER_CANCEL,
     }
 )
 

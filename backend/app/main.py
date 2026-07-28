@@ -78,10 +78,10 @@ from app.modules.diary.router import (                             # Phase 8.1-8
     practices_insights_router,
 )
 from app.modules.ai.router import router as ai_router              # Phase 9.1
+from app.modules.comms_proxy.router import router as notifications_router  # Phase 6 / T1
 
 # Model imports for Alembic and relationship resolution.
 from app.modules.promos.models import Promo  # noqa: F401  # Phase 6.7
-from app.modules.notifications.models import Notification, NotificationDelivery  # noqa: F401  # Phase 7.1
 from app.modules.diary.models import (  # noqa: F401  # Phase 8.1-8.4 + redesign
     Checkin,
     Feedback,
@@ -95,11 +95,8 @@ from app.modules.zoom.models import (  # noqa: F401  # E21
 )
 # Library module has no active models yet (Phase 9.2 stub).
 
-# Notification processor (Phase 7.2).
-from app.modules.notifications.processor import run_processor  # Phase 7.2
-
-# Comms outbox relay (Phase 6 / T0) -- a SIBLING of run_processor, not
-# its replacement: the old notifications module stays live until T1.
+# Comms outbox relay (Phase 6 / T0; since T1 the ONLY notification
+# pipeline -- the old modules/notifications processor is gone, ID-1/ID-8).
 from app.core.events.relay import run_relay  # Phase 6 / T0
 from app.core.events.models import OutboxEvent  # noqa: F401  # Phase 6 / T0
 
@@ -111,9 +108,6 @@ from app.modules.zoom.retry_poller import run_zoom_retry_poller  # E21
 
 # Zoom report poller -- the attendance decision (E21 step F).
 from app.modules.zoom.report_poller import run_zoom_report_poller  # E21
-
-# Notification templates (Phase 7.3).
-from app.modules.notifications.template_engine import load_templates  # Phase 7.3
 
 
 logger = structlog.get_logger()
@@ -160,7 +154,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "if this is genuinely a test server."
         )
 
-    processor_task: asyncio.Task | None = None
     relay_task: asyncio.Task | None = None
     autofinalizer_task: asyncio.Task | None = None
     zoom_retry_task: asyncio.Task | None = None
@@ -168,27 +161,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     try:
         await init_redis()
 
-        # Phase 7.3: Load notification templates from YAML files.
-        template_count = load_templates()
-        logger.info("notification_templates_loaded", count=template_count)
-
-        # Start notification processor as background task (Phase 7.2).
-        # Gated by settings so tests can disable it -- the background loop
-        # otherwise races the manual _stage_* calls in test_notifications.py
-        # via FOR UPDATE SKIP LOCKED, causing flaky delivery skips.
-        if settings.notification_processor_enabled:
-            processor_task = asyncio.create_task(
-                run_processor(), name="notification_processor",
-            )
-        else:
-            logger.info("notification_processor_disabled")
-
-        # Start the comms outbox relay as background task (Phase 6 / T0).
-        # A sibling of run_processor above, NOT its replacement -- the old
-        # notification pipeline keeps delivering until the T1 cutover.
-        # Gated by settings for the same test-race reason as every worker
-        # here; additionally requires a configured COMMS_REDIS_URL --
-        # local dev has no comms stack, so an empty url means "no relay".
+        # Start the comms outbox relay as background task (Phase 6 / T0;
+        # since T1 the only notification pipeline -- templates, gating,
+        # and delivery live in comms, ID-1). Gated by settings for the
+        # same test-race reason as every worker here; additionally
+        # requires a configured COMMS_REDIS_URL -- local dev has no
+        # comms stack, so an empty url means "no relay".
         if settings.comms_relay_enabled and settings.comms_redis_url:
             relay_task = asyncio.create_task(
                 run_relay(), name="comms_outbox_relay",
@@ -239,14 +217,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
         yield
     finally:
-        # Stop notification processor.
-        if processor_task is not None and not processor_task.done():
-            processor_task.cancel()
-            try:
-                await processor_task
-            except asyncio.CancelledError:
-                pass
-
         # Stop comms outbox relay (Phase 6 / T0). suppress() instead of
         # the try/except-pass of the older blocks -- lint-clean (SIM105)
         # without touching the sibling shutdowns.
@@ -327,6 +297,7 @@ app.include_router(diary_feed_router)             # Diary redesign
 app.include_router(diary_router)                  # Phase 8.3
 app.include_router(practices_insights_router)     # Phase 8.4
 app.include_router(ai_router)                     # Phase 9.1
+app.include_router(notifications_router)          # Phase 6 / T1 (comms proxy)
 
 
 # ---------------------------------------------------------------------------
