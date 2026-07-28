@@ -38,6 +38,7 @@ function group(id: string, overrides: Partial<GroupListItem> = {}): GroupListIte
     kind: 'custom',
     name: `Группа ${id}`,
     members_count: 0,
+    description: null,
     ...overrides,
   }
 }

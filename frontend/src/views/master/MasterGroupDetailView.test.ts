@@ -107,8 +107,8 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue(
       customGroups([
-        { id: 'students', kind: 'students', name: 'Ученики', members_count: 0 },
-        { id: 'g1', kind: 'custom', name: 'VIP', members_count: 0 },
+        { id: 'students', kind: 'students', name: 'Ученики', members_count: 0, description: null },
+        { id: 'g1', kind: 'custom', name: 'VIP', members_count: 0, description: null },
       ]),
     )
   vi.mocked(groupsApi.setStudentTag).mockReset()
@@ -164,7 +164,9 @@ describe('MasterGroupDetailView', () => {
     it('the API answer OVERWRITES the query hint once it resolves, even to a different value', async () => {
       routeQuery.name = 'Устаревшее'
       vi.mocked(groupsApi.getGroups).mockResolvedValue(
-        customGroups([{ id: 'g1', kind: 'custom', name: 'Актуальное', members_count: 0 }]),
+        customGroups([
+          { id: 'g1', kind: 'custom', name: 'Актуальное', members_count: 0, description: null },
+        ]),
       )
       mount()
       await flush()
@@ -176,7 +178,9 @@ describe('MasterGroupDetailView', () => {
     it('a cold reload with NO query at all still resolves the correct name from the API (the bug this fixes)', async () => {
       routeQuery.name = ''
       vi.mocked(groupsApi.getGroups).mockResolvedValue(
-        customGroups([{ id: 'g1', kind: 'custom', name: 'Из API', members_count: 0 }]),
+        customGroups([
+          { id: 'g1', kind: 'custom', name: 'Из API', members_count: 0, description: null },
+        ]),
       )
       mount()
       await flush()
@@ -400,8 +404,8 @@ describe('MasterGroupDetailView', () => {
       vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([member('s1', { name: 'Анна' })]))
       vi.mocked(groupsApi.getGroups).mockResolvedValue(
         customGroups([
-          { id: 'g1', kind: 'custom', name: 'VIP', members_count: 1 },
-          { id: 'g2', kind: 'custom', name: 'Другая группа', members_count: 0 },
+          { id: 'g1', kind: 'custom', name: 'VIP', members_count: 1, description: null },
+          { id: 'g2', kind: 'custom', name: 'Другая группа', members_count: 0, description: null },
         ]),
       )
       vi.mocked(groupsApi.addGroupMember).mockResolvedValue(undefined)
@@ -457,8 +461,8 @@ describe('MasterGroupDetailView', () => {
       vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([member('s1', { name: 'Анна' })]))
       vi.mocked(groupsApi.getGroups).mockResolvedValue(
         customGroups([
-          { id: 'g1', kind: 'custom', name: 'VIP', members_count: 1 },
-          { id: 'g2', kind: 'custom', name: 'Другая', members_count: 0 },
+          { id: 'g1', kind: 'custom', name: 'VIP', members_count: 1, description: null },
+          { id: 'g2', kind: 'custom', name: 'Другая', members_count: 0, description: null },
         ]),
       )
       vi.mocked(groupsApi.removeGroupMember).mockResolvedValue(undefined)
@@ -782,7 +786,9 @@ describe('MasterGroupDetailView', () => {
       routeQuery.name = 'Временная'
       vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([]))
       vi.mocked(groupsApi.getGroups).mockResolvedValue(
-        customGroups([{ id: 'g1', kind: 'custom', name: 'Временная', members_count: 0 }]),
+        customGroups([
+          { id: 'g1', kind: 'custom', name: 'Временная', members_count: 0, description: null },
+        ]),
       )
       vi.mocked(groupsApi.deleteGroup).mockResolvedValue(undefined)
       mount()

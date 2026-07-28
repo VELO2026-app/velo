@@ -1541,8 +1541,8 @@ describe('CreatePracticeView', () => {
     it('the group multi-select renders ONLY for «Конкретные группы»', async () => {
       vi.mocked(groupsApi.getGroups).mockResolvedValue({
         items: [
-          { id: 'g1', kind: 'custom', name: 'VIP', members_count: 3 },
-          { id: 'g2', kind: 'custom', name: 'Утро', members_count: 1 },
+          { id: 'g1', kind: 'custom', name: 'VIP', members_count: 3, description: null },
+          { id: 'g2', kind: 'custom', name: 'Утро', members_count: 1, description: null },
         ],
       })
       mount()
@@ -1562,7 +1562,7 @@ describe('CreatePracticeView', () => {
 
     it('picking a group chip sends its id in group_ids', async () => {
       vi.mocked(groupsApi.getGroups).mockResolvedValue({
-        items: [{ id: 'g1', kind: 'custom', name: 'VIP', members_count: 3 }],
+        items: [{ id: 'g1', kind: 'custom', name: 'VIP', members_count: 3, description: null }],
       })
       mount()
       await flush()
@@ -1584,7 +1584,7 @@ describe('CreatePracticeView', () => {
 
     it('«Конкретные группы» with nothing picked blocks submit with a field error', async () => {
       vi.mocked(groupsApi.getGroups).mockResolvedValue({
-        items: [{ id: 'g1', kind: 'custom', name: 'VIP', members_count: 3 }],
+        items: [{ id: 'g1', kind: 'custom', name: 'VIP', members_count: 3, description: null }],
       })
       mount()
       await flush()

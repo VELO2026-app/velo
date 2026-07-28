@@ -44,12 +44,12 @@ export interface GroupListItem {
   name: string
   members_count: number
   /** Owner Q4 (ПРОМТ №610): always null for the two virtual groups and for
-   *  any custom group created before this field existed. Optional here (not
-   *  `string | null`) so the many pre-existing test mocks across the app
-   *  that construct a bare GroupListItem (CreatePracticeView.test.ts,
-   *  EditPracticeView.test.ts, etc. -- audience-group pickers unrelated to
-   *  this feature) don't all need updating for a field they never read. */
-  description?: string | null
+   *  any custom group created before this field existed. Required (not
+   *  optional) -- ПРОМТ №613: the backend always serializes this key (no
+   *  response_model_exclude_unset), so the wire shape has it present on
+   *  every response, and the hand-written type must mirror that exactly,
+   *  not just "safely" allow it to be missing. */
+  description: string | null
 }
 
 export interface GroupListResponse {
@@ -60,7 +60,7 @@ export interface GroupResponse {
   id: string
   name: string
   members_count: number
-  description?: string | null
+  description: string | null
 }
 
 export interface GroupMemberItem {
