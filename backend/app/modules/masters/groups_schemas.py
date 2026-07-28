@@ -17,6 +17,11 @@ from pydantic import BaseModel, Field, StringConstraints
 # exception. The DB column is String(100), same bound.
 GroupNameStr = Annotated[str, StringConstraints(min_length=1, max_length=100)]
 TagStr = Annotated[str, StringConstraints(min_length=1, max_length=100)]
+# Owner Q4 (ПРОМТ №610): optional, so min_length is NOT set (unlike
+# GroupNameStr) -- an empty/whitespace-only value is normalized to NULL in
+# the service (create_group), never stored as "". 500 chars: a short
+# under-the-name blurb, not a long-form Practice.description (5000).
+GroupDescriptionStr = Annotated[str, StringConstraints(max_length=500)]
 
 
 class GroupListItem(BaseModel):
@@ -32,6 +37,10 @@ class GroupListItem(BaseModel):
     kind: Literal["students", "deleted", "custom"]
     name: str
     members_count: int
+    # Owner Q4 (ПРОМТ №610): always null for the two virtual groups
+    # ("students"/"deleted" are not MasterGroup rows) and for any custom
+    # group created before this field existed.
+    description: str | None = None
 
 
 class GroupListResponse(BaseModel):
@@ -44,10 +53,22 @@ class CreateGroupRequest(BaseModel):
     """POST /masters/me/groups."""
 
     name: GroupNameStr
+    # Owner Q4 (ПРОМТ №610): optional. Blank/whitespace-only is normalized
+    # to None server-side (create_group), never persisted as "".
+    description: GroupDescriptionStr | None = None
 
 
 class RenameGroupRequest(BaseModel):
-    """PATCH /masters/me/groups/{id}."""
+    """PATCH /masters/me/groups/{id}.
+
+    Renames ONLY -- no `description` field. Owner Q4-Q6 (ПРОМТ №610) never
+    asked for an edit-description surface (only "Новая группа", i.e. create),
+    and rename_group() correspondingly never touches the column: a group's
+    description is fixed at creation. Deliberately NOT adding an unused
+    Optional[str]=None field here -- that shape can't distinguish "the
+    caller didn't send description" from "the caller wants to clear it",
+    which would silently wipe an existing description on every plain rename.
+    """
 
     name: GroupNameStr
 
@@ -58,6 +79,7 @@ class GroupResponse(BaseModel):
     id: UUID
     name: str
     members_count: int
+    description: str | None = None
 
 
 class GroupMemberItem(BaseModel):

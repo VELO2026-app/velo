@@ -53,6 +53,11 @@
     </VHeader>
 
     <div class="group-detail__content">
+      <!-- Owner Q4 (ПРОМТ №610): description under the group name (the
+           header title above). No description -> renders nothing, no
+           reserved space (v-if on a falsy empty string). -->
+      <p v-if="groupDescription" class="group-detail__description">{{ groupDescription }}</p>
+
       <div class="group-detail__search">
         <div class="group-detail__search-field">
           <VInput
@@ -262,6 +267,11 @@ const { onFieldFocus } = useKeyboardFieldScroll()
 const groupId = computed(() => String(route.params.id))
 const groupName = computed(() => String(route.query.name ?? ''))
 const headerTitle = computed(() => `Группа "${groupName.value}"`)
+// Owner Q4 (ПРОМТ №610): rides the same router-query mechanism as
+// `groupName` above (MasterGroupsView.openDetail passes both). Empty
+// string when absent -- the template's `v-if` below reserves NO space for
+// it (falsy string), matching "no dead space when empty" exactly.
+const groupDescription = computed(() => String(route.query.description ?? ''))
 
 /** Derived purely from the id string -- "students"/"deleted" are system
  *  slugs, matching the backend's own dispatch (groups_service.py). */
@@ -492,6 +502,17 @@ async function onDeleteConfirm(): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+}
+
+/* Owner Q4 (ПРОМТ №610): optional description, under the group name.
+   Absent entirely (v-if) when empty -- no placeholder text, no reserved
+   height, per the owner's own "no dead space" rule. */
+.group-detail__description {
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--velo-text-secondary);
+  line-height: 1.5;
+  margin: 0;
 }
 
 .group-detail__state {

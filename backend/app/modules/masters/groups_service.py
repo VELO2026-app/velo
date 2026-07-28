@@ -371,6 +371,7 @@ async def list_master_groups(master_id: UUID, session: AsyncSession) -> list[dic
                 "kind": "custom",
                 "name": g.name,
                 "members_count": member_counts.get(g.id, 0),
+                "description": g.description,
             }
         )
 
@@ -425,7 +426,10 @@ async def _get_custom_group_or_404(
 
 
 async def create_group(
-    master_id: UUID, name: str, session: AsyncSession,
+    master_id: UUID,
+    name: str,
+    session: AsyncSession,
+    description: str | None = None,
 ) -> MasterGroup:
     existing = (
         await session.execute(
@@ -437,7 +441,15 @@ async def create_group(
     if existing is not None:
         raise ConflictError(f"A group named '{name}' already exists")
 
-    group = MasterGroup(master_id=master_id, name=name)
+    # Owner Q4 (ПРОМТ №610): blank/whitespace-only normalizes to NULL, never
+    # stored as "" -- keeps "no description" a single, unambiguous DB state
+    # for the frontend's own "no dead space when empty" display rule.
+    normalized_description = (
+        description.strip() if description and description.strip() else None
+    )
+    group = MasterGroup(
+        master_id=master_id, name=name, description=normalized_description,
+    )
     try:
         async with session.begin_nested():
             session.add(group)

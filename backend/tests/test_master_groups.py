@@ -245,6 +245,95 @@ async def test_create_group_empty_name_422(
 
 
 @pytest.mark.asyncio
+async def test_create_group_with_description(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """Owner Q4 (ПРОМТ №610): description round-trips on create."""
+    master = await _make_verified_master(client, db_session, 99776)
+
+    resp = await client.post(
+        GROUPS_URL,
+        json={"name": "Группа с описанием", "description": "Для продвинутых учеников"},
+        headers=auth_headers(master["session_token"]),
+    )
+
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["description"] == "Для продвинутых учеников"
+
+
+@pytest.mark.asyncio
+async def test_create_group_without_description(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """Omitting `description` entirely -- the field is optional -- stores
+    NULL, same as an explicit blank/whitespace-only value (normalized in
+    create_group(), asserted here via the response, not just the DB row)."""
+    master = await _make_verified_master(client, db_session, 99777)
+    headers = auth_headers(master["session_token"])
+
+    resp = await client.post(GROUPS_URL, json={"name": "Без описания"}, headers=headers)
+    assert resp.status_code == 201
+    assert resp.json()["description"] is None
+
+    blank_resp = await client.post(
+        GROUPS_URL,
+        json={"name": "Пустое описание", "description": "   "},
+        headers=headers,
+    )
+    assert blank_resp.status_code == 201
+    assert blank_resp.json()["description"] is None
+
+
+@pytest.mark.asyncio
+async def test_rename_group_leaves_description_untouched(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """RenameGroupRequest has no `description` field (see groups_schemas.py's
+    own docstring) -- renaming a group must not disturb its description."""
+    master = await _make_verified_master(client, db_session, 99778)
+    headers = auth_headers(master["session_token"])
+    created = await client.post(
+        GROUPS_URL,
+        json={"name": "Старое", "description": "Исходное описание"},
+        headers=headers,
+    )
+    group_id = created.json()["id"]
+
+    resp = await client.patch(
+        GROUP_URL.format(group_id=group_id),
+        json={"name": "Новое"},
+        headers=headers,
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "Новое"
+    assert resp.json()["description"] == "Исходное описание"
+
+
+@pytest.mark.asyncio
+async def test_list_groups_includes_description(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """GET /masters/me/groups: the custom group carries its description;
+    the virtual «Ученики» group (never a MasterGroup row) carries None."""
+    master = await _make_verified_master(client, db_session, 99779)
+    headers = auth_headers(master["session_token"])
+    await client.post(
+        GROUPS_URL,
+        json={"name": "Листинг", "description": "Видно в списке"},
+        headers=headers,
+    )
+
+    resp = await client.get(GROUPS_URL, headers=headers)
+
+    assert resp.status_code == 200
+    items = {item["name"]: item for item in resp.json()["items"]}
+    assert items["Листинг"]["description"] == "Видно в списке"
+    assert items["Ученики"]["description"] is None
+
+
+@pytest.mark.asyncio
 async def test_two_masters_can_use_the_same_group_name(
     client: AsyncClient,
     db_session: AsyncSession,

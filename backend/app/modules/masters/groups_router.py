@@ -108,10 +108,14 @@ async def create_group_endpoint(
 ) -> GroupResponse:
     """Create a custom group. 409 on a duplicate name for this master."""
     user, _profile = master_tuple
-    group = await create_group(user.id, body.name, session)
+    group = await create_group(
+        user.id, body.name, session, description=body.description,
+    )
     await session.flush()
     await session.refresh(group)
-    return GroupResponse(id=group.id, name=group.name, members_count=0)
+    return GroupResponse(
+        id=group.id, name=group.name, members_count=0, description=group.description,
+    )
 
 
 @router.patch("/me/groups/{group_id}", response_model=GroupResponse)
@@ -127,7 +131,12 @@ async def rename_group_endpoint(
     group = await rename_group(user.id, group_id, body.name, session)
     await session.flush()
     count = await count_group_members(group.id, session)
-    return GroupResponse(id=group.id, name=group.name, members_count=count)
+    return GroupResponse(
+        id=group.id,
+        name=group.name,
+        members_count=count,
+        description=group.description,
+    )
 
 
 @router.delete("/me/groups/{group_id}", status_code=204)

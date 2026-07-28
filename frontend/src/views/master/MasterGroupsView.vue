@@ -245,10 +245,14 @@ const visibleGroups = computed((): GroupListItem[] =>
 const hiddenCount = computed((): number => Math.max(0, groups.value.length - GROUPS_PREVIEW))
 
 function openDetail(group: GroupListItem): void {
+  // Owner Q4 (ПРОМТ №610): `description` rides along the SAME router-query
+  // mechanism `name` already uses -- no new "get one group" endpoint for a
+  // value the caller already has in hand. `undefined` (not null) so vue-
+  // router omits the query key entirely rather than serializing "null".
   router.push({
     name: 'master-group-detail',
     params: { id: group.id },
-    query: { name: group.name },
+    query: { name: group.name, description: group.description ?? undefined },
   })
 }
 

@@ -43,6 +43,13 @@ export interface GroupListItem {
   kind: GroupKind
   name: string
   members_count: number
+  /** Owner Q4 (ПРОМТ №610): always null for the two virtual groups and for
+   *  any custom group created before this field existed. Optional here (not
+   *  `string | null`) so the many pre-existing test mocks across the app
+   *  that construct a bare GroupListItem (CreatePracticeView.test.ts,
+   *  EditPracticeView.test.ts, etc. -- audience-group pickers unrelated to
+   *  this feature) don't all need updating for a field they never read. */
+  description?: string | null
 }
 
 export interface GroupListResponse {
@@ -53,6 +60,7 @@ export interface GroupResponse {
   id: string
   name: string
   members_count: number
+  description?: string | null
 }
 
 export interface GroupMemberItem {
@@ -127,10 +135,15 @@ export function getGroups(): Promise<GroupListResponse> {
   return api.get<GroupListResponse>('/api/v1/masters/me/groups')
 }
 
-/** POST /api/v1/masters/me/groups -- create a custom group. 409 on a
- *  duplicate name for this master (surface via extractApiError). */
-export function createGroup(name: string): Promise<GroupResponse> {
-  return api.post<GroupResponse>('/api/v1/masters/me/groups', { name })
+/** POST /api/v1/masters/me/groups -- create a custom group. `description`
+ *  is optional (Owner Q4, ПРОМТ №610); blank/whitespace is normalized to
+ *  null server-side. 409 on a duplicate name for this master (surface via
+ *  extractApiError). */
+export function createGroup(name: string, description?: string): Promise<GroupResponse> {
+  return api.post<GroupResponse>('/api/v1/masters/me/groups', {
+    name,
+    description: description || undefined,
+  })
 }
 
 /** PATCH /api/v1/masters/me/groups/{id} -- rename a custom group. */

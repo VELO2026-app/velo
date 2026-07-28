@@ -19,7 +19,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -45,6 +45,14 @@ class MasterGroup(UUIDMixin, Base):
         nullable=False,
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
+    # Owner Q4 (ПРОМТ №610): optional free-text blurb, set at create time only
+    # -- rename_group() never touches it (see groups_service.py). Additive +
+    # nullable, no server_default, no backfill -- safe on a live prod table
+    # (matches taxonomy_models.py's own additive-column discipline). Text,
+    # not String(N), same choice as Practice.description -- the 500-char cap
+    # lives at the schema layer (groups_schemas.py's GroupDescriptionStr),
+    # not the column.
+    description: Mapped[str | None] = mapped_column(Text, default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

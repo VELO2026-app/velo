@@ -77,6 +77,26 @@ describe('MasterGroupCreateView', () => {
     expect(host?.querySelector('.velo-section-title')?.textContent).toBe('Основное')
   })
 
+  it('owner Q6 (ПРОМТ №610): shows the required-fields legend', () => {
+    mount()
+
+    expect(host?.textContent).toContain('— поля, обязательные для заполнения')
+  })
+
+  it('owner Q6/Q4 (ПРОМТ №610): «Название» carries the required seal, «Описание» does not', () => {
+    mount()
+
+    expect(host?.querySelector('.v-input__seal')).not.toBeNull()
+    expect(host?.querySelector('.v-textarea__seal')).toBeNull()
+  })
+
+  it('owner Q4 (ПРОМТ №610): renders an optional «Описание» textarea', () => {
+    mount()
+
+    expect(host?.textContent).toContain('Описание')
+    expect(host?.querySelector('textarea')).not.toBeNull()
+  })
+
   it('an empty name toasts and does not call createGroup', async () => {
     mount()
 
@@ -87,11 +107,12 @@ describe('MasterGroupCreateView', () => {
     expect(groupsApi.createGroup).not.toHaveBeenCalled()
   })
 
-  it('on success: calls createGroup with the trimmed name, toasts, and navigates to the list', async () => {
+  it('on success: calls createGroup with the trimmed name + description, toasts, and navigates to the list', async () => {
     vi.mocked(groupsApi.createGroup).mockResolvedValue({
       id: 'g1',
       name: 'VIP',
       members_count: 0,
+      description: null,
     })
     mount()
 
@@ -100,9 +121,29 @@ describe('MasterGroupCreateView', () => {
     submitBtn()?.click()
     await flush()
 
-    expect(groupsApi.createGroup).toHaveBeenCalledWith('VIP')
+    expect(groupsApi.createGroup).toHaveBeenCalledWith('VIP', '')
     expect(toastSuccess).toHaveBeenCalledWith('Группа создана')
     expect(push).toHaveBeenCalledWith({ name: 'master-groups' })
+  })
+
+  it('on success with a description: calls createGroup with the trimmed description too (owner Q4, ПРОМТ №610)', async () => {
+    vi.mocked(groupsApi.createGroup).mockResolvedValue({
+      id: 'g1',
+      name: 'VIP',
+      members_count: 0,
+      description: 'Для продвинутых',
+    })
+    mount()
+
+    nameInput()!.value = 'VIP'
+    nameInput()!.dispatchEvent(new Event('input'))
+    const descField = host?.querySelector<HTMLTextAreaElement>('textarea')
+    descField!.value = '  Для продвинутых  '
+    descField!.dispatchEvent(new Event('input'))
+    submitBtn()?.click()
+    await flush()
+
+    expect(groupsApi.createGroup).toHaveBeenCalledWith('VIP', 'Для продвинутых')
   })
 
   it('409 duplicate name: shows the inline field error AND a toast, does not navigate', async () => {
