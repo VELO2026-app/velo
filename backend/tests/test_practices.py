@@ -2067,3 +2067,36 @@ async def test_flags_booked_paid(
     item = next(i for i in resp.json()["items"] if i["id"] == pid)
     assert item["is_booked"] is True
     assert item["is_paid"] is True
+
+
+# ---------------------------------------------------------------------------
+# SECURITY (C2 part b): parent_practice_id is not a mutable attribute
+# ---------------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_update_ignores_parent_practice_id(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """parent_practice_id is series identity, dropped from
+    UpdatePracticeRequest -- a PATCH that tries to set it must be
+    silently ignored (extra='ignore'), never re-pointing the practice
+    at another series. Belt to C2's owner-scoped cascade (part a)."""
+    auth = await _make_verified_master(client, db_session)
+    pid = await _create_and_publish(client, auth)
+
+    # A PATCH carrying parent_practice_id (a random target) must succeed
+    # while leaving parent_practice_id untouched (still None).
+    resp = await client.patch(
+        f"{PRACTICES_URL}/{pid}",
+        json={"title": "Renamed", "parent_practice_id": str(uuid4())},
+        headers=auth_headers(auth["session_token"]),
+    )
+    assert resp.status_code == 200
+
+    practice = (
+        await db_session.execute(
+            select(Practice).where(Practice.id == UUID(pid))
+        )
+    ).scalar_one()
+    assert practice.parent_practice_id is None
+    assert practice.title == "Renamed"  # the legit field DID change

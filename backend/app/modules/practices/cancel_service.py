@@ -273,6 +273,20 @@ async def cancel_practice(
                     select(Practice)
                     .where(
                         root_expr == root_id,
+                        # SECURITY (C2): scope the cascade to the actor's
+                        # OWN practices. root_id derives from
+                        # parent_practice_id, which is client-writable
+                        # via UpdatePracticeRequest -- without this
+                        # filter a master could set their practice's
+                        # parent to another master's series root and
+                        # cancel+refund that whole series (cross-tenant
+                        # mass refund, ledger debit, audit under the
+                        # attacker's actor_id). The owner check on
+                        # `primary` above does not cover the siblings.
+                        # Defense-in-depth: holds even once
+                        # parent_practice_id is removed from the update
+                        # schema (the other half of the fix).
+                        Practice.master_id == user.id,
                         Practice.id != primary.id,
                         Practice.scheduled_at >= primary.scheduled_at,
                         Practice.status.in_(_CANCELLABLE_PRACTICE_STATUSES),

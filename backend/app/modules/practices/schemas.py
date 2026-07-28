@@ -398,7 +398,14 @@ class UpdatePracticeRequest(BaseModel):
     zoom_link: str | None = Field(
         default=None, max_length=settings.practice_zoom_link_max_length,
     )
-    parent_practice_id: UUID | None = None
+    # parent_practice_id is DELIBERATELY absent (C2): it is the series
+    # identity, set once by the series generator at creation time, not a
+    # mutable attribute. It used to be here and flowed into the update
+    # setattr loop -> a client could re-point a practice at another
+    # master's series root. The cascade is now owner-scoped (C2 part a),
+    # and dropping it from the schema removes the attack surface at the
+    # edge: with the model's default extra="ignore", a sent
+    # parent_practice_id is silently dropped and never reaches setattr.
     status: str | None = None
 
     # -- Pricing (Phase 4.3/4.4) --

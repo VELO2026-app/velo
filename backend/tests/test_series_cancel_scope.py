@@ -408,3 +408,63 @@ async def test_cancel_this_and_future_on_completed_root_rejected(
 
     resp = await _cancel(client, auth, root_id, scope="this_and_future")
     assert resp.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# SECURITY (C2): cross-tenant series cancel via forged parent_practice_id
+# ---------------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_this_and_future_cannot_cross_tenant_via_forged_parent(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """A master must not cancel another master's series by pointing their
+    own practice's parent_practice_id at the victim's series root.
+
+    root_id in cancel_practice derives from parent_practice_id, which is
+    client-influenceable. The sibling fan-out is scoped to the actor's OWN
+    practices (Practice.master_id == user.id), so even a forged parent
+    cancels nothing that is not the attacker's. We forge the parent at the
+    DB level -- that is the strongest form of the attack (it models the
+    schema hole AND any other route to a bad parent), and the fix must
+    hold against it, not merely against the API.
+    """
+    attacker = await _make_verified_master(
+        client, db_session, telegram_id=64001,
+    )
+    victim = await _make_verified_master(
+        client, db_session, telegram_id=64002,
+    )
+
+    # Victim publishes a real 4-occurrence series.
+    victim_root = await _create_and_publish(
+        client, victim,
+        recurrence={"period": "daily", "end": "after_count", "count": 4},
+    )
+
+    # Attacker publishes a lone practice, then forges its parent to point
+    # at the victim's series root.
+    attacker_practice = await _create_and_publish(client, attacker)
+    await db_session.execute(
+        update(Practice)
+        .where(Practice.id == UUID(attacker_practice))
+        .values(parent_practice_id=UUID(victim_root))
+    )
+    await db_session.commit()
+
+    resp = await _cancel(
+        client, attacker, attacker_practice, scope="this_and_future",
+    )
+    assert resp.status_code == 200
+
+    # The victim's ENTIRE series is untouched: root + every child stays
+    # in a live (non-cancelled) status.
+    victim_map = await _status_map(client, victim)
+    victim_ids = [victim_root, *await _children_ids(client, victim, victim_root)]
+    assert len(victim_ids) == 4
+    for pid in victim_ids:
+        assert victim_map[pid] != PracticeStatus.CANCELLED.value
+
+    # The attacker's own practice IS cancelled (their legitimate action).
+    attacker_map = await _status_map(client, attacker)
+    assert attacker_map[attacker_practice] == PracticeStatus.CANCELLED.value

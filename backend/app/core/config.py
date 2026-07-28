@@ -637,6 +637,39 @@ class Settings(BaseSettings):
                 "Use INFO or higher."
             )
 
+        # COMMS integration (Phase 6): paired-secret gate. comms may not
+        # be installed on a given box (empty url = feature off, degrades
+        # cleanly), so we do NOT force comms config everywhere. But a
+        # PARTIAL config is a silent failure the operator cannot see,
+        # which is exactly what happened to notifications before: a set
+        # api_url with an empty token ships "Authorization: Bearer " as
+        # a valid header (comms 401 -> the bell breaks for everyone), and
+        # a relay enabled by flag with an empty redis_url just never
+        # starts (INFO log, no error). Enforce the pairing in production:
+        # if one half of a comms surface is configured, its partner must
+        # be too. (Dev stays fully optional.)
+        if not is_dev:
+            if self.comms_api_url and not self.comms_service_token:
+                raise ValueError(
+                    "COMMS_API_URL is set but COMMS_SERVICE_TOKEN is "
+                    "empty: the proxy would send an empty Bearer token "
+                    "and comms would 401, logging out every user who "
+                    "opens the bell. Set the token or clear the URL."
+                )
+            if self.comms_service_token and not self.comms_api_url:
+                raise ValueError(
+                    "COMMS_SERVICE_TOKEN is set but COMMS_API_URL is "
+                    "empty: half-configured comms proxy. Set the URL or "
+                    "clear the token."
+                )
+            if self.comms_relay_enabled and not self.comms_redis_url:
+                raise ValueError(
+                    "comms_relay_enabled is true but COMMS_REDIS_URL is "
+                    "empty: the outbox relay would silently never start "
+                    "and domain events would pile up undelivered. Set "
+                    "COMMS_REDIS_URL or set COMMS_RELAY_ENABLED=false."
+                )
+
         return self
 
     # -- Pydantic Settings Config --

@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.waitlist.models import Waitlist
@@ -440,6 +440,74 @@ async def test_confirm_waitlist_success(
     data = confirm_resp.json()
     assert data["waitlist_entry"]["status"] == "converted"
     assert data["booking_id"] is not None
+
+
+@pytest.mark.asyncio
+async def test_confirm_waitlist_creates_zoom_registrant(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """C5: a user who gets in off the waitlist must be registered for
+    the Zoom meeting, exactly like the direct create_booking path --
+    otherwise they pay but never get a join link. With an ACTIVE
+    meeting the registrant lands 'registered'."""
+    from uuid import UUID as _UUID
+
+    from app.modules.zoom.models import (
+        ZoomMeeting,
+        ZoomMeetingStatus,
+        ZoomRegistrant,
+    )
+
+    master = await _make_verified_master(client, db_session)
+    pid = await _create_scheduled_practice(
+        client, master, max_participants=1,
+    )
+    # Publishing already created a ZoomMeeting row (E21 wiring), in a
+    # pre-active status since no real Zoom call runs in tests. Drive it
+    # to ACTIVE so the waitlist registrant lands 'registered' rather
+    # than queued 'pending'.
+    await db_session.execute(
+        update(ZoomMeeting)
+        .where(ZoomMeeting.practice_id == _UUID(pid))
+        .values(
+            status=ZoomMeetingStatus.ACTIVE.value,
+            zoom_meeting_id="99887766",
+        )
+    )
+    await db_session.commit()
+
+    filler = await _fill_practice(client, pid, telegram_id=62130)
+    user = await login_user(
+        client, telegram_id=62131, first_name="Waiter",
+    )
+    headers = auth_headers(user["session_token"])
+
+    wid = (
+        await client.post(
+            WAITLIST_JOIN_URL.format(practice_id=pid), headers=headers,
+        )
+    ).json()["id"]
+    await client.delete(
+        f"{BOOKINGS_URL}/{filler['booking_id']}",
+        headers=auth_headers(filler["session_token"]),
+    )
+    confirm_resp = await client.post(
+        f"{WAITLIST_URL}/{wid}/confirm", headers=headers,
+    )
+    assert confirm_resp.status_code == 201
+
+    # A registrant row now exists for the converted user's booking.
+    user_id = user["user"]["id"]
+    registrant = (
+        await db_session.execute(
+            select(ZoomRegistrant).where(
+                ZoomRegistrant.user_id == _UUID(user_id),
+            )
+        )
+    ).scalar_one_or_none()
+    assert registrant is not None
+    assert registrant.status == "registered"
 
 
 @pytest.mark.asyncio

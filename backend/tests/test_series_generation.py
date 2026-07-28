@@ -27,7 +27,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -636,3 +636,61 @@ async def test_series_until_date_in_past_rejected_on_publish(
         headers=auth_headers(auth["session_token"]),
     )
     assert publish.status_code == 400, publish.text
+
+
+# ---------------------------------------------------------------------------
+# SECURITY (C1): a 'groups' series must restrict its CHILDREN too
+# ---------------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_groups_series_children_inherit_audience_and_groups(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Publishing a groups-restricted series must give every child the
+    same restriction: audience_kind='groups' AND a copy of the root's
+    target-group rows. Without this the children default to PUBLIC and
+    carry no group rows -- anyone could see and book occurrences the
+    master restricted (access + revenue leak)."""
+    from app.modules.masters.groups_models import MasterGroup
+    from app.modules.practices.models import (
+        AudienceKind,
+        Practice,
+        PracticeAudienceGroup,
+    )
+
+    auth = await _make_verified_master(client, db_session)
+    master_id = auth["user"]["id"]
+
+    # A real custom group owned by this master.
+    group = MasterGroup(master_id=UUID(master_id), name="Inner circle")
+    db_session.add(group)
+    await db_session.commit()
+
+    root_id = await _create_series_and_publish(
+        client, auth,
+        recurrence={"period": "daily", "end": "after_count", "count": 4},
+        audience_kind="groups",
+        group_ids=[str(group.id)],
+    )
+
+    # Every child (parent_practice_id == root) is groups-restricted and
+    # has a PracticeAudienceGroup row for the same group.
+    children = (
+        await db_session.execute(
+            select(Practice).where(
+                Practice.parent_practice_id == UUID(root_id),
+            )
+        )
+    ).scalars().all()
+    assert len(children) == 3  # 4 occurrences: root + 3 children
+
+    for child in children:
+        assert child.audience_kind == AudienceKind.GROUPS.value
+        child_groups = (
+            await db_session.execute(
+                select(PracticeAudienceGroup.group_id).where(
+                    PracticeAudienceGroup.practice_id == child.id,
+                )
+            )
+        ).scalars().all()
+        assert child_groups == [group.id]

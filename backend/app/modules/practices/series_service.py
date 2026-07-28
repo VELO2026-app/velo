@@ -10,6 +10,7 @@
 
 import copy
 from datetime import UTC, date, datetime, timedelta
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import structlog
@@ -18,7 +19,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.exceptions import BadRequestError
-from app.modules.practices.models import Practice, PracticeStatus, PracticeType
+from app.modules.practices.models import (
+    AudienceKind,
+    Practice,
+    PracticeAudienceGroup,
+    PracticeStatus,
+    PracticeType,
+)
 
 logger = structlog.get_logger()
 
@@ -146,6 +153,13 @@ def _build_child_occurrence(
         is_free=root.is_free,
         price_cents=root.price_cents,
         currency=root.currency,
+        # SECURITY (C1): the audience gate is per-occurrence. Without
+        # copying this, a child defaults to PUBLIC (column default), so
+        # a private/groups series would publish public children --
+        # anyone could see and book what the master restricted. The
+        # target GROUP rows live in a separate table and are copied
+        # after flush in generate_series_occurrences.
+        audience_kind=root.audience_kind,
     )
     taxonomy = (root.data or {}).get("taxonomy")
     if taxonomy is not None:
@@ -239,12 +253,39 @@ async def generate_series_occurrences(
     # queues the registrant as pending until the meeting goes active.
     from app.modules.zoom.models import ZoomMeeting, ZoomMeetingStatus
 
+    # SECURITY (C1): a 'groups' series restricts its audience to the
+    # root's target custom groups, stored in PracticeAudienceGroup
+    # (separate table, not copied by _build_child_occurrence). Load the
+    # root's group ids ONCE; each child gets its own copy after flush so
+    # the audience gate (assert_viewer_can_access_practice) resolves the
+    # same restriction per occurrence. Without this, children of a
+    # groups series would have NO group rows -> visible/bookable by
+    # anyone.
+    root_group_ids: list[UUID] = []
+    if root.audience_kind == AudienceKind.GROUPS.value:
+        root_group_ids = list(
+            (
+                await session.execute(
+                    select(PracticeAudienceGroup.group_id).where(
+                        PracticeAudienceGroup.practice_id == root.id,
+                    )
+                )
+            ).scalars().all()
+        )
+
     children: list[Practice] = []
     for start_utc in starts:
         child = _build_child_occurrence(root, start_utc)
         session.add(child)
         await session.flush()
         children.append(child)
+        for group_id in root_group_ids:
+            session.add(
+                PracticeAudienceGroup(
+                    practice_id=child.id,
+                    group_id=group_id,
+                )
+            )
         session.add(
             ZoomMeeting(
                 practice_id=child.id,

@@ -443,6 +443,17 @@ async def confirm_waitlist(
         session=session,
     )
 
+    # Zoom registrant (C5): confirm_waitlist is the OTHER booking-
+    # creation path besides create_booking, which registers its booker
+    # for the meeting (bookings/service.py). Without this, a user who
+    # got in off the waitlist pays but never gets a join link -> shows
+    # up and cannot enter. create_registrant_for_booking NEVER RAISES,
+    # is idempotent, and self-handles the series-child (no meeting yet
+    # -> None) and pending-meeting (queued for the retry poller) cases,
+    # so it is safe to call unconditionally here.
+    from app.modules.zoom.service import create_registrant_for_booking
+    await create_registrant_for_booking(booking, user_obj, session)
+
     entry.status = WaitlistStatus.CONVERTED.value
 
     # Comms (T1): this is the OTHER booking-creation path besides
