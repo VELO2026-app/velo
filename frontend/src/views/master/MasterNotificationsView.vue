@@ -207,8 +207,11 @@ async function loadPrefs(): Promise<void> {
   try {
     const prefs = await getNotificationPrefs()
     for (const [key, category] of Object.entries(CATEGORY_BY_KEY)) {
-      if (category && category in prefs.categories) {
-        toggles[key as ToggleKey] = prefs.categories[category]
+      // noUncheckedIndexedAccess: read once, narrow on the value --
+      // an `in` guard does not narrow indexed access.
+      const enabled = category ? prefs.categories[category] : undefined
+      if (enabled !== undefined) {
+        toggles[key as ToggleKey] = enabled
       }
     }
     if (prefs.schedule) {
