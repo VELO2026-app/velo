@@ -497,8 +497,12 @@ describe('MasterGroupDetailView', () => {
     })
   })
 
-  describe('empty-group invite CTA (P4, ПРОМТ №593)', () => {
-    it('an empty CUSTOM group shows «Пригласить в группу», which creates + copies + toasts', async () => {
+  describe('invite via header menu on an EMPTY group (owner Q8, ПРОМТ №610 -- the old empty-state CTA button was removed as a duplicate; this is now the only path)', () => {
+    function headerMenuTrigger(): HTMLElement | null {
+      return host?.querySelector<HTMLElement>('.v-header__right .v-menu__trigger') ?? null
+    }
+
+    it('an empty CUSTOM group: header menu invite creates + copies + toasts', async () => {
       routeParams.id = 'g1' // custom
       vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([]))
       vi.mocked(groupsApi.createGroupInvite).mockResolvedValue({
@@ -507,52 +511,15 @@ describe('MasterGroupDetailView', () => {
       mount()
       await flush()
 
-      const invite = Array.from(host?.querySelectorAll<HTMLElement>('button') ?? []).find(
-        (b) => b.textContent?.trim() === 'Пригласить в группу',
-      )
-      expect(invite).toBeDefined()
-      invite?.click()
+      headerMenuTrigger()?.click()
+      await flush()
+      const inviteItem = Array.from(host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? [])[0]
+      inviteItem?.click()
       await flush()
 
       expect(groupsApi.createGroupInvite).toHaveBeenCalledWith('g1')
       expect(writeText).toHaveBeenCalledWith('https://t.me/velo_bot?startapp=group_invite__xyz')
       expect(toastSuccess).toHaveBeenCalledWith('Ссылка скопирована')
-    })
-
-    it('never renders on the system groups («Ученики»/«Удалённые»), even when empty', async () => {
-      for (const id of ['students', 'deleted']) {
-        routeParams.id = id
-        vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([]))
-        mount()
-        await flush()
-
-        const invite = Array.from(host?.querySelectorAll<HTMLElement>('button') ?? []).find(
-          (b) => b.textContent?.trim() === 'Пригласить в группу',
-        )
-        expect(invite).toBeUndefined()
-
-        app?.unmount()
-        host?.remove()
-      }
-    })
-
-    it('does not render while a search filter is active (empty-search offers "clear", not "invite")', async () => {
-      vi.useFakeTimers()
-      routeParams.id = 'g1'
-      vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([]))
-      mount()
-      await flush()
-
-      const input = host?.querySelector<HTMLInputElement>('input')
-      input!.value = 'zzz'
-      input!.dispatchEvent(new Event('input'))
-      vi.advanceTimersByTime(300)
-      await flush()
-
-      const invite = Array.from(host?.querySelectorAll<HTMLElement>('button') ?? []).find(
-        (b) => b.textContent?.trim() === 'Пригласить в группу',
-      )
-      expect(invite).toBeUndefined()
     })
 
     it('a failed invite create surfaces an error toast', async () => {
@@ -562,14 +529,26 @@ describe('MasterGroupDetailView', () => {
       mount()
       await flush()
 
-      const invite = Array.from(host?.querySelectorAll<HTMLElement>('button') ?? []).find(
-        (b) => b.textContent?.trim() === 'Пригласить в группу',
-      )
-      invite?.click()
+      headerMenuTrigger()?.click()
+      await flush()
+      const inviteItem = Array.from(host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? [])[0]
+      inviteItem?.click()
       await flush()
 
       expect(writeText).not.toHaveBeenCalled()
       expect(toastError).toHaveBeenCalledWith('Не удалось создать ссылку')
+    })
+
+    it('the empty state renders no invite button anymore (removed duplicate, header menu is the single entry point)', async () => {
+      routeParams.id = 'g1'
+      vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([]))
+      mount()
+      await flush()
+
+      const invite = Array.from(host?.querySelectorAll<HTMLElement>('button') ?? []).find(
+        (b) => b.textContent?.trim() === 'Пригласить в группу',
+      )
+      expect(invite).toBeUndefined()
     })
   })
 

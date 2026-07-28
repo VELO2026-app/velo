@@ -162,21 +162,21 @@ describe('MasterGroupsView', () => {
   })
 
   describe('preview cap + expander', () => {
-    it('shows only the first 10 and hides the rest behind "+ ещё N групп"', async () => {
+    it('shows only the first 5 and hides the rest behind "+ ещё N групп"', async () => {
       vi.mocked(groupsApi.getGroups).mockResolvedValue({
-        items: Array.from({ length: 13 }, (_, i) => group(`g${i}`, { name: `Группа${i}` })),
+        items: Array.from({ length: 8 }, (_, i) => group(`g${i}`, { name: `Группа${i}` })),
       })
       mount()
       await flush()
 
-      expect(rows()).toHaveLength(10)
-      // 13 - 10 = 3 hidden -> plural('группы') for count=3.
+      expect(rows()).toHaveLength(5)
+      // 8 - 5 = 3 hidden -> plural('группы') for count=3.
       expect(text()).toContain('+ ещё 3 группы')
     })
 
     it('tapping the expander reveals the full list', async () => {
       vi.mocked(groupsApi.getGroups).mockResolvedValue({
-        items: Array.from({ length: 13 }, (_, i) => group(`g${i}`, { name: `Группа${i}` })),
+        items: Array.from({ length: 8 }, (_, i) => group(`g${i}`, { name: `Группа${i}` })),
       })
       mount()
       await flush()
@@ -187,7 +187,7 @@ describe('MasterGroupsView', () => {
       pill?.click()
       await flush()
 
-      expect(rows()).toHaveLength(13)
+      expect(rows()).toHaveLength(8)
     })
   })
 

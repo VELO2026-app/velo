@@ -15,12 +15,18 @@
   G2 (ПРОМТ №609, owner-ruled): invite/rename/delete MOVED here from
   MasterGroupsView's per-card buttons -- reachable from this header's own
   «⋯» menu for ANY custom group, empty or not (the old per-card buttons
-  only worked when the group already had ≥1 member visible in the list;
-  the empty-group invite CTA below still works too, this menu is the
-  universal path). Same VMenu/VMenuItem idiom the per-member rows on this
-  exact screen already use, just one level up (the group itself, not a
-  member). Virtual groups («Ученики»/«Удалённые») get none of the three --
-  matches the backend's 400-on-system-slug.
+  only worked when the group already had ≥1 member visible in the list).
+  Same VMenu/VMenuItem idiom the per-member rows on this exact screen
+  already use, just one level up (the group itself, not a member). Virtual
+  groups («Ученики»/«Удалённые») get none of the three -- matches the
+  backend's 400-on-system-slug.
+
+  Owner Q8 (ПРОМТ №610): the empty-state's own "Пригласить в группу" CTA
+  -- a leftover from before the header menu existed (P4, ПРОМТ №593) --
+  removed as a duplicate of that same header menu action, now the single
+  invite entry point. `onInviteClick`'s "Ссылка скопирована" toast already
+  lives on THIS screen (it always has, since the header menu invite calls
+  the same function) -- nothing to move.
 -->
 
 <template>
@@ -133,21 +139,14 @@
           icon="group"
           :title="search ? 'Никого не найдено' : 'Участников пока нет'"
           :description="search ? 'Попробуйте изменить запрос' : emptyDescription"
-        >
-          <!-- Empty-group invite CTA (P4, ПРОМТ №593): only for an actually
-               empty CUSTOM group (no search filter active, kind==='custom')
-               -- matches the backend's 400-on-system-slug, and a search-empty
-               state should offer "clear the search", not "invite someone". -->
-          <VButton
-            v-if="!search && kind === 'custom'"
-            size="sm"
-            variant="outline"
-            :loading="inviting"
-            @click="onInviteClick"
-          >
-            Пригласить в группу
-          </VButton>
-        </VEmptyState>
+        />
+        <!-- Empty-group invite CTA REMOVED here (owner Q8, ПРОМТ №610): the
+             header's own «⋯» menu (line ~30 above, kind==='custom') is now
+             the SINGLE invite entry point for any custom group, empty or
+             not -- this button duplicated it (G2, ПРОМТ №609, already made
+             the header menu path universal; this CTA just hadn't been
+             cleaned up yet). `onInviteClick`/`inviting` stay -- still used
+             by `onHeaderInviteClick` above. -->
       </template>
     </div>
 

@@ -230,9 +230,14 @@ watch(search, (value) => {
   searchTimer = setTimeout(loadSearch, 300)
 })
 
-// Show the first 10; the rest hide behind "+ ещё N групп" (mirrors
-// MasterStudentsView's identical STUDENTS_PREVIEW pattern).
-const GROUPS_PREVIEW = 10
+// Show the first 5 (owner Q7, ПРОМТ №610 -- was 10); the rest hide behind
+// the outlined "+ ещё N групп" pill (VShowMore already built this exact
+// recipe -- primary stroke + primary text, see that file -- no visual
+// change needed there, only this constant). Never applies while a search
+// query is active: that's a structurally separate branch above
+// (`v-if="search.trim()"`), which renders ALL of `matchingGroups`
+// un-truncated -- search results are never hidden behind this expander.
+const GROUPS_PREVIEW = 5
 const expanded = ref(false)
 const visibleGroups = computed((): GroupListItem[] =>
   expanded.value ? groups.value : groups.value.slice(0, GROUPS_PREVIEW),
