@@ -826,3 +826,57 @@ async def test_detail_of_groups_practice_hidden_from_non_member(
         headers=auth_headers(stranger["session_token"]),
     )
     assert stranger_detail.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_detail_still_visible_to_booked_non_member(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """A non-member who ALREADY holds a booking keeps access to the
+    detail view even after the audience is narrowed against them -- the
+    endpoint feeds PracticeLiveView/CheckinView for a booked non-owner,
+    and access they paid for must not be revoked retroactively (R2)."""
+    from uuid import UUID as _UUID
+
+    from app.modules.bookings.models import Booking, BookingStatus
+
+    master = await _make_verified_master(client, db_session, 99343)
+    headers = auth_headers(master["session_token"])
+    group = await _custom_group(db_session, master["user"]["id"], name="Круг")
+    await db_session.commit()
+
+    created = await client.post(
+        PRACTICES_URL,
+        json=_practice_body(
+            audience_kind=AudienceKind.GROUPS.value,
+            group_ids=[str(group.id)],
+        ),
+        headers=headers,
+    )
+    assert created.status_code == 201
+    pid = created.json()["id"]
+    pub = await client.patch(
+        f"{PRACTICES_URL}/{pid}",
+        json={"status": "scheduled"},
+        headers=headers,
+    )
+    assert pub.status_code == 200
+
+    # A non-member who nonetheless holds a booking (e.g. booked while
+    # public, before the master narrowed the audience).
+    booked = await login_user(client, telegram_id=99344, first_name="Booked")
+    db_session.add(
+        Booking(
+            practice_id=_UUID(pid),
+            user_id=_UUID(booked["user"]["id"]),
+            status=BookingStatus.CONFIRMED.value,
+        )
+    )
+    await db_session.commit()
+
+    detail = await client.get(
+        f"{PRACTICES_URL}/{pid}",
+        headers=auth_headers(booked["session_token"]),
+    )
+    # 200, not 404 -- they keep the practice they paid for.
+    assert detail.status_code == 200

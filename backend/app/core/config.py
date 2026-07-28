@@ -645,10 +645,20 @@ class Settings(BaseSettings):
         # api_url with an empty token ships "Authorization: Bearer " as
         # a valid header (comms 401 -> the bell breaks for everyone), and
         # a relay enabled by flag with an empty redis_url just never
-        # starts (INFO log, no error). Enforce the pairing in production:
-        # if one half of a comms surface is configured, its partner must
-        # be too. (Dev stays fully optional.)
-        if not is_dev:
+        # starts (INFO log, no error). Enforce the pairing in production,
+        # but ONLY when comms is actually INTENDED on this box: a box with
+        # no comms config at all (every field empty) is the "comms not
+        # installed" case, which must degrade cleanly -- the relay simply
+        # never starts on an empty redis_url. Gating on the default
+        # comms_relay_enabled=True alone would stop every comms-less prod
+        # box from starting, including in-place upgrades of existing boxes
+        # whose .env has no COMMS_* keys yet. (Dev stays fully optional.)
+        comms_intended = bool(
+            self.comms_api_url
+            or self.comms_service_token
+            or self.comms_redis_url
+        )
+        if not is_dev and comms_intended:
             if self.comms_api_url and not self.comms_service_token:
                 raise ValueError(
                     "COMMS_API_URL is set but COMMS_SERVICE_TOKEN is "
@@ -664,9 +674,9 @@ class Settings(BaseSettings):
                 )
             if self.comms_relay_enabled and not self.comms_redis_url:
                 raise ValueError(
-                    "comms_relay_enabled is true but COMMS_REDIS_URL is "
-                    "empty: the outbox relay would silently never start "
-                    "and domain events would pile up undelivered. Set "
+                    "comms is configured (api_url/token present) but "
+                    "COMMS_REDIS_URL is empty while the relay is enabled: "
+                    "domain events would pile up undelivered. Set "
                     "COMMS_REDIS_URL or set COMMS_RELAY_ENABLED=false."
                 )
 

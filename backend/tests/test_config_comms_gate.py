@@ -48,11 +48,16 @@ def _mk(
     api_url: str = "",
     token: str = "",
     redis_url: str = "",
-    relay_enabled: bool = False,
+    relay_enabled: bool = True,
 ) -> Settings:
     """Build Settings with the ENTIRE comms quartet pinned explicitly and
     the .env read disabled, so neither .env nor os.environ can leak a
-    real comms value into the assertion."""
+    real comms value into the assertion.
+
+    relay_enabled defaults to True -- the PRODUCTION default -- so the
+    "comms not installed" case (all urls empty) is tested against the
+    real default, not a convenient False (R3: an earlier version used
+    False here and missed that a comms-less prod box fails to start)."""
     base = dict(_PROD_BASE)
     base["app_env"] = app_env
     return Settings(
@@ -75,25 +80,30 @@ def test_full_comms_config_passes() -> None:
     assert s.comms_api_url == "http://comms-app:8000"
 
 
-def test_comms_fully_off_passes() -> None:
-    """Empty everything + relay disabled = comms not installed here."""
-    s = _mk()
+def test_comms_not_installed_starts_on_prod_default() -> None:
+    """R3: a comms-less prod box -- NO comms config at all, relay_enabled
+    at its production default (True) -- must start. This is the in-place
+    upgrade path for existing boxes whose .env has no COMMS_* keys yet.
+    The gate only fires when comms is INTENDED (some field set)."""
+    s = _mk()  # relay_enabled defaults to True now
     assert s.comms_api_url == ""
+    assert s.comms_relay_enabled is True
 
 
 def test_api_url_without_token_rejected() -> None:
     with pytest.raises(ValidationError, match="COMMS_SERVICE_TOKEN"):
-        _mk(api_url="http://comms-app:8000", token="")
+        _mk(api_url="http://comms-app:8000", token="", redis_url="redis://x")
 
 
 def test_token_without_api_url_rejected() -> None:
     with pytest.raises(ValidationError, match="COMMS_API_URL"):
-        _mk(token="tok", api_url="")
+        _mk(token="tok", api_url="", redis_url="redis://x")
 
 
 def test_relay_enabled_without_redis_rejected() -> None:
+    # comms is INTENDED (api_url + token set) but redis is missing -> reject.
     with pytest.raises(ValidationError, match="COMMS_REDIS_URL"):
-        _mk(redis_url="", relay_enabled=True)
+        _mk(api_url="http://comms-app:8000", token="tok", redis_url="")
 
 
 def test_dev_allows_partial_comms_config() -> None:

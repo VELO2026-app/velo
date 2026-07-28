@@ -2157,3 +2157,39 @@ async def test_update_max_participants_below_headcount_rejected(
         )
     ).scalar_one()
     assert practice.max_participants == 2
+
+
+@pytest.mark.asyncio
+async def test_update_max_participants_to_null_removes_limit(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Setting max_participants to null is REMOVING the cap (a
+    relaxation), always allowed even with active bookings -- and must
+    not TypeError on `None < active`. The frontend sends null on every
+    save with an empty capacity field."""
+    auth = await _make_verified_master(client, db_session)
+    pid = await _create_and_publish(client, auth)
+    booker = await login_user(client, telegram_id=60063, first_name="A")
+    db_session.add(
+        Booking(
+            practice_id=UUID(pid),
+            user_id=UUID(booker["user"]["id"]),
+            status=BookingStatus.CONFIRMED.value,
+        )
+    )
+    await db_session.commit()
+
+    resp = await client.patch(
+        f"{PRACTICES_URL}/{pid}",
+        json={"max_participants": None},
+        headers=auth_headers(auth["session_token"]),
+    )
+    assert resp.status_code == 200
+
+    practice = (
+        await db_session.execute(
+            select(Practice).where(Practice.id == UUID(pid))
+        )
+    ).scalar_one()
+    assert practice.max_participants is None
