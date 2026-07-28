@@ -200,10 +200,14 @@
 
     <!-- Rename + description edit (G2, ПРОМТ №609 -- moved from
          MasterGroupsView's card menu; owner Q10, ПРОМТ №611 -- gained the
-         description field, same dialog). -->
+         description field, same dialog). ПРОМТ №613: compact-title added --
+         this title (~494px at --text-xl) is LONGER than «Сообщить о
+         пользователе» (~408px), the title that originally justified this
+         prop, and was missed when this dialog was built. -->
     <VBottomSheet
       :open="renameOpen"
       title="Изменить название и описание"
+      compact-title
       save-label="Сохранить"
       @save="onRenameSave"
       @close="renameOpen = false"
