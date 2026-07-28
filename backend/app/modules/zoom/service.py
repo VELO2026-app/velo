@@ -756,7 +756,7 @@ async def get_meeting_start_url(zoom_meeting_id: str) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# REC-1 (ПРОМТ №618): watch-recording link for a past practice. Owner
+# REC-1 (PROMPT №618): watch-recording link for a past practice. Owner
 # decisions this reflects: sharing is on and "must authenticate" is off (so
 # a VELO user with no Zoom account can open the link), passcode is required
 # and NOT embedded by Zoom (that account setting stays off), so WE embed it

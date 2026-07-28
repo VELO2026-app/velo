@@ -1,5 +1,5 @@
 # =============================================================================
-# Tests: Watch-recording link for a past practice (REC-1, ПРОМТ №618)
+# Tests: Watch-recording link for a past practice (REC-1, PROMPT №618)
 # =============================================================================
 #
 # telegram_id range: 99400-99499

@@ -220,7 +220,7 @@ def _stub_response(method: str, path: str, json_body: dict | None) -> Any:
         return {}
     if method == "GET" and "/report/meetings/" in path:
         return {"participants": []}
-    # REC-1 (ПРОМТ №618): must come AFTER report/meetings and BEFORE the
+    # REC-1 (PROMPT №618): must come AFTER report/meetings and BEFORE the
     # generic /meetings/ GET check below -- "/meetings/{id}/recordings"
     # contains "/meetings/" as a substring too, same trap as the comment
     # above already documents for /registrants and /report/meetings/.
@@ -260,7 +260,7 @@ async def create_meeting(
     here so the meeting is ready for registrants once that wiring lands in
     a later step -- no registrant is created by this call.
 
-    auto_recording="cloud" (REC-1, ПРОМТ №618): the account-level "record
+    auto_recording="cloud" (REC-1, PROMPT №618): the account-level "record
     automatically" setting is what actually makes recording happen -- Zoom
     applies the account setting regardless of this field, and it was OFF
     until the owner turned it on directly in the console (2026-07-29,
@@ -316,7 +316,7 @@ async def delete_meeting(*, zoom_meeting_id: str) -> None:
 
 
 async def get_meeting_recordings(*, zoom_meeting_id: str) -> dict:
-    """Fetch this meeting's cloud recording (REC-1, ПРОМТ №618).
+    """Fetch this meeting's cloud recording (REC-1, PROMPT №618).
 
     Raises ZoomAPIError on any non-2xx, INCLUDING 404 -- Zoom returns 404
     when there is no recording (never created, still processing, or

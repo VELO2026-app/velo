@@ -124,7 +124,7 @@ class BookingWithPracticeResponse(BaseModel):
 
 
 class BookingRecordingResponse(BaseModel):
-    """GET /api/v1/bookings/{id}/recording -- REC-1 (ПРОМТ №618).
+    """GET /api/v1/bookings/{id}/recording -- REC-1 (PROMPT №618).
 
     Three states, deliberately not collapsed (owner-mandate: never conflate
     "we checked, nothing there" with "we couldn't check"):

@@ -1297,7 +1297,7 @@ async def get_booking_by_id(
 
 
 # ===================================================================
-# REC-1 (ПРОМТ №618): watch-recording, own booking only
+# REC-1 (PROMPT №618): watch-recording, own booking only
 # ===================================================================
 
 # Deliberately NOT practices/service.py's ZOOM_VISIBLE_BOOKING_STATUSES --

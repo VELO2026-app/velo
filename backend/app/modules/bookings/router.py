@@ -378,7 +378,7 @@ async def get_booking_recording_endpoint(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_reader),
 ) -> BookingRecordingResponse:
-    """Watch-recording link for a past practice (REC-1, ПРОМТ №618).
+    """Watch-recording link for a past practice (REC-1, PROMPT №618).
 
     Owner ruling: entitlement is the BOOKING, never attendance --
     confirmed/attended/no_show all qualify, pending/cancelled do not.
