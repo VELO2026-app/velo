@@ -1147,6 +1147,7 @@ export interface PracticeResponse {
   created_at: string
   updated_at: string | null
   zoom_host_join_url?: string | null
+  zoom_shared_join_url?: string | null
   zoom_meeting_status?: string | null
   deduplicated?: boolean
 }
