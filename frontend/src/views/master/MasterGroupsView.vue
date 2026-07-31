@@ -39,8 +39,12 @@
     </VHeader>
 
     <div class="groups__content">
-      <!-- Combined search field -- same DS pattern as MasterStudentsView /
-           MasterGroupDetailView (VInput glass pill + magnifier). -->
+      <!-- T24-21/22/23 (PROMPT №639): restyled to the owner's measured search
+           field -- white glow (not a border), no magnifier button (the field
+           already self-triggers via its own watch()+debounce below), stretched
+           to the group cards' own width. Deliberately NOT the same as
+           MasterStudentsView's search field anymore (see the delivery report
+           on whether a shared component is worth extracting now). -->
       <div class="groups__search">
         <div class="groups__search-field">
           <VInput
@@ -50,7 +54,6 @@
             @focus="onFieldFocus"
           />
         </div>
-        <span class="groups__search-btn" aria-hidden="true"><IconSearch :size="20" /></span>
       </div>
 
       <template v-if="search.trim()">
@@ -165,7 +168,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import { VLoader, VEmptyState, VButton, VListRow, VInput, VAvatar, VChip } from '@/components/ui'
-import { IconPlusFilled, IconSearch } from '@/components/icons'
+import { IconPlusFilled } from '@/components/icons'
 import VShowMore from '@/components/shared/VShowMore.vue'
 import { getGroups, searchGroupMemberships } from '@/api/groups'
 import { extractApiError } from '@/composables/useApiError'
@@ -292,9 +295,17 @@ const matchingGroups = computed((): GroupListItem[] => {
   padding: var(--space-6) 0;
 }
 
-/* -- Cross-group search (P6, PROMPT №607): same DS pattern as
-   MasterStudentsView / MasterGroupDetailView (VInput glass pill +
-   magnifier), token-for-token. -- */
+/* -- Cross-group search (P6, PROMPT №607; restyled T24-21/22/23, PROMPT №639) --
+   T24-22: the magnifier button is REMOVED (the field already self-triggers
+   via its own watch()+debounce below) -- `.groups__search` now wraps only
+   the field, so it stretches to the full content width (T24-23), matching
+   the group cards (`.groups__row-wrap`) below: both are direct children of
+   `.groups__content`, which has zero horizontal padding of its own (rides
+   the app-wide rail), so "100% width" IS "same width as the cards" -- not a
+   hardcoded px figure (the owner's measured 336px is what HIS canvas
+   happened to compute at a specific viewport width, not a fixed target;
+   hardcoding it would fight the cards' own fluid width instead of matching
+   it). */
 .groups__search {
   display: flex;
   align-items: center;
@@ -311,21 +322,38 @@ const matchingGroups = computed((): GroupListItem[] => {
   margin-bottom: 0;
 }
 
+/* T24-21: height 50 (--velo-size-50, this token's own comment already reads
+   "search / chat input field height" -- no new token needed) + radius 25 on
+   a 50px-tall field IS --radius-full (any radius >= half the height renders
+   the same maximal pill, confirmed against the owner's own number) + fill
+   --velo-primary at 15% is --velo-glass-blue-15 (already the exact rgba of
+   --velo-primary at 0.15 -- confirmed, not approximated) -- all three were
+   already-tokened, DS-first satisfied without minting anything. */
 .groups__search-field :deep(.v-input__field) {
   background: var(--velo-glass-blue-15);
   border-radius: var(--radius-full);
+  height: var(--velo-size-50);
+  /* White glow, NOT a border -- pure white drop shadow, no offset. DERIVED
+     FIGURES: the owner relayed dilate 8.82 / blur 13.167 from his design file
+     but this session could not reach that file to re-derive them directly --
+     built to the relayed numbers verbatim, per his own fallback instruction.
+     Distinct from the pre-existing --velo-shadow-glow token (0 0 20.9px 7px
+     white) used on MasterGroupDetailView's own search field -- that token's
+     own comment already admits it's "the closest EXISTING match" to a
+     similarly-measured glow, not this exact value; inlined here rather than
+     silently reusing the approximate token for a number given explicitly
+     this time. */
+  box-shadow: 0 0 13.167px 8.82px #ffffff;
 }
 
-.groups__search-btn {
-  width: var(--velo-size-44);
-  height: var(--velo-size-44);
-  flex-shrink: 0;
-  border-radius: var(--radius-full);
-  background: var(--velo-primary);
-  color: var(--velo-white);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* T24-21: placeholder 16px (--text-16) -- the FIELD's own text stays the DS
+   default (--text-base, 18px, VInput's shared size); only the placeholder is
+   smaller, per the owner's measurement. Colour: kept at VInput's existing
+   --velo-text-muted (rgba of --velo-text-primary at 50%) -- the owner
+   measured 60%, no exact 60%-opacity token exists yet (DS-first: flagged in
+   the report rather than minting one silently). */
+.groups__search-field :deep(.v-input__field::placeholder) {
+  font-size: var(--text-16);
 }
 
 .groups__row-wrap {

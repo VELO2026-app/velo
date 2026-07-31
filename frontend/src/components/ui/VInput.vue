@@ -13,8 +13,18 @@
 
 <template>
   <div class="v-input" :class="{ 'v-input--error': !!error }">
-    <!-- External label — hidden in floating mode (the label lives inside the field). -->
-    <label v-if="label && !floatingLabel" class="v-input__label">{{ label }}</label>
+    <!-- External label — hidden in floating mode (the label lives inside the field).
+         T24-6 (PROMPT №639): `hideLabel` keeps this SAME <label> in the DOM (a
+         placeholder is not a substitute -- it disappears on typing and is not
+         announced the way a label is) but visually hides it, for a screen that
+         wants the placeholder alone to carry the visible hint. Off by default —
+         every existing caller keeps the visible label, byte-identical. -->
+    <label
+      v-if="label && !floatingLabel"
+      class="v-input__label"
+      :class="{ 'v-input__label--visually-hidden': hideLabel }"
+      >{{ label }}</label
+    >
 
     <div class="v-input__row">
       <!-- Floating-label path (DS variant): the label sits inside the empty field
@@ -122,6 +132,11 @@ const props = withDefaults(
      *  floats up small on focus/fill. Default OFF — all existing callers keep the
      *  external-label layout. Ignored when prefix/suffix slots are used. */
     floatingLabel?: boolean
+    /** T24-6 (PROMPT №639): keep `label` as the field's accessible name but hide
+     *  it visually — the placeholder alone carries the visible hint. Default OFF
+     *  — every existing caller keeps the visible label. Ignored with `floatingLabel`
+     *  (that variant already has no external label to hide). */
+    hideLabel?: boolean
   }>(),
   {
     modelValue: '',
@@ -132,6 +147,7 @@ const props = withDefaults(
     disabled: false,
     required: false,
     floatingLabel: false,
+    hideLabel: false,
   },
 )
 
@@ -185,6 +201,21 @@ function onInput(e: Event): void {
   font-size: var(--text-base);
   color: var(--velo-text-primary);
   margin-bottom: var(--space-2);
+}
+
+/* T24-6 (PROMPT №639): standard visually-hidden technique -- stays in the DOM
+   and in the accessible-name computation, occupies zero visual space (clipped
+   to 1px, not display:none, which screen readers skip entirely). */
+.v-input__label--visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* Row = field (flex:1) + optional required seal in the right gutter. */

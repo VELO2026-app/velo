@@ -53,10 +53,17 @@
 
       <h2 class="velo-section-title">Основное</h2>
 
+      <!-- T24-5/6 (PROMPT №639): the placeholder alone carries the visible
+           hint now -- it already matched `label` before this batch
+           (measured: was already true), so T24-5 needed no text change,
+           only T24-6's label removal. `hideLabel` keeps `label` as the
+           accessible name (a placeholder disappears on typing and is not
+           announced the way a label is) without rendering it visibly. -->
       <VInput
         v-model="name"
         label="Название"
         placeholder="Название"
+        hide-label
         :error="fieldError"
         required
         @focus="onFieldFocus"
@@ -66,6 +73,7 @@
         v-model="description"
         label="Описание"
         placeholder="Описание"
+        hide-label
         :rows="3"
         autogrow
         @focus="onFieldFocus"
@@ -158,6 +166,33 @@ async function onCreate(): Promise<void> {
 .new-group__legend-seal {
   flex-shrink: 0;
   color: var(--velo-error);
+}
+
+/* T24-7 (PROMPT №639): MEASURED finding -- the visible gap between the two
+   fields was DOUBLE-COUNTED, not merely "too much by feel". `.new-group__content`
+   is a flex column with `gap: var(--space-4)` between EVERY pair of children,
+   but VInput/VTextarea ALSO carry their OWN `margin-bottom: var(--space-4)`
+   (their shared default, needed by every OTHER caller that isn't inside a
+   gapped flex column) -- the two stacked to 32px between Название and
+   Описание where one space-4 (16px) was ever intended. Zeroing the Название
+   field's own margin-bottom here removes exactly the duplicate, leaving a
+   single space-4 gap -- scoped to THIS one transition (heading->Название and
+   Описание->button keep their normal spacing, untouched). */
+.new-group__content > :deep(.v-input) {
+  margin-bottom: 0;
+}
+
+/* T24-8 (PROMPT №639): MEASURED finding -- the wrapper divs were ALREADY the
+   same width (both stretch via the parent flex column's default
+   align-items:stretch); the VISIBLE PLATE was not. Название is `required`,
+   so its row reserves ~30px (IconRequired 22px + --space-2 gap) for the seal
+   INSIDE `.v-input__row`, shrinking the field's own flex:1 share by that much.
+   Описание has no seal (genuinely optional) so its row gives the field the
+   full width. Reserving the same 30px on the textarea's side (as invisible
+   margin, not a fake seal) equalizes the two visible plates without touching
+   VInput's shared required-seal layout used everywhere else. */
+.new-group__content :deep(.v-textarea__field) {
+  margin-right: 30px;
 }
 
 /* Pinned to the screen's bottom edge (owner Q5) -- mirrors

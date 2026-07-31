@@ -107,6 +107,25 @@ afterEach(() => {
 })
 
 describe('MasterGroupsView', () => {
+  describe('T24-21/22/23 (PROMPT №639): search field restyle', () => {
+    it('T24-22: no magnifier button beside the field anymore', async () => {
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.groups__search-btn')).toBeNull()
+      expect(host?.querySelector('.groups__search-field input')).not.toBeNull()
+    })
+
+    it('T24-23: the field is the ONLY child of its row -- no sibling competing for width, so it stretches to the full content width like the group cards below', async () => {
+      mount()
+      await flush()
+
+      const row = host?.querySelector('.groups__search')
+      expect(row?.children).toHaveLength(1)
+      expect(row?.firstElementChild?.classList.contains('groups__search-field')).toBe(true)
+    })
+  })
+
   describe('state ladder', () => {
     it('shows the loader while the fetch is in flight', async () => {
       vi.mocked(groupsApi.getGroups).mockReturnValue(new Promise(() => {}))

@@ -12,12 +12,23 @@
 
 <template>
   <div class="v-textarea" :class="{ 'v-textarea--error': !!error }">
-    <label v-if="label" class="v-textarea__label">{{ label }}</label>
+    <!-- T24-6 (PROMPT №639): `hideLabel` mirrors VInput.vue's own prop -- keeps
+         this SAME <label> as the accessible name, hides it visually only. Off
+         by default, every existing caller keeps the visible label. -->
+    <label
+      v-if="label"
+      class="v-textarea__label"
+      :class="{ 'v-textarea__label--visually-hidden': hideLabel }"
+      >{{ label }}</label
+    >
     <div class="v-textarea__row">
       <textarea
         ref="fieldEl"
         class="v-textarea__field"
-        :class="{ 'v-textarea__field--autogrow': autogrow }"
+        :class="{
+          'v-textarea__field--autogrow': autogrow,
+          'v-textarea__field--bordered-rest': borderedAtRest,
+        }"
         :value="modelValue"
         :placeholder="placeholder"
         :rows="rows"
@@ -74,6 +85,17 @@ const props = withDefaults(
     /** Show the pink IconRequired seal in the right gutter (DS required marker,
      *  W22 -- parity with VInput/VSelect). */
     required?: boolean
+    /** T24-6 (PROMPT №639): keep `label` as the accessible name but hide it
+     *  visually -- mirrors VInput.vue's own prop, see its comment. Default OFF. */
+    hideLabel?: boolean
+    /** T24-18 (PROMPT №639): opt-in visible border AT REST. VTextarea is
+     *  borderless at rest by design (2px solid transparent, same philosophy
+     *  VInput.vue documents) -- this is an additive VARIANT for a caller that
+     *  needs the empty state to read as a field, not a bug fix to the default.
+     *  DERIVED value (not owner-given): 1.5px --velo-primary, the nearest
+     *  measured bordered-pill value in his files (the search screen). Default
+     *  OFF -- every existing caller stays byte-identical. */
+    borderedAtRest?: boolean
   }>(),
   {
     modelValue: '',
@@ -84,6 +106,8 @@ const props = withDefaults(
     disabled: false,
     autogrow: false,
     required: false,
+    hideLabel: false,
+    borderedAtRest: false,
   },
 )
 
@@ -135,6 +159,21 @@ watch(
   margin-bottom: var(--space-2);
 }
 
+/* T24-6 (PROMPT №639): standard visually-hidden technique, same as
+   VInput.vue's own -- stays in the accessible-name computation, occupies
+   zero visual space. */
+.v-textarea__label--visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Row = field (flex:1) + optional required seal in the right gutter. */
 .v-textarea__row {
   display: flex;
@@ -170,6 +209,21 @@ watch(
 
 .v-textarea__field:focus {
   outline: none;
+  border-color: var(--velo-border-input-focus);
+}
+
+/* T24-18 (PROMPT №639): opt-in visible border at rest. DERIVED (not
+   owner-given) -- see the prop's own doc comment above for why this exact
+   value. Written as its own rule (not folded into the base `.v-textarea__field`)
+   so every other caller stays byte-identical. The explicit `:focus` override
+   right after keeps the ALREADY-correct focus colour (--velo-border-input-focus,
+   unchanged) winning regardless of source order -- only the rest state changes. */
+.v-textarea__field--bordered-rest {
+  border-width: 1.5px;
+  border-color: var(--velo-primary);
+}
+
+.v-textarea__field--bordered-rest:focus {
   border-color: var(--velo-border-input-focus);
 }
 

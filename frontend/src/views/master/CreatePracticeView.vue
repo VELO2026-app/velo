@@ -299,7 +299,7 @@
 
         <div class="create-practice__railed">
           <VCard class="create-practice__repeat" padding="none">
-            <VRadioGroup v-model="form.audience_kind" :options="AUDIENCE_OPTIONS" />
+            <VRadioGroup v-model="form.audience_kind" :options="createAudienceOptions" />
           </VCard>
 
           <template v-if="form.audience_kind === 'groups'">
@@ -474,6 +474,18 @@ import type { RecurrenceSpec, PracticeResponse, PracticeDirection } from '@/api/
 
 const router = useRouter()
 const toast = useToast()
+
+// T24-24 (PROMPT №639): "Все ученики" -> "Все мои ученики", on THIS screen
+// ONLY. AUDIENCE_OPTIONS is shared with EditPracticeView.vue (practiceOptions.ts
+// says so explicitly) -- editing the label there would have silently changed
+// BOTH screens, exactly the "one-word edit made by search-and-replace" trap
+// the instruction warned about (the same string is also byte-scanned as a
+// substring of MasterSummaryView's unrelated "Все ученики в порядке", not
+// touched -- a different sentence, not this label). A local mapped copy
+// keeps Edit byte-identical.
+const createAudienceOptions = AUDIENCE_OPTIONS.map((o) =>
+  o.value === 'students' ? { ...o, label: 'Все мои ученики' } : o,
+)
 
 // Lift the focused field above the soft keyboard once it settles (shared M5
 // composable — replaces the bespoke 300ms scrollFieldIntoView, K3).

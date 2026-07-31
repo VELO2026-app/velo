@@ -97,6 +97,20 @@ describe('MasterGroupCreateView', () => {
     expect(host?.querySelector('textarea')).not.toBeNull()
   })
 
+  it('T24-5/6 (PROMPT №639): both fields carry the placeholder AND a visually-hidden (not deleted) label', () => {
+    mount()
+
+    expect(nameInput()?.getAttribute('placeholder')).toBe('Название')
+    expect(host?.querySelector('textarea')?.getAttribute('placeholder')).toBe('Описание')
+
+    const labels = Array.from(host?.querySelectorAll('label') ?? [])
+    expect(labels).toHaveLength(2)
+    // Each component's own hidden-label class -- still real <label> elements
+    // (the accessible name), not deleted.
+    expect(host?.querySelector('.v-input__label--visually-hidden')?.textContent).toBe('Название')
+    expect(host?.querySelector('.v-textarea__label--visually-hidden')?.textContent).toBe('Описание')
+  })
+
   it('an empty name toasts and does not call createGroup', async () => {
     mount()
 

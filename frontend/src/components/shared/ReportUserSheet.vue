@@ -77,6 +77,7 @@
       v-model="comment"
       placeholder="Опишите, что произошло, это поможет нам разобраться"
       :rows="4"
+      bordered-at-rest
       class="report-user__textarea"
     />
 
@@ -229,9 +230,12 @@ async function onSend(): Promise<void> {
 
 /* Measured rx4.5 -- deliberately small, NOT --radius-md. Scoped to THIS
    instance via :deep() (the search-field glass-pill pattern), never
-   VTextarea's own default. */
+   VTextarea's own default. T24-18 (PROMPT №639): the border-color override
+   that used to live here (--velo-border, #abbfda -- pale enough to read as
+   "no border" at rest, see the delivery report) is REPLACED by the
+   `bordered-at-rest` prop above -- a real DS variant now, not a local
+   :deep() color hack. -->
 .report-user__textarea :deep(.v-textarea__field) {
-  border-color: var(--velo-border);
   border-radius: var(--velo-radius-4-5);
 }
 

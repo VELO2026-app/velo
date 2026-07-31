@@ -982,6 +982,24 @@ describe('MasterStudentProfileView', () => {
       const sendBtn = sheetOverlay()?.querySelector<HTMLButtonElement>('.v-sheet__save')
       expect(sendBtn?.disabled).toBe(true)
 
+      // T24-18 (PROMPT №639): the description field carries the derived
+      // visible-border-at-rest variant now (bordered-at-rest prop). NOTE
+      // (measured while writing this test): `class="report-user__textarea"`
+      // lands DIRECTLY on the <textarea> itself, not a wrapper div --
+      // VTextarea.vue has inheritAttrs:false + v-bind="$attrs" on the inner
+      // element, so the caller's class ends up on the SAME node as
+      // .v-textarea__field, never an ancestor of it. That also means the
+      // textarea's OWN pre-existing `.report-user__textarea :deep(.v-textarea__field)`
+      // CSS selector (a descendant combinator) could never have matched
+      // anything -- same-element, not ancestor-descendant -- which is a
+      // second, adjacent explanation for T24-18 beyond what the report
+      // covers; flagged there, not fixed here (out of this item's scope).
+      expect(
+        sheetOverlay()
+          ?.querySelector('.report-user__textarea')
+          ?.classList.contains('v-textarea__field--bordered-rest'),
+      ).toBe(true)
+
       const chip = Array.from(
         sheetOverlay()?.querySelectorAll<HTMLElement>('.report-user__reason-row') ?? [],
       ).find((c) => c.textContent?.includes('Сорвал практику'))

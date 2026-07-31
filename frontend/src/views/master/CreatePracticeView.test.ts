@@ -1524,12 +1524,12 @@ describe('CreatePracticeView', () => {
       expect(sentBody().group_ids).toEqual([])
     })
 
-    it('«Все ученики» sends audience_kind=students', async () => {
+    it('T24-24 (PROMPT №639): «Все мои ученики» sends audience_kind=students', async () => {
       mount()
       await flush()
       await fillMinimalForm()
 
-      button('Все ученики')?.click()
+      button('Все мои ученики')?.click()
       await flush()
       submitForm()
       await flush()

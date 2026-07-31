@@ -261,6 +261,25 @@ describe('VInput', () => {
       expect(host?.querySelector('.v-input')?.hasAttribute('min')).toBe(false)
     })
 
+    it('T24-6 (PROMPT №639): hideLabel keeps the label in the DOM (accessible name) but visually hides it', () => {
+      mountWith(passThrough, '', { label: 'Название', hideLabel: true })
+
+      const label = host?.querySelector('.v-input__label')
+      expect(label).not.toBeNull()
+      expect(label?.textContent).toBe('Название')
+      expect(label?.classList.contains('v-input__label--visually-hidden')).toBe(true)
+    })
+
+    it('T24-6: hideLabel is OFF by default -- every existing caller stays byte-identical', () => {
+      mountWith(passThrough, '', { label: 'Название' })
+
+      expect(
+        host
+          ?.querySelector('.v-input__label')
+          ?.classList.contains('v-input__label--visually-hidden'),
+      ).toBe(false)
+    })
+
     it('exposes focus()', () => {
       // Used by TopupView to focus the custom-amount field on reveal
       // (TopupView.vue:152-156).
