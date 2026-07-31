@@ -170,7 +170,9 @@
       :open="!!addTarget"
       :student-id="addTarget.id"
       :student-name="addTarget.name"
+      :avatar-url="addTarget.avatar_url"
       :custom-groups="customGroups"
+      :existing-group-ids="addTargetGroupIds"
       :current-group-id="kind === 'custom' ? groupId : null"
       @close="addTarget = null"
       @saved="load"
@@ -181,22 +183,38 @@
       :open="!!removeTarget"
       :student-id="removeTarget.id"
       :student-name="removeTarget.name"
+      :avatar-url="removeTarget.avatar_url"
       :current-group-id="groupId"
       :custom-groups="customGroups"
       @close="removeTarget = null"
       @saved="load"
     />
 
-    <!-- Unblock confirm («Удалённые» rows only, P3 ПРОМТ №592) -->
+    <!-- Unblock confirm («Удалённые» rows only, P3 ПРОМТ №592). T24-28..31
+         (ПРОМТ №634): smaller title (hairline stroke, :deep below) + avatar
+         plinth (TargetUserCard, T24-29) + text moved onto the peach panel
+         (warning-panel, T24-30 -- the shared 14/17 line-height lives in
+         VConfirmDialog itself) + position-based button colours (T24-31). -->
     <VConfirmDialog
       :open="!!unblockTarget"
       :title="unblockTitle"
       :message="unblockMessage"
       confirm-label="Разблокировать"
+      danger
+      warning-panel
+      cancel-variant="primary"
+      title-strong
       :loading="unblocking"
       @confirm="onUnblockConfirm"
       @cancel="unblockTarget = null"
-    />
+    >
+      <TargetUserCard
+        v-if="unblockTarget"
+        :name="unblockTarget.name"
+        :avatar-url="unblockTarget.avatar_url"
+        class="group-detail__unblock-card"
+      />
+    </VConfirmDialog>
 
     <!-- Rename + description edit (G2, ПРОМТ №609 -- moved from
          MasterGroupsView's card menu; owner Q10, ПРОМТ №611 -- gained the
@@ -260,9 +278,11 @@ import IconTrash from '@/components/icons/IconTrash.vue'
 import AddTagSheet from '@/components/shared/AddTagSheet.vue'
 import AddToGroupSheet from '@/components/shared/AddToGroupSheet.vue'
 import RemoveFromGroupSheet from '@/components/shared/RemoveFromGroupSheet.vue'
+import TargetUserCard from '@/components/shared/TargetUserCard.vue'
 import {
   getGroupMembers,
   getGroups,
+  getStudentGroups,
   unblockStudent,
   createGroupInvite,
   renameGroup,
@@ -400,8 +420,21 @@ function openAddTag(member: GroupMemberItem): void {
 }
 
 const addTarget = ref<GroupMemberItem | null>(null)
-function openAddToGroup(member: GroupMemberItem): void {
+// T24-35 (ПРОМТ №634): which of THIS master's custom groups the target is
+// ALREADY in, so AddToGroupSheet can mark those chips with the darker
+// "existing" state instead of showing nothing (the owner's own example: a
+// student already in four groups, and nothing on screen said so).
+const addTargetGroupIds = ref<string[]>([])
+async function openAddToGroup(member: GroupMemberItem): Promise<void> {
   addTarget.value = member
+  addTargetGroupIds.value = []
+  try {
+    const res = await getStudentGroups(member.id)
+    addTargetGroupIds.value = res.groups.map((g) => g.id)
+  } catch {
+    // Best-effort: the darker "already a member" mark is informational, not
+    // load-bearing -- the sheet still works correctly with zero marks.
+  }
 }
 
 const removeTarget = ref<GroupMemberItem | null>(null)
@@ -414,7 +447,7 @@ function openRemoveFromGroup(member: GroupMemberItem): void {
 // by prettier and lose its semicolon, breaking the Vue template compiler
 // -- one function call per @click avoids that entirely).
 function onAddToGroupClick(member: GroupMemberItem, close: () => void): void {
-  openAddToGroup(member)
+  void openAddToGroup(member)
   close()
 }
 function onAddTagClick(member: GroupMemberItem, close: () => void): void {
@@ -621,5 +654,11 @@ async function onDeleteConfirm(): Promise<void> {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+/* T24-29: same spacing as MasterStudentProfileView's own block-flow
+   TargetUserCard instances (.profile__dialog-card). */
+.group-detail__unblock-card {
+  margin-bottom: var(--space-4);
 }
 </style>

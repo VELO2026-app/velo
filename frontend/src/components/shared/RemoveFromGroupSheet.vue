@@ -14,17 +14,28 @@
   removeGroupMember is idempotent-safe (a no-op 204 if the student isn't a
   member of a given group), so this reaches the exact same end state as a
   hypothetical dedicated endpoint would, without inventing one.
+
+  T24-25/26/27 (ПРОМТ №634): smaller title (VBottomSheet's own compactTitle,
+  ПРОМТ №609 -- already existed, just unused here) + hairline-stroke weight
+  (the app-wide .velo-text-strong utility) + the student on the shared
+  TargetUserCard plinth (was a plain name paragraph) + an explicit "Отмена"
+  beside "Удалить" (VBottomSheet's cancelLabel, ПРОМТ №610 -- its default
+  paired-row colours are ALREADY blue-cancel/coral-save, which is exactly
+  Rule 2's position-based colour rule; no colour override needed here).
 -->
 
 <template>
   <VBottomSheet
     :open="open"
     title="Удалить из группы"
+    compact-title
+    title-strong
     save-label="Удалить"
+    cancel-label="Отмена"
     @save="onSave"
     @close="$emit('close')"
   >
-    <p class="remove-from-group__name">{{ studentName }}</p>
+    <TargetUserCard :name="studentName" :avatar-url="avatarUrl" class="remove-from-group__card" />
 
     <VRadioGroup v-model="mode" :options="MODE_OPTIONS" />
 
@@ -52,6 +63,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { VBottomSheet, VRadioGroup, VChip } from '@/components/ui'
+import TargetUserCard from './TargetUserCard.vue'
 import { removeGroupMember } from '@/api/groups'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
@@ -61,6 +73,7 @@ const props = defineProps<{
   open: boolean
   studentId: string
   studentName: string
+  avatarUrl?: string | null
   /** The group this sheet was opened from -- always a real custom group id
    *  (this sheet is only ever offered on a custom group's member row). */
   currentGroupId: string
@@ -122,11 +135,8 @@ async function onSave(): Promise<void> {
 </script>
 
 <style scoped>
-.remove-from-group__name {
-  font-family: var(--font-body);
-  font-size: var(--text-base);
-  color: var(--velo-text-primary);
-  margin: 0 0 var(--space-4);
+.remove-from-group__card {
+  margin-bottom: var(--space-4);
 }
 
 .remove-from-group__chips {

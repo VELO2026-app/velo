@@ -852,6 +852,16 @@ describe('MasterStudentProfileView', () => {
       expect(modal?.querySelector('.v-confirm__panel svg')).not.toBeNull()
     })
 
+    it('T24-14 (ПРОМТ №634): «Отмена» is solid blue (primary), not the old outlined ghost', async () => {
+      mount()
+      await flush()
+
+      buttonWith('Заблокировать пользователя')?.click()
+      await flush()
+
+      expect(modalButtonWith('Отмена')?.classList.contains('v-btn--primary')).toBe(true)
+    })
+
     it('confirming calls blockStudent, toasts, and opens the report-offer', async () => {
       vi.mocked(groupsApi.blockStudent).mockResolvedValue({
         student_user_id: 's1',
@@ -907,7 +917,7 @@ describe('MasterStudentProfileView', () => {
       expect(sheetOverlay()).toBeNull()
     })
 
-    it('owner Q9: the report-offer dialog ALSO carries the TargetUserCard + a warning icon', async () => {
+    it('T24-15 (ПРОМТ №634): the report-offer dialog carries the TargetUserCard + the peach panel, but NO icon -- opposite of the block-confirm dialog above', async () => {
       vi.mocked(groupsApi.blockStudent).mockResolvedValue({
         student_user_id: 's1',
         blocked_at: '2026-07-24T00:00:00Z',
@@ -924,7 +934,28 @@ describe('MasterStudentProfileView', () => {
       const modal = liveModal()
       expect(modal?.querySelector('.target-user-card')).not.toBeNull()
       expect(modal?.querySelector('.v-confirm__panel')).not.toBeNull()
-      expect(modal?.querySelector('.v-confirm__panel svg')).not.toBeNull()
+      // T24-15: the icon is removed entirely for THIS dialog (the block-
+      // confirm above keeps its own, just re-centred -- T24-13) -- these two
+      // modals look alike but the owner ruled them opposite.
+      expect(modal?.querySelector('.v-confirm__panel svg')).toBeNull()
+    })
+
+    it('T24-16 (ПРОМТ №634): «Не сейчас» is blue (primary), «В поддержку» is coral (danger) -- position-based colour rule', async () => {
+      vi.mocked(groupsApi.blockStudent).mockResolvedValue({
+        student_user_id: 's1',
+        blocked_at: '2026-07-24T00:00:00Z',
+        cancelled_bookings_count: 0,
+      })
+      mount()
+      await flush()
+
+      buttonWith('Заблокировать пользователя')?.click()
+      await flush()
+      modalButtonWith('Заблокировать')?.click()
+      await flush()
+
+      expect(modalButtonWith('Не сейчас')?.classList.contains('v-btn--primary')).toBe(true)
+      expect(modalButtonWith('В поддержку')?.classList.contains('v-btn--danger')).toBe(true)
     })
 
     it('«В поддержку» opens the report form; «Отправить» is disabled until a reason is chosen', async () => {

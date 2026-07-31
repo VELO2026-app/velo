@@ -115,6 +115,7 @@ beforeEach(() => {
   vi.mocked(groupsApi.addGroupMember).mockReset()
   vi.mocked(groupsApi.removeGroupMember).mockReset()
   vi.mocked(groupsApi.unblockStudent).mockReset()
+  vi.mocked(groupsApi.getStudentGroups).mockReset().mockResolvedValue({ groups: [] })
   vi.mocked(groupsApi.createGroupInvite).mockReset()
   vi.mocked(groupsApi.renameGroup).mockReset()
   vi.mocked(groupsApi.deleteGroup).mockReset()
@@ -431,6 +432,84 @@ describe('MasterGroupDetailView', () => {
 
       expect(groupsApi.addGroupMember).toHaveBeenCalledWith('g2', 's1')
     })
+
+    it('T24-35 (ПРОМТ №634): a group the student is already in gets the darker "existing" chip, not the plain active one', async () => {
+      vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([member('s1', { name: 'Анна' })]))
+      vi.mocked(groupsApi.getGroups).mockResolvedValue(
+        customGroups([
+          { id: 'g1', kind: 'custom', name: 'VIP', members_count: 1, description: null },
+          { id: 'g2', kind: 'custom', name: 'Другая группа', members_count: 0, description: null },
+        ]),
+      )
+      vi.mocked(groupsApi.getStudentGroups).mockResolvedValue({
+        groups: [{ id: 'g2', name: 'Другая группа' }],
+      })
+      mount()
+      await flush()
+
+      host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
+      await flush()
+      const addToGroupBtn = Array.from(host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? [])[0]
+      addToGroupBtn?.click()
+      await flush()
+
+      const chips = Array.from(sheetOverlay()?.querySelectorAll<HTMLElement>('.v-chip') ?? [])
+      const existingChip = chips.find((c) => c.textContent?.includes('Другая группа'))
+      const freshChip = chips.find((c) => c.textContent?.includes('VIP'))
+      expect(existingChip?.classList.contains('v-chip--existing')).toBe(true)
+      expect(freshChip?.classList.contains('v-chip--existing')).toBe(false)
+    })
+
+    it('T24-36 (ПРОМТ №634): the removal toggle is a real checkbox, not a switch', async () => {
+      routeParams.id = 'g1'
+      vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([member('s1', { name: 'Анна' })]))
+      mount()
+      await flush()
+
+      host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
+      await flush()
+      const addToGroupBtn = Array.from(host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? [])[0]
+      addToGroupBtn?.click()
+      await flush()
+
+      expect(sheetOverlay()?.querySelector('.v-checkbox[role="checkbox"]')).not.toBeNull()
+      expect(sheetOverlay()?.querySelector('.v-switch')).toBeNull()
+    })
+
+    it('T24-37 (ПРОМТ №634, Rule 2 exception): "Отмена" is coral on the left, "Добавить" is blue on the right', async () => {
+      vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([member('s1', { name: 'Анна' })]))
+      mount()
+      await flush()
+
+      host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
+      await flush()
+      const addToGroupBtn = Array.from(host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? [])[0]
+      addToGroupBtn?.click()
+      await flush()
+
+      const cancelBtn = sheetOverlay()?.querySelector<HTMLElement>('.v-sheet__cancel')
+      const saveBtn = sheetOverlay()?.querySelector<HTMLElement>('.v-sheet__save')
+      expect(cancelBtn?.textContent?.trim()).toBe('Отмена')
+      expect(cancelBtn?.classList.contains('v-sheet__cancel--danger')).toBe(true)
+      expect(saveBtn?.textContent?.trim()).toBe('Добавить')
+      expect(saveBtn?.classList.contains('v-sheet__save--primary')).toBe(true)
+    })
+
+    it("T24-32 (ПРОМТ №634): compact + hairline-stroke title, via VBottomSheet's own props (not a caller :deep() -- that cannot reach a Teleported root, see VBottomSheet.vue)", async () => {
+      vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([member('s1', { name: 'Анна' })]))
+      mount()
+      await flush()
+
+      host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
+      await flush()
+      const addToGroupBtn = Array.from(host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? [])[0]
+      addToGroupBtn?.click()
+      await flush()
+
+      const titleEl = sheetOverlay()?.querySelector('.v-sheet__title')
+      expect(titleEl?.classList.contains('v-sheet__title--compact')).toBe(true)
+      expect(titleEl?.classList.contains('v-sheet__title--strong')).toBe(true)
+    })
   })
 
   describe('RemoveFromGroupSheet (custom groups only)', () => {
@@ -454,6 +533,36 @@ describe('MasterGroupDetailView', () => {
       await flush()
 
       expect(groupsApi.removeGroupMember).toHaveBeenCalledWith('g1', 's1')
+    })
+
+    it('T24-25/26/27 (ПРОМТ №634): compact title, TargetUserCard plinth, and «Отмена» blue left / «Удалить» coral right', async () => {
+      routeParams.id = 'g1'
+      vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(
+        page([member('s1', { name: 'Анна', avatar_url: 'https://x/a.png' })]),
+      )
+      mount()
+      await flush()
+
+      host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
+      await flush()
+      const removeBtn = Array.from(host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? [])[2]
+      removeBtn?.click()
+      await flush()
+
+      const sheet = sheetOverlay()
+      const titleEl = sheet?.querySelector('.v-sheet__title')
+      expect(titleEl?.classList.contains('v-sheet__title--compact')).toBe(true)
+      expect(titleEl?.classList.contains('v-sheet__title--strong')).toBe(true)
+      expect(sheet?.querySelector('.target-user-card')).not.toBeNull()
+      expect(sheet?.textContent).toContain('Анна')
+
+      const cancelBtn = sheet?.querySelector<HTMLElement>('.v-sheet__cancel')
+      const saveBtn = sheet?.querySelector<HTMLElement>('.v-sheet__save')
+      expect(cancelBtn?.textContent?.trim()).toBe('Отмена')
+      expect(cancelBtn?.classList.contains('v-sheet__cancel--danger')).toBe(false)
+      expect(saveBtn?.textContent?.trim()).toBe('Удалить')
+      expect(saveBtn?.classList.contains('v-sheet__save--paired')).toBe(true)
+      expect(saveBtn?.classList.contains('v-sheet__save--primary')).toBe(false)
     })
 
     it('"Удалить из всех групп" loops every custom group (idempotent DELETE, no dedicated endpoint)', async () => {
@@ -530,6 +639,35 @@ describe('MasterGroupDetailView', () => {
       expect(dialogText).toContain(
         'Анна вернется в группу «Ученики» и снова сможет видеть и бронировать ваши практики.',
       )
+    })
+
+    it('T24-28..31 (ПРОМТ №634): compact title, TargetUserCard plinth, the peach panel, and «Отмена» blue / «Разблокировать» coral', async () => {
+      routeParams.id = 'deleted'
+      vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(
+        page([member('s1', { name: 'Анна', avatar_url: 'https://x/a.png' })]),
+      )
+      mount()
+      await flush()
+
+      host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
+      await flush()
+      host?.querySelector<HTMLElement>('.v-menu-item')?.click()
+      await flush()
+
+      const modal = modalOverlay()
+      expect(modal?.querySelector('.v-confirm__title--strong')).not.toBeNull()
+      expect(modal?.querySelector('.target-user-card')).not.toBeNull()
+      // T24-30: the message now renders inside the peach panel.
+      expect(modal?.querySelector('.v-confirm__panel')).not.toBeNull()
+      expect(modal?.textContent).toContain(
+        'Анна вернется в группу «Ученики» и снова сможет видеть и бронировать ваши практики.',
+      )
+
+      const buttons = Array.from(modal?.querySelectorAll<HTMLElement>('button') ?? [])
+      const cancelBtn = buttons.find((b) => b.textContent?.trim() === 'Отмена')
+      const confirmBtn = buttons.find((b) => b.textContent?.trim() === 'Разблокировать')
+      expect(cancelBtn?.classList.contains('v-btn--primary')).toBe(true)
+      expect(confirmBtn?.classList.contains('v-btn--danger')).toBe(true)
     })
 
     it('confirming calls unblockStudent, toasts, and reloads the (now shorter) list', async () => {

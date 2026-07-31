@@ -121,6 +121,7 @@
       confirm-label="Заблокировать"
       danger
       warning-panel
+      cancel-variant="primary"
       :loading="blocking"
       @confirm="onBlockConfirm"
       @cancel="blockConfirmOpen = false"
@@ -141,6 +142,9 @@
       cancel-label="Не сейчас"
       compact-actions
       warning-panel
+      :warning-panel-icon="false"
+      danger
+      cancel-variant="primary"
       @confirm="onReportOfferAccept"
       @cancel="reportOfferOpen = false"
     >

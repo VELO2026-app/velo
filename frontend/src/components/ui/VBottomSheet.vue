@@ -31,6 +31,27 @@
   and save at ~61% (measured, ReportUserSheet's «Отмена»/«Отправить»).
   Default '' = byte-identical to every other caller; only ReportUserSheet
   sets this today.
+
+  Optional `cancelVariant`/`saveVariant` (T24-27/37, ПРОМТ №634): the
+  owner's position-based colour rule -- LEFT (cancel) BLUE, RIGHT (save)
+  CORAL, with exactly one owner-ruled exception (Modal E, «Добавить в
+  группу»: swapped). The paired row's colours were already exactly this
+  (cancel primary blue, paired-save --velo-error coral, both measured
+  ПРОМТ №610) -- these props only let a caller INVERT them for the one
+  exception; every existing caller (ReportUserSheet) keeps the same
+  colours it already had. Defaults 'primary'/'danger' = byte-identical.
+
+  Optional `titleStrong` (T24-25/32, ПРОМТ №634): a prop, NOT a `:deep()`
+  override from the caller's own scoped style -- this component's template
+  root is Teleported, and Vue does not forward a caller's `class` fallthrough
+  onto a Teleported root (confirmed the hard way: `[Vue warn]: Extraneous
+  non-props attributes (class) were passed to component but could not be
+  automatically inherited because component renders fragment or text or
+  teleport root nodes`), so a scoped `:deep()` selector from outside can
+  never reach `.v-sheet__title`. Applies the app-wide hairline-stroke
+  faux-bold (global.css `.velo-text-strong`'s own recipe, reused as a class
+  here rather than via that global class directly, since this stays scoped
+  to THIS component). Default false = byte-identical to every other caller.
 -->
 
 <template>
@@ -42,7 +63,10 @@
           <h2
             v-if="title"
             class="v-sheet__title"
-            :class="{ 'v-sheet__title--compact': compactTitle }"
+            :class="{
+              'v-sheet__title--compact': compactTitle,
+              'v-sheet__title--strong': titleStrong,
+            }"
           >
             {{ title }}
           </h2>
@@ -50,12 +74,18 @@
             <slot />
           </div>
           <div v-if="cancelLabel && saveLabel" class="v-sheet__actions">
-            <button type="button" class="v-sheet__cancel" @click="$emit('close')">
+            <button
+              type="button"
+              class="v-sheet__cancel"
+              :class="{ 'v-sheet__cancel--danger': cancelVariant === 'danger' }"
+              @click="$emit('close')"
+            >
               {{ cancelLabel }}
             </button>
             <button
               type="button"
               class="v-sheet__save v-sheet__save--paired"
+              :class="{ 'v-sheet__save--primary': saveVariant === 'primary' }"
               :disabled="saveDisabled"
               @click="$emit('save')"
             >
@@ -98,6 +128,17 @@ const props = withDefaults(
     /** Adds a cancel button beside save (ПРОМТ №610, owner Q3) -- see the
      *  file header. Default '' = byte-identical to before. */
     cancelLabel?: string
+    /** Paired-row cancel button colour (T24-27/37, ПРОМТ №634) -- see the
+     *  file header. Default 'primary' (blue) = byte-identical to before
+     *  this prop existed. */
+    cancelVariant?: 'primary' | 'danger'
+    /** Paired-row save button colour (T24-27/37, ПРОМТ №634) -- see the
+     *  file header. Default 'danger' (coral) = byte-identical to before
+     *  this prop existed. */
+    saveVariant?: 'primary' | 'danger'
+    /** Hairline-stroke title weight (T24-25/32, ПРОМТ №634) -- see the
+     *  file header. Default false = byte-identical to before. */
+    titleStrong?: boolean
   }>(),
   {
     title: '',
@@ -106,6 +147,9 @@ const props = withDefaults(
     closeOnOverlay: true,
     compactTitle: false,
     cancelLabel: '',
+    cancelVariant: 'primary',
+    saveVariant: 'danger',
+    titleStrong: false,
   },
 )
 
@@ -202,6 +246,12 @@ onUnmounted(() => {
   font-size: var(--text-lg);
 }
 
+/* T24-25/32 (ПРОМТ №634) -- see the file header for why this is a prop-
+   driven class, not a caller-supplied :deep() override. */
+.v-sheet__title--strong {
+  -webkit-text-stroke: var(--velo-text-stroke-strong) currentColor;
+}
+
 .v-sheet__body {
   flex: 1;
 }
@@ -262,6 +312,17 @@ onUnmounted(() => {
   background: var(--velo-primary-dark);
 }
 
+/* T24-37 (ПРОМТ №634, Rule 2's one owner-ruled exception -- «Добавить в
+   группу»): cancel repainted coral instead of the default blue. */
+.v-sheet__cancel--danger {
+  background: var(--velo-error);
+}
+
+.v-sheet__cancel--danger:hover {
+  background: var(--velo-error);
+  opacity: 0.9;
+}
+
 /* Paired save (measured: --velo-error fill, not the lone-button's primary
    -- ReportUserSheet's «Отправить», owner-specified, not a mistake to
    "correct" back to primary). Same shape/size as the lone .v-sheet__save,
@@ -284,6 +345,25 @@ onUnmounted(() => {
   opacity: 0.5;
   box-shadow: var(--velo-shadow-glow);
   cursor: not-allowed;
+}
+
+/* T24-37 (ПРОМТ №634, Rule 2's one owner-ruled exception): paired save
+   repainted blue instead of the default coral. Same specificity as
+   .v-sheet__save--paired (one class each) -- source order after it wins. */
+.v-sheet__save--primary {
+  background: var(--velo-primary);
+}
+
+.v-sheet__save--primary:hover:not(:disabled) {
+  background: var(--velo-primary-dark);
+  opacity: 1;
+}
+
+.v-sheet__save--primary:disabled {
+  background: var(--velo-nav-inactive-bg);
+  color: var(--velo-text-muted);
+  box-shadow: none;
+  opacity: 1;
 }
 
 /* -- Slide-up transition (mirrors VModal) -- */
