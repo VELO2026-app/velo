@@ -295,24 +295,43 @@ async def ensure_shared_registrant(
     joining through this link structurally unmatchable by the attendance
     ladder, which never queries ZoomMeeting for a "registrant").
 
-    Idempotent by a plain column check (if shared_registrant_id is already
-    set, no-op) rather than the savepoint/IntegrityError dance
-    ensure_host_registrant needs -- there is no unique index to race here
-    (this is an UPDATE of one already-identified row, not an INSERT
-    contending for a slot), and the email this function sends Zoom is
-    DETERMINISTIC per meeting (_shared_registration_email_for), so even two
-    concurrent callers racing this check both land on the SAME Zoom
-    registrant (recon, PROMPT №641: Zoom is idempotent on a duplicate
-    registrant email -- same email returns the same registrant_id/join_url,
-    no error, no duplicate) -- the race is harmless by construction on
-    BOTH sides, ours and Zoom's, not merely unlikely.
+    Idempotent by a plain column check (BOTH shared_registrant_id AND
+    shared_join_url already set -> no-op) rather than the savepoint/
+    IntegrityError dance ensure_host_registrant needs -- there is no unique
+    index to race here (this is an UPDATE of one already-identified row,
+    not an INSERT contending for a slot).
+
+    PROMPT №645 (audit-found CRITICAL, fixed): the guard checks BOTH
+    fields, not just shared_registrant_id, because Zoom's create-registrant
+    response can carry a registrant_id with NO join_url --
+    ZoomRegistrant.join_url's own docstring (models.py) already documents
+    this as REAL, not hypothetical, for the twin per-user registrant path.
+    A guard keyed on shared_registrant_id alone would set that field, see
+    it truthy on every future call, and permanently skip ever filling in
+    the still-missing join_url -- exactly the bug this replaced. A re-call
+    that reaches this function again is safe to retry unconditionally: the
+    email this function sends Zoom is DETERMINISTIC per meeting
+    (_shared_registration_email_for), so even two concurrent callers, or a
+    genuine retry after a partial success, land on the SAME Zoom registrant
+    (recon, PROMPT №641: Zoom is idempotent on a duplicate registrant email
+    -- same email returns the same registrant_id/join_url, no error, no
+    duplicate) -- harmless by construction on BOTH sides, ours and Zoom's,
+    not merely unlikely.
 
     Best-effort, same posture as ensure_host_registrant: never raises. No
     retry-poller coverage exists for a failure here (that poller only
     claims ZoomRegistrant rows, which this deliberately is not) -- see the
-    PROMPT №642 DONE report for the known, accepted gap this leaves.
+    PROMPT №642 DONE report for the known, accepted gap this leaves. NOTE
+    left for a future reader, not new scope for this prompt: under today's
+    call graph (create_meeting_for_practice + attempt_zoom_meeting_create,
+    both fire at most once per ZoomMeeting -- neither is reachable once
+    status is ACTIVE) this guard fix does not by itself add a NEW recovery
+    trigger; it fixes the guard's own logic so that IF this function is
+    ever called again for the same meeting (a future manual re-mint action,
+    say), it behaves correctly instead of silently locking in a partial
+    failure.
     """
-    if zoom_meeting.shared_registrant_id:
+    if zoom_meeting.shared_registrant_id and zoom_meeting.shared_join_url:
         return
 
     email = _shared_registration_email_for(zoom_meeting)
@@ -521,6 +540,15 @@ async def sync_meeting_reschedule(
     we pick up the fresh ones without needing to have known which world we
     were in. No-op (logged, not raised) if there's no active ZoomMeeting for
     this practice yet, or if either Zoom call fails.
+
+    PROMPT №645: the shared registrant (ZoomMeeting.shared_registrant_id/
+    shared_join_url, T24-38) rides the SAME `list_registrants` call below --
+    Zoom returns it in that list like any other registrant on the meeting,
+    we simply never stored it as a ZoomRegistrant row (see that pair of
+    columns' own docstring for why). Only REFRESHES an already-minted
+    shared registrant's join_url; it does not attempt a fresh mint if one
+    never succeeded -- that is the separate, already-accepted no-retry-
+    coverage gap (PROMPT №642 item A), not this function's job.
     """
     zoom_meeting = (
         await session.execute(
@@ -575,12 +603,21 @@ async def sync_meeting_reschedule(
 
     for remote in registrants:
         remote_id = remote.get("registrant_id") or remote.get("id")
-        local = by_zoom_id.get(remote_id)
-        if local is None:
-            continue
         fresh_join_url = remote.get("join_url")
-        if fresh_join_url and fresh_join_url != local.join_url:
-            local.join_url = fresh_join_url
+        local = by_zoom_id.get(remote_id)
+        if local is not None:
+            if fresh_join_url and fresh_join_url != local.join_url:
+                local.join_url = fresh_join_url
+            continue
+        # PROMPT №645: same refresh, for the shared registrant living on
+        # ZoomMeeting instead of a ZoomRegistrant row (see docstring above).
+        if (
+            remote_id
+            and remote_id == zoom_meeting.shared_registrant_id
+            and fresh_join_url
+            and fresh_join_url != zoom_meeting.shared_join_url
+        ):
+            zoom_meeting.shared_join_url = fresh_join_url
 
     logger.info(
         "zoom_registrants_refetched",

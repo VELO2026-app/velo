@@ -35,7 +35,11 @@ from app.modules.zoom.models import (
     ZoomRegistrantRole,
     ZoomRegistrantStatus,
 )
-from app.modules.zoom.service import create_registrant_for_booking, ensure_host_registrant
+from app.modules.zoom.service import (
+    create_registrant_for_booking,
+    ensure_host_registrant,
+    ensure_shared_registrant,
+)
 from app.modules.zoom.zoom_client import ZoomAPIError
 from tests.helpers import auth_headers, login_user
 
@@ -308,6 +312,72 @@ async def test_host_registrant_created_once_no_booking_id(
         )
     ).scalars().all()
     assert len(host_rows_after) == 1, "must stay exactly one host registrant"
+
+
+# ===================================================================
+# 3a. Shared registrant survives Zoom's documented join_url omission
+#     (PROMPT №645 -- audit-found CRITICAL, fixed same prompt)
+# ===================================================================
+
+
+@pytest.mark.asyncio
+async def test_shared_registrant_join_url_omission_is_recovered_by_a_retry(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Reproduces Zoom's documented registrant_id-without-join_url shape
+    (ZoomRegistrant.join_url's own docstring, models.py) against the SHARED
+    registrant specifically (T24-38), via zoom_client._stub_omit_join_url --
+    a test-only knob added in this same prompt because nothing before it
+    could exercise this shape at all.
+
+    Proves the FIXED guard (both shared_registrant_id AND shared_join_url
+    must be set to no-op) recovers on a second call, where the OLD guard
+    (shared_registrant_id alone) would have permanently no-op'd and left
+    shared_join_url NULL forever -- this is the exact CRITICAL bug the
+    PROMPT №645 audit found. Run this test against the pre-fix guard first
+    to see it fail RED before trusting the GREEN below (this file's own
+    header: BACKEND-ONLY, UNPROVEN LOCALLY -- see that docstring for why
+    this could not actually be executed this session).
+    """
+    from app.modules.zoom import zoom_client
+
+    master = await _make_verified_master(client, db_session, telegram_id=79208)
+
+    zoom_client._stub_omit_join_url = True
+    try:
+        practice_id = await _create_and_publish_practice(client, master)
+    finally:
+        zoom_client._stub_omit_join_url = False
+
+    zoom_meeting = (
+        await db_session.execute(
+            select(ZoomMeeting).where(ZoomMeeting.practice_id == UUID(practice_id))
+        )
+    ).scalar_one()
+    assert zoom_meeting.status == ZoomMeetingStatus.ACTIVE.value
+    assert zoom_meeting.shared_registrant_id is not None, (
+        "the mint itself must have succeeded -- this test's trigger "
+        "condition is an OMITTED join_url, not a failed create_registrant"
+    )
+    assert zoom_meeting.shared_join_url is None, (
+        "must reproduce the omitted-join_url shape, or this test proves "
+        "nothing about the bug it exists to catch"
+    )
+
+    # A second call, simulating a retry reaching this function again for
+    # the same meeting (the stub is back to its normal, join_url-included
+    # shape here).
+    await ensure_shared_registrant(zoom_meeting, db_session)
+    await db_session.commit()
+    await db_session.refresh(zoom_meeting)
+
+    assert zoom_meeting.shared_join_url is not None, (
+        "a re-call must fill in the missing join_url -- under the OLD "
+        "guard (shared_registrant_id alone) this assertion is exactly "
+        "what fails, because the guard early-returns before ever calling "
+        "create_registrant again"
+    )
 
 
 # ===================================================================
