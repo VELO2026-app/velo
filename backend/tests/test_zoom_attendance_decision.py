@@ -24,6 +24,7 @@ from uuid import UUID
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -59,6 +60,35 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
 
 
 async def _do_cleanup(session: AsyncSession) -> None:
+    """PROMPT №647: retries ONCE on a genuine Postgres deadlock, never on
+    anything else. This file's own SW1 test (test_concurrent_cancel_
+    during_poller_lock_is_refused_not_reverted) runs two independent
+    sessions (get_session_factory(), not this fixture's db_session)
+    against the same Booking row -- diagnosed as a test-harness-only
+    collision (see the PROMPT №647 DONE report / commit body for the full
+    reasoning: neither the product SW1 lock itself, which this file's own
+    poller/canceller pair only ever contend on ONE resource under, nor any
+    production background worker, which conftest.py disables for the
+    whole suite, can be the second party in the observed cycle -- this
+    bulk multi-table DELETE-by-id-range has no production caller at all,
+    confirmed by grep). Retrying a purely additive, idempotent-by-
+    construction cleanup is safe: a re-run either finds nothing left to
+    delete (already gone) or completes the interrupted pass -- it cannot
+    duplicate or corrupt anything. Never retries a non-deadlock error --
+    a genuine schema/query bug must still fail loudly, not loop.
+    """
+    for attempt in range(2):
+        try:
+            await _do_cleanup_once(session)
+            return
+        except DBAPIError as exc:
+            is_deadlock = "deadlock detected" in str(exc.orig).lower()
+            await session.rollback()
+            if not is_deadlock or attempt == 1:
+                raise
+
+
+async def _do_cleanup_once(session: AsyncSession) -> None:
     await session.rollback()
     subq = select(User.id).where(User.telegram_id.between(_TID_MIN, _TID_MAX))
     await session.execute(
