@@ -71,7 +71,8 @@ import MasterStudentProfileView from '@/views/master/MasterStudentProfileView.vu
 import * as mastersApi from '@/api/masters'
 import * as groupsApi from '@/api/groups'
 import * as reportsApi from '@/api/reports'
-import type { StudentDetailResponse, StudentCheckinItem, StudentFeedbackItem } from '@/api/types'
+import type { StudentDetailResponseWithBlocked } from '@/api/masters'
+import type { StudentCheckinItem, StudentFeedbackItem } from '@/api/types'
 
 vi.mock('@/api/masters')
 vi.mock('@/api/groups')
@@ -110,7 +111,9 @@ function feedback(over: Partial<StudentFeedbackItem> = {}): StudentFeedbackItem 
   return { rating: 5, comment: null, created_at: '2026-06-09T10:00:00Z', ...over }
 }
 
-function detail(over: Partial<StudentDetailResponse> = {}): StudentDetailResponse {
+function detail(
+  over: Partial<StudentDetailResponseWithBlocked> = {},
+): StudentDetailResponseWithBlocked {
   return {
     name: 'Анна Кузнецова',
     avatar_url: null,
@@ -119,6 +122,7 @@ function detail(over: Partial<StudentDetailResponse> = {}): StudentDetailRespons
     satisfaction_pct: null,
     recent_checkins: [],
     feedbacks: [],
+    blocked: false,
     ...over,
   }
 }
@@ -229,7 +233,7 @@ describe('MasterStudentProfileView', () => {
   describe('state ladder', () => {
     it('shows the loader — and NOT the hero — while the fetch is in flight', async () => {
       vi.mocked(mastersApi.getStudent).mockReturnValue(
-        new Promise(() => {}) as Promise<StudentDetailResponse>,
+        new Promise(() => {}) as Promise<StudentDetailResponseWithBlocked>,
       )
       routeState.query = { name: 'Анна из списка' }
       mount()
@@ -1162,6 +1166,256 @@ describe('MasterStudentProfileView', () => {
       expect(error).toHaveBeenCalledTimes(1)
       const [message] = error.mock.calls[0]!
       expect(message).toContain('сократите комментарий')
+    })
+  })
+
+  // T24-9/10 (PROMPT №638): the profile's own "..." menu, relocated from the
+  // member-list row's own menu (MasterGroupDetailView.vue, removed by
+  // T24-19 -- see that file's own test for the "no menu on any row" proof).
+  // Same three sheets, same underlying API calls; only the trigger context
+  // changed (this profile's student, not a clicked row).
+  describe('T24-9/10: the profile\'s own "..." menu', () => {
+    function menuTrigger(): HTMLElement | null {
+      return host?.querySelector<HTMLElement>('.v-menu__trigger') ?? null
+    }
+    function menuItems(): HTMLElement[] {
+      return Array.from(host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? [])
+    }
+
+    it('renders exactly 3 items -- tag / add-to-group / remove-from-group, trash tinted danger', async () => {
+      mount()
+      await flush()
+
+      menuTrigger()?.click()
+      await flush()
+
+      const items = menuItems()
+      expect(items).toHaveLength(3)
+      expect(items[0]?.getAttribute('aria-label')).toBe('Добавить тег')
+      expect(items[1]?.getAttribute('aria-label')).toBe('Добавить в группу')
+      expect(items[2]?.getAttribute('aria-label')).toBe('Удалить из группы')
+      expect(items[2]?.classList.contains('v-menu-item--danger')).toBe(true)
+    })
+
+    it('T24-9: the trigger dots are horizontal at rest and rotate open', async () => {
+      mount()
+      await flush()
+
+      const dots = host?.querySelector('.profile__dots')
+      expect(dots?.classList.contains('profile__dots--open')).toBe(false)
+
+      menuTrigger()?.click()
+      await flush()
+
+      expect(host?.querySelector('.profile__dots')?.classList.contains('profile__dots--open')).toBe(
+        true,
+      )
+    })
+
+    it('"Добавить тег" opens AddTagSheet; saving calls setStudentTag against THIS profile\'s student', async () => {
+      vi.mocked(groupsApi.setStudentTag).mockResolvedValue({ student_user_id: 's1', tag: 'VIP' })
+      mount()
+      await flush()
+
+      menuTrigger()?.click()
+      await flush()
+      menuItems()[0]?.click()
+      await flush()
+
+      const input = sheetOverlay()?.querySelector<HTMLInputElement>('input')
+      input!.value = 'VIP'
+      input!.dispatchEvent(new Event('input'))
+      sheetOverlay()?.querySelector<HTMLElement>('.v-sheet__save')?.click()
+      await flush()
+
+      expect(groupsApi.setStudentTag).toHaveBeenCalledWith('s1', 'VIP')
+    })
+
+    it('"Добавить в группу" opens AddToGroupSheet with null currentGroupId (no single-group context on the profile); saving calls addGroupMember', async () => {
+      vi.mocked(groupsApi.getGroups).mockResolvedValue({
+        items: [
+          { id: 'g1', kind: 'custom', name: 'VIP', members_count: 1, description: null },
+          { id: 'g2', kind: 'custom', name: 'Другая группа', members_count: 0, description: null },
+        ],
+      })
+      vi.mocked(groupsApi.addGroupMember).mockResolvedValue(undefined)
+      mount()
+      await flush()
+
+      menuTrigger()?.click()
+      await flush()
+      menuItems()[1]?.click()
+      await flush()
+
+      const chip = Array.from(sheetOverlay()?.querySelectorAll<HTMLElement>('.v-chip') ?? []).find(
+        (c) => c.textContent?.includes('Другая группа'),
+      )
+      chip?.click()
+      await nextTick()
+      sheetOverlay()?.querySelector<HTMLElement>('.v-sheet__save')?.click()
+      await flush()
+
+      expect(groupsApi.addGroupMember).toHaveBeenCalledWith('g2', 's1')
+    })
+
+    it('"Удалить из группы" opens RemoveFromGroupSheet WITHOUT a "current group" option (T24-10 widened RemoveFromGroupSheet.vue for exactly this) -- only "selected" / "all"', async () => {
+      vi.mocked(groupsApi.getGroups).mockResolvedValue({
+        items: [{ id: 'g1', kind: 'custom', name: 'VIP', members_count: 1, description: null }],
+      })
+      mount()
+      await flush()
+
+      menuTrigger()?.click()
+      await flush()
+      menuItems()[2]?.click()
+      await flush()
+
+      const radioLabels = Array.from(
+        sheetOverlay()?.querySelectorAll<HTMLElement>('.v-radio') ?? [],
+      ).map((r) => r.textContent?.trim())
+      expect(radioLabels).not.toContain('Удалить из текущей группы')
+      expect(radioLabels).toEqual(
+        expect.arrayContaining(['Удалить из выбранных групп', 'Удалить из всех групп']),
+      )
+    })
+
+    it('"Удалить из всех групп" (default-less mode, no current group) loops every custom group', async () => {
+      vi.mocked(groupsApi.getGroups).mockResolvedValue({
+        items: [
+          { id: 'g1', kind: 'custom', name: 'VIP', members_count: 1, description: null },
+          { id: 'g2', kind: 'custom', name: 'Другая', members_count: 0, description: null },
+        ],
+      })
+      vi.mocked(groupsApi.removeGroupMember).mockResolvedValue(undefined)
+      mount()
+      await flush()
+
+      menuTrigger()?.click()
+      await flush()
+      menuItems()[2]?.click()
+      await flush()
+
+      const allRadio = Array.from(
+        sheetOverlay()?.querySelectorAll<HTMLElement>('.v-radio') ?? [],
+      ).find((r) => r.textContent?.includes('Удалить из всех групп'))
+      allRadio?.click()
+      await nextTick()
+      sheetOverlay()?.querySelector<HTMLElement>('.v-sheet__save')?.click()
+      await flush()
+
+      expect(groupsApi.removeGroupMember).toHaveBeenCalledWith('g1', 's1')
+      expect(groupsApi.removeGroupMember).toHaveBeenCalledWith('g2', 's1')
+      expect(groupsApi.removeGroupMember).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  // T24-20 (PROMPT №638): a blocked student's profile now opens (backend
+  // narrow allow-path) instead of the generic "Не удалось загрузить
+  // профиль" failure -- the ONLY visible difference is the bottom action's
+  // label/target, and the "..." menu (relocated unblock, T24-19) is hidden
+  // (same reasoning the row's old «Удалённые» kind already used: those
+  // actions are meaningless for a blocked student).
+  describe('T24-20: blocked student profile', () => {
+    it('a blocked student opens normally (200), not the generic error screen', async () => {
+      vi.mocked(mastersApi.getStudent)
+        .mockReset()
+        .mockResolvedValue(detail({ blocked: true }))
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.profile__hero')).not.toBeNull()
+      expect(text()).not.toContain('Не удалось загрузить профиль')
+    })
+
+    it('the "..." menu is hidden while blocked', async () => {
+      vi.mocked(mastersApi.getStudent)
+        .mockReset()
+        .mockResolvedValue(detail({ blocked: true }))
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.v-menu__trigger')).toBeNull()
+    })
+
+    it('the bottom action reads "Разблокировать пользователя" instead of "Заблокировать пользователя" -- same position, still variant="danger"', async () => {
+      vi.mocked(mastersApi.getStudent)
+        .mockReset()
+        .mockResolvedValue(detail({ blocked: true }))
+      mount()
+      await flush()
+
+      expect(buttonWith('Заблокировать пользователя')).toBeUndefined()
+      const btn = buttonWith('Разблокировать пользователя')
+      expect(btn).toBeDefined()
+      expect(btn?.classList.contains('v-btn--danger')).toBe(true)
+    })
+
+    it('a NON-blocked profile keeps the old label and the "..." trigger (regression check)', async () => {
+      mount()
+      await flush()
+
+      expect(buttonWith('Заблокировать пользователя')).toBeDefined()
+      expect(buttonWith('Разблокировать пользователя')).toBeUndefined()
+      expect(host?.querySelector('.v-menu__trigger')).not.toBeNull()
+    })
+
+    it("clicking it opens the unblock confirm with the same copy the row's own dialog used before T24-19", async () => {
+      vi.mocked(mastersApi.getStudent)
+        .mockReset()
+        .mockResolvedValue(detail({ blocked: true }))
+      mount()
+      await flush()
+
+      buttonWith('Разблокировать пользователя')?.click()
+      await flush()
+
+      const dialogText = liveModal()?.textContent ?? ''
+      expect(dialogText).toContain('Разблокировать Анна Кузнецова?')
+      expect(dialogText).toContain(
+        'Анна Кузнецова вернется в группу «Ученики» и снова сможет видеть и бронировать ваши практики.',
+      )
+    })
+
+    it('confirming calls unblockStudent, toasts, and reloads -- the menu reappears and the label reverts', async () => {
+      vi.mocked(mastersApi.getStudent)
+        .mockReset()
+        .mockResolvedValueOnce(detail({ blocked: true }))
+        .mockResolvedValue(detail({ blocked: false }))
+      vi.mocked(groupsApi.unblockStudent).mockResolvedValue(undefined)
+      mount()
+      await flush()
+
+      buttonWith('Разблокировать пользователя')?.click()
+      await flush()
+      const confirmBtn = Array.from(liveModal()?.querySelectorAll('button') ?? []).find(
+        (b) => b.textContent?.trim() === 'Разблокировать',
+      )
+      confirmBtn?.click()
+      await flush()
+
+      expect(groupsApi.unblockStudent).toHaveBeenCalledWith('s1')
+      expect(success).toHaveBeenCalledWith('Пользователь разблокирован')
+      expect(buttonWith('Заблокировать пользователя')).toBeDefined()
+      expect(host?.querySelector('.v-menu__trigger')).not.toBeNull()
+    })
+
+    it('«Отмена» dismisses without calling unblockStudent', async () => {
+      vi.mocked(mastersApi.getStudent)
+        .mockReset()
+        .mockResolvedValue(detail({ blocked: true }))
+      mount()
+      await flush()
+
+      buttonWith('Разблокировать пользователя')?.click()
+      await flush()
+      const cancelBtn = Array.from(liveModal()?.querySelectorAll('button') ?? []).find(
+        (b) => b.textContent?.trim() === 'Отмена',
+      )
+      cancelBtn?.click()
+      await flush()
+
+      expect(groupsApi.unblockStudent).not.toHaveBeenCalled()
+      expect(modalDismissed()).toBe(true)
     })
   })
 })

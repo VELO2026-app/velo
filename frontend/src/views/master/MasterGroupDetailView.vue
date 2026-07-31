@@ -3,23 +3,18 @@
 
   One component parametrised by :id -- a real custom group's UUID, or the
   system slugs "students" / "deleted". GET /masters/me/groups/:id/members
-  handles all three the same way server-side; this screen only varies the
-  per-row «⋯» action set by `kind` (derived from :id itself -- no extra
-  fetch needed to know whether we're on a system slug).
+  handles all three the same way server-side.
 
-  Reuses VListRow (member rows) + VMenu/VMenuItem (per-row «⋯») + VInput
-  (search) + VTag (the student's tag, if any). Tapping a row navigates to
-  the EXISTING student profile screen (master-student-profile) -- not
-  rebuilt here.
+  Reuses VListRow (member rows) + VInput (search) + VTag (the student's tag,
+  if any, read-only here). Tapping a row navigates to the student profile
+  screen (master-student-profile) -- not rebuilt here.
 
   G2 (PROMPT №609, owner-ruled): invite/rename/delete MOVED here from
   MasterGroupsView's per-card buttons -- reachable from this header's own
-  «⋯» menu for ANY custom group, empty or not (the old per-card buttons
-  only worked when the group already had ≥1 member visible in the list).
-  Same VMenu/VMenuItem idiom the per-member rows on this exact screen
-  already use, just one level up (the group itself, not a member). Virtual
-  groups («Ученики»/«Удалённые») get none of the three -- matches the
-  backend's 400-on-system-slug.
+  «⋯» menu (VMenu/VMenuItem) for ANY custom group, empty or not (the old
+  per-card buttons only worked when the group already had ≥1 member visible
+  in the list). Virtual groups («Ученики»/«Удалённые») get none of the
+  three -- matches the backend's 400-on-system-slug.
 
   Owner Q8 (PROMPT №610): the empty-state's own "Пригласить в группу" CTA
   -- a leftover from before the header menu existed (P4, PROMPT №593) --
@@ -27,6 +22,14 @@
   invite entry point. `onInviteClick`'s "Ссылка скопирована" toast already
   lives on THIS screen (it always has, since the header menu invite calls
   the same function) -- nothing to move.
+
+  T24-19 (PROMPT №638): the per-row «⋯» menu (add to group / add tag /
+  remove from group / unblock -- everything that used to vary by `kind` on
+  EACH row) is REMOVED. Those four actions moved to the student profile's
+  own «⋯» menu and bottom action instead (T24-9/10/20,
+  MasterStudentProfileView.vue) -- a row's only remaining trailing content
+  is its tag chip, read-only. The header's own group-level «⋯» menu above
+  (invite/rename/delete) is untouched -- a SEPARATE menu, one level up.
 -->
 
 <template>
@@ -99,41 +102,15 @@
               <VAvatar :name="member.name" :url="member.avatar_url ?? undefined" size="md" />
             </template>
             <template #trailing>
-              <div class="group-detail__row-actions" @click.stop>
-                <VTag v-if="member.tag">{{ member.tag }}</VTag>
-                <VMenu v-if="kind !== 'deleted'" ariaLabel="Меню участника">
-                  <template #default="{ close }">
-                    <VMenuItem
-                      :icon="IconPlus"
-                      ariaLabel="Добавить в группу"
-                      @click="onAddToGroupClick(member, close)"
-                    />
-                    <VMenuItem
-                      :icon="IconPen"
-                      ariaLabel="Добавить тег"
-                      @click="onAddTagClick(member, close)"
-                    />
-                    <VMenuItem
-                      v-if="kind === 'custom'"
-                      :icon="IconTrash"
-                      ariaLabel="Удалить из группы"
-                      danger
-                      @click="onRemoveFromGroupClick(member, close)"
-                    />
-                  </template>
-                </VMenu>
-                <!-- «Удалённые» (P3, PROMPT №592): the one action here is
-                     Unblock -- everything else (add to group / tag) is
-                     meaningless for a blocked student. -->
-                <VMenu v-else ariaLabel="Меню участника">
-                  <template #default="{ close }">
-                    <VMenuItem
-                      :icon="IconCheck"
-                      ariaLabel="Разблокировать"
-                      @click="onUnblockClick(member, close)"
-                    />
-                  </template>
-                </VMenu>
+              <!-- T24-19 (PROMPT №638): the per-row "..." menu (add to
+                   group / add tag / remove from group / unblock) is REMOVED
+                   from every row here -- it moved to the student profile's
+                   own "..." menu (T24-9/10) and bottom action (T24-20,
+                   unblock). Tapping the row still opens that profile
+                   (openProfile above); only the tag chip stays as a
+                   read-only indicator on the row itself. -->
+              <div v-if="member.tag" class="group-detail__row-actions">
+                <VTag>{{ member.tag }}</VTag>
               </div>
             </template>
           </VListRow>
@@ -154,67 +131,6 @@
              by `onHeaderInviteClick` above. -->
       </template>
     </div>
-
-    <AddTagSheet
-      v-if="tagTarget"
-      :open="!!tagTarget"
-      :student-id="tagTarget.id"
-      :student-name="tagTarget.name"
-      :current-tag="tagTarget.tag"
-      @close="tagTarget = null"
-      @saved="load"
-    />
-
-    <AddToGroupSheet
-      v-if="addTarget"
-      :open="!!addTarget"
-      :student-id="addTarget.id"
-      :student-name="addTarget.name"
-      :avatar-url="addTarget.avatar_url"
-      :custom-groups="customGroups"
-      :existing-group-ids="addTargetGroupIds"
-      :current-group-id="kind === 'custom' ? groupId : null"
-      @close="addTarget = null"
-      @saved="load"
-    />
-
-    <RemoveFromGroupSheet
-      v-if="removeTarget && kind === 'custom'"
-      :open="!!removeTarget"
-      :student-id="removeTarget.id"
-      :student-name="removeTarget.name"
-      :avatar-url="removeTarget.avatar_url"
-      :current-group-id="groupId"
-      :custom-groups="customGroups"
-      @close="removeTarget = null"
-      @saved="load"
-    />
-
-    <!-- Unblock confirm («Удалённые» rows only, P3 PROMPT №592). T24-28..31
-         (PROMPT №634): smaller title (hairline stroke, :deep below) + avatar
-         plinth (TargetUserCard, T24-29) + text moved onto the peach panel
-         (warning-panel, T24-30 -- the shared 14/17 line-height lives in
-         VConfirmDialog itself) + position-based button colours (T24-31). -->
-    <VConfirmDialog
-      :open="!!unblockTarget"
-      :title="unblockTitle"
-      :message="unblockMessage"
-      confirm-label="Разблокировать"
-      danger
-      warning-panel
-      cancel-variant="primary"
-      title-strong
-      :loading="unblocking"
-      @confirm="onUnblockConfirm"
-      @cancel="unblockTarget = null"
-    >
-      <TargetUserCard
-        v-if="unblockTarget"
-        :name="unblockTarget.name"
-        :avatar-url="unblockTarget.avatar_url"
-        class="group-detail__unblock-card"
-      />
-    </VConfirmDialog>
 
     <!-- Rename + description edit (G2, PROMPT №609 -- moved from
          MasterGroupsView's card menu; owner Q10, PROMPT №611 -- gained the
@@ -271,19 +187,13 @@ import {
   VConfirmDialog,
   VBottomSheet,
 } from '@/components/ui'
-import { IconShare, IconPlus, IconPen, IconCheck } from '@/components/icons'
+import { IconShare, IconPen } from '@/components/icons'
 // IconTrash is not re-exported from the icons barrel (same pattern as
 // EntryView.vue's delete action) -- import the component file directly.
 import IconTrash from '@/components/icons/IconTrash.vue'
-import AddTagSheet from '@/components/shared/AddTagSheet.vue'
-import AddToGroupSheet from '@/components/shared/AddToGroupSheet.vue'
-import RemoveFromGroupSheet from '@/components/shared/RemoveFromGroupSheet.vue'
-import TargetUserCard from '@/components/shared/TargetUserCard.vue'
 import {
   getGroupMembers,
   getGroups,
-  getStudentGroups,
-  unblockStudent,
   createGroupInvite,
   renameGroup,
   deleteGroup,
@@ -333,13 +243,14 @@ const loading = ref(true)
 const error = ref('')
 const search = ref('')
 
-// This master's custom groups -- feeds AddToGroupSheet / RemoveFromGroupSheet's
-// chip palette. Loaded once; independent of the members list/search. Also
-// where THIS group's own name/description come from now (owner Q12,
-// PROMPT №611) -- getGroups() already returns every group, custom AND the
-// two virtuals, so one fetch covers both needs instead of two.
+// Where THIS group's own name/description come from (owner Q12, PROMPT
+// №611) -- getGroups() returns every group, custom AND the two virtuals, so
+// one fetch resolves groupMeta below. T24-19 (PROMPT №638) removed this
+// screen's own customGroups filter (allGroups.filter(kind==='custom')) --
+// it fed AddToGroupSheet/RemoveFromGroupSheet's chip palette, and both
+// sheets moved to the student profile's own menu, which fetches its own
+// copy (MasterStudentProfileView.vue).
 const allGroups = ref<GroupListItem[]>([])
-const customGroups = computed(() => allGroups.value.filter((g) => g.kind === 'custom'))
 
 async function loadGroups(): Promise<void> {
   try {
@@ -361,9 +272,7 @@ async function loadGroups(): Promise<void> {
   } catch {
     // Best-effort: load() below (members) has its own independent error
     // handling and is the authoritative failure signal for this screen --
-    // a metadata-fetch hiccup alone doesn't need a separate message, and
-    // customGroups above degrades to [] on its own via the empty allGroups
-    // fallback, matching the old loadCustomGroups()'s catch behavior.
+    // a metadata-fetch hiccup alone doesn't need a separate message.
   }
 }
 
@@ -406,6 +315,9 @@ async function retry(): Promise<void> {
 
 onMounted(retry)
 
+// T24-19 (PROMPT №638): tapping a row now ALWAYS opens the profile -- there
+// is no competing row menu to route around anymore (the tag/add-to-group/
+// remove-from-group/unblock actions all moved to that profile, T24-9/10/20).
 function openProfile(member: GroupMemberItem): void {
   router.push({
     name: 'master-student-profile',
@@ -414,70 +326,8 @@ function openProfile(member: GroupMemberItem): void {
   })
 }
 
-const tagTarget = ref<GroupMemberItem | null>(null)
-function openAddTag(member: GroupMemberItem): void {
-  tagTarget.value = member
-}
-
-const addTarget = ref<GroupMemberItem | null>(null)
-// T24-35 (PROMPT №634): which of THIS master's custom groups the target is
-// ALREADY in, so AddToGroupSheet can mark those chips with the darker
-// "existing" state instead of showing nothing (the owner's own example: a
-// student already in four groups, and nothing on screen said so).
-const addTargetGroupIds = ref<string[]>([])
-async function openAddToGroup(member: GroupMemberItem): Promise<void> {
-  addTarget.value = member
-  addTargetGroupIds.value = []
-  try {
-    const res = await getStudentGroups(member.id)
-    addTargetGroupIds.value = res.groups.map((g) => g.id)
-  } catch {
-    // Best-effort: the darker "already a member" mark is informational, not
-    // load-bearing -- the sheet still works correctly with zero marks.
-  }
-}
-
-const removeTarget = ref<GroupMemberItem | null>(null)
-function openRemoveFromGroup(member: GroupMemberItem): void {
-  removeTarget.value = member
-}
-
-// Single-expression wrappers for the VMenu default-slot's `close` (a
-// semicolon-joined inline handler here would be reformatted across lines
-// by prettier and lose its semicolon, breaking the Vue template compiler
-// -- one function call per @click avoids that entirely).
-function onAddToGroupClick(member: GroupMemberItem, close: () => void): void {
-  void openAddToGroup(member)
-  close()
-}
-function onAddTagClick(member: GroupMemberItem, close: () => void): void {
-  openAddTag(member)
-  close()
-}
-function onRemoveFromGroupClick(member: GroupMemberItem, close: () => void): void {
-  openRemoveFromGroup(member)
-  close()
-}
-
-// -- Unblock («Удалённые» rows only, P3 PROMPT №592) --
 const toast = useToast()
-const unblockTarget = ref<GroupMemberItem | null>(null)
-const unblocking = ref(false)
-const unblockTitle = computed(() =>
-  unblockTarget.value ? `Разблокировать ${unblockTarget.value.name}?` : '',
-)
-const unblockMessage = computed(() =>
-  unblockTarget.value
-    ? `${unblockTarget.value.name} вернется в группу «Ученики» и снова сможет видеть и бронировать ваши практики.`
-    : '',
-)
-function openUnblock(member: GroupMemberItem): void {
-  unblockTarget.value = member
-}
-function onUnblockClick(member: GroupMemberItem, close: () => void): void {
-  openUnblock(member)
-  close()
-}
+
 // -- Invite (P4, PROMPT №593; empty-group CTA below AND the header menu,
 //    G2 PROMPT №609 -- same action, two entry points now: the CTA only
 //    shows for an actually-empty custom group, the header menu works for
@@ -504,22 +354,6 @@ async function onInviteClick(): Promise<void> {
 function onHeaderInviteClick(close: () => void): void {
   void onInviteClick()
   close()
-}
-
-async function onUnblockConfirm(): Promise<void> {
-  const target = unblockTarget.value
-  if (!target) return
-  unblocking.value = true
-  try {
-    await unblockStudent(target.id)
-    toast.success('Пользователь разблокирован')
-    unblockTarget.value = null
-    await load()
-  } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось разблокировать'))
-  } finally {
-    unblocking.value = false
-  }
 }
 
 // -- Rename + description edit (G2, PROMPT №609 -- moved from
@@ -654,11 +488,5 @@ async function onDeleteConfirm(): Promise<void> {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-}
-
-/* T24-29: same spacing as MasterStudentProfileView's own block-flow
-   TargetUserCard instances (.profile__dialog-card). */
-.group-detail__unblock-card {
-  margin-bottom: var(--space-4);
 }
 </style>

@@ -19,6 +19,9 @@
 #       booking at all -- both degrade to honest zero/empty aggregates.
 #       Still 404s for a real stranger (no booking of any status, no
 #       group membership) -- proves the gate was widened, not removed.
+#     - T24-20 (PROMPT №638): a master's OWN blocked student now opens too
+#       (narrow allow-path, separate from is_master_audience_member) --
+#       response carries blocked=True/False.
 # =============================================================================
 
 from collections.abc import AsyncGenerator
@@ -39,6 +42,7 @@ from tests.helpers import auth_headers, full_cleanup_range, login_user
 
 STUDENTS_URL = "/api/v1/masters/me/students"
 STUDENT_DETAIL_URL = "/api/v1/masters/me/students/{student_id}"
+BLOCK_URL = "/api/v1/masters/me/students/{student_id}/block"
 
 _TID_MIN = 91000
 _TID_MAX = 91999
@@ -527,3 +531,50 @@ async def test_student_detail_stranger_still_404s(
         headers=auth_headers(master["session_token"]),
     )
     assert resp2.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_student_detail_blocked_student_opens_with_blocked_true(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """T24-20 (PROMPT №638): a master's OWN blocked student now opens (200,
+    blocked=True) instead of 404 -- the narrow allow-path in
+    get_master_student_detail, NOT a widened is_master_audience_member (a
+    stranger still 404s, proven above and re-checked here isn't touched by
+    this same call sequence)."""
+    master = await _make_verified_master(client, db_session, telegram_id=91916)
+    headers = auth_headers(master["session_token"])
+    practice = await _create_completed_practice(db_session, master["user"]["id"])
+    uid, _b = await _attend(client, db_session, practice, 91124, first_name="ToBlock")
+    await db_session.commit()
+
+    block_resp = await client.post(
+        BLOCK_URL.format(student_id=uid), headers=headers,
+    )
+    assert block_resp.status_code == 200
+
+    url = STUDENT_DETAIL_URL.format(student_id=uid)
+    resp = await client.get(url, headers=headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["blocked"] is True
+
+
+@pytest.mark.asyncio
+async def test_student_detail_non_blocked_student_carries_blocked_false(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Sibling of the blocked-true case above: an ordinary (not blocked)
+    student's detail response carries blocked=False, not an absent/null
+    field -- the frontend branches on this to pick the button label."""
+    master = await _make_verified_master(client, db_session, telegram_id=91917)
+    practice = await _create_completed_practice(db_session, master["user"]["id"])
+    uid, _b = await _attend(client, db_session, practice, 91125, first_name="NotBlocked")
+    await db_session.commit()
+
+    url = STUDENT_DETAIL_URL.format(student_id=uid)
+    resp = await client.get(url, headers=auth_headers(master["session_token"]))
+    assert resp.status_code == 200
+    assert resp.json()["blocked"] is False

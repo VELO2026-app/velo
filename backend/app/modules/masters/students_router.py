@@ -100,7 +100,8 @@ async def get_my_student_endpoint(
 ) -> StudentDetailResponse:
     """Per-student detail: counts, hours, satisfaction, recent activity.
 
-    404 if the user is not this master's student (no attended booking).
+    404 only for a real stranger. Opens for this master's own blocked
+    student too (T24-20, PROMPT №638) -- response.blocked tells the caller.
     """
     user, _profile = master_tuple
     data = await get_master_student_detail(user.id, student_id, session)

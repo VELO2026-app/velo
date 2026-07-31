@@ -22,6 +22,15 @@
   beside "Удалить" (VBottomSheet's cancelLabel, PROMPT №610 -- its default
   paired-row colours are ALREADY blue-cancel/coral-save, which is exactly
   Rule 2's position-based colour rule; no colour override needed here).
+
+  T24-10 (PROMPT №638): `currentGroupId` widened to optional -- the student
+  PROFILE'S own "..." menu (MasterStudentProfileView) opens this same sheet
+  with no single-group context to be "current" (the profile isn't scoped to
+  any one group the way a member row is). The "current" radio option is
+  simply omitted when there is none; "selected" / "all" cover the profile
+  case fully. The row usage (MasterGroupDetailView) is untouched -- it still
+  always passes a real id, so its default mode ('current') and behaviour are
+  byte-identical to before.
 -->
 
 <template>
@@ -37,7 +46,7 @@
   >
     <TargetUserCard :name="studentName" :avatar-url="avatarUrl" class="remove-from-group__card" />
 
-    <VRadioGroup v-model="mode" :options="MODE_OPTIONS" />
+    <VRadioGroup v-model="mode" :options="modeOptions" />
 
     <template v-if="mode === 'selected'">
       <div class="remove-from-group__chips">
@@ -61,7 +70,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { VBottomSheet, VRadioGroup, VChip } from '@/components/ui'
 import TargetUserCard from './TargetUserCard.vue'
 import { removeGroupMember } from '@/api/groups'
@@ -74,9 +83,11 @@ const props = defineProps<{
   studentId: string
   studentName: string
   avatarUrl?: string | null
-  /** The group this sheet was opened from -- always a real custom group id
-   *  (this sheet is only ever offered on a custom group's member row). */
-  currentGroupId: string
+  /** The group this sheet was opened from, when there is one -- a member
+   *  row always has a real custom group id. T24-10: the student profile's
+   *  own menu opens this sheet with no single-group context, so this is
+   *  optional; the "current" radio option is omitted when absent. */
+  currentGroupId?: string | null
   customGroups: GroupListItem[]
 }>()
 
@@ -84,11 +95,18 @@ const emit = defineEmits<{ close: []; saved: [] }>()
 
 const toast = useToast()
 
-const MODE_OPTIONS = [
+const ALL_MODE_OPTIONS = [
   { value: 'current', label: 'Удалить из текущей группы' },
   { value: 'selected', label: 'Удалить из выбранных групп' },
   { value: 'all', label: 'Удалить из всех групп' },
 ]
+
+// No currentGroupId (profile menu, T24-10) -- drop the "current" option,
+// there is no group to call it. Row usage always has an id, so this stays
+// the full three-option list there, unchanged.
+const modeOptions = computed(() =>
+  props.currentGroupId ? ALL_MODE_OPTIONS : ALL_MODE_OPTIONS.filter((o) => o.value !== 'current'),
+)
 
 const mode = ref<'current' | 'selected' | 'all'>('current')
 const selected = ref<Set<string>>(new Set())
@@ -97,7 +115,7 @@ watch(
   () => props.open,
   (isOpen) => {
     if (isOpen) {
-      mode.value = 'current'
+      mode.value = props.currentGroupId ? 'current' : 'selected'
       selected.value = new Set()
     }
   },
@@ -113,6 +131,9 @@ function toggle(groupId: string): void {
 async function onSave(): Promise<void> {
   try {
     if (mode.value === 'current') {
+      // Reachable only when currentGroupId is set: modeOptions omits
+      // "current" without it, and the open-watcher above never selects it.
+      if (!props.currentGroupId) return
       await removeGroupMember(props.currentGroupId, props.studentId)
     } else if (mode.value === 'selected') {
       if (selected.value.size === 0) {

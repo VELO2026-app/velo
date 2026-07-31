@@ -41,6 +41,7 @@ from app.core.exceptions import NotFoundError
 from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.diary.insights_service import ATTENTION_RATING_MAX
 from app.modules.diary.models import Checkin, Feedback
+from app.modules.masters.groups_models import MasterStudent
 from app.modules.masters.groups_service import is_master_audience_member
 from app.modules.practices.models import Practice
 from app.modules.users.helpers import display_name
@@ -157,13 +158,10 @@ async def get_master_student_detail(
     Returns a dict ready for StudentDetailResponse.
 
     Raises:
-        NotFoundError: when `student_id` is not someone this master can
-            already see on screen -- see is_master_audience_member's own
-            docstring for the two admitted cases (P6, owner-ruled widen,
-            PROMPT №609; this screen used to gate on ATTENDED-only, the
-            same as list_master_students below -- that mismatch is why a
-            master could open «Мои группы» -> a member with no attended
-            booking yet and get a hard 404 here).
+        NotFoundError: when `student_id` is neither someone this master can
+            already see on screen (is_master_audience_member's two admitted
+            cases, P6, PROMPT №609) NOR this master's own blocked student
+            (T24-20 below).
 
     practices_count/hours/satisfaction_pct/recent_checkins/feedbacks below
     are STILL attended-only / feedback-only, unchanged -- widening the
@@ -173,9 +171,32 @@ async def get_master_student_detail(
     a grouping-less COUNT, satisfaction_pct=None, both lists=[]) rather
     than crashing or fabricating history -- none of these queries assumed
     at least one row existed.
+
+    T24-20 (PROMPT №638): a blocked student's profile used to hard-404 (the
+    generic "Не удалось загрузить профиль" screen) because
+    is_master_audience_member deliberately never admits a blocked student
+    (see its own docstring -- that exclusion is load-bearing: the predicate
+    also gates audience/visibility elsewhere, and loosening IT would risk
+    letting a blocked student back into practice visibility, the opposite
+    of what blocking means). The owner's ruling was narrower than that: the
+    profile itself should open for a master's OWN blocked student, showing
+    "Разблокировать" instead of "Заблокировать" at the bottom -- nothing
+    about audience/visibility. So the allow-path here is a SEPARATE, local
+    query against MasterStudent for exactly this master+student pair,
+    scoped to this one function -- is_master_audience_member itself is
+    untouched.
     """
+    blocked_at = None
     if not await is_master_audience_member(master_id, student_id, session):
-        raise NotFoundError("Student not found")
+        blocked_at = await session.scalar(
+            select(MasterStudent.blocked_at).where(
+                MasterStudent.master_id == master_id,
+                MasterStudent.student_user_id == student_id,
+                MasterStudent.blocked_at.is_not(None),
+            )
+        )
+        if blocked_at is None:
+            raise NotFoundError("Student not found")
 
     # practices_count + attended duration in one pass. Deliberately STILL
     # ATTENDED-only (see the docstring above) -- a widened-gate student
@@ -266,4 +287,5 @@ async def get_master_student_detail(
             {"rating": rating, "comment": comment, "created_at": created_at}
             for rating, comment, created_at in feedback_rows
         ],
+        "blocked": blocked_at is not None,
     }
