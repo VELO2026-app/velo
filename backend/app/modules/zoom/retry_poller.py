@@ -47,7 +47,7 @@ from app.modules.zoom.models import (
     ZoomRegistrant,
     ZoomRegistrantStatus,
 )
-from app.modules.zoom.service import ensure_host_registrant
+from app.modules.zoom.service import ensure_host_registrant, ensure_shared_registrant
 from app.modules.zoom.zoom_client import (
     ZoomAPIError,
     create_meeting,
@@ -280,6 +280,11 @@ async def attempt_zoom_meeting_create(
             attempt=row.retry_count,
         )
         await ensure_host_registrant(row, practice, session)
+        # T24-38 (PROMPT №642): same reasoning as the initial-creation call
+        # site (service.py's create_meeting_for_practice) -- a meeting that
+        # only succeeded on a RETRY still needs its shared registrant minted
+        # here, since this is the only other place the meeting flips ACTIVE.
+        await ensure_shared_registrant(row, session)
     except ZoomAPIError as exc:
         if exc.status_code == 429:
             row.last_sync_error = (

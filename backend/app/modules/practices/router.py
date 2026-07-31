@@ -244,8 +244,15 @@ async def create_practice_endpoint(
     # T21-1: same owner-only posture for the host's own join_url. A freshly
     # created practice has no ZoomMeeting yet (that happens on publish, not
     # here) -- get_host_join_url returns None until then, which is correct.
-    from app.modules.zoom.service import get_host_join_url, get_zoom_meeting_status
+    from app.modules.zoom.service import (
+        get_host_join_url,
+        get_shared_join_url,
+        get_zoom_meeting_status,
+    )
     host_join_url = await get_host_join_url(practice.id, session)
+    # T24-38 (PROMPT №642): None here too, same reasoning -- a freshly
+    # created practice has no ZoomMeeting yet.
+    shared_join_url = await get_shared_join_url(practice.id, session)
     # A4 V2 (PROMPT №572): None here too, same reasoning as host_join_url --
     # fetched anyway for consistency with the other three owner-only sites
     # (this is also the endpoint V6's deduplicated-practice response flows
@@ -256,6 +263,7 @@ async def create_practice_endpoint(
     return practice_to_response(
         practice, user.first_name,
         zoom_link_visible=True, zoom_host_join_url=host_join_url,
+        zoom_shared_join_url=shared_join_url,
         zoom_meeting_status=zoom_meeting_status,
         deduplicated=deduplicated,
         audience_group_names=audience_group_names,
@@ -389,17 +397,22 @@ async def retry_zoom_meeting_endpoint(
         )
 
     from app.modules.zoom.retry_poller import attempt_zoom_meeting_create
-    from app.modules.zoom.service import get_host_join_url
+    from app.modules.zoom.service import get_host_join_url, get_shared_join_url
 
     await attempt_zoom_meeting_create(meeting, practice, session)
     await session.flush()
     await session.refresh(meeting)
 
     host_join_url = await get_host_join_url(practice.id, session)
+    # T24-38 (PROMPT №642): attempt_zoom_meeting_create above also attempts
+    # the shared registrant when the retry succeeds (retry_poller.py) --
+    # fetched here for the same reason host_join_url is.
+    shared_join_url = await get_shared_join_url(practice.id, session)
     return practice_to_response(
         practice, user.first_name,
         zoom_link_visible=True,
         zoom_host_join_url=host_join_url,
+        zoom_shared_join_url=shared_join_url,
         zoom_meeting_status=meeting.status,
     )
 
@@ -531,8 +544,15 @@ async def update_practice_endpoint(
     # owner-always-sees rule on the detail (M-3) and the master list (Z-6).
     # T21-1: same owner-only posture for the host's own join_url (may become
     # non-None here if this update is the draft->scheduled publish).
-    from app.modules.zoom.service import get_host_join_url, get_zoom_meeting_status
+    from app.modules.zoom.service import (
+        get_host_join_url,
+        get_shared_join_url,
+        get_zoom_meeting_status,
+    )
     host_join_url = await get_host_join_url(practice.id, session)
+    # T24-38 (PROMPT №642): same reasoning as host_join_url -- becomes
+    # non-None here too if this update is the draft->scheduled publish.
+    shared_join_url = await get_shared_join_url(practice.id, session)
     # A4 V2 (PROMPT №572): so a master publishing a draft (creating the Zoom
     # meeting) sees "готовится" immediately instead of a stale None.
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
@@ -540,6 +560,7 @@ async def update_practice_endpoint(
     return practice_to_response(
         practice, user.first_name,
         zoom_link_visible=True, zoom_host_join_url=host_join_url,
+        zoom_shared_join_url=shared_join_url,
         zoom_meeting_status=zoom_meeting_status,
         audience_group_names=audience_group_names,
     )
@@ -601,12 +622,20 @@ async def delete_practice_endpoint(
     # T21-1: soft-deleted drafts never had a meeting created (E21 fires on
     # publish only), so this is always None here -- fetched anyway for
     # consistency with the other three owner-only sites.
-    from app.modules.zoom.service import get_host_join_url, get_zoom_meeting_status
+    from app.modules.zoom.service import (
+        get_host_join_url,
+        get_shared_join_url,
+        get_zoom_meeting_status,
+    )
     host_join_url = await get_host_join_url(practice.id, session)
+    # T24-38 (PROMPT №642): soft-deleted drafts never had a meeting created
+    # either -- always None here, fetched anyway for consistency.
+    shared_join_url = await get_shared_join_url(practice.id, session)
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
     return practice_to_response(
         practice, user.first_name,
         zoom_link_visible=True, zoom_host_join_url=host_join_url,
+        zoom_shared_join_url=shared_join_url,
         zoom_meeting_status=zoom_meeting_status,
     )
 
@@ -648,13 +677,21 @@ async def cancel_practice_endpoint(
     # T21-1: cancel_practice deletes the Zoom meeting (zoom/service.py
     # delete_meeting_for_practice) -- get_host_join_url returns None once that
     # row's status flips, which is correct (nothing to join anymore).
-    from app.modules.zoom.service import get_host_join_url, get_zoom_meeting_status
+    from app.modules.zoom.service import (
+        get_host_join_url,
+        get_shared_join_url,
+        get_zoom_meeting_status,
+    )
     host_join_url = await get_host_join_url(practice.id, session)
+    # T24-38 (PROMPT №642): cancel_practice deletes the Zoom meeting too --
+    # None once that row's status flips, same as host_join_url.
+    shared_join_url = await get_shared_join_url(practice.id, session)
     # A4 V2 (PROMPT №572): will read 'deleted' after the cancel above --
     # correctly distinct from create_failed/pending_creation.
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
     return practice_to_response(
         practice, user.first_name,
         zoom_link_visible=True, zoom_host_join_url=host_join_url,
+        zoom_shared_join_url=shared_join_url,
         zoom_meeting_status=zoom_meeting_status,
     )

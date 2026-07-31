@@ -284,6 +284,17 @@ async def create_meeting(
                 "registrants_email_notification": True,
                 "join_before_host": False,
                 "auto_recording": "cloud",
+                # T24-38 (PROMPT №642, E21/№641 research): explicit, was
+                # previously unset (riding whatever the account default is,
+                # never read). This is the one Zoom lever the research found
+                # that is actually about concurrent use of a single
+                # registrant join_url -- required for the shared-registrant
+                # link (ensure_shared_registrant, service.py) to admit more
+                # than one guest. Existing upcoming meetings created before
+                # this change do NOT get it retroactively -- see that
+                # function's docstring and the PROMPT №642 DONE report for
+                # why patch_meeting was deliberately not used here.
+                "allow_multiple_devices": True,
             },
         },
     )

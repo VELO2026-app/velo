@@ -100,6 +100,27 @@
           :difficulty-label="difficultyLabel"
         />
 
+        <!-- T24-38 (PROMPT №642): the SHARED, registration-free Zoom link --
+             a DELIBERATE TEMPORARY CRUTCH for the launch period (owner
+             ruling), never woven into the personal join_url ladder
+             (utils/zoomLink.ts, untouched by this feature). Kept as ONE
+             self-contained, liftable block: this markup + sharedJoinUrl +
+             copyingShared + onCopySharedLink + PracticeWithSharedLink below
+             + the .pd-shared-link* styles are the entire surface -- deleting
+             all of them removes the feature cleanly, no disentanglement.
+             Hidden entirely (v-if) until the backend has actually minted a
+             link (ensure_shared_registrant, zoom/service.py); no separate
+             "not available yet" state needed here, unlike a control whose
+             BACKEND is missing -- this backend exists, the value is just not
+             ready yet, same non-state the master already sees for zoom_host_
+             join_url before a meeting is created. -->
+        <div v-if="sharedJoinUrl" class="pd-shared-link">
+          <span class="pd-shared-link__label">Ссылка для гостей без входа в приложение</span>
+          <VButton size="sm" variant="outline" :loading="copyingShared" @click="onCopySharedLink">
+            Копировать
+          </VButton>
+        </div>
+
         <!-- Записалось / Мест (карточка «Цена» убрана — operator 2026-06-18) -->
         <div class="practice-detail__stats">
           <VStatCard :value="enrolledStat" label="Записалось" />
@@ -344,6 +365,18 @@ import type {
   ReviewItem,
 } from '@/api/types'
 
+// TEMPORARY (T24-38, PROMPT №642): zoom_shared_join_url does not exist on
+// PracticeResponse in generated.ts yet -- the backend field
+// (practices/schemas.py) has not been deployed/regenerated. Hand-typed
+// here, scoped to this one view only -- NOT added to api/types.ts, whose
+// own header says backend types "do NOT add manually -- they come from
+// generated.ts". Delete this interface and read practice.value.
+// zoom_shared_join_url directly the first time this file is touched after
+// the next `make gen-types` regen.
+interface PracticeWithSharedLink extends PracticeResponse {
+  zoom_shared_join_url?: string | null
+}
+
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
@@ -390,6 +423,29 @@ const recurrenceLabel = computed((): string | null => {
   if (practice.value?.practice_type !== 'series') return null
   return recurrenceDaysLabel(practice.value.recurrence_days) ?? 'Регулярная'
 })
+
+// T24-38 (PROMPT №642): the shared, registration-free link -- see the
+// template block's own comment for the full liftability note. null until
+// the backend has minted one (ensure_shared_registrant, zoom/service.py).
+const sharedJoinUrl = computed(
+  (): string | null =>
+    (practice.value as PracticeWithSharedLink | null)?.zoom_shared_join_url ?? null,
+)
+const copyingShared = ref(false)
+async function onCopySharedLink(): Promise<void> {
+  if (copyingShared.value || !sharedJoinUrl.value) return
+  copyingShared.value = true
+  try {
+    // Clipboard needs no backend -- same pattern as MasterGroupDetailView's
+    // group-invite copy.
+    await navigator.clipboard.writeText(sharedJoinUrl.value)
+    toast.success('Ссылка скопирована')
+  } catch (e) {
+    toast.error(extractApiError(e, 'Не удалось скопировать ссылку'))
+  } finally {
+    copyingShared.value = false
+  }
+}
 
 // Accordion open state (local per-screen cards, was VAccordion — PROMPT №158).
 // All three open by default (operator PD-C1: Противопоказания also expanded).
@@ -617,6 +673,28 @@ onMounted(load)
    Upcoming keeps the default spacing. */
 .practice-detail__content--past {
   padding-top: 0;
+}
+
+/* ===== T24-38 (PROMPT №642): shared guest link ===== */
+/* See the template block's own comment (above the markup) for the full
+   liftability note -- this rule + its sibling below are part of that same
+   removable unit. */
+.pd-shared-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  background: var(--velo-bg-card-solid);
+  border: 1px solid var(--velo-border-card);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.pd-shared-link__label {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--velo-text-secondary);
+  line-height: 1.4;
 }
 
 /* ===== Stats ===== */

@@ -626,6 +626,7 @@ def practice_to_response(
     no_show: int | None = None,
     zoom_link_visible: bool = False,
     zoom_host_join_url: str | None = None,
+    zoom_shared_join_url: str | None = None,
     zoom_meeting_status: str | None = None,
     deduplicated: bool = False,
     audience_group_names: list[str] | None = None,
@@ -682,6 +683,10 @@ def practice_to_response(
     # T21-1: host join_url -- caller decides whether to fetch/pass it (owner-
     # facing responses only); everyone else gets the schema default (None).
     resp.zoom_host_join_url = zoom_host_join_url
+
+    # T24-38 (PROMPT №642): shared-link, same "caller decides" posture as
+    # zoom_host_join_url immediately above.
+    resp.zoom_shared_join_url = zoom_shared_join_url
 
     # A4 V2 (PROMPT №572): NOT owner-gated, unlike zoom_host_join_url above --
     # see the schema field's own docstring for why.
@@ -1091,9 +1096,13 @@ async def get_practice_detail(
     # attendance counts above (a non-owner must never see the master's
     # personal link either).
     host_join_url = None
+    shared_join_url = None
     if is_owner:
-        from app.modules.zoom.service import get_host_join_url
+        from app.modules.zoom.service import get_host_join_url, get_shared_join_url
         host_join_url = await get_host_join_url(practice.id, session)
+        # T24-38 (PROMPT №642): same is_owner gate as host_join_url above --
+        # a non-owner must never see the shared link either.
+        shared_join_url = await get_shared_join_url(practice.id, session)
     # A4 V2 (PROMPT №572): NOT owner-gated -- this is the call site behind
     # GET /practices/{id}, which is also what PracticeLiveView reads for a
     # booked (non-owner) participant. Both need to distinguish pending_
@@ -1113,6 +1122,7 @@ async def get_practice_detail(
         is_paid=is_paid,
         zoom_link_visible=zoom_visible,
         zoom_host_join_url=host_join_url,
+        zoom_shared_join_url=shared_join_url,
         zoom_meeting_status=zoom_meeting_status,
         audience_group_names=audience_group_names,
         **series_meta_kwargs(series_meta.get(practice.id)),

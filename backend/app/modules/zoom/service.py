@@ -130,6 +130,9 @@ async def create_meeting_for_practice(
             zoom_meeting_id=row.zoom_meeting_id,
         )
         await ensure_host_registrant(row, practice, session)
+        # T24-38 (PROMPT №642): best-effort, same call-site shape as the host
+        # registrant above -- see ensure_shared_registrant's own docstring.
+        await ensure_shared_registrant(row, session)
     except ZoomAPIError as exc:
         row.status = ZoomMeetingStatus.CREATE_FAILED.value
         row.last_sync_error = (
@@ -263,6 +266,83 @@ async def ensure_host_registrant(
         logger.exception(
             "zoom_host_registrant_unexpected_error",
             practice_id=str(practice.id),
+        )
+
+
+def _shared_registration_email_for(zoom_meeting: ZoomMeeting) -> str:
+    """The exact email sent to Zoom for the shared (no-human) registrant --
+    deterministic per meeting, same shape as _registration_email_for's own
+    .invalid placeholder but a DIFFERENT subdomain (@meetings., not
+    @users.), on purpose: this address must never accidentally satisfy
+    attendance_service.PLACEHOLDER_EMAIL_SUFFIX or any other check written
+    against a per-USER placeholder, because this one represents no user at
+    all. Deterministic (keyed on zoom_meeting.id, not a random token) so a
+    retried mint sends Zoom the SAME email every time -- required for the
+    idempotency this function leans on (see its own docstring)."""
+    return f"shared-{zoom_meeting.id}@meetings.velo.invalid"
+
+
+async def ensure_shared_registrant(
+    zoom_meeting: ZoomMeeting,
+    session: AsyncSession,
+) -> None:
+    """T24-38 (PROMPT №642): mint the ONE shared, registration-free
+    registrant for this meeting, idempotently.
+
+    Writes directly onto ZoomMeeting.shared_registrant_id / shared_join_url
+    -- deliberately NOT a ZoomRegistrant row (see those two columns'
+    docstring in models.py for the correctness reason: it keeps a guest
+    joining through this link structurally unmatchable by the attendance
+    ladder, which never queries ZoomMeeting for a "registrant").
+
+    Idempotent by a plain column check (if shared_registrant_id is already
+    set, no-op) rather than the savepoint/IntegrityError dance
+    ensure_host_registrant needs -- there is no unique index to race here
+    (this is an UPDATE of one already-identified row, not an INSERT
+    contending for a slot), and the email this function sends Zoom is
+    DETERMINISTIC per meeting (_shared_registration_email_for), so even two
+    concurrent callers racing this check both land on the SAME Zoom
+    registrant (recon, PROMPT №641: Zoom is idempotent on a duplicate
+    registrant email -- same email returns the same registrant_id/join_url,
+    no error, no duplicate) -- the race is harmless by construction on
+    BOTH sides, ours and Zoom's, not merely unlikely.
+
+    Best-effort, same posture as ensure_host_registrant: never raises. No
+    retry-poller coverage exists for a failure here (that poller only
+    claims ZoomRegistrant rows, which this deliberately is not) -- see the
+    PROMPT №642 DONE report for the known, accepted gap this leaves.
+    """
+    if zoom_meeting.shared_registrant_id:
+        return
+
+    email = _shared_registration_email_for(zoom_meeting)
+
+    try:
+        response = await create_registrant(
+            zoom_meeting_id=zoom_meeting.zoom_meeting_id,
+            email=email,
+            first_name="VELO",
+            last_name="Guest Link",
+        )
+        zoom_meeting.shared_registrant_id = (
+            response.get("registrant_id") or response.get("id")
+        )
+        zoom_meeting.shared_join_url = response.get("join_url")
+        logger.info(
+            "zoom_shared_registrant_created",
+            zoom_meeting_id=str(zoom_meeting.id),
+            shared_registrant_id=zoom_meeting.shared_registrant_id,
+        )
+    except ZoomAPIError as exc:
+        logger.warning(
+            "zoom_shared_registrant_create_failed",
+            zoom_meeting_id=str(zoom_meeting.id),
+            status_code=exc.status_code,
+        )
+    except Exception:
+        logger.exception(
+            "zoom_shared_registrant_unexpected_error",
+            zoom_meeting_id=str(zoom_meeting.id),
         )
 
 
@@ -620,6 +700,54 @@ async def get_host_join_urls(
                 ZoomRegistrant.role == ZoomRegistrantRole.HOST.value,
                 ZoomRegistrant.status != ZoomRegistrantStatus.CANCELLED.value,
                 ZoomRegistrant.join_url.is_not(None),
+            )
+        )
+    ).all()
+    return {row[0]: row[1] for row in rows}
+
+
+# ---------------------------------------------------------------------------
+# T24-38 (PROMPT №642): read-only shared-link lookups for the master-only
+# PracticeResponse.zoom_shared_join_url. Same owner-only posture as
+# get_host_join_url[s] above -- callers gate the call itself on is_owner,
+# not this function (mirrors that pair exactly, see practices/service.py).
+# Unlike get_host_join_url[s], no join to zoom_registrants: the value lives
+# directly on ZoomMeeting (see that model's shared_registrant_id/
+# shared_join_url docstring for why).
+# ---------------------------------------------------------------------------
+
+
+async def get_shared_join_url(
+    practice_id: UUID,
+    session: AsyncSession,
+) -> str | None:
+    """This practice's shared registrant join_url, or None if there is no
+    USABLE one -- meeting not active, or Zoom hasn't returned one yet."""
+    return (
+        await session.execute(
+            select(ZoomMeeting.shared_join_url).where(
+                ZoomMeeting.practice_id == practice_id,
+                ZoomMeeting.status == ZoomMeetingStatus.ACTIVE.value,
+            )
+        )
+    ).scalar_one_or_none()
+
+
+async def get_shared_join_urls(
+    practice_ids: list[UUID],
+    session: AsyncSession,
+) -> dict[UUID, str]:
+    """Batched form of get_shared_join_url for a list endpoint (master's own
+    practice list) -- one query, no N+1, same pattern as get_host_join_urls
+    above."""
+    if not practice_ids:
+        return {}
+    rows = (
+        await session.execute(
+            select(ZoomMeeting.practice_id, ZoomMeeting.shared_join_url).where(
+                ZoomMeeting.practice_id.in_(practice_ids),
+                ZoomMeeting.status == ZoomMeetingStatus.ACTIVE.value,
+                ZoomMeeting.shared_join_url.is_not(None),
             )
         )
     ).all()

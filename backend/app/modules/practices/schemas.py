@@ -744,6 +744,15 @@ class PracticeResponse(BaseModel):
     # attended/no_show above.
     zoom_host_join_url: str | None = None
 
+    # T24-38 (PROMPT №642): the SHARED, registration-free link -- a
+    # deliberate temporary crutch for the launch period (owner ruling, to be
+    # REMOVED later). Same owner-only gating posture as zoom_host_join_url
+    # immediately above (populated only on owner-facing responses; every
+    # other caller leaves the schema default None) -- kept as its OWN field
+    # rather than folded into zoom_host_join_url so deleting the feature
+    # later is a plain field removal, not a disentanglement.
+    zoom_shared_join_url: str | None = None
+
     # A4 V2 (PROMPT №572): this practice's ZoomMeeting.status verbatim
     # ('active' | 'pending_creation' | 'create_failed' | 'deleted'), or None
     # if no ZoomMeeting row exists at all. UNLIKE zoom_host_join_url above,
