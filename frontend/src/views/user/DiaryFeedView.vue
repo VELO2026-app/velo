@@ -208,8 +208,9 @@
       </template>
     </div>
 
-    <!-- Compose dim scrim: dims the feed while writing; the header islands and
-         composer stay bright above it. -->
+    <!-- Compose tap-catcher: invisible (T24-2 removed the frost/dim), but
+         still captures taps while writing to block accidental feed navigation
+         and dismiss the keyboard on an outside tap. -->
     <div
       class="diary-feed__scrim"
       :class="{ 'diary-feed__scrim--on': composing }"
@@ -869,38 +870,53 @@ onBeforeUnmount(() => {
   padding-bottom: calc(var(--space-4) + 5px + env(safe-area-inset-bottom, 0px));
 }
 
-/* -- Compose write-mode glass --
-   position:absolute (was fixed, bg-freeze batch) so it covers `.diary-feed`
-   edge-to-edge WITHOUT tracking the visual viewport -- a fixed layer resizes
-   with the keyboard on every platform by CSS spec, which visibly diverged from
-   the (now frozen-height) #app::before background underneath it. `.diary-feed`
-   is position:relative (its own root rule), so inset:0 here resolves against
-   that stable box instead. While writing it is a WHITENED FROSTED glass (white
-   wash + blur) over the feed -- NOT a dark dim: the content stays faintly
-   visible behind the frost. z 1 puts it above the feed (isolated to its own
-   stacking context below) but BELOW the sticky header/composer islands, so
-   only the chrome stays crisp. */
+/* T24-1: reposition the composer above the LIVE keyboard, not the frozen
+   box's own bottom edge. `.diary-feed__composer` is bottom:0 of `.diary-feed`
+   (position:relative), whose own height inherits the frozen `--velo-frozen-vh`
+   box (global.css BG-FREEZE) all the way down -- immune by construction to any
+   live viewport signal. That's correct at rest, but on a platform where the
+   keyboard actually shrinks the visible surface (not just overlays it), the
+   frozen box now overflows the real screen and bottom:0 lands beyond what's
+   visible. `--velo-vvh` (live) and `html.is-keyboard-open` are the signal
+   useBackgroundStabilizer already publishes for exactly this; global.css
+   explicitly excludes fill-mode screens (this one) from the shared
+   `.velo-kbd-scroll` mechanism because they "own their keyboard handling
+   directly" -- this is the diary doing that. `frozen - vvh` is the shrink
+   amount; shifting `bottom` up by it re-anchors the composer to the live
+   bottom edge instead of the frozen one. AT REST (no is-keyboard-open) this
+   selector never matches -> layout is byte-identical to before. Does NOT
+   touch #app/html/body (BG-ROOT stays untouched) -- scoped to this one
+   diary-owned element only. */
+html.is-keyboard-open .diary-feed--composing .diary-feed__composer {
+  bottom: calc(var(--velo-frozen-vh, 100%) - var(--velo-vvh, 100%));
+}
+
+/* -- Compose write-mode tap-catcher --
+   T24-2 (owner reversal, 2026-07-31, supersedes the 2026-07-29 ruling): the
+   feed must stay VISIBLE while writing -- the frosted-glass wash + blur over
+   the feed is REMOVED. What stays: this element's TAP-CATCHING role, which is
+   independent of how it looks. position:absolute (was fixed, bg-freeze batch)
+   so it covers `.diary-feed` edge-to-edge WITHOUT tracking the visual viewport
+   (`.diary-feed` is position:relative, so inset:0 resolves against that stable
+   box). While writing it is fully transparent but still captures taps: blocks
+   accidental feed navigation, and tapping it (a non-focusable element) blurs
+   the field -> dismisses the keyboard (in addition to the explicit ⌄ button).
+   z 1 keeps it above the feed but BELOW the sticky header/composer islands. */
 .diary-feed__scrim {
   position: absolute;
   inset: 0;
   z-index: 1;
-  background: var(--velo-write-frost);
-  -webkit-backdrop-filter: blur(var(--velo-write-blur));
-  backdrop-filter: blur(var(--velo-write-blur));
-  opacity: 0;
   pointer-events: none;
-  transition: opacity 0.28s ease;
 }
 .diary-feed__scrim--on {
-  opacity: 1;
-  /* Capture taps while writing: blocks accidental feed navigation, and tapping
-     the frost (a non-focusable element) blurs the field -> dismisses the
-     keyboard (in addition to the explicit ⌄ button). */
+  /* Capture taps while writing (see comment above) -- purely functional now,
+     nothing to fade in visually. */
   pointer-events: auto;
 }
 
 /* Feed content fades (70%) while writing, so it reads as background behind the
-   frosted writing surface (operator-tuned 2026-06-05). */
+   composer field (operator-tuned 2026-06-05). Independent of the T24-2 frost
+   removal above -- the owner did not name this fade, so it is kept as-is. */
 .diary-feed--composing .diary-feed__body {
   opacity: 0.7;
 }

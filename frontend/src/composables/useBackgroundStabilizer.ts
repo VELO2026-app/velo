@@ -26,6 +26,10 @@ import { resetKeyboardViewportState } from '@/utils/keyboardViewportState'
  * visualViewport resize/scroll handler -- doing so would defeat the whole
  * point, since that IS the keyboard signal).
  *
+ * T24-4 (mount-time race, white rounded-corner slivers): the mount call is
+ * deferred via `queueMicrotask`, not synchronous -- see the onMounted body
+ * below for why.
+ *
  * The "dancing background" is fixed STRUCTURALLY now (batch K): #app::before is an
  * absolute child of #app's stable box (global.css), so it no longer tracks
  * the visual viewport and there is nothing to counter-shift per frame. This
@@ -65,8 +69,8 @@ const ORIENTATION_SETTLE_MS = 300
  * Capture the current viewport height ONCE as a literal px value into
  * `--velo-frozen-vh`. Read (visualViewport?.height ?? innerHeight) -- the
  * same fallback pair the rest of the keyboard machinery uses -- but written
- * to a var that NOTHING else ever touches live. Call sites: mount (before any
- * keyboard can be open) and orientationchange (a genuine size change) ONLY.
+ * to a var that NOTHING else ever touches live. Call sites: mount (deferred,
+ * see below) and orientationchange (a genuine size change) ONLY.
  */
 function freezeAppHeight(): void {
   if (typeof window === 'undefined') return
@@ -114,12 +118,21 @@ export function useBackgroundStabilizer(): void {
   }
 
   onMounted(() => {
-    // Capture the frozen anchor height FIRST, before any keyboard listener is
-    // wired -- guarantees this read happens at the pristine, keyboard-closed
-    // moment. Unconditional (not gated on `vv`): freezeAppHeight has its own
+    // T24-4: deferred to a microtask, NOT called synchronously here. This
+    // composable is invoked from App.vue BEFORE App.vue's own onMounted is
+    // registered, so Vue fires this onMounted first -- if freezeAppHeight()
+    // ran synchronously here, it would capture the height before App.vue's
+    // onMounted has even called initAuth() -> platform.init() ->
+    // webApp.expand(), freezing a viewport Telegram has not finished
+    // expanding (the mount-time race behind the white rounded-corner
+    // slivers). expand() itself executes synchronously inside platform.init()
+    // (no internal await precedes it), so by the time this queued microtask
+    // runs -- after the WHOLE synchronous mount call stack, i.e. every
+    // onMounted hook for this tick, has unwound -- expand() has already been
+    // called. Unconditional (not gated on `vv`): freezeAppHeight has its own
     // window/visualViewport fallback and must run even where visualViewport
     // is unsupported (desktop/older engines).
-    freezeAppHeight()
+    queueMicrotask(freezeAppHeight)
     window.addEventListener('orientationchange', onOrientationChange)
 
     if (!vv) return

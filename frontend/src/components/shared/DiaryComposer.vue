@@ -5,14 +5,15 @@
   target entry_type ('note' for Дневник, 'dream' for Сонник) is decided by the
   parent from the active filter and passed in as `entryType`.
 
-  Behaviour (rebuilt PROMPT №629, owner rulings 1-7):
+  Behaviour (rebuilt PROMPT №629, owner rulings 1-7; T24-3 removed the mic):
   - Idle: a borderless "rail" field (translucent white outline + soft glow,
-    matches the floating-glass chrome) plus ONE action slot on the right: mic
-    while empty, send once there is text -- never both at once.
-  - Compose (field focused): the parent dims the feed and shows its own
-    frosted scrim (unchanged -- the owner's own tuning). The field itself has
-    NO fill of its own anymore -- just its outline, sitting directly over that
-    scrim. Still one row with the slot button; the field grows in height,
+    matches the floating-glass chrome) plus ONE action slot on the right,
+    constant width -- EMPTY while the field is empty, send once there is text.
+  - Compose (field focused): the parent dims the feed (opacity fade, unchanged
+    -- the owner's own tuning); the feed itself stays visible (T24-2 removed
+    the feed-wide frost the parent used to show). The field itself carries a
+    slight frost of its own now, so typed text stays readable over the visible
+    feed behind it. Still one row with the slot button; the field grows in height,
     capped to ~1/3 of the on-screen keyboard's own height (see autogrow()),
     then scrolls internally. Emits `composingChange` so the parent can toggle
     its dim scrim.
@@ -49,25 +50,31 @@
       <span v-if="showPreview" class="composer__preview">{{ previewText }}</span>
     </div>
 
-    <!-- One action slot (ruling 4): mic while empty, send once there is text
-         -- never both at once. -->
-    <button
-      type="button"
-      class="composer__btn composer__btn--slot"
-      :aria-label="canSend ? 'Отправить' : 'Голосовой ввод'"
-      :disabled="submitting"
-      @pointerdown.prevent
-      @click="onSlotClick"
-    >
-      <IconSend v-if="canSend" :size="20" />
-      <IconMic v-else :size="20" />
-    </button>
+    <!-- T24-3: the mic is gone (voice input was never wired up and must not
+         tease the user); the one action slot is EMPTY while the field is
+         empty and holds ONLY the send button once there is text -- never a
+         disabled placeholder (the owner's reasoning: a greyed-out button
+         teases the same way the mic did). The wrapper holds a CONSTANT WIDTH
+         either way so the row never jumps when the button appears. -->
+    <div class="composer__slot">
+      <button
+        v-if="canSend"
+        type="button"
+        class="composer__btn"
+        aria-label="Отправить"
+        :disabled="submitting"
+        @pointerdown.prevent
+        @click="onSend"
+      >
+        <IconSend :size="20" />
+      </button>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
-import { IconMic, IconSend } from '@/components/icons'
+import { IconSend } from '@/components/icons'
 import { useDiaryStore } from '@/stores/diary'
 import { useToast } from '@/composables/useToast'
 
@@ -207,18 +214,6 @@ function autogrow(): void {
   el.style.height = `${Math.min(el.scrollHeight, cap)}px`
 }
 
-function onMic(): void {
-  // Voice input is not implemented yet -- visual stub.
-  toast.info('Функция временно недоступна')
-}
-
-// Single action slot (ruling 4): mic while empty, send once there is text --
-// never both at once.
-function onSlotClick(): void {
-  if (canSend.value) void onSend()
-  else onMic()
-}
-
 async function onSend(): Promise<void> {
   if (!canSend.value || submitting.value) return
   submitting.value = true
@@ -308,8 +303,19 @@ async function onSend(): Promise<void> {
   opacity: 0.85;
 }
 
-/* SOLID round button (the one mic/send slot) -- #627A9C, no glass; icon stays
-   readable on any backdrop. 44px circle (Figma Group 2545). */
+/* T24-3: fixed-width wrapper around the one action slot -- always reserves
+   the button's own 44px footprint (even when the button isn't rendered), so
+   the row never jumps when the send button appears on the first keystroke. */
+.composer__slot {
+  width: var(--velo-size-44);
+  height: var(--velo-size-44);
+  flex-shrink: 0;
+}
+
+/* SOLID round send button -- #627A9C, no glass; icon stays readable on any
+   backdrop. 44px circle (Figma Group 2545). Renders ONLY once there is text
+   (T24-3 removed the mic and the greyed-out-when-empty state alike -- the
+   owner's reasoning: a disabled button teases the same way the mic did). */
 .composer__btn {
   display: inline-flex;
   align-items: center;
@@ -338,9 +344,7 @@ async function onSend(): Promise<void> {
 }
 
 /* -- Compose mode: still one row with the slot button (ruling 4); the field
-   just grows taller and bottom-aligns against it. No fill of its own anymore
-   (ruling 1) -- the parent's scrim + feed-dim (untouched) are what keep the
-   text readable; this is just an outline sitting over them. -- */
+   just grows taller and bottom-aligns against it. -- */
 .composer--composing {
   align-items: flex-end;
 }
@@ -352,6 +356,13 @@ async function onSend(): Promise<void> {
   border-color: var(--velo-nav-active-bg);
   box-shadow: none;
   border-radius: 20px;
+  /* T24-2: the feed-wide frost moved OFF the feed and onto just this field, so
+     typed text still reads clearly over the now-visible feed behind it. Same
+     tokens the feed scrim used to use -- variables.css already documents
+     --velo-write-blur as serving "scrim + composer field". */
+  background: var(--velo-write-frost);
+  -webkit-backdrop-filter: blur(var(--velo-write-blur));
+  backdrop-filter: blur(var(--velo-write-blur));
 }
 
 .composer--composing .composer__input::placeholder {

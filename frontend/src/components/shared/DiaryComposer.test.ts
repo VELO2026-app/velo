@@ -39,9 +39,8 @@ import type { DiaryEntryResponse, DiaryFeedResponse } from '@/api/types'
 vi.mock('@/api/diary')
 
 const toastError = vi.fn()
-const toastInfo = vi.fn()
 vi.mock('@/composables/useToast', () => ({
-  useToast: () => ({ error: toastError, success: vi.fn(), info: toastInfo }),
+  useToast: () => ({ error: toastError, success: vi.fn(), info: vi.fn() }),
 }))
 
 function emptyPage(): DiaryFeedResponse {
@@ -113,6 +112,12 @@ function slotBtn(): HTMLButtonElement {
   return btns[0] as HTMLButtonElement
 }
 
+// T24-3: the slot wrapper is always present (constant width); the button
+// inside it renders only once there is text.
+function slotButtonCount(): number {
+  return host?.querySelectorAll('.composer__btn').length ?? 0
+}
+
 function typeText(value: string): void {
   const el = textarea()
   el.value = value
@@ -128,7 +133,6 @@ beforeEach(() => {
   vi.mocked(diaryApi.createDiaryEntry).mockReset()
   vi.mocked(diaryApi.listDiaryFeed).mockReset().mockResolvedValue(emptyPage())
   toastError.mockReset()
-  toastInfo.mockReset()
 })
 
 afterEach(() => {
@@ -137,12 +141,12 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('DiaryComposer -- idle state (1: no chevron, one slot)', () => {
-  it('renders exactly one action button, no kb-collapse button, mic in the slot', () => {
+describe('DiaryComposer -- idle state (1: no chevron, one slot; T24-3: no mic)', () => {
+  it('renders NO action button while empty, no kb-collapse button, but the slot still reserves its width', () => {
     mount()
-    expect(host!.querySelectorAll('.composer__btn').length).toBe(1)
+    expect(slotButtonCount()).toBe(0)
     expect(host!.querySelector('.composer__btn--kb')).toBeNull()
-    expect(slotBtn().getAttribute('aria-label')).toBe('Голосовой ввод')
+    expect(host!.querySelector('.composer__slot')).not.toBeNull()
   })
 
   it('placeholder follows entryType', () => {
@@ -156,24 +160,24 @@ describe('DiaryComposer -- idle state (1: no chevron, one slot)', () => {
   })
 })
 
-describe('DiaryComposer -- the single action slot (4: mic <-> send, never both)', () => {
-  it('typing swaps the slot to send; clearing swaps it back to mic', async () => {
+describe('DiaryComposer -- the single action slot (4: empty <-> send, never a disabled mic)', () => {
+  it('typing makes the send button appear; clearing removes it again (empty slot)', async () => {
     mount()
     typeText('hello')
     await nextTick()
     expect(slotBtn().getAttribute('aria-label')).toBe('Отправить')
-    expect(host!.querySelectorAll('.composer__btn').length).toBe(1)
+    expect(slotButtonCount()).toBe(1)
 
     typeText('')
     await nextTick()
-    expect(slotBtn().getAttribute('aria-label')).toBe('Голосовой ввод')
+    expect(slotButtonCount()).toBe(0)
   })
 
-  it('whitespace-only text never swaps the slot to send', async () => {
+  it('whitespace-only text never shows the send button', async () => {
     mount()
     typeText('   \n   ')
     await nextTick()
-    expect(slotBtn().getAttribute('aria-label')).toBe('Голосовой ввод')
+    expect(slotButtonCount()).toBe(0)
   })
 
   it('the kb-collapse button never reappears once composing', async () => {
@@ -181,15 +185,15 @@ describe('DiaryComposer -- the single action slot (4: mic <-> send, never both)'
     textarea().dispatchEvent(new Event('focus'))
     await nextTick()
     expect(host!.querySelector('.composer__btn--kb')).toBeNull()
-    expect(host!.querySelectorAll('.composer__btn').length).toBe(1)
+    // Composing with no text yet: the slot stays empty, not a placeholder button.
+    expect(slotButtonCount()).toBe(0)
   })
-})
 
-describe('DiaryComposer -- mic stays a stub (6)', () => {
-  it('clicking the slot while empty always toasts and never touches the store', () => {
+  it('the slot has no button and cannot be clicked while the field is empty (mic removed, T24-3)', () => {
     mount()
-    slotBtn().click()
-    expect(toastInfo).toHaveBeenCalledWith('Функция временно недоступна')
+    const slot = host!.querySelector('.composer__slot')
+    expect(slot).not.toBeNull()
+    expect(slot!.querySelector('.composer__btn')).toBeNull()
     expect(diaryApi.createDiaryEntry).not.toHaveBeenCalled()
   })
 })
