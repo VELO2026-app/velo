@@ -1359,7 +1359,7 @@ export interface StudentCheckinItem {
   created_at: string
 }
 
-/** GET /api/v1/masters/me/students/{id} -- per-student aggregate. name / avatar_url -- the student's identity, same source as StudentListItem (so a direct/refreshed deep-link renders the real name, not a fallback). practices_count -- number of this master's practices the student attended. hours -- attended duration_minutes summed, in hours (1 decimal). satisfaction_pct-- round(avg(rating) * 10) over the student's feedbacks on this master's practices; null when they left no feedback. recent_checkins -- newest-first, capped. feedbacks -- newest-first, capped. */
+/** GET /api/v1/masters/me/students/{id} -- per-student aggregate. name / avatar_url -- the student's identity, same source as StudentListItem (so a direct/refreshed deep-link renders the real name, not a fallback). practices_count -- number of this master's practices the student attended. hours -- attended duration_minutes summed, in hours (1 decimal). satisfaction_pct-- round(avg(rating) * 10) over the student's feedbacks on this master's practices; null when they left no feedback. recent_checkins -- newest-first, capped. feedbacks -- newest-first, capped. blocked -- T24-20 (PROMPT №638): True iff MasterStudent.blocked_at is set for THIS master. Lets the frontend swap the bottom action ("Заблокировать" / "Разблокировать") instead of guessing from the fact the request merely succeeded. get_master_student_detail's own narrow allow-path (NOT is_master_audience_member, which still never admits a blocked student -- see that function's docstring) is the only place blocked=True can occur. */
 export interface StudentDetailResponse {
   name: string
   avatar_url: string | null
@@ -1368,6 +1368,7 @@ export interface StudentDetailResponse {
   satisfaction_pct: number | null
   recent_checkins: StudentCheckinItem[]
   feedbacks: StudentFeedbackItem[]
+  blocked: boolean
 }
 
 /** One feedback left by the student (on this master's practices). */
