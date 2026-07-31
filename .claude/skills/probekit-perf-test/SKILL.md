@@ -12,11 +12,11 @@ pytest-benchmark, and stdlib fallback — auto-detected from project environment
 
 ## Configuration
 
-<!-- VELO-tuned (ПРОМТ №435): CBS's docs/01_refer path replaced with the
+<!-- VELO-tuned (PROMPT №435): CBS's docs/01_refer path replaced with the
      git-untracked scratch dir the rest of the family already uses (dda9a6f,
-     ПРОМТ №385). VELO has no docs/01_refer/.
+     PROMPT №385). VELO has no docs/01_refer/.
 
-     NO LOCAL TARGET -- read this before running (ПРОМТ №435). This skill needs
+     NO LOCAL TARGET -- read this before running (PROMPT №435). This skill needs
      a live HTTP endpoint. VELO's backend runs in Docker on the VPS; there is no
      local API and no Docker locally, so the only reachable targets are the
      shared TEST and PROD servers. Do NOT point a load/stress/spike/soak run at

@@ -154,7 +154,7 @@ ol {
       behaviour: on Android keyboard-open (adjustResize shrinks the layout
       viewport), the browser forces a scroll on the root to reveal the focused
       input, BYPASSING `overflow:hidden` for the purposes of that one
-      auto-scroll (confirmed by on-device HUD data, audit ПРОМТ №383 —
+      auto-scroll (confirmed by on-device HUD data, audit PROMPT №383 —
       `#app`'s own rect.top goes negative while its rect.height stays frozen).
       This is exactly why rule 2's bg anchor was moved OFF `#app` entirely
       instead of relying on root-lock to keep it still.
@@ -207,7 +207,7 @@ ol {
       correctly on any platform.
    ============================================================================= */
 
-/* === Photo background layer (ПРОМТ №383) === */
+/* === Photo background layer (PROMPT №383) === */
 /* `#app-bg` is a STATIC element in index.html (first child of <body>, before
    #app) -- not Vue-rendered -- so it paints at first paint with zero
    mount-delay flash. Body-level, not `#app::before`: `#app` sits inside a
@@ -312,7 +312,7 @@ html.is-keyboard-open .v-sheet__panel {
   max-height: 100%;
 }
 
-/* Dancing-background freeze rules (ПРОМТ №232/№242/№282) were REMOVED in batch K;
+/* Dancing-background freeze rules (PROMPT №232/№242/№282) were REMOVED in batch K;
    ROOT-LOCK (this file's top) + freeze-px (№379) then targeted RESIZE — but
    audit №383 proved the root's own forced focus-scroll still dragged
    #app::before (a descendant of the scrolled subtree) despite both. The bg
@@ -323,7 +323,7 @@ html.is-keyboard-open .v-sheet__panel {
    marked SCROLL regions, not the bg — the bg no longer depends on them at
    all). */
 
-/* VARIANT 3 (ПРОМТ №282): while typing on a fog screen, keep the TOP fade and
+/* VARIANT 3 (PROMPT №282): while typing on a fog screen, keep the TOP fade and
    drop ONLY the BOTTOM fade (was: whole mask → `none`, which made the whole
    backdrop visibly "switch"). Reuses the resting top stops (--fog-top-hard /
    --fog-top-fade, set inline on this same element by MobileLayout.mainStyle);

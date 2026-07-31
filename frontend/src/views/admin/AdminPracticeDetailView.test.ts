@@ -104,7 +104,9 @@ function rosterEntry(overrides: Partial<AdminRosterEntry> = {}): AdminRosterEntr
   }
 }
 
-function practice(overrides: Partial<AdminPracticeDetailResponse> = {}): AdminPracticeDetailResponse {
+function practice(
+  overrides: Partial<AdminPracticeDetailResponse> = {},
+): AdminPracticeDetailResponse {
   return {
     id: 'p_1',
     title: 'Утренняя медитация',
@@ -118,7 +120,10 @@ function practice(overrides: Partial<AdminPracticeDetailResponse> = {}): AdminPr
     status: 'upcoming',
     timezone: 'Europe/Berlin',
     attended: 0,
-    roster: [rosterEntry({ user_id: 'u_1' }), rosterEntry({ user_id: 'u_2', name: 'Борис Сидоров' })],
+    roster: [
+      rosterEntry({ user_id: 'u_1' }),
+      rosterEntry({ user_id: 'u_2', name: 'Борис Сидоров' }),
+    ],
     ...overrides,
   }
 }
@@ -212,12 +217,14 @@ describe('AdminPracticeDetailView', () => {
   describe('ladder (FOUR rungs -- see banner)', () => {
     it('loading -> content', async () => {
       let resolveGet!: (v: AdminPracticeDetailResponse) => void
-      vi.mocked(adminApi.getAdminPracticeDetail).mockReset().mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolveGet = resolve
-          }),
-      )
+      vi.mocked(adminApi.getAdminPracticeDetail)
+        .mockReset()
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveGet = resolve
+            }),
+        )
       mount('p_upcoming')
       await nextTick()
 
@@ -267,12 +274,14 @@ describe('AdminPracticeDetailView', () => {
 
     it('the FOURTH rung ("Практика недоступна") is transiently reachable right after mount, before the load() flip to loading=true has painted', () => {
       let resolveGet!: (v: AdminPracticeDetailResponse) => void
-      vi.mocked(adminApi.getAdminPracticeDetail).mockReset().mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolveGet = resolve
-          }),
-      )
+      vi.mocked(adminApi.getAdminPracticeDetail)
+        .mockReset()
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveGet = resolve
+            }),
+        )
       mount('p_upcoming')
       // NO await at all here -- checking the DOM in the exact synchronous tick
       // app.mount() returns in, before Vue's microtask-batched re-render from
@@ -326,7 +335,8 @@ describe('AdminPracticeDetailView', () => {
   describe('the three empty states -- distinct strings, correctly placed (see banner)', () => {
     it('registered-empty (upcoming, empty roster): "Данных пока нет" under «Записались»', async () => {
       vi.mocked(adminApi.getAdminPracticeDetail).mockResolvedValue(
-        PRACTICE_UPCOMING() && practice({ id: 'p_upcoming', status: 'upcoming', booked: 0, roster: [] }),
+        PRACTICE_UPCOMING() &&
+          practice({ id: 'p_upcoming', status: 'upcoming', booked: 0, roster: [] }),
       )
       mount('p_upcoming')
       await flush()
@@ -452,7 +462,7 @@ describe('AdminPracticeDetailView', () => {
       expect(statValue('Свободно')).toBe('0')
     })
 
-    it('SW5: whenLabel renders in the PRACTICE\'s own timezone, not a hardcoded UTC default -- must agree with AdminPracticesView\'s list item, which already threads timezone through', async () => {
+    it("SW5: whenLabel renders in the PRACTICE's own timezone, not a hardcoded UTC default -- must agree with AdminPracticesView's list item, which already threads timezone through", async () => {
       // 2020-01-15T00:30:00Z: in UTC this is 15 января. In Pacific/Honolulu
       // (UTC-10, no DST) it is still 2020-01-14 14:30 local -- 14 января.
       // Before this fix, formatDateShort's timezone param defaulted to 'UTC'
@@ -476,7 +486,7 @@ describe('AdminPracticeDetailView', () => {
   })
 
   // ===========================================================================
-  // T21-1 (ПРОМТ №541): the Zoom section was built to close ПРОМТ №540's audit
+  // T21-1 (PROMPT №541): the Zoom section was built to close PROMPT №540's audit
   // finding -- the endpoint and its unmatched bucket existed with ZERO
   // frontend consumers. Fetched separately from the main practice detail
   // (own try/catch, own ref) so a failure here never blocks the roster/stats
@@ -507,7 +517,9 @@ describe('AdminPracticeDetailView', () => {
     })
 
     it('active meeting: shows the "Активна" badge', async () => {
-      vi.mocked(adminApi.getAdminZoomAttendance).mockResolvedValue(zoomAttendance({ zoom_meeting_status: 'active' }))
+      vi.mocked(adminApi.getAdminZoomAttendance).mockResolvedValue(
+        zoomAttendance({ zoom_meeting_status: 'active' }),
+      )
       mount('p_upcoming')
       await flush()
 

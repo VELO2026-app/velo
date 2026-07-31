@@ -6,7 +6,7 @@
 #
 # LIST (GET /masters/me/students) -- "Мои ученики": a "student" here is a
 # user with >= 1 ATTENDED booking on a practice owned by this master, and
-# ONLY that (owner-ruled, ПРОМТ №609: kept deliberately narrow, NOT
+# ONLY that (owner-ruled, PROMPT №609: kept deliberately narrow, NOT
 # unified with DETAIL below -- the two lists mean different things on
 # purpose). Group attended bookings on the master's practices by user.
 # practices_count = number of attended practices. needs_attention = the
@@ -16,7 +16,7 @@
 # offset/limit pagination.
 #
 # DETAIL (GET /masters/me/students/{id}) -- "Профиль ученика": WIDER gate
-# (P6, ПРОМТ №609) -- reachable for anyone this master can already see on
+# (P6, PROMPT №609) -- reachable for anyone this master can already see on
 # screen, via groups_service.is_master_audience_member (a derived
 # "Ученики" member OR a custom-group member with no booking at all), not
 # ATTENDED-only. practices_count + hours (attended duration summed / 60),
@@ -160,7 +160,7 @@ async def get_master_student_detail(
         NotFoundError: when `student_id` is not someone this master can
             already see on screen -- see is_master_audience_member's own
             docstring for the two admitted cases (P6, owner-ruled widen,
-            ПРОМТ №609; this screen used to gate on ATTENDED-only, the
+            PROMPT №609; this screen used to gate on ATTENDED-only, the
             same as list_master_students below -- that mismatch is why a
             master could open «Мои группы» -> a member with no attended
             booking yet and get a hard 404 here).

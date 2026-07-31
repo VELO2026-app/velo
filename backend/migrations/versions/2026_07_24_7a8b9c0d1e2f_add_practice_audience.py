@@ -4,7 +4,7 @@ Revision ID: 7a8b9c0d1e2f
 Revises: 6f7a8b9c0d1f
 Create Date: 2026-07-24
 
-Master GROUPS, P5 (ПРОМТ №594): per-practice audience.
+Master GROUPS, P5 (PROMPT №594): per-practice audience.
 
 practices.audience_kind ('public' | 'students' | 'groups', NEW column) --
 added NOT NULL with server_default='public'. This single ALTER TABLE ADD

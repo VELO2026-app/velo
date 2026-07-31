@@ -15,7 +15,7 @@ security, or runtime scanning — only what Claude Code detects by reading sourc
 
 ## Configuration
 
-<!-- VELO-tuned (ПРОМТ №386, sweep): CBS's docs/01_refer path replaced with a
+<!-- VELO-tuned (PROMPT №386, sweep): CBS's docs/01_refer path replaced with a
      git-untracked scratch dir; VELO has no docs/01_refer/ or ENVIRONMENT.md. -->
 report_dir: .tmp/probekit-review
 
@@ -29,7 +29,7 @@ Parse the user's request to extract:
 - If no target → ask: "What should I audit? Provide a file path, directory, or describe the scope."
 
 Read `ENVIRONMENT.md` if it exists — extract project language, framework.
-(VELO note, ПРОМТ №386: no ENVIRONMENT.md in this repo -- language/framework is known:
+(VELO note, PROMPT №386: no ENVIRONMENT.md in this repo -- language/framework is known:
 Vue 3 + TS frontend, FastAPI + Python backend. Shell is Windows Git-Bash/PowerShell;
 no docker/VPS locally.)
 

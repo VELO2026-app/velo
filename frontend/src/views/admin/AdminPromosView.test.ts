@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- AdminPromosView Screen Tests (T8, ПРОМТ №432)
+// VELO Frontend -- AdminPromosView Screen Tests (T8, PROMPT №432)
 // =============================================================================
 //
 // Every master's promo codes plus VELO's own, with admin deactivation. Money:
@@ -176,7 +176,7 @@ describe('AdminPromosView', () => {
     })
 
     it('error retry: the «Повторить» button RENDERS and re-fetches', async () => {
-      // REGRESSION GUARD (T8, find from ПРОМТ №432, fixed in №433).
+      // REGRESSION GUARD (T8, find from PROMPT №432, fixed in №433).
       // Same defect as AdminWithdrawalsView: this screen passes its retry button
       // through `<template #action>` (AdminPromosView.vue:42-44), a slot
       // VEmptyState did not declare -- so Vue dropped it silently and the admin
@@ -234,7 +234,9 @@ describe('AdminPromosView', () => {
   describe('card content', () => {
     it('renders the code, discount and usage from the API', async () => {
       vi.mocked(adminApi.getAdminPromos).mockResolvedValue(
-        page([promo('p1', { code: 'SUMMER25', discount_percent: 25, used_count: 4, max_uses: 10 })]),
+        page([
+          promo('p1', { code: 'SUMMER25', discount_percent: 25, used_count: 4, max_uses: 10 }),
+        ]),
       )
       mount()
       await flush()
@@ -255,7 +257,9 @@ describe('AdminPromosView', () => {
     })
 
     it('a promo with no end date shows «бессрочно»', async () => {
-      vi.mocked(adminApi.getAdminPromos).mockResolvedValue(page([promo('p1', { valid_until: null })]))
+      vi.mocked(adminApi.getAdminPromos).mockResolvedValue(
+        page([promo('p1', { valid_until: null })]),
+      )
       mount()
       await flush()
 
@@ -276,7 +280,9 @@ describe('AdminPromosView', () => {
   describe('owner attribution (whose money the discount comes out of)', () => {
     it('a master promo names the master and is labelled «Мастер»', async () => {
       vi.mocked(adminApi.getAdminPromos).mockResolvedValue(
-        page([promo('p1', { type: 'master', master_first_name: 'Анна', master_last_name: 'Петрова' })]),
+        page([
+          promo('p1', { type: 'master', master_first_name: 'Анна', master_last_name: 'Петрова' }),
+        ]),
       )
       mount()
       await flush()
@@ -339,7 +345,9 @@ describe('AdminPromosView', () => {
     })
 
     it('a deactivated promo is badged and offers NO button -- it is already dead', async () => {
-      vi.mocked(adminApi.getAdminPromos).mockResolvedValue(page([promo('p1', { is_active: false })]))
+      vi.mocked(adminApi.getAdminPromos).mockResolvedValue(
+        page([promo('p1', { is_active: false })]),
+      )
       mount()
       await flush()
 
@@ -390,7 +398,7 @@ describe('AdminPromosView', () => {
       expect(adminApi.getAdminPromos).toHaveBeenLastCalledWith(undefined, false, 20, 0)
     })
 
-    it('switching tabs clears the previous tab\'s rows before the new ones land', async () => {
+    it("switching tabs clears the previous tab's rows before the new ones land", async () => {
       // loadInitial resets items/total/hasMore up front (AdminPromosView.vue:192-194).
       // Without that, company promos would flash under the «Мастеров» tab.
       vi.mocked(adminApi.getAdminPromos).mockResolvedValue(page([promo('p1', { code: 'FIRST' })]))

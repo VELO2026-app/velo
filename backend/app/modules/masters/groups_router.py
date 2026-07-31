@@ -1,5 +1,5 @@
 # =============================================================================
-# VELO Backend -- Master Groups Router (P1, ПРОМТ №590)
+# VELO Backend -- Master Groups Router (P1, PROMPT №590)
 # =============================================================================
 #
 # Master-facing group CRUD + membership. Mounted as a SEPARATE router (like
@@ -12,7 +12,7 @@
 # SESSION: get_db_reader for every GET (read-only), get_db_session for
 # every mutation (P-01 -- router flushes, service never commits).
 #
-# GET /me/groups/search (P6, ПРОМТ №606) is a STATIC path declared before
+# GET /me/groups/search (P6, PROMPT №606) is a STATIC path declared before
 # this file's DYNAMIC /me/groups/{group_id}... routes -- same static-
 # before-dynamic reasoning students_router.py's own header documents for
 # /me/students vs /me/students/{student_id}. No GET exists on the bare
@@ -84,7 +84,7 @@ async def search_group_memberships_endpoint(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> PaginatedGroupSearchResponse:
-    """Cross-group people-search (P6, ПРОМТ №606): one row per (student,
+    """Cross-group people-search (P6, PROMPT №606): one row per (student,
     CUSTOM group) membership -- a student in N groups appears N times,
     each row naming a different group. See this file's own header for
     the static-before-dynamic placement reasoning."""
@@ -125,7 +125,7 @@ async def rename_group_endpoint(
     master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
     session: AsyncSession = Depends(get_db_session),
 ) -> GroupResponse:
-    """Rename AND/OR edit description of a custom group (owner Q10, ПРОМТ
+    """Rename AND/OR edit description of a custom group (owner Q10, PROMPT
     №611). `description` is a partial update: body.model_dump(exclude_unset
     =True) distinguishes "not sent" (leave the column untouched) from "sent"
     (even "" or whitespace -- normalized to NULL in rename_group()), same
@@ -220,7 +220,7 @@ async def remove_group_member_endpoint(
 
 
 # ===========================================================================
-# P4 addenda (ПРОМТ №593): group invite links
+# P4 addenda (PROMPT №593): group invite links
 # ===========================================================================
 
 

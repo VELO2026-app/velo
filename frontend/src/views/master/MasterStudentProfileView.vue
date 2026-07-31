@@ -1,6 +1,6 @@
 <!--
   VELO Frontend -- MasterStudentProfileView (Master DS, 2026-06-11; block +
-  report flow P3, ПРОМТ №592)
+  report flow P3, PROMPT №592)
 
   "Профиль ученика" — one student's card: hero, GROUP CHIPS, stats, recent
   check-ins, feedbacks, "Написать сообщение", and (P3) a destructive
@@ -53,13 +53,13 @@
           <VTag v-for="g in groupChips" :key="g.id">{{ g.name }}</VTag>
         </div>
 
-        <!-- Stats (% card removed — ПРОМТ №157; two cards widen under the hero) -->
+        <!-- Stats (% card removed — PROMPT №157; two cards widen under the hero) -->
         <div class="profile__stats">
           <VStatCard :value="practicesCount" label="Практик" />
           <VStatCard :value="hours" label="Часов" />
         </div>
 
-        <!-- Recent check-ins (cap 3; rest behind «посмотреть еще» — ПРОМТ №157) -->
+        <!-- Recent check-ins (cap 3; rest behind «посмотреть еще» — PROMPT №157) -->
         <h2 class="velo-section-title">Последние check-ins</h2>
         <div v-if="checkinRows.length === 0" class="profile__empty">Пока нет check-ins</div>
         <div v-for="(ci, i) in visibleCheckins" :key="`ci-${i}`" class="profile__ci">
@@ -75,7 +75,7 @@
           @click="ciExpanded = true"
         />
 
-        <!-- Feedbacks (cap 3; rest behind «посмотреть еще» — ПРОМТ №157) -->
+        <!-- Feedbacks (cap 3; rest behind «посмотреть еще» — PROMPT №157) -->
         <h2 class="velo-section-title">Feedbacks</h2>
         <div v-if="feedbackRows.length === 0" class="profile__empty">Пока нет отзывов</div>
         <div v-for="(fb, i) in visibleFeedbacks" :key="`fb-${i}`" class="profile__fb">
@@ -101,7 +101,7 @@
           Написать сообщение
         </VButton>
 
-        <!-- P3 (ПРОМТ №592): destructive, bottom of the screen (design variant 3). -->
+        <!-- P3 (PROMPT №592): destructive, bottom of the screen (design variant 3). -->
         <VButton variant="danger" block class="profile__block-cta" @click="blockConfirmOpen = true">
           Заблокировать пользователя
         </VButton>
@@ -110,7 +110,7 @@
 
     <SendMessageModal :open="msgOpen" :name="name" @close="msgOpen = false" />
 
-    <!-- Block confirm (destructive). TargetUserCard (owner Q9, ПРОМТ №610)
+    <!-- Block confirm (destructive). TargetUserCard (owner Q9, PROMPT №610)
          via the default slot + warning-panel for the consequences text
          (same peach recipe as ReportUserSheet's notice, WITH an icon --
          that dialog deliberately has none). -->
@@ -130,8 +130,8 @@
     </VConfirmDialog>
 
     <!-- Report-offer (optional step -- dismiss is fine). compact-actions
-         (ПРОМТ №609, G10) + confirm-label shortened to «В поддержку»
-         (owner Q1, ПРОМТ №610) -- «Сообщить в поддержку» was the label
+         (PROMPT №609, G10) + confirm-label shortened to «В поддержку»
+         (owner Q1, PROMPT №610) -- «Сообщить в поддержку» was the label
          still overflowing even at compact size; see the delivery report
          for the measured fit with the new label. -->
     <VConfirmDialog
@@ -263,7 +263,7 @@ const feedbackRows = computed(() =>
 )
 
 // Show the 3 most recent of each; the rest hide behind a «посмотреть еще» pill
-// until tapped (operator, ПРОМТ №157). Client-side expand of the already-loaded
+// until tapped (operator, PROMPT №157). Client-side expand of the already-loaded
 // (backend-capped) set — no pagination.
 const PREVIEW_CAP = 3
 const ciExpanded = ref(false)
@@ -280,7 +280,7 @@ const hiddenFeedbacks = computed((): number => Math.max(0, feedbackRows.value.le
 // "Написать сообщение" — stub (E4 messaging not delivered).
 const msgOpen = ref(false)
 
-// -- Block -> report-offer -> report form (P3, ПРОМТ №592) --
+// -- Block -> report-offer -> report form (P3, PROMPT №592) --
 const toast = useToast()
 
 const blockConfirmOpen = ref(false)
@@ -360,7 +360,7 @@ const reportFormOpen = ref(false)
   color: var(--velo-text-primary);
 }
 
-/* -- Group chips (P3, ПРОМТ №592) -- */
+/* -- Group chips (P3, PROMPT №592) -- */
 .profile__groups {
   display: flex;
   flex-wrap: wrap;
@@ -464,7 +464,7 @@ const reportFormOpen = ref(false)
   margin-top: var(--space-2);
 }
 
-/* TargetUserCard inside the two block-flow dialogs (owner Q9, ПРОМТ №610). */
+/* TargetUserCard inside the two block-flow dialogs (owner Q9, PROMPT №610). */
 .profile__dialog-card {
   margin-bottom: var(--space-4);
 }

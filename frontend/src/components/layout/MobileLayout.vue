@@ -177,7 +177,7 @@ function fogDefaults() {
 // практике» / «Вывод средств») doesn't underlap its header before the island is
 // measured. Derived from VHeader.vue: padding-top calc(--space-3 + 20px)=34 +
 // the 40px back button + padding-bottom --space-3=14 ≈ 88px. The measured
-// islandH>0 path stays unchanged. (operator ПРОМТ №164)
+// islandH>0 path stays unchanged. (operator PROMPT №164)
 const HEADER_FALLBACK = 88
 const mainStyle = computed(() => {
   const d = fogDefaults()

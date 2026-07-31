@@ -231,7 +231,7 @@ describe('dayLabelOf', () => {
 // while its lookalike had a block: a reader scanning this file sees
 // "formatDateShort" covered and moves on.
 //
-// The gap cost a real bug (ПРОМТ №440/441): days 1-9 rendered zero-padded
+// The gap cost a real bug (PROMPT №440/441): days 1-9 rendered zero-padded
 // ("09 июня") against a docstring promising "9 июня", across 13 view/card
 // surfaces, for nine days of every month. Days 10-31 were correct, which is why
 // no one noticed. The leading-zero cases below are the regression guard --

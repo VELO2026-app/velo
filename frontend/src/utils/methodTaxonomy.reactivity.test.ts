@@ -1,7 +1,7 @@
 // =============================================================================
-// VELO Frontend -- methodTaxonomy.ts cache reactivity tests (ПРОМТ №503 commit 1)
+// VELO Frontend -- methodTaxonomy.ts cache reactivity tests (PROMPT №503 commit 1)
 // =============================================================================
-// The bug-2/bug-5 fixes (ПРОМТ №405/№408) taught parseMethods/flattenMethods/
+// The bug-2/bug-5 fixes (PROMPT №405/№408) taught parseMethods/flattenMethods/
 // directionLabel about the DB catalog, but the cache backing them was plain
 // module-level `let`s -- invisible to Vue's reactivity system. A computed()
 // built on these functions never re-ran just because applyTaxonomyCatalog()
@@ -27,7 +27,7 @@ import {
   taxonomyCatalogVersion,
 } from '@/utils/methodTaxonomy'
 
-describe('methodTaxonomy cache reactivity (ПРОМТ №503 commit 1)', () => {
+describe('methodTaxonomy cache reactivity (PROMPT №503 commit 1)', () => {
   it('a computed() built on directionLabel re-resolves once the catalog warms, with no manual re-trigger', async () => {
     const label = computed(() => directionLabel('custom_reactivity01'))
 

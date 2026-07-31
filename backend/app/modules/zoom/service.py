@@ -10,8 +10,8 @@
 # (reschedule/delete/cancel failures, which don't block anything downstream
 # in this step). This is the whole point: publish/reschedule/cancel/book
 # must never be blocked by a third party (E21 plan sec 2/3, confirmed as
-# the intended reading in ПРОМТ №519, restated explicitly for booking in
-# ПРОМТ №520: "do not soften it into 'usually'").
+# the intended reading in PROMPT №519, restated explicitly for booking in
+# PROMPT №520: "do not soften it into 'usually'").
 #
 # HOST EXCLUSION (step E): ensure_host_registrant registers the practice's
 # master through the SAME Zoom flow as a student, role='host', no
@@ -99,7 +99,7 @@ async def create_meeting_for_practice(
     failure. Never raises: the caller (update_practice's publish branch)
     must succeed regardless of Zoom's outcome.
 
-    ПРОМТ №530: row creation happens UNCONDITIONALLY, stub mode included --
+    PROMPT №530: row creation happens UNCONDITIONALLY, stub mode included --
     do not gate this on settings.is_zoom_stub. Stub mode's entire purpose
     (zoom_client.py module docstring) is to exercise this exact control flow
     (meeting/registrant creation, reschedule, retry, report ingestion) with
@@ -141,7 +141,7 @@ async def create_meeting_for_practice(
             status_code=exc.status_code,
         )
     except Exception:
-        # ПРОМТ №525: ensure_host_registrant is now self-contained (its own
+        # PROMPT №525: ensure_host_registrant is now self-contained (its own
         # savepoint absorbs a database-level conflict, see that function),
         # but the module docstring's "NEVER RAISES" is a blanket contract --
         # anything else unforeseen here must not escape either, or publish
@@ -172,7 +172,7 @@ async def ensure_host_registrant(
     master. See module docstring -- this is the entire host-exclusion
     mechanism.
 
-    ПРОМТ №525: the existence check above is TOCTOU-safe only up to the
+    PROMPT №525: the existence check above is TOCTOU-safe only up to the
     point of the actual insert -- a concurrent caller (or, as the incident
     that prompted this, a caller that seeded a conflicting row directly)
     can still lose a genuine race to
@@ -275,7 +275,7 @@ async def create_registrant_for_booking(
 
     Idempotent by (zoom_meeting_id, user_id) -- looks up an existing,
     non-cancelled registrant for this pair FIRST and reuses it instead of
-    inserting a second row (ПРОМТ №525: this check was missing entirely
+    inserting a second row (PROMPT №525: this check was missing entirely
     before, the same non-idempotent shape that broke ensure_host_registrant,
     just never triggered here yet -- the bookings table's own
     uq_booking_practice_user_active makes two ACTIVE bookings for the same
@@ -289,7 +289,7 @@ async def create_registrant_for_booking(
     a series-child edge case), or when the insert lost a race for the slot.
 
     NEVER RAISES and never blocks booking creation, regardless of Zoom's
-    or the meeting's state (ПРОМТ №519 amendment 2 / ПРОМТ №520: not
+    or the meeting's state (PROMPT №519 amendment 2 / PROMPT №520: not
     softened into "usually"). The insert itself runs inside
     session.begin_nested() (a SAVEPOINT) for the same reason as
     ensure_host_registrant: catching the exception alone would not be
@@ -627,7 +627,7 @@ async def get_host_join_urls(
 
 
 # ---------------------------------------------------------------------------
-# A4 V2 (ПРОМТ №572): read-only ZoomMeetingStatus lookups for
+# A4 V2 (PROMPT №572): read-only ZoomMeetingStatus lookups for
 # PracticeResponse.zoom_meeting_status / PracticeSummary.zoom_meeting_status.
 # Unlike get_host_join_url[s] above, this is NOT owner-gated -- the status
 # value itself carries no secret material (same zero-masking posture as the
@@ -673,7 +673,7 @@ async def get_zoom_meeting_statuses(
 
 
 # ---------------------------------------------------------------------------
-# ПРОМТ №556 (OWNER-1, option В): "Начать" -- the master starts their own
+# PROMPT №556 (OWNER-1, option В): "Начать" -- the master starts their own
 # meeting as host. start_url is a bearer credential (its holder needs no
 # further Zoom-side identity check to become host) that also expires, so the
 # owner decided against ever storing or returning it: it is fetched fresh

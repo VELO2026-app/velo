@@ -46,7 +46,7 @@ class ZoomMeetingStatus(enum.StrEnum):
     """Lifecycle of our view of a practice's Zoom meeting.
 
     active            -- created successfully, zoom_meeting_id is usable.
-    pending_creation   -- ПРОМТ №559: creation deliberately DEFERRED, never
+    pending_creation   -- PROMPT №559: creation deliberately DEFERRED, never
                           attempted yet -- a series child beyond the nearest
                           occurrence (see series_service.py). Distinct from
                           create_failed on purpose: nothing has failed here,
@@ -196,7 +196,7 @@ class ZoomRegistrant(UUIDMixin, TimestampMixin, Base):
         server_default=ZoomRegistrantStatus.PENDING.value,
     )
 
-    # Retry bookkeeping (E21 step E, ПРОМТ №520) -- same shape and cap
+    # Retry bookkeeping (E21 step E, PROMPT №520) -- same shape and cap
     # convention as ZoomMeeting.retry_count / last_sync_error. Only the
     # retry poller increments retry_count; the initial attempt at booking
     # time does not.

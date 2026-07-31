@@ -18,7 +18,7 @@
       by the backend (422), so never wire such a button here.
 
   Decisions (operator, WI-B, all Г=А):
-    FORK1 — REMOVED (ПРОМТ post-№280): the per-participant «отменить запись» X was a
+    FORK1 — REMOVED (PROMPT post-№280): the per-participant «отменить запись» X was a
             stub (no master-removes-participant endpoint — cancelBooking is self-only)
             so the operator asked to drop it entirely until the backend exists. The
             roster rows are now read-only. Re-add the X when the remove-participant
@@ -131,7 +131,7 @@
         </section>
 
         <!-- Описание / Противопоказания / Что подготовить — отдельные карточки
-             (separate cards, bold headers, big chevron — ПРОМТ №158). -->
+             (separate cards, bold headers, big chevron — PROMPT №158). -->
         <section
           v-if="practice.description || practice.contraindications || practice.what_to_prepare"
           class="practice-detail__section"
@@ -254,7 +254,7 @@
               </div>
               <div v-if="r.comment" class="practice-detail__review-quote">«{{ r.comment }}»</div>
             </div>
-            <!-- Первые 10 + раскрытие «посмотреть еще» (operator ПРОМТ №160). -->
+            <!-- Первые 10 + раскрытие «посмотреть еще» (operator PROMPT №160). -->
             <VShowMore
               v-if="!reviewsExpanded && hiddenReviewsCount > 0"
               label="посмотреть еще"
@@ -391,7 +391,7 @@ const recurrenceLabel = computed((): string | null => {
   return recurrenceDaysLabel(practice.value.recurrence_days) ?? 'Регулярная'
 })
 
-// Accordion open state (local per-screen cards, was VAccordion — ПРОМТ №158).
+// Accordion open state (local per-screen cards, was VAccordion — PROMPT №158).
 // All three open by default (operator PD-C1: Противопоказания also expanded).
 const descOpen = ref(true)
 const contraOpen = ref(true)
@@ -470,7 +470,7 @@ const reviewsTotal = ref(0)
 const reviewsLoading = ref(false)
 const hasMoreReviews = computed((): boolean => reviews.value.length < reviewsTotal.value)
 
-// Первые 10 + раскрытие «посмотреть еще» (operator ПРОМТ №160).
+// Первые 10 + раскрытие «посмотреть еще» (operator PROMPT №160).
 const reviewsExpanded = ref(false)
 const visibleReviews = computed((): ReviewItem[] =>
   reviewsExpanded.value ? reviews.value : reviews.value.slice(0, REVIEWS_PREVIEW),
@@ -634,7 +634,7 @@ onMounted(load)
 }
 
 /* Описание / Противопоказания / Что подготовить — отдельные карточки
-   (bold header + big chevron, screen-local; ПРОМТ №158). */
+   (bold header + big chevron, screen-local; PROMPT №158). */
 .pd-acc {
   background: var(--velo-bg-card-solid);
   border: 1px solid var(--velo-border-card);

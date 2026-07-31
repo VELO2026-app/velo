@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- useAuth: parseStartParam Tests (P4, ПРОМТ №593)
+// VELO Frontend -- useAuth: parseStartParam Tests (P4, PROMPT №593)
 // =============================================================================
 //
 // parseStartParam is a pure function (no platform/network dependency) --
@@ -42,7 +42,7 @@ describe('parseStartParam', () => {
     })
   })
 
-  it('parses group_invite__{token} (P4, ПРОМТ №593)', () => {
+  it('parses group_invite__{token} (P4, PROMPT №593)', () => {
     const token = 'b'.repeat(43) // typical secrets.token_urlsafe(32) length
     expect(parseStartParam(`group_invite__${token}`)).toEqual({
       name: 'group-join',

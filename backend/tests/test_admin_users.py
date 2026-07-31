@@ -305,7 +305,7 @@ async def test_masters_list_verified_filter(
 
 
 # ---------------------------------------------------------------------------
-# POST /admin/users/{user_id}/make-master (ПРОМТ №292)
+# POST /admin/users/{user_id}/make-master (PROMPT №292)
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
 async def test_make_master_no_auth(client: AsyncClient) -> None:

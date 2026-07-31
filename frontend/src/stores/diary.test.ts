@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- Diary Store Tests (W27, ПРОМТ №438)
+// VELO Frontend -- Diary Store Tests (W27, PROMPT №438)
 // =============================================================================
 //
 // The diary store had NO tests. This file exists because W27 changed its
@@ -49,8 +49,12 @@ function feedPage(items: unknown[] = []) {
 
 beforeEach(() => {
   setActivePinia(createPinia())
-  vi.mocked(diaryApi.upsertCheckin).mockReset().mockResolvedValue({} as never)
-  vi.mocked(diaryApi.upsertFeedback).mockReset().mockResolvedValue({} as never)
+  vi.mocked(diaryApi.upsertCheckin)
+    .mockReset()
+    .mockResolvedValue({} as never)
+  vi.mocked(diaryApi.upsertFeedback)
+    .mockReset()
+    .mockResolvedValue({} as never)
   vi.mocked(diaryApi.listDiaryFeed).mockReset().mockResolvedValue(feedPage())
   refreshBookings.mockReset()
 })
@@ -137,7 +141,7 @@ describe('diary store', () => {
   })
 
   describe('W27: the diary store does NOT reach into the bookings store', () => {
-    // The guard on the fix. Before ПРОМТ №438 both of these fired
+    // The guard on the fix. Before PROMPT №438 both of these fired
     // useBookingsStore().refreshBookings() from inside the store, which was
     // (a) the diary->bookings half of a circular import and (b) redundant --
     // CheckinView.vue:155 and FeedbackView.vue:127 already call refreshBookings

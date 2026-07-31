@@ -33,7 +33,7 @@ async def get_active_taxonomy_endpoint(
 ) -> TaxonomyListResponse:
     """Active direction/style catalog (is_active=true only).
 
-    T22-6 (ПРОМТ №561): scoped to the requesting user -- global rows plus
+    T22-6 (PROMPT №561): scoped to the requesting user -- global rows plus
     their OWN master-scoped rows, if any. Every other master's private
     entries are excluded.
     """

@@ -53,7 +53,7 @@ export const useAdminStore = defineStore('admin', () => {
       pendingReports.value = reports.total
       loaded.value = true
     } catch (e) {
-      // W14 fix (ПРОМТ №409): every caller fires this with `void` and no
+      // W14 fix (PROMPT №409): every caller fires this with `void` and no
       // .catch(), so an uncaught error here used to be a completely silent
       // unhandled rejection -- badges/stats just never updated, with nothing
       // telling the admin why. Record it so a caller can surface it.
@@ -64,10 +64,7 @@ export const useAdminStore = defineStore('admin', () => {
   }
 
   // Load the period-scoped overview for the stat cards + deltas (D1/D6).
-  async function fetchOverview(
-    period: 'week' | 'month',
-    offset = 0,
-  ): Promise<void> {
+  async function fetchOverview(period: 'week' | 'month', offset = 0): Promise<void> {
     overviewLoading.value = true
     overviewError.value = ''
     try {

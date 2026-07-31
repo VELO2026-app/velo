@@ -15,7 +15,7 @@
   masters resolve; 404 otherwise -> "Мастер не найден" (no retry, nothing to
   retry). A 5xx/network failure is a DIFFERENT empty state -- "Не удалось
   загрузить" with a "Повторить" retry -- since the master may well exist
-  (B11 item 2, ПРОМТ №587; before this both collapsed into "не найден").
+  (B11 item 2, PROMPT №587; before this both collapsed into "не найден").
 
   Route: /user/masters/:id  (name: user-master-public)
 -->

@@ -285,7 +285,7 @@ async def get_master_by_id(
 
 
 # ---------------------------------------------------------------------------
-# Explicit admin make-master (ПРОМТ №292)
+# Explicit admin make-master (PROMPT №292)
 # ---------------------------------------------------------------------------
 # Distinct from the application-approval path (admin/masters verify_master):
 # this is a direct admin grant from the all-users screen, with no prior
@@ -345,7 +345,7 @@ async def make_master(
     admin: User,
     session: AsyncSession,
 ) -> MasterProfile:
-    """Explicitly promote a user to master (admin button, ПРОМТ №292).
+    """Explicitly promote a user to master (admin button, PROMPT №292).
 
     Ports scripts/set_role.py `to_master`: if the user has no MasterProfile,
     create a verified one; if a non-verified profile exists, re-verify it in

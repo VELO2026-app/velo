@@ -1,7 +1,7 @@
 // =============================================================================
 // VELO Frontend -- useBodyScrollLock Unit Tests
 // =============================================================================
-// W16 (ПРОМТ №409): VModal/VBottomSheet each used to set
+// W16 (PROMPT №409): VModal/VBottomSheet each used to set
 // document.body.style.overflow directly -- with two overlays open at once,
 // whichever closed SECOND unlocked the body even though the other was still
 // open. lockBodyScroll/unlockBodyScroll are ref-counted so "hidden" only

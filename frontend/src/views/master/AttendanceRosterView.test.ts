@@ -48,7 +48,7 @@
 //
 // whenLabel/durationLabel (.vue:130-139): whenLabel combines formatDateShort
 // (Date.now-dependent) + formatTime (pure) -- same handling as
-// AttendanceView's practiceWhen. ПРОМТ №542: the ORIGINAL fixture used a
+// AttendanceView's practiceWhen. PROMPT №542: the ORIGINAL fixture used a
 // literal date "verified via node beforehand" to be far from "today" --
 // that only held on the day it was written, and drifted into the Сегодня/
 // Завтра window as real time passed. The clock is now FAKED and frozen
@@ -72,12 +72,12 @@ import type { AttendanceResponse, AttendanceItemResponse, PracticeResponse } fro
 
 vi.mock('@/api/practices')
 
-// T21-1 follow-up (ПРОМТ №542): the clock is now FAKED and frozen at NOW
+// T21-1 follow-up (PROMPT №542): the clock is now FAKED and frozen at NOW
 // (beforeEach below), not left to the real wall clock -- whenLabel
 // (formatDateShort, Date.now-dependent) previously read a fixture date
 // "far from today" that was only far from the day this was WRITTEN, and
 // drifted into the Сегодня/Завтра window as real time passed (it did,
-// ПРОМТ №542). STABLE_SCHEDULED_AT is derived from NOW with a fixed +30-day
+// PROMPT №542). STABLE_SCHEDULED_AT is derived from NOW with a fixed +30-day
 // offset, so the relationship holds regardless of what NOW is -- proven by
 // re-running this file with NOW set to several unrelated instants, not by
 // picking one date and hoping it stays far enough away.
@@ -114,12 +114,22 @@ function roster(attendedCount: number, noShowCount: number): AttendanceItemRespo
   const items: AttendanceItemResponse[] = []
   for (let i = 0; i < attendedCount; i++) {
     items.push(
-      attendanceItem({ booking_id: `att_${i}`, user_id: `u_att_${i}`, user_display_name: `Пришёл ${i}`, status: 'attended' }),
+      attendanceItem({
+        booking_id: `att_${i}`,
+        user_id: `u_att_${i}`,
+        user_display_name: `Пришёл ${i}`,
+        status: 'attended',
+      }),
     )
   }
   for (let i = 0; i < noShowCount; i++) {
     items.push(
-      attendanceItem({ booking_id: `no_${i}`, user_id: `u_no_${i}`, user_display_name: `Пропустил ${i}`, status: 'no_show' }),
+      attendanceItem({
+        booking_id: `no_${i}`,
+        user_id: `u_no_${i}`,
+        user_display_name: `Пропустил ${i}`,
+        status: 'no_show',
+      }),
     )
   }
   return items
@@ -228,7 +238,7 @@ function statValue(label: string): string {
 // -----------------------------------------------------------------------------
 
 beforeEach(() => {
-  // ПРОМТ №542: freeze the clock this screen's Date.now-dependent whenLabel
+  // PROMPT №542: freeze the clock this screen's Date.now-dependent whenLabel
   // sees, so its outcome no longer depends on the real calendar date at all
   // (same pattern as MasterDashboardView.test.ts's beforeEach). Nothing in
   // this screen's mount chain installs its own timer, so faking time here
@@ -259,12 +269,14 @@ describe('AttendanceRosterView', () => {
   describe('ladder + the partial-failure shape (matches the sibling, see banner)', () => {
     it('loading -> content', async () => {
       let resolveGet!: (v: AttendanceResponse) => void
-      vi.mocked(practicesApi.getAttendance).mockReset().mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolveGet = resolve
-          }),
-      )
+      vi.mocked(practicesApi.getAttendance)
+        .mockReset()
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveGet = resolve
+            }),
+        )
       mount()
       await nextTick()
 
@@ -430,11 +442,13 @@ describe('AttendanceRosterView', () => {
   })
 
   // ===========================================================================
-  // T21-1 (ПРОМТ №541): backend has computed unmatched_count since E21 step G
-  // (ПРОМТ №521) with zero frontend consumers until now (ПРОМТ №540 audit).
+  // T21-1 (PROMPT №541): backend has computed unmatched_count since E21 step G
+  // (PROMPT №521) with zero frontend consumers until now (PROMPT №540 audit).
   describe('unmatched bucket note (T21-1)', () => {
     it('shows nothing when unmatched_count is 0 or absent (old fixtures without the field)', async () => {
-      vi.mocked(practicesApi.getAttendance).mockResolvedValue(attendanceResponse({ unmatched_count: 0 }))
+      vi.mocked(practicesApi.getAttendance).mockResolvedValue(
+        attendanceResponse({ unmatched_count: 0 }),
+      )
       mount()
       await flush()
 
@@ -442,7 +456,9 @@ describe('AttendanceRosterView', () => {
     })
 
     it('shows a plain count when Zoom left unmatched participants, the whole point of the design', async () => {
-      vi.mocked(practicesApi.getAttendance).mockResolvedValue(attendanceResponse({ unmatched_count: 3 }))
+      vi.mocked(practicesApi.getAttendance).mockResolvedValue(
+        attendanceResponse({ unmatched_count: 3 }),
+      )
       mount()
       await flush()
 

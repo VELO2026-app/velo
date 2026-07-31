@@ -1,5 +1,5 @@
 # =============================================================================
-# Tests: Zoom Attendance Matching Ladder (E21 step F -- ПРОМТ №521)
+# Tests: Zoom Attendance Matching Ladder (E21 step F -- PROMPT №521)
 # =============================================================================
 #
 # Pure logic, no DB: match_report_rows / sum_seconds_by_registrant operate
@@ -32,7 +32,7 @@ from app.modules.zoom.attendance_service import (
 )
 from app.modules.zoom.models import ZoomRegistrant, ZoomRegistrantRole
 
-# Illustrative boundary only -- NOT the production threshold since ПРОМТ
+# Illustrative boundary only -- NOT the production threshold since PROMPT
 # №585 (the real one is 50% of each practice's own duration_minutes, see
 # attendance_threshold_seconds() and its own tests below). Kept as a plain
 # constant here because these two tests exercise sum_seconds_by_registrant's
@@ -187,7 +187,7 @@ def test_rejoin_summing_exactly_at_threshold() -> None:
 
 # ===================================================================
 # attendance_threshold_seconds -- 50% of the practice's OWN duration
-# (ПРОМТ №585, replaces the old fixed 10-minute constant)
+# (PROMPT №585, replaces the old fixed 10-minute constant)
 # ===================================================================
 
 

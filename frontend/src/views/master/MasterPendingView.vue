@@ -34,7 +34,7 @@
       </template>
 
       <!-- ================= APPROVED (verified) =================
-           White VCard подложка (R1 fix, ПРОМТ №391 — operator-approved preview
+           White VCard подложка (R1 fix, PROMPT №391 — operator-approved preview
            .tmp/batch-r/r1-application-states.html): was rendering directly on
            the transparent fog bg, unlike SENT below which already had it. -->
       <template v-else-if="profileStatus === 'verified'">
@@ -86,7 +86,7 @@
 
       <!-- ================= SENT (pending) =================
            White VCard подложка, vertically centered (K2). A discreet text
-           link (F4, not a block button -- ПРОМТ №418: this screen exists so
+           link (F4, not a block button -- PROMPT №418: this screen exists so
            a person waits calmly; a full-width button would read as an
            invitation to leave). -->
       <template v-else>
@@ -189,7 +189,7 @@ onMounted(async () => {
   } else {
     await authStore.fetchMe()
   }
-  // Bug 1 fix (ПРОМТ №405): mark the per-user key once the rejection screen
+  // Bug 1 fix (PROMPT №405): mark the per-user key once the rejection screen
   // has actually rendered, mirroring masterApprovedSeenKey's placement for
   // the approved case, so roleRedirect stops routing here on future opens
   // (operator decision: show the verdict once, then treat as an ordinary user).

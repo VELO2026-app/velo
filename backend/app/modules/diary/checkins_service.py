@@ -88,7 +88,7 @@ async def upsert_checkin(
     if practice is None:
         raise NotFoundError("Practice not found")
 
-    # P5 (ПРОМТ №594): covers the RETROACTIVE case create_booking's own gate
+    # P5 (PROMPT №594): covers the RETROACTIVE case create_booking's own gate
     # cannot -- a booking made while the practice was public/open, before
     # the master narrowed the audience or blocked this viewer. Without this,
     # that old CONFIRMED booking would still let them check in. Same shared

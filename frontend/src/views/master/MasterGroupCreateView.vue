@@ -1,26 +1,26 @@
 <!--
-  VELO Frontend -- MasterGroupCreateView (Master GROUPS P2, ПРОМТ №591;
-  description field + layout fix batch ПРОМТ №610)
+  VELO Frontend -- MasterGroupCreateView (Master GROUPS P2, PROMPT №591;
+  description field + layout fix batch PROMPT №610)
 
   "Новая группа" -- «Название» + optional «Описание», POST /masters/me/groups,
   back to the list on success. 409 (duplicate name for this master) surfaces
   as an inline VInput error + a toast (mirrors MasterNewPromocodeView's
   create-form pattern: extractApiError + toast.error).
 
-  G17/G18 (ПРОМТ №609): «Основное» section heading, reusing the existing
+  G17/G18 (PROMPT №609): «Основное» section heading, reusing the existing
   velo-section-title class CreatePracticeView already uses -- no new DS
   class. Placeholder shortened to «Название» (was «Название группы»); the
   VInput label above the field already says «Название», so the placeholder
   no longer needs to repeat it.
 
-  Owner Q4 (ПРОМТ №610): «Описание» -- optional, VTextarea/autogrow (same
+  Owner Q4 (PROMPT №610): «Описание» -- optional, VTextarea/autogrow (same
   shape CreatePracticeView's own optional description field uses), no
   required-seal. Trimmed + blank-normalized-to-undefined client-side before
   POST -- createGroup() forwards that as `undefined` to the backend, which
   normalizes again server-side (belt + suspenders, matches the backend's
   own "never store ''" rule).
 
-  Owner Q5 (ПРОМТ №610): submit button PINNED to the bottom of the screen,
+  Owner Q5 (PROMPT №610): submit button PINNED to the bottom of the screen,
   not merely placed after the last field -- `.new-group` is a full-height
   flex column, `.new-group__submit` gets `margin-top: auto` (same recipe
   MasterApplyView.vue's `.apply-view__next` already uses). With this form's
@@ -29,7 +29,7 @@
   back to sitting right after the last field, same graceful degradation as
   that existing precedent.
 
-  Owner Q6 (ПРОМТ №610): required-fields legend, reusing
+  Owner Q6 (PROMPT №610): required-fields legend, reusing
   MasterNewPromocodeView's exact recipe (`.new-promo__legend` -- the later,
   operator-brightened iteration; CreatePracticeView's own earlier version
   of this SAME banner uses a paler alpha (0.25 vs 0.40) and a different

@@ -226,7 +226,10 @@ function booking(
   }
 }
 
-function page(items: BookingWithPracticeResponse[], total = items.length): PaginatedBookingsResponse {
+function page(
+  items: BookingWithPracticeResponse[],
+  total = items.length,
+): PaginatedBookingsResponse {
   return { items, total, limit: 20, offset: 0 }
 }
 
@@ -547,12 +550,16 @@ describe('UserDashboardView', () => {
       expect(platformState.openLink).not.toHaveBeenCalled()
     })
 
-    // -- D3 link ladder (T21-1, ПРОМТ №541) --
+    // -- D3 link ladder (T21-1, PROMPT №541) --
     it('Zoom: a personal registrant link takes priority over the manual zoom_link', async () => {
       const withPersonal = booking(
         'up_personal',
         { status: 'confirmed', zoom_registrant_join_url: 'https://zoom.us/w/personal?tk=abc' },
-        { scheduled_at: '2026-07-20T11:50:00Z', duration_minutes: 60, zoom_link: 'https://zoom.us/j/live1' },
+        {
+          scheduled_at: '2026-07-20T11:50:00Z',
+          duration_minutes: 60,
+          zoom_link: 'https://zoom.us/j/live1',
+        },
       )
       vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([withPersonal])
       mount()
@@ -577,7 +584,11 @@ describe('UserDashboardView', () => {
       const withPersonal = booking(
         'up_personal2',
         { status: 'confirmed', zoom_registrant_join_url: 'https://zoom.us/w/personal?tk=abc' },
-        { scheduled_at: '2026-07-20T11:50:00Z', duration_minutes: 60, zoom_link: 'https://zoom.us/j/live1' },
+        {
+          scheduled_at: '2026-07-20T11:50:00Z',
+          duration_minutes: 60,
+          zoom_link: 'https://zoom.us/j/live1',
+        },
       )
       vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([withPersonal])
       mount()
@@ -586,7 +597,7 @@ describe('UserDashboardView', () => {
       expect(host?.textContent).not.toContain('посещение не засчитается')
     })
 
-    // A4 V2 (ПРОМТ №572): before this, create_failed and pending_creation
+    // A4 V2 (PROMPT №572): before this, create_failed and pending_creation
     // both rendered as the SAME disabled Zoom button with no explanation --
     // a participant could not tell "still preparing" from "will never
     // happen unless the master acts".
@@ -643,14 +654,22 @@ describe('UserDashboardView', () => {
 
       liveCheckin?.click()
       await flush()
-      expect(push).toHaveBeenCalledWith({ name: 'user-checkin', params: { practiceId: 'pr_up_live' } })
+      expect(push).toHaveBeenCalledWith({
+        name: 'user-checkin',
+        params: { practiceId: 'pr_up_live' },
+      })
     })
 
     it('card click: routes by BACKEND status (practice-live), not the client-time badge', async () => {
       const liveBackend = booking(
         'up_backend_live',
         { status: 'confirmed' },
-        { title: 'Идёт сейчас', scheduled_at: '2026-07-20T11:55:00Z', duration_minutes: 60, status: 'live' },
+        {
+          title: 'Идёт сейчас',
+          scheduled_at: '2026-07-20T11:55:00Z',
+          duration_minutes: 60,
+          status: 'live',
+        },
       )
       vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([liveBackend])
       mount()
@@ -659,7 +678,10 @@ describe('UserDashboardView', () => {
       cardOf(nearestBlocks()[0]!).click()
       await flush()
 
-      expect(push).toHaveBeenCalledWith({ name: 'practice-live', params: { practiceId: 'pr_up_backend_live' } })
+      expect(push).toHaveBeenCalledWith({
+        name: 'practice-live',
+        params: { practiceId: 'pr_up_backend_live' },
+      })
     })
 
     it('card click: routes to practice-detail when backend status is not live, even while the badge shows "В эфире"', async () => {
@@ -680,7 +702,12 @@ describe('UserDashboardView', () => {
       const paid = booking(
         'up_paid',
         { status: 'confirmed' },
-        { title: 'Платная практика', scheduled_at: '2026-07-22T09:00:00Z', duration_minutes: 60, is_free: false },
+        {
+          title: 'Платная практика',
+          scheduled_at: '2026-07-22T09:00:00Z',
+          duration_minutes: 60,
+          is_free: false,
+        },
       )
       vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([paid])
       mount()
@@ -714,7 +741,10 @@ describe('UserDashboardView', () => {
 
       b!.click()
       await flush()
-      expect(push).toHaveBeenCalledWith({ name: 'user-checkin', params: { practiceId: 'pr_bk_checkin' } })
+      expect(push).toHaveBeenCalledWith({
+        name: 'user-checkin',
+        params: { practiceId: 'pr_bk_checkin' },
+      })
     })
 
     it('out-of-window: does not show (too early, outside the 24h check-in window)', async () => {
@@ -770,7 +800,10 @@ describe('UserDashboardView', () => {
 
       b!.click()
       await flush()
-      expect(push).toHaveBeenCalledWith({ name: 'user-feedback', params: { practiceId: 'pr_bk_feedback' } })
+      expect(push).toHaveBeenCalledWith({
+        name: 'user-feedback',
+        params: { practiceId: 'pr_bk_feedback' },
+      })
     })
 
     it('out-of-window: does not show once the 72h window has closed', async () => {
@@ -806,7 +839,10 @@ describe('UserDashboardView', () => {
 
       b!.click()
       await flush()
-      expect(push).toHaveBeenCalledWith({ name: 'user-reflection', params: { practiceId: 'practice_r1' } })
+      expect(push).toHaveBeenCalledWith({
+        name: 'user-reflection',
+        params: { practiceId: 'practice_r1' },
+      })
     })
 
     it('out-of-window: does not show once the window has closed', async () => {
@@ -848,7 +884,9 @@ describe('UserDashboardView', () => {
   // ===========================================================================
   describe('progress stats + AI summary', () => {
     it('renders the REAL fetched numbers (not the silent-degrade default) in both the progress cards and the AI text', async () => {
-      vi.mocked(bookingsApi.getMyStats).mockResolvedValue(stats({ practices_attended: 12, hours_attended: 9 }))
+      vi.mocked(bookingsApi.getMyStats).mockResolvedValue(
+        stats({ practices_attended: 12, hours_attended: 9 }),
+      )
       mount()
       await flush()
 

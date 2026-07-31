@@ -72,7 +72,7 @@ async def list_active_taxonomy(
     -- the master methods picker). An inactive direction is dropped entirely
     (its styles too); an active direction keeps only its active styles.
 
-    master_id (T22-6, ПРОМТ №561): the requesting user's own id. A direction
+    master_id (T22-6, PROMPT №561): the requesting user's own id. A direction
     row scoped to a DIFFERENT master (or to no one, if master_id is None --
     e.g. a non-master user) is excluded -- global rows (master_id IS NULL)
     are always included regardless. This is the enforcement point for "a

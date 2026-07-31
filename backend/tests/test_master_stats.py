@@ -106,7 +106,7 @@ async def _create_practice(
 ) -> Practice:
     """Create a practice owned by the master with the given schedule/status.
 
-    MIG1 (uq_practice_master_title_scheduled_recurrence, ПРОМТ №583): several
+    MIG1 (uq_practice_master_title_scheduled_recurrence, PROMPT №583): several
     tests in this file deliberately create multiple practices for the SAME
     master at the SAME scheduled_at (to exercise period-window counting) --
     a shared hardcoded title would collide with the new partial unique index

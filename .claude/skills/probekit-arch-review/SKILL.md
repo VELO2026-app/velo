@@ -12,7 +12,7 @@ Evaluates structural quality of any codebase against universal principles and pr
 
 ## Configuration
 
-<!-- VELO-tuned (ПРОМТ №386, sweep): CBS's docs/01_refer path replaced with a
+<!-- VELO-tuned (PROMPT №386, sweep): CBS's docs/01_refer path replaced with a
      git-untracked scratch dir; VELO has no docs/01_refer/ or ENVIRONMENT.md. -->
 review_dir: .tmp/probekit-review
 
@@ -31,7 +31,7 @@ Determine what to review: file, directory, or entire project.
 
 Check for ENVIRONMENT.md, ARCHITECTURE.md, or similar docs in the project.
 If found — read for architecture context before proceeding.
-(VELO note, ПРОМТ №386: no ENVIRONMENT.md; repo root has spec docs -- see
+(VELO note, PROMPT №386: no ENVIRONMENT.md; repo root has spec docs -- see
 [[velo_spec_index]] memory -- but for this sweep keep it simple, do not wire them in.
 Shell is Windows Git-Bash/PowerShell, no docker/VPS locally.)
 

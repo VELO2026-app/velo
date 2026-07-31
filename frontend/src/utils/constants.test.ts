@@ -2,11 +2,11 @@
 // VELO Frontend -- constants.ts Unit Tests
 // =============================================================================
 //
-// W18 fix (ПРОМТ №408): masterApprovedSeenKey used to be a flat
+// W18 fix (PROMPT №408): masterApprovedSeenKey used to be a flat
 // MASTER_APPROVED_SEEN_KEY string -- unscoped by user, so on a shared device
 // (or after an account switch) person B inherited person A's "seen" state and
 // never saw their own approval screen. Mirrors masterRejectionSeenKey's
-// existing per-user pattern (constants.ts, added ПРОМТ №405).
+// existing per-user pattern (constants.ts, added PROMPT №405).
 //
 // No router guard reads this key (only MasterPendingView.vue /
 // RoleSwitchSection.vue do), so it is exercised directly here rather than

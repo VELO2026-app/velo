@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- TopupSuccessView Screen Tests (T8, ПРОМТ №432)
+// VELO Frontend -- TopupSuccessView Screen Tests (T8, PROMPT №432)
 // =============================================================================
 //
 // The landing page Stripe returns the user to after a successful charge. Its

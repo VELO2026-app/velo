@@ -10,7 +10,7 @@ Verifies components work in the Telegram Mini App webview.
 
 ## Configuration
 
-<!-- VELO-tuned (ПРОМТ №435): CBS's mockups/frontend/* paths swapped for VELO's
+<!-- VELO-tuned (PROMPT №435): CBS's mockups/frontend/* paths swapped for VELO's
      real tree.
 
      WHY THIS SKILL MATTERS MORE HERE, NOT LESS: VELO is a Telegram Mini App. It
@@ -18,7 +18,7 @@ Verifies components work in the Telegram Mini App webview.
      soft keyboard come and go -- so P2 (safe-area) and P8 (dvh units) are load-
      bearing here in a way they never are on a normal desktop-first site, where
      they are usually cosmetic. The Mini App is exactly the case they were
-     written for. (Argued and accepted, ПРОМТ №435.)
+     written for. (Argued and accepted, PROMPT №435.)
 
      P6 (RTL Layout) is DROPPED, not inert -- VELO ships no RTL locale and the
      probe needs one to exist before it can mean anything. See

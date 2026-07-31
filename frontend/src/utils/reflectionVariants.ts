@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- No-show reflection copy variants (ПРОМТ №269, U4)
+// VELO Frontend -- No-show reflection copy variants (PROMPT №269, U4)
 // =============================================================================
 //
 // A no-show booking («Не состоялась») prompts a gentle reflection instead of a
@@ -10,7 +10,7 @@
 // different practices rotate through the set.
 //
 // Copy source = operator SVGs (3 ReflectionView screens + 2 banner plates,
-// ПРОМТ №269). V2 bannerTitle defaults to «Поделитесь состоянием» (F5=А).
+// PROMPT №269). V2 bannerTitle defaults to «Поделитесь состоянием» (F5=А).
 // Text-only: no backend, no new component.
 // =============================================================================
 

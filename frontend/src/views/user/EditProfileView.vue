@@ -66,7 +66,7 @@
         <!-- Pending: the proposed set is locked while an admin reviews it —
              shown in the SAME направление→вид white cards (batch L, readonly
              picker), not a flat chip row. Unmatched (custom) strings now
-             surface as their own chip (Q3=А, ПРОМТ №391 — was drop, Q3=В). -->
+             surface as their own chip (Q3=А, PROMPT №391 — was drop, Q3=В). -->
         <template v-if="methodRequestPending">
           <MethodTaxonomyPicker :model-value="pendingProposedMethods" readonly />
           <div class="edit-profile__methods-status">
@@ -250,7 +250,9 @@ const currentMethods = computed((): string[] => masterStore.profile?.methods ?? 
 // (drop-unmatched, Q3). This is the baseline the picker seeds to and that
 // `methodsChanged` compares against — so opening the screen shows «no change»
 // even when the stored set contained strings outside the taxonomy.
-const normalizedCurrent = computed((): string[] => flattenMethods(parseMethods(currentMethods.value)))
+const normalizedCurrent = computed((): string[] =>
+  flattenMethods(parseMethods(currentMethods.value)),
+)
 
 // The outstanding / recently-decided change-request (null when none).
 const methodRequest = computed(() => masterStore.profile?.method_change_request ?? null)
@@ -341,7 +343,7 @@ async function onSaveLanguages(): Promise<void> {
 
 // Load the master profile so the delete modal can show the balance to forfeit
 // and the methods/languages blocks reflect the current set + any pending request.
-// Bug 2 fix (ПРОМТ №405): prime the taxonomy catalog cache in parallel so a
+// Bug 2 fix (PROMPT №405): prime the taxonomy catalog cache in parallel so a
 // promoted custom method already resolves to a plain chip on first render
 // instead of flashing "custom".
 onMounted(() => {

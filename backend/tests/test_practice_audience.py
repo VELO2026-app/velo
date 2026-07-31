@@ -1,5 +1,5 @@
 # =============================================================================
-# VELO Backend -- Tests: Practice Audience (Master GROUPS P5, ПРОМТ №594)
+# VELO Backend -- Tests: Practice Audience (Master GROUPS P5, PROMPT №594)
 # =============================================================================
 #
 # telegram_id range: 99300-99399
@@ -25,13 +25,13 @@
 #   - POST /practices (create_practice): group_ids must be the master's OWN
 #     custom groups (rejects another master's group with 400); a valid
 #     'groups' create returns audience_group_names.
-#   - PATCH /practices/{id} (update_practice, ПРОМТ №596 FIX 3): the
+#   - PATCH /practices/{id} (update_practice, PROMPT №596 FIX 3): the
 #     audience-switching branch matrix -- switch to 'groups' (sets targets),
 #     switch away (clears stale practice_audience_group rows), groups ->
 #     different groups (replaces targets), re-send 'groups' without new
 #     group_ids (reuses existing targets), reject another master's/unknown
 #     group id.
-#   - POST /waitlist/{id}/confirm (confirm_waitlist, ПРОМТ №596 FIX 4): the
+#   - POST /waitlist/{id}/confirm (confirm_waitlist, PROMPT №596 FIX 4): the
 #     OTHER booking-creation path enforces the identical gate as
 #     create_booking.
 # =============================================================================
@@ -460,7 +460,7 @@ async def test_create_practice_with_own_groups_returns_group_names(
 
 
 # ===================================================================
-# Update-practice audience switching (ПРОМТ №596, FIX 3 -- previously
+# Update-practice audience switching (PROMPT №596, FIX 3 -- previously
 # untested branch matrix in update_practice, practices/service.py)
 # ===================================================================
 
@@ -647,7 +647,7 @@ async def test_update_practice_group_ids_rejects_unknown_id(
 
 
 # ===================================================================
-# Waitlist-confirmation gate (ПРОМТ №596, FIX 4) -- confirm_waitlist is the
+# Waitlist-confirmation gate (PROMPT №596, FIX 4) -- confirm_waitlist is the
 # OTHER booking-creation path (waitlist/service.py); a HELD notification
 # must not convert into a booking for a now-blocked/out-of-audience user
 # any more than a fresh POST /bookings can.
@@ -724,7 +724,7 @@ async def test_confirm_waitlist_rejects_a_viewer_outside_the_audience(
 
 
 # ===================================================================
-# Group rename while targeted by a 'groups' practice (ПРОМТ №596, FIX 5) --
+# Group rename while targeted by a 'groups' practice (PROMPT №596, FIX 5) --
 # audience_group_names is resolved via a live JOIN (practices/service.py's
 # group_names_for_practice), never cached/duplicated, so a rename must
 # self-correct with no extra write on the practice side.
@@ -764,7 +764,7 @@ async def test_rename_group_updates_targeting_practices_audience_group_names(
 
 
 # ===================================================================
-# Owner Q15 (ПРОМТ №613): POST /practices/{id}/audience-preview -- read-only
+# Owner Q15 (PROMPT №613): POST /practices/{id}/audience-preview -- read-only
 # dry-run, reuses this file's own predicates (count_stranded_active_bookings,
 # audience_service.py) rather than a second definition of "in the audience".
 # ===================================================================

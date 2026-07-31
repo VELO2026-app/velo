@@ -4,7 +4,7 @@
        on IconPlus: the two are different SVG techniques (fill vs stroke),
        matching how this icon set already keeps visually-distinct shapes as
        separate files rather than one parameterized component.
-       Measured from the owner's SVG (3 My groups.svg, ПРОМТ №609): 20x20
+       Measured from the owner's SVG (3 My groups.svg, PROMPT №609): 20x20
        bounding box, 2px-thick bars. Color via currentColor. -->
   <svg
     xmlns="http://www.w3.org/2000/svg"

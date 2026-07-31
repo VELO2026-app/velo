@@ -4,7 +4,7 @@ Revision ID: 8d9e0f1a2b3c
 Revises: 7c8d9e0f1a2b
 Create Date: 2026-07-20 00:00:00.000001+00:00
 
-E21 step A (ПРОМТ №519): one row per booking (role=student) plus one row
+E21 step A (PROMPT №519): one row per booking (role=student) plus one row
 per practice for the master (role=host, booking_id NULL) -- host exclusion
 is our own explicit fact, not inferred from any Zoom-provided field (E21
 research: no reliable host flag exists on either Zoom surface). Inert on

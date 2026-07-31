@@ -1,8 +1,8 @@
 // =============================================================================
-// VELO Frontend -- VEmptyState Slot Contract Tests (T8, ПРОМТ №433)
+// VELO Frontend -- VEmptyState Slot Contract Tests (T8, PROMPT №433)
 // =============================================================================
 //
-// Written alongside the fix for the defect found in ПРОМТ №432: VEmptyState
+// Written alongside the fix for the defect found in PROMPT №432: VEmptyState
 // rendered only `icon` and the DEFAULT slot, but 11 views passed their retry
 // button as `<template #action>`. Vue drops an unmatched named slot SILENTLY --
 // no warning, no error, no button -- so all eleven rendered an error state with
@@ -69,7 +69,7 @@ afterEach(() => {
 })
 
 describe('VEmptyState', () => {
-  describe('the action slot (the ПРОМТ №432 defect)', () => {
+  describe('the action slot (the PROMPT №432 defect)', () => {
     it('renders a button passed as #action', async () => {
       // THE regression guard. This is the spelling 11 views were already written
       // against and which silently rendered nothing.
@@ -82,7 +82,10 @@ describe('VEmptyState', () => {
     it('still renders a button passed in the DEFAULT slot', async () => {
       // 24 sites use this spelling and always worked. The fix must not trade one
       // broken spelling for another -- both render into .v-empty__action.
-      await render({ icon: 'warning', title: 'Ошибка' }, { default: () => h('button', 'Повторить') })
+      await render(
+        { icon: 'warning', title: 'Ошибка' },
+        { default: () => h('button', 'Повторить') },
+      )
 
       expect(action()).not.toBeNull()
       expect(text()).toContain('Повторить')
@@ -163,7 +166,10 @@ describe('VEmptyState', () => {
     })
 
     it('has no icon, no title element and no action wrapper', async () => {
-      await render({ variant: 'note', title: 'Данных пока нет' }, { action: () => h('button', 'X') })
+      await render(
+        { variant: 'note', title: 'Данных пока нет' },
+        { action: () => h('button', 'X') },
+      )
 
       expect(host?.querySelector('.v-empty__icon')).toBeNull()
       expect(host?.querySelector('.v-empty__title')).toBeNull()

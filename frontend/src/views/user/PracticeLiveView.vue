@@ -10,7 +10,7 @@
     - Video placeholder (no real video in MVP; Zoom is external)
     - Info card: title + master + "В эфире" badge
     - Actions:
-        no booking for this practice -- N1 (ПРОМТ №587): honest inline
+        no booking for this practice -- N1 (PROMPT №587): honest inline
           "Вы не записаны" empty state instead of the badges/"Войти" button
         "Войти"            -- join (sets joined_at) + open Zoom link
         "Check-in"         -- go to the check-in form
@@ -24,7 +24,7 @@
     POST /bookings/{id}/join   -- confirmed + scheduled/live, 409 if already joined
     POST /bookings/{id}/leave  -- requires joined_at, 400 if not joined
 
-  Zoom link (T21-1, ПРОМТ №541): resolveZoomLink() ladder -- the booking's
+  Zoom link (T21-1, PROMPT №541): resolveZoomLink() ladder -- the booking's
   own registrant link first, else the manual practice.zoom_link visibly
   marked (attendance not counted), else "Ссылка готовится". Security
   (AUDIT-0520-02, now inside resolveZoomLink): only an https:// URL is ever
@@ -59,7 +59,7 @@
 
     <!-- Actions -->
     <div class="live__actions">
-      <!-- N1 (ПРОМТ №587, recon №586): no booking for THIS practice at all --
+      <!-- N1 (PROMPT №587, recon №586): no booking for THIS practice at all --
            canJoin (below) already permanently disables "Войти" in this case
            (not a security hole: the backend also fail-closes the zoom_link),
            but a disabled button with no explanation was a UX dead end. An
@@ -72,14 +72,14 @@
         description="Чтобы войти, сначала забронируйте практику"
       />
       <template v-else>
-        <!-- D3 ladder (ПРОМТ №541): the manual-link state must be visibly
+        <!-- D3 ladder (PROMPT №541): the manual-link state must be visibly
              distinct from a real personal link -- silent fall-through is the
              defect being fixed, so this badge is never optional decoration. -->
         <VBadge v-if="zoomLink.kind === 'manual'" variant="warning" class="live__zoom-note">
           Ссылка от мастера — посещение не засчитается автоматически
         </VBadge>
 
-        <!-- A4 V2 (ПРОМТ №572): honest permanent-failure state, distinct from
+        <!-- A4 V2 (PROMPT №572): honest permanent-failure state, distinct from
              "still preparing" -- before this, create_failed rendered the
              identical "Ссылка готовится" spinner forever. A participant has
              no retry action (only the master does, MasterDashboardView) --
@@ -149,9 +149,9 @@ const myBooking = computed(() =>
 const alreadyCheckedIn = computed(() => !!myBooking.value?.has_checkin)
 
 /**
- * D3 ladder (ПРОМТ №541): the booking's own registrant link first, the
+ * D3 ladder (PROMPT №541): the booking's own registrant link first, the
  * manual practice.zoom_link only as a visibly-marked fallback, otherwise
- * "being prepared" -- or, since A4 V2 (ПРОМТ №572), the honest "failed"
+ * "being prepared" -- or, since A4 V2 (PROMPT №572), the honest "failed"
  * state when practice.zoom_meeting_status is create_failed. Never a silent
  * fall-through (AUDIT-0520-02's https guard is now inside resolveZoomLink
  * for both rungs).

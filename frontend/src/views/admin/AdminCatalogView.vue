@@ -76,17 +76,32 @@
       <div class="admin-catalog__dir-head">
         <template v-if="editingDirectionId === dir.id">
           <VInput v-model="draftLabel" class="admin-catalog__edit-input" />
-          <button type="button" class="admin-catalog__icon-btn" aria-label="Сохранить" @click="saveDirectionLabel(dir)">
+          <button
+            type="button"
+            class="admin-catalog__icon-btn"
+            aria-label="Сохранить"
+            @click="saveDirectionLabel(dir)"
+          >
             <IconCheck :size="18" />
           </button>
-          <button type="button" class="admin-catalog__icon-btn" aria-label="Отмена" @click="cancelEdit">
+          <button
+            type="button"
+            class="admin-catalog__icon-btn"
+            aria-label="Отмена"
+            @click="cancelEdit"
+          >
             <IconClose :size="18" />
           </button>
         </template>
         <template v-else>
           <span class="admin-catalog__dir-title">{{ dir.label }}</span>
           <VBadge :variant="dir.source === 'seed' ? 'muted' : 'blue'">{{ dir.source }}</VBadge>
-          <button type="button" class="admin-catalog__icon-btn" aria-label="Редактировать" @click="startEditDirection(dir)">
+          <button
+            type="button"
+            class="admin-catalog__icon-btn"
+            aria-label="Редактировать"
+            @click="startEditDirection(dir)"
+          >
             <IconEdit :size="18" />
           </button>
           <VButton
@@ -152,7 +167,16 @@
 <script setup lang="ts">
 import { reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { VBackButton, VCard, VChip, VInput, VButton, VBadge, VLoader, VEmptyState } from '@/components/ui'
+import {
+  VBackButton,
+  VCard,
+  VChip,
+  VInput,
+  VButton,
+  VBadge,
+  VLoader,
+  VEmptyState,
+} from '@/components/ui'
 import { IconEdit, IconClose, IconCheck } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
@@ -336,11 +360,11 @@ onMounted(load)
   display: flex;
   gap: var(--space-2);
   align-items: center;
-  /* T21-9 (ПРОМТ №546): the input can shrink to 0 (min-width:0 below) but
+  /* T21-9 (PROMPT №546): the input can shrink to 0 (min-width:0 below) but
      VButton is white-space:nowrap with no min-width override, so on a narrow
      card it cannot shrink below "+ Добавить"'s full width and pokes out past
      the card edge. Same escape hatch already used at .admin-catalog__dir-head
-     (Bug 6b, ПРОМТ №408) -- let the button drop to its own line instead. */
+     (Bug 6b, PROMPT №408) -- let the button drop to its own line instead. */
   flex-wrap: wrap;
 }
 
@@ -365,7 +389,7 @@ onMounted(load)
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  /* Bug 6b (ПРОМТ №408, operator-approved .tmp/promt407-bug4-bug6-preview.html):
+  /* Bug 6b (PROMPT №408, operator-approved .tmp/promt407-bug4-bug6-preview.html):
      lets the toggle button drop to its own line when the title's real width
      doesn't leave room for it, instead of the title painting through the
      source badge (see .admin-catalog__dir-title below for why). */
@@ -379,7 +403,7 @@ onMounted(load)
      never wrapped and the title just painted through the badge next to it. */
   flex: 1 1 auto;
   min-width: 0;
-  /* ПРОМТ №503 commit 4: min-width:0 only lets this item SHRINK below its
+  /* PROMPT №503 commit 4: min-width:0 only lets this item SHRINK below its
      content size -- it doesn't give the text itself anywhere to break. A
      single long unbreakable label (admin free text or an auto-promoted
      custom method has no length cap under 100 chars) still overflowed this
@@ -419,7 +443,7 @@ onMounted(load)
   gap: var(--space-2);
 }
 
-/* ПРОМТ №503 commit 4: VChip's shared default is white-space:nowrap (correct
+/* PROMPT №503 commit 4: VChip's shared default is white-space:nowrap (correct
    everywhere else it's used -- short, bounded labels). This screen's style
    labels are admin free text or auto-promoted custom methods with no length
    cap under 100 chars, so a long one rendered as a single unbreakable pill

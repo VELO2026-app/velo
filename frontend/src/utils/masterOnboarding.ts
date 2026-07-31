@@ -7,7 +7,7 @@
 // full-screen overlay on first master-dashboard entry. Kept framework-free so
 // the gate is unit-testable.
 //
-// E15 SHIPPED (ПРОМТ №256/257): `master_onboarding_completed` is persisted by
+// E15 SHIPPED (PROMPT №256/257): `master_onboarding_completed` is persisted by
 // the backend and typed on UserResponse. The reader below stays null-tolerant
 // (absent / undefined / null -> false) so it accepts a not-yet-loaded user.
 // =============================================================================

@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- AdminRevenueView Screen Tests (T8, ПРОМТ №432)
+// VELO Frontend -- AdminRevenueView Screen Tests (T8, PROMPT №432)
 // =============================================================================
 //
 // Platform revenue: GMV, commission, payout, and the per-master breakdown. It
@@ -19,7 +19,7 @@
 // Its retry button sits in VEmptyState's DEFAULT slot (AdminRevenueView.vue:39).
 // That is one of 24 such sites and it has always worked. The 11 sites that used
 // `<template #action>` did NOT -- VEmptyState never declared that slot and Vue
-// dropped it silently (found ПРОМТ №432, fixed №433: `action` is now declared,
+// dropped it silently (found PROMPT №432, fixed №433: `action` is now declared,
 // and both slots render into .v-empty__action). Migrating these 24 onto the
 // named slot was scoped in №433 and NOT done -- see that report.
 //
@@ -83,12 +83,12 @@ async function flush(): Promise<void> {
 // literals are invisible in a diff and the next editor would "tidy" them away
 // without noticing what broke.
 function text(): string {
-// Intl's ru currency format groups thousands with U+00A0 (a NON-BREAKING
-// space), not the space on your keyboard -- so a toContain('1 000,00') typed
-// normally fails on every amount over 999 while the screen is perfectly
-// correct. Matched by ESCAPE, never by pasting the literal character: the
-// literal is invisible in a diff and the next editor would "tidy" it into a
-// plain space without noticing what broke.
+  // Intl's ru currency format groups thousands with U+00A0 (a NON-BREAKING
+  // space), not the space on your keyboard -- so a toContain('1 000,00') typed
+  // normally fails on every amount over 999 while the screen is perfectly
+  // correct. Matched by ESCAPE, never by pasting the literal character: the
+  // literal is invisible in a diff and the next editor would "tidy" it into a
+  // plain space without noticing what broke.
   return (host?.textContent ?? '').replace(/[\u00A0\u202F\u2009]/g, ' ')
 }
 
@@ -271,7 +271,7 @@ describe('AdminRevenueView', () => {
       expect(adminApi.getAdminRevenue).toHaveBeenCalledTimes(1)
     })
 
-    it('the switched period renders ITS data, not the previous period\'s', async () => {
+    it("the switched period renders ITS data, not the previous period's", async () => {
       vi.mocked(adminApi.getAdminRevenue).mockResolvedValue(revenue({ revenue_cents: 10000 }))
       mount()
       await flush()

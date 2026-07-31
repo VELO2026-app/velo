@@ -64,15 +64,14 @@ export const useMasterStore = defineStore('master', () => {
       profileMissing.value = false
     } catch (e) {
       profileError.value = extractApiError(e, 'Не удалось загрузить профиль мастера')
-      profileMissing.value =
-        e instanceof ApiResponseError && e.code === 'master_profile_not_found'
+      profileMissing.value = e instanceof ApiResponseError && e.code === 'master_profile_not_found'
     } finally {
       profileLoading.value = false
     }
   }
 
   // =========================================================================
-  // Practices (paginated) -- T22-3/T22-5 (ПРОМТ №561): TWO independent
+  // Practices (paginated) -- T22-3/T22-5 (PROMPT №561): TWO independent
   // cursors, not one. "Предстоящие" and "Прошедшие" are different questions
   // to the server (nearest-first vs most-recent-first over disjoint status
   // sets), so one shared futures-first cursor could never answer both --
@@ -106,9 +105,7 @@ export const useMasterStore = defineStore('master', () => {
     ...paginationUpcoming.items.value,
     ...paginationPast.items.value,
   ])
-  const practicesTotal = computed(
-    () => paginationUpcoming.total.value + paginationPast.total.value,
-  )
+  const practicesTotal = computed(() => paginationUpcoming.total.value + paginationPast.total.value)
 
   /**
    * Initial load of the "Предстоящие" bucket only.

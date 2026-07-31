@@ -11,7 +11,7 @@
 #
 # telegram_id range (56600-56699 -- this module owns this sub-range):
 #   56601        -- verified master (default)
-#   56602, 56603 -- "other master" isolation checks (A4 V8, ПРОМТ №571)
+#   56602, 56603 -- "other master" isolation checks (A4 V8, PROMPT №571)
 #   56690        -- admin (ADMIN_TID)
 # =============================================================================
 
@@ -103,7 +103,7 @@ async def _make_verified_master(
 ) -> dict:
     """Create user, apply, verify via admin. Returns master auth (post-verify).
 
-    admin_auth (ПРОМТ №583): pass an already-obtained admin session to reuse
+    admin_auth (PROMPT №583): pass an already-obtained admin session to reuse
     it instead of logging in fresh here. Each _make_admin_auth() call burns
     2 of the 5-per-60s auth-rate-limit budget for ADMIN_TID (CRITICAL-4);
     tests that build several masters and/or also call _make_admin_auth
@@ -389,10 +389,10 @@ async def test_approve_with_master_only_creates_scoped_direction(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """A4 V8 / ПРОМТ №571: master_only=[label] on the approve_method_change
+    """A4 V8 / PROMPT №571: master_only=[label] on the approve_method_change
     flow inserts a new source='custom' direction scoped to THIS master
     (master_id = the requesting master's own user id), not a global
-    (master_id=NULL) row -- the same fix T22-6 (ПРОМТ №561) already proved
+    (master_id=NULL) row -- the same fix T22-6 (PROMPT №561) already proved
     for verify_master (test_admin_masters.py's
     test_verify_with_master_only_creates_scoped_direction), but never
     exercised on approve_method_change's OWN wiring
@@ -408,7 +408,7 @@ async def test_approve_with_master_only_creates_scoped_direction(
     ).scalars().all()
     assert premise == [], f"premise violated: {label!r} already exists"
 
-    # ПРОМТ №583: one admin session, reused for every admin action below --
+    # PROMPT №583: one admin session, reused for every admin action below --
     # this test builds TWO masters (via _make_verified_master) plus its own
     # approve call, which at 2 fresh logins each would otherwise burn 6 of
     # the 5-per-60s ADMIN_TID auth-rate-limit budget within a single test.
@@ -459,7 +459,7 @@ async def test_approve_with_master_only_and_promote_together(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """A4 V8 / ПРОМТ №571: a single approve call carrying BOTH promote and
+    """A4 V8 / PROMPT №571: a single approve call carrying BOTH promote and
     master_only -- the admin picking "add to catalog" for one proposed
     label and "only this master" for another in the same dialog submit --
     must route each label to its own branch: the promoted label becomes a
@@ -473,7 +473,7 @@ async def test_approve_with_master_only_and_promote_together(
     global_label = "Синтетическое направление ПРОМТ-571 (approve promote combo)"
     scoped_label = "Синтетическое направление ПРОМТ-571 (approve scoped combo)"
 
-    # ПРОМТ №583: one admin session, reused for setup and the approve call --
+    # PROMPT №583: one admin session, reused for setup and the approve call --
     # keeps this test comfortably under the 5-per-60s ADMIN_TID auth-rate-
     # limit budget (see the sibling master_only test above for the full count).
     admin_auth = await _make_admin_auth(client, db_session)

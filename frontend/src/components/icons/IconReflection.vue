@@ -1,6 +1,6 @@
 <!--
   IconReflection — hand glyph extracted verbatim from the operator's no-show
-  reflection-banner plate SVG (Group 2737 / Group 3195, ПРОМТ №271). The path is
+  reflection-banner plate SVG (Group 2737 / Group 3195, PROMPT №271). The path is
   the exact vector from that design; only the fill was swapped from the plate's
   literal #26767D to currentColor so it inherits the banner's teal token
   (Banner variant="success" → --velo-teal-700). viewBox frames the glyph's own

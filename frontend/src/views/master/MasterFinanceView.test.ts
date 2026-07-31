@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- MasterFinanceView Screen Tests (T8, ПРОМТ №432)
+// VELO Frontend -- MasterFinanceView Screen Tests (T8, PROMPT №432)
 // =============================================================================
 //
 // Where a master asks for their money. POST /masters/me/withdraw opens the
@@ -126,12 +126,12 @@ async function flush(): Promise<void> {
 // literals are invisible in a diff and the next editor would "tidy" them away
 // without noticing what broke.
 function norm(s: string | null | undefined): string {
-// Intl's ru currency format groups thousands with U+00A0 (a NON-BREAKING
-// space), not the space on your keyboard -- so a toContain('1 000,00') typed
-// normally fails on every amount over 999 while the screen is perfectly
-// correct. Matched by ESCAPE, never by pasting the literal character: the
-// literal is invisible in a diff and the next editor would "tidy" it into a
-// plain space without noticing what broke.
+  // Intl's ru currency format groups thousands with U+00A0 (a NON-BREAKING
+  // space), not the space on your keyboard -- so a toContain('1 000,00') typed
+  // normally fails on every amount over 999 while the screen is perfectly
+  // correct. Matched by ESCAPE, never by pasting the literal character: the
+  // literal is invisible in a diff and the next editor would "tidy" it into a
+  // plain space without noticing what broke.
   return (s ?? '').replace(/[\u00A0\u202F\u2009]/g, ' ')
 }
 

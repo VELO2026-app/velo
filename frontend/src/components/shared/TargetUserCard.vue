@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- TargetUserCard (measured, ПРОМТ №610; owner Q11, ПРОМТ
+  VELO Frontend -- TargetUserCard (measured, PROMPT №610; owner Q11, PROMPT
   №611 -- avatar reverted to the DS's own size)
 
   The "who this is about" card -- avatar + name on a tinted plate. Owner Q9:
@@ -12,7 +12,7 @@
   primary-tinted plate in this app already uses), name Marmelad 18
   (--text-base).
 
-  Owner Q11 (ПРОМТ №611): the SVG's avatar circle measured at Ø41; this
+  Owner Q11 (PROMPT №611): the SVG's avatar circle measured at Ø41; this
   component originally forced VAvatar's own "md" (40px) up to that exact
   pixel via a scoped `!important` override. Owner ruled: revert -- the
   mockup tells us WHICH token/size to apply, it doesn't license overriding

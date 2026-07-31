@@ -72,7 +72,7 @@ async def practice_zoom_attendance_endpoint(
     session: AsyncSession = Depends(get_db_reader),
 ) -> AdminZoomAttendanceResponse:
     """Per-booking Zoom-derived attendance totals + the raw unmatched
-    bucket, for reconciliation (E21 step G, ПРОМТ №521).
+    bucket, for reconciliation (E21 step G, PROMPT №521).
 
     404 if the practice does not exist or is soft-deleted. An empty
     zoom_meeting_status (null) means no Zoom meeting was ever created for

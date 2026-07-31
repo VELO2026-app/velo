@@ -17,7 +17,7 @@
 # CALENDAR BOUNDS come from core.periods (single source of truth, E7); revenue
 # is a single-period aggregate, so the previous-period start is ignored.
 #
-# offset (W9, ПРОМТ №387): steps the window by whole periods, mirroring the
+# offset (W9, PROMPT №387): steps the window by whole periods, mirroring the
 # admin dashboard's other engagement metrics (admin/metrics/service.py,
 # admin/stats/overview_service.py) -- the revenue card previously had no
 # offset support at all, so it silently ignored the dashboard's week/month

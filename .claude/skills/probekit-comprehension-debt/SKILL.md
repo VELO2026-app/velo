@@ -16,7 +16,7 @@ This skill provides proxy metrics that make the invisible visible.
 
 ## Configuration
 
-<!-- VELO-tuned (ПРОМТ №385, trial): CBS's docs/01_refer path replaced with a
+<!-- VELO-tuned (PROMPT №385, trial): CBS's docs/01_refer path replaced with a
      git-untracked scratch dir; VELO has no docs/01_refer/. -->
 review_dir: .tmp/probekit-review
 
@@ -27,7 +27,7 @@ review_dir: .tmp/probekit-review
 Check for ENVIRONMENT.md. Detect OS, shell, git availability.
 All commands use `git log`, `git diff`, `git shortlog` — require a git repository.
 If not a git repository: abort with "comprehension-debt requires a git repository."
-(VELO note, ПРОМТ №385: no ENVIRONMENT.md in this repo -- shell is Windows
+(VELO note, PROMPT №385: no ENVIRONMENT.md in this repo -- shell is Windows
 Git-Bash/PowerShell, git is available, `D:/02_Projects/velo` is a git repo.)
 
 **Step 1 — Identify input and scope**

@@ -1,6 +1,6 @@
 <!--
 =============================================================================
-VELO Frontend — Master invite claim (Batch-INVITE, ПРОМТ №258)
+VELO Frontend — Master invite claim (Batch-INVITE, PROMPT №258)
 =============================================================================
 
 Landing for the generic one-time invite deeplink master_onboarding__<token>
@@ -22,7 +22,7 @@ Verified masters never reach here: applyGuard bounces them to the dashboard.
         <p class="invite-claim__subtitle">Проверяем приглашение…</p>
       </template>
 
-      <!-- W11 fix (ПРОМТ №409): a network blip / timeout is not the same claim
+      <!-- W11 fix (PROMPT №409): a network blip / timeout is not the same claim
            as "this one-time link is burned" -- offer a retry instead of telling
            the user their invite is dead when it might just be their connection. -->
       <template v-else-if="transientError">

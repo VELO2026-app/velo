@@ -65,7 +65,7 @@ const READY_TIMEOUT_MS = 10_000
  * Supported formats:
  *   open_practice__{uuid}       -> { name: 'practice-detail', params: { id } }
  *   master_onboarding__{token}  -> { name: 'master-invite', params: { token } }
- *   group_invite__{token}       -> { name: 'group-join', params: { token } } (P4, ПРОМТ №593)
+ *   group_invite__{token}       -> { name: 'group-join', params: { token } } (P4, PROMPT №593)
  */
 export function parseStartParam(
   startParam: string | null,

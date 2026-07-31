@@ -1,14 +1,14 @@
 # =============================================================================
-# Tests: Zoom "Начать" -- master starts their own meeting as host (ПРОМТ №556,
+# Tests: Zoom "Начать" -- master starts their own meeting as host (PROMPT №556,
 # OWNER-1 option В)
 # =============================================================================
 #
-# telegram_id range: 99600-99699 (ПРОМТ №558 -- moved off 79200-79299 after
+# telegram_id range: 99600-99699 (PROMPT №558 -- moved off 79200-79299 after
 # that band turned out to be test_zoom_registrants.py's ALREADY-CLAIMED band,
 # literal telegram_id for literal telegram_id (both files independently
 # picked 79201-79206 for their masters). Verified 99600-99699 is free by
 # grepping every "telegram_id range" comment AND every literal 996xx value
-# across backend/tests/*.py -- zero hits either way (see ПРОМТ №558 report).
+# across backend/tests/*.py -- zero hits either way (see PROMPT №558 report).
 #
 # ⚠ BACKEND-ONLY, UNPROVEN LOCALLY -- there is no docker/postgres available in
 # this environment (per [[velo_testing]]). These tests were written to be
@@ -18,7 +18,7 @@
 # run. See the ГОТОВО report for exactly what was and wasn't observed.
 #
 # EXCEPTION -- test_zoom_start_route_is_reachable_not_a_uuid_parse_422 below
-# WAS actually executed (ПРОМТ №557), not merely collected: run as a plain
+# WAS actually executed (PROMPT №557), not merely collected: run as a plain
 # script against a live-imported `app.main.app` via httpx.ASGITransport (same
 # mechanism as the `client` fixture below), with ONLY
 # zoom.service.redeem_start_ticket mocked (it needs Redis, unreachable here;
@@ -61,7 +61,7 @@ _TID_MAX = 99699
 @pytest.fixture(autouse=True)
 async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
     """TD-032: the shared, FK-safe cleanup helper -- not a bespoke raw-SQL
-    list. ПРОМТ №558: this file's own hand-rolled list (zoom_registrants,
+    list. PROMPT №558: this file's own hand-rolled list (zoom_registrants,
     zoom_meetings, practices, master_profiles, users, in that order) omitted
     master_ledger entirely, which is exactly what broke the deploy gate --
     full_cleanup_range deletes master_ledger (RESTRICT FK) before users
@@ -142,7 +142,7 @@ async def _create_and_publish_practice(
 
 
 # ---------------------------------------------------------------------------
-# 0. Routing -- ПРОМТ №557: the route must be reached via the REAL router,
+# 0. Routing -- PROMPT №557: the route must be reached via the REAL router,
 #    not a direct call to the handler function (that would prove nothing --
 #    the defect class this guards against lives in route declaration order,
 #    not in handler logic, and a handler-level test stays green through it).

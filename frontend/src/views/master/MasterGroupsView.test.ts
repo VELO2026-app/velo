@@ -1,6 +1,6 @@
 // =============================================================================
-// VELO Frontend -- MasterGroupsView Screen Tests (Master GROUPS P2, ПРОМТ №591;
-// invite wiring P4, ПРОМТ №593)
+// VELO Frontend -- MasterGroupsView Screen Tests (Master GROUPS P2, PROMPT №591;
+// invite wiring P4, PROMPT №593)
 // =============================================================================
 //
 // PATTERN B (local-ref, no store): mirrors MasterStudentsView.test.ts -- state
@@ -221,7 +221,7 @@ describe('MasterGroupsView', () => {
     })
   })
 
-  describe('cross-group search (P6, ПРОМТ №607)', () => {
+  describe('cross-group search (P6, PROMPT №607)', () => {
     /** Types into the search field and advances past the 300ms debounce
      *  (same window as MasterGroupDetailView's own member search). Requires
      *  vi.useFakeTimers() to already be active in the calling test. */
@@ -321,7 +321,7 @@ describe('MasterGroupsView', () => {
     })
   })
 
-  describe('combined group-name + people search (G1, ПРОМТ №609)', () => {
+  describe('combined group-name + people search (G1, PROMPT №609)', () => {
     async function searchFor(value: string): Promise<void> {
       const input = host?.querySelector<HTMLInputElement>('input')
       if (!input) throw new Error('search input not rendered')

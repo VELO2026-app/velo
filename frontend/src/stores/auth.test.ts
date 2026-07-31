@@ -194,7 +194,7 @@ describe('useAuthStore', () => {
     })
   })
 
-  // -- ПРОМТ №550: logout race (ПРОМТ №549 adversarial finding) --------------
+  // -- PROMPT №550: logout race (PROMPT №549 adversarial finding) --------------
   // fetchMe() now runs routinely (useRoleFreshness.ts -- every navigation,
   // every 30s foregrounded), not just at boot, so a call already in flight
   // when logout() fires is a real, not theoretical, timing window. Before
@@ -211,7 +211,10 @@ describe('useAuthStore', () => {
       // in flight at the moment logout() runs.
       let resolveGetMe: (user: UserResponse) => void = () => {}
       vi.mocked(usersApi.getMe).mockImplementation(
-        () => new Promise<UserResponse>((resolve) => { resolveGetMe = resolve }),
+        () =>
+          new Promise<UserResponse>((resolve) => {
+            resolveGetMe = resolve
+          }),
       )
       const fetchPromise = store.fetchMe()
 

@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- MasterGroupsView (Master GROUPS P2, ПРОМТ №591)
+  VELO Frontend -- MasterGroupsView (Master GROUPS P2, PROMPT №591)
 
   "Мои группы" -- replaces "Мои ученики" as the dashboard entry. Lists the
   two virtual groups («Ученики» always first, «Удалённые» last and omitted
@@ -9,14 +9,14 @@
   Reuses VListRow (row shell), VShowMore (the "+ ещё N групп" expander) --
   no bespoke visual component, DS tokens only.
 
-  G2 (ПРОМТ №609, owner-ruled): the per-card «share» + «⋯» actions
+  G2 (PROMPT №609, owner-ruled): the per-card «share» + «⋯» actions
   (invite/rename/delete) MOVED into MasterGroupDetailView's header menu --
   reachable from there for ANY group (empty or not), not just the ones the
   old empty-group CTA covered. Cards here are plain, tap-to-open rows now.
 
-  G1 (ПРОМТ №609, owner-ruled): ONE search field matches BOTH group names
+  G1 (PROMPT №609, owner-ruled): ONE search field matches BOTH group names
   (client-side, over the already-loaded `groups`) AND people across CUSTOM
-  groups (server-side, debounced -- the original P6/ПРОМТ №607 people
+  groups (server-side, debounced -- the original P6/PROMPT №607 people
   search, unchanged in mechanism). The two result kinds are VISUALLY
   SEPARATED under their own section heading (Группы / Участники) rather
   than interleaved, so they never blur into one list -- groups first
@@ -27,7 +27,7 @@
 <template>
   <div class="groups">
     <VHeader title="Мои группы" show-back @back="router.push({ name: 'master-dashboard' })">
-      <!-- G3 (ПРОМТ №609): top-right, same row as the title (measured
+      <!-- G3 (PROMPT №609): top-right, same row as the title (measured
            from the owner's SVG: 40px circle, right-aligned to the cards'
            own right edge -- VHeader's #action slot already sits flush
            with the header row's right side, same rail). -->
@@ -70,7 +70,7 @@
           </div>
         </template>
 
-        <!-- People matches: server-side, debounced (P6, ПРОМТ №607 mechanism unchanged). -->
+        <!-- People matches: server-side, debounced (P6, PROMPT №607 mechanism unchanged). -->
         <div v-if="searchLoading" class="groups__state">
           <VLoader size="lg" />
         </div>
@@ -194,7 +194,7 @@ async function load(): Promise<void> {
 }
 onMounted(load)
 
-// -- Cross-group people-search (P6, ПРОМТ №607) --
+// -- Cross-group people-search (P6, PROMPT №607) --
 // One row per (person, CUSTOM group) MEMBERSHIP -- owner-approved preview,
 // deliberately NOT deduped. Server-side + debounced exactly like
 // MasterGroupDetailView's own member search (same 300ms, same
@@ -230,7 +230,7 @@ watch(search, (value) => {
   searchTimer = setTimeout(loadSearch, 300)
 })
 
-// Show the first 5 (owner Q7, ПРОМТ №610 -- was 10); the rest hide behind
+// Show the first 5 (owner Q7, PROMPT №610 -- was 10); the rest hide behind
 // the outlined "+ ещё N групп" pill (VShowMore already built this exact
 // recipe -- primary stroke + primary text, see that file -- no visual
 // change needed there, only this constant). Never applies while a search
@@ -245,7 +245,7 @@ const visibleGroups = computed((): GroupListItem[] =>
 const hiddenCount = computed((): number => Math.max(0, groups.value.length - GROUPS_PREVIEW))
 
 function openDetail(group: GroupListItem): void {
-  // Owner Q4 (ПРОМТ №610): `description` rides along the SAME router-query
+  // Owner Q4 (PROMPT №610): `description` rides along the SAME router-query
   // mechanism `name` already uses -- no new "get one group" endpoint for a
   // value the caller already has in hand. `undefined` (not null) so vue-
   // router omits the query key entirely rather than serializing "null".
@@ -260,7 +260,7 @@ function onCreate(): void {
   router.push({ name: 'master-group-create' })
 }
 
-// G1 (ПРОМТ №609): group-NAME matches -- instant, client-side over the
+// G1 (PROMPT №609): group-NAME matches -- instant, client-side over the
 // already-loaded `groups` (no fetch, unlike the people search below).
 // Includes the two virtuals same as the plain list does (no special
 // exclusion asked for or implied).
@@ -292,7 +292,7 @@ const matchingGroups = computed((): GroupListItem[] => {
   padding: var(--space-6) 0;
 }
 
-/* -- Cross-group search (P6, ПРОМТ №607): same DS pattern as
+/* -- Cross-group search (P6, PROMPT №607): same DS pattern as
    MasterStudentsView / MasterGroupDetailView (VInput glass pill +
    magnifier), token-for-token. -- */
 .groups__search {
@@ -332,7 +332,7 @@ const matchingGroups = computed((): GroupListItem[] => {
   cursor: pointer;
 }
 
-/* G1 (ПРОМТ №609): section headings separating group-name matches from
+/* G1 (PROMPT №609): section headings separating group-name matches from
    people matches -- reuses the app-wide velo-section-title class
    (MasterStudentProfileView's «Последние check-ins»/«Feedbacks» recipe),
    just a small top gap since it follows the search field / a prior
@@ -341,7 +341,7 @@ const matchingGroups = computed((): GroupListItem[] => {
   margin-top: var(--space-2);
 }
 
-/* G3 (ПРОМТ №609): top-right header control -- measured from the owner's
+/* G3 (PROMPT №609): top-right header control -- measured from the owner's
    SVG (3 My groups.svg): a 40px circle, #627A9C (= --velo-primary), same
    row as the title. No glow specified for this control (unlike the
    search field, G1/G5) -- plain fill only. */

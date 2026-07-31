@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- Reports API (Master GROUPS P3, ПРОМТ №592)
+// VELO Frontend -- Reports API (Master GROUPS P3, PROMPT №592)
 // =============================================================================
 //
 // Typed wrapper over the EXISTING backend Report table (Phase 3.3) --

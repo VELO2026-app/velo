@@ -14,7 +14,7 @@
 #   GET /masters/me/students/{id}
 #     - practices_count, hours, satisfaction_pct, recent_checkins, feedbacks
 #     - satisfaction_pct null when no feedback
-#     - P6 (ПРОМТ №609, owner-ruled widen): opens for a non-cancelled
+#     - P6 (PROMPT №609, owner-ruled widen): opens for a non-cancelled
 #       (not-yet-attended) booking, and for a custom-group member with NO
 #       booking at all -- both degrade to honest zero/empty aggregates.
 #       Still 404s for a real stranger (no booking of any status, no
@@ -53,7 +53,7 @@ _TID_MAX = 91999
 async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
     """Clean test data before/after each test, FK-safe.
 
-    Switched to the shared full_cleanup_range (P6, ПРОМТ №609) instead of
+    Switched to the shared full_cleanup_range (P6, PROMPT №609) instead of
     this file's own ad-hoc delete list -- the new group-membership tests
     below are the first in this file to touch master_group/
     master_group_membership, which the old hand-rolled list never knew
@@ -447,7 +447,7 @@ async def test_student_detail_widened_confirmed_booking_opens(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """P6 (owner-ruled widen, ПРОМТ №609): a non-cancelled booking that
+    """P6 (owner-ruled widen, PROMPT №609): a non-cancelled booking that
     hasn't been ATTENDED yet now opens the profile -- this is the exact
     case that was broken in production: reachable from «Мои группы»
     (derived «Ученики» already admits any non-cancelled booking) but

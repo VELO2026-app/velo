@@ -301,7 +301,7 @@ async def patch_meeting(*, zoom_meeting_id: str, start_time_iso: str) -> None:
 async def get_meeting(*, zoom_meeting_id: str) -> dict:
     """Fetch a meeting's current details from Zoom, including start_url.
 
-    ПРОМТ №556 (OWNER-1, option В): this is the ONLY place start_url is ever
+    PROMPT №556 (OWNER-1, option В): this is the ONLY place start_url is ever
     read. create_meeting's response has one too, but that one is deliberately
     discarded (see this module's FAILURE SHAPE note + zoom/service.py) so the
     credential is fetched fresh, on demand, and never stored -- callers must

@@ -32,7 +32,7 @@
 <template>
   <div class="analytics">
     <!-- Header (DS VHeader — uniform with the rest of the master zone, rides
-         MobileLayout's floating island; ПРОМТ №162). -->
+         MobileLayout's floating island; PROMPT №162). -->
     <VHeader title="Аналитика" />
 
     <!-- Tab segment (track+thumb, DS primitive) -->
@@ -72,7 +72,7 @@
       <!-- Требуют внимания: ученики, оставившие в фидбэке «Есть вопросы» (confused)
            за период. Секция (вместе с заголовком) НЕ показывается, если таких нет.
            Тап по карточке → профиль ученика (E1: user_id на MasterReviewItem);
-           кнопка сообщения — @click.stop, шлёт сообщение, не навигируя (ПРОМТ №229). -->
+           кнопка сообщения — @click.stop, шлёт сообщение, не навигируя (PROMPT №229). -->
       <section v-if="attentionItems.length > 0" class="analytics__section">
         <h2 class="velo-section-title">Требуют внимания</h2>
         <div
@@ -138,7 +138,8 @@
               <div class="analytics__pcard-info">
                 <div class="analytics__pcard-title">{{ p.title }}</div>
                 <div class="analytics__pcard-meta">
-                  {{ formatShortDate(p.scheduled_at, p.timezone) }} · {{ p.current_participants }} участников
+                  {{ formatShortDate(p.scheduled_at, p.timezone) }} ·
+                  {{ p.current_participants }} участников
                 </div>
               </div>
             </div>
@@ -161,7 +162,11 @@
             @click="pastExpanded = true"
           />
           <div v-else-if="pastExpanded && masterStore.practicesPastHasMore" class="analytics__more">
-            <VButton variant="ghost" :loading="masterStore.practicesPastLoading" @click="onLoadMore">
+            <VButton
+              variant="ghost"
+              :loading="masterStore.practicesPastLoading"
+              @click="onLoadMore"
+            >
               Показать ещё
             </VButton>
           </div>
@@ -289,7 +294,7 @@ const PERIOD_OPTIONS: ReadonlyArray<{ value: 'week' | 'month'; label: string }> 
 // Past practices (completed, newest first)
 // =========================================================================
 
-// T22-5 (ПРОМТ №561): the server now owns the completed-only, most-recent-
+// T22-5 (PROMPT №561): the server now owns the completed-only, most-recent-
 // first ordering -- no client-side filter/sort left to hide the next
 // ordering bug.
 const pastPractices = computed(() => masterStore.practicesPast)
@@ -408,7 +413,7 @@ const attentionItems = computed((): MasterReviewItem[] => {
   )
 })
 
-// E1 (ПРОМТ №229): tap an attention card → the reviewer's student profile
+// E1 (PROMPT №229): tap an attention card → the reviewer's student profile
 // (user_id now on MasterReviewItem). Mirrors PracticeReviewsView.goStudent.
 function goStudent(item: MasterReviewItem): void {
   router.push({
@@ -529,7 +534,7 @@ function openReviews(practiceId: string): void {
 onMounted(async () => {
   void loadPayments()
   void loadReviews()
-  // T22-5 (ПРОМТ №561): this tab only ever needs "Прошедшие" -- fetching the
+  // T22-5 (PROMPT №561): this tab only ever needs "Прошедшие" -- fetching the
   // combined bucket here would warm "Предстоящие" for no reason.
   await masterStore.fetchPastPractices()
   await loadVisibleInsights()
@@ -719,7 +724,7 @@ onMounted(async () => {
 /* Spread the rating trio across the card (operator SVG: 3 equal-width pills,
    gap 10) — analytics-only override; the shared VRatingBadges component layout
    is untouched (other usages keep their left-aligned trio). The icon+% is
-   CENTERED within each pill (operator ПРОМТ №235: «по центру, а не с левого
+   CENTERED within each pill (operator PROMPT №235: «по центру, а не с левого
    края / распределены по карточке»). */
 .analytics__pcard-badges {
   gap: var(--velo-card-meta-row-gap);

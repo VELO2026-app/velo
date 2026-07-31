@@ -11,11 +11,11 @@ Also audits existing test suites for quality, coverage gaps, and anti-patterns.
 
 ## Configuration
 
-<!-- VELO-tuned (ПРОМТ №435): CBS's docs/01_refer path replaced with the
+<!-- VELO-tuned (PROMPT №435): CBS's docs/01_refer path replaced with the
      git-untracked scratch dir the rest of the family already uses (dda9a6f,
-     ПРОМТ №385). VELO has no docs/01_refer/.
+     PROMPT №385). VELO has no docs/01_refer/.
 
-     NO RUNNER, NO SUITE -- read this before running (ПРОМТ №435). VELO has no
+     NO RUNNER, NO SUITE -- read this before running (PROMPT №435). VELO has no
      Playwright, no Cypress and no Cucumber in frontend/package.json, and no
      tests/e2e tree. This skill therefore CANNOT run or audit anything here
      today; the `--audit` mode has nothing to read. Standing it up means adding

@@ -266,7 +266,7 @@ function practicesPage(items: PracticeResponse[], total = items.length, offset =
   return { items, total, limit: 20, offset }
 }
 
-// T22-5 (ПРОМТ №561): the server now owns the completed-only, most-recent-
+// T22-5 (PROMPT №561): the server now owns the completed-only, most-recent-
 // first ordering -- pastPractices no longer re-sorts client-side (.vue), so
 // the fake server must actually behave like one. This screen only ever
 // fetches the "past" bucket (fetchPastPractices), but the helper mirrors
@@ -459,7 +459,9 @@ beforeEach(() => {
   vi.mocked(mastersApi.getIncome)
     .mockReset()
     .mockImplementation(async (period) => (period === 'month' ? INCOME_MONTH : INCOME_WEEK))
-  vi.mocked(mastersApi.getTransactions).mockReset().mockResolvedValue(txPage([TX_SALE, TX_FEE]))
+  vi.mocked(mastersApi.getTransactions)
+    .mockReset()
+    .mockResolvedValue(txPage([TX_SALE, TX_FEE]))
 
   // The real store puts whatever this resolves into its reactive cache; a
   // practice with no fixture rejects, which is the honest shape of an insights
@@ -887,7 +889,7 @@ describe('AnalyticsView', () => {
 
   // ===========================================================================
   describe('Требуют внимания -- navigation and the message modal', () => {
-    it('tapping a card opens that reviewer\'s student profile', async () => {
+    it("tapping a card opens that reviewer's student profile", async () => {
       mount()
       await flush()
 
@@ -909,9 +911,7 @@ describe('AnalyticsView', () => {
 
       expect(modalDismissed()).toBe(true)
 
-      attentionCards()[0]
-        ?.querySelector<HTMLButtonElement>('.analytics__attention-msg')
-        ?.click()
+      attentionCards()[0]?.querySelector<HTMLButtonElement>('.analytics__attention-msg')?.click()
       await flush()
 
       expect(push).not.toHaveBeenCalled()
@@ -922,9 +922,7 @@ describe('AnalyticsView', () => {
     it('«Отмена» dismisses the modal', async () => {
       mount()
       await flush()
-      attentionCards()[0]
-        ?.querySelector<HTMLButtonElement>('.analytics__attention-msg')
-        ?.click()
+      attentionCards()[0]?.querySelector<HTMLButtonElement>('.analytics__attention-msg')?.click()
       await flush()
       // Pinned open first, so modalDismissed() cannot always-pass (SC-13b).
       expect(modalDismissed()).toBe(false)

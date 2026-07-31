@@ -1,5 +1,5 @@
 # =============================================================================
-# Tests: Zoom Registrant Lifecycle (E21 step E -- ПРОМТ №520)
+# Tests: Zoom Registrant Lifecycle (E21 step E -- PROMPT №520)
 # =============================================================================
 #
 # telegram_id range: 79200-79299
@@ -55,7 +55,7 @@ _CLEANUP_QUERIES = [
         "DELETE FROM zoom_meetings WHERE practice_id IN "
         "(SELECT id FROM practices WHERE master_id IN (" + _MASTER_RANGE + "))"
     ),
-    # ПРОМТ №527: purchases must go before bookings -- purchases_booking_id_fkey
+    # PROMPT №527: purchases must go before bookings -- purchases_booking_id_fkey
     # (RESTRICT) blocks deleting a booking that still has a purchase pointing at
     # it. This file is the only zoom test file that books through the real
     # /api/v1/bookings endpoint (create_booking always creates a purchase);
@@ -63,7 +63,7 @@ _CLEANUP_QUERIES = [
     # the ORM, bypassing purchase creation -- same convention as
     # test_cancellation.py's cleanup order.
     text("DELETE FROM purchases WHERE user_id IN (" + _TID_RANGE + ")"),
-    # ПРОМТ №530: this file's new stub-mode-finalize test projects diary
+    # PROMPT №530: this file's new stub-mode-finalize test projects diary
     # practice_outcome events -- clean those up too (no FK ordering
     # constraint either way, source_id carries no ForeignKey).
     text("DELETE FROM diary_events WHERE user_id IN (" + _TID_RANGE + ")"),
@@ -311,7 +311,7 @@ async def test_host_registrant_created_once_no_booking_id(
 
 
 # ===================================================================
-# 3b. create_registrant_for_booking is idempotent too (ПРОМТ №525 --
+# 3b. create_registrant_for_booking is idempotent too (PROMPT №525 --
 #     this existence check did not exist before; calling it twice for the
 #     same booking used to insert a second row and violate
 #     uq_zoom_registrant_meeting_user_active)
@@ -359,7 +359,7 @@ async def test_create_registrant_for_booking_called_twice_stays_one_row(
 
 
 # ===================================================================
-# 3c. Regression pin (ПРОМТ №530): stub mode must not defer attendance
+# 3c. Regression pin (PROMPT №530): stub mode must not defer attendance
 # ===================================================================
 
 
@@ -372,7 +372,7 @@ async def test_finalize_decides_immediately_in_stub_mode_no_deferral(
     treating it as Zoom-tracked would defer attendance for the full
     settings.zoom_attendance_decision_deadline_minutes (120) before the
     deadline fallback finally decided it. Relies on the suite's stub-mode
-    pin (conftest.py, ПРОМТ №543), not on any server's actual credential
+    pin (conftest.py, PROMPT №543), not on any server's actual credential
     state. Pins the fix directly: the ZoomMeeting row IS still created and
     ACTIVE (stub mode's normal, unchanged behavior -- see
     test_host_registrant_created_once_no_booking_id above), but finalize
@@ -476,7 +476,7 @@ async def test_cancel_booking_marks_registrant_cancelled_even_when_zoom_fails(
 
 # ===================================================================
 # 5. A participant's join_url stops being handed out once the meeting is
-#    gone (ПРОМТ №563) -- the registrant row itself is never touched when a
+#    gone (PROMPT №563) -- the registrant row itself is never touched when a
 #    meeting is deleted outside the normal cancel flow (see
 #    zoom/service.get_host_join_url's own docstring), so the list endpoints
 #    must consult ZoomMeeting.status themselves, same as the host path.

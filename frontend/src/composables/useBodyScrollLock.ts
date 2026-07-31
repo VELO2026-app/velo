@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- Body scroll-lock (shared, ref-counted) (W16, ПРОМТ №409)
+// VELO Frontend -- Body scroll-lock (shared, ref-counted) (W16, PROMPT №409)
 // =============================================================================
 //
 // VModal and VBottomSheet each used to set document.body.style.overflow

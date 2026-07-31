@@ -2,7 +2,7 @@
 // VELO Frontend -- api/admin.ts Unit Tests: the promote/master_only seam
 // =============================================================================
 //
-// B13 (Батч B, ПРОМТ №579): the promote (add-to-catalog) seam had thorough
+// B13 (Батч B, PROMPT №579): the promote (add-to-catalog) seam had thorough
 // coverage on BOTH ends -- AdminMasterReviewView.test.ts / AdminMethodRequestsView.
 // test.ts assert the COMPONENT calls verifyMaster/approveMethodChange with the
 // right (promote, masterOnly) args (but mock @/api/admin entirely, so the

@@ -2,7 +2,7 @@
 // VELO Frontend -- periodRange.ts Unit Tests
 // =============================================================================
 //
-// SW17 (Батч 3, ПРОМТ №580): formatPeriodRange did all its week/month math via
+// SW17 (Батч 3, PROMPT №580): formatPeriodRange did all its week/month math via
 // device-LOCAL Date getters/setters (getDay/setDate/getFullYear/getMonth) and
 // formatted via toLocaleDateString with NO explicit timeZone -- the same class
 // of bug already fixed for adminHelpers.ts (SW10). Two admins (or the same
@@ -51,7 +51,7 @@ describe('formatPeriodRange', () => {
   // already Wednesday local, Etc/GMT+12 (UTC-12) is still Tuesday local, a
   // 26h spread guaranteeing different LOCAL weekdays/calendar days for the
   // same instant (same technique as adminHelpers.test.ts's SW10 tests).
-  it('SW17: week label is unaffected by the DEVICE\'s own timezone', () => {
+  it("SW17: week label is unaffected by the DEVICE's own timezone", () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-06-16T23:30:00Z'))
 
@@ -66,7 +66,7 @@ describe('formatPeriodRange', () => {
   // SW17: system time is 23:30 UTC on the last day of June -- Kiritimati
   // (UTC+14) is already July 1 local; Etc/GMT+12 (UTC-12) is still June 30
   // local. Before the fix these landed in DIFFERENT months entirely.
-  it('SW17: month label is unaffected by the DEVICE\'s own timezone, even across a month boundary', () => {
+  it("SW17: month label is unaffected by the DEVICE's own timezone, even across a month boundary", () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-06-30T23:30:00Z'))
 

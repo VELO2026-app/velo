@@ -1,11 +1,11 @@
 <!--
-  VELO Frontend -- MasterSummaryView (Master DS, 2026-06-11; E6 wiring ПРОМТ №420)
+  VELO Frontend -- MasterSummaryView (Master DS, 2026-06-11; E6 wiring PROMPT №420)
 
   "Саммари недели" — the master's weekly summary, reached from the dashboard
   summary card ("Подробнее"). Rendered inside MasterShell.
 
   E6 = three pieces (insight + key feedbacks + needs attention). Recon
-  (ПРОМТ №420) found two of three already real, just not wired together on
+  (PROMPT №420) found two of three already real, just not wired together on
   this one screen:
     - insight: HONEST STUB. No AI provider exists in this project (backend/
       app/modules/ai/ is a Protocol + MockAIService, explicitly out-of-MVP-
@@ -146,7 +146,7 @@ const router = useRouter()
 //    -- operator 2026-07-15: AI work is Zod's, once that infra lands. --
 const insight = ref('Сводка появится, когда подключится аналитика')
 
-// -- Key feedbacks — REAL (E6, ПРОМТ №420): GET /masters/me/reviews, same
+// -- Key feedbacks — REAL (E6, PROMPT №420): GET /masters/me/reviews, same
 //    cross-practice named feed AnalyticsView's «Требуют внимания» uses, but
 //    WITHOUT the attention=true filter -- this section is a highlight reel
 //    (positive included), not only the negative bucket. Rating icon + color

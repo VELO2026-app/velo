@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- MasterGroupCreateView Screen Tests (Master GROUPS P2, ПРОМТ №591)
+// VELO Frontend -- MasterGroupCreateView Screen Tests (Master GROUPS P2, PROMPT №591)
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -71,26 +71,26 @@ describe('MasterGroupCreateView', () => {
     expect(submitBtn()).toBeDefined()
   })
 
-  it('G17 (ПРОМТ №609): shows the «Основное» section heading', () => {
+  it('G17 (PROMPT №609): shows the «Основное» section heading', () => {
     mount()
 
     expect(host?.querySelector('.velo-section-title')?.textContent).toBe('Основное')
   })
 
-  it('owner Q6 (ПРОМТ №610): shows the required-fields legend', () => {
+  it('owner Q6 (PROMPT №610): shows the required-fields legend', () => {
     mount()
 
     expect(host?.textContent).toContain('— поля, обязательные для заполнения')
   })
 
-  it('owner Q6/Q4 (ПРОМТ №610): «Название» carries the required seal, «Описание» does not', () => {
+  it('owner Q6/Q4 (PROMPT №610): «Название» carries the required seal, «Описание» does not', () => {
     mount()
 
     expect(host?.querySelector('.v-input__seal')).not.toBeNull()
     expect(host?.querySelector('.v-textarea__seal')).toBeNull()
   })
 
-  it('owner Q4 (ПРОМТ №610): renders an optional «Описание» textarea', () => {
+  it('owner Q4 (PROMPT №610): renders an optional «Описание» textarea', () => {
     mount()
 
     expect(host?.textContent).toContain('Описание')
@@ -126,7 +126,7 @@ describe('MasterGroupCreateView', () => {
     expect(push).toHaveBeenCalledWith({ name: 'master-groups' })
   })
 
-  it('on success with a description: calls createGroup with the trimmed description too (owner Q4, ПРОМТ №610)', async () => {
+  it('on success with a description: calls createGroup with the trimmed description too (owner Q4, PROMPT №610)', async () => {
     vi.mocked(groupsApi.createGroup).mockResolvedValue({
       id: 'g1',
       name: 'VIP',

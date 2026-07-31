@@ -30,7 +30,7 @@
 // A fixture dated near the real run date would make this suite flaky
 // depending on WHEN it runs.
 //
-// ПРОМТ №563 (flagged by 137bd8c, fixed here): the ORIGINAL fixture picked
+// PROMPT №563 (flagged by 137bd8c, fixed here): the ORIGINAL fixture picked
 // 2030-03-15 as "far enough in the future to never collide" -- true only
 // until 2030 itself, a long fuse, not a fix. Same root-cause treatment as
 // AttendanceView.test.ts/AttendanceRosterView.test.ts (137bd8c): the clock
@@ -65,7 +65,7 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ back, push }),
 }))
 
-// ПРОМТ №563: clock is FAKED and frozen at NOW (beforeEach below), same
+// PROMPT №563: clock is FAKED and frozen at NOW (beforeEach below), same
 // pattern as AttendanceView.test.ts/AttendanceRosterView.test.ts (137bd8c).
 // STABLE_SCHEDULED_AT is NOW + 30 days, so formatDateShort's Сегодня/Завтра
 // branch can never collide with it regardless of when this suite runs.
@@ -93,9 +93,19 @@ function practice(overrides: Partial<AdminPracticeListItem> = {}): AdminPractice
   }
 }
 
-const P_NOT_FULL = practice({ id: 'p_not_full', title: 'Утренняя медитация', booked: 5, capacity: 10 })
+const P_NOT_FULL = practice({
+  id: 'p_not_full',
+  title: 'Утренняя медитация',
+  booked: 5,
+  capacity: 10,
+})
 const P_FULL = practice({ id: 'p_full', title: 'Вечерняя йога', booked: 10, capacity: 10 })
-const P_UNLIMITED = practice({ id: 'p_unlimited', title: 'Открытый круг', booked: 3, capacity: null })
+const P_UNLIMITED = practice({
+  id: 'p_unlimited',
+  title: 'Открытый круг',
+  booked: 3,
+  capacity: null,
+})
 
 function paginated(items: AdminPracticeListItem[], total?: number) {
   return { items, total: total ?? items.length, limit: 100, offset: 0 }
@@ -160,7 +170,7 @@ function buttonByText(t: string): HTMLButtonElement | undefined {
 // -----------------------------------------------------------------------------
 
 beforeEach(() => {
-  // ПРОМТ №563: freeze the clock this screen's Date.now-dependent
+  // PROMPT №563: freeze the clock this screen's Date.now-dependent
   // formatDateShort sees, so its outcome no longer depends on the real
   // calendar date at all (same pattern as AttendanceView.test.ts).
   vi.useFakeTimers()
@@ -191,12 +201,14 @@ describe('AdminPracticesView', () => {
   describe('ladder + recovery', () => {
     it('shows the loading spinner while the fetch is in flight, then replaces it on resolve', async () => {
       let resolveList!: (v: ReturnType<typeof paginated>) => void
-      vi.mocked(adminApi.getAdminPractices).mockReset().mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolveList = resolve
-          }),
-      )
+      vi.mocked(adminApi.getAdminPractices)
+        .mockReset()
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveList = resolve
+            }),
+        )
       mount()
       await nextTick()
 
@@ -231,7 +243,9 @@ describe('AdminPracticesView', () => {
       mount()
       await flush()
 
-      expect(host?.querySelector('.v-empty__title')?.textContent).toBe('Не удалось загрузить практики')
+      expect(host?.querySelector('.v-empty__title')?.textContent).toBe(
+        'Не удалось загрузить практики',
+      )
       expect(cards()).toHaveLength(0)
     })
 
@@ -324,7 +338,9 @@ describe('AdminPracticesView', () => {
     })
 
     it('before the fetch settles, shows "—"', () => {
-      vi.mocked(adminApi.getAdminPractices).mockReset().mockImplementation(() => new Promise(() => {}))
+      vi.mocked(adminApi.getAdminPractices)
+        .mockReset()
+        .mockImplementation(() => new Promise(() => {}))
       mount()
 
       expect(host?.querySelector('.admin-list__count')?.textContent).toBe('—')
@@ -346,7 +362,9 @@ describe('AdminPracticesView', () => {
       await flush()
 
       const card = cardByTitle('Утренняя медитация')!
-      expect(card.querySelector('.practice-list-card__when')?.textContent?.trim()).toBe('21 августа')
+      expect(card.querySelector('.practice-list-card__when')?.textContent?.trim()).toBe(
+        '21 августа',
+      )
       expect(card.querySelector('.practice-list-card__dur span')?.textContent?.trim()).toBe('13:00')
     })
 

@@ -16,14 +16,14 @@ THE READ-PATH RULE (this is why the script exists):
   read by name through getComputedStyle in MobileLayout/UserShell/MasterShell. A
   var()-only counter calls them dead; acting on that deletes working layout code.
 
-THE MIRROR RULE (the inverse trap, found ПРОМТ №436):
+THE MIRROR RULE (the inverse trap, found PROMPT №436):
   Some tokens are WRITTEN at runtime by JS and never appear in variables.css:
   --velo-frozen-vh and --velo-vvh are set via setProperty() in
   useBackgroundStabilizer.ts and consumed as var(--velo-frozen-vh, 100lvh).
   They are "referenced but undefined" ONLY from the CSS file's point of view.
   They are not dangling. Reported separately as RUNTIME-DEFINED, not as broken.
 
-THE MASK RULE (found ПРОМТ №436):
+THE MASK RULE (found PROMPT №436):
   #000 inside mask-image / -webkit-mask-image is an ALPHA CHANNEL, not a colour.
   A naive "hardcoded colour" probe raises CRITICALs on 20 of them and someone
   "fixing" them breaks the fog masks. Classified separately, never as a colour.
@@ -80,7 +80,7 @@ def scan_usage(tokens):
     for p in source_files():
         t = io.open(p, encoding='utf-8').read()
         if p.endswith('variables.css'):
-            # THE ALIAS RULE (ПРОМТ №437): variables.css references its OWN tokens
+            # THE ALIAS RULE (PROMPT №437): variables.css references its OWN tokens
             # 10 times -- --velo-motion-* are aliases of --velo-duration-*, and
             # --velo-effect-focus consumes --velo-blue-500. Skipping this file (as
             # this script did until now) reports those sources as ZERO-USE. Deleting

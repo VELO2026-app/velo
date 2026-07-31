@@ -2,7 +2,7 @@
   VELO Frontend -- VTextarea Component (Phase F2.1)
 
   Multiline text input. Matches mockup .form-textarea styles.
-  `required` (W22, ПРОМТ №409) -> renders the same pink IconRequired seal
+  `required` (W22, PROMPT №409) -> renders the same pink IconRequired seal
   VInput/VSelect already do, for DS parity.
 
   Usage:

@@ -225,7 +225,7 @@ class CreatePracticeRequest(BaseModel):
     # simply no-ops. Persisted into data.recurrence by the service layer.
     recurrence: RecurrenceSpec | None = None
 
-    # -- Audience (Master GROUPS P5, ПРОМТ №594) --
+    # -- Audience (Master GROUPS P5, PROMPT №594) --
     # Default 'public' -- matches every practice's behavior before this
     # feature existed (see the migration's backfill note). group_ids is
     # required (non-empty) only when audience_kind='groups'; the service
@@ -414,7 +414,7 @@ class UpdatePracticeRequest(BaseModel):
         default=None, max_length=settings.practice_style_max_length,
     )
 
-    # -- Audience (Master GROUPS P5, ПРОМТ №594) --
+    # -- Audience (Master GROUPS P5, PROMPT №594) --
     # Both optional (PATCH semantics): omitted = unchanged. group_ids, when
     # SENT, REPLACES the practice's full target-group set (an empty list
     # clears it). Cross-field consistency (audience_kind vs group_ids) is
@@ -588,7 +588,7 @@ class UpdatePracticeRequest(BaseModel):
 
 
 class AudiencePreviewRequest(BaseModel):
-    """POST /api/v1/practices/{id}/audience-preview (owner Q15, ПРОМТ №613).
+    """POST /api/v1/practices/{id}/audience-preview (owner Q15, PROMPT №613).
 
     A PROPOSED audience the master hasn't saved yet -- unlike
     UpdatePracticeRequest's own audience_kind/group_ids, both are REQUIRED
@@ -685,7 +685,7 @@ class PracticeResponse(BaseModel):
     style: str | None = None
     difficulty: str | None = None
 
-    # -- Audience (Master GROUPS P5, ПРОМТ №594) --
+    # -- Audience (Master GROUPS P5, PROMPT №594) --
     # audience_kind: model_validate() auto-populates this from the ORM
     # column (default 'public', same as every practice before this feature).
     # audience_group_names: NOT auto-populated (no ORM relationship) -- the
@@ -744,7 +744,7 @@ class PracticeResponse(BaseModel):
     # attended/no_show above.
     zoom_host_join_url: str | None = None
 
-    # A4 V2 (ПРОМТ №572): this practice's ZoomMeeting.status verbatim
+    # A4 V2 (PROMPT №572): this practice's ZoomMeeting.status verbatim
     # ('active' | 'pending_creation' | 'create_failed' | 'deleted'), or None
     # if no ZoomMeeting row exists at all. UNLIKE zoom_host_join_url above,
     # this is NOT owner-gated -- the value carries no secret material (same
@@ -755,9 +755,9 @@ class PracticeResponse(BaseModel):
     # both rendered the identical "готовится" spinner in both cases.
     zoom_meeting_status: str | None = None
 
-    # A4 V6 (ПРОМТ №572): True when create_practice returned an EXISTING
+    # A4 V6 (PROMPT №572): True when create_practice returned an EXISTING
     # practice instead of creating a new one -- either the window-scoped
-    # duplicate-submit check (_find_recent_duplicate_practice, ПРОМТ №559)
+    # duplicate-submit check (_find_recent_duplicate_practice, PROMPT №559)
     # or the TOCTOU race-lost path (uq_practice_master_title_scheduled_
     # recurrence, A4 V7). Before this field existed, both paths returned a
     # bare PracticeResponse indistinguishable from a freshly created one --
@@ -841,7 +841,7 @@ class PracticeSummary(BaseModel):
     # builder set.
     zoom_link: str | None = None
 
-    # A4 V2 (ПРОМТ №572): same field, same NOT-owner-gated posture as
+    # A4 V2 (PROMPT №572): same field, same NOT-owner-gated posture as
     # PracticeResponse.zoom_meeting_status above -- powers the SAME
     # pending-vs-failed distinction on list-view Zoom buttons (dashboard
     # nearest card, my-bookings). Set by from_practice() below; no ORM
@@ -878,7 +878,7 @@ class PracticeSummary(BaseModel):
 
 
 class ZoomStartTicketResponse(BaseModel):
-    """POST /api/v1/practices/{id}/zoom/start-ticket (ПРОМТ №556, OWNER-1).
+    """POST /api/v1/practices/{id}/zoom/start-ticket (PROMPT №556, OWNER-1).
 
     Deliberately carries a one-time ticket, never a start_url -- see
     zoom/service.py's ticket-issuance docstring for why."""

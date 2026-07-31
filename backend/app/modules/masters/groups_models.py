@@ -1,5 +1,5 @@
 # =============================================================================
-# VELO Backend -- Master Groups Models (P1, ПРОМТ №590)
+# VELO Backend -- Master Groups Models (P1, PROMPT №590)
 # =============================================================================
 #
 # Three tables. "Ученики" / "Удалённые" are NOT rows here -- they are DERIVED
@@ -45,7 +45,7 @@ class MasterGroup(UUIDMixin, Base):
         nullable=False,
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    # Owner Q4 (ПРОМТ №610): optional free-text blurb, set at create time only
+    # Owner Q4 (PROMPT №610): optional free-text blurb, set at create time only
     # -- rename_group() never touches it (see groups_service.py). Additive +
     # nullable, no server_default, no backfill -- safe on a live prod table
     # (matches taxonomy_models.py's own additive-column discipline). Text,
@@ -103,7 +103,7 @@ class MasterGroupMembership(UUIDMixin, Base):
 
 
 class GroupInvite(UUIDMixin, Base):
-    """A CUSTOM group's reusable join link (P4, ПРОМТ №593).
+    """A CUSTOM group's reusable join link (P4, PROMPT №593).
 
     REUSABLE + STABLE by design -- unlike the single-use, Redis-only,
     sha256'd master_onboarding invite (admin/masters/service.py), the master

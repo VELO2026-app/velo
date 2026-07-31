@@ -4,7 +4,7 @@ Revision ID: 3c4d5e6a7b8c
 Revises: 2b3c4d5e6a7b
 Create Date: 2026-07-22 00:00:00.000000+00:00
 
-T22-6 (ПРОМТ №561): master-scoped taxonomy. Today, an admin approving a
+T22-6 (PROMPT №561): master-scoped taxonomy. Today, an admin approving a
 custom method "for this master only" writes the raw label into
 MasterProfile.data.profile.methods and creates NO catalog row at all --
 the direction has zero representation anywhere a practice could reference

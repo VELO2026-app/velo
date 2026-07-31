@@ -7,7 +7,7 @@ import { resetKeyboardViewportState } from '@/utils/keyboardViewportState'
  * App-root keyboard-viewport publisher. Mounted ONCE from App.vue (the
  * always-mounted root); the single visualViewport listener for CSS state.
  *
- * ANDROID FIX (batch bg-freeze, 2026-07-13 — audit ПРОМТ №378): `#app`'s
+ * ANDROID FIX (batch bg-freeze, 2026-07-13 — audit PROMPT №378): `#app`'s
  * `100lvh` was assumed stable across the keyboard (batch K/N/root-lock), but
  * `lvh`'s keyboard-immunity depends entirely on the platform respecting
  * index.html's `interactive-widget=resizes-visual` -- a Chromium-only hint.

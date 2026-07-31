@@ -1,6 +1,6 @@
 # VELO seed_practices_v2 — Complete Project Context (v2.3)
 
-> **Freshness (ПРОМТ №510, 2026-07-19, verified against `8d4948f` on `test`):** graded
+> **Freshness (PROMPT №510, 2026-07-19, verified against `8d4948f` on `test`):** graded
 > ACTIVELY MISLEADING overall — NOT rewritten this round; no specific line-level correction
 > was in scope for this pass, and none of this pass's four named contradictions touch this
 > file. This document is dated 2026-05-27 (v2.3) and describes `seed_practices.py` /

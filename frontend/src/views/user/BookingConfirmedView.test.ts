@@ -27,7 +27,7 @@
 // !practice`) -- the exact bug class just fixed on CalendarView (a guard
 // reading "is there ANY data" where it should read "is there the RIGHT data
 // for what's on screen"). TWO findings were surfaced against this rung
-// (ПРОМТ №464); this file now reflects the outcome of BOTH:
+// (PROMPT №464); this file now reflects the outcome of BOTH:
 //
 //  (a) STRUCTURAL, NOT USER-VISIBLE -- STILL PRESENT, NOT FIXED (out of scope,
 //      the owner's call): the guard's own literal DEFAULTS
@@ -42,7 +42,7 @@
 //      before paint -- unlike CalendarView's bug, a real browser would very
 //      likely never paint this frame. Left as a documented structural note.
 //
-//  (b) REAL AND BOUNDED -- FIXED HERE (ПРОМТ №466). `practice` (.vue:91) used
+//  (b) REAL AND BOUNDED -- FIXED HERE (PROMPT №466). `practice` (.vue:91) used
 //      to be bare `store.selected`, with NO check that it belongs to THIS
 //      screen's route practiceId. usePracticesStore is a session-lifetime
 //      singleton; a stale DIFFERENT practice left in store.selected by an
@@ -189,7 +189,7 @@ describe('BookingConfirmedView', () => {
       expect(content()).toBeNull()
     })
 
-    it('(finding a, structural) the FIRST synchronous frame -- zero ticks after mount() -- already matches the error/missing rung, because the guard\'s own literal defaults (loading=false, practice=null, error=null) satisfy `!practice` before onMounted\'s fetchPractice() write has been flushed by Vue\'s scheduler', () => {
+    it("(finding a, structural) the FIRST synchronous frame -- zero ticks after mount() -- already matches the error/missing rung, because the guard's own literal defaults (loading=false, practice=null, error=null) satisfy `!practice` before onMounted's fetchPractice() write has been flushed by Vue's scheduler", () => {
       getPracticeMock.mockReturnValue(new Promise(() => {}))
       mount() // NO await at all -- inspecting the pre-flush DOM on purpose
 
@@ -199,7 +199,9 @@ describe('BookingConfirmedView', () => {
     })
 
     it('error: the real backend message renders in the combined rung', async () => {
-      getPracticeMock.mockRejectedValue(new ApiResponseError(404, 'Практика не существует', 'not_found'))
+      getPracticeMock.mockRejectedValue(
+        new ApiResponseError(404, 'Практика не существует', 'not_found'),
+      )
       mount()
       await flush()
 

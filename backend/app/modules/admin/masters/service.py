@@ -100,7 +100,7 @@ async def verify_master(
     promote: list[str] | None = None,
     master_only: list[str] | None = None,
 ) -> MasterProfile:
-    """Verify a pending master application (T4, ПРОМТ №295).
+    """Verify a pending master application (T4, PROMPT №295).
 
     Sets MasterProfile.data.account.status -> "verified" ONLY. The user's role
     is NOT changed: approval grants master *capability* (a verified profile),
@@ -109,7 +109,7 @@ async def verify_master(
     lands the approved applicant back in the user zone with the switch offered,
     per the locked call-design.
 
-    promote (ПРОМТ №503 commit 3): optional custom method labels from the
+    promote (PROMPT №503 commit 3): optional custom method labels from the
     applicant's own data.profile.methods that the admin chose to promote into
     the taxonomy catalog, reusing the exact same _promote_custom_methods
     helper approve_method_change already uses for an already-verified
@@ -117,11 +117,11 @@ async def verify_master(
     mechanism is reachable from the initial-application path. Absent/empty ->
     no catalog write, unchanged from before this parameter existed. Does NOT
     rewrite data.profile.methods itself -- the applicant's stored text is
-    untouched; parseMethods/directionLabel (frontend, ПРОМТ №503 commits 1-2)
+    untouched; parseMethods/directionLabel (frontend, PROMPT №503 commits 1-2)
     now resolve it to the promoted chip on the strength of the catalog label
     matching, the same as any other catalog-matched value.
 
-    master_only (T22-6, ПРОМТ №561): mirrors approve_method_change's own
+    master_only (T22-6, PROMPT №561): mirrors approve_method_change's own
     parameter -- the admin's "Только этому мастеру" choice on this same
     initial-application dialog. Each label gets a MASTER-SCOPED
     TaxonomyDirection row (_scope_custom_methods_to_master), so the new
@@ -510,7 +510,7 @@ async def _scope_custom_methods_to_master(
     session: AsyncSession,
 ) -> list[str]:
     """Insert each label as a new MASTER-SCOPED TaxonomyDirection (T22-6,
-    ПРОМТ №561): the admin's "Только этому мастеру" choice.
+    PROMPT №561): the admin's "Только этому мастеру" choice.
 
     Sibling of _promote_custom_methods, same insert shape (synthetic
     value, source='custom'), except master_id=master_id -- invisible to
@@ -585,7 +585,7 @@ async def approve_method_change(
     free text. Absent/empty -> no catalog write, identical to pre-stage-4
     behavior. Deduped against existing rows (_promote_custom_methods).
 
-    master_only (T22-6, ПРОМТ №561): the admin's OTHER choice on the same
+    master_only (T22-6, PROMPT №561): the admin's OTHER choice on the same
     dialog -- "Только этому мастеру". Before this parameter existed, picking
     it approved the method but wrote NOTHING to the catalog, so the
     direction had no representation anywhere a practice could reference it
@@ -639,7 +639,7 @@ async def edit_master_methods(
     admin: User,
     session: AsyncSession,
 ) -> MasterProfile:
-    """Admin edits a master's methods during review (T3, ПРОМТ №293).
+    """Admin edits a master's methods during review (T3, PROMPT №293).
 
     Overwrites data.profile.methods with the validated flat list. Mirrors
     approve_method_change's JSONB write (deepcopy -> set_jsonb) + audit, but is

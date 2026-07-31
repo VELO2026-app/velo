@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- MasterGroupDetailView (Master GROUPS P2, ПРОМТ №591)
+  VELO Frontend -- MasterGroupDetailView (Master GROUPS P2, PROMPT №591)
 
   One component parametrised by :id -- a real custom group's UUID, or the
   system slugs "students" / "deleted". GET /masters/me/groups/:id/members
@@ -12,7 +12,7 @@
   the EXISTING student profile screen (master-student-profile) -- not
   rebuilt here.
 
-  G2 (ПРОМТ №609, owner-ruled): invite/rename/delete MOVED here from
+  G2 (PROMPT №609, owner-ruled): invite/rename/delete MOVED here from
   MasterGroupsView's per-card buttons -- reachable from this header's own
   «⋯» menu for ANY custom group, empty or not (the old per-card buttons
   only worked when the group already had ≥1 member visible in the list).
@@ -21,8 +21,8 @@
   groups («Ученики»/«Удалённые») get none of the three -- matches the
   backend's 400-on-system-slug.
 
-  Owner Q8 (ПРОМТ №610): the empty-state's own "Пригласить в группу" CTA
-  -- a leftover from before the header menu existed (P4, ПРОМТ №593) --
+  Owner Q8 (PROMPT №610): the empty-state's own "Пригласить в группу" CTA
+  -- a leftover from before the header menu existed (P4, PROMPT №593) --
   removed as a duplicate of that same header menu action, now the single
   invite entry point. `onInviteClick`'s "Ссылка скопирована" toast already
   lives on THIS screen (it always has, since the header menu invite calls
@@ -53,7 +53,7 @@
     </VHeader>
 
     <div class="group-detail__content">
-      <!-- Owner Q4 (ПРОМТ №610): description under the group name (the
+      <!-- Owner Q4 (PROMPT №610): description under the group name (the
            header title above). No description -> renders nothing, no
            reserved space (v-if on a falsy empty string). -->
       <p v-if="groupDescription" class="group-detail__description">{{ groupDescription }}</p>
@@ -122,7 +122,7 @@
                     />
                   </template>
                 </VMenu>
-                <!-- «Удалённые» (P3, ПРОМТ №592): the one action here is
+                <!-- «Удалённые» (P3, PROMPT №592): the one action here is
                      Unblock -- everything else (add to group / tag) is
                      meaningless for a blocked student. -->
                 <VMenu v-else ariaLabel="Меню участника">
@@ -145,10 +145,10 @@
           :title="search ? 'Никого не найдено' : 'Участников пока нет'"
           :description="search ? 'Попробуйте изменить запрос' : emptyDescription"
         />
-        <!-- Empty-group invite CTA REMOVED here (owner Q8, ПРОМТ №610): the
+        <!-- Empty-group invite CTA REMOVED here (owner Q8, PROMPT №610): the
              header's own «⋯» menu (line ~30 above, kind==='custom') is now
              the SINGLE invite entry point for any custom group, empty or
-             not -- this button duplicated it (G2, ПРОМТ №609, already made
+             not -- this button duplicated it (G2, PROMPT №609, already made
              the header menu path universal; this CTA just hadn't been
              cleaned up yet). `onInviteClick`/`inviting` stay -- still used
              by `onHeaderInviteClick` above. -->
@@ -190,8 +190,8 @@
       @saved="load"
     />
 
-    <!-- Unblock confirm («Удалённые» rows only, P3 ПРОМТ №592). T24-28..31
-         (ПРОМТ №634): smaller title (hairline stroke, :deep below) + avatar
+    <!-- Unblock confirm («Удалённые» rows only, P3 PROMPT №592). T24-28..31
+         (PROMPT №634): smaller title (hairline stroke, :deep below) + avatar
          plinth (TargetUserCard, T24-29) + text moved onto the peach panel
          (warning-panel, T24-30 -- the shared 14/17 line-height lives in
          VConfirmDialog itself) + position-based button colours (T24-31). -->
@@ -216,9 +216,9 @@
       />
     </VConfirmDialog>
 
-    <!-- Rename + description edit (G2, ПРОМТ №609 -- moved from
-         MasterGroupsView's card menu; owner Q10, ПРОМТ №611 -- gained the
-         description field, same dialog). ПРОМТ №613: compact-title added --
+    <!-- Rename + description edit (G2, PROMPT №609 -- moved from
+         MasterGroupsView's card menu; owner Q10, PROMPT №611 -- gained the
+         description field, same dialog). PROMPT №613: compact-title added --
          this title (~494px at --text-xl) is LONGER than «Сообщить о
          пользователе» (~408px), the title that originally justified this
          prop, and was missed when this dialog was built. -->
@@ -240,7 +240,7 @@
       />
     </VBottomSheet>
 
-    <!-- Delete confirm (G2, ПРОМТ №609 -- moved from MasterGroupsView's card menu) -->
+    <!-- Delete confirm (G2, PROMPT №609 -- moved from MasterGroupsView's card menu) -->
     <VConfirmDialog
       :open="deleteConfirmOpen"
       :message="deleteMessage"
@@ -300,7 +300,7 @@ const { onFieldFocus } = useKeyboardFieldScroll()
 
 const groupId = computed(() => String(route.params.id))
 
-// Owner Q12 (ПРОМТ №611): route.query is now only a FIRST-PAINT HINT so the
+// Owner Q12 (PROMPT №611): route.query is now only a FIRST-PAINT HINT so the
 // header doesn't flash empty while getGroups() is in flight -- it never
 // wins once the API has answered, even if the API's own value is empty/
 // null (a Mini App reload has NO query at all: the app is reopened, not
@@ -336,7 +336,7 @@ const search = ref('')
 // This master's custom groups -- feeds AddToGroupSheet / RemoveFromGroupSheet's
 // chip palette. Loaded once; independent of the members list/search. Also
 // where THIS group's own name/description come from now (owner Q12,
-// ПРОМТ №611) -- getGroups() already returns every group, custom AND the
+// PROMPT №611) -- getGroups() already returns every group, custom AND the
 // two virtuals, so one fetch covers both needs instead of two.
 const allGroups = ref<GroupListItem[]>([])
 const customGroups = computed(() => allGroups.value.filter((g) => g.kind === 'custom'))
@@ -420,7 +420,7 @@ function openAddTag(member: GroupMemberItem): void {
 }
 
 const addTarget = ref<GroupMemberItem | null>(null)
-// T24-35 (ПРОМТ №634): which of THIS master's custom groups the target is
+// T24-35 (PROMPT №634): which of THIS master's custom groups the target is
 // ALREADY in, so AddToGroupSheet can mark those chips with the darker
 // "existing" state instead of showing nothing (the owner's own example: a
 // student already in four groups, and nothing on screen said so).
@@ -459,7 +459,7 @@ function onRemoveFromGroupClick(member: GroupMemberItem, close: () => void): voi
   close()
 }
 
-// -- Unblock («Удалённые» rows only, P3 ПРОМТ №592) --
+// -- Unblock («Удалённые» rows only, P3 PROMPT №592) --
 const toast = useToast()
 const unblockTarget = ref<GroupMemberItem | null>(null)
 const unblocking = ref(false)
@@ -478,8 +478,8 @@ function onUnblockClick(member: GroupMemberItem, close: () => void): void {
   openUnblock(member)
   close()
 }
-// -- Invite (P4, ПРОМТ №593; empty-group CTA below AND the header menu,
-//    G2 ПРОМТ №609 -- same action, two entry points now: the CTA only
+// -- Invite (P4, PROMPT №593; empty-group CTA below AND the header menu,
+//    G2 PROMPT №609 -- same action, two entry points now: the CTA only
 //    shows for an actually-empty custom group, the header menu works for
 //    any custom group). --
 const inviting = ref(false)
@@ -522,8 +522,8 @@ async function onUnblockConfirm(): Promise<void> {
   }
 }
 
-// -- Rename + description edit (G2, ПРОМТ №609 -- moved from
-// MasterGroupsView's card menu; owner Q10, ПРОМТ №611 -- gained description) --
+// -- Rename + description edit (G2, PROMPT №609 -- moved from
+// MasterGroupsView's card menu; owner Q10, PROMPT №611 -- gained description) --
 const renameOpen = ref(false)
 const renameName = ref('')
 const renameDescription = ref('')
@@ -539,7 +539,7 @@ async function onRenameSave(): Promise<void> {
   try {
     await renameGroup(groupId.value, name, renameDescription.value.trim())
     renameOpen.value = false
-    // Owner Q12/Q10 (ПРОМТ №611): the screen is now API-driven (groupMeta
+    // Owner Q12/Q10 (PROMPT №611): the screen is now API-driven (groupMeta
     // above), not route.query -- re-read from getGroups() instead of
     // rewriting the URL, same source of truth loadGroups() already is.
     await loadGroups()
@@ -548,7 +548,7 @@ async function onRenameSave(): Promise<void> {
   }
 }
 
-// -- Delete (G2, ПРОМТ №609 -- moved from MasterGroupsView's card menu) --
+// -- Delete (G2, PROMPT №609 -- moved from MasterGroupsView's card menu) --
 const deleteConfirmOpen = ref(false)
 const deleting = ref(false)
 const deleteMessage = computed(
@@ -599,7 +599,7 @@ async function onDeleteConfirm(): Promise<void> {
   gap: var(--space-2);
 }
 
-/* Owner Q4 (ПРОМТ №610): optional description, under the group name.
+/* Owner Q4 (PROMPT №610): optional description, under the group name.
    Absent entirely (v-if) when empty -- no placeholder text, no reserved
    height, per the owner's own "no dead space" rule. */
 .group-detail__description {
@@ -617,7 +617,7 @@ async function onDeleteConfirm(): Promise<void> {
 }
 
 /* Search: same DS pattern as MasterStudentsView (VInput glass pill). G4
-   (ПРОМТ №609): the decorative magnifier button removed -- it was
+   (PROMPT №609): the decorative magnifier button removed -- it was
    aria-hidden with no click handler, the field already self-triggers via
    its own watch()+debounce. */
 .group-detail__search {
@@ -636,7 +636,7 @@ async function onDeleteConfirm(): Promise<void> {
   margin-bottom: 0;
 }
 
-/* G5 (ПРОМТ №609): white glow via the existing --velo-shadow-glow token
+/* G5 (PROMPT №609): white glow via the existing --velo-shadow-glow token
    (measured from the owner's SVG as dilate 8.82 + blur 13.167 white --
    the token is the closest existing match, used here rather than the
    raw numbers). */

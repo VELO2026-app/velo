@@ -1,12 +1,12 @@
 # =============================================================================
-# Test: normalize_master_methods.py rollback safety (T21-6 chain, ПРОМТ №550)
+# Test: normalize_master_methods.py rollback safety (T21-6 chain, PROMPT №550)
 # =============================================================================
 #
 # _run_rollback previously decided purely on `current == before`, which meant
 # a row that had legitimately changed for a DIFFERENT reason since
 # normalization (e.g. an admin approved a real method-change request) looked
 # identical to "not yet rolled back" and would be silently OVERWRITTEN back to
-# its pre-normalization value, discarding the real approval (ПРОМТ №549
+# its pre-normalization value, discarding the real approval (PROMPT №549
 # adversarial finding). Fixed to also check `current == after`: only a row
 # that still holds EXACTLY what the normalizer wrote is safe to revert.
 # Neither `before` nor `after` -> REFUSE loudly (printed, naming the master
@@ -22,7 +22,7 @@
 # sys.path, which it already is for every `from app...` import in this suite.
 #
 # NOT EXECUTED (local pytest is blocked, same as every other file in this
-# module's chain) -- traced by hand; see the ПРОМТ №550 report for the trace.
+# module's chain) -- traced by hand; see the PROMPT №550 report for the trace.
 #
 # telegram_id range: 99900-99909 (own tiny band).
 # =============================================================================
@@ -102,7 +102,7 @@ async def _seed_normalize_audit_entry(
     """Insert the AuditLog row _run_normalize would have written, without
     actually running the normalizer -- isolates the rollback test from the
     normalize step (already covered separately by tracing _normalize_methods
-    in the ПРОМТ №547/549 reports)."""
+    in the PROMPT №547/549 reports)."""
     session.add(
         AuditLog(
             event=_AUDIT_EVENT,

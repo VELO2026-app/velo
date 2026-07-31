@@ -4,9 +4,9 @@
 #
 # _assert_master_confirmed_taxonomy (practices/service.py) shipped in c2ef48c
 # (T21-6) with ZERO test coverage of its own -- nothing asserted it ACCEPTS a
-# direction/style a master genuinely holds, or REJECTS one they don't. ПРОМТ
+# direction/style a master genuinely holds, or REJECTS one they don't. PROMPT
 # №547 traced its behavior by hand (fixing the mixed value/label storage
-# format, T21-7) and ПРОМТ №548 (owner mandate) requires that trace to become
+# format, T21-7) and PROMPT №548 (owner mandate) requires that trace to become
 # a test that would FAIL if the rule were removed or either fix reverted.
 #
 # Each test goes through the real HTTP create/update endpoints (not a direct
@@ -15,7 +15,7 @@
 # returns the right boolean.
 #
 # NONE of these tests have been executed (local pytest is blocked). Each is
-# traced by hand against the current code in this PR -- see the ПРОМТ №548
+# traced by hand against the current code in this PR -- see the PROMPT №548
 # report for the full trace of every test below. The deploy gate is their
 # first real run.
 #
@@ -115,7 +115,7 @@ async def _narrow_confirmed_methods(
     write path (submit a method-change-request, admin approves it) -- not a
     hand-rolled JSONB edit. This is exactly how "a master's confirmed methods
     no longer cover an existing practice's direction" happens for real (the
-    owner's own framing in ПРОМТ №547 Task 2): approve_method_change
+    owner's own framing in PROMPT №547 Task 2): approve_method_change
     overwrites data.profile.methods verbatim (admin/masters/service.py:517),
     same mechanism test_master_method_change.py already exercises."""
     submit = await client.post(
@@ -154,7 +154,7 @@ def _valid_practice_body(**overrides: object) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# ACCEPTS -- both stored formats (T21-7, ПРОМТ №547)
+# ACCEPTS -- both stored formats (T21-7, PROMPT №547)
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
 async def test_accepts_direction_confirmed_as_raw_catalog_value(
@@ -216,7 +216,7 @@ async def test_rejects_direction_master_does_not_hold_at_all(
 
 # ---------------------------------------------------------------------------
 # The bare-direction / specific-style hierarchy is strict in BOTH directions
-# -- deliberate design decision from ПРОМТ №547, not an accident of string
+# -- deliberate design decision from PROMPT №547, not an accident of string
 # matching. Each half gets its own test so a change to either direction of
 # the rule fails exactly one of them, not both.
 # ---------------------------------------------------------------------------
@@ -256,7 +256,7 @@ async def test_style_specific_confirmation_does_not_grant_bare_parent_direction(
 
 
 # ---------------------------------------------------------------------------
-# T21-8 (ПРОМТ №547 Task 2): validate on CHANGE, not on presence. This is the
+# T21-8 (PROMPT №547 Task 2): validate on CHANGE, not on presence. This is the
 # owner's exact scenario and the whole point of the distinction -- currently
 # asserted nowhere else.
 # ---------------------------------------------------------------------------

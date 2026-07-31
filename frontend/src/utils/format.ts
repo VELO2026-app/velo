@@ -172,7 +172,7 @@ export function dayKeyOf(isoString: string, timezone = 'UTC'): string {
 /**
  * Relative day label «Сегодня» / «Вчера» / «24 января» for a datetime, computed
  * in the target timezone. Extracted verbatim from DiaryList/DiaryTimeline
- * (ПРОМТ №267) so the dashboard feedback banner and the diary share one
+ * (PROMPT №267) so the dashboard feedback banner and the diary share one
  * implementation instead of hardcoding the day.
  */
 export function dayLabelOf(isoString: string, timezone = 'UTC'): string {

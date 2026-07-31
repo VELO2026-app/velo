@@ -55,11 +55,15 @@
           <VStatCard :value="attendance.no_show" label="Не пришли" value-tone="rose" />
         </div>
 
-        <!-- T21-1 (ПРОМТ №541): the unmatched bucket, made VISIBLE here too --
+        <!-- T21-1 (PROMPT №541): the unmatched bucket, made VISIBLE here too --
              backend has computed unmatched_count since E21 step G with no
-             consumer until now (ПРОМТ №540 audit). Shown only when non-zero:
+             consumer until now (PROMPT №540 audit). Shown only when non-zero:
              this is a heads-up for the master, not a permanent stat card. -->
-        <VBadge v-if="(attendance.unmatched_count ?? 0) > 0" variant="warning" class="roster__unmatched-note">
+        <VBadge
+          v-if="(attendance.unmatched_count ?? 0) > 0"
+          variant="warning"
+          class="roster__unmatched-note"
+        >
           {{ attendance.unmatched_count }} участник(а) Zoom не удалось сопоставить с записью
         </VBadge>
 
@@ -221,7 +225,7 @@ onMounted(load)
 .roster__content {
   flex: 1;
   /* F-5 rail sync: ride MobileLayout's 24px rail (no local h-padding).
-     Top tightened (operator ПРОМТ №161): back-button → hero sits closer. */
+     Top tightened (operator PROMPT №161): back-button → hero sits closer. */
   padding: var(--space-2) 0 var(--space-4);
   display: flex;
   flex-direction: column;
@@ -242,7 +246,7 @@ onMounted(load)
 }
 
 /* ===== Section ===== */
-/* Row-to-row spacing tightened (operator ПРОМТ №161). */
+/* Row-to-row spacing tightened (operator PROMPT №161). */
 .roster__section {
   display: flex;
   flex-direction: column;
@@ -278,5 +282,4 @@ onMounted(load)
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
 }
-
 </style>

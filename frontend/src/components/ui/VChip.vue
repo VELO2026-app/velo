@@ -11,7 +11,7 @@
     <VChip>Медитация</VChip>
     <VChip size="md" clickable :active="on" @click="toggle">Заметки</VChip>
 
-  Optional `existing` (T24-35, ПРОМТ №634): a second, DARKER selected state
+  Optional `existing` (T24-35, PROMPT №634): a second, DARKER selected state
   meaning "already a member of this" -- distinct from `active` ("selected
   right now, about to be added"). The owner's own example: a student
   already in four groups, and nothing on screen said so. Colour derived
@@ -96,7 +96,7 @@ defineEmits<{
   color: var(--velo-white);
 }
 
-/* T24-35 (ПРОМТ №634): darker "already a member" state -- --velo-primary-dark,
+/* T24-35 (PROMPT №634): darker "already a member" state -- --velo-primary-dark,
    the existing hover-state token for --velo-primary (VButton), not a new
    colour. Deliberately not just a heavier active: this chip did not become
    selected because of THIS interaction, it already was true before the

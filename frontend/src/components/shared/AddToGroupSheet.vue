@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- AddToGroupSheet (Master GROUPS P2, ПРОМТ №591)
+  VELO Frontend -- AddToGroupSheet (Master GROUPS P2, PROMPT №591)
 
   "Добавить в группу" -- add-access, NOT move (owner-settled: the title is
   deliberately "Добавить", never "Переместить"). Multi-select VChips over
@@ -12,7 +12,7 @@
   toast; a partial failure still calls `saved` so the parent reloads and
   shows the real resulting state.
 
-  T24-32..37 (ПРОМТ №634): smaller title (VBottomSheet's compactTitle) +
+  T24-32..37 (PROMPT №634): smaller title (VBottomSheet's compactTitle) +
   hairline-stroke weight (.velo-text-strong) + TargetUserCard plinth +
   bolder "Выберите группу" heading (bumped --text-sm -> --text-base, PLUS
   the same stroke) + chips KEPT (RULE 1 -- the owner's words win over the
@@ -102,7 +102,7 @@ const toast = useToast()
 const selected = ref<Set<string>>(new Set())
 const removeFromCurrent = ref(false)
 
-// T24-36 (ПРОМТ №634, real bug found while wiring the checkbox): this was a
+// T24-36 (PROMPT №634, real bug found while wiring the checkbox): this was a
 // ref reset by the watcher below, but `v-if="addTarget"` at the call site
 // (MasterGroupDetailView.vue) means the parent DESTROYS and RECREATES this
 // whole component on every open -- a plain (non-immediate) watch on `open`

@@ -4,7 +4,7 @@
 **Дата:** 6 июля 2026
 **Статус:** Active
 
-> **Freshness (ПРОМТ №510, 2026-07-19, verified against `8d4948f` on `test`):** graded
+> **Freshness (PROMPT №510, 2026-07-19, verified against `8d4948f` on `test`):** graded
 > ACTIVELY MISLEADING overall. This pass corrected three leftover references to the
 > `AdminConsistencyView` / `/admin/consistency` screen, deleted whole 2026-07-07 (`9ca5619`) —
 > confirmed absent from `frontend/src/router/index.ts` and `api/admin.ts` today. Everything

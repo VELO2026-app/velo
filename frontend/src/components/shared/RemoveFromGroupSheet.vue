@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- RemoveFromGroupSheet (Master GROUPS P2, ПРОМТ №591)
+  VELO Frontend -- RemoveFromGroupSheet (Master GROUPS P2, PROMPT №591)
 
   "Удалить из группы" -- CUSTOM groups only (removal from «Ученики» is
   Block, P3; «Удалённые» is Unblock, P3 -- neither is offered here). Three
@@ -15,11 +15,11 @@
   member of a given group), so this reaches the exact same end state as a
   hypothetical dedicated endpoint would, without inventing one.
 
-  T24-25/26/27 (ПРОМТ №634): smaller title (VBottomSheet's own compactTitle,
-  ПРОМТ №609 -- already existed, just unused here) + hairline-stroke weight
+  T24-25/26/27 (PROMPT №634): smaller title (VBottomSheet's own compactTitle,
+  PROMPT №609 -- already existed, just unused here) + hairline-stroke weight
   (the app-wide .velo-text-strong utility) + the student on the shared
   TargetUserCard plinth (was a plain name paragraph) + an explicit "Отмена"
-  beside "Удалить" (VBottomSheet's cancelLabel, ПРОМТ №610 -- its default
+  beside "Удалить" (VBottomSheet's cancelLabel, PROMPT №610 -- its default
   paired-row colours are ALREADY blue-cancel/coral-save, which is exactly
   Rule 2's position-based colour rule; no colour override needed here).
 -->

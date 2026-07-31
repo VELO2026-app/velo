@@ -13,7 +13,7 @@
       ...content...
     </VBottomSheet>
 
-  Optional `compactTitle` (ПРОМТ №609, G11): steps the title font-size
+  Optional `compactTitle` (PROMPT №609, G11): steps the title font-size
   down from --text-xl (32px) to --text-lg (20px), for a caller whose title
   is long enough to wrap onto two lines (ReportUserSheet's «Сообщить о
   пользователе» -- the longest title of this component's 10 callers).
@@ -23,7 +23,7 @@
   were never asked about to fix the one that needed it. Default false,
   every pre-existing caller renders byte-identically.
 
-  Optional `cancelLabel` (ПРОМТ №610, owner Q3): this component had NO
+  Optional `cancelLabel` (PROMPT №610, owner Q3): this component had NO
   cancel button at all -- dismissed only by tapping the scrim or Escape.
   When set (together with saveLabel), renders a two-button ROW instead of
   the single full-width save button: cancel at ~39% width (emits the
@@ -32,16 +32,16 @@
   Default '' = byte-identical to every other caller; only ReportUserSheet
   sets this today.
 
-  Optional `cancelVariant`/`saveVariant` (T24-27/37, ПРОМТ №634): the
+  Optional `cancelVariant`/`saveVariant` (T24-27/37, PROMPT №634): the
   owner's position-based colour rule -- LEFT (cancel) BLUE, RIGHT (save)
   CORAL, with exactly one owner-ruled exception (Modal E, «Добавить в
   группу»: swapped). The paired row's colours were already exactly this
   (cancel primary blue, paired-save --velo-error coral, both measured
-  ПРОМТ №610) -- these props only let a caller INVERT them for the one
+  PROMPT №610) -- these props only let a caller INVERT them for the one
   exception; every existing caller (ReportUserSheet) keeps the same
   colours it already had. Defaults 'primary'/'danger' = byte-identical.
 
-  Optional `titleStrong` (T24-25/32, ПРОМТ №634): a prop, NOT a `:deep()`
+  Optional `titleStrong` (T24-25/32, PROMPT №634): a prop, NOT a `:deep()`
   override from the caller's own scoped style -- this component's template
   root is Teleported, and Vue does not forward a caller's `class` fallthrough
   onto a Teleported root (confirmed the hard way: `[Vue warn]: Extraneous
@@ -116,27 +116,27 @@ const props = withDefaults(
     open: boolean
     title?: string
     saveLabel?: string
-    /** Disables the save button (P3, ПРОМТ №592 -- e.g. the report form's
+    /** Disables the save button (P3, PROMPT №592 -- e.g. the report form's
      *  «Отправить» until a reason is chosen). Default false -- every
      *  pre-existing caller renders byte-identically to before this prop
      *  existed. */
     saveDisabled?: boolean
     closeOnOverlay?: boolean
-    /** Sizing-only fix for a long title (ПРОМТ №609, G11) -- see the file
+    /** Sizing-only fix for a long title (PROMPT №609, G11) -- see the file
      *  header. Default false = byte-identical to before. */
     compactTitle?: boolean
-    /** Adds a cancel button beside save (ПРОМТ №610, owner Q3) -- see the
+    /** Adds a cancel button beside save (PROMPT №610, owner Q3) -- see the
      *  file header. Default '' = byte-identical to before. */
     cancelLabel?: string
-    /** Paired-row cancel button colour (T24-27/37, ПРОМТ №634) -- see the
+    /** Paired-row cancel button colour (T24-27/37, PROMPT №634) -- see the
      *  file header. Default 'primary' (blue) = byte-identical to before
      *  this prop existed. */
     cancelVariant?: 'primary' | 'danger'
-    /** Paired-row save button colour (T24-27/37, ПРОМТ №634) -- see the
+    /** Paired-row save button colour (T24-27/37, PROMPT №634) -- see the
      *  file header. Default 'danger' (coral) = byte-identical to before
      *  this prop existed. */
     saveVariant?: 'primary' | 'danger'
-    /** Hairline-stroke title weight (T24-25/32, ПРОМТ №634) -- see the
+    /** Hairline-stroke title weight (T24-25/32, PROMPT №634) -- see the
      *  file header. Default false = byte-identical to before. */
     titleStrong?: boolean
   }>(),
@@ -166,7 +166,7 @@ function onKeydown(e: KeyboardEvent): void {
   if (e.key === 'Escape' && props.open) emit('close')
 }
 
-// Lock body scroll while open. Ref-counted (W16, ПРОМТ №409) -- see
+// Lock body scroll while open. Ref-counted (W16, PROMPT №409) -- see
 // VModal.vue's identical comment for why (two overlays open at once, whoever
 // closes first must not unlock the body out from under the other).
 let locked = false
@@ -240,13 +240,13 @@ onUnmounted(() => {
   margin: 6px 0 18px;
 }
 
-/* Opt-in (ПРОМТ №609, G11) -- see this component's own header for why
+/* Opt-in (PROMPT №609, G11) -- see this component's own header for why
    this is a modifier, not a change to .v-sheet__title itself. */
 .v-sheet__title--compact {
   font-size: var(--text-lg);
 }
 
-/* T24-25/32 (ПРОМТ №634) -- see the file header for why this is a prop-
+/* T24-25/32 (PROMPT №634) -- see the file header for why this is a prop-
    driven class, not a caller-supplied :deep() override. */
 .v-sheet__title--strong {
   -webkit-text-stroke: var(--velo-text-stroke-strong) currentColor;
@@ -276,7 +276,7 @@ onUnmounted(() => {
   background: var(--velo-primary-dark);
 }
 
-/* Mirrors VButton's own :disabled recipe (P3, ПРОМТ №592). */
+/* Mirrors VButton's own :disabled recipe (P3, PROMPT №592). */
 .v-sheet__save:disabled {
   cursor: not-allowed;
   background: var(--velo-nav-inactive-bg);
@@ -284,7 +284,7 @@ onUnmounted(() => {
   box-shadow: none;
 }
 
-/* Cancel + save ROW (ПРОМТ №610, owner Q3) -- unitless flex-grow ratios
+/* Cancel + save ROW (PROMPT №610, owner Q3) -- unitless flex-grow ratios
    (39/61, measured) so the gap is handled correctly by the browser
    instead of fighting percentage-basis-minus-gap arithmetic. */
 .v-sheet__actions {
@@ -312,7 +312,7 @@ onUnmounted(() => {
   background: var(--velo-primary-dark);
 }
 
-/* T24-37 (ПРОМТ №634, Rule 2's one owner-ruled exception -- «Добавить в
+/* T24-37 (PROMPT №634, Rule 2's one owner-ruled exception -- «Добавить в
    группу»): cancel repainted coral instead of the default blue. */
 .v-sheet__cancel--danger {
   background: var(--velo-error);
@@ -347,7 +347,7 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 
-/* T24-37 (ПРОМТ №634, Rule 2's one owner-ruled exception): paired save
+/* T24-37 (PROMPT №634, Rule 2's one owner-ruled exception): paired save
    repainted blue instead of the default coral. Same specificity as
    .v-sheet__save--paired (one class each) -- source order after it wins. */
 .v-sheet__save--primary {

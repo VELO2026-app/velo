@@ -348,7 +348,9 @@ beforeEach(() => {
   vi.mocked(adminApi.revokeMaster).mockReset()
   // Rejected -- both this screen's parseMethods AND the picker's own fetch
   // fall back to the SAME hardcoded taxonomy on failure (see banner).
-  vi.mocked(taxonomyApi.getActiveTaxonomy).mockReset().mockRejectedValue(new Error('offline in test'))
+  vi.mocked(taxonomyApi.getActiveTaxonomy)
+    .mockReset()
+    .mockRejectedValue(new Error('offline in test'))
 
   push.mockReset()
   back.mockReset()
@@ -411,12 +413,14 @@ describe('AdminMasterReviewView', () => {
         last_name: 'Мастер',
       })
       let resolveGet!: (v: AdminMasterDetail) => void
-      vi.mocked(adminApi.getMasterById).mockReset().mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolveGet = resolve
-          }),
-      )
+      vi.mocked(adminApi.getMasterById)
+        .mockReset()
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveGet = resolve
+            }),
+        )
       mount('m_pending', staleFromAnother)
       await nextTick()
 
@@ -437,12 +441,14 @@ describe('AdminMasterReviewView', () => {
   describe('ladder', () => {
     it('loading -> content', async () => {
       let resolveGet!: (v: AdminMasterDetail) => void
-      vi.mocked(adminApi.getMasterById).mockReset().mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolveGet = resolve
-          }),
-      )
+      vi.mocked(adminApi.getMasterById)
+        .mockReset()
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveGet = resolve
+            }),
+        )
       mount('m_pending')
       await nextTick()
 
@@ -552,7 +558,7 @@ describe('AdminMasterReviewView', () => {
       expect(host?.querySelector('.mreview__processed')?.textContent).toContain('Отклонён')
     })
 
-    it('MUTATION: inverting isVerified\'s status check hides Отозвать for an actually-verified master', async () => {
+    it("MUTATION: inverting isVerified's status check hides Отозвать for an actually-verified master", async () => {
       // Not a source mutation (out of scope for this coverage-only commit) --
       // proven instead by feeding a status the real computed does NOT
       // recognise as verified, confirming the gate reads the EXACT string,
@@ -610,13 +616,13 @@ describe('AdminMasterReviewView', () => {
   })
 
   // ===========================================================================
-  // PROMOTE-ON-VERIFY (ПРОМТ №505): mirrors AdminMethodRequestsView's own
+  // PROMOTE-ON-VERIFY (PROMPT №505): mirrors AdminMethodRequestsView's own
   // promote-on-approve dialog. `getActiveTaxonomy` is mocked to REJECT in
   // beforeEach (see banner) -- the catalog cache never warms in this whole
   // file, so any label outside the hardcoded DIRECTION_OPTIONS/
   // STYLE_OPTIONS_BY_DIRECTION maps reliably parses as unmatched/custom.
   // ===========================================================================
-  describe('PROMOTE-ON-VERIFY (.vue: onVerify/doVerify, ПРОМТ №505)', () => {
+  describe('PROMOTE-ON-VERIFY (.vue: onVerify/doVerify, PROMPT №505)', () => {
     it('no custom text (default fixture, methods: ["Медитация"] matches the taxonomy): verifies immediately, no dialog', async () => {
       vi.mocked(adminApi.verifyMaster).mockResolvedValue({ user_id: 'm_pending', status: 'ok' })
       mount('m_pending')
@@ -660,14 +666,16 @@ describe('AdminMasterReviewView', () => {
       await flush()
 
       expect(adminApi.verifyMaster).toHaveBeenCalledWith(
-        'm_pending', ['Нестандартный метод'], undefined,
+        'm_pending',
+        ['Нестандартный метод'],
+        undefined,
       )
       expect(toastSuccess).toHaveBeenCalledWith('Мастер верифицирован')
       expect(push).toHaveBeenCalledWith({ name: 'admin-masters' })
       expect(modalIsOpen()).toBe(false)
     })
 
-    it('cancel ("Только этому мастеру"): verifies, SCOPED to this master only (T22-6, ПРОМТ №561)', async () => {
+    it('cancel ("Только этому мастеру"): verifies, SCOPED to this master only (T22-6, PROMPT №561)', async () => {
       vi.mocked(adminApi.getMasterById).mockResolvedValue(
         master({ methods: ['Нестандартный метод'] }),
       )
@@ -692,9 +700,9 @@ describe('AdminMasterReviewView', () => {
       // Was "exactly one arg, promote never sent": that used to mean the
       // label vanished entirely (T22-6). Now it takes the master_only
       // branch, so the direction gets a real (master-scoped) row.
-      expect(adminApi.verifyMaster).toHaveBeenCalledWith(
-        'm_pending', undefined, ['Нестандартный метод'],
-      )
+      expect(adminApi.verifyMaster).toHaveBeenCalledWith('m_pending', undefined, [
+        'Нестандартный метод',
+      ])
       expect(toastSuccess).toHaveBeenCalledWith('Мастер верифицирован')
       expect(push).toHaveBeenCalledWith({ name: 'admin-masters' })
     })
@@ -717,9 +725,9 @@ describe('AdminMasterReviewView', () => {
       modalOverlay()?.click()
       await flush()
 
-      expect(adminApi.verifyMaster).toHaveBeenCalledWith(
-        'm_pending', undefined, ['Нестандартный метод'],
-      )
+      expect(adminApi.verifyMaster).toHaveBeenCalledWith('m_pending', undefined, [
+        'Нестандартный метод',
+      ])
       expect(toastSuccess).toHaveBeenCalledWith('Мастер верифицирован')
     })
 
@@ -740,7 +748,9 @@ describe('AdminMasterReviewView', () => {
       await flush()
 
       expect(adminApi.verifyMaster).toHaveBeenCalledWith(
-        'm_pending', ['Нестандартный метод'], undefined,
+        'm_pending',
+        ['Нестандартный метод'],
+        undefined,
       )
       expect(toastError).toHaveBeenCalledWith('Ошибка верификации')
       expect(push).not.toHaveBeenCalled()
@@ -820,12 +830,14 @@ describe('AdminMasterReviewView', () => {
   describe('REVOKE -- the preview ordering IS the safety property (.vue:527-552)', () => {
     it('openRevoke fetches the preview and the advisory renders once resolved; revokeMaster is untouched until then', async () => {
       let resolvePreview!: (v: RevokeMasterAdvisory) => void
-      vi.mocked(adminApi.getRevokePreview).mockReset().mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolvePreview = resolve
-          }),
-      )
+      vi.mocked(adminApi.getRevokePreview)
+        .mockReset()
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolvePreview = resolve
+            }),
+        )
       vi.mocked(adminApi.getMasterById).mockResolvedValue(MASTER_VERIFIED())
       mount('m_verified')
       await flush()
@@ -1087,7 +1099,10 @@ describe('AdminMasterReviewView', () => {
     })
 
     it('success: editMasterMethods called with the (seeded, untouched) draft, local update, toast', async () => {
-      vi.mocked(adminApi.editMasterMethods).mockResolvedValue({ user_id: 'm_pending', status: 'ok' })
+      vi.mocked(adminApi.editMasterMethods).mockResolvedValue({
+        user_id: 'm_pending',
+        status: 'ok',
+      })
       mount('m_pending') // methods: ['Медитация']
       await flush()
 
@@ -1134,7 +1149,10 @@ describe('AdminMasterReviewView', () => {
     })
 
     it('success: editMasterProfile called with the exact patch, LOCAL update via Object.assign, toast, editor closes', async () => {
-      vi.mocked(adminApi.editMasterProfile).mockResolvedValue({ user_id: 'm_pending', status: 'ok' })
+      vi.mocked(adminApi.editMasterProfile).mockResolvedValue({
+        user_id: 'm_pending',
+        status: 'ok',
+      })
       mount('m_pending')
       await flush()
 
@@ -1209,7 +1227,10 @@ describe('AdminMasterReviewView', () => {
       await flush()
       expect(rowErrorText('Опыт')).toBe('Опыт: целое число 0–50')
 
-      vi.mocked(adminApi.editMasterProfile).mockResolvedValue({ user_id: 'm_pending', status: 'ok' })
+      vi.mocked(adminApi.editMasterProfile).mockResolvedValue({
+        user_id: 'm_pending',
+        status: 'ok',
+      })
       setValue(rowInput('Опыт'), '12')
       await flush()
       saveBtn('Опыт').click()
@@ -1218,7 +1239,10 @@ describe('AdminMasterReviewView', () => {
     })
 
     it('saveAccountName: sends BOTH first_name and last_name in one patch', async () => {
-      vi.mocked(adminApi.editMasterProfile).mockResolvedValue({ user_id: 'm_pending', status: 'ok' })
+      vi.mocked(adminApi.editMasterProfile).mockResolvedValue({
+        user_id: 'm_pending',
+        status: 'ok',
+      })
       mount('m_pending')
       await flush()
 
@@ -1238,7 +1262,10 @@ describe('AdminMasterReviewView', () => {
     })
 
     it('saveLanguages (list-valued, toggleDraft): toggling a chip sends the full updated list', async () => {
-      vi.mocked(adminApi.editMasterProfile).mockResolvedValue({ user_id: 'm_pending', status: 'ok' })
+      vi.mocked(adminApi.editMasterProfile).mockResolvedValue({
+        user_id: 'm_pending',
+        status: 'ok',
+      })
       mount('m_pending') // languages: ['Русский']
       await flush()
 
@@ -1255,7 +1282,10 @@ describe('AdminMasterReviewView', () => {
     })
 
     it('saveCertifications (list-valued, addCert + remove): add via Enter, remove via chip click', async () => {
-      vi.mocked(adminApi.editMasterProfile).mockResolvedValue({ user_id: 'm_pending', status: 'ok' })
+      vi.mocked(adminApi.editMasterProfile).mockResolvedValue({
+        user_id: 'm_pending',
+        status: 'ok',
+      })
       mount('m_pending') // certifications: ['Сертификат йоги']
       await flush()
 
@@ -1265,7 +1295,9 @@ describe('AdminMasterReviewView', () => {
       const row = rowByKey('Сертификаты')
       const input = row.querySelector<HTMLInputElement>('.v-input__field')!
       setValue(input, 'Новый сертификат')
-      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+      input.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+      )
       await flush()
 
       // Remove the original by clicking its chip.
@@ -1379,7 +1411,7 @@ describe('AdminMasterReviewView', () => {
     // (non-whitespace) content -- reachable only for a pathological array of
     // solely empty/whitespace strings (parseMethods discards those before
     // either counter sees them). Reported, not fixed here.
-    it('an unmatched/custom method: hasParsedMethods is STILL true -- the readonly picker renders it via its OWN custom chip, not the screen\'s verbatim fallback', async () => {
+    it("an unmatched/custom method: hasParsedMethods is STILL true -- the readonly picker renders it via its OWN custom chip, not the screen's verbatim fallback", async () => {
       vi.mocked(adminApi.getMasterById).mockResolvedValue(
         master({ methods: ['Совершенно кастомный метод'] }),
       )

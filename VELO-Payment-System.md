@@ -4,7 +4,7 @@
 **Дата:** 6 февраля 2026  
 **Статус:** ✅ Утверждено
 
-> **Freshness (ПРОМТ №510, 2026-07-19, verified against `8d4948f` on `test`):** graded
+> **Freshness (PROMPT №510, 2026-07-19, verified against `8d4948f` on `test`):** graded
 > STALE-BUT-HARMLESS overall — NOT rewritten this round. One addition this pass: §8 below,
 > a current operational risk (Stripe stub mode) this document previously never mentioned.
 > Everything else is UNVERIFIED as of this pass.
@@ -550,7 +550,7 @@ Master Profile: frozen=0, available=$21.25
 
 ## 8. Известный операционный риск: Stripe stub-режим
 
-**Добавлено ПРОМТ №510, 2026-07-19.** Топап (§3.1) имеет два режима, переключаемых
+**Добавлено PROMPT №510, 2026-07-19.** Топап (§3.1) имеет два режима, переключаемых
 `STRIPE_SECRET_KEY`:
 
 - **Реальный ключ** — обычный Stripe Checkout, webhook подтверждает оплату.

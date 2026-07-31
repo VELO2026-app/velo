@@ -1,7 +1,7 @@
 // =============================================================================
 // VELO Frontend -- methodTaxonomy.ts Unit Tests
 // =============================================================================
-// R3/R4 regression (ПРОМТ №391): parseMethods used to DROP any string that
+// R3/R4 regression (PROMPT №391): parseMethods used to DROP any string that
 // didn't match the taxonomy (Q3=В); it now SURFACES it as the custom variant
 // (Q3=А) so a master's «Свой вариант» entry (e.g. "терапия") shows up in the
 // picker instead of silently vanishing after submit / after admin approval.
@@ -95,7 +95,7 @@ describe('parseMethods -> flattenMethods round-trip', () => {
 })
 
 // =============================================================================
-// Bug 2 (ПРОМТ №405): a value auto-promoted into the DB catalog (admin
+// Bug 2 (PROMPT №405): a value auto-promoted into the DB catalog (admin
 // approves a master's «Свой вариант» with "добавить в каталог") must resolve
 // as a MATCHED direction, not stay "unmatched -> custom" forever.
 //
@@ -190,9 +190,9 @@ describe('primeMethodTaxonomyCatalog (warm cache)', () => {
 })
 
 // =============================================================================
-// Bug 5 leak 2 (ПРОМТ №408): flattenMethods against a catalog-only style.
+// Bug 5 leak 2 (PROMPT №408): flattenMethods against a catalog-only style.
 //
-// The bug 2 fix (ПРОМТ №405) above taught directionLabel/parseMethods about
+// The bug 2 fix (PROMPT №405) above taught directionLabel/parseMethods about
 // the catalog, but flattenMethods' style branch (`STYLE_LABEL[st] ?? st`) was
 // never made catalog-aware in any screen -- a catalog-created style
 // flattened straight to its raw slug (e.g. "Йога тест — custom_l40lb6fj")

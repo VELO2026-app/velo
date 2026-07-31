@@ -1,6 +1,6 @@
 # Accessibility Audit — Probe Definitions
 
-WCAG 2.1 AA compliance probes for VELO's Vue 3 frontend (VELO-tuned, ПРОМТ №435).
+WCAG 2.1 AA compliance probes for VELO's Vue 3 frontend (VELO-tuned, PROMPT №435).
 Read severity from `probekit-core/references/severity-format.md`.
 
 ## P1: Semantic HTML (CRITICAL)

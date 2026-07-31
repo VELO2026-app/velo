@@ -141,7 +141,7 @@ function isLive(b: BookingWithPracticeResponse): boolean {
 }
 
 /**
- * Calendar-date comparison helpers. SW3 (ПРОМТ №577): dates are compared in
+ * Calendar-date comparison helpers. SW3 (PROMPT №577): dates are compared in
  * the VIEWER's profile timezone (matching BookingCard's own rendered date
  * text), not the practice's own timezone and not the browser's -- otherwise
  * "Завтра" could disagree with the shown date. Same en-CA + timeZone pattern

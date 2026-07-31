@@ -190,7 +190,7 @@ async def _owned_group_ids_or_400(
     master_id: UUID, group_ids: list[UUID], session: AsyncSession,
 ) -> None:
     """Validate every group_id in a create/update audience payload belongs
-    to a CUSTOM group owned by master_id (Master GROUPS P5, ПРОМТ №594).
+    to a CUSTOM group owned by master_id (Master GROUPS P5, PROMPT №594).
 
     Rejects another master's group, an unknown id, or a system slug (which
     never resolves to a real MasterGroup row in the first place) with a
@@ -397,7 +397,7 @@ async def _validate_taxonomy(
     its existing, reusable "is this a real taxonomy value at all" meaning
     (master onboarding's own picker legitimately needs the unfiltered
     catalog, and must never route through the master-confirmation check --
-    T21-6, ПРОМТ №546)."""
+    T21-6, PROMPT №546)."""
     if direction not in settings.practice_allowed_directions:
         if not await _direction_in_catalog(direction, session):
             raise BadRequestError(
@@ -407,7 +407,7 @@ async def _validate_taxonomy(
     await _validate_style_choice(direction, style, session)
 
 
-# T21-6 (ПРОМТ №546): flat "Направление — Вид" join, byte-for-byte identical
+# T21-6 (PROMPT №546): flat "Направление — Вид" join, byte-for-byte identical
 # to the frontend's methodTaxonomy.ts SEP -- MasterProfile.data.profile.
 # methods is a list of these frozen strings (see admin/masters/service.py's
 # approve_method_change, which copies proposed_methods verbatim with no
@@ -471,7 +471,7 @@ async def _assert_master_confirmed_taxonomy(
     production. Restricting THAT case would be enforcing a rule against
     data that predates the rule, not the rule itself.
 
-    STORED FORMAT IS MIXED (T21-7, ПРОМТ №547, MEASURED on prod): a method
+    STORED FORMAT IS MIXED (T21-7, PROMPT №547, MEASURED on prod): a method
     entry is a frozen catalog LABEL ("Йога — Кундалини-йога") when it was
     written by the wizard (flattenMethods/approve_method_change), but a raw
     catalog VALUE ("yoga") when it was written directly against the API --
@@ -683,11 +683,11 @@ def practice_to_response(
     # facing responses only); everyone else gets the schema default (None).
     resp.zoom_host_join_url = zoom_host_join_url
 
-    # A4 V2 (ПРОМТ №572): NOT owner-gated, unlike zoom_host_join_url above --
+    # A4 V2 (PROMPT №572): NOT owner-gated, unlike zoom_host_join_url above --
     # see the schema field's own docstring for why.
     resp.zoom_meeting_status = zoom_meeting_status
 
-    # A4 V6 (ПРОМТ №572): True only on create_practice's two dedup-return
+    # A4 V6 (PROMPT №572): True only on create_practice's two dedup-return
     # paths (see that function's own docstring). Every other caller of this
     # builder (update/delete/cancel/list/detail) leaves the schema default
     # (False) -- deduplication is a CREATE-time concept only.
@@ -796,13 +796,13 @@ async def _find_recent_duplicate_practice(
     body: CreatePracticeRequest,
     session: AsyncSession,
 ) -> Practice | None:
-    """ПРОМТ №559 idempotency check: a non-deleted practice this SAME master
+    """PROMPT №559 idempotency check: a non-deleted practice this SAME master
     created within the last practice_duplicate_submit_window_minutes, with
     the identical title, scheduled_at, AND recurrence spec, is treated as
     the master's earlier submission having already gone through -- not a
     fresh, different practice.
 
-    MEASURED root cause (ПРОМТ №559): a series publish makes one Zoom API
+    MEASURED root cause (PROMPT №559): a series publish makes one Zoom API
     call per occurrence, sequentially, inside one request; the frontend's
     own 15s AbortController gives up well before a ~29-occurrence series
     finishes, the master sees a timeout, and presses the button again --
@@ -817,7 +817,7 @@ async def _find_recent_duplicate_practice(
     tap, two tabs) both run this SELECT before either commits, so both see
     nothing and both proceed to insert. create_practice below closes that
     gap at the DB level (uq_practice_master_title_scheduled_recurrence),
-    same pattern as ensure_host_registrant (zoom/service.py, ПРОМТ №525).
+    same pattern as ensure_host_registrant (zoom/service.py, PROMPT №525).
     This windowed check remains the fast, common-case path (a retry inside
     the window returns immediately, no INSERT attempted at all); the DB
     constraint is the backstop for the race this check cannot see.
@@ -853,7 +853,7 @@ async def create_practice(
 ) -> tuple[Practice, bool]:
     """Create a new practice in draft status.
 
-    Returns (practice, deduplicated) -- A4 V6 (ПРОМТ №572): deduplicated is
+    Returns (practice, deduplicated) -- A4 V6 (PROMPT №572): deduplicated is
     True on EITHER return-the-existing-practice path below (the window
     check or the post-race lookup), False on a genuine new insert. Before
     this, both paths returned a bare Practice indistinguishable from a
@@ -869,14 +869,14 @@ async def create_practice(
     (T2, 2026-07-15) is validated here against the config+catalog union --
     difficulty stays schema-validated (config only, no catalog table).
 
-    T21-6 (ПРОМТ №546): ALSO validated against the calling master's own
+    T21-6 (PROMPT №546): ALSO validated against the calling master's own
     CONFIRMED methods (_assert_master_confirmed_taxonomy) -- a master may
     only create a practice in a direction/style their profile has been
     approved for. This is separate from the global catalog check above and
     does not apply anywhere master onboarding picks methods (a different
     endpoint entirely, which correctly shows the unfiltered catalogue).
 
-    ПРОМТ №559: returns the EXISTING practice, unchanged, instead of
+    PROMPT №559: returns the EXISTING practice, unchanged, instead of
     creating a new one, if _find_recent_duplicate_practice finds a match --
     see that function's docstring for exactly what this does and does not
     cover. No new validation runs in that case; there is nothing new to
@@ -888,7 +888,7 @@ async def create_practice(
     requests for the same (master, title, scheduled_at, recurrence) at the
     DB level. The insert below runs inside session.begin_nested() (a
     SAVEPOINT) for the same reason as ensure_host_registrant (zoom/
-    service.py, ПРОМТ №525): a plain try/except around the flush is not
+    service.py, PROMPT №525): a plain try/except around the flush is not
     enough by itself to keep the CALLER's own transaction usable after a
     database-level abort (PendingRollbackError) -- something has to roll
     back TO. On IntegrityError, the race was LOST: look up the winning row
@@ -908,7 +908,7 @@ async def create_practice(
     await _validate_taxonomy(body.direction, body.style, session)
     await _assert_master_confirmed_taxonomy(user.id, body.direction, body.style, session)
     price_cents = _enforce_pricing(body.is_free, body.price_cents)
-    # P5 (ПРОМТ №594): reject a group_id that isn't one of THIS master's own
+    # P5 (PROMPT №594): reject a group_id that isn't one of THIS master's own
     # custom groups (another master's group, an unknown id, or a system
     # slug) before anything is inserted.
     await _owned_group_ids_or_400(user.id, body.group_ids, session)
@@ -1094,13 +1094,13 @@ async def get_practice_detail(
     if is_owner:
         from app.modules.zoom.service import get_host_join_url
         host_join_url = await get_host_join_url(practice.id, session)
-    # A4 V2 (ПРОМТ №572): NOT owner-gated -- this is the call site behind
+    # A4 V2 (PROMPT №572): NOT owner-gated -- this is the call site behind
     # GET /practices/{id}, which is also what PracticeLiveView reads for a
     # booked (non-owner) participant. Both need to distinguish pending_
     # creation from create_failed, not just the owner.
     from app.modules.zoom.service import get_zoom_meeting_status
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
-    # P5 (ПРОМТ №594): needed by CheckinView.vue to compose "Вы не состоите
+    # P5 (PROMPT №594): needed by CheckinView.vue to compose "Вы не состоите
     # в группе «...»" client-side without a second round-trip -- see this
     # endpoint's own callers for the full message-mapping story.
     audience_group_names = await group_names_for_practice(practice, session)
@@ -1174,7 +1174,7 @@ async def update_practice(
         if field in update_data
     }
 
-    # P5 (ПРОМТ №594): group_ids is NOT a column either (practice_audience_
+    # P5 (PROMPT №594): group_ids is NOT a column either (practice_audience_
     # group is a separate table) -- pull it out before the setattr loop for
     # the same reason as taxonomy above. audience_kind IS a real column and
     # flows through the loop unchanged.
@@ -1260,7 +1260,7 @@ async def update_practice(
     # draft -> scheduled publication and materialize series occurrences below.
     old_status = practice.status
 
-    # P5 (ПРОМТ №594): capture the PRE-update audience_kind before the
+    # P5 (PROMPT №594): capture the PRE-update audience_kind before the
     # setattr loop overwrites it, so the "transitioning away from groups"
     # branch below can tell.
     old_audience_kind = practice.audience_kind
@@ -1290,7 +1290,7 @@ async def update_practice(
         # Pydantic (it can't reach the async catalog), so both are validated
         # here, against the config+catalog union.
         #
-        # T21-8 (ПРОМТ №547): EditPracticeView resends BOTH direction and
+        # T21-8 (PROMPT №547): EditPracticeView resends BOTH direction and
         # style on EVERY save (not only when the master actually changes
         # them), and exclude_unset only tells us they were PRESENT, not that
         # they changed -- so gating re-validation on presence alone re-ran
@@ -1316,7 +1316,7 @@ async def update_practice(
             )
             if direction_changed or style_changed:
                 await _validate_taxonomy(new_direction, new_style, session)
-                # T21-6 (ПРОМТ №546): same master-confirmation check as
+                # T21-6 (PROMPT №546): same master-confirmation check as
                 # create_practice -- an update can equally smuggle in a
                 # direction/style the master was never confirmed for.
                 await _assert_master_confirmed_taxonomy(
@@ -1401,7 +1401,7 @@ async def update_practice(
     # E21: create the practice's Zoom meeting on publish (draft -> scheduled),
     # for ANY practice type -- not gated on series, unlike the block above.
     # Best-effort: create_meeting_for_practice never raises, so publish
-    # always succeeds regardless of Zoom's outcome (ПРОМТ №519 amendment 2 --
+    # always succeeds regardless of Zoom's outcome (PROMPT №519 amendment 2 --
     # confirmed as the intended reading). KNOWN GAP: series CHILDREN are
     # created directly inside generate_series_occurrences() with
     # status=scheduled and never pass through this branch, so they do not
@@ -1424,7 +1424,7 @@ async def preview_audience_change(
     group_ids: list[UUID],
     session: AsyncSession,
 ) -> int:
-    """Owner Q15 (ПРОМТ №613): how many of this practice's ACTIVE (pending/
+    """Owner Q15 (PROMPT №613): how many of this practice's ACTIVE (pending/
     confirmed) bookers would fall OUTSIDE a PROPOSED audience -- called by
     EditPracticeView before saving an audience change, so the master sees
     the real number instead of finding out from upset students at check-in

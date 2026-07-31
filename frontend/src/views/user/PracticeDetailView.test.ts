@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- PracticeDetailView Screen Tests (T8, ПРОМТ №432)
+// VELO Frontend -- PracticeDetailView Screen Tests (T8, PROMPT №432)
 // =============================================================================
 //
 // The buy button. This is where a user spends their balance on a practice, and

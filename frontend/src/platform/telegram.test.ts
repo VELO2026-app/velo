@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- Telegram Platform Chrome Tests (T8, ПРОМТ №437)
+// VELO Frontend -- Telegram Platform Chrome Tests (T8, PROMPT №437)
 // =============================================================================
 //
 // Covers the chrome tokenisation: #334D6E / #F8FAFC used to be bare literals in
@@ -11,7 +11,7 @@
 // WHY THIS FILE EXISTS: the read has a fallback, and these tests pin which
 // branch wins when.
 //
-// HONESTY NOTE (ПРОМТ №437). The previous commit claimed this file guards the
+// HONESTY NOTE (PROMPT №437). The previous commit claimed this file guards the
 // fallback literals against drifting from variables.css. IT DOES NOT, and the
 // first version of that test proved the point by passing while --velo-tg-bg was
 // changed from #f8fafc to #ffffff and the fallback still said #F8FAFC -- it set
@@ -95,7 +95,7 @@ describe('telegramPlatform.init -- app chrome', () => {
 
   it('the token WINS over the fallback -- so drift in the fallback cannot show', async () => {
     // Why there is no test comparing the fallback to variables.css, despite the
-    // previous commit message claiming one (wrong, corrected ПРОМТ №437):
+    // previous commit message claiming one (wrong, corrected PROMPT №437):
     //
     // Reading variables.css from a test needs node:fs (vue-tsc rejects it -- this
     // repo carries no @types/node), or Vite's ?raw (returns '' because vitest

@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- useToast Composable Unit Tests (ПРОМТ №500)
+// VELO Frontend -- useToast Composable Unit Tests (PROMPT №500)
 // =============================================================================
 //
 // Every other test file in the repo mocks this module entirely

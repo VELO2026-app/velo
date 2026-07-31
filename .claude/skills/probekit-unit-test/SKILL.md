@@ -10,7 +10,7 @@ Iterates until tests pass. Delivers a coverage report and test quality summary.
 
 ## Configuration
 
-<!-- VELO-tuned (ПРОМТ №402): the CBS defaults below assumed a separate
+<!-- VELO-tuned (PROMPT №402): the CBS defaults below assumed a separate
      tests/ tree and a single top-level src/ -- neither holds here. VELO
      colocates every test next to its source (src/api/payments.ts ->
      src/api/payments.test.ts) -- all 13 existing tests follow this, zero

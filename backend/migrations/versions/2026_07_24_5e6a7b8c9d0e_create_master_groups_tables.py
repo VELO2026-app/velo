@@ -4,7 +4,7 @@ Revision ID: 5e6a7b8c9d0e
 Revises: 4d5e6a7b8c9d
 Create Date: 2026-07-24
 
-Master GROUPS, P1 (ПРОМТ №590): three new tables. Mirrors the master-scope
+Master GROUPS, P1 (PROMPT №590): three new tables. Mirrors the master-scope
 FK pattern already proven by practice_directions.master_id
 (2026_07_22_3c4d5e6a7b8c_add_master_id_to_practice_directions.py).
 

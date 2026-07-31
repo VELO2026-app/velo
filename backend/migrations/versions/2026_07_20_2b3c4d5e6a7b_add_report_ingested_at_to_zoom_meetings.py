@@ -4,7 +4,7 @@ Revision ID: 2b3c4d5e6a7b
 Revises: 1a2b3c4d5e6a
 Create Date: 2026-07-20 00:00:00.000005+00:00
 
-E21 step F (ПРОМТ №521): marks a meeting as "we successfully pulled its
+E21 step F (PROMPT №521): marks a meeting as "we successfully pulled its
 report", regardless of whether any rows came back (a genuinely-empty
 meeting is a valid, successful pull -- distinct from "not tried yet" or
 "tried and Zoom errored"). This is what lets the report poller stop

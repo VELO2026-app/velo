@@ -1,6 +1,6 @@
 <!--
 =============================================================================
-VELO Frontend — Group invite join (Master GROUPS P4, ПРОМТ №593)
+VELO Frontend — Group invite join (Master GROUPS P4, PROMPT №593)
 =============================================================================
 
 Landing for the group_invite__<token> deeplink (route /groups/join/:token,

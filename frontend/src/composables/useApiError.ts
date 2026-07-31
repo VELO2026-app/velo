@@ -22,7 +22,7 @@ import { ApiResponseError } from '@/api/client'
  * - ApiResponseError with an EMPTY detail, or anything else: returns the
  *   provided fallback string
  *
- * B3 (Батч 3, ПРОМТ №580): the empty-detail fallback was previously
+ * B3 (Батч 3, PROMPT №580): the empty-detail fallback was previously
  * duplicated inline at several call sites (`e.detail || fallback`, not just
  * `e.detail`) -- folded in here so every caller gets it, not just the ones
  * that happened to write the guard themselves. A backend response with a

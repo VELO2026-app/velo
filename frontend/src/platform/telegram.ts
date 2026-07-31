@@ -24,7 +24,7 @@ function getWebApp(): TelegramWebApp {
 let _backButtonCallback: (() => void) | null = null
 
 /**
- * Read a design token by NAME (ПРОМТ №437).
+ * Read a design token by NAME (PROMPT №437).
  *
  * The Telegram SDK takes a colour STRING, not a CSS variable, so the app chrome
  * cannot use var() like everything else does. Before this, that meant two bare

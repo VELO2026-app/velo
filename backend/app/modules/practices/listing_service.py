@@ -39,7 +39,7 @@ _FEED_STATUSES = {
 }
 
 
-# T22-3/T22-5 (ПРОМТ №561): the two master-list tabs ask fundamentally
+# T22-3/T22-5 (PROMPT №561): the two master-list tabs ask fundamentally
 # different questions ("what's next" vs "what happened"), each wanting the
 # OPPOSITE ordering -- one shared futures-first cursor can never answer both
 # without one tab drowning in the other's rows. "upcoming" = draft/scheduled/
@@ -73,7 +73,7 @@ async def list_master_practices(
     None (default) keeps the prior behavior -- every non-deleted status,
     futures-first.
 
-    bucket (T22-3/T22-5, ПРОМТ №561): the tab-shaped alternative to `status`.
+    bucket (T22-3/T22-5, PROMPT №561): the tab-shaped alternative to `status`.
     "upcoming" filters to draft/scheduled/live and orders NEAREST FIRST
     (ascending); "past" filters to completed and orders MOST RECENT FIRST
     (descending). When given, `bucket` OWNS both the filter and the
@@ -126,7 +126,7 @@ async def list_master_practices(
     # requester's own).
     from app.modules.zoom.service import get_host_join_urls, get_zoom_meeting_statuses
     host_join_urls = await get_host_join_urls([p.id for p in page_practices], session)
-    # A4 V2 (ПРОМТ №572): batched Zoom meeting status for this page --
+    # A4 V2 (PROMPT №572): batched Zoom meeting status for this page --
     # MasterDashboardView's "nearest practices" and MasterPracticesView both
     # read practicesUpcoming (this endpoint), and their Zoom button needs to
     # tell "готовится" apart from "не удалось создать встречу".
@@ -246,7 +246,7 @@ async def list_public_practices(
     # FIX 5.3: Build filter list once, apply to both queries (DRY).
     filters: list = []
 
-    # Audience + block (Master GROUPS P5, ПРОМТ №594): applies regardless of
+    # Audience + block (Master GROUPS P5, PROMPT №594): applies regardless of
     # the branch below (explicit status or the default time-gated feed) --
     # a blocked/out-of-audience viewer must not see the practice either way.
     # The owner always sees their OWN practice here too (same posture as

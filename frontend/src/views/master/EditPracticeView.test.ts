@@ -81,7 +81,7 @@ import { ApiResponseError } from '@/api/client'
 import type { MasterProfileResponse, PracticeResponse, UpdatePracticeRequest } from '@/api/types'
 
 vi.mock('@/api/practices')
-// P5 port (ПРОМТ №606): «Для кого практика» -> «Конкретные группы» fetches
+// P5 port (PROMPT №606): «Для кого практика» -> «Конкретные группы» fetches
 // the master's own custom groups on mount, same as CreatePracticeView.
 // Mocked wholesale -- an unmocked call here would hit the real network in
 // EVERY test in this file, not just the audience-specific ones below.
@@ -114,7 +114,7 @@ vi.mock('@/composables/useToast', () => ({
 // asks it to invalidate after a mutation. Getters over a mutable object so tests
 // mutate state instead of re-mocking (velo-idiom §5).
 //
-// A4 V3 (ПРОМТ №571): profile/profileLoaded added -- directionOptions/
+// A4 V3 (PROMPT №571): profile/profileLoaded added -- directionOptions/
 // styleOptionsForForm now filter to the master's own confirmed methods,
 // same as CreatePracticeView.test.ts's masterState.
 const masterState: {
@@ -312,7 +312,7 @@ beforeEach(() => {
   vi.mocked(ensureTaxonomyCatalog).mockReset().mockResolvedValue(null)
   vi.mocked(practicesApi.getPractice).mockReset().mockResolvedValue(practice())
   vi.mocked(practicesApi.updatePractice).mockReset().mockResolvedValue(practice())
-  // Owner Q15 (ПРОМТ №613): default to "nobody stranded" so every
+  // Owner Q15 (PROMPT №613): default to "nobody stranded" so every
   // pre-existing save test proceeds silently, same as before this dry-run
   // check existed -- tests that specifically exercise the warning override
   // this per-test.
@@ -474,9 +474,9 @@ describe('EditPracticeView', () => {
     })
   })
 
-  describe('Направление/Вид: confirmed-methods parity with CreatePracticeView (A4 V3, ПРОМТ №571)', () => {
+  describe('Направление/Вид: confirmed-methods parity with CreatePracticeView (A4 V3, PROMPT №571)', () => {
     it('offers NOTHING (not the whole catalogue) while the master profile has not loaded yet', async () => {
-      // Mirrors CreatePracticeView's identical test (ПРОМТ №556, OWNER-2).
+      // Mirrors CreatePracticeView's identical test (PROMPT №556, OWNER-2).
       // Before this fix, EditPracticeView's directionOptions was
       // catalogDirectionOptions(catalog.value) unconditionally -- it never
       // consulted profileLoaded/confirmedMethods at all, so this state was
@@ -498,7 +498,7 @@ describe('EditPracticeView', () => {
       // The real break this closes: before the fix, a master confirmed for
       // ONLY "Йога" still saw the full catalogue (Медитация, Дыхательные
       // практики, ...) on the edit screen, unlike CreatePracticeView which
-      // already narrows this (T21-6, ПРОМТ №546).
+      // already narrows this (T21-6, PROMPT №546).
       masterState.profile = { methods: ['Йога', 'Йога — Хатха-йога'] } as MasterProfileResponse
       mountCached(practice())
       await flush()
@@ -681,7 +681,7 @@ describe('EditPracticeView', () => {
 
       expect(document.body.querySelector('.cpd__recur')).toBeNull()
       // Scoped to the dialog's own root (.cpd), not the whole document: the
-      // audience block added to the main form by the P5 port (ПРОМТ №606)
+      // audience block added to the main form by the P5 port (PROMPT №606)
       // renders its OWN .v-radio (Публичная/Все ученики/Конкретные группы),
       // which a global query would also match. This assertion's actual
       // claim is "the cancel dialog itself offers no scope radio", not
@@ -1156,7 +1156,7 @@ describe('EditPracticeView', () => {
     })
 
     it('A4 V3: translates direction_not_confirmed into Russian, not the raw backend detail', async () => {
-      // Mirrors CreatePracticeView's submit() catch (ПРОМТ №556, OWNER-2).
+      // Mirrors CreatePracticeView's submit() catch (PROMPT №556, OWNER-2).
       // Before this fix, EVERY rejection on this screen -- including this
       // code -- fell through to the raw e.detail branch, showing the master
       // the backend's raw English, API-shaped message.
@@ -1298,7 +1298,7 @@ describe('EditPracticeView', () => {
     })
   })
 
-  describe('«Для кого практика» (P5 port, ПРОМТ №606)', () => {
+  describe('«Для кого практика» (P5 port, PROMPT №606)', () => {
     it('a public practice PATCHes audience_kind=public with no group_ids', async () => {
       mountCached(practice({ audience_kind: 'public' }))
       await flush()
@@ -1396,7 +1396,7 @@ describe('EditPracticeView', () => {
     })
   })
 
-  describe('audience-narrowing warning (owner Q15, ПРОМТ №613)', () => {
+  describe('audience-narrowing warning (owner Q15, PROMPT №613)', () => {
     it('editing an UNRELATED field never calls previewAudienceChange (audience unchanged)', async () => {
       mountCached(practice({ audience_kind: 'public' }))
       await flush()
@@ -1446,7 +1446,7 @@ describe('EditPracticeView', () => {
       )
     })
 
-    it('a stranded count of exactly 1 uses the SINGULAR noun + agreeing verbs/pronouns (ПРОМТ №614)', async () => {
+    it('a stranded count of exactly 1 uses the SINGULAR noun + agreeing verbs/pronouns (PROMPT №614)', async () => {
       vi.mocked(practicesApi.previewAudienceChange).mockResolvedValue({ stranded_count: 1 })
       mountCached(practice({ audience_kind: 'public' }))
       await flush()

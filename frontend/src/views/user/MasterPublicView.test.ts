@@ -29,7 +29,7 @@
 // render, before onMounted has run at all. Proven below with a zero-tick
 // assertion (the mirror image of BookingConfirmedView's structural finding).
 //
-// FIXED (B11 item 2, ПРОМТ №587): this file used to document a finding --
+// FIXED (B11 item 2, PROMPT №587): this file used to document a finding --
 // extractApiError treated every ApiResponseError identically regardless of
 // status code, and the template had exactly ONE combined v-else-if for
 // "error OR no profile", so a genuine 404 and a transient 500/network drop
@@ -247,7 +247,7 @@ describe('MasterPublicView', () => {
       expect(content()?.textContent).toContain('Верифицирован')
     })
 
-    it('FIXED (B11 item 2, ПРОМТ №587): a 404 ApiResponseError shows "Мастер не найден" with the backend\'s own detail, and NO retry action', async () => {
+    it('FIXED (B11 item 2, PROMPT №587): a 404 ApiResponseError shows "Мастер не найден" with the backend\'s own detail, and NO retry action', async () => {
       vi.mocked(mastersApi.getPublicMaster).mockRejectedValue(
         new ApiResponseError(404, 'Мастер не найден или не верифицирован', 'not_found'),
       )

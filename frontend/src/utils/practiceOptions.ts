@@ -13,7 +13,7 @@ export const DURATION_OPTIONS: { label: string; value: string }[] = [
   { label: '120 минут', value: '120' },
 ]
 
-// «Для кого практика» (P5, ПРОМТ №594): audience_kind single-select, shared
+// «Для кого практика» (P5, PROMPT №594): audience_kind single-select, shared
 // between Create and Edit for the same reason as DURATION_OPTIONS above --
 // originally lived only in CreatePracticeView; extracted here so Edit's port
 // doesn't duplicate the option list a second time.

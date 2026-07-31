@@ -3,7 +3,7 @@
 # VELO Backend -- One-time repair: normalize master_profiles methods format
 # =============================================================================
 #
-# PROBLEM (T21-7, MEASURED on prod, ПРОМТ №547):
+# PROBLEM (T21-7, MEASURED on prod, PROMPT №547):
 #   MasterProfile.data.profile.methods is stored in TWO formats depending on
 #   how it was written: a frozen catalog LABEL ("Йога — Кундалини-йога") from
 #   the wizard (flattenMethods / admin/masters/service.py's
@@ -28,7 +28,7 @@
 #   docstring: "existing masters' stored methods strings must keep resolving
 #   even after a direction/style is retired from new selection").
 #
-# ORDERING (owner decision, ПРОМТ №547): run this AFTER
+# ORDERING (owner decision, PROMPT №547): run this AFTER
 # practices/service.py's _assert_master_confirmed_taxonomy already tolerates
 # BOTH formats (T21-7 fix) -- this script is cleanup on top of an
 # already-safe read path, never a prerequisite for it. The confirmation
@@ -45,7 +45,7 @@
 #   apply) -- matches how every other repair script in this directory scopes
 #   its own idempotency/rollback story.
 #
-#   ПРОМТ №549/550: --rollback checks the row's CURRENT value against BOTH
+#   PROMPT №549/550: --rollback checks the row's CURRENT value against BOTH
 #   "before" and "after", not just "before" -- current==before means already
 #   rolled back (skip), current==after means untouched since normalization
 #   (safe to revert), and current matching NEITHER means the row changed for
@@ -84,7 +84,7 @@ from app.core.audit import AuditLog, record_audit
 from app.core.database import dispose_engine, get_session_factory
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.taxonomy_models import TaxonomyDirection, TaxonomyStyle
-# T21-6 chain (ПРОМТ №552, MEASURED in the app container): required even
+# T21-6 chain (PROMPT №552, MEASURED in the app container): required even
 # though nothing below calls User directly by name for its own sake --
 # MasterProfile.user (masters/models.py) is a STRING forward-ref
 # relationship ("User", carrying its own lint-suppression comment for F821
@@ -293,7 +293,7 @@ async def _run_rollback(session: AsyncSession, dry_run: bool) -> None:
             continue
 
         if current != after:
-            # ПРОМТ №549/550: current is NEITHER what we recorded as the
+            # PROMPT №549/550: current is NEITHER what we recorded as the
             # pre-normalize value NOR what we wrote -- something else
             # legitimately changed this row since normalization (e.g. an
             # admin approved a real method-change request). Deciding on

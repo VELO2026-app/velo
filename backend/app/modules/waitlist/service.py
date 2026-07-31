@@ -357,7 +357,7 @@ async def confirm_waitlist(
         )
         return entry, None
 
-    # P5 (ПРОМТ №594, the carried seam from P1): reject a viewer blocked by
+    # P5 (PROMPT №594, the carried seam from P1): reject a viewer blocked by
     # this practice's master, or outside its configured audience. This is
     # the OTHER booking-creation path besides create_booking -- a waitlist
     # notification is a HELD spot; without this check here, a user blocked

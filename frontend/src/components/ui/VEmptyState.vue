@@ -26,7 +26,7 @@
       <template #action><VButton @click="load">Повторить</VButton></template>
     </VEmptyState>
 
-  Why both (T8, ПРОМТ №433): 11 views were already written against `#action`, a
+  Why both (T8, PROMPT №433): 11 views were already written against `#action`, a
   slot this component did not declare. Vue drops an unmatched named slot SILENTLY
   — no warning, no error — so all eleven rendered an error state with no button
   and no way out. 24 other sites use the default slot for the same purpose and
@@ -37,7 +37,9 @@
 
 <template>
   <!-- note: compact card-wrapped single-line placeholder (no icon / action). -->
-  <div v-if="variant === 'note'" class="v-empty-note"><slot>{{ title }}</slot></div>
+  <div v-if="variant === 'note'" class="v-empty-note">
+    <slot>{{ title }}</slot>
+  </div>
 
   <!-- full (default): icon + title + optional description + optional action. -->
   <div v-else class="v-empty">

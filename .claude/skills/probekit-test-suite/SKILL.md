@@ -10,13 +10,13 @@ Runs testing skills in logical sequence, gates on quality, auto-fixes safe CRITI
 
 ## Configuration
 
-<!-- VELO-tuned (ПРОМТ №435): CBS's path replaced with the git-untracked scratch
-     dir the rest of the family already uses (dda9a6f, ПРОМТ №385). Note this
+<!-- VELO-tuned (PROMPT №435): CBS's path replaced with the git-untracked scratch
+     dir the rest of the family already uses (dda9a6f, PROMPT №385). Note this
      one pointed at docs/01_reference/KNOWLEDGE/, a DIFFERENT stale path from
      the docs/01_refer/ARCHIVES/ the other skills carried -- neither exists in
      VELO.
 
-     INERT STAGES against VELO -- marked, NOT rewired (ПРОМТ №435). This
+     INERT STAGES against VELO -- marked, NOT rewired (PROMPT №435). This
      orchestrator dispatches to the skills below; two of them cannot do anything
      here, so in `full` mode expect them to no-op:
        - Stage 11 e2e-bdd-test -- VELO has no Playwright/Cypress/Cucumber and no

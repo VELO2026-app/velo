@@ -245,7 +245,7 @@ async def test_stats_masters_count_after_verify(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """Admin-verify grants master CAPABILITY, not role (T4, ПРОМТ №295).
+    """Admin-verify grants master CAPABILITY, not role (T4, PROMPT №295).
 
     verify sets the profile status=verified but does NOT flip User.role, so
     masters_count (COUNT role=='master') is UNCHANGED at verify -- only the

@@ -21,7 +21,7 @@
 // `window.history.replaceState()` BEFORE mount (the screen reads it during
 // setup, same technique as AdminWithdrawalDetailView.test.ts's precedent).
 //
-// LADDER CLASSIFICATION (SW8, fixed ПРОМТ №577): FOUR rungs now --
+// LADDER CLASSIFICATION (SW8, fixed PROMPT №577): FOUR rungs now --
 // loading / error / not-found / content. Previously a fetch FAILURE and a
 // genuinely NOT-FOUND state rendered the EXACT SAME UI (.vue's old catch
 // block never set any error/not-found flag, `report.value` simply stayed
@@ -206,12 +206,14 @@ describe('AdminReportDetailView', () => {
   describe('ladder (SW8: error rung distinct from not-found -- see banner)', () => {
     it('loading -> content for a valid id', async () => {
       let resolveGet!: (v: ReportResponse) => void
-      vi.mocked(adminApi.getReportById).mockReset().mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolveGet = resolve
-          }),
-      )
+      vi.mocked(adminApi.getReportById)
+        .mockReset()
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveGet = resolve
+            }),
+        )
       mount('r_pending')
       await nextTick()
 
@@ -520,9 +522,7 @@ describe('AdminReportDetailView', () => {
       mount('r_m', masterReport)
       await flush()
 
-      host
-        ?.querySelector<HTMLButtonElement>('.report-detail__meta-val--link')
-        ?.click()
+      host?.querySelector<HTMLButtonElement>('.report-detail__meta-val--link')?.click()
       await flush()
 
       expect(push).toHaveBeenCalledWith({
@@ -537,9 +537,9 @@ describe('AdminReportDetailView', () => {
       await flush()
 
       expect(host?.querySelector('.report-detail__meta-val--link')).toBeNull()
-      const plain = Array.from(
-        host?.querySelectorAll('.report-detail__meta-val--mono') ?? [],
-      ).find((el) => !el.classList.contains('report-detail__meta-val--link'))
+      const plain = Array.from(host?.querySelectorAll('.report-detail__meta-val--mono') ?? []).find(
+        (el) => !el.classList.contains('report-detail__meta-val--link'),
+      )
       expect(plain?.textContent?.trim()).toContain('user_1'.slice(0, 8))
     })
 

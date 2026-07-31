@@ -142,7 +142,7 @@ describe('usePagination', () => {
     expect(items.value[0]!.id).toBe(1)
   })
 
-  // W17 (ПРОМТ №409): a refresh() firing while an EARLIER loadMore() is still
+  // W17 (PROMPT №409): a refresh() firing while an EARLIER loadMore() is still
   // in flight used to be blocked by that earlier call's `loading` guard (so
   // refresh's own fetch never ran), then the earlier call's stale response
   // landed on top of the just-cleared state once it resolved.

@@ -1,7 +1,7 @@
 // =============================================================================
 // VELO Frontend -- MasterGroupDetailView Screen Tests
-// (Master GROUPS P2 ПРОМТ №591, unblock added P3 ПРОМТ №592, invite CTA P4
-// ПРОМТ №593)
+// (Master GROUPS P2 PROMPT №591, unblock added P3 PROMPT №592, invite CTA P4
+// PROMPT №593)
 // =============================================================================
 //
 // One component parametrised by :id (a custom group's UUID, or the system
@@ -69,7 +69,7 @@ function mount(): HTMLElement {
 }
 
 async function flush(): Promise<void> {
-  // Owner Q12 (ПРОМТ №611): the screen's own load chain is now SEQUENTIAL
+  // Owner Q12 (PROMPT №611): the screen's own load chain is now SEQUENTIAL
   // (loadGroups() -- resolving name/description + existence -- awaited
   // BEFORE the members fetch, not parallel), so it needs more ticks to
   // settle than the previous single-round-trip flow did.
@@ -97,7 +97,7 @@ beforeEach(() => {
   routeParams.id = 'g1'
   routeQuery.name = 'VIP'
   vi.mocked(groupsApi.getGroupMembers).mockReset().mockResolvedValue(page([]))
-  // Owner Q12 (ПРОМТ №611): the screen now resolves its own name/description
+  // Owner Q12 (PROMPT №611): the screen now resolves its own name/description
   // by matching THIS group's id in getGroups()' response -- the default
   // mock must include an entry for every id the suite defaults to ('g1',
   // 'students'), or the new "not found" path fires and blocks the members
@@ -152,7 +152,7 @@ describe('MasterGroupDetailView', () => {
     expect(text()).toContain('Группа "VIP"')
   })
 
-  describe('owner Q12 (ПРОМТ №611): API-driven name/description, not the URL', () => {
+  describe('owner Q12 (PROMPT №611): API-driven name/description, not the URL', () => {
     it('shows the route.query hint on first paint, before getGroups() resolves', async () => {
       routeQuery.name = 'Из query'
       vi.mocked(groupsApi.getGroups).mockReturnValue(new Promise(() => {}))
@@ -292,7 +292,7 @@ describe('MasterGroupDetailView', () => {
       await flush()
 
       // Scoped to a MEMBER row (not `host` globally): G2's header menu
-      // (ПРОМТ №609) also renders a `.v-menu__trigger` for custom groups,
+      // (PROMPT №609) also renders a `.v-menu__trigger` for custom groups,
       // which an unscoped query would match FIRST, opening the wrong menu.
       host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
       await flush()
@@ -308,7 +308,7 @@ describe('MasterGroupDetailView', () => {
       await flush()
 
       // Scoped to a MEMBER row (not `host` globally): G2's header menu
-      // (ПРОМТ №609) also renders a `.v-menu__trigger` for custom groups,
+      // (PROMPT №609) also renders a `.v-menu__trigger` for custom groups,
       // which an unscoped query would match FIRST, opening the wrong menu.
       host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
       await flush()
@@ -324,7 +324,7 @@ describe('MasterGroupDetailView', () => {
       await flush()
 
       // Scoped to a MEMBER row (not `host` globally): G2's header menu
-      // (ПРОМТ №609) also renders a `.v-menu__trigger` for custom groups,
+      // (PROMPT №609) also renders a `.v-menu__trigger` for custom groups,
       // which an unscoped query would match FIRST, opening the wrong menu.
       host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
       await flush()
@@ -382,7 +382,7 @@ describe('MasterGroupDetailView', () => {
       await flush()
 
       // Scoped to a MEMBER row (not `host` globally): G2's header menu
-      // (ПРОМТ №609) also renders a `.v-menu__trigger` for custom groups,
+      // (PROMPT №609) also renders a `.v-menu__trigger` for custom groups,
       // which an unscoped query would match FIRST, opening the wrong menu.
       host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
       await flush()
@@ -414,7 +414,7 @@ describe('MasterGroupDetailView', () => {
       await flush()
 
       // Scoped to a MEMBER row (not `host` globally): G2's header menu
-      // (ПРОМТ №609) also renders a `.v-menu__trigger` for custom groups,
+      // (PROMPT №609) also renders a `.v-menu__trigger` for custom groups,
       // which an unscoped query would match FIRST, opening the wrong menu.
       host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
       await flush()
@@ -433,7 +433,7 @@ describe('MasterGroupDetailView', () => {
       expect(groupsApi.addGroupMember).toHaveBeenCalledWith('g2', 's1')
     })
 
-    it('T24-35 (ПРОМТ №634): a group the student is already in gets the darker "existing" chip, not the plain active one', async () => {
+    it('T24-35 (PROMPT №634): a group the student is already in gets the darker "existing" chip, not the plain active one', async () => {
       vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([member('s1', { name: 'Анна' })]))
       vi.mocked(groupsApi.getGroups).mockResolvedValue(
         customGroups([
@@ -460,7 +460,7 @@ describe('MasterGroupDetailView', () => {
       expect(freshChip?.classList.contains('v-chip--existing')).toBe(false)
     })
 
-    it('T24-36 (ПРОМТ №634): the removal toggle is a real checkbox, not a switch', async () => {
+    it('T24-36 (PROMPT №634): the removal toggle is a real checkbox, not a switch', async () => {
       routeParams.id = 'g1'
       vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([member('s1', { name: 'Анна' })]))
       mount()
@@ -476,7 +476,7 @@ describe('MasterGroupDetailView', () => {
       expect(sheetOverlay()?.querySelector('.v-switch')).toBeNull()
     })
 
-    it('T24-37 (ПРОМТ №634, Rule 2 exception): "Отмена" is coral on the left, "Добавить" is blue on the right', async () => {
+    it('T24-37 (PROMPT №634, Rule 2 exception): "Отмена" is coral on the left, "Добавить" is blue on the right', async () => {
       vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([member('s1', { name: 'Анна' })]))
       mount()
       await flush()
@@ -495,7 +495,7 @@ describe('MasterGroupDetailView', () => {
       expect(saveBtn?.classList.contains('v-sheet__save--primary')).toBe(true)
     })
 
-    it("T24-32 (ПРОМТ №634): compact + hairline-stroke title, via VBottomSheet's own props (not a caller :deep() -- that cannot reach a Teleported root, see VBottomSheet.vue)", async () => {
+    it("T24-32 (PROMPT №634): compact + hairline-stroke title, via VBottomSheet's own props (not a caller :deep() -- that cannot reach a Teleported root, see VBottomSheet.vue)", async () => {
       vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([member('s1', { name: 'Анна' })]))
       mount()
       await flush()
@@ -521,7 +521,7 @@ describe('MasterGroupDetailView', () => {
       await flush()
 
       // Scoped to a MEMBER row (not `host` globally): G2's header menu
-      // (ПРОМТ №609) also renders a `.v-menu__trigger` for custom groups,
+      // (PROMPT №609) also renders a `.v-menu__trigger` for custom groups,
       // which an unscoped query would match FIRST, opening the wrong menu.
       host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
       await flush()
@@ -535,7 +535,7 @@ describe('MasterGroupDetailView', () => {
       expect(groupsApi.removeGroupMember).toHaveBeenCalledWith('g1', 's1')
     })
 
-    it('T24-25/26/27 (ПРОМТ №634): compact title, TargetUserCard plinth, and «Отмена» blue left / «Удалить» coral right', async () => {
+    it('T24-25/26/27 (PROMPT №634): compact title, TargetUserCard plinth, and «Отмена» blue left / «Удалить» coral right', async () => {
       routeParams.id = 'g1'
       vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(
         page([member('s1', { name: 'Анна', avatar_url: 'https://x/a.png' })]),
@@ -579,7 +579,7 @@ describe('MasterGroupDetailView', () => {
       await flush()
 
       // Scoped to a MEMBER row (not `host` globally): G2's header menu
-      // (ПРОМТ №609) also renders a `.v-menu__trigger` for custom groups,
+      // (PROMPT №609) also renders a `.v-menu__trigger` for custom groups,
       // which an unscoped query would match FIRST, opening the wrong menu.
       host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
       await flush()
@@ -607,7 +607,7 @@ describe('MasterGroupDetailView', () => {
       await flush()
 
       // Scoped to a MEMBER row (not `host` globally): G2's header menu
-      // (ПРОМТ №609) also renders a `.v-menu__trigger` for custom groups,
+      // (PROMPT №609) also renders a `.v-menu__trigger` for custom groups,
       // which an unscoped query would match FIRST, opening the wrong menu.
       host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
       await flush()
@@ -619,7 +619,7 @@ describe('MasterGroupDetailView', () => {
     })
   })
 
-  describe('Unblock («Удалённые» rows only, P3 ПРОМТ №592)', () => {
+  describe('Unblock («Удалённые» rows only, P3 PROMPT №592)', () => {
     it('opens the confirm with the member name in the title and message', async () => {
       routeParams.id = 'deleted'
       vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([member('s1', { name: 'Анна' })]))
@@ -627,7 +627,7 @@ describe('MasterGroupDetailView', () => {
       await flush()
 
       // Scoped to a MEMBER row (not `host` globally): G2's header menu
-      // (ПРОМТ №609) also renders a `.v-menu__trigger` for custom groups,
+      // (PROMPT №609) also renders a `.v-menu__trigger` for custom groups,
       // which an unscoped query would match FIRST, opening the wrong menu.
       host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
       await flush()
@@ -641,7 +641,7 @@ describe('MasterGroupDetailView', () => {
       )
     })
 
-    it('T24-28..31 (ПРОМТ №634): compact title, TargetUserCard plinth, the peach panel, and «Отмена» blue / «Разблокировать» coral', async () => {
+    it('T24-28..31 (PROMPT №634): compact title, TargetUserCard plinth, the peach panel, and «Отмена» blue / «Разблокировать» coral', async () => {
       routeParams.id = 'deleted'
       vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(
         page([member('s1', { name: 'Анна', avatar_url: 'https://x/a.png' })]),
@@ -680,7 +680,7 @@ describe('MasterGroupDetailView', () => {
       await flush()
 
       // Scoped to a MEMBER row (not `host` globally): G2's header menu
-      // (ПРОМТ №609) also renders a `.v-menu__trigger` for custom groups,
+      // (PROMPT №609) also renders a `.v-menu__trigger` for custom groups,
       // which an unscoped query would match FIRST, opening the wrong menu.
       host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
       await flush()
@@ -706,7 +706,7 @@ describe('MasterGroupDetailView', () => {
       await flush()
 
       // Scoped to a MEMBER row (not `host` globally): G2's header menu
-      // (ПРОМТ №609) also renders a `.v-menu__trigger` for custom groups,
+      // (PROMPT №609) also renders a `.v-menu__trigger` for custom groups,
       // which an unscoped query would match FIRST, opening the wrong menu.
       host?.querySelector<HTMLElement>('.group-detail__row-wrap .v-menu__trigger')?.click()
       await flush()
@@ -727,7 +727,7 @@ describe('MasterGroupDetailView', () => {
     })
   })
 
-  describe('invite via header menu on an EMPTY group (owner Q8, ПРОМТ №610 -- the old empty-state CTA button was removed as a duplicate; this is now the only path)', () => {
+  describe('invite via header menu on an EMPTY group (owner Q8, PROMPT №610 -- the old empty-state CTA button was removed as a duplicate; this is now the only path)', () => {
     function headerMenuTrigger(): HTMLElement | null {
       return host?.querySelector<HTMLElement>('.v-header__right .v-menu__trigger') ?? null
     }
@@ -782,7 +782,7 @@ describe('MasterGroupDetailView', () => {
     })
   })
 
-  describe('header menu -- invite/rename/delete (G2, ПРОМТ №609)', () => {
+  describe('header menu -- invite/rename/delete (G2, PROMPT №609)', () => {
     /** The header's OWN menu trigger, scoped to `.v-header__right` so it
      *  is never confused with a per-member row's own «⋯» trigger (the
      *  opposite scoping fix from the member-row tests above, same root
@@ -833,7 +833,7 @@ describe('MasterGroupDetailView', () => {
       routeParams.id = 'g1'
       routeQuery.name = 'Старое'
       vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([]))
-      // Owner Q12 (ПРОМТ №611): the screen now resolves name/description
+      // Owner Q12 (PROMPT №611): the screen now resolves name/description
       // from getGroups(), not route.query -- the mock must carry the
       // CURRENT values the dialog should prefill, and the query hint
       // above is a red herring the API overwrites (proves that ordering).
@@ -918,7 +918,7 @@ describe('MasterGroupDetailView', () => {
 
     it('«Удалить группу» confirms, calls deleteGroup, and navigates away (nothing left to reload)', async () => {
       routeParams.id = 'g1'
-      // Owner Q12 (ПРОМТ №611): the screen now resolves the CURRENT name
+      // Owner Q12 (PROMPT №611): the screen now resolves the CURRENT name
       // from getGroups(), not this stale query hint -- the mock below is
       // what the delete-confirm message must actually reflect.
       routeQuery.name = 'Временная'

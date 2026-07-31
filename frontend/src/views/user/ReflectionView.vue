@@ -8,7 +8,7 @@
 
   Copy rotates per booking (utils/reflectionVariants, stable by practiceId).
 
-  STUB (TD-REFLECTION, ПРОМТ №269): submit persists NOTHING — the backend
+  STUB (TD-REFLECTION, PROMPT №269): submit persists NOTHING — the backend
   `POST /api/v1/practices/{id}/reflection` endpoint does not exist yet (see
   VELO-Backend-Tasks.md). The flow completes honestly in the UI (thank-you
   screen, no "saved" claim) and the dashboard banner is dismissed client-side
@@ -85,7 +85,7 @@ const toast = useToast()
 const practiceId = route.params.practiceId as string
 
 // Stable per-booking copy — same booking always renders the same variant
-// (no flicker on the dashboard's 60s re-eval; ПРОМТ №269 F5=А).
+// (no flicker on the dashboard's 60s re-eval; PROMPT №269 F5=А).
 const variant = pickReflectionVariant(practiceId)
 
 const practice = computed(() => practicesStore.selected)

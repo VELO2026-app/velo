@@ -228,8 +228,8 @@ function selectErrorText(): string {
 }
 
 function checkboxByLabel(labelSubstr: string): HTMLButtonElement {
-  const btn = Array.from(host?.querySelectorAll<HTMLButtonElement>('.v-checkbox') ?? []).find(
-    (c) => c.querySelector('.v-checkbox__label')?.textContent?.includes(labelSubstr),
+  const btn = Array.from(host?.querySelectorAll<HTMLButtonElement>('.v-checkbox') ?? []).find((c) =>
+    c.querySelector('.v-checkbox__label')?.textContent?.includes(labelSubstr),
   )
   if (!btn) throw new Error(`no checkbox with label containing «${labelSubstr}»`)
   return btn
@@ -515,7 +515,7 @@ describe('MasterApplyView', () => {
   })
 
   // ===========================================================================
-  // ПРОМТ №565 (T23-2): .apply-view__content (.vue:40) is ONE persistent
+  // PROMPT №565 (T23-2): .apply-view__content (.vue:40) is ONE persistent
   // scrolling container reused across all 3 steps -- the v-if/v-else-if chain
   // only swaps its CHILDREN. A watch(step, ...) (.vue:249-256) resets its
   // scrollTop to 0 on every transition. happy-dom has no real layout/overflow
@@ -523,7 +523,7 @@ describe('MasterApplyView', () => {
   // simulation of an actual scrollable viewport, so this proves the WATCHER
   // fires on every direction, not that a real browser visually scrolls to
   // the top (that half is unverifiable by this harness -- see the report).
-  describe('scroll reset on step transition (ПРОМТ №565, T23-2)', () => {
+  describe('scroll reset on step transition (PROMPT №565, T23-2)', () => {
     function contentEl(): HTMLElement {
       const el = host?.querySelector<HTMLElement>('.apply-view__content')
       if (!el) throw new Error('.apply-view__content did not render')

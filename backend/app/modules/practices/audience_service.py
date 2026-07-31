@@ -1,5 +1,5 @@
 # =============================================================================
-# VELO Backend -- Practice Audience Service (Master GROUPS P5, ПРОМТ №594)
+# VELO Backend -- Practice Audience Service (Master GROUPS P5, PROMPT №594)
 # =============================================================================
 #
 # ONE shared predicate for "can this viewer see/book/check into this
@@ -138,7 +138,7 @@ async def assert_viewer_can_access_practice(
     message -- see diary/checkins_service.py upsert_checkin's docstring for
     the exact strings and where they surface.
 
-    OWNER BYPASS (P5 hardening, ПРОМТ №596): matches list_public_practices's
+    OWNER BYPASS (P5 hardening, PROMPT №596): matches list_public_practices's
     own `or_(Practice.master_id == user.id, viewer_audience_clause(user.id))`
     filter (listing_service.py) -- so the gate and the feed filter agree by
     construction, not by caller discipline. VERIFIED INERT today: every call
@@ -188,7 +188,7 @@ async def assert_viewer_can_access_practice(
             )
         return
 
-    # FAIL-CLOSED (P5 hardening, ПРОМТ №596): an unrecognized audience_kind
+    # FAIL-CLOSED (P5 hardening, PROMPT №596): an unrecognized audience_kind
     # is DENIED, not silently allowed -- matches viewer_audience_clause's SQL
     # `or_`, which likewise matches none of its three explicit branches and
     # so evaluates false for anything else. AudienceKind has exactly three
@@ -208,7 +208,7 @@ async def count_stranded_active_bookings(
     proposed_group_ids: list[UUID],
     session: AsyncSession,
 ) -> int:
-    """Owner Q15 (ПРОМТ №613): how many of `booker_ids` (this practice's
+    """Owner Q15 (PROMPT №613): how many of `booker_ids` (this practice's
     CURRENT active bookers -- the caller, practices/service.py, already owns
     that query and its own "active" definition, _ACTIVE_BOOKING_STATUSES)
     would fail assert_viewer_can_access_practice's own rule if the practice's

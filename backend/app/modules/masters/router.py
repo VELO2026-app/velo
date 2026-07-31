@@ -431,7 +431,7 @@ async def list_my_practices(
     status is already excluded unconditionally). Omitted (and no `bucket`)
     -> unfiltered, futures-first, same as before this param existed.
 
-    ?bucket= (T22-3/T22-5, ПРОМТ №561): "upcoming" (draft/scheduled/live,
+    ?bucket= (T22-3/T22-5, PROMPT №561): "upcoming" (draft/scheduled/live,
     nearest first) or "past" (completed, most-recent first) -- the two
     master-list tabs, each with correct server-side ordering instead of one
     shared futures-first page split client-side. Takes priority over

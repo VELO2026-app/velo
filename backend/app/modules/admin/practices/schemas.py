@@ -74,7 +74,7 @@ class AdminPracticeDetailResponse(BaseModel):
     roster: list[AdminRosterEntry]
 
 
-# -- Zoom attendance (E21 step G, ПРОМТ №521) --
+# -- Zoom attendance (E21 step G, PROMPT №521) --
 
 
 class AdminZoomBookingAttendance(BaseModel):

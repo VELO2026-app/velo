@@ -240,7 +240,7 @@ async def create_booking(
     if practice.master_id == user.id:
         raise BadRequestError("Cannot book your own practice")
 
-    # P5 (ПРОМТ №594, the carried seam from P1): reject a viewer blocked by
+    # P5 (PROMPT №594, the carried seam from P1): reject a viewer blocked by
     # this practice's master, or outside its configured audience. Shared
     # with confirm_waitlist (waitlist/service.py, the OTHER booking-creation
     # path) and upsert_checkin (diary/checkins_service.py) -- one predicate,
@@ -313,7 +313,7 @@ async def create_booking(
     # E21 step E: create the Zoom registrant for this booking. Best-effort,
     # never raises, never blocks -- if the meeting isn't active yet or the
     # Zoom call fails, the booking above has ALREADY succeeded; the
-    # registrant is queued for the retry poller (ПРОМТ №520 amendment,
+    # registrant is queued for the retry poller (PROMPT №520 amendment,
     # restated explicitly: not softened into "usually"). Lazy import, same
     # one-way-dependency pattern as diary above.
     from app.modules.zoom.service import create_registrant_for_booking
@@ -669,7 +669,7 @@ async def _finalize_practice_core(
 
     Transitions:
     - NO active Zoom meeting, OR an active meeting created in Zoom STUB mode
-      (ПРОМТ №530, settings.is_zoom_stub -- no real credentials configured):
+      (PROMPT №530, settings.is_zoom_stub -- no real credentials configured):
       confirmed + (joined_at IS NOT NULL OR PRE check-in) -> attended, else
       -> no_show. Decided HERE, immediately, tagged legacy_proxy (unchanged
       from before E21 step F -- covers practices published before Zoom
@@ -722,7 +722,7 @@ async def _finalize_practice_core(
             )
         )
     ).scalar_one_or_none()
-    # ПРОМТ №530: an active meeting created in Zoom STUB mode (no real
+    # PROMPT №530: an active meeting created in Zoom STUB mode (no real
     # credentials configured -- true on every server today) can never
     # produce a real attendance report; zoom/report_poller.py would poll
     # forever and the deadline fallback (settings.
@@ -1110,7 +1110,7 @@ async def list_user_bookings(
     # implicit -- booking_id is NULL for the master's own host row (see
     # ZoomRegistrant model docstring).
     #
-    # ПРОМТ №563: joined to ZoomMeeting.status == ACTIVE, same posture as the
+    # PROMPT №563: joined to ZoomMeeting.status == ACTIVE, same posture as the
     # host path (zoom/service.py's get_host_join_url[s]). Without this, a
     # registrant row whose join_url was set while the meeting was active
     # keeps being handed out after the meeting is deleted outside the normal
@@ -1233,7 +1233,7 @@ async def list_upcoming_bookings(
             ).scalars().all()
         )
 
-    # ПРОМТ №563: same meeting-state join as list_user_bookings above -- see
+    # PROMPT №563: same meeting-state join as list_user_bookings above -- see
     # that function's comment for the full reasoning.
     join_urls: dict[UUID, str] = {}
     if booking_ids:

@@ -1,8 +1,8 @@
 // =============================================================================
-// VELO Frontend -- VInput Controlled-Input Tests (T8, ПРОМТ №434)
+// VELO Frontend -- VInput Controlled-Input Tests (T8, PROMPT №434)
 // =============================================================================
 //
-// Written alongside the fix for the defect found in ПРОМТ №432 (on TopupView)
+// Written alongside the fix for the defect found in PROMPT №432 (on TopupView)
 // and traced to VInput in №433.
 //
 // THE BUG: VInput was not actually a controlled input. When a parent REJECTS or
@@ -79,7 +79,7 @@ afterEach(() => {
 })
 
 describe('VInput', () => {
-  describe('the controlled-input contract (the ПРОМТ №432 defect)', () => {
+  describe('the controlled-input contract (the PROMPT №432 defect)', () => {
     it('REJECTED input is wiped from the FIELD, not just from the state', async () => {
       // THE regression guard, in its purest form: '' -> '-5' -> ''. The parent
       // lands back on the value it already held, so the child is not re-rendered
@@ -199,7 +199,10 @@ describe('VInput', () => {
     })
 
     it('floating-label path', async () => {
-      const { input, model } = mountWith(rejectNegative, '', { floatingLabel: true, label: 'Сумма' })
+      const { input, model } = mountWith(rejectNegative, '', {
+        floatingLabel: true,
+        label: 'Сумма',
+      })
       expect(host?.querySelector('.v-input__field--float')).not.toBeNull()
       await type(input, '-5')
       expect(input.value).toBe('')

@@ -99,7 +99,7 @@ function onCreateAccount(): void {
 
 onMounted(() => {
   initAuth()
-  // T21-4/T21-5 (ПРОМТ №546): foreground-only poll so a role/master-
+  // T21-4/T21-5 (PROMPT №546): foreground-only poll so a role/master-
   // application change is picked up even if the session never navigates
   // again while parked on one screen. Safe to start before auth resolves --
   // each tick's fetchMe() already no-ops without a session token.

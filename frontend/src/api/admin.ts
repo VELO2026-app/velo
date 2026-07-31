@@ -24,7 +24,7 @@
 //   GET  /api/v1/admin/practices            -- global practices list (E9)
 //   GET  /api/v1/admin/practices/{id}       -- practice detail + roster (E9)
 //   GET  /api/v1/admin/practices/{id}/zoom-attendance -- Zoom meeting status +
-//                                              unmatched bucket (T21-1, ПРОМТ №541)
+//                                              unmatched bucket (T21-1, PROMPT №541)
 //   GET  /api/v1/admin/revenue              -- revenue/commission/payout (E9)
 // =============================================================================
 
@@ -139,7 +139,7 @@ export function getMastersList(
 }
 
 // ============================================================================
-// Users (all-users list + explicit make-master, ПРОМТ №292)
+// Users (all-users list + explicit make-master, PROMPT №292)
 // ============================================================================
 
 /**
@@ -196,10 +196,9 @@ export function editMasterMethods(
   userId: string,
   methods: string[],
 ): Promise<AdminMasterActionResponse> {
-  return api.patch<AdminMasterActionResponse>(
-    `/api/v1/admin/masters/${userId}/methods`,
-    { methods },
-  )
+  return api.patch<AdminMasterActionResponse>(`/api/v1/admin/masters/${userId}/methods`, {
+    methods,
+  })
 }
 
 /**
@@ -213,14 +212,11 @@ export function editMasterProfile(
   userId: string,
   body: AdminMasterProfileUpdate,
 ): Promise<AdminMasterActionResponse> {
-  return api.patch<AdminMasterActionResponse>(
-    `/api/v1/admin/masters/${userId}/profile`,
-    body,
-  )
+  return api.patch<AdminMasterActionResponse>(`/api/v1/admin/masters/${userId}/profile`, body)
 }
 
 /**
- * Verify a pending master application. promote (ПРОМТ №505, mirrors
+ * Verify a pending master application. promote (PROMPT №505, mirrors
  * approveMethodChange below): optional custom method labels to add to the
  * taxonomy catalog -- absent/empty posts the same bare `{}` every existing
  * caller already sends, so nothing else changes.
@@ -233,10 +229,7 @@ export function verifyMaster(
   const body: { promote?: string[]; master_only?: string[] } = {}
   if (promote && promote.length) body.promote = promote
   if (masterOnly && masterOnly.length) body.master_only = masterOnly
-  return api.post<AdminMasterActionResponse>(
-    `/api/v1/admin/masters/${userId}/verify`,
-    body,
-  )
+  return api.post<AdminMasterActionResponse>(`/api/v1/admin/masters/${userId}/verify`, body)
 }
 
 export function rejectMaster(userId: string, reason: string): Promise<AdminMasterActionResponse> {
@@ -428,15 +421,17 @@ export function getAdminPracticeDetail(id: string): Promise<AdminPracticeDetailR
   return api.get<AdminPracticeDetailResponse>(`/api/v1/admin/practices/${id}`)
 }
 
-/** T21-1 (ПРОМТ №541): meeting status, per-booking minutes present, and the
+/** T21-1 (PROMPT №541): meeting status, per-booking minutes present, and the
  * unmatched bucket -- schema existed since E21 step G with zero consumers
- * until now (ПРОМТ №540 audit). */
+ * until now (PROMPT №540 audit). */
 export function getAdminZoomAttendance(practiceId: string): Promise<AdminZoomAttendanceResponse> {
-  return api.get<AdminZoomAttendanceResponse>(`/api/v1/admin/practices/${practiceId}/zoom-attendance`)
+  return api.get<AdminZoomAttendanceResponse>(
+    `/api/v1/admin/practices/${practiceId}/zoom-attendance`,
+  )
 }
 
 /** Platform revenue/commission/payout + per-master breakdown for the period.
- * offset (W9, ПРОМТ №387): steps the window by whole periods, same stepper
+ * offset (W9, PROMPT №387): steps the window by whole periods, same stepper
  * convention as getCheckinMetric/getFeedbackMetric/getReturnMetric below. */
 export function getAdminRevenue(
   period: 'week' | 'month' = 'week',

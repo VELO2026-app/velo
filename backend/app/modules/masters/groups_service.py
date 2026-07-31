@@ -1,5 +1,5 @@
 # =============================================================================
-# VELO Backend -- Master Groups Service (P1, ПРОМТ №590)
+# VELO Backend -- Master Groups Service (P1, PROMPT №590)
 # =============================================================================
 #
 # Group CRUD + membership + per-student tag/block. Two virtual groups
@@ -139,7 +139,7 @@ async def is_master_audience_member(
     this master's own CUSTOM groups (who may have no booking at all).
 
     Reused by students_service.get_master_student_detail's own gate (P6,
-    owner-ruled widen, ПРОМТ №609) instead of that module writing a THIRD
+    owner-ruled widen, PROMPT №609) instead of that module writing a THIRD
     definition of "student" -- see that function's docstring.
 
     Deliberately does NOT admit a BLOCKED ("Удалённые") student: excluded
@@ -442,7 +442,7 @@ async def create_group(
     if existing is not None:
         raise ConflictError(f"A group named '{name}' already exists")
 
-    # Owner Q4 (ПРОМТ №610): blank/whitespace-only normalizes to NULL, never
+    # Owner Q4 (PROMPT №610): blank/whitespace-only normalizes to NULL, never
     # stored as "" -- keeps "no description" a single, unambiguous DB state
     # for the frontend's own "no dead space when empty" display rule.
     normalized_description = (
@@ -472,7 +472,7 @@ async def rename_group(
     description: str | None = None,
     description_provided: bool = False,
 ) -> MasterGroup:
-    """Rename AND/OR edit description (owner Q10, ПРОМТ №611).
+    """Rename AND/OR edit description (owner Q10, PROMPT №611).
 
     `description_provided` is the router's own
     `"description" in body.model_dump(exclude_unset=True)` check -- partial
@@ -579,7 +579,7 @@ async def delete_group(
 ) -> None:
     group = await _get_custom_group_or_404(master_id, group_id_str, session)
 
-    # P5 orphan-audience guard (ПРОМТ №606, owner-ruled: BLOCK, never
+    # P5 orphan-audience guard (PROMPT №606, owner-ruled: BLOCK, never
     # auto-reassign or auto-unlist). group_ids is always validated as this
     # SAME master's own custom groups at write time
     # (_owned_group_ids_or_400), so every PracticeAudienceGroup row pointing
@@ -634,7 +634,7 @@ async def search_group_memberships(
     limit: int = 20,
     offset: int = 0,
 ) -> tuple[list[dict], int]:
-    """Cross-group people-search (P6, ПРОМТ №606, owner-ruled: ONE ROW PER
+    """Cross-group people-search (P6, PROMPT №606, owner-ruled: ONE ROW PER
     MEMBERSHIP). Every (student, CUSTOM group) membership row for this
     master, optionally name-filtered -- a student in N groups yields N
     rows, each carrying which group. Never «Ученики»/«Удалённые»: neither
@@ -822,7 +822,7 @@ async def block_student(
     """Block a student: set blocked_at, drop them from every custom group,
     cancel+refund their FUTURE confirmed bookings on this master's
     practices, and remove their ACTIVE waitlist entries for this master's
-    practices (owner Q13, ПРОМТ №613).
+    practices (owner Q13, PROMPT №613).
 
     Money movement REUSES refund_booking() (payments/refund.py) exactly as
     refund_all_bookings_for_practice() already does for a master-initiated
@@ -964,7 +964,7 @@ async def unblock_student(
     (derived). Custom-group memberships are NOT restored (owner-settled).
     The tag is kept -- the row is only deleted if there is no tag either.
 
-    Waitlist (owner Q13, ПРОМТ №613): deliberately does NOT restore any
+    Waitlist (owner Q13, PROMPT №613): deliberately does NOT restore any
     entry block_student removed. Their old queue position is gone for
     good -- the same "no restoration" rule custom-group membership already
     follows above, for the same reason: silently handing back a spot in
@@ -991,7 +991,7 @@ async def unblock_student(
 
 
 # ===========================================================================
-# P3 addenda (ПРОМТ №592): tag palette + a student's custom groups
+# P3 addenda (PROMPT №592): tag palette + a student's custom groups
 # ===========================================================================
 
 
@@ -1034,7 +1034,7 @@ async def list_student_custom_groups(
 
 
 # ===========================================================================
-# P4 addenda (ПРОМТ №593): group invite links
+# P4 addenda (PROMPT №593): group invite links
 # ===========================================================================
 
 

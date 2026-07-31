@@ -2,7 +2,7 @@
 // VELO Frontend -- MethodTaxonomyPicker Unit Tests
 // =============================================================================
 //
-// Bug 5 leak 1 (ПРОМТ №408): a catalog-created direction/style leaked into a
+// Bug 5 leak 1 (PROMPT №408): a catalog-created direction/style leaked into a
 // master's stored `methods: string[]` as its raw slug (e.g. "custom_vwxosjci")
 // because methodTaxonomy.ts's module-level catalog cache stayed cold --
 // MasterApplyView never called primeMethodTaxonomyCatalog() (it wasn't among
@@ -119,7 +119,7 @@ describe('MethodTaxonomyPicker (bug 5 leak 1 -- shared cache warmed on mount)', 
 })
 
 // =============================================================================
-// ПРОМТ №503 commit 2: a value cold-parsed as "custom" against a not-yet-warm
+// PROMPT №503 commit 2: a value cold-parsed as "custom" against a not-yet-warm
 // catalog must reparse to its real chip once the catalog resolves, even
 // though the incoming modelValue TEXT never changes between the cold and
 // warm parse (that's the whole trap -- sameSet() alone can't tell the two
@@ -128,7 +128,7 @@ describe('MethodTaxonomyPicker (bug 5 leak 1 -- shared cache warmed on mount)', 
 // free-text box because the picker's own immediate watch always fires before
 // its onMounted catalog fetch can resolve.
 // =============================================================================
-describe('MethodTaxonomyPicker (ПРОМТ №503 commit 2 -- reparse on catalog warm-up)', () => {
+describe('MethodTaxonomyPicker (PROMPT №503 commit 2 -- reparse on catalog warm-up)', () => {
   it('a value that cold-parses as custom becomes the matched, active chip once the catalog resolves', async () => {
     vi.mocked(getActiveTaxonomy).mockResolvedValueOnce({
       directions: [

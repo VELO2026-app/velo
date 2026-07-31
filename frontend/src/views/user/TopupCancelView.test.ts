@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- TopupCancelView Screen Tests (T8, ПРОМТ №432)
+// VELO Frontend -- TopupCancelView Screen Tests (T8, PROMPT №432)
 // =============================================================================
 //
 // Where Stripe drops the user who backed out of checkout. Pure presentation +

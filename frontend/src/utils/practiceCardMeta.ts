@@ -6,7 +6,7 @@
 // master dashboard's «Ближайшие практики» card renders identical meta (DB-2,
 // 2026-06-30) WITHOUT duplicating the formatting logic.
 //
-// E12 swap (ПРОМТ №419, operator 2026-07-15): checkinLabel used to read the
+// E12 swap (PROMPT №419, operator 2026-07-15): checkinLabel used to read the
 // anonymous-insights mood tally (checkins.high/mid/low) as a stand-in check-in
 // count. That number answers "how many diary entries were written" -- it
 // double-counts a person who checks in AND writes again later, so a card

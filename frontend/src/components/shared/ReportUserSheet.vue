@@ -1,6 +1,6 @@
 <!--
-  VELO Frontend -- ReportUserSheet (Master GROUPS P3, ПРОМТ №592; MULTI-select
-  + styling fix batch ПРОМТ №609; full rebuild to measured values ПРОМТ №610)
+  VELO Frontend -- ReportUserSheet (Master GROUPS P3, PROMPT №592; MULTI-select
+  + styling fix batch PROMPT №609; full rebuild to measured values PROMPT №610)
 
   "Сообщить о пользователе" -- the report form (step D of the block flow,
   also reachable standalone from wherever a master wants to report a
@@ -24,7 +24,7 @@
   throwing, so there is nothing to special-case here; the success toast
   fires uniformly.
 
-  Rebuild to `Report a user.svg` / `Report a user 2.svg` (ПРОМТ №610):
+  Rebuild to `Report a user.svg` / `Report a user 2.svg` (PROMPT №610):
     - target-user card (TargetUserCard, shared with both block-flow
       VConfirmDialogs on MasterStudentProfileView -- owner Q9)
     - «Причина:» as a full-width glass band, not coloured text

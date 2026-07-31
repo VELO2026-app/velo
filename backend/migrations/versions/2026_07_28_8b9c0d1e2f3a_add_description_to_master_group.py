@@ -4,7 +4,7 @@ Revision ID: 8b9c0d1e2f3a
 Revises: 7a8b9c0d1e2f
 Create Date: 2026-07-28
 
-Owner Q4 (ПРОМТ №610): «Новая группа» gets a free-text description field.
+Owner Q4 (PROMPT №610): «Новая группа» gets a free-text description field.
 
 master_group.description -- NEW column, nullable, NO server_default. Purely
 additive: every existing group row gets NULL (= "no description"), which is

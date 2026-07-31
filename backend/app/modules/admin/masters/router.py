@@ -103,7 +103,7 @@ async def verify_master_endpoint(
 ) -> AdminMasterActionResponse:
     """Verify a pending master application.
 
-    Updates profile status to 'verified'. body.promote (ПРОМТ №503 commit 3):
+    Updates profile status to 'verified'. body.promote (PROMPT №503 commit 3):
     optional custom method labels to add to the taxonomy catalog -- absent/
     empty writes nothing, identical to before this field existed.
     """
@@ -165,7 +165,7 @@ async def edit_master_methods_endpoint(
     admin: User = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
 ) -> AdminMasterActionResponse:
-    """Admin edits a master's methods during review (T3, ПРОМТ №293).
+    """Admin edits a master's methods during review (T3, PROMPT №293).
 
     Overwrites data.profile.methods with the validated flat list (min 1).
     Distinct from the master's own method-change request (M3 approve/reject).

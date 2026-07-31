@@ -175,7 +175,7 @@ async def list_my_bookings_endpoint(
     # locally to match this file's cross-service import style (get_master_-
     # display_name above) and sidestep any module-load import cycle.
     from app.modules.practices.service import ZOOM_VISIBLE_BOOKING_STATUSES
-    # A4 V2 (ПРОМТ №572): batched Zoom meeting status for this page's
+    # A4 V2 (PROMPT №572): batched Zoom meeting status for this page's
     # practices -- NOT gated by ZOOM_VISIBLE_BOOKING_STATUSES (that gate is
     # for the manual zoom_link fallback, M-3); the meeting STATUS carries no
     # secret material, same posture as PracticeResponse.zoom_meeting_status.
@@ -264,7 +264,7 @@ async def list_my_upcoming_bookings_endpoint(
         mid = row[1].master_id
         if mid not in master_names:
             master_names[mid] = await get_master_display_name(mid, session)
-    # A4 V2 (ПРОМТ №572): this is the exact endpoint UserDashboardView's
+    # A4 V2 (PROMPT №572): this is the exact endpoint UserDashboardView's
     # "nearest practice" card reads -- the participant surface this fix is
     # for.
     zoom_meeting_statuses = await get_zoom_meeting_statuses(

@@ -37,7 +37,7 @@
          populateForm uses centsToEurString() -- no float precision issues.
     W-8: date input has :min="todayDate" to prevent setting past dates
     W-9: commission calc uses COMMISSION_RATE from @/utils/commission
-    A4 V3 (ПРОМТ №571): Направление/Вид options filtered to the master's own
+    A4 V3 (PROMPT №571): Направление/Вид options filtered to the master's own
         CONFIRMED methods (mirrors CreatePracticeView), and the taxonomy
         rejection codes (direction_not_confirmed/style_not_confirmed) get the
         same Russian toast translation as CreatePracticeView's submit() catch.
@@ -150,7 +150,7 @@
           />
 
           <!-- ================================================================
-               Для кого практика (P5 port, ПРОМТ №606): mirrors
+               Для кого практика (P5 port, PROMPT №606): mirrors
                CreatePracticeView's audience block, adapted to Edit's FLAT
                layout (Реш. В, above -- no velo-section-title sections here,
                so no section wrapper is dragged in with it; a plain
@@ -201,7 +201,7 @@
             autogrow
           />
 
-          <!-- Zoom (T21-1, ПРОМТ №541, owner decision D1): the backend now
+          <!-- Zoom (T21-1, PROMPT №541, owner decision D1): the backend now
                ALWAYS creates a real Zoom meeting automatically on publish --
                this field is an EMERGENCY fallback only (Zoom's daily creation
                quota can fail it), kept so a master is never left with no way
@@ -456,13 +456,13 @@ const form = reactive({
   what_to_prepare: '',
   contraindications: '',
   zoom_link: '',
-  // P5 port (ПРОМТ №606): audience_kind + audience_group_ids, mirrors
+  // P5 port (PROMPT №606): audience_kind + audience_group_ids, mirrors
   // CreatePracticeView's own form fields exactly.
   audience_kind: 'public' as 'public' | 'students' | 'groups',
   audience_group_ids: [] as string[],
 })
 
-// P5 port (ПРОМТ №606): this master's own custom groups, for «Конкретные
+// P5 port (PROMPT №606): this master's own custom groups, for «Конкретные
 // группы»'s multi-select -- loaded in onMounted below, same recipe as
 // CreatePracticeView.
 const customGroups = ref<GroupListItem[]>([])
@@ -496,8 +496,8 @@ const isTerminal = computed(
 // W-6: use eurStringToCents() -- avoids parseFloat(raw) * 100 float precision trap.
 const priceCents = computed((): number => eurStringToCents(form.price_eur_raw))
 
-// A4 V3 (ПРОМТ №571): this master's OWN CONFIRMED methods, same resolver
-// and same fail-CLOSED posture as CreatePracticeView (ПРОМТ №556/№546) --
+// A4 V3 (PROMPT №571): this master's OWN CONFIRMED methods, same resolver
+// and same fail-CLOSED posture as CreatePracticeView (PROMPT №556/№546) --
 // this screen shares masterStatusGuard with master-practice-new (router/
 // index.ts), so masterStore.profileLoaded is already true on first render
 // in the normal navigation case; the "not loaded yet" branch below is a
@@ -513,7 +513,7 @@ const confirmedMethods = computed(() => {
 
 // Direction/style options, catalog-first (T2 stage 2), filtered to the
 // master's own confirmed methods -- mirrors CreatePracticeView's
-// directionOptions/styleOptionsForForm exactly (ПРОМТ №556/№546). Before
+// directionOptions/styleOptionsForForm exactly (PROMPT №556/№546). Before
 // this, EditPracticeView offered the WHOLE active catalogue unfiltered,
 // so a master could re-pick (or leave untouched, see populateForm) a
 // direction/style their profile was never confirmed for and only find out
@@ -597,7 +597,7 @@ onMounted(async () => {
     catalog.value = c
   })
 
-  // P5 port (ПРОМТ №606): this master's own custom groups, for «Конкретные
+  // P5 port (PROMPT №606): this master's own custom groups, for «Конкретные
   // группы»'s multi-select -- same fire-and-forget-before-the-cached-check
   // placement as the taxonomy fetch above, so it runs on both branches.
   // «Удалённые» is a system slug (never a real MasterGroup row) and
@@ -663,7 +663,7 @@ function validate(): boolean {
   return ok
 }
 
-// -- Audience-narrowing warning (owner Q15, ПРОМТ №613) --
+// -- Audience-narrowing warning (owner Q15, PROMPT №613) --
 //
 // True iff the FORM's audience differs from what's currently SAVED on
 // `practice.value` -- gates the stranded-bookers check below so it only
@@ -709,7 +709,7 @@ async function save(): Promise<void> {
     // Owner Q15: warn ONLY when the count is above zero -- a narrowing
     // that strands nobody saves silently, same as today.
     if (preview.stranded_count > 0) {
-      // Owner-picked wording (ПРОМТ №614, wording B): three facts -- how
+      // Owner-picked wording (PROMPT №614, wording B): three facts -- how
       // many, why, and that the booking survives (the fact that stops the
       // master over-panicking). `plural()` (@/utils/plural, the repo's one
       // canonical Russian pluralizer, already used app-wide for counts)
@@ -776,7 +776,7 @@ async function commitSave(): Promise<void> {
       zoom_link: form.zoom_link.trim() || null,
       is_free: form.is_free,
       price_cents: form.is_free ? 0 : priceCents.value,
-      // P5 port (ПРОМТ №606): mirrors CreatePracticeView -- group_ids is
+      // P5 port (PROMPT №606): mirrors CreatePracticeView -- group_ids is
       // only meaningful (and only sent) for audience_kind='groups'.
       audience_kind: form.audience_kind,
       group_ids: form.audience_kind === 'groups' ? form.audience_group_ids : [],
@@ -786,10 +786,10 @@ async function commitSave(): Promise<void> {
     toast.success('Сохранено')
     await masterStore.refreshMyPractices()
   } catch (e) {
-    // A4 V3 (ПРОМТ №571): _assert_master_confirmed_taxonomy's rejection is a
+    // A4 V3 (PROMPT №571): _assert_master_confirmed_taxonomy's rejection is a
     // raw, English, API-shaped message (e.detail) -- must never reach a human
     // directly. Same codes, same translation, same pattern as
-    // CreatePracticeView's submit() catch (ПРОМТ №556, OWNER-2).
+    // CreatePracticeView's submit() catch (PROMPT №556, OWNER-2).
     if (e instanceof ApiResponseError && e.code === 'direction_not_confirmed') {
       toast.error('Это направление ещё не подтверждено в вашем профиле')
     } else if (e instanceof ApiResponseError && e.code === 'style_not_confirmed') {
@@ -941,7 +941,7 @@ async function remove(): Promise<void> {
   margin-bottom: var(--space-2);
 }
 
-/* -- Для кого практика (P5 port, ПРОМТ №606): same token recipe as
+/* -- Для кого практика (P5 port, PROMPT №606): same token recipe as
    CreatePracticeView's .create-practice__audience-chips/__empty (itself
    AddToGroupSheet's .add-to-group__chips/__empty recipe). -- */
 .edit-practice__audience-chips {
@@ -965,7 +965,7 @@ async function remove(): Promise<void> {
   margin-top: var(--space-1);
 }
 
-/* T21-1 (ПРОМТ №541): honest caption for the now-fallback Zoom field. */
+/* T21-1 (PROMPT №541): honest caption for the now-fallback Zoom field. */
 .edit-practice__hint {
   margin: 0 0 var(--space-2);
   font-size: var(--text-xs);

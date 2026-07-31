@@ -40,7 +40,7 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
     """Clean test data for the 56000-56999 range before/after.
 
     Upgraded from the lighter cleanup_range to full_cleanup_range (T22-6,
-    ПРОМТ №561): this file now creates real Practice rows too (the
+    PROMPT №561): this file now creates real Practice rows too (the
     master-only-direction confirmation test), which cleanup_range's
     master_profiles/role-only scope never touched.
     """
@@ -48,7 +48,7 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
     await db_session.commit()
     yield
     await full_cleanup_range(db_session, 56000, 56999, delete_users=False)
-    # ПРОМТ №503 commit 3 / T22-6 (ПРОМТ №561): verify's promote AND
+    # PROMPT №503 commit 3 / T22-6 (PROMPT №561): verify's promote AND
     # master_only params can insert custom TaxonomyDirection rows (same
     # "custom_" value prefix as _promote_custom_methods' other caller,
     # approve_method_change -- see test_master_method_change.py's identical
@@ -195,7 +195,7 @@ async def test_verify_master_no_notes(
 
 
 # ---------------------------------------------------------------------------
-# POST /admin/masters/{user_id}/verify -- promote (ПРОМТ №503 commit 3)
+# POST /admin/masters/{user_id}/verify -- promote (PROMPT №503 commit 3)
 #
 # Before this, ONLY an already-verified master's later method-change request
 # (approve_method_change) could promote a custom label into the taxonomy
@@ -204,7 +204,7 @@ async def test_verify_master_no_notes(
 # test_master_method_change.py's approve+promote trio exactly, against the
 # initial-application endpoint instead.
 #
-# ПРОМТ №507 POSTMORTEM (deploy gate, first-ever run of these three tests):
+# PROMPT №507 POSTMORTEM (deploy gate, first-ever run of these three tests):
 # test_verify_with_promote_creates_custom_direction originally used
 # "Дыхательные практики" as its "creates a NEW row" fixture -- that label is
 # a REAL SEEDED direction (source='seed', migration 1a2b3c4d5e6f, value=
@@ -222,7 +222,7 @@ async def test_verify_master_no_notes(
 # from every migration/seed file) -- that test PASSED, proving the shared
 # promotion mechanism itself works in this deploy DB. What that sibling
 # test does NOT prove is that THIS code's new addition -- verify_master's
-# promote parameter, wired in ПРОМТ №503 commit 3 -- threads the value
+# promote parameter, wired in PROMPT №503 commit 3 -- threads the value
 # through correctly on its OWN path; only a passing run of the fixed test
 # below (obviously-synthetic label, not a mere "absent today" one) proves
 # that specifically, and it is unproven until the next deploy.
@@ -272,12 +272,12 @@ async def test_verify_with_promote_creates_custom_direction(
     source='custom' direction -- the previously-missing promotion path for a
     brand-new applicant. Does NOT rewrite the applicant's own stored methods
     text -- only the catalog gains the row; the frontend resolves the
-    existing text to the new chip via label matching (ПРОМТ №503 commits 1-2).
+    existing text to the new chip via label matching (PROMPT №503 commits 1-2).
 
-    Asserts its own premise first (ПРОМТ №507): if this label somehow
+    Asserts its own premise first (PROMPT №507): if this label somehow
     already existed, a future failure here names that cause directly
     instead of surfacing as a confusing 'seed' == 'custom' mismatch three
-    assertions later, the way the ПРОМТ №507 deploy failure did.
+    assertions later, the way the PROMPT №507 deploy failure did.
     """
     premise = (
         await db_session.execute(
@@ -329,7 +329,7 @@ async def test_verify_with_promote_dedups_existing_label(
     """Promoting a label that already exists in the catalog (seeded) does
     not create a duplicate row.
 
-    ПРОМТ №507: an earlier version of this test submitted ONLY the existing
+    PROMPT №507: an earlier version of this test submitted ONLY the existing
     label and asserted the row count stayed at 1 -- which cannot tell
     "dedup correctly skipped it" apart from "promote never reached the
     service at all" (both leave the count at 1; nothing here proves the
@@ -392,7 +392,7 @@ async def test_verify_with_promote_dedups_existing_label(
 
 
 # ---------------------------------------------------------------------------
-# POST /admin/masters/{user_id}/verify -- master_only (T22-6, ПРОМТ №561)
+# POST /admin/masters/{user_id}/verify -- master_only (T22-6, PROMPT №561)
 #
 # Before this, "Только этому мастеру" approved the method but wrote NOTHING
 # to the catalog -- the direction had no representation anywhere a practice

@@ -68,7 +68,7 @@
         <h2 class="velo-section-title">Использовать шаблон</h2>
         <!-- Full width (NOT railed): the block carries no required-seal of its
              own, so it spans the whole rail — as wide as a field PLUS its seal
-             indicator (operator ПРОМТ №233). -->
+             indicator (operator PROMPT №233). -->
         <UseTemplateBlock :practices="templatePractices" @select="applyTemplate" />
       </div>
 
@@ -290,7 +290,7 @@
       </div>
 
       <!-- ================================================================
-           Для кого практика  (P5, ПРОМТ №594): audience_kind single-select,
+           Для кого практика  (P5, PROMPT №594): audience_kind single-select,
            + a multi-select of the master's own custom groups when 'groups'
            is chosen. No SVG mock exists -- MINIMAL DS-language design.
            ================================================================ -->
@@ -376,7 +376,7 @@
       </div>
 
       <!-- ================================================================
-           Подключение (T21-1, ПРОМТ №541, owner decision D1): the backend
+           Подключение (T21-1, PROMPT №541, owner decision D1): the backend
            ALWAYS creates a real Zoom meeting automatically on publish -- this
            field is now an EMERGENCY fallback only (Zoom's daily creation quota
            can fail it), not the primary link. Kept because a master must
@@ -500,19 +500,19 @@ const masterStore = useMasterStore()
 // warmed it this session); if cold, fetched here before the master is likely
 // to have opened the Направление select.
 const catalog = ref<TaxonomyListResponse | null>(null)
-// P5 (ПРОМТ №594): the master's own custom groups (loaded in onMounted below).
+// P5 (PROMPT №594): the master's own custom groups (loaded in onMounted below).
 const customGroups = ref<GroupListItem[]>([])
 onMounted(() => {
   void masterStore.fetchMyPractices()
   void ensureTaxonomyCatalog().then((c) => {
     catalog.value = c
   })
-  // T21-6 (ПРОМТ №546): needed to filter the direction/style pickers down to
+  // T21-6 (PROMPT №546): needed to filter the direction/style pickers down to
   // this master's OWN confirmed methods (see directionOptions/
   // styleOptionsForForm below). No-op if already loaded elsewhere this
   // session (fetchMyProfile's own cache, same as fetchMyPractices above).
   void masterStore.fetchMyProfile()
-  // P5 (ПРОМТ №594): the master's own custom groups, for «Конкретные
+  // P5 (PROMPT №594): the master's own custom groups, for «Конкретные
   // группы»'s multi-select. «Удалённые» is a system slug (never a real
   // MasterGroup row) and «Ученики» isn't a target-able group either --
   // getGroups() already returns both alongside custom ones, so filter here.
@@ -599,7 +599,7 @@ const form = reactive({
   timezone: authStore.user?.timezone ?? 'Europe/Moscow',
   max_participants_raw: '', // string input, parsed to int|null on submit
   is_free: true, // «Платно» removed — practices are free for now (Q2=А)
-  // P5 (ПРОМТ №594): «Для кого практика» — single-select kind, + a
+  // P5 (PROMPT №594): «Для кого практика» — single-select kind, + a
   // multi-select of the master's OWN custom groups when kind='groups'.
   // Default 'public' -- matches every practice's behavior before this
   // feature existed.
@@ -633,7 +633,7 @@ const errors = reactive({
 // «Использовать шаблон» source: all the master's practices, newest-created
 // first (operator Q2=А — backend list order isn't guaranteed, so sort here).
 //
-// T23-3 (ПРОМТ №565): a published SERIES must offer ONE entry, not one per
+// T23-3 (PROMPT №565): a published SERIES must offer ONE entry, not one per
 // generated occurrence -- masterStore.practices carries every child
 // individually (each is its own Practice row), so an unrelated series
 // otherwise floods this list with N near-identical cards ("Свист" three
@@ -668,7 +668,7 @@ const templatePractices = computed((): PracticeResponse[] => {
   return [...bestForGroup.values()].sort((a, b) => b.created_at.localeCompare(a.created_at))
 })
 
-// T21-6 (ПРОМТ №546): this master's OWN CONFIRMED methods (MasterProfile.
+// T21-6 (PROMPT №546): this master's OWN CONFIRMED methods (MasterProfile.
 // methods -- the live field, only overwritten on admin approval), parsed
 // into direction/style VALUES via the same resolver every other screen
 // uses. Deliberately reads masterStore.profile?.methods, NEVER
@@ -681,7 +681,7 @@ const confirmedMethods = computed(() => {
   return parseMethods(methods)
 })
 
-// ПРОМТ №556 (OWNER-2, MEASURED): this route (master-practice-new) has
+// PROMPT №556 (OWNER-2, MEASURED): this route (master-practice-new) has
 // masterStatusGuard on it (router/index.ts), which AWAITS fetchMyProfile()
 // before this component ever mounts -- so masterStore.profileLoaded is
 // already true on first render in the normal navigation case, and the
@@ -735,7 +735,7 @@ function applyTemplate(p: PracticeResponse): void {
   // get saved.
   suppressSave = true
   form.title = p.title
-  // ПРОМТ №556 (OWNER-2, MEASURED root cause): a template practice's
+  // PROMPT №556 (OWNER-2, MEASURED root cause): a template practice's
   // direction/style were confirmed at the time IT was created -- a master's
   // confirmed methods can have since narrowed (a method-change-request +
   // admin approval overwrites the profile's methods verbatim). Copying the
@@ -943,7 +943,7 @@ function validate(): boolean {
     errors.recurrence_count = 'Укажите число повторений (не меньше 1)'
     ok = false
   }
-  // P5 (ПРОМТ №594): «Конкретные группы» needs at least one group chosen --
+  // P5 (PROMPT №594): «Конкретные группы» needs at least one group chosen --
   // matches the backend's own group_ids-non-empty-when-groups check.
   if (form.audience_kind === 'groups' && form.audience_group_ids.length === 0) {
     errors.audience_group_ids = 'Выберите хотя бы одну группу'
@@ -1028,15 +1028,15 @@ async function submit(): Promise<void> {
       currency: 'eur',
       // E3: when recurring, send the series spec; non-recurring → null.
       recurrence: form.is_recurring ? buildRecurrence() : null,
-      // P5 (ПРОМТ №594): audience_kind + group_ids (only meaningful --
+      // P5 (PROMPT №594): audience_kind + group_ids (only meaningful --
       // and only sent -- for 'groups').
       audience_kind: form.audience_kind,
       group_ids: form.audience_kind === 'groups' ? form.audience_group_ids : [],
     })
 
-    // A4 V6 (ПРОМТ №572): `deduplicated` is the EXPLICIT backend signal that
+    // A4 V6 (PROMPT №572): `deduplicated` is the EXPLICIT backend signal that
     // `created` is the master's own EARLIER submission (the window-scoped
-    // retry-after-timeout check, ПРОМТ №559, or the losing side of a
+    // retry-after-timeout check, PROMPT №559, or the losing side of a
     // genuine concurrent double-tap, A4 V7) -- not a new practice. Before
     // this field existed, the form said "Практика создана!" and navigated
     // to the list regardless, so a master who double-tapped had no way to
@@ -1087,7 +1087,7 @@ async function submit(): Promise<void> {
     // refresh is harmless and must not turn a successful create into an error path.
     void masterStore.refreshMyPractices().catch(() => {})
   } catch (e) {
-    // ПРОМТ №556 (OWNER-2): _assert_master_confirmed_taxonomy's rejection is a
+    // PROMPT №556 (OWNER-2): _assert_master_confirmed_taxonomy's rejection is a
     // raw, English, API-shaped message (e.detail) -- must never reach a human
     // directly. Same pattern as MasterInviteClaimView's invite_invalid: switch
     // on the machine-readable code, not the message text.
@@ -1151,7 +1151,7 @@ async function submit(): Promise<void> {
   margin-bottom: 0;
 }
 
-/* T21-1 (ПРОМТ №541): honest caption for the now-fallback Zoom field. */
+/* T21-1 (PROMPT №541): honest caption for the now-fallback Zoom field. */
 .create-practice__hint {
   margin: 0;
   font-size: var(--text-xs);
@@ -1257,7 +1257,7 @@ async function submit(): Promise<void> {
   margin-top: var(--space-1);
 }
 
-/* -- Для кого практика (P5, ПРОМТ №594): group multi-select chips, same
+/* -- Для кого практика (P5, PROMPT №594): group multi-select chips, same
    token recipe as AddToGroupSheet's .add-to-group__chips/__empty. -- */
 .create-practice__audience-chips {
   display: flex;

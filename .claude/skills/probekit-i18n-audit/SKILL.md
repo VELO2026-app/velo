@@ -3,7 +3,7 @@ name: probekit-i18n-audit
 description: "PAUSED for VELO — not applicable until multi-language ships; do not run, it would report a vacuous pass. i18n compliance audit: checks all strings use t(), keys exist in every locale, RTL support, no hardcoded text. Switch this back on when VELO gains an i18n surface (see Configuration)."
 ---
 
-# i18n-audit v1.0.0 — PAUSED (ПРОМТ №435)
+# i18n-audit v1.0.0 — PAUSED (PROMPT №435)
 
 > **PAUSED, NOT RETIRED.** This skill is kept deliberately and is not archived or
 > deleted. It does not apply to VELO *yet* — and it is expected to. Read the
@@ -14,14 +14,14 @@ Verifies all user-visible strings go through vue-i18n `t()` and keys exist in al
 
 ## Configuration
 
-<!-- ================= PAUSED FOR VELO (ПРОМТ №435) =================
+<!-- ================= PAUSED FOR VELO (PROMPT №435) =================
      Operator's ruling, verbatim: «не выбрасываем — ставим на паузу. Скоро мы
      будем встраивать эту функцию отдельно.» So this skill stays in the repo,
      unarchived, waiting to be switched on. It is NOT dead tooling and it is NOT
      a candidate for cleanup -- probekit-project-hygiene will see an unused
      skill here; that is expected, leave it.
 
-     WHY IT IS PAUSED: VELO has ZERO i18n surface today. Verified ПРОМТ №435,
+     WHY IT IS PAUSED: VELO has ZERO i18n surface today. Verified PROMPT №435,
      not assumed:
        - vue-i18n is NOT in frontend/package.json
        - 0 occurrences of $t( / useI18n / vue-i18n anywhere in frontend/src

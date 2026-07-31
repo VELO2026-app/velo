@@ -5,7 +5,7 @@
 # ENDPOINT:
 #   GET /api/v1/admin/revenue?period=week|month&offset=N
 #       -- platform revenue (GMV) + commission + payout + per-master breakdown.
-#       offset (W9, ПРОМТ №387): same stepper convention as admin/metrics.
+#       offset (W9, PROMPT №387): same stepper convention as admin/metrics.
 #
 # AUTH: get_current_admin. SESSION: get_db_reader -- read-only.
 # =============================================================================

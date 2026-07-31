@@ -17,7 +17,7 @@
 #   create_failed (retry_count + last_sync_error both readable), the poller
 #   just stops touching it.
 #
-#   ПРОМТ №559: this worker ALSO makes the FIRST (not just retry) attempt for
+#   PROMPT №559: this worker ALSO makes the FIRST (not just retry) attempt for
 #   status=pending_creation rows -- a series child beyond the nearest
 #   occurrence, whose Zoom meeting creation is deliberately deferred here
 #   rather than made synchronously during publish (series_service.py).
@@ -109,7 +109,7 @@ async def run_zoom_retry_poller() -> None:
 
 async def _poll_cycle() -> bool:
     """Retry every create_failed ZoomMeeting row, and attempt every
-    pending_creation one for the first time (ПРОМТ №559), both still under
+    pending_creation one for the first time (PROMPT №559), both still under
     the cap, THEN every pending/create_failed ZoomRegistrant row whose
     meeting is now active (step E: a booking made while the meeting wasn't
     active yet, or whose registrant call failed, queues here).
@@ -141,7 +141,7 @@ async def _poll_cycle() -> bool:
 async def _claim_retryable_ids() -> list:
     """Return ids of ZoomMeeting rows still eligible for a creation attempt
     -- either a genuine RETRY (create_failed) or a FIRST attempt that was
-    deliberately deferred (pending_creation, ПРОМТ №559: series children
+    deliberately deferred (pending_creation, PROMPT №559: series children
     beyond the nearest occurrence). attempt_zoom_meeting_create below treats both
     identically -- same Zoom call, same success/failure handling, same 429
     exemption -- a pending_creation row simply has retry_count=0 going in."""
@@ -226,7 +226,7 @@ async def attempt_zoom_meeting_create(
     as last_sync_error, same posture as the initial attempt in
     practices/service.py. Caller commits.
 
-    SW13 (Батч B, ПРОМТ №579): "anything else" above used to be aspirational
+    SW13 (Батч B, PROMPT №579): "anything else" above used to be aspirational
     only -- a non-ZoomAPIError exception (e.g. a malformed response.get()
     call, an unwrapped network error) propagated straight past this
     function's own except clause to _retry_one's outer `except Exception`,
@@ -237,7 +237,7 @@ async def attempt_zoom_meeting_create(
     below closes it: any non-ZoomAPIError failure now counts against the
     cap exactly like a generic (non-429) ZoomAPIError does.
 
-    A4 V2 (ПРОМТ №572): public (no leading underscore) -- besides
+    A4 V2 (PROMPT №572): public (no leading underscore) -- besides
     _retry_one's own automatic-poller call below, practices/router.py's
     retry_zoom_meeting_endpoint calls this directly for a master-triggered
     "Повторить" on a create_failed meeting, so the master does not have to
@@ -245,7 +245,7 @@ async def attempt_zoom_meeting_create(
     backed off from idling). Caller owns the row's FOR UPDATE lock either
     way -- this function itself takes no lock and commits nothing.
 
-    RATE LIMIT (429) IS EXEMPT FROM THE RETRY CAP (ПРОМТ №520, series-hole
+    RATE LIMIT (429) IS EXEMPT FROM THE RETRY CAP (PROMPT №520, series-hole
     volume answer). A generic failure (bad config, network down, Zoom
     outage) counts against retry_count and eventually gives up visibly --
     that's the cap's whole purpose. A 429 is categorically different: Zoom
@@ -421,7 +421,7 @@ async def _attempt_registrant_create(
     blank/placeholder, so a retried registrant shows the real person's name
     on Zoom's side, not a generic stand-in.
 
-    SW13 (Батч B, ПРОМТ №579): same broad `except Exception` fallback as
+    SW13 (Батч B, PROMPT №579): same broad `except Exception` fallback as
     attempt_zoom_meeting_create above, same reasoning -- a non-ZoomAPIError
     exception must still count against the cap, or it retries forever
     without ever surfacing create_failed.

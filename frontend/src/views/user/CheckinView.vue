@@ -182,7 +182,7 @@ async function onSubmit(): Promise<void> {
   }
 }
 
-// P5 (ПРОМТ №594): the check-in gate (audience_service.py, via
+// P5 (PROMPT №594): the check-in gate (audience_service.py, via
 // upsert_checkin) rejects a viewer who is blocked, or no longer in the
 // practice's audience (the retroactive case -- a booking made before the
 // master narrowed the audience or blocked this viewer). Maps the backend's

@@ -223,7 +223,7 @@ async def get_admin_practice_detail(
     )
 
 
-# -- Zoom attendance (E21 step G, ПРОМТ №521) --
+# -- Zoom attendance (E21 step G, PROMPT №521) --
 
 
 async def get_admin_zoom_attendance(

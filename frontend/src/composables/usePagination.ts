@@ -54,7 +54,7 @@ export function usePagination<T>(fetchFn: FetchFn<T>, pageSize = 20) {
 
   const hasMore = computed(() => offset.value < total.value)
 
-  // W17 fix (ПРОМТ №409): reset()/refresh() calling loadMore() while an
+  // W17 fix (PROMPT №409): reset()/refresh() calling loadMore() while an
   // EARLIER loadMore() is still in flight used to corrupt state -- the
   // earlier call's `loading` guard blocked the new refresh's own loadMore
   // from running at all, then the earlier (stale-offset, stale-filter)

@@ -4,7 +4,7 @@ Revision ID: 1a2b3c4d5e6a
 Revises: 0f1a2b3c4d5e
 Create Date: 2026-07-20 00:00:00.000004+00:00
 
-E21 step E (ПРОМТ №520): registrant creation is queued for the retry
+E21 step E (PROMPT №520): registrant creation is queued for the retry
 poller (meeting not active yet, or the Zoom call fails) -- these two
 columns give it the same retry-count-with-cap + visible-error bookkeeping
 ZoomMeeting already has. Purely additive, inert until the retry poller's

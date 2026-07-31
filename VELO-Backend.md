@@ -5,7 +5,7 @@
 **Статус:** Active
 **Тесты:** 615 passed, 12 skipped  
 
-> **Freshness (ПРОМТ №510, 2026-07-19, verified against `8d4948f` on `test`):** graded
+> **Freshness (PROMPT №510, 2026-07-19, verified against `8d4948f` on `test`):** graded
 > STALE-BUT-HARMLESS overall — NOT rewritten this round; the test count in the header above
 > is UNVERIFIED against current `test` (live TEST box is 802 collected / 790 passed / 12
 > skipped, but that number belongs to the whole suite at a later date, not a re-run of this

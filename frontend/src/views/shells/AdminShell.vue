@@ -81,7 +81,7 @@ const DETAIL_ROUTES = [
   'admin-withdrawals',
   'admin-promos',
   'admin-profile',
-  // ПРОМТ №503 commit 4: a back-button-driven single-purpose management
+  // PROMPT №503 commit 4: a back-button-driven single-purpose management
   // screen, same shape as admin-promos/admin-profile above -- not a feed
   // (no fog), was simply never added when those were migrated, so it fell
   // through to AdminLayout's legacy 16px box instead of the shared 24px
@@ -91,7 +91,7 @@ const DETAIL_ROUTES = [
 const isDetailRoute = computed(() => DETAIL_ROUTES.includes(route.name as string))
 
 onMounted(() => {
-  // W14 fix (ПРОМТ №409): fetchDashboard used to be an unhandled rejection on
+  // W14 fix (PROMPT №409): fetchDashboard used to be an unhandled rejection on
   // failure -- badges just silently never updated. Toast here since this shell
   // wraps every /admin/* route and is always the first to actually run the
   // fetch (AdminDashboardView's own onMounted call is a no-op while this one

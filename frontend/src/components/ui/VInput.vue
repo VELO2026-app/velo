@@ -74,11 +74,7 @@
       <!-- Required marker (DS): the gutter is ALWAYS reserved while `required`, so
            the field width never jumps when it fills. Red rosette «!» when empty →
            green rosette «✓» when filled (operator 2026-06-23). -->
-      <span
-        v-if="required"
-        class="v-input__seal"
-        :class="{ 'v-input__seal--done': !!modelValue }"
-      >
+      <span v-if="required" class="v-input__seal" :class="{ 'v-input__seal--done': !!modelValue }">
         <IconRequired v-if="!modelValue" :size="22" />
         <IconRequiredDone v-else :size="22" />
       </span>
@@ -105,7 +101,7 @@ defineOptions({ inheritAttrs: false })
 // scrollIntoView twice is harmless. Callers may drop their own wiring later;
 // not required for this to work.
 //
-// W10 fix (ПРОМТ №387): the original batch only wired `@focus` on the PLAIN
+// W10 fix (PROMPT №387): the original batch only wired `@focus` on the PLAIN
 // render path (below) -- the floating-label path (`floating-label` prop,
 // e.g. MasterApplyView Step 1's display_name/email/phone) and the affix path
 // (prefix/suffix slots) each render their OWN <input>, so they silently
@@ -158,7 +154,7 @@ defineExpose({ focus: () => inputEl.value?.focus() })
  * patched. The typed text survives because nothing overwrites it, and the field
  * then shows something the state does not agree with. (It is NOT that Vue
  * "skips the value patch" -- Vue always patches `value`; the child simply never
- * re-renders. Verified on a bare VInput, ПРОМТ №434.)
+ * re-renders. Verified on a bare VInput, PROMPT №434.)
  *
  * Two sites do this today, both money-adjacent -- TopupView's negative-amount
  * reject and MasterNewPromocodeView's usage-limit clamp; both are covered in

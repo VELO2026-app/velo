@@ -1,10 +1,10 @@
 // =============================================================================
-// VELO Frontend -- Master Groups API (P2, ПРОМТ №591)
+// VELO Frontend -- Master Groups API (P2, PROMPT №591)
 // =============================================================================
 //
 // Typed wrappers over api.get/post/patch/put/delete for the master GROUPS
 // endpoints, mirroring masters.ts. HAND-WRITTEN, not generated: the backend
-// (P1, ПРОМТ №590) shipped these endpoints without a local server to
+// (P1, PROMPT №590) shipped these endpoints without a local server to
 // regenerate generated.ts against, so the types below are a temporary
 // stand-in for the real OpenAPI-derived ones. They reconcile automatically
 // at the next `velo update` regen -- do NOT add these to api/types.ts by
@@ -43,9 +43,9 @@ export interface GroupListItem {
   kind: GroupKind
   name: string
   members_count: number
-  /** Owner Q4 (ПРОМТ №610): always null for the two virtual groups and for
+  /** Owner Q4 (PROMPT №610): always null for the two virtual groups and for
    *  any custom group created before this field existed. Required (not
-   *  optional) -- ПРОМТ №613: the backend always serializes this key (no
+   *  optional) -- PROMPT №613: the backend always serializes this key (no
    *  response_model_exclude_unset), so the wire shape has it present on
    *  every response, and the hand-written type must mirror that exactly,
    *  not just "safely" allow it to be missing. */
@@ -136,7 +136,7 @@ export function getGroups(): Promise<GroupListResponse> {
 }
 
 /** POST /api/v1/masters/me/groups -- create a custom group. `description`
- *  is optional (Owner Q4, ПРОМТ №610); blank/whitespace is normalized to
+ *  is optional (Owner Q4, PROMPT №610); blank/whitespace is normalized to
  *  null server-side. 409 on a duplicate name for this master (surface via
  *  extractApiError). */
 export function createGroup(name: string, description?: string): Promise<GroupResponse> {
@@ -147,7 +147,7 @@ export function createGroup(name: string, description?: string): Promise<GroupRe
 }
 
 /** PATCH /api/v1/masters/me/groups/{id} -- rename AND/OR edit description
- *  (Owner Q10, ПРОМТ №611). `description` is a PARTIAL UPDATE: omitting the
+ *  (Owner Q10, PROMPT №611). `description` is a PARTIAL UPDATE: omitting the
  *  argument entirely (`undefined`) omits the JSON key too, so the backend's
  *  own exclude_unset check leaves the column untouched -- passing `''`
  *  explicitly sends the key and clears it to NULL server-side. This is the

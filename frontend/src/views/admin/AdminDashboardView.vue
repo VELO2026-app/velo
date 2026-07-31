@@ -193,7 +193,9 @@
       >
         <template #trailing>
           <span class="admin-dashboard__row-trailing">
-            <VBadge v-if="pendingMethodChanges > 0" variant="error">{{ pendingMethodChanges }}</VBadge>
+            <VBadge v-if="pendingMethodChanges > 0" variant="error">{{
+              pendingMethodChanges
+            }}</VBadge>
             <IconArrowRight :size="20" />
           </span>
         </template>
@@ -213,7 +215,16 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { VStatCard, VCard, VLoader, VProgressRow, VListRow, VBadge, VMoreLink, VSegment } from '@/components/ui'
+import {
+  VStatCard,
+  VCard,
+  VLoader,
+  VProgressRow,
+  VListRow,
+  VBadge,
+  VMoreLink,
+  VSegment,
+} from '@/components/ui'
 import type { SegmentOption } from '@/components/ui/VSegment.vue'
 import Banner from '@/components/shared/Banner.vue'
 import { IconProfile, IconPending, IconWarning, IconArrowRight } from '@/components/icons'
@@ -337,7 +348,7 @@ const engagementQuery = computed(() => ({
 
 // Refetch the overview + engagement rates whenever the period or the stepper
 // offset changes (D1/D3 cards + D4/D5 engagement share one window).
-// W14 fix (ПРОМТ №409): fetchOverview used to be an unhandled rejection on
+// W14 fix (PROMPT №409): fetchOverview used to be an unhandled rejection on
 // failure -- the stat cards just silently stayed stale. Toast here (the sole
 // caller of fetchOverview, so no double-toast risk with AdminShell's own
 // fetchDashboard toast).

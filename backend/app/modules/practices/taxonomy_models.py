@@ -12,7 +12,7 @@
 # behavior. See practices/service.py: _validate_taxonomy() /
 # _validate_style_choice().
 #
-# ПРОМТ №394 originally scoped this table to master-methods-only "to keep the
+# PROMPT №394 originally scoped this table to master-methods-only "to keep the
 # blast radius small" -- that was an explicit DEFERRAL, not a permanent
 # boundary (operator roadmap tail T2, DS-build-plan.md OPEN THREADS): unify
 # once the catalog was proven live on TEST. T2 is that deferred batch.
@@ -42,7 +42,7 @@ from app.core.mixins import TimestampMixin, UUIDMixin
 class TaxonomyDirection(UUIDMixin, TimestampMixin, Base):
     """A practice direction (Направление) -- e.g. "meditation" / "Медитация".
 
-    master_id (T22-6, ПРОМТ №561): NULL for every pre-existing / globally
+    master_id (T22-6, PROMPT №561): NULL for every pre-existing / globally
     promoted row (unchanged meaning -- visible to every master's catalog
     fetch). A value scopes the row to exactly one master: it never appears
     in another master's or a non-owner's `GET /taxonomy` response, only in

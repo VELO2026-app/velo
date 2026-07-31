@@ -26,7 +26,7 @@ _MethodStr = Annotated[str, StringConstraints(min_length=1, max_length=200)]
 class VerifyMasterRequest(BaseModel):
     """POST /admin/masters/{user_id}/verify -- request body.
 
-    promote (ПРОМТ №503 commit 3, mirrors ApproveMethodChangeRequest.promote
+    promote (PROMPT №503 commit 3, mirrors ApproveMethodChangeRequest.promote
     below): optional list of custom method labels from the applicant's own
     `methods` that the admin chose to add to the taxonomy catalog. Before this,
     only an ALREADY-VERIFIED master's later method-change request had any
@@ -49,7 +49,7 @@ class VerifyMasterRequest(BaseModel):
     master_only: list[str] = Field(
         default_factory=list,
         description=(
-            "T22-6 (ПРОМТ №561): custom method labels approved for THIS "
+            "T22-6 (PROMPT №561): custom method labels approved for THIS "
             "master only -- each gets a master-scoped taxonomy row, never "
             "visible to another master's picker."
         ),
@@ -211,7 +211,7 @@ class ApproveMethodChangeRequest(BaseModel):
     master_only: list[str] = Field(
         default_factory=list,
         description=(
-            "T22-6 (ПРОМТ №561): custom method labels approved for THIS "
+            "T22-6 (PROMPT №561): custom method labels approved for THIS "
             "master only -- each gets a master-scoped taxonomy row, never "
             "visible to another master's picker."
         ),

@@ -1,5 +1,5 @@
 # =============================================================================
-# VELO Backend -- Tests: Master Groups (P1, ПРОМТ №590; P3 addenda ПРОМТ №592)
+# VELO Backend -- Tests: Master Groups (P1, PROMPT №590; P3 addenda PROMPT №592)
 # =============================================================================
 #
 # telegram_id range: 99700-99799
@@ -269,7 +269,7 @@ async def test_create_group_empty_name_422(
 async def test_create_group_with_description(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """Owner Q4 (ПРОМТ №610): description round-trips on create."""
+    """Owner Q4 (PROMPT №610): description round-trips on create."""
     master = await _make_verified_master(client, db_session, 99776)
 
     resp = await client.post(
@@ -358,7 +358,7 @@ async def test_list_groups_includes_description(
 async def test_edit_description_only_leaves_name_untouched(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """Owner Q10 (ПРОМТ №611): PATCH with description sent alongside the
+    """Owner Q10 (PROMPT №611): PATCH with description sent alongside the
     SAME name updates only the description -- name-unchanged must not skip
     the description write (the trap in the old early-return shape)."""
     master = await _make_verified_master(client, db_session, 99780)
@@ -990,7 +990,7 @@ async def test_block_removes_waitlist_entries_for_this_master_only(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """Owner Q13 (ПРОМТ №613): block_student removes ACTIVE (waiting/
+    """Owner Q13 (PROMPT №613): block_student removes ACTIVE (waiting/
     notified) waitlist entries for THIS master's practices -- scoped
     exactly like the future-booking cancel above, never touching another
     master's queue for the same student (that's the next test)."""
@@ -1312,7 +1312,7 @@ async def test_derived_students_widened_beyond_attended_only(
 
 
 # ===================================================================
-# P3 addenda (ПРОМТ №592): GET /masters/me/tags, GET .../students/{id}/groups
+# P3 addenda (PROMPT №592): GET /masters/me/tags, GET .../students/{id}/groups
 # ===================================================================
 
 
@@ -1414,7 +1414,7 @@ async def test_student_groups_empty_when_no_custom_membership(
 
 
 # ===================================================================
-# P4 addenda (ПРОМТ №593): group invite links
+# P4 addenda (PROMPT №593): group invite links
 # ===================================================================
 #
 # BOT_URL is monkeypatched (same pattern as test_master_invite.py) so the
@@ -1587,7 +1587,7 @@ async def test_join_group_invalid_token_404(
 
 
 # ===================================================================
-# delete_group: orphan-audience guard (P5, ПРОМТ №606)
+# delete_group: orphan-audience guard (P5, PROMPT №606)
 # ===================================================================
 
 
@@ -1716,7 +1716,7 @@ async def test_delete_group_allowed_when_sole_audience_of_a_completed_practice(
 
 
 # ===================================================================
-# GET /masters/me/groups/search: cross-group people-search (P6, ПРОМТ №606)
+# GET /masters/me/groups/search: cross-group people-search (P6, PROMPT №606)
 # ===================================================================
 
 

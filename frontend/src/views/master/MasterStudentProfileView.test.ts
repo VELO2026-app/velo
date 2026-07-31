@@ -58,7 +58,7 @@
 // «посмотреть еще» label and «Хорошо» is BOTH the high mood label and the good
 // rating label.
 //
-// P3 ADDITIONS (ПРОМТ №592): two more seams now exist and are mocked below --
+// P3 ADDITIONS (PROMPT №592): two more seams now exist and are mocked below --
 // @/api/groups (getStudentGroups for the profile's group chips, blockStudent
 // for the block flow) and @/api/reports (createReport, imported by the REAL
 // child ReportUserSheet -- not stubbed, so its own module needs mocking here
@@ -770,7 +770,7 @@ describe('MasterStudentProfileView', () => {
     })
   })
 
-  describe('group chips (P3, ПРОМТ №592)', () => {
+  describe('group chips (P3, PROMPT №592)', () => {
     it('renders a VTag per custom group the student is in', async () => {
       vi.mocked(groupsApi.getStudentGroups).mockResolvedValue({
         groups: [
@@ -802,7 +802,7 @@ describe('MasterStudentProfileView', () => {
     })
   })
 
-  describe('block -> report-offer -> report form (P3, ПРОМТ №592)', () => {
+  describe('block -> report-offer -> report form (P3, PROMPT №592)', () => {
     // ⚠ buttonWith() only searches `host` -- VConfirmDialog/VModal and
     // VBottomSheet both TELEPORT to document.body (same trap the file's own
     // SendMessageModal tests already worked around with liveModal()). Two
@@ -836,7 +836,7 @@ describe('MasterStudentProfileView', () => {
       expect(modalButtonWith('Заблокировать')).toBeDefined()
     })
 
-    it('owner Q9 (ПРОМТ №610): the block-confirm dialog carries the TargetUserCard + a warning icon', async () => {
+    it('owner Q9 (PROMPT №610): the block-confirm dialog carries the TargetUserCard + a warning icon', async () => {
       mount()
       await flush()
 
@@ -852,7 +852,7 @@ describe('MasterStudentProfileView', () => {
       expect(modal?.querySelector('.v-confirm__panel svg')).not.toBeNull()
     })
 
-    it('T24-14 (ПРОМТ №634): «Отмена» is solid blue (primary), not the old outlined ghost', async () => {
+    it('T24-14 (PROMPT №634): «Отмена» is solid blue (primary), not the old outlined ghost', async () => {
       mount()
       await flush()
 
@@ -888,9 +888,9 @@ describe('MasterStudentProfileView', () => {
       expect(offerText).toContain('Пользователь перемещен в «Удаленные».')
       expect(modalButtonWith('Не сейчас')).toBeDefined()
       expect(modalButtonWith('В поддержку')).toBeDefined()
-      // G10 (ПРОМТ №609): compact-actions -> both buttons render at the
+      // G10 (PROMPT №609): compact-actions -> both buttons render at the
       // smaller VButton size, a sizing fix for the ORIGINAL long «Сообщить
-      // в поддержку» label. Owner Q1 (ПРОМТ №610) shortened the label
+      // в поддержку» label. Owner Q1 (PROMPT №610) shortened the label
       // itself to «В поддержку» afterward -- both changes stack; this
       // still asserts the sizing class survives on the new label.
       expect(modalButtonWith('Не сейчас')?.classList.contains('v-btn--sm')).toBe(true)
@@ -917,7 +917,7 @@ describe('MasterStudentProfileView', () => {
       expect(sheetOverlay()).toBeNull()
     })
 
-    it('T24-15 (ПРОМТ №634): the report-offer dialog carries the TargetUserCard + the peach panel, but NO icon -- opposite of the block-confirm dialog above', async () => {
+    it('T24-15 (PROMPT №634): the report-offer dialog carries the TargetUserCard + the peach panel, but NO icon -- opposite of the block-confirm dialog above', async () => {
       vi.mocked(groupsApi.blockStudent).mockResolvedValue({
         student_user_id: 's1',
         blocked_at: '2026-07-24T00:00:00Z',
@@ -940,7 +940,7 @@ describe('MasterStudentProfileView', () => {
       expect(modal?.querySelector('.v-confirm__panel svg')).toBeNull()
     })
 
-    it('T24-16 (ПРОМТ №634): «Не сейчас» is blue (primary), «В поддержку» is coral (danger) -- position-based colour rule', async () => {
+    it('T24-16 (PROMPT №634): «Не сейчас» is blue (primary), «В поддержку» is coral (danger) -- position-based colour rule', async () => {
       vi.mocked(groupsApi.blockStudent).mockResolvedValue({
         student_user_id: 's1',
         blocked_at: '2026-07-24T00:00:00Z',
@@ -987,7 +987,7 @@ describe('MasterStudentProfileView', () => {
       expect(sendBtn?.disabled).toBe(false)
     })
 
-    it('owner Q9/G14 (ПРОМТ №610): the report sheet ALSO has the card, but its notice panel has NO icon (unlike the two dialogs)', async () => {
+    it('owner Q9/G14 (PROMPT №610): the report sheet ALSO has the card, but its notice panel has NO icon (unlike the two dialogs)', async () => {
       mount()
       await flush()
 
@@ -1010,7 +1010,7 @@ describe('MasterStudentProfileView', () => {
       expect(noteEl?.querySelector('svg')).toBeNull()
     })
 
-    it('owner Q3 (ПРОМТ №610): «Отмена» in the report sheet dismisses it without sending', async () => {
+    it('owner Q3 (PROMPT №610): «Отмена» in the report sheet dismisses it without sending', async () => {
       mount()
       await flush()
 
@@ -1074,7 +1074,7 @@ describe('MasterStudentProfileView', () => {
       expect(success).toHaveBeenCalledWith('Заявка отправлена в поддержку')
     })
 
-    it('G12 (ПРОМТ №609): MULTI-select -- picking two reasons joins both into one reason string', async () => {
+    it('G12 (PROMPT №609): MULTI-select -- picking two reasons joins both into one reason string', async () => {
       vi.mocked(groupsApi.blockStudent).mockResolvedValue({
         student_user_id: 's1',
         blocked_at: '2026-07-24T00:00:00Z',
@@ -1171,7 +1171,7 @@ describe('MasterStudentProfileView', () => {
 // =============================================================================
 //
 // - satisfaction_pct. It is in StudentDetailResponse (generated.ts:1200) and the
-//   screen NEVER reads it -- the % stat card was removed in ПРОМТ №157 (.vue:41).
+//   screen NEVER reads it -- the % stat card was removed in PROMPT №157 (.vue:41).
 //   There is no derivation and no DOM to assert. Fixtures pass null to document
 //   that the field is dead on this screen, not to test it.
 //

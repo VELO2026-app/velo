@@ -87,13 +87,13 @@ def _valid_apply_body() -> dict:
             "email": "master@test.com",
         },
         "experience": {
-            # T21-6/T21-7 (ПРОМТ №547/548): _assert_master_confirmed_taxonomy
+            # T21-6/T21-7 (PROMPT №547/548): _assert_master_confirmed_taxonomy
             # requires the calling master to hold the exact direction/style
             # being created or updated. Widened to cover exactly what THIS
             # file's own tests exercise (bare yoga + its 3 styles used here,
             # bare breathwork) -- raw VALUES, matching this fixture's own
             # pre-existing style and the value-canonical comparison chosen in
-            # ПРОМТ №547, not "every direction in the catalog".
+            # PROMPT №547, not "every direction in the catalog".
             "methods": [
                 "meditation",
                 "yoga",
@@ -400,7 +400,7 @@ async def test_create_practice_invalid_duration(
 
 
 # ---------------------------------------------------------------------------
-# POST /practices -- concurrent double-submit (A4 V7 / ПРОМТ №571)
+# POST /practices -- concurrent double-submit (A4 V7 / PROMPT №571)
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
 async def test_concurrent_duplicate_creates_yield_exactly_one_practice(
@@ -483,7 +483,7 @@ async def test_create_practice_window_dedup_marks_the_second_response(
     db_session: AsyncSession,
 ) -> None:
     """A4 V6: a SEQUENTIAL retry within practice_duplicate_submit_window_
-    minutes (the ПРОМТ №559 case this dedup check was built for -- a
+    minutes (the PROMPT №559 case this dedup check was built for -- a
     frontend timeout, not a race) must be marked deduplicated=true on the
     SECOND response. Before this field existed, the second POST returned
     200-shaped success with no way for the master to tell it apart from a
@@ -910,7 +910,7 @@ async def test_list_master_practices_status_filter(
 
 
 # ---------------------------------------------------------------------------
-# GET /masters/me/practices -- T22-3/T22-5 bucket ordering (ПРОМТ №561)
+# GET /masters/me/practices -- T22-3/T22-5 bucket ordering (PROMPT №561)
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
 async def test_list_master_practices_bucket_upcoming_nearest_first(

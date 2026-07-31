@@ -1,6 +1,6 @@
 // =============================================================================
-// VELO Frontend -- Zoom link ladder (T21-1, ПРОМТ №541, owner decision D3;
-// A4 V2, ПРОМТ №572)
+// VELO Frontend -- Zoom link ladder (T21-1, PROMPT №541, owner decision D3;
+// A4 V2, PROMPT №572)
 // =============================================================================
 //
 // One place for the rule every Zoom entry point (user dashboard, practice-
@@ -40,7 +40,7 @@ function isValidHttpsUrl(value: string | null | undefined): value is string {
 
 /** Resolve which link (if any) a Zoom entry point should offer right now.
  *
- * meetingStatus (A4 V2, ПРОМТ №572): PracticeResponse/PracticeSummary's
+ * meetingStatus (A4 V2, PROMPT №572): PracticeResponse/PracticeSummary's
  * zoom_meeting_status verbatim -- 'create_failed' is the only value that
  * changes the outcome (-> kind 'failed' when neither link is available).
  * Every other value (including undefined/null, e.g. a caller that has not

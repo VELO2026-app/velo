@@ -29,7 +29,7 @@
 #   Read endpoints use get_db_reader.
 #   Mutating endpoints use get_db_session (write).
 #
-# ROUTE ORDER (ПРОМТ №557): every LITERAL-segment route in this router must
+# ROUTE ORDER (PROMPT №557): every LITERAL-segment route in this router must
 #   be declared before any PARAMETERISED route it shares a path prefix with,
 #   even when (as verified here, see the "/zoom/start" block below) the two
 #   don't actually collide -- a reader should never have to reason about
@@ -231,7 +231,7 @@ async def create_practice_endpoint(
 ) -> PracticeResponse:
     """Create a new practice (verified master only)."""
     user, _profile = master_tuple
-    # A4 V6 (ПРОМТ №572): deduplicated is True when create_practice returned
+    # A4 V6 (PROMPT №572): deduplicated is True when create_practice returned
     # an EXISTING practice (the window-scoped dedup check, or the TOCTOU
     # race-lost path, A4 V7) instead of creating a new one -- see that
     # function's own docstring.
@@ -246,7 +246,7 @@ async def create_practice_endpoint(
     # here) -- get_host_join_url returns None until then, which is correct.
     from app.modules.zoom.service import get_host_join_url, get_zoom_meeting_status
     host_join_url = await get_host_join_url(practice.id, session)
-    # A4 V2 (ПРОМТ №572): None here too, same reasoning as host_join_url --
+    # A4 V2 (PROMPT №572): None here too, same reasoning as host_join_url --
     # fetched anyway for consistency with the other three owner-only sites
     # (this is also the endpoint V6's deduplicated-practice response flows
     # through, where the returned practice IS already published and DOES
@@ -263,11 +263,11 @@ async def create_practice_endpoint(
 
 
 # ------------------------------------------------------------------
-# Zoom "Начать" (ПРОМТ №556, OWNER-1 option В) -- the master starts their
+# Zoom "Начать" (PROMPT №556, OWNER-1 option В) -- the master starts their
 # own meeting as host. See zoom/service.py's ticket-issuance docstring for
 # the full rationale (start_url never stored, never in a JSON body).
 #
-# ПРОМТ №557: GET "/zoom/start" is declared here, BEFORE GET "/{practice_id}"
+# PROMPT №557: GET "/zoom/start" is declared here, BEFORE GET "/{practice_id}"
 # below, on the SAME convention already documented at the top of this file
 # for GET "" vs GET "/{practice_id}" -- a literal-segment route must be
 # declared ahead of any parameterised route it could be confused with, so a
@@ -323,7 +323,7 @@ async def create_zoom_start_ticket_endpoint(
 
 
 # ------------------------------------------------------------------
-# A4 V2 (ПРОМТ №572): master-triggered retry for a permanently-failed
+# A4 V2 (PROMPT №572): master-triggered retry for a permanently-failed
 # meeting creation. RECON (before this endpoint existed): the background
 # retry poller (zoom/retry_poller.py) already re-attempts create_failed
 # rows automatically, so re-enqueueing was cheap -- attempt_zoom_meeting_
@@ -533,7 +533,7 @@ async def update_practice_endpoint(
     # non-None here if this update is the draft->scheduled publish).
     from app.modules.zoom.service import get_host_join_url, get_zoom_meeting_status
     host_join_url = await get_host_join_url(practice.id, session)
-    # A4 V2 (ПРОМТ №572): so a master publishing a draft (creating the Zoom
+    # A4 V2 (PROMPT №572): so a master publishing a draft (creating the Zoom
     # meeting) sees "готовится" immediately instead of a stale None.
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
     audience_group_names = await group_names_for_practice(practice, session)
@@ -546,7 +546,7 @@ async def update_practice_endpoint(
 
 
 # ------------------------------------------------------------------
-# POST /api/v1/practices/{id}/audience-preview -- dry-run (owner Q15, ПРОМТ №613)
+# POST /api/v1/practices/{id}/audience-preview -- dry-run (owner Q15, PROMPT №613)
 # ------------------------------------------------------------------
 @router.post(
     "/{practice_id}/audience-preview",
@@ -650,7 +650,7 @@ async def cancel_practice_endpoint(
     # row's status flips, which is correct (nothing to join anymore).
     from app.modules.zoom.service import get_host_join_url, get_zoom_meeting_status
     host_join_url = await get_host_join_url(practice.id, session)
-    # A4 V2 (ПРОМТ №572): will read 'deleted' after the cancel above --
+    # A4 V2 (PROMPT №572): will read 'deleted' after the cancel above --
     # correctly distinct from create_failed/pending_creation.
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
     return practice_to_response(

@@ -18,7 +18,7 @@
 
   Data reality (Q4=А):
     REAL  -- participants, date/time/duration, practice icon; check-in count
-             (checkin_count / max, owner-only -- E12 swap, ПРОМТ №419: was
+             (checkin_count / max, owner-only -- E12 swap, PROMPT №419: was
              insights.checkins mood tally, now distinct PRE check-ins, see
              practiceCardMeta.ts) + rating distribution (insights.feedbacks,
              reused from diaryStore cache like AnalyticsView, PAST tab only).
@@ -46,25 +46,15 @@
     </div>
 
     <!-- Loading -->
-    <div
-      v-if="currentLoading && currentItems.length === 0"
-      class="master-practices__loader"
-    >
+    <div v-if="currentLoading && currentItems.length === 0" class="master-practices__loader">
       <VLoader size="lg" />
     </div>
 
     <!-- Error (INITIAL load only -- a failed page-N is toasted by onLoadMore and
          must not replace the pages already on screen; mirrors the loading rung
          above and MyBookingsView.vue:28) -->
-    <div
-      v-else-if="currentError && currentItems.length === 0"
-      class="master-practices__content"
-    >
-      <VEmptyState
-        icon="warning"
-        title="Не удалось загрузить практики"
-        :description="currentError"
-      >
+    <div v-else-if="currentError && currentItems.length === 0" class="master-practices__content">
+      <VEmptyState icon="warning" title="Не удалось загрузить практики" :description="currentError">
         <VButton size="sm" variant="outline" @click="masterStore.refreshMyPractices()">
           Повторить
         </VButton>
@@ -176,13 +166,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import { VButton, VLoader, VEmptyState, VSegmentTrack, VRatingBadges } from '@/components/ui'
-import {
-  IconPlus,
-  IconGroup,
-  IconCheckin,
-  IconRepeat,
-  IconHourglass,
-} from '@/components/icons'
+import { IconPlus, IconGroup, IconCheckin, IconRepeat, IconHourglass } from '@/components/icons'
 import { useMasterStore } from '@/stores/master'
 import { useDiaryStore } from '@/stores/diary'
 import { useToast } from '@/composables/useToast'
@@ -207,11 +191,11 @@ const insightsCache = diaryStore.insightsCache
 // (otherwise a fresh mount always reset to «Предстоящие»).
 const activeTab = ref<'upcoming' | 'past'>(route.query.tab === 'past' ? 'past' : 'upcoming')
 
-// T22-3/T22-5 (ПРОМТ №561): the server now owns both the filter AND the
+// T22-3/T22-5 (PROMPT №561): the server now owns both the filter AND the
 // ordering per bucket (nearest-first for upcoming, most-recent-first for
 // past) -- no client-side filter/sort left to hide the next ordering bug.
 //
-// A4 V5 (ПРОМТ №571): fetchUpcomingPractices() is a one-shot cache -- it
+// A4 V5 (PROMPT №571): fetchUpcomingPractices() is a one-shot cache -- it
 // no-ops once upcomingLoaded is true (stores/master.ts:117-121) -- but the
 // backend transitions a practice scheduled/live -> completed BY WALL CLOCK
 // (the autofinalize worker, practices/service.py's state machine), not on
@@ -243,13 +227,17 @@ const currentItems = computed(() =>
   activeTab.value === 'past' ? pastPractices.value : upcomingPractices.value,
 )
 const currentLoading = computed(() =>
-  activeTab.value === 'past' ? masterStore.practicesPastLoading : masterStore.practicesUpcomingLoading,
+  activeTab.value === 'past'
+    ? masterStore.practicesPastLoading
+    : masterStore.practicesUpcomingLoading,
 )
 const currentError = computed(() =>
   activeTab.value === 'past' ? masterStore.practicesPastError : masterStore.practicesUpcomingError,
 )
 const currentHasMore = computed(() =>
-  activeTab.value === 'past' ? masterStore.practicesPastHasMore : masterStore.practicesUpcomingHasMore,
+  activeTab.value === 'past'
+    ? masterStore.practicesPastHasMore
+    : masterStore.practicesUpcomingHasMore,
 )
 
 const tabOptions = [
@@ -299,7 +287,7 @@ function ratingPct(id: string, key: 'fire' | 'good' | 'confused'): number {
 }
 
 /** Eager-load insights for the visible tab (idempotent: cached ids are skipped).
- *  E12 swap (ПРОМТ №419): the "Предстоящие" tab's check-in badge now reads
+ *  E12 swap (PROMPT №419): the "Предстоящие" tab's check-in badge now reads
  *  checkin_count straight off the practice, not insights -- so insights are
  *  only fetched for "Прошедшие" (rating badges). Upcoming skips the round-trip
  *  entirely. */

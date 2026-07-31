@@ -45,7 +45,7 @@
     <!-- List: compact bordered cards (NP-5/6/7); ~3 tall then scroll. The native
          ::-webkit-scrollbar is not painted by the iOS/Telegram webview for a
          touch-scroll container, so the block read as non-scrollable — a custom
-         always-visible thumb (item 6, ПРОМТ №233) shows position + that it scrolls. -->
+         always-visible thumb (item 6, PROMPT №233) shows position + that it scrolls. -->
     <div v-else-if="open" class="use-template__scrollwrap">
       <div ref="listEl" class="use-template__list" @scroll="syncScrollbar">
         <button
@@ -241,7 +241,7 @@ function select(p: PracticeResponse): void {
   display: none;
 }
 
-/* Custom always-visible scroll indicator (item 6, ПРОМТ №233): a faint track +
+/* Custom always-visible scroll indicator (item 6, PROMPT №233): a faint track +
    a --velo-primary thumb positioned from the scroll ratio (JS). Non-interactive
    (pointer-events:none) — it only signals position + that the block scrolls. */
 .use-template__scrollbar {

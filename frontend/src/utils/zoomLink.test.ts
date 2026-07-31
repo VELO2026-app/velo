@@ -7,7 +7,9 @@ import { resolveZoomLink } from '@/utils/zoomLink'
 
 describe('resolveZoomLink', () => {
   it('prefers the personal link when present and https', () => {
-    expect(resolveZoomLink('https://zoom.us/w/personal?tk=abc', 'https://zoom.us/j/manual')).toEqual({
+    expect(
+      resolveZoomLink('https://zoom.us/w/personal?tk=abc', 'https://zoom.us/j/manual'),
+    ).toEqual({
       kind: 'personal',
       url: 'https://zoom.us/w/personal?tk=abc',
     })
@@ -54,7 +56,7 @@ describe('resolveZoomLink', () => {
     expect(result.kind).not.toBe('personal')
   })
 
-  // A4 V2 (ПРОМТ №572): pending_creation and create_failed used to render
+  // A4 V2 (PROMPT №572): pending_creation and create_failed used to render
   // the identical 'pending' state -- the whole defect being fixed.
   describe('meetingStatus (create_failed vs pending_creation)', () => {
     it('reports failed when the meeting permanently failed and neither link exists', () => {

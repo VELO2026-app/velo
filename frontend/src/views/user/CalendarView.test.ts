@@ -50,7 +50,7 @@
 // rule: a
 // real find is reported, not silently patched inside a test task).
 //
-// TIMEZONE (SW2, fixed ПРОМТ №577): dayLabel now derives from the VIEWER's
+// TIMEZONE (SW2, fixed PROMPT №577): dayLabel now derives from the VIEWER's
 // profile timezone (viewerTz, .vue:205-208), matching the store's own
 // selectedDayPractices bucketing (store.ts:165-175) and CalendarPracticeCard's
 // rendered time -- previously it read the FIRST practice's OWN `.timezone`
@@ -249,10 +249,16 @@ function dayCellHasDot(b: HTMLButtonElement): boolean {
   return !!b.querySelector('.week-strip__dot--visible')
 }
 function nextWeekBtn(): HTMLButtonElement | undefined {
-  return host?.querySelector<HTMLButtonElement>('.week-strip__arrow[aria-label="Следующая неделя"]') ?? undefined
+  return (
+    host?.querySelector<HTMLButtonElement>('.week-strip__arrow[aria-label="Следующая неделя"]') ??
+    undefined
+  )
 }
 function prevWeekBtn(): HTMLButtonElement | undefined {
-  return host?.querySelector<HTMLButtonElement>('.week-strip__arrow[aria-label="Предыдущая неделя"]') ?? undefined
+  return (
+    host?.querySelector<HTMLButtonElement>('.week-strip__arrow[aria-label="Предыдущая неделя"]') ??
+    undefined
+  )
 }
 function selectPill(): HTMLButtonElement | undefined {
   return host?.querySelector<HTMLButtonElement>('.calendar__select-pill') ?? undefined
@@ -292,8 +298,12 @@ beforeEach(() => {
   pinia = createPinia()
   setActivePinia(pinia)
 
-  vi.mocked(practicesApi.getPractices).mockReset().mockResolvedValue(page([practice('p1')]))
-  vi.mocked(taxonomyApi.getActiveTaxonomy).mockReset().mockRejectedValue(new Error('offline in test'))
+  vi.mocked(practicesApi.getPractices)
+    .mockReset()
+    .mockResolvedValue(page([practice('p1')]))
+  vi.mocked(taxonomyApi.getActiveTaxonomy)
+    .mockReset()
+    .mockRejectedValue(new Error('offline in test'))
 
   useAuthStore().user = user()
 
@@ -352,14 +362,18 @@ describe('CalendarView', () => {
       await flush()
 
       const err = emptyByTitle('Не удалось загрузить')
-      expect(norm(err?.querySelector('.v-empty__desc')?.textContent)).toBe('Не удалось загрузить календарь')
+      expect(norm(err?.querySelector('.v-empty__desc')?.textContent)).toBe(
+        'Не удалось загрузить календарь',
+      )
     })
 
     it('error: Retry re-calls loadWeek through the store (not a page reload)', async () => {
       vi.mocked(practicesApi.getPractices).mockRejectedValue(new Error('Сервис недоступен'))
       mount()
       await flush()
-      vi.mocked(practicesApi.getPractices).mockClear().mockResolvedValue(page([practice('p1')]))
+      vi.mocked(practicesApi.getPractices)
+        .mockClear()
+        .mockResolvedValue(page([practice('p1')]))
 
       const retryBtn = Array.from(
         emptyByTitle('Не удалось загрузить')?.querySelectorAll<HTMLButtonElement>('button') ?? [],
@@ -383,7 +397,7 @@ describe('CalendarView', () => {
       expect(loader()).toBeNull()
     })
 
-    it('content: renders the selected day\'s practices with real titles and badges', async () => {
+    it("content: renders the selected day's practices with real titles and badges", async () => {
       vi.mocked(practicesApi.getPractices).mockResolvedValue(
         page([
           practice('p1', { title: 'Утренняя медитация', is_free: true }),
@@ -404,7 +418,7 @@ describe('CalendarView', () => {
 
   // ===========================================================================
   describe('day label + timezone', () => {
-    it('SW2: uses the VIEWER profile timezone, not the practice\'s own -- distinguishing fixture', async () => {
+    it("SW2: uses the VIEWER profile timezone, not the practice's own -- distinguishing fixture", async () => {
       // 20:00 UTC on the 20th (after NOW=12:00Z, so not filtered as
       // already-started). In the VIEWER's Moscow (UTC+3) that's 23:00 on the
       // 20th -- the SAME calendar day as NOW there (15:00 on the 20th), which
@@ -418,7 +432,9 @@ describe('CalendarView', () => {
       // test, "Сегодня" alone can't be produced by both branches by
       // coincidence.
       vi.mocked(practicesApi.getPractices).mockResolvedValue(
-        page([practice('p1', { scheduled_at: '2026-07-20T20:00:00Z', timezone: 'Asia/Yekaterinburg' })]),
+        page([
+          practice('p1', { scheduled_at: '2026-07-20T20:00:00Z', timezone: 'Asia/Yekaterinburg' }),
+        ]),
       )
       mount()
       await flush()
@@ -426,7 +442,7 @@ describe('CalendarView', () => {
       expect(dateHeader()).toBe('Сегодня')
     })
 
-    it('dot-marker bucketing uses the VIEWER profile timezone, not the practice\'s own -- distinguishing fixture', async () => {
+    it("dot-marker bucketing uses the VIEWER profile timezone, not the practice's own -- distinguishing fixture", async () => {
       // 22:30 UTC on the 20th: in the practice's OWN tz (UTC, if unset -> the
       // fixture default) it's still the 20th, but in the VIEWER's Moscow
       // (UTC+3) it's already 01:30 on the 21st. daysWithPractices buckets by
@@ -654,7 +670,9 @@ describe('CalendarView', () => {
   describe('money (NBSP)', () => {
     it('a priced, non-free, non-paid practice renders the REAL formatted price above 999 (NBSP-safe)', async () => {
       vi.mocked(practicesApi.getPractices).mockResolvedValue(
-        page([practice('p1', { is_free: false, is_paid: false, price_cents: 152350, currency: 'EUR' })]),
+        page([
+          practice('p1', { is_free: false, is_paid: false, price_cents: 152350, currency: 'EUR' }),
+        ]),
       )
       mount()
       await flush()

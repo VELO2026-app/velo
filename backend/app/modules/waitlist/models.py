@@ -12,7 +12,7 @@
 #   left      -> waiting (re-join: UPDATE position + joined_at + status)
 #   declined  -> waiting (re-join)
 #   expired   -> waiting (re-join)
-#   removed   -> waiting (re-join, ПРОМТ №613 -- see below)
+#   removed   -> waiting (re-join, PROMPT №613 -- see below)
 #
 # POSITION:
 #   Stored column, computed at INSERT/re-join via subquery:
@@ -62,7 +62,7 @@ class WaitlistStatus(enum.StrEnum):
     LEFT = "left"
     DECLINED = "declined"
     EXPIRED = "expired"
-    # ПРОМТ №613, owner Q13: the master removed this entry via block_student
+    # PROMPT №613, owner Q13: the master removed this entry via block_student
     # -- distinct from LEFT/DECLINED (both user-initiated) because the
     # cause is different and worth keeping honest in the status history,
     # same reasoning as Booking.cancellation_reason distinguishing
@@ -78,7 +78,7 @@ class WaitlistStatus(enum.StrEnum):
 # REJOINABLE, not in ACTIVE) and fall through to INSERT
 # which hits UniqueConstraint.
 #
-# REMOVED added (ПРОМТ №613): a blocked-then-unblocked student must be able
+# REMOVED added (PROMPT №613): a blocked-then-unblocked student must be able
 # to join this SAME practice's waitlist again like anyone else -- omitting
 # it here would permanently lock them out via the (practice_id, user_id)
 # UniqueConstraint (the terminal row can never be re-inserted, only
