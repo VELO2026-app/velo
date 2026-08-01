@@ -73,10 +73,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { IconSend } from '@/components/icons'
 import { useDiaryStore } from '@/stores/diary'
 import { useToast } from '@/composables/useToast'
+import { visibleHeight } from '@/composables/useViewportGeometry'
 
 const MAX_LEN = 10000
 
@@ -155,18 +156,16 @@ watch(text, (val) => {
 watch(() => props.entryType, loadDraft)
 
 // Recompute the grow cap when the visual viewport changes (iOS keyboard show /
-// hide), since the available space above the keyboard bounds the composing cap.
-function onViewportResize(): void {
+// hide), since the available space above the keyboard bounds the composing
+// cap. PROMPT №657: reads the shared `visibleHeight` ref from
+// useViewportGeometry.ts instead of its own visualViewport listener -- one
+// less independent reader of the raw platform signal.
+watch(visibleHeight, () => {
   if (composing.value) autogrow()
-}
+})
 
 onMounted(() => {
   loadDraft()
-  window.visualViewport?.addEventListener('resize', onViewportResize)
-})
-
-onBeforeUnmount(() => {
-  window.visualViewport?.removeEventListener('resize', onViewportResize)
 })
 
 // -- Compose focus state -----------------------------------------------------
@@ -202,7 +201,11 @@ function openCompose(): void {
 function autogrow(): void {
   const el = inputEl.value
   if (!el) return
-  const vh = window.visualViewport?.height ?? window.innerHeight
+  // PROMPT №657: the shared visibleHeight ref (useViewportGeometry.ts), not
+  // a bare window.visualViewport read -- falls back to innerHeight only if
+  // the module never published (no visualViewport support at all; a real
+  // published height is never 0).
+  const vh = visibleHeight.value || window.innerHeight
   const cap = composing.value
     ? Math.max(
         COMPOSING_HEIGHT_FLOOR,

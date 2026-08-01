@@ -1,20 +1,30 @@
 <!--
-  TEMPORARY DIAGNOSTIC -- PROMPT №654 (T24-1/B29). NOT design-system UI: do not
-  theme it, do not keep it. Ships to prod for ONE device screenshot from the
-  owner's Android with the diary composer open, then gets removed in a
-  follow-up commit (see the removal note in this prompt's commit body).
+  TEMPORARY DIAGNOSTIC -- PROMPT №654/656/657 (T24-1/B29). NOT design-system
+  UI: do not theme it, do not keep it. Ships to prod for ONE device
+  screenshot from the owner's Android with the diary composer open, then gets
+  removed in a follow-up commit (see the removal note in this prompt's commit
+  body).
 
-  Visibility: mounted by DiaryFeedView.vue behind `authStore.role === 'admin'`
-  only -- the owner's own account, no separate switch to flip. A normal user
-  role never sees this file execute.
+  Visibility: mounted by DiaryFeedView.vue behind a hidden tap gesture on the
+  title (persisted in localStorage) -- see DiaryFeedView.vue's onTitleTap.
 
-  Every value below is READ-ONLY: it queries window/document/CSS state and the
-  SAME isKeyboardOpen/nativeKeyboardDelta functions the real mechanism calls,
-  but never writes a style, a class, or a listener onto .diary-feed /
-  .diary-feed__composer / #app / html -- the elements under test. Its own box
-  is `position: fixed; top: 0` in plain, literal pixel values (no --velo-* var,
-  no design token) so a bug in the thing being diagnosed cannot also mis-place
-  the diagnostic itself.
+  PROMPT №657: reports what useViewportGeometry.ts -- the ONE place in the
+  tree that now reads raw visualViewport height/offset or the tma.js viewport
+  SDK for keyboard state -- actually PUBLISHED (its CSS vars + its exported
+  refs, imported directly here, not re-derived). This panel does NOT read
+  window.visualViewport.height/offsetTop or call viewport.isMounted() /
+  stableHeight() itself anymore (it did in №654/656) -- that would have made
+  TWO readers again, exactly the defect this rebuild exists to remove. Three
+  things it still reads directly, deliberately, because they are NOT part of
+  what useViewportGeometry computes and so cannot duplicate it: basic device
+  metrics (innerHeight/screen.height/devicePixelRatio/pageTop), the RAW
+  window.Telegram.WebApp surface (a third, independent platform layer, kept
+  as a cross-check per the original №654 ask), and the composer element's own
+  DOM geometry (a measurement of the RESULT, not an input). Writes no style,
+  class, or listener onto .diary-feed / .diary-feed__composer / #app / html
+  -- the elements under test. Its own box is `position: fixed; top: 0` in
+  plain, literal pixel values (no --velo-* var, no design token) so a bug in
+  the thing being diagnosed cannot also mis-place the diagnostic itself.
 -->
 <template>
   <div class="kbd-debug" aria-hidden="true">
@@ -27,9 +37,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue'
-import { viewport } from '@tma.js/sdk-vue'
-import { KEYBOARD_VIEWPORT_THRESHOLD } from '@/utils/constants'
-import { isKeyboardOpen, nativeKeyboardDelta } from '@/utils/keyboardDetection'
+import {
+  keyboardOpen as canonicalKeyboardOpen,
+  keyboardSignal as canonicalKeyboardSignal,
+  visibleHeight as canonicalVisibleHeight,
+  viewportOffsetTop as canonicalOffsetTop,
+} from '@/composables/useViewportGeometry'
 
 const POLL_MS = 300
 
@@ -58,26 +71,18 @@ function collect(): void {
   const innerH = window.innerHeight
   const screenH = window.screen?.height
   const dpr = window.devicePixelRatio
-  const vvH = vv?.height ?? null
-  const vvOffsetTop = vv?.offsetTop ?? null
+  // pageTop only -- height/offsetTop come from the canonical refs below, not
+  // re-read here (see the file header: reading them again would restore the
+  // exact "two readers" defect this rebuild removed).
   const vvPageTop = (vv as unknown as { pageTop?: number } | null)?.pageTop ?? null
-
-  const browserDelta = vvH !== null ? innerH - vvH : null
-
-  const tmaMounted = viewport.isMounted()
-  const tmaStable = tmaMounted ? viewport.isStable() : null
-  const tmaHeight = tmaMounted ? viewport.height() : null
-  const tmaStableHeight = tmaMounted ? viewport.stableHeight() : null
-  const nativeDelta = nativeKeyboardDelta()
-  const usedBranch = nativeDelta !== null ? 'NATIVE' : 'BROWSER'
-  const kbOpen =
-    vvH !== null ? isKeyboardOpen(nativeDelta, innerH, vvH, KEYBOARD_VIEWPORT_THRESHOLD) : null
 
   const wa = readTelegramWebApp()
 
   const root = document.documentElement
   const frozenVh = getComputedStyle(root).getPropertyValue('--velo-frozen-vh').trim() || '(unset)'
   const veloVvh = getComputedStyle(root).getPropertyValue('--velo-vvh').trim() || '(unset)'
+  const veloVvOffset =
+    getComputedStyle(root).getPropertyValue('--velo-vv-offset').trim() || '(unset)'
   const htmlKbOpen = root.classList.contains('is-keyboard-open')
 
   const feedEl = document.querySelector('.diary-feed')
@@ -86,30 +91,32 @@ function collect(): void {
   const composerBottom = composerEl ? getComputedStyle(composerEl).bottom : 'n/a (not mounted)'
   const rect = composerEl?.getBoundingClientRect() ?? null
 
+  // The true visible rect, in layout-box coordinates -- offsetTop is the
+  // ONLY new number this whole rebuild is about; bottom = offset + height is
+  // computeKeyboardBottomOffset's other half, made visible in plain terms.
+  const visibleTop = canonicalOffsetTop.value
+  const visibleBottom = canonicalOffsetTop.value + canonicalVisibleHeight.value
+
   lines.value = [
     ['window.innerHeight', fmt(innerH)],
     ['window.screen.height', fmt(screenH)],
     ['devicePixelRatio', fmt(dpr)],
-    ['visualViewport.height', fmt(vvH)],
-    ['visualViewport.offsetTop', fmt(vvOffsetTop)],
-    ['visualViewport.pageTop', fmt(vvPageTop)],
-    ['browserDelta (inner - vv.h)', fmt(browserDelta)],
-    ['KEYBOARD_VIEWPORT_THRESHOLD', fmt(KEYBOARD_VIEWPORT_THRESHOLD)],
-    ['--- @tma.js/sdk-vue viewport ---', ''],
-    ['viewport.isMounted()', String(tmaMounted)],
-    ['viewport.isStable()', String(tmaStable)],
-    ['viewport.height()', fmt(tmaHeight)],
-    ['viewport.stableHeight()', fmt(tmaStableHeight)],
-    ['nativeDelta (stable - height)', fmt(nativeDelta)],
-    ['isKeyboardOpen USED BRANCH', usedBranch],
-    ['isKeyboardOpen() result', String(kbOpen)],
-    ['--- window.Telegram.WebApp (raw) ---', ''],
+    ['visualViewport.pageTop (not tracked by the module)', fmt(vvPageTop)],
+    ['--- window.Telegram.WebApp (raw, independent cross-check) ---', ''],
     ['WebApp.viewportHeight', wa.vh],
     ['WebApp.viewportStableHeight', wa.vsh],
     ['WebApp.isExpanded', wa.exp],
-    ['--- CSS vars / classes ---', ''],
+    ['--- useViewportGeometry canonical refs (the ONE reader) ---', ''],
+    ['visibleHeight', fmt(canonicalVisibleHeight.value)],
+    ['viewportOffsetTop', fmt(canonicalOffsetTop.value)],
+    ['keyboardOpen', String(canonicalKeyboardOpen.value)],
+    ['keyboardSignal (WHICH signal decided it)', canonicalKeyboardSignal.value],
+    ['visible rect: top (=offsetTop)', fmt(visibleTop)],
+    ['visible rect: bottom (=offset+visibleHeight)', fmt(visibleBottom)],
+    ['--- CSS vars / classes published by the module ---', ''],
     ['--velo-frozen-vh', frozenVh],
     ['--velo-vvh', veloVvh],
+    ['--velo-vv-offset', veloVvOffset],
     ['html.is-keyboard-open present', String(htmlKbOpen)],
     ['.diary-feed--composing present', String(composingOn)],
     ['--- composer element ---', ''],

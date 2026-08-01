@@ -711,6 +711,25 @@ onBeforeUnmount(() => {
   pointer-events: auto;
 }
 
+/* PROMPT №658 (Navigator's call, not the owner's): the header is `top:0` of
+   the same frozen-height box the composer sits `bottom:0` of, so it is
+   equally vulnerable to a visual-viewport pan -- when the pan pushes the
+   visible window's top down by `--velo-vv-offset` px, the header (still
+   drawn at the box's TRUE top) ends up above the panned-down visible area
+   entirely. This is what the owner's own screenshot (e) showed: the back
+   button and the title gone off the top of the screen, in the SAME capture
+   that showed the composer clipped at the bottom. Same signal, same module,
+   the other half of the same defect. Compensates by shifting `top` down by
+   the live offset, so the header tracks the visible window's top instead of
+   the frozen box's. AT REST (no is-keyboard-open, no composing, offset
+   always 0) this selector never matches -> layout is byte-identical to
+   before, same reasoning and same proof method as the composer rule below.
+   Does NOT touch #app/html/body (BG-ROOT stays untouched) -- scoped to this
+   one diary-owned element only, same as the composer. */
+html.is-keyboard-open .diary-feed--composing .diary-feed__header {
+  top: var(--velo-vv-offset, 0px);
+}
+
 .diary-feed__title {
   font-family: var(--font-heading);
   font-size: var(--text-base);
@@ -931,25 +950,29 @@ onBeforeUnmount(() => {
   padding-bottom: calc(var(--space-4) + 5px + env(safe-area-inset-bottom, 0px));
 }
 
-/* T24-1: reposition the composer above the LIVE keyboard, not the frozen
-   box's own bottom edge. `.diary-feed__composer` is bottom:0 of `.diary-feed`
-   (position:relative), whose own height inherits the frozen `--velo-frozen-vh`
-   box (global.css BG-FREEZE) all the way down -- immune by construction to any
-   live viewport signal. That's correct at rest, but on a platform where the
-   keyboard actually shrinks the visible surface (not just overlays it), the
-   frozen box now overflows the real screen and bottom:0 lands beyond what's
-   visible. `--velo-vvh` (live) and `html.is-keyboard-open` are the signal
-   useBackgroundStabilizer already publishes for exactly this; global.css
-   explicitly excludes fill-mode screens (this one) from the shared
-   `.velo-kbd-scroll` mechanism because they "own their keyboard handling
-   directly" -- this is the diary doing that. `frozen - vvh` is the shrink
-   amount; shifting `bottom` up by it re-anchors the composer to the live
-   bottom edge instead of the frozen one. AT REST (no is-keyboard-open) this
-   selector never matches -> layout is byte-identical to before. Does NOT
-   touch #app/html/body (BG-ROOT stays untouched) -- scoped to this one
-   diary-owned element only. */
+/* T24-1, corrected PROMPT №657: reposition the composer above the LIVE
+   keyboard, not the frozen box's own bottom edge. `.diary-feed__composer` is
+   bottom:0 of `.diary-feed` (position:relative), whose own height inherits
+   the frozen `--velo-frozen-vh` box (global.css BG-FREEZE) all the way down
+   -- immune by construction to any live viewport signal. `--velo-vvh` /
+   `--velo-vv-offset` / `html.is-keyboard-open` are published by the ONE
+   canonical reader now, useViewportGeometry.ts (composables/) -- see its own
+   header for what this replaces (four independent readers, one of them this
+   exact rule, none of which ever read `offsetTop`).
+   THE FIX: `frozen - vvh` alone (the pre-№657 formula) assumed the visible
+   window's TOP always coincides with the layout box's top -- true only when
+   the browser hasn't panned the visual viewport. When it has (a documented,
+   real browser/WebView behavior -- see the PROMPT №657 DONE report's search
+   findings), the true visible bottom is `offsetTop + vvh`, not `vvh` alone,
+   so the shift must also subtract `--velo-vv-offset`
+   (computeKeyboardBottomOffset in useViewportGeometry.ts is this exact
+   formula, unit-tested including the pan case). AT REST (no
+   is-keyboard-open, offset always 0) this selector never matches and the var
+   is unset -> layout is byte-identical to before. Does NOT touch
+   #app/html/body (BG-ROOT stays untouched) -- scoped to this one diary-owned
+   element only. */
 html.is-keyboard-open .diary-feed--composing .diary-feed__composer {
-  bottom: calc(var(--velo-frozen-vh, 100%) - var(--velo-vvh, 100%));
+  bottom: calc(var(--velo-frozen-vh, 100%) - var(--velo-vvh, 100%) - var(--velo-vv-offset, 0px));
 }
 
 /* -- Compose write-mode tap-catcher --
