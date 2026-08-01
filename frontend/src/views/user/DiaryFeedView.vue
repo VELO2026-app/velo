@@ -254,6 +254,12 @@
       @search="onApplySearch"
       @close="showSearch = false"
     />
+
+    <!-- TEMPORARY -- PROMPT №654 (T24-1/B29 device diagnostic). Admin-only
+         (authStore.role, an existing flag -- no new switch), read-only, plain
+         position:fixed. Remove in the follow-up commit named in this one's
+         body. -->
+    <DiaryKeyboardDebugPanel v-if="authStore.role === 'admin'" />
   </div>
 </template>
 
@@ -268,6 +274,7 @@ import DiaryList from '@/components/shared/DiaryList.vue'
 import DiaryComposer from '@/components/shared/DiaryComposer.vue'
 import DiaryFilterModal from '@/components/shared/DiaryFilterModal.vue'
 import DiarySearchModal from '@/components/shared/DiarySearchModal.vue'
+import DiaryKeyboardDebugPanel from '@/components/shared/DiaryKeyboardDebugPanel.vue'
 import { useDiaryStore } from '@/stores/diary'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
