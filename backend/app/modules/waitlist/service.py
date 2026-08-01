@@ -350,31 +350,23 @@ async def confirm_waitlist(
     if entry.status != WaitlistStatus.NOTIFIED.value:
         raise BadRequestError("Can only confirm a notified waitlist entry")
 
-    # Practice guards -- confirm_waitlist is the OTHER path that creates a
-    # CONFIRMED booking with a real charge, so it must refuse the same
-    # states create_booking refuses (bookings/service.py). Without these,
-    # a holder could convert their offer on a CANCELLED / COMPLETED
-    # practice, or one that has already started -- taking money for a
-    # slot that no longer exists. Scheduled-only (not LIVE): the waitlist
-    # is a pre-start queue -- join_waitlist itself requires SCHEDULED.
     now = datetime.now(UTC)
-    if practice.status != PracticeStatus.SCHEDULED.value:
-        raise BadRequestError(
-            "Practice is no longer available for confirmation"
-        )
-    if practice.scheduled_at <= now:
-        raise BadRequestError(
-            "Cannot confirm a spot on a practice that has already started"
-        )
 
-    # Lazy expiration check.
-    # Returns (entry, None) instead of raising -- changes must commit.
+    # Lazy expiration check -- MUST run before the practice guards below.
+    # This is the ONLY place in the codebase that performs the
+    # NOTIFIED -> EXPIRED transition (lazy design: no background sweeper).
+    # The guards raise, and a raise means the request session rolls back;
+    # if they ran first, an overdue NOTIFIED entry on a cancelled/started
+    # practice would hit the raise before ever expiring and stay NOTIFIED
+    # forever ("stuck NOTIFIED" regression). Expiry instead returns
+    # (entry, None) precisely so the router commits the state change.
     if entry.expires_at and entry.expires_at < now:
         entry.status = WaitlistStatus.EXPIRED.value
 
         # Comms (T1, dictionary §2): waitlist.expired to the holder --
-        # the held spot lapsed; process_waitlist below hands it to the
-        # next in line (who gets their own waitlist.spot_available).
+        # the held spot lapsed. Emitted UNCONDITIONALLY: the holder's
+        # hold is honestly closed regardless of what happened to the
+        # practice.
         from app.core.events.notify import emit_notification
         await emit_notification(
             session,
@@ -394,7 +386,18 @@ async def confirm_waitlist(
             },
         )
 
-        await process_waitlist(entry.practice_id, session)
+        # Hand the spot to the next in line ONLY if the practice is still
+        # confirmable. process_waitlist has no practice-state guard of its
+        # own: on a cancelled/started practice it would blindly NOTIFY the
+        # next waiter (spot_available + 30-min window), who would then hit
+        # the guards below, expire, and the chain would walk the whole
+        # queue with pointless pings. `practice` is already loaded and
+        # locked above.
+        if (
+            practice.status == PracticeStatus.SCHEDULED.value
+            and practice.scheduled_at > now
+        ):
+            await process_waitlist(entry.practice_id, session)
 
         logger.info(
             "waitlist_confirm_expired",
@@ -403,6 +406,26 @@ async def confirm_waitlist(
             expires_at=entry.expires_at.isoformat(),
         )
         return entry, None
+
+    # Practice guards -- confirm_waitlist is the OTHER path that creates a
+    # CONFIRMED booking with a real charge, so it must refuse the same
+    # states create_booking refuses (bookings/service.py). Without these,
+    # a holder could convert their offer on a CANCELLED / COMPLETED
+    # practice, or one that has already started -- taking money for a
+    # slot that no longer exists. Scheduled-only (not LIVE): the waitlist
+    # is a pre-start queue -- join_waitlist itself requires SCHEDULED.
+    # Placed AFTER lazy expiry (expiry must commit; these raise ->
+    # rollback) and BEFORE the access/capacity checks (a dead practice
+    # must 400 outright -- if capacity ran first, an alive holder on a
+    # full started practice would be soft-returned to WAITING instead).
+    if practice.status != PracticeStatus.SCHEDULED.value:
+        raise BadRequestError(
+            "Practice is no longer available for confirmation"
+        )
+    if practice.scheduled_at <= now:
+        raise BadRequestError(
+            "Cannot confirm a spot on a practice that has already started"
+        )
 
     # P5 (ПРОМТ №594, the carried seam from P1): reject a viewer blocked by
     # this practice's master, or outside its configured audience. This is

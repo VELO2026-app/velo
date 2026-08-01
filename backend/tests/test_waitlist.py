@@ -44,8 +44,18 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
 
 
 async def _do_cleanup(session: AsyncSession) -> None:
-    """Full ORM cleanup for telegram_id 62000-62999."""
+    """Full ORM cleanup for telegram_id 62000-62999.
+
+    H-R1: also cleans the 89600-89619 band issued for the stuck-NOTIFIED
+    regression tests (the legacy 62xxx ids in this file predate the band
+    registry and are left untouched).
+    """
+    # Commit between the two calls: full_cleanup_range opens with
+    # session.rollback(), which would discard the first range's
+    # uncommitted deletes.
     await full_cleanup_range(session, 62000, 62999, delete_users=False)
+    await session.commit()
+    await full_cleanup_range(session, 89600, 89619, delete_users=False)
     await session.commit()
 
 
@@ -554,6 +564,17 @@ async def test_confirm_waitlist_on_started_practice_rejected(
     resp = await client.post(f"{WAITLIST_URL}/{wid}/confirm", headers=headers)
     assert resp.status_code == 400
 
+    # H-R1 twin of the guard reorder: an ALIVE (non-expired) hold on a
+    # started practice must stay NOTIFIED -- the raise path (rollback)
+    # is still the one taken, not the expiry commit path.
+    db_session.expire_all()
+    entry = (
+        await db_session.execute(
+            select(Waitlist).where(Waitlist.id == wid)
+        )
+    ).scalar_one()
+    assert entry.status == "notified"
+
 
 @pytest.mark.asyncio
 async def test_confirm_waitlist_creates_zoom_registrant(
@@ -677,6 +698,20 @@ async def test_confirm_waitlist_expired(
     )
     wid = join_resp.json()["id"]
 
+    # H-R1 (twin of the dead-practice handoff gate): a SECOND waiter in
+    # the queue -- on a LIVE practice the expiry branch must hand the
+    # spot to them. Joins BEFORE the filler cancels (join_waitlist
+    # requires a full practice).
+    second = await login_user(
+        client, telegram_id=89600, first_name="SecondWaiter",
+    )
+    second_join = await client.post(
+        WAITLIST_JOIN_URL.format(practice_id=pid),
+        headers=auth_headers(second["session_token"]),
+    )
+    assert second_join.status_code == 201
+    second_id = second["user"]["id"]
+
     # Cancel filler -> waiter notified.
     await client.delete(
         f"{BOOKINGS_URL}/{filler['booking_id']}",
@@ -698,6 +733,197 @@ async def test_confirm_waitlist_expired(
         headers=headers,
     )
     assert confirm_resp.status_code == 400
+
+    # H-R1 post-state (not just the status code): the overdue hold is
+    # EXPIRED in the DB (the 400 came from the soft commit path, not a
+    # rollback) and the spot moved on to the next in line.
+    from app.core.events.models import OutboxEvent
+
+    db_session.expire_all()
+    entry = (
+        await db_session.execute(
+            select(Waitlist).where(Waitlist.id == wid)
+        )
+    ).scalar_one()
+    assert entry.status == "expired"
+
+    second_entry = (
+        await db_session.execute(
+            select(Waitlist).where(
+                Waitlist.practice_id == uuid.UUID(pid),
+                Waitlist.user_id == uuid.UUID(second_id),
+            )
+        )
+    ).scalar_one()
+    assert second_entry.status == "notified"
+
+    spot_events = (
+        await db_session.execute(
+            select(OutboxEvent).where(
+                OutboxEvent.payload["type"].astext
+                == "waitlist.spot_available",
+                OutboxEvent.payload["target_value"].astext == second_id,
+            )
+        )
+    ).scalars().all()
+    assert len(spot_events) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("dead_state", ["started", "cancelled"])
+async def test_confirm_waitlist_expired_on_dead_practice(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    dead_state: str,
+) -> None:
+    """H-R1 regression test (stuck NOTIFIED): an OVERDUE hold on a dead
+    practice (started or cancelled) must still expire and COMMIT.
+
+    Before the guard reorder the practice guards raised first, the
+    session rolled back, and the entry stayed NOTIFIED forever (the
+    NOTIFIED -> EXPIRED transition lives only in confirm_waitlist).
+
+    Post-state asserted, per the negative-twins methodology:
+    - entry is EXPIRED in the DB;
+    - no booking was created for the holder;
+    - the next in line STAYED WAITING (handoff gated on a dead practice);
+    - outbox: waitlist.expired to the holder, NO waitlist.spot_available
+      to the next in line.
+    """
+    from datetime import UTC
+    from uuid import UUID as _UUID
+
+    from sqlalchemy import update as _update
+
+    from app.core.events.models import OutboxEvent
+    from app.modules.bookings.models import Booking
+    from app.modules.practices.models import Practice, PracticeStatus
+
+    master = await _make_verified_master(
+        client, db_session, telegram_id=89601,
+    )
+    pid = await _create_scheduled_practice(
+        client, master, max_participants=1,
+    )
+    filler = await _fill_practice(client, pid, telegram_id=89602)
+
+    holder = await login_user(
+        client, telegram_id=89603, first_name="Holder",
+    )
+    holder_headers = auth_headers(holder["session_token"])
+    holder_id = holder["user"]["id"]
+    wid = (
+        await client.post(
+            WAITLIST_JOIN_URL.format(practice_id=pid),
+            headers=holder_headers,
+        )
+    ).json()["id"]
+
+    second = await login_user(
+        client, telegram_id=89604, first_name="NextInLine",
+    )
+    second_id = second["user"]["id"]
+    second_join = await client.post(
+        WAITLIST_JOIN_URL.format(practice_id=pid),
+        headers=auth_headers(second["session_token"]),
+    )
+    assert second_join.status_code == 201
+
+    # Cancel the filler -> holder becomes NOTIFIED with a window.
+    await client.delete(
+        f"{BOOKINGS_URL}/{filler['booking_id']}",
+        headers=auth_headers(filler["session_token"]),
+    )
+
+    # Overdue hold + dead practice. The dead state is set by DIRECT
+    # update (never via the cancellation flow -- that flow has its own
+    # waitlist side effects and the test must probe the guard, not the
+    # flow): started -> scheduled_at in the past; cancelled -> status.
+    await db_session.execute(
+        update(Waitlist)
+        .where(Waitlist.id == wid)
+        .values(
+            expires_at=datetime.now(UTC) - timedelta(hours=1),
+        )
+    )
+    if dead_state == "started":
+        await db_session.execute(
+            _update(Practice)
+            .where(Practice.id == _UUID(pid))
+            .values(
+                scheduled_at=(
+                    datetime.now(UTC) - timedelta(minutes=5)
+                ),
+            )
+        )
+    else:
+        await db_session.execute(
+            _update(Practice)
+            .where(Practice.id == _UUID(pid))
+            .values(status=PracticeStatus.CANCELLED.value)
+        )
+    await db_session.commit()
+
+    confirm_resp = await client.post(
+        f"{WAITLIST_URL}/{wid}/confirm",
+        headers=holder_headers,
+    )
+    assert confirm_resp.status_code == 400
+
+    db_session.expire_all()
+
+    # Holder's entry is EXPIRED and COMMITTED (the whole point of H-R1).
+    entry = (
+        await db_session.execute(
+            select(Waitlist).where(Waitlist.id == wid)
+        )
+    ).scalar_one()
+    assert entry.status == "expired"
+
+    # No booking materialized for the holder.
+    bookings = (
+        await db_session.execute(
+            select(Booking).where(
+                Booking.practice_id == _UUID(pid),
+                Booking.user_id == _UUID(holder_id),
+            )
+        )
+    ).scalars().all()
+    assert bookings == []
+
+    # Handoff gate: the next in line was NOT offered a dead practice.
+    second_entry = (
+        await db_session.execute(
+            select(Waitlist).where(
+                Waitlist.practice_id == _UUID(pid),
+                Waitlist.user_id == _UUID(second_id),
+            )
+        )
+    ).scalar_one()
+    assert second_entry.status == "waiting"
+
+    # Outbox: the holder's hold is honestly closed...
+    expired_events = (
+        await db_session.execute(
+            select(OutboxEvent).where(
+                OutboxEvent.payload["type"].astext == "waitlist.expired",
+                OutboxEvent.payload["target_value"].astext == holder_id,
+            )
+        )
+    ).scalars().all()
+    assert len(expired_events) == 1
+
+    # ...and NO spot_available went to the next in line.
+    spot_events = (
+        await db_session.execute(
+            select(OutboxEvent).where(
+                OutboxEvent.payload["type"].astext
+                == "waitlist.spot_available",
+                OutboxEvent.payload["target_value"].astext == second_id,
+            )
+        )
+    ).scalars().all()
+    assert spot_events == []
 
 
 @pytest.mark.asyncio
