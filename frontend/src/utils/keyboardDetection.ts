@@ -21,14 +21,32 @@
 // detection instead).
 //
 // THE FIX: prefer a native delta when one is available (Telegram's own
-// viewport.stableHeight - viewport.height, via @tma.js/sdk-vue -- see
-// useBackgroundStabilizer.ts). Those values come from the Telegram HOST
-// app, not the WebView's CSS engine, so they do not depend on whether the
-// WebView correctly propagates a resize to visualViewport/innerHeight at
-// all -- they survive exactly the failure mode above. Falls back to the
-// browser delta only when no native signal exists (standalone/browser, or
-// the Telegram viewport SDK never mounted) -- unchanged behaviour there.
+// viewport.stableHeight - viewport.height, via @tma.js/sdk-vue). Those
+// values come from the Telegram HOST app, not the WebView's CSS engine, so
+// they do not depend on whether the WebView correctly propagates a resize
+// to visualViewport/innerHeight at all -- they survive exactly the failure
+// mode above. Falls back to the browser delta only when no native signal
+// exists (standalone/browser, or the Telegram viewport SDK never mounted)
+// -- unchanged behaviour there.
+//
+// PROMPT №651: ONE place decides this, full stop. useBackgroundStabilizer.ts
+// (the `is-keyboard-open` class / DiaryFeedView composer repositioning) AND
+// useKeyboardOpen.ts (the tab bar, UserShell.vue/MasterShell.vue) both call
+// isKeyboardOpen + nativeKeyboardDelta below -- neither has its own copy.
 // =============================================================================
+
+import { viewport } from '@tma.js/sdk-vue'
+
+/**
+ * Telegram's own (stableHeight - height), or null when there's no native
+ * signal to use (standalone/browser, or the @tma.js/sdk-vue viewport never
+ * mounted -- e.g. an older client, or the mount is still in flight, see
+ * platform/telegram-sdk.ts's own guarded/best-effort posture).
+ */
+export function nativeKeyboardDelta(): number | null {
+  if (!viewport.isMounted()) return null
+  return viewport.stableHeight() - viewport.height()
+}
 
 /**
  * True if the on-screen keyboard should be treated as open.

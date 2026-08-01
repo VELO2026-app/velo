@@ -4,7 +4,7 @@ import router from '@/router'
 import { platform } from '@/platform'
 import { KEYBOARD_VIEWPORT_THRESHOLD } from '@/utils/constants'
 import { resetKeyboardViewportState } from '@/utils/keyboardViewportState'
-import { isKeyboardOpen } from '@/utils/keyboardDetection'
+import { isKeyboardOpen, nativeKeyboardDelta } from '@/utils/keyboardDetection'
 
 /**
  * App-root keyboard-viewport publisher. Mounted ONCE from App.vue (the
@@ -111,20 +111,6 @@ function freezeAppHeight(): void {
 }
 
 /**
- * Telegram's own (stableHeight - height), or null when there's no native
- * signal to use (standalone/browser, or the @tma.js/sdk-vue viewport never
- * mounted -- e.g. an older client, or the mount is still in flight, see
- * platform/telegram-sdk.ts's own guarded/best-effort posture). Both values
- * come from the Telegram host app, not the WebView's CSS engine -- see
- * utils/keyboardDetection.ts for why that's what makes them survive the
- * Android "shrink" model this file's header documents.
- */
-function nativeKeyboardDelta(): number | null {
-  if (!viewport.isMounted()) return null
-  return viewport.stableHeight() - viewport.height()
-}
-
-/**
  * PROMPT №650 (T24-4): call `freezeAppHeight()` exactly ONCE, but only after
  * the initial viewport expansion has genuinely settled -- not merely been
  * requested. Outside Telegram (or before the SDK viewport has mounted at
@@ -133,10 +119,11 @@ function nativeKeyboardDelta(): number | null {
  *
  * NOT a violation of the guardrail above: this still fires exactly once per
  * mount. It is not subscribed to `viewport.isStable` at all (see
- * `nativeKeyboardDelta` for the ONE place that signal-family IS read live,
- * every frame, for keyboard detection -- a deliberately different function,
- * never this one) -- it POLLS a bounded number of times, stops the instant
- * the viewport reports settled, and never runs again after that.
+ * `utils/keyboardDetection.ts`'s `nativeKeyboardDelta` for the ONE place
+ * that signal-family IS read live, every frame, for keyboard detection --
+ * a deliberately different function, never this one) -- it POLLS a bounded
+ * number of times, stops the instant the viewport reports settled, and
+ * never runs again after that.
  */
 function scheduleInitialFreeze(): void {
   if (platform.name !== 'telegram') {
