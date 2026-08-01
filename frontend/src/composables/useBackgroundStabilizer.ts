@@ -1,7 +1,10 @@
 import { onMounted, onBeforeUnmount } from 'vue'
+import { viewport } from '@tma.js/sdk-vue'
 import router from '@/router'
+import { platform } from '@/platform'
 import { KEYBOARD_VIEWPORT_THRESHOLD } from '@/utils/constants'
 import { resetKeyboardViewportState } from '@/utils/keyboardViewportState'
+import { isKeyboardOpen } from '@/utils/keyboardDetection'
 
 /**
  * App-root keyboard-viewport publisher. Mounted ONCE from App.vue (the
@@ -26,9 +29,28 @@ import { resetKeyboardViewportState } from '@/utils/keyboardViewportState'
  * visualViewport resize/scroll handler -- doing so would defeat the whole
  * point, since that IS the keyboard signal).
  *
- * T24-4 (mount-time race, white rounded-corner slivers): the mount call is
- * deferred via `queueMicrotask`, not synchronous -- see the onMounted body
- * below for why.
+ * T24-4 (mount-time race, white rounded-corner slivers) -- PROMPT №650: a
+ * `queueMicrotask` defer alone only proves `webApp.expand()` was CALLED
+ * before the freeze, not that the native resize it triggers has FINISHED --
+ * a microtask elapses before the next paint, not before a native-host
+ * round-trip. `scheduleInitialFreeze()` below now waits for Telegram's own
+ * `viewport.isStable` signal (via `@tma.js/sdk-vue`, already integrated
+ * elsewhere in this app for safe-area -- see platform/telegram-sdk.ts) to
+ * confirm the expansion has genuinely settled, with a bounded timeout
+ * fallback so the freeze is never left unset. See that function's own
+ * docstring for the full reasoning and why this does NOT violate the
+ * guardrail above (still exactly ONE freeze per mount, never wired to an
+ * ongoing keyboard signal).
+ *
+ * T24-1 (Android composer hidden behind the keyboard) -- PROMPT №650: the
+ * `is-keyboard-open` toggle below now ALSO prefers a native delta
+ * (Telegram's own `viewport.stableHeight - viewport.height`) over the
+ * browser-only `innerHeight - visualViewport.height` when one is
+ * available -- see `utils/keyboardDetection.ts` for why the browser-only
+ * delta collapses to ~0 on exactly the Android WebView "shrink" case this
+ * file's ANDROID FIX comment above already documents, and why the native
+ * signal survives it (it comes from the Telegram host app, not the
+ * WebView's own CSS engine).
  *
  * The "dancing background" is fixed STRUCTURALLY now (batch K): #app::before is an
  * absolute child of #app's stable box (global.css), so it no longer tracks
@@ -65,6 +87,16 @@ const NAV_SUPPRESS_MS = 350
 // instant `orientationchange` fires; a short delay avoids capturing mid-rotation.
 const ORIENTATION_SETTLE_MS = 300
 
+// PROMPT №650: bounded wait for viewport.isStable after mount, polled rather
+// than event-subscribed (simpler to reason about correctly than nested
+// signal listeners for a one-shot, non-hot-path wait). Generous margin over
+// a typical native expand animation (well under 500ms) -- this is a safety
+// ceiling, not the expected wait; on a client that never reports isStable at
+// all it is what stands between "stuck forever unset" and "eventually
+// freezes something reasonable".
+const EXPAND_SETTLE_TIMEOUT_MS = 1200
+const EXPAND_SETTLE_POLL_MS = 50
+
 /**
  * Capture the current viewport height ONCE as a literal px value into
  * `--velo-frozen-vh`. Read (visualViewport?.height ?? innerHeight) -- the
@@ -76,6 +108,57 @@ function freezeAppHeight(): void {
   if (typeof window === 'undefined') return
   const h = window.visualViewport?.height ?? window.innerHeight
   document.documentElement.style.setProperty('--velo-frozen-vh', `${h}px`)
+}
+
+/**
+ * Telegram's own (stableHeight - height), or null when there's no native
+ * signal to use (standalone/browser, or the @tma.js/sdk-vue viewport never
+ * mounted -- e.g. an older client, or the mount is still in flight, see
+ * platform/telegram-sdk.ts's own guarded/best-effort posture). Both values
+ * come from the Telegram host app, not the WebView's CSS engine -- see
+ * utils/keyboardDetection.ts for why that's what makes them survive the
+ * Android "shrink" model this file's header documents.
+ */
+function nativeKeyboardDelta(): number | null {
+  if (!viewport.isMounted()) return null
+  return viewport.stableHeight() - viewport.height()
+}
+
+/**
+ * PROMPT №650 (T24-4): call `freezeAppHeight()` exactly ONCE, but only after
+ * the initial viewport expansion has genuinely settled -- not merely been
+ * requested. Outside Telegram (or before the SDK viewport has mounted at
+ * all) there is no native "expand finished" signal to wait for, so this
+ * falls back to the pre-existing microtask-defer behaviour, unchanged.
+ *
+ * NOT a violation of the guardrail above: this still fires exactly once per
+ * mount. It is not subscribed to `viewport.isStable` at all (see
+ * `nativeKeyboardDelta` for the ONE place that signal-family IS read live,
+ * every frame, for keyboard detection -- a deliberately different function,
+ * never this one) -- it POLLS a bounded number of times, stops the instant
+ * the viewport reports settled, and never runs again after that.
+ */
+function scheduleInitialFreeze(): void {
+  if (platform.name !== 'telegram') {
+    // No native expand animation to wait for -- unchanged from before
+    // PROMPT №650.
+    queueMicrotask(freezeAppHeight)
+    return
+  }
+  const deadline = Date.now() + EXPAND_SETTLE_TIMEOUT_MS
+  const tick = (): void => {
+    if (viewport.isMounted() && viewport.isStable()) {
+      freezeAppHeight()
+      return
+    }
+    if (Date.now() >= deadline) {
+      // Safety net -- see the constant's own comment above.
+      freezeAppHeight()
+      return
+    }
+    window.setTimeout(tick, EXPAND_SETTLE_POLL_MS)
+  }
+  tick()
 }
 
 export function useBackgroundStabilizer(): void {
@@ -108,7 +191,12 @@ export function useBackgroundStabilizer(): void {
     root.style.setProperty('--velo-vvh', `${vv.height}px`)
     root.classList.toggle(
       'is-keyboard-open',
-      window.innerHeight - vv.height > KEYBOARD_VIEWPORT_THRESHOLD,
+      isKeyboardOpen(
+        nativeKeyboardDelta(),
+        window.innerHeight,
+        vv.height,
+        KEYBOARD_VIEWPORT_THRESHOLD,
+      ),
     )
   }
 
@@ -118,21 +206,13 @@ export function useBackgroundStabilizer(): void {
   }
 
   onMounted(() => {
-    // T24-4: deferred to a microtask, NOT called synchronously here. This
-    // composable is invoked from App.vue BEFORE App.vue's own onMounted is
-    // registered, so Vue fires this onMounted first -- if freezeAppHeight()
-    // ran synchronously here, it would capture the height before App.vue's
-    // onMounted has even called initAuth() -> platform.init() ->
-    // webApp.expand(), freezing a viewport Telegram has not finished
-    // expanding (the mount-time race behind the white rounded-corner
-    // slivers). expand() itself executes synchronously inside platform.init()
-    // (no internal await precedes it), so by the time this queued microtask
-    // runs -- after the WHOLE synchronous mount call stack, i.e. every
-    // onMounted hook for this tick, has unwound -- expand() has already been
-    // called. Unconditional (not gated on `vv`): freezeAppHeight has its own
+    // T24-4/PROMPT №650: NOT called synchronously here -- see
+    // scheduleInitialFreeze's own docstring for why (waits for the
+    // viewport to genuinely settle, not just for expand() to be called).
+    // Unconditional (not gated on `vv`): freezeAppHeight has its own
     // window/visualViewport fallback and must run even where visualViewport
     // is unsupported (desktop/older engines).
-    queueMicrotask(freezeAppHeight)
+    scheduleInitialFreeze()
     window.addEventListener('orientationchange', onOrientationChange)
 
     if (!vv) return
