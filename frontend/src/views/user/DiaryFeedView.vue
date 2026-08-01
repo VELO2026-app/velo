@@ -975,17 +975,29 @@ html.is-keyboard-open .diary-feed--composing .diary-feed__composer {
   bottom: calc(var(--velo-frozen-vh, 100%) - var(--velo-vvh, 100%) - var(--velo-vv-offset, 0px));
 }
 
-/* -- Compose write-mode tap-catcher --
-   T24-2 (owner reversal, 2026-07-31, supersedes the 2026-07-29 ruling): the
-   feed must stay VISIBLE while writing -- the frosted-glass wash + blur over
-   the feed is REMOVED. What stays: this element's TAP-CATCHING role, which is
-   independent of how it looks. position:absolute (was fixed, bg-freeze batch)
-   so it covers `.diary-feed` edge-to-edge WITHOUT tracking the visual viewport
-   (`.diary-feed` is position:relative, so inset:0 resolves against that stable
-   box). While writing it is fully transparent but still captures taps: blocks
-   accidental feed navigation, and tapping it (a non-focusable element) blurs
-   the field -> dismisses the keyboard (in addition to the explicit ⌄ button).
-   z 1 keeps it above the feed but BELOW the sticky header/composer islands. */
+/* -- Compose write-mode tap-catcher + fog --
+   T24-2 (owner reversal, 2026-07-31) removed the frosted-glass wash here,
+   read as "remove everything." PROMPT №657 (owner-ruled): that removal went
+   too far -- restore the fog, scoped correctly this time. The owner's own
+   words are the spec: entering the diary looks normal while scrolling; the
+   moment you start writing, the CONTENT is muted by fog (white + blur) while
+   the header buttons stay untouched; entries stay faintly perceptible, never
+   competing with the text; the field above the keyboard is written in calmly.
+   Restored with the EXACT pre-existing tokens (--velo-write-frost /
+   --velo-write-blur, rgba(255,255,255,0.20) / 10px, operator-tuned
+   2026-06-05, commit 2b28f2c7) -- already documented in variables.css as
+   serving "scrim + composer field," already used unchanged on the composer
+   field itself (.composer--composing .composer__field below). No new token
+   minted. Scope is correct by construction, not by a new rule: this element
+   is `.diary-feed`'s full-bleed absolute child at z-index 1, BELOW the
+   header/composer islands (z var(--z-sticky), both siblings) -- their pixels
+   paint over this layer, so they were never blurred/dimmed by it even before
+   this restoration, and stay exactly as untouched now.
+   position:absolute (was fixed, bg-freeze batch) so it covers `.diary-feed`
+   edge-to-edge WITHOUT tracking the visual viewport (`.diary-feed` is
+   position:relative, so inset:0 resolves against that stable box). Tapping it
+   (still non-focusable) blurs the field -> dismisses the keyboard, in
+   addition to blocking accidental feed navigation -- unchanged. */
 .diary-feed__scrim {
   position: absolute;
   inset: 0;
@@ -993,14 +1005,17 @@ html.is-keyboard-open .diary-feed--composing .diary-feed__composer {
   pointer-events: none;
 }
 .diary-feed__scrim--on {
-  /* Capture taps while writing (see comment above) -- purely functional now,
-     nothing to fade in visually. */
   pointer-events: auto;
+  background: var(--velo-write-frost);
+  -webkit-backdrop-filter: blur(var(--velo-write-blur));
+  backdrop-filter: blur(var(--velo-write-blur));
 }
 
-/* Feed content fades (70%) while writing, so it reads as background behind the
-   composer field (operator-tuned 2026-06-05). Independent of the T24-2 frost
-   removal above -- the owner did not name this fade, so it is kept as-is. */
+/* Feed content fades (70%) while writing (operator-tuned 2026-06-05, SAME
+   commit as the scrim's frost values above -- 2b28f2c7 tuned both together,
+   measured via `git log -S`, not assumed). PROMPT №657: COEXISTS with the
+   restored scrim fog by design, not by default -- the pre-T24-2 look was
+   always fade + frost together as one tuned pair, never either alone. */
 .diary-feed--composing .diary-feed__body {
   opacity: 0.7;
 }
