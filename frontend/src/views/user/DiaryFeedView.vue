@@ -32,10 +32,7 @@
           :aria-label="filterActive ? 'Сбросить фильтр' : 'Выйти из дневника'"
           @click="onBack"
         />
-        <!-- PROMPT №655: the debug-panel gesture target. Had no click behaviour
-             before this (plain click-through label, see .diary-feed__title's
-             pointer-events below) -- nothing existing is overridden. -->
-        <h1 class="diary-feed__title" @click="onTitleTap">{{ feedTitle }}</h1>
+        <h1 class="diary-feed__title">{{ feedTitle }}</h1>
       </div>
       <VMenu>
         <!-- Trigger glyph: vertical dots that rotate to horizontal while the
@@ -258,12 +255,15 @@
       @close="showSearch = false"
     />
 
-    <!-- TEMPORARY -- PROMPT №654/655 (T24-1/B29 device diagnostic). Gated by a
-         hidden gesture (5 taps on the title within 2s, see onTitleTap),
-         persisted in localStorage -- default OFF, no role/link/setting.
-         Read-only, plain position:fixed. Remove in the follow-up commit named
-         in this one's body. -->
-    <DiaryKeyboardDebugPanel v-if="debugPanelOn" />
+    <!-- TEMPORARY -- PROMPT №654..660 (T24-1/B29 device diagnostic).
+         UNCONDITIONAL as of №660 (Navigator's call, not the owner's): four
+         gesture-gated activation attempts (roles, then taps) never produced a
+         confirmed sighting on the owner's device, and the gesture layer itself
+         is now a variable nobody can rule out from source. Renders for every
+         diary visitor until removed -- see docs/diary-behaviour-map.md for the
+         investigation this replaces. Read-only, plain position:fixed. Remove
+         once the owner has captured what it was built for. -->
+    <DiaryKeyboardDebugPanel />
   </div>
 </template>
 
@@ -343,43 +343,6 @@ function onTap(payload: { item: DiaryFeedItem; editable: boolean }): void {
 
 const showFilter = ref(false)
 const showSearch = ref(false)
-
-// -- TEMPORARY debug-panel gesture (PROMPT №655/656, T24-1/B29 device
-// diagnostic) -- 3 taps on the title within TAP_WINDOW_MS toggles
-// DiaryKeyboardDebugPanel. No role/link/setting -- persisted in localStorage
-// so it survives opening the composer, the keyboard, and a reload. Default
-// OFF; a user who never performs the gesture sees exactly what they see
-// today. Remove alongside the panel itself (see the follow-up commit named
-// in №654's body).
-//
-// №656: the 5-tap/2000ms version shipped in №655 produced NOTHING observable
-// on the owner's device -- taps that land or don't were indistinguishable
-// from each other because nothing confirmed a tap was even registering.
-// Loosened (5 -> 3 taps, 2000 -> 3000ms) and given a toast on every counted
-// tap plus a clear on/off toast at trigger, so a failed attempt is now
-// visibly different from a working one: silence means the tap genuinely
-// isn't reaching the element (a pointer-events/hit-region problem to chase
-// next), a toast that stops advancing mid-count means the WINDOW is still
-// too tight, not that nothing is happening at all.
-const DEBUG_PANEL_STORAGE_KEY = 'velo:diary-kbd-debug'
-const TAP_WINDOW_MS = 3000
-const TAPS_TO_TOGGLE = 3
-const debugPanelOn = ref(localStorage.getItem(DEBUG_PANEL_STORAGE_KEY) === '1')
-let debugTapTimes: number[] = []
-
-function onTitleTap(): void {
-  const now = Date.now()
-  debugTapTimes = debugTapTimes.filter((t) => now - t < TAP_WINDOW_MS)
-  debugTapTimes.push(now)
-  if (debugTapTimes.length < TAPS_TO_TOGGLE) {
-    toast.info(`${debugTapTimes.length}/${TAPS_TO_TOGGLE}`)
-    return
-  }
-  debugTapTimes = []
-  debugPanelOn.value = !debugPanelOn.value
-  localStorage.setItem(DEBUG_PANEL_STORAGE_KEY, debugPanelOn.value ? '1' : '0')
-  toast.success(debugPanelOn.value ? 'Диагностика: ВКЛ' : 'Диагностика: ВЫКЛ')
-}
 
 // View mode: flat column ('list') vs thread/map ('map'), toggled from the
 // "..." menu. Default 'list' — the redesign's primary, more readable view;
@@ -735,19 +698,6 @@ html.is-keyboard-open .diary-feed--composing .diary-feed__header {
   font-size: var(--text-base);
   letter-spacing: 0.36px;
   color: var(--velo-text-primary);
-  /* PROMPT №655/656: re-enable taps for the debug-panel gesture (onTitleTap)
-     -- the title had no prior interactive behaviour, it was plain
-     click-through text like the rest of .diary-feed__left (see that rule's
-     own comment). The feed still scrolls under it exactly as before, this
-     only stops taps landing ON the title's box from falling through to the
-     feed underneath. */
-  pointer-events: auto;
-  /* №656: the word alone (its glyph box) was too small a target on a phone --
-     padding + equal negative margin enlarges the tappable area without
-     moving the visible text or the surrounding flex layout (10px < the 14px
-     --space-3 gap to the back button, so the two hit areas never touch). */
-  padding: 10px;
-  margin: -10px;
 }
 
 /* Left island group: exit back-pill + plain category title (no backing). The
