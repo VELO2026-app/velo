@@ -1,0 +1,133 @@
+# Diary screen — target behaviour spec
+
+**Authored by Navigator-41 from the owner's rulings, 2026-08-03.** This is the companion to
+`diary-behaviour-map.md`, which describes what the screen does TODAY. This file describes what it
+must do, and it is the thing a build is graded against.
+
+**Why it exists.** Five build attempts on the diary composer/keyboard problem were rejected on the
+owner's device. He ordered the order reversed: describe the behaviour, agree it with him, record it,
+and only then build. This file is the record. Nothing in it may be inferred from code — every line
+here is either the owner's ruling or is explicitly marked OPEN.
+
+**Code state this spec is written against:** `origin/main` = `2d4fb6ce`, worktree clean. All
+`file:line` references verified against that state at authoring time.
+
+---
+
+## §1. The four rulings
+
+Put to the owner as forks on 2026-08-03; his answers, verbatim in effect:
+
+**Ruling 1 — write mode starts on TAP.** The moment the user taps the input field is the start of
+write mode: the keyboard rises and the fog is laid over the feed. Not the first keystroke.
+*(Owner's own words: "I pressed the input field. That is the start of write mode.")*
+The Navigator's stated decision was a split trigger (field on tap, fog on first keystroke); the
+owner overruled it, and ruling 2 removed the only reason that split had. Recorded as overruled, not
+as agreed — the difference matters if this is ever revisited.
+
+**Ruling 2 — the header never moves. Ever.** The header pill (back arrow, title, menu) stays exactly
+where it is, in every state, including while the keyboard is open and while text is being typed.
+*(Owner: "the back arrow, the header is in effect always in place — why remove it at all?")*
+Today's behaviour, where it leaves the screen on Android when the keyboard opens, is a defect and
+nothing else. There is no state in which the header is expected to move, shrink, or hide.
+
+**Ruling 3 — the keyboard CLOSES after Send.** After a successful send the field empties and the
+keyboard dismisses, so the entry is immediately visible in the feed. Writing a second entry costs a
+deliberate tap, and that is accepted.
+
+**Ruling 4 — the pills stop floating and take their own place in the layout, keeping the glass.**
+The frosted material and blur stay. What goes is the floating: the header and the composer are no
+longer absolutely-positioned islands overlapping the feed — they occupy their own space, and the
+feed lives between them.
+⚠ **This is the structural ruling and it is the one to re-confirm at the approval gate below.** Its
+consequence, stated plainly so it cannot arrive as a surprise: the feed will no longer slide UNDER
+the header and composer, so the fade-under-glass effect is lost. The material remains; what it is
+laid over changes.
+**Why it was put as a fork at all, and the measured fact behind it:** the only version of this
+screen ever reported as working had no keyboard computation whatsoever — a flat
+`position: absolute; bottom: 0`. Every version since computes a `bottom` from live viewport signals
+(`1ba4b7cd` -> `88dadca9` -> `a75a9f93` -> `212a3698`), and every one of them has been reported
+broken on a device. The floating construction is what forces the computation; ruling 4 removes the
+forcing.
+
+---
+
+## §2. Target behaviour, state by state
+
+Same twelve steps as `diary-behaviour-map.md` §1, so the two can be read side by side. "TARGET" is
+what must be true after the build. "CHANGE" names what differs from today.
+
+| # | State | TARGET behaviour | CHANGE from today |
+|---|---|---|---|
+| 1 | Diary opened | Header at the top in its own space, composer at the bottom in its own space, feed between them. Immersive mode unchanged: no tab bar, exit via the menu. | Header and composer stop overlapping the feed (ruling 4). |
+| 2 | Scrolling the feed | Feed scrolls between the two pills. No content passes under them. | The 4-zone fade mask that made cards dissolve under the pills is no longer needed for that purpose. |
+| 3 | Field tapped | Write mode begins HERE: fog over the feed, feed dims, field takes focus, keyboard rises. Header does not move. | Trigger is unchanged (already tap). Header no longer shifts (ruling 2). |
+| 4 | Keyboard opening | Composer stays above the rising keyboard throughout the animation. Header stays put. | Today the composer is positioned by a formula recomputed every animation frame; under ruling 4 the layout holds it without a formula. |
+| 5 | Keyboard fully open | Composer sits directly above the keyboard. Header fully visible in its original place. No buttons below the field. | This is the reported defect on Android and is the point of the whole rebuild. |
+| 6 | First character typed | Send button appears in the action slot. Nothing else moves. | Unchanged. |
+| 7 | Text grows past one line | Field grows upward, taking space from the feed, not from the header and not from the keyboard. Buttons stay level with the field's bottom. | Growth must not be able to push the field down behind the keyboard — today the field's own growth and the `bottom` computation are unproven against each other. |
+| 8 | Text grows past the cap | Field stops growing at the owner's ~300px figure and scrolls internally. | Unchanged; the 300px is the owner's own number (`DiaryComposer.vue:83-92`), not derived from the keyboard. |
+| 9 | Tap outside the field | Write mode ends: fog off, feed undimmed, keyboard dismissed, draft preserved as a collapsed preview if non-empty. Header, as always, does not move. | Unchanged except that the header has nothing to restore. |
+| 10 | Send | Entry posts, field empties, **keyboard closes** (ruling 3), feed visible with the new entry. | Today the keyboard stays open. |
+| 11 | Keyboard closes | Composer returns to rest at the bottom. Header, as always, unmoved. | Symmetric to 4. |
+| 12 | Navigate away | Focus dropped, keyboard state reset, no geometry leaked onto the next screen. | Unchanged — the existing 350ms suppression window is correct and stays. |
+
+---
+
+## §3. What ruling 4 removes, and what it must not break
+
+**Expected to become unnecessary** (to be confirmed by the build, not assumed here):
+- the composer's computed `bottom` (`DiaryFeedView.vue:924-927`);
+- the header's compensating `top` (`DiaryFeedView.vue:692-695`, added last cycle);
+- the dependence of `DiaryComposer.autogrow` on the live visible height for anything except its cap.
+
+**Must not break — each of these is a prohibition with a history:**
+- **BG-ROOT.** `#app-bg` fixed at body level (`5a3be00`) fixed the background jumping under the
+  keyboard, device-confirmed on Android AND iOS, after it had returned ten times. Nothing in this
+  rebuild touches `#app`, `html`, or `body`.
+- **The frozen app height** (`--velo-frozen-vh`, `useBackgroundStabilizer`) is a whole-app mechanism,
+  not a diary one. `B29` is a separate open defect against it and is NOT in scope here.
+- **`useKeyboardFieldScroll` and `useSafeArea`** serve other screens and a different signal family.
+  Out of scope, untouched.
+- **The fog's tuned pair.** The wash and the 70% feed fade were tuned together in one commit
+  (`2b28f2c7`) and are one look, never either alone.
+
+---
+
+## §4. Still OPEN — not resolved by these rulings
+
+1. **Does the owner's Android pan the visual viewport, or shrink it?** Ruling 2 states the
+   requirement (header always visible); it does not state the mechanism. If the browser PANS, a
+   header in normal flow can still be carried off-screen and will need explicit handling. If it
+   SHRINKS, normal flow is sufficient on its own. **This is what the diagnostic panel's
+   `viewportOffsetTop` field answers, and it is the only thing that answers it.** Awaiting one
+   screenshot with the panel visible and the keyboard up.
+2. **The fog's visible side edges.** Leading explanation, UNVERIFIED: `AppFrame.vue:53-54` caps the
+   whole app at `--velo-screen-width` = **402px** (`variables.css:265`) and centres it, so on any
+   device wider than 402 CSS px the un-fogged background shows as a strip down each side the moment
+   the fog paints. Settled by one number — the owner's screen width. Not settled by anything in this
+   repo.
+3. **The diagnostic panel owes removal.** It is on production, unconditional, on the diary screen.
+   It comes out the moment the screenshot lands. Carried as a debt, not as a feature.
+
+---
+
+## §5. The approval gate — the owner's own requirement
+
+**Owner's instruction, 2026-08-03:** the Orchestrator is to walk him through it step by step — what
+happens, when, who enters what, and every state — so that he can agree them BEFORE it is built.
+
+That is binding on the build and it is not satisfied by a description in prose. Concretely:
+
+- The Orchestrator produces a `.tmp/` preview that renders **every state in §2 that is visually
+  distinguishable**, each labelled with its step number, viewable at a URL on the `tmp-static`
+  server — the house convention for visual approval.
+- It STOPS there and reports. **No implementation commit happens before the owner has seen the
+  states and said so.**
+- **Ruling 4 is called out explicitly in that report**, in one plain sentence naming what the feed
+  will no longer do, so the owner is agreeing to the consequence and not only to the phrase.
+- Only after his confirmation does the build proceed, and it is then graded against §2 line by line.
+
+**Standing:** anything in §2 that the build cannot deliver is a STOP and a question, never a
+substitution. Five attempts have been lost to reasoning that shipped; this file exists to make the
+agreement precede the code.
