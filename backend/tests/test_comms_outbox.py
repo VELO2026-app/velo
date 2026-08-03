@@ -28,12 +28,13 @@
 # =============================================================================
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
 from redis import asyncio as aioredis
 from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 from sqlalchemy import delete, or_, select, update
 
 from app.core.config import settings
@@ -46,7 +47,12 @@ from app.core.events import (
     emit_event,
     user_snapshot,
 )
-from app.core.events.relay import build_envelope, relay_pending_batch
+from app.core.events.outbox_admin import list_dead_events, requeue_events
+from app.core.events.relay import (
+    build_envelope,
+    create_relay_redis,
+    relay_pending_batch,
+)
 from app.modules.users.models import User
 from tests.helpers import (
     auth_headers,
@@ -274,6 +280,13 @@ class TestRelay:
         ):
             # Pass 1: poison fails (attempts=1), the other two publish.
             assert await relay_pending_batch(redis, session=db_session) == (2, 1)
+            # H-R3: the failure assigned a backoff -- pass 2 would now
+            # skip the row (see TestRelayHardening). Lapse it directly:
+            # this test's subject is the WARN threshold and the moving
+            # pipe, not the backoff itself.
+            events = await _synth_events(db_session)
+            next(e for e in events if e.id == poison_id).next_attempt_at = None
+            await db_session.flush()
             # Pass 2: only the poison row is pending; attempts hits the
             # threshold (2) -> the WARN branch fires.
             assert await relay_pending_batch(redis, session=db_session) == (0, 1)
@@ -344,6 +357,259 @@ class TestRelay:
 # ===========================================================================
 # 3. Identity sync emits
 # ===========================================================================
+
+
+class TestRelayHardening:
+    """H-R3 (§8a-3): backoff + ceiling/DLQ + timeouts + requeue.
+
+    Same conventions as TestRelay: SYNTH-marked rows, no commit, the
+    autouse _clean_band drains our rows. NOTE for the band registry:
+    the issued band 89680-89699 is NOT consumed -- this suite creates
+    no users (synthetic recipient_ids only), recorded in the H-R3
+    report.
+    """
+
+    async def _emit_synth(self, session, tag: str):
+        return await emit_event(
+            session, EVENT_GROUP_CHANGED,
+            {"group_key": "masters",
+             "recipient_id": f"{SYNTH}{tag}", "member": True},
+        )
+
+    @staticmethod
+    def _always_poison(redis):
+        return patch.object(
+            redis, "xadd", side_effect=RuntimeError("malformed"),
+        )
+
+    async def test_poison_gets_backoff_alive_row_ships_immediately(
+        self, db_session, relay_redis
+    ):
+        """Twin pair: the poison row leaves the pass with a FUTURE
+        next_attempt_at and is NOT selectable next pass; a fresh alive
+        row (next_attempt_at NULL) ships without any delay."""
+        redis, _stream = relay_redis
+        await _park_foreign_pending(db_session)
+        poison = await self._emit_synth(db_session, "bo-p")
+
+        real_xadd = redis.xadd
+
+        async def xadd_poisoned(stream_name, fields, *a, **kw):
+            if json.loads(fields["data"])["recipient_id"] == f"{SYNTH}bo-p":
+                raise RuntimeError("malformed for the wire")
+            return await real_xadd(stream_name, fields, *a, **kw)
+
+        with patch.object(redis, "xadd", side_effect=xadd_poisoned):
+            assert await relay_pending_batch(redis, session=db_session) == (0, 1)
+
+            now = datetime.now(UTC)
+            events = await _synth_events(db_session)
+            row = next(e for e in events if e.id == poison.id)
+            # Backoff from POST-increment attempts: base(2.0) * 2**1.
+            assert row.attempts == 1
+            assert row.dead_lettered_at is None
+            assert row.next_attempt_at is not None
+            assert row.next_attempt_at > now
+            assert row.next_attempt_at <= now + timedelta(seconds=10)
+
+            # Alive row emitted AFTER: ships in the very next pass while
+            # the backed-off poison is not even selected (0 failed).
+            await self._emit_synth(db_session, "bo-a")
+            assert await relay_pending_batch(redis, session=db_session) == (1, 0)
+            events = await _synth_events(db_session)
+            row = next(e for e in events if e.id == poison.id)
+            assert row.attempts == 1  # untouched: filtered out, not retried
+        await db_session.rollback()
+
+    async def test_backoff_lapse_makes_row_selectable_again(
+        self, db_session, relay_redis
+    ):
+        """Direct-state twin: next_attempt_at in the past -> picked up;
+        in the future -> skipped. No sleeping, state built directly."""
+        redis, _stream = relay_redis
+        await _park_foreign_pending(db_session)
+        e = await self._emit_synth(db_session, "lapse")
+
+        e.next_attempt_at = datetime.now(UTC) + timedelta(minutes=5)
+        await db_session.flush()
+        assert await relay_pending_batch(redis, session=db_session) == (0, 0)
+
+        e.next_attempt_at = datetime.now(UTC) - timedelta(seconds=1)
+        await db_session.flush()
+        assert await relay_pending_batch(redis, session=db_session) == (1, 0)
+        await db_session.rollback()
+
+    async def test_ceiling_dead_letters_once_and_leaves_the_select(
+        self, db_session, relay_redis
+    ):
+        """attempts hits the ceiling -> dead_lettered_at set, published_at
+        stays NULL, next_attempt_at NOT assigned on death, and the row is
+        excluded from the next pass -- so a second ERROR is impossible by
+        construction."""
+        redis, _stream = relay_redis
+        await _park_foreign_pending(db_session)
+        e = await self._emit_synth(db_session, "dl")
+        # One failure away from the ceiling; clear any pending delay so
+        # the pass picks it up.
+        e.attempts = settings.comms_relay_max_attempts - 1
+        e.next_attempt_at = None
+        await db_session.flush()
+
+        with self._always_poison(redis):
+            assert await relay_pending_batch(redis, session=db_session) == (0, 1)
+            events = await _synth_events(db_session)
+            row = next(x for x in events if x.id == e.id)
+            assert row.attempts == settings.comms_relay_max_attempts
+            assert row.dead_lettered_at is not None
+            assert row.published_at is None  # the truth: never shipped
+            assert row.next_attempt_at is None  # no backoff for the dead
+
+            # Second pass: the dead row is not selected -- (0, 0), so it
+            # cannot fail (or ERROR) again.
+            assert await relay_pending_batch(redis, session=db_session) == (0, 0)
+            events = await _synth_events(db_session)
+            row = next(x for x in events if x.id == e.id)
+            assert row.attempts == settings.comms_relay_max_attempts
+        await db_session.rollback()
+
+    async def test_head_of_line_survives_the_ceiling(
+        self, db_session, relay_redis
+    ):
+        """T0 invariant alive at the ceiling: the row DYING in this pass
+        does not stop the rest of the batch from publishing."""
+        redis, _stream = relay_redis
+        await _park_foreign_pending(db_session)
+        dying = await self._emit_synth(db_session, "hd-p")
+        alive = await self._emit_synth(db_session, "hd-a")
+        dying.attempts = settings.comms_relay_max_attempts - 1
+        await db_session.flush()
+
+        real_xadd = redis.xadd
+
+        async def xadd_poisoned(stream_name, fields, *a, **kw):
+            if json.loads(fields["data"])["recipient_id"] == f"{SYNTH}hd-p":
+                raise RuntimeError("malformed for the wire")
+            return await real_xadd(stream_name, fields, *a, **kw)
+
+        with patch.object(redis, "xadd", side_effect=xadd_poisoned):
+            assert await relay_pending_batch(redis, session=db_session) == (1, 1)
+
+        events = await _synth_events(db_session)
+        dead = next(x for x in events if x.id == dying.id)
+        ok = next(x for x in events if x.id == alive.id)
+        assert dead.dead_lettered_at is not None
+        assert ok.published_at is not None
+        await db_session.rollback()
+
+    async def test_infra_error_assigns_no_backoff_and_never_kills(
+        self, db_session, relay_redis
+    ):
+        """Extended infra twin (item 4): a redis TimeoutError aborts the
+        pass; attempts, next_attempt_at AND dead_lettered_at are all
+        untouched -- even at attempts == max - 1."""
+        redis, _stream = relay_redis
+        await _park_foreign_pending(db_session)
+        e = await self._emit_synth(db_session, "inf")
+        e.attempts = settings.comms_relay_max_attempts - 1
+        await db_session.flush()
+
+        with patch.object(
+            redis, "xadd", side_effect=RedisTimeoutError("hung socket")
+        ):
+            assert await relay_pending_batch(redis, session=db_session) == (0, 0)
+
+        events = await _synth_events(db_session)
+        row = next(x for x in events if x.id == e.id)
+        assert row.attempts == settings.comms_relay_max_attempts - 1
+        assert row.next_attempt_at is None
+        assert row.dead_lettered_at is None
+
+        # Pipe back up -> ships normally.
+        assert await relay_pending_batch(redis, session=db_session) == (1, 0)
+        await db_session.rollback()
+
+    async def test_relay_redis_factory_carries_socket_timeouts(self):
+        """done-when item 4: the timeouts are visible in from_url."""
+        captured: dict = {}
+
+        def fake_from_url(url, **kwargs):
+            captured.update(kwargs, url=url)
+            return object()
+
+        with patch.object(aioredis, "from_url", side_effect=fake_from_url):
+            create_relay_redis()
+
+        assert captured["socket_connect_timeout"] == (
+            settings.comms_relay_socket_connect_timeout_seconds
+        )
+        assert captured["socket_timeout"] == (
+            settings.comms_relay_socket_timeout_seconds
+        )
+
+    async def test_requeue_revives_and_relay_ships_it(
+        self, db_session, relay_redis
+    ):
+        """Item 5 service-level integration: list-dead sees the corpse,
+        requeue clears BOTH markers and KEEPS attempts, the next pass
+        publishes the row for real."""
+        redis, stream = relay_redis
+        await _park_foreign_pending(db_session)
+        e = await self._emit_synth(db_session, "rq")
+        e.attempts = settings.comms_relay_max_attempts - 1
+        await db_session.flush()
+
+        with self._always_poison(redis):
+            assert await relay_pending_batch(redis, session=db_session) == (0, 1)
+
+        dead = [
+            x for x in await list_dead_events(db_session)
+            if str(x.payload.get("recipient_id", "")).startswith(SYNTH)
+        ]
+        assert [x.id for x in dead] == [e.id]
+
+        revived = await requeue_events(db_session, event_ids=[e.id])
+        assert revived == 1
+
+        events = await _synth_events(db_session)
+        row = next(x for x in events if x.id == e.id)
+        assert row.dead_lettered_at is None
+        assert row.next_attempt_at is None
+        assert row.attempts == settings.comms_relay_max_attempts  # history
+
+        # Poison fixed (real xadd) -> ships on the next pass.
+        assert await relay_pending_batch(redis, session=db_session) == (1, 0)
+        entries = await redis.xrange(stream)
+        assert any(
+            json.loads(f[b"data"])["recipient_id"] == f"{SYNTH}rq"
+            for _, f in entries
+        )
+        await db_session.rollback()
+
+    async def test_requeue_all_and_argument_validation(self, db_session):
+        """--all revives every dead row; exactly-one-scope is enforced."""
+        await _park_foreign_pending(db_session)
+        e1 = await self._emit_synth(db_session, "ra1")
+        e2 = await self._emit_synth(db_session, "ra2")
+        now = datetime.now(UTC)
+        e1.dead_lettered_at = now
+        e2.dead_lettered_at = now
+        e2.next_attempt_at = now
+        await db_session.flush()
+
+        with pytest.raises(ValueError):
+            await requeue_events(db_session)
+        with pytest.raises(ValueError):
+            await requeue_events(
+                db_session, event_ids=[e1.id], requeue_all=True,
+            )
+
+        revived = await requeue_events(db_session, requeue_all=True)
+        assert revived >= 2  # ours for sure; foreign dead rows (if any) too
+        events = await _synth_events(db_session)
+        for x in events:
+            assert x.dead_lettered_at is None
+            assert x.next_attempt_at is None
+        await db_session.rollback()
 
 
 class TestIdentitySync:

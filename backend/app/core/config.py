@@ -315,6 +315,23 @@ class Settings(BaseSettings):
     # otherwise) -- loud enough for the operator, quiet enough not to
     # drown the logs. Rows are never dropped.
     comms_relay_warn_every_attempts: int = 10
+    # -- H-R3 relay hardening --
+    # Exponential backoff for poison rows: delay = min(base * 2**attempts,
+    # cap), computed from the POST-increment attempts (first failure ->
+    # base * 2). Infra failures never assign a backoff.
+    comms_relay_backoff_base_seconds: float = 2.0
+    comms_relay_backoff_cap_seconds: float = 300.0
+    # Dead-letter ceiling: at this many failed attempts the row gets
+    # dead_lettered_at, ONE error log, and leaves the relay's select.
+    # With base 2.0 / cap 300 the pure-backoff path to death is
+    # 4+8+16+32+64+128+256 + 4x300 ~= 28-35 min plus pass ticks.
+    comms_relay_max_attempts: int = 12
+    # Socket timeouts for the relay's Redis connection -- a hung TCP
+    # connection must not stall the loop forever. A timeout surfaces as
+    # redis TimeoutError, already classified as INFRA (pass aborted,
+    # attempts untouched).
+    comms_relay_socket_connect_timeout_seconds: float = 5.0
+    comms_relay_socket_timeout_seconds: float = 5.0
     # Background relay toggle. True in prod (lifespan task). Disabled
     # in tests so relay tests drive relay_pending_batch manually --
     # same rationale as the worker toggles below (tests drive manually).

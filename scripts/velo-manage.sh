@@ -961,6 +961,17 @@ Triggered by velo update on commit $NEW_COMMIT" || {
         resync_comms_projection || exit 1
         ;;
 
+    # === Comms outbox dead-letter queue (H-R3 relay hardening) ===
+    # Thin pass-through: all logic lives in scripts/comms_outbox.py
+    # (backed by app/core/events/outbox_admin.py, service-tested).
+    #   velo comms-outbox list-dead
+    #   velo comms-outbox requeue <event-id> [...] | --all
+    comms-outbox)
+        shift
+        cd_compose
+        $COMPOSE_CMD exec -T app python scripts/comms_outbox.py "$@" || exit 1
+        ;;
+
     backup)
         TIMESTAMP=$(date +%Y%m%d_%H%M%S)
         BACKUP_DIR="$INSTALL_BASE/backups"
@@ -1298,6 +1309,8 @@ Triggered by velo update on commit $NEW_COMMIT" || {
         echo "  resync-comms        — Rebuild the comms projection (truncate + backfill;"
         echo "                        test server only; update runs it after tests; also"
         echo "                        run it after 'velo seed' -- seeds bypass the emits)"
+        echo "  comms-outbox        — Outbox dead-letter queue: list-dead |"
+        echo "                        requeue <id> [...] | requeue --all"
         echo ""
         echo "Database:"
         echo "  db connect          — Open psql session"

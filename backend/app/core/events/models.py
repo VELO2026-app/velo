@@ -82,6 +82,29 @@ class OutboxEvent(Base):
         server_default="0",
     )
 
+    # H-R3 (relay hardening): exponential-backoff carrier. NULL = "may be
+    # picked up immediately" (also the state of every pre-migration row --
+    # no backfill needed). Set ONLY by the relay's per-event (poison)
+    # failure branch; the infra branch never touches it (an outage is not
+    # the row's fault). timezone=True mirrors published_at -- all
+    # comparisons are aware UTC (П-1).
+    next_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        default=None,
+    )
+
+    # H-R3: dead-letter marker. NULL = alive. Set once, when attempts
+    # reaches comms_relay_max_attempts; the relay's select excludes dead
+    # rows, published_at stays NULL (the truth of the state: it was never
+    # shipped). Revived by the comms-outbox requeue CLI (attempts kept --
+    # history; an unfixed poison re-dies fast, by design).
+    dead_lettered_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        default=None,
+    )
+
     # Partial index: the relay's steady-state scan is
     # `WHERE published_at IS NULL ORDER BY id` -- index only the
     # pending tail, not the ever-growing published history.
