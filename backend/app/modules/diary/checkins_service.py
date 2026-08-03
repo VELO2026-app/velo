@@ -21,10 +21,10 @@ from app.core.audit import record_audit
 from app.core.config import settings
 from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
 from app.modules.bookings.models import Booking, BookingStatus
-from app.modules.diary.models import CheckType, Checkin
+from app.modules.diary.models import Checkin, CheckType
 from app.modules.diary.projections import upsert_checkin_event
 from app.modules.masters.service import get_master_full_name
-from app.modules.practices.audience_service import assert_viewer_can_access_practice
+from app.modules.practices.audience_service import assert_viewer_not_blocked
 from app.modules.practices.models import Practice
 from app.modules.users.models import User
 
@@ -88,18 +88,28 @@ async def upsert_checkin(
     if practice is None:
         raise NotFoundError("Practice not found")
 
-    # P5 (ПРОМТ №594): covers the RETROACTIVE case create_booking's own gate
-    # cannot -- a booking made while the practice was public/open, before
-    # the master narrowed the audience or blocked this viewer. Without this,
-    # that old CONFIRMED booking would still let them check in. Same shared
-    # predicate as create_booking/confirm_waitlist -- see audience_service.py.
-    # Frontend maps the raised code to one of three Russian messages
-    # (CheckinView.vue): "blocked_by_master" -> "Мастер ограничил вам доступ
-    # к этой практике"; "not_a_student" -> "Эта практика доступна только
-    # ученикам мастера"; "not_in_audience" -> "Вы не состоите в группе
-    # «{group name(s)}»" (composed client-side from the practice's own
-    # audience_group_names, already on the loaded PracticeResponse).
-    await assert_viewer_can_access_practice(user.id, practice, session)
+    # RETROACTIVE POLICY (B) (H-R2-8, was P5 ПРОМТ №594): of the two
+    # retroactive cases create_booking's own gate cannot cover -- a
+    # booking made BEFORE the master narrowed the audience, or BEFORE the
+    # master blocked this viewer -- only the BLOCK still refuses check-in.
+    # Audience narrowing is an impersonal reconfiguration and is
+    # grandfathered by the CONFIRMED booking found above (paid access is
+    # not retroactively stripped -- the R2 symmetry); a block is targeted
+    # moderation and revokes the ACTION (this check-in), though not the
+    # record (get_practice_detail keeps the practice readable for a
+    # booked viewer -- see its view manifest). Hence the blocked-ONLY
+    # probe below instead of the full audience predicate -- see
+    # assert_viewer_not_blocked's docstring (audience_service.py) for why
+    # a separate function and not a flag. Order preserved: booking-first
+    # above keeps "404 before 403" so this endpoint is no existence
+    # oracle for strangers.
+    # Frontend note: of CheckinView.vue's three mapped codes, only
+    # "blocked_by_master" -> "Мастер ограничил вам доступ к этой
+    # практике" remains reachable from check-in; the "not_a_student" /
+    # "not_in_audience" branches are now dead FOR THIS ENDPOINT (kept in
+    # the view -- other consumers of those codes exist; recorded in the
+    # H-R2-8 report, not cleaned here).
+    await assert_viewer_not_blocked(user.id, practice, session)
 
     now = datetime.now(UTC)
     window_open = practice.scheduled_at - timedelta(

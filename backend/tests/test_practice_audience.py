@@ -46,6 +46,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.bookings.models import Booking, BookingStatus
+from app.modules.diary.models import Checkin
 from app.modules.masters.groups_models import (
     MasterGroup,
     MasterGroupMembership,
@@ -328,9 +329,15 @@ async def test_blocked_viewer_sees_no_practices_of_that_master_regardless_of_aud
 
 
 @pytest.mark.asyncio
-async def test_checkin_rejects_a_viewer_no_longer_in_the_audience(
+async def test_checkin_grandfathers_a_viewer_no_longer_in_the_audience(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
+    """H-R2-8, decision (B): flipped from its pre-(B) shape (was
+    test_checkin_rejects_...). A CONFIRMED booking grandfathers the
+    holder through audience narrowing at check-in -- the audience gate
+    stays alive for NEW acquisitions (create_booking tests below) and
+    the personal block still refuses check-in (blocked test above).
+    Full twin set: tests/test_checkin_audience_grandfather.py."""
     master = await _make_verified_master(client, db_session, 99311)
     master_id = master["user"]["id"]
     group = await _custom_group(db_session, master_id)
@@ -355,8 +362,16 @@ async def test_checkin_rejects_a_viewer_no_longer_in_the_audience(
         headers=auth_headers(outsider_auth["session_token"]),
     )
 
-    assert resp.status_code == 403
-    assert resp.json()["error"] == "not_in_audience"
+    assert resp.status_code in (200, 201)
+    checkin_row = (
+        await db_session.execute(
+            select(Checkin).where(
+                Checkin.practice_id == practice.id,
+                Checkin.user_id == outsider_id,
+            )
+        )
+    ).scalar_one_or_none()
+    assert checkin_row is not None
 
 
 # ===================================================================

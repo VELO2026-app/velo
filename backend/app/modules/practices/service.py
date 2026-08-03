@@ -1128,6 +1128,11 @@ async def get_practice_detail(
     # 404 a practice they paid for -- their access already exists; the
     # gate only guards access a stranger does NOT yet have. The owner
     # always sees their own practice.
+    # Retroactive policy (B) (H-R2-8): this READ grandfather covers BOTH
+    # cases (the record stays visible); the check-in ACTION is
+    # grandfathered only through audience narrowing -- a blocked viewer
+    # still reads here but is refused at upsert_checkin
+    # (diary/checkins_service.py).
     if practice.master_id != user.id and not is_booked:
         from app.core.exceptions import ForbiddenError
         from app.modules.practices.audience_service import (

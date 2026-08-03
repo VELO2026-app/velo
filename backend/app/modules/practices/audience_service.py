@@ -11,9 +11,10 @@
 #     -- also closes the carried seam; a blocked/out-of-audience user must
 #     not be able to convert a held waitlist notification into a booking
 #     either)
-#   - diary/checkins_service.py upsert_checkin (covers the retroactive case:
-#     a booking made while the practice was public/open, before the master
-#     narrowed the audience or blocked this viewer)
+#   - diary/checkins_service.py upsert_checkin -- via
+#     assert_viewer_not_blocked ONLY (retroactive policy (B), H-R2-8):
+#     a CONFIRMED booking grandfathers the holder through audience
+#     narrowing; a personal block still refuses the check-in action
 # via assert_viewer_can_access_practice below.
 #
 # RULE: viewer is NOT blocked by the practice's master (master_student.
@@ -151,11 +152,20 @@ async def assert_viewer_can_access_practice(
         exist via join_waitlist, which itself rejects `practice.master_id ==
         user.id` with "Cannot join waitlist for your own practice"
         (waitlist/service.py:136-137)
-      - upsert_checkin: unreachable transitively -- requires an existing
-        CONFIRMED Booking (diary/checkins_service.py), and a booking can only
-        be created via the two gated paths above
     So this bypass changes no live behavior; it removes the shared
     function's dependence on that caller discipline continuing to hold.
+
+    RETROACTIVE POLICY (B) (H-R2-8): upsert_checkin is NO LONGER a caller
+    of this FULL predicate. A CONFIRMED booking grandfathers the holder
+    through audience NARROWING (an impersonal reconfiguration must not
+    strip access already paid for -- the R2 symmetry), while a personal
+    BLOCK (targeted moderation) still refuses the check-in ACTION.
+    Check-in therefore calls assert_viewer_not_blocked below -- ONLY the
+    blocked probe, with the audience branches structurally unreachable
+    rather than flag-disabled. The four remaining callers of the full
+    predicate (create_booking, join_waitlist, confirm_waitlist,
+    get_practice_detail's stranger gate) are byte-for-byte unchanged:
+    the audience gate stays fully alive for NEW acquisitions.
     """
     if practice.master_id == user_id:
         return
@@ -199,3 +209,54 @@ async def assert_viewer_can_access_practice(
     raise ForbiddenError(
         "Unrecognized audience_kind", code="not_in_audience",
     )
+
+
+async def assert_viewer_not_blocked(
+    user_id: UUID, practice: Practice, session: AsyncSession,
+) -> None:
+    """Raise ForbiddenError ONLY if `user_id` is personally blocked by the
+    practice's master -- the blocked probe of the full predicate above,
+    without the audience branches.
+
+    RETROACTIVE POLICY (B) (H-R2-8): the dedicated entry point for
+    diary/checkins_service.py upsert_checkin. Check-in runs only for
+    holders of a CONFIRMED booking (booking-first, NotFound without one),
+    and decision (B) grandfathers that paid access through audience
+    NARROWING: narrowing is an impersonal reconfiguration and must not
+    retroactively strip access already bought. A personal BLOCK is
+    targeted moderation and still refuses the ACTION. A separate
+    function -- not a bool flag on the full predicate -- so the audience
+    branches are structurally unreachable on this path, not merely
+    switched off, and no future caller can "make it work" by passing
+    True.
+
+    Message and code are byte-for-byte the full predicate's blocked
+    branch (frontend mapping unchanged). Same _blocked_clause / same
+    _clause_true_for -- nothing reimplemented.
+
+    OWNER BYPASS mirrored from the parent (P5 hardening, ПРОМТ №596),
+    and the parent's old inertness argument for check-in lives HERE now:
+    unreachable transitively -- upsert_checkin requires an existing
+    CONFIRMED Booking, and a booking can only be created via the gated
+    paths (create_booking / confirm_waitlist), both of which reject a
+    master acting on their own practice. Kept anyway so this function,
+    like its parent, does not depend on that caller discipline
+    continuing to hold.
+
+    FLOW NOTE (defense in depth, verified H-R2-8): the live block flow
+    (groups_service.block_student) cancels+refunds the student's FUTURE
+    confirmed bookings, and the check-in window closes AT scheduled_at
+    -- so any practice still check-in-able is "future" and its booking
+    is cancelled by the block itself, landing on the booking-first
+    NotFound. This 403 is therefore reachable only if blocked_at and a
+    CONFIRMED booking coexist (flow changes, re-confirmation after an
+    unblock..re-block, or direct state) -- kept as the belt to that
+    flow's suspenders, not dead code.
+    """
+    if practice.master_id == user_id:
+        return
+
+    if await _clause_true_for(practice.id, _blocked_clause(user_id), session):
+        raise ForbiddenError(
+            "You are blocked by this practice's master", code="blocked_by_master",
+        )
