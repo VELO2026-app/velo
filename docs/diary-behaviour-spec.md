@@ -112,12 +112,48 @@ what must be true after the build. "CHANGE" names what differs from today.
 
 ## §4. Still OPEN — not resolved by these rulings
 
-1. **Does the owner's Android pan the visual viewport, or shrink it?** Ruling 2 states the
-   requirement (header always visible); it does not state the mechanism. If the browser PANS, a
-   header in normal flow can still be carried off-screen and will need explicit handling. If it
-   SHRINKS, normal flow is sufficient on its own. **This is what the diagnostic panel's
-   `viewportOffsetTop` field answers, and it is the only thing that answers it.** Awaiting one
-   screenshot with the panel visible and the keyboard up.
+1. ~~Does the owner's Android pan the visual viewport, or shrink it?~~ **ANSWERED 2026-08-03 BY
+   DEVICE MEASUREMENT — five screenshots of the diagnostic panel on prod `2d4fb6ce`, Android,
+   `devicePixelRatio` 2.98, `screen.height` 932. This is the first device measurement in the whole
+   saga; everything before it was an argument from source.** The device does BOTH, and the app is
+   blind to each half for a different reason:
+
+   **(a) THE KEYBOARD IS NEVER DETECTED AT ALL — this is the root cause.**
+   `isKeyboardOpenFrom` (`useViewportGeometry.ts:62-70`) takes `delta = nativeDelta ?? (layoutHeight
+   − visualHeight)` and returns `delta > 150` (`constants.ts:99`). `keyboardSignal` read **`native`**,
+   so `nativeKeyboardDelta()` (`:53-56`) supplied it: `viewport.stableHeight() − viewport.height()`.
+   Measured with the keyboard UP: `WebApp.viewportHeight` **523.7** and `WebApp.viewportStableHeight`
+   **523.7** — Telegram reports the shrunken height as the STABLE one, so the delta is **0**, and
+   `0 > 150` is false. **`keyboardOpen` read `false` with the keyboard visibly open, and
+   `html.is-keyboard-open present: false`.** The browser fallback fails identically: `innerHeight`
+   523 against `visualViewport.height` 523.7 move together, delta ≈ 0.
+   ⇒ **Neither CSS rule (`:692-694`, `:924-926`) has EVER matched on this device.** They are not
+   wrong; they are never invoked. Five fixes refined formulas behind a gate that never opens.
+
+   **(b) THE DISPLACEMENT IS REAL AND READ FROM THE WRONG PROPERTY.** `visualViewport.pageTop` =
+   **263.53** with the keyboard up — the browser scrolls the page to reveal the focused field. The
+   module reads `visualViewport.offsetTop` instead (`:106`, `:119`), which measured **0** in every
+   state, so `--velo-vv-offset` was **`0px`** throughout. The panel prints both, adjacent, and labels
+   `pageTop` "not tracked by the module" — the previous cycle shipped the answer in the instrument's
+   own output.
+
+   **(c) THE ARITHMETIC, from his numbers.** `--velo-frozen-vh` **828.235px**, never changes;
+   `--velo-vvh` **523.697px** with the keyboard up. The composer is pinned to the frozen box's bottom
+   (`composer computed bottom: 0px`, `rect.bottom` **828.24**), i.e. ~**304px below the visible
+   bottom**. The browser's own 263.53 scroll drags it back to ~564.7 against a visible bottom of
+   523.7 — **~41px still under the fold**, which is exactly "visible field, clipped send button". The
+   header, pinned to the same box's top with the page scrolled 263.53, is carried **fully off the top
+   edge**. Both reported symptoms, reproduced as arithmetic.
+
+   ⚠ **WHAT THIS CHANGES ABOUT RULING 4, and it is not a detail: NORMAL FLOW ALONE DOES NOT FIX
+   THIS.** The diary's column is `height:100%` of a box ultimately sized by `--velo-frozen-vh` = 828.
+   Make the header and composer plain flex rows and the composer still lands at 828 while 523.7 is
+   visible — the same bug, restructured. **The missing piece is that the diary's own column must be
+   sized by the LIVE visible height, not the frozen one.** That is ONE value, not a formula, and it
+   is precisely what the old iOS-only "working" version got for free: WebKit resized the layout
+   viewport itself, so `bottom: 0` was already the bottom of what you could see. Ruling 4 remains
+   correct and necessary — it removes the per-frame math — but it must be built against the live
+   height or it inherits the defect.
 2. **The fog's visible side edges.** Leading explanation, UNVERIFIED: `AppFrame.vue:53-54` caps the
    whole app at `--velo-screen-width` = **402px** (`variables.css:265`) and centres it, so on any
    device wider than 402 CSS px the un-fogged background shows as a strip down each side the moment
