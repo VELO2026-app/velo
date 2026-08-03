@@ -77,8 +77,12 @@ what must be true after the build. "CHANGE" names what differs from today.
 ## §3. What ruling 4 removes, and what it must not break
 
 **Expected to become unnecessary** (to be confirmed by the build, not assumed here):
-- the composer's computed `bottom` (`DiaryFeedView.vue:924-927`);
-- the header's compensating `top` (`DiaryFeedView.vue:692-695`, added last cycle);
+- the composer's computed `bottom` (`DiaryFeedView.vue:924-926`);
+- the header's compensating `top` (`DiaryFeedView.vue:692-694`, added last cycle);
+  > ⚠ **Both ranges read `:924-927`/`:692-695` when this file was authored — inherited from
+  > `diary-behaviour-map.md`, which swept in the trailing blank line. Corrected 2026-08-03 after
+  > Orchestrator-81 measured them at `№661` and I re-derived per line. The map still carries the
+  > wrong ranges; this file is the corrected one.
 - the dependence of `DiaryComposer.autogrow` on the live visible height for anything except its cap.
 
 **Must not break — each of these is a prohibition with a history:**
