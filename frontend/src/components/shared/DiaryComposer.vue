@@ -229,6 +229,12 @@ async function onSend(): Promise<void> {
       text.value = '' // watch() clears the stored draft
       await nextTick()
       autogrow()
+      // Ruling 3 (spec §1): the keyboard closes after Send, so the entry is
+      // immediately visible in the feed. Reuses the SAME mechanism as an
+      // outside tap (blur -> onBlur -> setComposing(false)), not a new one --
+      // a no-op if the field somehow wasn't focused (blur() on an unfocused
+      // element does nothing).
+      inputEl.value?.blur()
       emit('created')
     } else {
       toast.error(result.error)

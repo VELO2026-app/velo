@@ -17,6 +17,7 @@ import { createApp, defineComponent, h, nextTick, type App } from 'vue'
 import {
   isKeyboardOpenFrom,
   computeKeyboardBottomOffset,
+  restBaselineDelta,
   useViewportGeometry,
   keyboardOpen,
   viewportOffsetTop,
@@ -52,6 +53,38 @@ describe('isKeyboardOpenFrom', () => {
 
   it('a native delta of exactly the threshold is NOT open (strictly greater, matches the existing >)', () => {
     expect(isKeyboardOpenFrom(150, 800, 798, 150)).toBe(false)
+  })
+})
+
+describe('restBaselineDelta (PROMPT №663)', () => {
+  it('no baseline yet (0) returns null regardless of current height', () => {
+    expect(restBaselineDelta(0, 523.7)).toBeNull()
+  })
+
+  it("THE RED-THEN-GREEN CASE: the owner's own device numbers, where BOTH the old native and browser deltas collapsed to ~0", () => {
+    // At rest: restHeight established at 828.235 (the frozen box's own value,
+    // reported by the device before any keyboard opened). Keyboard up:
+    // visualViewport.height 523.697. The OLD inputs (quoted in PROMPT №663):
+    // nativeKeyboardDelta() = stableHeight(523.7) - height(523.7) = 0 (WRONG,
+    // reads as closed); browser fallback = innerHeight(523) - vv.height(523.7)
+    // ~= 0 (WRONG too, same reason -- both move together on this device).
+    // restBaselineDelta uses a DIFFERENT reference -- the pre-keyboard rest
+    // height -- and gets the right answer.
+    const delta = restBaselineDelta(828.235, 523.697)
+    expect(delta).toBeCloseTo(304.538, 2)
+    expect(isKeyboardOpenFrom(delta, 523, 523.697, 150)).toBe(true)
+  })
+
+  it('a taller reading than the current baseline is NOT how the baseline itself updates (pure function -- updateRestHeight, not exported, owns that)', () => {
+    // restBaselineDelta is a pure comparison; a "new taller reading raises the
+    // baseline" is publish()'s job (updateRestHeight), not this function's --
+    // pinning that this one only ever computes restHeight - currentHeight.
+    expect(restBaselineDelta(500, 600)).toBe(-100)
+  })
+
+  it('at rest (current close to the baseline) is NOT open', () => {
+    const delta = restBaselineDelta(828.235, 828.235)
+    expect(isKeyboardOpenFrom(delta, 828, 828.235, 150)).toBe(false)
   })
 })
 

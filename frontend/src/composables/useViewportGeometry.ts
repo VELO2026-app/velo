@@ -33,9 +33,20 @@ import { resetKeyboardViewportState } from '@/utils/keyboardViewportState'
  *
  * CSS contract kept IDENTICAL to before (`--velo-vvh`, `html.is-keyboard-open`)
  * so every existing consumer outside the diary (`.velo-kbd-scroll`, modal
- * sheets) needs zero changes. One CSS var is NEW: `--velo-vv-offset` (px,
- * visualViewport.offsetTop) -- the diary composer/header are the only current
- * consumers of it (DiaryFeedView.vue).
+ * sheets) needs zero changes. `--velo-vv-offset` (px, visualViewport.offsetTop)
+ * is read by the debug panel only as of PROMPT №663 -- the diary's own
+ * composer/header rules that used to consume it were removed (ruling 4's
+ * normal-flow rebuild made them unnecessary; see DiaryFeedView.vue).
+ *
+ * PROMPT №663: `keyboardOpen`'s decision input changed from
+ * `nativeKeyboardDelta()` (Telegram's stableHeight vs height) to
+ * `restBaselineDelta()`, a self-captured rest-height baseline -- a DEVICE
+ * measurement showed both the native AND browser deltas collapse to ~0 on
+ * (at least) one real Android/Telegram combination, so `is-keyboard-open`
+ * had never matched there at all. This is APP-WIDE, not diary-only: every
+ * `.velo-kbd-scroll` consumer (global.css) and the tab bar (`useKeyboardOpen`)
+ * read the SAME `keyboardOpen` ref and were equally silently inert on that
+ * device class. See restBaselineDelta's own docstring for the full mechanism.
  */
 
 // K3f suppression window (ms): a soft keyboard animates shut over ~250ms; hold
@@ -44,15 +55,55 @@ import { resetKeyboardViewportState } from '@/utils/keyboardViewportState'
 // useBackgroundStabilizer.ts.
 const NAV_SUPPRESS_MS = 350
 
+// PROMPT №663: settle window (ms) before trusting a post-rotation reading as
+// the new rest baseline -- same VALUE and REASON as
+// useBackgroundStabilizer's own ORIENTATION_SETTLE_MS (rotation dimensions
+// aren't always final the instant `orientationchange` fires), duplicated
+// here deliberately rather than imported, so this file's rest-height capture
+// stays fully independent of that other mechanism (see restBaselineDelta's
+// own docstring for why that independence matters).
+const ORIENTATION_SETTLE_MS = 300
+
 /**
  * Telegram's own (stableHeight - height), or null when there's no native
  * signal to use (standalone/browser, or the @tma.js/sdk-vue viewport never
  * mounted). Pure, exported for unit tests -- unchanged from the retired
- * utils/keyboardDetection.ts.
+ * utils/keyboardDetection.ts. KEPT as a diagnostic cross-check (the debug
+ * panel still reads it) but NO LONGER the decision input -- see
+ * restBaselineDelta below for why, and the PROMPT №663 comment on `publish()`.
  */
 export function nativeKeyboardDelta(): number | null {
   if (!viewport.isMounted()) return null
   return viewport.stableHeight() - viewport.height()
+}
+
+/**
+ * Delta (px) between a first-observed "rest" visual-viewport height and the
+ * current one, or null while no baseline is established yet (restHeight <= 0
+ * -- the very first reading seeds it and cannot judge itself against it).
+ *
+ * PROMPT №663, added after a DEVICE measurement (five screenshots, the
+ * owner's Android, prod `2d4fb6ce`): with the keyboard visibly open,
+ * `viewport.stableHeight()` reported the SAME shrunken value as
+ * `viewport.height()` (523.7 == 523.7), so `nativeKeyboardDelta()` returned
+ * ~0 -- Telegram itself considers the shrunken height "stable" on this
+ * device. `window.innerHeight` moved in lockstep with `visualViewport.height`
+ * too (523 vs 523.7), so the browser fallback (`layoutHeight - visualHeight`)
+ * failed identically -- the WebView's own rendering surface shrinks before
+ * the CSS engine ever sees it, so neither existing signal has a FIXED point
+ * to measure from. `is-keyboard-open` had therefore never matched on this
+ * device; every consumer of `keyboardOpen` was silently inert.
+ *
+ * This baseline is captured HERE, independently -- deliberately NOT reusing
+ * useBackgroundStabilizer's `--velo-frozen-vh`, which is a DIFFERENT
+ * mechanism with its own unresolved mount-timing race (B29). Reaching into
+ * it would inherit that race; this capture is self-contained and self-heals
+ * from an early undersized reading the same way `updateRestHeight` does
+ * below (a later, taller reading raises the baseline, never the reverse).
+ */
+export function restBaselineDelta(restHeight: number, currentHeight: number): number | null {
+  if (restHeight <= 0) return null
+  return restHeight - currentHeight
 }
 
 /**
@@ -90,7 +141,8 @@ export function computeKeyboardBottomOffset(
 const _visibleHeight = ref(0)
 const _offsetTop = ref(0)
 const _keyboardOpen = ref(false)
-const _signal = ref<'native' | 'browser'>('browser')
+const _signal = ref<'baseline' | 'native' | 'browser'>('browser')
+const _restHeight = ref(0)
 
 /** Live visual-viewport height (px). Same meaning as the old --velo-vvh. */
 export const visibleHeight = readonly(_visibleHeight)
@@ -100,15 +152,34 @@ export const viewportOffsetTop = readonly(_offsetTop)
 export const keyboardOpen = readonly(_keyboardOpen)
 /** Which signal decided the current `keyboardOpen` value -- for diagnostics. */
 export const keyboardSignal = readonly(_signal)
+/** The self-captured "rest" baseline restBaselineDelta measures against -- for diagnostics (PROMPT №663). */
+export const keyboardRestHeight = readonly(_restHeight)
+
+/** A taller reading raises the baseline (covers a slow-finishing native
+ *  expand()); it never lowers it here -- a genuine rest-state change
+ *  (rotation) is handled by resetting it to 0 on orientationchange, below. */
+function updateRestHeight(h: number): void {
+  if (h > _restHeight.value) _restHeight.value = h
+}
 
 function publish(vv: VisualViewport): void {
   _visibleHeight.value = vv.height
   _offsetTop.value = vv.offsetTop
 
+  // PROMPT №663: restBaselineDelta first -- computed against the baseline AS
+  // OF BEFORE this call updates it, so the very first-ever reading (baseline
+  // still 0) correctly falls through to the old native/browser pair instead
+  // of judging itself against itself. nativeKeyboardDelta() stays as a
+  // diagnostic cross-check (the debug panel still shows it) but is no longer
+  // the decision input -- see restBaselineDelta's own docstring for why.
+  const baselineDelta = restBaselineDelta(_restHeight.value, vv.height)
+  updateRestHeight(vv.height)
+
   const nativeDelta = nativeKeyboardDelta()
-  _signal.value = nativeDelta !== null ? 'native' : 'browser'
+  const decidingDelta = baselineDelta ?? nativeDelta
+  _signal.value = baselineDelta !== null ? 'baseline' : nativeDelta !== null ? 'native' : 'browser'
   _keyboardOpen.value = isKeyboardOpenFrom(
-    nativeDelta,
+    decidingDelta,
     window.innerHeight,
     vv.height,
     KEYBOARD_VIEWPORT_THRESHOLD,
@@ -137,6 +208,7 @@ export function useViewportGeometry(): void {
   let rafId = 0
   let stopAfterEach: (() => void) | null = null
   let suppressUntil = 0
+  let orientationResetId = 0
 
   function setShift(): void {
     rafId = 0
@@ -153,10 +225,26 @@ export function useViewportGeometry(): void {
     rafId = window.requestAnimationFrame(setShift)
   }
 
+  // PROMPT №663: a genuine rotation can make the true rest height SMALLER
+  // than before (portrait -> landscape) -- updateRestHeight only ever raises
+  // the baseline, so without this it would stay wrongly stuck at the old
+  // orientation's height forever, and a landscape screen would misread as
+  // "keyboard open" permanently. Mirrors useBackgroundStabilizer's own
+  // orientationchange handling in shape only, not by importing it (see
+  // restBaselineDelta's docstring).
+  function onOrientationChange(): void {
+    window.clearTimeout(orientationResetId)
+    orientationResetId = window.setTimeout(() => {
+      _restHeight.value = 0
+      schedule()
+    }, ORIENTATION_SETTLE_MS)
+  }
+
   onMounted(() => {
     if (!vv) return
     vv.addEventListener('resize', schedule)
     vv.addEventListener('scroll', schedule)
+    window.addEventListener('orientationchange', onOrientationChange)
     setShift()
     // K3f (moved verbatim from useBackgroundStabilizer.ts): clear stale
     // keyboard state the instant the route changes, dismiss the keyboard,
@@ -175,8 +263,10 @@ export function useViewportGeometry(): void {
       window.cancelAnimationFrame(rafId)
       rafId = 0
     }
+    window.clearTimeout(orientationResetId)
     vv?.removeEventListener('resize', schedule)
     vv?.removeEventListener('scroll', schedule)
+    window.removeEventListener('orientationchange', onOrientationChange)
     stopAfterEach?.()
     stopAfterEach = null
     resetState()

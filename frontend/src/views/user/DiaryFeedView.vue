@@ -160,62 +160,75 @@
       </VMenu>
     </header>
 
-    <!-- Feed body: the ONLY scrolling area, between fixed header and composer -->
-    <div ref="scrollEl" class="diary-feed__body">
-      <!-- Initial loading -->
-      <div v-if="initialLoading" class="diary-feed__state">
-        <VLoader size="lg" />
-      </div>
+    <!-- Feed row: takes its own space between the header and composer rows
+         (ruling 4/PROMPT №663 -- no longer an absolutely-positioned full-bleed
+         layer). Non-scrolling itself; hosts the write-mode scrim as an
+         absolutely-positioned child so the scrim stays put over the VISIBLE
+         feed area instead of scrolling away with the cards (the scroll lives
+         one level in, see .diary-feed__scroll). -->
+    <div class="diary-feed__body">
+      <!-- Compose tap-catcher: invisible (T24-2 removed the frost/dim), but
+           still captures taps while writing to block accidental feed navigation
+           and dismiss the keyboard on an outside tap. -->
+      <div
+        class="diary-feed__scrim"
+        :class="{ 'diary-feed__scrim--on': composing }"
+        aria-hidden="true"
+      />
 
-      <!-- Error (only when nothing loaded yet) -->
-      <VEmptyState
-        v-else-if="feedError && items.length === 0"
-        icon="warning"
-        title="Не удалось загрузить дневник"
-        description="Проверьте соединение и попробуйте ещё раз"
-      >
-        <template #action>
-          <VButton variant="primary" @click="reload">Повторить</VButton>
+      <!-- The ONLY scrolling area. -->
+      <div ref="scrollEl" class="diary-feed__scroll">
+        <!-- Initial loading -->
+        <div v-if="initialLoading" class="diary-feed__state">
+          <VLoader size="lg" />
+        </div>
+
+        <!-- Error (only when nothing loaded yet) -->
+        <VEmptyState
+          v-else-if="feedError && items.length === 0"
+          icon="warning"
+          title="Не удалось загрузить дневник"
+          description="Проверьте соединение и попробуйте ещё раз"
+        >
+          <template #action>
+            <VButton variant="primary" @click="reload">Повторить</VButton>
+          </template>
+        </VEmptyState>
+
+        <!-- Empty -->
+        <VEmptyState
+          v-else-if="items.length === 0"
+          title="Дневник пуст"
+          description="Здесь появятся ваши записи, практики, check-ins и отзывы"
+        >
+          <template #icon><IconDiaryBook :size="64" /></template>
+        </VEmptyState>
+
+        <!-- Thread (chat-mode: oldest at top, newest at bottom) -->
+        <template v-else>
+          <!-- Infinite-scroll sentinel + "loading older" indicator sit ABOVE the
+               thread: history is loaded by scrolling UP. -->
+          <div ref="sentinelEl" class="diary-feed__sentinel" />
+          <div v-if="loadingMore" class="diary-feed__state diary-feed__state--more">
+            <VLoader />
+          </div>
+
+          <!-- Wrapper pins a short feed to the bottom (margin-top:auto) so few
+               entries sit next to the composer, chat-style. При активном
+               фильтре/поиске прижатие отключается (--top) — результаты идут
+               СВЕРХУ, а не уезжают в середину/низ (operator 2026-06-04). -->
+          <div class="diary-feed__thread" :class="{ 'diary-feed__thread--top': filterActive }">
+            <DiaryList
+              v-if="viewMode === 'list'"
+              :items="items"
+              :timezone="timezone"
+              @tap="onTap"
+            />
+            <DiaryTimeline v-else :items="items" :timezone="timezone" @tap="onTap" />
+          </div>
         </template>
-      </VEmptyState>
-
-      <!-- Empty -->
-      <VEmptyState
-        v-else-if="items.length === 0"
-        title="Дневник пуст"
-        description="Здесь появятся ваши записи, практики, check-ins и отзывы"
-      >
-        <template #icon><IconDiaryBook :size="64" /></template>
-      </VEmptyState>
-
-      <!-- Thread (chat-mode: oldest at top, newest at bottom) -->
-      <template v-else>
-        <!-- Infinite-scroll sentinel + "loading older" indicator sit ABOVE the
-             thread: history is loaded by scrolling UP. -->
-        <div ref="sentinelEl" class="diary-feed__sentinel" />
-        <div v-if="loadingMore" class="diary-feed__state diary-feed__state--more">
-          <VLoader />
-        </div>
-
-        <!-- Wrapper pins a short feed to the bottom (margin-top:auto) so few
-             entries sit next to the composer, chat-style. При активном
-             фильтре/поиске прижатие отключается (--top) — результаты идут
-             СВЕРХУ, а не уезжают в середину/низ (operator 2026-06-04). -->
-        <div class="diary-feed__thread" :class="{ 'diary-feed__thread--top': filterActive }">
-          <DiaryList v-if="viewMode === 'list'" :items="items" :timezone="timezone" @tap="onTap" />
-          <DiaryTimeline v-else :items="items" :timezone="timezone" @tap="onTap" />
-        </div>
-      </template>
+      </div>
     </div>
-
-    <!-- Compose tap-catcher: invisible (T24-2 removed the frost/dim), but
-         still captures taps while writing to block accidental feed navigation
-         and dismiss the keyboard on an outside tap. -->
-    <div
-      class="diary-feed__scrim"
-      :class="{ 'diary-feed__scrim--on': composing }"
-      aria-hidden="true"
-    />
 
     <!-- Undo bar: shown after deleting an entry (Figma screen 58) -->
     <div v-if="deletedEntryId" class="diary-feed__undo">
@@ -637,61 +650,83 @@ onBeforeUnmount(() => {
 <style scoped>
 /* Chat-style layout. The parent (MobileLayout main in `fill` mode) is a flex
    column that hands us its full height with no scroll of its own. We fill that
-   height and split it into three rows: fixed header, scrolling feed, fixed
-   composer. Only the feed (.diary-feed__body) scrolls -- header and composer
-   stay put, so the composer is always pinned just above the tab bar on both
-   short and long feeds. The background stays continuous across all three rows
-   (overlay look preserved: nothing opaque cuts the runes backdrop). */
-/* Immersive overlay layout (G-1 glass islands). The feed scrolls edge-to-edge
-   under floating glass islands: NO opaque bars. The header (title pill + "...")
-   and the composer are transparent containers whose only solid pixels are the
-   glass islands themselves; the feed flows under them, blurred only where an
-   island sits on top. The scrollbar is hidden app-wide. */
+   height and split it into three rows: header, scrolling feed, composer. Only
+   the feed (.diary-feed__scroll) scrolls -- header and composer stay put. The
+   background stays continuous across all three rows (nothing opaque cuts the
+   runes backdrop in the header/composer rows' own transparent gaps).
+   PROMPT №663 (ruling 4 rebuild) CORRECTS this block and the one below it,
+   which described the PRE-rebuild model as current fact: the three rows no
+   longer overlap ("the feed flows under them" is no longer true -- see the
+   `.diary-feed` comment right below for what replaced it), and the islands
+   are glass ONLY on the individual pill elements, not a claim about the feed
+   sliding under them any more. The scrollbar is hidden app-wide. */
+/* PROMPT №663 (ruling 4 rebuild): a flex COLUMN, not an absolute-positioning
+   host any more -- header / feed / composer are its three rows, in DOM
+   order, none of them overlapping. Sized to the LIVE visible height
+   (`--velo-vvh`, published by useViewportGeometry.ts), NOT 100% of the
+   frozen ancestor (`AppFrame`'s `--velo-frozen-vh`): a normal-flow column
+   sized to the FROZEN height would still put the composer at the frozen
+   box's bottom while only the SHRUNKEN visible area is actually on screen --
+   the same Android defect, merely restructured (this is the device-measured
+   finding behind diary-behaviour-spec.md §4.1). Falls back to 100% (of the
+   frozen ancestor, same as before) until the var publishes, mirroring
+   AppFrame.vue's own `height: 100lvh; height: var(--velo-frozen-vh, 100lvh)`
+   fallback pattern. Second-order effect this is expected to produce
+   (REASONED, not yet device-confirmed): if the document is never taller than
+   what's actually visible, the browser has nothing to auto-scroll into view,
+   so the native pan that currently carries the header off the top edge
+   should not trigger at all -- ruling 2 satisfied structurally rather than by
+   a compensating rule. */
+/* PROMPT №664: `--velo-vvh` is the RAW visual-viewport height -- it does NOT
+   know about AppFrame's safe-area `padding-top` the way a PERCENTAGE height
+   would (a percentage always resolves against the parent's content box,
+   which already excludes that padding; an absolute px var does not).
+   AppFrame's own content box is `--velo-vvh` (at rest) minus
+   `--velo-content-safe-top` (0 in-chat, ~70px in Telegram fullscreen,
+   useSafeArea.ts) -- binding straight to `--velo-vvh` reintroduced exactly
+   this screen's own defect class in fullscreen: the column would be the
+   FULL viewport tall while starting `--velo-content-safe-top` px down, so
+   its bottom -- the composer -- would overshoot the actually-visible bottom
+   by that same amount, clipped by `.mobile-layout__main--fill`'s
+   `overflow:hidden`. Subtracting the var (published by AppFrame.vue
+   alongside its padding) fixes it in BOTH modes: in-chat
+   `--velo-content-safe-top` is 0, so `calc(vvh - 0px)` = `vvh`, BYTE-IDENTICAL
+   to before this line existed (this is the mode all five of the owner's
+   device screenshots were taken in, which is why the bug did not show up in
+   them); fullscreen it correctly evaluates to `vvh - ~70px`, matching
+   AppFrame's own reduced content box instead of overshooting it. */
 .diary-feed {
   position: relative;
   height: 100%;
+  height: calc(var(--velo-vvh, 100%) - var(--velo-content-safe-top, 0px));
   min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-/* -- Header: transparent overlay, islands only (top row) --
-   Aligned to the same 33px side rail as the composer row, so the title pill
-   sits over the composer field's left edge and "..." over the send button. */
+/* -- Header: its own row, top of the column (ruling 4) --
+   Transparent container; only the back-pill / title / "..." trigger are
+   opaque ("keeping the glass" -- ruling 4 is about POSITION, not about
+   filling this row). Aligned to the same 33px side rail as the composer row,
+   so the title pill sits over the composer field's left edge and "..." over
+   the send button. */
 .diary-feed__header {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: var(--z-sticky);
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
   /* +20px top so the islands clear the Telegram chrome / screen edge. */
   padding: calc(var(--space-3) + 20px) var(--velo-rail-pad-x) var(--space-3);
-  /* Container is click-through; only the islands inside catch taps. */
-  pointer-events: none;
-}
-.diary-feed__header > * {
-  pointer-events: auto;
 }
 
-/* PROMPT №658 (Navigator's call, not the owner's): the header is `top:0` of
-   the same frozen-height box the composer sits `bottom:0` of, so it is
-   equally vulnerable to a visual-viewport pan -- when the pan pushes the
-   visible window's top down by `--velo-vv-offset` px, the header (still
-   drawn at the box's TRUE top) ends up above the panned-down visible area
-   entirely. This is what the owner's own screenshot (e) showed: the back
-   button and the title gone off the top of the screen, in the SAME capture
-   that showed the composer clipped at the bottom. Same signal, same module,
-   the other half of the same defect. Compensates by shifting `top` down by
-   the live offset, so the header tracks the visible window's top instead of
-   the frozen box's. AT REST (no is-keyboard-open, no composing, offset
-   always 0) this selector never matches -> layout is byte-identical to
-   before, same reasoning and same proof method as the composer rule below.
-   Does NOT touch #app/html/body (BG-ROOT stays untouched) -- scoped to this
-   one diary-owned element only, same as the composer. */
-html.is-keyboard-open .diary-feed--composing .diary-feed__header {
-  top: var(--velo-vv-offset, 0px);
-}
+/* PROMPT №663: the compensating `top: var(--velo-vv-offset)` rule that used
+   to live here (added PROMPT №658) is REMOVED, not merely inert -- once the
+   header is a normal-flow row instead of `position:absolute;top:0`, `top`
+   does not apply to it at all, so there is no property left for a formula to
+   get wrong. This is ruling 2 (the header never moves) delivered by removing
+   the only rule that could ever move it, not by a smarter version of that
+   rule. See the file-level `.diary-feed` comment above for the live-height
+   reasoning this depends on. */
 
 .diary-feed__title {
   font-family: var(--font-heading);
@@ -700,21 +735,17 @@ html.is-keyboard-open .diary-feed--composing .diary-feed__header {
   color: var(--velo-text-primary);
 }
 
-/* Left island group: exit back-pill + plain category title (no backing). The
-   group itself is click-through so the feed scrolls under the title text; only
-   the back-pill and reset cross re-enable taps. */
+/* Left group: exit back-pill + plain category title (no backing). PROMPT
+   №663: the click-through trick (`pointer-events:none` container +
+   `pointer-events:auto` on the pill) is GONE -- it existed so the feed could
+   be tapped/scrolled through the header's empty gaps while the header
+   floated over it. Under ruling 4 the feed no longer extends into this row
+   at all, so there is nothing behind those gaps to reach any more. */
 .diary-feed__left {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   min-width: 0;
-  pointer-events: none;
-}
-
-/* The shared VBackButton sits inside the click-through left group, so re-enable
-   taps on it (the rest of the group stays click-through). */
-.diary-feed__back {
-  pointer-events: auto;
 }
 
 /* "..." trigger glyph: vertical dots that rotate to horizontal while the menu
@@ -742,46 +773,49 @@ html.is-keyboard-open .diary-feed--composing .diary-feed__header {
   transform: rotate(30deg);
 }
 
-/* -- Body: the ONLY scrolling area, edge-to-edge UNDER the islands --
-   Fills the whole frame; top/bottom padding (40 / 80, G-1 spec) keeps the first
-   and last card reachable from under the header / composer islands. Scrollbar
-   hidden (app-wide rule). */
+/* -- Feed row: takes its own space between the header and composer rows
+   (ruling 4/PROMPT №663) -- NOT the ONLY-scrolling element any more; it is a
+   non-scrolling positioning host so the write-mode scrim (below) stays put
+   over the visible feed instead of scrolling away with the cards (an
+   absolutely-positioned child of a scroll container lays out in that
+   container's scrollable overflow region, not its visible viewport -- caught
+   before shipping, at №662's lean-grade). The actual scroll region is
+   `.diary-feed__scroll`, one level in. */
 .diary-feed__body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* The ONLY scrolling area. PROMPT №663: the old 4-zone mask (hard-transparent
+   bands sized to hide cards passing UNDER the floating header/composer
+   islands) is RETIRED -- ruling 4 means nothing passes under them any more,
+   so there is nothing to hide. REPLACED by the ruling-4 amendment: a plain,
+   symmetric edge fade -- appearance only, no overlap, no keyboard-derived
+   value (the amendment's own words; a build that reads a viewport signal
+   here has misread it). */
+.diary-feed__scroll {
   position: absolute;
   inset: 0;
-  /* Own stacking context (z 0) so feed cards never paint above the compose
-     scrim (which sits at z 1, just below the chrome islands). */
   z-index: 0;
   transition: opacity 0.28s ease;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 120px var(--velo-rail-pad-x) 140px;
+  padding: var(--space-5) var(--velo-rail-pad-x);
   scrollbar-width: none;
   -ms-overflow-style: none;
-  /* 4-zone fog (operator spec 50 / 70 / 70 / 70 -- +10 per zone after the
-     islands were nudged +20 off the edges), top -> bottom:
-       50  hard transparent (behind the title island)
-       70  fade  -- the feed emerges from full transparency
-       ..  fully visible content
-       70  fade  -- dissolves as it slides under the composer
-       70  hard transparent (behind the composer island)
-     Top padding 120 = 50+70, bottom padding 140 = 70+70. */
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0,
-    transparent 50px,
-    #000 120px,
-    #000 calc(100% - 140px),
-    transparent calc(100% - 70px),
+    #000 var(--space-5),
+    #000 calc(100% - var(--space-5)),
     transparent 100%
   );
   mask-image: linear-gradient(
     to bottom,
     transparent 0,
-    transparent 50px,
-    #000 120px,
-    #000 calc(100% - 140px),
-    transparent calc(100% - 70px),
+    #000 var(--space-5),
+    #000 calc(100% - var(--space-5)),
     transparent 100%
   );
   /* Chat-mode: a flex column so the thread wrapper can pin a short feed to the
@@ -790,7 +824,7 @@ html.is-keyboard-open .diary-feed--composing .diary-feed__header {
   display: flex;
   flex-direction: column;
 }
-.diary-feed__body::-webkit-scrollbar {
+.diary-feed__scroll::-webkit-scrollbar {
   width: 0;
   height: 0;
   display: none;
@@ -871,83 +905,64 @@ html.is-keyboard-open .diary-feed--composing .diary-feed__header {
   opacity: 0.8;
 }
 
-/* -- Composer: transparent overlay container, the pill is the only island --
-   Floats over the edge-to-edge feed (no opaque bar). The diary hides the tab
-   bar, so the safe-area inset is added here to clear the home indicator.
-   pointer-events: the container is click-through; the composer pill catches
-   taps. Same 33px side rail as the header islands. */
+/* -- Composer: its own row, bottom of the column (ruling 4) --
+   Transparent container; the field + send button are the only opaque/glass
+   pixels ("keeping the glass"). The diary hides the tab bar, so the
+   safe-area inset is added here to clear the home indicator. Same 33px side
+   rail as the header row. PROMPT №663: no longer `position:absolute` and no
+   longer click-through (same reasoning as the header -- see its own
+   comment). */
 .diary-feed__composer {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: var(--z-sticky);
+  flex: 0 0 auto;
   display: flex;
   justify-content: center;
   /* +20px bottom so the composer buttons clear the screen edge / Telegram chrome. */
   padding: var(--space-3) var(--velo-rail-pad-x)
     calc(var(--space-4) + 20px + env(safe-area-inset-bottom, 0px));
-  pointer-events: none;
-}
-.diary-feed__composer > * {
-  pointer-events: auto;
 }
 
 /* While writing (keyboard up) drop the composer's extra bottom offset so the
    buttons sit closer to the keyboard -- the keyboard<->buttons gap then roughly
-   matches the buttons<->field gap. */
+   matches the buttons<->field gap. Unaffected by the ruling-4 restructure --
+   purely cosmetic, was never part of the positioning mechanism. */
 .diary-feed--composing .diary-feed__composer {
   padding-bottom: calc(var(--space-4) + 5px + env(safe-area-inset-bottom, 0px));
 }
 
-/* T24-1, corrected PROMPT №657: reposition the composer above the LIVE
-   keyboard, not the frozen box's own bottom edge. `.diary-feed__composer` is
-   bottom:0 of `.diary-feed` (position:relative), whose own height inherits
-   the frozen `--velo-frozen-vh` box (global.css BG-FREEZE) all the way down
-   -- immune by construction to any live viewport signal. `--velo-vvh` /
-   `--velo-vv-offset` / `html.is-keyboard-open` are published by the ONE
-   canonical reader now, useViewportGeometry.ts (composables/) -- see its own
-   header for what this replaces (four independent readers, one of them this
-   exact rule, none of which ever read `offsetTop`).
-   THE FIX: `frozen - vvh` alone (the pre-№657 formula) assumed the visible
-   window's TOP always coincides with the layout box's top -- true only when
-   the browser hasn't panned the visual viewport. When it has (a documented,
-   real browser/WebView behavior -- see the PROMPT №657 DONE report's search
-   findings), the true visible bottom is `offsetTop + vvh`, not `vvh` alone,
-   so the shift must also subtract `--velo-vv-offset`
-   (computeKeyboardBottomOffset in useViewportGeometry.ts is this exact
-   formula, unit-tested including the pan case). AT REST (no
-   is-keyboard-open, offset always 0) this selector never matches and the var
-   is unset -> layout is byte-identical to before. Does NOT touch
-   #app/html/body (BG-ROOT stays untouched) -- scoped to this one diary-owned
-   element only. */
-html.is-keyboard-open .diary-feed--composing .diary-feed__composer {
-  bottom: calc(var(--velo-frozen-vh, 100%) - var(--velo-vvh, 100%) - var(--velo-vv-offset, 0px));
-}
+/* PROMPT №663: the `bottom: calc(--velo-frozen-vh - --velo-vvh -
+   --velo-vv-offset)` rule that used to live here (T24-1, corrected №657) is
+   REMOVED, not merely inert. It computed where the LIVE keyboard's top edge
+   was, every animation frame, so it could shift a composer pinned to a
+   FROZEN box's bottom back into the live visible area. Once the composer is
+   a normal-flow row inside a column sized to the live visible height itself
+   (`.diary-feed`, above), it is ALREADY at the live visible bottom -- there
+   is nothing left to compute. Device measurement (diary-behaviour-spec.md
+   §4.1) showed the formula never even mattered in practice: `is-keyboard-open`
+   never matched on the owner's Android at all (see useViewportGeometry.ts,
+   restBaselineDelta), so this rule had never once fired. */
 
 /* -- Compose write-mode tap-catcher + fog --
    T24-2 (owner reversal, 2026-07-31) removed the frosted-glass wash here,
    read as "remove everything." PROMPT №657 (owner-ruled): that removal went
-   too far -- restore the fog, scoped correctly this time. The owner's own
-   words are the spec: entering the diary looks normal while scrolling; the
-   moment you start writing, the CONTENT is muted by fog (white + blur) while
-   the header buttons stay untouched; entries stay faintly perceptible, never
-   competing with the text; the field above the keyboard is written in calmly.
-   Restored with the EXACT pre-existing tokens (--velo-write-frost /
-   --velo-write-blur, rgba(255,255,255,0.20) / 10px, operator-tuned
-   2026-06-05, commit 2b28f2c7) -- already documented in variables.css as
-   serving "scrim + composer field," already used unchanged on the composer
-   field itself (.composer--composing .composer__field below). No new token
-   minted. Scope is correct by construction, not by a new rule: this element
-   is `.diary-feed`'s full-bleed absolute child at z-index 1, BELOW the
-   header/composer islands (z var(--z-sticky), both siblings) -- their pixels
-   paint over this layer, so they were never blurred/dimmed by it even before
-   this restoration, and stay exactly as untouched now.
-   position:absolute (was fixed, bg-freeze batch) so it covers `.diary-feed`
-   edge-to-edge WITHOUT tracking the visual viewport (`.diary-feed` is
-   position:relative, so inset:0 resolves against that stable box). Tapping it
-   (still non-focusable) blurs the field -> dismisses the keyboard, in
-   addition to blocking accidental feed navigation -- unchanged. */
+   too far -- restore the fog. The owner's own words are the spec: entering
+   the diary looks normal while scrolling; the moment you start writing, the
+   CONTENT is muted by fog (white + blur) while the header buttons stay
+   untouched; entries stay faintly perceptible, never competing with the
+   text; the field above the keyboard is written in calmly. EXACT
+   pre-existing tokens (--velo-write-frost / --velo-write-blur,
+   rgba(255,255,255,0.20) / 10px, operator-tuned 2026-06-05, commit
+   2b28f2c7) -- already documented in variables.css as serving "scrim +
+   composer field," already used unchanged on the composer field itself
+   (.composer--composing .composer__field below). No new token minted.
+   PROMPT №663: rescoped from `.diary-feed`'s full-bleed absolute child to
+   `.diary-feed__body`'s (the non-scrolling feed row, above) -- a SAFE
+   rescoping, not a behaviour change: this element sat BELOW the header/
+   composer islands even before this prompt (they were siblings painting
+   above it at a higher z-index), so it never covered them then and does not
+   now; only the box it fills got smaller (the feed's own row instead of the
+   whole screen), which is exactly what ruling 4 intends. Tapping it (still
+   non-focusable) blurs the field -> dismisses the keyboard, in addition to
+   blocking accidental feed navigation -- unchanged. */
 .diary-feed__scrim {
   position: absolute;
   inset: 0;
@@ -963,10 +978,13 @@ html.is-keyboard-open .diary-feed--composing .diary-feed__composer {
 
 /* Feed content fades (70%) while writing (operator-tuned 2026-06-05, SAME
    commit as the scrim's frost values above -- 2b28f2c7 tuned both together,
-   measured via `git log -S`, not assumed). PROMPT №657: COEXISTS with the
-   restored scrim fog by design, not by default -- the pre-T24-2 look was
-   always fade + frost together as one tuned pair, never either alone. */
-.diary-feed--composing .diary-feed__body {
+   measured via `git log -S`, not assumed). COEXISTS with the scrim fog by
+   design, not by default -- fade + frost together, one tuned pair, never
+   either alone (spec §3's standing prohibition). PROMPT №663: retargeted from
+   `.diary-feed__body` to `.diary-feed__scroll` -- the actual card content --
+   now that `.diary-feed__body` also hosts the scrim as a sibling; dimming the
+   OUTER wrapper would have dimmed the scrim's own wash along with the cards. */
+.diary-feed--composing .diary-feed__scroll {
   opacity: 0.7;
 }
 </style>

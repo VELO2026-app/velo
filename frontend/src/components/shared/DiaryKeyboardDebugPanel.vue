@@ -1,12 +1,15 @@
 <!--
-  TEMPORARY DIAGNOSTIC -- PROMPT №654/656/657 (T24-1/B29). NOT design-system
-  UI: do not theme it, do not keep it. Ships to prod for ONE device
-  screenshot from the owner's Android with the diary composer open, then gets
-  removed in a follow-up commit (see the removal note in this prompt's commit
-  body).
+  TEMPORARY DIAGNOSTIC -- PROMPT №654/656/657/663 (T24-1/B29). NOT
+  design-system UI: do not theme it, do not keep it. It comes out on the
+  Navigator's word, once the rebuild is accepted on the owner's device --
+  NOT on this prompt.
 
-  Visibility: mounted by DiaryFeedView.vue behind a hidden tap gesture on the
-  title (persisted in localStorage) -- see DiaryFeedView.vue's onTitleTap.
+  Visibility: UNCONDITIONAL (PROMPT №660) -- mounted by DiaryFeedView.vue for
+  every diary visitor, no gesture, no role, no storage. Four gesture-gated
+  activation attempts before №660 never produced a confirmed sighting, so the
+  gesture layer itself was removed as a variable. PROMPT №663 (owner-ruled,
+  after finally seeing it): kept, made small with a small font so the field
+  list fits without covering the app.
 
   PROMPT №657: reports what useViewportGeometry.ts -- the ONE place in the
   tree that now reads raw visualViewport height/offset or the tma.js viewport
@@ -42,6 +45,7 @@ import {
   keyboardSignal as canonicalKeyboardSignal,
   visibleHeight as canonicalVisibleHeight,
   viewportOffsetTop as canonicalOffsetTop,
+  keyboardRestHeight as canonicalRestHeight,
 } from '@/composables/useViewportGeometry'
 
 const POLL_MS = 300
@@ -69,7 +73,10 @@ function readTelegramWebApp(): { vh: string; vsh: string; exp: string } {
 
 function collect(): void {
   const innerH = window.innerHeight
+  const innerW = window.innerWidth
   const screenH = window.screen?.height
+  const screenW = window.screen?.width
+  const clientW = document.documentElement.clientWidth
   const dpr = window.devicePixelRatio
   // pageTop only -- height/offsetTop come from the canonical refs below, not
   // re-read here (see the file header: reading them again would restore the
@@ -99,7 +106,10 @@ function collect(): void {
 
   lines.value = [
     ['window.innerHeight', fmt(innerH)],
+    ['window.innerWidth', fmt(innerW)],
     ['window.screen.height', fmt(screenH)],
+    ['window.screen.width', fmt(screenW)],
+    ['documentElement.clientWidth', fmt(clientW)],
     ['devicePixelRatio', fmt(dpr)],
     ['visualViewport.pageTop (not tracked by the module)', fmt(vvPageTop)],
     ['--- window.Telegram.WebApp (raw, independent cross-check) ---', ''],
@@ -111,6 +121,11 @@ function collect(): void {
     ['viewportOffsetTop', fmt(canonicalOffsetTop.value)],
     ['keyboardOpen', String(canonicalKeyboardOpen.value)],
     ['keyboardSignal (WHICH signal decided it)', canonicalKeyboardSignal.value],
+    ['keyboardRestHeight (PROMPT №663 baseline)', fmt(canonicalRestHeight.value)],
+    [
+      'baseline delta (restHeight - visibleHeight)',
+      fmt(canonicalRestHeight.value - canonicalVisibleHeight.value),
+    ],
     ['visible rect: top (=offsetTop)', fmt(visibleTop)],
     ['visible rect: bottom (=offset+visibleHeight)', fmt(visibleBottom)],
     ['--- CSS vars / classes published by the module ---', ''],
@@ -120,7 +135,10 @@ function collect(): void {
     ['html.is-keyboard-open present', String(htmlKbOpen)],
     ['.diary-feed--composing present', String(composingOn)],
     ['--- composer element ---', ''],
-    ['composer computed bottom', composerBottom],
+    [
+      'composer computed bottom (expect "auto": normal-flow row since №663, not bottom-pinned)',
+      composerBottom,
+    ],
     ['composer rect.top', rect ? fmt(rect.top) : 'n/a (not mounted)'],
     ['composer rect.bottom', rect ? fmt(rect.bottom) : 'n/a (not mounted)'],
   ]
@@ -153,28 +171,35 @@ onBeforeUnmount(() => {
 <style scoped>
 /* Plain literal values only -- see the file header. This box must survive a
    bug in --velo-frozen-vh / --velo-vvh / is-keyboard-open, since those are
-   exactly what it is measuring. */
+   exactly what it is measuring.
+   PROMPT №663 (owner-ruled, after seeing it on his phone): shrunk font/
+   padding/line-height so the whole field list fits without covering most of
+   the screen -- his own report was the panel covering ~830px of an 828px
+   viewport, cutting off exactly the field he needed to read. max-height
+   dropped from 55vh to 30vh as a safeguard cap, not because the shorter rows
+   need it (they no longer do, at this size) -- overflow-y:auto still catches
+   it if a future field list grows past that again. */
 .kbd-debug {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   z-index: 999999;
-  max-height: 55vh;
+  max-height: 30vh;
   overflow-y: auto;
   background: #000000;
   color: #00ff66;
   font-family: 'Courier New', Consolas, monospace;
-  font-size: 10px;
-  line-height: 1.5;
-  padding: 6px 8px;
+  font-size: 8px;
+  line-height: 1.3;
+  padding: 4px 6px;
   pointer-events: none;
 }
 
 .kbd-debug__row {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
+  gap: 6px;
   white-space: nowrap;
 }
 

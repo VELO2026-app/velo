@@ -285,6 +285,31 @@ describe('DiaryComposer -- send path', () => {
     expect(createdCount).toBe(0)
   })
 
+  it('ruling 3: success blurs the field, so the keyboard closes', async () => {
+    // Per this file's own caveat (top banner): happy-dom does not reliably
+    // propagate a real DOM .blur() call into a dispatched 'blur' event, even
+    // on a genuinely .focus()-ed element -- confirmed by hand this session
+    // (real .focus() + .blur() left composer--composing unchanged, twice).
+    // That is an environment gap, not a code bug -- a real engine fires
+    // 'blur' synchronously from .blur(), which is exactly what a real
+    // outside tap already exercises (the draft-preservation tests above, via
+    // a directly-dispatched blur event). So this asserts what onSend's own
+    // code does -- calls .blur() on the field -- rather than a downstream
+    // effect this environment cannot produce. Do not rewrite this to check
+    // the composing class/composingChange; that would test happy-dom, not
+    // this component.
+    vi.mocked(diaryApi.createDiaryEntry).mockResolvedValueOnce(entryFixture('a real entry'))
+    mount()
+    typeText('a real entry')
+    await nextTick()
+    const blurSpy = vi.spyOn(textarea(), 'blur')
+
+    slotBtn().click()
+    await flush()
+
+    expect(blurSpy).toHaveBeenCalledTimes(1)
+  })
+
   it('a second click while the first send is still in flight is a no-op (submitting guard)', async () => {
     let resolveCreate!: (v: DiaryEntryResponse) => void
     vi.mocked(diaryApi.createDiaryEntry).mockReturnValueOnce(
