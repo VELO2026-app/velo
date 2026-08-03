@@ -175,17 +175,24 @@ onBeforeUnmount(() => {
    PROMPT №663 (owner-ruled, after seeing it on his phone): shrunk font/
    padding/line-height so the whole field list fits without covering most of
    the screen -- his own report was the panel covering ~830px of an 828px
-   viewport, cutting off exactly the field he needed to read. max-height
-   dropped from 55vh to 30vh as a safeguard cap, not because the shorter rows
-   need it (they no longer do, at this size) -- overflow-y:auto still catches
-   it if a future field list grows past that again. */
+   viewport, cutting off exactly the field he needed to read.
+   PROMPT №665: `max-height` changed from `30vh` to a FIXED `300px`. `vh`
+   tracks the live viewport -- exactly the thing this panel measures -- so a
+   `vh` cap made the panel itself resize between keyboard-open and
+   keyboard-closed, the owner's second report. NO `vh`/`dvh`/`lvh`/`svh`/`%`
+   anywhere in this file, on purpose: this box must survive a bug in the very
+   numbers it prints, and a relative unit here would make it one more thing
+   that could be wrong at the moment it's needed. 300px comfortably holds the
+   full field list at the current 8px/1.3 sizing without scrolling on a
+   typical device; overflow-y:auto stays as the safety valve if the list
+   grows past that again. */
 .kbd-debug {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   z-index: 999999;
-  max-height: 30vh;
+  max-height: 300px;
   overflow-y: auto;
   background: #000000;
   color: #00ff66;
