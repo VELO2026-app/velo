@@ -43,6 +43,18 @@ feed lives between them.
 consequence, stated plainly so it cannot arrive as a surprise: the feed will no longer slide UNDER
 the header and composer, so the fade-under-glass effect is lost. The material remains; what it is
 laid over changes.
+**AMENDED 2026-08-03, after the owner SAW the consequence drawn (`.tmp/` preview, `№661`/`№662`) —
+ruling 4 stands, plus a softening he chose over accepting the hard edge:** the feed keeps a **soft
+fade at its OWN top and bottom edges**, so cards pale as they approach the boundary instead of being
+cut off flat.
+⚠ **This is NOT the old 4-zone mask brought back, and the difference is the whole point.** The old
+mask existed to hide the fact that cards passed UNDERNEATH floating islands. The new fade serves
+appearance only: it is a fade on the feed row's own edge, it requires no overlap, and it requires no
+knowledge of the keyboard. A build that reintroduces overlap or a viewport-derived value in order to
+achieve it has misread this amendment.
+The owner accepted, in exchange, that a card fades rather than physically travelling under glass —
+he was told that difference is visible close up before he chose.
+
 **Why it was put as a fork at all, and the measured fact behind it:** the only version of this
 screen ever reported as working had no keyboard computation whatsoever — a flat
 `position: absolute; bottom: 0`. Every version since computes a `bottom` from live viewport signals
@@ -60,7 +72,7 @@ what must be true after the build. "CHANGE" names what differs from today.
 | # | State | TARGET behaviour | CHANGE from today |
 |---|---|---|---|
 | 1 | Diary opened | Header at the top in its own space, composer at the bottom in its own space, feed between them. Immersive mode unchanged: no tab bar, exit via the menu. | Header and composer stop overlapping the feed (ruling 4). |
-| 2 | Scrolling the feed | Feed scrolls between the two pills. No content passes under them. | The 4-zone fade mask that made cards dissolve under the pills is no longer needed for that purpose. |
+| 2 | Scrolling the feed | Feed scrolls between the two pills. No content passes under them. Cards **pale toward the feed's own top and bottom edges** (ruling 4 amendment) — appearance only, no overlap, no keyboard-derived value. | The 4-zone mask that hid cards passing UNDER the pills is retired and REPLACED by a plain edge fade serving a different purpose. Not a removal. |
 | 3 | Field tapped | Write mode begins HERE: fog over the feed, feed dims, field takes focus, keyboard rises. Header does not move. | Trigger is unchanged (already tap). Header no longer shifts (ruling 2). |
 | 4 | Keyboard opening | Composer stays above the rising keyboard throughout the animation. Header stays put. | Today the composer is positioned by a formula recomputed every animation frame; under ruling 4 the layout holds it without a formula. |
 | 5 | Keyboard fully open | Composer sits directly above the keyboard. Header fully visible in its original place. No buttons below the field. | This is the reported defect on Android and is the point of the whole rebuild. |
