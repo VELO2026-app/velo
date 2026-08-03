@@ -277,8 +277,23 @@ ol {
 html.is-keyboard-open .velo-kbd-scroll {
   /* Scroll region (and its %-based fog mask) shrink to the visible area, so a
      sticky composer sits just above the keyboard and the focused field is
-     reachable; the fog fade follows the new bottom instead of clipping a band. */
-  max-height: var(--velo-vvh);
+     reachable; the fog fade follows the new bottom instead of clipping a band.
+     PROMPT №666: subtracts `--velo-content-safe-top` (AppFrame.vue,
+     0 in-chat / ~70px Telegram fullscreen) -- the SAME defect class the diary
+     was returned for at №664: `--velo-vvh` is the RAW visual-viewport height,
+     unaware of AppFrame's safe-area padding-top, so capping straight to it
+     would overshoot the actually-visible bottom by the safe-area amount in
+     fullscreen. This was harmless while Android keyboard detection never
+     fired (№663 root cause); it fires now. Safe here because every
+     `.velo-kbd-scroll` consumer this rule reaches is a normal descendant of
+     AppFrame (auth screens, onboarding, MasterApplyView, GroupJoinView,
+     MasterPendingView, NotFoundView, AdminLayout -- confirmed via App.vue,
+     `<AppFrame><RouterView/></AppFrame>` wraps every route), so
+     `--velo-content-safe-top` reaches them by ordinary CSS inheritance.
+     NOT applied to the `.v-modal__overlay`/`.v-sheet__overlay`/
+     `.v-modal__container`/`.v-sheet__panel` rules below -- see their own
+     comments for why. */
+  max-height: calc(var(--velo-vvh) - var(--velo-content-safe-top, 0px));
 }
 
 html.is-keyboard-open .v-modal__overlay,
@@ -289,7 +304,20 @@ html.is-keyboard-open .v-sheet__overlay {
      container — .v-modal__scroll / .v-sheet__panel inside it is; see below).
      .v-sheet__overlay (VBottomSheet) joins .v-modal__overlay here (bg-freeze
      batch) -- it previously had no keyboard treatment at all, a real gap since
-     it hosts VTextarea reject-reason fields (admin moderation flows). */
+     it hosts VTextarea reject-reason fields (admin moderation flows).
+     PROMPT №666: deliberately NOT subtracting `--velo-content-safe-top` here,
+     unlike `.velo-kbd-scroll` above -- VModal.vue and VBottomSheet.vue both
+     `<Teleport to="body">` (confirmed by reading both files), so this
+     overlay is a SIBLING of `#app` at the true DOM body level, not a
+     descendant of `AppFrame`. CSS custom properties only inherit down the
+     DOM to descendants; `--velo-content-safe-top` is set via an inline
+     `:style` binding on `.app-frame` (a deep descendant of `#app`), which a
+     body-level sibling has no ancestor relationship to at all -- `var(--velo-
+     content-safe-top, 0px)` here would silently resolve to its 0px fallback
+     forever, not a real fix, just a no-op that reads like one. A genuine fix
+     needs the var published somewhere teleported content CAN inherit from
+     (body/html level), which needs a new Vue-reactive binding at that level
+     -- out of scope for this prompt; flagged, not built. */
   height: var(--velo-vvh);
   bottom: auto;
 }

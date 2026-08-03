@@ -110,11 +110,14 @@ const back = vi.fn()
 const routeQuery = reactive<{ deleted?: string | string[] }>({})
 
 // PROMPT №657: real() kept via importOriginal -- DiaryFeedView now transitively
-// imports the real @/router singleton (DiaryKeyboardDebugPanel ->
-// useViewportGeometry -> @/router, for the K3f route-suppression hook), which
-// calls createRouter()/createWebHistory() at module load. A full replace-mock
-// (the pre-№657 version here) has neither, so importing the router module
-// under it throws. Additive mock: everything real EXCEPT useRouter/useRoute.
+// imports the real @/router singleton (DiaryComposer -> useViewportGeometry ->
+// @/router, for the K3f route-suppression hook -- PROMPT №666: was cited here
+// as DiaryKeyboardDebugPanel's chain, but that component is deleted; the same
+// transitive import survives independently through DiaryComposer's own
+// `visibleHeight` import), which calls createRouter()/createWebHistory() at
+// module load. A full replace-mock (the pre-№657 version here) has neither,
+// so importing the router module under it throws. Additive mock: everything
+// real EXCEPT useRouter/useRoute.
 vi.mock('vue-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('vue-router')>()
   return {

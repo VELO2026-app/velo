@@ -62,6 +62,31 @@ screen ever reported as working had no keyboard computation whatsoever — a fla
 broken on a device. The floating construction is what forces the computation; ruling 4 removes the
 forcing.
 
+**Ruling 5 — WHILE COMPOSING, EVERYTHING BEHIND THE FOG IS NAILED DOWN (owner-ruled 2026-08-03).**
+In English: *"Why does it move at all when the text moves? We covered it with the fog — that's it, it
+must stand still. Nailed down. Until we send the entry to the diary."*
+> Verbatim original, kept as EVIDENCE of what was actually ruled rather than as prose — a paraphrase
+> cannot be checked against him later, which is the one thing a ruling record is for. Enumerated and
+> justified per `Claude-Profile-Rules` LANGUAGE; every other line of this file is English:
+> *"Зачем он вообще движется при движении текста? Мы его перекрыли туманом, всё, он должен статично
+> стоять. Прибитый намертво. Пока мы не отправим введённое сообщение в дневник."*
+From the moment write mode begins until the entry is sent (or write mode ends), **nothing behind the
+fog may move, resize, re-scroll or re-fade.** The feed is covered and dimmed — it is not being read —
+so it has no business shifting when the composer grows by a line.
+
+**The mechanical cause, DEVICE-MEASURED, not inferred:** the composer grows upward by taking space
+from the feed row's `flex: 1 1 auto`. Owner's screenshots, prod `68d66890`: composer `rect.top`
+**434.71** at one line, **335.69** at six. Every candidate for the visible "jump" — the edge-fade
+mask's percentage stops riding the row's moving bottom edge, the fog's `backdrop-filter` re-sampling
+shifted content, scroll anchoring — is a CONSEQUENCE of that one box changing size. **Freeze the box
+and all of them go, which is why this ruling makes diagnosing the jump unnecessary.**
+
+⚠ **THE TRAP, named because it is the failure that has bitten this screen five times:** a naive
+height-lock on the feed row makes the column taller than the viewport when the composer grows, which
+pushes the composer BELOW the fold — the original defect, restored. Whatever mechanism is chosen must
+keep the composer anchored above the keyboard, the 300px cap intact, and ruling 4's no-overlap-at-rest
+intact. **Verify the jump is actually gone on a device; do not assume the freeze implies it.**
+
 ---
 
 ## §2. Target behaviour, state by state

@@ -166,8 +166,21 @@
          fixed layer (see .diary-feed__scrim below, now a sibling of this
          element) -- this row no longer hosts anything but its own scroll
          content, so the extra non-scrolling wrapper + inner `.diary-feed__scroll`
-         split from №663 is gone; this element IS the scrolling area again. -->
-    <div ref="scrollEl" class="diary-feed__body">
+         split from №663 is gone; this element IS the scrolling area again.
+         PROMPT №667 (ruling 5): while composing, `:style` pins this row's
+         height to its own pre-composing value (see `frozenFeedHeight` in
+         <script>) so the composer's growth cannot resize -- and therefore
+         cannot visibly move anything behind -- the fog. Unset (undefined)
+         at rest, so nothing here differs from ruling 4's behaviour then. -->
+    <div
+      ref="scrollEl"
+      class="diary-feed__body"
+      :style="
+        frozenFeedHeight !== null
+          ? { height: `${frozenFeedHeight}px`, flex: '0 0 auto' }
+          : undefined
+      "
+    >
       <!-- Initial loading -->
       <div v-if="initialLoading" class="diary-feed__state">
         <VLoader size="lg" />
@@ -267,16 +280,6 @@
       @search="onApplySearch"
       @close="showSearch = false"
     />
-
-    <!-- TEMPORARY -- PROMPT №654..660 (T24-1/B29 device diagnostic).
-         UNCONDITIONAL as of №660 (Navigator's call, not the owner's): four
-         gesture-gated activation attempts (roles, then taps) never produced a
-         confirmed sighting on the owner's device, and the gesture layer itself
-         is now a variable nobody can rule out from source. Renders for every
-         diary visitor until removed -- see docs/diary-behaviour-map.md for the
-         investigation this replaces. Read-only, plain position:fixed. Remove
-         once the owner has captured what it was built for. -->
-    <DiaryKeyboardDebugPanel />
   </div>
 </template>
 
@@ -291,7 +294,6 @@ import DiaryList from '@/components/shared/DiaryList.vue'
 import DiaryComposer from '@/components/shared/DiaryComposer.vue'
 import DiaryFilterModal from '@/components/shared/DiaryFilterModal.vue'
 import DiarySearchModal from '@/components/shared/DiarySearchModal.vue'
-import DiaryKeyboardDebugPanel from '@/components/shared/DiaryKeyboardDebugPanel.vue'
 import { useDiaryStore } from '@/stores/diary'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
@@ -602,6 +604,58 @@ async function onComposerCreated(): Promise<void> {
 const scrollEl = ref<HTMLElement | null>(null)
 const sentinelEl = ref<HTMLElement | null>(null)
 let observer: IntersectionObserver | null = null
+
+// -- Ruling 5 (PROMPT №667): freeze the feed row while composing ------------
+//
+// Owner, ruling 5: we covered it with the fog, so it must stand still --
+// nailed down until the entry is sent. Verbatim original in the spec.
+// (diary-behaviour-spec.md §1). MEASURED cause: the composer grows upward by
+// taking space from `.diary-feed__body`'s `flex: 1 1 auto` -- every candidate
+// for the visible jump (the edge-fade mask's percentage stops riding the
+// row's moving bottom edge, the fog's backdrop-filter re-sampling shifted
+// content, scroll anchoring) is a CONSEQUENCE of that one box resizing.
+// Freezing it removes the cause without needing to know which consequence
+// the owner actually saw.
+//
+// WHAT IS FROZEN: `.diary-feed__body`'s own rendered height, captured via
+// getBoundingClientRect() at the exact instant `composing` flips true --
+// this is BEFORE the composer has grown at all (focus alone doesn't grow
+// it; growth only happens on later `input` events), so the captured value
+// is the row's ordinary, unremarkable at-rest height. `watch()` runs
+// pre-flush (Vue's default), i.e. before this same reactive tick's DOM
+// patch, so the measurement is taken against the OLD (still flex:1,
+// composer still flex:0 0 auto) layout, not a half-transitioned one.
+//
+// FROZEN TO: that captured number, verbatim, as an explicit `height` +
+// `flex: 0 0 auto` inline style -- overriding the CSS class's `flex: 1 1
+// auto` so the flex algorithm cannot redistribute space into this row once
+// the composer (below) leaves the flex flow. Because the captured height
+// already equals what flex would have computed a moment earlier, applying
+// it is a NO-OP at the instant it takes effect: same box, same pixels, only
+// pinned instead of computed -- the same "AT REST byte-identical" proof
+// shape this codebase already uses elsewhere (e.g. AppFrame's frozen-vh
+// fallback chain).
+//
+// THAWS: the moment `composing` goes false (blur, outside tap, or Send via
+// DiaryComposer's own post-send blur, ruling 3) -- the inline style is
+// removed entirely, and `.diary-feed__body` returns to plain `flex: 1 1
+// auto`, exactly its ruling-4 at-rest behaviour, unchanged by any of this.
+//
+// The composer itself gains `position:absolute` ONLY while composing (see
+// `.diary-feed--composing .diary-feed__composer` in <style>) so its growth
+// no longer competes for the frozen row's space at all -- it overlays the
+// (now motionless, fogged, unread) bottom of the feed instead. Still
+// anchored `bottom:0` of the SAME live-height `.diary-feed` column
+// (untouched, still `--velo-vvh`-based), so ruling 5's requirement that the
+// composer stays above the keyboard at every text length is unaffected --
+// only WHERE it takes its space from changes, not what it's anchored to.
+const frozenFeedHeight = ref<number | null>(null)
+
+watch(composing, (isComposing) => {
+  frozenFeedHeight.value = isComposing
+    ? (scrollEl.value?.getBoundingClientRect().height ?? null)
+    : null
+})
 
 function setupObserver(): void {
   if (observer || !sentinelEl.value) return
@@ -928,8 +982,28 @@ onBeforeUnmount(() => {
 /* While writing (keyboard up) drop the composer's extra bottom offset so the
    buttons sit closer to the keyboard -- the keyboard<->buttons gap then roughly
    matches the buttons<->field gap. Unaffected by the ruling-4 restructure --
-   purely cosmetic, was never part of the positioning mechanism. */
+   purely cosmetic, was never part of the positioning mechanism.
+   PROMPT №667 (ruling 5): ALSO takes the composer out of the flex flow while
+   composing (`position:absolute`, still `bottom:0` of the SAME live-height
+   `.diary-feed` column -- untouched), so its growth stops competing with
+   `.diary-feed__body` for flex space at all. That row is frozen to its
+   pre-composing height in the SAME instant (see `frozenFeedHeight` in
+   <script>), and the two changes land together: at the moment composing
+   begins the composer hasn't grown yet, so its natural height still equals
+   exactly what the frozen row already reserved for it -- zero overlap at
+   that instant, matching ruling 4's at-rest contract one frame longer than
+   strictly required. Only actual typing-driven growth beyond that (which
+   necessarily happens after the ~200ms fog fade-in has already covered the
+   feed) pushes the composer's own top edge up INTO the now-frozen row's
+   box -- permitted by ruling 5 ("the feed is covered and dimmed -- it is
+   not being read"), never visible as bare overlap. AT REST (not composing)
+   this rule does not match -- `.diary-feed__composer` stays exactly the
+   `position:relative;flex:0 0 auto` row from PROMPT №663/№665, unchanged. */
 .diary-feed--composing .diary-feed__composer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   padding-bottom: calc(var(--space-4) + 5px + env(safe-area-inset-bottom, 0px));
 }
 
