@@ -375,9 +375,11 @@ async def confirm_waitlist(
             target_value=str(entry.user_id),
             title="Бронь по листу ожидания истекла",
             body=(
+                # Neutral for BOTH exit paths: the handoff to the next
+                # in line is gated on a confirmable practice (below), so
+                # "passed to the next" would be a lie on a dead one.
                 f"Вы не подтвердили место на практику "
-                f"«{practice.title}» вовремя -- оно передано "
-                f"следующему в очереди."
+                f"«{practice.title}» вовремя -- бронь истекла."
             ),
             action_data={
                 "action": "open_practice",

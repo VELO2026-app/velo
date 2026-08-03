@@ -106,6 +106,18 @@ def test_relay_enabled_without_redis_rejected() -> None:
         _mk(api_url="http://comms-app:8000", token="tok", redis_url="")
 
 
+def test_redis_without_api_and_token_rejected() -> None:
+    """The inverse half-integration: relay ships events, bell proxy dead."""
+    with pytest.raises(ValidationError, match="COMMS_API_URL"):
+        _mk(redis_url="redis://x", api_url="", token="")
+
+
+def test_dev_allows_redis_only_config() -> None:
+    """Dev twin of the branch above: redis-only must not block local dev."""
+    s = _mk(app_env="development", redis_url="redis://x", api_url="", token="")
+    assert s.comms_redis_url == "redis://x"
+
+
 def test_dev_allows_partial_comms_config() -> None:
     """Dev stays permissive: a half-config must not block local startup."""
     s = _mk(app_env="development", api_url="http://comms-app:8000", token="")

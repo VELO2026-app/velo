@@ -178,6 +178,7 @@ async def full_cleanup_range(
     tid_max: int,
     *,
     delete_users: bool = False,
+    extra_ranges: list[tuple[int, int]] | None = None,
 ) -> None:
     """Delete all test data for a telegram_id range in FK-safe order.
 
@@ -196,13 +197,30 @@ async def full_cleanup_range(
         delete_users: If True, hard-delete users in the range.
                       Use for tests that count absolute user totals
                       (e.g. test_admin_stats). Default: False (role reset).
+        extra_ranges: Additional (tid_min, tid_max) ranges cleaned in the
+                      SAME pass. H-R2: two back-to-back calls silently
+                      undo each other -- the rollback below discards the
+                      first call's uncommitted deletes (the H-R1 trap).
+                      One call, N ranges, one rollback.
     """
+    # Defensive rollback, KEEP IT (H-R2 verdict): cleanup fixtures run
+    # first in a test, and the PREVIOUS test may have left the shared
+    # session dirty or in a failed transaction -- without this reset the
+    # very first DELETE below can blow up with PendingRollbackError
+    # across unrelated files (106 call sites depend on it). It has no
+    # documented origin (arrived wholesale with the helper, a1d6671),
+    # but the protective role stands on its own. Consequence: never call
+    # this helper twice without committing in between -- pass
+    # extra_ranges instead.
     await session.rollback()
 
-    # Reusable subqueries.
-    user_ids_subq = select(User.id).where(
-        User.telegram_id.between(tid_min, tid_max)
+    ranges = [(tid_min, tid_max), *(extra_ranges or [])]
+    tid_clause = or_(
+        *(User.telegram_id.between(lo, hi) for lo, hi in ranges)
     )
+
+    # Reusable subqueries.
+    user_ids_subq = select(User.id).where(tid_clause)
     practice_ids_subq = select(Practice.id).where(
         Practice.master_id.in_(user_ids_subq)
     )
@@ -217,9 +235,7 @@ async def full_cleanup_range(
     )
 
     # String-cast subqueries for JSONB / text-value comparisons.
-    user_ids_str_subq = select(cast(User.id, String)).where(
-        User.telegram_id.between(tid_min, tid_max)
-    )
+    user_ids_str_subq = select(cast(User.id, String)).where(tid_clause)
     practice_ids_str_subq = select(cast(Practice.id, String)).where(
         Practice.master_id.in_(user_ids_subq)
     )
@@ -406,10 +422,10 @@ async def full_cleanup_range(
     if not delete_users:
         await session.execute(
             update(User)
-            .where(User.telegram_id.between(tid_min, tid_max))
+            .where(tid_clause)
             .values(role=UserRole.USER.value, balance_cents=0)
         )
     else:
         await session.execute(
-            delete(User).where(User.telegram_id.between(tid_min, tid_max))
+            delete(User).where(tid_clause)
         )

@@ -222,6 +222,10 @@ async function loadPrefs(): Promise<void> {
       schedule.days = prefs.schedule.days
     }
   } catch (error) {
+    // H-R2 (3.6): a silent load failure left the screen showing defaults
+    // the server never confirmed -- surface it (same tone as the
+    // category handler below).
+    toast.error('Не удалось загрузить настройки уведомлений')
     console.warn('notification prefs load failed', error)
   }
 }
@@ -230,7 +234,12 @@ onMounted(loadPrefs)
 function persistSchedule(): void {
   updateNotificationPrefs({
     schedule: { from: schedule.from, to: schedule.to, days: [...schedule.days] },
-  }).catch((error) => console.warn('schedule save failed', error))
+  }).catch((error) => {
+    // H-R2 (3.6): the schedule save failing silently meant the picker
+    // showed a schedule the server never accepted.
+    toast.error('Не удалось сохранить расписание')
+    console.warn('schedule save failed', error)
+  })
 }
 
 // --- Handlers --------------------------------------------------------------

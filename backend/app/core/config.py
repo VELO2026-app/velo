@@ -679,6 +679,23 @@ class Settings(BaseSettings):
                     "domain events would pile up undelivered. Set "
                     "COMMS_REDIS_URL or set COMMS_RELAY_ENABLED=false."
                 )
+            if (
+                self.comms_redis_url
+                and not self.comms_api_url
+                and not self.comms_service_token
+            ):
+                # The inverse half-integration of the branch above: the
+                # relay happily ships events into Redis, but with no
+                # api_url the bell proxy is off -- users never see a
+                # single notification and nothing errors anywhere.
+                raise ValueError(
+                    "COMMS_REDIS_URL is set but COMMS_API_URL and "
+                    "COMMS_SERVICE_TOKEN are both empty: the relay would "
+                    "ship events to comms while the bell proxy stays "
+                    "dead -- notifications pile up that no user can ever "
+                    "see. Set COMMS_API_URL + COMMS_SERVICE_TOKEN or "
+                    "clear COMMS_REDIS_URL."
+                )
 
         return self
 

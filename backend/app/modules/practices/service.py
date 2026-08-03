@@ -77,7 +77,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import structlog
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -183,6 +183,32 @@ _TAXONOMY_FIELDS = ("direction", "style", "difficulty")
 # ===================================================================
 # Helpers
 # ===================================================================
+
+
+async def _owned_root_parent_or_400(
+    master_id: UUID, parent_id: UUID | None, session: AsyncSession,
+) -> None:
+    """H-R2 (3.4): a series occurrence may only attach to (a) an EXISTING
+    practice, (b) owned by THIS master, (c) that is itself a ROOT (no
+    grandchildren -- occurrences of occurrences are not a thing).
+
+    One 400 for all three refusals, deliberately not distinguishing
+    "someone else's" from "does not exist" -- same anti-enumeration
+    reflex as _owned_group_ids_or_400 below (a 400/404 split would leak
+    which foreign practice ids exist). Also converts what would be a raw
+    FK IntegrityError (-> 500) on a nonexistent id into a clean 400.
+    """
+    if parent_id is None:
+        return
+    parent = await session.get(Practice, parent_id)
+    if (
+        parent is None
+        or parent.master_id != master_id
+        or parent.parent_practice_id is not None
+    ):
+        raise BadRequestError(
+            "parent_practice_id must be your own root practice"
+        )
 
 
 async def _owned_group_ids_or_400(
@@ -930,6 +956,11 @@ async def create_practice(
     # custom groups (another master's group, an unknown id, or a system
     # slug) before anything is inserted.
     await _owned_group_ids_or_400(user.id, body.group_ids, session)
+    # H-R2 (3.4): validate parent_practice_id BEFORE anything is inserted
+    # -- same placement discipline as the group check above.
+    await _owned_root_parent_or_400(
+        user.id, body.parent_practice_id, session,
+    )
 
     practice = Practice(
         master_id=user.id,
@@ -1334,6 +1365,12 @@ async def update_practice(
     # branch below can tell.
     old_audience_kind = practice.audience_kind
 
+    # H-R2 (3.3): capture the PRE-update capacity before the setattr loop
+    # overwrites it -- the "was capacity relaxed?" comparison at the end
+    # of this function must read the OLD value (mirror of old_scheduled_at
+    # / old_status above).
+    old_cap = practice.max_participants
+
     # Apply only provided column fields.
     for field, value in update_data.items():
         setattr(practice, field, value)
@@ -1560,6 +1597,81 @@ async def update_practice(
     ):
         from app.modules.zoom.service import create_meeting_for_practice
         await create_meeting_for_practice(practice, session)
+
+    # H-R2 (3.3): a capacity RELAXATION frees seats -- hand them to the
+    # waitlist NOW instead of leaving the queue to wait for someone
+    # else's cancellation. Relaxation = max_participants was updated AND
+    # (a numeric cap was lifted to None, or raised to a larger number);
+    # None -> number is a TIGHTENING and number -> smaller is refused by
+    # the shrink guard above, so neither reaches the loop. All decisions
+    # read the FINAL post-update state (status / scheduled_at / new cap)
+    # except the OLD cap, pre-captured above: a single PATCH may raise
+    # the cap AND cancel the practice, and the final picture decides.
+    # Gated on a confirmable practice -- mirror of the H-R1 handoff gate
+    # in confirm_waitlist's expiry branch (waitlist/service.py): offering
+    # seats on a dead practice would only walk the queue through
+    # pointless notify -> expire cycles.
+    if "max_participants" in update_data:
+        new_cap = practice.max_participants
+        relaxed = (new_cap is None and old_cap is not None) or (
+            new_cap is not None
+            and old_cap is not None
+            and new_cap > old_cap
+        )
+        now_utc = datetime.now(UTC)
+        confirmable = (
+            practice.status == PracticeStatus.SCHEDULED.value
+            and practice.scheduled_at > now_utc
+        )
+        if relaxed and confirmable:
+            # process_waitlist notifies EXACTLY ONE waiter per call
+            # (.limit(1)) and does NOT check capacity itself -- the
+            # boundary is the caller's job (verified fact, H-R2).
+            from app.modules.bookings.models import Booking, BookingStatus
+            from app.modules.waitlist.models import Waitlist, WaitlistStatus
+            from app.modules.waitlist.service import process_waitlist
+
+            if new_cap is None:
+                # No limit anymore: every WAITING entry gets its offer.
+                while await process_waitlist(practice.id, session):
+                    pass
+            else:
+                active = (
+                    await session.execute(
+                        select(func.count())
+                        .select_from(Booking)
+                        .where(
+                            Booking.practice_id == practice.id,
+                            Booking.status
+                            == BookingStatus.CONFIRMED.value,
+                        )
+                    )
+                ).scalar_one()
+                # Live holds keep their seat reserved: NOTIFIED with a
+                # window still open, or (defensively) with no window at
+                # all -- under-offering beats re-offering (re-offering
+                # existing holders is explicitly forbidden).
+                live_holds = (
+                    await session.execute(
+                        select(func.count())
+                        .select_from(Waitlist)
+                        .where(
+                            Waitlist.practice_id == practice.id,
+                            Waitlist.status
+                            == WaitlistStatus.NOTIFIED.value,
+                            or_(
+                                Waitlist.expires_at.is_(None),
+                                Waitlist.expires_at > now_utc,
+                            ),
+                        )
+                    )
+                ).scalar_one()
+                free_seats = new_cap - active - live_holds
+                for _ in range(max(free_seats, 0)):
+                    if await process_waitlist(
+                        practice.id, session,
+                    ) is None:
+                        break  # queue drained before the seats did
 
     return practice
 

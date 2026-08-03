@@ -230,6 +230,37 @@ describe('MasterNotificationsView', () => {
       expect(toastError).toHaveBeenCalledWith('Не удалось сохранить настройку')
     })
 
+    // H-R2 (3.6): the two formerly-silent catches now surface.
+    it('toasts when the initial prefs LOAD fails (was a silent console.warn)', async () => {
+      prefsGet.mockRejectedValueOnce(new Error('500'))
+      mount()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Не удалось загрузить настройки уведомлений')
+    })
+
+    it('toasts when the schedule SAVE fails (was a silent console.warn)', async () => {
+      prefsPut.mockRejectedValueOnce(new Error('500'))
+      mount()
+      await flush()
+
+      dayBtn('ПН').click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Не удалось сохранить расписание')
+    })
+
+    it('happy path shows NO toasts -- load and schedule save both succeed', async () => {
+      mount()
+      await flush()
+
+      dayBtn('ПН').click()
+      await flush()
+
+      expect(prefsPut).toHaveBeenCalled()
+      expect(toastError).not.toHaveBeenCalled()
+    })
+
     it('a STUB row (Ежемесячный отчет) writes NOTHING and is lost on remount -- still the honest local stub', async () => {
       mount()
       await flush()

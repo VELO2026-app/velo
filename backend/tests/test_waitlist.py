@@ -46,16 +46,16 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
 async def _do_cleanup(session: AsyncSession) -> None:
     """Full ORM cleanup for telegram_id 62000-62999.
 
-    H-R1: also cleans the 89600-89619 band issued for the stuck-NOTIFIED
-    regression tests (the legacy 62xxx ids in this file predate the band
-    registry and are left untouched).
+    H-R1/H-R2: also cleans the 89600-89619 band issued for the
+    stuck-NOTIFIED regression tests, in the same pass via extra_ranges
+    (the legacy 62xxx ids in this file predate the band registry and are
+    left untouched).
     """
-    # Commit between the two calls: full_cleanup_range opens with
-    # session.rollback(), which would discard the first range's
-    # uncommitted deletes.
-    await full_cleanup_range(session, 62000, 62999, delete_users=False)
-    await session.commit()
-    await full_cleanup_range(session, 89600, 89619, delete_users=False)
+    await full_cleanup_range(
+        session, 62000, 62999,
+        delete_users=False,
+        extra_ranges=[(89600, 89619)],
+    )
     await session.commit()
 
 
@@ -536,6 +536,18 @@ async def test_confirm_waitlist_on_cancelled_practice_rejected(
 
     resp = await client.post(f"{WAITLIST_URL}/{wid}/confirm", headers=headers)
     assert resp.status_code == 400
+
+    # H-R2 twin of the guard reorder, symmetric to the started test: an
+    # ALIVE (non-expired) hold on a CANCELLED practice must stay
+    # NOTIFIED -- the raise path (rollback) is still the one taken, not
+    # the expiry commit path.
+    db_session.expire_all()
+    entry = (
+        await db_session.execute(
+            select(Waitlist).where(Waitlist.id == wid)
+        )
+    ).scalar_one()
+    assert entry.status == "notified"
 
 
 @pytest.mark.asyncio
