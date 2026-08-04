@@ -31,9 +31,14 @@ where it is, in every state, including while the keyboard is open and while text
 Today's behaviour, where it leaves the screen on Android when the keyboard opens, is a defect and
 nothing else. There is no state in which the header is expected to move, shrink, or hide.
 
-**Ruling 3 — the keyboard CLOSES after Send.** After a successful send the field empties and the
-keyboard dismisses, so the entry is immediately visible in the feed. Writing a second entry costs a
-deliberate tap, and that is accepted.
+**Ruling 3 — SUPERSEDED THE SAME DAY, and the reversal is stated rather than rewritten.**
+~~The keyboard CLOSES after Send.~~ It was ruled on the reasoning that *"the diary is a record of an
+event, not a conversation"*. **The owner then redefined the diary AS a conversation** — "сообщения мы
+пишем как в Telegram, внутри дневника" — which removes the premise the ruling rested on.
+**RULING 3b (owner-ruled 2026-08-03): after Send the keyboard STAYS OPEN, and the feed scrolls so the
+just-created entry sits visibly above the keyboard.** Both of his requirements are real — write
+several entries in a row, and see that the entry landed — and only this shape serves both. It is also
+what his own Telegram reference does.
 
 **Ruling 4 — the pills stop floating and take their own place in the layout, keeping the glass.**
 The frosted material and blur stay. What goes is the floating: the header and the composer are no
@@ -62,7 +67,15 @@ screen ever reported as working had no keyboard computation whatsoever — a fla
 broken on a device. The floating construction is what forces the computation; ruling 4 removes the
 forcing.
 
-**Ruling 5 — WHILE COMPOSING, EVERYTHING BEHIND THE FOG IS NAILED DOWN (owner-ruled 2026-08-03).**
+> 🔴 **RULING 5 IS DEAD — REVERSED BY RULING 6 ON THE SAME DAY IT SHIPPED (`c122fae5`). READ RULING 6
+> FIRST; DO NOT REINSTATE THE FREEZE.** It is kept here in full, struck rather than deleted, because
+> a future reader finding the freeze in git and no record of why it went would put it back.
+> **Why it died:** the freeze existed so that content moving UNDER THE FOG did not read as random
+> jumping. Ruling 6 removes the fog, and once the movement is visible it is not random — it is the
+> ordinary behaviour of a message list being pushed up by a growing input, which is exactly what the
+> owner asked for. The freeze would now FIGHT the requirement instead of serving it.
+
+~~**Ruling 5 — WHILE COMPOSING, EVERYTHING BEHIND THE FOG IS NAILED DOWN (owner-ruled 2026-08-03).**~~
 In English: *"Why does it move at all when the text moves? We covered it with the fog — that's it, it
 must stand still. Nailed down. Until we send the entry to the diary."*
 > Verbatim original, kept as EVIDENCE of what was actually ruled rather than as prose — a paraphrase
@@ -86,6 +99,30 @@ height-lock on the feed row makes the column taller than the viewport when the c
 pushes the composer BELOW the fold — the original defect, restored. Whatever mechanism is chosen must
 keep the composer anchored above the keyboard, the 300px cap intact, and ruling 4's no-overlap-at-rest
 intact. **Verify the jump is actually gone on a device; do not assume the freeze implies it.**
+
+**Ruling 6 — NO FOG. THE DIARY IS A CONVERSATION, AND IT BEHAVES LIKE ONE (owner-ruled 2026-08-03,
+with Telegram screenshots as the reference).** This supersedes ruling 4's fog work AND ruling 5
+entirely. Four requirements, his:
+1. **The blur / frosted wash over the feed is REMOVED.** So is the feed's 70% dim. **The diary's
+   content stays fully visible and unobscured the whole time he is writing** — that is the point, and
+   it is the opposite of everything the fog was built to do.
+2. **Activating the field PUSHES the feed content UP, and it keeps pushing as the text grows.** The
+   list behaves like a message list: anchored to the bottom, riding above a growing composer.
+3. **The composer field itself MAY carry a slight frost**, and only it — so the text being typed reads
+   clearly against whatever is behind it.
+4. The header stays where it is (ruling 2, unchanged).
+
+⚠ **WHAT DIES WITH THIS, named so nobody restores it by accident:** the full-viewport `position:fixed`
+scrim (`№665`), the feed's `opacity: 0.7` dim, and the `composing` height-freeze on the feed row plus
+the composer's compose-time `position: absolute` (`№667`). **The fog and the freeze were one idea; both
+go together.** What SURVIVES untouched: the baseline keyboard detection, the live-height column
+(`calc(var(--velo-vvh) - var(--velo-content-safe-top))`), `--velo-content-safe-top` itself, BG-ROOT,
+and the composer's 300px autogrow cap.
+
+⚠ **THE HONEST NOTE FOR WHOEVER READS THIS COLD:** rulings 4, 5 and 6 were all made within one day,
+and 6 reverses much of 4 and all of 5. That is not churn for its own sake — each ruling was made on
+what the previous build actually looked like on his device, which is the order he asked for after five
+source-reasoned failures. The pattern to copy is "he looks, then he rules", not "the spec is unstable".
 
 ---
 

@@ -229,12 +229,13 @@ async function onSend(): Promise<void> {
       text.value = '' // watch() clears the stored draft
       await nextTick()
       autogrow()
-      // Ruling 3 (spec §1): the keyboard closes after Send, so the entry is
-      // immediately visible in the feed. Reuses the SAME mechanism as an
-      // outside tap (blur -> onBlur -> setComposing(false)), not a new one --
-      // a no-op if the field somehow wasn't focused (blur() on an unfocused
-      // element does nothing).
-      inputEl.value?.blur()
+      // Ruling 3b (spec §1, PROMPT №668 -- SUPERSEDES ruling 3): the keyboard
+      // STAYS OPEN after Send, so a second entry costs no extra tap. Ruling 3
+      // used to blur the field here (closing the keyboard); that call is
+      // REMOVED, not merely inert -- the field stays focused, `composing`
+      // stays true, and the parent's own `scrollToBottom()` (fired from this
+      // `created` emit) is what makes the just-sent entry visible above the
+      // still-open keyboard, not a keyboard dismissal.
       emit('created')
     } else {
       toast.error(result.error)
