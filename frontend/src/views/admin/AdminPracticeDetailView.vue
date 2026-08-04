@@ -68,6 +68,14 @@
             {{ zoomAttendance.unmatched_count }}
           </VBadge>
         </div>
+        <!-- PK-Z2: ZoomMeeting.last_sync_error, previously write-only --
+             shown only when set (typically alongside a create_failed status
+             above). Raw, whatever English the backend recorded -- no
+             translation layer exists for developer-facing error text (B8). -->
+        <div v-if="zoomAttendance.last_sync_error" class="admin-detail__zoom-error-row">
+          <span class="admin-detail__zoom-label">Причина ошибки</span>
+          <span class="admin-detail__zoom-error">{{ zoomAttendance.last_sync_error }}</span>
+        </div>
       </VCard>
 
       <!-- Upcoming: who registered -->
@@ -139,7 +147,7 @@ import {
 import PracticeHeroCard from '@/components/shared/PracticeHeroCard.vue'
 import { IconCalendar, IconProfile, IconCheck, IconClose } from '@/components/icons'
 import { getAdminPracticeDetail, getAdminZoomAttendance } from '@/api/admin'
-import type { AdminZoomAttendanceResponse } from '@/api/admin'
+import type { AdminZoomAttendanceResponseWithError } from '@/api/admin'
 import { extractApiError } from '@/composables/useApiError'
 import { formatDateShort } from '@/utils/format'
 import type { AdminPracticeDetailResponse, AdminRosterEntry } from '@/api/types'
@@ -153,7 +161,7 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 // T21-1: best-effort, separate from the main loading/error state above -- a
 // failure here must never block the rest of the (already-working) page.
-const zoomAttendance = ref<AdminZoomAttendanceResponse | null>(null)
+const zoomAttendance = ref<AdminZoomAttendanceResponseWithError | null>(null)
 
 const isPast = computed<boolean>(() => practice.value?.status === 'past')
 
@@ -318,6 +326,21 @@ onMounted(() => {
   font-family: var(--font-body);
   font-size: var(--text-sm);
   color: var(--velo-text-secondary);
+}
+
+/* PK-Z2: stacked (not the label-left/badge-right row above) -- a raw
+   backend error string wraps, unlike the short status/count values. */
+.admin-detail__zoom-error-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.admin-detail__zoom-error {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--velo-error-text);
+  word-break: break-word;
 }
 
 .admin-detail__items {

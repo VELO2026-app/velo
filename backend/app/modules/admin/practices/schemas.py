@@ -110,3 +110,8 @@ class AdminZoomAttendanceResponse(BaseModel):
     bookings: list[AdminZoomBookingAttendance]
     unmatched: list[AdminZoomUnmatchedRow]
     unmatched_count: int
+    # PK-Z2: ZoomMeeting.last_sync_error, previously write-only (16 assignment
+    # sites, zero readers). Raw, whatever English the backend recorded --
+    # this project has no error-translation layer (B8) and this is a
+    # trusted admin-only surface, not a user-facing one.
+    last_sync_error: str | None

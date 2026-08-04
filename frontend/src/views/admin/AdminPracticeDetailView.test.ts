@@ -493,8 +493,8 @@ describe('AdminPracticeDetailView', () => {
   // that already worked before this section existed.
   describe('Zoom section (T21-1)', () => {
     function zoomAttendance(
-      overrides: Partial<adminApi.AdminZoomAttendanceResponse> = {},
-    ): adminApi.AdminZoomAttendanceResponse {
+      overrides: Partial<adminApi.AdminZoomAttendanceResponseWithError> = {},
+    ): adminApi.AdminZoomAttendanceResponseWithError {
       return {
         practice_id: 'p_upcoming',
         zoom_meeting_status: 'active',
@@ -502,6 +502,7 @@ describe('AdminPracticeDetailView', () => {
         bookings: [],
         unmatched: [],
         unmatched_count: 0,
+        last_sync_error: null,
         ...overrides,
       }
     }
@@ -568,6 +569,33 @@ describe('AdminPracticeDetailView', () => {
 
       expect(text()).toContain('Нераспознанные участники')
       expect(text()).toContain('4')
+    })
+
+    // PK-Z2: last_sync_error was write-only (16 assignment sites, zero
+    // readers) before this -- the admin screen showed a failed meeting but
+    // never why. Raw string, no translation layer.
+    it('PK-Z2: create_failed WITH a recorded reason shows the raw string, unmodified', async () => {
+      vi.mocked(adminApi.getAdminZoomAttendance).mockResolvedValue(
+        zoomAttendance({
+          zoom_meeting_status: 'create_failed',
+          last_sync_error: 'Zoom API error 503: capacity exceeded',
+        }),
+      )
+      mount('p_upcoming')
+      await flush()
+
+      expect(text()).toContain('Причина ошибки')
+      expect(text()).toContain('Zoom API error 503: capacity exceeded')
+    })
+
+    it('PK-Z2: no recorded reason (null) -- the reason row does not render at all, not an empty one', async () => {
+      vi.mocked(adminApi.getAdminZoomAttendance).mockResolvedValue(
+        zoomAttendance({ zoom_meeting_status: 'active', last_sync_error: null }),
+      )
+      mount('p_upcoming')
+      await flush()
+
+      expect(text()).not.toContain('Причина ошибки')
     })
   })
 })
