@@ -131,18 +131,27 @@ source-reasoned failures. The pattern to copy is "he looks, then he rules", not 
 Same twelve steps as `diary-behaviour-map.md` §1, so the two can be read side by side. "TARGET" is
 what must be true after the build. "CHANGE" names what differs from today.
 
+⚠ **ROWS 3, 9 AND 10 WERE STALE AGAINST §1 UNTIL 2026-08-05 AND ARE CORRECTED HERE (Navigator-42, at
+boot).** They still described the fog, the dim, and "keyboard closes (ruling 3)" after rulings 3b and 6
+had reversed all three in §1 of this same file — and §1 was updated while the table was not. This
+matters more than an ordinary doc lag because `:5` and `:243` both name §2 as *the thing a build is
+graded against*: grading the deployed build (`bd8e3b05`) against the old table would have marked
+shipped, owner-ruled behaviour as wrong in three rows of twelve. Row 2's edge fade was checked against
+the code before being left alone — the feed's own `mask-image` (`DiaryFeedView.vue:803,810`) survives;
+the fog is deleted, not hidden (`:948`).
+
 | # | State | TARGET behaviour | CHANGE from today |
 |---|---|---|---|
 | 1 | Diary opened | Header at the top in its own space, composer at the bottom in its own space, feed between them. Immersive mode unchanged: no tab bar, exit via the menu. | Header and composer stop overlapping the feed (ruling 4). |
 | 2 | Scrolling the feed | Feed scrolls between the two pills. No content passes under them. Cards **pale toward the feed's own top and bottom edges** (ruling 4 amendment) — appearance only, no overlap, no keyboard-derived value. | The 4-zone mask that hid cards passing UNDER the pills is retired and REPLACED by a plain edge fade serving a different purpose. Not a removal. |
-| 3 | Field tapped | Write mode begins HERE: fog over the feed, feed dims, field takes focus, keyboard rises. Header does not move. | Trigger is unchanged (already tap). Header no longer shifts (ruling 2). |
+| 3 | Field tapped | Write mode begins HERE: field takes focus, keyboard rises, **the feed stays fully visible and is pushed UP** (ruling 6.1/6.2). No fog, no dim. Header does not move. | Trigger is unchanged (already tap). Header no longer shifts (ruling 2). |
 | 4 | Keyboard opening | Composer stays above the rising keyboard throughout the animation. Header stays put. | Today the composer is positioned by a formula recomputed every animation frame; under ruling 4 the layout holds it without a formula. |
 | 5 | Keyboard fully open | Composer sits directly above the keyboard. Header fully visible in its original place. No buttons below the field. | This is the reported defect on Android and is the point of the whole rebuild. |
 | 6 | First character typed | Send button appears in the action slot. Nothing else moves. | Unchanged. |
 | 7 | Text grows past one line | Field grows upward, taking space from the feed, not from the header and not from the keyboard. Buttons stay level with the field's bottom. | Growth must not be able to push the field down behind the keyboard — today the field's own growth and the `bottom` computation are unproven against each other. |
 | 8 | Text grows past the cap | Field stops growing at the owner's ~300px figure and scrolls internally. | Unchanged; the 300px is the owner's own number (`DiaryComposer.vue:83-92`), not derived from the keyboard. |
-| 9 | Tap outside the field | Write mode ends: fog off, feed undimmed, keyboard dismissed, draft preserved as a collapsed preview if non-empty. Header, as always, does not move. | Unchanged except that the header has nothing to restore. |
-| 10 | Send | Entry posts, field empties, **keyboard closes** (ruling 3), feed visible with the new entry. | Today the keyboard stays open. |
+| 9 | Tap outside the field | Write mode ends: keyboard dismissed, the feed settles back down, draft preserved as a collapsed preview if non-empty. Nothing to un-fog or un-dim — neither exists (ruling 6.1). Header, as always, does not move. | Unchanged except that the header has nothing to restore. |
+| 10 | Send | Entry posts, field empties, **the keyboard STAYS OPEN** (ruling 3b), and the feed scrolls so the just-created entry sits visibly above the keyboard. | Unchanged in mechanism — ruling 3 would have closed it, 3b reversed that before anything was built to close it. |
 | 11 | Keyboard closes | Composer returns to rest at the bottom. Header, as always, unmoved. | Symmetric to 4. |
 | 12 | Navigate away | Focus dropped, keyboard state reset, no geometry leaked onto the next screen. | Unchanged — the existing 350ms suppression window is correct and stays. |
 
