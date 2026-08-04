@@ -246,6 +246,11 @@ export const useBookingsStore = defineStore('bookings', () => {
     fetchMyBookings,
     loadMore: pagination.loadMore,
     refreshBookings: pagination.refresh,
+    // B30: like refreshBookings(), but never flashes the list empty -- for a
+    // background freshness check on a screen that already shows data
+    // (PracticeDetailView, MyBookingsView), so a practice that just ended
+    // doesn't sit on a permanently-stale "counting attendance" badge.
+    refreshMyBookings: pagination.refreshInPlace,
 
     // Live-or-upcoming set for the dashboard nearest widget (B1)
     upcoming,

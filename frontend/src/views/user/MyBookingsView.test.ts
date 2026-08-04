@@ -148,8 +148,8 @@ function mount(): HTMLElement {
   return host
 }
 
-// onMounted -> store.fetchMyBookings() -> pagination.refresh() -> awaited
-// fetch + its continuation + the re-render. One tick is not enough
+// onMounted -> store.refreshMyBookings() (B30) -> pagination.refreshInPlace()
+// -> awaited fetch + its continuation + the re-render. One tick is not enough
 // (CalendarFilterModal.test.ts:71-74 flushes three for the same reason).
 async function flush(): Promise<void> {
   await nextTick()
@@ -351,6 +351,44 @@ describe('MyBookingsView', () => {
       expect(text()).not.toContain('Сегодня')
       expect(text()).not.toContain('В эфире')
       expect(text()).toContain('Подсчитывается')
+    })
+
+    it('B30: a re-visit refetches instead of reusing a stale list -- the badge advances past «Подсчитывается»', async () => {
+      // First visit: the practice just ended, the Zoom report hasn't ripened
+      // yet -- confirmed + ended reads as "still being decided".
+      vi.mocked(bookingsApi.getMyBookings).mockResolvedValueOnce(
+        page([
+          booking(
+            'b1',
+            { status: 'confirmed' },
+            { scheduled_at: '2026-07-20T09:00:00Z', duration_minutes: 60 },
+          ),
+        ]),
+      )
+      mount()
+      await flush()
+      expect(text()).toContain('Подсчитывается')
+
+      // Leave and come back once the report has ripened: same booking, now
+      // decided. The pre-B30 fetchMyBookings() would have skipped this fetch
+      // entirely because the list was already non-empty, leaving the stale
+      // "Подсчитывается" badge showing forever.
+      vi.mocked(bookingsApi.getMyBookings).mockResolvedValueOnce(
+        page([
+          booking(
+            'b1',
+            { status: 'attended' },
+            { scheduled_at: '2026-07-20T09:00:00Z', duration_minutes: 60 },
+          ),
+        ]),
+      )
+      app?.unmount()
+      host?.remove()
+      mount()
+      await flush()
+
+      expect(text()).toContain('Завершена')
+      expect(text()).not.toContain('Подсчитывается')
     })
 
     it('a practice in progress is upcoming and badged «В эфире»', async () => {

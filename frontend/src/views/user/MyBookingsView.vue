@@ -242,7 +242,12 @@ function openDetail(b: BookingWithPracticeResponse): void {
 }
 
 onMounted(() => {
-  store.fetchMyBookings()
+  // B30: refreshMyBookings() (not fetchMyBookings()) -- badgeFor() below reads
+  // a "Подсчитывается" (attendance-pending) state off a cached list that may
+  // have been fetched before the practice ended; fetchMyBookings() would
+  // no-op and the badge would never advance to its real verdict.
+  // refreshMyBookings() always re-fetches, without flashing the list empty.
+  store.refreshMyBookings()
 })
 </script>
 

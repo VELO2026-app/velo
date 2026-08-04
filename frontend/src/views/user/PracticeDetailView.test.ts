@@ -84,6 +84,7 @@ vi.mock('@/stores/practices', () => ({
 const bookingsState: { bookings: BookingWithPracticeResponse[] } = { bookings: [] }
 const fetchMyBookings = vi.fn()
 const refreshBookings = vi.fn()
+const refreshMyBookings = vi.fn()
 const cancelBooking = vi.fn()
 vi.mock('@/stores/bookings', () => ({
   useBookingsStore: () => ({
@@ -92,6 +93,7 @@ vi.mock('@/stores/bookings', () => ({
     },
     fetchMyBookings,
     refreshBookings,
+    refreshMyBookings,
     cancelBooking,
   }),
 }))
@@ -246,6 +248,7 @@ beforeEach(() => {
   clearSelected.mockReset()
   fetchMyBookings.mockReset()
   refreshBookings.mockReset()
+  refreshMyBookings.mockReset()
   cancelBooking.mockReset().mockResolvedValue({ ok: true })
   push.mockReset()
   back.mockReset()
@@ -298,12 +301,12 @@ describe('PracticeDetailView', () => {
       expect(text()).toContain('Вечерняя йога')
     })
 
-    it('fetches the practice and the bookings on mount', async () => {
+    it('fetches the practice and refreshes the bookings on mount (B30: not the cached-skip fetchMyBookings)', async () => {
       mount()
       await flush()
 
       expect(fetchPractice).toHaveBeenCalledWith('p1')
-      expect(fetchMyBookings).toHaveBeenCalled()
+      expect(refreshMyBookings).toHaveBeenCalled()
     })
   })
 

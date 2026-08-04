@@ -650,7 +650,12 @@ let clockInterval: ReturnType<typeof setInterval> | null = null
 onMounted(() => {
   const id = route.params.id as string
   store.fetchPractice(id)
-  bookingsStore.fetchMyBookings()
+  // B30: refreshMyBookings() (not fetchMyBookings()) -- the list may already
+  // be cached from a screen visited earlier in the session, taken BEFORE this
+  // practice ended; fetchMyBookings() would then no-op and the attendance
+  // badge below (attendancePending) would never clear. refreshMyBookings()
+  // always re-fetches, without flashing the status row/Zoom card empty.
+  bookingsStore.refreshMyBookings()
   // Refresh window checks every 60s.
   clockInterval = setInterval(() => {
     now.value = Date.now()
