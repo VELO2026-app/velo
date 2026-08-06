@@ -43,9 +43,12 @@ set -uo pipefail
 #
 # USAGE:
 #   First time:   sudo bash install_velo.sh
-#                 (comms branch override: sudo COMMS_BRANCH=test bash install_velo.sh)
 #   After that:   velo status | velo logs | velo update | velo version | ...
-#                 comms lifecycle: bash /opt/comms/repo/deploy/comms-deploy.sh {status|update|logs|db}
+#
+#   `velo update` updates EVERY service this installer put on the box --
+#   services first, the product last -- each through its OWN lifecycle
+#   script. No second command to remember, no manual step on a server.
+#   comms-deploy.sh stays callable directly for debugging; nothing needs it.
 #
 # REQUIREMENTS:
 #   - Ubuntu 22.04+ (fresh VPS), root access
@@ -87,11 +90,12 @@ COMMS_GITHUB_REPO="aivis-one/comms"
 # for comms -- comms-deploy.sh only ever pulls (velo's own key needs write
 # because `velo update` pushes generated.ts).
 COMMS_REPO_URL=""  # set after comms SSH key setup (setup_comms_ssh)
-# Branch to clone. main carries v1.1.0-rc and deploy/ is currently identical
-# on main and test, so the default is right for BOTH server roles; pinning a
-# tag on prod is a later refinement. Override per run:
-#   sudo COMMS_BRANCH=test bash install_velo.sh
-COMMS_BRANCH="${COMMS_BRANCH:-main}"
+# NOTE: the comms branch is NOT a knob here any more (H-D1, 2026-08-04).
+# It is declared once, for every server of this product, in the service
+# registry (repo/scripts/services.conf) and read from there below --
+# "remember to export COMMS_BRANCH" was a manual step, i.e. exactly what
+# an installer must never require, and forgetting it produced servers
+# whose two stacks silently tracked different branches.
 # Shared external docker network joining the velo and comms stacks.
 SHARED_NETWORK="aivis-shared"
 
@@ -1015,12 +1019,49 @@ upsert_env_var() {
     fi
 }
 
+# Read one service's branch out of the registry that ships in the velo
+# checkout (repo/scripts/services.conf). Kept tiny on purpose: install
+# provisions ONE service specially (deploy key, env hand-over), and that
+# part is not generic yet -- what IS shared is the declaration.
+registry_branch_for() {
+    local wanted="$1" conf="$INSTALL_BASE/repo/scripts/services.conf"
+    if [ ! -f "$conf" ]; then
+        error "Service registry not found at $conf"
+        return 1
+    fi
+    # VELO_ROLE is in scope for `role:` expressions; VELO_BRANCH for `conf:`
+    # -- both are read by svc_branch through indirect expansion, which is
+    # why shellcheck cannot see the use.
+    # shellcheck disable=SC2034
+    local VELO_BRANCH="$GIT_BRANCH"
+    # shellcheck source=/dev/null
+    source "$conf" || return 1
+    local record
+    for record in "${VELO_SERVICES[@]}"; do
+        if [ "$(svc_field "$record" 1)" = "$wanted" ]; then
+            svc_branch "$(svc_field "$record" 4)" "$wanted" || return 1
+            return 0
+        fi
+    done
+    error "Service '$wanted' is not declared in $conf"
+    return 1
+}
+
 setup_comms() {
     log "Setting up the comms stack (orchestrated)..."
 
     local COMMS_DEPLOY="$COMMS_REPO_DIR/deploy/comms-deploy.sh"
     local VELO_ENV="$INSTALL_BASE/repo/backend/.env"
     local COMMS_ENV="$COMMS_INSTALL_BASE/.env"
+
+    # The branch comes from the SERVICE REGISTRY in the checkout we just
+    # cloned -- the same file `velo update` reads, so the install and every
+    # later update can never disagree about what this server tracks.
+    local comms_branch
+    if ! comms_branch=$(registry_branch_for comms); then
+        error "Could not resolve the comms branch from the service registry"
+        exit 1
+    fi
 
     # -- 1. Clone the comms repo (SSH, dedicated READ-ONLY deploy key --
     # set up in setup_comms_ssh; all keys strictly private, always) --
@@ -1030,16 +1071,16 @@ setup_comms() {
         warn "comms checkout already present at $COMMS_REPO_DIR -- reusing it"
     else
         mkdir -p "$COMMS_INSTALL_BASE"
-        if ! git clone -b "$COMMS_BRANCH" "$COMMS_REPO_URL" "$COMMS_REPO_DIR"; then
-            error "Failed to clone $COMMS_REPO_URL (branch: $COMMS_BRANCH)"
+        if ! git clone -b "$comms_branch" "$COMMS_REPO_URL" "$COMMS_REPO_DIR"; then
+            error "Failed to clone $COMMS_REPO_URL (branch: $comms_branch)"
             exit 1
         fi
-        success "comms cloned to $COMMS_REPO_DIR (branch: $COMMS_BRANCH)"
+        success "comms cloned to $COMMS_REPO_DIR (branch: $comms_branch)"
     fi
 
     if [ ! -f "$COMMS_DEPLOY" ]; then
         error "comms deploy CLI not found at $COMMS_DEPLOY"
-        error "Does branch '$COMMS_BRANCH' carry comms/deploy/ (Phase 5)?"
+        error "Does branch '$comms_branch' carry comms/deploy/ (Phase 5)?"
         exit 1
     fi
 
@@ -1198,8 +1239,14 @@ exec "$INSTALL_BASE/repo/scripts/velo-manage.sh" "\$@"
 EOF
     chmod +x "$INSTALL_BASE/scripts/manage.sh"
 
-    # The two values velo-manage.sh cannot get from the repo, because they
-    # are not code -- they are what makes this server THIS server.
+    # The values velo-manage.sh cannot get from the repo, because they are
+    # not code -- they are what makes this server THIS server.
+    # VELO_BRANCH joined them (H-D1, 2026-08-04): `velo update` used to read
+    # the branch off the live checkout, so DRIFT was the source of truth and
+    # a checkout nudged sideways stayed sideways. Recorded here, it is what
+    # every later update reconciles the checkout to -- no question asked, no
+    # hand fix on the server. Service branches are NOT here: they are policy,
+    # identical on every server of this product, and live in the registry.
     # Phase 6 / T0 finding #2: VELO_ROLE joined them -- the role fork used
     # to die at install time (it only picked the branch), while `velo
     # update` stayed role-blind and ran the pytest suite against the live
@@ -1209,6 +1256,7 @@ EOF
 DOMAIN_FRONTEND=${DOMAIN_FRONTEND}
 DOMAIN_API=${DOMAIN_API}
 VELO_ROLE=${VELO_ROLE}
+VELO_BRANCH=${GIT_BRANCH}
 EOF
 
     ln -sf "$INSTALL_BASE/scripts/manage.sh" /usr/local/bin/velo
@@ -1246,7 +1294,7 @@ info "Server: $SERVER_IP ($VELO_ROLE, branch $GIT_BRANCH)"
 info "Frontend: https://$DOMAIN_FRONTEND"
 info "API:      https://$DOMAIN_API"
 info "Health:   https://$DOMAIN_API/health"
-info "Comms:    up on '$SHARED_NETWORK' (internal API, no public port; smoke profile, branch $COMMS_BRANCH)"
+info "Comms:    up on '$SHARED_NETWORK' (internal API, no public port; smoke profile; branch per scripts/services.conf)"
 echo ""
 
 info "Directory structure:"

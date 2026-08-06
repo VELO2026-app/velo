@@ -98,6 +98,44 @@ case "$VELO_ROLE" in
         ;;
 esac
 
+# -- Recorded product branch (H-D1, 2026-08-04) -------------------------------
+# `velo update` used to take the branch from the live checkout, which made
+# DRIFT the source of truth: a checkout nudged sideways stayed sideways
+# forever, silently. The installer now records the chosen branch in
+# velo.conf and update reconciles the checkout to it. Servers installed
+# before the key existed keep working: the role implies the branch by the
+# same rule the installer uses (test -> test, prod -> main).
+if [ -z "${VELO_BRANCH:-}" ]; then
+    case "$VELO_ROLE" in
+        test) VELO_BRANCH="test" ;;
+        prod) VELO_BRANCH="main" ;;
+    esac
+    VELO_BRANCH_INFERRED=1
+fi
+
+# -- Service registry ---------------------------------------------------------
+# ONE declaration of what this product runs; see the file's header. Sourced
+# from the checkout, so a registry change ships like any other code change.
+SERVICES_CONF="$COMPOSE_DIR/scripts/services.conf"
+if [ -f "$SERVICES_CONF" ]; then
+    # shellcheck source=/dev/null
+    source "$SERVICES_CONF"
+else
+    # Pre-H-D1 checkout (or a half-finished update): fall back to updating
+    # the product alone rather than refusing to run. Loud, not silent.
+    echo -e "${YELLOW}⚠ $SERVICES_CONF not found -- service registry unavailable,${NC}" >&2
+    echo -e "${YELLOW}  only the product will be updated by 'velo update'.${NC}" >&2
+    VELO_SERVICES=("velo|aivis-one/velo|$COMPOSE_DIR|conf:VELO_BRANCH|internal|update_product")
+    svc_field() {
+        local record="$1" index="$2"
+        local IFS='|'
+        # shellcheck disable=SC2206
+        local fields=($record)
+        printf '%s' "${fields[$((index - 1))]}"
+    }
+    svc_branch() { printf '%s' "$VELO_BRANCH"; }
+fi
+
 # Ensure we're in the right directory for docker compose
 cd_compose() {
     cd "$COMPOSE_DIR" || {
@@ -424,173 +462,216 @@ check_nginx() {
     fi
 }
 
-case "${1:-}" in
+# =============================================================================
+# UPDATE CYCLE -- every service on this box, one command (H-D1, 2026-08-04)
+# =============================================================================
+# The installer has always put TWO stacks on the server, but `velo update`
+# only ever pulled velo: comms could move only by hand, on the server --
+# the one thing that is now forbidden outright. The cycle below walks the
+# registry instead, top to bottom, and each service is updated by ITS OWN
+# lifecycle script. Mechanics stay in their own repos: no docker or compose
+# command in this file ever addresses another service.
 
-    # === Service Management ===
+# Bring a checkout in line with its recorded branch. Does NOT fast-forward
+# to origin -- pulling is the service's own job (comms-deploy.sh pulls with
+# --ff-only; update_product has its own gated pull), and doing it here would
+# make both of them think there was nothing to update.
+#
+# Sets SVC_CHANGED=1 when there is something to deploy.
+svc_sync_checkout() {
+    local dir="$1" want="$2" name="$3"
+    SVC_CHANGED=0
 
-    start)
-        echo "Starting VELO..."
-        cd_compose
-        ensure_shared_network
-        $COMPOSE_CMD up -d
-        echo -e "${GREEN}✓ Started${NC}"
-        ;;
+    cd "$dir" || { echo -e "${RED}✗ $name: $dir is not reachable${NC}"; return 1; }
 
-    stop)
-        echo "Stopping VELO..."
-        cd_compose
-        $COMPOSE_CMD down
-        echo -e "${GREEN}✓ Stopped${NC}"
-        ;;
+    # 1. Dirty tree = drift (nothing here is hand-edited any more), so it
+    # is discarded -- but never without a trace: what is being thrown away
+    # is printed FIRST. That log line is the forensics if norm 1 was
+    # broken by somebody.
+    if ! git diff-index --quiet HEAD -- 2>/dev/null; then
+        echo -e "${YELLOW}⚠ $name: local modifications in $dir -- discarding:${NC}"
+        git status --short | sed 's/^/    /'
+        git --no-pager diff --stat HEAD | sed 's/^/    /'
+        git reset --hard HEAD > /dev/null || return 1
+    fi
 
-    restart)
-        case "${2:-all}" in
-            app)
-                echo "Restarting app only..."
-                cd_compose
-                $COMPOSE_CMD restart app
-                ;;
-            *)
-                echo "Restarting all services..."
-                cd_compose
-                $COMPOSE_CMD down
-                ensure_shared_network
-                $COMPOSE_CMD up -d
-                ;;
-        esac
-        echo -e "${GREEN}✓ Restarted${NC}"
-        ;;
+    if ! git fetch origin --quiet; then
+        echo -e "${RED}✗ $name: git fetch failed -- nothing touched${NC}"
+        return 1
+    fi
 
-    status)
-        echo "=== VELO Service Status ==="
-        echo ""
-        cd_compose
-        $COMPOSE_CMD ps
-        echo ""
+    if ! git rev-parse --verify --quiet "origin/$want" > /dev/null; then
+        echo -e "${RED}✗ $name: branch '$want' does not exist on origin${NC}"
+        echo "  Registry says this service tracks '$want' (scripts/services.conf)."
+        return 1
+    fi
 
-        # Health check
-        echo "=== Health Check ==="
-        HEALTH=$(curl -s http://127.0.0.1:8000/health 2>/dev/null)
-        if [ -n "$HEALTH" ]; then
-            echo "$HEALTH" | python3 -m json.tool 2>/dev/null || echo "$HEALTH"
-        else
-            echo -e "${RED}API not responding${NC}"
+    local current ahead
+    current=$(git branch --show-current)
+
+    if [ "$current" = "$want" ]; then
+        # 2. Local commits that never reached origin. Aligning the branch
+        # would erase them silently -- exactly what a failed types-push
+        # leaves behind (see the push retry in update_product). Try to
+        # push them home; if that fails, STOP. Losing a commit quietly is
+        # worse than a red update.
+        ahead=$(git rev-list --count "origin/$want..HEAD" 2>/dev/null || echo 0)
+        if [ "$ahead" -gt 0 ]; then
+            echo -e "${YELLOW}⚠ $name: $ahead local commit(s) not on origin/$want -- pushing${NC}"
+            if ! git push origin "$want"; then
+                echo -e "${RED}✗ $name: cannot push local commits to origin/$want${NC}"
+                echo "  Refusing to realign the checkout: that would destroy them."
+                echo "  Inspect: cd $dir && git log origin/$want..HEAD"
+                return 1
+            fi
         fi
-        echo ""
-
-        # External check
-        echo "=== External Access ==="
-        EXT_HEALTH=$(curl -s "https://$DOMAIN_API/health" 2>/dev/null)
-        if [ -n "$EXT_HEALTH" ]; then
-            echo -e "${GREEN}✓ https://$DOMAIN_API/health is accessible${NC}"
-        else
-            echo -e "${YELLOW}⚠ https://$DOMAIN_API/health not accessible${NC}"
+    else
+        # 3. The checkout drifted off its recorded branch. Local commits on
+        # a FOREIGN branch are a double violation with no safe automatic
+        # answer -- neither pushing them somewhere they do not belong nor
+        # deleting them is ours to decide.
+        if [ -n "$current" ] && git rev-parse --verify --quiet "origin/$current" > /dev/null; then
+            ahead=$(git rev-list --count "origin/$current..HEAD" 2>/dev/null || echo 0)
+            if [ "$ahead" -gt 0 ]; then
+                echo -e "${RED}✗ $name: on branch '$current' (expected '$want') with $ahead unpushed commit(s)${NC}"
+                echo "  Refusing to switch branches over them. Inspect: cd $dir && git log origin/$current..HEAD"
+                return 1
+            fi
         fi
+        echo -e "${CYAN}↻ $name: checkout '${current:-detached}' -> '$want' (recorded branch wins)${NC}"
+        if ! git checkout -B "$want" "origin/$want"; then
+            echo -e "${RED}✗ $name: could not switch to '$want'${NC}"
+            return 1
+        fi
+        # A branch switch replaces the code wholesale: always redeploy,
+        # even though HEAD now equals origin (nothing left to pull).
+        SVC_CHANGED=1
+    fi
+
+    # 4. Product branches are allowed but never free: warn (do not refuse)
+    # when a service tracks something that main is not an ancestor of --
+    # that is the moment a fix on main stops reaching this server.
+    if [ "$want" != "main" ] && git rev-parse --verify --quiet origin/main > /dev/null; then
+        if ! git merge-base --is-ancestor origin/main "origin/$want" 2>/dev/null; then
+            echo -e "${YELLOW}⚠ $name: origin/$want is NOT a descendant of origin/main${NC}"
+            echo "    Fixes landing on main do not reach this server until it is merged."
+        fi
+    fi
+
+    if [ "$(git rev-parse HEAD)" != "$(git rev-parse "origin/$want")" ]; then
+        SVC_CHANGED=1
+    fi
+    return 0
+}
+
+# Update ONE registry record. Returns non-zero to stop the whole cycle.
+update_service() {
+    local record="$1"; shift
+    local name dir branch_expr lifecycle updater want
+    name=$(svc_field "$record" 1)
+    dir=$(svc_field "$record" 3)
+    branch_expr=$(svc_field "$record" 4)
+    lifecycle=$(svc_field "$record" 5)
+    updater=$(svc_field "$record" 6)
+
+    # Presence: a service that is not on this box is a legitimate
+    # configuration (comms-less servers exist), not an error.
+    if [ "$lifecycle" != "internal" ] && { [ ! -d "$dir/.git" ] || [ ! -f "$dir/$lifecycle" ]; }; then
+        echo -e "${YELLOW}⊘ $name: not installed, skipped${NC}"
         echo ""
+        return 0
+    fi
 
-        # Disk & memory
-        echo "=== Resources ==="
-        echo "Disk: $(df -h /opt | tail -1 | awk '{print $3 "/" $2 " (" $5 ")"}')"
-        echo "Memory: $(free -h | awk '/Mem:/ {print $3 "/" $2}')"
-        # `docker images --format '{{.Size}}'` emits human-readable sizes
-        # ("1.2GB", "450MB") with the unit baked into the string -- summing
-        # those with `bc` (a plain number calculator) never parsed anything
-        # real; it printed a stray number with no unit, from nowhere. `docker
-        # system df` already computes a real total and formats it itself, so
-        # there is nothing left to add or convert.
-        DOCKER_IMAGES_SIZE=$(docker system df --format '{{.Type}} {{.Size}}' 2>/dev/null | awk '$1 == "Images" {print $2}')
-        echo "Docker images: ${DOCKER_IMAGES_SIZE:-unknown} on disk"
-        ;;
+    want=$(svc_branch "$branch_expr" "$name") || return 1
+    echo -e "${CYAN}=== $name ($want) ===${NC}"
 
-    # === Logs ===
+    svc_sync_checkout "$dir" "$want" "$name" || return 1
 
-    logs)
-        cd_compose
-        case "${2:-app}" in
-            app)
-                $COMPOSE_CMD logs -f --tail=100 app
-                ;;
-            db|postgres)
-                $COMPOSE_CMD logs -f --tail=100 postgres
-                ;;
-            redis)
-                $COMPOSE_CMD logs -f --tail=100 redis
-                ;;
-            frontend)
-                $COMPOSE_CMD logs -f --tail=100 frontend
-                ;;
-            all|"")
-                $COMPOSE_CMD logs -f --tail=100
-                ;;
-            *)
-                echo "Usage: velo logs [app|db|redis|frontend|all]"
-                exit 1
-                ;;
-        esac
-        ;;
+    if [ "$lifecycle" = "internal" ]; then
+        # The product runs its own full cycle (build, tests, types, health)
+        # and decides for itself whether there is anything to do.
+        "$updater" "$@" || return 1
+        return 0
+    fi
 
-    # === Testing & Linting ===
+    if [ "$SVC_CHANGED" -eq 0 ]; then
+        echo -e "${GREEN}✓ $name: already up to date${NC}"
+        echo ""
+        return 0
+    fi
 
-    test)
-        # Backend pytest runs against the LIVE DB (and since T0 emits real
-        # comms sync events) -- an explicit `velo test` on prod is as
-        # forbidden as the update-time run. Frontend tests are container-
-        # local, but the command keeps one rule for simplicity.
-        if [ "$VELO_ROLE" != "test" ]; then
-            echo -e "${RED}✗ 'velo test' is refused on role '$VELO_ROLE': the suite runs against the live DB.${NC}"
-            echo "The deploy gate for prod is a green TEST server."
+    # Its own script, its own mechanics -- we only tell it to go.
+    if ! bash "$dir/$lifecycle" "$updater"; then
+        echo -e "${RED}✗ $name: update failed${NC}"
+        return 1
+    fi
+    echo ""
+    return 0
+}
+
+# `velo update` -- the whole box, in registry order.
+update_all() {
+    # -- Self-update guard --------------------------------------------------
+    # This file IS the product's checkout (the /usr/local/bin/velo shim execs
+    # it straight from repo/scripts), and this very run pulls that checkout.
+    # Bash reads a script incrementally, by byte offset, so rewriting the
+    # file mid-run can drop the interpreter into the middle of a different
+    # line. Run from a snapshot instead: the copy is immune to the pull, and
+    # the NEXT invocation is already the new version.
+    if [ "${VELO_UPDATE_SNAPSHOT:-0}" != "1" ]; then
+        local snapshot
+        snapshot=$(mktemp /tmp/velo-manage-snapshot.XXXXXX) || {
+            echo -e "${RED}✗ Could not create the update snapshot${NC}"; exit 1; }
+        cp "${BASH_SOURCE[0]}" "$snapshot" || {
+            echo -e "${RED}✗ Could not snapshot ${BASH_SOURCE[0]}${NC}"; exit 1; }
+        export VELO_UPDATE_SNAPSHOT=1 VELO_SNAPSHOT_PATH="$snapshot"
+        exec bash "$snapshot" "$@"
+    fi
+    # In the snapshot run: clean up after ourselves whichever way we exit.
+    trap 'rm -f "${VELO_SNAPSHOT_PATH:-}"' EXIT
+
+    if [ "${VELO_BRANCH_INFERRED:-0}" = "1" ]; then
+        echo -e "${YELLOW}ℹ VELO_BRANCH not recorded in $CONF_FILE -- inferred '${VELO_BRANCH}' from role '${VELO_ROLE}'${NC}"
+    fi
+
+    # Read-only pre-scan: --frontend-only is a deliberate narrow fast path
+    # for iterating on the frontend, so it skips the service half entirely.
+    # The flags themselves are parsed (and validated) inside update_product.
+    local frontend_only=0 arg
+    for arg in "$@"; do
+        [ "$arg" = "--frontend-only" ] && frontend_only=1
+    done
+
+    local registry_before=""
+    [ -f "$SERVICES_CONF" ] && registry_before=$(md5sum "$SERVICES_CONF" 2>/dev/null)
+
+    local record lifecycle
+    for record in "${VELO_SERVICES[@]}"; do
+        lifecycle=$(svc_field "$record" 5)
+        if [ "$lifecycle" != "internal" ] && [ "$frontend_only" -eq 1 ]; then
+            echo -e "${YELLOW}⊘ $(svc_field "$record" 1): services skipped (--frontend-only)${NC}"
+            echo ""
+            continue
+        fi
+        if ! update_service "$record" "$@"; then
+            echo -e "${RED}✗ Update stopped at '$(svc_field "$record" 1)' -- nothing after it was touched${NC}"
             exit 1
         fi
-        FAILED=0
-        case "${2:-all}" in
-            backend)
-                echo "=== Backend Tests ==="
-                cd_compose
-                if ! $COMPOSE_CMD exec -T app python -m pytest tests/ -v --tb=short; then
-                    FAILED=1
-                fi
-                ;;
-            frontend)
-                echo "=== Frontend Tests ==="
-                if ! run_frontend_tests; then
-                    FAILED=1
-                fi
-                ;;
-            all|"")
-                echo "=== Backend Tests ==="
-                cd_compose
-                if ! $COMPOSE_CMD exec -T app python -m pytest tests/ -v --tb=short; then
-                    FAILED=1
-                fi
-                echo ""
-                echo "=== Frontend Tests ==="
-                if ! run_frontend_tests; then
-                    FAILED=1
-                fi
-                ;;
-            *)
-                echo "Usage: velo test [backend|frontend|all]"
-                exit 1
-                ;;
-        esac
+    done
 
-        echo ""
-        if [ $FAILED -ne 0 ]; then
-            echo -e "${RED}✗ Some tests failed${NC}"
-            exit 1
-        else
-            echo -e "${GREEN}✓ All tests passed${NC}"
+    # A registry change arrives WITH the product update, but the list was
+    # read before that -- so a newly declared service starts being managed
+    # on the next run. Say so instead of letting it look like a no-op.
+    if [ -n "$registry_before" ] && [ -f "$SERVICES_CONF" ]; then
+        if [ "$registry_before" != "$(md5sum "$SERVICES_CONF" 2>/dev/null)" ]; then
+            echo ""
+            echo -e "${CYAN}ℹ The service registry changed in this update.${NC}"
+            echo "  Run 'velo update' once more to apply it."
         fi
-        ;;
+    fi
+}
 
-    lint)
-        cd_compose
-        $COMPOSE_CMD exec -T app python -m ruff check app/ tests/
-        ;;
-
-    # === Update & Deploy ===
-
-    update|deploy)
+update_product() {
         # Parse optional flags (order-independent).
         #   --skip-tests      Skip the backend test suite (keep everything else).
         #   --frontend-only   Skip the entire backend cycle: backend build,
@@ -660,12 +741,14 @@ case "${1:-}" in
             git --no-pager diff --stat HEAD
             echo ""
             echo "(full diff: cd $INSTALL_BASE/repo && git diff HEAD)"
-            read -p "Discard local changes and update? (y/n): " -n 1 -r
-            echo
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                echo "Update cancelled"
-                exit 1
-            fi
+            # NO QUESTION (H-D1, 2026-08-04). Nothing on this server is
+            # edited by hand -- that is the law -- so a dirty tree is
+            # drift, and drift gets fixed, not negotiated. Asking would
+            # only stall an unattended run waiting for somebody who is
+            # not supposed to be at this keyboard. The diffstat above is
+            # printed FIRST on purpose: we discard silently-to-the-user
+            # but never without a trace in the log.
+            echo -e "${YELLOW}Discarding the above (server state is defined by the scripts)${NC}"
             # reset --hard, not `checkout -- .`: checkout restores the worktree
             # from the INDEX, so staged edits would survive and could still
             # break the pull below -- the prompt promises a discard, keep it.
@@ -675,8 +758,11 @@ case "${1:-}" in
         # Fetch and check
         git fetch origin
         if git diff --quiet HEAD "origin/$BRANCH" 2>/dev/null; then
-            echo -e "${GREEN}✓ Already up to date${NC}"
-            exit 0
+            echo -e "${GREEN}✓ velo: already up to date${NC}"
+            # return, NOT exit: this is one service in a cycle now, and
+            # the product is the LAST of them -- but an exit here would
+            # also swallow the cycle's own epilogue.
+            return 0
         fi
 
         # Pull
@@ -951,6 +1037,176 @@ Triggered by velo update on commit $NEW_COMMIT" || {
         docker image prune -f > /dev/null 2>&1 || true
         docker builder prune -f --filter until=24h > /dev/null 2>&1 || true
         echo -e "${GREEN}✓ Cleanup done${NC}"
+}
+
+case "${1:-}" in
+
+    # === Service Management ===
+
+    start)
+        echo "Starting VELO..."
+        cd_compose
+        ensure_shared_network
+        $COMPOSE_CMD up -d
+        echo -e "${GREEN}✓ Started${NC}"
+        ;;
+
+    stop)
+        echo "Stopping VELO..."
+        cd_compose
+        $COMPOSE_CMD down
+        echo -e "${GREEN}✓ Stopped${NC}"
+        ;;
+
+    restart)
+        case "${2:-all}" in
+            app)
+                echo "Restarting app only..."
+                cd_compose
+                $COMPOSE_CMD restart app
+                ;;
+            *)
+                echo "Restarting all services..."
+                cd_compose
+                $COMPOSE_CMD down
+                ensure_shared_network
+                $COMPOSE_CMD up -d
+                ;;
+        esac
+        echo -e "${GREEN}✓ Restarted${NC}"
+        ;;
+
+    status)
+        echo "=== VELO Service Status ==="
+        echo ""
+        cd_compose
+        $COMPOSE_CMD ps
+        echo ""
+
+        # Health check
+        echo "=== Health Check ==="
+        HEALTH=$(curl -s http://127.0.0.1:8000/health 2>/dev/null)
+        if [ -n "$HEALTH" ]; then
+            echo "$HEALTH" | python3 -m json.tool 2>/dev/null || echo "$HEALTH"
+        else
+            echo -e "${RED}API not responding${NC}"
+        fi
+        echo ""
+
+        # External check
+        echo "=== External Access ==="
+        EXT_HEALTH=$(curl -s "https://$DOMAIN_API/health" 2>/dev/null)
+        if [ -n "$EXT_HEALTH" ]; then
+            echo -e "${GREEN}✓ https://$DOMAIN_API/health is accessible${NC}"
+        else
+            echo -e "${YELLOW}⚠ https://$DOMAIN_API/health not accessible${NC}"
+        fi
+        echo ""
+
+        # Disk & memory
+        echo "=== Resources ==="
+        echo "Disk: $(df -h /opt | tail -1 | awk '{print $3 "/" $2 " (" $5 ")"}')"
+        echo "Memory: $(free -h | awk '/Mem:/ {print $3 "/" $2}')"
+        # `docker images --format '{{.Size}}'` emits human-readable sizes
+        # ("1.2GB", "450MB") with the unit baked into the string -- summing
+        # those with `bc` (a plain number calculator) never parsed anything
+        # real; it printed a stray number with no unit, from nowhere. `docker
+        # system df` already computes a real total and formats it itself, so
+        # there is nothing left to add or convert.
+        DOCKER_IMAGES_SIZE=$(docker system df --format '{{.Type}} {{.Size}}' 2>/dev/null | awk '$1 == "Images" {print $2}')
+        echo "Docker images: ${DOCKER_IMAGES_SIZE:-unknown} on disk"
+        ;;
+
+    # === Logs ===
+
+    logs)
+        cd_compose
+        case "${2:-app}" in
+            app)
+                $COMPOSE_CMD logs -f --tail=100 app
+                ;;
+            db|postgres)
+                $COMPOSE_CMD logs -f --tail=100 postgres
+                ;;
+            redis)
+                $COMPOSE_CMD logs -f --tail=100 redis
+                ;;
+            frontend)
+                $COMPOSE_CMD logs -f --tail=100 frontend
+                ;;
+            all|"")
+                $COMPOSE_CMD logs -f --tail=100
+                ;;
+            *)
+                echo "Usage: velo logs [app|db|redis|frontend|all]"
+                exit 1
+                ;;
+        esac
+        ;;
+
+    # === Testing & Linting ===
+
+    test)
+        # Backend pytest runs against the LIVE DB (and since T0 emits real
+        # comms sync events) -- an explicit `velo test` on prod is as
+        # forbidden as the update-time run. Frontend tests are container-
+        # local, but the command keeps one rule for simplicity.
+        if [ "$VELO_ROLE" != "test" ]; then
+            echo -e "${RED}✗ 'velo test' is refused on role '$VELO_ROLE': the suite runs against the live DB.${NC}"
+            echo "The deploy gate for prod is a green TEST server."
+            exit 1
+        fi
+        FAILED=0
+        case "${2:-all}" in
+            backend)
+                echo "=== Backend Tests ==="
+                cd_compose
+                if ! $COMPOSE_CMD exec -T app python -m pytest tests/ -v --tb=short; then
+                    FAILED=1
+                fi
+                ;;
+            frontend)
+                echo "=== Frontend Tests ==="
+                if ! run_frontend_tests; then
+                    FAILED=1
+                fi
+                ;;
+            all|"")
+                echo "=== Backend Tests ==="
+                cd_compose
+                if ! $COMPOSE_CMD exec -T app python -m pytest tests/ -v --tb=short; then
+                    FAILED=1
+                fi
+                echo ""
+                echo "=== Frontend Tests ==="
+                if ! run_frontend_tests; then
+                    FAILED=1
+                fi
+                ;;
+            *)
+                echo "Usage: velo test [backend|frontend|all]"
+                exit 1
+                ;;
+        esac
+
+        echo ""
+        if [ $FAILED -ne 0 ]; then
+            echo -e "${RED}✗ Some tests failed${NC}"
+            exit 1
+        else
+            echo -e "${GREEN}✓ All tests passed${NC}"
+        fi
+        ;;
+
+    lint)
+        cd_compose
+        $COMPOSE_CMD exec -T app python -m ruff check app/ tests/
+        ;;
+
+    # === Update & Deploy ===
+
+    update|deploy)
+        update_all "$@"
         ;;
 
     # === Backup ===
