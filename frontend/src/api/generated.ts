@@ -408,6 +408,11 @@ export interface CancelPracticeRequest {
   scope?: 'this' | 'this_and_future'
 }
 
+/** Open (or reopen) the conversation with one master. */
+export interface ChatCreate {
+  master_id: string
+}
+
 /** GET /api/v1/admin/metrics/check-in. */
 export interface CheckinMetricResponse {
   rate_pct: number
@@ -820,6 +825,10 @@ export interface MasterTransactionItem {
   created_at: string
   counterparty_name: string | null
   amount_cents: number
+}
+
+export interface MessageCreate {
+  body: string
 }
 
 /** Response for approve/reject method-change actions. status is the resulting request state: "approved" (methods updated, request cleared) or "rejected". */
