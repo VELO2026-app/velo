@@ -479,7 +479,7 @@ check_nginx() {
 #
 # Sets SVC_CHANGED=1 when there is something to deploy.
 svc_sync_checkout() {
-    local dir="$1" want="$2" name="$3"
+    local dir="$1" want="$2" name="$3" policy="${4:-}"
     SVC_CHANGED=0
 
     cd "$dir" || { echo -e "${RED}✗ $name: $dir is not reachable${NC}"; return 1; }
@@ -548,10 +548,16 @@ svc_sync_checkout() {
         SVC_CHANGED=1
     fi
 
-    # 4. Product branches are allowed but never free: warn (do not refuse)
-    # when a service tracks something that main is not an ancestor of --
+    # 4. Product branches of a SERVICE are allowed but never free: warn (do
+    # not refuse) when one tracks something main is not an ancestor of --
     # that is the moment a fix on main stops reaching this server.
-    if [ "$want" != "main" ] && git rev-parse --verify --quiet origin/main > /dev/null; then
+    #
+    # Only for branches pinned by POLICY (`fixed:`). The product's own branch
+    # comes from this server's config (`conf:`), and a test server diverging
+    # from main is not drift, it IS the workflow -- warning about it every
+    # single run would be noise that teaches people to ignore warnings.
+    if [ "${policy%%:*}" = "fixed" ] && [ "$want" != "main" ] \
+       && git rev-parse --verify --quiet origin/main > /dev/null; then
         if ! git merge-base --is-ancestor origin/main "origin/$want" 2>/dev/null; then
             echo -e "${YELLOW}⚠ $name: origin/$want is NOT a descendant of origin/main${NC}"
             echo "    Fixes landing on main do not reach this server until it is merged."
@@ -585,7 +591,7 @@ update_service() {
     want=$(svc_branch "$branch_expr" "$name") || return 1
     echo -e "${CYAN}=== $name ($want) ===${NC}"
 
-    svc_sync_checkout "$dir" "$want" "$name" || return 1
+    svc_sync_checkout "$dir" "$want" "$name" "$branch_expr" || return 1
 
     if [ "$lifecycle" = "internal" ]; then
         # The product runs its own full cycle (build, tests, types, health)
@@ -612,36 +618,46 @@ update_service() {
 # `velo update` -- the whole box, in registry order.
 update_all() {
     # -- Session durability -------------------------------------------------
-    # Same reasoning as the installer (see its header): an update builds for
-    # minutes and used to die with the ssh client, leaving containers half
-    # swapped. The tmux relaunch keeps the RUN alive across a disconnect,
-    # the transcript keeps the EVIDENCE. Duplicated rather than shared
-    # because install_velo.sh reaches a box before this file exists on it.
-    if [ -z "${TMUX:-}" ] && [ -z "${STY:-}" ] && [ "${VELO_NO_TMUX:-0}" != "1" ]; then
-        if command -v tmux > /dev/null 2>&1; then
-            if tmux has-session -t velo-update 2>/dev/null; then
-                echo -e "${YELLOW}An update is already running -- attaching to it.${NC}"
-                exec tmux attach -t velo-update
-            fi
-            echo -e "${CYAN}Running inside tmux (session: velo-update).${NC}"
-            echo -e "${CYAN}If the connection drops: tmux attach -t velo-update${NC}"
+    # `velo update` is fully non-interactive, so unlike the installer nobody
+    # needs to sit INSIDE the session: the run goes into a DETACHED tmux
+    # session and this terminal just follows its transcript. Consequences,
+    # all of them wanted:
+    #   - a dropped connection (or Ctrl-C) kills the VIEWER, never the run;
+    #   - the pane is a real terminal, so docker keeps its normal progress
+    #     output -- piping this script through `tee` would have hidden the
+    #     tty from docker and turned every build into a wall of text;
+    #   - the transcript is taken by tmux (pipe-pane), which copies the pane
+    #     without standing between the build and the terminal;
+    #   - the exit code is carried back through a status file, so
+    #     `velo update && something` keeps working.
+    if [ -z "${TMUX:-}" ] && [ -z "${STY:-}" ] && [ "${VELO_NO_TMUX:-0}" != "1" ] \
+       && command -v tmux > /dev/null 2>&1; then
+        if tmux has-session -t velo-update 2>/dev/null; then
+            echo -e "${YELLOW}An update is already running -- following it.${NC}"
+        else
+            local log status
+            log="/var/log/velo-update-$(date +%Y%m%d-%H%M%S).log"
+            status="${log%.log}.status"
+            touch "$log" && chmod 600 "$log"
+            # shellcheck disable=SC2012  # names are ours: prefix + timestamp
+            ls -1t /var/log/velo-update-*.log 2>/dev/null | tail -n +6 | xargs -r rm -f
+            # shellcheck disable=SC2012
+            ls -1t /var/log/velo-update-*.status 2>/dev/null | tail -n +6 | xargs -r rm -f
+            echo -e "${CYAN}Transcript: $log${NC}"
             echo ""
-            exec tmux new-session -s velo-update bash "${BASH_SOURCE[0]}" "$@"
+            tmux new-session -d -s velo-update \
+                "VELO_NO_TMUX=1 bash '${BASH_SOURCE[0]}' ${*@Q}; printf %s \$? > '$status'"
+            tmux pipe-pane -o -t velo-update "cat >> '$log'" 2>/dev/null
+            # Follow the transcript until the session is gone, then hand the
+            # run's own exit code back to whoever called us.
+            tail -f -n +1 "$log" 2>/dev/null &
+            local viewer=$!
+            while tmux has-session -t velo-update 2>/dev/null; do sleep 1; done
+            sleep 1
+            kill "$viewer" 2>/dev/null
+            wait "$viewer" 2>/dev/null
+            exit "$(cat "$status" 2>/dev/null || echo 1)"
         fi
-        echo -e "${YELLOW}⚠ tmux is unavailable -- this run will NOT survive a disconnect${NC}"
-    fi
-
-    if [ -z "${VELO_UPDATE_LOG:-}" ]; then
-        VELO_UPDATE_LOG="/var/log/velo-update-$(date +%Y%m%d-%H%M%S).log"
-        export VELO_UPDATE_LOG
-        touch "$VELO_UPDATE_LOG" && chmod 600 "$VELO_UPDATE_LOG"
-        # Five most recent transcripts, no more: build output is bulky.
-        # shellcheck disable=SC2012  # names are ours: fixed prefix +
-        # timestamp; find has no portable mtime sort.
-        ls -1t /var/log/velo-update-*.log 2>/dev/null | tail -n +6 | xargs -r rm -f
-        exec > >(tee -a "$VELO_UPDATE_LOG") 2>&1
-        echo -e "${CYAN}Transcript: $VELO_UPDATE_LOG${NC}"
-        echo ""
     fi
 
     # -- Self-update guard --------------------------------------------------
@@ -839,7 +855,7 @@ update_product() {
             # through to `up -d`, which restarted the PREVIOUS app image --
             # and everything after it (migrations, backend tests) then ran
             # and passed against code that was never rebuilt.
-            if ! $COMPOSE_CMD build --progress plain app; then
+            if ! $COMPOSE_CMD build app; then
                 echo -e "${RED}✗ BACKEND BUILD FAILED${NC}"
                 echo "Nothing was deployed -- the previous app image is still running."
                 echo "Fix the code and run: velo update"
@@ -1038,7 +1054,7 @@ Triggered by velo update on commit $NEW_COMMIT" || {
         # image while printing success -- the gate would exist but never fire.
         # This script has no `set -e`, so the check must be explicit (same
         # shape as the backend build gate above).
-        if ! $COMPOSE_CMD build --progress plain frontend; then
+        if ! $COMPOSE_CMD build frontend; then
             echo -e "${RED}✗ FRONTEND BUILD FAILED (unit tests run inside the build)${NC}"
             echo "Nothing was deployed -- the previous frontend image is still running."
             echo "Fix the code and run: velo update"

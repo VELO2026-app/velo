@@ -124,62 +124,75 @@ success() { echo -e "${GREEN}✓${NC} $1"; }
 # =============================================================================
 # SESSION DURABILITY -- an install must not die with the ssh client
 # =============================================================================
-# The install asks all of its questions up front and then builds for
-# minutes on end. A dropped connection used to SIGHUP the whole thing
-# mid-build, leaving a half-installed box and no record of how far it got.
+# The install asks its questions up front and then builds for minutes. A
+# dropped connection used to SIGHUP the whole run, leaving a half-installed
+# box and no record of how far it got.
 #
-# Two independent guards:
-#   1. the run is relaunched inside a tmux session, so the server-side
-#      process survives the client going away -- reconnect and
-#      `tmux attach -t velo-install` puts you back on the same screen,
-#      including a question that is still waiting for an answer;
-#   2. everything is teed into a timestamped log, so even a run nobody
-#      watched can be read afterwards.
+# The run is relaunched inside a DETACHED tmux session and then attached to,
+# which buys two things at once:
+#   - the work lives on the server: a dropped client leaves it running, and
+#     `tmux attach -t velo-install` returns you to the same screen (including
+#     a question still waiting for an answer);
+#   - the pane is a REAL terminal, so docker keeps its normal progress
+#     output. Piping this script through `tee` would have been simpler and
+#     would have cost exactly that: with a pipe on stdout, docker sees no
+#     tty and degrades to a wall of plain text. The transcript is taken by
+#     tmux itself (pipe-pane), which copies the pane WITHOUT standing
+#     between the build and the terminal.
+#
+# `alternate-screen off`: without it tmux restores the previous screen on
+# exit and the whole install -- final banner included -- vanishes from view.
 #
 # Deliberately duplicated in velo-manage.sh rather than shared: this file
-# is handed to the operator ALONE, before any repo exists on the box, so
-# it cannot source anything.
+# reaches the box ALONE, before any repo exists, so it cannot source
+# anything.
 INSTALL_LOG_PREFIX="/var/log/velo-install"
 INSTALL_TMUX_SESSION="velo-install"
 
-# -- 1. tmux ------------------------------------------------------------------
-# Skipped when already inside tmux/screen (no nesting) or when the operator
-# opts out with VELO_NO_TMUX=1 (an escape hatch for automation, not for
-# daily use).
 if [ -z "${TMUX:-}" ] && [ -z "${STY:-}" ] && [ "${VELO_NO_TMUX:-0}" != "1" ]; then
     if ! command -v tmux > /dev/null 2>&1; then
-        # Quietly: this runs before the banner, and a missing tmux is not
-        # fatal -- the install just loses the reconnect guard.
         apt-get install -y -qq tmux > /dev/null 2>&1 || true
     fi
     if command -v tmux > /dev/null 2>&1; then
         if tmux has-session -t "$INSTALL_TMUX_SESSION" 2>/dev/null; then
-            echo -e "${YELLOW}An install session is already running -- attaching to it.${NC}"
-            echo -e "${YELLOW}(It survived your last disconnect; detach again with Ctrl-b d.)${NC}"
+            echo "An install is already running here -- attaching to it."
             exec tmux attach -t "$INSTALL_TMUX_SESSION"
         fi
-        echo -e "${CYAN}Starting the install inside tmux (session: $INSTALL_TMUX_SESSION).${NC}"
-        echo -e "${CYAN}If the connection drops: ssh back in and run${NC}"
-        echo -e "${CYAN}  tmux attach -t $INSTALL_TMUX_SESSION${NC}"
-        echo ""
-        exec tmux new-session -s "$INSTALL_TMUX_SESSION" bash "$0" "$@"
-    fi
-    echo -e "${YELLOW}[WARN] tmux is unavailable -- the install will NOT survive a disconnect.${NC}"
-fi
+        INSTALL_LOG="${INSTALL_LOG_PREFIX}-$(date +%Y%m%d-%H%M%S).log"
+        INSTALL_STATUS="${INSTALL_LOG%.log}.status"
+        touch "$INSTALL_LOG" && chmod 600 "$INSTALL_LOG"
+        # shellcheck disable=SC2012  # names are ours: fixed prefix + timestamp
+        ls -1t "${INSTALL_LOG_PREFIX}"-*.log 2>/dev/null | tail -n +6 | xargs -r rm -f
+        # shellcheck disable=SC2012
+        ls -1t "${INSTALL_LOG_PREFIX}"-*.status 2>/dev/null | tail -n +6 | xargs -r rm -f
 
-# -- 2. transcript ------------------------------------------------------------
-INSTALL_LOG="${INSTALL_LOG_PREFIX}-$(date +%Y%m%d-%H%M%S).log"
-touch "$INSTALL_LOG" && chmod 600 "$INSTALL_LOG"
-# Keep the five most recent transcripts; build logs are large and this
-# directory is not anybody's archive.
-# shellcheck disable=SC2012  # names are ours: fixed prefix + timestamp, no
-# spaces or newlines possible; find has no portable mtime sort.
-ls -1t "${INSTALL_LOG_PREFIX}"-*.log 2>/dev/null | tail -n +6 | xargs -r rm -f
-# Everything from here on goes to the terminal AND the file. Prompts land
-# in it too, so the log reads as the actual session, not a summary.
-exec > >(tee -a "$INSTALL_LOG") 2>&1
-echo -e "${CYAN}Transcript: $INSTALL_LOG${NC}"
-echo ""
+        tmux new-session -d -s "$INSTALL_TMUX_SESSION" \
+            "bash '$0' ${*@Q}; printf %s \$? > '$INSTALL_STATUS'" || {
+                echo "Could not start a tmux session -- running directly."
+                VELO_NO_TMUX=1 exec bash "$0" "$@"
+            }
+        tmux set-window-option -t "$INSTALL_TMUX_SESSION" alternate-screen off > /dev/null 2>&1
+        tmux pipe-pane -o -t "$INSTALL_TMUX_SESSION" "cat >> '$INSTALL_LOG'" 2>/dev/null
+
+        tmux attach -t "$INSTALL_TMUX_SESSION"
+
+        # Back here after the install finished OR after a manual detach.
+        if tmux has-session -t "$INSTALL_TMUX_SESSION" 2>/dev/null; then
+            echo ""
+            echo "Install still running in the background."
+            echo "  Reattach:  tmux attach -t $INSTALL_TMUX_SESSION"
+            echo "  Follow:    tail -f $INSTALL_LOG"
+            exit 0
+        fi
+        echo ""
+        echo "Transcript: $INSTALL_LOG"
+        echo "It can contain SECRETS (the COMMS_* block is printed when the"
+        echo "automatic hand-over cannot write the product .env) -- delete it"
+        echo "once you are done."
+        exit "$(cat "$INSTALL_STATUS" 2>/dev/null || echo 0)"
+    fi
+    echo "[WARN] tmux is unavailable -- this install will NOT survive a disconnect."
+fi
 
 # === Error handler ===
 handle_error() {
@@ -1205,7 +1218,7 @@ start_stack() {
     # Explicitly checked: a failed image build must not fall through to
     # `up -d`, which would start whatever image (if any) already existed
     # under that tag while reporting the stack as started.
-    if ! docker compose build --progress plain --no-cache app; then
+    if ! docker compose build --no-cache app; then
         error "Backend image build FAILED — stack was not started."
         error "Fix the code / .env, then re-run this installer, or:"
         error "  cd $INSTALL_BASE/repo && docker compose build app"
@@ -1255,7 +1268,7 @@ start_stack() {
 
     # -- 3. Build and start frontend (picks up fresh generated.ts) --
     log "Building frontend..."
-    if ! docker compose build --progress plain --no-cache frontend; then
+    if ! docker compose build --no-cache frontend; then
         error "Frontend image build FAILED (unit tests run inside the build)."
         error "Fix the code, then re-run this installer, or:"
         error "  cd $INSTALL_BASE/repo && docker compose build frontend"
@@ -1341,6 +1354,47 @@ setup_backup_cron() {
 setup_backup_cron
 
 # ==============================================================================
+# HOUSEKEEPING -- leave the box tidy, not just working
+# ==============================================================================
+
+# The install builds both stacks with --no-cache, which is correct (a fresh
+# box must not inherit a stale layer) and expensive: it leaves gigabytes of
+# buildkit cache behind. `velo update` reaps leftovers older than a day; that
+# filter deliberately does not fit HERE, where everything was made minutes ago
+# and none of it is needed again. Volumes are never touched.
+cleanup_build_leftovers() {
+    log "Reclaiming build leftovers..."
+    docker image prune -f > /dev/null 2>&1 || true
+    docker builder prune -f > /dev/null 2>&1 || true
+    success "Build cache and dangling images reclaimed"
+}
+
+cleanup_build_leftovers
+
+# Cap the systemd journal. Unbounded, it grows to 10% of the filesystem by
+# default -- on a 30G VPS shared with two docker stacks that is gigabytes of
+# logs nobody reads, discovered only when a build dies out of disk space. A
+# server's own limits are the installer's job, not something to fix by hand
+# later (which is banned anyway).
+cap_journal_size() {
+    local conf=/etc/systemd/journald.conf
+    [ -f "$conf" ] || return 0
+    if grep -qE '^\s*SystemMaxUse=' "$conf"; then
+        success "journald size cap already configured -- left untouched"
+        return 0
+    fi
+    if printf '\n# Capped by install_velo.sh: a VPS journal has no business\n# growing past a few hundred megabytes.\nSystemMaxUse=200M\n' >> "$conf"; then
+        systemctl restart systemd-journald > /dev/null 2>&1 || true
+        journalctl --vacuum-size=200M > /dev/null 2>&1 || true
+        success "journald capped at 200M"
+    else
+        warn "Could not cap journald size -- check $conf by hand"
+    fi
+}
+
+cap_journal_size
+
+# ==============================================================================
 # POST-INSTALLATION
 # ==============================================================================
 
@@ -1388,8 +1442,3 @@ echo "  2. Verify: velo version   (confirms the script matches git, no drift)"
 echo "  3. Check:  curl https://$DOMAIN_API/health"
 echo "  4. Open:   https://$DOMAIN_FRONTEND"
 echo ""
-
-echo ""
-info "Transcript of this run: $INSTALL_LOG"
-warn "It can contain SECRETS (the COMMS_* block is printed when the automatic"
-warn "hand-over cannot write the product .env). Delete it once you are done."
