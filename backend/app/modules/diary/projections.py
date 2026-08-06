@@ -210,11 +210,19 @@ async def _find_object_event(
     *,
     source_type: str,
     source_id: UUID,
+    kind: str | None = None,
 ) -> DiaryEvent | None:
     """Find the single per-object event for (source_type, source_id).
 
     Used by upsert projections (checkin/feedback/note/dream) to refresh the
     existing event on edit instead of appending a duplicate.
+
+    `kind` narrows the lookup and exists because (source_type, source_id) is
+    only unique while a source type produces ONE kind of event. That holds
+    for the upsert kinds above, and it is exactly what a second kind on the
+    same source would break: scalar_one_or_none() would start raising
+    MultipleResultsFound at runtime, in a projection, inside somebody else's
+    transaction. Pass it whenever the source could grow a second event kind.
     """
     stmt = (
         select(DiaryEvent)
@@ -223,6 +231,8 @@ async def _find_object_event(
             DiaryEvent.source_id == source_id,
         )
     )
+    if kind is not None:
+        stmt = stmt.where(DiaryEvent.kind == kind)
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
 
@@ -568,3 +578,62 @@ async def hide_entry_event(
     if existing is not None:
         existing.is_hidden = True
         await session.flush()
+
+
+# ===================================================================
+# Chat projection (per-object, append-once -- seam T2 / ID-10)
+# ===================================================================
+
+
+async def upsert_thread_started_event(
+    session: AsyncSession,
+    *,
+    user_id: UUID,
+    thread_id: UUID,
+    occurred_at: datetime,
+    master_id: UUID,
+    master_name: str | None,
+) -> DiaryEvent | None:
+    """Record "a conversation with a master began" -- once per thread.
+
+    UPSERT-IF-ABSENT, not append-once-on-a-flag, and the difference matters.
+    comms answers create-or-get with `created: true` exactly once in a
+    thread's life; if the response carrying that `true` is lost (timeout,
+    restart, a failed commit on our side), the retry sees `false` and the
+    fact would be gone forever. So the caller runs this on EVERY create-or-get
+    and the absence of the row -- not the flag -- decides. The flag only tells
+    us whose diary it is the first time round.
+
+    occurred_at is the thread's OWN created_at from comms, never "now": a
+    late heal must land on the timeline where the conversation actually
+    started, not where we noticed.
+
+    Returns the event (existing or new); None is never returned -- the
+    signature keeps the shape of its siblings.
+    """
+    existing = await _find_object_event(
+        session,
+        source_type=DiaryEventSourceType.THREAD.value,
+        source_id=thread_id,
+        # MUST filter: a thread is a long-lived object and a plausible
+        # source for further kinds later (first reply, closed, ...).
+        kind=DiaryEventKind.THREAD_STARTED.value,
+    )
+    if existing is not None:
+        return existing
+
+    snapshot = {
+        "thread_id": str(thread_id),
+        "master_id": str(master_id),
+        "master_name": master_name,
+    }
+    return await _add_event(
+        session,
+        user_id=user_id,
+        kind=DiaryEventKind.THREAD_STARTED.value,
+        occurred_at=occurred_at,
+        source_type=DiaryEventSourceType.THREAD.value,
+        source_id=thread_id,
+        snapshot=snapshot,
+        text_search=master_name,
+    )

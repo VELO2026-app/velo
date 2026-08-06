@@ -154,6 +154,10 @@ class DiaryEventKind(enum.StrEnum):
       FEEDBACK  -- post-practice feedback. Append-once, same as CHECKIN.
       NOTE      -- free-form diary entry. Refreshed on edit (source editable).
       DREAM     -- dream diary entry. Refreshed on edit (source editable).
+      THREAD_STARTED -- a conversation with a master began. Per-object
+                   (one row per thread), written by the chat proxy from the
+                   `created` flag comms returns on create-or-get. Never
+                   refreshed: a conversation starts once.
     """
 
     BOOKING_CONFIRMED = "booking_confirmed"
@@ -165,6 +169,7 @@ class DiaryEventKind(enum.StrEnum):
     FEEDBACK = "feedback"
     NOTE = "note"
     DREAM = "dream"
+    THREAD_STARTED = "thread_started"
 
 
 class DiaryEventSourceType(enum.StrEnum):
@@ -175,6 +180,10 @@ class DiaryEventSourceType(enum.StrEnum):
     CHECKIN = "checkin"
     FEEDBACK = "feedback"
     DIARY_ENTRY = "diary_entry"
+    # The source row lives in comms, not here: source_id is the comms
+    # thread id. velo keeps its own pointer to it (chats.ChatThread) --
+    # this column stays the diary's uniform "what produced me" axis.
+    THREAD = "thread"
 
 
 # ===================================================================
@@ -467,12 +476,14 @@ class DiaryEvent(JSONBMixin, UUIDMixin, TimestampMixin, Base):
             "kind IN ("
             "'booking_confirmed', 'booking_cancelled_by_user', "
             "'practice_rescheduled', 'practice_cancelled_by_master', "
-            "'practice_outcome', 'checkin', 'feedback', 'note', 'dream')",
+            "'practice_outcome', 'checkin', 'feedback', 'note', 'dream', "
+            "'thread_started')",
             name="ck_diary_event_kind",
         ),
         CheckConstraint(
             "source_type IN ("
-            "'booking', 'practice', 'checkin', 'feedback', 'diary_entry')",
+            "'booking', 'practice', 'checkin', 'feedback', 'diary_entry', "
+            "'thread')",
             name="ck_diary_event_source_type",
         ),
         # Primary feed query: WHERE user_id=? [AND ...] ORDER BY occurred_at
