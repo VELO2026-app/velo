@@ -121,6 +121,66 @@ error()   { echo -e "${RED}[ERROR]${NC} $1"; }
 info()    { echo -e "${BLUE}[INFO]${NC} $1"; }
 success() { echo -e "${GREEN}✓${NC} $1"; }
 
+# =============================================================================
+# SESSION DURABILITY -- an install must not die with the ssh client
+# =============================================================================
+# The install asks all of its questions up front and then builds for
+# minutes on end. A dropped connection used to SIGHUP the whole thing
+# mid-build, leaving a half-installed box and no record of how far it got.
+#
+# Two independent guards:
+#   1. the run is relaunched inside a tmux session, so the server-side
+#      process survives the client going away -- reconnect and
+#      `tmux attach -t velo-install` puts you back on the same screen,
+#      including a question that is still waiting for an answer;
+#   2. everything is teed into a timestamped log, so even a run nobody
+#      watched can be read afterwards.
+#
+# Deliberately duplicated in velo-manage.sh rather than shared: this file
+# is handed to the operator ALONE, before any repo exists on the box, so
+# it cannot source anything.
+INSTALL_LOG_PREFIX="/var/log/velo-install"
+INSTALL_TMUX_SESSION="velo-install"
+
+# -- 1. tmux ------------------------------------------------------------------
+# Skipped when already inside tmux/screen (no nesting) or when the operator
+# opts out with VELO_NO_TMUX=1 (an escape hatch for automation, not for
+# daily use).
+if [ -z "${TMUX:-}" ] && [ -z "${STY:-}" ] && [ "${VELO_NO_TMUX:-0}" != "1" ]; then
+    if ! command -v tmux > /dev/null 2>&1; then
+        # Quietly: this runs before the banner, and a missing tmux is not
+        # fatal -- the install just loses the reconnect guard.
+        apt-get install -y -qq tmux > /dev/null 2>&1 || true
+    fi
+    if command -v tmux > /dev/null 2>&1; then
+        if tmux has-session -t "$INSTALL_TMUX_SESSION" 2>/dev/null; then
+            echo -e "${YELLOW}An install session is already running -- attaching to it.${NC}"
+            echo -e "${YELLOW}(It survived your last disconnect; detach again with Ctrl-b d.)${NC}"
+            exec tmux attach -t "$INSTALL_TMUX_SESSION"
+        fi
+        echo -e "${CYAN}Starting the install inside tmux (session: $INSTALL_TMUX_SESSION).${NC}"
+        echo -e "${CYAN}If the connection drops: ssh back in and run${NC}"
+        echo -e "${CYAN}  tmux attach -t $INSTALL_TMUX_SESSION${NC}"
+        echo ""
+        exec tmux new-session -s "$INSTALL_TMUX_SESSION" bash "$0" "$@"
+    fi
+    echo -e "${YELLOW}[WARN] tmux is unavailable -- the install will NOT survive a disconnect.${NC}"
+fi
+
+# -- 2. transcript ------------------------------------------------------------
+INSTALL_LOG="${INSTALL_LOG_PREFIX}-$(date +%Y%m%d-%H%M%S).log"
+touch "$INSTALL_LOG" && chmod 600 "$INSTALL_LOG"
+# Keep the five most recent transcripts; build logs are large and this
+# directory is not anybody's archive.
+# shellcheck disable=SC2012  # names are ours: fixed prefix + timestamp, no
+# spaces or newlines possible; find has no portable mtime sort.
+ls -1t "${INSTALL_LOG_PREFIX}"-*.log 2>/dev/null | tail -n +6 | xargs -r rm -f
+# Everything from here on goes to the terminal AND the file. Prompts land
+# in it too, so the log reads as the actual session, not a summary.
+exec > >(tee -a "$INSTALL_LOG") 2>&1
+echo -e "${CYAN}Transcript: $INSTALL_LOG${NC}"
+echo ""
+
 # === Error handler ===
 handle_error() {
     error "Error occurred at line: ${1}"
@@ -1145,7 +1205,7 @@ start_stack() {
     # Explicitly checked: a failed image build must not fall through to
     # `up -d`, which would start whatever image (if any) already existed
     # under that tag while reporting the stack as started.
-    if ! docker compose build --no-cache app; then
+    if ! docker compose build --progress plain --no-cache app; then
         error "Backend image build FAILED — stack was not started."
         error "Fix the code / .env, then re-run this installer, or:"
         error "  cd $INSTALL_BASE/repo && docker compose build app"
@@ -1195,7 +1255,7 @@ start_stack() {
 
     # -- 3. Build and start frontend (picks up fresh generated.ts) --
     log "Building frontend..."
-    if ! docker compose build --no-cache frontend; then
+    if ! docker compose build --progress plain --no-cache frontend; then
         error "Frontend image build FAILED (unit tests run inside the build)."
         error "Fix the code, then re-run this installer, or:"
         error "  cd $INSTALL_BASE/repo && docker compose build frontend"
@@ -1328,3 +1388,8 @@ echo "  2. Verify: velo version   (confirms the script matches git, no drift)"
 echo "  3. Check:  curl https://$DOMAIN_API/health"
 echo "  4. Open:   https://$DOMAIN_FRONTEND"
 echo ""
+
+echo ""
+info "Transcript of this run: $INSTALL_LOG"
+warn "It can contain SECRETS (the COMMS_* block is printed when the automatic"
+warn "hand-over cannot write the product .env). Delete it once you are done."

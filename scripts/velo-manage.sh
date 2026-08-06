@@ -611,6 +611,39 @@ update_service() {
 
 # `velo update` -- the whole box, in registry order.
 update_all() {
+    # -- Session durability -------------------------------------------------
+    # Same reasoning as the installer (see its header): an update builds for
+    # minutes and used to die with the ssh client, leaving containers half
+    # swapped. The tmux relaunch keeps the RUN alive across a disconnect,
+    # the transcript keeps the EVIDENCE. Duplicated rather than shared
+    # because install_velo.sh reaches a box before this file exists on it.
+    if [ -z "${TMUX:-}" ] && [ -z "${STY:-}" ] && [ "${VELO_NO_TMUX:-0}" != "1" ]; then
+        if command -v tmux > /dev/null 2>&1; then
+            if tmux has-session -t velo-update 2>/dev/null; then
+                echo -e "${YELLOW}An update is already running -- attaching to it.${NC}"
+                exec tmux attach -t velo-update
+            fi
+            echo -e "${CYAN}Running inside tmux (session: velo-update).${NC}"
+            echo -e "${CYAN}If the connection drops: tmux attach -t velo-update${NC}"
+            echo ""
+            exec tmux new-session -s velo-update bash "${BASH_SOURCE[0]}" "$@"
+        fi
+        echo -e "${YELLOW}⚠ tmux is unavailable -- this run will NOT survive a disconnect${NC}"
+    fi
+
+    if [ -z "${VELO_UPDATE_LOG:-}" ]; then
+        VELO_UPDATE_LOG="/var/log/velo-update-$(date +%Y%m%d-%H%M%S).log"
+        export VELO_UPDATE_LOG
+        touch "$VELO_UPDATE_LOG" && chmod 600 "$VELO_UPDATE_LOG"
+        # Five most recent transcripts, no more: build output is bulky.
+        # shellcheck disable=SC2012  # names are ours: fixed prefix +
+        # timestamp; find has no portable mtime sort.
+        ls -1t /var/log/velo-update-*.log 2>/dev/null | tail -n +6 | xargs -r rm -f
+        exec > >(tee -a "$VELO_UPDATE_LOG") 2>&1
+        echo -e "${CYAN}Transcript: $VELO_UPDATE_LOG${NC}"
+        echo ""
+    fi
+
     # -- Self-update guard --------------------------------------------------
     # This file IS the product's checkout (the /usr/local/bin/velo shim execs
     # it straight from repo/scripts), and this very run pulls that checkout.
@@ -806,7 +839,7 @@ update_product() {
             # through to `up -d`, which restarted the PREVIOUS app image --
             # and everything after it (migrations, backend tests) then ran
             # and passed against code that was never rebuilt.
-            if ! $COMPOSE_CMD build app; then
+            if ! $COMPOSE_CMD build --progress plain app; then
                 echo -e "${RED}✗ BACKEND BUILD FAILED${NC}"
                 echo "Nothing was deployed -- the previous app image is still running."
                 echo "Fix the code and run: velo update"
@@ -1005,7 +1038,7 @@ Triggered by velo update on commit $NEW_COMMIT" || {
         # image while printing success -- the gate would exist but never fire.
         # This script has no `set -e`, so the check must be explicit (same
         # shape as the backend build gate above).
-        if ! $COMPOSE_CMD build frontend; then
+        if ! $COMPOSE_CMD build --progress plain frontend; then
             echo -e "${RED}✗ FRONTEND BUILD FAILED (unit tests run inside the build)${NC}"
             echo "Nothing was deployed -- the previous frontend image is still running."
             echo "Fix the code and run: velo update"
