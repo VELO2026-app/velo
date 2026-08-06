@@ -323,6 +323,106 @@ class TestOpenChat:
 # ---------------------------------------------------------------------------
 
 
+class TestRepointing:
+    """comms can be rebuilt underneath us -- the test contour's projection
+    resync truncates recipients CASCADE, and threads go with it. The next
+    create-or-get then returns a NEW thread id for the SAME pair. Keyed by
+    thread id, that would insert a second row for the pair, violate
+    uq_chat_threads_pair and 500 forever."""
+
+    async def test_a_recreated_thread_repoints_the_existing_pointer(
+        self, client: AsyncClient, db_session: AsyncSession, monkeypatch
+    ) -> None:
+        student = await login_user(
+            client, telegram_id=BAND_MIN + 28, first_name="Student",
+        )
+        master = await _make_master(client, db_session, BAND_MIN + 29)
+        headers = auth_headers(student["session_token"])
+
+        monkeypatch.setattr(
+            _SEAM, AsyncMock(return_value=_thread_payload(created=True))
+        )
+        await client.post(
+            CHATS_URL, json={"master_id": master["user"]["id"]}, headers=headers,
+        )
+
+        # comms was wiped and rebuilt: same two people, new thread id.
+        new_id = "bbbbbbbb-8972-4000-8000-000000000002"
+        monkeypatch.setattr(
+            _SEAM,
+            AsyncMock(
+                return_value=_thread_payload(created=True, thread_id=new_id)
+            ),
+        )
+        resp = await client.post(
+            CHATS_URL, json={"master_id": master["user"]["id"]}, headers=headers,
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["id"] == new_id
+
+        pointers = (
+            await db_session.execute(
+                select(ChatThread).where(
+                    ChatThread.client_user_id == UUID(student["user"]["id"])
+                )
+            )
+        ).scalars().all()
+        assert len(pointers) == 1
+        assert pointers[0].comms_thread_id == UUID(new_id)
+
+        # The conversation did not start twice: one card, on the original
+        # instant. A second one would claim something that never happened.
+        events = await _diary_rows(db_session, UUID(student["user"]["id"]))
+        assert len(events) == 1
+        assert events[0].source_id == UUID(THREAD_ID)
+
+    async def test_the_repointed_thread_is_usable(
+        self, client: AsyncClient, db_session: AsyncSession, monkeypatch
+    ) -> None:
+        """Membership must follow the new id -- otherwise the chat is
+        authorized against a thread that no longer exists."""
+        student = await login_user(
+            client, telegram_id=BAND_MIN + 30, first_name="Student",
+        )
+        master = await _make_master(client, db_session, BAND_MIN + 31)
+        headers = auth_headers(student["session_token"])
+        new_id = "bbbbbbbb-8972-4000-8000-000000000003"
+
+        monkeypatch.setattr(
+            _SEAM, AsyncMock(return_value=_thread_payload(created=True))
+        )
+        await client.post(
+            CHATS_URL, json={"master_id": master["user"]["id"]}, headers=headers,
+        )
+        monkeypatch.setattr(
+            _SEAM,
+            AsyncMock(
+                return_value=_thread_payload(created=True, thread_id=new_id)
+            ),
+        )
+        await client.post(
+            CHATS_URL, json={"master_id": master["user"]["id"]}, headers=headers,
+        )
+
+        fake = AsyncMock(return_value={"id": str(uuid4())})
+        monkeypatch.setattr(_SEAM, fake)
+        posted = await client.post(
+            f"{CHATS_URL}/{new_id}/messages",
+            json={"body": "still here"},
+            headers=headers,
+        )
+        stale = await client.post(
+            f"{CHATS_URL}/{THREAD_ID}/messages",
+            json={"body": "gone"},
+            headers=headers,
+        )
+
+        assert posted.status_code == 200
+        # The old id is nobody's thread any more.
+        assert stale.status_code == 404
+
+
 class TestMembership:
     async def _chat(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch, base: int

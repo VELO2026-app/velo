@@ -35,6 +35,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
+import structlog
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
@@ -48,6 +49,8 @@ from app.modules.chats.models import ChatThread
 from app.modules.diary.projections import upsert_thread_started_event
 from app.modules.masters.service import get_master_full_name, is_master_verified
 from app.modules.users.models import User, UserRole
+
+logger = structlog.get_logger()
 
 router = APIRouter(prefix="/api/v1/chats", tags=["chats"])
 
@@ -153,17 +156,25 @@ async def open_chat(
 
     comms_thread_id = UUID(str(payload["id"]))
 
-    # Local pointer: written on first sight, found afterwards. `created` from
-    # comms is NOT the condition -- see the projection's docstring: a lost
-    # response would otherwise strand both the pointer and the diary row.
-    existing = (
+    # Local pointer, keyed by the PAIR rather than by the thread id, because
+    # the thread id is not stable for the lifetime of a pair: comms can be
+    # rebuilt underneath us (the test contour's projection resync truncates
+    # recipients CASCADE, which takes threads with it), and the next
+    # create-or-get then answers with a brand-new id for the same two people.
+    # Keyed by thread id, that case would try to INSERT a second row for the
+    # pair, hit uq_chat_threads_pair, and 500 -- permanently, since every
+    # retry repeats it. So: find by pair, re-point when the id moved.
+    pointer = (
         await session.execute(
             select(ChatThread).where(
-                ChatThread.comms_thread_id == comms_thread_id
+                ChatThread.client_user_id == user.id,
+                ChatThread.operator_user_id == body.master_id,
             )
         )
     ).scalar_one_or_none()
-    if existing is None:
+
+    repointed = False
+    if pointer is None:
         session.add(
             ChatThread(
                 comms_thread_id=comms_thread_id,
@@ -172,18 +183,38 @@ async def open_chat(
             )
         )
         await session.flush()
+    elif pointer.comms_thread_id != comms_thread_id:
+        # An anomaly, not a normal path: comms lost the thread it had told
+        # us about. Loud on purpose -- outside the test contour this means
+        # the two sides genuinely diverged and somebody should know.
+        logger.warning(
+            "chat_thread_repointed",
+            client_user_id=str(user.id),
+            operator_user_id=str(body.master_id),
+            old_thread_id=str(pointer.comms_thread_id),
+            new_thread_id=str(comms_thread_id),
+        )
+        pointer.comms_thread_id = comms_thread_id
+        repointed = True
+        await session.flush()
 
     # The diary entry belongs to the student's own timeline (ID-5: the diary
     # is velo's, and it is the student's personal space -- the master gets
     # nothing). occurred_at comes from the thread, not from now().
-    await upsert_thread_started_event(
-        session,
-        user_id=user.id,
-        thread_id=comms_thread_id,
-        occurred_at=_parsed_created_at(payload),
-        master_id=body.master_id,
-        master_name=await get_master_full_name(body.master_id, session),
-    )
+    #
+    # NOT written on a re-point: the conversation with this master already
+    # has its "started" card. comms handed out a new thread id, but nothing
+    # started again in the student's life, and a second card would say
+    # otherwise.
+    if not repointed:
+        await upsert_thread_started_event(
+            session,
+            user_id=user.id,
+            thread_id=comms_thread_id,
+            occurred_at=_parsed_created_at(payload),
+            master_id=body.master_id,
+            master_name=await get_master_full_name(body.master_id, session),
+        )
 
     # `created` is a seam detail (it exists so this handler can act on it);
     # the frontend gets the thread, unchanged otherwise.
