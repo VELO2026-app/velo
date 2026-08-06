@@ -158,6 +158,12 @@ cd_compose() {
 # truncates: the transactional outbox + snapshot-on-login self-healing +
 # the idempotent backfill (as a reconciliation tool, WITHOUT truncate)
 # keep the projection converged.
+# WARNING -- THIS DESTROYS DATA. The TRUNCATE below cascades far past the
+# two tables it names: recipients is referenced by the messaging side, so
+# threads, messages and thread_read_states go with it. On a stand with live
+# chats that is every conversation, gone. It is a test-contour ritual for
+# rebuilding the identity projection, never a routine step -- which is why
+# `velo update` stopped calling it (H-D2, 2026-08-06).
 resync_comms_projection() {
     if [ "$VELO_ROLE" != "test" ]; then
         echo -e "${RED}✗ resync-comms is a test-contour ritual; refusing on role '$VELO_ROLE'${NC}"
@@ -688,6 +694,8 @@ update_all() {
 update_product() {
         # Parse optional flags (order-independent).
         #   --skip-tests      Skip the backend test suite (keep everything else).
+        #   --notests         Alias of --skip-tests. Neither touches the
+        #                     frontend tests: those are a build step.
         #   --frontend-only   Skip the entire backend cycle: backend build,
         #                     full compose restart, migrations, backend tests
         #                     and `app` container restart. Only frontend gets
@@ -698,11 +706,16 @@ update_product() {
         shift  # drop "update" / "deploy"
         while [ $# -gt 0 ]; do
             case "$1" in
-                --skip-tests)    SKIP_TESTS=1 ;;
+                # --notests is the same switch under the name people
+                # reach for first. Worth knowing what neither of them
+                # does: the FRONTEND tests run inside the frontend
+                # Dockerfile as a build step, so a red frontend test still
+                # fails the build no matter which flag you pass.
+                --skip-tests|--notests) SKIP_TESTS=1 ;;
                 --frontend-only) FRONTEND_ONLY=1 ;;
                 *)
                     echo -e "${RED}Unknown option: $1${NC}"
-                    echo "Usage: velo update [--skip-tests] [--frontend-only]"
+                    echo "Usage: velo update [--skip-tests|--notests] [--frontend-only]"
                     exit 1
                     ;;
             esac
@@ -919,11 +932,21 @@ update_product() {
                 fi
                 echo -e "${GREEN}✓ All backend tests passed${NC}"
 
-                # The suite just polluted the comms projection with
-                # phantom events (T0 finding #2) -- resync it. Test
-                # contour only; see resync_comms_projection.
+                # The suite pollutes the comms projection with phantom
+                # events (T0 finding #2), and this used to resync it right
+                # here. It no longer does: the resync TRUNCATEs recipients
+                # CASCADE, and once chats existed that cascade started
+                # taking threads / messages / read-states with it -- every
+                # update wiped the stand's conversations. A cleanup that
+                # destroys real data is not something to run automatically
+                # behind somebody's back; the phantom recipients it fixes
+                # are harmless by comparison (they resolve to nobody).
+                # Manual now, on purpose. Backlog: a reconcile-style resync
+                # that converges without touching messaging.
                 echo ""
-                resync_comms_projection || exit 1
+                echo -e "${YELLOW}ℹ The suite left phantom rows in the comms projection.${NC}"
+                echo "  Projection resync is MANUAL now: velo resync-comms"
+                echo "  (it truncates -- it would wipe this stand's chats)"
             else
                 echo ""
                 echo -e "${YELLOW}⊘ Backend tests skipped (--skip-tests)${NC}"
@@ -1053,6 +1076,69 @@ Triggered by velo update on commit $NEW_COMMIT" || {
         echo -e "${GREEN}✓ Cleanup done${NC}"
 }
 
+# -----------------------------------------------------------------------------
+# Registry-driven reporting (H-D2)
+# -----------------------------------------------------------------------------
+# `status` and `version` used to describe the product only, which stopped being
+# the whole truth the moment the box ran two stacks. Both now walk the same
+# registry the update cycle does, so a service can never be managed by one and
+# invisible to the other.
+#
+# Division of labour, same as in the update cycle: git state is read here (a
+# checkout is a checkout), CONTAINER state is delegated to the service's own
+# CLI. velo does not run docker commands against another service's stack --
+# that mechanic lives in its repo, and duplicating it is how the two drift.
+
+# Git one-liner for a checkout: "branch @ short-sha (date)" plus a tag when
+# HEAD carries one. Prints nothing but a reason if the directory is not a
+# checkout.
+svc_git_line() {
+    local dir="$1"
+    if [ ! -d "$dir/.git" ]; then
+        echo "no checkout at $dir"
+        return 0
+    fi
+    local branch sha date tag
+    branch=$(git -C "$dir" branch --show-current 2>/dev/null)
+    sha=$(git -C "$dir" rev-parse --short HEAD 2>/dev/null)
+    date=$(git -C "$dir" --no-pager log -1 --format='%ci' 2>/dev/null)
+    tag=$(git -C "$dir" describe --tags --exact-match HEAD 2>/dev/null)
+    printf '%s @ %s (%s)%s' \
+        "${branch:-detached}" "${sha:-unknown}" "${date:-unknown}" \
+        "${tag:+  tag: $tag}"
+}
+
+# Per-service section shared by `status` (with containers) and `version`
+# (git only). Never fails the command: a missing service is a legitimate
+# configuration, and a report that exits non-zero over it is useless.
+svc_report() {
+    local record="$1" with_containers="$2"
+    local name dir lifecycle branch_expr want
+    name=$(svc_field "$record" 1)
+    dir=$(svc_field "$record" 3)
+    branch_expr=$(svc_field "$record" 4)
+    lifecycle=$(svc_field "$record" 5)
+
+    if [ "$lifecycle" != "internal" ] && { [ ! -d "$dir/.git" ] || [ ! -f "$dir/$lifecycle" ]; }; then
+        echo -e "${YELLOW}⊘ $name: not installed${NC}"
+        echo ""
+        return 0
+    fi
+
+    want=$(svc_branch "$branch_expr" "$name" 2>/dev/null) || want="?"
+    echo -e "${CYAN}--- $name ---${NC}"
+    echo "  tracks:  $want"
+    echo "  running: $(svc_git_line "$dir")"
+
+    if [ "$with_containers" = "1" ] && [ "$lifecycle" != "internal" ]; then
+        # Its own CLI, its own output format. Parsing it into a uniform
+        # table would mean re-implementing its status here and breaking
+        # silently the day it changes a column.
+        bash "$dir/$lifecycle" status 2>&1 | sed 's/^/  /'
+    fi
+    echo ""
+}
+
 case "${1:-}" in
 
     # === Service Management ===
@@ -1091,6 +1177,13 @@ case "${1:-}" in
         ;;
 
     status)
+        echo "=== Services on this box ==="
+        echo ""
+        for record in "${VELO_SERVICES[@]}"; do
+            [ "$(svc_field "$record" 5)" = "internal" ] && continue
+            svc_report "$record" 1
+        done
+
         echo "=== VELO Service Status ==="
         echo ""
         cd_compose
@@ -1369,6 +1462,11 @@ case "${1:-}" in
     version)
         echo -e "${CYAN}VELO Management Script${NC}"
         echo ""
+        for record in "${VELO_SERVICES[@]}"; do
+            [ "$(svc_field "$record" 5)" = "internal" ] && continue
+            svc_report "$record" 0
+        done
+
         cd "$INSTALL_BASE/repo" 2>/dev/null && {
             echo -n "Repo HEAD:   "
             git rev-parse --short HEAD 2>/dev/null || echo "unknown"
@@ -1560,7 +1658,7 @@ case "${1:-}" in
         echo "  start               — Start all services"
         echo "  stop                — Stop all services"
         echo "  restart [app]       — Restart all (or just app)"
-        echo "  status              — Show status + health check"
+        echo "  status              — Show status + health check (every service)"
         echo ""
         echo "Logs:"
         echo "  logs [app|db|redis|frontend] — View logs (default: app)"
@@ -1574,11 +1672,16 @@ case "${1:-}" in
         echo "Deployment:"
         echo "  update              — Pull, rebuild, migrate, test, restart"
         echo "    --skip-tests        Skip backend tests (everything else runs)"
+        echo "    --notests           Alias of --skip-tests (frontend tests are"
+        echo "                        a build step -- no flag skips them)"
         echo "    --frontend-only     Skip whole backend cycle; refuses if backend/ changed"
         echo "  gen-types           — Regenerate frontend types from backend"
-        echo "  resync-comms        — Rebuild the comms projection (truncate + backfill;"
-        echo "                        test server only; update runs it after tests; also"
-        echo "                        run it after 'velo seed' -- seeds bypass the emits)"
+        echo "  resync-comms        — Rebuild the comms projection (test server only)."
+        echo "                        DESTRUCTIVE: truncates recipients CASCADE, which"
+        echo "                        takes threads/messages/read-states with it. MANUAL"
+        echo "                        since H-D2 -- update no longer runs it. Use after"
+        echo "                        'velo seed' (seeds bypass the emits) or after the"
+        echo "                        suite leaves phantom rows."
         echo "  comms-outbox        — Outbox dead-letter queue: list-dead |"
         echo "                        requeue <id> [...] | requeue --all"
         echo ""
