@@ -617,48 +617,13 @@ update_service() {
 
 # `velo update` -- the whole box, in registry order.
 update_all() {
-    # -- Session durability -------------------------------------------------
-    # `velo update` is fully non-interactive, so unlike the installer nobody
-    # needs to sit INSIDE the session: the run goes into a DETACHED tmux
-    # session and this terminal just follows its transcript. Consequences,
-    # all of them wanted:
-    #   - a dropped connection (or Ctrl-C) kills the VIEWER, never the run;
-    #   - the pane is a real terminal, so docker keeps its normal progress
-    #     output -- piping this script through `tee` would have hidden the
-    #     tty from docker and turned every build into a wall of text;
-    #   - the transcript is taken by tmux (pipe-pane), which copies the pane
-    #     without standing between the build and the terminal;
-    #   - the exit code is carried back through a status file, so
-    #     `velo update && something` keeps working.
-    if [ -z "${TMUX:-}" ] && [ -z "${STY:-}" ] && [ "${VELO_NO_TMUX:-0}" != "1" ] \
-       && command -v tmux > /dev/null 2>&1; then
-        if tmux has-session -t velo-update 2>/dev/null; then
-            echo -e "${YELLOW}An update is already running -- following it.${NC}"
-        else
-            local log status
-            log="/var/log/velo-update-$(date +%Y%m%d-%H%M%S).log"
-            status="${log%.log}.status"
-            touch "$log" && chmod 600 "$log"
-            # shellcheck disable=SC2012  # names are ours: prefix + timestamp
-            ls -1t /var/log/velo-update-*.log 2>/dev/null | tail -n +6 | xargs -r rm -f
-            # shellcheck disable=SC2012
-            ls -1t /var/log/velo-update-*.status 2>/dev/null | tail -n +6 | xargs -r rm -f
-            echo -e "${CYAN}Transcript: $log${NC}"
-            echo ""
-            tmux new-session -d -s velo-update \
-                "VELO_NO_TMUX=1 bash '${BASH_SOURCE[0]}' ${*@Q}; printf %s \$? > '$status'"
-            tmux pipe-pane -o -t velo-update "cat >> '$log'" 2>/dev/null
-            # Follow the transcript until the session is gone, then hand the
-            # run's own exit code back to whoever called us.
-            tail -f -n +1 "$log" 2>/dev/null &
-            local viewer=$!
-            while tmux has-session -t velo-update 2>/dev/null; do sleep 1; done
-            sleep 1
-            kill "$viewer" 2>/dev/null
-            wait "$viewer" 2>/dev/null
-            exit "$(cat "$status" 2>/dev/null || echo 1)"
-        fi
-    fi
+    # NOTE (2026-08-06): a tmux wrapper (detached session + transcript) was
+    # tried here and REJECTED after seeing it run -- it replaced the
+    # terminal's colours, echoed mouse-wheel escape codes into the output,
+    # and any tee-based transcript costs docker its tty (plain-text builds).
+    # Durability, if wanted, belongs outside the script: run it under
+    # `tmux`/`screen` on the operator's side. Anyone who wants a log:
+    #   velo update 2>&1 | tee /tmp/update.log     (accepting plain output)
 
     # -- Self-update guard --------------------------------------------------
     # This file IS the product's checkout (the /usr/local/bin/velo shim execs

@@ -121,78 +121,17 @@ error()   { echo -e "${RED}[ERROR]${NC} $1"; }
 info()    { echo -e "${BLUE}[INFO]${NC} $1"; }
 success() { echo -e "${GREEN}✓${NC} $1"; }
 
-# =============================================================================
-# SESSION DURABILITY -- an install must not die with the ssh client
-# =============================================================================
-# The install asks its questions up front and then builds for minutes. A
-# dropped connection used to SIGHUP the whole run, leaving a half-installed
-# box and no record of how far it got.
-#
-# The run is relaunched inside a DETACHED tmux session and then attached to,
-# which buys two things at once:
-#   - the work lives on the server: a dropped client leaves it running, and
-#     `tmux attach -t velo-install` returns you to the same screen (including
-#     a question still waiting for an answer);
-#   - the pane is a REAL terminal, so docker keeps its normal progress
-#     output. Piping this script through `tee` would have been simpler and
-#     would have cost exactly that: with a pipe on stdout, docker sees no
-#     tty and degrades to a wall of plain text. The transcript is taken by
-#     tmux itself (pipe-pane), which copies the pane WITHOUT standing
-#     between the build and the terminal.
-#
-# `alternate-screen off`: without it tmux restores the previous screen on
-# exit and the whole install -- final banner included -- vanishes from view.
-#
-# Deliberately duplicated in velo-manage.sh rather than shared: this file
-# reaches the box ALONE, before any repo exists, so it cannot source
-# anything.
-INSTALL_LOG_PREFIX="/var/log/velo-install"
-INSTALL_TMUX_SESSION="velo-install"
-
-if [ -z "${TMUX:-}" ] && [ -z "${STY:-}" ] && [ "${VELO_NO_TMUX:-0}" != "1" ]; then
-    if ! command -v tmux > /dev/null 2>&1; then
-        apt-get install -y -qq tmux > /dev/null 2>&1 || true
-    fi
-    if command -v tmux > /dev/null 2>&1; then
-        if tmux has-session -t "$INSTALL_TMUX_SESSION" 2>/dev/null; then
-            echo "An install is already running here -- attaching to it."
-            exec tmux attach -t "$INSTALL_TMUX_SESSION"
-        fi
-        INSTALL_LOG="${INSTALL_LOG_PREFIX}-$(date +%Y%m%d-%H%M%S).log"
-        INSTALL_STATUS="${INSTALL_LOG%.log}.status"
-        touch "$INSTALL_LOG" && chmod 600 "$INSTALL_LOG"
-        # shellcheck disable=SC2012  # names are ours: fixed prefix + timestamp
-        ls -1t "${INSTALL_LOG_PREFIX}"-*.log 2>/dev/null | tail -n +6 | xargs -r rm -f
-        # shellcheck disable=SC2012
-        ls -1t "${INSTALL_LOG_PREFIX}"-*.status 2>/dev/null | tail -n +6 | xargs -r rm -f
-
-        tmux new-session -d -s "$INSTALL_TMUX_SESSION" \
-            "bash '$0' ${*@Q}; printf %s \$? > '$INSTALL_STATUS'" || {
-                echo "Could not start a tmux session -- running directly."
-                VELO_NO_TMUX=1 exec bash "$0" "$@"
-            }
-        tmux set-window-option -t "$INSTALL_TMUX_SESSION" alternate-screen off > /dev/null 2>&1
-        tmux pipe-pane -o -t "$INSTALL_TMUX_SESSION" "cat >> '$INSTALL_LOG'" 2>/dev/null
-
-        tmux attach -t "$INSTALL_TMUX_SESSION"
-
-        # Back here after the install finished OR after a manual detach.
-        if tmux has-session -t "$INSTALL_TMUX_SESSION" 2>/dev/null; then
-            echo ""
-            echo "Install still running in the background."
-            echo "  Reattach:  tmux attach -t $INSTALL_TMUX_SESSION"
-            echo "  Follow:    tail -f $INSTALL_LOG"
-            exit 0
-        fi
-        echo ""
-        echo "Transcript: $INSTALL_LOG"
-        echo "It can contain SECRETS (the COMMS_* block is printed when the"
-        echo "automatic hand-over cannot write the product .env) -- delete it"
-        echo "once you are done."
-        exit "$(cat "$INSTALL_STATUS" 2>/dev/null || echo 0)"
-    fi
-    echo "[WARN] tmux is unavailable -- this install will NOT survive a disconnect."
-fi
+# NOTE (2026-08-06): a tmux wrapper was tried here to survive dropped ssh
+# sessions and REJECTED by the owner after seeing it run. Recording why, so
+# nobody re-invents it: inside a tmux pane the terminal's colour scheme is
+# replaced by tmux's own, mouse wheel turns into arrow keys the pane echoes
+# into the output, and any transcript taken by piping this script (tee) hides
+# the tty from docker, which then degrades to a wall of plain text. This file
+# is the ONE artefact the customer runs -- how it looks outweighs surviving a
+# disconnect, and a dropped install is simply re-run (idempotent by design:
+# secrets and profile are guarded). If durability is ever wanted again, it
+# belongs OUTSIDE the script: `ssh -t ... tmux new -s install` on the
+# operator's side, or systemd-run, neither of which touches this file.
 
 # === Error handler ===
 handle_error() {
