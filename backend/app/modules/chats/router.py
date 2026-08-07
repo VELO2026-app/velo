@@ -39,6 +39,7 @@ import structlog
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.comms import comms_request
@@ -175,14 +176,42 @@ async def open_chat(
 
     repointed = False
     if pointer is None:
-        session.add(
-            ChatThread(
-                comms_thread_id=comms_thread_id,
-                client_user_id=user.id,
-                operator_user_id=body.master_id,
+        # Concurrent first-open (a double tap on "Write" is enough): both
+        # requests find no pointer, both insert, and the loser hits
+        # uq_chat_threads_pair. Caught rather than prevented with a lock:
+        # comms has already deduped the THREAD itself, so the winner's row
+        # is the right one and the loser only needs to find it. A SAVEPOINT
+        # keeps the failed INSERT from poisoning the surrounding
+        # transaction -- the diary write still has to happen after this.
+        try:
+            async with session.begin_nested():
+                session.add(
+                    ChatThread(
+                        comms_thread_id=comms_thread_id,
+                        client_user_id=user.id,
+                        operator_user_id=body.master_id,
+                    )
+                )
+                await session.flush()
+        except IntegrityError:
+            pointer = (
+                await session.execute(
+                    select(ChatThread).where(
+                        ChatThread.client_user_id == user.id,
+                        ChatThread.operator_user_id == body.master_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if pointer is None:
+                # The constraint fired but no row is visible: not our race,
+                # and nothing here knows how to recover from it.
+                raise
+            logger.info(
+                "chat_thread_insert_race_lost",
+                client_user_id=str(user.id),
+                operator_user_id=str(body.master_id),
+                thread_id=str(comms_thread_id),
             )
-        )
-        await session.flush()
     elif pointer.comms_thread_id != comms_thread_id:
         # An anomaly, not a normal path: comms lost the thread it had told
         # us about. Loud on purpose -- outside the test contour this means

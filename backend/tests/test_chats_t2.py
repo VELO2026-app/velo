@@ -28,6 +28,7 @@ from httpx import AsyncClient
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import get_session_factory
 from app.modules.chats.models import ChatThread
 from app.modules.diary.models import DiaryEvent, DiaryEventKind
 from app.modules.masters.models import MasterProfile
@@ -421,6 +422,57 @@ class TestRepointing:
         assert posted.status_code == 200
         # The old id is nobody's thread any more.
         assert stale.status_code == 404
+
+
+class TestConcurrentFirstOpen:
+    """C-1: two requests open the same chat at once. Both find no pointer,
+    both insert, and the loser hit uq_chat_threads_pair -> 500. A double tap
+    on the button is enough to reach it."""
+
+    async def test_the_losing_insert_is_absorbed(
+        self, client: AsyncClient, db_session: AsyncSession, monkeypatch
+    ) -> None:
+        student = await login_user(
+            client, telegram_id=BAND_MIN + 32, first_name="Student",
+        )
+        master = await _make_master(client, db_session, BAND_MIN + 33)
+        factory = get_session_factory()
+
+        # Stand in for the race WINNER: its row is already committed by the
+        # time this request tries to insert its own -- exactly what the loser
+        # sees. Deterministic, unlike firing two live requests and hoping.
+        async with factory() as other:
+            other.add(
+                ChatThread(
+                    comms_thread_id=uuid4(),
+                    client_user_id=UUID(student["user"]["id"]),
+                    operator_user_id=UUID(master["user"]["id"]),
+                )
+            )
+            await other.commit()
+
+        payload = _thread_payload(created=False)
+        monkeypatch.setattr(_SEAM, AsyncMock(return_value=payload))
+
+        resp = await client.post(
+            CHATS_URL,
+            json={"master_id": master["user"]["id"]},
+            headers=auth_headers(student["session_token"]),
+        )
+
+        # No 500: the loser finds the winner's row instead of dying on it.
+        assert resp.status_code == 200
+
+        async with factory() as check:
+            rows = (
+                await check.execute(
+                    select(ChatThread).where(
+                        ChatThread.client_user_id
+                        == UUID(student["user"]["id"])
+                    )
+                )
+            ).scalars().all()
+        assert len(rows) == 1
 
 
 class TestMembership:
