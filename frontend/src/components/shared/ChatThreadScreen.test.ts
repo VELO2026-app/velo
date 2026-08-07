@@ -160,7 +160,12 @@ describe('ChatThreadScreen', () => {
   it('renders the NEWEST-first comms feed in top-down reading order, aligned by sender', async () => {
     vi.mocked(chatsApi.listChatMessages).mockResolvedValue(
       feed([
-        msg({ id: 'm-2', sender: MY_ID, body: 'и вам привет', created_at: '2026-08-07T09:05:00+00:00' }),
+        msg({
+          id: 'm-2',
+          sender: MY_ID,
+          body: 'и вам привет',
+          created_at: '2026-08-07T09:05:00+00:00',
+        }),
         msg({ id: 'm-1', body: 'привет', created_at: '2026-08-07T09:00:00+00:00' }),
       ]),
     )
@@ -230,7 +235,7 @@ describe('ChatThreadScreen', () => {
     expect(sendBtn().disabled).toBe(false)
   })
 
-  it('polls the visible thread every 12s; growth re-renders AND re-marks read', async () => {
+  it('polls the visible thread every 12s; a new tail re-renders AND re-marks read', async () => {
     vi.useFakeTimers()
     vi.mocked(chatsApi.listChatMessages).mockResolvedValue(feed([msg()]))
     mount()
@@ -251,6 +256,115 @@ describe('ChatThreadScreen', () => {
     expect(chatsApi.listChatMessages).toHaveBeenCalledTimes(2)
     expect(bodies()).toEqual(['привет', 'новое сообщение'])
     expect(chatsApi.markChatRead).toHaveBeenCalledWith(THREAD_ID)
+  })
+
+  // CH-1 (review): the regression the ORIGINAL poll test could not catch,
+  // because it asserted the same false invariant the code used (growth of
+  // the array length). Past one page an eternal DM is length-pinned:
+  // 100 === 100 forever, and a length compare silently blinds the poll to
+  // exactly the peer's replies. Detection must key off the newest id.
+  it("CH-1: a FULL page whose newest message changed (length pinned at 100) still renders the peer's reply and re-marks read", async () => {
+    vi.useFakeTimers()
+    const fullPage = (offset: number) =>
+      Array.from({ length: 100 }, (_, i) =>
+        msg({
+          id: `m-${offset + (99 - i)}`, // newest-first, as comms feeds it
+          body: `сообщение ${offset + (99 - i)}`,
+          created_at: `2026-08-07T09:00:${String(offset + (99 - i)).padStart(2, '0')}+00:00`,
+        }),
+      )
+    vi.mocked(chatsApi.listChatMessages).mockResolvedValue(feed(fullPage(0)))
+    mount()
+    await vi.advanceTimersByTimeAsync(0)
+    vi.mocked(chatsApi.markChatRead).mockClear()
+
+    // The peer answers: the window slides by one -- SAME length, new tail.
+    vi.mocked(chatsApi.listChatMessages).mockResolvedValue(feed(fullPage(1)))
+    await vi.advanceTimersByTimeAsync(12_000)
+
+    expect(bodies()[bodies().length - 1]).toBe('сообщение 100')
+    expect(chatsApi.markChatRead).toHaveBeenCalledWith(THREAD_ID)
+  })
+
+  // CH-3 (review): incoming messages must not yank a reader who scrolled up
+  // into history; only a reader already at the bottom follows the thread
+  // down. happy-dom measures nothing, so the feed's scroll metrics are
+  // stubbed -- the REAL wiring (poll -> readerNearBottom -> scrollTop) is
+  // still what runs.
+  function stubFeedScroll(metrics: {
+    scrollTop: number
+    scrollHeight: number
+    clientHeight: number
+  }) {
+    const el = host?.querySelector<HTMLElement>('[data-testid="chat-feed"]')
+    if (!el) throw new Error('no feed element')
+    let top = metrics.scrollTop
+    Object.defineProperty(el, 'scrollHeight', {
+      configurable: true,
+      get: () => metrics.scrollHeight,
+    })
+    Object.defineProperty(el, 'clientHeight', {
+      configurable: true,
+      get: () => metrics.clientHeight,
+    })
+    Object.defineProperty(el, 'scrollTop', {
+      configurable: true,
+      get: () => top,
+      set: (v: number) => {
+        top = v
+      },
+    })
+    return {
+      get top() {
+        return top
+      },
+    }
+  }
+
+  it('CH-3: a reader deep in history is NOT scrolled down by an incoming message', async () => {
+    vi.useFakeTimers()
+    vi.mocked(chatsApi.listChatMessages).mockResolvedValue(feed([msg()]))
+    mount()
+    await vi.advanceTimersByTimeAsync(0)
+
+    // 2000px of history, viewport 800, reader parked at the top.
+    const scroll = stubFeedScroll({ scrollTop: 0, scrollHeight: 2000, clientHeight: 800 })
+
+    vi.mocked(chatsApi.listChatMessages).mockResolvedValue(
+      feed([msg({ id: 'm-2', body: 'входящее' }), msg()]),
+    )
+    await vi.advanceTimersByTimeAsync(12_000)
+
+    expect(bodies()).toContain('входящее') // the message itself still lands
+    expect(scroll.top).toBe(0) // ...but the reader stays where they were
+    expect(chatsApi.markChatRead).toHaveBeenCalled() // and it still counts as seen-able
+  })
+
+  it('CH-3 twin: a reader AT the bottom follows the conversation down', async () => {
+    vi.useFakeTimers()
+    vi.mocked(chatsApi.listChatMessages).mockResolvedValue(feed([msg()]))
+    mount()
+    await vi.advanceTimersByTimeAsync(0)
+
+    // Within the 120px near-bottom band.
+    const scroll = stubFeedScroll({ scrollTop: 1150, scrollHeight: 2000, clientHeight: 800 })
+
+    vi.mocked(chatsApi.listChatMessages).mockResolvedValue(
+      feed([msg({ id: 'm-2', body: 'входящее' }), msg()]),
+    )
+    await vi.advanceTimersByTimeAsync(12_000)
+
+    expect(scroll.top).toBe(2000) // scrollToBottom drove it to scrollHeight
+  })
+
+  // CH-2 (review, cheap half): the composer mirrors the server's 4000-char
+  // limit (chats/router.py MessageCreate max_length) so an over-long draft
+  // is stopped at the keyboard, not by a 400 round-trip.
+  it('CH-2: the composer textarea carries maxlength=4000 (server limit mirrored)', async () => {
+    mount()
+    await flush()
+
+    expect(composerTextarea().getAttribute('maxlength')).toBe('4000')
   })
 
   it('a failed initial load shows the retry state, and «Повторить» refetches', async () => {

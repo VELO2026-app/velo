@@ -27,52 +27,27 @@
 
 <template>
   <div class="chat-thread">
-    <VHeader
-      :title="peerTitle"
-      show-back
-      @back="emit('back')"
-    />
+    <VHeader :title="peerTitle" show-back @back="emit('back')" />
 
     <!-- Loading (first fetch only; polls refresh silently) -->
-    <div
-      v-if="loading"
-      class="chat-thread__center"
-    >
+    <div v-if="loading" class="chat-thread__center">
       <VLoader size="lg" />
     </div>
 
     <!-- Load failure: the thread may well exist -- offer a retry. -->
-    <div
-      v-else-if="error"
-      class="chat-thread__center"
-    >
-      <VEmptyState
-        title="Не удалось загрузить переписку"
-        :description="error"
-      >
+    <div v-else-if="error" class="chat-thread__center">
+      <VEmptyState title="Не удалось загрузить переписку" :description="error">
         <template #icon>
           <IconMessages :size="48" />
         </template>
       </VEmptyState>
-      <VButton
-        size="sm"
-        @click="reload"
-      >
-        Повторить
-      </VButton>
+      <VButton size="sm" @click="reload"> Повторить </VButton>
     </div>
 
     <template v-else>
-      <div
-        ref="feedEl"
-        class="chat-thread__feed"
-        data-testid="chat-feed"
-      >
+      <div ref="feedEl" class="chat-thread__feed" data-testid="chat-feed">
         <!-- Empty thread: an honest invitation, not a fake history. -->
-        <div
-          v-if="messages.length === 0"
-          class="chat-thread__empty"
-        >
+        <div v-if="messages.length === 0" class="chat-thread__empty">
           Сообщений пока нет — напишите первое.
         </div>
 
@@ -109,6 +84,7 @@
             placeholder="Сообщение…"
             :rows="1"
             autogrow
+            maxlength="4000"
             :disabled="sending"
           />
         </div>
@@ -181,10 +157,41 @@ async function scrollToBottom(): Promise<void> {
   if (feedEl.value) feedEl.value.scrollTop = feedEl.value.scrollHeight
 }
 
+/** CH-3: pixels the reader may drift from the bottom and still be counted
+ *  "at" it -- an incoming message then auto-scrolls; further up (reading
+ *  history) it must not yank them down. */
+const NEAR_BOTTOM_PX = 120
+
+/** Pure over the three scroll numbers, so tests can drive it by stubbing
+ *  the feed element's metrics (happy-dom measures nothing by itself). */
+function isNearBottom(
+  scrollTop: number,
+  scrollHeight: number,
+  clientHeight: number,
+  threshold = NEAR_BOTTOM_PX,
+): boolean {
+  return scrollHeight - scrollTop - clientHeight <= threshold
+}
+
+function readerNearBottom(): boolean {
+  const el = feedEl.value
+  if (!el) return true
+  return isNearBottom(el.scrollTop, el.scrollHeight, el.clientHeight)
+}
+
 /** One page, newest-first from comms -> stored oldest-first for rendering. */
 async function fetchMessages(): Promise<ChatMessage[]> {
   const page = await listChatMessages(props.threadId)
   return [...page.messages].reverse()
+}
+
+/** The newest message's id (oldest-first storage -> it's the tail).
+ *  CH-1: THIS, not the array length, is what says "something arrived" --
+ *  on an eternal DM past one page the length is pinned at the page size
+ *  (100 === 100 forever), and a length compare silently blinds the poll
+ *  to exactly the peer's replies. */
+function newestId(list: ChatMessage[]): string | null {
+  return list.at(-1)?.id ?? null
 }
 
 function markRead(): void {
@@ -207,17 +214,22 @@ async function reload(): Promise<void> {
   }
 }
 
-/** Silent poll of the visible thread: replace on growth, read what arrived. */
+/** Silent poll of the visible thread. Any drift (new tail, an edit-free
+ *  world still allows resync/repoint) replaces the local copy; a NEW tail
+ *  additionally marks read and -- only when the reader is already at the
+ *  bottom (CH-3) -- follows the conversation down. */
 async function poll(): Promise<void> {
   if (document.hidden || loading.value || sending.value) return
   try {
     const fresh = await fetchMessages()
-    if (fresh.length !== messages.value.length) {
-      const grew = fresh.length > messages.value.length
+    const freshNewest = newestId(fresh)
+    const hasNew = freshNewest !== null && freshNewest !== newestId(messages.value)
+    if (hasNew || fresh.length !== messages.value.length) {
+      const followDown = hasNew && readerNearBottom()
       messages.value = fresh
-      if (grew) {
+      if (hasNew) {
         markRead()
-        await scrollToBottom()
+        if (followDown) await scrollToBottom()
       }
     }
   } catch {
@@ -288,8 +300,7 @@ onBeforeUnmount(() => {
      MobileLayout island and FLOATS over the feed, and fill mode drops the
      layout's measured mainStyle clearance. 88px mirrors the layout's own
      HEADER_FALLBACK for a floating VHeader (MobileLayout.vue, ПРОМТ №164). */
-  padding: calc(88px + var(--space-2)) var(--velo-rail-pad-x, var(--space-4))
-    var(--space-3);
+  padding: calc(88px + var(--space-2)) var(--velo-rail-pad-x, var(--space-4)) var(--space-3);
 }
 
 .chat-thread__empty {
