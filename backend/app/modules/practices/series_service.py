@@ -305,6 +305,15 @@ async def generate_series_occurrences(
     return len(starts)
 
 
+# S-d: statuses whose audience is history, not policy. A child in one of
+# these is never rewritten by a root edit.
+_TERMINAL_CHILD_STATUSES = (
+    PracticeStatus.COMPLETED.value,
+    PracticeStatus.CANCELLED.value,
+    PracticeStatus.DELETED.value,
+)
+
+
 async def propagate_audience_to_children(
     root: Practice,
     session: AsyncSession,
@@ -324,11 +333,22 @@ async def propagate_audience_to_children(
     updated. Idempotent: re-running with the same audience is a no-op in
     effect (same rows rewritten).
     """
+    # S-d: NON-TERMINAL children only. A completed session already happened
+    # in front of whoever was allowed in at the time, and a cancelled or
+    # deleted one is not going to happen at all -- rewriting their audience
+    # edits history to match a decision taken afterwards. Only sessions that
+    # can still be attended (draft / scheduled / live) track the root.
+    #
+    # The SAME filter must gate BOTH writes below. Applied to only one of
+    # them, a terminal child would end up with the old audience_kind and the
+    # new group rows (or the reverse) -- a state worse than either, and one
+    # no read path expects.
     child_ids = list(
         (
             await session.execute(
                 select(Practice.id).where(
                     Practice.parent_practice_id == root.id,
+                    Practice.status.notin_(_TERMINAL_CHILD_STATUSES),
                 )
             )
         ).scalars().all()
@@ -336,10 +356,10 @@ async def propagate_audience_to_children(
     if not child_ids:
         return 0
 
-    # 1. audience_kind column on every child.
+    # 1. audience_kind column on every non-terminal child.
     await session.execute(
         update(Practice)
-        .where(Practice.parent_practice_id == root.id)
+        .where(Practice.id.in_(child_ids))
         .values(audience_kind=root.audience_kind)
     )
 

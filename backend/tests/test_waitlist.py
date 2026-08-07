@@ -549,6 +549,40 @@ async def test_confirm_waitlist_on_cancelled_practice_rejected(
     ).scalar_one()
     assert entry.status == "notified"
 
+    # Lesson 5.5: a guard test that only checks the code and the entry
+    # status leaves the expensive half unwatched. The refusal is about
+    # MONEY -- the whole point of C4 is that a holder must not be charged
+    # for a session that will not happen -- so the absence of the financial
+    # artifacts is what actually has to hold. confirm_waitlist creates a
+    # Booking AND a double-entry Purchase in one transaction
+    # (waitlist/service.py:466, :488); a rollback that left either behind
+    # would be invisible to the assertions above.
+    from app.modules.bookings.models import Booking as _Booking
+    from app.modules.payments.models import Purchase as _Purchase
+
+    user_id = (
+        await db_session.execute(
+            select(Waitlist.user_id).where(Waitlist.id == wid)
+        )
+    ).scalar_one()
+
+    bookings = (
+        await db_session.execute(
+            select(_Booking).where(
+                _Booking.practice_id == _UUID(pid),
+                _Booking.user_id == user_id,
+            )
+        )
+    ).scalars().all()
+    assert bookings == [], "refused confirm must not leave a booking behind"
+
+    purchases = (
+        await db_session.execute(
+            select(_Purchase).where(_Purchase.user_id == user_id)
+        )
+    ).scalars().all()
+    assert purchases == [], "refused confirm must not charge the holder"
+
 
 @pytest.mark.asyncio
 async def test_confirm_waitlist_on_started_practice_rejected(

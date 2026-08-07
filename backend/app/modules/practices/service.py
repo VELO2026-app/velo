@@ -175,6 +175,18 @@ ZOOM_VISIBLE_BOOKING_STATUSES = {
     BookingStatus.ATTENDED.value,
 }
 
+# S-c: statuses that let a NON-audience viewer through the detail read gate
+# (get_practice_detail). Same composition as the zoom set and deliberately
+# an ALIAS of it rather than a copy -- two literal sets drift, and the day
+# they do, one of them silently widens an access gate. The name exists
+# because "zoom_visible" says nothing about reading a restricted practice.
+#
+# Why not _BOOKED_STATUSES (which the is_booked BADGE uses): that set
+# includes PENDING, and a pending booking is an intent, not an entitlement
+# -- anyone able to create one would otherwise read practices their
+# audience excludes them from. The badge keeps PENDING; the gate does not.
+_ACCESS_GRANTING_STATUSES = ZOOM_VISIBLE_BOOKING_STATUSES
+
 # Calendar taxonomy facets -- stored in Practice.data.taxonomy (JSONB),
 # NOT as columns. Handled separately from setattr-based column updates.
 _TAXONOMY_FIELDS = ("direction", "style", "difficulty")
@@ -1133,7 +1145,22 @@ async def get_practice_detail(
     # grandfathered only through audience narrowing -- a blocked viewer
     # still reads here but is refused at upsert_checkin
     # (diary/checkins_service.py).
-    if practice.master_id != user.id and not is_booked:
+    # S-c: the EXEMPTION uses the strict set, not is_booked. is_booked is a
+    # display flag and counts PENDING -- an intent, not an entitlement.
+    # Taking it as proof of access let anyone who can create a pending
+    # booking read a practice their audience excludes them from; the badge
+    # is unaffected and still shows PENDING as "yours".
+    holds_access_booking = (
+        await session.execute(
+            select(func.count(Booking.id)).where(
+                Booking.user_id == user.id,
+                Booking.practice_id == practice.id,
+                Booking.status.in_(_ACCESS_GRANTING_STATUSES),
+            )
+        )
+    ).scalar_one() > 0
+
+    if practice.master_id != user.id and not holds_access_booking:
         from app.core.exceptions import ForbiddenError
         from app.modules.practices.audience_service import (
             assert_viewer_can_access_practice,
@@ -1248,6 +1275,27 @@ async def update_practice(
 
     update_data = body.model_dump(exclude_unset=True)
 
+    # S-a: a CHILD occurrence has no audience of its own to edit.
+    #
+    # The audience of a series lives on the root and is pushed down to the
+    # children (propagate_audience_to_children). Editing a child's audience
+    # per-occurrence therefore produces a state that looks applied and is
+    # not: the very next root edit overwrites it without a word. That is
+    # worse than a refusal -- the master believes one session is restricted
+    # while it is one root save away from being public again.
+    #
+    # Refused WHOLE, before anything is applied: a PATCH mixing an audience
+    # field with innocent ones would otherwise land half of itself and stay
+    # silent about the rest -- the exact class of quiet partial state this
+    # gate exists to kill.
+    if practice.parent_practice_id is not None and (
+        "audience_kind" in update_data or "group_ids" in update_data
+    ):
+        raise BadRequestError(
+            "Audience belongs to the series: edit it on the series root, "
+            "not on a single occurrence",
+        )
+
     # Separate Calendar taxonomy (JSONB) from plain column fields.
     # These are NOT columns: applying them via setattr would create dead
     # Python attributes that never persist (same trap as onboarding_completed
@@ -1292,6 +1340,29 @@ async def update_practice(
             raise BadRequestError(
                 "group_ids must be non-empty when audience_kind='groups'"
             )
+
+    # S-b: does this request actually CHANGE the target-group set?
+    #
+    # EditPracticeView resends group_ids on every save (an empty list on a
+    # public practice), so without this the delete-then-insert below ran on
+    # every title edit -- and, worse, marked the audience as changed, which
+    # fanned the C1 propagation out over every child of the series. Same
+    # reasoning as the taxonomy comparison further down: presence in the
+    # payload is not change.
+    #
+    # Compared as SETS: order and duplicates carry no meaning here.
+    groups_unchanged = False
+    if group_ids_sent:
+        stored_group_ids = set(
+            (
+                await session.execute(
+                    select(PracticeAudienceGroup.group_id).where(
+                        PracticeAudienceGroup.practice_id == practice.id,
+                    )
+                )
+            ).scalars().all()
+        )
+        groups_unchanged = stored_group_ids == set(group_ids_value)
 
     # Guard NOT NULL fields against explicit null (P-02).
     for field in _NOT_NULL_FIELDS:
@@ -1380,7 +1451,7 @@ async def update_practice(
     for field, value in update_data.items():
         setattr(practice, field, value)
 
-    if group_ids_sent:
+    if group_ids_sent and not groups_unchanged:
         await _set_practice_audience_groups(practice.id, group_ids_value, session)
     elif (
         "audience_kind" in update_data
@@ -1401,8 +1472,12 @@ async def update_practice(
     # than at generation). Root-only: children are edited via their own
     # root, not individually, and a per-occurrence audience change is not
     # a supported operation, so a non-root update never fans out.
+    # An unchanged set is not a change -- otherwise every save propagated to
+    # every child. A KIND change still propagates even when the set is
+    # identical (public -> groups with the same rows already stored is a
+    # real audience change).
     audience_changed = (
-        group_ids_sent
+        (group_ids_sent and not groups_unchanged)
         or ("audience_kind" in update_data
             and old_audience_kind != final_audience_kind)
     )
