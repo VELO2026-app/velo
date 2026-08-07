@@ -37,7 +37,7 @@ from app.modules.zoom.models import (
 )
 from app.modules.zoom.service import create_registrant_for_booking, ensure_host_registrant
 from app.modules.zoom.zoom_client import ZoomAPIError
-from tests.helpers import auth_headers, login_user
+from tests.helpers import auth_headers, fresh_get, login_user
 
 PRACTICES_URL = "/api/v1/practices"
 BOOKINGS_URL = "/api/v1/bookings"
@@ -412,7 +412,7 @@ async def test_finalize_decides_immediately_in_stub_mode_no_deferral(
     await auto_finalize_practice(UUID(practice_id), db_session)
     await db_session.commit()
 
-    att_booking = await db_session.get(Booking, UUID(att_booking_id))
+    att_booking = await fresh_get(Booking, UUID(att_booking_id))
     abs_booking = await db_session.get(Booking, UUID(abs_booking_id))
     assert att_booking.status == BookingStatus.ATTENDED.value, (
         "must be decided immediately, not left CONFIRMED pending a Zoom report"

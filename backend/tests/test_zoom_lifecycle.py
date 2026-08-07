@@ -45,7 +45,7 @@ from app.modules.zoom.models import (
 )
 from app.modules.zoom.retry_poller import _poll_cycle
 from app.modules.zoom.zoom_client import ZoomAPIError
-from tests.helpers import auth_headers, login_user
+from tests.helpers import auth_headers, fresh_get, login_user
 
 PRACTICES_URL = "/api/v1/practices"
 
@@ -345,7 +345,7 @@ async def test_reschedule_refetches_and_overwrites_join_url(
         mock_patch.assert_called_once()
         mock_list.assert_called_once()
 
-    await db_session.refresh(stale_registrant)
+    stale_registrant = await fresh_get(ZoomRegistrant, stale_registrant.id)
     assert stale_registrant.join_url == "https://zoom.us/w/fresh?tk=new"
 
 
@@ -626,7 +626,7 @@ async def test_retry_endpoint_succeeds_and_flips_status_to_active(
     assert resp.status_code == 200
     assert resp.json()["zoom_meeting_status"] == "active"
 
-    await db_session.refresh(zoom_meeting)
+    zoom_meeting = await fresh_get(ZoomMeeting, zoom_meeting.id)
     assert zoom_meeting.status == ZoomMeetingStatus.ACTIVE.value
     assert zoom_meeting.retry_count == cap + 1
 
@@ -665,7 +665,7 @@ async def test_retry_endpoint_still_fails_reports_honest_state_not_500(
     assert resp.status_code == 200
     assert resp.json()["zoom_meeting_status"] == "create_failed"
 
-    await db_session.refresh(zoom_meeting)
+    zoom_meeting = await fresh_get(ZoomMeeting, zoom_meeting.id)
     assert zoom_meeting.status == ZoomMeetingStatus.CREATE_FAILED.value
     assert zoom_meeting.retry_count == 2
     assert "retry #2" in zoom_meeting.last_sync_error

@@ -46,7 +46,7 @@ from app.modules.payments.service import record_user_ledger
 from app.modules.practices.models import PracticeStatus
 from app.modules.users.models import User, UserRole
 from app.modules.waitlist.models import Waitlist, WaitlistStatus
-from tests.helpers import auth_headers, login_user
+from tests.helpers import auth_headers, fresh_execute, login_user
 
 
 # ---------------------------------------------------------------------------
@@ -574,7 +574,7 @@ async def test_master_cancel_practice_refunds_all(
 
     # Both purchases -> REFUNDED.
     for bid in [bid1, bid2]:
-        purchase = (await db_session.execute(
+        purchase = (await fresh_execute(
             select(Purchase).where(Purchase.booking_id == bid),
         )).scalar_one()
         assert purchase.status == PurchaseStatus.REFUNDED.value
@@ -628,7 +628,7 @@ async def test_master_cancel_free_practice(
     assert resp.status_code == 200
 
     db_session.expire_all()
-    purchase = (await db_session.execute(
+    purchase = (await fresh_execute(
         select(Purchase).where(Purchase.booking_id == bid),
     )).scalar_one()
     assert purchase.status == PurchaseStatus.REFUNDED.value
@@ -674,7 +674,7 @@ async def test_master_cancel_clears_waitlist(
 
     # Waitlist entry -> left.
     db_session.expire_all()
-    wl = (await db_session.execute(
+    wl = (await fresh_execute(
         select(Waitlist).where(
             Waitlist.practice_id == UUID(practice_id),
             Waitlist.user_id == UUID(user2["user"]["id"]),
@@ -915,7 +915,7 @@ async def test_audit_log_master_cancel(
     assert resp.status_code == 200
 
     db_session.expire_all()
-    audit = (await db_session.execute(
+    audit = (await fresh_execute(
         select(AuditLog).where(
             AuditLog.event == "practice_cancelled_by_master",
             AuditLog.target_id == UUID(practice_id),

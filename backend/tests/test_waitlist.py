@@ -19,7 +19,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.waitlist.models import Waitlist
 from app.modules.users.models import User, UserRole
-from tests.helpers import auth_headers, login_user, full_cleanup_range, switch_self_to_master
+from tests.helpers import (
+    auth_headers,
+    fresh_execute,
+    fresh_get,
+    full_cleanup_range,
+    login_user,
+    switch_self_to_master,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -543,7 +550,7 @@ async def test_confirm_waitlist_on_cancelled_practice_rejected(
     # the expiry commit path.
     db_session.expire_all()
     entry = (
-        await db_session.execute(
+        await fresh_execute(
             select(Waitlist).where(Waitlist.id == wid)
         )
     ).scalar_one()
@@ -615,7 +622,7 @@ async def test_confirm_waitlist_on_started_practice_rejected(
     # is still the one taken, not the expiry commit path.
     db_session.expire_all()
     entry = (
-        await db_session.execute(
+        await fresh_execute(
             select(Waitlist).where(Waitlist.id == wid)
         )
     ).scalar_one()
@@ -680,7 +687,7 @@ async def test_confirm_waitlist_creates_zoom_registrant(
     # A registrant row now exists for the converted user's booking.
     user_id = user["user"]["id"]
     registrant = (
-        await db_session.execute(
+        await fresh_execute(
             select(ZoomRegistrant).where(
                 ZoomRegistrant.user_id == _UUID(user_id),
             )
@@ -787,7 +794,7 @@ async def test_confirm_waitlist_expired(
 
     db_session.expire_all()
     entry = (
-        await db_session.execute(
+        await fresh_execute(
             select(Waitlist).where(Waitlist.id == wid)
         )
     ).scalar_one()
@@ -920,7 +927,7 @@ async def test_confirm_waitlist_expired_on_dead_practice(
 
     # Holder's entry is EXPIRED and COMMITTED (the whole point of H-R1).
     entry = (
-        await db_session.execute(
+        await fresh_execute(
             select(Waitlist).where(Waitlist.id == wid)
         )
     ).scalar_one()
@@ -1110,8 +1117,7 @@ async def test_cancel_booking_triggers_waitlist(
     )
 
     # Check waitlist entry is now notified.
-    entry = await db_session.get(Waitlist, wid)
-    await db_session.refresh(entry)
+    entry = await fresh_get(Waitlist, wid)
     assert entry.status == "notified"
     assert entry.notified_at is not None
     assert entry.expires_at is not None
@@ -1164,8 +1170,7 @@ async def test_position_ordering(
         headers=auth_headers(filler["session_token"]),
     )
 
-    entry1 = await db_session.get(Waitlist, wid1)
-    await db_session.refresh(entry1)
+    entry1 = await fresh_get(Waitlist, wid1)
     assert entry1.status == "notified"
 
 
@@ -1219,8 +1224,7 @@ async def test_decline_notifies_next(
     )
 
     # User2 should now be notified.
-    entry2 = await db_session.get(Waitlist, wid2)
-    await db_session.refresh(entry2)
+    entry2 = await fresh_get(Waitlist, wid2)
     assert entry2.status == "notified"
 
 
@@ -1290,7 +1294,7 @@ async def test_confirm_spot_taken_returns_to_waiting(
 
     # Verify entry is back to WAITING (committed, not rolled back).
     db_session.expire_all()
-    entry = await db_session.get(Waitlist, wid)
+    entry = await fresh_get(Waitlist, wid)
     assert entry.status == "waiting"
     assert entry.notified_at is None
     assert entry.expires_at is None

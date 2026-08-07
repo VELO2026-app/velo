@@ -35,7 +35,7 @@ from app.modules.diary.models import DiaryEvent, DiaryEventKind
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import Practice
 from app.modules.users.models import User, UserRole
-from tests.helpers import auth_headers, login_user, full_cleanup_range
+from tests.helpers import auth_headers, fresh_execute, full_cleanup_range, login_user
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -526,7 +526,7 @@ async def test_finalize_projects_outcome_for_attended_and_no_show(
     # directly to pin the column itself (mirrors test_zoom_attendance_decision.py's
     # pattern for the same kind).
     outcome_events = (
-        await db_session.execute(
+        await fresh_execute(
             select(DiaryEvent).where(
                 DiaryEvent.kind == DiaryEventKind.PRACTICE_OUTCOME.value,
                 DiaryEvent.source_id == UUID(pid),

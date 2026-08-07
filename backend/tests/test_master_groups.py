@@ -47,7 +47,13 @@ from app.modules.masters.models import MasterProfile
 from app.modules.payments.models import Purchase, PurchaseStatus
 from app.modules.practices.models import Practice, PracticeStatus, PracticeType
 from app.modules.users.models import User, UserRole
-from tests.helpers import auth_headers, full_cleanup_range, login_user
+from tests.helpers import (
+    auth_headers,
+    fresh_execute,
+    fresh_get,
+    full_cleanup_range,
+    login_user,
+)
 
 GROUPS_URL = "/api/v1/masters/me/groups"
 GROUP_URL = "/api/v1/masters/me/groups/{group_id}"
@@ -349,7 +355,7 @@ async def test_delete_group_cascades_memberships(
     )
     membership_before = (
         (
-            await db_session.execute(
+            await fresh_execute(
                 select(MasterGroupMembership).where(
                     MasterGroupMembership.group_id == UUID(group_id),
                 )
@@ -607,7 +613,7 @@ async def test_set_and_clear_tag(client: AsyncClient, db_session: AsyncSession) 
     assert set_resp.json()["tag"] == "Платит вовремя"
 
     row = (
-        await db_session.execute(
+        await fresh_execute(
             select(MasterStudent).where(
                 MasterStudent.master_id == master["user"]["id"],
                 MasterStudent.student_user_id == student_id,
@@ -657,7 +663,7 @@ async def test_tag_overwrites_not_appends(
     assert second.json()["tag"] == "Второй"
     rows = (
         (
-            await db_session.execute(
+            await fresh_execute(
                 select(MasterStudent).where(
                     MasterStudent.master_id == master["user"]["id"],
                     MasterStudent.student_user_id == student_id,
@@ -698,7 +704,7 @@ async def test_block_sets_blocked_at_and_removes_from_custom_groups(
     assert resp.json()["cancelled_bookings_count"] == 0
 
     row = (
-        await db_session.execute(
+        await fresh_execute(
             select(MasterStudent).where(
                 MasterStudent.master_id == master_id,
                 MasterStudent.student_user_id == student_id,
@@ -780,7 +786,7 @@ async def test_block_cancels_and_refunds_future_confirmed_bookings(
     assert resp.status_code == 200
     assert resp.json()["cancelled_bookings_count"] == 1
 
-    await db_session.refresh(future_booking)
+    future_booking = await fresh_get(Booking, future_booking.id)
     assert future_booking.status == BookingStatus.CANCELLED.value
     await db_session.refresh(future_purchase)
     assert future_purchase.status == PurchaseStatus.REFUNDED.value
@@ -828,7 +834,7 @@ async def test_block_emits_reminder_cancel_for_cancelled_bookings(
 
     # Exactly one reminder_cancel, correlated by the cancelled booking.
     rows = (
-        await db_session.execute(
+        await fresh_execute(
             select(OutboxEvent).where(
                 OutboxEvent.event_type == "reminder_cancel",
                 OutboxEvent.payload["correlation_value"].astext
@@ -931,7 +937,7 @@ async def test_unblock_returns_to_students_without_restoring_custom_group_but_ke
     assert custom_members.json()["total"] == 0
 
     row = (
-        await db_session.execute(
+        await fresh_execute(
             select(MasterStudent).where(
                 MasterStudent.master_id == master_id,
                 MasterStudent.student_user_id == student_id,

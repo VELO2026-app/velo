@@ -26,7 +26,13 @@ from app.modules.practices.models import (
     PracticeType,
 )
 from app.modules.payments.service import record_user_ledger
-from tests.helpers import auth_headers, login_user, full_cleanup_range, switch_self_to_master
+from tests.helpers import (
+    auth_headers,
+    fresh_execute,
+    full_cleanup_range,
+    login_user,
+    switch_self_to_master,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -455,7 +461,7 @@ async def test_concurrent_duplicate_creates_yield_exactly_one_practice(
     )
 
     count = (
-        await db_session.execute(
+        await fresh_execute(
             select(func.count()).select_from(Practice).where(
                 Practice.master_id == UUID(master["user"]["id"]),
                 Practice.title == "Concurrent Race Practice",
@@ -508,7 +514,7 @@ async def test_create_practice_window_dedup_marks_the_second_response(
     assert second.json()["deduplicated"] is True
 
     count = (
-        await db_session.execute(
+        await fresh_execute(
             select(func.count()).select_from(Practice).where(
                 Practice.master_id == UUID(master["user"]["id"]),
                 Practice.title == "Sequential Retry Practice",
@@ -2095,7 +2101,7 @@ async def test_update_ignores_parent_practice_id(
     assert resp.status_code == 200
 
     practice = (
-        await db_session.execute(
+        await fresh_execute(
             select(Practice).where(Practice.id == UUID(pid))
         )
     ).scalar_one()
@@ -2152,7 +2158,7 @@ async def test_update_max_participants_below_headcount_rejected(
     assert ok.status_code == 200
 
     practice = (
-        await db_session.execute(
+        await fresh_execute(
             select(Practice).where(Practice.id == UUID(pid))
         )
     ).scalar_one()
@@ -2188,7 +2194,7 @@ async def test_update_max_participants_to_null_removes_limit(
     assert resp.status_code == 200
 
     practice = (
-        await db_session.execute(
+        await fresh_execute(
             select(Practice).where(Practice.id == UUID(pid))
         )
     ).scalar_one()

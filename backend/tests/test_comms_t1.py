@@ -64,7 +64,7 @@ from app.core.events.service import (
     EVENT_REMINDER_CANCEL,
 )
 from app.modules.users.models import User
-from tests.helpers import auth_headers, cleanup_range, login_user
+from tests.helpers import auth_headers, cleanup_range, fresh_execute, login_user
 
 pytestmark = pytest.mark.asyncio
 
@@ -539,7 +539,7 @@ class TestAnnouncements:
         assert response.status_code == 200
         assert response.json() == {"queued": True, "audience": "all"}
 
-        result = await db_session.execute(
+        result = await fresh_execute(
             select(OutboxEvent)
             .where(
                 OutboxEvent.payload["type"].astext
@@ -570,7 +570,7 @@ class TestAnnouncements:
         )
         assert response.status_code == 200
 
-        result = await db_session.execute(
+        result = await fresh_execute(
             select(OutboxEvent)
             .where(
                 OutboxEvent.payload["type"].astext

@@ -43,7 +43,7 @@ from app.modules.payments.stripe import (
     handle_checkout_expired_or_failed,
 )
 from app.modules.users.models import User, UserRole
-from tests.helpers import auth_headers, login_user
+from tests.helpers import auth_headers, fresh_execute, login_user
 
 
 # ---------------------------------------------------------------------------
@@ -515,7 +515,7 @@ async def test_webhook_checkout_completed_e2e(
     # Verify payment confirmed in DB.
     db_session.expire_all()
     stmt = select(Payment).where(Payment.id == payment_id)
-    result = await db_session.execute(stmt)
+    result = await fresh_execute(stmt)
     confirmed_payment = result.scalar_one()
     assert confirmed_payment.status == PaymentStatus.CONFIRMED.value
 
@@ -569,6 +569,6 @@ async def test_webhook_checkout_expired_e2e(
 
     db_session.expire_all()
     stmt = select(Payment).where(Payment.id == payment_id)
-    result = await db_session.execute(stmt)
+    result = await fresh_execute(stmt)
     failed_payment = result.scalar_one()
     assert failed_payment.status == PaymentStatus.FAILED.value

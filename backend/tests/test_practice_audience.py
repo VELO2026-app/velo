@@ -62,7 +62,7 @@ from app.modules.practices.models import (
 )
 from app.modules.users.models import User, UserRole
 from app.modules.waitlist.models import Waitlist, WaitlistStatus
-from tests.helpers import auth_headers, full_cleanup_range, login_user
+from tests.helpers import auth_headers, fresh_execute, full_cleanup_range, login_user
 
 PRACTICES_URL = "/api/v1/practices"
 BOOKINGS_URL = "/api/v1/bookings"
@@ -364,7 +364,7 @@ async def test_checkin_grandfathers_a_viewer_no_longer_in_the_audience(
 
     assert resp.status_code in (200, 201)
     checkin_row = (
-        await db_session.execute(
+        await fresh_execute(
             select(Checkin).where(
                 Checkin.practice_id == practice.id,
                 Checkin.user_id == outsider_id,

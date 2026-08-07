@@ -1,3 +1,5 @@
+# Post-HTTP DB reads go through tests.helpers.fresh_get / fresh_execute
+# (T-19 convention -- see the docstring there for the flake AND the lie it kills).
 """H-R2-8 (3.2, decision B): check-in for a CONFIRMED booking survives
 audience NARROWING; a personal BLOCK still refuses it.
 
@@ -40,6 +42,7 @@ from app.modules.masters.groups_models import MasterStudent
 from app.modules.users.models import User, UserRole
 from tests.helpers import (
     auth_headers,
+    fresh_execute,
     full_cleanup_range,
     login_user,
     switch_self_to_master,
@@ -432,7 +435,7 @@ async def test_create_booking_for_non_member_still_403(
 
     db_session.expire_all()
     bookings = (
-        await db_session.execute(
+        await fresh_execute(
             select(Booking).where(
                 Booking.practice_id == uuid.UUID(pid),
                 Booking.user_id == uuid.UUID(outsider["user"]["id"]),

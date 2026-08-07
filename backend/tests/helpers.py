@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import AuditLog
 from app.core.config import settings
+from app.core.database import get_session_factory
 from app.core.events.models import OutboxEvent
 from app.modules.bookings.models import Booking
 from app.modules.diary.models import Checkin, DiaryEvent, Feedback
@@ -429,3 +430,60 @@ async def full_cleanup_range(
         await session.execute(
             delete(User).where(tid_clause)
         )
+
+
+# ===========================================================================
+# T-19 CONVENTION -- reading the database AFTER an HTTP request
+# ===========================================================================
+
+
+async def fresh_get(model, pk):
+    """Read one row by primary key through a NEW session. USE THIS (or
+    fresh_execute below) FOR EVERY DB READ THAT FOLLOWS AN HTTP CALL.
+
+    Why the fixture session is the wrong tool after HTTP -- two distinct
+    failure modes, one of them silent:
+
+    1. FLAKE. The fixture session detaches its connection on commit; the
+       first read after the request checks a connection back out of the
+       pool, and the pre-ping that guards that checkout runs outside a
+       greenlet. If the pool's connection died meanwhile (CI restarts,
+       recycling), the read explodes with MissingGreenlet -- at a line
+       that has nothing to do with the failure.
+
+    2. LIE. `db_session.get(Model, pk)` after HTTP can skip the database
+       entirely: with expire_on_commit=False the identity map serves the
+       object AS IT WAS BEFORE THE REQUEST. The assert then verifies the
+       past and stays green no matter what the endpoint actually wrote.
+
+    A fresh session has neither problem: no pooled state to trip over, no
+    identity map to answer from. It sees exactly what the request
+    committed -- which is the only thing a post-request assert should be
+    looking at. Objects come back detached; read loaded columns, do not
+    lazy-load relationships through them.
+
+    First applied in test_review_suggestions_hr4.py (_reread) and
+    test_purchase.py; promoted here by the T-19 sweep.
+    """
+    factory = get_session_factory()
+    async with factory() as s:
+        return await s.get(model, pk)
+
+
+async def fresh_execute(stmt, params=None):
+    """Execute a SELECT through a NEW session -- see fresh_get for why.
+
+    The returned Result is fully buffered, so .scalar_one() / .scalars()
+    / .all() work after the session is gone. `params` exists for the
+    text() form (`fresh_execute(text(...), {...})`); ORM selects don't
+    need it.
+
+    SELECTs ONLY. A write through here would silently roll back: the
+    session closes without a commit -- by design, a reader has nothing to
+    commit. (The T-19 sweep hit exactly this: two audit positions turned
+    out to be backdating UPDATEs, and routing them through a fresh
+    session undid the test's own setup.)
+    """
+    factory = get_session_factory()
+    async with factory() as s:
+        return await s.execute(stmt, params)

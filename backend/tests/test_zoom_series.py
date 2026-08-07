@@ -43,7 +43,7 @@ from app.modules.users.models import User, UserRole
 from app.modules.zoom.models import ZoomMeeting, ZoomMeetingStatus
 from app.modules.zoom.retry_poller import _poll_cycle
 from app.modules.zoom.zoom_client import ZoomAPIError
-from tests.helpers import auth_headers, login_user
+from tests.helpers import auth_headers, fresh_execute, login_user
 
 PRACTICES_URL = "/api/v1/practices"
 
@@ -335,7 +335,7 @@ async def test_duplicate_series_submit_creates_no_second_series(
     )
 
     all_roots = (
-        await db_session.execute(
+        await fresh_execute(
             select(Practice.id).where(
                 Practice.master_id == UUID(master["user"]["id"]),
                 Practice.parent_practice_id.is_(None),

@@ -24,7 +24,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.practices.taxonomy_models import TaxonomyDirection
 from app.modules.users.models import User, UserRole
-from tests.helpers import auth_headers, full_cleanup_range, login_user, switch_self_to_master
+from tests.helpers import (
+    auth_headers,
+    fresh_execute,
+    full_cleanup_range,
+    login_user,
+    switch_self_to_master,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -342,7 +348,7 @@ async def test_approve_without_promote_leaves_catalog_unchanged(
     assert approve.status_code == 200
 
     after = (
-        await db_session.execute(select(TaxonomyDirection.id))
+        await fresh_execute(select(TaxonomyDirection.id))
     ).scalars().all()
     assert set(after) == set(before)
 
@@ -376,7 +382,7 @@ async def test_approve_with_promote_creates_custom_direction(
     assert me.json()["methods"] == ["Ченнелинг"]
 
     row = (
-        await db_session.execute(
+        await fresh_execute(
             select(TaxonomyDirection).where(TaxonomyDirection.label == "Ченнелинг")
         )
     ).scalar_one()
@@ -434,7 +440,7 @@ async def test_approve_with_master_only_creates_scoped_direction(
     assert me.json()["methods"] == [label]
 
     row = (
-        await db_session.execute(
+        await fresh_execute(
             select(TaxonomyDirection).where(TaxonomyDirection.label == label)
         )
     ).scalar_one()
@@ -498,7 +504,7 @@ async def test_approve_with_master_only_and_promote_together(
     assert me.json()["methods"] == [global_label, scoped_label]
 
     global_row = (
-        await db_session.execute(
+        await fresh_execute(
             select(TaxonomyDirection).where(TaxonomyDirection.label == global_label)
         )
     ).scalar_one()
@@ -554,7 +560,7 @@ async def test_approve_with_promote_dedups_existing_label(
     assert approve.status_code == 200
 
     after_count = (
-        await db_session.execute(
+        await fresh_execute(
             select(TaxonomyDirection.id).where(
                 TaxonomyDirection.label == "Медитация"
             )

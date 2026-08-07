@@ -1,6 +1,8 @@
 # =============================================================================
 # Test: Masters Module — application flow
 # =============================================================================
+# Post-HTTP DB reads go through tests.helpers.fresh_get / fresh_execute
+# (T-19 convention -- see the docstring there for the flake AND the lie it kills).
 
 import copy
 from collections.abc import AsyncGenerator
@@ -12,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.masters.models import MasterProfile
 from app.modules.users.models import User, UserRole
-from tests.helpers import auth_headers, login_user, full_cleanup_range
+from tests.helpers import auth_headers, fresh_execute, fresh_get, full_cleanup_range, login_user
 
 
 # ---------------------------------------------------------------------------
@@ -161,7 +163,7 @@ async def test_apply_master_reapply_after_rejection(
     assert resp2.json()["status"] == "pending"
 
     # Verify rejection history is preserved.
-    await db_session.refresh(profile)
+    profile = await fresh_get(MasterProfile, profile.user_id)
     rejections = profile.data["account"]["rejections"]
     assert len(rejections) == 1
     assert rejections[0]["reason"] == "Not enough experience"
@@ -331,7 +333,7 @@ async def test_apply_master_self_provision_no_profile_creates_verified(
     # The persisted profile is verified, self-provision-stamped, open, and
     # carries the fields the form collected.
     profile = (
-        await db_session.execute(
+        await fresh_execute(
             select(MasterProfile).where(MasterProfile.user_id == user_id)
         )
     ).scalar_one()

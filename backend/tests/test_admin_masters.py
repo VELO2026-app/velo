@@ -19,7 +19,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.taxonomy_models import TaxonomyDirection
 from app.modules.users.models import User, UserRole
-from tests.helpers import auth_headers, full_cleanup_range, login_user, switch_self_to_master
+from tests.helpers import (
+    auth_headers,
+    fresh_execute,
+    fresh_get,
+    full_cleanup_range,
+    login_user,
+    switch_self_to_master,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -155,8 +162,7 @@ async def test_verify_master_success(
     assert data["user_id"] == user_id
 
     # Assert DB: profile status.
-    profile = await db_session.get(MasterProfile, user_id)
-    await db_session.refresh(profile)
+    profile = await fresh_get(MasterProfile, user_id)
     assert profile.data["account"]["status"] == "verified"
     assert profile.data["account"]["verification"]["notes"] == "All documents OK"
 
@@ -189,8 +195,7 @@ async def test_verify_master_no_notes(
     )
     assert resp.status_code == 200
 
-    profile = await db_session.get(MasterProfile, user_id)
-    await db_session.refresh(profile)
+    profile = await fresh_get(MasterProfile, user_id)
     assert profile.data["account"]["verification"]["notes"] is None
 
 
@@ -259,7 +264,7 @@ async def test_verify_without_promote_leaves_catalog_unchanged(
     )
     assert resp.status_code == 200
 
-    after = (await db_session.execute(select(TaxonomyDirection.id))).scalars().all()
+    after = (await fresh_execute(select(TaxonomyDirection.id))).scalars().all()
     assert set(after) == set(before)
 
 
@@ -305,8 +310,7 @@ async def test_verify_with_promote_creates_custom_direction(
     assert resp.status_code == 200
     assert resp.json()["status"] == "verified"
 
-    profile = await db_session.get(MasterProfile, user_id)
-    await db_session.refresh(profile)
+    profile = await fresh_get(MasterProfile, user_id)
     assert profile.data["profile"]["methods"] == [_NOVEL_CUSTOM_LABEL]
 
     row = (
@@ -372,7 +376,7 @@ async def test_verify_with_promote_dedups_existing_label(
     assert resp.status_code == 200
 
     after = (
-        await db_session.execute(
+        await fresh_execute(
             select(TaxonomyDirection.id).where(TaxonomyDirection.label == "Медитация")
         )
     ).scalars().all()
@@ -436,8 +440,7 @@ async def test_verify_with_master_only_creates_scoped_direction(
     assert resp.status_code == 200
     assert resp.json()["status"] == "verified"
 
-    profile = await db_session.get(MasterProfile, user_id)
-    await db_session.refresh(profile)
+    profile = await fresh_get(MasterProfile, user_id)
     assert profile.data["profile"]["methods"] == [_SCOPED_LABEL]
 
     row = (
@@ -524,7 +527,7 @@ async def test_practice_created_on_master_only_direction_passes_confirmation(
     assert verify_resp.status_code == 200
 
     row = (
-        await db_session.execute(
+        await fresh_execute(
             select(TaxonomyDirection).where(TaxonomyDirection.label == label)
         )
     ).scalar_one()
@@ -585,8 +588,7 @@ async def test_reject_master_success(
     assert data["user_id"] == user_id
 
     # Assert DB: profile status.
-    profile = await db_session.get(MasterProfile, user_id)
-    await db_session.refresh(profile)
+    profile = await fresh_get(MasterProfile, user_id)
     assert profile.data["account"]["status"] == "rejected"
     assert profile.data["account"]["rejection_reason"] == "Insufficient experience"
 
@@ -765,8 +767,7 @@ async def test_reject_reapply_verify_cycle(
     assert resp3.json()["status"] == "verified"
 
     # Assert: rejection history preserved.
-    profile = await db_session.get(MasterProfile, user_id)
-    await db_session.refresh(profile)
+    profile = await fresh_get(MasterProfile, user_id)
     rejections = profile.data["account"].get("rejections", [])
     assert len(rejections) == 1
     assert rejections[0]["reason"] == "Need more experience"
@@ -823,8 +824,7 @@ async def test_edit_methods_success(
     assert resp.json()["user_id"] == user_id
 
     # DB reflects the new flat method list.
-    profile = await db_session.get(MasterProfile, user_id)
-    await db_session.refresh(profile)
+    profile = await fresh_get(MasterProfile, user_id)
     assert profile.data["profile"]["methods"] == ["yoga", "tantra"]
 
     # Detail endpoint returns the updated methods.
@@ -926,8 +926,7 @@ async def test_edit_profile_partial_update_preserves_siblings(
     assert resp.status_code == 200
     assert resp.json()["user_id"] == user_id
 
-    profile = await db_session.get(MasterProfile, user_id)
-    await db_session.refresh(profile)
+    profile = await fresh_get(MasterProfile, user_id)
     prof = profile.data["profile"]
     # Sent keys applied.
     assert prof["display_name"] == "New Name"
@@ -968,8 +967,7 @@ async def test_edit_profile_all_fields(
     )
     assert resp.status_code == 200
 
-    profile = await db_session.get(MasterProfile, user_id)
-    await db_session.refresh(profile)
+    profile = await fresh_get(MasterProfile, user_id)
     prof = profile.data["profile"]
     assert prof["display_name"] == "Full Edit"
     assert prof["email"] == "new@test.com"
@@ -998,8 +996,7 @@ async def test_edit_profile_updates_account_name(
     )
     assert resp.status_code == 200
 
-    user = await db_session.get(User, user_id)
-    await db_session.refresh(user)
+    user = await fresh_get(User, user_id)
     assert user.first_name == "Ivan"
     assert user.last_name == "Petrov"
 
@@ -1037,8 +1034,7 @@ async def test_edit_profile_works_on_verified_master(
     )
     assert resp.status_code == 200
 
-    profile = await db_session.get(MasterProfile, user_id)
-    await db_session.refresh(profile)
+    profile = await fresh_get(MasterProfile, user_id)
     assert profile.data["profile"]["bio"] == "Edited after verification"
     # Status stays verified -- a profile edit never changes account status.
     assert profile.data["account"]["status"] == "verified"

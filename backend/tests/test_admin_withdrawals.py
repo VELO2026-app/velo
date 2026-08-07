@@ -18,7 +18,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.modules.payments.models import Payment, PaymentDirection, PaymentStatus
 from app.modules.users.models import User, UserRole
-from tests.helpers import auth_headers, login_user, full_cleanup_range, switch_self_to_master
+from tests.helpers import (
+    auth_headers,
+    fresh_execute,
+    full_cleanup_range,
+    login_user,
+    switch_self_to_master,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -225,7 +231,7 @@ async def test_approve_double_entry_balanced(
 
     # Verify: master frozen=0, available=5000 (had 10000, withdrew 5000).
     db_session.expire_all()
-    row = (await db_session.execute(
+    row = (await fresh_execute(
         text(
             "SELECT "
             "  COALESCE(SUM(CASE WHEN is_frozen THEN amount_cents ELSE 0 END), 0) AS frozen, "
@@ -333,7 +339,7 @@ async def test_reject_unfreezes_balance(
 
     # Check master profile: frozen=0, available=10000 (fully restored).
     db_session.expire_all()
-    row = (await db_session.execute(
+    row = (await fresh_execute(
         text(
             "SELECT "
             "  COALESCE(SUM(CASE WHEN is_frozen THEN amount_cents ELSE 0 END), 0) AS frozen, "

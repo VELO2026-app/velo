@@ -33,7 +33,7 @@ from app.modules.chats.models import ChatThread
 from app.modules.diary.models import DiaryEvent, DiaryEventKind
 from app.modules.masters.models import MasterProfile
 from app.modules.users.models import User, UserRole
-from tests.helpers import auth_headers, cleanup_range, login_user
+from tests.helpers import auth_headers, cleanup_range, fresh_execute, login_user
 
 BAND_MIN, BAND_MAX = 89720, 89759
 _SEAM = "app.modules.chats.router.comms_request"
@@ -165,7 +165,7 @@ class TestOpenChat:
 
         # Local pointer written -- this is what later authorizes the thread.
         pointer = (
-            await db_session.execute(
+            await fresh_execute(
                 select(ChatThread).where(
                     ChatThread.comms_thread_id == UUID(THREAD_ID)
                 )
@@ -363,7 +363,7 @@ class TestRepointing:
         assert resp.json()["id"] == new_id
 
         pointers = (
-            await db_session.execute(
+            await fresh_execute(
                 select(ChatThread).where(
                     ChatThread.client_user_id == UUID(student["user"]["id"])
                 )

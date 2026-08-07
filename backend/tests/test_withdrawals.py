@@ -28,7 +28,13 @@ from app.modules.masters.models import MasterProfile
 from app.modules.payments.service import record_master_ledger
 from app.modules.withdrawals.models import Withdrawal, WithdrawalStatus
 from app.modules.users.models import User, UserRole
-from tests.helpers import auth_headers, login_user, full_cleanup_range, switch_self_to_master
+from tests.helpers import (
+    auth_headers,
+    fresh_execute,
+    full_cleanup_range,
+    login_user,
+    switch_self_to_master,
+)
 
 # ---------------------------------------------------------------------------
 # URLs
@@ -245,7 +251,7 @@ async def test_withdraw_success(
     # withdrawal_hold: -5000 (available) + 5000 (frozen)
     # Net SUM must equal the initial credit (10000), nothing lost.
     db_session.expire_all()
-    result = await db_session.execute(
+    result = await fresh_execute(
         text(
             "SELECT "
             "  COALESCE(SUM(CASE WHEN is_frozen THEN amount_cents ELSE 0 END), 0) AS frozen, "

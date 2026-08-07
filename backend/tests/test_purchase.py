@@ -47,7 +47,7 @@ from app.modules.payments.purchase import (
 from app.modules.payments.service import record_user_ledger
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.users.models import User, UserRole
-from tests.helpers import auth_headers, login_user, full_cleanup_range
+from tests.helpers import auth_headers, fresh_execute, full_cleanup_range, login_user
 
 
 # ---------------------------------------------------------------------------
@@ -192,7 +192,7 @@ async def test_purchase_free_practice_creates_zero_ledger(
 
     # Verify Purchase exists with paid_cents=0.
     stmt = select(Purchase).where(Purchase.booking_id == booking_id)
-    result = await db_session.execute(stmt)
+    result = await fresh_execute(stmt)
     purchase = result.scalar_one()
     assert purchase.paid_cents == 0
     assert purchase.status == PurchaseStatus.PENDING.value
@@ -267,7 +267,7 @@ async def test_purchase_paid_practice_deducts_balance(
     # Verify user balance decreased.
     db_session.expire_all()
     stmt = select(User).where(User.id == user_id)
-    result = await db_session.execute(stmt)
+    result = await fresh_execute(stmt)
     user = result.scalar_one()
     assert user.balance_cents == 5000  # 10000 - 5000
 
@@ -384,7 +384,7 @@ async def test_finalize_paid_practice_commission(
     # Verify purchase completed with commission.
     db_session.expire_all()
     stmt = select(Purchase).where(Purchase.booking_id == booking_id)
-    result = await db_session.execute(stmt)
+    result = await fresh_execute(stmt)
     purchase = result.scalar_one()
     assert purchase.status == PurchaseStatus.COMPLETED.value
 
@@ -449,7 +449,7 @@ async def test_finalize_free_practice_zero_commission(
     # Verify zero-amount commission entries.
     db_session.expire_all()
     stmt = select(Purchase).where(Purchase.booking_id == booking_id)
-    result = await db_session.execute(stmt)
+    result = await fresh_execute(stmt)
     purchase = result.scalar_one()
     assert purchase.commission_cents == 0
     assert purchase.status == PurchaseStatus.COMPLETED.value
@@ -569,7 +569,7 @@ async def test_semaphore_double_entry_sum_zero_after_finalize(
             UserLedger.status == LedgerStatus.DONE.value,
         )
     )
-    user_sum = (await db_session.execute(stmt)).scalar_one()
+    user_sum = (await fresh_execute(stmt)).scalar_one()
 
     # Master ledger for this practice.
     stmt = (
@@ -672,7 +672,7 @@ async def test_booking_endpoint_also_creates_purchase(
 
     # Verify purchase was created.
     stmt = select(Purchase).where(Purchase.booking_id == booking_id)
-    result = await db_session.execute(stmt)
+    result = await fresh_execute(stmt)
     purchase = result.scalar_one()
     assert purchase is not None
     assert purchase.paid_cents == 0
@@ -726,6 +726,6 @@ async def test_configurable_commission_percent(
 
     db_session.expire_all()
     stmt = select(Purchase).where(Purchase.booking_id == booking_id)
-    result = await db_session.execute(stmt)
+    result = await fresh_execute(stmt)
     purchase = result.scalar_one()
     assert purchase.commission_cents == 2000  # 20% of 10000

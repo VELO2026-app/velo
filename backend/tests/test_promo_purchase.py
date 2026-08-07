@@ -74,7 +74,7 @@ from app.modules.payments.service import record_user_ledger
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.promos.models import Promo, PromoType
 from app.modules.users.models import User, UserRole
-from tests.helpers import auth_headers, login_user, full_cleanup_range
+from tests.helpers import auth_headers, fresh_execute, full_cleanup_range, login_user
 
 
 # ---------------------------------------------------------------------------
@@ -422,7 +422,7 @@ async def test_company_promo_50_percent(
 
     # User balance: 5000 - 5000 = 0.
     db_session.expire_all()
-    user = (await db_session.execute(
+    user = (await fresh_execute(
         select(User).where(User.id == user_data["user"]["id"]),
     )).scalar_one()
     assert user.balance_cents == 0
@@ -463,7 +463,7 @@ async def test_company_promo_double_entry(
     pid = practice_id
 
     # User ledger.
-    user_sum = (await db_session.execute(
+    user_sum = (await fresh_execute(
         select(func.coalesce(func.sum(UserLedger.amount_cents), 0))
         .where(UserLedger.reason.like(f"%practice={pid}%"))
     )).scalar_one()
@@ -526,7 +526,7 @@ async def test_company_promo_finalize_commission_on_paid(
 
     # Commission should be 15% of 5000 (paid) = 750, not 15% of 10000.
     db_session.expire_all()
-    purchase = (await db_session.execute(
+    purchase = (await fresh_execute(
         select(Purchase).where(Purchase.booking_id == booking_id),
     )).scalar_one()
     assert purchase.status == PurchaseStatus.COMPLETED.value
@@ -615,7 +615,7 @@ async def test_master_promo_50_percent(
     assert data["paid_cents"] == 4000
 
     db_session.expire_all()
-    profile = (await db_session.execute(
+    profile = (await fresh_execute(
         select(MasterProfile).where(MasterProfile.user_id == master_id),
     )).scalar_one()
     assert profile.frozen_cents == 4000  # master gets only what user paid
@@ -844,7 +844,7 @@ async def test_promo_used_count_increment(
     assert resp.status_code == 201
 
     db_session.expire_all()
-    refreshed = (await db_session.execute(
+    refreshed = (await fresh_execute(
         select(Promo).where(Promo.id == promo_id),
     )).scalar_one()
     assert refreshed.used_count == 1
@@ -892,7 +892,7 @@ async def test_refund_company_promo(
 
     # Verify Purchase -> REFUNDED.
     db_session.expire_all()
-    purchase = (await db_session.execute(
+    purchase = (await fresh_execute(
         select(Purchase).where(Purchase.booking_id == booking_id),
     )).scalar_one()
     assert purchase.status == PurchaseStatus.REFUNDED.value
@@ -973,7 +973,7 @@ async def test_late_cancel_company_promo(
 
     # Purchase -> COMPLETED (early finalize).
     db_session.expire_all()
-    purchase = (await db_session.execute(
+    purchase = (await fresh_execute(
         select(Purchase).where(Purchase.booking_id == booking_id),
     )).scalar_one()
     assert purchase.status == PurchaseStatus.COMPLETED.value
@@ -1029,7 +1029,7 @@ async def test_refund_master_promo(
 
     # Verify full user balance restored.
     db_session.expire_all()
-    user = (await db_session.execute(
+    user = (await fresh_execute(
         select(User).where(User.id == user_data["user"]["id"]),
     )).scalar_one()
     assert user.balance_cents == 2000
@@ -1077,7 +1077,7 @@ async def test_bookings_endpoint_with_promo(
 
     # Verify purchase has discount.
     db_session.expire_all()
-    purchase = (await db_session.execute(
+    purchase = (await fresh_execute(
         select(Purchase).where(Purchase.booking_id == booking_id),
     )).scalar_one()
     assert purchase.amount_cents == 2000
