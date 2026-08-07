@@ -66,8 +66,21 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
 
 
 async def _do_cleanup(session: AsyncSession) -> None:
-    """Full ORM cleanup for telegram_id 94000-94999."""
-    await full_cleanup_range(session, _TID_MIN, _TID_MAX, delete_users=False)
+    """Full ORM cleanup for telegram_id 94000-94999.
+
+    delete_users=True is LOAD-BEARING here, not hygiene. This file asserts
+    new_users / new_masters deltas, and those counters are driven by
+    User.created_at -- which login_user's upsert deliberately does NOT
+    touch on an existing row (auth/service.py: created_at is absent from
+    set_). Leave the band's users alive and the second run's "logins"
+    become UPDATEs: the delta the test expects never appears
+    ((386 - 386) == 2). The suite only stayed green because
+    test_admin_practices.py shares band 94000-94999, deletes users hard,
+    and happens to collect FIRST alphabetically -- a cleanup borrowed
+    from collection order (T-19 review: order swap alone reproduces the
+    failure in 3 seconds, no random ordering needed).
+    """
+    await full_cleanup_range(session, _TID_MIN, _TID_MAX, delete_users=True)
     await session.commit()
 
 
