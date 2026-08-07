@@ -1077,6 +1077,84 @@ Triggered by velo update on commit $NEW_COMMIT" || {
 }
 
 # -----------------------------------------------------------------------------
+# Attendance dead-ends -- DATA drift, not config drift (H-R4 audit, class 4)
+# -----------------------------------------------------------------------------
+# Every other doctor check compares an install-time ARTIFACT against the repo.
+# This one reads DATA, because the failure it looks for leaves no artifact and
+# no error line: zoom_meetings.report_ingested_at is set unconditionally after
+# an ingest, while the poller only ever selects meetings where it is NULL.
+# Anything that becomes relevant AFTER the marker lands is never looked at
+# again -- there is no second pass. The damage stays invisible until counted.
+#
+# Two populations, both silent:
+#   A. the report was EMPTY when polled (Zoom had not finished preparing it):
+#      everyone scored zero seconds and was written off as no_show. Afterwards
+#      an unearned no_show cannot be told from a real one -- there are no
+#      segments left to argue with.
+#   B. a booking with no registrant row at ingest time: never considered, still
+#      CONFIRMED, now unreachable -- even the deadline fallback, which exists
+#      precisely to stop a booking sitting undecided forever, is reached only
+#      through the same NULL filter.
+#
+# WARNS, NEVER FAILS. This reports history that is already written; a doctor
+# that goes permanently red over yesterday's data stops being read, and then
+# it stops catching config drift either. The exit code stays with the checks
+# above.
+check_attendance_deadends() {
+    if ! $COMPOSE_CMD ps 2>/dev/null | grep -q postgres; then
+        echo -e "${YELLOW}⊘ Attendance dead-ends: database not running, skipped${NC}"
+        return 0
+    fi
+
+    local stuck blind
+    stuck=$($COMPOSE_CMD exec -T postgres psql -U velo -d velo -tAc \
+"SELECT count(DISTINCT p.id) FROM zoom_meetings zm \
+ JOIN practices p ON p.id = zm.practice_id \
+ JOIN bookings b ON b.practice_id = p.id \
+ WHERE zm.report_ingested_at IS NOT NULL AND zm.status = 'active' \
+   AND b.status = 'confirmed';" 2>/dev/null | tr -d '[:space:]')
+
+    blind=$($COMPOSE_CMD exec -T postgres psql -U velo -d velo -tAc \
+"SELECT count(*) FROM ( \
+   SELECT p.id FROM zoom_meetings zm \
+   JOIN practices p ON p.id = zm.practice_id \
+   JOIN bookings b ON b.practice_id = p.id \
+   WHERE zm.report_ingested_at IS NOT NULL \
+     AND NOT EXISTS (SELECT 1 FROM zoom_attendance_segments s \
+                     WHERE s.zoom_meeting_id = zm.id) \
+   GROUP BY p.id \
+   HAVING count(b.id) FILTER (WHERE b.status = 'attended') = 0 \
+      AND count(b.id) FILTER (WHERE b.status = 'no_show') > 0) x;" \
+        2>/dev/null | tr -d '[:space:]')
+
+    # Non-numeric or empty output means the query did not run at all (schema
+    # older than the zoom tables, credentials, container mid-restart). Say so
+    # rather than print a reassuring zero nobody measured.
+    case "$stuck$blind" in
+        ""|*[!0-9]*)
+            echo -e "${YELLOW}⊘ Attendance dead-ends: query did not run, skipped${NC}"
+            return 0
+            ;;
+    esac
+
+    if [ "$stuck" -eq 0 ] && [ "$blind" -eq 0 ]; then
+        echo -e "${GREEN}✓ Attendance: no dead-ends (0 undecidable bookings, 0 blind no_shows)${NC}"
+        return 0
+    fi
+
+    if [ "$stuck" -gt 0 ]; then
+        echo -e "${YELLOW}⚠ Attendance: $stuck practice(s) hold CONFIRMED bookings that can never be decided${NC}"
+        echo "    Their report marker is set, so the poller will not revisit them."
+    fi
+    if [ "$blind" -gt 0 ]; then
+        echo -e "${YELLOW}⚠ Attendance: $blind practice(s) marked EVERYONE no_show with no segments at all${NC}"
+        echo "    Consistent with an empty report at poll time -- those no_shows may be unearned."
+    fi
+    echo "    Inspect: velo db connect (queries in the H-R4 audit)."
+    return 0
+}
+
+# -----------------------------------------------------------------------------
 # Registry-driven reporting (H-D2)
 # -----------------------------------------------------------------------------
 # `status` and `version` used to describe the product only, which stopped being
@@ -1545,7 +1623,11 @@ case "${1:-}" in
         check_nginx "$COMPOSE_DIR/scripts/nginx-render.sh" "/etc/nginx/sites-available/velo" "${DOMAIN_FRONTEND:-}" "${DOMAIN_API:-}" || NGINX_DRIFT=1
         echo ""
 
-        echo "Checked: vite.env keys, backend/.env keys, nginx config (rendered vs live)."
+        check_attendance_deadends
+        echo ""
+
+        echo "Checked: vite.env keys, backend/.env keys, nginx config (rendered vs"
+        echo "live), attendance dead-ends (data -- warns only, never fails)."
         if [ "$VITE_DRIFT" -eq 0 ] && [ "$BACKEND_DRIFT" -eq 0 ] && [ "$NGINX_DRIFT" -eq 0 ]; then
             echo -e "${GREEN}✓ 0 drift found${NC}"
             exit 0
@@ -1707,6 +1789,7 @@ case "${1:-}" in
         echo "  ssl status          — Show certificate info"
         echo "  nginx reload        — Reload Nginx config"
         echo "  version             — Show what is actually running + drift check"
-        echo "  doctor              — Check vite.env / backend/.env for missing keys"
+        echo "  doctor              — Check vite.env / backend/.env / nginx for drift,"
+        echo "                        plus attendance dead-ends in the data (warns)"
         ;;
 esac
