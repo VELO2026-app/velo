@@ -11,7 +11,7 @@
     :tabs="USER_TABS"
     :active-tab="activeTab"
     :fill="isFillRoute"
-    :hide-tab-bar="isDiaryRoute || isFormRoute || keyboardOpen"
+    :hide-tab-bar="isDiaryRoute || isFormRoute || isChatRoute || keyboardOpen"
     :fog="isFogRoute"
     v-bind="fogTuning"
     @navigate="router.push($event)"
@@ -59,7 +59,16 @@ const isDiaryRoute = computed(() => DIARY_ROUTES.includes(route.name as string))
 // join it. Non-fill previously reserved a phantom ~104px header fallback (no
 // VHeader teleports on these screens) that collapsed their content into a
 // cramped, pushed-down box (G2: «Запись» скукоженный).
-const isFillRoute = computed(() => DIARY_ROUTES.includes(route.name as string))
+// user-chat (T2 messaging): same fill contract as master-chat in MasterShell
+// (MC-2 precedent) -- the thread owns its internal scroll + composer, and a
+// reserved floating-header clearance would push the feed down. The tab bar
+// hides with it (detail screen; the composer must sit on the bottom edge).
+const CHAT_ROUTES = ['user-chat']
+const isChatRoute = computed(() => CHAT_ROUTES.includes(route.name as string))
+
+const isFillRoute = computed(
+  () => DIARY_ROUTES.includes(route.name as string) || isChatRoute.value,
+)
 
 // Focused full-screen form flows (check-in / feedback / no-show reflection)
 // hide the tab bar too: they have their own "Close" + submit/skip actions, and

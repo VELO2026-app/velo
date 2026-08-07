@@ -703,3 +703,104 @@ class TestBodies:
             headers=headers,
         )
         assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Peer enrichment (P-1)
+# ---------------------------------------------------------------------------
+#
+# The chat is a pre-sale channel, so a master's counterparty may be nobody's
+# student -- /masters/me/students/{id} 404s for them, and comms only knows a
+# bare uuid. The proxy therefore stamps a `peer` display block (name +
+# avatar) from velo's own users onto every list row and onto the open
+# response. Negative twin per the T1-review methodology: the guard (an
+# unresolvable client id) yields peer=null without breaking the row, AND the
+# adjacent legitimate rows still arrive enriched in the same response.
+
+
+class TestPeerEnrichment:
+    async def test_open_response_carries_the_masters_peer_block(
+        self, client: AsyncClient, db_session: AsyncSession, monkeypatch
+    ) -> None:
+        student = await login_user(
+            client, telegram_id=BAND_MIN + 34, first_name="Student",
+        )
+        master = await _make_master(client, db_session, BAND_MIN + 35)
+        monkeypatch.setattr(
+            _SEAM, AsyncMock(return_value=_thread_payload(created=True))
+        )
+
+        resp = await client.post(
+            CHATS_URL,
+            json={"master_id": master["user"]["id"]},
+            headers=auth_headers(student["session_token"]),
+        )
+
+        assert resp.status_code == 200
+        peer = resp.json()["peer"]
+        assert peer["user_id"] == master["user"]["id"]
+        # login_user creates first_name-only users; the name convention is
+        # get_master_full_name's ("First Last" from Telegram fields).
+        assert peer["name"] == "Master"
+        assert "avatar_url" in peer
+        # The seam detail stays a seam detail even with the block added.
+        assert "created" not in resp.json()
+
+    async def test_student_list_names_the_masters_without_comms(
+        self, client: AsyncClient, db_session: AsyncSession, monkeypatch
+    ) -> None:
+        student = await login_user(
+            client, telegram_id=BAND_MIN + 36, first_name="Student",
+        )
+        master = await _make_master(client, db_session, BAND_MIN + 37)
+        headers = auth_headers(student["session_token"])
+        monkeypatch.setattr(
+            _SEAM, AsyncMock(return_value=_thread_payload(created=True))
+        )
+        await client.post(
+            CHATS_URL, json={"master_id": master["user"]["id"]}, headers=headers,
+        )
+
+        fake = AsyncMock(return_value={"threads": ["SHOULD NOT BE USED"]})
+        monkeypatch.setattr(_SEAM, fake)
+        resp = await client.get(CHATS_URL, headers=headers)
+
+        assert resp.status_code == 200
+        (thread,) = resp.json()["threads"]
+        assert thread["peer"]["user_id"] == master["user"]["id"]
+        assert thread["peer"]["name"] == "Master"
+        # Enrichment is local knowledge (ID-11 pointer + users): the
+        # student's list still never touches comms.
+        fake.assert_not_awaited()
+
+    async def test_master_list_is_enriched_and_a_stray_client_survives(
+        self, client: AsyncClient, db_session: AsyncSession, monkeypatch
+    ) -> None:
+        """Both halves in one response: a resolvable client arrives named,
+        an unresolvable one (comms knows a uuid velo does not) degrades to
+        peer=null instead of failing the whole page."""
+        student = await login_user(
+            client, telegram_id=BAND_MIN + 38, first_name="Student",
+        )
+        master = await _make_master(client, db_session, BAND_MIN + 39)
+
+        known = _thread_payload()
+        known["client"] = student["user"]["id"]
+        stray = _thread_payload(
+            thread_id="bbbbbbbb-8972-4000-8000-00000000feed"
+        )
+        stray["client"] = str(uuid4())  # no such velo user
+        fake = AsyncMock(
+            return_value={"threads": [known, stray], "next_cursor": None}
+        )
+        monkeypatch.setattr(_SEAM, fake)
+
+        resp = await client.get(
+            CHATS_URL, headers=auth_headers(master["session_token"]),
+        )
+
+        assert resp.status_code == 200
+        threads = resp.json()["threads"]
+        assert threads[0]["peer"]["user_id"] == student["user"]["id"]
+        assert threads[0]["peer"]["name"] == "Student"
+        assert threads[1]["peer"] is None

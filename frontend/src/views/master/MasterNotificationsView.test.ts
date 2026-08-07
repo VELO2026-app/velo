@@ -313,12 +313,41 @@ describe('MasterNotificationsView', () => {
       mount()
       await flush()
 
-      switchByRow('От участников').click() // msg_participants
+      switchByRow('Ответы в ваших обращениях').click() // msg_participants
       await flush()
 
-      expect(isOn('От участников')).toBe(false)
-      expect(isOn('От поддержки')).toBe(true) // msg_support, untouched
+      expect(isOn('Ответы в ваших обращениях')).toBe(false)
+      expect(isOn('Сообщения учеников')).toBe(true) // msg_support, untouched
       expect(isOn('Новое бронирование')).toBe(true) // unrelated group, untouched
+    })
+
+    // P-2 (H-T2-UI): the RECEIVER side of the msg.* axis (comms
+    // notifier.py:214-232) -- a master receives students' chat messages as
+    // msg.support_message -> category msg_support. The label must SAY so,
+    // and flipping that label must WRITE that category: wording and wiring
+    // asserted together, so neither can silently flip back to the old
+    // inverted pair («От участников»/«От поддержки») without going red.
+    it('P-2: the msg_support row is worded «сообщения учеников» AND writes msg_support', async () => {
+      mount()
+      await flush()
+
+      const row = switchByRow('Сообщения учеников')
+      expect(row.getAttribute('aria-label')?.toLowerCase()).toContain('учеников')
+
+      row.click()
+      await flush()
+
+      expect(prefsPut).toHaveBeenCalledWith({ categories: { msg_support: false } })
+    })
+
+    it('P-2 twin: the msg_participants row is worded as one\'s OWN threads AND writes msg_participants', async () => {
+      mount()
+      await flush()
+
+      switchByRow('Ответы в ваших обращениях').click()
+      await flush()
+
+      expect(prefsPut).toHaveBeenCalledWith({ categories: { msg_participants: false } })
     })
   })
 

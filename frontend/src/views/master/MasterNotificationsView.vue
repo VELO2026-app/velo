@@ -142,9 +142,26 @@ const GROUPS: Group[] = [
   },
   {
     title: 'Сообщения',
+    // P-2 (H-T2-UI): labels follow the RECEIVER side of the msg.* axis
+    // (comms app/notifier.py:214-232): a thread's OPERATOR -- the master --
+    // receives students' chat messages as msg.support_message -> category
+    // msg_support, REGARDLESS of thread form; msg_participants reaches the
+    // master only where they are the CLIENT of somebody else's thread. The
+    // old labels («От участников» / «От поддержки») said the opposite of
+    // what the toggles do. msg_support first: it is the one that matters
+    // to a master. Texts approved by Master-chat (Т-10); wording is the
+    // boss's to replay after the show -- a two-line edit here.
     rows: [
-      { key: 'msg_participants', label: 'От участников' },
-      { key: 'msg_support', label: 'От поддержки' },
+      {
+        key: 'msg_support',
+        label: 'Сообщения учеников',
+        sub: 'Новые сообщения в ваших чатах',
+      },
+      {
+        key: 'msg_participants',
+        label: 'Ответы в ваших обращениях',
+        sub: 'Чаты, где вы — автор',
+      },
     ],
   },
   {

@@ -1,29 +1,33 @@
 <!--
-  VELO Frontend -- MasterChatView (chat thread; honesty-cleanup 2026-07-12;
-  REAL THREAD -- Phase 6 / T2, H-T2-UI phase «а», 2026-08-08)
+  VELO Frontend -- UserChatView (Phase 6 / T2, H-T2-UI phase «а», 2026-08-08)
 
-  The master's side of the DM. Thin wrapper over the shared ChatThreadScreen
-  (same component the student uses): resolves the peer from the comms
-  operator list, hands over threadId + display props.
+  The student's side of the eternal DM with one master. Thin wrapper over the
+  shared ChatThreadScreen: this view only resolves WHICH conversation and WHO
+  the peer is, then hands over.
 
-  Route /master/messages/:id (name 'master-chat', meta.hideTabBar), reached
-  from MasterMessagesView. A deep link to a foreign/unknown id: the list
-  won't contain it -> not-found state here, and the proxy 404s every thread
-  route anyway (membership is checked against the local pointer, ID-11).
+  Route: /user/profile/messages/:id (name 'user-chat', meta.hideTabBar --
+  detail screen). Reached from the list AND from «Задать вопрос» on the
+  master's public profile (which just opened/looked up the thread).
+
+  Peer resolution: one GET /api/v1/chats and find the row -- the student's
+  list is the local pointer set (small by construction, no pagination behind
+  the ID-11 fence), each row carrying the P-1 peer block. A deep link to an
+  id that is not ours lands in the not-found state: the proxy 404s every
+  thread route for non-participants, and the list simply won't contain it.
 -->
 
 <template>
-  <div class="chat">
+  <div class="user-chat">
     <div
       v-if="resolving"
-      class="chat__center"
+      class="user-chat__center"
     >
       <VLoader size="lg" />
     </div>
 
     <div
       v-else-if="notFound"
-      class="chat__center"
+      class="user-chat__center"
     >
       <VHeader
         title="Сообщения"
@@ -50,7 +54,7 @@
       v-else
       :thread-id="threadId"
       :peer="peer"
-      peer-fallback="Ученик"
+      peer-fallback="Мастер"
       @back="router.back()"
     />
   </div>
@@ -83,6 +87,8 @@ onMounted(async () => {
       peer.value = thread.peer ?? null
     }
   } catch {
+    // The thread screen has its own retry; a failed lookup only costs the
+    // header name -- fall through with the role fallback.
     peer.value = null
   } finally {
     resolving.value = false
@@ -91,17 +97,14 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* Fill-mode screen (MasterShell routes master-chat into MobileLayout `fill`
-   mode, which zeroes the shared rail) -- ChatThreadScreen supplies its own
-   rail padding, this wrapper only stretches. */
-.chat {
+.user-chat {
   height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
-.chat__center {
+.user-chat__center {
   flex: 1;
   display: flex;
   flex-direction: column;

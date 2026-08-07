@@ -106,6 +106,66 @@ def _is_participant(thread: ChatThread, user: User) -> bool:
     return user.id in (thread.client_user_id, thread.operator_user_id)
 
 
+def _peer_payload(user: User | None) -> dict[str, Any] | None:
+    """The counterparty as a chat row displays it: id + name + avatar (P-1).
+
+    Telegram first/last name -- the same convention as
+    masters.service.get_master_full_name, so a master carries one name
+    everywhere (diary feed, practice cards, chat list alike);
+    MasterProfile.display_name is deliberately not consulted here for the
+    same reason it isn't there. `name` may be null (the columns are
+    nullable even though Telegram guarantees a first_name) -- the frontend
+    owns the role-appropriate fallback wording.
+    """
+    if user is None:
+        return None
+    parts = [p for p in (user.first_name, user.last_name) if p]
+    return {
+        "user_id": str(user.id),
+        "name": " ".join(parts) if parts else None,
+        "avatar_url": user.avatar_url,
+    }
+
+
+async def _attach_peers_from_comms(payload: Any, session: AsyncSession) -> None:
+    """Stamp a `peer` display block onto every thread comms listed (P-1).
+
+    The comms list names the counterparty only as a bare `client` uuid:
+    display identity is deliberately NOT comms' knowledge (ID-4 -- domain
+    facts live in the product), and the chat is a pre-sale channel, so the
+    client may well not be anybody's student -- there is no other endpoint
+    a master could resolve the name through. The referenced users are
+    velo's own rows (identity sync T0), so ONE bulk SELECT resolves the
+    whole page and nothing goes back to comms.
+
+    Defensive on purpose: an id that does not parse or does not resolve
+    gets `peer: null` instead of an exception -- a cosmetic block must
+    never take the list down with it.
+    """
+    if not isinstance(payload, dict):
+        return
+    threads = payload.get("threads")
+    if not isinstance(threads, list):
+        return
+
+    def _client_uuid(thread: Any) -> UUID | None:
+        if not isinstance(thread, dict):
+            return None
+        try:
+            return UUID(str(thread.get("client")))
+        except (TypeError, ValueError):
+            return None
+
+    ids = {cid for t in threads if (cid := _client_uuid(t)) is not None}
+    users: dict[UUID, User] = {}
+    if ids:
+        result = await session.execute(select(User).where(User.id.in_(ids)))
+        users = {u.id: u for u in result.scalars()}
+    for thread in threads:
+        if isinstance(thread, dict):
+            thread["peer"] = _peer_payload(users.get(_client_uuid(thread)))
+
+
 async def _require_participant(
     session: AsyncSession, thread_id: UUID, user: User
 ) -> ChatThread:
@@ -141,7 +201,8 @@ async def open_chat(
     # a pending application exists would leak it).
     if not await is_master_verified(body.master_id, session):
         raise NotFoundError("Master not found")
-    if await session.get(User, body.master_id) is None:
+    master = await session.get(User, body.master_id)
+    if master is None:
         raise NotFoundError("Master not found")
 
     payload = await comms_request(
@@ -246,8 +307,13 @@ async def open_chat(
         )
 
     # `created` is a seam detail (it exists so this handler can act on it);
-    # the frontend gets the thread, unchanged otherwise.
-    return {k: v for k, v in payload.items() if k != "created"}
+    # the frontend gets the thread, plus the counterparty's display block
+    # (P-1): who you are talking to is velo's knowledge, not comms' (ID-4),
+    # and stamping it here saves the UI a second request per screen.
+    return {
+        **{k: v for k, v in payload.items() if k != "created"},
+        "peer": _peer_payload(master),
+    }
 
 
 def _parsed_created_at(payload: dict[str, Any]) -> datetime:
@@ -291,7 +357,9 @@ async def list_chats(
         }
         if cursor is not None:
             params["cursor"] = cursor
-        return await comms_request("GET", "/api/v1/threads", params=params)
+        payload = await comms_request("GET", "/api/v1/threads", params=params)
+        await _attach_peers_from_comms(payload, session)
+        return payload
 
     rows = (
         await session.execute(
@@ -301,12 +369,24 @@ async def list_chats(
             .limit(limit)
         )
     ).scalars().all()
+
+    # P-1: the masters' display blocks, one bulk SELECT for the page --
+    # without this the frontend would need a public-profile request per row.
+    master_ids = {row.operator_user_id for row in rows}
+    masters: dict[UUID, User] = {}
+    if master_ids:
+        result = await session.execute(
+            select(User).where(User.id.in_(master_ids))
+        )
+        masters = {u.id: u for u in result.scalars()}
+
     return {
         "threads": [
             {
                 "id": str(row.comms_thread_id),
                 "operator_value": str(row.operator_user_id),
                 "created_at": row.created_at.isoformat(),
+                "peer": _peer_payload(masters.get(row.operator_user_id)),
             }
             for row in rows
         ],

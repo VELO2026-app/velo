@@ -117,9 +117,21 @@
         </VAccordion>
       </div>
 
-      <!-- Ask a question (frame 6 -- not built yet) -->
+      <!-- Ask a question -- REAL since T2 (H-T2-UI phase «а»): opens/joins
+           the eternal DM with this master (POST /api/v1/chats is create-or-
+           get, so tapping twice lands in the same thread) and navigates in.
+           The «frame 6» placeholder is retired -- this button IS its slot. -->
       <div class="master-public__actions">
-        <VButton variant="primary" size="lg" block @click="onAsk"> Задать вопрос </VButton>
+        <VButton
+          variant="primary"
+          size="lg"
+          block
+          :loading="openingChat"
+          :disabled="openingChat"
+          @click="onAsk"
+        >
+          Задать вопрос
+        </VButton>
       </div>
     </div>
   </div>
@@ -142,6 +154,7 @@ import { VHeader } from '@/components/layout'
 import { IconCheck } from '@/components/icons'
 import CalendarPracticeCard from '@/components/shared/CalendarPracticeCard.vue'
 import { getPublicMaster } from '@/api/masters'
+import { openChat } from '@/api/chats'
 import { getPractices } from '@/api/practices'
 import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
@@ -186,10 +199,22 @@ function goToPractice(id: string): void {
   router.push({ name: 'practice-detail', params: { id } })
 }
 
-function onAsk(): void {
-  // Ask-master flow (Figma frame 6) is a separate iteration with its own
-  // backend endpoint. Placeholder until then (V2).
-  toast.info('Вопрос мастеру -- скоро')
+const openingChat = ref(false)
+
+async function onAsk(): Promise<void> {
+  // T2 (H-T2-UI): open-or-get the DM with this master, then go there. The
+  // backend re-checks the verified predicate server-side (404 otherwise) --
+  // this view already only renders verified masters, so the states agree.
+  if (openingChat.value) return
+  openingChat.value = true
+  try {
+    const thread = await openChat(masterId.value)
+    await router.push({ name: 'user-chat', params: { id: thread.id } })
+  } catch (e) {
+    toast.error(extractApiError(e, 'Не удалось открыть чат'))
+  } finally {
+    openingChat.value = false
+  }
 }
 
 async function loadMaster(id: string): Promise<void> {

@@ -126,6 +126,7 @@ import {
 } from '@/components/icons'
 import { useMasterStore } from '@/stores/master'
 import { useAuthStore } from '@/stores/auth'
+import { getChatUnreadCount, listChats } from '@/api/chats'
 
 const router = useRouter()
 const masterStore = useMasterStore()
@@ -142,8 +143,22 @@ const userEmail = computed(
   () => (authStore.user as { email?: string | null } | null | undefined)?.email ?? '',
 )
 
-// «Сообщения» unread count -- stub (no messages module yet). -> Zod.
-const messagesCount = computed(() => 0)
+// «Сообщения» unread badge -- REAL since T2 (H-T2-UI): the sum of per-thread
+// unread counts. Loaded lazily on mount and silent on failure (the badge is
+// a courtesy, the hub must render regardless of the chat proxy's health).
+const messagesCount = ref(0)
+
+async function loadMessagesCount(): Promise<void> {
+  try {
+    const { threads } = await listChats()
+    const counts = await Promise.all(
+      threads.map((t) => getChatUnreadCount(t.id).then((r) => r.unread, () => 0)),
+    )
+    messagesCount.value = counts.reduce((sum, n) => sum + n, 0)
+  } catch {
+    messagesCount.value = 0
+  }
+}
 
 // -- Menu actions --
 function onEditProfile(): void {
@@ -177,6 +192,7 @@ async function onLogout(): Promise<void> {
 // -- Lifecycle: load the master profile (display_name) for verified masters. --
 onMounted(async () => {
   if (authStore.role === 'master') {
+    void loadMessagesCount() // fire-and-forget: never blocks the profile
     await masterStore.fetchMyProfile()
   }
 })

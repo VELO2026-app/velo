@@ -67,10 +67,12 @@ import MasterPublicView from '@/views/user/MasterPublicView.vue'
 import * as mastersApi from '@/api/masters'
 import * as practicesApi from '@/api/practices'
 import { ApiResponseError } from '@/api/client'
+import * as chatsApi from '@/api/chats'
 import type { MasterPublicResponse, PracticeResponse } from '@/api/types'
 
 vi.mock('@/api/masters')
 vi.mock('@/api/practices')
+vi.mock('@/api/chats')
 
 const back = vi.fn()
 const push = vi.fn()
@@ -87,8 +89,9 @@ vi.mock('vue-router', () => ({
 }))
 
 const toastInfo = vi.fn()
+const toastError = vi.fn()
 vi.mock('@/composables/useToast', () => ({
-  useToast: () => ({ error: vi.fn(), success: vi.fn(), info: toastInfo }),
+  useToast: () => ({ error: toastError, success: vi.fn(), info: toastInfo }),
 }))
 
 function masterProfile(overrides: Partial<MasterPublicResponse> = {}): MasterPublicResponse {
@@ -209,6 +212,8 @@ beforeEach(() => {
   vi.mocked(mastersApi.getPublicMaster).mockReset()
   vi.mocked(practicesApi.getPractices).mockReset()
   toastInfo.mockReset()
+  toastError.mockReset()
+  vi.mocked(chatsApi.openChat).mockReset()
   push.mockReset()
   back.mockReset()
   routeParams.id = 'm1'
@@ -381,8 +386,8 @@ describe('MasterPublicView', () => {
   })
 
   // ===========================================================================
-  describe("ask-master (V2 stub -- NOT disabled, unlike BookingConfirmedView's)", () => {
-    it("the button is fully enabled (a different stub shape than BookingConfirmedView's disabled textarea+button)", async () => {
+  describe('ask-master (REAL since T2 / H-T2-UI: opens the DM and navigates)', () => {
+    it("the button is fully enabled (a different shape than BookingConfirmedView's disabled textarea+button)", async () => {
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
       mount()
@@ -391,15 +396,38 @@ describe('MasterPublicView', () => {
       expect(askBtn()?.disabled).toBe(false)
     })
 
-    it('clicking it fires the "coming soon" toast and does NOT navigate anywhere', async () => {
+    it('clicking it opens/joins the thread via POST /chats and navigates into it', async () => {
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      vi.mocked(chatsApi.openChat).mockResolvedValue({
+        id: 'thread-1',
+        created_at: '2026-08-01T10:30:00+00:00',
+      })
       mount()
       await flush()
 
       askBtn()?.click()
+      await flush()
 
-      expect(toastInfo).toHaveBeenCalledWith('Вопрос мастеру -- скоро')
+      // The actor is the session's, server-side: the view only names WHICH
+      // master (the route's), never who is asking.
+      expect(chatsApi.openChat).toHaveBeenCalledWith('m1')
+      expect(push).toHaveBeenCalledWith({ name: 'user-chat', params: { id: 'thread-1' } })
+    })
+
+    it('negative twin: a failed open toasts and does NOT navigate', async () => {
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      vi.mocked(chatsApi.openChat).mockRejectedValue(
+        new ApiResponseError(502, 'Сервис сообщений недоступен', 'bad_gateway'),
+      )
+      mount()
+      await flush()
+
+      askBtn()?.click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalled()
       expect(push).not.toHaveBeenCalled()
     })
   })

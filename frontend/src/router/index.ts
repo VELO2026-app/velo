@@ -115,6 +115,12 @@ const router = createRouter({
           component: () => import('@/views/user/UserMessagesView.vue'),
         },
         {
+          path: 'profile/messages/:id',
+          name: 'user-chat',
+          meta: { hideTabBar: true },
+          component: () => import('@/views/user/UserChatView.vue'),
+        },
+        {
           path: 'support',
           name: 'user-support',
           component: () => import('@/views/user/SupportView.vue'),
