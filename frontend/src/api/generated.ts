@@ -265,6 +265,7 @@ export interface AdminZoomAttendanceResponse {
   bookings: AdminZoomBookingAttendance[]
   unmatched: AdminZoomUnmatchedRow[]
   unmatched_count: number
+  last_sync_error: string | null
 }
 
 /** One booking's Zoom-derived attendance totals, for reconciliation. */
