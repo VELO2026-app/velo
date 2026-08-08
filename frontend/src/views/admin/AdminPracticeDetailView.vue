@@ -147,7 +147,7 @@ import {
 import PracticeHeroCard from '@/components/shared/PracticeHeroCard.vue'
 import { IconCalendar, IconProfile, IconCheck, IconClose } from '@/components/icons'
 import { getAdminPracticeDetail, getAdminZoomAttendance } from '@/api/admin'
-import type { AdminZoomAttendanceResponseWithError } from '@/api/admin'
+import type { AdminZoomAttendanceResponse } from '@/api/admin'
 import { extractApiError } from '@/composables/useApiError'
 import { formatDateShort } from '@/utils/format'
 import type { AdminPracticeDetailResponse, AdminRosterEntry } from '@/api/types'
@@ -161,7 +161,7 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 // T21-1: best-effort, separate from the main loading/error state above -- a
 // failure here must never block the rest of the (already-working) page.
-const zoomAttendance = ref<AdminZoomAttendanceResponseWithError | null>(null)
+const zoomAttendance = ref<AdminZoomAttendanceResponse | null>(null)
 
 const isPast = computed<boolean>(() => practice.value?.status === 'past')
 

@@ -72,16 +72,6 @@ import type { AdminZoomAttendanceResponse } from '@/api/generated'
 export type { AdminPromoResponse, AdminPaginatedPromosResponse }
 export type { AdminZoomAttendanceResponse }
 
-// TEMPORARY (PK-Z2, PROMPT №671): last_sync_error does not exist on
-// AdminZoomAttendanceResponse in generated.ts yet -- the backend field
-// (admin/practices/schemas.py) has not been deployed/regenerated. Extended
-// locally via intersection (not a full hand-copy -- avoids duplicating the
-// other 6 fields, the B26 drift risk). Delete this alias and use
-// AdminZoomAttendanceResponse directly the first time this file is touched
-// after the next generated.ts regen.
-export type AdminZoomAttendanceResponseWithError = AdminZoomAttendanceResponse & {
-  last_sync_error: string | null
-}
 export type AdminPromoTypeFilter = 'company' | 'master'
 
 // Re-export for views that import from api/admin.ts directly.
@@ -434,12 +424,9 @@ export function getAdminPracticeDetail(id: string): Promise<AdminPracticeDetailR
 
 /** T21-1 (PROMPT №541): meeting status, per-booking minutes present, and the
  * unmatched bucket -- schema existed since E21 step G with zero consumers
- * until now (PROMPT №540 audit). Return type carries last_sync_error via the
- * TEMPORARY intersection above (PK-Z2) until the next generated.ts regen. */
-export function getAdminZoomAttendance(
-  practiceId: string,
-): Promise<AdminZoomAttendanceResponseWithError> {
-  return api.get<AdminZoomAttendanceResponseWithError>(
+ * until now (PROMPT №540 audit). */
+export function getAdminZoomAttendance(practiceId: string): Promise<AdminZoomAttendanceResponse> {
+  return api.get<AdminZoomAttendanceResponse>(
     `/api/v1/admin/practices/${practiceId}/zoom-attendance`,
   )
 }

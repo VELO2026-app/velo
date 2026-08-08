@@ -493,8 +493,8 @@ describe('AdminPracticeDetailView', () => {
   // that already worked before this section existed.
   describe('Zoom section (T21-1)', () => {
     function zoomAttendance(
-      overrides: Partial<adminApi.AdminZoomAttendanceResponseWithError> = {},
-    ): adminApi.AdminZoomAttendanceResponseWithError {
+      overrides: Partial<adminApi.AdminZoomAttendanceResponse> = {},
+    ): adminApi.AdminZoomAttendanceResponse {
       return {
         practice_id: 'p_upcoming',
         zoom_meeting_status: 'active',
