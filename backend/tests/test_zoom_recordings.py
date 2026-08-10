@@ -241,6 +241,73 @@ async def test_confirmed_booking_available_stub_recording(
 
 
 @pytest.mark.asyncio
+async def test_recording_passcode_arrives_under_the_password_key(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """PK-Z3 audit finding, now closed: get_meeting_recording_link's `or
+    response.get("password")` fallback (service.py:963) was unreachable
+    under the stub, which always returned recording_play_passcode.
+    Exercises the real, documented Zoom shape where the passcode arrives
+    under the OLDER `password` key instead, via
+    zoom_client._stub_recording_passcode -- same pattern as
+    _stub_omit_join_url (test_zoom_registrants.py)."""
+    from app.modules.zoom import zoom_client
+
+    master_id = await _make_master(client, db_session, 99409)
+    practice = await _create_practice(db_session, master_id)
+    await _active_zoom_meeting(db_session, practice)
+    booking, auth = await _booking_for(client, db_session, practice, 99431)
+    await db_session.commit()
+
+    zoom_client._stub_recording_passcode = "password_field"
+    try:
+        resp = await client.get(
+            f"{BOOKINGS_URL}/{booking.id}/recording",
+            headers=auth_headers(auth["session_token"]),
+        )
+    finally:
+        zoom_client._stub_recording_passcode = "normal"
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "available"
+    assert body["url"] is not None
+    assert "pwd=stubpasscode" in body["url"]
+
+
+@pytest.mark.asyncio
+async def test_recording_with_no_passcode_at_all_still_returns_the_share_url(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """The other real Zoom shape: neither passcode key present at all --
+    get_meeting_recording_link's soft-fail (service.py:964-971), logged and
+    the bare share_url returned rather than showing nothing. Unreachable
+    under the stub before this prompt (PK-Z3)."""
+    from app.modules.zoom import zoom_client
+
+    master_id = await _make_master(client, db_session, 99410)
+    practice = await _create_practice(db_session, master_id)
+    await _active_zoom_meeting(db_session, practice)
+    booking, auth = await _booking_for(client, db_session, practice, 99432)
+    await db_session.commit()
+
+    zoom_client._stub_recording_passcode = "missing"
+    try:
+        resp = await client.get(
+            f"{BOOKINGS_URL}/{booking.id}/recording",
+            headers=auth_headers(auth["session_token"]),
+        )
+    finally:
+        zoom_client._stub_recording_passcode = "normal"
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "available"
+    assert body["url"] is not None
+    assert "pwd=" not in body["url"]
+
+
+@pytest.mark.asyncio
 async def test_no_show_booking_gets_same_access_over_http(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:

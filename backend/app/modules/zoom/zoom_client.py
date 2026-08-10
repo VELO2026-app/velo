@@ -70,6 +70,21 @@ _token_cache: tuple[str, float] | None = None
 # True)`; never set outside a test.
 _stub_omit_join_url: bool = False
 
+# PROMPT №672 (audit finding PK-Z3, test-only knob, same shape as
+# _stub_omit_join_url above): the stub's recordings response has always
+# unconditionally included recording_play_passcode -- there was no way to
+# exercise either of the two OTHER documented-but-real shapes
+# get_meeting_recording_link (service.py) actually branches on: Zoom
+# returning the passcode under the older `password` key instead
+# ("password_field", the `or response.get("password")` fallback), or
+# omitting a passcode of either shape entirely ("missing", the no-passcode
+# soft-fail). A string, not a second bool, because the two alternates are
+# mutually exclusive -- two independent bools would allow an invalid
+# both-True state a single flag cannot represent. A test sets this via
+# `zoom_client._stub_recording_passcode = "password_field"` / `"missing"`
+# in a try/finally that restores `"normal"`; never set outside a test.
+_stub_recording_passcode: str = "normal"  # "normal" | "password_field" | "missing"
+
 
 class ZoomAPIError(Exception):
     """Raised on any non-2xx response or network failure from the Zoom API.
@@ -243,10 +258,20 @@ def _stub_response(method: str, path: str, json_body: dict | None) -> Any:
     # above already documents for /registrants and /report/meetings/.
     if method == "GET" and path.endswith("/recordings"):
         stub_id = path.split("/")[-2]
-        return {
-            "share_url": f"https://zoom.us/rec/share/{stub_id}",
-            "recording_play_passcode": "stubpasscode",
-        }
+        response = {"share_url": f"https://zoom.us/rec/share/{stub_id}"}
+        if _stub_recording_passcode == "password_field":
+            # PROMPT №672: the real, documented Zoom shape where the
+            # passcode arrives under the older `password` key instead of
+            # `recording_play_passcode` -- get_meeting_recording_link's
+            # `or` fallback exists for exactly this. Test-only.
+            response["password"] = "stubpasscode"
+        elif _stub_recording_passcode == "missing":
+            # PROMPT №672: a share_url with no passcode of either shape --
+            # get_meeting_recording_link's no-passcode soft-fail. Test-only.
+            pass
+        else:
+            response["recording_play_passcode"] = "stubpasscode"
+        return response
     # Must come AFTER both /registrants and /report/meetings/ GET checks
     # above -- both of those paths also contain "/meetings/" as a substring.
     if method == "GET" and "/meetings/" in path:

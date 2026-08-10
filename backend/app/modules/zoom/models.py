@@ -107,10 +107,15 @@ class ZoomMeeting(UUIDMixin, TimestampMixin, Base):
     zoom_meeting_uuid: Mapped[str | None] = mapped_column(
         String(64), default=None,
     )
-    # Snapshot of host_id from the creation response. Secondary defense for
-    # host exclusion -- the primary mechanism is ZoomRegistrant.role='host'
-    # (see that model's docstring); Zoom exposes no reliable host flag on
-    # either the webhook or report surface (E21 research, round 2).
+    # Snapshot of host_id from the creation response. NOT currently read
+    # anywhere (PK-Z1 audit, 2026-08-08) -- despite the name below, it
+    # defends nothing today; ZoomRegistrant.role='host' is the mechanism
+    # that actually excludes the host from attendance (see that model's
+    # docstring). A CANDIDATE key for a second exclusion path, but wiring
+    # one in rests on an unconfirmed premise -- whether Zoom's own report
+    # returns the host's entry (made via start_url, not a registrant link)
+    # in a form this field could match against. That premise is V1's open
+    # question (board), not something to resolve here by guessing.
     host_zoom_user_id: Mapped[str | None] = mapped_column(
         String(64), default=None,
     )
