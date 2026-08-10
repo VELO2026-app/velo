@@ -396,6 +396,7 @@ async def health() -> dict:
     except Exception:
         result["db"] = "error"
         result["status"] = "degraded"
+        logger.exception("health_check_db_failed")
 
     # Check Redis.
     try:
@@ -404,6 +405,7 @@ async def health() -> dict:
     except Exception:
         result["redis"] = "error"
         result["status"] = "degraded"
+        logger.exception("health_check_redis_failed")
 
     return result
 

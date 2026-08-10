@@ -18,13 +18,28 @@
 // Desktop / no visualViewport → a single deferred scroll (unchanged fallback).
 // =============================================================================
 
+import { onUnmounted } from 'vue'
+
 /** Time (ms) with no visualViewport resize before we treat the keyboard as
  *  settled and scroll the field into view. */
 const SETTLE_MS = 120
 
 export function useKeyboardFieldScroll() {
+  // The listener this composable currently has attached to the (long-lived,
+  // global) window.visualViewport, if any. Normally removed on the field's
+  // own `blur` -- but if the component unmounts first (nav away with the
+  // keyboard still open, the exact case this file exists for), `blur` never
+  // fires and the listener -- plus everything its closure keeps alive --
+  // stays attached to `visualViewport` forever. Reaped here instead.
+  let activeCleanup: (() => void) | null = null
+
+  onUnmounted(() => {
+    activeCleanup?.()
+    activeCleanup = null
+  })
+
   /** Bind as `@focus` on the field (input / textarea). Listeners self-remove on
-   *  the field's own `blur`. */
+   *  the field's own `blur`, or on the owning component's unmount. */
   function onFieldFocus(e: FocusEvent): void {
     const el = e.target as HTMLElement | null
     if (!el) return
@@ -47,14 +62,14 @@ export function useKeyboardFieldScroll() {
       settle = window.setTimeout(bring, SETTLE_MS)
     }
     vv.addEventListener('resize', onResize)
-    el.addEventListener(
-      'blur',
-      () => {
-        vv.removeEventListener('resize', onResize)
-        window.clearTimeout(settle)
-      },
-      { once: true },
-    )
+
+    const cleanup = (): void => {
+      vv.removeEventListener('resize', onResize)
+      window.clearTimeout(settle)
+      activeCleanup = null
+    }
+    activeCleanup = cleanup
+    el.addEventListener('blur', cleanup, { once: true })
 
     // Kick once: if the keyboard is already open (focus without a resize), the
     // debounce still fires a single settle scroll.

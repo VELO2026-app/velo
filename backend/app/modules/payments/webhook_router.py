@@ -36,6 +36,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from app.core.database import get_session_factory
+from app.core.exceptions import BadRequestError
 from app.modules.payments.stripe import (
     handle_checkout_completed,
     handle_checkout_expired_or_failed,
@@ -81,12 +82,22 @@ async def stripe_webhook(request: Request) -> JSONResponse:
 
     try:
         event = verify_webhook_signature(payload, sig_header)
-    except Exception:
-        # verify_webhook_signature raises BadRequestError
-        # on invalid signature / payload. Return 400.
+    except BadRequestError:
+        # Expected: invalid signature / payload. stripe.py already logs the
+        # specific reason one frame down. Return 400 -- Stripe won't retry.
         return JSONResponse(
             status_code=400,
             content={"error": "Invalid signature"},
+        )
+    except Exception:
+        # Unanticipated -- e.g. a _configure_stripe() misconfiguration, not a
+        # bad signature. A 400 here would be a lie about what happened, and
+        # Stripe won't retry a 4xx, so the event would be lost silently.
+        # Follow the file's own strategy for transient/unexpected failures.
+        logger.exception("stripe_webhook_verify_unexpected_error")
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Internal error"},
         )
 
     event_type = event.get("type", "unknown")
