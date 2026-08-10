@@ -87,13 +87,13 @@ def _valid_apply_body() -> dict:
     return {
         "profile": {"display_name": "Taxonomy Union Master", "email": "tunion@test.com"},
         "experience": {
-            # T21-6/T21-7 (ПРОМТ №547/548): _assert_master_confirmed_taxonomy
+            # T21-6/T21-7 (PROMPT №547/548): _assert_master_confirmed_taxonomy
             # requires the calling master to hold the exact direction/style
             # being created/updated. Widened to exactly what THIS file's own
             # tests exercise (yoga+kundalini/hatha/the catalog-only style,
             # the catalog-only direction bare and with its own catalog-only
             # style) -- raw VALUES, matching this fixture's own pre-existing
-            # style and the value-canonical comparison chosen in ПРОМТ №547.
+            # style and the value-canonical comparison chosen in PROMPT №547.
             # No bare "yoga" entry -- this file never creates a bare-style
             # yoga practice, unlike test_practices.py.
             "methods": [

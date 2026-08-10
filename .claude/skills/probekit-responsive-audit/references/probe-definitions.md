@@ -1,6 +1,6 @@
 # Responsive Audit — Probe Definitions
 
-Responsive layout probes for VELO's Telegram Mini App frontend (VELO-tuned, ПРОМТ №435).
+Responsive layout probes for VELO's Telegram Mini App frontend (VELO-tuned, PROMPT №435).
 Breakpoints: phone (≤480px) is the tier VELO ships to; tablet (481-1024px) and desktop (>1024px) are informational.
 Read severity from `probekit-core/references/severity-format.md`.
 
@@ -69,7 +69,7 @@ Verify headers and tab bars use `position: sticky`, NOT `position: fixed`.
 grep -rn 'position:\s*fixed' src/components/ --include='*.vue'
 ```
 
-## P6: RTL Layout — DROPPED for VELO (ПРОМТ №435)
+## P6: RTL Layout — DROPPED for VELO (PROMPT №435)
 
 Upstream this probe verified RTL compatibility for CBS's Arabic locale. VELO
 ships no Arabic and no RTL locale, and has no i18n surface at all today
@@ -95,7 +95,7 @@ Detection was `grep -rn 'margin-left\|padding-left\|text-align:\s*left'` over
 
 If media queries are used, verify breakpoints match VELO's device reality.
 
-<!-- VELO-tuned (ПРОМТ №435): CBS's livemockup-studio desktop-first breakpoints
+<!-- VELO-tuned (PROMPT №435): CBS's livemockup-studio desktop-first breakpoints
      replaced. VELO is a Telegram Mini App -- it renders in a phone-sized webview,
      so the tablet/desktop tiers below are informational, not a target. The
      phone tier is the one that matters. -->

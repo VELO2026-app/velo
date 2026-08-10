@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- AdminUsersView (all-users list + make-master, ПРОМТ №292)
+  VELO Frontend -- AdminUsersView (all-users list + make-master, PROMPT №292)
 
   The «Пользователи» admin screen: lists ALL users (any role), mirroring the
   AdminMastersView DS (header + count + fog-feed cards). Reached from the admin
@@ -37,7 +37,9 @@
       title="Не удалось загрузить пользователей"
       description="Проверьте соединение и попробуйте ещё раз"
     >
-      <template #action><VButton variant="primary" @click="load(true)">Повторить</VButton></template>
+      <template #action
+        ><VButton variant="primary" @click="load(true)">Повторить</VButton></template
+      >
     </VEmptyState>
 
     <!-- List -->
@@ -53,12 +55,7 @@
             <VBadge :variant="roleVariant(u.role)">{{ roleLabel(u.role) }}</VBadge>
           </div>
 
-          <VButton
-            v-if="u.role === 'user'"
-            variant="secondary"
-            block
-            @click="askMakeMaster(u)"
-          >
+          <VButton v-if="u.role === 'user'" variant="secondary" block @click="askMakeMaster(u)">
             Сделать мастером
           </VButton>
         </div>
@@ -70,7 +67,9 @@
     </template>
 
     <!-- Empty -->
-    <VCard v-else><p class="admin-users__empty">{{ emptyText }}</p></VCard>
+    <VCard v-else
+      ><p class="admin-users__empty">{{ emptyText }}</p></VCard
+    >
 
     <VConfirmDialog
       :open="confirm.open"
@@ -177,7 +176,12 @@ function loadMore(): void {
 }
 
 // -- Make-master confirm flow --
-const confirm = reactive<{ open: boolean; loading: boolean; message: string; target: UserResponse | null }>({
+const confirm = reactive<{
+  open: boolean
+  loading: boolean
+  message: string
+  target: UserResponse | null
+}>({
   open: false,
   loading: false,
   message: '',

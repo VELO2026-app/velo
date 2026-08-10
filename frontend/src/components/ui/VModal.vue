@@ -71,7 +71,7 @@ function onKeydown(e: KeyboardEvent): void {
   }
 }
 
-// Lock body scroll when modal is open. Ref-counted (W16, ПРОМТ №409) so a
+// Lock body scroll when modal is open. Ref-counted (W16, PROMPT №409) so a
 // second overlay (e.g. a VBottomSheet opened from inside this modal) closing
 // first doesn't unlock the body while this one is still open. `locked` tracks
 // whether THIS instance currently holds the lock, so lock/unlock stay paired
@@ -129,7 +129,7 @@ onUnmounted(() => {
   /* Плавающая шторка (overlay даёт отступ со всех сторон) -> скругляем ВСЕ
      углы. Радиус из DS-токена (--radius-md=15), а не сырой 20px. */
   border-radius: var(--radius-md);
-  /* box-shadow: var(--shadow-xl) removed ПРОМТ №437 (operator ruling: VELO is
+  /* box-shadow: var(--shadow-xl) removed PROMPT №437 (operator ruling: VELO is
      flat). --shadow-xl was `none`, so this asked for a shadow and got nothing --
      a leftover from before the flat decision. Removing it renders identically.
      The modal is separated by its white rim + the scrim behind it. */

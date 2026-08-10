@@ -1,5 +1,5 @@
 # =============================================================================
-# VELO Backend -- Zoom Attendance Decision (E21 step F, ПРОМТ №521)
+# VELO Backend -- Zoom Attendance Decision (E21 step F, PROMPT №521)
 # =============================================================================
 #
 # THIS IS THE MODULE THAT CHANGES PRODUCTION BEHAVIOUR. Everything else in
@@ -82,7 +82,7 @@ def _normalized_matchable_email(email: str | None) -> str | None:
 
 def attendance_threshold_seconds(duration_minutes: int) -> int:
     """The attendance bar for a practice: 50% of ITS OWN duration, not a
-    fixed global minute count (owner decision, ПРОМТ №585 -- replaces the
+    fixed global minute count (owner decision, PROMPT №585 -- replaces the
     old settings.zoom_attendance_threshold_minutes=10 constant, which is
     now vestigial, see config.py). Integer floor division on minutes, THEN
     converted to seconds -- matches the owner's mapping exactly: 30->15,

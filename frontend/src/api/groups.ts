@@ -1,10 +1,10 @@
 // =============================================================================
-// VELO Frontend -- Master Groups API (P2, ПРОМТ №591)
+// VELO Frontend -- Master Groups API (P2, PROMPT №591)
 // =============================================================================
 //
 // Typed wrappers over api.get/post/patch/put/delete for the master GROUPS
 // endpoints, mirroring masters.ts. HAND-WRITTEN, not generated: the backend
-// (P1, ПРОМТ №590) shipped these endpoints without a local server to
+// (P1, PROMPT №590) shipped these endpoints without a local server to
 // regenerate generated.ts against, so the types below are a temporary
 // stand-in for the real OpenAPI-derived ones. They reconcile automatically
 // at the next `velo update` regen -- do NOT add these to api/types.ts by
@@ -13,6 +13,7 @@
 // Backend endpoints (masters/groups_router.py + students_router.py's tag/
 // block/P3-addenda additions):
 //   GET    /api/v1/masters/me/groups                          -- list
+//   GET    /api/v1/masters/me/groups/search                   -- cross-group search (P6)
 //   POST   /api/v1/masters/me/groups                          -- create custom
 //   PATCH  /api/v1/masters/me/groups/{id}                     -- rename custom
 //   DELETE /api/v1/masters/me/groups/{id}                     -- delete custom
@@ -42,6 +43,13 @@ export interface GroupListItem {
   kind: GroupKind
   name: string
   members_count: number
+  /** Owner Q4 (PROMPT №610): always null for the two virtual groups and for
+   *  any custom group created before this field existed. Required (not
+   *  optional) -- PROMPT №613: the backend always serializes this key (no
+   *  response_model_exclude_unset), so the wire shape has it present on
+   *  every response, and the hand-written type must mirror that exactly,
+   *  not just "safely" allow it to be missing. */
+  description: string | null
 }
 
 export interface GroupListResponse {
@@ -52,6 +60,7 @@ export interface GroupResponse {
   id: string
   name: string
   members_count: number
+  description: string | null
 }
 
 export interface GroupMemberItem {
@@ -64,6 +73,29 @@ export interface GroupMemberItem {
 
 export interface PaginatedGroupMembersResponse {
   items: GroupMemberItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** GET /api/v1/masters/me/groups/search (P6). ONE ROW PER (student, group)
+ *  MEMBERSHIP, not one row per student -- a student in N of this master's
+ *  custom groups appears N times, each row naming a DIFFERENT group. Field
+ *  shape copied field-by-field from the backend's GroupSearchMemberItem
+ *  (groups_schemas.py) -- generated.ts will carry the authoritative version
+ *  once a deploy regenerates it against this backend; this is a temporary
+ *  hand-written stand-in, same posture as every other type in this file. */
+export interface GroupSearchMemberItem {
+  student_user_id: string
+  name: string
+  avatar_url: string | null
+  tag: string | null
+  group_id: string
+  group_name: string
+}
+
+export interface PaginatedGroupSearchResponse {
+  items: GroupSearchMemberItem[]
   total: number
   limit: number
   offset: number
@@ -103,15 +135,35 @@ export function getGroups(): Promise<GroupListResponse> {
   return api.get<GroupListResponse>('/api/v1/masters/me/groups')
 }
 
-/** POST /api/v1/masters/me/groups -- create a custom group. 409 on a
- *  duplicate name for this master (surface via extractApiError). */
-export function createGroup(name: string): Promise<GroupResponse> {
-  return api.post<GroupResponse>('/api/v1/masters/me/groups', { name })
+/** POST /api/v1/masters/me/groups -- create a custom group. `description`
+ *  is optional (Owner Q4, PROMPT №610); blank/whitespace is normalized to
+ *  null server-side. 409 on a duplicate name for this master (surface via
+ *  extractApiError). */
+export function createGroup(name: string, description?: string): Promise<GroupResponse> {
+  return api.post<GroupResponse>('/api/v1/masters/me/groups', {
+    name,
+    description: description || undefined,
+  })
 }
 
-/** PATCH /api/v1/masters/me/groups/{id} -- rename a custom group. */
-export function renameGroup(id: string, name: string): Promise<GroupResponse> {
-  return api.patch<GroupResponse>(`/api/v1/masters/me/groups/${id}`, { name })
+/** PATCH /api/v1/masters/me/groups/{id} -- rename AND/OR edit description
+ *  (Owner Q10, PROMPT №611). `description` is a PARTIAL UPDATE: omitting the
+ *  argument entirely (`undefined`) omits the JSON key too, so the backend's
+ *  own exclude_unset check leaves the column untouched -- passing `''`
+ *  explicitly sends the key and clears it to NULL server-side. This is the
+ *  same distinction MasterGroupDetailView's combined rename+description
+ *  dialog relies on: it always sends both, but a raw caller renaming only
+ *  must be able to omit description without wiping it. */
+export function renameGroup(
+  id: string,
+  name: string,
+  description?: string,
+): Promise<GroupResponse> {
+  const body: { name: string; description?: string } = { name }
+  if (description !== undefined) {
+    body.description = description
+  }
+  return api.patch<GroupResponse>(`/api/v1/masters/me/groups/${id}`, body)
 }
 
 /** DELETE /api/v1/masters/me/groups/{id} -- delete a custom group (its
@@ -130,6 +182,18 @@ export function getGroupMembers(
 ): Promise<PaginatedGroupMembersResponse> {
   const query = buildQuery({ search: search || undefined, limit, offset })
   return api.get<PaginatedGroupMembersResponse>(`/api/v1/masters/me/groups/${id}/members${query}`)
+}
+
+/** GET /api/v1/masters/me/groups/search (P6) -- cross-group people-search,
+ *  one row per (student, CUSTOM group) membership. Same paginated +
+ *  searchable shape as getGroupMembers above. */
+export function searchGroupMemberships(
+  search = '',
+  limit = 20,
+  offset = 0,
+): Promise<PaginatedGroupSearchResponse> {
+  const query = buildQuery({ search: search || undefined, limit, offset })
+  return api.get<PaginatedGroupSearchResponse>(`/api/v1/masters/me/groups/search${query}`)
 }
 
 /** POST /api/v1/masters/me/groups/{id}/members -- add-access, not move

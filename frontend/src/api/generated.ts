@@ -9,7 +9,7 @@
 
 // -- Enums --------------------------------------------------------------------
 
-/** Who can see/book a practice (Master GROUPS P5, ПРОМТ №594). PUBLIC: everyone (default -- matches every practice's behavior before this column existed, see the migration's backfill). STUDENTS: anyone with >= 1 non-cancelled booking on this master's practices (the same "derived «Ученики»" rule groups_service.py already uses). GROUPS: members of at least one of the practice's target CUSTOM groups (practice_audience_group). A blocked student is EXCLUDED from all three -- see practices/audience_service.py, the single shared predicate every enforcement point below reuses. */
+/** Who can see/book a practice (Master GROUPS P5, PROMPT №594). PUBLIC: everyone (default -- matches every practice's behavior before this column existed, see the migration's backfill). STUDENTS: anyone with >= 1 non-cancelled booking on this master's practices (the same "derived «Ученики»" rule groups_service.py already uses). GROUPS: members of at least one of the practice's target CUSTOM groups (practice_audience_group). A blocked student is EXCLUDED from all three -- see practices/audience_service.py, the single shared predicate every enforcement point below reuses. */
 export type AudienceKind = 'public' | 'students' | 'groups'
 
 /** Booking lifecycle statuses. */
@@ -25,7 +25,7 @@ export type PracticeType = 'live' | 'series' | 'one_on_one' | 'replay'
 export type UserRole = 'user' | 'master' | 'admin'
 
 /** Waitlist entry lifecycle statuses. */
-export type WaitlistStatus = 'waiting' | 'notified' | 'converted' | 'left' | 'declined' | 'expired'
+export type WaitlistStatus = 'waiting' | 'notified' | 'converted' | 'left' | 'declined' | 'expired' | 'removed'
 
 /** Withdrawal request lifecycle statuses. */
 export type WithdrawalStatus = 'pending' | 'approved' | 'rejected'
@@ -265,6 +265,7 @@ export interface AdminZoomAttendanceResponse {
   bookings: AdminZoomBookingAttendance[]
   unmatched: AdminZoomUnmatchedRow[]
   unmatched_count: number
+  last_sync_error: string | null
 }
 
 /** One booking's Zoom-derived attendance totals, for reconciliation. */
@@ -333,6 +334,17 @@ export interface AttendanceResponse {
   unmatched_count?: number
 }
 
+/** POST /api/v1/practices/{id}/audience-preview (owner Q15, PROMPT №613). A PROPOSED audience the master hasn't saved yet -- unlike UpdatePracticeRequest's own audience_kind/group_ids, both are REQUIRED here (no partial-update ambiguity to model): the frontend always has a complete proposed state in hand before it ever calls this, since it's evaluating "what if I save the form as it stands right now", not a partial PATCH. */
+export interface AudiencePreviewRequest {
+  audience_kind: AudienceKind
+  group_ids?: string[]
+}
+
+/** POST /api/v1/practices/{id}/audience-preview -- read-only, never persists anything. `stranded_count` is how many of this practice's ACTIVE (pending/confirmed) bookers would fall OUTSIDE the proposed audience -- the frontend warns and requires confirmation when this is above zero, saves silently when it's zero (owner-ruled). */
+export interface AudiencePreviewResponse {
+  stranded_count: number
+}
+
 /** POST /api/v1/auth/telegram — response body. */
 export interface AuthResponse {
   user: UserResponse
@@ -360,6 +372,12 @@ export interface BookingDetailResponse {
   created_at: string
   updated_at: string | null
   practice: PracticeResponse
+}
+
+/** GET /api/v1/bookings/{id}/recording -- REC-1 (PROMPT №618). Three states, deliberately not collapsed (owner-mandate: never conflate "we checked, nothing there" with "we couldn't check"): - available: url is set, ready to open. Passcode already embedded (see zoom/service.py::get_meeting_recording_link) -- the caller never sees a raw Zoom URL or a passcode. - unavailable: Zoom has no recording for this meeting right now. Covers three cases we deliberately do NOT distinguish (we store nothing, so we cannot and the user-facing message is identical either way): never created, still processing, or already deleted by Zoom's own 7-day retention. - error: the Zoom call itself failed (network/auth/5xx). NOT the same as unavailable -- this means we could not check, not that we checked and found nothing. A booking that does not qualify at all (wrong owner, never confirmed, or the practice hasn't ended) is a 404 (P-08), not one of these three -- that is an entitlement question, not a recording-state one. */
+export interface BookingRecordingResponse {
+  status: 'available' | 'unavailable' | 'error'
+  url?: string | null
 }
 
 /** Booking representation returned by endpoints. */
@@ -487,6 +505,7 @@ export interface CreateDirectionRequest {
 /** POST /masters/me/groups. */
 export interface CreateGroupRequest {
   name: string
+  description?: string | null
 }
 
 /** POST /api/v1/masters/me/promos -- create a master promo code. Master promos: master absorbs the discount from their revenue. type and master_id are set automatically by the service layer. */
@@ -580,7 +599,7 @@ export interface DismissReportRequest {
   resolution_note?: string | null
 }
 
-/** GET /masters/me/tags -- P3 addendum (ПРОМТ №592), closes the P2 tag-palette gap (P2 derived it client-side from the loaded page only). */
+/** GET /masters/me/tags -- P3 addendum (PROMPT №592), closes the P2 tag-palette gap (P2 derived it client-side from the loaded page only). */
 export interface DistinctTagsResponse {
   tags: string[]
 }
@@ -640,6 +659,7 @@ export interface GroupListItem {
   kind: 'students' | 'deleted' | 'custom'
   name: string
   members_count: number
+  description?: string | null
 }
 
 /** GET /masters/me/groups. */
@@ -660,6 +680,17 @@ export interface GroupResponse {
   id: string
   name: string
   members_count: number
+  description?: string | null
+}
+
+/** One row in GET /masters/me/groups/search. ONE ROW PER (student, group) MEMBERSHIP, not one row per student (owner-ruled, PROMPT №606): a student who belongs to N of this master's CUSTOM groups appears N times here, each row naming a DIFFERENT group -- this is a membership-management surface, so the multiplicity IS the meaning, not noise to dedupe away. Never the two virtuals («Ученики»/ «Удалённые») -- neither is a MasterGroupMembership row (mirrors list_student_custom_groups's identical exclusion). */
+export interface GroupSearchMemberItem {
+  student_user_id: string
+  name: string
+  avatar_url: string | null
+  tag: string | null
+  group_id: string
+  group_name: string
 }
 
 /** GET /api/v1/masters/me/income?period=week|month. income_cents -- gross booked turnover for the current calendar period: signed sum of title-tagged sale (+) / commission (-) / refund (-) movements, frozen sales included. Matches the transaction feed, not realized/available earnings. prev_income_cents -- same sum for the previous calendar period. delta_pct -- signed percent change vs the previous period, or null when the previous period had no net-positive turnover. */
@@ -945,6 +976,14 @@ export interface PaginatedGroupMembersResponse {
   offset: number
 }
 
+/** GET /masters/me/groups/search -- paginated, searchable. */
+export interface PaginatedGroupSearchResponse {
+  items: GroupSearchMemberItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
 /** GET /api/v1/masters/me/reviews -- paginated cross-practice feed. */
 export interface PaginatedMasterReviewsResponse {
   items: MasterReviewItem[]
@@ -1125,6 +1164,7 @@ export interface PracticeResponse {
   created_at: string
   updated_at: string | null
   zoom_host_join_url?: string | null
+  zoom_shared_join_url?: string | null
   zoom_meeting_status?: string | null
   deduplicated?: boolean
 }
@@ -1262,9 +1302,10 @@ export interface RejectWithdrawalRequest {
   note: string
 }
 
-/** PATCH /masters/me/groups/{id}. */
+/** PATCH /masters/me/groups/{id} -- rename AND/OR edit description (owner Q10, PROMPT №611; class name kept as-is despite now covering more than a rename -- renaming this Pydantic class would rename the emitted type in generated.ts at the next deploy regen, drifting the hand-written frontend types in api/groups.ts, the exact class of failure that red the gate on a prior feature). `name` is always required (a group always has one). `description` is a PARTIAL UPDATE, same contract as users/service.py's update_user() and admin/masters/admin_taxonomy's PATCH endpoints: body.model_dump(exclude_unset=True) at the router distinguishes "the key was absent" (leave the column untouched) from "the key was sent" (even as "" or whitespace -- normalized to NULL in rename_group(), same rule create_group() already applies). This is the fix for the exact gap PROMPT №610 itself flagged: a bare Optional[str]=None default could not tell those two cases apart and would have silently wiped an existing description on every plain rename. */
 export interface RenameGroupRequest {
   name: string
+  description?: string | null
 }
 
 /** Single report -- returned to both user and admin. */
@@ -1349,7 +1390,7 @@ export interface StudentCheckinItem {
   created_at: string
 }
 
-/** GET /api/v1/masters/me/students/{id} -- per-student aggregate. name / avatar_url -- the student's identity, same source as StudentListItem (so a direct/refreshed deep-link renders the real name, not a fallback). practices_count -- number of this master's practices the student attended. hours -- attended duration_minutes summed, in hours (1 decimal). satisfaction_pct-- round(avg(rating) * 10) over the student's feedbacks on this master's practices; null when they left no feedback. recent_checkins -- newest-first, capped. feedbacks -- newest-first, capped. */
+/** GET /api/v1/masters/me/students/{id} -- per-student aggregate. name / avatar_url -- the student's identity, same source as StudentListItem (so a direct/refreshed deep-link renders the real name, not a fallback). practices_count -- number of this master's practices the student attended. hours -- attended duration_minutes summed, in hours (1 decimal). satisfaction_pct-- round(avg(rating) * 10) over the student's feedbacks on this master's practices; null when they left no feedback. recent_checkins -- newest-first, capped. feedbacks -- newest-first, capped. blocked -- T24-20 (PROMPT №638): True iff MasterStudent.blocked_at is set for THIS master. Lets the frontend swap the bottom action ("Заблокировать" / "Разблокировать") instead of guessing from the fact the request merely succeeded. get_master_student_detail's own narrow allow-path (NOT is_master_audience_member, which still never admits a blocked student -- see that function's docstring) is the only place blocked=True can occur. */
 export interface StudentDetailResponse {
   name: string
   avatar_url: string | null
@@ -1358,6 +1399,7 @@ export interface StudentDetailResponse {
   satisfaction_pct: number | null
   recent_checkins: StudentCheckinItem[]
   feedbacks: StudentFeedbackItem[]
+  blocked: boolean
 }
 
 /** One feedback left by the student (on this master's practices). */
@@ -1373,7 +1415,7 @@ export interface StudentGroupItem {
   name: string
 }
 
-/** GET /masters/me/students/{student_user_id}/groups -- P3 addendum (ПРОМТ №592). The CUSTOM groups this student is in for this master (powers the profile's group chips). Virtual groups ("Ученики"/ "Удалённые") are never listed here -- they aren't membership rows. */
+/** GET /masters/me/students/{student_user_id}/groups -- P3 addendum (PROMPT №592). The CUSTOM groups this student is in for this master (powers the profile's group chips). Virtual groups ("Ученики"/ "Удалённые") are never listed here -- they aren't membership rows. */
 export interface StudentGroupsResponse {
   groups: StudentGroupItem[]
 }
@@ -1540,7 +1582,7 @@ export interface UserUpdate {
   master_notifications?: MasterNotificationSettingsUpdate | null
 }
 
-/** POST /admin/masters/{user_id}/verify -- request body. promote (ПРОМТ №503 commit 3, mirrors ApproveMethodChangeRequest.promote below): optional list of custom method labels from the applicant's own `methods` that the admin chose to add to the taxonomy catalog. Before this, only an ALREADY-VERIFIED master's later method-change request had any promotion path -- a brand-new applicant's «Свой вариант» text could never become a real catalog chip, no matter what the admin did. Absent/empty -> no catalog write, identical to before this field existed. Deduped against existing rows (_promote_custom_methods) -- admin-picked, not automatic, same editorial-control rationale as the method-change-request flow (operator decision 3=Б): a custom label becomes SHARED vocabulary for every future master/admin the moment it's promoted, so it stays a deliberate admin choice rather than something typo'd free text can trigger unreviewed. */
+/** POST /admin/masters/{user_id}/verify -- request body. promote (PROMPT №503 commit 3, mirrors ApproveMethodChangeRequest.promote below): optional list of custom method labels from the applicant's own `methods` that the admin chose to add to the taxonomy catalog. Before this, only an ALREADY-VERIFIED master's later method-change request had any promotion path -- a brand-new applicant's «Свой вариант» text could never become a real catalog chip, no matter what the admin did. Absent/empty -> no catalog write, identical to before this field existed. Deduped against existing rows (_promote_custom_methods) -- admin-picked, not automatic, same editorial-control rationale as the method-change-request flow (operator decision 3=Б): a custom label becomes SHARED vocabulary for every future master/admin the moment it's promoted, so it stays a deliberate admin choice rather than something typo'd free text can trigger unreviewed. */
 export interface VerifyMasterRequest {
   notes?: string | null
   promote?: string[]
@@ -1599,7 +1641,7 @@ export interface WithdrawalResponse {
   updated_at: string | null
 }
 
-/** POST /api/v1/practices/{id}/zoom/start-ticket (ПРОМТ №556, OWNER-1). Deliberately carries a one-time ticket, never a start_url -- see zoom/service.py's ticket-issuance docstring for why. */
+/** POST /api/v1/practices/{id}/zoom/start-ticket (PROMPT №556, OWNER-1). Deliberately carries a one-time ticket, never a start_url -- see zoom/service.py's ticket-issuance docstring for why. */
 export interface ZoomStartTicketResponse {
   ticket: string
 }

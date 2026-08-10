@@ -189,10 +189,13 @@ async function loadInitial(): Promise<void> {
   total.value = 0
   hasMore.value = false
   try {
-    // Bug 2 fix (ПРОМТ №405): prime the taxonomy catalog cache alongside the
+    // Bug 2 fix (PROMPT №405): prime the taxonomy catalog cache alongside the
     // requests fetch, so a proposed method already promoted from an earlier
     // approval renders as a recognized chip instead of "custom".
-    const [res] = await Promise.all([getMethodChangeRequests(LIMIT, 0), primeMethodTaxonomyCatalog()])
+    const [res] = await Promise.all([
+      getMethodChangeRequests(LIMIT, 0),
+      primeMethodTaxonomyCatalog(),
+    ])
     items.value = res.items
     total.value = res.total
     hasMore.value = res.items.length < res.total
@@ -263,7 +266,7 @@ function onPromoteConfirm(): void {
 }
 
 /** «Только этому мастеру» (or dialog dismissed) -- approve, scoped to this
- *  master only (T22-6, ПРОМТ №561): a real taxonomy row, just not a shared
+ *  master only (T22-6, PROMPT №561): a real taxonomy row, just not a shared
  *  one -- was silently nothing before this. */
 function onPromoteCancel(): void {
   const item = promoteTarget.value

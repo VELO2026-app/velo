@@ -139,7 +139,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # -- see core/config.py, three conditions: not dev, is_stripe_stub, NOT
     # allow_stripe_stub), set on TEST only.
     #
-    # ПРОМТ №509 (owner-measured, 2026-07-17): prod is NOT currently running
+    # PROMPT №509 (owner-measured, 2026-07-17): prod is NOT currently running
     # a real Stripe key -- it has STRIPE_SECRET_KEY=TEST and no
     # ALLOW_STRIPE_STUB set, i.e. it is in exactly the state this guard
     # exists to refuse. It only still runs because the currently-deployed

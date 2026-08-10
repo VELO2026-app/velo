@@ -123,10 +123,10 @@ export const useAuthStore = defineStore('auth', () => {
   /**
    * Refetch /users/me and write the result into the store -- UNLESS the
    * session this call started under is no longer the current one by the
-   * time it resolves (ПРОМТ №550, closing a ПРОМТ №549 adversarial finding).
+   * time it resolves (PROMPT №550, closing a PROMPT №549 adversarial finding).
    *
    * Pre-existing gap, only reachable in practice since T21-4/T21-5: before
-   * useRoleFreshness.ts (ПРОМТ №546) started calling this on every
+   * useRoleFreshness.ts (PROMPT №546) started calling this on every
    * navigation and every 30s while foregrounded, fetchMe() ran rarely enough
    * (app boot, one screen mounting) that a call landing after logout was a
    * near-impossible timing coincidence. Promoting it to a routine background
@@ -187,7 +187,7 @@ export const useAuthStore = defineStore('auth', () => {
     const { useMasterStore } = await import('@/stores/master')
     useMasterStore().$reset()
 
-    // T21-4/T21-5 (ПРОМТ №546): stop the foreground role-freshness poll so it
+    // T21-4/T21-5 (PROMPT №546): stop the foreground role-freshness poll so it
     // doesn't keep ticking a fetchMe() against a session that's about to be
     // cleared. Dynamic import, same circular-dep reasoning as above.
     const { stopRoleFreshnessPoll } = await import('@/composables/useRoleFreshness')

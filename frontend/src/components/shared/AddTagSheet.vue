@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- AddTagSheet (Master GROUPS P2 ПРОМТ №591, palette wired P3 ПРОМТ №592)
+  VELO Frontend -- AddTagSheet (Master GROUPS P2 PROMPT №591, palette wired P3 PROMPT №592)
 
   "Добавить тег" -- a free-text field + the master's existing tags as
   single-select VChips (owner Q1=A: one tag per student, so at most one

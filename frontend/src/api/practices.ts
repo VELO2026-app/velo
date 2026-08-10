@@ -31,6 +31,8 @@ import type {
   UpdatePracticeRequest,
   AttendanceResponse,
   PaginatedReviewsResponse,
+  AudiencePreviewRequest,
+  AudiencePreviewResponse,
 } from '@/api/types'
 
 // ============================================================================
@@ -105,6 +107,20 @@ export function updatePractice(id: string, body: UpdatePracticeRequest): Promise
 }
 
 /**
+ * POST /api/v1/practices/{id}/audience-preview (owner Q15, PROMPT №613).
+ * Read-only dry-run -- never saves anything. Returns how many of this
+ * practice's ACTIVE bookers would fall outside the proposed audience, so
+ * EditPracticeView can warn with a real count before an audience-narrowing
+ * save strands people who are already booked.
+ */
+export function previewAudienceChange(
+  id: string,
+  body: AudiencePreviewRequest,
+): Promise<AudiencePreviewResponse> {
+  return api.post<AudiencePreviewResponse>(`/api/v1/practices/${id}/audience-preview`, body)
+}
+
+/**
  * Soft-delete a practice (draft only -> status=deleted).
  * Returns 204 No Content on success.
  */
@@ -127,10 +143,7 @@ export function cancelPractice(
   id: string,
   scope?: 'this' | 'this_and_future',
 ): Promise<PracticeResponse> {
-  return api.post<PracticeResponse>(
-    `/api/v1/practices/${id}/cancel`,
-    scope ? { scope } : undefined,
-  )
+  return api.post<PracticeResponse>(`/api/v1/practices/${id}/cancel`, scope ? { scope } : undefined)
 }
 
 /**
@@ -143,7 +156,7 @@ export function getAttendance(id: string): Promise<AttendanceResponse> {
 }
 
 // ============================================================================
-// Zoom "Начать" (ПРОМТ №556, OWNER-1 option В)
+// Zoom "Начать" (PROMPT №556, OWNER-1 option В)
 // ============================================================================
 //
 // start_url is a bearer credential (its holder needs no further Zoom-side
@@ -164,7 +177,7 @@ export function createZoomStartTicket(practiceId: string): Promise<{ ticket: str
 }
 
 /**
- * A4 V2 (ПРОМТ №572): the "Повторить" action on a permanently-failed Zoom
+ * A4 V2 (PROMPT №572): the "Повторить" action on a permanently-failed Zoom
  * meeting (zoom_meeting_status === 'create_failed'). Owner-only; throws
  * ApiResponseError code 'zoom_meeting_not_failed' if the meeting is not
  * currently in that state, or a 404 if there is no ZoomMeeting row at all.
@@ -181,7 +194,7 @@ export function retryZoomMeeting(practiceId: string): Promise<PracticeResponse> 
  * Zoom. Never fetch() this URL: that would not navigate the browser, and
  * the point of the redirect is that the frontend never touches start_url.
  *
- * FAILS CLOSED (ПРОМТ №557): no hardcoded fallback domain. If
+ * FAILS CLOSED (PROMPT №557): no hardcoded fallback domain. If
  * VITE_API_BASE_URL is not configured, returns null rather than a URL --
  * the caller must show an honest "unavailable" message and navigate
  * nowhere. A foreign fallback domain here would mean a plain browser

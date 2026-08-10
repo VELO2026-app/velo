@@ -54,7 +54,7 @@ import type {
 export interface SubmitResult {
   ok: boolean
   error: string
-  /** P5 (ПРОМТ №594): ApiResponseError.code when the failure is one, so a
+  /** P5 (PROMPT №594): ApiResponseError.code when the failure is one, so a
    *  caller (CheckinView.vue) can switch on it for a specific message
    *  instead of the generic `error` string. Undefined on success or a
    *  non-ApiResponseError failure. */
@@ -126,7 +126,7 @@ export const useDiaryStore = defineStore('diary', () => {
   /**
    * Submit a no-show reflection for a practice.
    *
-   * STUB (TD-REFLECTION, ПРОМТ №269): the backend endpoint
+   * STUB (TD-REFLECTION, PROMPT №269): the backend endpoint
    * `POST /api/v1/practices/{id}/reflection` does not exist yet (see
    * VELO-Backend-Tasks.md). This resolves ok WITHOUT any network call so the UI
    * flow completes honestly — nothing is persisted server-side and no "saved"
@@ -222,7 +222,7 @@ export const useDiaryStore = defineStore('diary', () => {
    * Refresh the feed after a check-in / feedback mutation projected a new event
    * onto the timeline. Best-effort: a refresh failure must not fail the submit.
    *
-   * W27 (ПРОМТ №438): this used to ALSO call
+   * W27 (PROMPT №438): this used to ALSO call
    * `useBookingsStore().refreshBookings()`, which was the diary->bookings half of
    * a circular store dependency (bookings.ts imports this store in return). That
    * call was REDUNDANT, not merely circular: `refreshAfterDiaryMutation` is

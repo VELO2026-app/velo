@@ -46,7 +46,7 @@ class ZoomMeetingStatus(enum.StrEnum):
     """Lifecycle of our view of a practice's Zoom meeting.
 
     active            -- created successfully, zoom_meeting_id is usable.
-    pending_creation   -- ПРОМТ №559: creation deliberately DEFERRED, never
+    pending_creation   -- PROMPT №559: creation deliberately DEFERRED, never
                           attempted yet -- a series child beyond the nearest
                           occurrence (see series_service.py). Distinct from
                           create_failed on purpose: nothing has failed here,
@@ -107,10 +107,15 @@ class ZoomMeeting(UUIDMixin, TimestampMixin, Base):
     zoom_meeting_uuid: Mapped[str | None] = mapped_column(
         String(64), default=None,
     )
-    # Snapshot of host_id from the creation response. Secondary defense for
-    # host exclusion -- the primary mechanism is ZoomRegistrant.role='host'
-    # (see that model's docstring); Zoom exposes no reliable host flag on
-    # either the webhook or report surface (E21 research, round 2).
+    # Snapshot of host_id from the creation response. NOT currently read
+    # anywhere (PK-Z1 audit, 2026-08-08) -- despite the name below, it
+    # defends nothing today; ZoomRegistrant.role='host' is the mechanism
+    # that actually excludes the host from attendance (see that model's
+    # docstring). A CANDIDATE key for a second exclusion path, but wiring
+    # one in rests on an unconfirmed premise -- whether Zoom's own report
+    # returns the host's entry (made via start_url, not a registrant link)
+    # in a form this field could match against. That premise is V1's open
+    # question (board), not something to resolve here by guessing.
     host_zoom_user_id: Mapped[str | None] = mapped_column(
         String(64), default=None,
     )
@@ -140,6 +145,27 @@ class ZoomMeeting(UUIDMixin, TimestampMixin, Base):
     report_ingested_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), default=None,
     )
+
+    # T24-38 (PROMPT №642): the SHARED, registration-free link -- a Zoom
+    # registrant with NO human behind it, minted once per meeting so the
+    # master can hand it to people outside the app. Deliberately COLUMNS
+    # HERE, not a ZoomRegistrant row: attendance_service.ingest_report_for_
+    # meeting queries ALL ZoomRegistrant rows for the meeting unconditionally
+    # (select(ZoomRegistrant).where(zoom_meeting_id==...)) and matches report
+    # rows against every one of them by zoom_registrant_id -- if this lived
+    # in that table, every guest who joined through the shared link would
+    # match it (method='registrant_id') instead of landing in the unmatched
+    # bucket the owner ruled for them (AT-3). Living on ZoomMeeting instead
+    # makes that outcome STRUCTURALLY impossible: this column is never
+    # fed into match_report_rows, so a guest can never match anyone, host or
+    # student, by construction -- not by a rule someone has to remember.
+    # A deliberate temporary crutch (owner ruling) -- kept as its OWN two
+    # nullable columns precisely so removal is a plain drop, never a
+    # disentanglement from ZoomRegistrant/attendance code that must stay.
+    shared_registrant_id: Mapped[str | None] = mapped_column(
+        String(64), default=None,
+    )
+    shared_join_url: Mapped[str | None] = mapped_column(Text, default=None)
 
     def __repr__(self) -> str:
         return (
@@ -196,7 +222,7 @@ class ZoomRegistrant(UUIDMixin, TimestampMixin, Base):
         server_default=ZoomRegistrantStatus.PENDING.value,
     )
 
-    # Retry bookkeeping (E21 step E, ПРОМТ №520) -- same shape and cap
+    # Retry bookkeeping (E21 step E, PROMPT №520) -- same shape and cap
     # convention as ZoomMeeting.retry_count / last_sync_error. Only the
     # retry poller increments retry_count; the initial attempt at booking
     # time does not.

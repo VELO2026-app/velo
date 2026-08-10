@@ -1,8 +1,8 @@
 # =============================================================================
-# Test: normalize_master_methods.py starts standalone (T21-6 chain, ПРОМТ №552)
+# Test: normalize_master_methods.py starts standalone (T21-6 chain, PROMPT №552)
 # =============================================================================
 #
-# ПРОМТ №552 production crash: `python scripts/normalize_master_methods.py
+# PROMPT №552 production crash: `python scripts/normalize_master_methods.py
 # --dry-run` died before touching anything --
 #   InvalidRequestError: When initializing mapper Mapper[MasterProfile
 #   (master_profiles)], expression 'User' failed to locate a name ('User')
@@ -52,7 +52,7 @@
 #     than glossed over for this one file.
 #   - Only catches THIS class of bug (a mapped class imported without a
 #     relationship target it needs) for THIS script. It is not a general
-#     linter and does not sweep every script automatically -- see the ПРОМТ
+#     linter and does not sweep every script automatically -- see the PROMPT
 #     №552 report for the manual sweep of the other scripts.
 # =============================================================================
 
@@ -66,7 +66,7 @@ _BACKEND_DIR = Path(__file__).resolve().parent.parent
 def test_normalize_master_methods_configures_mappers_in_a_standalone_process() -> None:
     """Spawns a fresh `python -c` process (NOT this test process) that
     imports scripts.normalize_master_methods and calls configure_mappers()
-    explicitly. Would have failed with the exact ПРОМТ №552
+    explicitly. Would have failed with the exact PROMPT №552
     InvalidRequestError if scripts/normalize_master_methods.py did not
     import User -- revert that import to reproduce the failure locally in a
     container with valid settings."""

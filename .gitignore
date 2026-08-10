@@ -18,7 +18,7 @@ desc/
 #      a preview, not by reading a description. Serve them via the `tmp-static`
 #      entry in .claude/launch.json. A preview is spent once he has looked at it.
 #   2. probekit report output — `.tmp/probekit-review` is the configured report_dir
-#      for nine audit skills (ПРОМТ №435), so every run writes here.
+#      for nine audit skills (PROMPT №435), so every run writes here.
 # Untracked-but-not-ignored was the actual problem: every probekit run dirtied
 # `git status`, which is how 8.7MB of one-shot previews eventually gets committed
 # by accident.

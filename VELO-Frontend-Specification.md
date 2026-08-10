@@ -12,7 +12,7 @@
 
 > **История версий (v2.0–v2.6)** — вынесена в git-лог; фазовые детали каждой версии — в секциях PHASE F0–F16 ниже + Фронтовый Кодекс. Текущая версия — в шапке.
 
-> **Freshness (ПРОМТ №510, 2026-07-19, verified against `8d4948f` on `test`):** graded
+> **Freshness (PROMPT №510, 2026-07-19, verified against `8d4948f` on `test`):** graded
 > STALE-BUT-HARMLESS overall — NOT rewritten this round. Five spots referencing the deleted
 > `AdminConsistencyView` / `/admin/consistency` screen (removed 2026-07-07, `9ca5619`) were
 > corrected: the role table, two tree comments, the route table, and phase F8.3. Everything
@@ -1465,7 +1465,7 @@ DS-first, honest-stub (контрол без бэка = тост «недост�
 
 ## PHASE F16: Роли и онбординг — capability-свитч, E15, честный вход, инвайт-ссылка ✅ (held)
 
-**Цель:** Закрыть roadmap ролей/онбординга (Batch-USERS + Batch-INVITE, ПРОМТ №255-258): безопасность роль-свитча без тест-флага, персист мастер-онбординга, честный вход мастера без профиля, одноразовое приглашение мастера по ссылке. База `d01f6f9` (Zod: zoom-гейт Z-7 + `velo setrole`), батч ahead-10 до `77ad43a`, **HELD — не задеплоено** (accumulate-then-deploy).
+**Цель:** Закрыть roadmap ролей/онбординга (Batch-USERS + Batch-INVITE, PROMPT №255-258): безопасность роль-свитча без тест-флага, персист мастер-онбординга, честный вход мастера без профиля, одноразовое приглашение мастера по ссылке. База `d01f6f9` (Zod: zoom-гейт Z-7 + `velo setrole`), батч ahead-10 до `77ad43a`, **HELD — не задеплоено** (accumulate-then-deploy).
 
 **Задачи:**
 

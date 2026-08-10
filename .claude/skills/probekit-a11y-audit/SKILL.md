@@ -10,14 +10,14 @@ Verifies WCAG 2.1 AA compliance across all components and views.
 
 ## Configuration
 
-<!-- VELO-tuned (ПРОМТ №435): CBS's mockups/frontend/* paths swapped for VELO's
+<!-- VELO-tuned (PROMPT №435): CBS's mockups/frontend/* paths swapped for VELO's
      real tree. review_dir ADDED -- it was referenced by Step 5 below but never
      defined anywhere in this skill, so the tracker path was undefined.
 
      WHY THIS SKILL APPLIES HERE, despite the Mini App being RU-only: RU-only is
      an i18n property, not an accessibility one. Screen readers, keyboard focus
      order, contrast and form labels are orthogonal to how many languages ship.
-     (Argued and accepted, ПРОМТ №435.)
+     (Argued and accepted, PROMPT №435.)
 
      ONE INERT STEP -- marked, NOT rewritten: Step 3.4 "Cross-reference with
      i18n (ARIA labels must be translated)". VELO has no i18n surface today

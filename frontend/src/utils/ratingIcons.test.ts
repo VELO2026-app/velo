@@ -2,7 +2,7 @@
 // VELO Frontend -- ratingIcons.ts Unit Tests
 // =============================================================================
 //
-// B6 (Батч 3, ПРОМТ №580): pins the shared MOOD_ICON/RATING_ICON maps this
+// B6 (Батч 3, PROMPT №580): pins the shared MOOD_ICON/RATING_ICON maps this
 // module now centralizes, so a future edit at any of the (formerly 9)
 // consuming sites can't silently drift the mapping without a test noticing.
 // =============================================================================

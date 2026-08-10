@@ -9,8 +9,8 @@ Generates working Vitest tests for VELO's screens (`frontend/src/views/**`) and 
 route-transition logic (`frontend/src/router/guards.ts`). Produces real, passing tests —
 not templates. Runs them and iterates until green.
 
-<!-- v1.1.0 (ПРОМТ №439): folded in the seven gaps that cost the skill's first outside
-     user (11 screens, ПРОМТ №432-434) real time. Each was re-verified against the repo
+<!-- v1.1.0 (PROMPT №439): folded in the seven gaps that cost the skill's first outside
+     user (11 screens, PROMPT №432-434) real time. Each was re-verified against the repo
      before being written here. The expensive ones: SC-13 (teleported overlays survive
      unmount), Step 3's Pattern C, and the NBSP trap. Knowledge an orc paid for belongs
      in this file, not in its head. -->
@@ -24,7 +24,7 @@ Scope boundary vs the rest of the family:
 
 ## Configuration
 
-<!-- VELO-tuned at birth (ПРОМТ №431). Written against the idiom actually in the
+<!-- VELO-tuned at birth (PROMPT №431). Written against the idiom actually in the
      repo, verified by reading all 23 existing test files -- NOT against the
      probekit family defaults, which assume a separate tests/ tree and
      @vue/test-utils. Both are wrong here. See references/velo-idiom.md. -->

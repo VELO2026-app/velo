@@ -43,7 +43,7 @@
 // so every fixture below carries an explicit `timezone` and no formatter is
 // ever left to default to the host. TZ_SORT_A / TZ_SORT_B deliberately carry
 // NON-UTC zones whose local-wall-clock order disagrees with their absolute
-// order -- the only way to prove ordering is server-owned (T22-3, ПРОМТ №561:
+// order -- the only way to prove ordering is server-owned (T22-3, PROMPT №561:
 // the old client-side localSortKey re-sort is retired) rather than re-derived.
 //
 // v-if, not v-show (SC-14): grepped -- this template has no v-show, so a pane
@@ -77,7 +77,7 @@
 //     GET /masters/me/stats?period and watch(period) really refetches
 //     (.vue:258-260,288-292). Asserted as the live behaviour it is.
 //   - «Мои ученики (stub — no screen yet)». Untrue: onGroups() pushes to
-//     'master-groups' (P2, ПРОМТ №591 -- was onStudents/'master-students')
+//     'master-groups' (P2, PROMPT №591 -- was onStudents/'master-students')
 //     and that route exists and resolves MasterGroupsView. It navigates.
 // Both reported. Neither faked.
 //
@@ -109,7 +109,7 @@ import type {
 vi.mock('@/api/masters')
 vi.mock('@/api/users')
 
-// ПРОМТ №565: "Zoom", for kind==='personal', now goes through the same
+// PROMPT №565: "Zoom", for kind==='personal', now goes through the same
 // ticket flow "Начать" used before the two buttons merged -- only
 // createZoomStartTicket is a network call worth mocking. zoomStartRedirectUrl
 // is left REAL (a pure function over import.meta.env.VITE_API_BASE_URL,
@@ -343,7 +343,7 @@ function page(items: PracticeResponse[], total = items.length, offset = 0) {
   return { items, total, limit: 20, offset }
 }
 
-// T22-3 (ПРОМТ №561): the server now owns both the filter AND the ordering
+// T22-3 (PROMPT №561): the server now owns both the filter AND the ordering
 // per bucket -- nearestPractices no longer re-sorts client-side (.vue), so
 // the fake server must actually behave like one. Mirrors
 // listing_service.py's bucket semantics: "upcoming" = draft/scheduled/live,
@@ -709,7 +709,7 @@ describe('MasterDashboardView', () => {
       expect(titles()).toEqual(['Идёт сейчас'])
     })
 
-    it('renders the SERVER order verbatim -- no client re-sort (T22-3, ПРОМТ №561)', async () => {
+    it('renders the SERVER order verbatim -- no client re-sort (T22-3, PROMPT №561)', async () => {
       // Was CR-1 ("sorts by LOCAL wall clock, not by the absolute instant"):
       // nearestPractices used to re-derive its own order via localSortKey. That
       // client-side re-sort is gone by owner decision -- the server now owns
@@ -988,7 +988,7 @@ describe('MasterDashboardView', () => {
       expect(push).toHaveBeenCalledWith({ name: 'master-practice-new' })
     })
 
-    it('«Мои группы» navigates to master-groups (P2, ПРОМТ №591)', async () => {
+    it('«Мои группы» navigates to master-groups (P2, PROMPT №591)', async () => {
       mount()
       await flush()
 
@@ -1042,7 +1042,7 @@ describe('MasterDashboardView', () => {
       await flush()
 
       // blocks()[1] carries no zoom_link and no host registrant link (T21-1
-      // ПРОМТ №541 supersedes the old "click a live button, get a toast"
+      // PROMPT №541 supersedes the old "click a live button, get a toast"
       // behaviour -- the button itself is now disabled, same posture as the
       // user-facing screens).
       const zoomBtn = actionIn(blocks()[1]!, 'Zoom')
@@ -1052,7 +1052,7 @@ describe('MasterDashboardView', () => {
       expect(platformState.openLink).not.toHaveBeenCalled()
     })
 
-    it('T21-1/ПРОМТ №565: a personal host registrant link (kind===personal) takes priority over the manual zoom_link, and starts the meeting as host via the ticket flow -- NOT by opening the raw registrant link', async () => {
+    it('T21-1/PROMPT №565: a personal host registrant link (kind===personal) takes priority over the manual zoom_link, and starts the meeting as host via the ticket flow -- NOT by opening the raw registrant link', async () => {
       // zoom_host_join_url is a plain Zoom REGISTRANT join_url (see
       // MasterDashboardView.vue's onZoom comment) -- opening it directly, as
       // this test used to assert, lands the master on Zoom's "waiting for
@@ -1082,7 +1082,7 @@ describe('MasterDashboardView', () => {
       )
     })
 
-    it('ПРОМТ №565: kind===personal, but no active meeting anymore (zoom_meeting_not_active) -- honest error, no crash', async () => {
+    it('PROMPT №565: kind===personal, but no active meeting anymore (zoom_meeting_not_active) -- honest error, no crash', async () => {
       vi.stubEnv('VITE_API_BASE_URL', 'https://velo-backend.test')
       vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
         page([practice('withHost', { zoom_host_join_url: 'https://zoom.us/w/host?tk=xyz' })]),
@@ -1104,7 +1104,7 @@ describe('MasterDashboardView', () => {
       expect(platformState.openLink).not.toHaveBeenCalled()
     })
 
-    it('ПРОМТ №565/№557: kind===personal, VITE_API_BASE_URL not configured -- fails closed, no foreign redirect', async () => {
+    it('PROMPT №565/№557: kind===personal, VITE_API_BASE_URL not configured -- fails closed, no foreign redirect', async () => {
       vi.stubEnv('VITE_API_BASE_URL', '')
       vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
         page([practice('withHost', { zoom_host_join_url: 'https://zoom.us/w/host?tk=xyz' })]),
@@ -1120,7 +1120,7 @@ describe('MasterDashboardView', () => {
       expect(platformState.openLink).not.toHaveBeenCalled()
     })
 
-    it('ПРОМТ №565: the Zoom button is disabled while a start-ticket request is in flight', async () => {
+    it('PROMPT №565: the Zoom button is disabled while a start-ticket request is in flight', async () => {
       vi.stubEnv('VITE_API_BASE_URL', 'https://velo-backend.test')
       vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
         page([practice('withHost', { zoom_host_join_url: 'https://zoom.us/w/host?tk=xyz' })]),
@@ -1156,12 +1156,12 @@ describe('MasterDashboardView', () => {
     })
 
     // =========================================================================
-    // A4 V2 (ПРОМТ №572): create_failed replaces "Zoom" with "Повторить".
+    // A4 V2 (PROMPT №572): create_failed replaces "Zoom" with "Повторить".
     // Before this, create_failed and pending_creation both rendered the
     // identical disabled "Zoom" button -- indistinguishable to the master,
     // and no way to act on the permanent one.
     // =========================================================================
-    describe('create_failed: "Повторить" (A4 V2, ПРОМТ №572)', () => {
+    describe('create_failed: "Повторить" (A4 V2, PROMPT №572)', () => {
       it('shows "Повторить" instead of "Zoom", plus the honest failed badge', async () => {
         vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
           page([practice('failed1', { zoom_meeting_status: 'create_failed' })]),

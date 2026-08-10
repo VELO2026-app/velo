@@ -4,7 +4,7 @@
 **Дата:** 8 марта 2026
 **Статус:** Active
 
-> **Freshness (ПРОМТ №510, 2026-07-19, verified against `8d4948f` on `test`):** graded
+> **Freshness (PROMPT №510, 2026-07-19, verified against `8d4948f` on `test`):** graded
 > STALE-BUT-HARMLESS overall — NOT rewritten this round. Three claims were checked and
 > corrected below (design-token source §2.3, backend module count/list §3.1, the removed
 > admin-consistency mention). Everything else in this document is UNVERIFIED as of this
@@ -116,7 +116,7 @@ MVP — один сервис, разбитый на изолированные 
 самодостаточен и спроектирован так, чтобы в будущем стать отдельным
 микросервисом без переписывания бизнес-логики.
 
-**Freshness (ПРОМТ №510):** was 9 modules, missing `ai`, `library`, `promos`, `reports`,
+**Freshness (PROMPT №510):** was 9 modules, missing `ai`, `library`, `promos`, `reports`,
 `waitlist`, `withdrawals`. Corrected below to the real 15 (counted directly under
 `backend/app/modules/`, excluding `__pycache__`).
 

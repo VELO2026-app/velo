@@ -10,8 +10,8 @@
 # (reschedule/delete/cancel failures, which don't block anything downstream
 # in this step). This is the whole point: publish/reschedule/cancel/book
 # must never be blocked by a third party (E21 plan sec 2/3, confirmed as
-# the intended reading in ПРОМТ №519, restated explicitly for booking in
-# ПРОМТ №520: "do not soften it into 'usually'").
+# the intended reading in PROMPT №519, restated explicitly for booking in
+# PROMPT №520: "do not soften it into 'usually'").
 #
 # HOST EXCLUSION (step E): ensure_host_registrant registers the practice's
 # master through the SAME Zoom flow as a student, role='host', no
@@ -68,6 +68,7 @@ from app.modules.zoom.zoom_client import (
     create_registrant,
     delete_meeting,
     get_meeting,
+    get_meeting_recordings,
     list_registrants,
     patch_meeting,
     update_registrant_status,
@@ -98,7 +99,7 @@ async def create_meeting_for_practice(
     failure. Never raises: the caller (update_practice's publish branch)
     must succeed regardless of Zoom's outcome.
 
-    ПРОМТ №530: row creation happens UNCONDITIONALLY, stub mode included --
+    PROMPT №530: row creation happens UNCONDITIONALLY, stub mode included --
     do not gate this on settings.is_zoom_stub. Stub mode's entire purpose
     (zoom_client.py module docstring) is to exercise this exact control flow
     (meeting/registrant creation, reschedule, retry, report ingestion) with
@@ -129,6 +130,9 @@ async def create_meeting_for_practice(
             zoom_meeting_id=row.zoom_meeting_id,
         )
         await ensure_host_registrant(row, practice, session)
+        # T24-38 (PROMPT №642): best-effort, same call-site shape as the host
+        # registrant above -- see ensure_shared_registrant's own docstring.
+        await ensure_shared_registrant(row, session)
     except ZoomAPIError as exc:
         row.status = ZoomMeetingStatus.CREATE_FAILED.value
         row.last_sync_error = (
@@ -140,7 +144,7 @@ async def create_meeting_for_practice(
             status_code=exc.status_code,
         )
     except Exception:
-        # ПРОМТ №525: ensure_host_registrant is now self-contained (its own
+        # PROMPT №525: ensure_host_registrant is now self-contained (its own
         # savepoint absorbs a database-level conflict, see that function),
         # but the module docstring's "NEVER RAISES" is a blanket contract --
         # anything else unforeseen here must not escape either, or publish
@@ -171,7 +175,7 @@ async def ensure_host_registrant(
     master. See module docstring -- this is the entire host-exclusion
     mechanism.
 
-    ПРОМТ №525: the existence check above is TOCTOU-safe only up to the
+    PROMPT №525: the existence check above is TOCTOU-safe only up to the
     point of the actual insert -- a concurrent caller (or, as the incident
     that prompted this, a caller that seeded a conflicting row directly)
     can still lose a genuine race to
@@ -265,6 +269,102 @@ async def ensure_host_registrant(
         )
 
 
+def _shared_registration_email_for(zoom_meeting: ZoomMeeting) -> str:
+    """The exact email sent to Zoom for the shared (no-human) registrant --
+    deterministic per meeting, same shape as _registration_email_for's own
+    .invalid placeholder but a DIFFERENT subdomain (@meetings., not
+    @users.), on purpose: this address must never accidentally satisfy
+    attendance_service.PLACEHOLDER_EMAIL_SUFFIX or any other check written
+    against a per-USER placeholder, because this one represents no user at
+    all. Deterministic (keyed on zoom_meeting.id, not a random token) so a
+    retried mint sends Zoom the SAME email every time -- required for the
+    idempotency this function leans on (see its own docstring)."""
+    return f"shared-{zoom_meeting.id}@meetings.velo.invalid"
+
+
+async def ensure_shared_registrant(
+    zoom_meeting: ZoomMeeting,
+    session: AsyncSession,
+) -> None:
+    """T24-38 (PROMPT №642): mint the ONE shared, registration-free
+    registrant for this meeting, idempotently.
+
+    Writes directly onto ZoomMeeting.shared_registrant_id / shared_join_url
+    -- deliberately NOT a ZoomRegistrant row (see those two columns'
+    docstring in models.py for the correctness reason: it keeps a guest
+    joining through this link structurally unmatchable by the attendance
+    ladder, which never queries ZoomMeeting for a "registrant").
+
+    Idempotent by a plain column check (BOTH shared_registrant_id AND
+    shared_join_url already set -> no-op) rather than the savepoint/
+    IntegrityError dance ensure_host_registrant needs -- there is no unique
+    index to race here (this is an UPDATE of one already-identified row,
+    not an INSERT contending for a slot).
+
+    PROMPT №645 (audit-found CRITICAL, fixed): the guard checks BOTH
+    fields, not just shared_registrant_id, because Zoom's create-registrant
+    response can carry a registrant_id with NO join_url --
+    ZoomRegistrant.join_url's own docstring (models.py) already documents
+    this as REAL, not hypothetical, for the twin per-user registrant path.
+    A guard keyed on shared_registrant_id alone would set that field, see
+    it truthy on every future call, and permanently skip ever filling in
+    the still-missing join_url -- exactly the bug this replaced. A re-call
+    that reaches this function again is safe to retry unconditionally: the
+    email this function sends Zoom is DETERMINISTIC per meeting
+    (_shared_registration_email_for), so even two concurrent callers, or a
+    genuine retry after a partial success, land on the SAME Zoom registrant
+    (recon, PROMPT №641: Zoom is idempotent on a duplicate registrant email
+    -- same email returns the same registrant_id/join_url, no error, no
+    duplicate) -- harmless by construction on BOTH sides, ours and Zoom's,
+    not merely unlikely.
+
+    Best-effort, same posture as ensure_host_registrant: never raises. No
+    retry-poller coverage exists for a failure here (that poller only
+    claims ZoomRegistrant rows, which this deliberately is not) -- see the
+    PROMPT №642 DONE report for the known, accepted gap this leaves. NOTE
+    left for a future reader, not new scope for this prompt: under today's
+    call graph (create_meeting_for_practice + attempt_zoom_meeting_create,
+    both fire at most once per ZoomMeeting -- neither is reachable once
+    status is ACTIVE) this guard fix does not by itself add a NEW recovery
+    trigger; it fixes the guard's own logic so that IF this function is
+    ever called again for the same meeting (a future manual re-mint action,
+    say), it behaves correctly instead of silently locking in a partial
+    failure.
+    """
+    if zoom_meeting.shared_registrant_id and zoom_meeting.shared_join_url:
+        return
+
+    email = _shared_registration_email_for(zoom_meeting)
+
+    try:
+        response = await create_registrant(
+            zoom_meeting_id=zoom_meeting.zoom_meeting_id,
+            email=email,
+            first_name="VELO",
+            last_name="Guest Link",
+        )
+        zoom_meeting.shared_registrant_id = (
+            response.get("registrant_id") or response.get("id")
+        )
+        zoom_meeting.shared_join_url = response.get("join_url")
+        logger.info(
+            "zoom_shared_registrant_created",
+            zoom_meeting_id=str(zoom_meeting.id),
+            shared_registrant_id=zoom_meeting.shared_registrant_id,
+        )
+    except ZoomAPIError as exc:
+        logger.warning(
+            "zoom_shared_registrant_create_failed",
+            zoom_meeting_id=str(zoom_meeting.id),
+            status_code=exc.status_code,
+        )
+    except Exception:
+        logger.exception(
+            "zoom_shared_registrant_unexpected_error",
+            zoom_meeting_id=str(zoom_meeting.id),
+        )
+
+
 async def create_registrant_for_booking(
     booking: Booking,
     user: User,
@@ -274,7 +374,7 @@ async def create_registrant_for_booking(
 
     Idempotent by (zoom_meeting_id, user_id) -- looks up an existing,
     non-cancelled registrant for this pair FIRST and reuses it instead of
-    inserting a second row (ПРОМТ №525: this check was missing entirely
+    inserting a second row (PROMPT №525: this check was missing entirely
     before, the same non-idempotent shape that broke ensure_host_registrant,
     just never triggered here yet -- the bookings table's own
     uq_booking_practice_user_active makes two ACTIVE bookings for the same
@@ -288,7 +388,7 @@ async def create_registrant_for_booking(
     a series-child edge case), or when the insert lost a race for the slot.
 
     NEVER RAISES and never blocks booking creation, regardless of Zoom's
-    or the meeting's state (ПРОМТ №519 amendment 2 / ПРОМТ №520: not
+    or the meeting's state (PROMPT №519 amendment 2 / PROMPT №520: not
     softened into "usually"). The insert itself runs inside
     session.begin_nested() (a SAVEPOINT) for the same reason as
     ensure_host_registrant: catching the exception alone would not be
@@ -440,6 +540,15 @@ async def sync_meeting_reschedule(
     we pick up the fresh ones without needing to have known which world we
     were in. No-op (logged, not raised) if there's no active ZoomMeeting for
     this practice yet, or if either Zoom call fails.
+
+    PROMPT №645: the shared registrant (ZoomMeeting.shared_registrant_id/
+    shared_join_url, T24-38) rides the SAME `list_registrants` call below --
+    Zoom returns it in that list like any other registrant on the meeting,
+    we simply never stored it as a ZoomRegistrant row (see that pair of
+    columns' own docstring for why). Only REFRESHES an already-minted
+    shared registrant's join_url; it does not attempt a fresh mint if one
+    never succeeded -- that is the separate, already-accepted no-retry-
+    coverage gap (PROMPT №642 item A), not this function's job.
     """
     zoom_meeting = (
         await session.execute(
@@ -494,12 +603,21 @@ async def sync_meeting_reschedule(
 
     for remote in registrants:
         remote_id = remote.get("registrant_id") or remote.get("id")
-        local = by_zoom_id.get(remote_id)
-        if local is None:
-            continue
         fresh_join_url = remote.get("join_url")
-        if fresh_join_url and fresh_join_url != local.join_url:
-            local.join_url = fresh_join_url
+        local = by_zoom_id.get(remote_id)
+        if local is not None:
+            if fresh_join_url and fresh_join_url != local.join_url:
+                local.join_url = fresh_join_url
+            continue
+        # PROMPT №645: same refresh, for the shared registrant living on
+        # ZoomMeeting instead of a ZoomRegistrant row (see docstring above).
+        if (
+            remote_id
+            and remote_id == zoom_meeting.shared_registrant_id
+            and fresh_join_url
+            and fresh_join_url != zoom_meeting.shared_join_url
+        ):
+            zoom_meeting.shared_join_url = fresh_join_url
 
     logger.info(
         "zoom_registrants_refetched",
@@ -626,7 +744,55 @@ async def get_host_join_urls(
 
 
 # ---------------------------------------------------------------------------
-# A4 V2 (ПРОМТ №572): read-only ZoomMeetingStatus lookups for
+# T24-38 (PROMPT №642): read-only shared-link lookups for the master-only
+# PracticeResponse.zoom_shared_join_url. Same owner-only posture as
+# get_host_join_url[s] above -- callers gate the call itself on is_owner,
+# not this function (mirrors that pair exactly, see practices/service.py).
+# Unlike get_host_join_url[s], no join to zoom_registrants: the value lives
+# directly on ZoomMeeting (see that model's shared_registrant_id/
+# shared_join_url docstring for why).
+# ---------------------------------------------------------------------------
+
+
+async def get_shared_join_url(
+    practice_id: UUID,
+    session: AsyncSession,
+) -> str | None:
+    """This practice's shared registrant join_url, or None if there is no
+    USABLE one -- meeting not active, or Zoom hasn't returned one yet."""
+    return (
+        await session.execute(
+            select(ZoomMeeting.shared_join_url).where(
+                ZoomMeeting.practice_id == practice_id,
+                ZoomMeeting.status == ZoomMeetingStatus.ACTIVE.value,
+            )
+        )
+    ).scalar_one_or_none()
+
+
+async def get_shared_join_urls(
+    practice_ids: list[UUID],
+    session: AsyncSession,
+) -> dict[UUID, str]:
+    """Batched form of get_shared_join_url for a list endpoint (master's own
+    practice list) -- one query, no N+1, same pattern as get_host_join_urls
+    above."""
+    if not practice_ids:
+        return {}
+    rows = (
+        await session.execute(
+            select(ZoomMeeting.practice_id, ZoomMeeting.shared_join_url).where(
+                ZoomMeeting.practice_id.in_(practice_ids),
+                ZoomMeeting.status == ZoomMeetingStatus.ACTIVE.value,
+                ZoomMeeting.shared_join_url.is_not(None),
+            )
+        )
+    ).all()
+    return {row[0]: row[1] for row in rows}
+
+
+# ---------------------------------------------------------------------------
+# A4 V2 (PROMPT №572): read-only ZoomMeetingStatus lookups for
 # PracticeResponse.zoom_meeting_status / PracticeSummary.zoom_meeting_status.
 # Unlike get_host_join_url[s] above, this is NOT owner-gated -- the status
 # value itself carries no secret material (same zero-masking posture as the
@@ -672,7 +838,7 @@ async def get_zoom_meeting_statuses(
 
 
 # ---------------------------------------------------------------------------
-# ПРОМТ №556 (OWNER-1, option В): "Начать" -- the master starts their own
+# PROMPT №556 (OWNER-1, option В): "Начать" -- the master starts their own
 # meeting as host. start_url is a bearer credential (its holder needs no
 # further Zoom-side identity check to become host) that also expires, so the
 # owner decided against ever storing or returning it: it is fetched fresh
@@ -752,3 +918,56 @@ async def get_meeting_start_url(zoom_meeting_id: str) -> str | None:
     if not isinstance(start_url, str) or not start_url.startswith("https://"):
         return None
     return start_url
+
+
+# ---------------------------------------------------------------------------
+# REC-1 (PROMPT №618): watch-recording link for a past practice. Owner
+# decisions this reflects: sharing is on and "must authenticate" is off (so
+# a VELO user with no Zoom account can open the link), passcode is required
+# and NOT embedded by Zoom (that account setting stays off), so WE embed it
+# -- the user never sees a raw URL or a passcode, only one ready link.
+# Retention is Zoom's own 7-day auto-delete; our side never expires
+# anything, it only reacts to the file being gone (a 404 from Zoom).
+# ---------------------------------------------------------------------------
+
+
+async def get_meeting_recording_link(zoom_meeting_id: str) -> str | None:
+    """This meeting's current recording link, passcode embedded, fetched
+    fresh from Zoom every call -- never stored, same "ask Zoom at request
+    time" posture as get_meeting_start_url above, and for the same reason:
+    a stored link would go stale the moment Zoom's own 7-day retention
+    deletes the file, and re-deriving staleness ourselves would duplicate a
+    job Zoom already does.
+
+    Returns None when Zoom has no recording for this meeting right now
+    (404 -- never created, still processing, or already deleted). Raises
+    ZoomAPIError for any other failure (network/auth/5xx) so the caller can
+    tell "confirmed absent" apart from "couldn't check" -- do not catch
+    that here and collapse the two.
+
+    Does not log `response` or the constructed link -- the link carries the
+    passcode inline once built, same "never log the credential" rule
+    get_meeting_start_url's docstring states for start_url above.
+    """
+    try:
+        response = await get_meeting_recordings(zoom_meeting_id=zoom_meeting_id)
+    except ZoomAPIError as exc:
+        if exc.status_code == 404:
+            return None
+        raise
+
+    share_url = response.get("share_url")
+    if not isinstance(share_url, str) or not share_url.startswith("https://"):
+        return None
+
+    passcode = response.get("recording_play_passcode") or response.get("password")
+    if not passcode:
+        # Share URL exists but Zoom didn't return a passcode -- still
+        # usable (Zoom will prompt), better than showing nothing. Logged
+        # without the URL itself, which carries no secret in this branch.
+        logger.warning(
+            "zoom_recording_no_passcode", zoom_meeting_id=zoom_meeting_id,
+        )
+        return share_url
+
+    return f"{share_url}?pwd={passcode}"

@@ -160,7 +160,10 @@ function practice(overrides: Partial<PracticeResponse> = {}): PracticeResponse {
   } as PracticeResponse
 }
 
-function rosterItem(n: number, overrides: Partial<AttendanceItemResponse> = {}): AttendanceItemResponse {
+function rosterItem(
+  n: number,
+  overrides: Partial<AttendanceItemResponse> = {},
+): AttendanceItemResponse {
   return {
     booking_id: `b${n}`,
     user_id: `user_${n}0000000`,
@@ -215,6 +218,10 @@ function reviewsPage(items: ReviewItem[], total = items.length) {
 let app: App | null = null
 let host: HTMLElement | null = null
 let pinia: Pinia
+// T24-38 (PROMPT №643): navigator.clipboard does not exist in happy-dom --
+// defined per test, same pattern as MasterGroupDetailView.test.ts's
+// writeText mock.
+let writeText: ReturnType<typeof vi.fn>
 
 // A real Pinia is installed even though BOTH stores this screen reads are
 // module-mocked above. No child of this screen resolves a store today, but
@@ -323,7 +330,9 @@ beforeEach(() => {
   vi.mocked(practicesApi.getPractice).mockReset().mockResolvedValue(practice())
   vi.mocked(practicesApi.getAttendance).mockReset().mockResolvedValue(attendance())
   vi.mocked(practicesApi.getPracticeReviews).mockReset().mockResolvedValue(reviewsPage([]))
-  vi.mocked(practicesApi.cancelPractice).mockReset().mockResolvedValue(practice({ status: 'cancelled' }))
+  vi.mocked(practicesApi.cancelPractice)
+    .mockReset()
+    .mockResolvedValue(practice({ status: 'cancelled' }))
   vi.mocked(practicesApi.deletePractice).mockReset().mockResolvedValue(undefined)
 
   // Mirrors the real store (stores/diary.ts:363-380): fills the reactive cache
@@ -338,7 +347,22 @@ beforeEach(() => {
   toastError.mockReset()
   toastSuccess.mockReset()
   insightsFixture = null
+
+  writeText = vi.fn().mockResolvedValue(undefined)
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    writable: true,
+    value: { writeText },
+  })
 })
+
+// TEMPORARY (T24-38, PROMPT №642/643): mirrors the view's own local
+// PracticeWithSharedLink extension (MasterPracticeDetailView.vue) -- delete
+// alongside it after the next `make gen-types` regen, once zoom_shared_
+// join_url is a real field on PracticeResponse.
+function withSharedLink(p: PracticeResponse, url: string | null): PracticeResponse {
+  return { ...p, zoom_shared_join_url: url } as PracticeResponse
+}
 
 let insightsFixture: PracticeInsightsResponse | null = null
 
@@ -440,7 +464,7 @@ describe('MasterPracticeDetailView', () => {
       expect(text()).toContain('22 июля, 10:00')
     })
 
-    it('fetches this route\'s practice, not a hardcoded one', async () => {
+    it("fetches this route's practice, not a hardcoded one", async () => {
       routeParams.id = 'p42'
       mount()
       await flush()
@@ -570,6 +594,78 @@ describe('MasterPracticeDetailView', () => {
     })
   })
 
+  // T24-38 (PROMPT №642/643): the shared, registration-free Zoom link. Risk
+  // is not "wrong value" -- get_shared_join_url is owner-gated server-side
+  // (practices/service.py) and the value is fetched from a real API
+  // response either way -- it is "the control appears when it should not
+  // (every pre-existing practice, forever, since the migration backfills
+  // nothing)" and "the copy button silently does nothing on failure". Both
+  // are asserted directly below, plus the success path so a future refactor
+  // of onCopySharedLink cannot regress the URL or the toast without a test
+  // noticing.
+  describe('upcoming hub: T24-38 shared guest link', () => {
+    it('is ABSENT when zoom_shared_join_url is null -- the state every practice is in today', async () => {
+      // practice() does not set the field at all, same as a real not-yet-
+      // regenerated PracticeResponse or a pre-migration row.
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.pd-shared-link')).toBeNull()
+      expect(text()).not.toContain('Ссылка для гостей без входа в приложение')
+    })
+
+    it('RENDERS the label and Копировать button when the backend has minted a link', async () => {
+      vi.mocked(practicesApi.getPractice).mockResolvedValue(
+        withSharedLink(practice(), 'https://zoom.us/w/stub123?tk=abc'),
+      )
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.pd-shared-link')).not.toBeNull()
+      expect(text()).toContain('Ссылка для гостей без входа в приложение')
+      const copyBtn = Array.from(host?.querySelectorAll<HTMLElement>('button') ?? []).find(
+        (b) => b.textContent?.trim() === 'Копировать',
+      )
+      expect(copyBtn).toBeDefined()
+    })
+
+    it('copying writes the EXACT shared url to the clipboard and toasts success', async () => {
+      vi.mocked(practicesApi.getPractice).mockResolvedValue(
+        withSharedLink(practice(), 'https://zoom.us/w/stub123?tk=abc'),
+      )
+      mount()
+      await flush()
+
+      const copyBtn = Array.from(host?.querySelectorAll<HTMLElement>('button') ?? []).find(
+        (b) => b.textContent?.trim() === 'Копировать',
+      )
+      copyBtn?.click()
+      await flush()
+
+      expect(writeText).toHaveBeenCalledWith('https://zoom.us/w/stub123?tk=abc')
+      expect(toastSuccess).toHaveBeenCalledWith('Ссылка скопирована')
+      expect(toastError).not.toHaveBeenCalled()
+    })
+
+    it('a REJECTED clipboard write surfaces the error toast, not a silent no-op', async () => {
+      writeText.mockRejectedValue(new Error('clipboard denied'))
+      vi.mocked(practicesApi.getPractice).mockResolvedValue(
+        withSharedLink(practice(), 'https://zoom.us/w/stub123?tk=abc'),
+      )
+      mount()
+      await flush()
+
+      const copyBtn = Array.from(host?.querySelectorAll<HTMLElement>('button') ?? []).find(
+        (b) => b.textContent?.trim() === 'Копировать',
+      )
+      copyBtn?.click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Не удалось скопировать ссылку')
+      expect(toastSuccess).not.toHaveBeenCalled()
+    })
+  })
+
   describe('upcoming hub: the roster (Записались)', () => {
     it('renders the display names the API returned', async () => {
       vi.mocked(practicesApi.getAttendance).mockResolvedValue(
@@ -684,9 +780,9 @@ describe('MasterPracticeDetailView', () => {
       await flush()
 
       expect(host?.querySelectorAll('.pd-prow__ava-img')).toHaveLength(2)
-      host?.querySelectorAll<HTMLImageElement>('.pd-prow__ava-img')[0]?.dispatchEvent(
-        new Event('error'),
-      )
+      host
+        ?.querySelectorAll<HTMLImageElement>('.pd-prow__ava-img')[0]
+        ?.dispatchEvent(new Event('error'))
       await flush()
 
       expect(host?.querySelectorAll('.pd-prow__ava-img')).toHaveLength(1)
@@ -704,7 +800,7 @@ describe('MasterPracticeDetailView', () => {
       expect(text()).toContain('Завтра, 08:30')
     })
 
-    it('renders the practice\'s OWN timezone, not the runner\'s', async () => {
+    it("renders the practice's OWN timezone, not the runner's", async () => {
       // whenLabel passes practice.timezone into both formatters (.vue:375-380).
       // 10:00 UTC is 13:00 in Moscow; a master in Lisbon must still see the time
       // their Moscow practice actually starts at.
@@ -1124,9 +1220,7 @@ describe('MasterPracticeDetailView', () => {
       // dialog that never rendered.
       expect(dialogText()).toContain('Отменить практику?')
       expect(dialogText()).not.toContain('Это регулярная практика')
-      expect(
-        document.body.querySelectorAll('.v-modal__overlay [role="radio"]'),
-      ).toHaveLength(0)
+      expect(document.body.querySelectorAll('.v-modal__overlay [role="radio"]')).toHaveLength(0)
     })
 
     it('on success: toasts, refreshes the master cache, and leaves the screen', async () => {
@@ -1241,7 +1335,9 @@ describe('MasterPracticeDetailView', () => {
       // no bookings and no money: routing it to /cancel would run a refund
       // sweep over nothing while leaving the draft alive.
       routeParams.id = 'p42'
-      vi.mocked(practicesApi.getPractice).mockResolvedValue(practice({ id: 'p42', status: 'draft' }))
+      vi.mocked(practicesApi.getPractice).mockResolvedValue(
+        practice({ id: 'p42', status: 'draft' }),
+      )
       mount()
       await flush()
       await openDestructive()

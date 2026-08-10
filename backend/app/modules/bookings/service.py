@@ -240,7 +240,7 @@ async def create_booking(
     if practice.master_id == user.id:
         raise BadRequestError("Cannot book your own practice")
 
-    # P5 (ПРОМТ №594, the carried seam from P1): reject a viewer blocked by
+    # P5 (PROMPT №594, the carried seam from P1): reject a viewer blocked by
     # this practice's master, or outside its configured audience. Shared
     # with confirm_waitlist (waitlist/service.py, the OTHER booking-creation
     # path) and upsert_checkin (diary/checkins_service.py) -- one predicate,
@@ -353,7 +353,7 @@ async def create_booking(
     # E21 step E: create the Zoom registrant for this booking. Best-effort,
     # never raises, never blocks -- if the meeting isn't active yet or the
     # Zoom call fails, the booking above has ALREADY succeeded; the
-    # registrant is queued for the retry poller (ПРОМТ №520 amendment,
+    # registrant is queued for the retry poller (PROMPT №520 amendment,
     # restated explicitly: not softened into "usually"). Lazy import, same
     # one-way-dependency pattern as diary above.
     from app.modules.zoom.service import create_registrant_for_booking
@@ -749,7 +749,7 @@ async def _finalize_practice_core(
 
     Transitions:
     - NO active Zoom meeting, OR an active meeting created in Zoom STUB mode
-      (ПРОМТ №530, settings.is_zoom_stub -- no real credentials configured):
+      (PROMPT №530, settings.is_zoom_stub -- no real credentials configured):
       confirmed + (joined_at IS NOT NULL OR PRE check-in) -> attended, else
       -> no_show. Decided HERE, immediately, tagged legacy_proxy (unchanged
       from before E21 step F -- covers practices published before Zoom
@@ -802,7 +802,7 @@ async def _finalize_practice_core(
             )
         )
     ).scalar_one_or_none()
-    # ПРОМТ №530: an active meeting created in Zoom STUB mode (no real
+    # PROMPT №530: an active meeting created in Zoom STUB mode (no real
     # credentials configured -- true on every server today) can never
     # produce a real attendance report; zoom/report_poller.py would poll
     # forever and the deadline fallback (settings.
@@ -1184,7 +1184,7 @@ async def list_user_bookings(
     # implicit -- booking_id is NULL for the master's own host row (see
     # ZoomRegistrant model docstring).
     #
-    # ПРОМТ №563: joined to ZoomMeeting.status == ACTIVE, same posture as the
+    # PROMPT №563: joined to ZoomMeeting.status == ACTIVE, same posture as the
     # host path (zoom/service.py's get_host_join_url[s]). Without this, a
     # registrant row whose join_url was set while the meeting was active
     # keeps being handed out after the meeting is deleted outside the normal
@@ -1307,7 +1307,7 @@ async def list_upcoming_bookings(
             ).scalars().all()
         )
 
-    # ПРОМТ №563: same meeting-state join as list_user_bookings above -- see
+    # PROMPT №563: same meeting-state join as list_user_bookings above -- see
     # that function's comment for the full reasoning.
     join_urls: dict[UUID, str] = {}
     if booking_ids:
@@ -1368,6 +1368,100 @@ async def get_booking_by_id(
         raise NotFoundError("Booking not found")
 
     return booking, practice
+
+
+# ===================================================================
+# REC-1 (PROMPT №618): watch-recording, own booking only
+# ===================================================================
+
+# Deliberately NOT practices/service.py's ZOOM_VISIBLE_BOOKING_STATUSES --
+# that constant gates the PRE-practice join link and excludes no_show on
+# purpose (a no_show never needed to join). This is the opposite side of
+# the practice's lifecycle: owner ruling (REC-1) is that entitlement is the
+# BOOKING, never attendance, so no_show gets the SAME access as attended.
+RECORDING_ELIGIBLE_BOOKING_STATUSES = {
+    BookingStatus.CONFIRMED.value,
+    BookingStatus.ATTENDED.value,
+    BookingStatus.NO_SHOW.value,
+}
+
+
+def is_booking_recording_eligible(booking: Booking, practice: Practice) -> bool:
+    """Pure predicate, no DB -- directly unit-testable without a session,
+    same shape attendance_service.py's match_report_rows uses for the same
+    reason (docstring there explains the pattern)."""
+    return (
+        booking.status in RECORDING_ELIGIBLE_BOOKING_STATUSES
+        and practice.status == PracticeStatus.COMPLETED.value
+    )
+
+
+async def get_booking_recording(
+    booking_id: UUID,
+    user: User,
+    session: AsyncSession,
+) -> tuple[str, str | None]:
+    """Watch-recording link for a past practice.
+
+    Returns (status, url) -- status is 'available' | 'unavailable' |
+    'error', see BookingRecordingResponse's docstring for what each means.
+
+    Raises NotFoundError (P-08) when the booking isn't the caller's own, or
+    doesn't yet qualify (still upcoming, or never confirmed/attended/
+    no_show) -- an entitlement question, kept OUT of the three-way status:
+    the button shouldn't be showing at all in these cases (PracticeDetailView
+    gates it client-side too), so there is nothing to render.
+
+    P-08, but narrower than get_booking_by_id above: the practice's MASTER
+    is deliberately NOT granted access here (that function's dual
+    owner-or-master check does not apply). This is a student-facing "my
+    bookings" feature; whether the master needs their own path to the same
+    recording is a separate, undecided product question -- the master has
+    no independent way to reach it either, since the meeting runs under the
+    S2S app's own Zoom user, not the master's own account.
+    """
+    stmt = (
+        select(Booking, Practice)
+        .join(Practice, Booking.practice_id == Practice.id)
+        .where(Booking.id == booking_id)
+    )
+    row = (await session.execute(stmt)).one_or_none()
+    if not row:
+        raise NotFoundError("Booking not found")
+    booking, practice = row[0], row[1]
+
+    if booking.user_id != user.id:
+        raise NotFoundError("Booking not found")
+
+    if not is_booking_recording_eligible(booking, practice):
+        raise NotFoundError("Booking not found")
+
+    from app.modules.zoom.models import ZoomMeeting
+
+    zoom_meeting = (
+        await session.execute(
+            select(ZoomMeeting).where(ZoomMeeting.practice_id == practice.id)
+        )
+    ).scalar_one_or_none()
+    if zoom_meeting is None or not zoom_meeting.zoom_meeting_id:
+        return "unavailable", None
+
+    from app.modules.zoom.service import get_meeting_recording_link
+    from app.modules.zoom.zoom_client import ZoomAPIError
+
+    try:
+        url = await get_meeting_recording_link(zoom_meeting.zoom_meeting_id)
+    except ZoomAPIError as exc:
+        logger.warning(
+            "booking_recording_zoom_error",
+            booking_id=str(booking_id),
+            status_code=exc.status_code,
+        )
+        return "error", None
+
+    if url is None:
+        return "unavailable", None
+    return "available", url
 
 
 # ===================================================================

@@ -12,7 +12,7 @@ Produces a scored report with actionable fixes. Optionally auto-fixes findings.
 
 ## Configuration
 
-<!-- VELO-tuned (ПРОМТ №385, trial): CBS's docs/01_refer path replaced with a
+<!-- VELO-tuned (PROMPT №385, trial): CBS's docs/01_refer path replaced with a
      git-untracked scratch dir; VELO has no docs/01_refer/. No ENVIRONMENT.md
      exists in this repo -- shell is Windows Git-Bash/PowerShell, no
      docker/VPS locally. -->
@@ -36,7 +36,7 @@ Before running any review command, paste the output of an existence probe for
 ENVIRONMENT.md (common locations: root, docs/01_refer/), e.g. `ls ENVIRONMENT.md docs/01_refer/ENVIRONMENT.md`.
 If the probe shows it exists, read it and quote the shell/tool pitfalls that constrain
 your commands; only then proceed. Do not hardcode shell syntax — adapt to the detected environment.
-(VELO note, ПРОМТ №385: probe will show ENVIRONMENT.md absent -- this repo has none.
+(VELO note, PROMPT №385: probe will show ENVIRONMENT.md absent -- this repo has none.
 Shell is Windows Git-Bash/PowerShell; no docker/VPS locally, so any command touching
 those is out of scope for this skill.)
 

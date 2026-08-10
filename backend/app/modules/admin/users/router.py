@@ -70,7 +70,7 @@ async def make_master_endpoint(
     admin: User = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
 ) -> AdminMasterActionResponse:
-    """Explicitly promote a user to master (admin all-users screen, ПРОМТ №292).
+    """Explicitly promote a user to master (admin all-users screen, PROMPT №292).
 
     Creates a verified MasterProfile if missing (or re-verifies a non-verified
     one) and sets role=master. 409 if the user is already a master. Distinct

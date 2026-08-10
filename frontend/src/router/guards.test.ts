@@ -144,7 +144,7 @@ describe('router/guards', () => {
       expect(await promise).toEqual({ path: '/master/dashboard' })
     })
 
-    // -- Bug 1 (ПРОМТ №405): rejected applicant routing --------------------
+    // -- Bug 1 (PROMPT №405): rejected applicant routing --------------------
     it('rejected applicant, not yet seen -> routed to /master/pending', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'user', master_application: { status: 'rejected' } })
@@ -184,7 +184,7 @@ describe('router/guards', () => {
       expect(await call(roleRedirect)).toEqual({ path: '/master/pending' })
     })
 
-    // ПРОМТ №406: the seen key is a per-user LIFETIME flag, not per-rejection
+    // PROMPT №406: the seen key is a per-user LIFETIME flag, not per-rejection
     // -- without a re-arm on re-apply, a second rejection would be invisible
     // forever. MasterApplyView.vue's submit handler clears the key via the
     // same masterRejectionSeenKey(userId) + localStorage.removeItem() call
@@ -338,7 +338,7 @@ describe('router/guards', () => {
   })
 
   // ===========================================================================
-  // T21-4/T21-5 (ПРОМТ №546): roleFreshnessGuard generalizes roleRedirect's
+  // T21-4/T21-5 (PROMPT №546): roleFreshnessGuard generalizes roleRedirect's
   // rejection branch to EVERY route, not just a fresh nav to '/' -- the
   // actual gap the recon traced (a session already open and simply
   // navigating around never re-checked this at all). Takes `to` directly
@@ -355,7 +355,9 @@ describe('router/guards', () => {
     it('rejected applicant, not yet seen, navigating anywhere else -> routed to /master/pending', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'user', master_application: { status: 'rejected' } })
-      expect(await roleFreshnessGuard({ name: 'user-calendar' })).toEqual({ path: '/master/pending' })
+      expect(await roleFreshnessGuard({ name: 'user-calendar' })).toEqual({
+        path: '/master/pending',
+      })
     })
 
     it('does not redirect a navigation already headed to master-pending (avoids a loop)', async () => {
@@ -364,7 +366,7 @@ describe('router/guards', () => {
       expect(await roleFreshnessGuard({ name: 'master-pending' })).toBe(true)
     })
 
-    it('rejected applicant, already seen -> allowed through (matches roleRedirect\'s own rule)', async () => {
+    it("rejected applicant, already seen -> allowed through (matches roleRedirect's own rule)", async () => {
       __setReadyForTest(true)
       setAuthUser({ id: 'user_1', role: 'user', master_application: { status: 'rejected' } })
       localStorage.setItem(masterRejectionSeenKey('user_1'), '1')
@@ -383,7 +385,7 @@ describe('router/guards', () => {
       expect(await roleFreshnessGuard({ name: 'master-dashboard' })).toBe(true)
     })
 
-    // -- ПРОМТ №550: guard cost fix -- refreshRoleIfStale is fire-and-forget,
+    // -- PROMPT №550: guard cost fix -- refreshRoleIfStale is fire-and-forget,
     // and its scope stays every-role (not gated to role='user'). ------------
     it('still refreshes for a master role, not only role=user -- a revoked master must keep learning about it', async () => {
       __setReadyForTest(true)

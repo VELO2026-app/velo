@@ -215,17 +215,17 @@ async def generate_series_occurrences(
             "after the first occurrence; choose a later date"
         )
 
-    # E21 (ПРОМТ №520, closing the series hole): children are created
+    # E21 (PROMPT №520, closing the series hole): children are created
     # already SCHEDULED (_build_child_occurrence sets status=SCHEDULED at
     # construction) and never pass through update_practice()'s
     # draft->scheduled branch, which is where meeting creation is wired for
     # a non-series practice -- so without this, no recurring practice ever
-    # gets a Zoom meeting. ПРОМТ №527: child.id (app-side uuid4) is only
+    # gets a Zoom meeting. PROMPT №527: child.id (app-side uuid4) is only
     # populated at flush time, not at `Practice(...)` construction, so each
     # child is flushed before its ZoomMeeting row is built (that row's FK
     # needs a real id).
     #
-    # ПРОМТ №559 (OWNER-3): each child's Zoom meeting used to be created
+    # PROMPT №559 (OWNER-3): each child's Zoom meeting used to be created
     # HERE, synchronously, one real Zoom API call per child, all inside this
     # one request/transaction. MEASURED on prod: the parent and every child
     # PRACTICE row land within 194ms of each other (occurrence layout is

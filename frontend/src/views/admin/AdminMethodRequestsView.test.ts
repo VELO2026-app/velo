@@ -209,12 +209,14 @@ describe('AdminMethodRequestsView', () => {
   describe('ladder + recovery', () => {
     it('shows the loading spinner while the initial fetch is in flight, then content', async () => {
       let resolveList!: (v: ReturnType<typeof paginated>) => void
-      vi.mocked(adminApi.getMethodChangeRequests).mockReset().mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolveList = resolve
-          }),
-      )
+      vi.mocked(adminApi.getMethodChangeRequests)
+        .mockReset()
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveList = resolve
+            }),
+        )
       mount()
       await nextTick()
 
@@ -305,12 +307,14 @@ describe('AdminMethodRequestsView', () => {
       expect(moreBtn()).toBeDefined()
 
       let resolvePage2!: (v: ReturnType<typeof paginated>) => void
-      vi.mocked(adminApi.getMethodChangeRequests).mockReset().mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolvePage2 = resolve
-          }),
-      )
+      vi.mocked(adminApi.getMethodChangeRequests)
+        .mockReset()
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolvePage2 = resolve
+            }),
+        )
       moreBtn()?.click()
       await nextTick()
 
@@ -386,11 +390,13 @@ describe('AdminMethodRequestsView', () => {
       await flush()
 
       expect(adminApi.approveMethodChange).toHaveBeenCalledWith(
-        'm_custom', ['Мой уникальный метод'], undefined,
+        'm_custom',
+        ['Мой уникальный метод'],
+        undefined,
       )
     })
 
-    it('«Только этому мастеру» approves scoped to THIS master only (T22-6, ПРОМТ №561)', async () => {
+    it('«Только этому мастеру» approves scoped to THIS master only (T22-6, PROMPT №561)', async () => {
       // Was "approves WITHOUT promote (undefined)": that used to mean the
       // label vanished entirely -- no catalog write anywhere (T22-6). Now it
       // takes the OTHER branch, master_only, so the direction gets a real
@@ -407,9 +413,9 @@ describe('AdminMethodRequestsView', () => {
       btnByText(document.body, 'Только этому мастеру')?.click()
       await flush()
 
-      expect(adminApi.approveMethodChange).toHaveBeenCalledWith(
-        'm_custom', undefined, ['Мой уникальный метод'],
-      )
+      expect(adminApi.approveMethodChange).toHaveBeenCalledWith('m_custom', undefined, [
+        'Мой уникальный метод',
+      ])
     })
   })
 
@@ -654,9 +660,7 @@ describe('AdminMethodRequestsView', () => {
       await flush()
       expect(cards()).toHaveLength(1)
 
-      vi.mocked(adminApi.getMethodChangeRequests).mockResolvedValueOnce(
-        paginated([ITEM_CUSTOM], 2),
-      )
+      vi.mocked(adminApi.getMethodChangeRequests).mockResolvedValueOnce(paginated([ITEM_CUSTOM], 2))
       moreBtn()?.click()
       await flush()
 

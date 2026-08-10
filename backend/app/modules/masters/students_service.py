@@ -2,22 +2,30 @@
 # VELO Backend -- Master Students Service (E5)
 # =============================================================================
 #
-# Read-only CRM aggregate over bookings + practices + diary. A "student" is a
-# user with >= 1 ATTENDED booking on a practice owned by this master. No new
-# table -- everything is derived live (ORM-only, no raw SQL).
+# Read-only CRM aggregate over bookings + practices + diary.
 #
-# LIST (GET /masters/me/students):
-#   Group attended bookings on the master's practices by user. practices_count
-#   = number of attended practices. needs_attention = the student's MOST RECENT
-#   feedback on this master's practices is in the negative bucket (rating <= 3),
-#   computed for the current page only via one DISTINCT ON query.
-#   Optional case-insensitive name search; offset/limit pagination.
+# LIST (GET /masters/me/students) -- "Мои ученики": a "student" here is a
+# user with >= 1 ATTENDED booking on a practice owned by this master, and
+# ONLY that (owner-ruled, PROMPT №609: kept deliberately narrow, NOT
+# unified with DETAIL below -- the two lists mean different things on
+# purpose). Group attended bookings on the master's practices by user.
+# practices_count = number of attended practices. needs_attention = the
+# student's MOST RECENT feedback on this master's practices is in the
+# negative bucket (rating <= 3), computed for the current page only via
+# one DISTINCT ON query. Optional case-insensitive name search;
+# offset/limit pagination.
 #
-# DETAIL (GET /masters/me/students/{id}):
-#   practices_count + hours (attended duration summed / 60), satisfaction_pct
-#   (round(avg(rating)*10) over the student's feedbacks on this master's
-#   practices), and the newest recent_checkins / feedbacks. 404 when the user
-#   is not this master's student (no attended booking) -- P-08 style.
+# DETAIL (GET /masters/me/students/{id}) -- "Профиль ученика": WIDER gate
+# (P6, PROMPT №609) -- reachable for anyone this master can already see on
+# screen, via groups_service.is_master_audience_member (a derived
+# "Ученики" member OR a custom-group member with no booking at all), not
+# ATTENDED-only. practices_count + hours (attended duration summed / 60),
+# satisfaction_pct (round(avg(rating)*10) over the student's feedbacks on
+# this master's practices), and the newest recent_checkins / feedbacks
+# stay attended/feedback-only and degrade to honest zeros/empty for
+# someone admitted with no attended history. 404 only for someone this
+# master has no relationship to at all -- see get_master_student_detail's
+# own docstring.
 #
 # SESSION RULES:
 #   Read-only -- callers pass get_db_reader. No commit (P-01).
@@ -33,6 +41,8 @@ from app.core.exceptions import NotFoundError
 from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.diary.insights_service import ATTENTION_RATING_MAX
 from app.modules.diary.models import Checkin, Feedback
+from app.modules.masters.groups_models import MasterStudent
+from app.modules.masters.groups_service import is_master_audience_member
 from app.modules.practices.models import Practice
 from app.modules.users.helpers import display_name
 from app.modules.users.models import User
@@ -148,10 +158,52 @@ async def get_master_student_detail(
     Returns a dict ready for StudentDetailResponse.
 
     Raises:
-        NotFoundError: when the user has no attended booking on this master's
-            practices (not this master's student) -- P-08 style.
+        NotFoundError: when `student_id` is neither someone this master can
+            already see on screen (is_master_audience_member's two admitted
+            cases, P6, PROMPT №609) NOR this master's own blocked student
+            (T24-20 below).
+
+    practices_count/hours/satisfaction_pct/recent_checkins/feedbacks below
+    are STILL attended-only / feedback-only, unchanged -- widening the
+    GATE does not widen what these mean. For someone admitted via the
+    group-membership branch with zero bookings at all, every aggregate
+    below degrades to its own honest empty value (count=0 via COALESCE/
+    a grouping-less COUNT, satisfaction_pct=None, both lists=[]) rather
+    than crashing or fabricating history -- none of these queries assumed
+    at least one row existed.
+
+    T24-20 (PROMPT №638): a blocked student's profile used to hard-404 (the
+    generic "Не удалось загрузить профиль" screen) because
+    is_master_audience_member deliberately never admits a blocked student
+    (see its own docstring -- that exclusion is load-bearing: the predicate
+    also gates audience/visibility elsewhere, and loosening IT would risk
+    letting a blocked student back into practice visibility, the opposite
+    of what blocking means). The owner's ruling was narrower than that: the
+    profile itself should open for a master's OWN blocked student, showing
+    "Разблокировать" instead of "Заблокировать" at the bottom -- nothing
+    about audience/visibility. So the allow-path here is a SEPARATE, local
+    query against MasterStudent for exactly this master+student pair,
+    scoped to this one function -- is_master_audience_member itself is
+    untouched.
     """
-    # practices_count + attended duration in one pass.
+    blocked_at = None
+    if not await is_master_audience_member(master_id, student_id, session):
+        blocked_at = await session.scalar(
+            select(MasterStudent.blocked_at).where(
+                MasterStudent.master_id == master_id,
+                MasterStudent.student_user_id == student_id,
+                MasterStudent.blocked_at.is_not(None),
+            )
+        )
+        if blocked_at is None:
+            raise NotFoundError("Student not found")
+
+    # practices_count + attended duration in one pass. Deliberately STILL
+    # ATTENDED-only (see the docstring above) -- a widened-gate student
+    # with no attended booking correctly gets practices_count=0/hours=0
+    # here, not an error: COUNT/COALESCE(SUM) over zero matching rows in
+    # a non-grouped aggregate still returns one row of zeros, never no
+    # rows at all.
     practices_count, total_minutes = (
         await session.execute(
             select(
@@ -166,9 +218,6 @@ async def get_master_student_detail(
             )
         )
     ).one()
-
-    if practices_count == 0:
-        raise NotFoundError("Student not found")
 
     # Identity for the detail header — same source as the list (StudentListItem):
     # the student's User record. Guaranteed present (the booking FK references it).
@@ -238,4 +287,5 @@ async def get_master_student_detail(
             {"rating": rating, "comment": comment, "created_at": created_at}
             for rating, comment, created_at in feedback_rows
         ],
+        "blocked": blocked_at is not None,
     }

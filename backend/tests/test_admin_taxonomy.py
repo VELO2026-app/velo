@@ -122,7 +122,7 @@ async def test_taxonomy_list_returns_seed(
         assert directions[value]["is_active"] is True
 
     # Directions with styles carry the right style values (label spot-check).
-    # Subset, not exact equality (ПРОМТ №411/№412): an admin can add a new
+    # Subset, not exact equality (PROMPT №411/№412): an admin can add a new
     # style under meditation via this very CRUD endpoint (that is R5's whole
     # point), so asserting the seed set is the WHOLE set fails the moment the
     # feature it's meant to guard actually gets used -- the identical bug

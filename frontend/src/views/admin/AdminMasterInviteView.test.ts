@@ -188,7 +188,7 @@ describe('AdminMasterInviteView', () => {
     })
 
     it('failure (bot_url_not_configured): toasts a human message, NOT the raw backend detail', async () => {
-      // ПРОМТ №523: the raw detail ("telegram_bot_url is not configured") is a
+      // PROMPT №523: the raw detail ("telegram_bot_url is not configured") is a
       // server misconfiguration string, not something an admin can act on --
       // this code now gets its own human Russian message (BookingPopup.vue's
       // e.code hand-branch pattern). 503 status and the code itself are

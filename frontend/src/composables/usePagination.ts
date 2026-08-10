@@ -54,7 +54,7 @@ export function usePagination<T>(fetchFn: FetchFn<T>, pageSize = 20) {
 
   const hasMore = computed(() => offset.value < total.value)
 
-  // W17 fix (ПРОМТ №409): reset()/refresh() calling loadMore() while an
+  // W17 fix (PROMPT №409): reset()/refresh() calling loadMore() while an
   // EARLIER loadMore() is still in flight used to corrupt state -- the
   // earlier call's `loading` guard blocked the new refresh's own loadMore
   // from running at all, then the earlier (stale-offset, stale-filter)
@@ -127,6 +127,46 @@ export function usePagination<T>(fetchFn: FetchFn<T>, pageSize = 20) {
     await loadMore()
   }
 
+  /**
+   * Reload the first page WITHOUT clearing `items` first (unlike refresh(),
+   * which resets to [] synchronously and lets the empty state render while the
+   * request is in flight). For a background freshness check on an
+   * already-populated list -- items only swap once the new page has arrived,
+   * so nothing flashes empty. Still bumps requestId so it composes correctly
+   * with a concurrent loadMore/reset (same guard as loadMore's own check).
+   *
+   * On an EMPTY list (first-ever call) this behaves like refresh(): sets
+   * `loading`/`error` normally, since there is nothing to protect from a
+   * flash and the caller's initial-load rung needs those signals. On an
+   * ALREADY-POPULATED list, a failure is swallowed silently and the existing
+   * (stale) items are kept -- this path is a passive refresh, not the
+   * primary load the screen depends on to render at all.
+   */
+  async function refreshInPlace(): Promise<void> {
+    requestId += 1
+    const myRequestId = requestId
+    const isFirstLoad = items.value.length === 0
+    if (isFirstLoad) {
+      loading.value = true
+      error.value = null
+    }
+    try {
+      const result = await fetchFn(pageSize, 0)
+      if (myRequestId !== requestId) return // superseded by a reset/refresh
+      items.value = result.items
+      total.value = result.total
+      offset.value = result.items.length
+      loadMoreError.value = null
+    } catch (e) {
+      if (myRequestId !== requestId) return
+      if (isFirstLoad) {
+        error.value = e instanceof Error ? e.message : 'Unknown error'
+      }
+    } finally {
+      if (isFirstLoad && myRequestId === requestId) loading.value = false
+    }
+  }
+
   return {
     items,
     total,
@@ -137,5 +177,6 @@ export function usePagination<T>(fetchFn: FetchFn<T>, pageSize = 20) {
     loadMore,
     reset,
     refresh,
+    refreshInPlace,
   }
 }

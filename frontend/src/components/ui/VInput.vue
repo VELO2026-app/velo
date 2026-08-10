@@ -13,8 +13,18 @@
 
 <template>
   <div class="v-input" :class="{ 'v-input--error': !!error }">
-    <!-- External label — hidden in floating mode (the label lives inside the field). -->
-    <label v-if="label && !floatingLabel" class="v-input__label">{{ label }}</label>
+    <!-- External label — hidden in floating mode (the label lives inside the field).
+         T24-6 (PROMPT №639): `hideLabel` keeps this SAME <label> in the DOM (a
+         placeholder is not a substitute -- it disappears on typing and is not
+         announced the way a label is) but visually hides it, for a screen that
+         wants the placeholder alone to carry the visible hint. Off by default —
+         every existing caller keeps the visible label, byte-identical. -->
+    <label
+      v-if="label && !floatingLabel"
+      class="v-input__label"
+      :class="{ 'v-input__label--visually-hidden': hideLabel }"
+      >{{ label }}</label
+    >
 
     <div class="v-input__row">
       <!-- Floating-label path (DS variant): the label sits inside the empty field
@@ -74,11 +84,7 @@
       <!-- Required marker (DS): the gutter is ALWAYS reserved while `required`, so
            the field width never jumps when it fills. Red rosette «!» when empty →
            green rosette «✓» when filled (operator 2026-06-23). -->
-      <span
-        v-if="required"
-        class="v-input__seal"
-        :class="{ 'v-input__seal--done': !!modelValue }"
-      >
+      <span v-if="required" class="v-input__seal" :class="{ 'v-input__seal--done': !!modelValue }">
         <IconRequired v-if="!modelValue" :size="22" />
         <IconRequiredDone v-else :size="22" />
       </span>
@@ -105,7 +111,7 @@ defineOptions({ inheritAttrs: false })
 // scrollIntoView twice is harmless. Callers may drop their own wiring later;
 // not required for this to work.
 //
-// W10 fix (ПРОМТ №387): the original batch only wired `@focus` on the PLAIN
+// W10 fix (PROMPT №387): the original batch only wired `@focus` on the PLAIN
 // render path (below) -- the floating-label path (`floating-label` prop,
 // e.g. MasterApplyView Step 1's display_name/email/phone) and the affix path
 // (prefix/suffix slots) each render their OWN <input>, so they silently
@@ -126,6 +132,11 @@ const props = withDefaults(
      *  floats up small on focus/fill. Default OFF — all existing callers keep the
      *  external-label layout. Ignored when prefix/suffix slots are used. */
     floatingLabel?: boolean
+    /** T24-6 (PROMPT №639): keep `label` as the field's accessible name but hide
+     *  it visually — the placeholder alone carries the visible hint. Default OFF
+     *  — every existing caller keeps the visible label. Ignored with `floatingLabel`
+     *  (that variant already has no external label to hide). */
+    hideLabel?: boolean
   }>(),
   {
     modelValue: '',
@@ -136,6 +147,7 @@ const props = withDefaults(
     disabled: false,
     required: false,
     floatingLabel: false,
+    hideLabel: false,
   },
 )
 
@@ -158,7 +170,7 @@ defineExpose({ focus: () => inputEl.value?.focus() })
  * patched. The typed text survives because nothing overwrites it, and the field
  * then shows something the state does not agree with. (It is NOT that Vue
  * "skips the value patch" -- Vue always patches `value`; the child simply never
- * re-renders. Verified on a bare VInput, ПРОМТ №434.)
+ * re-renders. Verified on a bare VInput, PROMPT №434.)
  *
  * Two sites do this today, both money-adjacent -- TopupView's negative-amount
  * reject and MasterNewPromocodeView's usage-limit clamp; both are covered in
@@ -189,6 +201,21 @@ function onInput(e: Event): void {
   font-size: var(--text-base);
   color: var(--velo-text-primary);
   margin-bottom: var(--space-2);
+}
+
+/* T24-6 (PROMPT №639): standard visually-hidden technique -- stays in the DOM
+   and in the accessible-name computation, occupies zero visual space (clipped
+   to 1px, not display:none, which screen readers skip entirely). */
+.v-input__label--visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* Row = field (flex:1) + optional required seal in the right gutter. */

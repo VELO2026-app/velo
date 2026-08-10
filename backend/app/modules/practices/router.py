@@ -29,7 +29,7 @@
 #   Read endpoints use get_db_reader.
 #   Mutating endpoints use get_db_session (write).
 #
-# ROUTE ORDER (ПРОМТ №557): every LITERAL-segment route in this router must
+# ROUTE ORDER (PROMPT №557): every LITERAL-segment route in this router must
 #   be declared before any PARAMETERISED route it shares a path prefix with,
 #   even when (as verified here, see the "/zoom/start" block below) the two
 #   don't actually collide -- a reader should never have to reason about
@@ -69,6 +69,8 @@ from app.modules.practices.cancel_service import cancel_practice
 from app.modules.practices.listing_service import list_public_practices
 from app.modules.practices.models import Practice
 from app.modules.practices.schemas import (
+    AudiencePreviewRequest,
+    AudiencePreviewResponse,
     CancelPracticeRequest,
     CreatePracticeRequest,
     PaginatedPracticesResponse,
@@ -82,6 +84,7 @@ from app.modules.practices.service import (
     get_practice_detail,
     group_names_for_practice,
     practice_to_response,
+    preview_audience_change,
     update_practice,
 )
 from app.modules.users.models import User
@@ -228,7 +231,7 @@ async def create_practice_endpoint(
 ) -> PracticeResponse:
     """Create a new practice (verified master only)."""
     user, _profile = master_tuple
-    # A4 V6 (ПРОМТ №572): deduplicated is True when create_practice returned
+    # A4 V6 (PROMPT №572): deduplicated is True when create_practice returned
     # an EXISTING practice (the window-scoped dedup check, or the TOCTOU
     # race-lost path, A4 V7) instead of creating a new one -- see that
     # function's own docstring.
@@ -241,9 +244,16 @@ async def create_practice_endpoint(
     # T21-1: same owner-only posture for the host's own join_url. A freshly
     # created practice has no ZoomMeeting yet (that happens on publish, not
     # here) -- get_host_join_url returns None until then, which is correct.
-    from app.modules.zoom.service import get_host_join_url, get_zoom_meeting_status
+    from app.modules.zoom.service import (
+        get_host_join_url,
+        get_shared_join_url,
+        get_zoom_meeting_status,
+    )
     host_join_url = await get_host_join_url(practice.id, session)
-    # A4 V2 (ПРОМТ №572): None here too, same reasoning as host_join_url --
+    # T24-38 (PROMPT №642): None here too, same reasoning -- a freshly
+    # created practice has no ZoomMeeting yet.
+    shared_join_url = await get_shared_join_url(practice.id, session)
+    # A4 V2 (PROMPT №572): None here too, same reasoning as host_join_url --
     # fetched anyway for consistency with the other three owner-only sites
     # (this is also the endpoint V6's deduplicated-practice response flows
     # through, where the returned practice IS already published and DOES
@@ -253,6 +263,7 @@ async def create_practice_endpoint(
     return practice_to_response(
         practice, user.first_name,
         zoom_link_visible=True, zoom_host_join_url=host_join_url,
+        zoom_shared_join_url=shared_join_url,
         zoom_meeting_status=zoom_meeting_status,
         deduplicated=deduplicated,
         audience_group_names=audience_group_names,
@@ -260,11 +271,11 @@ async def create_practice_endpoint(
 
 
 # ------------------------------------------------------------------
-# Zoom "Начать" (ПРОМТ №556, OWNER-1 option В) -- the master starts their
+# Zoom "Начать" (PROMPT №556, OWNER-1 option В) -- the master starts their
 # own meeting as host. See zoom/service.py's ticket-issuance docstring for
 # the full rationale (start_url never stored, never in a JSON body).
 #
-# ПРОМТ №557: GET "/zoom/start" is declared here, BEFORE GET "/{practice_id}"
+# PROMPT №557: GET "/zoom/start" is declared here, BEFORE GET "/{practice_id}"
 # below, on the SAME convention already documented at the top of this file
 # for GET "" vs GET "/{practice_id}" -- a literal-segment route must be
 # declared ahead of any parameterised route it could be confused with, so a
@@ -320,7 +331,7 @@ async def create_zoom_start_ticket_endpoint(
 
 
 # ------------------------------------------------------------------
-# A4 V2 (ПРОМТ №572): master-triggered retry for a permanently-failed
+# A4 V2 (PROMPT №572): master-triggered retry for a permanently-failed
 # meeting creation. RECON (before this endpoint existed): the background
 # retry poller (zoom/retry_poller.py) already re-attempts create_failed
 # rows automatically, so re-enqueueing was cheap -- attempt_zoom_meeting_
@@ -386,17 +397,22 @@ async def retry_zoom_meeting_endpoint(
         )
 
     from app.modules.zoom.retry_poller import attempt_zoom_meeting_create
-    from app.modules.zoom.service import get_host_join_url
+    from app.modules.zoom.service import get_host_join_url, get_shared_join_url
 
     await attempt_zoom_meeting_create(meeting, practice, session)
     await session.flush()
     await session.refresh(meeting)
 
     host_join_url = await get_host_join_url(practice.id, session)
+    # T24-38 (PROMPT №642): attempt_zoom_meeting_create above also attempts
+    # the shared registrant when the retry succeeds (retry_poller.py) --
+    # fetched here for the same reason host_join_url is.
+    shared_join_url = await get_shared_join_url(practice.id, session)
     return practice_to_response(
         practice, user.first_name,
         zoom_link_visible=True,
         zoom_host_join_url=host_join_url,
+        zoom_shared_join_url=shared_join_url,
         zoom_meeting_status=meeting.status,
     )
 
@@ -528,18 +544,53 @@ async def update_practice_endpoint(
     # owner-always-sees rule on the detail (M-3) and the master list (Z-6).
     # T21-1: same owner-only posture for the host's own join_url (may become
     # non-None here if this update is the draft->scheduled publish).
-    from app.modules.zoom.service import get_host_join_url, get_zoom_meeting_status
+    from app.modules.zoom.service import (
+        get_host_join_url,
+        get_shared_join_url,
+        get_zoom_meeting_status,
+    )
     host_join_url = await get_host_join_url(practice.id, session)
-    # A4 V2 (ПРОМТ №572): so a master publishing a draft (creating the Zoom
+    # T24-38 (PROMPT №642): same reasoning as host_join_url -- becomes
+    # non-None here too if this update is the draft->scheduled publish.
+    shared_join_url = await get_shared_join_url(practice.id, session)
+    # A4 V2 (PROMPT №572): so a master publishing a draft (creating the Zoom
     # meeting) sees "готовится" immediately instead of a stale None.
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
     audience_group_names = await group_names_for_practice(practice, session)
     return practice_to_response(
         practice, user.first_name,
         zoom_link_visible=True, zoom_host_join_url=host_join_url,
+        zoom_shared_join_url=shared_join_url,
         zoom_meeting_status=zoom_meeting_status,
         audience_group_names=audience_group_names,
     )
+
+
+# ------------------------------------------------------------------
+# POST /api/v1/practices/{id}/audience-preview -- dry-run (owner Q15, PROMPT №613)
+# ------------------------------------------------------------------
+@router.post(
+    "/{practice_id}/audience-preview",
+    response_model=AudiencePreviewResponse,
+)
+async def preview_audience_change_endpoint(
+    practice_id: UUID,
+    body: AudiencePreviewRequest,
+    master_tuple: tuple[User, MasterProfile] = Depends(
+        get_current_master,
+    ),
+    session: AsyncSession = Depends(get_db_reader),
+) -> AudiencePreviewResponse:
+    """How many of this practice's ACTIVE bookers would fall outside a
+    PROPOSED audience -- read-only, never saves anything. Called by
+    EditPracticeView before an audience-narrowing save, so the master can
+    be warned with a real count instead of finding out from upset students
+    at check-in time (owner-ruled)."""
+    user, _profile = master_tuple
+    stranded_count = await preview_audience_change(
+        practice_id, user, body.audience_kind.value, body.group_ids, session,
+    )
+    return AudiencePreviewResponse(stranded_count=stranded_count)
 
 
 # ------------------------------------------------------------------
@@ -571,12 +622,20 @@ async def delete_practice_endpoint(
     # T21-1: soft-deleted drafts never had a meeting created (E21 fires on
     # publish only), so this is always None here -- fetched anyway for
     # consistency with the other three owner-only sites.
-    from app.modules.zoom.service import get_host_join_url, get_zoom_meeting_status
+    from app.modules.zoom.service import (
+        get_host_join_url,
+        get_shared_join_url,
+        get_zoom_meeting_status,
+    )
     host_join_url = await get_host_join_url(practice.id, session)
+    # T24-38 (PROMPT №642): soft-deleted drafts never had a meeting created
+    # either -- always None here, fetched anyway for consistency.
+    shared_join_url = await get_shared_join_url(practice.id, session)
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
     return practice_to_response(
         practice, user.first_name,
         zoom_link_visible=True, zoom_host_join_url=host_join_url,
+        zoom_shared_join_url=shared_join_url,
         zoom_meeting_status=zoom_meeting_status,
     )
 
@@ -618,13 +677,21 @@ async def cancel_practice_endpoint(
     # T21-1: cancel_practice deletes the Zoom meeting (zoom/service.py
     # delete_meeting_for_practice) -- get_host_join_url returns None once that
     # row's status flips, which is correct (nothing to join anymore).
-    from app.modules.zoom.service import get_host_join_url, get_zoom_meeting_status
+    from app.modules.zoom.service import (
+        get_host_join_url,
+        get_shared_join_url,
+        get_zoom_meeting_status,
+    )
     host_join_url = await get_host_join_url(practice.id, session)
-    # A4 V2 (ПРОМТ №572): will read 'deleted' after the cancel above --
+    # T24-38 (PROMPT №642): cancel_practice deletes the Zoom meeting too --
+    # None once that row's status flips, same as host_join_url.
+    shared_join_url = await get_shared_join_url(practice.id, session)
+    # A4 V2 (PROMPT №572): will read 'deleted' after the cancel above --
     # correctly distinct from create_failed/pending_creation.
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
     return practice_to_response(
         practice, user.first_name,
         zoom_link_visible=True, zoom_host_join_url=host_join_url,
+        zoom_shared_join_url=shared_join_url,
         zoom_meeting_status=zoom_meeting_status,
     )

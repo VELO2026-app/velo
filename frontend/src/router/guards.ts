@@ -52,7 +52,7 @@ import { MASTER_APPLIED_KEY, masterRejectionSeenKey } from '@/utils/constants'
  * link) and wins over the rejection redirect below -- the rejection screen
  * will surface on the next plain open instead.
  *
- * Bug 1 (ПРОМТ №405, operator device testing 2026-07-15): a rejected
+ * Bug 1 (PROMPT №405, operator device testing 2026-07-15): a rejected
  * applicant returning later (role='user', no capability) is routed to
  * /master/pending ONCE (operator decision: show the verdict, then treat
  * them as an ordinary user) if they have not already seen it -- see the
@@ -104,18 +104,18 @@ export const roleRedirect: NavigationGuardWithThis<undefined> = async () => {
 }
 
 /**
- * T21-4/T21-5 (ПРОМТ №546, cost fixed ПРОМТ №550): keeps role/master-
+ * T21-4/T21-5 (PROMPT №546, cost fixed PROMPT №550): keeps role/master-
  * application state fresh across in-app navigation and catches an unseen
  * rejection verdict on ANY route. roleRedirect's own rejection branch above
  * only ever fires for a fresh navigation to '/' -- for a session that's
  * already open and simply navigating around (dashboard -> calendar ->
- * settings), nothing previously re-checked this at all (ПРОМТ №545 recon,
+ * settings), nothing previously re-checked this at all (PROMPT №545 recon,
  * B1's actual root cause). Called directly from router/index.ts's global
  * beforeEach rather than registered as its own router.beforeEach, so it
  * composes with the existing P-1 logic in one guard chain instead of two
  * independent ones racing on order.
  *
- * refreshRoleIfStale() is deliberately NOT awaited (ПРОМТ №550, ПРОМТ №549
+ * refreshRoleIfStale() is deliberately NOT awaited (PROMPT №550, PROMPT №549
  * regression finding): this guard runs on EVERY navigation, for EVERY role
  * -- awaiting it made every navigation, app-wide, periodically block on a
  * real GET /users/me round trip (roughly once per NAV_REFRESH_DEBOUNCE_MS of
@@ -283,7 +283,7 @@ export const masterStatusGuard: NavigationGuardWithThis<undefined> = async () =>
  *                         authoritative signal the view's own profileStatus
  *                         computed already trusts, not the sessionStorage marker
  *                         which only covers the fresh-submit path)
- *   - user + rejected   -> allow (R2 fix, ПРОМТ №390: a rejected applicant is
+ *   - user + rejected   -> allow (R2 fix, PROMPT №390: a rejected applicant is
  *                         role='user' with no capability and no session marker
  *                         by the time a decision lands (24-48h later, a
  *                         different session) — without this branch every

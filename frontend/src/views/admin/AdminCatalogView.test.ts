@@ -248,12 +248,14 @@ describe('AdminCatalogView', () => {
   describe('ladder + recovery', () => {
     it('shows the loading spinner while the fetch is in flight, then content', async () => {
       let resolveList!: (v: ReturnType<typeof taxonomy>) => void
-      vi.mocked(taxonomyApi.getFullTaxonomy).mockReset().mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolveList = resolve
-          }),
-      )
+      vi.mocked(taxonomyApi.getFullTaxonomy)
+        .mockReset()
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveList = resolve
+            }),
+        )
       mount()
       await nextTick()
 
@@ -283,7 +285,9 @@ describe('AdminCatalogView', () => {
       mount()
       await flush()
 
-      expect(host?.querySelector('.v-empty__title')?.textContent).toBe('Не удалось загрузить каталог')
+      expect(host?.querySelector('.v-empty__title')?.textContent).toBe(
+        'Не удалось загрузить каталог',
+      )
       expect(host?.querySelector('.v-empty__desc')?.textContent).toBe(
         'Проверьте соединение и попробуйте ещё раз',
       )
@@ -346,7 +350,7 @@ describe('AdminCatalogView', () => {
       expect(toastError).toHaveBeenCalledWith('Такое направление уже есть')
     })
 
-    it('failure (non-ApiResponseError): falls back to addDirection\'s OWN fallback string', async () => {
+    it("failure (non-ApiResponseError): falls back to addDirection's OWN fallback string", async () => {
       vi.mocked(taxonomyApi.createTaxonomyDirection).mockRejectedValue(new Error('ECONNRESET'))
       mount()
       await flush()
@@ -421,7 +425,7 @@ describe('AdminCatalogView', () => {
       expect(taxonomyApi.getFullTaxonomy).toHaveBeenCalledTimes(2)
     })
 
-    it('ISOLATION: typing under direction A does not leak into direction C\'s input', async () => {
+    it("ISOLATION: typing under direction A does not leak into direction C's input", async () => {
       mount()
       await flush()
 
@@ -462,7 +466,7 @@ describe('AdminCatalogView', () => {
       expect(toastError).toHaveBeenCalledWith('Такой вид уже есть')
     })
 
-    it('failure (non-ApiResponseError): falls back to addStyle\'s OWN fallback string', async () => {
+    it("failure (non-ApiResponseError): falls back to addStyle's OWN fallback string", async () => {
       vi.mocked(taxonomyApi.createTaxonomyStyle).mockRejectedValue(new Error('ECONNRESET'))
       mount()
       await flush()
@@ -547,7 +551,7 @@ describe('AdminCatalogView', () => {
       expect(toastError).toHaveBeenCalledWith('Такая метка уже занята')
     })
 
-    it('failure (non-ApiResponseError): falls back to saveDirectionLabel\'s OWN fallback string', async () => {
+    it("failure (non-ApiResponseError): falls back to saveDirectionLabel's OWN fallback string", async () => {
       vi.mocked(taxonomyApi.updateTaxonomyDirection).mockRejectedValue(new Error('ECONNRESET'))
       mount()
       await flush()
@@ -612,7 +616,9 @@ describe('AdminCatalogView', () => {
       textBtn(cardA, 'Деактивировать')?.click()
       await flush()
 
-      expect(taxonomyApi.updateTaxonomyDirection).toHaveBeenCalledWith('dir_a', { is_active: false })
+      expect(taxonomyApi.updateTaxonomyDirection).toHaveBeenCalledWith('dir_a', {
+        is_active: false,
+      })
       expect(taxonomyApi.getFullTaxonomy).toHaveBeenCalledTimes(2)
     })
 
@@ -638,12 +644,10 @@ describe('AdminCatalogView', () => {
       const cardB = dirCards()[1]!
       expect(chips(cardB)).toHaveLength(0)
       expect(cardB.querySelector('.admin-catalog__add-style-input')).toBeNull()
-      expect(cardB.querySelector('.admin-catalog__none')?.textContent).toContain(
-        'Неактивно',
-      )
+      expect(cardB.querySelector('.admin-catalog__none')?.textContent).toContain('Неактивно')
     })
 
-    it('failure: toasts the real detail (ApiResponseError) or the toggle\'s OWN fallback', async () => {
+    it("failure: toasts the real detail (ApiResponseError) or the toggle's OWN fallback", async () => {
       vi.mocked(taxonomyApi.updateTaxonomyDirection).mockRejectedValue(new Error('ECONNRESET'))
       mount()
       await flush()
@@ -738,7 +742,7 @@ describe('AdminCatalogView', () => {
   })
 
   // ===========================================================================
-  // ПРОМТ №503 commit 4: a long/unbreakable title or style label used to force
+  // PROMPT №503 commit 4: a long/unbreakable title or style label used to force
   // this whole screen wider than the viewport (missing overflow-wrap on
   // .admin-catalog__dir-title, missing wrap-or-truncate on this screen's
   // VChip usage). happy-dom has NO layout engine -- getComputedStyle returns
@@ -757,7 +761,7 @@ describe('AdminCatalogView', () => {
   // verification is UNVERIFIED by this suite and needs the owner's device
   // check.
   // ===========================================================================
-  describe('long/unbreakable content lands in the elements the overflow fix targets (ПРОМТ №503 commit 4)', () => {
+  describe('long/unbreakable content lands in the elements the overflow fix targets (PROMPT №503 commit 4)', () => {
     it('a long single-word direction title renders inside .admin-catalog__dir-title (the overflow-wrap target)', async () => {
       const longLabel = 'Суперкалифраджилистикэкспиалидоциознейшийпрактикующий'
       vi.mocked(taxonomyApi.getFullTaxonomy).mockResolvedValue(

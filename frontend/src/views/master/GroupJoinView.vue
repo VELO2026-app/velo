@@ -1,6 +1,6 @@
 <!--
 =============================================================================
-VELO Frontend — Group invite join (Master GROUPS P4, ПРОМТ №593)
+VELO Frontend — Group invite join (Master GROUPS P4, PROMPT №593)
 =============================================================================
 
 Landing for the group_invite__<token> deeplink (route /groups/join/:token,
@@ -136,14 +136,14 @@ onMounted(join)
   font-size: var(--text-base);
   color: var(--velo-text-secondary);
   text-align: center;
-  max-width: 300px;
+  max-width: var(--velo-content-width-narrow);
   line-height: 1.5;
   margin: 0;
 }
 
 .group-join__actions {
   width: 100%;
-  max-width: 300px;
+  max-width: var(--velo-content-width-narrow);
   margin-top: var(--space-4);
 }
 </style>

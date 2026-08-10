@@ -226,7 +226,7 @@ class Settings(BaseSettings):
     # the ceiling matches that default. NO-LITERALS: tunable here, not inline.
     practice_series_max_occurrences: int = 40
 
-    # ПРОМТ №559: a duplicate practice submission (master retries after the
+    # PROMPT №559: a duplicate practice submission (master retries after the
     # frontend's own request timeout, believing the first attempt failed --
     # MEASURED on prod: 09:56:48, 09:57:07, 10:00:30, three complete series)
     # is treated as the SAME submission, not a new one, when another
@@ -255,7 +255,7 @@ class Settings(BaseSettings):
     # allow_stripe_stub is NOT set. The guard is correct and deliberate --
     # do not weaken it.
     #
-    # ПРОМТ №509 (owner read both servers' env, 2026-07-17): PROD currently
+    # PROMPT №509 (owner read both servers' env, 2026-07-17): PROD currently
     # has STRIPE_SECRET_KEY=TEST and NO ALLOW_STRIPE_STUB at all -- i.e. prod
     # is, right now, in exactly the state this guard exists to refuse. It
     # has not crashed only because the currently-running prod build predates
@@ -477,7 +477,7 @@ class Settings(BaseSettings):
     zoom_account_id: str = ""
     zoom_client_id: str = ""
     zoom_client_secret: str = ""
-    # VESTIGIAL (ПРОМТ №585) -- no longer decides anything. The attendance
+    # VESTIGIAL (PROMPT №585) -- no longer decides anything. The attendance
     # decision is now 50% of EACH PRACTICE'S OWN duration_minutes (owner
     # decision), computed in zoom/attendance_service.py's
     # attendance_threshold_seconds(), not read from here. This field is kept
@@ -505,7 +505,7 @@ class Settings(BaseSettings):
     # Same cap convention, for ZoomRegistrant.retry_count (E21 step E).
     zoom_registrant_create_max_retries: int = 5
 
-    # -- Zoom report ingestion (E21 step F, ПРОМТ №521) --
+    # -- Zoom report ingestion (E21 step F, PROMPT №521) --
     # Background worker toggle, same rationale as the other three loops:
     # tests disable it so the loop can't race manual test calls.
     zoom_report_enabled: bool = True
@@ -516,7 +516,7 @@ class Settings(BaseSettings):
     # scheduled end + this margin has passed -- polling earlier would just
     # find nothing and waste a call.
     zoom_report_ripen_margin_minutes: int = 15
-    # THE BOUND (ПРОМТ №521's trap-closer): once a practice's scheduled end
+    # THE BOUND (PROMPT №521's trap-closer): once a practice's scheduled end
     # + this many minutes has passed with ZoomMeeting.report_ingested_at
     # still NULL, remaining CONFIRMED bookings on it fall back to the
     # legacy proxy and are decided (tagged legacy_proxy) rather than sitting
@@ -746,7 +746,7 @@ class Settings(BaseSettings):
         NO SERVER'S ACTUAL ZOOM CREDENTIAL STATE HAS BEEN OBSERVED as of
         this writing -- this differs from is_stripe_stub, whose comment can
         reference a specific, owner-verified reading of prod's .env
-        (ПРОМТ №509). Do not add a claim here about what TEST or prod
+        (PROMPT №509). Do not add a claim here about what TEST or prod
         currently has configured unless you have personally read that
         server's env; the Stripe guard's comment once asserted "prod has a
         real key" and that assertion was false (the W6 incident, see

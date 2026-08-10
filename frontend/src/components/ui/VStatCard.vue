@@ -90,7 +90,7 @@ defineEmits<{
 }
 
 .v-stat--clickable:hover {
-  /* box-shadow: var(--shadow-md) removed ПРОМТ №437 (operator ruling: VELO is
+  /* box-shadow: var(--shadow-md) removed PROMPT №437 (operator ruling: VELO is
      flat). --shadow-md was `none`, so the hover shadow never existed; the lift
      below is what the interaction actually shows. Renders identically. */
   transform: translateY(-2px);

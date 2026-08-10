@@ -1,37 +1,20 @@
-import { ref, onMounted, onBeforeUnmount } from 'vue'
-import { KEYBOARD_VIEWPORT_THRESHOLD } from '@/utils/constants'
+import { keyboardOpen } from './useViewportGeometry'
 
 /**
- * Reactive "is the on-screen keyboard open" flag, derived from visualViewport.
+ * Reactive "is the on-screen keyboard open" flag.
  *
- * When the soft keyboard opens, the visual viewport height shrinks well below
- * the layout viewport (window.innerHeight). We treat a shrink larger than
- * `threshold` px as "keyboard open".
+ * PROMPT №657 (rebuild): this used to own its own visualViewport listener and
+ * its own copy of the native/browser delta decision. Both moved to
+ * useViewportGeometry.ts, the one place that now reads live viewport signals
+ * -- this is a thin re-export of its shared `keyboardOpen` ref so existing
+ * call sites (UserShell.vue, MasterShell.vue: `const { keyboardOpen } =
+ * useKeyboardOpen()`) need no changes. useViewportGeometry() is mounted once
+ * from App.vue; this function does not mount anything itself.
  *
- * Used to hide the floating bottom tab bar while typing, so it does not ride up
- * and overlap a focused input (e.g. BookingConfirmedView's "запрос мастеру").
- * The same visualViewport approach is used by DiaryComposer for field sizing.
- *
- * No-ops gracefully where visualViewport is unavailable (flag stays false).
+ * Used to hide the floating bottom tab bar while typing, so it does not ride
+ * up and overlap a focused input (e.g. BookingConfirmedView's "запрос
+ * мастеру").
  */
-export function useKeyboardOpen(threshold = KEYBOARD_VIEWPORT_THRESHOLD) {
-  const keyboardOpen = ref(false)
-  const vv = typeof window !== 'undefined' ? window.visualViewport : null
-
-  function update(): void {
-    if (!vv) return
-    keyboardOpen.value = window.innerHeight - vv.height > threshold
-  }
-
-  onMounted(() => {
-    if (!vv) return
-    vv.addEventListener('resize', update)
-    update()
-  })
-
-  onBeforeUnmount(() => {
-    vv?.removeEventListener('resize', update)
-  })
-
+export function useKeyboardOpen() {
   return { keyboardOpen }
 }

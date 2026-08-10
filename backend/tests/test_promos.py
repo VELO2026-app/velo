@@ -107,7 +107,7 @@ async def _create_verified_master(
     )
     assert verify_resp.status_code == 200
 
-    # T4 (ПРОМТ №295): approval sets status=verified but no longer flips role;
+    # T4 (PROMPT №295): approval sets status=verified but no longer flips role;
     # the applicant self-switches to master (capability path).
     await switch_self_to_master(client, auth["session_token"])
 
@@ -234,7 +234,7 @@ async def test_create_promo_valid_until_before_valid_from(
 async def test_create_promo_omitted_valid_from_defaults_to_now(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """R6 regression (ПРОМТ №390): POSTing a master promo with NO valid_from
+    """R6 regression (PROMPT №390): POSTing a master promo with NO valid_from
     key at all in the JSON body must succeed (201), not 500. Before the fix,
     pydantic's before-validator never ran against the omitted default (needs
     validate_default=True), so valid_from stayed None all the way to

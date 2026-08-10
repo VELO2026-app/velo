@@ -12,7 +12,7 @@
 //      practice that falls through the partition is simply invisible to its own
 //      owner -- no error, no empty state, just a row that is not there. Both
 //      tabs are asserted for what they include AND what they must exclude.
-//   2. The order is now whatever the SERVER returns (T22-3/T22-5, ПРОМТ
+//   2. The order is now whatever the SERVER returns (T22-3/T22-5, PROMPT
 //      №561) -- the view's old client-side localSortKey re-sort is gone by
 //      owner decision. The "renders the SERVER order verbatim" test below is
 //      built so the absolute-instant order and the old local-wall-clock order
@@ -172,7 +172,7 @@ const U_DRAFT = practice('u-draft', {
   scheduled_at: '2026-07-25T10:00:00Z',
 })
 
-// A4 V5 (ПРОМТ №571): status is still 'live' (the backend has not yet run its
+// A4 V5 (PROMPT №571): status is still 'live' (the backend has not yet run its
 // autofinalize transition to 'completed') but scheduled_at + duration_minutes
 // is already BEHIND NOW -- started 11:00Z, 60 min, ends 12:00Z, frozen instant
 // is 12:00:00Z exactly. practiceHasEnded is `nowMs >= end`, so this is the
@@ -242,7 +242,7 @@ function page(items: PracticeResponse[], total = items.length, offset = 0) {
   return { items, total, limit: 20, offset }
 }
 
-// T22-3/T22-5 (ПРОМТ №561): the server now owns the filter AND the ordering
+// T22-3/T22-5 (PROMPT №561): the server now owns the filter AND the ordering
 // per bucket -- the view no longer re-filters/re-sorts client-side, so the
 // fake server must actually behave like one. Mirrors
 // listing_service.py's bucket semantics: "upcoming" = draft/scheduled/live,
@@ -608,7 +608,7 @@ describe('MasterPracticesView', () => {
       expect(replace).toHaveBeenCalledWith({ query: { from: 'dashboard', tab: 'past' } })
     })
 
-    it('fetches each bucket ONCE on first activation, never again on repeat switches (T22-3/T22-5, ПРОМТ №561)', async () => {
+    it('fetches each bucket ONCE on first activation, never again on repeat switches (T22-3/T22-5, PROMPT №561)', async () => {
       // Was "does NOT re-fetch ... one dataset partitioned client-side": that
       // premise is gone by design -- the two tabs are now two independent
       // server queries (ensureBucketLoaded, .vue), each fetched lazily ON
@@ -773,7 +773,7 @@ describe('MasterPracticesView', () => {
       expect(cardTitles()).toEqual(['Недавняя', 'Давняя'])
     })
 
-    it('renders the SERVER order verbatim -- no client re-sort (T22-3/T22-5, ПРОМТ №561)', async () => {
+    it('renders the SERVER order verbatim -- no client re-sort (T22-3/T22-5, PROMPT №561)', async () => {
       // Was CR-1 ("orders by LOCAL wall-clock"): the view used to re-derive its
       // own order via localSortKey, comparing each practice's wall-clock in ITS
       // OWN timezone. That client-side re-sort is gone by owner decision --
@@ -1095,7 +1095,7 @@ describe('MasterPracticesView', () => {
     it('the upcoming tab skips the insights round-trip entirely', async () => {
       // .vue:275-278 short-circuits on `activeTab !== 'past'`. The only
       // observable: nothing on the upcoming card is insights-derived any more
-      // (the check-in badge reads checkin_count off the practice since ПРОМТ
+      // (the check-in badge reads checkin_count off the practice since PROMPT
       // №419), so a leaked fetch would be invisible in the DOM and cost every
       // master an N-request storm on their default tab.
       mount()

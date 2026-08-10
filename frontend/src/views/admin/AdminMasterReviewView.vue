@@ -21,11 +21,11 @@
   Footer only for master_status==='pending'; processed applications show a note. After
   verify/reject → router.push({ name: 'admin-masters' }) (S-1/S-2: fresh list mount).
 
-  PROMOTE-ON-VERIFY (ПРОМТ №505): a custom/unmatched method in the applicant's own
+  PROMOTE-ON-VERIFY (PROMPT №505): a custom/unmatched method in the applicant's own
   methods pauses «Одобрить» on a confirm dialog -- mirrors AdminMethodRequestsView's
   identical promote-on-approve dialog verbatim (same VConfirmDialog, same copy).
   Confirming ("Добавить в каталог") or dismissing/cancelling ("Только этому мастеру")
-  both still verify -- never blocks. Closes the loop: verify_master (backend, ПРОМТ
+  both still verify -- never blocks. Closes the loop: verify_master (backend, PROMPT
   №503 commit 3) already accepted `promote`, but nothing on any screen could ever
   send it -- this is the first and only caller.
 -->
@@ -40,12 +40,7 @@
     <div v-if="loading" class="mreview__loader"><VLoader size="lg" /></div>
 
     <!-- Error (SW7): distinct from "not found" -- retry, not a dead end. -->
-    <VEmptyState
-      v-else-if="error"
-      icon="warning"
-      title="Ошибка загрузки"
-      :description="error"
-    >
+    <VEmptyState v-else-if="error" icon="warning" title="Ошибка загрузки" :description="error">
       <VButton size="sm" variant="outline" @click="loadMaster">Повторить</VButton>
     </VEmptyState>
 
@@ -73,16 +68,31 @@
           <div class="mreview__k">Имя-визитка</div>
           <template v-if="editing === 'display_name'">
             <div class="mreview__edit">
-              <VInput v-model="draftText" placeholder="Имя, видимое пользователям" :error="fieldError" />
+              <VInput
+                v-model="draftText"
+                placeholder="Имя, видимое пользователям"
+                :error="fieldError"
+              />
               <div class="mreview__edit-actions">
-                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">Отмена</VButton>
-                <VButton variant="primary" size="sm" :loading="savingField" @click="saveDisplayName">Сохранить</VButton>
+                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField"
+                  >Отмена</VButton
+                >
+                <VButton variant="primary" size="sm" :loading="savingField" @click="saveDisplayName"
+                  >Сохранить</VButton
+                >
               </div>
             </div>
           </template>
           <template v-else>
             <div class="mreview__v">{{ displayNameField }}</div>
-            <button type="button" class="mreview__pen" aria-label="Изменить имя-визитку" @click="startField('display_name')"><IconEdit :size="22" /></button>
+            <button
+              type="button"
+              class="mreview__pen"
+              aria-label="Изменить имя-визитку"
+              @click="startField('display_name')"
+            >
+              <IconEdit :size="22" />
+            </button>
           </template>
         </div>
 
@@ -95,14 +105,25 @@
               <VInput v-model="draftLast" placeholder="Фамилия" />
               <p v-if="fieldError" class="mreview__edit-err">{{ fieldError }}</p>
               <div class="mreview__edit-actions">
-                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">Отмена</VButton>
-                <VButton variant="primary" size="sm" :loading="savingField" @click="saveAccountName">Сохранить</VButton>
+                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField"
+                  >Отмена</VButton
+                >
+                <VButton variant="primary" size="sm" :loading="savingField" @click="saveAccountName"
+                  >Сохранить</VButton
+                >
               </div>
             </div>
           </template>
           <template v-else>
             <div class="mreview__v">{{ accountName }}</div>
-            <button type="button" class="mreview__pen" aria-label="Изменить имя аккаунта" @click="startField('account_name')"><IconEdit :size="22" /></button>
+            <button
+              type="button"
+              class="mreview__pen"
+              aria-label="Изменить имя аккаунта"
+              @click="startField('account_name')"
+            >
+              <IconEdit :size="22" />
+            </button>
           </template>
         </div>
 
@@ -114,14 +135,25 @@
               <VTextarea v-model="draftText" placeholder="О себе" :rows="3" />
               <p v-if="fieldError" class="mreview__edit-err">{{ fieldError }}</p>
               <div class="mreview__edit-actions">
-                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">Отмена</VButton>
-                <VButton variant="primary" size="sm" :loading="savingField" @click="saveBio">Сохранить</VButton>
+                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField"
+                  >Отмена</VButton
+                >
+                <VButton variant="primary" size="sm" :loading="savingField" @click="saveBio"
+                  >Сохранить</VButton
+                >
               </div>
             </div>
           </template>
           <template v-else>
             <div class="mreview__v mreview__v--bio">{{ bio }}</div>
-            <button type="button" class="mreview__pen" aria-label="Изменить о себе" @click="startField('bio')"><IconEdit :size="22" /></button>
+            <button
+              type="button"
+              class="mreview__pen"
+              aria-label="Изменить о себе"
+              @click="startField('bio')"
+            >
+              <IconEdit :size="22" />
+            </button>
           </template>
         </div>
 
@@ -130,16 +162,32 @@
           <div class="mreview__k">Email</div>
           <template v-if="editing === 'email'">
             <div class="mreview__edit">
-              <VInput v-model="draftText" type="email" placeholder="you@example.com" :error="fieldError" />
+              <VInput
+                v-model="draftText"
+                type="email"
+                placeholder="you@example.com"
+                :error="fieldError"
+              />
               <div class="mreview__edit-actions">
-                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">Отмена</VButton>
-                <VButton variant="primary" size="sm" :loading="savingField" @click="saveEmail">Сохранить</VButton>
+                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField"
+                  >Отмена</VButton
+                >
+                <VButton variant="primary" size="sm" :loading="savingField" @click="saveEmail"
+                  >Сохранить</VButton
+                >
               </div>
             </div>
           </template>
           <template v-else>
             <div class="mreview__v">{{ email }}</div>
-            <button type="button" class="mreview__pen" aria-label="Изменить email" @click="startField('email')"><IconEdit :size="22" /></button>
+            <button
+              type="button"
+              class="mreview__pen"
+              aria-label="Изменить email"
+              @click="startField('email')"
+            >
+              <IconEdit :size="22" />
+            </button>
           </template>
         </div>
 
@@ -150,14 +198,25 @@
             <div class="mreview__edit">
               <VInput v-model="draftText" placeholder="+7…" :error="fieldError" />
               <div class="mreview__edit-actions">
-                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">Отмена</VButton>
-                <VButton variant="primary" size="sm" :loading="savingField" @click="savePhone">Сохранить</VButton>
+                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField"
+                  >Отмена</VButton
+                >
+                <VButton variant="primary" size="sm" :loading="savingField" @click="savePhone"
+                  >Сохранить</VButton
+                >
               </div>
             </div>
           </template>
           <template v-else>
             <div class="mreview__v">{{ phone }}</div>
-            <button type="button" class="mreview__pen" aria-label="Изменить телефон" @click="startField('phone')"><IconEdit :size="22" /></button>
+            <button
+              type="button"
+              class="mreview__pen"
+              aria-label="Изменить телефон"
+              @click="startField('phone')"
+            >
+              <IconEdit :size="22" />
+            </button>
           </template>
         </div>
 
@@ -166,16 +225,32 @@
           <div class="mreview__k">Опыт</div>
           <template v-if="editing === 'experience_years'">
             <div class="mreview__edit">
-              <VInput v-model="draftText" type="number" placeholder="Лет опыта (0–50)" :error="fieldError" />
+              <VInput
+                v-model="draftText"
+                type="number"
+                placeholder="Лет опыта (0–50)"
+                :error="fieldError"
+              />
               <div class="mreview__edit-actions">
-                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">Отмена</VButton>
-                <VButton variant="primary" size="sm" :loading="savingField" @click="saveExperience">Сохранить</VButton>
+                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField"
+                  >Отмена</VButton
+                >
+                <VButton variant="primary" size="sm" :loading="savingField" @click="saveExperience"
+                  >Сохранить</VButton
+                >
               </div>
             </div>
           </template>
           <template v-else>
             <div class="mreview__v">{{ experience }}</div>
-            <button type="button" class="mreview__pen" aria-label="Изменить опыт" @click="startField('experience_years')"><IconEdit :size="22" /></button>
+            <button
+              type="button"
+              class="mreview__pen"
+              aria-label="Изменить опыт"
+              @click="startField('experience_years')"
+            >
+              <IconEdit :size="22" />
+            </button>
           </template>
         </div>
 
@@ -198,8 +273,12 @@
               </div>
               <p v-if="fieldError" class="mreview__edit-err">{{ fieldError }}</p>
               <div class="mreview__edit-actions">
-                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">Отмена</VButton>
-                <VButton variant="primary" size="sm" :loading="savingField" @click="saveLanguages">Сохранить</VButton>
+                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField"
+                  >Отмена</VButton
+                >
+                <VButton variant="primary" size="sm" :loading="savingField" @click="saveLanguages"
+                  >Сохранить</VButton
+                >
               </div>
             </div>
           </template>
@@ -208,7 +287,14 @@
               <VChip v-for="l in languages" :key="l" size="md">{{ l }}</VChip>
               <span v-if="!languages.length" class="mreview__muted">—</span>
             </div>
-            <button type="button" class="mreview__pen" aria-label="Изменить языки" @click="startField('languages')"><IconEdit :size="22" /></button>
+            <button
+              type="button"
+              class="mreview__pen"
+              aria-label="Изменить языки"
+              @click="startField('languages')"
+            >
+              <IconEdit :size="22" />
+            </button>
           </template>
         </div>
 
@@ -216,7 +302,7 @@
         <div class="mreview__row">
           <div class="mreview__k">Направления практик</div>
           <div v-if="editingMethods" class="mreview__methods-edit">
-            <!-- T4/F2-F6 (ПРОМТ №409): swapped the flat legacy AVAILABLE_METHODS
+            <!-- T4/F2-F6 (PROMPT №409): swapped the flat legacy AVAILABLE_METHODS
                  toggle for the writable two-level picker, mirroring the swap
                  already done in EditProfileView.vue -- an admin can now pick a
                  fresh Направление→Вид pair from the R5 DB catalog, not just
@@ -272,13 +358,27 @@
                 </VChip>
               </div>
               <div class="mreview__cert-add">
-                <VInput v-model="certInput" placeholder="Добавить сертификат + Enter" @keydown.enter.prevent="addCert" />
-                <VButton variant="ghost" size="sm" :disabled="!certInput.trim()" @click="addCert">Добавить</VButton>
+                <VInput
+                  v-model="certInput"
+                  placeholder="Добавить сертификат + Enter"
+                  @keydown.enter.prevent="addCert"
+                />
+                <VButton variant="ghost" size="sm" :disabled="!certInput.trim()" @click="addCert"
+                  >Добавить</VButton
+                >
               </div>
               <p v-if="fieldError" class="mreview__edit-err">{{ fieldError }}</p>
               <div class="mreview__edit-actions">
-                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">Отмена</VButton>
-                <VButton variant="primary" size="sm" :loading="savingField" @click="saveCertifications">Сохранить</VButton>
+                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField"
+                  >Отмена</VButton
+                >
+                <VButton
+                  variant="primary"
+                  size="sm"
+                  :loading="savingField"
+                  @click="saveCertifications"
+                  >Сохранить</VButton
+                >
               </div>
             </div>
           </template>
@@ -287,7 +387,14 @@
               <VChip v-for="(c, i) in certifications" :key="`${c}-${i}`" size="md">{{ c }}</VChip>
               <span v-if="!certifications.length" class="mreview__muted">—</span>
             </div>
-            <button type="button" class="mreview__pen" aria-label="Изменить сертификаты" @click="startField('certifications')"><IconEdit :size="22" /></button>
+            <button
+              type="button"
+              class="mreview__pen"
+              aria-label="Изменить сертификаты"
+              @click="startField('certifications')"
+            >
+              <IconEdit :size="22" />
+            </button>
           </template>
         </div>
       </VCard>
@@ -365,12 +472,7 @@
         </VCard>
         <!-- A1: revoke a verified master (soft-freeze, data preserved) -->
         <div v-if="isVerified" class="mreview__foot">
-          <VButton
-            variant="danger"
-            :loading="revoking"
-            :disabled="anyLoading"
-            @click="openRevoke"
-          >
+          <VButton variant="danger" :loading="revoking" :disabled="anyLoading" @click="openRevoke">
             Отозвать мастера
           </VButton>
         </div>
@@ -412,7 +514,7 @@
       @cancel="showRevoke = false"
     />
 
-    <!-- Custom method not in the catalog (ПРОМТ №505, mirrors
+    <!-- Custom method not in the catalog (PROMPT №505, mirrors
          AdminMethodRequestsView's identical dialog verbatim -- same copy,
          same never-blocks contract). -->
     <VConfirmDialog
@@ -594,7 +696,7 @@ async function loadMaster(): Promise<void> {
   if (!master.value) loading.value = true
   error.value = null
   try {
-    // Bug 2 fix (ПРОМТ №405): prime the taxonomy catalog cache alongside the
+    // Bug 2 fix (PROMPT №405): prime the taxonomy catalog cache alongside the
     // detail fetch so a promoted custom method already resolves to a plain
     // chip. Note: the `handed` instant-paint above can still render one frame
     // of stale (pre-catalog) chips before this resolves -- that flash predates
@@ -807,7 +909,7 @@ function closeReject(): void {
   showReject.value = false
 }
 
-// -- Promote-on-verify (ПРОМТ №505): mirrors AdminMethodRequestsView's own
+// -- Promote-on-verify (PROMPT №505): mirrors AdminMethodRequestsView's own
 // onApprove/doApprove/onPromoteConfirm/onPromoteCancel verbatim, same
 // VConfirmDialog component (already imported+used on this screen for
 // revoke), same copy. A custom/unmatched method in the applicant's own
@@ -852,7 +954,7 @@ function onPromoteConfirm(): void {
 }
 
 /** «Только этому мастеру» (or the dialog dismissed) -- verify, scoped to this
- *  master only (T22-6, ПРОМТ №561): a real taxonomy row, just not a shared
+ *  master only (T22-6, PROMPT №561): a real taxonomy row, just not a shared
  *  one -- was silently nothing before this. */
 function onPromoteCancel(): void {
   void doVerify(undefined, [promoteLabel.value])

@@ -360,7 +360,7 @@ async def test_revenue_offset_navigates_previous_week(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """W9 regression (ПРОМТ №387): offset=-1 shows a commission booked exactly
+    """W9 regression (PROMPT №387): offset=-1 shows a commission booked exactly
     one week ago; offset=0 (current week) does not. Before the fix,
     getAdminRevenue had no offset parameter at all -- the revenue card
     silently ignored the dashboard's week-stepper while its sibling metrics

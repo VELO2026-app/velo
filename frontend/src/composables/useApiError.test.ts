@@ -2,7 +2,7 @@
 // VELO Frontend -- useApiError.ts Unit Tests
 // =============================================================================
 //
-// First direct unit tests for this file. B3 (Батч 3, ПРОМТ №580) extended
+// First direct unit tests for this file. B3 (Батч 3, PROMPT №580) extended
 // extractApiError to also fall back on an EMPTY ApiResponseError.detail --
 // previously several call sites duplicated that guard inline
 // (`e.detail || fallback`) because the helper's own `e.detail` was

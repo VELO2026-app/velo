@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- useKeyboardFieldScroll (M5/M6, ПРОМТ №273)
+// VELO Frontend -- useKeyboardFieldScroll (M5/M6, PROMPT №273)
 // =============================================================================
 //
 // A @focus handler that scrolls a text field into view AFTER the soft keyboard

@@ -58,7 +58,7 @@
         >
           Свой вариант
         </VChip>
-        <!-- Readonly display of the custom variant (R3/R4 fix, ПРОМТ №391):
+        <!-- Readonly display of the custom variant (R3/R4 fix, PROMPT №391):
              parseMethods now SURFACES an unmatched string instead of
              dropping it (Q3=А, was Q3=В) -- this chip is what actually shows
              it, matching the selected-direction chips above rather than
@@ -70,7 +70,12 @@
     </VCard>
 
     <!-- Level 2: per selected direction that has (in readonly: chosen) styles. -->
-    <VCard v-for="card in styleCards" :key="`styles-${card.dir}`" class="mtp__chip-card mtp__styles" padding="none">
+    <VCard
+      v-for="card in styleCards"
+      :key="`styles-${card.dir}`"
+      class="mtp__chip-card mtp__styles"
+      padding="none"
+    >
       <span class="mtp__styles-title">{{ card.label }}</span>
       <div class="mtp__chips">
         <VChip
@@ -151,7 +156,7 @@ function sameSet(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((x) => b.includes(x))
 }
 
-// ПРОМТ №503 commit 2: the sameSet() guard above is necessary (without it,
+// PROMPT №503 commit 2: the sameSet() guard above is necessary (without it,
 // our own emitChange -> parent v-model -> this watch would loop) but it was
 // ALSO blocking a legitimate reparse. A value first parsed against a COLD
 // catalog (this component's own onMounted fetch hasn't resolved yet -- the
@@ -199,7 +204,7 @@ const catalog = ref<TaxonomyListResponse | null>(null)
 onMounted(async () => {
   try {
     catalog.value = await getActiveTaxonomy()
-    // Bug 5 leak 1 fix (ПРОМТ №408): feed the SAME fetch into methodTaxonomy.ts's
+    // Bug 5 leak 1 fix (PROMPT №408): feed the SAME fetch into methodTaxonomy.ts's
     // shared module cache. Every screen embeds this picker, so this is what
     // actually warms parseMethods/flattenMethods/directionLabel for a
     // catalog-only value -- a screen no longer has to separately remember its
@@ -232,9 +237,7 @@ function catalogStylesForDirection(dir: PracticeDirection): StyleOption[] {
 // Editable: the whole taxonomy. Readonly: only the chosen directions.
 const level1Directions = computed<DirectionOption[]>(() => {
   const all = allDirectionOptions()
-  return props.readonly
-    ? all.filter((o) => selection.directions.includes(o.value))
-    : all
+  return props.readonly ? all.filter((o) => selection.directions.includes(o.value)) : all
 })
 
 // -- Level 2 (styles per selected direction) ---------------------------------

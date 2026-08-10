@@ -3,7 +3,7 @@
 # =============================================================================
 #
 # Read-only engagement rates for the admin dashboard, per DISTINCT PRACTICE
-# (operator formulas, ПРОМТ №319). All three honor the same period + offset as
+# (operator formulas, PROMPT №319). All three honor the same period + offset as
 # the dashboard stepper (offset 0 = current, -1 = previous week/month, ...).
 #
 # "PAST practice in period" (check-in / feedback denominator):

@@ -91,7 +91,7 @@ import type {
 } from '@/api/types'
 
 vi.mock('@/api/practices')
-// P5 (ПРОМТ №594): «Для кого практика» -> «Конкретные группы» fetches the
+// P5 (PROMPT №594): «Для кого практика» -> «Конкретные группы» fetches the
 // master's own custom groups on mount. Mocked wholesale (like practicesApi
 // above) -- an unmocked call here would hit the real network in EVERY test
 // in this file, not just the audience-specific ones below.
@@ -129,7 +129,7 @@ const masterState: {
 } = {
   practices: [],
   profile: null,
-  // ПРОМТ №556: defaults true -- masterStatusGuard (router/index.ts) already
+  // PROMPT №556: defaults true -- masterStatusGuard (router/index.ts) already
   // awaits fetchMyProfile() before this screen mounts in the real app, so
   // "not yet loaded" is the abnormal case, not the default one. The two
   // tests that specifically exercise "profile hasn't loaded" override this.
@@ -374,7 +374,7 @@ beforeEach(() => {
   localStorage.clear()
   masterState.practices = []
   // Seeded with every direction/style this file's tests actually pick
-  // (T21-6, ПРОМТ №546) -- the confirmed-methods filter is real from here
+  // (T21-6, PROMPT №546) -- the confirmed-methods filter is real from here
   // down, not bypassed by the fail-open (no-profile) path. The two tests
   // that specifically exercise "profile hasn't loaded" / "profile narrows
   // to fewer directions" override this per-test.
@@ -385,7 +385,7 @@ beforeEach(() => {
   authState.user = { id: 'u1', timezone: 'Europe/Moscow' } as Partial<UserResponse>
   fetchMyProfile.mockReset().mockResolvedValue(undefined)
   vi.mocked(ensureTaxonomyCatalog).mockReset().mockResolvedValue(null)
-  // ПРОМТ №559: status:'draft' -- matches the REAL backend (create_practice
+  // PROMPT №559: status:'draft' -- matches the REAL backend (create_practice
   // always creates as draft; only the follow-up publish PATCH makes it
   // 'scheduled'). Left at the shared factory's default 'scheduled' this
   // would silently defeat the new guard that skips a redundant re-publish
@@ -452,8 +452,8 @@ describe('CreatePracticeView', () => {
       expect(selectByPlaceholder('Направление практики')).toBeDefined()
     })
 
-    it('offers NOTHING (not the full catalog) while the master profile has not loaded yet (ПРОМТ №556, OWNER-2 fix)', async () => {
-      // REVERSED by ПРОМТ №556: this used to assert a fail-OPEN fallback to
+    it('offers NOTHING (not the full catalog) while the master profile has not loaded yet (PROMPT №556, OWNER-2 fix)', async () => {
+      // REVERSED by PROMPT №556: this used to assert a fail-OPEN fallback to
       // the full catalog while the profile was unloaded -- exactly the gap
       // that let a form present a direction/style the master was never
       // confirmed for. An unknown confirmed-set must never read as
@@ -474,7 +474,7 @@ describe('CreatePracticeView', () => {
       expect(opts).toHaveLength(1)
     })
 
-    it("narrows to the master's own confirmed methods once the profile has loaded (T21-6, ПРОМТ №546)", async () => {
+    it("narrows to the master's own confirmed methods once the profile has loaded (T21-6, PROMPT №546)", async () => {
       // Same cold catalog as above (ensureTaxonomyCatalog mocked to null) --
       // the filter is driven by MasterProfileResponse.methods, resolved via
       // parseMethods against the hardcoded DIRECTION_OPTIONS fallback, not by
@@ -669,7 +669,7 @@ describe('CreatePracticeView', () => {
         price_cents: 0,
         currency: 'eur',
         recurrence: null,
-        // P5 (ПРОМТ №594): untouched «Для кого практика» -> the default.
+        // P5 (PROMPT №594): untouched «Для кого практика» -> the default.
         audience_kind: 'public',
         group_ids: [],
       })
@@ -1037,7 +1037,7 @@ describe('CreatePracticeView', () => {
       })
     })
 
-    it("ПРОМТ №559 / A4 V6 (ПРОМТ №572): a dedup-returned ALREADY-scheduled practice skips the publish PATCH AND is honestly presented as the master's existing practice, not a new one", async () => {
+    it("PROMPT №559 / A4 V6 (PROMPT №572): a dedup-returned ALREADY-scheduled practice skips the publish PATCH AND is honestly presented as the master's existing practice, not a new one", async () => {
       // The backend's own duplicate-submission check (create_practice)
       // returns the master's EARLIER submission unchanged, status='scheduled'
       // already, when this looks like a retry within its short window --
@@ -1229,7 +1229,7 @@ describe('CreatePracticeView', () => {
       expect(titles).toEqual(['Новая', 'Старая'])
     })
 
-    it('T23-3 (ПРОМТ №565): a published series offers ONE entry, not one per generated occurrence', async () => {
+    it('T23-3 (PROMPT №565): a published series offers ONE entry, not one per generated occurrence', async () => {
       // The owner's exact report: "Свист" for three separate July dates --
       // one root (parent_practice_id=null) + two generated children sharing
       // that root's id as their own parent_practice_id. Grouped by
@@ -1511,7 +1511,7 @@ describe('CreatePracticeView', () => {
     })
   })
 
-  describe('«Для кого практика» (P5, ПРОМТ №594)', () => {
+  describe('«Для кого практика» (P5, PROMPT №594)', () => {
     it('defaults to public with no group_ids when left untouched', async () => {
       mount()
       await flush()
@@ -1524,12 +1524,12 @@ describe('CreatePracticeView', () => {
       expect(sentBody().group_ids).toEqual([])
     })
 
-    it('«Все ученики» sends audience_kind=students', async () => {
+    it('T24-24 (PROMPT №639): «Все мои ученики» sends audience_kind=students', async () => {
       mount()
       await flush()
       await fillMinimalForm()
 
-      button('Все ученики')?.click()
+      button('Все мои ученики')?.click()
       await flush()
       submitForm()
       await flush()
@@ -1554,8 +1554,8 @@ describe('CreatePracticeView', () => {
     it('the group multi-select renders ONLY for «Конкретные группы»', async () => {
       vi.mocked(groupsApi.getGroups).mockResolvedValue({
         items: [
-          { id: 'g1', kind: 'custom', name: 'VIP', members_count: 3 },
-          { id: 'g2', kind: 'custom', name: 'Утро', members_count: 1 },
+          { id: 'g1', kind: 'custom', name: 'VIP', members_count: 3, description: null },
+          { id: 'g2', kind: 'custom', name: 'Утро', members_count: 1, description: null },
         ],
       })
       mount()
@@ -1575,7 +1575,7 @@ describe('CreatePracticeView', () => {
 
     it('picking a group chip sends its id in group_ids', async () => {
       vi.mocked(groupsApi.getGroups).mockResolvedValue({
-        items: [{ id: 'g1', kind: 'custom', name: 'VIP', members_count: 3 }],
+        items: [{ id: 'g1', kind: 'custom', name: 'VIP', members_count: 3, description: null }],
       })
       mount()
       await flush()
@@ -1597,7 +1597,7 @@ describe('CreatePracticeView', () => {
 
     it('«Конкретные группы» with nothing picked blocks submit with a field error', async () => {
       vi.mocked(groupsApi.getGroups).mockResolvedValue({
-        items: [{ id: 'g1', kind: 'custom', name: 'VIP', members_count: 3 }],
+        items: [{ id: 'g1', kind: 'custom', name: 'VIP', members_count: 3, description: null }],
       })
       mount()
       await flush()

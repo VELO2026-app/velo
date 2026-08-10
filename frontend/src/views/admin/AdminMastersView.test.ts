@@ -147,7 +147,7 @@ const M_SUSPENDED = master({
   methods: [],
 })
 
-// T21-10 (ПРОМТ №546): a promoted custom direction+style pair, exact shape as
+// T21-10 (PROMPT №546): a promoted custom direction+style pair, exact shape as
 // the bug report (custom_xxxxxxxx slugs, minted by admin/masters/service.py's
 // _promote_custom_methods) -- resolvable ONLY via the catalog, never the
 // hardcoded DIRECTION_LABEL/STYLE_LABEL maps. Kept OUT of FULL_LIST so it
@@ -248,12 +248,14 @@ describe('AdminMastersView', () => {
       // ever observe the loading=true render (Vue schedules that re-render on
       // its OWN microtask, so it never beats an already-resolved fetch).
       let resolveList!: (v: ReturnType<typeof paginated>) => void
-      vi.mocked(adminApi.getMastersList).mockReset().mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolveList = resolve
-          }),
-      )
+      vi.mocked(adminApi.getMastersList)
+        .mockReset()
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveList = resolve
+            }),
+        )
       mount()
       await nextTick()
 
@@ -275,7 +277,7 @@ describe('AdminMastersView', () => {
       expect(cards()).toHaveLength(5)
     })
 
-    // ПРОМТ №523 (T20-3 recon): pins the exact call args. Before ПРОМТ №289
+    // PROMPT №523 (T20-3 recon): pins the exact call args. Before PROMPT №289
     // (commit e579c17) this call sent `limit=200`, which the backend's
     // `le=100` constraint (admin/users/router.py:94) 422-rejected with
     // literally "Input should be less than or equal to 100" -- this test
@@ -294,7 +296,9 @@ describe('AdminMastersView', () => {
       mount()
       await flush()
 
-      expect(host?.querySelector('.v-empty__title')?.textContent).toBe('Не удалось загрузить мастеров')
+      expect(host?.querySelector('.v-empty__title')?.textContent).toBe(
+        'Не удалось загрузить мастеров',
+      )
       expect(cards()).toHaveLength(0)
       expect(toastError).toHaveBeenCalledWith('Ошибка загрузки мастеров')
     })
@@ -306,7 +310,9 @@ describe('AdminMastersView', () => {
       mount()
       await flush()
 
-      expect(host?.querySelector('.v-empty__title')?.textContent).toBe('Не удалось загрузить мастеров')
+      expect(host?.querySelector('.v-empty__title')?.textContent).toBe(
+        'Не удалось загрузить мастеров',
+      )
       expect(toastError).toHaveBeenCalledWith('Сервер недоступен')
     })
 
@@ -344,7 +350,9 @@ describe('AdminMastersView', () => {
       segmentItem('Проверка').click()
       await flush()
 
-      expect(host?.querySelector('.admin-list__empty')?.textContent).toBe('Нет мастеров на проверке')
+      expect(host?.querySelector('.admin-list__empty')?.textContent).toBe(
+        'Нет мастеров на проверке',
+      )
     })
   })
 
@@ -441,7 +449,7 @@ describe('AdminMastersView', () => {
   })
 
   // ===========================================================================
-  // T21-10 (ПРОМТ №546): the collapsed card's STYLE half used to read
+  // T21-10 (PROMPT №546): the collapsed card's STYLE half used to read
   // STYLE_LABEL[st] ?? st (hardcoded map only) -- a catalog-only style (e.g.
   // under a promoted custom direction) fell through to its raw
   // custom_xxxxxxxx slug. Fixed by switching to resolveStyleLabel, which

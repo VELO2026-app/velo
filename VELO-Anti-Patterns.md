@@ -5,7 +5,7 @@
 **Назначение:** Проспективный гайд по предсказанию повторяющихся ошибок при реализации.
 Каждый паттерн подтверждён реальными находками из 8+ раундов code review.
 
-> **Freshness (ПРОМТ №510, 2026-07-19, verified against `8d4948f` on `test`):** graded
+> **Freshness (PROMPT №510, 2026-07-19, verified against `8d4948f` on `test`):** graded
 > STALE-BUT-HARMLESS — NOT rewritten this round. Not sampled beyond one spot-check: P-01's
 > "семафорах 3.2/3.3" reference (data-integrity semaphores, removed 2026-07-07 `9ca5619`) was
 > found but is left as-is — it illustrates a bug pattern's *consequence*, is not in this

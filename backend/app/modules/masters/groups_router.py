@@ -1,5 +1,5 @@
 # =============================================================================
-# VELO Backend -- Master Groups Router (P1, ПРОМТ №590)
+# VELO Backend -- Master Groups Router (P1, PROMPT №590)
 # =============================================================================
 #
 # Master-facing group CRUD + membership. Mounted as a SEPARATE router (like
@@ -9,8 +9,15 @@
 # because the path shapes differ (/me/groups/... vs /me/students/...).
 #
 # AUTH: get_current_master on all endpoints (verified master only).
-# SESSION: get_db_reader for the two GETs (read-only), get_db_session for
+# SESSION: get_db_reader for every GET (read-only), get_db_session for
 # every mutation (P-01 -- router flushes, service never commits).
+#
+# GET /me/groups/search (P6, PROMPT №606) is a STATIC path declared before
+# this file's DYNAMIC /me/groups/{group_id}... routes -- same static-
+# before-dynamic reasoning students_router.py's own header documents for
+# /me/students vs /me/students/{student_id}. No GET exists on the bare
+# {group_id} shape today, so there is no actual collision to avoid, but
+# the declaration order costs nothing and keeps the file consistent.
 # =============================================================================
 
 from uuid import UUID
@@ -29,9 +36,11 @@ from app.modules.masters.groups_schemas import (
     GroupListResponse,
     GroupMemberItem,
     GroupResponse,
+    GroupSearchMemberItem,
     JoinGroupRequest,
     JoinGroupResponse,
     PaginatedGroupMembersResponse,
+    PaginatedGroupSearchResponse,
     RenameGroupRequest,
 )
 from app.modules.masters.groups_service import (
@@ -45,6 +54,7 @@ from app.modules.masters.groups_service import (
     list_master_groups,
     remove_group_member,
     rename_group,
+    search_group_memberships,
 )
 from app.modules.masters.models import MasterProfile
 from app.modules.users.models import User
@@ -66,6 +76,30 @@ async def list_groups_endpoint(
     return GroupListResponse(items=[GroupListItem(**item) for item in items])
 
 
+@router.get("/me/groups/search", response_model=PaginatedGroupSearchResponse)
+async def search_group_memberships_endpoint(
+    search: str | None = Query(default=None, min_length=1, max_length=100),
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_reader),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> PaginatedGroupSearchResponse:
+    """Cross-group people-search (P6, PROMPT №606): one row per (student,
+    CUSTOM group) membership -- a student in N groups appears N times,
+    each row naming a different group. See this file's own header for
+    the static-before-dynamic placement reasoning."""
+    user, _profile = master_tuple
+    items, total = await search_group_memberships(
+        user.id, session, search=search, limit=limit, offset=offset,
+    )
+    return PaginatedGroupSearchResponse(
+        items=[GroupSearchMemberItem(**item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
 @router.post("/me/groups", response_model=GroupResponse, status_code=201)
 async def create_group_endpoint(
     body: CreateGroupRequest,
@@ -74,10 +108,14 @@ async def create_group_endpoint(
 ) -> GroupResponse:
     """Create a custom group. 409 on a duplicate name for this master."""
     user, _profile = master_tuple
-    group = await create_group(user.id, body.name, session)
+    group = await create_group(
+        user.id, body.name, session, description=body.description,
+    )
     await session.flush()
     await session.refresh(group)
-    return GroupResponse(id=group.id, name=group.name, members_count=0)
+    return GroupResponse(
+        id=group.id, name=group.name, members_count=0, description=group.description,
+    )
 
 
 @router.patch("/me/groups/{group_id}", response_model=GroupResponse)
@@ -87,13 +125,31 @@ async def rename_group_endpoint(
     master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
     session: AsyncSession = Depends(get_db_session),
 ) -> GroupResponse:
-    """Rename a custom group. 400 if group_id is a system slug, 409 on a
-    duplicate name, 404 if the group doesn't exist / isn't this master's."""
+    """Rename AND/OR edit description of a custom group (owner Q10, PROMPT
+    №611). `description` is a partial update: body.model_dump(exclude_unset
+    =True) distinguishes "not sent" (leave the column untouched) from "sent"
+    (even "" or whitespace -- normalized to NULL in rename_group()), same
+    contract as users/service.py's update_user(). 400 if group_id is a
+    system slug, 409 on a duplicate name, 404 if the group doesn't exist /
+    isn't this master's."""
     user, _profile = master_tuple
-    group = await rename_group(user.id, group_id, body.name, session)
+    update_data = body.model_dump(exclude_unset=True)
+    group = await rename_group(
+        user.id,
+        group_id,
+        body.name,
+        session,
+        description=body.description,
+        description_provided="description" in update_data,
+    )
     await session.flush()
     count = await count_group_members(group.id, session)
-    return GroupResponse(id=group.id, name=group.name, members_count=count)
+    return GroupResponse(
+        id=group.id,
+        name=group.name,
+        members_count=count,
+        description=group.description,
+    )
 
 
 @router.delete("/me/groups/{group_id}", status_code=204)
@@ -164,7 +220,7 @@ async def remove_group_member_endpoint(
 
 
 # ===========================================================================
-# P4 addenda (ПРОМТ №593): group invite links
+# P4 addenda (PROMPT №593): group invite links
 # ===========================================================================
 
 

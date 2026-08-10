@@ -1,5 +1,5 @@
 # =============================================================================
-# Tests: Zoom Registrant Lifecycle (E21 step E -- ПРОМТ №520)
+# Tests: Zoom Registrant Lifecycle (E21 step E -- PROMPT №520)
 # =============================================================================
 #
 # telegram_id range: 79200-79299
@@ -35,7 +35,11 @@ from app.modules.zoom.models import (
     ZoomRegistrantRole,
     ZoomRegistrantStatus,
 )
-from app.modules.zoom.service import create_registrant_for_booking, ensure_host_registrant
+from app.modules.zoom.service import (
+    create_registrant_for_booking,
+    ensure_host_registrant,
+    ensure_shared_registrant,
+)
 from app.modules.zoom.zoom_client import ZoomAPIError
 from tests.helpers import auth_headers, fresh_get, login_user
 
@@ -55,7 +59,7 @@ _CLEANUP_QUERIES = [
         "DELETE FROM zoom_meetings WHERE practice_id IN "
         "(SELECT id FROM practices WHERE master_id IN (" + _MASTER_RANGE + "))"
     ),
-    # ПРОМТ №527: purchases must go before bookings -- purchases_booking_id_fkey
+    # PROMPT №527: purchases must go before bookings -- purchases_booking_id_fkey
     # (RESTRICT) blocks deleting a booking that still has a purchase pointing at
     # it. This file is the only zoom test file that books through the real
     # /api/v1/bookings endpoint (create_booking always creates a purchase);
@@ -63,7 +67,7 @@ _CLEANUP_QUERIES = [
     # the ORM, bypassing purchase creation -- same convention as
     # test_cancellation.py's cleanup order.
     text("DELETE FROM purchases WHERE user_id IN (" + _TID_RANGE + ")"),
-    # ПРОМТ №530: this file's new stub-mode-finalize test projects diary
+    # PROMPT №530: this file's new stub-mode-finalize test projects diary
     # practice_outcome events -- clean those up too (no FK ordering
     # constraint either way, source_id carries no ForeignKey).
     text("DELETE FROM diary_events WHERE user_id IN (" + _TID_RANGE + ")"),
@@ -311,7 +315,73 @@ async def test_host_registrant_created_once_no_booking_id(
 
 
 # ===================================================================
-# 3b. create_registrant_for_booking is idempotent too (ПРОМТ №525 --
+# 3a. Shared registrant survives Zoom's documented join_url omission
+#     (PROMPT №645 -- audit-found CRITICAL, fixed same prompt)
+# ===================================================================
+
+
+@pytest.mark.asyncio
+async def test_shared_registrant_join_url_omission_is_recovered_by_a_retry(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Reproduces Zoom's documented registrant_id-without-join_url shape
+    (ZoomRegistrant.join_url's own docstring, models.py) against the SHARED
+    registrant specifically (T24-38), via zoom_client._stub_omit_join_url --
+    a test-only knob added in this same prompt because nothing before it
+    could exercise this shape at all.
+
+    Proves the FIXED guard (both shared_registrant_id AND shared_join_url
+    must be set to no-op) recovers on a second call, where the OLD guard
+    (shared_registrant_id alone) would have permanently no-op'd and left
+    shared_join_url NULL forever -- this is the exact CRITICAL bug the
+    PROMPT №645 audit found. Run this test against the pre-fix guard first
+    to see it fail RED before trusting the GREEN below (this file's own
+    header: BACKEND-ONLY, UNPROVEN LOCALLY -- see that docstring for why
+    this could not actually be executed this session).
+    """
+    from app.modules.zoom import zoom_client
+
+    master = await _make_verified_master(client, db_session, telegram_id=79208)
+
+    zoom_client._stub_omit_join_url = True
+    try:
+        practice_id = await _create_and_publish_practice(client, master)
+    finally:
+        zoom_client._stub_omit_join_url = False
+
+    zoom_meeting = (
+        await db_session.execute(
+            select(ZoomMeeting).where(ZoomMeeting.practice_id == UUID(practice_id))
+        )
+    ).scalar_one()
+    assert zoom_meeting.status == ZoomMeetingStatus.ACTIVE.value
+    assert zoom_meeting.shared_registrant_id is not None, (
+        "the mint itself must have succeeded -- this test's trigger "
+        "condition is an OMITTED join_url, not a failed create_registrant"
+    )
+    assert zoom_meeting.shared_join_url is None, (
+        "must reproduce the omitted-join_url shape, or this test proves "
+        "nothing about the bug it exists to catch"
+    )
+
+    # A second call, simulating a retry reaching this function again for
+    # the same meeting (the stub is back to its normal, join_url-included
+    # shape here).
+    await ensure_shared_registrant(zoom_meeting, db_session)
+    await db_session.commit()
+    await db_session.refresh(zoom_meeting)
+
+    assert zoom_meeting.shared_join_url is not None, (
+        "a re-call must fill in the missing join_url -- under the OLD "
+        "guard (shared_registrant_id alone) this assertion is exactly "
+        "what fails, because the guard early-returns before ever calling "
+        "create_registrant again"
+    )
+
+
+# ===================================================================
+# 3b. create_registrant_for_booking is idempotent too (PROMPT №525 --
 #     this existence check did not exist before; calling it twice for the
 #     same booking used to insert a second row and violate
 #     uq_zoom_registrant_meeting_user_active)
@@ -359,7 +429,7 @@ async def test_create_registrant_for_booking_called_twice_stays_one_row(
 
 
 # ===================================================================
-# 3c. Regression pin (ПРОМТ №530): stub mode must not defer attendance
+# 3c. Regression pin (PROMPT №530): stub mode must not defer attendance
 # ===================================================================
 
 
@@ -372,7 +442,7 @@ async def test_finalize_decides_immediately_in_stub_mode_no_deferral(
     treating it as Zoom-tracked would defer attendance for the full
     settings.zoom_attendance_decision_deadline_minutes (120) before the
     deadline fallback finally decided it. Relies on the suite's stub-mode
-    pin (conftest.py, ПРОМТ №543), not on any server's actual credential
+    pin (conftest.py, PROMPT №543), not on any server's actual credential
     state. Pins the fix directly: the ZoomMeeting row IS still created and
     ACTIVE (stub mode's normal, unchanged behavior -- see
     test_host_registrant_created_once_no_booking_id above), but finalize
@@ -476,7 +546,7 @@ async def test_cancel_booking_marks_registrant_cancelled_even_when_zoom_fails(
 
 # ===================================================================
 # 5. A participant's join_url stops being handed out once the meeting is
-#    gone (ПРОМТ №563) -- the registrant row itself is never touched when a
+#    gone (PROMPT №563) -- the registrant row itself is never touched when a
 #    meeting is deleted outside the normal cancel flow (see
 #    zoom/service.get_host_join_url's own docstring), so the list endpoints
 #    must consult ZoomMeeting.status themselves, same as the host path.

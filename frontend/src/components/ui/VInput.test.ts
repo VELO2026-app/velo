@@ -1,8 +1,8 @@
 // =============================================================================
-// VELO Frontend -- VInput Controlled-Input Tests (T8, ПРОМТ №434)
+// VELO Frontend -- VInput Controlled-Input Tests (T8, PROMPT №434)
 // =============================================================================
 //
-// Written alongside the fix for the defect found in ПРОМТ №432 (on TopupView)
+// Written alongside the fix for the defect found in PROMPT №432 (on TopupView)
 // and traced to VInput in №433.
 //
 // THE BUG: VInput was not actually a controlled input. When a parent REJECTS or
@@ -79,7 +79,7 @@ afterEach(() => {
 })
 
 describe('VInput', () => {
-  describe('the controlled-input contract (the ПРОМТ №432 defect)', () => {
+  describe('the controlled-input contract (the PROMPT №432 defect)', () => {
     it('REJECTED input is wiped from the FIELD, not just from the state', async () => {
       // THE regression guard, in its purest form: '' -> '-5' -> ''. The parent
       // lands back on the value it already held, so the child is not re-rendered
@@ -199,7 +199,10 @@ describe('VInput', () => {
     })
 
     it('floating-label path', async () => {
-      const { input, model } = mountWith(rejectNegative, '', { floatingLabel: true, label: 'Сумма' })
+      const { input, model } = mountWith(rejectNegative, '', {
+        floatingLabel: true,
+        label: 'Сумма',
+      })
       expect(host?.querySelector('.v-input__field--float')).not.toBeNull()
       await type(input, '-5')
       expect(input.value).toBe('')
@@ -256,6 +259,25 @@ describe('VInput', () => {
       expect(input?.getAttribute('type')).toBe('number')
       expect(input?.getAttribute('min')).toBe('1')
       expect(host?.querySelector('.v-input')?.hasAttribute('min')).toBe(false)
+    })
+
+    it('T24-6 (PROMPT №639): hideLabel keeps the label in the DOM (accessible name) but visually hides it', () => {
+      mountWith(passThrough, '', { label: 'Название', hideLabel: true })
+
+      const label = host?.querySelector('.v-input__label')
+      expect(label).not.toBeNull()
+      expect(label?.textContent).toBe('Название')
+      expect(label?.classList.contains('v-input__label--visually-hidden')).toBe(true)
+    })
+
+    it('T24-6: hideLabel is OFF by default -- every existing caller stays byte-identical', () => {
+      mountWith(passThrough, '', { label: 'Название' })
+
+      expect(
+        host
+          ?.querySelector('.v-input__label')
+          ?.classList.contains('v-input__label--visually-hidden'),
+      ).toBe(false)
     })
 
     it('exposes focus()', () => {

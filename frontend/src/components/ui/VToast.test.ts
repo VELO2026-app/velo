@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- VToast Component Tests (ПРОМТ №500)
+// VELO Frontend -- VToast Component Tests (PROMPT №500)
 // =============================================================================
 //
 // VToast is mounted exactly once (App.vue) and is the ONLY rendering surface

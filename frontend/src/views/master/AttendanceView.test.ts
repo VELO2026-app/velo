@@ -37,7 +37,7 @@
 //
 // practiceWhen (.vue:129-134) combines formatDateShort (Date.now-dependent for
 // Сегодня/Завтра) + formatTime (PURE, no `new Date()` anywhere in it, verified
-// by reading format.ts:207-214). ПРОМТ №542: the ORIGINAL fixture picked a
+// by reading format.ts:207-214). PROMPT №542: the ORIGINAL fixture picked a
 // date "far from today" as of when this was written and verified the exact
 // string via node beforehand -- that relationship decays with every day that
 // passes and did in fact break (Сегодня/Завтра window reached it). The clock
@@ -60,12 +60,12 @@ import type { AttendanceResponse, AttendanceItemResponse, PracticeResponse } fro
 
 vi.mock('@/api/practices')
 
-// T21-1 follow-up (ПРОМТ №542): see AttendanceRosterView.test.ts's sibling
+// T21-1 follow-up (PROMPT №542): see AttendanceRosterView.test.ts's sibling
 // comment -- the clock is now FAKED and frozen at NOW (beforeEach below),
 // not left to the real wall clock. practiceWhen (formatDateShort, Date.now-
 // dependent) previously read a fixture date "far from today" that was only
 // far from the day this was WRITTEN, and drifted into the Сегодня/Завтра
-// window as real time passed (it did, ПРОМТ №542). STABLE_SCHEDULED_AT is
+// window as real time passed (it did, PROMPT №542). STABLE_SCHEDULED_AT is
 // derived from NOW with a fixed +30-day offset, so the relationship holds
 // regardless of what NOW is.
 const NOW = new Date('2026-07-20T10:00:00Z')
@@ -185,7 +185,7 @@ function errorDesc(): string {
 // -----------------------------------------------------------------------------
 
 beforeEach(() => {
-  // ПРОМТ №542: freeze the clock this screen's Date.now-dependent
+  // PROMPT №542: freeze the clock this screen's Date.now-dependent
   // practiceWhen sees, so its outcome no longer depends on the real
   // calendar date at all (same pattern as MasterDashboardView.test.ts).
   vi.useFakeTimers()
@@ -214,12 +214,14 @@ describe('AttendanceView', () => {
   describe('ladder', () => {
     it('loading -> content', async () => {
       let resolveGet!: (v: AttendanceResponse) => void
-      vi.mocked(practicesApi.getAttendance).mockReset().mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolveGet = resolve
-          }),
-      )
+      vi.mocked(practicesApi.getAttendance)
+        .mockReset()
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveGet = resolve
+            }),
+        )
       mount()
       await nextTick()
 
@@ -445,7 +447,9 @@ describe('AttendanceView', () => {
     it('checked in WITHOUT a comment: "Без комментария", not "Ожидает check-in"', async () => {
       vi.mocked(practicesApi.getAttendance).mockResolvedValue(
         attendanceResponse({
-          items: [attendanceItem({ user_display_name: 'Без Слов', checkin: { mood: 6, comment: null } })],
+          items: [
+            attendanceItem({ user_display_name: 'Без Слов', checkin: { mood: 6, comment: null } }),
+          ],
         }),
       )
       mount()

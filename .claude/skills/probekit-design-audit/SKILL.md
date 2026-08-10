@@ -11,7 +11,7 @@ Judges SCREENS against the SYSTEM: do components and views use the tokens in
 
 ## Configuration
 
-<!-- VELO-tuned (ПРОМТ №436): CBS's mockups/frontend/* paths swapped for VELO's
+<!-- VELO-tuned (PROMPT №436): CBS's mockups/frontend/* paths swapped for VELO's
      real tree.
 
      brand_ref: VELO HAS NO BRAND DOCUMENT, and one must NOT be invented -- the
@@ -20,7 +20,7 @@ Judges SCREENS against the SYSTEM: do components and views use the tokens in
      DERIVED from VELO's own token file by scripts/derive_token_reference.py.
      That is not circular: the skill judges SCREENS against the SYSTEM, and the
      system is 204 semantically-named tokens in a 439-line file -- reading it is
-     not making up a standard. (Operator ruling, ПРОМТ №436.)
+     not making up a standard. (Operator ruling, PROMPT №436.)
 
      The narrow circularity risk IS real: if a bad token already lives in the
      system, naive derivation encodes it as canonical. That is why the generator
@@ -40,7 +40,7 @@ deliberate.
 ## THE READ-PATH RULE (why a naive audit lies here)
 
 A token is used if EITHER `var(--x)` appears, OR its NAME appears as a string.
-Both paths are mandatory. Three traps in this repo, all verified ПРОМТ №436:
+Both paths are mandatory. Three traps in this repo, all verified PROMPT №436:
 
 1. **By-name reads.** 13 `--velo-fog-*` tokens have ZERO `var()` usages and are
    read by name via `getComputedStyle` (`MobileLayout.vue:150-161` through a
@@ -74,7 +74,7 @@ P3: Spacing Tokens (MEDIUM), P4: Radius Tokens (MEDIUM), P5: Shadow Tokens (MEDI
 INERT — P6: Dark Mode (HIGH). VELO has no dark mode; the probe finds nothing and
 its silence is not a pass. Kept: it is one theme away from mattering.
 
-DROPPED for VELO (ПРОМТ №436) — P7: Logo Icon Color enforced CBS's orange-logo
+DROPPED for VELO (PROMPT №436) — P7: Logo Icon Color enforced CBS's orange-logo
 rule; neither token nor brand exists here. P8: Token Sync diffed a second copy of
 variables.css; VELO has exactly one, and it says so itself (variables.css:4-5).
 Numbering is deliberately NOT reshuffled, so older reports stay readable.

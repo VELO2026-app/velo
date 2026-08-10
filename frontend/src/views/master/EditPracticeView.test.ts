@@ -76,10 +76,16 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import EditPracticeView from '@/views/master/EditPracticeView.vue'
 import * as practicesApi from '@/api/practices'
+import * as groupsApi from '@/api/groups'
 import { ApiResponseError } from '@/api/client'
 import type { MasterProfileResponse, PracticeResponse, UpdatePracticeRequest } from '@/api/types'
 
 vi.mock('@/api/practices')
+// P5 port (PROMPT №606): «Для кого практика» -> «Конкретные группы» fetches
+// the master's own custom groups on mount, same as CreatePracticeView.
+// Mocked wholesale -- an unmocked call here would hit the real network in
+// EVERY test in this file, not just the audience-specific ones below.
+vi.mock('@/api/groups')
 
 // Seamed at the helper, not at @/api/taxonomy: the real one caches for the whole
 // file (see the banner). Resolving null = catalog cold -> hardcoded fallback.
@@ -108,7 +114,7 @@ vi.mock('@/composables/useToast', () => ({
 // asks it to invalidate after a mutation. Getters over a mutable object so tests
 // mutate state instead of re-mocking (velo-idiom §5).
 //
-// A4 V3 (ПРОМТ №571): profile/profileLoaded added -- directionOptions/
+// A4 V3 (PROMPT №571): profile/profileLoaded added -- directionOptions/
 // styleOptionsForForm now filter to the master's own confirmed methods,
 // same as CreatePracticeView.test.ts's masterState.
 const masterState: {
@@ -306,10 +312,16 @@ beforeEach(() => {
   vi.mocked(ensureTaxonomyCatalog).mockReset().mockResolvedValue(null)
   vi.mocked(practicesApi.getPractice).mockReset().mockResolvedValue(practice())
   vi.mocked(practicesApi.updatePractice).mockReset().mockResolvedValue(practice())
+  // Owner Q15 (PROMPT №613): default to "nobody stranded" so every
+  // pre-existing save test proceeds silently, same as before this dry-run
+  // check existed -- tests that specifically exercise the warning override
+  // this per-test.
+  vi.mocked(practicesApi.previewAudienceChange).mockReset().mockResolvedValue({ stranded_count: 0 })
   vi.mocked(practicesApi.deletePractice).mockReset().mockResolvedValue(undefined)
   vi.mocked(practicesApi.cancelPractice)
     .mockReset()
     .mockResolvedValue(practice({ status: 'cancelled' }))
+  vi.mocked(groupsApi.getGroups).mockReset().mockResolvedValue({ items: [] })
   refreshMyPractices.mockReset().mockResolvedValue(undefined)
   push.mockReset()
   back.mockReset()
@@ -428,8 +440,8 @@ describe('EditPracticeView', () => {
     })
   })
 
-  describe('the form holds the practice\'s own values', () => {
-    it('renders the date and time in the PRACTICE\'s timezone, not the editor\'s', async () => {
+  describe("the form holds the practice's own values", () => {
+    it("renders the date and time in the PRACTICE's timezone, not the editor's", async () => {
       // :441-443. 10:00Z is 13:00 in Europe/Moscow. A screen that rendered the
       // browser's zone would show a master a time their students will not see,
       // and then save that time back.
@@ -452,7 +464,7 @@ describe('EditPracticeView', () => {
       expect(field('input[type="number"]')?.value).toBe('')
     })
 
-    it('renders the practice\'s own text fields', async () => {
+    it("renders the practice's own text fields", async () => {
       mountCached(practice({ contraindications: 'Травмы спины' }))
       await flush()
 
@@ -462,9 +474,9 @@ describe('EditPracticeView', () => {
     })
   })
 
-  describe('Направление/Вид: confirmed-methods parity with CreatePracticeView (A4 V3, ПРОМТ №571)', () => {
+  describe('Направление/Вид: confirmed-methods parity with CreatePracticeView (A4 V3, PROMPT №571)', () => {
     it('offers NOTHING (not the whole catalogue) while the master profile has not loaded yet', async () => {
-      // Mirrors CreatePracticeView's identical test (ПРОМТ №556, OWNER-2).
+      // Mirrors CreatePracticeView's identical test (PROMPT №556, OWNER-2).
       // Before this fix, EditPracticeView's directionOptions was
       // catalogDirectionOptions(catalog.value) unconditionally -- it never
       // consulted profileLoaded/confirmedMethods at all, so this state was
@@ -482,11 +494,11 @@ describe('EditPracticeView', () => {
       expect(opts).toHaveLength(0)
     })
 
-    it('narrows Направление to the master\'s own confirmed methods, not the whole catalogue', async () => {
+    it("narrows Направление to the master's own confirmed methods, not the whole catalogue", async () => {
       // The real break this closes: before the fix, a master confirmed for
       // ONLY "Йога" still saw the full catalogue (Медитация, Дыхательные
       // практики, ...) on the edit screen, unlike CreatePracticeView which
-      // already narrows this (T21-6, ПРОМТ №546).
+      // already narrows this (T21-6, PROMPT №546).
       masterState.profile = { methods: ['Йога', 'Йога — Хатха-йога'] } as MasterProfileResponse
       mountCached(practice())
       await flush()
@@ -668,7 +680,13 @@ describe('EditPracticeView', () => {
       await flush()
 
       expect(document.body.querySelector('.cpd__recur')).toBeNull()
-      expect(document.body.querySelectorAll('.v-radio')).toHaveLength(0)
+      // Scoped to the dialog's own root (.cpd), not the whole document: the
+      // audience block added to the main form by the P5 port (PROMPT №606)
+      // renders its OWN .v-radio (Публичная/Все ученики/Конкретные группы),
+      // which a global query would also match. This assertion's actual
+      // claim is "the cancel dialog itself offers no scope radio", not
+      // "nothing on the page renders a .v-radio".
+      expect(document.body.querySelectorAll('.cpd .v-radio')).toHaveLength(0)
     })
 
     it('a SERIES defaults to «Только эту» -- the narrow refund, not the wide one', async () => {
@@ -683,7 +701,8 @@ describe('EditPracticeView', () => {
       expect(document.body.querySelector('.cpd__recur')?.textContent).toContain(
         'Это регулярная практика',
       )
-      const radios = Array.from(document.body.querySelectorAll('.v-radio'))
+      // Scoped to .cpd for the same reason as the test above.
+      const radios = Array.from(document.body.querySelectorAll('.cpd .v-radio'))
       expect(radios[0]?.getAttribute('aria-checked')).toBe('true')
       expect(radios[0]?.textContent).toContain('Только эту')
 
@@ -1009,7 +1028,7 @@ describe('EditPracticeView', () => {
   })
 
   describe('saving: the PATCH body', () => {
-    it('ships the practice\'s OWN price back, to the cent', async () => {
+    it("ships the practice's OWN price back, to the cent", async () => {
       // MONEY. There is no price field on this form (the section was dropped;
       // see the template's Реш. В note) -- the price only survives an edit
       // because populateForm parks it in `form` and save reads it back
@@ -1050,7 +1069,7 @@ describe('EditPracticeView', () => {
       expect(sentBody().price_cents).toBe(0)
     })
 
-    it('round-trips scheduled_at through the practice\'s OWN timezone', async () => {
+    it("round-trips scheduled_at through the practice's OWN timezone", async () => {
       // populateForm renders 10:00Z as 13:00 Moscow (:441-443); save converts
       // 13:00 Moscow back to 10:00Z (:523-531). Saving an untouched form must
       // therefore be a no-op on the schedule -- if the two halves used different
@@ -1085,7 +1104,7 @@ describe('EditPracticeView', () => {
       expect(sentBody().zoom_link).toBeNull()
     })
 
-    it('sends duration as a NUMBER, not the select\'s string', async () => {
+    it("sends duration as a NUMBER, not the select's string", async () => {
       // form.duration_minutes is a string from VSelect; save coerces with
       // parseInt (:543). Shipping "60" to a backend expecting an int is a 422.
       mountCached(practice({ duration_minutes: 90 }))
@@ -1137,12 +1156,16 @@ describe('EditPracticeView', () => {
     })
 
     it('A4 V3: translates direction_not_confirmed into Russian, not the raw backend detail', async () => {
-      // Mirrors CreatePracticeView's submit() catch (ПРОМТ №556, OWNER-2).
+      // Mirrors CreatePracticeView's submit() catch (PROMPT №556, OWNER-2).
       // Before this fix, EVERY rejection on this screen -- including this
       // code -- fell through to the raw e.detail branch, showing the master
       // the backend's raw English, API-shaped message.
       vi.mocked(practicesApi.updatePractice).mockRejectedValue(
-        new ApiResponseError(400, "direction 'yoga' is not among your confirmed methods", 'direction_not_confirmed'),
+        new ApiResponseError(
+          400,
+          "direction 'yoga' is not among your confirmed methods",
+          'direction_not_confirmed',
+        ),
       )
       mountCached(practice())
       await flush()
@@ -1158,7 +1181,11 @@ describe('EditPracticeView', () => {
 
     it('A4 V3: translates style_not_confirmed into Russian, not the raw backend detail', async () => {
       vi.mocked(practicesApi.updatePractice).mockRejectedValue(
-        new ApiResponseError(400, "style 'kundalini' is not among your confirmed methods", 'style_not_confirmed'),
+        new ApiResponseError(
+          400,
+          "style 'kundalini' is not among your confirmed methods",
+          'style_not_confirmed',
+        ),
       )
       mountCached(practice())
       await flush()
@@ -1166,7 +1193,9 @@ describe('EditPracticeView', () => {
       button('Сохранить')?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Этот вид практики ещё не подтверждён в вашем профиле')
+      expect(toastError).toHaveBeenCalledWith(
+        'Этот вид практики ещё не подтверждён в вашем профиле',
+      )
     })
 
     it('does NOT save twice when the button is hit twice in flight', async () => {
@@ -1193,7 +1222,7 @@ describe('EditPracticeView', () => {
   })
 
   describe('rescheduling through the real date sheet', () => {
-    it('a picked day reaches the PATCH as an instant in the practice\'s zone', async () => {
+    it("a picked day reaches the PATCH as an instant in the practice's zone", async () => {
       // The form half of Pattern C, driven through the real teleported
       // DatePickerSheet rather than by poking `form.date` -- poking it would
       // assert our own fixture and leave the sheet -> form -> save wiring untested.
@@ -1202,9 +1231,9 @@ describe('EditPracticeView', () => {
 
       await pickDay(25)
 
-      expect(
-        host?.querySelector('.edit-practice__picker')?.textContent?.trim(),
-      ).toBe('25 июля 2026')
+      expect(host?.querySelector('.edit-practice__picker')?.textContent?.trim()).toBe(
+        '25 июля 2026',
+      )
 
       button('Сохранить')?.click()
       await flush()
@@ -1224,7 +1253,9 @@ describe('EditPracticeView', () => {
 
       const cells = Array.from(document.body.querySelectorAll<HTMLButtonElement>('.dps__day'))
       const dayCell = (n: number) =>
-        cells.find((b) => !b.classList.contains('dps__day--dim') && b.textContent?.trim() === String(n))
+        cells.find(
+          (b) => !b.classList.contains('dps__day--dim') && b.textContent?.trim() === String(n),
+        )
 
       expect(dayCell(19)?.disabled).toBe(true)
       // Today itself stays selectable -- `ymd < min` is strict.
@@ -1264,6 +1295,204 @@ describe('EditPracticeView', () => {
         params: { id: 'p7' },
       })
       expect(back).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('«Для кого практика» (P5 port, PROMPT №606)', () => {
+    it('a public practice PATCHes audience_kind=public with no group_ids', async () => {
+      mountCached(practice({ audience_kind: 'public' }))
+      await flush()
+
+      button('Сохранить')?.click()
+      await flush()
+
+      expect(sentBody().audience_kind).toBe('public')
+      expect(sentBody().group_ids).toEqual([])
+    })
+
+    it('pre-selects the chips of a groups-audience practice by resolving names -> ids', async () => {
+      // audience_group_names is what PracticeResponse actually carries (see
+      // populateForm's resolveAudienceGroupIds) -- no id list exists on the
+      // response, so this is the one path that proves the name->id
+      // resolution itself, not just that the radio renders.
+      vi.mocked(groupsApi.getGroups).mockResolvedValue({
+        items: [
+          { id: 'g1', kind: 'custom', name: 'VIP', members_count: 3, description: null },
+          { id: 'g2', kind: 'custom', name: 'Утро', members_count: 1, description: null },
+        ],
+      })
+      mountCached(practice({ audience_kind: 'groups', audience_group_names: ['Утро'] }))
+      await flush()
+
+      const chip = Array.from(host?.querySelectorAll<HTMLElement>('.v-chip') ?? []).find((c) =>
+        c.textContent?.includes('Утро'),
+      )
+      expect(chip?.classList.contains('v-chip--active')).toBe(true)
+      const otherChip = Array.from(host?.querySelectorAll<HTMLElement>('.v-chip') ?? []).find((c) =>
+        c.textContent?.includes('VIP'),
+      )
+      expect(otherChip?.classList.contains('v-chip--active')).toBe(false)
+
+      button('Сохранить')?.click()
+      await flush()
+
+      expect(sentBody().audience_kind).toBe('groups')
+      expect(sentBody().group_ids).toEqual(['g2'])
+    })
+
+    it('the group multi-select renders ONLY for «Конкретные группы»', async () => {
+      vi.mocked(groupsApi.getGroups).mockResolvedValue({
+        items: [{ id: 'g1', kind: 'custom', name: 'VIP', members_count: 3, description: null }],
+      })
+      mountCached(practice({ audience_kind: 'public' }))
+      await flush()
+
+      expect(text()).not.toContain('VIP')
+
+      button('Конкретные группы')?.click()
+      await flush()
+      expect(text()).toContain('VIP')
+
+      button('Публичная')?.click()
+      await flush()
+      expect(text()).not.toContain('VIP')
+    })
+
+    it('switching to «Конкретные группы» and picking a chip sends its id in group_ids', async () => {
+      vi.mocked(groupsApi.getGroups).mockResolvedValue({
+        items: [{ id: 'g1', kind: 'custom', name: 'VIP', members_count: 3, description: null }],
+      })
+      mountCached(practice({ audience_kind: 'public' }))
+      await flush()
+
+      button('Конкретные группы')?.click()
+      await flush()
+      const chip = Array.from(host?.querySelectorAll<HTMLElement>('.v-chip') ?? []).find((c) =>
+        c.textContent?.includes('VIP'),
+      )
+      chip?.click()
+      await flush()
+      button('Сохранить')?.click()
+      await flush()
+
+      expect(sentBody().audience_kind).toBe('groups')
+      expect(sentBody().group_ids).toEqual(['g1'])
+    })
+
+    it('«Конкретные группы» with nothing picked blocks Save with a field error', async () => {
+      vi.mocked(groupsApi.getGroups).mockResolvedValue({
+        items: [{ id: 'g1', kind: 'custom', name: 'VIP', members_count: 3, description: null }],
+      })
+      mountCached(practice({ audience_kind: 'public' }))
+      await flush()
+
+      button('Конкретные группы')?.click()
+      await flush()
+      button('Сохранить')?.click()
+      await flush()
+
+      expect(practicesApi.updatePractice).not.toHaveBeenCalled()
+      expect(text()).toContain('Выберите хотя бы одну группу')
+    })
+  })
+
+  describe('audience-narrowing warning (owner Q15, PROMPT №613)', () => {
+    it('editing an UNRELATED field never calls previewAudienceChange (audience unchanged)', async () => {
+      mountCached(practice({ audience_kind: 'public' }))
+      await flush()
+
+      const titleInput = host?.querySelector<HTMLInputElement>('input')
+      titleInput!.value = 'Новое название'
+      titleInput!.dispatchEvent(new Event('input'))
+      button('Сохранить')?.click()
+      await flush()
+
+      expect(practicesApi.previewAudienceChange).not.toHaveBeenCalled()
+      expect(practicesApi.updatePractice).toHaveBeenCalledTimes(1)
+    })
+
+    it('a stranded count of ZERO saves silently, no dialog', async () => {
+      vi.mocked(practicesApi.previewAudienceChange).mockResolvedValue({ stranded_count: 0 })
+      mountCached(practice({ audience_kind: 'public' }))
+      await flush()
+
+      button('Все ученики')?.click()
+      await flush()
+      button('Сохранить')?.click()
+      await flush()
+
+      expect(practicesApi.previewAudienceChange).toHaveBeenCalledWith('p1', {
+        audience_kind: 'students',
+        group_ids: [],
+      })
+      expect(document.body.querySelector('.v-confirm__actions')).toBeNull()
+      expect(practicesApi.updatePractice).toHaveBeenCalledTimes(1)
+    })
+
+    it('a stranded count above zero warns with the owner-picked wording (plural, N=3) and does NOT save yet', async () => {
+      vi.mocked(practicesApi.previewAudienceChange).mockResolvedValue({ stranded_count: 3 })
+      mountCached(practice({ audience_kind: 'public' }))
+      await flush()
+
+      button('Все ученики')?.click()
+      await flush()
+      button('Сохранить')?.click()
+      await flush()
+
+      expect(practicesApi.updatePractice).not.toHaveBeenCalled()
+      expect(document.body.querySelector('.v-confirm__text')?.textContent).toBe(
+        '3 записавшихся не попадут на эту практику — они не входят в выбранную аудиторию. ' +
+          'Их запись останется, но войти они не смогут. Сохранить?',
+      )
+    })
+
+    it('a stranded count of exactly 1 uses the SINGULAR noun + agreeing verbs/pronouns (PROMPT №614)', async () => {
+      vi.mocked(practicesApi.previewAudienceChange).mockResolvedValue({ stranded_count: 1 })
+      mountCached(practice({ audience_kind: 'public' }))
+      await flush()
+
+      button('Все ученики')?.click()
+      await flush()
+      button('Сохранить')?.click()
+      await flush()
+
+      expect(document.body.querySelector('.v-confirm__text')?.textContent).toBe(
+        '1 записавшийся не попадёт на эту практику — он не входит в выбранную аудиторию. ' +
+          'Его запись останется, но войти он не сможет. Сохранить?',
+      )
+    })
+
+    it('confirming the warning proceeds to the actual save', async () => {
+      vi.mocked(practicesApi.previewAudienceChange).mockResolvedValue({ stranded_count: 2 })
+      mountCached(practice({ audience_kind: 'public' }))
+      await flush()
+
+      button('Все ученики')?.click()
+      await flush()
+      button('Сохранить')?.click()
+      await flush()
+
+      confirmDialogConfirm('Сохранить всё равно')?.click()
+      await flush()
+
+      expect(practicesApi.updatePractice).toHaveBeenCalledTimes(1)
+      expect(sentBody().audience_kind).toBe('students')
+    })
+
+    it('cancelling the warning does NOT save', async () => {
+      vi.mocked(practicesApi.previewAudienceChange).mockResolvedValue({ stranded_count: 2 })
+      mountCached(practice({ audience_kind: 'public' }))
+      await flush()
+
+      button('Все ученики')?.click()
+      await flush()
+      button('Сохранить')?.click()
+      await flush()
+
+      confirmDialogConfirm('Отмена')?.click()
+      await flush()
+
+      expect(practicesApi.updatePractice).not.toHaveBeenCalled()
     })
   })
 

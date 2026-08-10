@@ -54,6 +54,7 @@ import { useAuth } from '@/composables/useAuth'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 import { useBackgroundStabilizer } from '@/composables/useBackgroundStabilizer'
+import { useViewportGeometry } from '@/composables/useViewportGeometry'
 import { useKeyboardDismiss } from '@/composables/useKeyboardDismiss'
 import { startRoleFreshnessPoll } from '@/composables/useRoleFreshness'
 import { VToast } from '@/components/ui'
@@ -70,6 +71,13 @@ const toast = useToast()
 // Pin the fixed photo-background against the iOS/Telegram keyboard viewport
 // shift (the "dancing background"). Mounted once here, on the app root.
 useBackgroundStabilizer()
+
+// PROMPT №657: the ONE live viewport/keyboard reader -- --velo-vvh,
+// --velo-vv-offset, html.is-keyboard-open, and the reactive refs every other
+// consumer (composer position, tab bar, autogrow, the debug panel) now reads
+// instead of touching window.visualViewport / the tma.js viewport SDK
+// themselves. See the file's own header for what this replaces.
+useViewportGeometry()
 
 // GLOBAL tap-to-dismiss keyboard (batch L, B1): one app-level owner replacing
 // the per-view dismissKeyboardOnBlank copies. Installed once here.
@@ -99,7 +107,7 @@ function onCreateAccount(): void {
 
 onMounted(() => {
   initAuth()
-  // T21-4/T21-5 (ПРОМТ №546): foreground-only poll so a role/master-
+  // T21-4/T21-5 (PROMPT №546): foreground-only poll so a role/master-
   // application change is picked up even if the session never navigates
   // again while parked on one screen. Safe to start before auth resolves --
   // each tick's fetchMe() already no-ops without a session token.

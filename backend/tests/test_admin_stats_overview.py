@@ -143,7 +143,7 @@ async def _create_practice(
 ) -> Practice:
     """Create a practice owned by the master with the given schedule/status.
 
-    MIG1 (uq_practice_master_title_scheduled_recurrence, ПРОМТ №583): several
+    MIG1 (uq_practice_master_title_scheduled_recurrence, PROMPT №583): several
     tests in this file deliberately create multiple practices for the SAME
     master at the SAME scheduled_at (to exercise period-window counting) --
     a shared hardcoded title would collide with the new partial unique index
@@ -470,7 +470,7 @@ async def test_rates_shape(
 async def test_checkin_and_feedback_count_before_autofinalize(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """W3 regression (ПРОМТ №387): a check-in/feedback on a still-CONFIRMED
+    """W3 regression (PROMPT №387): a check-in/feedback on a still-CONFIRMED
     booking (autofinalize hasn't flipped it to ATTENDED yet) for a practice
     that has already ENDED by wall-clock must still count toward the
     checkin/feedback rate. Before the fix, both gated on
@@ -531,7 +531,7 @@ async def test_checkin_and_feedback_count_before_autofinalize(
 async def test_return_count_before_autofinalize(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """SW11 (Батч B, ПРОМТ №579): a check-in on a still-CONFIRMED booking
+    """SW11 (Батч B, PROMPT №579): a check-in on a still-CONFIRMED booking
     (autofinalize hasn't flipped it to ATTENDED yet) for a practice that has
     already ENDED by wall-clock must still count as a "return" attendee, on
     BOTH sides of the comparison -- the period side and the "attended

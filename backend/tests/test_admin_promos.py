@@ -742,7 +742,7 @@ async def test_deactivate_not_admin(
 
 # ===================================================================
 # CreateCompanyPromoRequest.valid_from -- default-on-omit regression
-# (C2, ПРОМТ №387): pydantic v2 does NOT run a mode="before" validator
+# (C2, PROMPT №387): pydantic v2 does NOT run a mode="before" validator
 # against a field's default unless validate_default=True is set. Omitting
 # valid_from silently left it None instead of defaulting to now(UTC).
 # ===================================================================

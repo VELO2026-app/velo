@@ -2,7 +2,7 @@
 
 **Цель:** Превентивный анализ ТЗ. Список паттернов ошибок, которые Claude (Opus) повторяет при реализации кода по VELO Technical Specification. Каждый паттерн подтверждён реальными находками из 8 раундов аудита.
 
-> **Freshness (ПРОМТ №510, 2026-07-19, verified against `8d4948f` on `test`):** graded
+> **Freshness (PROMPT №510, 2026-07-19, verified against `8d4948f` on `test`):** graded
 > STALE-BUT-HARMLESS — NOT rewritten this round; no line-level check was performed against
 > current code for this pass (this doc wasn't named in the drift map's contradiction list).
 > Treat all patterns here as unverified against current code.

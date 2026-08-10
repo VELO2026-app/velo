@@ -1,5 +1,5 @@
 # =============================================================================
-# VELO Backend -- Zoom Report Poller (E21 step F, ПРОМТ №521)
+# VELO Backend -- Zoom Report Poller (E21 step F, PROMPT №521)
 # =============================================================================
 #
 # Background asyncio.Task, same shape as run_autofinalizer

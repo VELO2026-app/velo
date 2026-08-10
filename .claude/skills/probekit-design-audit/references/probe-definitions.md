@@ -1,6 +1,6 @@
 # Design Audit — Probe Definitions
 
-Design system compliance probes for VELO (VELO-tuned, ПРОМТ №436).
+Design system compliance probes for VELO (VELO-tuned, PROMPT №436).
 Live probes: P1-P5. P6 is INERT (no dark mode). P7/P8 are DROPPED (CBS-specific).
 Read severity from `probekit-core/references/severity-format.md`.
 
@@ -71,7 +71,7 @@ Verify box-shadow uses `var(--shadow-*)`.
 grep -rn --include='*.vue' 'box-shadow' src/ | grep -v 'var(--shadow' | grep -v 'none'
 ```
 
-## P6: Dark Mode Completeness — INERT for VELO (ПРОМТ №436)
+## P6: Dark Mode Completeness — INERT for VELO (PROMPT №436)
 
 VELO has NO dark mode: zero `prefers-color-scheme` in variables.css or
 global.css, and no theme tokens. This probe finds nothing today and its silence
@@ -91,7 +91,7 @@ Verify components render correctly in both themes.
 - Border colors use `--border`
 - No `background: white` or `color: black` literals
 
-## P7: Logo Icon Color — DROPPED for VELO (ПРОМТ №436)
+## P7: Logo Icon Color — DROPPED for VELO (PROMPT №436)
 
 Upstream this enforced CBS HOME's logo rule: icon background must be
 `--o-primary` (#cc3203), never `--accent` (#E8651A). Neither token, neither hex
@@ -101,7 +101,7 @@ Dropped rather than marked inert: it is not one config away from meaning
 something — it encodes another product's brand rule. If VELO ever gets a logo
 rule, it comes from the operator as a brand decision, not from this file.
 
-## P8: Token Sync — DROPPED for VELO (ПРОМТ №436)
+## P8: Token Sync — DROPPED for VELO (PROMPT №436)
 
 Upstream this diffed the frontend's `variables.css` against a second copy at
 `mockups/css/variables.css` — CBS kept two and they could drift. VELO has ONE:

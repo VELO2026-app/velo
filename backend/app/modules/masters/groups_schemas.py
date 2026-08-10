@@ -1,5 +1,5 @@
 # =============================================================================
-# VELO Backend -- Master Groups Schemas (P1, ПРОМТ №590)
+# VELO Backend -- Master Groups Schemas (P1, PROMPT №590)
 # =============================================================================
 #
 # Request/response shapes for the group CRUD, membership, tag, and block
@@ -17,6 +17,11 @@ from pydantic import BaseModel, Field, StringConstraints
 # exception. The DB column is String(100), same bound.
 GroupNameStr = Annotated[str, StringConstraints(min_length=1, max_length=100)]
 TagStr = Annotated[str, StringConstraints(min_length=1, max_length=100)]
+# Owner Q4 (PROMPT №610): optional, so min_length is NOT set (unlike
+# GroupNameStr) -- an empty/whitespace-only value is normalized to NULL in
+# the service (create_group), never stored as "". 500 chars: a short
+# under-the-name blurb, not a long-form Practice.description (5000).
+GroupDescriptionStr = Annotated[str, StringConstraints(max_length=500)]
 
 
 class GroupListItem(BaseModel):
@@ -32,6 +37,10 @@ class GroupListItem(BaseModel):
     kind: Literal["students", "deleted", "custom"]
     name: str
     members_count: int
+    # Owner Q4 (PROMPT №610): always null for the two virtual groups
+    # ("students"/"deleted" are not MasterGroup rows) and for any custom
+    # group created before this field existed.
+    description: str | None = None
 
 
 class GroupListResponse(BaseModel):
@@ -44,12 +53,33 @@ class CreateGroupRequest(BaseModel):
     """POST /masters/me/groups."""
 
     name: GroupNameStr
+    # Owner Q4 (PROMPT №610): optional. Blank/whitespace-only is normalized
+    # to None server-side (create_group), never persisted as "".
+    description: GroupDescriptionStr | None = None
 
 
 class RenameGroupRequest(BaseModel):
-    """PATCH /masters/me/groups/{id}."""
+    """PATCH /masters/me/groups/{id} -- rename AND/OR edit description
+    (owner Q10, PROMPT №611; class name kept as-is despite now covering more
+    than a rename -- renaming this Pydantic class would rename the emitted
+    type in generated.ts at the next deploy regen, drifting the hand-written
+    frontend types in api/groups.ts, the exact class of failure that red the
+    gate on a prior feature).
+
+    `name` is always required (a group always has one). `description` is a
+    PARTIAL UPDATE, same contract as users/service.py's update_user() and
+    admin/masters/admin_taxonomy's PATCH endpoints:
+    body.model_dump(exclude_unset=True) at the router distinguishes "the
+    key was absent" (leave the column untouched) from "the key was sent"
+    (even as "" or whitespace -- normalized to NULL in rename_group(), same
+    rule create_group() already applies). This is the fix for the exact gap
+    PROMPT №610 itself flagged: a bare Optional[str]=None default could not
+    tell those two cases apart and would have silently wiped an existing
+    description on every plain rename.
+    """
 
     name: GroupNameStr
+    description: GroupDescriptionStr | None = None
 
 
 class GroupResponse(BaseModel):
@@ -58,6 +88,7 @@ class GroupResponse(BaseModel):
     id: UUID
     name: str
     members_count: int
+    description: str | None = None
 
 
 class GroupMemberItem(BaseModel):
@@ -79,6 +110,35 @@ class PaginatedGroupMembersResponse(BaseModel):
     """GET /masters/me/groups/{id}/members -- paginated, searchable."""
 
     items: list[GroupMemberItem]
+    total: int
+    limit: int
+    offset: int
+
+
+class GroupSearchMemberItem(BaseModel):
+    """One row in GET /masters/me/groups/search.
+
+    ONE ROW PER (student, group) MEMBERSHIP, not one row per student
+    (owner-ruled, PROMPT №606): a student who belongs to N of this master's
+    CUSTOM groups appears N times here, each row naming a DIFFERENT group
+    -- this is a membership-management surface, so the multiplicity IS the
+    meaning, not noise to dedupe away. Never the two virtuals («Ученики»/
+    «Удалённые») -- neither is a MasterGroupMembership row (mirrors
+    list_student_custom_groups's identical exclusion).
+    """
+
+    student_user_id: UUID
+    name: str
+    avatar_url: str | None
+    tag: str | None
+    group_id: UUID
+    group_name: str
+
+
+class PaginatedGroupSearchResponse(BaseModel):
+    """GET /masters/me/groups/search -- paginated, searchable."""
+
+    items: list[GroupSearchMemberItem]
     total: int
     limit: int
     offset: int
@@ -121,7 +181,7 @@ class BlockStudentResponse(BaseModel):
 
 
 class DistinctTagsResponse(BaseModel):
-    """GET /masters/me/tags -- P3 addendum (ПРОМТ №592), closes the P2
+    """GET /masters/me/tags -- P3 addendum (PROMPT №592), closes the P2
     tag-palette gap (P2 derived it client-side from the loaded page only)."""
 
     tags: list[str]
@@ -136,7 +196,7 @@ class StudentGroupItem(BaseModel):
 
 class StudentGroupsResponse(BaseModel):
     """GET /masters/me/students/{student_user_id}/groups -- P3 addendum
-    (ПРОМТ №592). The CUSTOM groups this student is in for this master
+    (PROMPT №592). The CUSTOM groups this student is in for this master
     (powers the profile's group chips). Virtual groups ("Ученики"/
     "Удалённые") are never listed here -- they aren't membership rows."""
 
@@ -144,7 +204,7 @@ class StudentGroupsResponse(BaseModel):
 
 
 # ===========================================================================
-# P4 addenda (ПРОМТ №593): group invite links
+# P4 addenda (PROMPT №593): group invite links
 # ===========================================================================
 
 

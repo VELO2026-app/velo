@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- MasterPromocodesView Screen Tests (T8, ПРОМТ №432)
+// VELO Frontend -- MasterPromocodesView Screen Tests (T8, PROMPT №432)
 // =============================================================================
 //
 // A master's promo codes. Money-adjacent by construction: the master ABSORBS
@@ -184,7 +184,9 @@ describe('MasterPromocodesView', () => {
 
     it('content: renders the code, its discount and its usage from the API', async () => {
       vi.mocked(promosApi.getMyPromos).mockResolvedValue(
-        page([promo('p1', { code: 'SUMMER20', discount_percent: 25, used_count: 4, max_uses: 10 })]),
+        page([
+          promo('p1', { code: 'SUMMER20', discount_percent: 25, used_count: 4, max_uses: 10 }),
+        ]),
       )
       mount()
       await flush()
@@ -323,7 +325,7 @@ describe('MasterPromocodesView', () => {
   })
 
   describe('copy', () => {
-    it('«Копировать» writes THAT row\'s code to the clipboard', async () => {
+    it("«Копировать» writes THAT row's code to the clipboard", async () => {
       vi.mocked(promosApi.getMyPromos).mockResolvedValue(
         page([promo('p1', { code: 'FIRST' }), promo('p2', { code: 'SECOND' })]),
       )

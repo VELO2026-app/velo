@@ -70,7 +70,7 @@ const FOG_ROUTES = [
   // Scrolling profile (check-ins + feedbacks lists) — fog so the floating header
   // doesn't collide with content on scroll (operator tester-fix 2026-06-17).
   'master-student-profile',
-  // Master GROUPS (P2, ПРОМТ №591): list + per-group member list are both
+  // Master GROUPS (P2, PROMPT №591): list + per-group member list are both
   // long scrolling lists, same treatment as master-students. The create
   // form stays CRISP (not listed here) per the fog rule above.
   'master-groups',
@@ -123,7 +123,7 @@ function fogPx(cs: CSSStyleDeclaration, name: string, fallback: number): number 
 // CTA-safe fog tuning: a softer top dissolve + the full pd bottom via the shared
 // --velo-fog-pd-* tokens, so an in-flow bottom action button clears the bottom
 // fade and stays crisp. Read once + memoized. The create/edit/promocode forms
-// (and now finance, PC2b) moved to the COMPACT bottom (ПРОМТ №233 / 2026-07-12 —
+// (and now finance, PC2b) moved to the COMPACT bottom (PROMPT №233 / 2026-07-12 —
 // the full 140px read as a too-wide fog band; see COMPACT_BOTTOM_FOG_ROUTES /
 // FORM_FOG_ROUTES). Support is the only screen left on the full pd bottom.
 const CTA_SAFE_FOG_ROUTES = ['master-support']
@@ -150,7 +150,7 @@ function ctaSafeFog() {
 //   • master-practice-detail (FOG-2, 2026-06-30): the pd bottom (fade 50 + hard 90
 //     = 140px, sized for a tab bar the screen hides) wasted screen; the past-state
 //     «Посещаемость» CTA still clears the 48px fade.
-//   • create / edit practice + new promocode (ПРОМТ №233): same 140px read as a
+//   • create / edit practice + new promocode (PROMPT №233): same 140px read as a
 //     "too-wide" bottom fog band; the in-flow «Создать …» CTA clears the shorter
 //     48px fade the same way. Master-scoped; finance keeps the full pd bottom.
 // Reuses existing tokens, no new token. Device-tunable via --velo-fog-list-z3/z4.
@@ -178,7 +178,7 @@ function compactBottomFog() {
 // is intentional, unlike the forms' crisp fields.
 const COMPACT_BOTTOM_FOG_ROUTES = ['master-practice-detail']
 
-// Form-only fog (M7, ПРОМТ №275; joined by finance, PC2b 2026-07-12): the create /
+// Form-only fog (M7, PROMPT №275; joined by finance, PC2b 2026-07-12): the create /
 // edit practice + new promocode FORMS carry a TRANSPARENT floating VHeader
 // (~88px). The shared pd-top-hard (60) is shorter than the header, so form
 // content ghosted UNDER the header's lower half on scroll (operator «наезжает
@@ -214,7 +214,7 @@ function formFog() {
   return formFogCache
 }
 
-// master-dashboard (DB-1, 2026-06-30 → DB-1b, ПРОМТ №273): the greeting was
+// master-dashboard (DB-1, 2026-06-30 → DB-1b, PROMPT №273): the greeting was
 // removed, leaving an oversized top band. The hub is HEADERLESS (bell lives in the
 // content, no VHeader → islandH=0), so the 88px HEADER_FALLBACK dominates and the
 // earlier +8 (--space-2) gap only trimmed 8px off it (88+8=96px). Pull the band

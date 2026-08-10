@@ -4,7 +4,7 @@
 **Ревьюер:** Senior Software Engineer (Claude Code)
 **Стек:** Python 3.12 / FastAPI / SQLAlchemy async / PostgreSQL / Redis / Vue 3 / TypeScript / Pinia
 
-> **Freshness (ПРОМТ №510, 2026-07-19, verified against `8d4948f` on `test`):** graded
+> **Freshness (PROMPT №510, 2026-07-19, verified against `8d4948f` on `test`):** graded
 > ACTIVELY MISLEADING overall — this pass corrected two specific items: the CRITICAL-3
 > semaphore reference (feature removed 2026-07-07) and WARNING-5's file pointer + status
 > (the guard it asks for already exists, in a different file than named; the operational
@@ -64,7 +64,7 @@ the webhook module is `payments/webhook_router.py`, and its signature check
 it. Stub mode instead makes topup skip Stripe entirely at session-creation time
 (`payments/stripe.py::_create_stub_topup`), so no webhook is even involved when stub is on.
 
-**Corrected 2026-07-19 (ПРОМТ №510):** the guard this finding originally asked for
+**Corrected 2026-07-19 (PROMPT №510):** the guard this finding originally asked for
 already exists — `is_stripe_stub_blocked` raises `RuntimeError` at startup when
 `not is_dev and is_stripe_stub and not allow_stripe_stub`. It is not a gap in the code.
 The operational risk is real and current: per commit `8d4948f` (owner-measured

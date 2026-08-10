@@ -107,7 +107,7 @@ def _build_data(body: MasterApplyRequest) -> dict:
 
 
 def _build_verified_data(body: MasterApplyRequest) -> dict:
-    """Build VERIFIED JSONB data for master self-provision (ПРОМТ №307).
+    """Build VERIFIED JSONB data for master self-provision (PROMPT №307).
 
     A role=master account with NO profile (in practice an admin who switched
     into master mode, or a CLI-promoted account) fills the same apply form and
@@ -164,7 +164,7 @@ async def apply_for_master(
 
     Creates a new MasterProfile or updates an existing rejected one.
     """
-    # Self-provision (ПРОМТ №307): a role=master account WITHOUT a profile --
+    # Self-provision (PROMPT №307): a role=master account WITHOUT a profile --
     # an admin who switched into master mode, or a CLI-promoted account -- fills
     # this same form and gets a VERIFIED profile immediately (no approval loop).
     # A role=master WITH a profile is already a master -> 409. Real masters

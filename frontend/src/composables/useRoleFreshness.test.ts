@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- useRoleFreshness Unit Tests (T21-4/T21-5, ПРОМТ №546)
+// VELO Frontend -- useRoleFreshness Unit Tests (T21-4/T21-5, PROMPT №546)
 // =============================================================================
 //
 // Module-level singleton state (lastFetchAt, pollHandle, visibilityHandler),

@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- MasterNewPromocodeView Screen Tests (T8, ПРОМТ №432)
+// VELO Frontend -- MasterNewPromocodeView Screen Tests (T8, PROMPT №432)
 // =============================================================================
 //
 // The form that mints a master promo code. Money: the master absorbs the
@@ -270,7 +270,7 @@ describe('MasterNewPromocodeView', () => {
       expect(body.max_uses).toBe(10)
     })
 
-    it('sends discount_percent as a NUMBER, not the select\'s string', async () => {
+    it("sends discount_percent as a NUMBER, not the select's string", async () => {
       // form.discount is a string ('100') from VSelect; onCreate coerces with
       // Number() (MasterNewPromocodeView.vue:148). Shipping "100" to a backend
       // expecting an int is a 422 -- or worse, a silently mis-parsed discount.
@@ -361,7 +361,7 @@ describe('MasterNewPromocodeView', () => {
     })
 
     it('clamps AGAIN when the field is already at 1 -- the second clamp is the one that used to break', async () => {
-      // REGRESSION GUARD (T8, second site of the ПРОМТ №432 defect, found and
+      // REGRESSION GUARD (T8, second site of the PROMPT №432 defect, found and
       // fixed in №434). This one was live and NOTHING caught it: the tests above
       // only ever exercise the FIRST clamp, where form.limit genuinely changes
       // ('' -> '0' -> '1'), so the child re-renders and the DOM syncs.

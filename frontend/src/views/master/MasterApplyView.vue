@@ -118,9 +118,9 @@
       <template v-else>
         <h3 class="apply-view__step-title">Шаг 3: Документы</h3>
         <p class="apply-view__intro">
-          Сертификаты хранятся в зашифрованном виде и используются для внутренней верификации
-          вашей квалификации. Удостоверение личности используется только для подтверждения
-          личности и автоматически удаляется через 30 дней после верификации.
+          Сертификаты хранятся в зашифрованном виде и используются для внутренней верификации вашей
+          квалификации. Удостоверение личности используется только для подтверждения личности и
+          автоматически удаляется через 30 дней после верификации.
         </p>
 
         <!-- Documents are OPTIONAL right now: file upload/storage is not built
@@ -130,8 +130,8 @@
              nobody can become a master. «Пропустить» below submits with an
              empty documents list (the backend already accepts that). -->
         <VCard class="apply-view__skip-note" padding="none">
-          Загрузка документов пока недоступна. Вы можете отправить заявку без
-          документов и пройти верификацию позже — нажмите «Пропустить».
+          Загрузка документов пока недоступна. Вы можете отправить заявку без документов и пройти
+          верификацию позже — нажмите «Пропустить».
         </VCard>
 
         <!-- Passport -->
@@ -245,7 +245,7 @@ const authStore = useAuthStore()
 const step = ref(1)
 const submitting = ref(false)
 
-// ПРОМТ №565 (T23-2): .apply-view__content is ONE persistent scrolling
+// PROMPT №565 (T23-2): .apply-view__content is ONE persistent scrolling
 // container across all 3 steps (the v-if/v-else-if chain swaps only its
 // children, never the container itself, .vue:460-479) -- so whatever
 // scrollTop a step was left at carries straight into the next one. All FOUR
@@ -407,7 +407,7 @@ async function submit(skipDocuments = false): Promise<void> {
     })
 
     if (res.status === 'verified') {
-      // Self-provision (ПРОМТ №307): a no-profile role='master' account (an
+      // Self-provision (PROMPT №307): a no-profile role='master' account (an
       // admin who switched into master mode) is verified immediately -- go
       // straight to the master zone, no pending screen, no applicant marker.
       // Refresh the store so masterNoProfileGuard sees the fresh profile
@@ -420,7 +420,7 @@ async function submit(skipDocuments = false): Promise<void> {
       // session as an actual applicant so the master-pending guard lets a
       // still-role='user' applicant through (backend promotes role later).
       sessionStorage.setItem(MASTER_APPLIED_KEY, '1')
-      // Bug 1 follow-up (ПРОМТ №406): re-arm the rejection screen for this new
+      // Bug 1 follow-up (PROMPT №406): re-arm the rejection screen for this new
       // application. Without this, a second rejection would be invisible
       // forever -- the per-user seen-key set by the FIRST rejection would
       // still be there. Safe: the backend always resets status to "pending"

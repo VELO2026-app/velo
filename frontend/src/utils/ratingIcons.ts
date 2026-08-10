@@ -2,7 +2,7 @@
 // VELO Frontend -- Mood / Rating Icon Maps
 // =============================================================================
 //
-// B6 (Батч 3, ПРОМТ №580): single source of truth for the mood/rating zone ->
+// B6 (Батч 3, PROMPT №580): single source of truth for the mood/rating zone ->
 // icon COMPONENT maps, previously duplicated byte-for-byte across 9 files:
 //   RATING_ICON -- useDiaryCardModel.ts, DetailView.vue, AnalyticsView.vue,
 //     MasterPracticeDetailView.vue, MasterSummaryView.vue, PracticeReviewsView.vue,

@@ -8,7 +8,7 @@
     - Greeting + notification bell (badge only when unread > 0).
     - Stats: label + period toggle (Неделя / Месяц) + 3 VStatCard with optional
       delta trend. Period toggle = the user-dashboard pattern (NOT VSegment).
-    - "Мои группы" row (VMenuRow) -> master-groups (P2, ПРОМТ №591; was
+    - "Мои группы" row (VMenuRow) -> master-groups (P2, PROMPT №591; was
       "Мои ученики" -> master-students).
     - Zero state only: "Создать первую практику" (VButton) -> create.
     - "Саммари недели" (VCard placeholder).
@@ -76,7 +76,7 @@
       </div>
 
       <!-- ================================================================
-           МОИ ГРУППЫ (P2, ПРОМТ №591 -- was «Мои ученики» / master-students)
+           МОИ ГРУППЫ (P2, PROMPT №591 -- was «Мои ученики» / master-students)
            ================================================================ -->
       <VMenuRow label="Мои группы" @click="onGroups">
         <template #icon><IconGroup :size="24" /></template>
@@ -173,7 +173,7 @@
           <!-- Like the user dashboard: left = Zoom, right = Check-ins.
                Edit/delete moved to the practice screen, reached by tapping
                the card (openPractice).
-               ПРОМТ №565 (T23-1): there used to be a SEPARATE "Начать"
+               PROMPT №565 (T23-1): there used to be a SEPARATE "Начать"
                button next to "Zoom" for kind==='personal' -- pressing "Zoom"
                itself opened zoom_host_join_url (a plain Zoom REGISTRANT
                join_url, see zoomLinkFor below) and landed the master on
@@ -184,10 +184,10 @@
                exact same create_registrant() call used for a participant).
                Only start_url actually starts a meeting as host, and that is
                exactly what "Начать" already redeemed via the ticket flow
-               (ПРОМТ №556/557). Owner decision: no second button -- "Zoom"
+               (PROMPT №556/557). Owner decision: no second button -- "Zoom"
                itself now does what "Начать" did, for kind==='personal'. -->
           <div class="master-dashboard__practice-actions">
-            <!-- A4 V2 (ПРОМТ №572): create_failed replaces "Zoom" with
+            <!-- A4 V2 (PROMPT №572): create_failed replaces "Zoom" with
                  "Повторить" -- before this, a permanently-failed meeting
                  showed the SAME disabled "Zoom" button as one still being
                  created, with no way for the master to act on it. -->
@@ -369,7 +369,7 @@ const unreadCount = computed((): number => 0)
 const now = ref(Date.now())
 let clockInterval: ReturnType<typeof setInterval> | null = null
 
-// T22-3 (ПРОМТ №561): practicesUpcoming is already server-ordered nearest
+// T22-3 (PROMPT №561): practicesUpcoming is already server-ordered nearest
 // first (draft/scheduled/live) -- no client re-sort left to hide the next
 // ordering bug. Draft and already-ended occurrences are filtered out of the
 // (small, already-in-order) loaded window; a genuinely correct "nearest 2"
@@ -402,16 +402,16 @@ function onGroups(): void {
 function openPractice(p: PracticeResponse): void {
   router.push({ name: 'master-practice-detail', params: { id: p.id } })
 }
-// Zoom — D3 ladder (T21-1, ПРОМТ №541): the master's own host registrant
+// Zoom — D3 ladder (T21-1, PROMPT №541): the master's own host registrant
 // link first, else the manual practice.zoom_link (marked in the template),
 // else nudge -- via the platform abstraction (Telegram-SDK openLink vs
-// window.open). A4 V2 (ПРОМТ №572): meeting status distinguishes "still
+// window.open). A4 V2 (PROMPT №572): meeting status distinguishes "still
 // preparing" from "permanently failed".
 function zoomLinkFor(p: PracticeResponse): ZoomLinkResolution {
   return resolveZoomLink(p.zoom_host_join_url, p.zoom_link, p.zoom_meeting_status)
 }
 
-// ПРОМТ №565 (T23-1): "Zoom" for the master's OWN practice (every card on
+// PROMPT №565 (T23-1): "Zoom" for the master's OWN practice (every card on
 // this dashboard is the current master's own -- masterStore.practicesUpcoming
 // is already scoped server-side to this master) means START the meeting as
 // host, not join via the host-role registrant's join_url -- see the template
@@ -439,7 +439,7 @@ async function onZoom(p: PracticeResponse): Promise<void> {
   startingId.value = p.id
   try {
     const { ticket } = await createZoomStartTicket(p.id)
-    // ПРОМТ №557: FAILS CLOSED -- zoomStartRedirectUrl returns null when
+    // PROMPT №557: FAILS CLOSED -- zoomStartRedirectUrl returns null when
     // VITE_API_BASE_URL is not configured (no foreign-domain fallback). A
     // one-time start-ticket must never be navigated to some other server.
     const url = zoomStartRedirectUrl(ticket)
@@ -459,7 +459,7 @@ async function onZoom(p: PracticeResponse): Promise<void> {
   }
 }
 
-// A4 V2 (ПРОМТ №572): "Повторить" on a create_failed meeting. The endpoint
+// A4 V2 (PROMPT №572): "Повторить" on a create_failed meeting. The endpoint
 // itself never raises for a Zoom-side failure (same "never blocks"
 // contract as publish) -- it resolves 200 either way, so success/failure
 // is read off the RETURNED zoom_meeting_status, not off a thrown error.
@@ -538,7 +538,7 @@ onMounted(async () => {
   // Both calls are lazy -- skip if already populated by guard / prior navigation.
   await masterStore.fetchMyProfile()
   await masterStore.fetchMyPractices()
-  // E12 swap (ПРОМТ №419): the check-in meta now reads checkin_count straight
+  // E12 swap (PROMPT №419): the check-in meta now reads checkin_count straight
   // off the practice (already on masterStore.practices) -- the insights
   // eager-load that used to feed it is gone, one fewer network round-trip.
 })
@@ -550,7 +550,7 @@ onUnmounted(() => {
 
 <style scoped>
 /* Full-screen onboarding overlay. Replicates the app's photo background
-   (ПРОМТ №383: now `#app-bg` in global.css, was `#app::before`) so it obscures
+   (PROMPT №383: now `#app-bg` in global.css, was `#app::before`) so it obscures
    the dashboard behind it and the transparent carousel reads exactly like the
    user OnboardingView. Below the toast layer (--z-toast) so error toasts
    still surface. This is a SEPARATE, intentional second paint of the same
@@ -565,7 +565,7 @@ onUnmounted(() => {
    <body>, so a `fixed` layer tracked the visual viewport directly -- on a
    platform where the keyboard resizes that viewport, this SECOND copy of the
    mandala moved independently of the real background underneath it (a
-   confirmed jump vector, audit ПРОМТ №378). `body` is now position:relative
+   confirmed jump vector, audit PROMPT №378). `body` is now position:relative
    (global.css) with a frozen height, so `absolute; inset:0` here resolves
    against that stable box instead -- full-bleed coverage, immune to the
    keyboard, on every platform. */

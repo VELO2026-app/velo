@@ -76,6 +76,14 @@ class StudentDetailResponse(BaseModel):
                        this master's practices; null when they left no feedback.
     recent_checkins -- newest-first, capped.
     feedbacks       -- newest-first, capped.
+    blocked         -- T24-20 (PROMPT №638): True iff MasterStudent.blocked_at
+                       is set for THIS master. Lets the frontend swap the
+                       bottom action ("Заблокировать" / "Разблокировать")
+                       instead of guessing from the fact the request merely
+                       succeeded. get_master_student_detail's own narrow
+                       allow-path (NOT is_master_audience_member, which still
+                       never admits a blocked student -- see that function's
+                       docstring) is the only place blocked=True can occur.
     """
 
     name: str
@@ -85,3 +93,4 @@ class StudentDetailResponse(BaseModel):
     satisfaction_pct: int | None
     recent_checkins: list[StudentCheckinItem]
     feedbacks: list[StudentFeedbackItem]
+    blocked: bool

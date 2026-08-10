@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- Role Freshness (T21-4/T21-5, ПРОМТ №546)
+// VELO Frontend -- Role Freshness (T21-4/T21-5, PROMPT №546)
 // =============================================================================
 //
 // The gap this closes: nothing in the app ever refetched GET /users/me for a
@@ -7,7 +7,7 @@
 // masterApplication) was only ever refreshed on a full app boot (restoreSession/
 // loginViaTelegram) or by mounting MasterPendingView specifically. A rejection
 // or an admin approval that happened while the client sat on any other screen
-// was invisible until the user reloaded -- sometimes several times (ПРОМТ
+// was invisible until the user reloaded -- sometimes several times (PROMPT
 // №545 recon, B1/B2, ONE root cause traced end to end).
 //
 // Two levels, per the owner's decision (both, not either):
@@ -18,7 +18,7 @@
 //      poll for someone parked on a single screen who never navigates again
 //      while waiting for a verdict. Paused on backgrounding via
 //      visibilitychange (this codebase had NO pause-on-background handling
-//      anywhere before this -- confirmed absent by the ПРОМТ №545 recon), so
+//      anywhere before this -- confirmed absent by the PROMPT №545 recon), so
 //      it never ticks blind in a backgrounded Telegram webview.
 //
 // Explicitly NOT a websocket/push mechanism -- the owner has ruled that a

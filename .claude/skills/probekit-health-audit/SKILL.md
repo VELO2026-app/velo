@@ -11,11 +11,11 @@ when you look at the **running system**, not just the source code.
 
 ## Configuration
 
-<!-- VELO-tuned (ПРОМТ №435): CBS's docs/01_refer path replaced with the
+<!-- VELO-tuned (PROMPT №435): CBS's docs/01_refer path replaced with the
      git-untracked scratch dir the rest of the family already uses (dda9a6f,
-     ПРОМТ №385). VELO has no docs/01_refer/.
+     PROMPT №385). VELO has no docs/01_refer/.
 
-     INERT PROBES against VELO -- marked, NOT rewritten (ПРОМТ №435):
+     INERT PROBES against VELO -- marked, NOT rewritten (PROMPT №435):
      every SQLite probe below (*.db file growth, VACUUM, journal/WAL size,
      PRAGMA checks). VELO's backend is Postgres in Docker on the VPS; there is
      no .db file to stat and no local Docker or VPS access from this repo, so

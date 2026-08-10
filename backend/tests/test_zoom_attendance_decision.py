@@ -1,6 +1,6 @@
 # =============================================================================
 # Tests: Zoom Attendance Decision -- fallback, the undecided bound,
-# non-regression, diary is_hidden guarantee (E21 step F -- ПРОМТ №521)
+# non-regression, diary is_hidden guarantee (E21 step F -- PROMPT №521)
 # =============================================================================
 #
 # telegram_id range: 79300-79399
@@ -8,7 +8,7 @@
 # ⚠ BACKEND-ONLY, UNPROVEN LOCALLY -- see test_zoom_lifecycle.py's module
 # docstring for the exact local blocker (pre-existing stray key in
 # backend/.env, observed this session, not touched; also tried and
-# documented a genuine docker-based attempt in ПРОМТ №520's report). These
+# documented a genuine docker-based attempt in PROMPT №520's report). These
 # tests were collection-checked, never executed via pytest. UNLIKE the
 # ladder tests in test_zoom_attendance_ladder.py, the functions exercised
 # here (_finalize_practice_core, ingest_report_for_meeting,
@@ -24,6 +24,7 @@ from uuid import UUID
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -59,6 +60,35 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
 
 
 async def _do_cleanup(session: AsyncSession) -> None:
+    """PROMPT №647: retries ONCE on a genuine Postgres deadlock, never on
+    anything else. This file's own SW1 test (test_concurrent_cancel_
+    during_poller_lock_is_refused_not_reverted) runs two independent
+    sessions (get_session_factory(), not this fixture's db_session)
+    against the same Booking row -- diagnosed as a test-harness-only
+    collision (see the PROMPT №647 DONE report / commit body for the full
+    reasoning: neither the product SW1 lock itself, which this file's own
+    poller/canceller pair only ever contend on ONE resource under, nor any
+    production background worker, which conftest.py disables for the
+    whole suite, can be the second party in the observed cycle -- this
+    bulk multi-table DELETE-by-id-range has no production caller at all,
+    confirmed by grep). Retrying a purely additive, idempotent-by-
+    construction cleanup is safe: a re-run either finds nothing left to
+    delete (already gone) or completes the interrupted pass -- it cannot
+    duplicate or corrupt anything. Never retries a non-deadlock error --
+    a genuine schema/query bug must still fail loudly, not loop.
+    """
+    for attempt in range(2):
+        try:
+            await _do_cleanup_once(session)
+            return
+        except DBAPIError as exc:
+            is_deadlock = "deadlock detected" in str(exc.orig).lower()
+            await session.rollback()
+            if not is_deadlock or attempt == 1:
+                raise
+
+
+async def _do_cleanup_once(session: AsyncSession) -> None:
     await session.rollback()
     subq = select(User.id).where(User.telegram_id.between(_TID_MIN, _TID_MAX))
     await session.execute(
@@ -214,7 +244,7 @@ async def test_zoom_tracked_practice_defers_instead_of_deciding_immediately(
     _finalize_practice_core does NOT decide the booking -- it stays
     CONFIRMED, practice still completes.
 
-    ПРОМТ №530: this scenario is gated on settings.is_zoom_stub. ПРОМТ №543
+    PROMPT №530: this scenario is gated on settings.is_zoom_stub. PROMPT №543
     pinned the suite to stub mode by default (conftest.py) -- without
     forcing it False here, this test would exercise the OPPOSITE of what
     its name and assertions claim (a stub-mode active meeting is no longer
@@ -247,7 +277,7 @@ async def test_zoom_tracked_practice_defers_instead_of_deciding_immediately(
 async def test_stub_mode_active_meeting_decides_immediately_not_deferred(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """ПРОМТ №530 regression pin, at the _finalize_practice_core unit level:
+    """PROMPT №530 regression pin, at the _finalize_practice_core unit level:
     an ACTIVE ZoomMeeting under settings.is_zoom_stub must NOT defer -- it
     is decided immediately via the legacy proxy, exactly like a practice
     with no ZoomMeeting row at all. This is the counterpart to
@@ -255,7 +285,7 @@ async def test_stub_mode_active_meeting_decides_immediately_not_deferred(
     which forces real credentials to prove the deferral still exists for
     that case.
 
-    ПРОМТ №543: no monkeypatch needed HERE specifically because
+    PROMPT №543: no monkeypatch needed HERE specifically because
     conftest.py's session-scoped setup_infrastructure pins
     settings.zoom_client_secret = "TEST" for the whole suite -- this test
     relies on that suite-level pin, not on any server's actual credential
@@ -324,7 +354,7 @@ async def test_diary_is_hidden_stays_false_after_zoom_driven_no_show(
     asserted is_hidden for a practice_outcome event. Turns it into an
     enforced guarantee for the Zoom-decided path specifically.
 
-    Relies on the suite's stub-mode pin (conftest.py, ПРОМТ №543): the
+    Relies on the suite's stub-mode pin (conftest.py, PROMPT №543): the
     report call returns zero participants, so the registrant's booking is
     decided NO_SHOW via zoom_report with genuinely zero segments --
     exercising the real ingest_report_for_meeting code path, not a mocked
@@ -415,7 +445,7 @@ async def test_admin_checkin_metric_still_counts_confirmed_not_attended(
 
 
 # ===================================================================
-# 5. SW1 (Батч B, ПРОМТ №579): FOR UPDATE closes the cancel/poller race
+# 5. SW1 (Батч B, PROMPT №579): FOR UPDATE closes the cancel/poller race
 # ===================================================================
 
 

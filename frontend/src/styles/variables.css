@@ -9,7 +9,7 @@
  * of hardcoded hex values.
  *
  * ---------------------------------------------------------------------------
- * NAMING RULE (ПРОМТ №437, operator ruling) — FROZEN, NOT UNIFIED
+ * NAMING RULE (PROMPT №437, operator ruling) — FROZEN, NOT UNIFIED
  *
  * EVERY NEW TOKEN GETS THE --velo-* PREFIX. No exceptions.
  *
@@ -32,7 +32,7 @@
   --velo-primary-dark: #4c6589;
 
   /* === Colors: Background === */
-  /* --velo-bg-end removed ПРОМТ №437 (operator ruling): it was #ffffff with ZERO
+  /* --velo-bg-end removed PROMPT №437 (operator ruling): it was #ffffff with ZERO
      consumers -- a «white to white» gradient that never existed. --velo-bg-start
      stays: it is body's base colour (global.css:54) under the photo backdrop. */
   --velo-bg-start: #ffffff;
@@ -55,7 +55,7 @@
   --velo-success: #76dde6;
   --velo-warning: #fbc088;
   --velo-error: #f795a2;
-  /* --velo-info removed ПРОМТ №437 (operator ruling). It was #76dde6 -- a
+  /* --velo-info removed PROMPT №437 (operator ruling). It was #76dde6 -- a
      byte-identical copy of --velo-success -- with ZERO consumers, so «info» was
      a semantic distinction that existed only in the name. The real info banner
      paints itself blue (--velo-glass-blue-15, Banner.vue), which IS the live
@@ -87,7 +87,7 @@
   /* Destructive-action text/icon (Выйти, Удалить) — the product's red. Also the
      source for --velo-error-text below. */
   --velo-danger-text: #ad3444;
-  /* ПРОМТ №437 (operator ruling): error text was #a16124 -- the SAME brown as
+  /* PROMPT №437 (operator ruling): error text was #a16124 -- the SAME brown as
      --velo-warning-text and --velo-peach-700 -- so an error banner read as a
      warning: identical letters, only the background differed. Almost certainly a
      copy-paste from the warning block above.
@@ -106,7 +106,7 @@
   --velo-success-bg: rgba(118, 221, 230, 0.4);
   --velo-success-text: #26767d;
 
-  /* Info tints removed ПРОМТ №437 with --velo-info above -- zero consumers, and
+  /* Info tints removed PROMPT №437 with --velo-info above -- zero consumers, and
      --velo-info-bg duplicated --velo-success-bg byte for byte. */
 
   /* === Colors: Mood (Phase F9) === */
@@ -169,7 +169,7 @@
 
   /* === Shadows ===
    * The elevation ladder (--shadow-sm/md/lg/xl + --velo-effect-elevation-1..3,
-   * all `none`) was REMOVED here, ПРОМТ №437, operator ruling: VELO is flat by
+   * all `none`) was REMOVED here, PROMPT №437, operator ruling: VELO is flat by
    * design. This was already the documented intent -- the DS layer below carried
    * «Effects — flat (elevation→none; depth = glow)» -- but seven tokens stayed
    * behind resolving to `none`, so `var(--shadow-lg)` silently bought nothing.
@@ -231,7 +231,7 @@
   --velo-blue-400: #619cd2; /* analytics rating-bar "Есть вопросы"; operator SVG 2026-06-11 (no prior token) */
   --velo-sand-100: #fdf3e2;
 
-  /* === VELΘ: Telegram app chrome (ПРОМТ №437) ===
+  /* === VELΘ: Telegram app chrome (PROMPT №437) ===
    * The Mini App's own header/background, set through the Telegram SDK rather
    * than by CSS (platform/telegram.ts init). These two lived as bare hex in that
    * file and existed in NO token -- so the chrome the user sees around every
@@ -243,7 +243,7 @@
    *
    * --velo-tg-bg WAS #f8fafc -- a faintly cooler white than --velo-bg-start
    * (#ffffff), so the webview behind the app did not match the app itself. Set
-   * to #ffffff, ПРОМТ №437 (operator ruling): one white, no seam on overscroll.
+   * to #ffffff, PROMPT №437 (operator ruling): one white, no seam on overscroll.
    * This is the one change in this batch that CAN alter a pixel -- only where
    * the Telegram webview shows through, i.e. overscroll.
    * Keep this in step with --velo-bg-start: they are the same surface to a user.
@@ -256,6 +256,12 @@
 
   /* === VELΘ: Layout === */
   --velo-content-width: 336px;
+  /* A narrower cap than --velo-content-width above -- NOT a typo of it, a
+     different constant. Used by short centered copy blocks (a subtitle +
+     an action button) on standalone auth/invite/onboarding-style screens;
+     found repeated as an untokenized `max-width: 300px` literal across 6
+     files (PROMPT №604 recon, swept to this token in PROMPT №606). */
+  --velo-content-width-narrow: 300px;
   --velo-screen-width: 402px;
   --velo-screen-padding: 33px;
   /* Content "rail" side padding for the diary (messages/composer/header/undo),
@@ -303,7 +309,7 @@
   --velo-fog-pd-top-hard: 60px;
   --velo-fog-pd-bot-fade: 50px;
   --velo-fog-pd-bot-hard: 90px;
-  /* Form-only top-hard variant (M7, ПРОМТ №275): the compact-fog CREATE/EDIT/
+  /* Form-only top-hard variant (M7, PROMPT №275): the compact-fog CREATE/EDIT/
      promocode forms carry a TRANSPARENT floating VHeader (~88px, the
      HEADER_FALLBACK estimate). The shared pd-top-hard (60) is shorter than the
      header, so content in the 60–88px band ghosted UNDER the header's lower half
@@ -321,7 +327,7 @@
      the gap here (−40 ⇒ ~48px). Does NOT touch MobileLayout / HEADER_FALLBACK. */
   --velo-fog-mp-top-gap: -40px;
   /* Reusable SHORT top-fog clearance for HEADERLESS list heads (operator DB-1b,
-     ПРОМТ №273). A dashboard-style screen with no VHeader has islandH=0, so
+     PROMPT №273). A dashboard-style screen with no VHeader has islandH=0, so
      MobileLayout applies the 88px HEADER_FALLBACK + the default z1 gap ≈104px —
      an oversized empty band above the first row. This NEGATIVE top-gap pulls that
      fallback band down (top = 88 + this), the same mechanism as the
@@ -414,7 +420,7 @@
   --velo-pink-50: #fff5f5; /* NO SOURCE name (= error-bg-subtle) */
   --velo-pink-500: #d66674; /* NO SOURCE name (= rating-good) */
 
-  /* MOTION SCALE REMOVED — ПРОМТ №437, operator ruling.
+  /* MOTION SCALE REMOVED — PROMPT №437, operator ruling.
    *
    * 13 tokens deleted: --velo-duration-instant/fast/base/slow/slower,
    * --velo-ease-standard/out/in/emphasized, --velo-motion-micro/quick/moderate/
@@ -431,7 +437,7 @@
 
   /* Effects — flat by design: elevation is not a thing in VELO, depth = glow +
      the white card rim. The three --velo-effect-elevation-* tokens (all `none`,
-     zero consumers) were removed ПРОМТ №437 together with --shadow-sm/md/lg/xl;
+     zero consumers) were removed PROMPT №437 together with --shadow-sm/md/lg/xl;
      see the Shadows block above. */
   --velo-effect-glow: var(--velo-shadow-glow);
   --velo-effect-focus: 0 0 0 2px var(--velo-blue-500); /* NO SOURCE; 4.39:1 vs white */
@@ -442,6 +448,8 @@
    * ========================================================================= */
   /* Radius */
   --velo-radius-9: 9px; /* Support attach-box / thumb radius (between badge 5 / md 15) */
+  --velo-radius-10: 10px; /* Report-sheet target-user card (measured, PROMPT №610) */
+  --velo-radius-4-5: 4.5px; /* Report-sheet textarea -- deliberately small, not --radius-md (measured, PROMPT №610) */
   /* Surfaces */
   --velo-divider: rgba(98, 122, 156, 0.3); /* dashed section divider; = former glass-blue-30 (grab-handle) reused as a divider */
   --velo-divider-width: 3px; /* dashed divider stroke width */

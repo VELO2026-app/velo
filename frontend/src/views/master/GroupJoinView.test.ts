@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- GroupJoinView Screen Tests (Master GROUPS P4, ПРОМТ №593)
+// VELO Frontend -- GroupJoinView Screen Tests (Master GROUPS P4, PROMPT №593)
 // =============================================================================
 //
 // Landing for the group_invite__<token> deeplink. Mirrors the state-machine

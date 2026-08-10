@@ -1,5 +1,5 @@
 # =============================================================================
-# VELO Backend -- Tests: Master Groups (P1, ПРОМТ №590; P3 addenda ПРОМТ №592)
+# VELO Backend -- Tests: Master Groups (P1, PROMPT №590; P3 addenda PROMPT №592)
 # =============================================================================
 #
 # telegram_id range: 99700-99799
@@ -45,8 +45,15 @@ from app.modules.masters.groups_models import (
 )
 from app.modules.masters.models import MasterProfile
 from app.modules.payments.models import Purchase, PurchaseStatus
-from app.modules.practices.models import Practice, PracticeStatus, PracticeType
+from app.modules.practices.models import (
+    AudienceKind,
+    Practice,
+    PracticeAudienceGroup,
+    PracticeStatus,
+    PracticeType,
+)
 from app.modules.users.models import User, UserRole
+from app.modules.waitlist.models import Waitlist, WaitlistStatus
 from tests.helpers import (
     auth_headers,
     fresh_execute,
@@ -65,6 +72,7 @@ MY_TAGS_URL = "/api/v1/masters/me/tags"
 STUDENT_GROUPS_URL = "/api/v1/masters/me/students/{student_id}/groups"
 GROUP_INVITE_URL = "/api/v1/masters/me/groups/{group_id}/invite"
 JOIN_GROUP_URL = "/api/v1/masters/groups/join"
+GROUP_SEARCH_URL = "/api/v1/masters/me/groups/search"
 
 _TID_MIN = 99700
 _TID_MAX = 99799
@@ -191,6 +199,26 @@ async def _purchase(
     return purchase
 
 
+async def _waitlist_entry(
+    db_session: AsyncSession,
+    practice: Practice,
+    user_id: str,
+    *,
+    position: int,
+    status: str = WaitlistStatus.WAITING.value,
+) -> Waitlist:
+    entry = Waitlist(
+        practice_id=practice.id,
+        user_id=user_id,
+        position=position,
+        status=status,
+        joined_at=datetime.now(UTC),
+    )
+    db_session.add(entry)
+    await db_session.flush()
+    return entry
+
+
 # ===================================================================
 # Group CRUD
 # ===================================================================
@@ -241,6 +269,171 @@ async def test_create_group_empty_name_422(
     )
 
     assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_group_with_description(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """Owner Q4 (PROMPT №610): description round-trips on create."""
+    master = await _make_verified_master(client, db_session, 99776)
+
+    resp = await client.post(
+        GROUPS_URL,
+        json={"name": "Группа с описанием", "description": "Для продвинутых учеников"},
+        headers=auth_headers(master["session_token"]),
+    )
+
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["description"] == "Для продвинутых учеников"
+
+
+@pytest.mark.asyncio
+async def test_create_group_without_description(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """Omitting `description` entirely -- the field is optional -- stores
+    NULL, same as an explicit blank/whitespace-only value (normalized in
+    create_group(), asserted here via the response, not just the DB row)."""
+    master = await _make_verified_master(client, db_session, 99777)
+    headers = auth_headers(master["session_token"])
+
+    resp = await client.post(GROUPS_URL, json={"name": "Без описания"}, headers=headers)
+    assert resp.status_code == 201
+    assert resp.json()["description"] is None
+
+    blank_resp = await client.post(
+        GROUPS_URL,
+        json={"name": "Пустое описание", "description": "   "},
+        headers=headers,
+    )
+    assert blank_resp.status_code == 201
+    assert blank_resp.json()["description"] is None
+
+
+@pytest.mark.asyncio
+async def test_rename_group_leaves_description_untouched(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """RenameGroupRequest has no `description` field (see groups_schemas.py's
+    own docstring) -- renaming a group must not disturb its description."""
+    master = await _make_verified_master(client, db_session, 99778)
+    headers = auth_headers(master["session_token"])
+    created = await client.post(
+        GROUPS_URL,
+        json={"name": "Старое", "description": "Исходное описание"},
+        headers=headers,
+    )
+    group_id = created.json()["id"]
+
+    resp = await client.patch(
+        GROUP_URL.format(group_id=group_id),
+        json={"name": "Новое"},
+        headers=headers,
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "Новое"
+    assert resp.json()["description"] == "Исходное описание"
+
+
+@pytest.mark.asyncio
+async def test_list_groups_includes_description(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """GET /masters/me/groups: the custom group carries its description;
+    the virtual «Ученики» group (never a MasterGroup row) carries None."""
+    master = await _make_verified_master(client, db_session, 99779)
+    headers = auth_headers(master["session_token"])
+    await client.post(
+        GROUPS_URL,
+        json={"name": "Листинг", "description": "Видно в списке"},
+        headers=headers,
+    )
+
+    resp = await client.get(GROUPS_URL, headers=headers)
+
+    assert resp.status_code == 200
+    items = {item["name"]: item for item in resp.json()["items"]}
+    assert items["Листинг"]["description"] == "Видно в списке"
+    assert items["Ученики"]["description"] is None
+
+
+@pytest.mark.asyncio
+async def test_edit_description_only_leaves_name_untouched(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """Owner Q10 (PROMPT №611): PATCH with description sent alongside the
+    SAME name updates only the description -- name-unchanged must not skip
+    the description write (the trap in the old early-return shape)."""
+    master = await _make_verified_master(client, db_session, 99780)
+    headers = auth_headers(master["session_token"])
+    created = await client.post(GROUPS_URL, json={"name": "Группа X"}, headers=headers)
+    group_id = created.json()["id"]
+    assert created.json()["description"] is None
+
+    resp = await client.patch(
+        GROUP_URL.format(group_id=group_id),
+        json={"name": "Группа X", "description": "Добавлено позже"},
+        headers=headers,
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "Группа X"
+    assert resp.json()["description"] == "Добавлено позже"
+
+
+@pytest.mark.asyncio
+async def test_edit_description_and_rename_together(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """Owner Q10: the frontend's combined dialog sends both fields at once
+    -- both must land in the same PATCH."""
+    master = await _make_verified_master(client, db_session, 99781)
+    headers = auth_headers(master["session_token"])
+    created = await client.post(
+        GROUPS_URL,
+        json={"name": "Старое имя", "description": "Старое описание"},
+        headers=headers,
+    )
+    group_id = created.json()["id"]
+
+    resp = await client.patch(
+        GROUP_URL.format(group_id=group_id),
+        json={"name": "Новое имя", "description": "Новое описание"},
+        headers=headers,
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "Новое имя"
+    assert resp.json()["description"] == "Новое описание"
+
+
+@pytest.mark.asyncio
+async def test_clearing_description_via_patch_sets_null(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """Owner Q10: an explicitly SENT blank/whitespace description clears it
+    to NULL -- distinct from omitting the key entirely (which leaves it
+    untouched, see test_rename_group_leaves_description_untouched above)."""
+    master = await _make_verified_master(client, db_session, 99782)
+    headers = auth_headers(master["session_token"])
+    created = await client.post(
+        GROUPS_URL,
+        json={"name": "Очищаемая", "description": "Будет стёрто"},
+        headers=headers,
+    )
+    group_id = created.json()["id"]
+
+    resp = await client.patch(
+        GROUP_URL.format(group_id=group_id),
+        json={"name": "Очищаемая", "description": "   "},
+        headers=headers,
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["description"] is None
 
 
 @pytest.mark.asyncio
@@ -850,6 +1043,134 @@ async def test_block_emits_reminder_cancel_for_cancelled_bookings(
 
 
 @pytest.mark.asyncio
+async def test_block_removes_waitlist_entries_for_this_master_only(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Owner Q13 (PROMPT №613): block_student removes ACTIVE (waiting/
+    notified) waitlist entries for THIS master's practices -- scoped
+    exactly like the future-booking cancel above, never touching another
+    master's queue for the same student (that's the next test)."""
+    master = await _make_verified_master(client, db_session, 99755)
+    master_id = master["user"]["id"]
+    headers = auth_headers(master["session_token"])
+    student_id = await _login(client, 99783, "Waiter")
+
+    waiting_practice = await _practice(
+        db_session, master_id, scheduled_hours_from_now=48,
+    )
+    waiting_entry = await _waitlist_entry(
+        db_session, waiting_practice, student_id, position=1,
+    )
+
+    notified_practice = await _practice(
+        db_session, master_id, scheduled_hours_from_now=72,
+    )
+    notified_entry = await _waitlist_entry(
+        db_session,
+        notified_practice,
+        student_id,
+        position=1,
+        status=WaitlistStatus.NOTIFIED.value,
+    )
+
+    # A CONVERTED entry (already resolved) -- must NOT be touched, it's not
+    # ACTIVE.
+    converted_practice = await _practice(
+        db_session, master_id, scheduled_hours_from_now=96,
+    )
+    converted_entry = await _waitlist_entry(
+        db_session,
+        converted_practice,
+        student_id,
+        position=1,
+        status=WaitlistStatus.CONVERTED.value,
+    )
+    await db_session.commit()
+
+    resp = await client.post(
+        BLOCK_URL.format(student_id=student_id), headers=headers,
+    )
+    assert resp.status_code == 200
+
+    await db_session.refresh(waiting_entry)
+    assert waiting_entry.status == WaitlistStatus.REMOVED.value
+    await db_session.refresh(notified_entry)
+    assert notified_entry.status == WaitlistStatus.REMOVED.value
+    await db_session.refresh(converted_entry)
+    assert converted_entry.status == WaitlistStatus.CONVERTED.value  # untouched
+
+
+@pytest.mark.asyncio
+async def test_block_never_touches_a_different_masters_waitlist(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """The same student, waiting for a DIFFERENT master's practice, keeps
+    their spot when master A blocks them."""
+    master_a = await _make_verified_master(client, db_session, 99756)
+    headers_a = auth_headers(master_a["session_token"])
+    master_b = await _make_verified_master(client, db_session, 99757)
+    master_b_id = master_b["user"]["id"]
+    student_id = await _login(client, 99784, "Waiter")
+
+    other_practice = await _practice(
+        db_session, master_b_id, scheduled_hours_from_now=48,
+    )
+    other_entry = await _waitlist_entry(
+        db_session, other_practice, student_id, position=1,
+    )
+    await db_session.commit()
+
+    resp = await client.post(
+        BLOCK_URL.format(student_id=student_id), headers=headers_a,
+    )
+    assert resp.status_code == 200
+
+    await db_session.refresh(other_entry)
+    assert other_entry.status == WaitlistStatus.WAITING.value  # untouched
+
+
+@pytest.mark.asyncio
+async def test_block_promotes_the_next_waiting_person_not_the_blocked_one(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Owner Q13: a blocked student who was NOTIFIED (holding a freed spot)
+    must not sit on it until the confirm window times out -- the next real
+    person in line gets notified immediately, same trigger leave_waitlist's
+    own decline already uses."""
+    master = await _make_verified_master(client, db_session, 99758)
+    master_id = master["user"]["id"]
+    headers = auth_headers(master["session_token"])
+    blocked_id = await _login(client, 99785, "Blocked")
+    next_id = await _login(client, 99786, "NextInLine")
+
+    practice = await _practice(db_session, master_id, scheduled_hours_from_now=48)
+    blocked_entry = await _waitlist_entry(
+        db_session,
+        practice,
+        blocked_id,
+        position=1,
+        status=WaitlistStatus.NOTIFIED.value,
+    )
+    next_entry = await _waitlist_entry(
+        db_session, practice, next_id, position=2,
+    )
+    await db_session.commit()
+
+    resp = await client.post(
+        BLOCK_URL.format(student_id=blocked_id), headers=headers,
+    )
+    assert resp.status_code == 200
+
+    await db_session.refresh(blocked_entry)
+    assert blocked_entry.status == WaitlistStatus.REMOVED.value
+    await db_session.refresh(next_entry)
+    assert next_entry.status == WaitlistStatus.NOTIFIED.value
+
+
+@pytest.mark.asyncio
 async def test_blocked_student_excluded_from_derived_students(
     client: AsyncClient,
     db_session: AsyncSession,
@@ -949,6 +1270,36 @@ async def test_unblock_returns_to_students_without_restoring_custom_group_but_ke
 
 
 @pytest.mark.asyncio
+async def test_unblock_does_not_restore_waitlist_entry(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """Owner Q13: unblock_student does NOT bring back a waitlist spot
+    block_student removed -- same "no restoration" rule custom-group
+    membership already follows (test above). REMOVED stays REMOVED; the
+    student can join this practice's waitlist again like anyone else
+    (REMOVED is a REJOINABLE status, waitlist/models.py), just not at
+    their old position."""
+    master = await _make_verified_master(client, db_session, 99759)
+    master_id = master["user"]["id"]
+    headers = auth_headers(master["session_token"])
+    student_id = await _login(client, 99794, "Waiter")
+
+    practice = await _practice(db_session, master_id, scheduled_hours_from_now=48)
+    entry = await _waitlist_entry(db_session, practice, student_id, position=1)
+    await db_session.commit()
+
+    await client.post(BLOCK_URL.format(student_id=student_id), headers=headers)
+    unblock_resp = await client.delete(
+        BLOCK_URL.format(student_id=student_id), headers=headers,
+    )
+    assert unblock_resp.status_code == 204
+
+    await db_session.refresh(entry)
+    assert entry.status == WaitlistStatus.REMOVED.value  # NOT restored to waiting
+
+
+@pytest.mark.asyncio
 async def test_unblock_not_blocked_404(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
@@ -1018,7 +1369,7 @@ async def test_derived_students_widened_beyond_attended_only(
 
 
 # ===================================================================
-# P3 addenda (ПРОМТ №592): GET /masters/me/tags, GET .../students/{id}/groups
+# P3 addenda (PROMPT №592): GET /masters/me/tags, GET .../students/{id}/groups
 # ===================================================================
 
 
@@ -1120,7 +1471,7 @@ async def test_student_groups_empty_when_no_custom_membership(
 
 
 # ===================================================================
-# P4 addenda (ПРОМТ №593): group invite links
+# P4 addenda (PROMPT №593): group invite links
 # ===================================================================
 #
 # BOT_URL is monkeypatched (same pattern as test_master_invite.py) so the
@@ -1290,3 +1641,230 @@ async def test_join_group_invalid_token_404(
     )
 
     assert resp.status_code == 404
+
+
+# ===================================================================
+# delete_group: orphan-audience guard (P5, PROMPT №606)
+# ===================================================================
+
+
+async def _groups_practice(
+    db_session: AsyncSession,
+    master_id: str,
+    group_ids: list[UUID],
+    *,
+    status: str = PracticeStatus.SCHEDULED.value,
+) -> Practice:
+    """A practice targeting `group_ids` as its audience (audience_kind=
+    'groups' + one PracticeAudienceGroup row per id) -- mirrors what
+    practices/service.py's PATCH switch-matrix would have produced, built
+    directly since this file works at the groups_service layer, not
+    through the practices API."""
+    practice = await _practice(
+        db_session, master_id, scheduled_hours_from_now=5, status=status,
+    )
+    practice.audience_kind = AudienceKind.GROUPS.value
+    await db_session.flush()
+    for group_id in group_ids:
+        db_session.add(
+            PracticeAudienceGroup(practice_id=practice.id, group_id=group_id)
+        )
+    await db_session.flush()
+    return practice
+
+
+@pytest.mark.asyncio
+async def test_delete_group_blocked_when_sole_audience_of_a_practice(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    master = await _make_verified_master(client, db_session, 99770)
+    headers = auth_headers(master["session_token"])
+    created = await client.post(GROUPS_URL, json={"name": "VIP"}, headers=headers)
+    group_id = created.json()["id"]
+
+    practice = await _groups_practice(
+        db_session, master["user"]["id"], [UUID(group_id)],
+    )
+    await db_session.commit()
+
+    resp = await client.delete(GROUP_URL.format(group_id=group_id), headers=headers)
+
+    assert resp.status_code == 409
+    assert resp.json()["error"] == "group_in_use"
+
+    # The group and its audience link both survive -- the guard rejected
+    # BEFORE session.delete(), not after.
+    remaining_links = (
+        (
+            await db_session.execute(
+                select(PracticeAudienceGroup).where(
+                    PracticeAudienceGroup.practice_id == practice.id,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(remaining_links) == 1
+
+
+@pytest.mark.asyncio
+async def test_delete_group_allowed_when_practice_has_another_group_too(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """The group being deleted is NOT the practice's sole audience -- the
+    practice keeps a valid (non-empty) audience after the cascade, exactly
+    what a PATCH dropping this same group from group_ids is already
+    allowed to do. Must NOT block."""
+    master = await _make_verified_master(client, db_session, 99771)
+    headers = auth_headers(master["session_token"])
+    doomed = await client.post(GROUPS_URL, json={"name": "Doomed"}, headers=headers)
+    doomed_id = doomed.json()["id"]
+    survivor = await client.post(GROUPS_URL, json={"name": "Survivor"}, headers=headers)
+    survivor_id = survivor.json()["id"]
+
+    practice = await _groups_practice(
+        db_session, master["user"]["id"], [UUID(doomed_id), UUID(survivor_id)],
+    )
+    await db_session.commit()
+
+    resp = await client.delete(GROUP_URL.format(group_id=doomed_id), headers=headers)
+
+    assert resp.status_code == 204
+
+    remaining_links = (
+        (
+            await db_session.execute(
+                select(PracticeAudienceGroup).where(
+                    PracticeAudienceGroup.practice_id == practice.id,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(remaining_links) == 1
+    assert remaining_links[0].group_id == UUID(survivor_id)
+
+
+@pytest.mark.asyncio
+async def test_delete_group_allowed_when_sole_audience_of_a_completed_practice(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """A finished practice's audience is already inert (see
+    _sole_audience_practice_titles's own docstring) -- must NOT block a
+    cleanup."""
+    master = await _make_verified_master(client, db_session, 99772)
+    headers = auth_headers(master["session_token"])
+    created = await client.post(GROUPS_URL, json={"name": "Past"}, headers=headers)
+    group_id = created.json()["id"]
+
+    await _groups_practice(
+        db_session,
+        master["user"]["id"],
+        [UUID(group_id)],
+        status=PracticeStatus.COMPLETED.value,
+    )
+    await db_session.commit()
+
+    resp = await client.delete(GROUP_URL.format(group_id=group_id), headers=headers)
+
+    assert resp.status_code == 204
+
+
+# ===================================================================
+# GET /masters/me/groups/search: cross-group people-search (P6, PROMPT №606)
+# ===================================================================
+
+
+@pytest.mark.asyncio
+async def test_search_group_memberships_one_row_per_membership(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """A student in TWO custom groups appears as TWO rows, each naming a
+    different group -- owner-ruled, not deduped to one row with two chips."""
+    master = await _make_verified_master(client, db_session, 99773)
+    headers = auth_headers(master["session_token"])
+    group_a = await client.post(GROUPS_URL, json={"name": "Утро"}, headers=headers)
+    group_a_id = group_a.json()["id"]
+    group_b = await client.post(GROUPS_URL, json={"name": "VIP"}, headers=headers)
+    group_b_id = group_b.json()["id"]
+
+    student_id = await _login(client, 99790, "Дважды")
+    await client.post(
+        GROUP_MEMBERS_URL.format(group_id=group_a_id),
+        json={"student_user_id": student_id},
+        headers=headers,
+    )
+    await client.post(
+        GROUP_MEMBERS_URL.format(group_id=group_b_id),
+        json={"student_user_id": student_id},
+        headers=headers,
+    )
+
+    resp = await client.get(GROUP_SEARCH_URL, headers=headers)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 2
+    rows = [item for item in body["items"] if item["student_user_id"] == student_id]
+    assert len(rows) == 2
+    group_names = {row["group_name"] for row in rows}
+    assert group_names == {"Утро", "VIP"}
+    for row in rows:
+        assert row["name"] == "Дважды"
+
+
+@pytest.mark.asyncio
+async def test_search_group_memberships_name_filter(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    master = await _make_verified_master(client, db_session, 99774)
+    headers = auth_headers(master["session_token"])
+    group = await client.post(GROUPS_URL, json={"name": "Группа"}, headers=headers)
+    group_id = group.json()["id"]
+
+    match_id = await _login(client, 99791, "Найдётся")
+    other_id = await _login(client, 99792, "Другой")
+    for sid in (match_id, other_id):
+        await client.post(
+            GROUP_MEMBERS_URL.format(group_id=group_id),
+            json={"student_user_id": sid},
+            headers=headers,
+        )
+
+    resp = await client.get(
+        GROUP_SEARCH_URL, params={"search": "Найдётся"}, headers=headers,
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 1
+    assert body["items"][0]["student_user_id"] == match_id
+
+
+@pytest.mark.asyncio
+async def test_search_group_memberships_excludes_virtual_groups(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """A student with an attended booking (derived «Ученики») but no
+    CUSTOM group membership at all must yield ZERO rows -- the virtuals
+    are computed, not MasterGroupMembership rows, and this search is over
+    real group ASSIGNMENTS."""
+    master = await _make_verified_master(client, db_session, 99775)
+    headers = auth_headers(master["session_token"])
+    master_id = master["user"]["id"]
+
+    practice = await _practice(db_session, master_id, scheduled_hours_from_now=-2)
+    student_id = await _login(client, 99793, "Ученик")
+    await _booking(
+        db_session, practice, student_id, status=BookingStatus.ATTENDED.value,
+    )
+    await db_session.commit()
+
+    resp = await client.get(GROUP_SEARCH_URL, headers=headers)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 0
+    assert body["items"] == []

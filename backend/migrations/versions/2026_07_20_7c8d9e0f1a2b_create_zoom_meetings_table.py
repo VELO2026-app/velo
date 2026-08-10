@@ -4,7 +4,7 @@ Revision ID: 7c8d9e0f1a2b
 Revises: d6e7f8a9b0c1
 Create Date: 2026-07-20 00:00:00.000000+00:00
 
-E21 step A (ПРОМТ №519): one Zoom meeting per practice (1:1). Inert on
+E21 step A (PROMPT №519): one Zoom meeting per practice (1:1). Inert on
 deploy -- nothing writes to this table yet until step D lands in the same
 prompt's follow-up code (meeting creation wired into publish).
 """

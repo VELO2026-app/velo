@@ -81,7 +81,7 @@ defineEmits<{
      absorb overflow at all). */
   min-height: 0;
   overflow-y: auto;
-  /* ПРОМТ №503 commit 4: per the CSS overflow spec, leaving this axis at its
+  /* PROMPT №503 commit 4: per the CSS overflow spec, leaving this axis at its
      `visible` default while overflow-y is non-visible computes it to `auto`
      too -- so any descendant even slightly wider than the viewport (an
      unbreakable label, a missed max-width) turned this WHOLE content area

@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- AdminWithdrawalDetailView Screen Tests (T8, ПРОМТ №432)
+// VELO Frontend -- AdminWithdrawalDetailView Screen Tests (T8, PROMPT №432)
 // =============================================================================
 //
 // The single highest-stakes screen in the app: this is where an admin actually
@@ -215,7 +215,7 @@ describe('AdminWithdrawalDetailView', () => {
       expect(rowValue('К получению')).toContain('97,50')
     })
 
-    it('renders in the withdrawal\'s OWN currency, not a hardcoded EUR', async () => {
+    it("renders in the withdrawal's OWN currency, not a hardcoded EUR", async () => {
       mountWith(wd('w1', { currency: 'USD', amount_cents: 10000, fee_cents: 0 }))
       await flush()
 

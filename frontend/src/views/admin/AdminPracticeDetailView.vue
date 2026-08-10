@@ -50,10 +50,10 @@
         <VStatCard v-else :value="freeLabel" label="Свободно" />
       </div>
 
-      <!-- T21-1 (ПРОМТ №541): Zoom meeting status + the unmatched bucket,
-           made VISIBLE -- per the E21 design (ПРОМТ №521), a silent bucket
+      <!-- T21-1 (PROMPT №541): Zoom meeting status + the unmatched bucket,
+           made VISIBLE -- per the E21 design (PROMPT №521), a silent bucket
            was called out as the thing that would make the feature ship
-           inert, and until this screen it did (ПРОМТ №540 audit: zero admin
+           inert, and until this screen it did (PROMPT №540 audit: zero admin
            consumers existed at all). Best-effort: shown only once loaded,
            never blocks the rest of the page if this secondary fetch fails. -->
       <VCard v-if="zoomAttendance" class="admin-detail__zoom">
@@ -67,6 +67,14 @@
           <VBadge :variant="zoomAttendance.unmatched_count > 0 ? 'warning' : 'muted'">
             {{ zoomAttendance.unmatched_count }}
           </VBadge>
+        </div>
+        <!-- PK-Z2: ZoomMeeting.last_sync_error, previously write-only --
+             shown only when set (typically alongside a create_failed status
+             above). Raw, whatever English the backend recorded -- no
+             translation layer exists for developer-facing error text (B8). -->
+        <div v-if="zoomAttendance.last_sync_error" class="admin-detail__zoom-error-row">
+          <span class="admin-detail__zoom-label">Причина ошибки</span>
+          <span class="admin-detail__zoom-error">{{ zoomAttendance.last_sync_error }}</span>
         </div>
       </VCard>
 
@@ -180,11 +188,14 @@ const freeLabel = computed<string>(() => {
 // T21-1: zoom_meeting_status is null when no ZoomMeeting row was ever
 // created for this practice at all (pre-E21, or creation never succeeded --
 // backend docstring, admin/practices/router.py).
-// ПРОМТ №559: pending_creation added -- a series child beyond the nearest
+// PROMPT №559: pending_creation added -- a series child beyond the nearest
 // occurrence, whose meeting creation is deliberately deferred to the retry
 // poller, not failed. Without an entry here the fallback below would show
 // the raw English string to the admin.
-const ZOOM_STATUS_BADGES: Record<string, { label: string; variant: 'success' | 'error' | 'muted' }> = {
+const ZOOM_STATUS_BADGES: Record<
+  string,
+  { label: string; variant: 'success' | 'error' | 'muted' }
+> = {
   active: { label: 'Активна', variant: 'success' },
   pending_creation: { label: 'Ожидает создания', variant: 'muted' },
   create_failed: { label: 'Ошибка создания', variant: 'error' },
@@ -192,7 +203,9 @@ const ZOOM_STATUS_BADGES: Record<string, { label: string; variant: 'success' | '
 }
 const zoomStatusBadge = computed<{ label: string; variant: 'success' | 'error' | 'muted' }>(() => {
   const status = zoomAttendance.value?.zoom_meeting_status
-  return status ? (ZOOM_STATUS_BADGES[status] ?? { label: status, variant: 'muted' }) : { label: 'Не создана', variant: 'muted' }
+  return status
+    ? (ZOOM_STATUS_BADGES[status] ?? { label: status, variant: 'muted' })
+    : { label: 'Не создана', variant: 'muted' }
 })
 
 // Roster from the detail response. Past practices bucket by booking status.
@@ -295,7 +308,7 @@ onMounted(() => {
   margin-top: 0;
 }
 
-/* T21-1 (ПРОМТ №541): Zoom status + unmatched-bucket visibility. */
+/* T21-1 (PROMPT №541): Zoom status + unmatched-bucket visibility. */
 .admin-detail__zoom {
   display: flex;
   flex-direction: column;
@@ -313,6 +326,21 @@ onMounted(() => {
   font-family: var(--font-body);
   font-size: var(--text-sm);
   color: var(--velo-text-secondary);
+}
+
+/* PK-Z2: stacked (not the label-left/badge-right row above) -- a raw
+   backend error string wraps, unlike the short status/count values. */
+.admin-detail__zoom-error-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.admin-detail__zoom-error {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--velo-error-text);
+  word-break: break-word;
 }
 
 .admin-detail__items {

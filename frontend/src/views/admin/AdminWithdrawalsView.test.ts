@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- AdminWithdrawalsView Screen Tests (T8, ПРОМТ №432)
+// VELO Frontend -- AdminWithdrawalsView Screen Tests (T8, PROMPT №432)
 // =============================================================================
 //
 // The admin's payout queue: every row is real money about to leave the company.
@@ -163,7 +163,7 @@ describe('AdminWithdrawalsView', () => {
     })
 
     it('error retry: the «Повторить» button RENDERS', async () => {
-      // REGRESSION GUARD (T8, find from ПРОМТ №432, fixed in №433).
+      // REGRESSION GUARD (T8, find from PROMPT №432, fixed in №433).
       // This screen passes its retry button through `<template #action>`
       // (AdminWithdrawalsView.vue:40-42). VEmptyState did not declare an `action`
       // slot, and Vue drops an unmatched named slot SILENTLY -- no warning, no

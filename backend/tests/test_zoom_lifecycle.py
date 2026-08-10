@@ -1,5 +1,5 @@
 # =============================================================================
-# Tests: Zoom Meeting Lifecycle (E21 step D, ПРОМТ №519)
+# Tests: Zoom Meeting Lifecycle (E21 step D, PROMPT №519)
 # =============================================================================
 #
 # telegram_id range: 79000-79099
@@ -185,7 +185,7 @@ async def test_publish_succeeds_when_zoom_create_fails(
 
     Catches: a practice becoming silently unpublishable because a third
     party (Zoom) is unreachable -- the exact failure the design forbids
-    (E21 plan sec 2, confirmed ПРОМТ №519 amendment 2).
+    (E21 plan sec 2, confirmed PROMPT №519 amendment 2).
     """
     master = await _make_verified_master(client, db_session, telegram_id=79001)
     practice_id = await _create_draft_practice(client, master)
@@ -285,7 +285,7 @@ async def test_reschedule_refetches_and_overwrites_join_url(
     (the whole reason this shape was chosen over resolving the survives-
     reschedule question up front -- E21 plan sec 2).
 
-    FIXED (ПРОМТ №525): this test used to INSERT a second, manually-built
+    FIXED (PROMPT №525): this test used to INSERT a second, manually-built
     ZoomRegistrant row here to play the part of "the stored registrant with
     a stale join_url" -- but `_publish` above already creates the REAL host
     registrant via ensure_host_registrant (E21 step E), for the SAME
@@ -416,7 +416,7 @@ async def test_retry_poller_stops_at_cap_and_stays_visibly_failed(
 
 
 # ===================================================================
-# 3b. SW13 (Батч B, ПРОМТ №579): a non-ZoomAPIError exception still
+# 3b. SW13 (Батч B, PROMPT №579): a non-ZoomAPIError exception still
 #     counts against the retry cap -- must not retry forever unseen
 # ===================================================================
 
@@ -483,7 +483,7 @@ async def test_registrant_create_generic_exception_counts_against_cap(
     zoom_meeting = await _get_zoom_meeting(db_session, practice_id)
     assert zoom_meeting.status == ZoomMeetingStatus.ACTIVE.value
 
-    # ПРОМТ №583: a DISTINCT student user, not the master's own id -- _publish
+    # PROMPT №583: a DISTINCT student user, not the master's own id -- _publish
     # above already created the real HOST registrant for (zoom_meeting_id,
     # master's user_id) via ensure_host_registrant, so reusing that id here
     # collides with uq_zoom_registrant_meeting_user_active.
@@ -519,7 +519,7 @@ async def test_registrant_create_generic_exception_counts_against_cap(
 
 
 # ===================================================================
-# 4a. SW6 (Батч B, ПРОМТ №579): registrant 429 leaves status untouched
+# 4a. SW6 (Батч B, PROMPT №579): registrant 429 leaves status untouched
 # ===================================================================
 
 
@@ -548,7 +548,7 @@ async def test_registrant_retry_429_does_not_force_create_failed(
     zoom_meeting = await _get_zoom_meeting(db_session, practice_id)
     assert zoom_meeting.status == ZoomMeetingStatus.ACTIVE.value
 
-    # ПРОМТ №583: a DISTINCT student user, not the master's own id -- _publish
+    # PROMPT №583: a DISTINCT student user, not the master's own id -- _publish
     # above already created the real HOST registrant for (zoom_meeting_id,
     # master's user_id) via ensure_host_registrant, so reusing that id here
     # collides with uq_zoom_registrant_meeting_user_active.
@@ -584,7 +584,7 @@ async def test_registrant_retry_429_does_not_force_create_failed(
 
 
 # ===================================================================
-# 4b. POST /{id}/zoom/retry -- master-triggered retry (A4 V2, ПРОМТ №572)
+# 4b. POST /{id}/zoom/retry -- master-triggered retry (A4 V2, PROMPT №572)
 # ===================================================================
 
 RETRY_URL = PRACTICES_URL + "/{practice_id}/zoom/retry"
@@ -742,7 +742,7 @@ async def test_retry_endpoint_refuses_a_non_owner(
 
 # ===================================================================
 # 5. Publish survives a NON-ZoomAPIError failure inside the registrant
-#    step too, not just a Zoom-API failure (ПРОМТ №525)
+#    step too, not just a Zoom-API failure (PROMPT №525)
 # ===================================================================
 
 
@@ -752,7 +752,7 @@ async def test_publish_succeeds_when_host_registrant_call_raises_unexpectedly(
     db_session: AsyncSession,
 ) -> None:
     """"Zoom never blocks" (module docstring) is a blanket rule -- before
-    ПРОМТ №525, ensure_host_registrant only caught ZoomAPIError, so ANY
+    PROMPT №525, ensure_host_registrant only caught ZoomAPIError, so ANY
     other exception raised while registering the host (a bug, a database
     conflict, anything) would propagate out of create_meeting_for_practice
     and abort the publish request that had already succeeded otherwise.
@@ -791,7 +791,7 @@ async def test_publish_succeeds_when_host_registrant_call_raises_unexpectedly(
 
 # ===================================================================
 # 6. ensure_host_registrant's insert survives a DB-level conflict the
-#    idempotency check itself cannot see coming (ПРОМТ №525 -- the exact
+#    idempotency check itself cannot see coming (PROMPT №525 -- the exact
 #    incident shape, constructed directly instead of via a real race)
 # ===================================================================
 

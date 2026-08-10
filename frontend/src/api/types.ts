@@ -150,7 +150,7 @@ import type {
   UpdatePracticeRequest as GeneratedUpdatePracticeRequest,
 } from './generated'
 
-// -- P5 bridge (Master GROUPS, ПРОМТ №594): audience_kind + group_ids, ahead
+// -- P5 bridge (Master GROUPS, PROMPT №594): audience_kind + group_ids, ahead
 // of the next generated.ts regen -- same "never hand-edited" posture as the
 // T21-1 bridge above. Remove once a regen picks these up natively.
 export type PracticeAudienceKind = 'public' | 'students' | 'groups'
@@ -172,12 +172,31 @@ export interface UpdatePracticeRequest extends GeneratedUpdatePracticeRequest {
   group_ids?: string[]
 }
 
+// -- Q15 bridge (PROMPT №613): brand-new schemas, no generated.ts base to
+// extend yet -- POST /practices/{id}/audience-preview, a read-only dry-run
+// that never saves anything. Field shape copied verbatim from the backend's
+// AudiencePreviewRequest/Response (practices/schemas.py). Unlike
+// UpdatePracticeRequest above, both request fields are REQUIRED here -- the
+// caller always has a complete proposed state in hand (it's evaluating "if
+// I save the form as it stands"), not a partial PATCH.
+export interface AudiencePreviewRequest {
+  audience_kind: PracticeAudienceKind
+  group_ids: string[]
+}
+
+export interface AudiencePreviewResponse {
+  /** How many of this practice's ACTIVE (pending/confirmed) bookers would
+   * fall outside the proposed audience. Always present on the response
+   * (no response_model_exclude_unset on the backend route). */
+  stranded_count: number
+}
+
 export interface PracticeResponse extends GeneratedPracticeResponse {
   /** The practice owner's own Zoom host-registrant link. Populated only on
    * owner-facing responses; null/undefined otherwise. Optional for the same
    * fixture-compatibility reason as above. */
   zoom_host_join_url?: string | null
-  /** A4 V2 (ПРОМТ №572): this practice's ZoomMeeting.status verbatim
+  /** A4 V2 (PROMPT №572): this practice's ZoomMeeting.status verbatim
    * ('active' | 'pending_creation' | 'create_failed' | 'deleted'), or null/
    * undefined if no ZoomMeeting row exists. NOT owner-gated (unlike
    * zoom_host_join_url above) -- see the backend schema field's own
@@ -185,7 +204,7 @@ export interface PracticeResponse extends GeneratedPracticeResponse {
    * preparing" apart from "permanently failed" for BOTH the master and a
    * booked participant. */
   zoom_meeting_status?: string | null
-  /** A4 V6 (ПРОМТ №572): True when this response is the master's own
+  /** A4 V6 (PROMPT №572): True when this response is the master's own
    * EARLIER submission returned again (a window-scoped retry-after-timeout
    * dedup, or the losing side of a genuine concurrent double-tap) instead
    * of a freshly created practice. Only ever meaningful on the CREATE
@@ -193,7 +212,7 @@ export interface PracticeResponse extends GeneratedPracticeResponse {
    * detail, update, delete, cancel), same fixture-compatibility reason as
    * the other bridged fields above. */
   deduplicated?: boolean
-  /** P5 (ПРОМТ №594): 'public' | 'students' | 'groups'. Optional/undefined
+  /** P5 (PROMPT №594): 'public' | 'students' | 'groups'. Optional/undefined
    * for the same fixture-compatibility reason as the other bridged fields
    * above -- defaults to 'public' server-side, but existing test fixtures
    * built before this field existed simply omit it. */
@@ -304,10 +323,13 @@ export type PurchaseStatus = 'pending' | 'completed' | 'refunded' | 'failed'
 export type MasterStatus = 'pending' | 'verified' | 'rejected'
 export type AttendanceBookingStatus = 'pending' | 'confirmed' | 'attended' | 'no_show'
 export type WithdrawalStatus = 'pending' | 'approved' | 'rejected'
-// WaitlistStatus is re-exported from generated.ts (the backend is the source
-// of truth: 'waiting' | 'notified' | 'converted' | 'left' | 'declined' |
-// 'expired'). A stale hand-written copy used to live here with 'confirmed'
-// instead of 'converted' -- removed to avoid shadowing the generated type.
+// WaitlistStatus is re-exported from generated.ts -- that file is the
+// SOURCE OF TRUTH for its values, not this comment, so its members are
+// deliberately not enumerated here (PROMPT №614: a REMOVED status added
+// backend-side would otherwise make a listed enumeration stale the moment
+// it reached the wire). A stale hand-written copy used to live here with
+// 'confirmed' instead of 'converted' -- removed to avoid shadowing the
+// generated type.
 //
 // Mood / FeedbackRating are UI BUCKETS, not the raw backend value. On the
 // backend a check-in mood and a feedback rating are each a 1..10 score; the

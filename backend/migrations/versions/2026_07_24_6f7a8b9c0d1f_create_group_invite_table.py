@@ -4,7 +4,7 @@ Revision ID: 6f7a8b9c0d1f
 Revises: 5e6a7b8c9d0e
 Create Date: 2026-07-24
 
-Master GROUPS, P4 (ПРОМТ №593): group invite links.
+Master GROUPS, P4 (PROMPT №593): group invite links.
 
 REUSABLE + STABLE by design, unlike the single-use, Redis-only, sha256'd
 master_onboarding invite (admin/masters/service.py) -- the master pastes

@@ -29,7 +29,7 @@
 // not itself re-check practice.status. Both confirmed by reading the full
 // template, not assumed from the screen's name.
 //
-// N1 (ПРОМТ №587): VEmptyState WAS added, but only for one specific case --
+// N1 (PROMPT №587): VEmptyState WAS added, but only for one specific case --
 // no booking at all for this practice (`!myBooking`) -- replacing the
 // badges + "Войти" button block. It is not a general loading/error ladder;
 // Check-in and "Покинуть практику" stay rendered regardless (deliberately
@@ -290,7 +290,7 @@ describe('PracticeLiveView', () => {
   })
 
   // ===========================================================================
-  describe('N1 (ПРОМТ №587): honest "not booked" empty state', () => {
+  describe('N1 (PROMPT №587): honest "not booked" empty state', () => {
     it('no matching booking: the empty state renders with the exact copy, and the join button/badges are absent -- Check-in and «Покинуть практику» stay', () => {
       practicesState.selected = practice({ zoom_link: 'https://zoom.us/j/123456' })
       bookingsState.bookings = []
@@ -382,7 +382,7 @@ describe('PracticeLiveView', () => {
       expect(enterBtn()?.disabled).toBe(true)
     })
 
-    it('a valid https link but NO booking: N1 (ПРОМТ №587) -- "Войти" is GONE, replaced by the not-booked empty state, not merely disabled', () => {
+    it('a valid https link but NO booking: N1 (PROMPT №587) -- "Войти" is GONE, replaced by the not-booked empty state, not merely disabled', () => {
       practicesState.selected = practice({ zoom_link: 'https://zoom.us/j/123456' })
       bookingsState.bookings = []
       mount()
@@ -402,7 +402,7 @@ describe('PracticeLiveView', () => {
   })
 
   // ===========================================================================
-  describe('D3 link ladder (T21-1, ПРОМТ №541): personal link first, manual marked, else pending', () => {
+  describe('D3 link ladder (T21-1, PROMPT №541): personal link first, manual marked, else pending', () => {
     it('a personal registrant link takes priority over the manual zoom_link -- opens the PERSONAL one', async () => {
       practicesState.selected = practice({ zoom_link: 'https://zoom.us/j/manual' })
       bookingsState.bookings = [
@@ -447,7 +447,7 @@ describe('PracticeLiveView', () => {
       expect(text()).toContain('Ссылка готовится')
     })
 
-    // A4 V2 (ПРОМТ №572): before this, create_failed and pending_creation
+    // A4 V2 (PROMPT №572): before this, create_failed and pending_creation
     // rendered the IDENTICAL "Ссылка готовится" state -- a permanently
     // failed meeting looked exactly like one still being created, forever.
     it('the meeting permanently FAILED (create_failed): honest distinct state, not "готовится"', () => {

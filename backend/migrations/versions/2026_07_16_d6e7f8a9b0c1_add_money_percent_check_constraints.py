@@ -31,7 +31,7 @@ The three genuinely missing constraints, added here:
   - purchases.paid_cents >= 0
   - purchases.commission_cents >= 0
 
-NOT VALID (operator decision, ПРОМТ №422): added via raw
+NOT VALID (operator decision, PROMPT №422): added via raw
 ALTER TABLE ... CHECK (...) NOT VALID, not op.create_check_constraint()
 (which does not emit NOT VALID). Postgres skips validating existing rows
 and enforces only new inserts/updates -- this migration cannot fail on

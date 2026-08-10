@@ -4,7 +4,7 @@ Revision ID: 0f1a2b3c4d5e
 Revises: 9e0f1a2b3c4d
 Create Date: 2026-07-20 00:00:00.000003+00:00
 
-E21 step A (ПРОМТ №519): the two columns the choke point
+E21 step A (PROMPT №519): the two columns the choke point
 (bookings/service.py:648-661) will read once the attendance-decision step
 lands. Both nullable and unwritten by anything in this prompt -- purely
 additive, inert on deploy. NULL means "not decided via Zoom" and the

@@ -101,8 +101,8 @@ const MIN_CENTS = 100 // EUR 1.00 (from backend config)
 const MAX_CENTS = 50000 // EUR 500.00 (from backend config)
 
 // C-1: Allowed URL prefixes for checkout redirect.
-// FAILS CLOSED (ПРОМТ №563, same posture as api/practices.ts's
-// zoomStartRedirectUrl, ПРОМТ №557): no hardcoded fallback domain. The
+// FAILS CLOSED (PROMPT №563, same posture as api/practices.ts's
+// zoomStartRedirectUrl, PROMPT №557): no hardcoded fallback domain. The
 // second prefix (our own backend, used for the stub-mode success URL) is
 // only added when VITE_API_BASE_URL is actually configured -- api.talentir.
 // info belongs to a different project entirely. If the env var is missing,

@@ -60,6 +60,31 @@ _ZOOM_API_BASE = "https://api.zoom.us/v2"
 # In-memory only -- see module docstring. (access_token, expires_at_monotonic)
 _token_cache: tuple[str, float] | None = None
 
+# PROMPT №645 (audit finding, test-only knob): the stub's registrant-create
+# response has always unconditionally included join_url -- there was no way
+# to exercise the documented-but-real "Zoom returns a registrant_id with no
+# join_url" shape (models.py's own ZoomRegistrant.join_url docstring) under
+# test, which is exactly why the CRITICAL bug this flag exists to test
+# (service.py's ensure_shared_registrant guard) shipped uncaught. A test
+# flips this via `monkeypatch.setattr(zoom_client, "_stub_omit_join_url",
+# True)`; never set outside a test.
+_stub_omit_join_url: bool = False
+
+# PROMPT №672 (audit finding PK-Z3, test-only knob, same shape as
+# _stub_omit_join_url above): the stub's recordings response has always
+# unconditionally included recording_play_passcode -- there was no way to
+# exercise either of the two OTHER documented-but-real shapes
+# get_meeting_recording_link (service.py) actually branches on: Zoom
+# returning the passcode under the older `password` key instead
+# ("password_field", the `or response.get("password")` fallback), or
+# omitting a passcode of either shape entirely ("missing", the no-passcode
+# soft-fail). A string, not a second bool, because the two alternates are
+# mutually exclusive -- two independent bools would allow an invalid
+# both-True state a single flag cannot represent. A test sets this via
+# `zoom_client._stub_recording_passcode = "password_field"` / `"missing"`
+# in a try/finally that restores `"normal"`; never set outside a test.
+_stub_recording_passcode: str = "normal"  # "normal" | "password_field" | "missing"
+
 
 class ZoomAPIError(Exception):
     """Raised on any non-2xx response or network failure from the Zoom API.
@@ -208,18 +233,45 @@ def _stub_response(method: str, path: str, json_body: dict | None) -> Any:
         return {}
     if method == "POST" and path.endswith("/registrants"):
         stub_id = str(uuid4())
-        return {
+        response = {
             "registrant_id": stub_id,
             "id": stub_id,
             "topic": "stub",
             "join_url": f"https://zoom.us/w/stub?tk={stub_id}",
         }
+        if _stub_omit_join_url:
+            # PROMPT №645: the real, documented Zoom shape ZoomRegistrant.
+            # join_url's own docstring names -- registrant_id present,
+            # join_url absent. Test-only, see the flag's own module-level
+            # comment.
+            del response["join_url"]
+        return response
     if method == "GET" and path.endswith("/registrants"):
         return {"registrants": []}
     if method == "PUT" and path.endswith("/registrants/status"):
         return {}
     if method == "GET" and "/report/meetings/" in path:
         return {"participants": []}
+    # REC-1 (PROMPT №618): must come AFTER report/meetings and BEFORE the
+    # generic /meetings/ GET check below -- "/meetings/{id}/recordings"
+    # contains "/meetings/" as a substring too, same trap as the comment
+    # above already documents for /registrants and /report/meetings/.
+    if method == "GET" and path.endswith("/recordings"):
+        stub_id = path.split("/")[-2]
+        response = {"share_url": f"https://zoom.us/rec/share/{stub_id}"}
+        if _stub_recording_passcode == "password_field":
+            # PROMPT №672: the real, documented Zoom shape where the
+            # passcode arrives under the older `password` key instead of
+            # `recording_play_passcode` -- get_meeting_recording_link's
+            # `or` fallback exists for exactly this. Test-only.
+            response["password"] = "stubpasscode"
+        elif _stub_recording_passcode == "missing":
+            # PROMPT №672: a share_url with no passcode of either shape --
+            # get_meeting_recording_link's no-passcode soft-fail. Test-only.
+            pass
+        else:
+            response["recording_play_passcode"] = "stubpasscode"
+        return response
     # Must come AFTER both /registrants and /report/meetings/ GET checks
     # above -- both of those paths also contain "/meetings/" as a substring.
     if method == "GET" and "/meetings/" in path:
@@ -249,6 +301,16 @@ async def create_meeting(
     Registration-specific settings (approval_type etc.) are configured
     here so the meeting is ready for registrants once that wiring lands in
     a later step -- no registrant is created by this call.
+
+    auto_recording="cloud" (REC-1, PROMPT №618): the account-level "record
+    automatically" setting is what actually makes recording happen -- Zoom
+    applies the account setting regardless of this field, and it was OFF
+    until the owner turned it on directly in the console (2026-07-29,
+    zero code change). This field does not conflict with that: both now
+    say "record", so it is redundant today. It is set anyway so the
+    intent is recorded in code, not only in a console setting nobody
+    reading this file can see -- a future reader (or a future account
+    change) should not have to guess why recordings exist.
     """
     return await _request(
         "POST",
@@ -263,6 +325,30 @@ async def create_meeting(
                 "approval_type": 0,  # automatic approval
                 "registrants_email_notification": True,
                 "join_before_host": False,
+                "auto_recording": "cloud",
+                # T24-38 (PROMPT №642, corrected №645): explicit now, was
+                # previously unset (riding whatever the account default is,
+                # never read). This is the ONE lever the №641 research
+                # identified as PLAUSIBLY relevant to letting more than one
+                # guest use the shared-registrant link (ensure_shared_
+                # registrant, service.py) -- it is NOT confirmed to work.
+                # The №641 sources directly CONFLICT on whether this field
+                # governs registrant-link concurrency at all (one Zoom-staff
+                # reply says it blocks reuse from another device; a reply on
+                # the SAME thread says it does not restrict the join_url
+                # from multiple computers). One of those same sources also
+                # ties the field's documented behavior to `approval_type: 2`
+                # -- three lines above, this meeting uses `approval_type: 0`,
+                # and that interaction has never been checked. Set explicitly
+                # so we are at least not riding an unread account default;
+                # whether it actually achieves concurrent access is
+                # UNVERIFIED UNTIL A LIVE PRACTICE (owner ruling, PROMPT
+                # №641/№642: build it anyway, let the first practice settle
+                # it). Existing upcoming meetings created before this change
+                # do NOT get it retroactively -- see ensure_shared_registrant's
+                # docstring and the PROMPT №642 DONE report for why
+                # patch_meeting was deliberately not used here.
+                "allow_multiple_devices": True,
             },
         },
     )
@@ -280,7 +366,7 @@ async def patch_meeting(*, zoom_meeting_id: str, start_time_iso: str) -> None:
 async def get_meeting(*, zoom_meeting_id: str) -> dict:
     """Fetch a meeting's current details from Zoom, including start_url.
 
-    ПРОМТ №556 (OWNER-1, option В): this is the ONLY place start_url is ever
+    PROMPT №556 (OWNER-1, option В): this is the ONLY place start_url is ever
     read. create_meeting's response has one too, but that one is deliberately
     discarded (see this module's FAILURE SHAPE note + zoom/service.py) so the
     credential is fetched fresh, on demand, and never stored -- callers must
@@ -292,6 +378,20 @@ async def get_meeting(*, zoom_meeting_id: str) -> dict:
 async def delete_meeting(*, zoom_meeting_id: str) -> None:
     """Delete a meeting."""
     await _request("DELETE", f"/meetings/{zoom_meeting_id}")
+
+
+async def get_meeting_recordings(*, zoom_meeting_id: str) -> dict:
+    """Fetch this meeting's cloud recording (REC-1, PROMPT №618).
+
+    Raises ZoomAPIError on any non-2xx, INCLUDING 404 -- Zoom returns 404
+    when there is no recording (never created, still processing, or
+    already deleted by Zoom's own retention). The caller distinguishes
+    "confirmed absent" (404) from "couldn't check" (anything else) by
+    reading exc.status_code; this function does not special-case 404
+    itself so that distinction stays visible to the caller instead of
+    being collapsed here.
+    """
+    return await _request("GET", f"/meetings/{zoom_meeting_id}/recordings")
 
 
 # ---------------------------------------------------------------------------

@@ -196,7 +196,7 @@ Minor gaps closed by us (backend projection + manual `generated.ts` + frontend w
 **REASSIGNED (operator policy, 2026-07-15) — OWNED-BY-NAV, NOT Zod's lane.** These three were
 originally deferred as small-but-Zod-hot one-liners; none of the three files is messaging/notifications,
 so under the narrowed Zod lane (messaging + notifications only) they are ours:
-- **E12** add a grouped-COUNT `checkin_count` to `PracticeResponse`/`PracticeSummary`, batched like `series_meta_for_practices` (practices/enrichment_service.py:59 — renamed from `_series_meta_for_practices`, moved from service.py; verified ПРОМТ №510). OWNED-BY-NAV: practices/service.py (E3).
+- **E12** add a grouped-COUNT `checkin_count` to `PracticeResponse`/`PracticeSummary`, batched like `series_meta_for_practices` (practices/enrichment_service.py:59 — renamed from `_series_meta_for_practices`, moved from service.py; verified PROMPT №510). OWNED-BY-NAV: practices/service.py (E3).
 - **E15** mirror `onboarding_completed` → `master_onboarding_completed` on `UserResponse` + accept on PATCH-self (users/, credentials JSONB, service.py:45 frozenset). OWNED-BY-NAV: users/.
 - **E3a** add `Practice.status != PracticeStatus.DELETED.value` to the occurrence-count filter (practices/service.py:427) — soft-deleted occurrences currently inflate `total_sessions`. OWNED-BY-NAV: E3 engine.
 
@@ -219,7 +219,7 @@ Each epic states **(a) why · (b) screens · (c) what breaks · (d) backend stat
   (gen:663), `ReviewItem` (gen:922), `getPracticeReviews` practices.ts:170. The **cross-practice**
   needs-attention feed (the former internal "#3") is also DELIVERED: `GET /masters/me/reviews` →
   `PaginatedMasterReviewsResponse` (gen:615) with `MasterReviewItem.practice_title` (gen:521).
-  **CORRECTION (2026-07-04, ПРОМТ №280): the attention param was STALE-OPEN — it already ships.**
+  **CORRECTION (2026-07-04, PROMPT №280): the attention param was STALE-OPEN — it already ships.**
   `GET /masters/me/reviews?attention=true` narrows to the negative (confused) bucket server-side
   (`reviews_router.py` `attention: bool = Query`, `reviews_service.list_master_reviews`,
   `Feedback.rating <= ATTENTION_RATING_MAX`) and is LIVE on origin/test. E1-attention = **frontend
@@ -295,7 +295,7 @@ Each epic states **(a) why · (b) screens · (c) what breaks · (d) backend stat
   Persist the user's «запрос мастеру» (today `TD-ASK-MASTER`, not persisted) + add a `request` field to
   the check-in item (the 4 check-in/request states).
 - **STATUS (2026-06-24): OPEN** — no conversation/message DTO or endpoint exists.
-- **⟳ ENRICHED 2026-06-25 (master student-profile request-states — ex «item-3», precise contract).** The «запрос мастеру» must also surface on the MASTER's student profile (`MasterStudentProfileView`), not only as a chat thread. Verified now against `generated.ts`: (1) **No ask-master endpoint exists** — `BookingConfirmedView.onSendRequest` only fires a toast and **discards** the text (`TD-ASK-MASTER`); nothing is persisted. Need: persist it as **ONE request per booking, attached to that practice**, created from the booking-confirmed flow. (2) **The master cannot render it** — `StudentDetailResponse` (gen:966) / `StudentCheckinItem` (gen:959 = `{mood, comment, created_at}`) carry **no request field and no practice link**. Need the student-profile recent items to be **practice-keyed** so one row can carry check-in AND/OR request — e.g. add `request_text` + `practice_id` to `StudentCheckinItem`, or a parallel `recent_requests[]` on `StudentDetailResponse`. (3) Add the reviewer/student **`user_id`** to `StudentCheckinItem`/`recent_requests[]` so a profile row can navigate to the student — this is a DIFFERENT field on a DIFFERENT response than E1/E6's; that gap (`MasterReviewItem`/`ReviewItem.user_id`) is CLOSED as of ПРОМТ №420, this one (student-profile check-ins/requests) is still open on its own merits, not by analogy. **Frontend status:** until this lands, `MasterStudentProfileView` renders the **check-in state only** (real data); the request states are **deferred, not faked** (with the data contract undefined we render the real state, spec the contract here, and defer the dependent states rather than invent a shape or wire a POST to a non-existent endpoint).
+- **⟳ ENRICHED 2026-06-25 (master student-profile request-states — ex «item-3», precise contract).** The «запрос мастеру» must also surface on the MASTER's student profile (`MasterStudentProfileView`), not only as a chat thread. Verified now against `generated.ts`: (1) **No ask-master endpoint exists** — `BookingConfirmedView.onSendRequest` only fires a toast and **discards** the text (`TD-ASK-MASTER`); nothing is persisted. Need: persist it as **ONE request per booking, attached to that practice**, created from the booking-confirmed flow. (2) **The master cannot render it** — `StudentDetailResponse` (gen:966) / `StudentCheckinItem` (gen:959 = `{mood, comment, created_at}`) carry **no request field and no practice link**. Need the student-profile recent items to be **practice-keyed** so one row can carry check-in AND/OR request — e.g. add `request_text` + `practice_id` to `StudentCheckinItem`, or a parallel `recent_requests[]` on `StudentDetailResponse`. (3) Add the reviewer/student **`user_id`** to `StudentCheckinItem`/`recent_requests[]` so a profile row can navigate to the student — this is a DIFFERENT field on a DIFFERENT response than E1/E6's; that gap (`MasterReviewItem`/`ReviewItem.user_id`) is CLOSED as of PROMPT №420, this one (student-profile check-ins/requests) is still open on its own merits, not by analogy. **Frontend status:** until this lands, `MasterStudentProfileView` renders the **check-in state only** (real data); the request states are **deferred, not faked** (with the data contract undefined we render the real state, spec the contract here, and defer the dependent states rather than invent a shape or wire a POST to a non-existent endpoint).
 - **⟳ 2026-06-30 (user «Сообщения» entry built — honest stub).** Profile ▸ «Аккаунт» now has a «Сообщения» row → `UserMessagesView` (route `user-messages`), an honest **empty-state** («Здесь появятся ваши переписки с мастерами» / «Функция в разработке») — **no fake threads**, no chat route, no send box. It is the swap point for the real conversations list once `GET /conversations` (above) lands; the profile-row unread badge stays OFF until `GET /conversations/unread-total` exists. **Known cleanup (deferred, F2=А):** `MasterMessagesView` / `MasterChatView` still render hardcoded fake conversations (pre-existing seed-only stub) — convert them to real data / honest empty-state when the API lands.
 
 ### E5 — Students / CRM aggregate. **P0.**
@@ -312,10 +312,10 @@ Each epic states **(a) why · (b) screens · (c) what breaks · (d) backend stat
 - **(a) Why.** A weekly personalised summary (insight + key feedbacks + who needs attention). The
   existing AI summary is per-practice and mock.
 - **(b) Screens.** Master dashboard → «Саммари» + `MasterSummaryView`; user → «Подробнее» + `AiSummaryView`.
-- **(c) Breaks.** Nothing, as of ПРОМТ №420 — see STATUS.
+- **(c) Breaks.** Nothing, as of PROMPT №420 — see STATUS.
 - **(d) Backend.** `GET /practices/{id}/ai-summary` is mock + per-practice (unrelated to this epic; a
   different feature entirely, kept for its own sake, not a stand-in for the weekly summary).
-- **STATUS (2026-07-15, ПРОМТ №420): DELIVERED except the insight, which is Zod's (see LANE below).**
+- **STATUS (2026-07-15, PROMPT №420): DELIVERED except the insight, which is Zod's (see LANE below).**
   Recon before building found two of the three pieces already real and just not wired to this one
   screen — no new backend was needed for either:
   - **needs attention: DELIVERED, pre-existing (E5).** `MasterSummaryView` already filters the real
@@ -399,7 +399,7 @@ Each epic states **(a) why · (b) screens · (c) what breaks · (d) backend stat
   `backend/tests` first + regen `generated.ts`.
 - **CLOSED-BY-NAV (batch R, 2026-07-14, LIVE c1dbe08) — E9-rich.** `AdminMasterListItem` rich card
   (methods + Практик/Ученики/К-выводу stats) delivered additively, self-built. Do not rebuild.
-- **NEW `GET /admin/users/{id}` — admin single-user detail (ПРОМТ №372, 2026-07-12).** Today
+- **NEW `GET /admin/users/{id}` — admin single-user detail (PROMPT №372, 2026-07-12).** Today
   `/admin/users` (list) and `/admin/users/{id}/make-master` (action) exist, but there is no
   single-user GET. This blocks `AdminReportDetailView`'s clickable-target fix (master/practice
   targets already link out; `target_type=user` stays plain text — no user-detail screen to
@@ -435,7 +435,7 @@ Each epic states **(a) why · (b) screens · (c) what breaks · (d) backend stat
   expose it on the profile — contract undefined → define + spec (frontend defers, does not invent). **P2** (recon item E3).
 - NEW i18n EN catalog + language render layer + date-format pref + formatter. **P2.**
 - EXTEND `PracticeResponse` per-card `{ attended, no_show }` aggregate. **P2.**
-- **STATUS (2026-07-04, email SELF-BUILT — PACK#3, ПРОМТ №280):** `UserResponse.email` capture+expose
+- **STATUS (2026-07-04, email SELF-BUILT — PACK#3, PROMPT №280):** `UserResponse.email` capture+expose
   is DONE, additive credentials-JSONB (phone/bio pattern, NO column, NO migration): `"email"` added to
   `_JSONB_CREDENTIAL_FIELDS`, `UserResponse.email` computed_field, `UserUpdate.email` (soft
   email-validator; "" clears). `EditProfileView` email field enabled. Regenerated generated.ts.
@@ -527,7 +527,7 @@ Each epic states **(a) why · (b) screens · (c) what breaks · (d) backend stat
 - **(c) Breaks.** `MasterApplyExperience` / `MasterApplyRequest` (gen:472) has no `languages` field;
   `MasterProfileResponse` (gen:486) has no `languages`. The control persists nothing until added.
 - **Request.** Add `languages: string[]` to the apply experience intake + surface on the profile.
-- **STATUS (2026-07-04): SELF-BUILT (PACK#3, ПРОМТ №280).** Additive JSONB `data.profile.languages`
+- **STATUS (2026-07-04): SELF-BUILT (PACK#3, PROMPT №280).** Additive JSONB `data.profile.languages`
   (mirror `methods`, NO migration): `MasterApplyExperience.languages` (default []) + on
   `MasterProfileResponse`; apply UI wired (`langRu`/`langEn` → experience.languages). Q2=А: FREELY
   editable on the profile (no moderation) via new `PATCH /api/v1/masters/me/languages` +
@@ -585,7 +585,7 @@ Each epic states **(a) why · (b) screens · (c) what breaks · (d) backend stat
 - **Request.** Design + build the taxonomy model + change-request + admin-approval + pending status; image 2
   (PE-3) is the visual spec. Then the frontend upgrades the locked flat-chip display into the mockup's
   editable-with-approval rows. Until then the honest locked display stands.
-- **STATUS (2026-07-04): SELF-BUILT FLAT (M3, ПРОМТ №278) — two-level taxonomy DEFERRED / out of scope.**
+- **STATUS (2026-07-04): SELF-BUILT FLAT (M3, PROMPT №278) — two-level taxonomy DEFERRED / out of scope.**
   Operator locked F-M3-1=А (FLAT `string[]`, no direction→kind nesting) after recon surfaced that this E19
   entry contradicted the flat decision. Shipped additively (no migration): JSONB
   `data.profile.method_change_request` + 4 endpoints mirroring the master-application verify/reject loop
@@ -609,7 +609,7 @@ Each epic states **(a) why · (b) screens · (c) what breaks · (d) backend stat
 | GET /masters/me/transactions | NEW | title, date, counterparty, amount (signed) | P0 | DELIVERED (gen:536/679) |
 | GET /masters/me/students (+/{id}) | NEW | name, avatar, counts, checkins[], feedbacks[] | P0 | DELIVERED (gen:671/966) |
 | GET /masters/me/stats?period | NEW | practices, participants, income + deltas | P1 | DELIVERED (gen:526) |
-| ~~GET /masters/me/weekly-summary~~ | — | superseded 2026-07-15 (ПРОМТ №420) — not built, not needed; `MasterSummaryView` calls the two existing endpoints below directly | — | see E6 STATUS |
+| ~~GET /masters/me/weekly-summary~~ | — | superseded 2026-07-15 (PROMPT №420) — not built, not needed; `MasterSummaryView` calls the two existing endpoints below directly | — | see E6 STATUS |
 | ~~GET /users/me/weekly-summary~~ | — | superseded 2026-07-15 — insight is the only piece, stays a static placeholder (no AI provider); see E6 STATUS | — | see E6 STATUS |
 | POST /practices (recurrence) | EXTEND | recurrence{…} + generation | P1 | DELIVERED (gen:350/876) |
 | PATCH /practices/{id} (recurrence) | EXTEND | add recurrence to UpdatePracticeRequest + regen | P1 | OPEN (gen:1032 lacks it) |
@@ -706,7 +706,7 @@ state to hand to Zod against his own numbering.
 
 ## 2026-07-03 — ROLE_SWITCH_ENABLED removed (heads-up for YOUR docs)
 
-**What changed (commit `15d5b0d`, held batch on `d01f6f9`, ПРОМТ №256):** the TEST-only
+**What changed (commit `15d5b0d`, held batch on `d01f6f9`, PROMPT №256):** the TEST-only
 `ROLE_SWITCH_ENABLED` flag is REMOVED entirely (config field, the 404 router gate on
 `POST /users/me/role`, the W-4 startup warning + its test file, and the seeded
 `credentials.role_switch.allowed_roles` allow-lists — now ignored). Role-switch security is
@@ -733,7 +733,7 @@ closes the edge; operator accepted the edge as-is for now (№257 ruling), so th
 
 ## 2026-07-03 — zoom_link exposure matrix: test-debt cells (tied to your E18/M-3/Z-6/Z-7 batch)
 
-Pre-push audit (ПРОМТ №262) mapped `test_zoom_link_visibility.py` onto the full exposure matrix.
+Pre-push audit (PROMPT №262) mapped `test_zoom_link_visibility.py` onto the full exposure matrix.
 The gate itself verified fail-closed (only the two builders set the field). Six cells have NO test —
 small additive cases, your file/conventions:
 
@@ -757,7 +757,7 @@ after making the four owner-only CRUD responses in practices/router.py pass
 
 ---
 
-## 2026-07-03 — U4 no-show reflection: persist endpoint + booking flag (frontend shipped on a stub, ПРОМТ №269)
+## 2026-07-03 — U4 no-show reflection: persist endpoint + booking flag (frontend shipped on a stub, PROMPT №269)
 
 The User frontend now has a full **no-show reflection** flow, built entirely on a
 **stub** (no backend calls). A booking with `status = no_show` («Не состоялась») now shows
@@ -812,7 +812,7 @@ config-driven editable catalog, grandfather existing data**).
 Методы, each with add-edit-remove); the picklists it feeds — `CreatePracticeView`/`EditPracticeView`
 (direction + type), `MasterApplyView`/`EditProfileView` (methods).
 
-**(c) What exists today (all code-level constants, NONE are tables — recon ПРОМТ №314):**
+**(c) What exists today (all code-level constants, NONE are tables — recon PROMPT №314):**
 - **Directions:** Python `PracticeDirection(StrEnum)` `practices/models.py:67-88` + runtime allow-list
   `settings.practice_allowed_directions` `core/config.py:139`; stored per-practice in JSONB
   `data.taxonomy.direction` (not a column). FE mirrors: `utils/practiceOptions.ts` `DIRECTION_OPTIONS`,
@@ -854,7 +854,7 @@ FE icon map (`DIRECTION_ICON`, Partial+fallback) — a new direction with no ico
 (`TD-CAL-DIRECTIONS-EXPAND`), so the catalog can add directions ahead of icons. This epic supersedes
 the "manual code edit + migration" note in `docs/seed-context.md:208-212` once shipped.
 
-**(f) Deep-scout confirmation (ПРОМТ №360) + FE read-only ALREADY SHIPPED (batch P).**
+**(f) Deep-scout confirmation (PROMPT №360) + FE read-only ALREADY SHIPPED (batch P).**
 Forensic re-verify of the self-vs-Zod hinge — all confirmed:
 - The `PracticeDirection` enum is **NOT a gate**: it appears only as docstring/typing mirror
   (`practices/models.py:14,67,75`, `core/config.py:137`) — never a DB column type, `server_default`,
@@ -864,7 +864,7 @@ Forensic re-verify of the self-vs-Zod hinge — all confirmed:
   _styles_by_direction` inside per-request validators (`schemas.py:290,466,114`, `router.py:100`,
   `_flat_allowed_styles` `schemas.py:84`) — read at REQUEST time, so the read SOURCE can be swapped.
 - **No config/settings/kv store exists** (migrations are all domain tables) → a migration is unavoidable.
-  **⚠ Historical claim, since overtaken — see below:** this was true when written (ПРОМТ №360); a
+  **⚠ Historical claim, since overtaken — see below:** this was true when written (PROMPT №360); a
   store now exists (batch R). Kept for context, not as a live statement.
 - **T2 scope (navigator, was "Minimal Zod scope" — re-headed 2026-07-15, each part re-verified against
   current code before carrying forward):**
@@ -975,7 +975,7 @@ The admin F-batch shipped its self/FE parts (F1/F5/F3 masters status filter, F7 
 Two items were backend-blocked and originally deferred to Zod; both are OWNED-BY-NAV now (2026-07-15
 lane policy — neither is messaging/notifications). Recorded here, historical heading kept for context.
 
-### F2/F6 — master card + detail must show «Направление» + «Вид» — FOLD into E19 + E20. **P2. STATUS: OWNED-BY-NAV (2026-07-15, resolved by operator) — NOT Zod's lane.** ⚠ Recon flag (ПРОМТ №402):
+### F2/F6 — master card + detail must show «Направление» + «Вид» — FOLD into E19 + E20. **P2. STATUS: OWNED-BY-NAV (2026-07-15, resolved by operator) — NOT Zod's lane.** ⚠ Recon flag (PROMPT №402):
 this section's own analysis below predates batch R's `MethodTaxonomyPicker`/`methodTaxonomy.ts`
 client-side two-level parse-over-flat-list mechanism — much of what this section asks for may already
 be delivered by a different mechanism than the one specced here. Treat the text below as historical

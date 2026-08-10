@@ -366,7 +366,7 @@ async def test_insights_regular_user(
 ) -> None:
     """Regular user tries to access insights: 403 at the role guard.
 
-    ПРОМТ №575: the endpoint switched from get_current_user to
+    PROMPT №575: the endpoint switched from get_current_user to
     get_current_master (defense-in-depth), so a non-master is now rejected
     at the dependency before the handler (and the 404 ownership check in
     get_practice_insights) ever runs. See test_insights_not_owner below for
@@ -447,7 +447,7 @@ async def test_insights_practice_not_found(
     master_auth = await _make_verified_master(
         client, db_session, telegram_id=89516,
     )
-    # ПРОМТ №583: _make_verified_master only flushes -- the role=MASTER
+    # PROMPT №583: _make_verified_master only flushes -- the role=MASTER
     # change and the MasterProfile row must be COMMITTED before the request
     # below, which hits get_current_master through a separate DB connection.
     # Without this, the guard sees the old (non-master) role and rejects

@@ -13,6 +13,16 @@ export const DURATION_OPTIONS: { label: string; value: string }[] = [
   { label: '120 минут', value: '120' },
 ]
 
+// «Для кого практика» (P5, PROMPT №594): audience_kind single-select, shared
+// between Create and Edit for the same reason as DURATION_OPTIONS above --
+// originally lived only in CreatePracticeView; extracted here so Edit's port
+// doesn't duplicate the option list a second time.
+export const AUDIENCE_OPTIONS: { label: string; value: string }[] = [
+  { value: 'public', label: 'Публичная' },
+  { value: 'students', label: 'Все ученики' },
+  { value: 'groups', label: 'Конкретные группы' },
+]
+
 // -- Timezone options (iOS-style world list, 2026-05-29) ----------------------
 // One reference city per unique world UTC offset, from UTC-11 to UTC+14,
 // including the half-hour and 45-minute offsets (India, Nepal, Iran,

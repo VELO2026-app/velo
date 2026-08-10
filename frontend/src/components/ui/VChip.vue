@@ -10,6 +10,16 @@
   Usage:
     <VChip>Медитация</VChip>
     <VChip size="md" clickable :active="on" @click="toggle">Заметки</VChip>
+
+  Optional `existing` (T24-35, PROMPT №634): a second, DARKER selected state
+  meaning "already a member of this" -- distinct from `active` ("selected
+  right now, about to be added"). The owner's own example: a student
+  already in four groups, and nothing on screen said so. Colour derived
+  from the existing scale (--velo-primary-dark, the same token VButton's
+  own primary hover already uses) -- not a new colour. Takes precedence
+  over `active` when both are true (a chip already-in is not "newly
+  selected", it is its own state). Default false = byte-identical to
+  every pre-existing caller.
 -->
 
 <template>
@@ -20,7 +30,8 @@
     :class="{
       'v-chip--md': size === 'md',
       'v-chip--clickable': clickable,
-      'v-chip--active': active,
+      'v-chip--active': active && !existing,
+      'v-chip--existing': existing,
     }"
     @click="clickable && $emit('click', $event)"
   >
@@ -34,11 +45,14 @@ withDefaults(
     size?: 'sm' | 'md'
     active?: boolean
     clickable?: boolean
+    /** "Already a member" darker state (T24-35) -- see the file header. */
+    existing?: boolean
   }>(),
   {
     size: 'sm',
     active: false,
     clickable: false,
+    existing: false,
   },
 )
 
@@ -79,6 +93,17 @@ defineEmits<{
 .v-chip--active {
   background: var(--velo-primary);
   border-color: var(--velo-primary);
+  color: var(--velo-white);
+}
+
+/* T24-35 (PROMPT №634): darker "already a member" state -- --velo-primary-dark,
+   the existing hover-state token for --velo-primary (VButton), not a new
+   colour. Deliberately not just a heavier active: this chip did not become
+   selected because of THIS interaction, it already was true before the
+   sheet opened. */
+.v-chip--existing {
+  background: var(--velo-primary-dark);
+  border-color: var(--velo-primary-dark);
   color: var(--velo-white);
 }
 </style>

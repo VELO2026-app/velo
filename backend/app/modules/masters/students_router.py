@@ -1,6 +1,6 @@
 # =============================================================================
-# VELO Backend -- Master Students Router (E5, tag/block P1 ПРОМТ №590,
-# tag-palette + per-student groups P3 ПРОМТ №592)
+# VELO Backend -- Master Students Router (E5, tag/block P1 PROMPT №590,
+# tag-palette + per-student groups P3 PROMPT №592)
 # =============================================================================
 #
 # Master-facing "my students" CRM aggregate + the per-student tag/block
@@ -100,7 +100,8 @@ async def get_my_student_endpoint(
 ) -> StudentDetailResponse:
     """Per-student detail: counts, hours, satisfaction, recent activity.
 
-    404 if the user is not this master's student (no attended booking).
+    404 only for a real stranger. Opens for this master's own blocked
+    student too (T24-20, PROMPT №638) -- response.blocked tells the caller.
     """
     user, _profile = master_tuple
     data = await get_master_student_detail(user.id, student_id, session)
@@ -166,7 +167,7 @@ async def list_my_tags_endpoint(
     master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
     session: AsyncSession = Depends(get_db_reader),
 ) -> DistinctTagsResponse:
-    """P3 addendum (ПРОМТ №592): every distinct tag this master has used,
+    """P3 addendum (PROMPT №592): every distinct tag this master has used,
     alphabetical. Closes the P2 tag-palette gap (AddTagSheet used to derive
     its palette from whatever page of members happened to be loaded)."""
     user, _profile = master_tuple
@@ -180,7 +181,7 @@ async def list_student_groups_endpoint(
     master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
     session: AsyncSession = Depends(get_db_reader),
 ) -> StudentGroupsResponse:
-    """P3 addendum (ПРОМТ №592): the CUSTOM groups this student is in for
+    """P3 addendum (PROMPT №592): the CUSTOM groups this student is in for
     this master (powers the profile's group chips). Never includes the two
     virtuals -- they aren't membership rows."""
     user, _profile = master_tuple

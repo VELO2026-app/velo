@@ -247,7 +247,7 @@ wait_for_backend() {
     return 1
 }
 
-# ПРОМТ №563: a key missing from the real .env is only genuinely DRIFT if
+# PROMPT №563: a key missing from the real .env is only genuinely DRIFT if
 # nothing in the app covers for its absence. app/core/config.py's Settings
 # class gives every field a Python-side default (grep confirms: zero fields
 # declared without one, e.g. via pydantic's `Field(...)` -- checked, none

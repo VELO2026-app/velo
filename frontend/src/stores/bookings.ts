@@ -26,7 +26,7 @@ import { extractApiError } from '@/composables/useApiError'
 // One-way dependency: bookings -> diary. Used only inside actions, never at
 // module scope or in the store's setup body -- keep it that way.
 //
-// W27 (ПРОМТ №438): this comment used to read «mirrors diary.ts using
+// W27 (PROMPT №438): this comment used to read «mirrors diary.ts using
 // useBookingsStore(); avoids a top-level circular evaluation» -- true when
 // written, false now. diary.ts no longer imports this store (its
 // refreshBookings() call was redundant; the views already do it), so there is no
@@ -143,7 +143,7 @@ export const useBookingsStore = defineStore('bookings', () => {
     try {
       upcoming.value = await getUpcomingBookings()
     } catch (e) {
-      // W15 fix (ПРОМТ №409): used to swallow the error entirely (empty array
+      // W15 fix (PROMPT №409): used to swallow the error entirely (empty array
       // looks identical to "genuinely nothing upcoming") -- keep the same
       // fallback but record the error so the caller can surface it.
       upcoming.value = []
@@ -246,6 +246,11 @@ export const useBookingsStore = defineStore('bookings', () => {
     fetchMyBookings,
     loadMore: pagination.loadMore,
     refreshBookings: pagination.refresh,
+    // B30: like refreshBookings(), but never flashes the list empty -- for a
+    // background freshness check on a screen that already shows data
+    // (PracticeDetailView, MyBookingsView), so a practice that just ended
+    // doesn't sit on a permanently-stale "counting attendance" badge.
+    refreshMyBookings: pagination.refreshInPlace,
 
     // Live-or-upcoming set for the dashboard nearest widget (B1)
     upcoming,

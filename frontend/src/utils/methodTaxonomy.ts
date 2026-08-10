@@ -9,8 +9,8 @@
 // selection) sides, so the create wizard, the edit-profile picker and the
 // pending-request display all round-trip through the SAME logic.
 //
-// DECISION Q3 = А (SURFACE-UNMATCHED, operator-reversed 2026-07-13, ПРОМТ
-// №391 — was Q3=В DROP-UNMATCHED, ПРОМТ №349): any stored string that does
+// DECISION Q3 = А (SURFACE-UNMATCHED, operator-reversed 2026-07-13, PROMPT
+// №391 — was Q3=В DROP-UNMATCHED, PROMPT №349): any stored string that does
 // NOT map to a known direction (or direction + style) is now SURFACED as the
 // custom variant instead of dropped. The original DROP-UNMATCHED rationale
 // ("prod is still test-grade with no real masters, zero real data loss") no
@@ -75,7 +75,7 @@ const STYLE_VALUE_BY_LABEL: Partial<Record<PracticeDirection, Record<string, str
     ]),
   )
 
-// -- R5-stage-4 catalog cache (bug 2 fix, ПРОМТ №405; made reactive ПРОМТ
+// -- R5-stage-4 catalog cache (bug 2 fix, PROMPT №405; made reactive PROMPT
 // №503 commit 1) -------------------------------------------------------------
 //
 // parseMethods/flattenMethods matched ONLY the hardcoded maps above -- a
@@ -89,7 +89,7 @@ const STYLE_VALUE_BY_LABEL: Partial<Record<PracticeDirection, Record<string, str
 // back to the hardcoded maps only, same offline/error contract api/taxonomy.ts
 // documents for its own consumers.
 //
-// shallowRef, not plain `let` (ПРОМТ №503): the bug-2/bug-5 fixes closed
+// shallowRef, not plain `let` (PROMPT №503): the bug-2/bug-5 fixes closed
 // "which screens remember to prime()" but left every consumer that resolves
 // through these maps invisible to Vue's dependency tracking -- a computed()
 // built on parseMethods/flattenMethods/directionLabel never re-ran just
@@ -101,14 +101,14 @@ const catalogDirectionValueByLabel = shallowRef<Record<string, string> | null>(n
 const catalogDirectionLabelByValue = shallowRef<Record<string, string> | null>(null)
 const catalogStyleValueByLabel = shallowRef<Record<string, Record<string, string>> | null>(null)
 // Style value -> label, per direction (reverse of catalogStyleValueByLabel).
-// Added for bug 5 leak 2 (ПРОМТ №408): flattenMethods' style branch only ever
+// Added for bug 5 leak 2 (PROMPT №408): flattenMethods' style branch only ever
 // consulted the hardcoded STYLE_LABEL, so a catalog-only style (created in
 // AdminCatalogView, or auto-promoted) flattened straight to its raw slug --
 // the direction-side analogue of catalogDirectionLabelByValue below, which
 // the bug 2 fix already added for directions but never mirrored for styles.
 const catalogStyleLabelByValue = shallowRef<Record<string, Record<string, string>> | null>(null)
 
-// Bumped once per applyTaxonomyCatalog() call (ПРОМТ №503 commit 2). The maps
+// Bumped once per applyTaxonomyCatalog() call (PROMPT №503 commit 2). The maps
 // above being reactive fixes computed()-based consumers automatically, but a
 // plain watch() keyed on its own source (e.g. MethodTaxonomyPicker's modelValue
 // watcher) does NOT re-run just because a ref it happens to read inside the
@@ -135,7 +135,7 @@ let cachedCatalog: TaxonomyListResponse | null = null
  * so a caller that already has the catalog (MethodTaxonomyPicker fetches its
  * own copy for the options it renders) can feed the SAME cache directly,
  * instead of every screen having to remember a separate prime call (bug 5
- * leak 1, ПРОМТ №408) -- see MethodTaxonomyPicker.vue's onMounted.
+ * leak 1, PROMPT №408) -- see MethodTaxonomyPicker.vue's onMounted.
  */
 export function applyTaxonomyCatalog(catalog: TaxonomyListResponse): void {
   const directionValueByLabel: Record<string, string> = {}
@@ -213,19 +213,25 @@ function resolveDirectionValue(label: string): PracticeDirection | undefined {
 
 /** Style label -> value under a resolved direction, hardcoded first, catalog second. */
 function resolveStyleValue(dirValue: PracticeDirection, label: string): string | undefined {
-  return STYLE_VALUE_BY_LABEL[dirValue]?.[label] ?? catalogStyleValueByLabel.value?.[dirValue]?.[label]
+  return (
+    STYLE_VALUE_BY_LABEL[dirValue]?.[label] ?? catalogStyleValueByLabel.value?.[dirValue]?.[label]
+  )
 }
 
 /** Style value -> label under a direction, hardcoded first, catalog second
  *  (bug 5 leak 2 fix), falling back to the raw value if neither knows it.
- *  Exported (T21-10, ПРОМТ №546): AdminMastersView's collapsed master card
+ *  Exported (T21-10, PROMPT №546): AdminMastersView's collapsed master card
  *  had no catalog-aware style helper available and hand-rolled a
  *  hardcoded-only version (STYLE_LABEL[st] ?? st) -- a catalog-only style
  *  (e.g. under a promoted custom direction) fell through to its raw slug,
  *  unlike directionLabel (already exported) which the same card uses
  *  correctly for the direction half of each chip. */
 export function resolveStyleLabel(dirValue: string, styleValue: string): string {
-  return STYLE_LABEL[styleValue] ?? catalogStyleLabelByValue.value?.[dirValue]?.[styleValue] ?? styleValue
+  return (
+    STYLE_LABEL[styleValue] ??
+    catalogStyleLabelByValue.value?.[dirValue]?.[styleValue] ??
+    styleValue
+  )
 }
 
 /** direction value -> Russian label, hardcoded first, catalog second (bug 2
@@ -259,7 +265,7 @@ export function flattenMethods(sel: MethodSelection): string[] {
 
 /**
  * Parse a stored `methods: string[]` back into a selection (SURFACE-UNMATCHED,
- * Q3=А, ПРОМТ №391 — was DROP-UNMATCHED, Q3=В, ПРОМТ №349). An entry with the
+ * Q3=А, PROMPT №391 — was DROP-UNMATCHED, Q3=В, PROMPT №349). An entry with the
  * « — » separator must match BOTH a known direction and a known style under
  * it to be treated as a direction+style pair; a bare entry must match a known
  * direction label. Anything else (including a « — » entry where either half

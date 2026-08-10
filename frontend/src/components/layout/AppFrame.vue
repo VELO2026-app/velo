@@ -12,11 +12,25 @@
 
   box-sizing:border-box keeps the padding inside the frame's height so a child
   using height:100% fills the area BELOW the safe-area padding rather than
-  overflowing past the bottom edge.
+  overflowing past the bottom edge -- true for a PERCENTAGE child; an
+  absolute-px child (a live `--velo-vvh` binding, e.g. the diary) does NOT get
+  this for free, since a raw px number knows nothing about an ancestor's
+  padding. PROMPT №664: also publish `contentSafeTop` as `--velo-content-safe-top`
+  on this SAME inline `:style` object -- a plain Vue-reactive binding, the same
+  mechanism the existing `paddingTop` already uses successfully, NOT the raw
+  `element.style.setProperty()` path useSafeArea.ts's own header documents as
+  unreliable on the Telegram iOS WebView (that failure was in code calling
+  setProperty directly, outside Vue's own render/patch cycle; this is not
+  that). A descendant needing the TRUE available height under an absolute
+  live value (not a percentage) subtracts this var explicitly -- see
+  DiaryFeedView.vue's `.diary-feed`.
 -->
 
 <template>
-  <div class="app-frame" :style="{ paddingTop: contentSafeTop + 'px' }">
+  <div
+    class="app-frame"
+    :style="{ paddingTop: contentSafeTop + 'px', '--velo-content-safe-top': contentSafeTop + 'px' }"
+  >
     <slot />
   </div>
 </template>

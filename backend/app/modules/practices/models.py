@@ -103,7 +103,7 @@ class PracticeDifficulty(enum.StrEnum):
 
 
 class AudienceKind(enum.StrEnum):
-    """Who can see/book a practice (Master GROUPS P5, ПРОМТ №594).
+    """Who can see/book a practice (Master GROUPS P5, PROMPT №594).
 
     PUBLIC:   everyone (default -- matches every practice's behavior before
               this column existed, see the migration's backfill).
@@ -213,7 +213,7 @@ class Practice(JSONBMixin, UUIDMixin, TimestampMixin, Base):
         server_default="eur",
     )
 
-    # -- Audience (Master GROUPS P5, ПРОМТ №594) --
+    # -- Audience (Master GROUPS P5, PROMPT №594) --
     audience_kind: Mapped[str] = mapped_column(
         String(20),
         default=AudienceKind.PUBLIC.value,

@@ -1,5 +1,5 @@
 # =============================================================================
-# VELO Backend -- Practice Audience Service (Master GROUPS P5, ПРОМТ №594)
+# VELO Backend -- Practice Audience Service (Master GROUPS P5, PROMPT №594)
 # =============================================================================
 #
 # ONE shared predicate for "can this viewer see/book/check into this
@@ -139,7 +139,7 @@ async def assert_viewer_can_access_practice(
     message -- see diary/checkins_service.py upsert_checkin's docstring for
     the exact strings and where they surface.
 
-    OWNER BYPASS (P5 hardening, ПРОМТ №596): matches list_public_practices's
+    OWNER BYPASS (P5 hardening, PROMPT №596): matches list_public_practices's
     own `or_(Practice.master_id == user.id, viewer_audience_clause(user.id))`
     filter (listing_service.py) -- so the gate and the feed filter agree by
     construction, not by caller discipline. VERIFIED INERT today: every call
@@ -198,7 +198,7 @@ async def assert_viewer_can_access_practice(
             )
         return
 
-    # FAIL-CLOSED (P5 hardening, ПРОМТ №596): an unrecognized audience_kind
+    # FAIL-CLOSED (P5 hardening, PROMPT №596): an unrecognized audience_kind
     # is DENIED, not silently allowed -- matches viewer_audience_clause's SQL
     # `or_`, which likewise matches none of its three explicit branches and
     # so evaluates false for anything else. AudienceKind has exactly three
@@ -260,3 +260,81 @@ async def assert_viewer_not_blocked(
         raise ForbiddenError(
             "You are blocked by this practice's master", code="blocked_by_master",
         )
+
+
+async def count_stranded_active_bookings(
+    practice: Practice,
+    booker_ids: list[UUID],
+    proposed_audience_kind: str,
+    proposed_group_ids: list[UUID],
+    session: AsyncSession,
+) -> int:
+    """Owner Q15 (PROMPT №613): how many of `booker_ids` (this practice's
+    CURRENT active bookers -- the caller, practices/service.py, already owns
+    that query and its own "active" definition, _ACTIVE_BOOKING_STATUSES)
+    would fail assert_viewer_can_access_practice's own rule if the practice's
+    audience were saved as (proposed_audience_kind, proposed_group_ids)
+    instead of whatever it is stored as right now.
+
+    Read-only, evaluates a HYPOTHETICAL audience -- nothing here writes to
+    Practice or PracticeAudienceGroup.
+
+    Reuses _blocked_clause/_is_student_clause UNCHANGED: neither depends on
+    audience_kind or target groups, so "is this user blocked" / "is this
+    user a student of this master" mean exactly the same whether the
+    audience is saved or merely proposed. The GROUPS case can't reuse
+    _is_group_member_clause as-is -- that function joins through THIS
+    practice's ALREADY-SAVED PracticeAudienceGroup rows, and a proposal
+    that hasn't been saved has nothing there to join against -- so it
+    checks MasterGroupMembership against the proposed group_ids directly:
+    same table, same join key (student_user_id + group_id), just fed an
+    explicit set instead of this practice's persisted rows. This is the
+    one piece that couldn't be a literal function call; every other
+    condition is the exact, unmodified predicate the real gate uses.
+    """
+    if not booker_ids:
+        return 0
+
+    proposed_member_ids: set[UUID] = set()
+    if proposed_audience_kind == AudienceKind.GROUPS.value and proposed_group_ids:
+        proposed_member_ids = set(
+            (
+                await session.execute(
+                    select(MasterGroupMembership.student_user_id).where(
+                        MasterGroupMembership.group_id.in_(proposed_group_ids),
+                        MasterGroupMembership.student_user_id.in_(booker_ids),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+    stranded = 0
+    for user_id in booker_ids:
+        # Already outside every audience today -- not this change's doing.
+        # (Provably can't occur in practice: block_student already cancels
+        # a blocked student's active bookings on this master's practices --
+        # kept anyway for exact fidelity with assert_viewer_can_access_
+        # practice's own precedence, not as a load-bearing branch.)
+        if await _clause_true_for(practice.id, _blocked_clause(user_id), session):
+            continue
+        if proposed_audience_kind == AudienceKind.PUBLIC.value:
+            continue
+        if proposed_audience_kind == AudienceKind.STUDENTS.value:
+            if await _clause_true_for(
+                practice.id, _is_student_clause(user_id), session,
+            ):
+                continue
+            stranded += 1
+            continue
+        if proposed_audience_kind == AudienceKind.GROUPS.value:
+            if user_id in proposed_member_ids:
+                continue
+            stranded += 1
+            continue
+        # Unrecognized kind -- fail closed, matches
+        # assert_viewer_can_access_practice's own fail-closed default.
+        stranded += 1
+
+    return stranded

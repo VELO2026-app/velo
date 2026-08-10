@@ -4,7 +4,7 @@
 **Дата:** 29 мая 2026
 **Статус:** Active
 
-> **Freshness (ПРОМТ №510, 2026-07-19, verified against `8d4948f` on `test`):** graded
+> **Freshness (PROMPT №510, 2026-07-19, verified against `8d4948f` on `test`):** graded
 > ACTIVELY MISLEADING overall. This pass corrected one item: §6.8 (Data Consistency
 > Semaphores) marked "done" with a live file inventory — the whole feature was deleted
 > 2026-07-07 (`9ca5619`). Section kept as a historical record, not current behavior.

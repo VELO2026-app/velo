@@ -51,7 +51,7 @@
       </div>
     </template>
 
-    <!-- W12 fix (ПРОМТ №409): a failed load used to fall through to the same
+    <!-- W12 fix (PROMPT №409): a failed load used to fall through to the same
          "нет данных" empty state as a genuinely empty list -- indistinguishable
          to the admin, who'd read it as "no participants" rather than "retry". -->
     <VEmptyState
@@ -60,7 +60,9 @@
       title="Не удалось загрузить участников"
       description="Проверьте соединение и попробуйте ещё раз"
     >
-      <template #action><VButton variant="primary" @click="load(true)">Повторить</VButton></template>
+      <template #action
+        ><VButton variant="primary" @click="load(true)">Повторить</VButton></template
+      >
     </VEmptyState>
 
     <VCard v-else-if="!loading">

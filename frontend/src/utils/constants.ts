@@ -50,7 +50,7 @@ export const WITHDRAWAL_FEE_EUROS = 2
 export const MASTER_APPLIED_KEY = 'velo:master-applied'
 
 /**
- * localStorage marker key, PER-USER (W18 fix, ПРОМТ №408 -- was a flat
+ * localStorage marker key, PER-USER (W18 fix, PROMPT №408 -- was a flat
  * `MASTER_APPROVED_SEEN_KEY` constant that leaked across accounts on a shared
  * device, same class of bug masterRejectionSeenKey below was built to avoid
  * from the start). Set once the master has actually seen/entered through the
@@ -67,7 +67,7 @@ export function masterApprovedSeenKey(userId: string): string {
 }
 
 /**
- * localStorage marker key, PER-USER (bug 1, ПРОМТ №405 -- operator device
+ * localStorage marker key, PER-USER (bug 1, PROMPT №405 -- operator device
  * testing 2026-07-15): set once a rejected applicant has actually seen the
  * «Отказ» screen (MasterPendingView), read by roleRedirect to decide whether
  * a returning role='user' rejected applicant is routed to /master/pending

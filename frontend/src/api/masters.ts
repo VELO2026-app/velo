@@ -109,7 +109,7 @@ export function getPublicMaster(userId: string): Promise<MasterPublicResponse> {
  * Fetch paginated list of practices owned by the current master.
  * Only callable by users with role='master'.
  *
- * bucket (T22-3/T22-5, ПРОМТ №561): "upcoming" (draft/scheduled/live, nearest
+ * bucket (T22-3/T22-5, PROMPT №561): "upcoming" (draft/scheduled/live, nearest
  * first) or "past" (completed, most-recent first) -- the server now owns both
  * the filter and the ordering per tab, replacing the old single futures-first
  * cursor the client used to split and re-sort itself.
@@ -187,12 +187,23 @@ export function getStudents(limit = 50, offset = 0): Promise<PaginatedStudentsRe
 }
 
 /**
+ * T24-20 (PROMPT №638): the backend now returns a `blocked` field on this
+ * response (get_master_student_detail's narrow allow-path, so the frontend
+ * can swap the profile's bottom action instead of guessing). `generated.ts`
+ * is autogen -- regenerated from the OpenAPI schema by the bot on push, not
+ * hand-edited here -- so it does not have this field yet and would be wrong
+ * to touch directly. This local intersection type covers the gap until the
+ * next regen; it is dropped once generated.ts catches up.
+ */
+export type StudentDetailResponseWithBlocked = StudentDetailResponse & { blocked: boolean }
+
+/**
  * Fetch one student's aggregate (practices_count, hours, satisfaction_pct,
  * recent check-ins and feedbacks) over THIS master's practices.
  * Note: the response carries no name/avatar — the calling list passes those.
  */
-export function getStudent(id: string): Promise<StudentDetailResponse> {
-  return api.get<StudentDetailResponse>(`/api/v1/masters/me/students/${id}`)
+export function getStudent(id: string): Promise<StudentDetailResponseWithBlocked> {
+  return api.get<StudentDetailResponseWithBlocked>(`/api/v1/masters/me/students/${id}`)
 }
 
 // =============================================================================

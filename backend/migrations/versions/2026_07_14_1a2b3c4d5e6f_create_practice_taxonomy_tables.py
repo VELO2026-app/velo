@@ -7,7 +7,7 @@ Create Date: 2026-07-14 00:00:00.000000+00:00
 R5 (batch R stage 1): practice_directions + practice_styles, DB-backed catalog
 for MASTER METHODS only (data.profile.methods). Practice-creation taxonomy
 validation is UNCHANGED -- stays on settings.practice_allowed_directions /
-practice_allowed_styles_by_direction (operator decision, ПРОМТ №394).
+practice_allowed_styles_by_direction (operator decision, PROMPT №394).
 
 Seeded byte-for-byte from the two existing hand-kept-in-sync sources:
   - values + which directions have styles: core/config.py:154-171

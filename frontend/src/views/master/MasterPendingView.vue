@@ -34,7 +34,7 @@
       </template>
 
       <!-- ================= APPROVED (verified) =================
-           White VCard подложка (R1 fix, ПРОМТ №391 — operator-approved preview
+           White VCard подложка (R1 fix, PROMPT №391 — operator-approved preview
            .tmp/batch-r/r1-application-states.html): was rendering directly on
            the transparent fog bg, unlike SENT below which already had it. -->
       <template v-else-if="profileStatus === 'verified'">
@@ -46,8 +46,8 @@
           />
           <h2 class="pending-view__title">Ваша заявка одобрена!</h2>
           <p class="pending-view__subtitle">
-            Переключитесь в режим мастера, чтобы открыть кабинет. Вернуться в режим
-            пользователя можно в любой момент из настроек.
+            Переключитесь в режим мастера, чтобы открыть кабинет. Вернуться в режим пользователя
+            можно в любой момент из настроек.
           </p>
           <div class="pending-view__actions">
             <VButton variant="primary" block :loading="switching" @click="enterMasterMode">
@@ -86,7 +86,7 @@
 
       <!-- ================= SENT (pending) =================
            White VCard подложка, vertically centered (K2). A discreet text
-           link (F4, not a block button -- ПРОМТ №418: this screen exists so
+           link (F4, not a block button -- PROMPT №418: this screen exists so
            a person waits calmly; a full-width button would read as an
            invitation to leave). -->
       <template v-else>
@@ -94,7 +94,11 @@
           <img src="/onboarding/master-verdict-sent.svg" alt="" class="pending-view__illu" />
           <h2 class="pending-view__title">Заявка отправлена!</h2>
           <p class="pending-view__subtitle">Рассмотрим за 24–48 часов, сообщим в push и на email</p>
-          <button type="button" class="pending-view__withdraw-link" @click="confirmWithdrawOpen = true">
+          <button
+            type="button"
+            class="pending-view__withdraw-link"
+            @click="confirmWithdrawOpen = true"
+          >
             Отозвать заявку
           </button>
         </VCard>
@@ -122,7 +126,11 @@ import { useAuthStore } from '@/stores/auth'
 import { useMasterStore } from '@/stores/master'
 import { withdrawMasterApplication } from '@/api/masters'
 import { extractApiError } from '@/composables/useApiError'
-import { MASTER_APPLIED_KEY, masterApprovedSeenKey, masterRejectionSeenKey } from '@/utils/constants'
+import {
+  MASTER_APPLIED_KEY,
+  masterApprovedSeenKey,
+  masterRejectionSeenKey,
+} from '@/utils/constants'
 
 const router = useRouter()
 const toast = useToast()
@@ -181,7 +189,7 @@ onMounted(async () => {
   } else {
     await authStore.fetchMe()
   }
-  // Bug 1 fix (ПРОМТ №405): mark the per-user key once the rejection screen
+  // Bug 1 fix (PROMPT №405): mark the per-user key once the rejection screen
   // has actually rendered, mirroring masterApprovedSeenKey's placement for
   // the approved case, so roleRedirect stops routing here on future opens
   // (operator decision: show the verdict once, then treat as an ordinary user).
@@ -242,7 +250,6 @@ async function onWithdraw(): Promise<void> {
     confirmWithdrawOpen.value = false
   }
 }
-
 </script>
 
 <style scoped>
@@ -309,7 +316,7 @@ async function onWithdraw(): Promise<void> {
   font-size: var(--text-base);
   color: var(--velo-text-secondary);
   text-align: center;
-  max-width: 300px;
+  max-width: var(--velo-content-width-narrow);
   line-height: 1.5;
   margin: 0;
 }

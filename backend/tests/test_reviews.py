@@ -548,7 +548,7 @@ async def test_reviews_regular_user(
 ) -> None:
     """Regular (non-master) user cannot read reviews: 403 at the role guard.
 
-    ПРОМТ №575: the endpoint switched from get_current_user to
+    PROMPT №575: the endpoint switched from get_current_user to
     get_current_master (defense-in-depth), so a non-master is rejected at
     the dependency before the 404 ownership check ever runs. See
     test_reviews_not_owner above for the still-404 case of a DIFFERENT
@@ -628,7 +628,7 @@ async def test_reviews_practice_not_found(
     master_auth = await _make_verified_master(
         client, db_session, telegram_id=89910,
     )
-    # ПРОМТ №583: _make_verified_master only flushes -- the role=MASTER
+    # PROMPT №583: _make_verified_master only flushes -- the role=MASTER
     # change and the MasterProfile row must be COMMITTED before the request
     # below, which hits get_current_master through a separate DB connection.
     # Without this, the guard sees the old (non-master) role and rejects

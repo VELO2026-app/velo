@@ -125,7 +125,7 @@ def auth_headers(token: str) -> dict:
 async def switch_self_to_master(client: AsyncClient, token: str) -> None:
     """Self-switch the caller (a verified applicant) into master mode (T4).
 
-    Since ПРОМТ №295 admin approval sets status=verified but does NOT flip the
+    Since PROMPT №295 admin approval sets status=verified but does NOT flip the
     user's role; the account gains master *capability* and self-switches via
     POST /users/me/role. Test factories that mint a master via apply + admin
     verify call this afterwards so the resulting session resolves role=master
@@ -358,7 +358,7 @@ async def full_cleanup_range(
     )
 
     # -----------------------------------------------------------------------
-    # Master GROUPS (P1-P5, ПРОМТ №590-594): practice_audience_group and
+    # Master GROUPS (P1-P5, PROMPT №590-594): practice_audience_group and
     # group_invite both FK -> master_group.id (CASCADE); practice_audience_
     # group ALSO FK -> practices.id (CASCADE) -- must precede BOTH master_
     # group (below) and practices (below). master_group_membership FK ->
@@ -398,7 +398,7 @@ async def full_cleanup_range(
     )
 
     # -----------------------------------------------------------------------
-    # master_group / master_student (P1, ПРОМТ №590): both FK -> users.id
+    # master_group / master_student (P1, PROMPT №590): both FK -> users.id
     # only (CASCADE), no ordering dependency between them -- both must still
     # precede nothing further downstream. master_group.id is what group_
     # ids_subq (above) resolves, so this delete must come AFTER the three

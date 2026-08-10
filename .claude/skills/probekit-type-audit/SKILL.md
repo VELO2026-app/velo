@@ -12,7 +12,7 @@ Runs compiler checks, linter, and pattern analysis to find and fix type errors, 
 
 ## Configuration
 
-<!-- VELO-tuned (ПРОМТ №385, trial): CBS's mockups/frontend path replaced with
+<!-- VELO-tuned (PROMPT №385, trial): CBS's mockups/frontend path replaced with
      VELO's actual frontend/ dir; docs/01_refer replaced with a git-untracked
      scratch dir (VELO has no docs/01_refer/). -->
 review_dir: .tmp/probekit-review
@@ -31,7 +31,7 @@ Determine scope:
 
 Check for ENVIRONMENT.md in the project (root or docs/01_refer/).
 If found — read it for shell/tool pitfalls before executing commands.
-(VELO note, ПРОМТ №385: no ENVIRONMENT.md in this repo -- shell is Windows
+(VELO note, PROMPT №385: no ENVIRONMENT.md in this repo -- shell is Windows
 Git-Bash/PowerShell, no docker/VPS locally.)
 
 Verify prerequisites:

@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- TopupView Screen Tests (T8, ПРОМТ №432)
+// VELO Frontend -- TopupView Screen Tests (T8, PROMPT №432)
 // =============================================================================
 //
 // The money-in door: this is the only screen in the app that mints a Stripe
@@ -25,7 +25,7 @@
 // happy-dom would try to navigate. The stand-in also lets us prove the C-1
 // whitelist by reading back what the screen tried to navigate TO.
 //
-// ПРОМТ №563: ALLOWED_REDIRECT_PREFIXES (TopupView.vue:114-117) FAILS CLOSED --
+// PROMPT №563: ALLOWED_REDIRECT_PREFIXES (TopupView.vue:114-117) FAILS CLOSED --
 // the second (own-backend) prefix is only admitted when VITE_API_BASE_URL is
 // actually configured, never a hardcoded foreign domain. import.meta.env.
 // VITE_API_BASE_URL is EMPTY in .env (.env:15), so by default only Stripe's
@@ -212,7 +212,9 @@ describe('TopupView', () => {
     })
 
     it('picking a preset submits THAT amount in cents', async () => {
-      vi.mocked(paymentsApi.createTopup).mockResolvedValue(topup('https://checkout.stripe.com/c/pay/abc'))
+      vi.mocked(paymentsApi.createTopup).mockResolvedValue(
+        topup('https://checkout.stripe.com/c/pay/abc'),
+      )
       mount()
       await flush()
 
@@ -229,7 +231,9 @@ describe('TopupView', () => {
       // Leaving the stale custom value behind would let effectiveCents flip back
       // to it if custom mode were re-entered -- charging an amount the user is no
       // longer looking at.
-      vi.mocked(paymentsApi.createTopup).mockResolvedValue(topup('https://checkout.stripe.com/c/pay/abc'))
+      vi.mocked(paymentsApi.createTopup).mockResolvedValue(
+        topup('https://checkout.stripe.com/c/pay/abc'),
+      )
       mount()
       await flush()
 
@@ -255,7 +259,9 @@ describe('TopupView', () => {
       // FP-03 (TopupView.vue:117-119): parseFloat('0.575') * 100 rounds to 57,
       // not 58. eurStringToCents parses the parts as integers instead. '15.99'
       // must reach the API as exactly 1599 -- a cent off is a real charge error.
-      vi.mocked(paymentsApi.createTopup).mockResolvedValue(topup('https://checkout.stripe.com/c/pay/abc'))
+      vi.mocked(paymentsApi.createTopup).mockResolvedValue(
+        topup('https://checkout.stripe.com/c/pay/abc'),
+      )
       mount()
       await flush()
 
@@ -344,7 +350,7 @@ describe('TopupView', () => {
     })
 
     it('the wiped negative is gone from the FIELD too, not just from the state', async () => {
-      // REGRESSION GUARD (T8, find from ПРОМТ №432, fixed in №434).
+      // REGRESSION GUARD (T8, find from PROMPT №432, fixed in №434).
       // TopupView.vue:158-162 says "Prevent negative values in UI" -- and it did
       // not: the state was wiped but the field still showed «-5», leaving a
       // confusing dead end (no error text, since validationError bails on empty
@@ -370,7 +376,9 @@ describe('TopupView', () => {
 
   describe('C-1 checkout redirect whitelist (TopupView.vue:168-170)', () => {
     it('redirects to a Stripe checkout url', async () => {
-      vi.mocked(paymentsApi.createTopup).mockResolvedValue(topup('https://checkout.stripe.com/c/pay/session_123'))
+      vi.mocked(paymentsApi.createTopup).mockResolvedValue(
+        topup('https://checkout.stripe.com/c/pay/session_123'),
+      )
       mount()
       await flush()
 
@@ -382,11 +390,13 @@ describe('TopupView', () => {
     })
 
     it('redirects to the API base url (stub mode) when VITE_API_BASE_URL is configured', async () => {
-      // ПРОМТ №563: the own-backend prefix is only ever the CONFIGURED
+      // PROMPT №563: the own-backend prefix is only ever the CONFIGURED
       // VITE_API_BASE_URL, never a hardcoded domain -- stub it here to prove
       // the allowlist follows the real config, not a fallback constant.
       vi.stubEnv('VITE_API_BASE_URL', 'https://velo-backend.test')
-      vi.mocked(paymentsApi.createTopup).mockResolvedValue(topup('https://velo-backend.test/api/v1/payments/stub-success'))
+      vi.mocked(paymentsApi.createTopup).mockResolvedValue(
+        topup('https://velo-backend.test/api/v1/payments/stub-success'),
+      )
       mount()
       await flush()
 
@@ -398,13 +408,15 @@ describe('TopupView', () => {
     })
 
     it('FAILS CLOSED: refuses the stub-mode url when VITE_API_BASE_URL is NOT configured', async () => {
-      // ПРОМТ №563: this is the exact regression the old
+      // PROMPT №563: this is the exact regression the old
       // `|| 'https://api.talentir.info'` fallback would have caused --
       // api.talentir.info belongs to a different project. With no fallback,
       // an unconfigured env var must REJECT a checkout_url on that foreign
       // domain, same as any other outside-the-whitelist url.
       vi.stubEnv('VITE_API_BASE_URL', '')
-      vi.mocked(paymentsApi.createTopup).mockResolvedValue(topup('https://api.talentir.info/api/v1/payments/stub-success'))
+      vi.mocked(paymentsApi.createTopup).mockResolvedValue(
+        topup('https://api.talentir.info/api/v1/payments/stub-success'),
+      )
       mount()
       await flush()
 
@@ -433,7 +445,9 @@ describe('TopupView', () => {
     it('REFUSES a look-alike host that merely CONTAINS the allowed prefix', async () => {
       // startsWith, not includes -- `https://evil.com/?next=https://checkout.stripe.com/`
       // must not pass. A contains-check here would be a working open redirect.
-      vi.mocked(paymentsApi.createTopup).mockResolvedValue(topup('https://evil.example.com/?next=https://checkout.stripe.com/c/pay/x'))
+      vi.mocked(paymentsApi.createTopup).mockResolvedValue(
+        topup('https://evil.example.com/?next=https://checkout.stripe.com/c/pay/x'),
+      )
       mount()
       await flush()
 

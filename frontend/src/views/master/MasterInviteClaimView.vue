@@ -1,6 +1,6 @@
 <!--
 =============================================================================
-VELO Frontend — Master invite claim (Batch-INVITE, ПРОМТ №258)
+VELO Frontend — Master invite claim (Batch-INVITE, PROMPT №258)
 =============================================================================
 
 Landing for the generic one-time invite deeplink master_onboarding__<token>
@@ -22,7 +22,7 @@ Verified masters never reach here: applyGuard bounces them to the dashboard.
         <p class="invite-claim__subtitle">Проверяем приглашение…</p>
       </template>
 
-      <!-- W11 fix (ПРОМТ №409): a network blip / timeout is not the same claim
+      <!-- W11 fix (PROMPT №409): a network blip / timeout is not the same claim
            as "this one-time link is burned" -- offer a retry instead of telling
            the user their invite is dead when it might just be their connection. -->
       <template v-else-if="transientError">
@@ -31,9 +31,7 @@ Verified masters never reach here: applyGuard bounces them to the dashboard.
           Проблема с соединением. Проверьте интернет и попробуйте ещё раз.
         </p>
         <div class="invite-claim__actions">
-          <VButton variant="primary" block :loading="claiming" @click="claim">
-            Повторить
-          </VButton>
+          <VButton variant="primary" block :loading="claiming" @click="claim"> Повторить </VButton>
         </div>
       </template>
 
@@ -42,11 +40,7 @@ Verified masters never reach here: applyGuard bounces them to the dashboard.
         <h2 class="invite-claim__title">{{ errorTitle }}</h2>
         <p class="invite-claim__subtitle">{{ errorDescription }}</p>
         <div class="invite-claim__actions">
-          <VButton
-            variant="primary"
-            block
-            @click="router.replace({ name: 'user-dashboard' })"
-          >
+          <VButton variant="primary" block @click="router.replace({ name: 'user-dashboard' })">
             На главную
           </VButton>
         </div>
@@ -140,14 +134,14 @@ onMounted(claim)
   font-size: var(--text-base);
   color: var(--velo-text-secondary);
   text-align: center;
-  max-width: 300px;
+  max-width: var(--velo-content-width-narrow);
   line-height: 1.5;
   margin: 0;
 }
 
 .invite-claim__actions {
   width: 100%;
-  max-width: 300px;
+  max-width: var(--velo-content-width-narrow);
   margin-top: var(--space-4);
 }
 </style>

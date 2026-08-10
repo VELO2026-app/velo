@@ -225,7 +225,7 @@ class CreatePracticeRequest(BaseModel):
     # simply no-ops. Persisted into data.recurrence by the service layer.
     recurrence: RecurrenceSpec | None = None
 
-    # -- Audience (Master GROUPS P5, ПРОМТ №594) --
+    # -- Audience (Master GROUPS P5, PROMPT №594) --
     # Default 'public' -- matches every practice's behavior before this
     # feature existed (see the migration's backfill note). group_ids is
     # required (non-empty) only when audience_kind='groups'; the service
@@ -421,7 +421,7 @@ class UpdatePracticeRequest(BaseModel):
         default=None, max_length=settings.practice_style_max_length,
     )
 
-    # -- Audience (Master GROUPS P5, ПРОМТ №594) --
+    # -- Audience (Master GROUPS P5, PROMPT №594) --
     # Both optional (PATCH semantics): omitted = unchanged. group_ids, when
     # SENT, REPLACES the practice's full target-group set (an empty list
     # clears it). Cross-field consistency (audience_kind vs group_ids) is
@@ -594,6 +594,43 @@ class UpdatePracticeRequest(BaseModel):
         return v
 
 
+class AudiencePreviewRequest(BaseModel):
+    """POST /api/v1/practices/{id}/audience-preview (owner Q15, PROMPT №613).
+
+    A PROPOSED audience the master hasn't saved yet -- unlike
+    UpdatePracticeRequest's own audience_kind/group_ids, both are REQUIRED
+    here (no partial-update ambiguity to model): the frontend always has a
+    complete proposed state in hand before it ever calls this, since it's
+    evaluating "what if I save the form as it stands right now", not a
+    partial PATCH.
+    """
+
+    audience_kind: AudienceKind
+    group_ids: list[UUID] = []
+
+    @model_validator(mode="after")
+    def _check_group_ids_match_audience_kind(self) -> "AudiencePreviewRequest":
+        if self.audience_kind == AudienceKind.GROUPS.value and not self.group_ids:
+            raise ValueError(
+                "group_ids must be non-empty when audience_kind='groups'"
+            )
+        if self.audience_kind != AudienceKind.GROUPS.value and self.group_ids:
+            raise ValueError(
+                "group_ids is only allowed when audience_kind='groups'"
+            )
+        return self
+
+
+class AudiencePreviewResponse(BaseModel):
+    """POST /api/v1/practices/{id}/audience-preview -- read-only, never
+    persists anything. `stranded_count` is how many of this practice's
+    ACTIVE (pending/confirmed) bookers would fall OUTSIDE the proposed
+    audience -- the frontend warns and requires confirmation when this is
+    above zero, saves silently when it's zero (owner-ruled)."""
+
+    stranded_count: int
+
+
 class CancelPracticeRequest(BaseModel):
     """POST /api/v1/practices/{id}/cancel -- optional request body.
 
@@ -655,7 +692,7 @@ class PracticeResponse(BaseModel):
     style: str | None = None
     difficulty: str | None = None
 
-    # -- Audience (Master GROUPS P5, ПРОМТ №594) --
+    # -- Audience (Master GROUPS P5, PROMPT №594) --
     # audience_kind: model_validate() auto-populates this from the ORM
     # column (default 'public', same as every practice before this feature).
     # audience_group_names: NOT auto-populated (no ORM relationship) -- the
@@ -714,7 +751,16 @@ class PracticeResponse(BaseModel):
     # attended/no_show above.
     zoom_host_join_url: str | None = None
 
-    # A4 V2 (ПРОМТ №572): this practice's ZoomMeeting.status verbatim
+    # T24-38 (PROMPT №642): the SHARED, registration-free link -- a
+    # deliberate temporary crutch for the launch period (owner ruling, to be
+    # REMOVED later). Same owner-only gating posture as zoom_host_join_url
+    # immediately above (populated only on owner-facing responses; every
+    # other caller leaves the schema default None) -- kept as its OWN field
+    # rather than folded into zoom_host_join_url so deleting the feature
+    # later is a plain field removal, not a disentanglement.
+    zoom_shared_join_url: str | None = None
+
+    # A4 V2 (PROMPT №572): this practice's ZoomMeeting.status verbatim
     # ('active' | 'pending_creation' | 'create_failed' | 'deleted'), or None
     # if no ZoomMeeting row exists at all. UNLIKE zoom_host_join_url above,
     # this is NOT owner-gated -- the value carries no secret material (same
@@ -725,9 +771,9 @@ class PracticeResponse(BaseModel):
     # both rendered the identical "готовится" spinner in both cases.
     zoom_meeting_status: str | None = None
 
-    # A4 V6 (ПРОМТ №572): True when create_practice returned an EXISTING
+    # A4 V6 (PROMPT №572): True when create_practice returned an EXISTING
     # practice instead of creating a new one -- either the window-scoped
-    # duplicate-submit check (_find_recent_duplicate_practice, ПРОМТ №559)
+    # duplicate-submit check (_find_recent_duplicate_practice, PROMPT №559)
     # or the TOCTOU race-lost path (uq_practice_master_title_scheduled_
     # recurrence, A4 V7). Before this field existed, both paths returned a
     # bare PracticeResponse indistinguishable from a freshly created one --
@@ -811,7 +857,7 @@ class PracticeSummary(BaseModel):
     # builder set.
     zoom_link: str | None = None
 
-    # A4 V2 (ПРОМТ №572): same field, same NOT-owner-gated posture as
+    # A4 V2 (PROMPT №572): same field, same NOT-owner-gated posture as
     # PracticeResponse.zoom_meeting_status above -- powers the SAME
     # pending-vs-failed distinction on list-view Zoom buttons (dashboard
     # nearest card, my-bookings). Set by from_practice() below; no ORM
@@ -848,7 +894,7 @@ class PracticeSummary(BaseModel):
 
 
 class ZoomStartTicketResponse(BaseModel):
-    """POST /api/v1/practices/{id}/zoom/start-ticket (ПРОМТ №556, OWNER-1).
+    """POST /api/v1/practices/{id}/zoom/start-ticket (PROMPT №556, OWNER-1).
 
     Deliberately carries a one-time ticket, never a start_url -- see
     zoom/service.py's ticket-issuance docstring for why."""

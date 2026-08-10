@@ -37,7 +37,7 @@
          populateForm uses centsToEurString() -- no float precision issues.
     W-8: date input has :min="todayDate" to prevent setting past dates
     W-9: commission calc uses COMMISSION_RATE from @/utils/commission
-    A4 V3 (ПРОМТ №571): Направление/Вид options filtered to the master's own
+    A4 V3 (PROMPT №571): Направление/Вид options filtered to the master's own
         CONFIRMED methods (mirrors CreatePracticeView), and the taxonomy
         rejection codes (direction_not_confirmed/style_not_confirmed) get the
         same Russian toast translation as CreatePracticeView's submit() catch.
@@ -149,6 +149,40 @@
             :error="errors.max_participants"
           />
 
+          <!-- ================================================================
+               Для кого практика (P5 port, PROMPT №606): mirrors
+               CreatePracticeView's audience block, adapted to Edit's FLAT
+               layout (Реш. В, above -- no velo-section-title sections here,
+               so no section wrapper is dragged in with it; a plain
+               edit-practice__field-label instead, matching the Дата/Время
+               fields above).
+               ================================================================ -->
+          <div class="edit-practice__field edit-practice__audience">
+            <label class="edit-practice__field-label">Для кого практика</label>
+            <VRadioGroup v-model="form.audience_kind" :options="AUDIENCE_OPTIONS" />
+
+            <template v-if="form.audience_kind === 'groups'">
+              <div v-if="customGroups.length" class="edit-practice__audience-chips">
+                <VChip
+                  v-for="g in customGroups"
+                  :key="g.id"
+                  size="md"
+                  clickable
+                  :active="form.audience_group_ids.includes(g.id)"
+                  @click="onAudienceGroupChipClick(g.id)"
+                >
+                  {{ g.name }}
+                </VChip>
+              </div>
+              <p v-else class="edit-practice__audience-empty">
+                Пока нет ни одной группы. Создайте группу на экране «Мои группы».
+              </p>
+              <span v-if="errors.audience_group_ids" class="edit-practice__field-error">{{
+                errors.audience_group_ids
+              }}</span>
+            </template>
+          </div>
+
           <VTextarea v-model="form.description" label="Описание" :rows="4" autogrow />
 
           <VTextarea
@@ -167,14 +201,14 @@
             autogrow
           />
 
-          <!-- Zoom (T21-1, ПРОМТ №541, owner decision D1): the backend now
+          <!-- Zoom (T21-1, PROMPT №541, owner decision D1): the backend now
                ALWAYS creates a real Zoom meeting automatically on publish --
                this field is an EMERGENCY fallback only (Zoom's daily creation
                quota can fail it), kept so a master is never left with no way
                to run the session. Honest label states the cost of using it. -->
           <p class="edit-practice__hint">
-            Ссылка создаётся автоматически. Указывайте свою только как запасной
-            вариант — посещение по ней не засчитается автоматически.
+            Ссылка создаётся автоматически. Указывайте свою только как запасной вариант — посещение
+            по ней не засчитается автоматически.
           </p>
           <VInput
             v-model="form.zoom_link"
@@ -309,22 +343,38 @@ import {
   VLoader,
   VEmptyState,
   VConfirmDialog,
+  VRadioGroup,
+  VChip,
 } from '@/components/ui'
 import DatePickerSheet from '@/components/shared/DatePickerSheet.vue'
 import TimePickerSheet from '@/components/shared/TimePickerSheet.vue'
 import CancelPracticeDialog from '@/components/shared/CancelPracticeDialog.vue'
 import { useToast } from '@/composables/useToast'
 import { useMasterStore } from '@/stores/master'
-import { getPractice, updatePractice, deletePractice, cancelPractice } from '@/api/practices'
+import {
+  getPractice,
+  updatePractice,
+  deletePractice,
+  cancelPractice,
+  previewAudienceChange,
+} from '@/api/practices'
+import { getGroups } from '@/api/groups'
 import { formatShortDate, todayLocalISO } from '@/utils/format'
 import { masterPracticeBadge } from '@/utils/practiceStatus'
+import { plural } from '@/utils/plural'
 import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
-import { DURATION_OPTIONS, catalogDirectionOptions, catalogStylesForDirection } from '@/utils/practiceOptions'
+import {
+  DURATION_OPTIONS,
+  AUDIENCE_OPTIONS,
+  catalogDirectionOptions,
+  catalogStylesForDirection,
+} from '@/utils/practiceOptions'
 import { ensureTaxonomyCatalog, parseMethods } from '@/utils/methodTaxonomy'
 import { eurStringToCents, centsToEurString } from '@/utils/currency'
 import type { TaxonomyListResponse } from '@/api/taxonomy'
 import type { PracticeResponse } from '@/api/types'
+import type { GroupListItem } from '@/api/groups'
 
 const route = useRoute()
 const router = useRouter()
@@ -337,8 +387,7 @@ const practiceId = route.params.id as string
 // detail entry that pushed us here (avoids the edit<->detail back-loop); else
 // (cold deep-link) push the detail route. Mirror of CreatePracticeView.onBack.
 function onBack(): void {
-  if (window.history.state?.back)
-    router.back()
+  if (window.history.state?.back) router.back()
   else router.push({ name: 'master-practice-detail', params: { id: practiceId } })
 }
 
@@ -407,13 +456,33 @@ const form = reactive({
   what_to_prepare: '',
   contraindications: '',
   zoom_link: '',
+  // P5 port (PROMPT №606): audience_kind + audience_group_ids, mirrors
+  // CreatePracticeView's own form fields exactly.
+  audience_kind: 'public' as 'public' | 'students' | 'groups',
+  audience_group_ids: [] as string[],
 })
+
+// P5 port (PROMPT №606): this master's own custom groups, for «Конкретные
+// группы»'s multi-select -- loaded in onMounted below, same recipe as
+// CreatePracticeView.
+const customGroups = ref<GroupListItem[]>([])
+
+// Named wrapper (same B7-hook reasoning as CreatePracticeView.
+// onAudienceGroupChipClick -- an inline multi-statement @click handler can
+// be reformatted by the pre-commit hook's prettier pass and lose its
+// semicolon, breaking the Vue template compiler).
+function onAudienceGroupChipClick(groupId: string): void {
+  const idx = form.audience_group_ids.indexOf(groupId)
+  if (idx === -1) form.audience_group_ids.push(groupId)
+  else form.audience_group_ids.splice(idx, 1)
+}
 
 const errors = reactive({
   title: '',
   direction: '',
   max_participants: '',
   zoom_link: '',
+  audience_group_ids: '',
 })
 
 // -- Derived --
@@ -427,8 +496,8 @@ const isTerminal = computed(
 // W-6: use eurStringToCents() -- avoids parseFloat(raw) * 100 float precision trap.
 const priceCents = computed((): number => eurStringToCents(form.price_eur_raw))
 
-// A4 V3 (ПРОМТ №571): this master's OWN CONFIRMED methods, same resolver
-// and same fail-CLOSED posture as CreatePracticeView (ПРОМТ №556/№546) --
+// A4 V3 (PROMPT №571): this master's OWN CONFIRMED methods, same resolver
+// and same fail-CLOSED posture as CreatePracticeView (PROMPT №556/№546) --
 // this screen shares masterStatusGuard with master-practice-new (router/
 // index.ts), so masterStore.profileLoaded is already true on first render
 // in the normal navigation case; the "not loaded yet" branch below is a
@@ -444,7 +513,7 @@ const confirmedMethods = computed(() => {
 
 // Direction/style options, catalog-first (T2 stage 2), filtered to the
 // master's own confirmed methods -- mirrors CreatePracticeView's
-// directionOptions/styleOptionsForForm exactly (ПРОМТ №556/№546). Before
+// directionOptions/styleOptionsForForm exactly (PROMPT №556/№546). Before
 // this, EditPracticeView offered the WHOLE active catalogue unfiltered,
 // so a master could re-pick (or leave untouched, see populateForm) a
 // direction/style their profile was never confirmed for and only find out
@@ -496,6 +565,27 @@ function populateForm(p: PracticeResponse): void {
   form.what_to_prepare = p.what_to_prepare ?? ''
   form.contraindications = p.contraindications ?? ''
   form.zoom_link = p.zoom_link ?? ''
+  form.audience_kind = p.audience_kind ?? 'public'
+  // PracticeResponse carries audience_group_NAMES, not ids (see the field's
+  // own docstring in api/types.ts) -- CheckinView composes a message from
+  // the names directly and never needed ids, so the backend never added an
+  // id list to this response. Resolving name -> id against customGroups
+  // (loaded in onMounted, below) is safe: create_group() 409s on a
+  // duplicate name for the SAME master (groups_service.py:416-424), so a
+  // name uniquely identifies one of this master's groups. Called again from
+  // onMounted's getGroups().then() below, in case the groups fetch hasn't
+  // resolved yet when populateForm first runs (the cached-practice branch
+  // in onMounted can beat it).
+  resolveAudienceGroupIds()
+}
+
+// Resolve form.audience_kind === 'groups' names -> ids once customGroups is
+// available. A no-op (leaves the selection empty) if either side isn't
+// ready yet -- called again once customGroups.value is populated.
+function resolveAudienceGroupIds(): void {
+  if (form.audience_kind !== 'groups' || !practice.value) return
+  const names = new Set(practice.value.audience_group_names ?? [])
+  form.audience_group_ids = customGroups.value.filter((g) => names.has(g.name)).map((g) => g.id)
 }
 
 // -- Load practice --
@@ -505,6 +595,19 @@ onMounted(async () => {
   // regardless of which branch (cached vs network) the practice load takes.
   void ensureTaxonomyCatalog().then((c) => {
     catalog.value = c
+  })
+
+  // P5 port (PROMPT №606): this master's own custom groups, for «Конкретные
+  // группы»'s multi-select -- same fire-and-forget-before-the-cached-check
+  // placement as the taxonomy fetch above, so it runs on both branches.
+  // «Удалённые» is a system slug (never a real MasterGroup row) and
+  // «Ученики» isn't a target-able group either -- getGroups() already
+  // returns both alongside custom ones, so filter here (mirrors
+  // CreatePracticeView). Re-resolves the name->id selection afterward in
+  // case populateForm() already ran against an empty customGroups list.
+  void getGroups().then((res) => {
+    customGroups.value = res.items.filter((g) => g.kind === 'custom')
+    resolveAudienceGroupIds()
   })
 
   const cached = masterStore.practices.find((p) => p.id === practiceId)
@@ -532,6 +635,7 @@ function validate(): boolean {
   errors.direction = ''
   errors.max_participants = ''
   errors.zoom_link = ''
+  errors.audience_group_ids = ''
 
   if (!form.title.trim()) {
     errors.title = 'Введите название'
@@ -552,13 +656,95 @@ function validate(): boolean {
     errors.zoom_link = 'Ссылка должна начинаться с https://'
     ok = false
   }
+  if (form.audience_kind === 'groups' && form.audience_group_ids.length === 0) {
+    errors.audience_group_ids = 'Выберите хотя бы одну группу'
+    ok = false
+  }
   return ok
+}
+
+// -- Audience-narrowing warning (owner Q15, PROMPT №613) --
+//
+// True iff the FORM's audience differs from what's currently SAVED on
+// `practice.value` -- gates the stranded-bookers check below so it only
+// ever runs on an actual audience change, never on an unrelated save (e.g.
+// title-only) that happens to resend the same audience_kind/group_ids the
+// practice already has (this screen always sends both on every save).
+function audienceChanged(): boolean {
+  if (!practice.value) return false
+  const savedKind = practice.value.audience_kind ?? 'public'
+  if (form.audience_kind !== savedKind) return true
+  if (form.audience_kind !== 'groups') return false
+
+  // Same name -> id resolution resolveAudienceGroupIds() already uses --
+  // recomputed fresh here (not read off `form`, which may have already
+  // been edited) so this reflects what's actually SAVED, not the pending edit.
+  const savedNames = new Set(practice.value.audience_group_names ?? [])
+  const savedIds = new Set(
+    customGroups.value.filter((g) => savedNames.has(g.name)).map((g) => g.id),
+  )
+  if (form.audience_group_ids.length !== savedIds.size) return true
+  return form.audience_group_ids.some((id) => !savedIds.has(id))
 }
 
 // -- Save --
 async function save(): Promise<void> {
   if (!validate() || saving.value) return
+
+  if (audienceChanged()) {
+    saving.value = true
+    let preview
+    try {
+      preview = await previewAudienceChange(practiceId, {
+        audience_kind: form.audience_kind,
+        group_ids: form.audience_kind === 'groups' ? form.audience_group_ids : [],
+      })
+    } catch (e) {
+      saving.value = false
+      toast.error(extractApiError(e, 'Не удалось проверить аудиторию'))
+      return
+    }
+    saving.value = false
+
+    // Owner Q15: warn ONLY when the count is above zero -- a narrowing
+    // that strands nobody saves silently, same as today.
+    if (preview.stranded_count > 0) {
+      // Owner-picked wording (PROMPT №614, wording B): three facts -- how
+      // many, why, and that the booking survives (the fact that stops the
+      // master over-panicking). `plural()` (@/utils/plural, the repo's one
+      // canonical Russian pluralizer, already used app-wide for counts)
+      // covers the NOUN's 1 / 2-4 / 5+ forms -- but «записавшийся» is a
+      // substantivized participle, where the 2-4 and 5+ forms happen to be
+      // IDENTICAL ("записавшихся" either way), so plural()'s 3-way split
+      // collapses to a binary one here. That same one-vs-rest split also
+      // governs the sentence's verb/pronoun agreement (попадёт/попадут,
+      // он/они, его/их, сможет/смогут), which plural() only ever returns a
+      // single word for and can't cover -- so the SENTENCE branches on
+      // count === 1 directly rather than threading three template
+      // variants through one helper call.
+      const n = preview.stranded_count
+      const noun = plural(n, 'записавшийся', 'записавшихся', 'записавшихся')
+      confirmDialog.message =
+        n === 1
+          ? `${n} ${noun} не попадёт на эту практику — он не входит в выбранную аудиторию. ` +
+            'Его запись останется, но войти он не сможет. Сохранить?'
+          : `${n} ${noun} не попадут на эту практику — они не входят в выбранную аудиторию. ` +
+            'Их запись останется, но войти они не смогут. Сохранить?'
+      confirmDialog.confirmLabel = 'Сохранить всё равно'
+      confirmDialog.danger = false
+      confirmDialog.onConfirm = commitSave
+      confirmDialog.visible = true
+      return
+    }
+  }
+
+  await commitSave()
+}
+
+async function commitSave(): Promise<void> {
+  if (saving.value) return
   saving.value = true
+  confirmDialog.loading = true
   try {
     // Convert the wall-clock date + time back to a UTC instant in the
     // selected timezone (mirrors CreatePracticeView). undefined when either
@@ -570,7 +756,6 @@ async function save(): Promise<void> {
       })
       if (!dt.isValid) {
         toast.error('Некорректные дата или время')
-        saving.value = false
         return
       }
       scheduledAt = dt.toUTC().toISO() ?? undefined
@@ -591,15 +776,20 @@ async function save(): Promise<void> {
       zoom_link: form.zoom_link.trim() || null,
       is_free: form.is_free,
       price_cents: form.is_free ? 0 : priceCents.value,
+      // P5 port (PROMPT №606): mirrors CreatePracticeView -- group_ids is
+      // only meaningful (and only sent) for audience_kind='groups'.
+      audience_kind: form.audience_kind,
+      group_ids: form.audience_kind === 'groups' ? form.audience_group_ids : [],
     })
     practice.value = updated
+    confirmDialog.visible = false
     toast.success('Сохранено')
     await masterStore.refreshMyPractices()
   } catch (e) {
-    // A4 V3 (ПРОМТ №571): _assert_master_confirmed_taxonomy's rejection is a
+    // A4 V3 (PROMPT №571): _assert_master_confirmed_taxonomy's rejection is a
     // raw, English, API-shaped message (e.detail) -- must never reach a human
     // directly. Same codes, same translation, same pattern as
-    // CreatePracticeView's submit() catch (ПРОМТ №556, OWNER-2).
+    // CreatePracticeView's submit() catch (PROMPT №556, OWNER-2).
     if (e instanceof ApiResponseError && e.code === 'direction_not_confirmed') {
       toast.error('Это направление ещё не подтверждено в вашем профиле')
     } else if (e instanceof ApiResponseError && e.code === 'style_not_confirmed') {
@@ -609,6 +799,7 @@ async function save(): Promise<void> {
     }
   } finally {
     saving.value = false
+    confirmDialog.loading = false
   }
 }
 
@@ -707,7 +898,8 @@ async function remove(): Promise<void> {
 
 .edit-practice__readonly-text {
   font-family: var(--font-body);
-  font-size: var(--text-sm);  color: var(--velo-text-muted);
+  font-size: var(--text-sm);
+  color: var(--velo-text-muted);
 }
 
 /* -- Content -- */
@@ -749,7 +941,31 @@ async function remove(): Promise<void> {
   margin-bottom: var(--space-2);
 }
 
-/* T21-1 (ПРОМТ №541): honest caption for the now-fallback Zoom field. */
+/* -- Для кого практика (P5 port, PROMPT №606): same token recipe as
+   CreatePracticeView's .create-practice__audience-chips/__empty (itself
+   AddToGroupSheet's .add-to-group__chips/__empty recipe). -- */
+.edit-practice__audience-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.edit-practice__audience-empty {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--velo-text-muted);
+  margin: var(--space-3) 0 0;
+}
+
+.edit-practice__field-error {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--velo-error);
+  margin-top: var(--space-1);
+}
+
+/* T21-1 (PROMPT №541): honest caption for the now-fallback Zoom field. */
 .edit-practice__hint {
   margin: 0 0 var(--space-2);
   font-size: var(--text-xs);

@@ -223,7 +223,7 @@ async def get_admin_practice_detail(
     )
 
 
-# -- Zoom attendance (E21 step G, ПРОМТ №521) --
+# -- Zoom attendance (E21 step G, PROMPT №521) --
 
 
 async def get_admin_zoom_attendance(
@@ -255,6 +255,7 @@ async def get_admin_zoom_attendance(
             bookings=[],
             unmatched=[],
             unmatched_count=0,
+            last_sync_error=None,
         )
 
     booking_rows = (
@@ -310,4 +311,5 @@ async def get_admin_zoom_attendance(
         bookings=bookings,
         unmatched=unmatched,
         unmatched_count=len(unmatched),
+        last_sync_error=zoom_meeting.last_sync_error,
     )

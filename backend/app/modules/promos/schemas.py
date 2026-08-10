@@ -66,7 +66,7 @@ class CreateMasterPromoRequest(BaseModel):
         so service-layer comparisons (valid_until <= valid_from) work
         without None checks.
 
-        R6 fix (ПРОМТ №390): pydantic v2 does NOT run a mode="before"
+        R6 fix (PROMPT №390): pydantic v2 does NOT run a mode="before"
         validator against a field's own default unless validate_default=True
         is also set on the Field -- without it, omitting valid_from (which
         MasterNewPromocodeView.vue always does) left it None all the way

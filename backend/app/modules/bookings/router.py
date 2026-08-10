@@ -6,6 +6,7 @@
 #   POST   /api/v1/bookings              -- create booking (+ optional promo)
 #   GET    /api/v1/bookings/me           -- my bookings (Frontend Backlog)
 #   GET    /api/v1/bookings/{id}         -- booking detail (Frontend Backlog)
+#   GET    /api/v1/bookings/{id}/recording -- watch-recording link (REC-1)
 #   DELETE /api/v1/bookings/{id}         -- cancel booking
 #   POST   /api/v1/bookings/{id}/join    -- check-in (Phase 5.4)
 #   POST   /api/v1/bookings/{id}/leave   -- check-out (Phase 5.4)
@@ -41,6 +42,7 @@ from app.modules.bookings.schemas import (
     AttendanceItemResponse,
     AttendanceResponse,
     BookingDetailResponse,
+    BookingRecordingResponse,
     BookingResponse,
     BookingWithPracticeResponse,
     CancelBookingRequest,
@@ -53,6 +55,7 @@ from app.modules.bookings.service import (
     create_booking,
     get_attendance,
     get_booking_by_id,
+    get_booking_recording,
     get_user_practice_stats,
     join_booking,
     leave_booking,
@@ -172,7 +175,7 @@ async def list_my_bookings_endpoint(
     # locally to match this file's cross-service import style (get_master_-
     # display_name above) and sidestep any module-load import cycle.
     from app.modules.practices.service import ZOOM_VISIBLE_BOOKING_STATUSES
-    # A4 V2 (ПРОМТ №572): batched Zoom meeting status for this page's
+    # A4 V2 (PROMPT №572): batched Zoom meeting status for this page's
     # practices -- NOT gated by ZOOM_VISIBLE_BOOKING_STATUSES (that gate is
     # for the manual zoom_link fallback, M-3); the meeting STATUS carries no
     # secret material, same posture as PracticeResponse.zoom_meeting_status.
@@ -261,7 +264,7 @@ async def list_my_upcoming_bookings_endpoint(
         mid = row[1].master_id
         if mid not in master_names:
             master_names[mid] = await get_master_display_name(mid, session)
-    # A4 V2 (ПРОМТ №572): this is the exact endpoint UserDashboardView's
+    # A4 V2 (PROMPT №572): this is the exact endpoint UserDashboardView's
     # "nearest practice" card reads -- the participant surface this fix is
     # for.
     zoom_meeting_statuses = await get_zoom_meeting_statuses(
@@ -364,6 +367,28 @@ async def get_booking_detail_endpoint(
             update={"zoom_link": None},
         ),
     )
+
+
+@router.get(
+    "/{booking_id}/recording",
+    response_model=BookingRecordingResponse,
+)
+async def get_booking_recording_endpoint(
+    booking_id: UUID,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_reader),
+) -> BookingRecordingResponse:
+    """Watch-recording link for a past practice (REC-1, PROMPT №618).
+
+    Owner ruling: entitlement is the BOOKING, never attendance --
+    confirmed/attended/no_show all qualify, pending/cancelled do not.
+    404 (P-08) for a booking that isn't the caller's own, or hasn't
+    qualified yet (still upcoming, or never confirmed) -- distinct from a
+    200 with status='unavailable', which means the booking qualifies but
+    Zoom currently has nothing to show.
+    """
+    status_value, url = await get_booking_recording(booking_id, user, session)
+    return BookingRecordingResponse(status=status_value, url=url)
 
 
 # ===================================================================

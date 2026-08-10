@@ -27,7 +27,7 @@
 //
 // PINNED INSTANT: 2026-07-20T12:00:00.000Z. Every fixture is a literal against
 // it (SC-04) -- no `Date.now() + 86400000`. Timezone is pinned via
-// useAuthStore().user.timezone (SW4 fix, ПРОМТ №577): this screen renders the
+// useAuthStore().user.timezone (SW4 fix, PROMPT №577): this screen renders the
 // scheduled date via formatDate(scheduled_at, viewerTz.value), matching its
 // flow siblings PracticeDetailView/EntryView -- so the viewer's profile
 // timezone, not the practice's own, is what the runner's local zone could
@@ -398,7 +398,7 @@ describe('CheckinView', () => {
     })
 
     it("SW4: the date is rendered in the VIEWER's timezone, not the practice's own", async () => {
-      // formatDate(scheduled_at, viewerTz.value) -- .vue:153-154 (ПРОМТ №577
+      // formatDate(scheduled_at, viewerTz.value) -- .vue:153-154 (PROMPT №577
       // fix), matching PracticeDetailView/EntryView, this flow's siblings. The
       // fixture's practice.timezone (America/New_York, UTC-4 in July) is
       // deliberately DIFFERENT from the viewer's profile tz (Europe/Moscow,
@@ -897,14 +897,14 @@ describe('CheckinView', () => {
       expect(successTitle()).toBe('')
     })
 
-    // P5 (ПРОМТ №594): the audience/block gate on POST .../checkin
+    // P5 (PROMPT №594): the audience/block gate on POST .../checkin
     // (upsert_checkin, audience_service.py) -- covers the retroactive case
     // (a booking made before the master narrowed the audience or blocked
     // this viewer). The store surfaces the machine `code`; the view maps it
     // to the app's own Russian message, composing the groups case from the
     // ALREADY-LOADED practice's own audience_group_names (no raw backend
     // string, no second round-trip).
-    describe('the closed-practice gate (P5, ПРОМТ №594)', () => {
+    describe('the closed-practice gate (P5, PROMPT №594)', () => {
       it('blocked_by_master shows the exact copy', async () => {
         upsertCheckinMock.mockRejectedValue(
           new ApiResponseError(403, 'You are blocked', 'blocked_by_master'),

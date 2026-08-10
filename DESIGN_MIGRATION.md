@@ -1,6 +1,6 @@
 # VELΘ Design Migration Plan v4
 
-> **Freshness (ПРОМТ №510, 2026-07-19, verified against `8d4948f` on `test`):** graded
+> **Freshness (PROMPT №510, 2026-07-19, verified against `8d4948f` on `test`):** graded
 > ACTIVELY MISLEADING overall — NOT rewritten this round (no specific line-level correction
 > was in scope for this pass). Flagging the overall problem instead: this entire document's
 > premise — design tokens sourced from mockups/Figma via a `design/veltheta` migration

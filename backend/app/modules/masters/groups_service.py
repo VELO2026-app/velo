@@ -1,5 +1,5 @@
 # =============================================================================
-# VELO Backend -- Master Groups Service (P1, ПРОМТ №590)
+# VELO Backend -- Master Groups Service (P1, PROMPT №590)
 # =============================================================================
 #
 # Group CRUD + membership + per-student tag/block. Two virtual groups
@@ -42,9 +42,10 @@ from app.modules.masters.groups_models import (
     MasterStudent,
 )
 from app.modules.payments.refund import refund_booking
-from app.modules.practices.models import Practice
+from app.modules.practices.models import Practice, PracticeAudienceGroup, PracticeStatus
 from app.modules.users.helpers import display_name
 from app.modules.users.models import User
+from app.modules.waitlist.models import ACTIVE_STATUSES, Waitlist, WaitlistStatus
 
 logger = structlog.get_logger()
 
@@ -127,6 +128,50 @@ async def count_group_members(group_id: UUID, session: AsyncSession) -> int:
         MasterGroupMembership.group_id == group_id,
     )
     return (await session.execute(stmt)).scalar_one()
+
+
+async def is_master_audience_member(
+    master_id: UUID, student_id: UUID, session: AsyncSession,
+) -> bool:
+    """True iff `student_id` is someone this master can already see on
+    screen: a derived "Ученики" member (_derived_students_base's own
+    rule -- any non-cancelled booking, not blocked) OR a member of one of
+    this master's own CUSTOM groups (who may have no booking at all).
+
+    Reused by students_service.get_master_student_detail's own gate (P6,
+    owner-ruled widen, PROMPT №609) instead of that module writing a THIRD
+    definition of "student" -- see that function's docstring.
+
+    Deliberately does NOT admit a BLOCKED ("Удалённые") student: excluded
+    from _derived_students_base by construction, and removed from every
+    custom group the moment they're blocked (block_student) -- so neither
+    branch below ever reaches them. That is a separate, undecided scope
+    question, not silently folded in here.
+    """
+    derived_hit = (
+        await session.execute(
+            select(func.count()).select_from(
+                _derived_students_base(master_id)
+                .where(User.id == student_id)
+                .order_by(None)
+                .subquery()
+            )
+        )
+    ).scalar_one()
+    if derived_hit > 0:
+        return True
+
+    group_hit = (
+        await session.execute(
+            select(func.count(MasterGroupMembership.id))
+            .join(MasterGroup, MasterGroup.id == MasterGroupMembership.group_id)
+            .where(
+                MasterGroup.master_id == master_id,
+                MasterGroupMembership.student_user_id == student_id,
+            )
+        )
+    ).scalar_one()
+    return group_hit > 0
 
 
 async def _list_derived_students(
@@ -327,6 +372,7 @@ async def list_master_groups(master_id: UUID, session: AsyncSession) -> list[dic
                 "kind": "custom",
                 "name": g.name,
                 "members_count": member_counts.get(g.id, 0),
+                "description": g.description,
             }
         )
 
@@ -381,7 +427,10 @@ async def _get_custom_group_or_404(
 
 
 async def create_group(
-    master_id: UUID, name: str, session: AsyncSession,
+    master_id: UUID,
+    name: str,
+    session: AsyncSession,
+    description: str | None = None,
 ) -> MasterGroup:
     existing = (
         await session.execute(
@@ -393,7 +442,15 @@ async def create_group(
     if existing is not None:
         raise ConflictError(f"A group named '{name}' already exists")
 
-    group = MasterGroup(master_id=master_id, name=name)
+    # Owner Q4 (PROMPT №610): blank/whitespace-only normalizes to NULL, never
+    # stored as "" -- keeps "no description" a single, unambiguous DB state
+    # for the frontend's own "no dead space when empty" display rule.
+    normalized_description = (
+        description.strip() if description and description.strip() else None
+    )
+    group = MasterGroup(
+        master_id=master_id, name=name, description=normalized_description,
+    )
     try:
         async with session.begin_nested():
             session.add(group)
@@ -407,23 +464,44 @@ async def create_group(
 
 
 async def rename_group(
-    master_id: UUID, group_id_str: str, name: str, session: AsyncSession,
+    master_id: UUID,
+    group_id_str: str,
+    name: str,
+    session: AsyncSession,
+    *,
+    description: str | None = None,
+    description_provided: bool = False,
 ) -> MasterGroup:
+    """Rename AND/OR edit description (owner Q10, PROMPT №611).
+
+    `description_provided` is the router's own
+    `"description" in body.model_dump(exclude_unset=True)` check -- partial
+    update, same contract as groups_router.py's RenameGroupRequest docstring
+    describes. Only touches `group.description` when True; a plain rename
+    call (description_provided=False) leaves it byte-for-byte untouched --
+    this is the regression the whole feature exists to prevent.
+    """
     group = await _get_custom_group_or_404(master_id, group_id_str, session)
-    if group.name == name:
-        return group
 
-    dup = (
-        await session.execute(
-            select(MasterGroup).where(
-                MasterGroup.master_id == master_id, MasterGroup.name == name,
+    if group.name != name:
+        dup = (
+            await session.execute(
+                select(MasterGroup).where(
+                    MasterGroup.master_id == master_id, MasterGroup.name == name,
+                )
             )
-        )
-    ).scalar_one_or_none()
-    if dup is not None:
-        raise ConflictError(f"A group named '{name}' already exists")
+        ).scalar_one_or_none()
+        if dup is not None:
+            raise ConflictError(f"A group named '{name}' already exists")
+        group.name = name
 
-    group.name = name
+    if description_provided:
+        # Same blank/whitespace-only -> NULL normalization create_group()
+        # already applies -- "no description" stays ONE unambiguous DB state.
+        group.description = (
+            description.strip() if description and description.strip() else None
+        )
+
     try:
         async with session.begin_nested():
             await session.flush()
@@ -432,10 +510,90 @@ async def rename_group(
     return group
 
 
+async def _sole_audience_practice_titles(
+    group_id: UUID, session: AsyncSession,
+) -> list[str]:
+    """Titles of this master's practices for which `group_id` is the ONLY
+    remaining target group -- deleting the group would drop
+    practice_audience_group to zero rows for that practice while
+    audience_kind stays 'groups' (fail-closed: invisible + unbookable to
+    every new viewer, see audience_service.py's _is_group_member_clause).
+
+    Fires on the group's presence, NOT on a bare audience_kind='groups'
+    filter: PracticeAudienceGroup rows only ever exist for a groups-audience
+    practice by construction (service.py's PATCH switch-matrix clears them
+    the moment a practice switches away, so a stale row never lingers).
+
+    Deliberately SCOPED to non-terminal practices (draft/scheduled/live).
+    A completed/cancelled/deleted practice's audience is already inert: the
+    only two things audience_kind gates are the public feed (time/status-
+    filtered to upcoming scheduled/live already, listing_service.py) and
+    new booking/waitlist/checkin writes (each independently blocked on a
+    terminal practice by its OWN status check, before audience is ever
+    consulted). Orphaning a finished practice's audience changes nothing
+    reachable, so it must not block a cleanup the master is otherwise free
+    to do.
+
+    Deliberately NOT "any practice that merely references the group": a
+    practice with two target groups loses one and keeps a valid (non-empty)
+    audience -- exactly what a PATCH dropping that same group from
+    group_ids is already allowed to do (service.py:1189-1193). Blocking
+    that case would make group deletion stricter than editing the practice
+    directly for the identical resulting state.
+    """
+    other_groups_count = (
+        select(func.count(PracticeAudienceGroup.id))
+        .where(
+            PracticeAudienceGroup.practice_id == Practice.id,
+            PracticeAudienceGroup.group_id != group_id,
+        )
+        .correlate(Practice)
+        .scalar_subquery()
+    )
+    rows = (
+        await session.execute(
+            select(Practice.title)
+            .join(
+                PracticeAudienceGroup,
+                PracticeAudienceGroup.practice_id == Practice.id,
+            )
+            .where(
+                PracticeAudienceGroup.group_id == group_id,
+                Practice.status.notin_(
+                    [
+                        PracticeStatus.COMPLETED.value,
+                        PracticeStatus.CANCELLED.value,
+                        PracticeStatus.DELETED.value,
+                    ],
+                ),
+                other_groups_count == 0,
+            )
+            .order_by(Practice.scheduled_at)
+        )
+    ).scalars().all()
+    return list(rows)
+
+
 async def delete_group(
     master_id: UUID, group_id_str: str, session: AsyncSession,
 ) -> None:
     group = await _get_custom_group_or_404(master_id, group_id_str, session)
+
+    # P5 orphan-audience guard (PROMPT №606, owner-ruled: BLOCK, never
+    # auto-reassign or auto-unlist). group_ids is always validated as this
+    # SAME master's own custom groups at write time
+    # (_owned_group_ids_or_400), so every PracticeAudienceGroup row pointing
+    # at this group already belongs to this master -- no extra master_id
+    # filter needed on the practice side.
+    blocking_titles = await _sole_audience_practice_titles(group.id, session)
+    if blocking_titles:
+        names = ", ".join(f"«{t}»" for t in blocking_titles)
+        raise ConflictError(
+            f"Cannot delete: this group is the only audience of {names}. "
+            "Change that practice's audience first.",
+            code="group_in_use",
+        )
+
     await session.delete(group)
     await session.flush()
 
@@ -466,6 +624,85 @@ async def list_group_members(
     return await _list_custom_group_members(
         group, master_id, session, search=search, limit=limit, offset=offset,
     )
+
+
+async def search_group_memberships(
+    master_id: UUID,
+    session: AsyncSession,
+    *,
+    search: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[dict], int]:
+    """Cross-group people-search (P6, PROMPT №606, owner-ruled: ONE ROW PER
+    MEMBERSHIP). Every (student, CUSTOM group) membership row for this
+    master, optionally name-filtered -- a student in N groups yields N
+    rows, each carrying which group. Never «Ученики»/«Удалённые»: neither
+    is a MasterGroupMembership row (mirrors list_student_custom_groups's
+    identical exclusion) -- this is a search over actual group ASSIGNMENTS,
+    which the two virtuals, being computed rather than assigned, don't have.
+    """
+    full_name = func.concat(
+        func.coalesce(User.first_name, ""), " ", func.coalesce(User.last_name, ""),
+    )
+    base = (
+        select(
+            User,
+            MasterStudent.tag,
+            MasterGroup.id.label("group_id"),
+            MasterGroup.name.label("group_name"),
+        )
+        .select_from(MasterGroupMembership)
+        .join(User, User.id == MasterGroupMembership.student_user_id)
+        .join(MasterGroup, MasterGroup.id == MasterGroupMembership.group_id)
+        .outerjoin(
+            MasterStudent,
+            and_(
+                MasterStudent.master_id == master_id,
+                MasterStudent.student_user_id == User.id,
+            ),
+        )
+        .where(MasterGroup.master_id == master_id)
+    )
+
+    if search:
+        base = base.where(full_name.ilike(f"%{search}%"))
+
+    total = (
+        await session.execute(
+            select(func.count()).select_from(base.order_by(None).subquery())
+        )
+    ).scalar_one()
+
+    rows = (
+        await session.execute(
+            # Grouped by PERSON first: the two rows a person-in-two-groups
+            # produces land next to each other, matching the "a person
+            # appears N times" reading the search is FOR, rather than
+            # scattering them across a group-first ordering.
+            base.order_by(
+                func.coalesce(User.first_name, ""),
+                func.coalesce(User.last_name, ""),
+                User.id,
+                MasterGroup.name,
+            )
+            .limit(limit)
+            .offset(offset)
+        )
+    ).all()
+
+    items = [
+        {
+            "student_user_id": user.id,
+            "name": display_name(user.first_name, user.last_name),
+            "avatar_url": user.avatar_url,
+            "tag": tag,
+            "group_id": group_id,
+            "group_name": group_name,
+        }
+        for user, tag, group_id, group_name in rows
+    ]
+    return items, total
 
 
 async def add_group_member(
@@ -583,13 +820,25 @@ async def block_student(
     master_id: UUID, student_user_id: UUID, session: AsyncSession,
 ) -> dict:
     """Block a student: set blocked_at, drop them from every custom group,
-    and cancel+refund their FUTURE confirmed bookings on this master's
-    practices.
+    cancel+refund their FUTURE confirmed bookings on this master's
+    practices, and remove their ACTIVE waitlist entries for this master's
+    practices (owner Q13, PROMPT №613).
 
     Money movement REUSES refund_booking() (payments/refund.py) exactly as
     refund_all_bookings_for_practice() already does for a master-initiated
     cancel -- cancelled_by_master=True, unconditional 100% refund. No new
     ledger-writing code.
+
+    Waitlist (owner Q13): WITHOUT this, process_waitlist (waitlist/
+    service.py:439) would still notify a blocked student when their turn
+    comes up -- they'd get a "spot available" push from the master who
+    just blocked them, directly contradicting the block dialog's own
+    promise ("перестанет получать ваши уведомления"), and hold the freed
+    spot for the full confirm window before anyone downstream in the queue
+    gets a turn. confirm_waitlist's own P5 guard (assert_viewer_can_access_
+    practice) already stops them from converting that hold into a real
+    booking -- the leak was never a booking, it was the notification +
+    the held spot.
     """
     student = await session.get(User, student_user_id)
     if student is None:
@@ -660,13 +909,62 @@ async def block_student(
     for practice_id in touched_practice_ids:
         await recalculate_participants(practice_id, session)
 
+    # Remove ACTIVE waitlist entries for THIS master's practices only --
+    # scoped by the same Practice.master_id join as the booking cancel
+    # above, never touching this student's waitlist standing with any
+    # OTHER master. Terminal status (REMOVED), never a hard delete and
+    # never a renumbering of `position`: process_waitlist already selects
+    # the next entry via ORDER BY position + a status filter (ACTIVE_
+    # STATUSES), so a gap left by a removed entry is the exact same,
+    # already-established shape leave_waitlist's own LEFT/DECLINED
+    # transitions leave behind -- position is never reassigned there
+    # either. REMOVED is REJOINABLE (waitlist/models.py) so this student
+    # can join this same practice's queue again, fresh, if later unblocked
+    # -- see unblock_student's own docstring for why that queue spot is
+    # NOT restored automatically.
+    waitlist_rows = (
+        await session.execute(
+            select(Waitlist)
+            .join(Practice, Waitlist.practice_id == Practice.id)
+            .where(
+                Practice.master_id == master_id,
+                Waitlist.user_id == student_user_id,
+                Waitlist.status.in_(ACTIVE_STATUSES),
+            )
+            .with_for_update(of=Waitlist)
+        )
+    ).scalars().all()
+
+    notified_practice_ids = {
+        row.practice_id
+        for row in waitlist_rows
+        if row.status == WaitlistStatus.NOTIFIED.value
+    }
+    removed_waitlist_count = len(waitlist_rows)
+    for row in waitlist_rows:
+        row.status = WaitlistStatus.REMOVED.value
+
     await session.flush()
+
+    # A removed NOTIFIED entry was holding a spot for THIS student -- promote
+    # the next real person immediately instead of leaving it held until the
+    # confirm window times out on its own (same trigger leave_waitlist
+    # already uses for its own NOTIFIED -> DECLINED transition, waitlist/
+    # service.py:277-278). Lazy import: mirrors bookings/service.py's own
+    # process_waitlist import (cancel_booking) -- avoids a module-level
+    # import cycle between groups_service and waitlist/service.
+    if notified_practice_ids:
+        from app.modules.waitlist.service import process_waitlist
+
+        for practice_id in notified_practice_ids:
+            await process_waitlist(practice_id, session)
 
     logger.info(
         "master_student_blocked",
         master_id=str(master_id),
         student_user_id=str(student_user_id),
         cancelled_bookings_count=cancelled_count,
+        removed_waitlist_count=removed_waitlist_count,
     )
 
     return {"blocked_at": now, "cancelled_bookings_count": cancelled_count}
@@ -678,6 +976,16 @@ async def unblock_student(
     """Clear blocked_at. The student returns to «Ученики» automatically
     (derived). Custom-group memberships are NOT restored (owner-settled).
     The tag is kept -- the row is only deleted if there is no tag either.
+
+    Waitlist (owner Q13, PROMPT №613): deliberately does NOT restore any
+    entry block_student removed. Their old queue position is gone for
+    good -- the same "no restoration" rule custom-group membership already
+    follows above, for the same reason: silently handing back a spot in
+    a queue of real people who moved up while they were blocked would bump
+    someone who did nothing wrong. If they want back in, they join the
+    waitlist again like anyone else, landing at the end -- REMOVED is a
+    REJOINABLE status precisely so that path stays open (waitlist/
+    models.py), it just never fast-forwards them back to where they were.
     """
     row = await _get_or_none_master_student(master_id, student_user_id, session)
     if row is None or row.blocked_at is None:
@@ -696,7 +1004,7 @@ async def unblock_student(
 
 
 # ===========================================================================
-# P3 addenda (ПРОМТ №592): tag palette + a student's custom groups
+# P3 addenda (PROMPT №592): tag palette + a student's custom groups
 # ===========================================================================
 
 
@@ -739,7 +1047,7 @@ async def list_student_custom_groups(
 
 
 # ===========================================================================
-# P4 addenda (ПРОМТ №593): group invite links
+# P4 addenda (PROMPT №593): group invite links
 # ===========================================================================
 
 

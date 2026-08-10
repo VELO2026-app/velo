@@ -10,7 +10,7 @@ and service boundaries. Produces passing test files and a scored coverage report
 
 ## Configuration
 
-<!-- VELO-tuned (ПРОМТ №402): same fix as probekit-unit-test -- no tests/
+<!-- VELO-tuned (PROMPT №402): same fix as probekit-unit-test -- no tests/
      directory exists in this repo; every test is colocated next to its
      source. report_dir matches the other 6 VELO-tuned skills. -->
 test_output_dir: colocated -- same directory as the source file, *.test.ts suffix. NOT a separate tree.

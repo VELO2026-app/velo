@@ -4,7 +4,7 @@ Revision ID: 9e0f1a2b3c4d
 Revises: 8d9e0f1a2b3c
 Create Date: 2026-07-20 00:00:00.000002+00:00
 
-E21 step A (ПРОМТ №519): append-only raw report rows. Zoom returns
+E21 step A (PROMPT №519): append-only raw report rows. Zoom returns
 MULTIPLE rows per person on rejoin and does not sum them -- neither does
 this table; summing happens in the attendance-decision step that lands
 after this one. No updated_at (immutable journal, same shape as

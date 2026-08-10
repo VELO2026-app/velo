@@ -142,7 +142,7 @@ describe('usePagination', () => {
     expect(items.value[0]!.id).toBe(1)
   })
 
-  // W17 (ПРОМТ №409): a refresh() firing while an EARLIER loadMore() is still
+  // W17 (PROMPT №409): a refresh() firing while an EARLIER loadMore() is still
   // in flight used to be blocked by that earlier call's `loading` guard (so
   // refresh's own fetch never ran), then the earlier call's stale response
   // landed on top of the just-cleared state once it resolved.
@@ -213,5 +213,125 @@ describe('usePagination', () => {
     shouldFail = false
     await refresh()
     expect(error.value).toBeNull()
+  })
+
+  // -----------------------------------------------------------------------
+  // refreshInPlace (B30: a background freshness check that never flashes an
+  // already-populated list empty -- unlike refresh(), which reset()s
+  // synchronously before the fetch even starts)
+  // -----------------------------------------------------------------------
+  describe('refreshInPlace', () => {
+    it('on an EMPTY list, behaves like refresh(): sets loading and populates items', async () => {
+      let resolveFetch: ((value: PaginatedResult<Item>) => void) | null = null
+      const slowFetch = vi.fn(
+        () =>
+          new Promise<PaginatedResult<Item>>((resolve) => {
+            resolveFetch = resolve
+          }),
+      )
+      const { items, loading, refreshInPlace } = usePagination(slowFetch, 3)
+
+      const promise = refreshInPlace()
+      await nextTick()
+      expect(loading.value).toBe(true)
+
+      resolveFetch!({
+        items: [
+          { id: 1, name: 'a' },
+          { id: 2, name: 'b' },
+          { id: 3, name: 'c' },
+        ],
+        total: 3,
+        limit: 3,
+        offset: 0,
+      })
+      await promise
+      expect(loading.value).toBe(false)
+      expect(items.value).toHaveLength(3)
+    })
+
+    it('on an EMPTY list, a failure still fills `error` (first-load rung needs it)', async () => {
+      const failingFetch = vi.fn(async () => {
+        throw new Error('Network error')
+      })
+      const { error, refreshInPlace } = usePagination(failingFetch, 5)
+
+      await refreshInPlace()
+
+      expect(error.value).toBe('Network error')
+    })
+
+    it('on an ALREADY-POPULATED list, items never go empty while the request is in flight', async () => {
+      let resolveFetch: ((value: PaginatedResult<Item>) => void) | null = null
+      const fetchFn = vi.fn()
+      fetchFn
+        .mockResolvedValueOnce({
+          items: [{ id: 1, name: 'first' }],
+          total: 1,
+          limit: 20,
+          offset: 0,
+        })
+        .mockImplementationOnce(
+          () =>
+            new Promise<PaginatedResult<Item>>((resolve) => {
+              resolveFetch = resolve
+            }),
+        )
+      const { items, refreshInPlace } = usePagination(fetchFn)
+
+      await refreshInPlace() // first-ever load, populates items
+      expect(items.value).toEqual([{ id: 1, name: 'first' }])
+
+      const promise = refreshInPlace() // background refresh -- in flight now
+      await nextTick()
+      // No reset() happened -- the OLD item is still there, not [].
+      expect(items.value).toEqual([{ id: 1, name: 'first' }])
+
+      resolveFetch!({ items: [{ id: 1, name: 'updated' }], total: 1, limit: 20, offset: 0 })
+      await promise
+      expect(items.value).toEqual([{ id: 1, name: 'updated' }])
+    })
+
+    it('on an ALREADY-POPULATED list, a failure keeps the stale items and does not set `error`', async () => {
+      const fetchFn = vi
+        .fn()
+        .mockResolvedValueOnce({
+          items: [{ id: 1, name: 'first' }],
+          total: 1,
+          limit: 20,
+          offset: 0,
+        })
+        .mockRejectedValueOnce(new Error('Network error'))
+      const { items, error, refreshInPlace } = usePagination(fetchFn)
+
+      await refreshInPlace() // populates
+      await refreshInPlace() // background refresh fails
+
+      expect(items.value).toEqual([{ id: 1, name: 'first' }])
+      expect(error.value).toBeNull()
+    })
+
+    it('a stale in-flight refreshInPlace does not clobber a later one', async () => {
+      const resolvers: Array<(v: PaginatedResult<Item>) => void> = []
+      const fetchFn = vi.fn(
+        () => new Promise<PaginatedResult<Item>>((resolve) => resolvers.push(resolve)),
+      )
+      const { items, refreshInPlace } = usePagination(fetchFn, 3)
+
+      const stalePromise = refreshInPlace()
+      await nextTick()
+      const freshPromise = refreshInPlace()
+      await nextTick()
+      expect(fetchFn).toHaveBeenCalledTimes(2)
+
+      // The STALE (first) call resolves after the second has already started.
+      resolvers[0]!({ items: [{ id: 99, name: 'stale' }], total: 99, limit: 3, offset: 0 })
+      await stalePromise
+      expect(items.value.some((i) => i.id === 99)).toBe(false)
+
+      resolvers[1]!({ items: [{ id: 1, name: 'fresh' }], total: 1, limit: 3, offset: 0 })
+      await freshPromise
+      expect(items.value).toEqual([{ id: 1, name: 'fresh' }])
+    })
   })
 })

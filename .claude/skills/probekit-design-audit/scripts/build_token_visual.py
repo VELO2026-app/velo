@@ -28,7 +28,7 @@ BG_SRC = 'frontend/public/bg/background.png'
 BG_DST = '.tmp/_bg.png'
 
 # BACKDROP -- the bug that made the first build of this page look broken
-# (ПРОМТ №437). VELO's cards are white (--velo-bg-card-solid #ffffff) with a
+# (PROMPT №437). VELO's cards are white (--velo-bg-card-solid #ffffff) with a
 # WHITE rim (--velo-border-card #ffffff). The first version of this page put
 # them on a white panel, so card and rim and panel were all #ffffff and the
 # "today" card rendered as literally nothing -- the flat-vs-elevated comparison
@@ -91,7 +91,7 @@ def main():
     def sw(n):
         """One swatch: the colour, its name, its value, and who paints it.
 
-        A token this page names may since have been DELETED (ПРОМТ №437 removed
+        A token this page names may since have been DELETED (PROMPT №437 removed
         24 of them). val() would then return '' and the chip would render with no
         background -- an invisible swatch, the same class of bug that made the
         first build of this page look broken. Say «удалён» out loud instead."""
@@ -101,7 +101,7 @@ def main():
         <div class="chip" style="background:repeating-linear-gradient(45deg,#eef2f7,#eef2f7 6px,#dae2ec 6px,#dae2ec 12px)"></div>
         <div class="meta">
           <code>%s</code>
-          <span class="val">удалён — ПРОМТ №437</span>
+          <span class="val">удалён — PROMPT №437</span>
           <div class="use"><span class="none">токена больше нет в системе</span></div>
         </div>
       </div>''' % n
@@ -217,7 +217,7 @@ def main():
     html += '''
 <section>
   <h2>2. Ошибка выглядит как предупреждение — ИСПРАВЛЕНО</h2>
-  <div class="verdict">РЕШЕНО (ПРОМТ №437): ошибка теперь красная.
+  <div class="verdict">РЕШЕНО (PROMPT №437): ошибка теперь красная.
   <code>--velo-error-text</code> был коричневым <code>#a16124</code> — тем же, что
   у предупреждения; отличался только фон. Теперь это алиас
   <code>--velo-danger-text</code>, красного, который в продукте уже означает

@@ -1,12 +1,12 @@
 # =============================================================================
 # Tests: Zoom Meeting Creation for Series Children (E21, closing the series
-# hole -- ПРОМТ №520; REWRITTEN ПРОМТ №559 -- see below)
+# hole -- PROMPT №520; REWRITTEN PROMPT №559 -- see below)
 # =============================================================================
 #
 # telegram_id range: 79100-79199 (own band, no overlap with test_zoom_lifecycle
 # [79000-79099] or test_zoom_registrants [79200-79299]).
 #
-# ПРОМТ №559 (OWNER-3): series-child meeting creation is no longer synchronous
+# PROMPT №559 (OWNER-3): series-child meeting creation is no longer synchronous
 # during publish. MEASURED on prod: a series publish made one real Zoom API
 # call per child, sequentially, inside one request; a ~29-occurrence series
 # comfortably exceeds the frontend's 15s request timeout, the master saw a
@@ -153,7 +153,7 @@ async def test_series_publish_makes_exactly_one_zoom_call_for_the_root_only(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """ПРОМТ №559: publishing an N-occurrence series must call Zoom's
+    """PROMPT №559: publishing an N-occurrence series must call Zoom's
     create_meeting exactly ONCE in-request (the root -- always the nearest
     occurrence, since children are only ever later dates). Every child gets
     a ZoomMeeting row, but at status=pending_creation with ZERO Zoom calls
@@ -198,7 +198,7 @@ async def test_series_publish_makes_exactly_one_zoom_call_for_the_root_only(
     }
     assert len(zoom_meetings) == 4, (
         "every practice in the series (root + each child) must get its own "
-        "ZoomMeeting row -- the series hole (ПРОМТ №520) stays closed"
+        "ZoomMeeting row -- the series hole (PROMPT №520) stays closed"
     )
     assert zoom_meetings[UUID(root_id)].status == ZoomMeetingStatus.ACTIVE.value, (
         "the root's meeting is created synchronously during publish, same as "
@@ -221,7 +221,7 @@ async def test_poller_creates_pending_children_one_failure_does_not_abort_others
     """The retry poller must pick up EVERY pending_creation child (not just
     create_failed ones) and make its first Zoom attempt -- a failure on one
     child must not stop the poller from succeeding on the others, mirroring
-    this file's original guarantee (ПРОМТ №520), now verified at the poller
+    this file's original guarantee (PROMPT №520), now verified at the poller
     level instead of the publish level.
     """
     master = await _make_verified_master(client, db_session, telegram_id=79102)
@@ -279,7 +279,7 @@ async def test_duplicate_series_submit_creates_no_second_series(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """ПРОМТ №559 (requirement B): submitting the SAME series twice within
+    """PROMPT №559 (requirement B): submitting the SAME series twice within
     the dedup window (master_id + title + scheduled_at + recurrence, all
     identical -- exactly the retry-after-perceived-timeout shape MEASURED
     on prod) must create exactly one series, not two. create_practice

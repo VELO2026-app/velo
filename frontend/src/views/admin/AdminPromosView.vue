@@ -1,5 +1,5 @@
 <!--
-  VELO Frontend -- AdminPromosView (T5, ПРОМТ №418)
+  VELO Frontend -- AdminPromosView (T5, PROMPT №418)
 
   Admin sees + deactivates EVERY master's promos, plus its own company-wide
   ones (operator ask, 2026-07-14: "админ должен видеть и деактивировать
@@ -45,11 +45,7 @@
     </VEmptyState>
 
     <!-- Empty (filter has no promos) -->
-    <VEmptyState
-      v-else-if="items.length === 0"
-      icon="list"
-      :title="emptyTitle"
-    />
+    <VEmptyState v-else-if="items.length === 0" icon="list" :title="emptyTitle" />
 
     <template v-else>
       <div class="admin-promos__list">
@@ -62,7 +58,9 @@
           <div class="pcard__head">
             <VAvatar :name="ownerName(p)" size="md" />
             <div class="pcard__owner">
-              <span class="pcard__owner-label">{{ p.type === 'company' ? 'Компания' : 'Мастер' }}</span>
+              <span class="pcard__owner-label">{{
+                p.type === 'company' ? 'Компания' : 'Мастер'
+              }}</span>
               <span class="pcard__owner-name">{{ ownerName(p) }}</span>
             </div>
             <VBadge :variant="p.is_active ? 'success' : 'muted'">
@@ -83,11 +81,7 @@
           </div>
 
           <div v-if="p.is_active" class="pcard__actions">
-            <VButton
-              variant="outline"
-              :loading="deactivatingId === p.id"
-              @click="askDeactivate(p)"
-            >
+            <VButton variant="outline" :loading="deactivatingId === p.id" @click="askDeactivate(p)">
               Деактивировать
             </VButton>
           </div>
@@ -116,7 +110,17 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { VBackButton, VButton, VLoader, VEmptyState, VCard, VAvatar, VBadge, VSegment, VConfirmDialog } from '@/components/ui'
+import {
+  VBackButton,
+  VButton,
+  VLoader,
+  VEmptyState,
+  VCard,
+  VAvatar,
+  VBadge,
+  VSegment,
+  VConfirmDialog,
+} from '@/components/ui'
 import type { SegmentOption } from '@/components/ui/VSegment.vue'
 import { IconPromo } from '@/components/icons'
 import { useToast } from '@/composables/useToast'

@@ -19,7 +19,7 @@
 #   *_rate -- check-in / feedback / return, mirroring admin metrics (E9/4a),
 #     anchored on Practice.scheduled_at:
 #       check-in : checked-in non-cancelled bookings / non-cancelled bookings,
-#                  for practices that have ENDED by wall-clock (W3, ПРОМТ №387
+#                  for practices that have ENDED by wall-clock (W3, PROMPT №387
 #                  -- NOT Booking.status==ATTENDED, which lags behind wall-clock
 #                  end until autofinalize polls; same D4 bug class already
 #                  fixed in admin/metrics/service.py).
@@ -165,7 +165,7 @@ async def _past_practice_ids_in_period(
     ends). Gating on ATTENDED was the D4 bug in admin/metrics: a check-in or
     feedback lands on a still-CONFIRMED booking before finalization runs, so
     ATTENDED-scoping zeroed the rate during that window. _checkin_counts and
-    _feedback_counts below had the same gate and the same bug (W3, ПРОМТ
+    _feedback_counts below had the same gate and the same bug (W3, PROMPT
     №386/387); this fixes both the same way metrics/service.py already fixed
     theirs, so the two admin dashboards agree.
     """
@@ -292,7 +292,7 @@ async def _return_counts(
     returning = period attendees who also attended a practice that had
     ENDED (by wall-clock) before the period start.
 
-    SW11 (Батч B, ПРОМТ №579): "attended" is now a Checkin row on a
+    SW11 (Батч B, PROMPT №579): "attended" is now a Checkin row on a
     non-cancelled booking for a practice that has ENDED by wall-clock --
     the same signal _checkin_counts uses -- NOT Booking.status==ATTENDED,
     which was the same autofinalize-lag class already fixed for
