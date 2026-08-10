@@ -157,7 +157,32 @@ installed and deliberately unused, the harness being bare `createApp` + happy-do
 several dead-looking values are kept deliberately (unused enum members, a fallback branch unreachable
 under the stub).
 
-## 5. Status
+## 5. Triage — the owner's rulings, 2026-08-11
 
-No finding here has been fixed. Triage — which of these become work, in what order — is the owner's,
-and this file is the input to it.
+He took both halves rather than the invisible one alone, knowing he would not see the visual result
+on a device before it deploys, and said so explicitly. Recorded so it is not re-litigated at build
+time.
+
+**FIXED — `PROMPT №676`, commit `3ad1433d`** (findings 1, 2, 10): `/health` logs both probe failures;
+the Stripe webhook narrows its catch and logs the unexpected case. ⚠ That second one carries a
+deliberate status change — the unexpected branch now returns 500 rather than 400, because this file's
+own `ERROR STRATEGY` header (`webhook_router.py:21-27`) already rules that a 4xx stops Stripe
+retrying and would silently drop the event, while handlers are idempotent so a retry is safe. The
+known bad-signature path still returns 400. And `useKeyboardFieldScroll` now reaps its listener on
+unmount as well as on blur.
+⚠ Named gap, deliberately not papered over: no test asserts the new logging or the unmount cleanup.
+The composable half is cheaply testable and is owed; the backend half cannot be tested locally at all
+while the pytest gate is down.
+
+**RULED, NOT YET BUILT** (findings 9, 11, 14, 15):
+- **Placeholder contrast → a placeholder-specific token, NOT a darkened `--velo-text-muted`
+  (owner-ruled 2026-08-11, option B).** The shared token has 72 uses of which only 4 are
+  placeholders; darkening it would change 68 places nobody reviewed. The standing "do not burn
+  variants" rule bars a near-duplicate minted for taste — it does not bar one minted for a genuinely
+  different REQUIREMENT, and that is the case here: a placeholder must be readable, decorative muted
+  text need not be. ⚠ A code comment (`MasterGroupsView.vue:352`) records the owner once asking for
+  60% opacity on muted text; that is an agent's record of a ruling, not the ruling, and it is moot
+  either way — 60% still measures 2.57:1, short of both bars.
+- Touch targets, `<label>`/`for` pairing, and focus outlines: build as shown in the `.tmp/` preview.
+
+**NOT TAKEN this round** (everything else in §1): recorded, unfixed, no decision claimed.
