@@ -1,5 +1,11 @@
 # ZOD BACKEND TASKS — consolidated backend wishlist (user / master / admin)
 
+> **Maintenance rule (added `PROMPT №679`, 2026-08-12):** this document is refreshed whenever the
+> teammate's branch merges into our line — that is the exact moment it drifted from reality last
+> time (44851822/330a4d70, 2026-08-11: E4/E8/E9/E12/E15/E20/E21/F2/F6 all found DELIVERED against a
+> stale OPEN/PARTIAL status here, one epic 48 commits stale). Establish status by reading the code,
+> never by trusting this file's own field.
+
 > **Freshness (PROMPT №510, 2026-07-19, verified against `8d4948f` on `test`):** graded
 > ACTIVELY MISLEADING overall. This pass corrected: the "Consistency semaphore 1.3" FOLLOW-UP
 > (the feature and the "(parked)" screen it refers to are both gone, deleted 2026-07-07), the
@@ -67,24 +73,31 @@ from scattered epic text.
 
 ---
 
-## ⏱ STATUS — actualized 2026-06-28 (re-verified against live `generated.ts` on `origin/test=4713c60`)
+## ⏱ STATUS — actualized `PROMPT №679`, 2026-08-12, against live code on `test` (`330a4d70` + our three)
 
-Each epic carries a **STATUS** line. Numbering / names unchanged so they map 1:1 to Zod's version.
-**E12–E17 are new** (post-audit gaps: E12–E14 + E15 master-onboarding-flag / E16 apply-languages /
-E17 master-web-auth, all added 2026-06-26/27). Re-audited field-by-field vs the live `4713c60`
-contract. **Sole status change since 2026-06-24: E8 OPEN → PARTIAL** (master-notifications contract +
-capability gate delivered). Everything else unchanged, no regression. One-glance state:
+Each epic carries a **STATUS** line inside its own section below. One-glance state, established by
+reading the code, not by any epic's own stale field:
 
 - **DELIVERED (do not rebuild):** **E1** named reviews · **E2** income/ledger+transactions ·
-  **E5** students/CRM · **E7** period stats (master + admin) · **E9 (core)** admin practices/revenue/metrics.
-- **PARTIAL (some delivered, a remainder open):** **E3** (create-recurrence done; PATCH-edit open) ·
-  **E8** ⬆ (master-notifications contract `MasterNotificationSettings` gen:486 + on UserResponse gen:1118
-  /UserUpdate gen:1138 + master-capability gate DELIVERED; push-delivery worker + unread bell-feed open) ·
-  **E9** (rich masters/reports/withdrawals open) · **E10** (POST done; GET-list + DELETE open) ·
-  **E11** (real `DELETE /users/me` + `UserResponse.email` done №280; rest open) · **E1** (cross-practice needs-attention *filter* DONE №280).
-- **OPEN (untouched, field absent on `4713c60`):** **E4** messaging · **E6** weekly summary ·
-  **E12** checkin_count · **E13** apply-doc/photo-upload · **E14** application rejection_reason ·
-  **E15** master_onboarding_completed · **E16** apply languages · **E17** master web-auth (PARKED).
+  **E4** messaging (`backend/app/modules/chats/`) · **E5** students/CRM · **E7** period stats
+  (master + admin) · **E9 (core)** admin practices/revenue/metrics · **E12** checkin_count ·
+  **E15** master_onboarding_completed · **E16** apply languages · **E20 (T2 remainder)** taxonomy
+  validator DB source-swap + FE catalog fetch · **E21** Zoom attendance tracking (code-complete;
+  see its own section — gated only on missing Zoom credentials, not unbuilt).
+- **PARTIAL (some delivered, a remainder open):** **E3** (create-recurrence + daily-label/list-
+  visibility done; PATCH-edit of an existing series' recurrence open) · **E8** (master-notifications
+  contract + unread bell-feed DELIVERED; push-delivery/quiet-hours moved to an external comms
+  service and the 9 master toggles are stored but read by nothing — see E8) · **E9** (rich
+  masters-detail + admin/participants + list methods DELIVERED; `documents[]`, reports
+  category/priority, withdrawal `master_display_name`+2FA, single-user GET still open) ·
+  **E10** (GET-list DELIVERED; DELETE deliberately not built, PATCH-deactivate covers it — not an
+  open item) · **E11** (`DELETE /masters/me/payout` + per-card `{attended,no_show}` DELIVERED;
+  real account deletion+forfeiture, card payout, connection-link delivery, support-ticket intake,
+  master-side booking delete, i18n still open — see E11).
+- **OPEN (verified absent in code):** **E6** weekly-summary insight (no AI provider) · **E13**
+  apply-doc/photo-upload (no S3) · **E17** master web-auth (PARKED) · **E19** two-level
+  Направление→Вид taxonomy schema (F2/F6's DISPLAY need was met a different way — see F2/F6, now
+  removed — but E19's own schema+workflow ask is still unbuilt).
 - **Delivered OUTSIDE the epic set (not E-numbered):** auto-complete-by-duration (lifecycle worker);
   **W-6/W-7** (user dashboard full attended-stats + bookings load-more, commit `028ae7e`); plus
   frontend/test self-fixes (`StudentDetailResponse.name/avatar`, admin-metrics test isolation) — for
@@ -263,40 +276,32 @@ Each epic states **(a) why · (b) screens · (c) what breaks · (d) backend stat
   `recurrence_days`/`total_sessions`/`completed_sessions` on `PracticeResponse` (gen:765-767).
   **OPEN:** `UpdatePracticeRequest` (gen:1032) has **no `recurrence`** → `PATCH /practices/{id}` cannot
   edit an existing series' recurrence. Add it + regenerate the affected child instances on edit.
-- **⟳ ENRICHED 2026-06-25 (master practice card/list recon — items 1/5/6).** (1) **Daily series renders
-  «Регулярная», not «Ежедневно»:** `PracticeResponse` returns `recurrence_days` but **no `period`**, and
-  a daily series sends **no days** on create (`CreatePracticeView.buildRecurrence` — "Daily ignores
-  days"), so the frontend receives empty `recurrence_days` and cannot distinguish daily from generic.
-  Fix — either expose `period` on `PracticeResponse`, OR (zero-FE-change) have the backend populate
-  `recurrence_days=[1..7]` for a daily series so the existing `recurrenceDaysLabel()` already renders
-  «Ежедневно». (2) **Series occurrences invisible in «Предстоящие»:** the list renders exactly what
-  `GET /masters/me/practices` returns; if the engine emits only the parent series row (no per-occurrence
-  projection), individual dated occurrences never appear. Need the list to surface generated occurrences.
-  (3) **Deleting one occurrence removes the whole series from the list:** cancel has `scope` (gen:253,
-  DELIVERED) but DELETE has none. Define a delete scope (this-occurrence vs whole-series) mirroring
-  cancel, so removing one date does not kill the series.
-- **⟳ ENRICHED 2026-06-26 (seed-phase recon — series occurrence-count metadata).** The "N of M left"
-  count query (`service.py:427`) filters `status != CANCELLED` but **not** `status != DELETED`, so a
-  soft-deleted draft occurrence is still counted in the series total. Minor metadata skew only — **never a
-  data wipe** (confirmed by code read: `delete_practice` is draft-only + single-row soft-delete + no cascade;
-  `cancel_practice` is correctly series-scoped via `root_expr==root_id ∧ scheduled_at>=primary`). Fix: add
-  `Practice.status != PracticeStatus.DELETED.value` to the count filter. **P3 (cosmetic).**
+- **⟳ ACTUALISED `PROMPT №679`, 2026-08-12 — items 1/2 of the 2026-06-25 card/list recon are DONE.**
+  (1) **Daily series now renders «Ежедневно», not «Регулярная»:** `enrichment_service.py:31-40`
+  `_recurrence_days_from_spec()` populates `recurrence_days=[1..7]` for a daily series exactly as
+  the zero-FE-change fix option asked. (2) **Series occurrences are now visible in «Предстоящие»:**
+  `listing_service.py:56-114` (`list_master_practices`, wired to `GET /masters/me/practices`) filters
+  only on `master_id`/`status`, no parent-only restriction — each occurrence is its own row.
+  **Still open — item 3, unchanged:** deleting one occurrence still has no scope of its own;
+  `delete_practice` (`service.py:1810-1851`) remains draft-only, single-row, no cascade. In practice
+  this is narrower than it reads: a PUBLISHED series is removed via `cancel`, which already carries
+  `scope` (DELIVERED); only a DRAFT occurrence hits the scopeless delete path, and a draft series has
+  no participants to protect. Left open as originally P3/cosmetic, not reclassified.
+- **⟳ ACTUALISED `PROMPT №679` — the 2026-06-26 occurrence-count DELETED-filter fix is DONE.**
+  `service.py:838` now includes `Practice.status != PracticeStatus.DELETED.value` in the occurrence-
+  count filter, alongside the existing `!= CANCELLED`. The soft-deleted-draft skew this item tracked
+  (a soft-deleted draft occurrence inflating the series total) is closed.
 
-### E4 — Messaging module. **P1.**
-- **(a) Why.** Real one-to-one messaging across all zones (list, thread, send, unread). No conversation/
-  message entity exists; `master_messages`/`support_messages` are notification toggles, not a store.
-- **(b) Screens (one module).** Master Messages/Chat; students «Написать сообщение»; check-in bubbles;
-  hub «Сообщения N»; admin → user; **user → master «Вопрос мастеру»** (public profile + booking-confirmed);
-  the support thread (see E11).
-- **(c) Breaks.** Sample data everywhere; every send raises «недоступно»; unread stubbed to 0.
-- **(d) Backend.** No conversation/message entity.
-- **Requests.** NEW `GET /conversations`; `GET/POST /conversations/{id}/messages`;
-  `GET /conversations/unread-total`. Decide: is «Поддержка VELΘ» a real thread or a separate channel?
-  Persist the user's «запрос мастеру» (today `TD-ASK-MASTER`, not persisted) + add a `request` field to
-  the check-in item (the 4 check-in/request states).
-- **STATUS (2026-06-24): OPEN** — no conversation/message DTO or endpoint exists.
-- **⟳ ENRICHED 2026-06-25 (master student-profile request-states — ex «item-3», precise contract).** The «запрос мастеру» must also surface on the MASTER's student profile (`MasterStudentProfileView`), not only as a chat thread. Verified now against `generated.ts`: (1) **No ask-master endpoint exists** — `BookingConfirmedView.onSendRequest` only fires a toast and **discards** the text (`TD-ASK-MASTER`); nothing is persisted. Need: persist it as **ONE request per booking, attached to that practice**, created from the booking-confirmed flow. (2) **The master cannot render it** — `StudentDetailResponse` (gen:966) / `StudentCheckinItem` (gen:959 = `{mood, comment, created_at}`) carry **no request field and no practice link**. Need the student-profile recent items to be **practice-keyed** so one row can carry check-in AND/OR request — e.g. add `request_text` + `practice_id` to `StudentCheckinItem`, or a parallel `recent_requests[]` on `StudentDetailResponse`. (3) Add the reviewer/student **`user_id`** to `StudentCheckinItem`/`recent_requests[]` so a profile row can navigate to the student — this is a DIFFERENT field on a DIFFERENT response than E1/E6's; that gap (`MasterReviewItem`/`ReviewItem.user_id`) is CLOSED as of PROMPT №420, this one (student-profile check-ins/requests) is still open on its own merits, not by analogy. **Frontend status:** until this lands, `MasterStudentProfileView` renders the **check-in state only** (real data); the request states are **deferred, not faked** (with the data contract undefined we render the real state, spec the contract here, and defer the dependent states rather than invent a shape or wire a POST to a non-existent endpoint).
-- **⟳ 2026-06-30 (user «Сообщения» entry built — honest stub).** Profile ▸ «Аккаунт» now has a «Сообщения» row → `UserMessagesView` (route `user-messages`), an honest **empty-state** («Здесь появятся ваши переписки с мастерами» / «Функция в разработке») — **no fake threads**, no chat route, no send box. It is the swap point for the real conversations list once `GET /conversations` (above) lands; the profile-row unread badge stays OFF until `GET /conversations/unread-total` exists. **Known cleanup (deferred, F2=А):** `MasterMessagesView` / `MasterChatView` still render hardcoded fake conversations (pre-existing seed-only stub) — convert them to real data / honest empty-state when the API lands.
+### E4 — Messaging module. **P1. STATUS: DELIVERED (`PROMPT №679`, 2026-08-12) — do not rebuild.** `backend/app/modules/chats/` (threads/messages/read/unread-count) + full frontend chat UI.
+
+**Still genuinely open — a narrower, DIFFERENT item than the chat module above:** the "запрос
+мастеру" (ask-the-master) flow from a booking-confirmed screen is still not persisted as its own
+entity and does not surface on the master's student-profile screen. `BookingConfirmedView.onSendRequest`
+still only fires a toast (verify against current frontend before treating as current); backend
+`StudentCheckinItem` (`backend/app/modules/masters/students_schemas.py:47`) still carries no
+`request_text`/`practice_id`, and no `recent_requests[]` exists on `StudentDetailResponse`. Whether
+this belongs to Zod or is superseded by simply sending a chat message via the new module is an
+open product question, not resolved by this pass — flag as AUTO-ASK if picked up.
 
 ### E5 — Students / CRM aggregate. **P0.**
 - **(a) Why.** "A master's students" — people who book/attend, aggregated per person.
@@ -365,12 +370,26 @@ Each epic states **(a) why · (b) screens · (c) what breaks · (d) backend stat
 - **Requests.** EXTEND with `new_booking, booking_cancelled, reminder, new_checkin, new_feedback,
   msg_participants, msg_support, ai_summary, monthly_report` + a `schedule{from,to,days}`; NEW push
   delivery + quiet-hours scheduler; NEW unread-feed for the bell.
-- **STATUS (2026-06-28): PARTIAL ⬆ (was OPEN).** **DELIVERED:** the full master-notifications contract —
-  `MasterNotificationSettings` (gen:486, 9 toggles) + `MasterNotificationSettingsUpdate` (gen:500) +
-  `NotificationSchedule` (gen:579, `from_`/to/days) + `master_notifications` on `UserResponse` (gen:1118)
-  & `UserUpdate` (gen:1138), persisted under credentials, gated by master **capability** (not role) incl.
-  PATCH/POST (commits `7df02e7`/`e9fabb7`/`74ee56c`). User `NotificationSettings` correctly still 4 keys
-  (gen:593). **OPEN:** push-delivery worker + quiet-hours scheduler runtime; unread bell-feed (no feed DTO).
+- **STATUS (actualised `PROMPT №679`, 2026-08-12): PARTIAL, but the shape of what's open CHANGED —
+  read this before assigning anything against the old wording.** **DELIVERED, still true:** the full
+  master-notifications contract — `MasterNotificationSettings` (9 toggles) + `NotificationSchedule`
+  (`from_`/to/days), persisted under credentials, gated by master capability.
+  **DELIVERED, NEW since the last pass:** the unread bell-feed this epic asked for now exists —
+  `backend/app/modules/comms_proxy/router.py:84,99,110,121` — `GET /notifications` (keyset inbox),
+  `GET /notifications/unread-count`, `POST /notifications/read-all`, `POST /notifications/{id}/read`.
+  **ARCHITECTURE CHANGED, not just delivered:** push delivery itself did not land as an in-process
+  worker+scheduler the way this epic asked — the whole notifications pipeline was cut over
+  (`backend/app/core/events/`) to a transactional outbox that ships events via a Redis Stream to an
+  EXTERNAL comms microservice (`core/events/relay.py:79-176`); delivery and quiet-hours logic now
+  live there, outside this repo. `comms_proxy/router.py:141-228` does carry a real quiet-hours
+  contract (`schedule{from,to,days}`), forwarded to that external service.
+  **⚠ DEAD WORK, worth flagging rather than silently carrying:** the 9 master toggles
+  (`new_booking`, `booking_cancelled`, etc.) are stored and returned by `GET/PATCH /users/me`
+  (`backend/app/modules/users/service.py`, `router.py`) but read by **nothing** — no emit site or
+  relay code in this repo ever checks them; the actually-live category gating is a separate
+  mechanism inside the external comms service. Whether these toggles should be wired to gate
+  emit-time (our side) or are meant to be superseded by the comms-service's own preference store is
+  an open product/architecture question, not resolved by this pass.
 
 ### E9 — Admin oversight endpoints. **P0 (data) / P1 (rich).**
 - **(a) Why.** The admin role is built to the design; most admin lists/details have no endpoint or a
@@ -383,11 +402,24 @@ Each epic states **(a) why · (b) screens · (c) what breaks · (d) backend stat
   priority/date/reporter_name); EXTEND `/admin/users` (participants rich + filters); EXTEND
   `AdminWithdrawalResponse` (+master_display_name) + NEW real 2FA; NEW `/admin/metrics/*`; NEW
   `/admin/revenue`; NEW `/admin/practices`(+/{id}).
-- **STATUS (2026-06-24): PARTIAL.** DELIVERED: `/admin/practices`(+/{id}) (gen:567/59), `/admin/revenue`
-  (gen:97), `/admin/metrics/*`, verify/reject. **OPEN:** reports category/priority/reporter_name
-  (`ReportResponse` gen:895 = reporter_id + status/target_type filters only); masters `/{id}` rich
-  application profile + `documents[]` (returns minimal `AdminMasterListItem` gen:47) + edit-master-fields;
-  `AdminWithdrawalResponse` (gen:141) `master_display_name` + real 2FA; participants rich fields + filters.
+- **STATUS (actualised `PROMPT №679`, 2026-08-12): PARTIAL, several sub-items moved since the last
+  pass.** DELIVERED, unchanged: `/admin/practices`(+/{id}), `/admin/revenue`, `/admin/metrics/*`,
+  verify/reject.
+  **DELIVERED, NEW:** masters `/{id}` rich application profile + edit-master-fields —
+  `backend/app/modules/admin/users/schemas.py:53-75` `AdminMasterDetail` now carries
+  methods/experience_years/bio/display_name/email/phone/languages/certifications, and
+  `PATCH /admin/masters/{user_id}/profile` exists (`admin/masters/router.py:184-209`). Participants
+  rich fields + filters — but at a DIFFERENT endpoint than originally asked: not an extended
+  `GET /admin/users`, a new sibling `GET /admin/participants` (`admin/participants/router.py:31-49`,
+  `filter=all|new|active`, `period=week|month`, `AdminParticipant{practices_count,
+  last_login_at,…}`); `GET /admin/users` itself is unchanged.
+  **STILL OPEN, unchanged:** reports category/priority/reporter_name (`ReportResponse` still
+  reporter_id + status/target_type filters only); `AdminWithdrawalResponse.master_display_name` +
+  real 2FA (repo-wide search for 2fa/totp found zero hits); `GET /admin/users/{id}` single-user
+  detail (still no such route — see the item below).
+  **STILL OPEN, narrower than before:** `documents[]` on the master detail — the rich profile above
+  shipped without it; the only `"documents": []` in the codebase is an unrelated internal JSONB stub
+  (`admin/users/service.py:337`), not exposed via any schema.
 - **Q1 (batch Q, 2026-07-12) — admin masters LIST card rich fields.** `AdminMasterListItem` (gen:67)
   carries only id / name / avatar / role / `master_status` → the `AdminMastersView` cards render EVERY
   rich field as an honest «—» stub (**methods** · Практик/Учеников · К выводу [payout] · Опыт · Заявка
@@ -420,12 +452,33 @@ Each epic states **(a) why · (b) screens · (c) what breaks · (d) backend stat
 
 ### E11 — One-offs.
 - NEW master-side `DELETE` of a participant's booking (refund + notify) — `cancelBooking` is self-only. **P1.**
+  **STILL OPEN, confirmed `PROMPT №679`:** `bookings/router.py`'s `DELETE /{booking_id}` is
+  explicitly owner-only (self-cancel). Master-side cancellation only exists whole-practice
+  (`practices/router.py:658`, refunds ALL participants) or as a side-effect of blocking a student —
+  no targeted single-booking master delete.
 - NEW support-ticket intake `{ topic, message, attachments[] }` + upload (max 5 / 5 MB, server-side). **P1.**
-- NEW connection-link auto-generation + delivery (~10 min pre-start). **P2.**
-- NEW `DELETE /masters/me/payout` — only `PATCH` exists. **P2.** *(⟳ confirmed 2026-06-25, recon item #2 — `removePayout` is a stub toast «Удаление способа выплаты появится позже»; no delete endpoint, frontend does not fake a removal.)*
+  **STILL OPEN, confirmed `PROMPT №679`:** no `SupportTicket` model/router exists anywhere under
+  `backend/app/modules/`. The new `chats` module (see E4) is a generic DM-thread pointer with no
+  `topic`/`priority`/`status` — a different thing, not this ticket system.
+- **ACTUALISED `PROMPT №679` — connection-link is now PARTIAL, was fully OPEN.** The ~10-minute
+  pre-start TIMING scaffold exists: `backend/app/core/events/reminders.py:85-90,127-155` schedules a
+  `booking.reminder_10m` notification at `scheduled_at - 10min`. But its `action_data` carries only
+  `practice_id`/text — no Zoom join/connection link is generated or attached. So the delivery
+  *trigger* is built; the *link itself* is still not. **P2.**
+- ~~NEW `DELETE /masters/me/payout` — only `PATCH` exists.~~ **DONE, `PROMPT №679`.**
+  `backend/app/modules/masters/router.py:289-320` `delete_payout_details` — clears `data["payout"]`,
+  204 response.
 - NEW **card payout method** (card storage + one-time payout) — `savePayout` stubs `method==='card'` → toast «Выплата по номеру карты появится позже»; bank_transfer / PayPal / Revolut **already persist** via `PATCH /masters/me/payout`. So "doesn't save the card" = the card method only. ⟳ recon item #3 (2026-06-25). **P2.**
-- EXTEND real account deletion + balance forfeiture. **P2.**
-- EXTEND `UserResponse.email` (capture + expose). **P1.**
+  **STILL OPEN, confirmed `PROMPT №679`:** `masters/schemas.py:130-141` `PayoutDetailsUpdate.method`
+  remains freeform `str`, docstring only documents bank_transfer/paypal/revolut. No card storage.
+- **ACTUALISED `PROMPT №679` — the earlier STATUS line below claiming this DELIVERED was WRONG; the
+  claim never matched the code it cited.** EXTEND real account deletion + balance forfeiture. **P2.**
+  `backend/app/modules/users/router.py:139-155` `DELETE /me`'s own docstring: *"this does **NOT**
+  erase data or deactivate the account. It resets the onboarding flag... old data intact."* It calls
+  `reset_user_to_onboarding`, which touches no balance/forfeiture field at all (grepped, zero hits).
+  Whatever the frontend wiring at the old `users.ts:50` citation does, it is not calling anything
+  that forfeits a balance or erases data — this item is genuinely still open, not delivered.
+- EXTEND `UserResponse.email` (capture + expose). **P1.** *(Already correctly marked DONE below — unchanged by this pass.)*
 - **Master-application → profile data exposure (⟳ recon 2026-06-25, EditProfile).** (a) **`methods`** — onboarding
   captures the master's `methods` and the profile response carries a `methods?` field; the frontend renders
   locked method-chips gated on `profile.methods.length > 0` → VERIFY the backend COPIES the application's
@@ -433,8 +486,15 @@ Each epic states **(a) why · (b) screens · (c) what breaks · (d) backend stat
   **NO** `photo` / `photo_url` field anywhere in the contract (verified, grep); the profile avatar falls back to
   the Telegram `avatar_url`. To show an onboarding-captured photo, the application must capture + store a photo and
   expose it on the profile — contract undefined → define + spec (frontend defers, does not invent). **P2** (recon item E3).
+  **Not re-verified this pass** — outside the scope of what the merge plausibly touched; carry as-is.
 - NEW i18n EN catalog + language render layer + date-format pref + formatter. **P2.**
-- EXTEND `PracticeResponse` per-card `{ attended, no_show }` aggregate. **P2.**
+  **STILL OPEN, confirmed `PROMPT №679`:** `backend/app/core/i18n.py` is only a language-code
+  whitelist (`SUPPORTED_LANGUAGES`/`normalize_language`), not a translation catalog. No locale/.po
+  files anywhere. The new comms microservice owns template rendering for its own channel, per its
+  own module docstring — a separate concern from a user-facing EN catalog.
+- ~~EXTEND `PracticeResponse` per-card `{ attended, no_show }` aggregate.~~ **DONE, `PROMPT №679`.**
+  `backend/app/modules/practices/schemas.py:732-733` — `attended: int | None`, `no_show: int | None`,
+  owner-only aggregate, filled by the service. **P2.**
 - **STATUS (2026-07-04, email SELF-BUILT — PACK#3, PROMPT №280):** `UserResponse.email` capture+expose
   is DONE, additive credentials-JSONB (phone/bio pattern, NO column, NO migration): `"email"` added to
   `_JSONB_CREDENTIAL_FIELDS`, `UserResponse.email` computed_field, `UserUpdate.email` (soft
@@ -443,22 +503,15 @@ Each epic states **(a) why · (b) screens · (c) what breaks · (d) backend stat
   It is **additive only** (one credentials key + one response field + one PATCH field) — no schema/
   column/migration, no conflict with E8's `master_notifications`. users/ was re-checked remote-cold at
   build (origin/main 0-ahead vs test, no in-flight users/ push). Reconcile-before-push still mandatory
-  at deploy. The OTHER E11 one-offs below remain OPEN.
-- **STATUS (2026-06-24): PARTIAL.** DELIVERED: real `DELETE /users/me` (forfeit) — users.ts:50.
-  **OPEN:** master-delete-participant booking; support-ticket intake + upload; connection-link;
-  `DELETE /masters/me/payout` (only PATCH); `UserResponse.email` (gen:1059 has none); per-card
-  `{attended,no_show}` aggregate (data on `AttendanceResponse` gen:181); i18n EN (partly frontend).
+  at deploy.
+- **STATUS (actualised `PROMPT №679`, 2026-08-12): PARTIAL.** DELIVERED: `UserResponse.email`;
+  `DELETE /masters/me/payout`; per-card `{attended,no_show}` aggregate.
+  **OPEN, corrected:** real account deletion + forfeiture (the "DELIVERED (forfeit)" claim this line
+  used to carry was never true against the code — see the item above); master-delete-participant
+  booking; support-ticket intake + upload; card payout method; i18n EN (partly frontend).
+  **PARTIAL:** connection-link (timing exists, link generation doesn't — see the item above).
 
-### E12 — Check-in count aggregate (NEW post-audit). **P1.**
-- **(a) Why.** Dashboard + practice cards show a «😊 N/M» check-in indicator.
-- **(b) Screens.** Master dashboard cards; practice list/detail cards.
-- **(c) Breaks.** No data source → the indicator can't render.
-- **(d) Backend.** `checkin_count` is **absent** on `PracticeResponse` (gen:740) AND `PracticeSummary`
-  (gen:775).
-- **Request.** ADD `checkin_count` to the practice/list aggregate (groups with `recurrence_days` /
-  `total_sessions` / `completed_sessions`, E3).
-- **STATUS (2026-06-24): OPEN.** **LANE (2026-07-15):** OWNED-BY-NAV — see the SELF-FIX LOG
-  REASSIGNED note above; same item, same reassignment.
+### E12 — Check-in count aggregate. **P1. STATUS: DELIVERED (`PROMPT №679`, 2026-08-12) — do not rebuild.** `practices/schemas.py:731` + `enrichment_service.py:136-226`.
 
 ### E13 — Master-application document upload (NEW post-audit). **P2.**
 - **(a) Why.** The master-application flow shows document tiles, but there is no upload.
@@ -502,23 +555,7 @@ Each epic states **(a) why · (b) screens · (c) what breaks · (d) backend stat
   decision: show the verdict, then treat them as an ordinary user). Nothing owed to Zod — both gaps
   were frontend-only.
 
-### E15 — Master-onboarding "completed" flag (NEW 2026-06-26). **P2.**
-- **(a) Why.** A freshly-verified master currently lands straight on `MasterDashboardView` with no intro.
-  We are building a one-time master-onboarding carousel (clone of the user `OnboardingView` pattern). It
-  must show ONCE, cross-device — so it needs its OWN persisted flag, distinct from `onboarding_completed`
-  (which is already `true` by the time a user becomes a master, so it cannot be reused).
-- **(b) Screens.** new master `OnboardingView` (master-flavored), gated in `App.vue`/router on first
-  master-dashboard entry after verification.
-- **(c) Breaks.** No `master_onboarding_completed` field exists on `UserResponse` (gen:1072 has only
-  `onboarding_completed`), and the PATCH-self endpoint does not accept/persist it. Frontend is built
-  defensively (absent field → treat as not-completed → show once); persistence + gate go live on delivery.
-- **(d) Backend.** Mirror the existing `onboarding_completed`: add `master_onboarding_completed: boolean`
-  to `UserResponse`; accept `{ master_onboarding_completed: true }` on the user self-update PATCH (same
-  path the user carousel uses to persist `{ timezone, onboarding_completed: true }`); store in the same
-  credentials JSONB.
-- **Request.** Add the field to `UserResponse` + accept it on PATCH-self, mirroring `onboarding_completed`.
-- **STATUS (2026-06-26): OPEN.** (Frontend built against it under build-full-design; deploy gate with the batch.)
-- **LANE (2026-07-15):** OWNED-BY-NAV — see the SELF-FIX LOG REASSIGNED note above; same item.
+### E15 — Master-onboarding "completed" flag. **P2. STATUS: DELIVERED (`PROMPT №679`, 2026-08-12) — do not rebuild.** `users/schemas.py:406,585` + `service.py:56`.
 
 ### E16 — Master-application "languages" field (NEW slice-2 2026-06-27). **P2.**
 - **(a) Why.** The redesigned Step-2 «Опыт» adds a «Язык проведения практик» control (Русский /
@@ -614,32 +651,32 @@ Each epic states **(a) why · (b) screens · (c) what breaks · (d) backend stat
 | POST /practices (recurrence) | EXTEND | recurrence{…} + generation | P1 | DELIVERED (gen:350/876) |
 | PATCH /practices/{id} (recurrence) | EXTEND | add recurrence to UpdatePracticeRequest + regen | P1 | OPEN (gen:1032 lacks it) |
 | POST /practices/{id}/cancel (scope) | EXTEND | scope: this \| this_and_future | P1 | DELIVERED (gen:253) |
-| GET /conversations (+messages, POST, unread) | NEW | peer, preview, time, unread, messages[] | P1 | OPEN |
-| NotificationSettings (+Update) | EXTEND | +9 keys + schedule{from,to,days} | P1 | OPEN (still 4 keys, gen:551) |
-| push delivery + quiet-hours | NEW | scheduler honours window / days | P2 | OPEN |
-| notifications unread-feed | NEW | bell feed + badge | P1 | OPEN |
+| GET /conversations (+messages, POST, unread) | NEW | peer, preview, time, unread, messages[] | P1 | **DELIVERED, `PROMPT №679`** — shipped as `chats/router.py` (thread not "conversation"), see E4 |
+| NotificationSettings (+Update) | EXTEND | +9 keys + schedule{from,to,days} | P1 | DELIVERED — 9 toggles + schedule contract shipped; see E8 for what's still open |
+| push delivery + quiet-hours | NEW | scheduler honours window / days | P2 | **ARCHITECTURE CHANGED, `PROMPT №679`** — moved to an external comms microservice; the 9 toggles above are stored but unread by anything in this repo; see E8 |
+| notifications unread-feed | NEW | bell feed + badge | P1 | **DELIVERED, `PROMPT №679`** — `comms_proxy/router.py` `GET /notifications`+`/unread-count`, see E8 |
 | GET /admin/stats | EXTEND | deltas, revenue, rates, pending, period | P1 | DELIVERED (gen:113) |
-| GET /admin/masters/list + /{id} | EXTEND | rich + application profile + docs[] + history[] | P1 | OPEN (minimal, gen:47) |
-| admin edit-master-fields | NEW | save Направление / Вид | P2 | OPEN |
-| GET /admin/reports | EXTEND | category, priority, date, reporter_name | P1 | OPEN (gen:895 reporter_id only) |
-| GET /admin/users (participants) | EXTEND | practices_attended, last_active, joined, filters | P1 | OPEN |
-| GET /admin/users/{id} | NEW | single-user detail; unblocks report user-target link | P2 | OPEN |
-| AdminWithdrawalResponse + 2FA | EXTEND + NEW | master_display_name; real 2FA step | P2 | OPEN (gen:141) |
+| GET /admin/masters/list + /{id} | EXTEND | rich + application profile + docs[] + history[] | P1 | **PARTIAL, `PROMPT №679`** — rich detail + edit DELIVERED (`AdminMasterDetail`); `documents[]` still absent; see E9 |
+| admin edit-master-fields | NEW | save Направление / Вид | P2 | **DELIVERED, `PROMPT №679`** — `PATCH /admin/masters/{id}/profile`, see E9 |
+| GET /admin/reports | EXTEND | category, priority, date, reporter_name | P1 | OPEN (confirmed `PROMPT №679`, still reporter_id only) |
+| GET /admin/users (participants) | EXTEND | practices_attended, last_active, joined, filters | P1 | **DELIVERED, `PROMPT №679`, at a DIFFERENT endpoint** — `GET /admin/participants`, not an extended `/admin/users`; see E9 |
+| GET /admin/users/{id} | NEW | single-user detail; unblocks report user-target link | P2 | OPEN (confirmed `PROMPT №679`, still no such route) |
+| AdminWithdrawalResponse + 2FA | EXTEND + NEW | master_display_name; real 2FA step | P2 | OPEN (confirmed `PROMPT №679`) |
 | GET /admin/metrics/check-in\|feedback\|return | NEW | rate, totals, series, low/distribution/top | P0 | DELIVERED |
 | GET /admin/revenue | NEW | revenue, commission, payable, per-master (= E2) | P0 | DELIVERED (gen:97) |
 | GET /admin/practices (+/{id}) | NEW | global list + detail + roster | P0 | DELIVERED (gen:567/59) |
-| GET /masters/me/promos + DELETE | NEW | list; delete | P2 | OPEN (POST exists gen:320) |
-| DELETE participant's booking (master) | NEW | refund + notify | P1 | OPEN |
-| POST support ticket + upload | NEW | topic, message, attachments[] | P1 | OPEN |
-| connection-link auto-gen | NEW | link generation + delivery | P2 | OPEN |
-| DELETE /masters/me/payout | NEW | remove payout method | P2 | OPEN |
-| DELETE /users/me (real) | EXTEND | forfeit balance + erase semantics | P2 | DELIVERED (users.ts:50) |
+| GET /masters/me/promos + DELETE | NEW | list; delete | P2 | GET DELIVERED; DELETE deliberately not built (PATCH-deactivate covers it, per E10 — not an open item) |
+| DELETE participant's booking (master) | NEW | refund + notify | P1 | OPEN (confirmed `PROMPT №679`) |
+| POST support ticket + upload | NEW | topic, message, attachments[] | P1 | OPEN (confirmed `PROMPT №679` — no SupportTicket model anywhere; the new chats module is a different thing) |
+| connection-link auto-gen | NEW | link generation + delivery | P2 | **PARTIAL, `PROMPT №679`** — the 10-min-pre-start TIMING scaffold exists (`core/events/reminders.py`); the link itself still isn't generated; see E11 |
+| DELETE /masters/me/payout | NEW | remove payout method | P2 | **DELIVERED, `PROMPT №679`** — `masters/router.py:289-320` |
+| DELETE /users/me (real) | EXTEND | forfeit balance + erase semantics | P2 | **CORRECTED, `PROMPT №679` — the old "DELIVERED" here was WRONG.** Still a soft onboarding-reset, no forfeiture, no erasure (docstring says so); see E11 |
 | UserResponse.email | EXTEND | email capture + expose | P1 | SELF-BUILT №280 (credentials JSONB, no column/migration; UserUpdate.email) |
-| i18n EN + date-format pref | NEW | locale catalog + format pref + formatter | P2 | OPEN |
-| PracticeResponse {attended, no_show} | EXTEND | per-practice card aggregate | P2 | OPEN |
-| PracticeResponse.checkin_count (E12) | EXTEND | «😊 N/M» aggregate | P1 | OPEN (gen:740/775) |
-| apply document-upload (E13) | NEW | file intake + storage | P2 | OPEN |
-| application rejection_reason — expose (E14) | EXTEND | surface on profile/apply response | P2 | OPEN (gen:885 input only) |
+| i18n EN + date-format pref | NEW | locale catalog + format pref + formatter | P2 | OPEN (confirmed `PROMPT №679`) |
+| PracticeResponse {attended, no_show} | EXTEND | per-practice card aggregate | P2 | **DELIVERED, `PROMPT №679`** — `practices/schemas.py:732-733` |
+| PracticeResponse.checkin_count (E12) | EXTEND | «😊 N/M» aggregate | P1 | **DELIVERED, `PROMPT №679`** — see E12 |
+| apply document-upload (E13) | NEW | file intake + storage | P2 | OPEN (confirmed `PROMPT №679`, no S3 anywhere) |
+| application rejection_reason — expose (E14) | EXTEND | surface on profile/apply response | P2 | **CORRECTED, `PROMPT №679` — this row contradicted E14's own STATUS.** E14 has been CLOSED-BY-NAV since 2026-07-14/15 (`users/router.py:63-73` → `MasterPendingView.vue`) — this table row was simply never updated when the epic closed |
 
 ---
 
@@ -878,72 +915,43 @@ Forensic re-verify of the self-vs-Zod hinge — all confirmed:
      (public/master read) and `GET/POST/PATCH /api/v1/admin/taxonomy/*` (admin CRUD) already exist
      (R5) on the SAME tables. T2's work here is confirming these already cover the direction+style
      axis for practice-creation, not standing up `GET /catalog` from scratch.
-  3. **validation source-swap — VERIFIED STILL OPEN (2026-07-15).** Checked current code:
-     `practices/schemas.py:286-289` and `:463-467` (`direction_must_be_valid`) and
-     `practices/router.py:97-105` (`_validate_directions`) still read `settings.practice_allowed_directions`
-     directly — none have been rewired to the taxonomy tables. This part is real, unstarted work.
-     ⚠ Load-bearing: these validators gate `POST /practices`; a bad read source rejects valid creates.
-  4. **FE async-fetch — VERIFIED STILL OPEN (2026-07-15).** Checked current code: `CreatePracticeView.vue`
-     does not call `getActiveTaxonomy` (`api/taxonomy.ts`); `utils/practiceOptions.ts:170`
-     (`DIRECTION_OPTIONS`) is still a hardcoded const. This part is real, unstarted work.
+  3. **validation source-swap — DONE (`PROMPT №679`, 2026-08-12).** The validators moved and were
+     rewired in the same refactor: `practices/service.py:346-444` (`_validate_taxonomy`,
+     `_direction_in_catalog`, `_catalog_styles_for_direction`) now check the UNION of
+     `settings.practice_allowed_directions`/`_styles` **and** the active `TaxonomyDirection`/
+     `TaxonomyStyle` DB tables (`service.py:332-343`). The old cited locations
+     (`practices/schemas.py` `direction_must_be_valid`, `router.py` `_validate_directions`) no longer
+     exist — this is not a new build sitting on top of the old validators, the old validators were
+     replaced.
+  4. **FE async-fetch — DONE.** `CreatePracticeView.vue:519,717,731` now calls
+     `ensureTaxonomyCatalog()`/`catalogDirectionOptions`/`catalogStylesForDirection`, catalog-first;
+     `utils/practiceOptions.ts:181`'s `DIRECTION_OPTIONS` is now only the offline/cold-cache fallback,
+     not the live source.
   - **Scope caveat, not covered by (1)-(4) above:** the taxonomy tables only cover the
     direction+style axis. `PracticeType` (session **format** — a separate axis, validated in
     `router.py`'s `_validate_types`, persisted as a real `String(20)` column, see (c) above) has NO
     table and NO seed at all — closing (2)-(4) does not close the `practice_type` half of this epic.
-- **FE read-only ALREADY SHIPPED (batch P, this session):** `admin-catalog` route + `AdminCatalogView.vue`
-  (read-only list of directions→styles from `practiceOptions`, honest "редактирование появится с бэкендом
-  каталога" note, NO dead controls) + a «Каталог практик» dashboard row. Taxonomy is built in one
-  `buildCatalog()` = the **single swap point**: when `GET /catalog` lands, point it at the endpoint and
-  the UI renders unchanged. **Stale as written — corrected (2026-07-15):** batch R already delivered
-  exactly this for the master-**methods** side (editable controls + persistence, DB-backed, LIVE
-  c1dbe08 — see the CLOSED-BY-NAV note immediately below). Only the practice-creation side
-  (directions/types, this `GET /catalog` swap point) remains, and it is navigator tail T2, not Zod's.
+- **ACTUALISED `PROMPT №679` — the FE catalog editor is no longer read-only.**
+  `AdminCatalogView.vue` now has real `addDirection`/`addStyle` handlers calling
+  `POST/PATCH /api/v1/admin/taxonomy/*` — the "read-only, honest note" description below is
+  superseded; kept for context only.
 - **CLOSED-BY-NAV (batch R, 2026-07-14, LIVE c1dbe08) — E20-catalog, MASTER-METHODS SCOPE ONLY.**
   DB-backed taxonomy self-built: 2 tables (directions/styles) + seed + admin CRUD + read endpoint +
-  picker consuming it + editable admin UI + custom-method auto-promote with admin confirmation. Scope
-  is master **methods** only — **practice-creation taxonomy (directions/types, (b)/(d) above) still
-  runs on the old code-level config and remains OPEN — planned SELF (navigator tail T2, batch R
-  follow-up) — NOT Zod's lane.** Do not rebuild the methods side.
+  picker consuming it + editable admin UI + custom-method auto-promote with admin confirmation.
+  **⟳ ACTUALISED `PROMPT №679` — the practice-creation scope (directions/styles validators + FE
+  fetch) is now ALSO DELIVERED, see items 3/4 above.** Only genuinely remaining: `PracticeType`
+  (session **format** — a separate axis) still has no table and no seed at all — closing the
+  direction/style side above does not close the `practice_type` half of this epic. **E20 STATUS as
+  of this pass: DONE for directions/styles (both methods-side and practice-creation-side); STILL
+  OPEN only for the `practice_type` axis.**
 
-### E21 — Zoom attendance tracking (NEW 2026-07-12, operator). **OWNED-BY-NAV since 2026-07-16. DEADLINE CANCELLED. DO NOT START — this is not Zod's.**
-- **(a) Why.** Attendance today is inferred by the clock-driven lifecycle (Zod's recent
-  `feat(practices)!: drive practice lifecycle by the clock` — a scheduled practice auto-finalizes on
-  schedule and currently ASSUMES every booked participant attended). The operator wants REAL per-meeting
-  attendance from Zoom itself (join/leave events), replacing the assumption with ground truth.
-- **(b) Screens/consumers (FE, after the contract lands).** Nothing to build FE-side yet — this is a
-  pure backend/data epic. Once shipped, existing FE surfaces that already display attendance-derived
-  data become live instead of clock-inferred: master analytics hours/practices-attended counts,
-  the user dashboard check-in/feedback-vs-reflection branching, the diary состоялась/не-состоялась
-  indicator on past entries.
-- **(c) What's needed.**
-  1. Zoom webhook/API integration: capture `meeting.participant_joined` / `meeting.participant_left`
-     (or equivalent) per scheduled practice's Zoom meeting.
-  2. Map Zoom participant identity → the platform's booking/user record for that practice (join by
-     email/display-name-token or a pre-generated per-booking join link — TBD, needs a Zoom-side
-     identification strategy).
-  3. Derive a real attended/no_show verdict per booking from the join/leave timeline against a
-     duration threshold (e.g. "present for ≥N% of the scheduled duration" — **threshold value TBD**,
-     operator to confirm).
-  4. Feed the verdict into `booking.status` at finalize time, REPLACING the current clock-driven
-     "assume attended" default (the lifecycle-by-clock auto-finalizer becomes the fallback only when
-     Zoom data is unavailable, not the primary source).
-- **(d) Downstream (what starts being REAL once this ships, not before):** hours-practiced count ·
-  practices-attended count · feedback-request branching (attended → feedback prompt / no_show →
-  reflection prompt) · diary "состоялась / не состоялась" indicator on past entries. **FE does not
-  build speculative UI for this now** — the existing surfaces already render whatever `booking.status`
-  says (clock-inferred today); they pick up the real signal automatically once this epic changes what
-  populates that field. No FE ticket needed until the contract (exact field/enum) is defined.
-- **STATUS: OPEN — OWNED-BY-NAV (reassigned by explicit operator call 2026-07-16, superseding the
-  07-15 lane confirmation). The 2026-07-17 deadline is CANCELLED. Zod: do NOT start this epic; your
-  only role on E21 is REVIEW once we ship it.**
-- **Sequencing (operator, 2026-07-16):** E21 runs AFTER (1) the manual test round, (2) the T8 probekit
-  skills rework, (3) the full test round. It is a large standalone task, not a bolt-on.
-- **Method (operator, 2026-07-16) — research BEFORE code.** The operator has a **corporate Zoom**
-  account, and the stated preference is to integrate **WITHOUT the Zoom SDK**. So the epic OPENS with
-  web research + design: what corporate Zoom actually exposes (server-to-server OAuth, webhooks, REST),
-  which identification strategy fits our booking model, and what the right shape is FOR THIS PROJECT —
-  then implementation. The (c) list below is the 07-12 sketch, kept as input, NOT as an agreed design.
-  Treat every "TBD" in it as an open research question, not a gap to fill in blind.
+### E21 — Zoom attendance tracking. **OWNED-BY-NAV. STATUS: CODE-COMPLETE (`PROMPT №679`, 2026-08-12).** Full pipeline at `backend/app/modules/zoom/` (report-polling, `registrant_id`-ladder matching, 50%-duration threshold, verdict write-back at `bookings/service.py:733-820`).
+- **⚠ OPEN — operational, not a code gap:** no server has real Zoom credentials configured
+  (`config.py`), so `zoom_tracked` (`bookings/service.py:820`) is false everywhere today and every
+  practice still finalizes via the legacy clock-driven path. Activates the moment real S2S
+  credentials land.
+- **OPEN — a research question left in the code itself:** whether `include_registrant_id` on Zoom's
+  report variant is reliable is marked "unconfirmed (E21 research)" (`attendance_service.py:216-223`).
 
 ---
 
@@ -975,36 +983,7 @@ The admin F-batch shipped its self/FE parts (F1/F5/F3 masters status filter, F7 
 Two items were backend-blocked and originally deferred to Zod; both are OWNED-BY-NAV now (2026-07-15
 lane policy — neither is messaging/notifications). Recorded here, historical heading kept for context.
 
-### F2/F6 — master card + detail must show «Направление» + «Вид» — FOLD into E19 + E20. **P2. STATUS: OWNED-BY-NAV (2026-07-15, resolved by operator) — NOT Zod's lane.** ⚠ Recon flag (PROMPT №402):
-this section's own analysis below predates batch R's `MethodTaxonomyPicker`/`methodTaxonomy.ts`
-client-side two-level parse-over-flat-list mechanism — much of what this section asks for may already
-be delivered by a different mechanism than the one specced here. Treat the text below as historical
-until re-verified; do not build off it blind.
-
-**Reality (recon 2026-07-07).** A master profile stores only a **flat `methods: list[str]`**
-(`masters/service.py:81-90` `_build_data` → `data.profile.methods`; input `MasterApplyExperience`
-`masters/schemas.py:60-70`). There is **no** `direction` / `type` / `вид` / `subtype` / `category`
-field anywhere under `data.profile`. `AdminMasterReviewView` merely *relabels* the flat list
-"Направления практик" — cosmetic, no second «Вид» axis. Direction/type exist only on **Practice**
-(`data.taxonomy.direction` + `PracticeType`), not on masters.
-
-**What F2/F6 needs (all OWNED-BY-NAV — historical spec, see recon flag above):**
-1. A master-profile taxonomy shape — `direction` + `subtype (вид)` (two-level, mirroring E19's
-   «Направление»→«Вид»), JSONB-additive under `data.profile` (no column migration) — or the E20
-   `catalog_entries` route.
-2. A master-facing way to SET them: extend `MasterApplyExperience` (apply) + the M3 change-request
-   (`MethodChangeRequestSubmit` `masters/schemas.py:168-176`, currently flat `proposed_methods`) +
-   the **admin edit-master-fields** endpoint already tracked at the §E19-area row
-   `| admin edit-master-fields | NEW | save Направление / Вид | P2 | OPEN |` (line ~497).
-3. THEN the admin **card + detail** (`AdminMastersView`, `AdminMasterReviewView`, and the
-   `AdminMasterDetail` schema `admin/users/schemas.py:38-49`) render «Направление» + «Вид». Today
-   they show honest `«—»` stubs — the FE structure is already built for the values to drop in.
-
-**Cross-ref:** this IS the deferred **E19** (two-level Направление→Вид taxonomy, shipped FLAT M3
-instead) + **E20** (admin-editable catalog `catalog_entries`, kind ∈ {direction, practice_type,
-method}). F2/F6 cannot ship presentational — a faked taxonomy violates the E19 no-fake rule.
-**Operator fork:** (B) minimal real `data.profile.direction`+`subtype` now, hardcoded option lists;
-or (C) fold into E19+E20 catalog (correct, larger, unblocks CreatePractice/EditProfile picklists).
+### F2/F6 — master card + detail showing «Направление» + «Вид». **STATUS: DONE (`PROMPT №679`, 2026-08-12).** `AdminMastersView.vue`/`AdminMasterReviewView.vue` via `methodTaxonomy.ts` parsing. E19's own schema+workflow ask stays separately open, see E19.
 
 ### F4 — self-deleted master candidate → `cancelled_by_user` archival. **NEW. P2. STATUS: OWNED-BY-NAV (backend, 2026-07-15) + FE branch (self, unchanged).**
 
