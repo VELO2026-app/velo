@@ -1658,6 +1658,21 @@ case "${1:-}" in
         $COMPOSE_CMD exec app python scripts/seed_practices.py "$@"
         ;;
 
+    # === Demo-data seed (test contour only, T-31) ===
+
+    seed-demo)
+        # Stand tooling, not a prod feature: same role gate as resync-comms.
+        if [ "$VELO_ROLE" != "test" ]; then
+            echo -e "${RED}✗ seed-demo is a test-contour ritual; refusing on role '$VELO_ROLE'${NC}"
+            exit 1
+        fi
+        cd_compose
+        # Pass args straight through to the ORM script (it parses/validates):
+        #   velo seed-demo --master-tg <telegram_id> [--extra-masters N]
+        shift  # drop "seed-demo"
+        $COMPOSE_CMD exec -T app python scripts/seed_demo.py "$@"
+        ;;
+
     # === Roles ===
 
     setrole)
