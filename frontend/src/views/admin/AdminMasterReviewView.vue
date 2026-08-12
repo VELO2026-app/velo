@@ -34,7 +34,7 @@
   <div class="mreview">
     <header class="mreview__top">
       <VBackButton @click="router.back()" />
-      <span class="mreview__title">Заявка мастера</span>
+      <h1 class="mreview__title">Заявка мастера</h1>
     </header>
 
     <div v-if="loading" class="mreview__loader"><VLoader size="lg" /></div>
@@ -1000,6 +1000,7 @@ onMounted(loadMaster)
 
 .mreview__title {
   font-family: var(--font-body);
+  font-weight: 400;
   font-size: var(--text-sm);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;

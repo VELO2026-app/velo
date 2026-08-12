@@ -18,23 +18,18 @@
   <div class="invite">
     <header class="invite__top">
       <VBackButton @click="router.back()" />
-      <span class="invite__title">Пригласить мастера</span>
+      <h1 class="invite__title">Пригласить мастера</h1>
     </header>
 
     <!-- Form card -->
     <VCard class="invite__card">
       <span class="invite__section-title">ОДНОРАЗОВАЯ ССЫЛКА</span>
       <p class="invite__desc">
-        Создайте ссылку и отправьте её будущему мастеру. Она одноразовая:
-        сработает у первого, кто её откроет, — после этого погашается.
+        Создайте ссылку и отправьте её будущему мастеру. Она одноразовая: сработает у первого, кто
+        её откроет, — после этого погашается.
       </p>
 
-      <VButton
-        variant="primary"
-        block
-        :loading="creating"
-        @click="onCreate"
-      >
+      <VButton variant="primary" block :loading="creating" @click="onCreate">
         Создать ссылку
       </VButton>
     </VCard>
@@ -114,6 +109,7 @@ async function onCopy(): Promise<void> {
 .invite__title {
   flex: 1;
   font-family: var(--font-body);
+  font-weight: 400;
   font-size: var(--text-sm);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;

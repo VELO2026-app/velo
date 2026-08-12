@@ -18,7 +18,7 @@
   <div class="amr">
     <header class="amr__top">
       <VBackButton @click="router.back()" />
-      <span class="amr__title">Заявки на смену методов</span>
+      <h1 class="amr__title">Заявки на смену методов</h1>
       <span class="amr__count">{{ headerCount }}</span>
     </header>
 
@@ -326,6 +326,7 @@ onMounted(loadInitial)
 .amr__title {
   flex: 1;
   font-family: var(--font-body);
+  font-weight: 400;
   font-size: var(--text-sm);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;

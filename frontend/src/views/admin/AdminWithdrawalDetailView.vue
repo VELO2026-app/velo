@@ -19,7 +19,7 @@
   <div class="wd">
     <header class="wd__top">
       <VBackButton @click="router.back()" />
-      <span class="wd__title">Запрос на вывод</span>
+      <h1 class="wd__title">Запрос на вывод</h1>
     </header>
 
     <template v-if="w">
@@ -242,6 +242,7 @@ async function onReject(): Promise<void> {
 
 .wd__title {
   font-family: var(--font-body);
+  font-weight: 400;
   font-size: var(--text-sm);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;

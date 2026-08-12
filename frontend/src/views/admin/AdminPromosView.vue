@@ -21,7 +21,7 @@
   <div class="admin-promos">
     <header class="admin-promos__top">
       <VBackButton @click="router.back()" />
-      <span class="admin-promos__title">Промокоды</span>
+      <h1 class="admin-promos__title">Промокоды</h1>
       <span class="admin-promos__count">{{ headerCount }}</span>
     </header>
 
@@ -281,6 +281,7 @@ onMounted(loadInitial)
 .admin-promos__title {
   flex: 1;
   font-family: var(--font-body);
+  font-weight: 400;
   font-size: var(--text-sm);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;

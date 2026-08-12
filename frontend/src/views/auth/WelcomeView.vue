@@ -27,6 +27,10 @@
 
 <template>
   <div class="welcome velo-kbd-scroll">
+    <!-- A11Y-AUDIT-20260810 P1: no visible title (the logo carries the wordmark) --
+         sr-only heading so screen-reader users navigating by heading still get a
+         page label for this screen. -->
+    <h1 class="velo-sr-only">Добро пожаловать</h1>
     <div class="welcome__logo">
       <!-- White mandala variant, large -- matches Figma 01_Welcome.
            The logo already contains the VELO wordmark, so no text heading. -->

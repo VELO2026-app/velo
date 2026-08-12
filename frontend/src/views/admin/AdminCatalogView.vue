@@ -29,7 +29,7 @@
   <div class="admin-catalog">
     <header class="admin-catalog__top">
       <VBackButton @click="router.back()" />
-      <span class="admin-catalog__title">Каталог практик</span>
+      <h1 class="admin-catalog__title">Каталог практик</h1>
     </header>
 
     <VCard class="admin-catalog__note" padding="none">
@@ -336,6 +336,7 @@ onMounted(load)
 
 .admin-catalog__title {
   font-family: var(--font-body);
+  font-weight: 400;
   font-size: var(--text-sm);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;

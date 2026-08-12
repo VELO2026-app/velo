@@ -16,6 +16,11 @@
 
 <template>
   <div class="topup">
+    <!-- A11Y-AUDIT-20260810 P1: no page-level visible title anywhere on this
+         screen ("Ваш баланс" / "Выберите сумму" are section-level labels, not a
+         page title) -- sr-only heading so screen-reader users navigating by
+         heading still get a page label for this screen. -->
+    <h1 class="velo-sr-only">Пополнение баланса</h1>
     <!-- Balance -->
     <div class="topup__balance">
       <span class="topup__balance-label">Ваш баланс</span>

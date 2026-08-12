@@ -20,7 +20,7 @@
   <div class="admin-reports">
     <header class="admin-reports__top">
       <VBackButton @click="router.back()" />
-      <span class="admin-reports__title">Модерация</span>
+      <h1 class="admin-reports__title">Модерация</h1>
       <span class="admin-reports__count">{{ headerCount }}</span>
     </header>
 
@@ -244,6 +244,7 @@ onMounted(loadInitial)
 .admin-reports__title {
   flex: 1;
   font-family: var(--font-body);
+  font-weight: 400;
   font-size: var(--text-sm);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;

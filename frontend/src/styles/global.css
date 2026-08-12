@@ -395,3 +395,24 @@ html.is-keyboard-open .mobile-layout__main--fog {
 .velo-text-strong {
   -webkit-text-stroke: var(--velo-text-stroke-strong) currentColor;
 }
+
+/* === Screen-reader-only heading (DS canon, A11Y-AUDIT-20260810 P1) ===
+   Single shared source for "this screen has no visible title text, but still
+   needs a real heading for screen-reader navigation" (VoiceOver/TalkBack users
+   navigate by heading, same as any other product). Standard visually-hidden
+   recipe — stays in the DOM and in the accessible-name computation, occupies
+   zero visual space (clipped to 1px, not display:none, which screen readers
+   skip entirely). Same technique as VInput's `.v-input__label--visually-hidden`
+   (T24-6, PROMPT №639), promoted here so any view can reuse it on a heading tag
+   without duplicating the declarations. Apply as <h1 class="velo-sr-only">. */
+.velo-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

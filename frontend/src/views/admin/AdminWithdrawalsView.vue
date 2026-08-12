@@ -21,7 +21,7 @@
   <div class="admin-withdrawals">
     <header class="admin-withdrawals__top">
       <VBackButton @click="router.back()" />
-      <span class="admin-withdrawals__title">Выплаты</span>
+      <h1 class="admin-withdrawals__title">Выплаты</h1>
       <span class="admin-withdrawals__count">{{ headerCount }}</span>
     </header>
 
@@ -227,6 +227,7 @@ onMounted(loadInitial)
 .admin-withdrawals__title {
   flex: 1;
   font-family: var(--font-body);
+  font-weight: 400;
   font-size: var(--text-lg);
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
