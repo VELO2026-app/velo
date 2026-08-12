@@ -333,6 +333,18 @@ function onTap(payload: { item: DiaryFeedItem; editable: boolean }): void {
     return
   }
 
+  // Conversation with a master -> the thread itself. source_id IS the comms
+  // thread id (backend diary/projections.py:635 passes source_id=thread_id
+  // alongside the same value in the snapshot), so no snapshot read is needed
+  // and this stays identical in shape to the branches above.
+  if (item.kind === 'thread_started') {
+    void router.push({
+      name: 'user-chat',
+      params: { id: item.source_id },
+    })
+    return
+  }
+
   // Practice outcome -> existing practice detail page (source_id is the
   // practice id, per project_practice_outcome).
   if (item.kind === 'practice_outcome') {

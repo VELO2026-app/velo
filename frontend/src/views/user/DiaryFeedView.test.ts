@@ -455,6 +455,28 @@ describe('DiaryFeedView', () => {
       expect(feedBody().querySelector('.feed-card--banner-teal')).not.toBeNull()
     })
 
+    it('thread_started renders a real standard card -- title + master name, not the blank pen card it was before the kind existed frontend-side', async () => {
+      // The backend writes this on every chat create-or-get
+      // (diary/projections.py). The hand-written DiaryEventKind union listed
+      // nine kinds and missed it, so FEED_KIND_TITLE[kind] was undefined ->
+      // empty title, and the preview lookup read fields this snapshot does not
+      // carry -> null: a card with nothing on it but a date.
+      vi.mocked(diaryApi.listDiaryFeed).mockResolvedValue(
+        page([
+          feedItem('t1', 'thread_started', '2026-07-16T10:00:00Z', {
+            thread_id: 'thread-7',
+            master_id: 'master-3',
+            master_name: 'Анна Соколова',
+          }),
+        ]),
+      )
+      mount()
+      await flush()
+
+      expect(cardTitles()).toEqual(['Вы начали диалог'])
+      expect(cardPreviews()).toEqual(['Анна Соколова'])
+    })
+
     it('groups the thread by day, relative to the pinned clock', async () => {
       vi.mocked(diaryApi.listDiaryFeed).mockResolvedValue(
         page([
@@ -825,6 +847,32 @@ describe('DiaryFeedView', () => {
         name: 'user-diary-detail',
         params: { type: 'feedback', id: 'src_f1' },
       })
+    })
+
+    it('tapping a thread_started card opens the chat thread by source_id -- the comms thread id, which is what the route wants', async () => {
+      // Unlike practice_outcome (pinned below as unreachable), this kind takes
+      // the `standard` form, which IS a <button>, so the branch really runs.
+      // The snapshot's thread_id is deliberately set to a DIFFERENT value than
+      // source_id here (the real backend writes the same id into both) so the
+      // assertion discriminates which field the handler actually reads.
+      vi.mocked(diaryApi.listDiaryFeed).mockResolvedValue(
+        page([
+          feedItem('t1', 'thread_started', '2026-07-16T10:00:00Z', {
+            thread_id: 'snapshot-copy-not-read',
+            master_id: 'master-3',
+            master_name: 'Анна Соколова',
+          }),
+        ]),
+      )
+      mount()
+      await flush()
+
+      const card = feedBody().querySelector<HTMLButtonElement>('.feed-card--standard')
+      expect(card).not.toBeNull()
+      card?.click()
+      await flush()
+
+      expect(push).toHaveBeenCalledWith({ name: 'user-chat', params: { id: 'src_t1' } })
     })
 
     it('a banner card is inert -- no card button, no navigation', async () => {

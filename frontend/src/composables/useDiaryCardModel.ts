@@ -18,6 +18,7 @@ import {
   IconPen,
   IconDreamBook,
   IconDiaryBook,
+  IconMessages,
   IconMoodMid,
   IconRatingGood,
 } from '@/components/icons'
@@ -112,9 +113,15 @@ export function useDiaryCardModel(
     return base
   })
 
-  const preview = computed(
-    () => snapStr('content_preview') ?? snapStr('comment_preview') ?? snapStr('comment'),
-  )
+  const preview = computed(() => {
+    // thread_started's snapshot ({thread_id, master_id, master_name}) carries
+    // none of the *_preview/comment fields, so the generic lookup below
+    // returned null and the card rendered as a bare title. The useful second
+    // line here is WHO the conversation is with -- the only consumer of
+    // master_name for this kind.
+    if (kind.value === 'thread_started') return snapStr('master_name')
+    return snapStr('content_preview') ?? snapStr('comment_preview') ?? snapStr('comment')
+  })
 
   const bannerTone = computed<'teal' | 'neutral'>(() =>
     kind.value === 'booking_confirmed' ? 'teal' : 'neutral',
@@ -168,6 +175,8 @@ export function useDiaryCardModel(
         return IconDiaryBook
       case 'dream':
         return IconDreamBook
+      case 'thread_started':
+        return IconMessages
       default:
         return IconPen
     }

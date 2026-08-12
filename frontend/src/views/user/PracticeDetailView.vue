@@ -4,7 +4,8 @@
   Full practice detail screen. Matches design Dashboard 2 / booked-practice layout:
     - Hero: white card with IconMeditation SVG + title + meta + "Оплачено" badge
     - Accordions: "О практике" (description), "Что подготовить" (what_to_prepare)
-    - Master card: avatar + name + check + methods tags (VTag) + arrow
+    - Master card: avatar + name + check + methods tags (VTag) + arrow,
+      plus «Написать мастеру» (booked practices only) -> opens/joins the DM
     - Contraindications banner (if practice.contraindications)
     - Sticky footer: price + action button + cancel booking
 
@@ -90,6 +91,26 @@
           :avatar-url="practice.master_avatar_url"
           :master-id="practice.master_id"
         />
+        <!-- Direct line to the master, for a practice the viewer actually
+             holds a booking on (any status -- a question about a cancelled or
+             finished practice is just as legitimate). This is the screen every
+             row of «Мои бронирования» opens, so it is what gives the bookings
+             list a contact path at all. Not shown for a catalogue practice:
+             tapping the card above already reaches the master's public profile
+             and its «Задать вопрос», and a second identical control on every
+             practice in the catalogue would be noise. -->
+        <VButton
+          v-if="hasAnyBooking"
+          class="detail__master-write"
+          variant="secondary"
+          size="sm"
+          block
+          :loading="openingChat"
+          :disabled="openingChat"
+          @click="onWriteToMaster"
+        >
+          Написать мастеру
+        </VButton>
       </section>
 
       <!-- Zoom (Batch 6: ported from BookingDetailView). Only while the
@@ -250,6 +271,8 @@ import { hasEnded } from '@/utils/bookingStatus'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import { platform } from '@/platform'
 import { getBookingRecording } from '@/api/bookings'
+import { openChat } from '@/api/chats'
+import { extractApiError } from '@/composables/useApiError'
 import type { BookingStatus, BookingWithPracticeResponse, PracticeDifficulty } from '@/api/types'
 
 const route = useRoute()
@@ -615,6 +638,29 @@ function onFindOther(): void {
   router.push({ name: 'user-calendar' })
 }
 
+/**
+ * Open-or-get the eternal DM with this practice's master and go there. Same
+ * shape as MasterPublicView.onAsk (the only other caller of openChat): one
+ * in-flight flag that both disables and spins the button, failures surfaced as
+ * a toast and no navigation. POST /api/v1/chats dedups on the (client, master)
+ * pair, so tapping this from several practices by the same master lands in the
+ * one thread -- there is no per-practice conversation.
+ */
+const openingChat = ref(false)
+
+async function onWriteToMaster(): Promise<void> {
+  if (openingChat.value || !practice.value) return
+  openingChat.value = true
+  try {
+    const thread = await openChat(practice.value.master_id)
+    await router.push({ name: 'user-chat', params: { id: thread.id } })
+  } catch (e) {
+    toast.error(extractApiError(e, 'Не удалось открыть чат'))
+  } finally {
+    openingChat.value = false
+  }
+}
+
 function onCheckin(): void {
   if (!practice.value) return
   router.push({ name: 'user-checkin', params: { practiceId: practice.value.id } })
@@ -782,6 +828,13 @@ onUnmounted(() => {
 .detail__section {
   display: flex;
   flex-direction: column;
+}
+
+/* «Написать мастеру» sits under the master card inside the same section, so it
+ * needs its own gap (the section itself is a plain column, spacing comes from
+ * __body's gap between sections). Same step as .detail__contraindications. */
+.detail__master-write {
+  margin-top: var(--space-2);
 }
 
 .detail__section-title {

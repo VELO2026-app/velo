@@ -6,11 +6,13 @@
       "Практика забронирована!", "Ссылка на Zoom появится за 10 минут до
       начала." (static line).
     - "Ваш запрос мастеру (по желанию)" textarea + teal info banner.
-      VISUAL ONLY: "Отправить запрос" is a stub (TD-ASK-MASTER) -- questions
-      to a master are a separate cross-cutting feature (practice-bound or
-      general, routed to the master's Telegram bot with replies back to the
-      user). Until that exists, the field accepts text but goes nowhere and
-      the button shows a toast.
+      REAL since the chat landed (TD-ASK-MASTER retired): "Отправить запрос"
+      opens-or-gets the eternal DM with THIS practice's master
+      (POST /api/v1/chats is create-or-get, so a second tap lands in the same
+      thread), posts the typed text as a message and navigates into the
+      thread. Same shape as «Задать вопрос» on MasterPublicView, plus the
+      message: the master id comes from the loaded practice (master_id is
+      non-null on PracticeResponse), so nothing extra is fetched.
     - No in-page navigation buttons: the bottom tab bar handles it (this route
       highlights the Calendar tab via meta.activeTab).
 
@@ -48,16 +50,21 @@
         <p class="booking-confirmed__text">Ссылка на Zoom появится за 10 минут до начала.</p>
       </VCard>
 
-      <!-- Ask-master request — announced but honestly disabled until the
-           backend lands (TD-ASK-MASTER). Field non-editable, button disabled,
-           inline "скоро" hint; nothing looks tappable / fires a dead toast. -->
+      <!-- Ask-master request — REAL: the text becomes the first message of the
+           DM with this practice's master. The send button follows the chat
+           composer's own rule (ChatThreadScreen.vue:94): disabled while a send
+           is in flight AND while the field is blank — "Отправить запрос" with
+           nothing to send would open a thread and post nothing. The field is
+           still optional (the label says so): skipping it simply leaves the
+           block untouched. maxlength mirrors the chat composer's own cap. -->
       <div class="booking-confirmed__ask">
         <VTextarea
           v-model="masterRequest"
           label="Ваш запрос мастеру (по желанию)"
           placeholder="Концентрация, настрой на работу"
           :rows="2"
-          :disabled="true"
+          maxlength="4000"
+          :disabled="sending"
         />
         <Banner
           variant="info"
@@ -65,10 +72,16 @@
         >
           <template #icon><IconSupport :size="28" /></template>
         </Banner>
-        <VButton variant="secondary" size="lg" block :disabled="true" @click="onSendRequest">
+        <VButton
+          variant="secondary"
+          size="lg"
+          block
+          :loading="sending"
+          :disabled="sending || !masterRequest.trim()"
+          @click="onSendRequest"
+        >
           Отправить запрос
         </VButton>
-        <p class="booking-confirmed__ask-hint">Вопросы мастеру — скоро</p>
       </div>
     </div>
   </div>
@@ -82,6 +95,8 @@ import { useToast } from '@/composables/useToast'
 import { VLoader, VEmptyState, VButton, VTextarea, VCard } from '@/components/ui'
 import Banner from '@/components/shared/Banner.vue'
 import { IconSuccess, IconSupport } from '@/components/icons'
+import { openChat, sendChatMessage } from '@/api/chats'
+import { extractApiError } from '@/composables/useApiError'
 
 const route = useRoute()
 const router = useRouter()
@@ -100,13 +115,30 @@ const practiceId = route.params.practiceId as string
 // what is currently on screen.
 const practice = computed(() => (store.selected?.id === practiceId ? store.selected : null))
 
-// Local-only request text. Goes nowhere yet (TD-ASK-MASTER).
+// The first message of the DM with this practice's master.
 const masterRequest = ref('')
+const sending = ref(false)
 
-function onSendRequest(): void {
-  // Questions-to-master is a separate feature with its own backend and
-  // Telegram-bot routing. Stubbed for now (TD-ASK-MASTER).
-  toast.info('Вопросы мастеру -- скоро')
+async function onSendRequest(): Promise<void> {
+  // Two calls, in order: open-or-get the thread, then post the text into it.
+  // Both are guarded by ONE in-flight flag (same shape as MasterPublicView's
+  // onAsk, plus the send). A failure anywhere leaves the text in the field and
+  // toasts -- the retry is safe because POST /chats dedups on the pair, so a
+  // second attempt re-uses the same thread instead of making another.
+  const body = masterRequest.value.trim()
+  const masterId = practice.value?.master_id
+  if (!body || !masterId || sending.value) return
+  sending.value = true
+  try {
+    const thread = await openChat(masterId)
+    await sendChatMessage(thread.id, body)
+    masterRequest.value = ''
+    await router.push({ name: 'user-chat', params: { id: thread.id } })
+  } catch (e) {
+    toast.error(extractApiError(e, 'Не удалось отправить запрос'))
+  } finally {
+    sending.value = false
+  }
 }
 
 function goToDashboard(): void {
@@ -184,15 +216,6 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-}
-
-/* Inline "coming soon" hint under the disabled send button (TD-ASK-MASTER). */
-.booking-confirmed__ask-hint {
-  text-align: center;
-  font-family: var(--font-body);
-  font-size: var(--text-xs);
-  color: var(--velo-text-secondary);
-  margin: calc(-1 * var(--space-2)) 0 0;
 }
 
 /* Field + info banner are now the DS VTextarea + Banner components (own styles). */

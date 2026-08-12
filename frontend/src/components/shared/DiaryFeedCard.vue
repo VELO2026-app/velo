@@ -10,8 +10,9 @@
                 "confirmed" case, neutral slate for cancels/reschedules)
     practice -- practice_outcome (taller white card: title + master row +
                 date row + Done / "Не состоялась" outcome badge)
-    standard -- checkin / feedback / note / dream (white card: leading icon
-                + title + content preview + date line)
+    standard -- checkin / feedback / note / dream / thread_started (white card:
+                leading icon + title + content preview + date line; for
+                thread_started the preview line is the master's name)
 
   The card reads loosely-typed fields from `item.snapshot` (an open dict
   whose shape depends on kind -- see DiaryFeedItem). Missing fields degrade

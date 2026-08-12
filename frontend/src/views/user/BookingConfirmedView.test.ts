@@ -9,13 +9,16 @@
 // user's booking at all.
 //
 // PROVEN ABSENT (grepped the whole template before writing a single test):
-//  - NO practice-specific data is ever rendered. `practice` (.vue:91) gates
-//    the ladder but its title/master_name/scheduled_at/price are NEVER
-//    interpolated anywhere in the content block (.vue:41-73) -- the success
-//    card is 100% static copy ("Практика забронирована!", a fixed 10-minute
-//    Zoom line). This directly contradicts the assumed shape ("cover that the
-//    right data renders") -- there is no per-practice data to cover; two
-//    different fixtures produce byte-identical visible text (proven below).
+//  - NO practice-specific data is ever rendered. `practice` gates the ladder
+//    but its title/master_name/scheduled_at/price are NEVER interpolated
+//    anywhere in the content block -- the success card is 100% static copy
+//    ("Практика забронирована!", a fixed 10-minute Zoom line). This directly
+//    contradicts the assumed shape ("cover that the right data renders") --
+//    there is no per-practice data to cover; two different fixtures produce
+//    byte-identical visible text (proven below). STILL TRUE after the
+//    ask-master rewrite: the practice's `master_id` is now READ (it is the
+//    chat's target) but never rendered, so the byte-identity test below is
+//    unaffected and the send-path test asserts the id through the API call.
 //  - NO money anywhere -- no formatMoney, no price. No NBSP trap, no norm().
 //  - NO wall clock -- no Date.now()/new Date() read by this screen at all
 //    (the "10 minutes before" line is a hardcoded string, not computed).
@@ -71,6 +74,7 @@ import BookingConfirmedView from '@/views/user/BookingConfirmedView.vue'
 import { usePracticesStore } from '@/stores/practices'
 import { getPractice } from '@/api/practices'
 import { ApiResponseError } from '@/api/client'
+import * as chatsApi from '@/api/chats'
 import type { PracticeResponse } from '@/api/types'
 
 vi.mock('@/api/practices', async () => {
@@ -78,6 +82,12 @@ vi.mock('@/api/practices', async () => {
   return { ...actual, getPractice: vi.fn() }
 })
 const getPracticeMock = vi.mocked(getPractice)
+
+// The ask-master seam: TWO calls in order (open-or-get the thread, then post
+// the text into it), so both are mocked and both are asserted -- a test that
+// only checked openChat would pass on a screen that opens a thread and drops
+// the user's words.
+vi.mock('@/api/chats')
 
 const push = vi.fn()
 const routeParams: { practiceId: string } = { practiceId: 'p1' }
@@ -87,8 +97,9 @@ vi.mock('vue-router', () => ({
 }))
 
 const toastInfo = vi.fn()
+const toastError = vi.fn()
 vi.mock('@/composables/useToast', () => ({
-  useToast: () => ({ error: vi.fn(), success: vi.fn(), info: toastInfo }),
+  useToast: () => ({ error: toastError, success: vi.fn(), info: toastInfo }),
 }))
 
 function practice(overrides: Partial<PracticeResponse> = {}): PracticeResponse {
@@ -158,12 +169,22 @@ function textarea(): HTMLTextAreaElement | null {
 function sendBtn(): HTMLButtonElement | null {
   return host?.querySelector<HTMLButtonElement>('.booking-confirmed__ask .v-btn') ?? null
 }
+/** Drive VTextarea's v-model the way a keystroke does (it emits on `input`). */
+function type(value: string): void {
+  const el = textarea()
+  if (!el) throw new Error('the request textarea did not render')
+  el.value = value
+  el.dispatchEvent(new Event('input'))
+}
 
 beforeEach(() => {
   pinia = createPinia()
   setActivePinia(pinia)
   getPracticeMock.mockReset()
   toastInfo.mockReset()
+  toastError.mockReset()
+  vi.mocked(chatsApi.openChat).mockReset()
+  vi.mocked(chatsApi.sendChatMessage).mockReset()
   push.mockReset()
   routeParams.practiceId = 'p1'
 })
@@ -327,24 +348,160 @@ describe('BookingConfirmedView', () => {
   })
 
   // ===========================================================================
-  describe('ask-master (TD-ASK-MASTER, honest stub)', () => {
-    it('the request textarea and the send button are both genuinely disabled -- not just visually', async () => {
+  // ask-master, REAL (was the TD-ASK-MASTER stub: field hard-disabled, button
+  // hard-disabled, a «Вопросы мастеру — скоро» hint and a handler that only
+  // toasted). It now opens-or-gets the DM with THIS practice's master and posts
+  // the typed text as a message. The two tests that pinned the stub are gone --
+  // they asserted `disabled === true` unconditionally, which is exactly the
+  // behaviour being removed.
+  describe('ask-master (real: opens the DM and sends the text)', () => {
+    const THREAD = { id: 'thread-7', created_at: '2026-08-01T10:30:00+00:00' }
+    const SENT = {
+      id: 'msg-1',
+      thread_id: 'thread-7',
+      sender: 'user_1',
+      body: 'Болит колено',
+      created_at: '2026-08-01T10:30:01+00:00',
+    }
+
+    it('the textarea is editable now -- typing into it actually updates the model (the stub`s disabled field could not)', async () => {
       getPracticeMock.mockResolvedValue(practice())
       mount()
       await flush()
 
-      expect(textarea()?.disabled).toBe(true)
+      expect(textarea()?.disabled).toBe(false)
+      type('Болит колено')
+      await nextTick()
+
+      expect(textarea()?.value).toBe('Болит колено')
+    })
+
+    it('the send button is disabled while the field is blank and enabled once there is text -- same rule as the chat composer', async () => {
+      getPracticeMock.mockResolvedValue(practice())
+      mount()
+      await flush()
+      expect(sendBtn()?.disabled).toBe(true)
+
+      type('Болит колено')
+      await nextTick()
+
+      expect(sendBtn()?.disabled).toBe(false)
+    })
+
+    it('whitespace alone does NOT enable it -- the guard trims', async () => {
+      getPracticeMock.mockResolvedValue(practice())
+      mount()
+      await flush()
+
+      type('   \n  ')
+      await nextTick()
+
       expect(sendBtn()?.disabled).toBe(true)
     })
 
-    it('clicking the disabled send button never fires the stub toast (a disabled <button> dispatches no click)', async () => {
-      getPracticeMock.mockResolvedValue(practice())
+    it("sending: opens the thread with the fetched practice's OWN master_id, posts the trimmed text, then navigates into the thread", async () => {
+      getPracticeMock.mockResolvedValue(practice({ master_id: 'master_specific' }))
+      vi.mocked(chatsApi.openChat).mockResolvedValue(THREAD)
+      vi.mocked(chatsApi.sendChatMessage).mockResolvedValue(SENT)
       mount()
       await flush()
 
+      type('  Болит колено  ')
+      await nextTick()
       sendBtn()?.click()
+      await flush()
 
-      expect(toastInfo).not.toHaveBeenCalled()
+      expect(chatsApi.openChat).toHaveBeenCalledWith('master_specific')
+      // The thread id comes from the OPEN response, not from anywhere else.
+      expect(chatsApi.sendChatMessage).toHaveBeenCalledWith('thread-7', 'Болит колено')
+      expect(push).toHaveBeenCalledWith({ name: 'user-chat', params: { id: 'thread-7' } })
+    })
+
+    it('a successful send clears the field, so returning to this screen does not offer to send the same text again', async () => {
+      getPracticeMock.mockResolvedValue(practice())
+      vi.mocked(chatsApi.openChat).mockResolvedValue(THREAD)
+      vi.mocked(chatsApi.sendChatMessage).mockResolvedValue(SENT)
+      mount()
+      await flush()
+
+      type('Болит колено')
+      await nextTick()
+      sendBtn()?.click()
+      await flush()
+
+      expect(textarea()?.value).toBe('')
+      expect(sendBtn()?.disabled).toBe(true)
+    })
+
+    it("a failed OPEN surfaces the backend's own message and does not navigate -- and the text survives for a retry", async () => {
+      getPracticeMock.mockResolvedValue(practice())
+      vi.mocked(chatsApi.openChat).mockRejectedValue(
+        new ApiResponseError(502, 'Сервис сообщений недоступен', 'bad_gateway'),
+      )
+      mount()
+      await flush()
+
+      type('Болит колено')
+      await nextTick()
+      sendBtn()?.click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Сервис сообщений недоступен')
+      expect(chatsApi.sendChatMessage).not.toHaveBeenCalled()
+      expect(push).not.toHaveBeenCalled()
+      expect(textarea()?.value).toBe('Болит колено')
+    })
+
+    it('a thread that opens but a message that fails is NOT treated as success: no navigation, the text stays, and the failure is named', async () => {
+      getPracticeMock.mockResolvedValue(practice())
+      vi.mocked(chatsApi.openChat).mockResolvedValue(THREAD)
+      vi.mocked(chatsApi.sendChatMessage).mockRejectedValue(
+        new ApiResponseError(500, 'Сообщение не доставлено', 'internal_error'),
+      )
+      mount()
+      await flush()
+
+      type('Болит колено')
+      await nextTick()
+      sendBtn()?.click()
+      await flush()
+
+      expect(chatsApi.openChat).toHaveBeenCalledTimes(1)
+      expect(toastError).toHaveBeenCalledWith('Сообщение не доставлено')
+      expect(push).not.toHaveBeenCalled()
+      expect(textarea()?.value).toBe('Болит колено')
+    })
+
+    it('a non-ApiResponseError falls back to the screen`s own copy, not a raw exception message', async () => {
+      getPracticeMock.mockResolvedValue(practice())
+      vi.mocked(chatsApi.openChat).mockRejectedValue(new Error('ECONNRESET'))
+      mount()
+      await flush()
+
+      type('Болит колено')
+      await nextTick()
+      sendBtn()?.click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Не удалось отправить запрос')
+    })
+
+    it('re-entry: two clicks with no tick between them open ONE thread and send ONE message', async () => {
+      getPracticeMock.mockResolvedValue(practice())
+      vi.mocked(chatsApi.openChat).mockResolvedValue(THREAD)
+      vi.mocked(chatsApi.sendChatMessage).mockResolvedValue(SENT)
+      mount()
+      await flush()
+
+      type('Болит колено')
+      await nextTick()
+      const btn = sendBtn()
+      btn?.click()
+      btn?.click()
+      await flush()
+
+      expect(chatsApi.openChat).toHaveBeenCalledTimes(1)
+      expect(chatsApi.sendChatMessage).toHaveBeenCalledTimes(1)
     })
   })
 })

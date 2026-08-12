@@ -354,6 +354,9 @@ export type DiaryEventKind =
   | 'feedback'
   | 'note'
   | 'dream'
+  // A conversation with a master began (one row per thread, written by the
+  // chat proxy on create-or-get). Snapshot: {thread_id, master_id, master_name}.
+  | 'thread_started'
 
 // Filter chips on the feed. Map 1:1 onto backend \`category\` query values
 // (settings.diary_feed_categories). Omitting category = "Все".

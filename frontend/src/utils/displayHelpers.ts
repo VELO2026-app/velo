@@ -239,6 +239,11 @@ export const FEED_KIND_TITLE: Record<DiaryEventKind, string> = {
   feedback: 'Feedback', // + ": " + rating label
   note: 'Дневник',
   dream: 'Сонник',
+  // Written when the chat proxy opens (or re-finds) the DM with a master. The
+  // thread can be created without a message being sent yet, so the copy is
+  // about the conversation starting, not about writing. The master's name is
+  // the card's preview line (useDiaryCardModel.preview).
+  thread_started: 'Вы начали диалог',
 }
 
 /**
