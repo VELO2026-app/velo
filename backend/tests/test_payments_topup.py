@@ -25,6 +25,7 @@ from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
+import stripe
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -426,10 +427,23 @@ async def test_webhook_missing_signature(client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_webhook_invalid_signature(client: AsyncClient) -> None:
-    """Webhook with bad signature returns 400."""
+    """Webhook with bad signature returns 400.
+
+    The mock raises what Stripe ACTUALLY raises for a bad signature --
+    stripe.SignatureVerificationError -- not a bare Exception. It used to
+    raise a bare one, which passed only because the handler caught
+    everything and answered 400 to all of it. That broad catch was
+    narrowed deliberately (probekit sweep finding #2), so a bare Exception
+    now takes the unexpected-error branch and the old mock was asserting
+    the handler's OLD shape through an unrealistic fake. verify_webhook_
+    signature converts this into BadRequestError (stripe.py:298-303), and
+    THAT is what the 400 branch keys on.
+    """
     with patch(
         "app.modules.payments.stripe.stripe.Webhook.construct_event",
-        side_effect=Exception("Invalid signature"),
+        side_effect=stripe.SignatureVerificationError(
+            "Invalid signature", "t=123,v1=bad"
+        ),
     ):
         response = await client.post(
             "/webhooks/stripe",
@@ -438,6 +452,55 @@ async def test_webhook_invalid_signature(client: AsyncClient) -> None:
         )
 
     assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_webhook_malformed_payload_is_also_400(client: AsyncClient) -> None:
+    """A payload Stripe cannot parse is EXPECTED, so it is a 400 too.
+
+    The other half of the BadRequestError branch: verify_webhook_signature
+    maps ValueError to BadRequestError (stripe.py:294-296). Both expected
+    failures must stay 4xx -- Stripe does not retry a 4xx, and retrying a
+    genuinely malformed event would never succeed.
+    """
+    with patch(
+        "app.modules.payments.stripe.stripe.Webhook.construct_event",
+        side_effect=ValueError("not json"),
+    ):
+        response = await client.post(
+            "/webhooks/stripe",
+            content=b"not json at all",
+            headers={"stripe-signature": "t=123,v1=whatever"},
+        )
+
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_webhook_unexpected_verify_error_is_500_not_400(
+    client: AsyncClient,
+) -> None:
+    """An UNANTICIPATED verification failure must be 500, never 400.
+
+    This is the branch the sweep added and the one nothing covered. A 400
+    tells Stripe "your request was bad, do not retry" -- so answering 400
+    to our OWN fault (a _configure_stripe() misconfiguration, a missing
+    webhook secret) silently DROPS a real payment event: Stripe does not
+    retry a 4xx, and the handlers are idempotent so a retry would have
+    been safe. 500 is the honest answer and the one that gets the event
+    redelivered.
+    """
+    with patch(
+        "app.modules.payments.stripe.stripe.Webhook.construct_event",
+        side_effect=RuntimeError("stripe api key not configured"),
+    ):
+        response = await client.post(
+            "/webhooks/stripe",
+            content=b'{"type": "checkout.session.completed"}',
+            headers={"stripe-signature": "t=123,v1=bad"},
+        )
+
+    assert response.status_code == 500
 
 
 @pytest.mark.asyncio

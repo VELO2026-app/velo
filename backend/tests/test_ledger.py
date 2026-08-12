@@ -28,8 +28,35 @@ from tests.helpers import login_user
 # Helpers
 # ---------------------------------------------------------------------------
 
+async def _purge(session: AsyncSession, telegram_id: int) -> None:
+    """Drop any row this file left behind on an earlier run.
+
+    These tests pin FIXED telegram ids (70001-70003) and never commit --
+    the db_session fixture rolls back at teardown, so on a clean database
+    they leave nothing. That guarantee does NOT survive a run that dies
+    between the flush and the rollback: the row is already visible to the
+    connection, and if anything in the same session commits afterwards it
+    becomes permanent. Measured on the test server 2026-08-12 -- all three
+    ids were already present and every ledger test failed on
+    ix_users_telegram_id before a single assertion ran.
+
+    Deleting first makes the file idempotent instead of first-run-only.
+    Deliberately NOT switched to random ids: the fixed ones are readable
+    in a failure message and this file is their only user (verified --
+    `grep -rl '7000[0-9]' backend/tests/` returns this file alone). The
+    cascade takes MasterProfile and any ledger rows with the user.
+    """
+    existing = await session.scalar(
+        select(User).where(User.telegram_id == telegram_id)
+    )
+    if existing is not None:
+        await session.delete(existing)
+        await session.flush()
+
+
 async def _create_user(session: AsyncSession, telegram_id: int) -> User:
     """Create a bare User row for ledger tests."""
+    await _purge(session, telegram_id)
     user = User(
         telegram_id=telegram_id,
         first_name="LedgerTest",
@@ -42,6 +69,7 @@ async def _create_user(session: AsyncSession, telegram_id: int) -> User:
 
 async def _create_master(session: AsyncSession, telegram_id: int) -> tuple[User, MasterProfile]:
     """Create a User + MasterProfile pair for ledger tests."""
+    await _purge(session, telegram_id)
     user = User(
         telegram_id=telegram_id,
         first_name="MasterTest",
