@@ -1,0 +1,23 @@
+FLEET HOME MARKER — read by Agent-One/hooks/routing_footer_check.py
+
+Presence of this file, in the directory a session was launched from or within six ancestors of it,
+puts that session inside the routing-footer hook's scope. The hook reads existence only; content is
+for humans. It is WARN mode and never blocks.
+
+WHY IT EXISTS HERE: this repository is Agent-Velo's boot folder. Every session of this agent — both
+roles — launches from here and not from the fleet repo, so without this marker the hook was scoped to
+a directory this home never stands in.
+
+WHY A FILE AND NOT A LIST: the marker is opt-in by the home, placed in its own repo at its own
+landing, so scope rides the landing cycle instead of arriving as a broadcast. An absent marker means
+"this home has not landed the layer yet", never "this is not a fleet home".
+
+PLACED: 2026-08-12, Navigator-42, on Agent-One's PROMPT №172, copying the shape of the reference
+instance at `D:/02_Projects/aivis.one/Agent/.fleet-home` rather than inventing one.
+
+⚠ NOTE FOR WHOEVER READS THIS NEXT: the companion half of that landing — the
+`autoMemoryDirectory` key pointing at `C:/Users/AIVIS/.claude/fleet-memory` — lives in
+`.claude/settings.local.json`, which this repository does NOT commit. This file is committable and
+that one is not, which is exactly why the recovery text for the key is written into the agent home's
+own board as well. If auto-memory ever looks empty in this repo, that key is the first thing to
+check.
