@@ -350,6 +350,21 @@ class Settings(BaseSettings):
     # the bell, never crash velo (T1 handoff constraint).
     comms_http_timeout_seconds: float = 5.0
 
+    # -- Support chat (chats proxy) --
+    # velo user id (UUID string) of the DESIGNATED SUPPORT ACCOUNT. A
+    # support conversation is an ordinary comms DM whose operator is this
+    # user, which is why it must be a REAL velo user: comms only knows
+    # recipients that identity sync shipped it (core/events/sync.py), so a
+    # synthetic id would 404 at the create call. Any ADMIN may read and
+    # answer a thread whose operator is this account (chats/router.py
+    # _is_participant) -- the account is the desk, the admins are the staff.
+    # EMPTY = support chat not set up on this box: POST /chats/support
+    # answers 503 support_not_configured and nothing else changes. Not part
+    # of the comms paired-secret gate below on purpose -- support is a
+    # product feature that can be switched on later, not half of a
+    # credential pair whose absence is a silent failure.
+    support_operator_user_id: str = ""
+
     # -- Comms integration: reminder orchestration (Phase 6 / T1) --
     # Booking reminders (ID-6): velo schedules the series product-side
     # (comms engine/reminders.py left the domain orchestration to the

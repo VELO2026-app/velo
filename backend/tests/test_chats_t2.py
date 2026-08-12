@@ -28,6 +28,7 @@ from httpx import AsyncClient
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_session_factory
 from app.modules.chats.models import ChatThread
 from app.modules.diary.models import DiaryEvent, DiaryEventKind
@@ -601,12 +602,25 @@ class TestListing:
         assert params["operator"] == master["user"]["id"]
         assert params["is_supervisor"] is False
 
-    async def test_admin_gets_the_widened_read(
+    async def test_admin_no_longer_gets_the_widened_read(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch
     ) -> None:
-        """is_supervisor is stamped from the ROLE. It widens the comms read
-        to every thread, which is precisely why it may never come off the
-        wire."""
+        """T3 REVERSAL of this suite's original assertion.
+
+        This test used to assert `is_supervisor is True` for an admin. It
+        was asserting a privacy exposure: the flag widened the comms read
+        to EVERY conversation on the installation, each row enriched with
+        the counterparty's real name and avatar -- and every one of those
+        threads 404'd the moment the admin opened it, because
+        _require_participant never honoured the widening. The listing and
+        the membership check disagreed, and the listing was the loose one.
+
+        An admin's list is now local and equals what they can open (own
+        threads + the support desk); the widening is gone, not narrowed.
+        Its replacement is tested in test_chats_t3_support.py. Here we
+        pin the only thing this file can say alone: with no support
+        account configured, an admin's list never reaches comms at all.
+        """
         admin = await login_user(
             client, telegram_id=BAND_MIN + 21, first_name="Admin",
         )
@@ -617,12 +631,16 @@ class TestListing:
             client, telegram_id=BAND_MIN + 21, first_name="Admin",
         )
 
-        fake = AsyncMock(return_value={"threads": [], "next_cursor": None})
+        monkeypatch.setattr(settings, "support_operator_user_id", "")
+        fake = AsyncMock(return_value={"threads": ["EVERY THREAD ON THE BOX"]})
         monkeypatch.setattr(_SEAM, fake)
-        await client.get(
+        resp = await client.get(
             CHATS_URL, headers=auth_headers(admin["session_token"]),
         )
-        assert fake.await_args.kwargs["params"]["is_supervisor"] is True
+
+        assert resp.status_code == 200
+        assert resp.json() == {"threads": [], "next_cursor": None}
+        fake.assert_not_awaited()
 
     async def test_student_list_is_local_and_touches_no_comms(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch
