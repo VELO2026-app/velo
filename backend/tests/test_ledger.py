@@ -5,7 +5,7 @@
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BadRequestError
@@ -13,9 +13,6 @@ from app.modules.masters.models import MasterProfile
 from app.modules.payments.models import (
     CompanyLedgerType,
     LedgerStatus,
-    MasterLedger,
-    Payment,
-    Purchase,
     UserLedger,
 )
 from app.modules.payments.service import (
@@ -31,49 +28,52 @@ from tests.helpers import login_user
 # Helpers
 # ---------------------------------------------------------------------------
 
-async def _purge(session: AsyncSession, telegram_id: int) -> None:
-    """Drop any row this file left behind on an earlier run.
+# One unique id block per test PROCESS, so this file cannot collide with
+# what an earlier run left in the database.
+#
+# WHY NOT FIXED IDS + CLEANUP, which is the idiom elsewhere in this suite.
+# This file used to pin 70001-70003 and never commit, relying on
+# db_session's teardown rollback (conftest.py:126-142). That holds on a
+# clean database and fails permanently after any run that dies between the
+# flush and the rollback -- measured on the test server 2026-08-12, all
+# three ids present, every ledger test failing on ix_users_telegram_id
+# before a single assertion ran.
+#
+# Cleanup was tried first and abandoned after it failed TWICE on the
+# server, each time one foreign key deeper: first master_ledger, then --
+# once the money tables were cleared -- practices, because deleting the
+# User cascades into the practices it owns and a stranger's purchase still
+# references those. The chain does not terminate anywhere useful, and it
+# should not: every money FK to users.id is ondelete=RESTRICT on purpose
+# (payments/models.py:160, :204, :333, :426, each with a CRITICAL-02
+# comment saying the audit trail must outlive the user). Deleting a user
+# who has financial history is exactly what the schema is built to refuse.
+# Fighting that to satisfy a test is the wrong side of the argument.
+#
+# Unique ids sidestep it entirely: nothing to clean, nothing to collide
+# with, and the schema's guarantee is left intact. The rows do accumulate,
+# which is acceptable here and nowhere near the cost of the alternative --
+# this is the disposable test contour ("free to wipe / seed / break"), the
+# rows are three per run, and a wipe is a routine operation on it.
+#
+# The 11-digit block cannot overlap the 5-digit bands the other suites pin
+# (test_chats_t2 89720-89759, test_chats_t3_students 89760-89799,
+# test_comms_* 89400-89599) -- verified, not assumed.
+_RUN_BLOCK = 70_000_000_000 + (uuid4().int % 100_000_000) * 10
 
-    These tests pin FIXED telegram ids (70001-70003) and never commit --
-    the db_session fixture rolls back at teardown, so on a clean database
-    they leave nothing. That guarantee does NOT survive a run that dies
-    between the flush and the rollback: the row is already visible to the
-    connection, and if anything in the same session commits afterwards it
-    becomes permanent. Measured on the test server 2026-08-12 -- all three
-    ids were already present and every ledger test failed on
-    ix_users_telegram_id before a single assertion ran.
 
-    Fixed ids are the house idiom here (the chats suites pin bands too);
-    what this file lacked was their other half, the cleanup.
+def _tg(slot: int) -> int:
+    """Telegram id for this run's slot (1-9). Unique per test process.
 
-    ⚠ THE DEPENDENTS MUST GO FIRST, and the list is MEASURED, not assumed.
-    An earlier version of this helper deleted the User alone, claiming in
-    its own comment that "the cascade takes the ledger rows with it". It
-    does not, and the deploy said so: FK master_ledger_user_id_fkey
-    blocked the delete. Every ledger/money FK to users.id is
-    ondelete=RESTRICT ON PURPOSE -- payments/models.py:160 (user_ledger),
-    :204 (master_ledger), :333 (payments), :426 (purchases) -- because a
-    financial record must not vanish with the user it belongs to. Only
-    MasterProfile cascades (masters/models.py:59), so it is not listed.
-    company_ledger carries no users FK at all.
+    The slot keeps failures readable -- slot 1 is still "the plain user
+    balance test", exactly as 70001 was -- while the block makes the id
+    unique.
     """
-    existing = await session.scalar(
-        select(User).where(User.telegram_id == telegram_id)
-    )
-    if existing is None:
-        return
-
-    for model in (UserLedger, MasterLedger, Payment, Purchase):
-        await session.execute(
-            delete(model).where(model.user_id == existing.id)
-        )
-    await session.delete(existing)
-    await session.flush()
+    return _RUN_BLOCK + slot
 
 
 async def _create_user(session: AsyncSession, telegram_id: int) -> User:
     """Create a bare User row for ledger tests."""
-    await _purge(session, telegram_id)
     user = User(
         telegram_id=telegram_id,
         first_name="LedgerTest",
@@ -86,7 +86,6 @@ async def _create_user(session: AsyncSession, telegram_id: int) -> User:
 
 async def _create_master(session: AsyncSession, telegram_id: int) -> tuple[User, MasterProfile]:
     """Create a User + MasterProfile pair for ledger tests."""
-    await _purge(session, telegram_id)
     user = User(
         telegram_id=telegram_id,
         first_name="MasterTest",
@@ -113,7 +112,7 @@ async def test_user_ledger_updates_balance(
     db_session: AsyncSession,
 ) -> None:
     """Recording done entries updates User.balance_cents."""
-    user = await _create_user(db_session, telegram_id=70001)
+    user = await _create_user(db_session, telegram_id=_tg(1))
     assert user.balance_cents == 0
 
     # +1000 cents (topup).
@@ -142,7 +141,7 @@ async def test_user_ledger_pending_excluded(
     db_session: AsyncSession,
 ) -> None:
     """Pending entries are excluded from balance calculation."""
-    user = await _create_user(db_session, telegram_id=70002)
+    user = await _create_user(db_session, telegram_id=_tg(2))
 
     # Done entry: +500.
     await record_user_ledger(
@@ -174,7 +173,7 @@ async def test_master_ledger_frozen_and_available(
     db_session: AsyncSession,
 ) -> None:
     """Frozen and available balances are tracked separately."""
-    user, profile = await _create_master(db_session, telegram_id=70003)
+    user, profile = await _create_master(db_session, telegram_id=_tg(3))
 
     # Frozen entry: +5000 (sale, awaiting practice).
     await record_master_ledger(
