@@ -89,7 +89,10 @@ COMMS_GITHUB_REPO="aivis-one/comms"
 # refuses to attach one deploy key to two repositories. READ-ONLY is enough
 # for comms -- comms-deploy.sh only ever pulls (velo's own key needs write
 # because `velo update` pushes generated.ts).
-COMMS_REPO_URL=""  # set after comms SSH key setup (setup_comms_ssh)
+# Built from the registry (field 2) once the checkout exists -- see
+# setup_comms. The host alias is the one provision_service_keys wrote
+# into /root/.ssh/config for this service.
+COMMS_REPO_URL=""
 # NOTE: the comms branch is NOT a knob here any more (H-D1, 2026-08-04).
 # It is declared once, for every server of this product, in the service
 # registry (repo/scripts/services.conf) and read from there below --
@@ -583,76 +586,116 @@ setup_deploy_user
 # SSH SETUP FOR GITHUB
 # ==============================================================================
 
-setup_ssh() {
-    log "Setting up SSH for GitHub..."
+# Provision ONE GitHub deploy key: generate if absent, add the host alias
+# if absent, then TEST -- and only interrupt the operator if the test
+# fails.
+#
+# ORDER IS THE POINT (T-33 item 6). This used to print the key and block
+# on ENTER unconditionally, then test afterwards; a reinstall of a box
+# whose keys GitHub already knows stopped twice to ask for something
+# already done. Test first, and a reinstall is silent.
+#
+# WHY THAT WORKS AT ALL -- and it is worth knowing before you "clean up"
+# after a wipe: the wipe ritual removes /opt/* and the docker state, and
+# does NOT touch /root/.ssh. The keys therefore survive it, GitHub still
+# holds the public halves, and the probe below passes on the first try.
+# Delete /root/.ssh as part of a wipe and every reinstall goes back to
+# asking for two GitHub steps by hand -- this silence is a consequence
+# of that directory surviving, not of anything clever here.
+#
+#   $1 name    service id (key file and host alias are named after it)
+#   $2 repo    owner/repo, for the URL printed to the operator
+#   $3 access  "write" or "read" -- from the registry, never guessed:
+#              the instruction differs materially and a claim about
+#              privilege belongs where it can be reviewed.
+provision_deploy_key() {
+    local name="$1" repo="$2" access="$3"
+    local key="/root/.ssh/id_ed25519_${name}_deploy"
+    local alias="github.com-${name}"
 
-    DEPLOY_KEY="/root/.ssh/id_ed25519_velo_deploy"
-
-    # Add GitHub to known hosts
     mkdir -p /root/.ssh
     chmod 700 /root/.ssh
     if ! grep -q "github.com" /root/.ssh/known_hosts 2>/dev/null; then
         ssh-keyscan -H github.com >> /root/.ssh/known_hosts 2>/dev/null
     fi
 
-    # Generate deploy key if not exists
-    if [ ! -f "$DEPLOY_KEY" ]; then
-        ssh-keygen -t ed25519 -C "velo-deploy@$(hostname)" -f "$DEPLOY_KEY" -N ""
-        success "Deploy key generated"
-    else
-        success "Deploy key already exists"
+    if [ ! -f "$key" ]; then
+        ssh-keygen -t ed25519 -C "${name}-deploy@$(hostname)" -f "$key" -N ""
+        success "Deploy key generated for $name"
     fi
 
-    echo ""
-    echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
-    echo -e "${CYAN}  GitHub Deploy Key (add to repo settings)${NC}"
-    echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
-    echo ""
-    cat "${DEPLOY_KEY}.pub"
-    echo ""
-    echo -e "${YELLOW}Go to: https://github.com/$GITHUB_REPO/settings/keys${NC}"
-    echo -e "${YELLOW}Click 'Add deploy key', paste the key above.${NC}"
-    echo -e "${RED}IMPORTANT: tick 'Allow write access'.${NC}"
-    echo -e "${YELLOW}'velo update' commits & pushes regenerated generated.ts to branch '$GIT_BRANCH'.${NC}"
-    echo ""
-    read -p "Press ENTER after adding the deploy key to GitHub..."
-
-    # Configure SSH to use this key for GitHub
-    if ! grep -q "Host github.com-velo" /root/.ssh/config 2>/dev/null; then
+    if ! grep -q "Host ${alias}\b" /root/.ssh/config 2>/dev/null; then
         cat >> /root/.ssh/config << EOF
 
-# VELO Deploy Key
-Host github.com-velo
+# ${name} deploy key (${access})
+Host ${alias}
     HostName github.com
     User git
-    IdentityFile $DEPLOY_KEY
+    IdentityFile ${key}
     IdentitiesOnly yes
 EOF
         chmod 600 /root/.ssh/config
     fi
 
-    REPO_URL="git@github.com-velo:$GITHUB_REPO.git"
-
-    # Test connection.
-    # ssh -T against GitHub exits 1 even on SUCCESS ("does not provide
-    # shell access"), and under `set -o pipefail` (top of file) the old
-    # `ssh | grep -q` form propagated that 1 through a matching grep --
-    # the test failed on a perfectly good key, every time, on every
-    # machine. Found live 2026-07-27, first fresh-box run of this path
-    # since the three installers merged (the pre-merge test-server
-    # variant had no pipefail, which is why it never fired before).
-    # The banner is captured instead; `|| true` keeps the assignment
-    # from tripping the ERR trap.
-    log "Testing GitHub connection..."
-    local SSH_BANNER
-    SSH_BANNER=$(ssh -T git@github.com-velo 2>&1 || true)
-    if echo "$SSH_BANNER" | grep -q "successfully authenticated"; then
-        success "GitHub connection OK"
-    else
-        error "Cannot connect to GitHub"
-        error "Make sure the deploy key is added to: https://github.com/$GITHUB_REPO/settings/keys"
-        return 1
+    # The alias has to exist before this runs -- that is why the config
+    # block is written above and not after the interactive step.
+    if github_probe "$alias"; then
+        success "GitHub connection OK ($name)"
+        return 0
     fi
+
+    echo ""
+    echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}  GitHub Deploy Key -- ${name} repo${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
+    echo ""
+    cat "${key}.pub"
+    echo ""
+    echo -e "${YELLOW}Go to: https://github.com/${repo}/settings/keys${NC}"
+    echo -e "${YELLOW}Click 'Add deploy key', paste the key above.${NC}"
+    if [ "$access" = "write" ]; then
+        echo -e "${RED}IMPORTANT: tick 'Allow write access'.${NC}"
+        echo -e "${YELLOW}('velo update' pushes regenerated API types back to this repo.)${NC}"
+    else
+        echo -e "${GREEN}READ-ONLY is enough: do NOT tick 'Allow write access'.${NC}"
+        echo -e "${YELLOW}(nothing on this box ever pushes to ${repo}.)${NC}"
+    fi
+    echo ""
+    read -r -p "Press ENTER after adding the deploy key to GitHub..."
+
+    if github_probe "$alias"; then
+        success "GitHub connection OK ($name)"
+        return 0
+    fi
+
+    error "Cannot connect to GitHub with the ${name} deploy key"
+    error "Make sure the key is added to: https://github.com/${repo}/settings/keys"
+    return 1
+}
+
+# `ssh -T` against GitHub exits 1 even on SUCCESS ("does not provide
+# shell access"), and under `set -o pipefail` (top of file) the old
+# `ssh | grep -q` form propagated that 1 through a MATCHING grep -- the
+# test failed on a perfectly good key, every time, on every machine.
+# Found live 2026-07-27, first fresh-box run of this path since the
+# three installers merged (the pre-merge test-server variant had no
+# pipefail, which is why it never fired before). The banner is captured
+# instead; `|| true` keeps the assignment from tripping the ERR trap.
+github_probe() {
+    local alias="$1" banner
+    banner=$(ssh -T "git@${alias}" 2>&1 || true)
+    echo "$banner" | grep -q "successfully authenticated"
+}
+
+# BOOTSTRAP, and the one service that cannot come from the registry:
+# services.conf lives INSIDE the velo repo, so it cannot be read before
+# velo is cloned, and velo cannot be cloned without this key. Every
+# OTHER service is provisioned by the loop after the clone -- see
+# provision_service_keys().
+setup_ssh() {
+    log "Setting up SSH for GitHub..."
+    provision_deploy_key "velo" "$GITHUB_REPO" "write" || return 1
+    REPO_URL="git@github.com-velo:$GITHUB_REPO.git"
 }
 
 setup_ssh
@@ -660,74 +703,6 @@ setup_ssh
 # ==============================================================================
 # SSH SETUP FOR THE COMMS REPO
 # ==============================================================================
-# Mirror of setup_ssh above, for the SECOND repo this installer clones.
-# Sits right behind it in the linear flow so the operator handles both
-# GitHub-key steps in one sitting; github.com is already in known_hosts
-# by the time this runs.
-
-setup_comms_ssh() {
-    log "Setting up SSH for the comms repo..."
-
-    COMMS_DEPLOY_KEY="/root/.ssh/id_ed25519_comms_deploy"
-
-    # Generate the comms deploy key if not exists (guard mirrors setup_ssh:
-    # a reinstall reuses the key already known to GitHub).
-    if [ ! -f "$COMMS_DEPLOY_KEY" ]; then
-        ssh-keygen -t ed25519 -C "comms-deploy@$(hostname)" -f "$COMMS_DEPLOY_KEY" -N ""
-        success "comms deploy key generated"
-    else
-        success "comms deploy key already exists"
-    fi
-
-    echo ""
-    echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
-    echo -e "${CYAN}  GitHub Deploy Key -- COMMS repo${NC}"
-    echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
-    echo ""
-    cat "${COMMS_DEPLOY_KEY}.pub"
-    echo ""
-    echo -e "${YELLOW}Go to: https://github.com/$COMMS_GITHUB_REPO/settings/keys${NC}"
-    echo -e "${YELLOW}Click 'Add deploy key', paste the key above.${NC}"
-    echo -e "${GREEN}READ-ONLY is enough: do NOT tick 'Allow write access'.${NC}"
-    echo -e "${YELLOW}(comms-deploy.sh only pulls -- unlike velo, nothing ever pushes to comms.)${NC}"
-    echo ""
-    read -r -p "Press ENTER after adding the deploy key to GitHub..."
-
-    # Configure SSH to use this key for the comms remote (host alias --
-    # same mechanism as github.com-velo above; one key per repo, GitHub
-    # does not allow sharing a deploy key across repositories).
-    if ! grep -q "Host github.com-comms" /root/.ssh/config 2>/dev/null; then
-        cat >> /root/.ssh/config << EOF
-
-# COMMS Deploy Key (read-only)
-Host github.com-comms
-    HostName github.com
-    User git
-    IdentityFile $COMMS_DEPLOY_KEY
-    IdentitiesOnly yes
-EOF
-        chmod 600 /root/.ssh/config
-    fi
-
-    COMMS_REPO_URL="git@github.com-comms:$COMMS_GITHUB_REPO.git"
-
-    # Test connection -- same shape as the velo test above: the banner is
-    # captured because ssh -T exits 1 on success and pipefail would sink
-    # a piped grep (see the comment there).
-    log "Testing GitHub connection (comms key)..."
-    local SSH_BANNER
-    SSH_BANNER=$(ssh -T git@github.com-comms 2>&1 || true)
-    if echo "$SSH_BANNER" | grep -q "successfully authenticated"; then
-        success "GitHub connection OK (comms)"
-    else
-        error "Cannot connect to GitHub with the comms deploy key"
-        error "Make sure the key is added to: https://github.com/$COMMS_GITHUB_REPO/settings/keys"
-        return 1
-    fi
-}
-
-setup_comms_ssh
-
 # ==============================================================================
 # CLONE REPOSITORY
 # ==============================================================================
@@ -747,6 +722,10 @@ clone_repo() {
 }
 
 clone_repo
+
+# Only now can the registry be read -- it ships inside the checkout that
+# clone_repo just made. Everything after this point is registry-driven.
+provision_service_keys
 
 # ==============================================================================
 # GENERATE .ENV
@@ -1170,10 +1149,63 @@ upsert_env_var() {
     fi
 }
 
-# Read one service's branch out of the registry that ships in the velo
-# checkout (repo/scripts/services.conf). Kept tiny on purpose: install
-# provisions ONE service specially (deploy key, env hand-over), and that
-# part is not generic yet -- what IS shared is the declaration.
+# Read one field of one service out of the registry that ships in the
+# velo checkout (repo/scripts/services.conf).
+registry_field_for() {
+    local wanted="$1" index="$2" conf="$INSTALL_BASE/repo/scripts/services.conf"
+    [ -f "$conf" ] || return 1
+    # shellcheck source=/dev/null
+    source "$conf" || return 1
+    local record
+    for record in "${VELO_SERVICES[@]}"; do
+        if [ "$(svc_field "$record" 1)" = "$wanted" ]; then
+            svc_field "$record" "$index"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Provision a GitHub deploy key for EVERY service the registry declares,
+# except the product itself -- its key is the bootstrap that made this
+# file readable in the first place (see setup_ssh).
+#
+# This is what item 5 buys: a fourth service is one record in
+# services.conf and zero lines here. The velo record is deliberately NOT
+# filtered out by name -- it is skipped by its "internal" lifecycle, and
+# passing it through would be harmless anyway: provision_deploy_key is
+# idempotent and its probe would pass on the key that just cloned this.
+provision_service_keys() {
+    local conf="$INSTALL_BASE/repo/scripts/services.conf"
+    if [ ! -f "$conf" ]; then
+        error "Service registry not found at $conf"
+        exit 1
+    fi
+    # shellcheck source=/dev/null
+    source "$conf" || exit 1
+
+    local record name repo access
+    for record in "${VELO_SERVICES[@]}"; do
+        [ "$(svc_field "$record" 5)" = "internal" ] && continue
+        name=$(svc_field "$record" 1)
+        repo=$(svc_field "$record" 2)
+        access=$(svc_field "$record" 7)
+
+        # An undeclared privilege is a stop, not a default. Guessing
+        # "read" would print the wrong instruction to the operator and
+        # the failure would surface days later, as a push that cannot.
+        if [ "$access" != "read" ] && [ "$access" != "write" ]; then
+            error "Service '$name' declares access='$access' in services.conf"
+            error "-- expected 'read' or 'write'. Refusing to guess which"
+            error "instruction to give the operator."
+            exit 1
+        fi
+
+        provision_deploy_key "$name" "$repo" "$access" || exit 1
+    done
+}
+
+# Read one service's branch out of the registry.
 registry_branch_for() {
     local wanted="$1" conf="$INSTALL_BASE/repo/scripts/services.conf"
     if [ ! -f "$conf" ]; then
@@ -1204,7 +1236,11 @@ registry_branch_for() {
 read_env_value() {
     local file="$1" key="$2"
     [ -f "$file" ] || return 1
-    grep -m1 "^${key}=" "$file" 2>/dev/null | cut -d= -f2-
+    # `tail -n 1`, not `grep -m1`: an env file resolves a repeated key
+    # to the LAST assignment, exactly as a shell would. First-match
+    # would hand the caller a stale value that nothing else on the box
+    # agrees with. Same class as the env-render.sh fix (audit H-R4).
+    grep -E "^${key}=" "$file" 2>/dev/null | tail -n 1 | cut -d= -f2-
 }
 
 # Gate on every value we push into another stack's env file.
@@ -1383,8 +1419,21 @@ setup_comms() {
         exit 1
     fi
 
+    # The remote comes from the registry, not from a constant here: the
+    # slug is declared once, in field 2, and the host alias matches the
+    # key provision_service_keys wrote for this service. Assembled at the
+    # point of use so a failure to resolve it stops HERE, by name, rather
+    # than surfacing as `git clone ""` a moment later.
+    local comms_slug
+    if ! comms_slug=$(registry_field_for comms 2) || [ -z "$comms_slug" ]; then
+        error "Could not resolve the comms repo slug from the service registry"
+        exit 1
+    fi
+    COMMS_REPO_URL="git@github.com-comms:${comms_slug}.git"
+
     # -- 1. Clone the comms repo (SSH, dedicated READ-ONLY deploy key --
-    # set up in setup_comms_ssh; all keys strictly private, always) --
+    # provisioned by the registry loop after clone_repo; all keys
+    # strictly private, always) --
     if [ -d "$COMMS_REPO_DIR" ]; then
         # Practically unreachable after the cleanup block wiped /opt/comms,
         # but a partial re-run must reuse state, not re-clone over it.
