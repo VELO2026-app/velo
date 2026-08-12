@@ -431,6 +431,13 @@ normalize_nginx_conf() {
 # skew (comment wording, alignment padding) does not read as drift.
 check_nginx() {
     local nginx_render_lib="$1" live_conf="$2" domain_frontend="$3" domain_api="$4"
+    # Optional public domain (T-32 item 6), recorded in velo.conf by the
+    # installer. It MUST be passed through: the expected config is
+    # rendered from these arguments, so leaving it out on a server that
+    # opted in would make the doctor report drift for ever -- against a
+    # difference we ourselves installed. Empty renders exactly what the
+    # two-argument form always rendered.
+    local domain_public="${5:-}"
     echo "--- nginx ---"
     if [ ! -f "$live_conf" ]; then
         echo -e "${RED}✗ $live_conf not found${NC}"
@@ -446,12 +453,24 @@ check_nginx() {
     local expected variant
     if grep -q "ssl_certificate " "$live_conf"; then
         variant="ssl"
-        expected=$(render_nginx_ssl "$domain_frontend" "$domain_api")
+        expected=$(render_nginx_ssl "$domain_frontend" "$domain_api" "$domain_public")
     else
         variant="http-only"
-        expected=$(render_nginx_http "$domain_frontend" "$domain_api")
+        expected=$(render_nginx_http "$domain_frontend" "$domain_api" "$domain_public")
     fi
-    echo "      live config detected as: $variant (domains: $domain_frontend / $domain_api)"
+    echo "      live config detected as: $variant (domains: $domain_frontend / $domain_api${domain_public:+ / $domain_public})"
+
+    # One asymmetry worth naming rather than hiding: the public domain
+    # keeps its own certificate, so a box can legitimately serve the two
+    # main domains over SSL while that one is still plain HTTP. The
+    # variant above is decided by the file as a whole, so in that state
+    # the doctor reports drift -- correctly. It IS drift: the live config
+    # is not what a successful install produces.
+    if [ -n "$domain_public" ] && [ "$variant" = "ssl" ] \
+       && ! grep -q "live/${domain_public}/" "$live_conf"; then
+        echo -e "${YELLOW}      note: $domain_public has no certificate in the live config --${NC}"
+        echo -e "${YELLOW}      its certbot run failed at install. Re-request it, then reload nginx.${NC}"
+    fi
 
     local normalized_expected normalized_live
     normalized_expected=$(echo "$expected" | normalize_nginx_conf)
@@ -622,6 +641,72 @@ update_service() {
 }
 
 # `velo update` -- the whole box, in registry order.
+# Restart ONE registry service if -- and only if -- its profile is
+# bind-mounted out of this product's checkout, so that the templates
+# the product just pulled are the ones it serves.
+#
+# Everything is derived from the registry record, nothing hardcoded: a
+# second service with the same arrangement is covered by declaring it.
+# Silence is the correct answer in every "not applicable" case (no
+# service env, profile kept elsewhere, comms-less box) -- this is an
+# addition to `velo update`, and an addition may not invent new ways
+# for it to fail.
+reload_bound_profile() {
+    local record="$1"
+    local name dir cli env_file profile_dir
+
+    name=$(svc_field "$record" 1)
+    dir=$(svc_field "$record" 3)          # e.g. /opt/comms/repo
+    cli=$(svc_field "$record" 5)          # e.g. deploy/comms-deploy.sh
+
+    # The service's own env sits next to its checkout, outside it (the
+    # layout every service CLI here uses, so that `update` never touches
+    # secrets).
+    env_file="$(dirname "$dir")/.env"
+    [ -f "$env_file" ] || return 0
+
+    # grep, not source: that file is full of secrets and this is a
+    # read of exactly one key.
+    profile_dir=$(grep -m1 '^PROFILE_DIR=' "$env_file" 2>/dev/null | cut -d= -f2-)
+    [ -n "$profile_dir" ] || return 0
+
+    # Not bound into our checkout -> the pull changed nothing it reads.
+    case "$profile_dir" in
+        "$COMPOSE_DIR"/*) ;;
+        *) return 0 ;;
+    esac
+
+    echo ""
+    echo -e "${CYAN}Reloading $name -- its profile is bound to $profile_dir${NC}"
+    if [ ! -x "$dir/$cli" ] && [ ! -f "$dir/$cli" ]; then
+        echo -e "${YELLOW}⊘ $name: $dir/$cli not found -- skipping profile reload${NC}"
+        return 0
+    fi
+
+    if bash "$dir/$cli" restart; then
+        echo -e "${GREEN}✓ $name restarted on the profile from this checkout${NC}"
+        return 0
+    fi
+
+    # The service validates its profile at startup and refuses to boot on
+    # a bad one -- so by far the likeliest cause of a failure HERE is the
+    # template commit that just arrived, and the operator is looking at a
+    # crash-looping service. Give them the way out, not just the verdict.
+    echo -e "${RED}✗ $name did not come back after the profile reload${NC}"
+    echo ""
+    echo -e "${YELLOW}Most likely cause: the profile that just arrived in this pull.${NC}"
+    echo "  $name refuses to start on a profile it cannot validate"
+    echo "  (malformed types.yaml, a broken template placeholder, a type"
+    echo "  declared without a category)."
+    echo ""
+    echo "  Inspect:  bash $dir/$cli logs"
+    echo "  Recover:  revert the profile commit and roll out again --"
+    echo "    cd $COMPOSE_DIR && git revert <commit touching comms-profile/>"
+    echo "    git push && velo update"
+    echo ""
+    return 1
+}
+
 update_all() {
     # NOTE (2026-08-06): a tmux wrapper (detached session + transcript) was
     # tried here and REJECTED after seeing it run -- it replaced the
@@ -678,6 +763,25 @@ update_all() {
             exit 1
         fi
     done
+
+    # -- Bound profiles: the SECOND restart (T-32 item 1) --------------------
+    # The registry order is "services -> product", and it stays that way:
+    # a service's CODE must be current before the product that calls it.
+    # But a service whose PROFILE is bind-mounted out of the product's
+    # checkout has a second dependency pointing the other way -- the data
+    # only arrived a moment ago, in update_product's pull, long after that
+    # service restarted. Without this pass a template edit would land on
+    # disk now and reach the running service one update LATER.
+    #
+    # So: same order, one extra restart, and only for services that are
+    # actually bound into this checkout. It is about DATA, not about the
+    # code contract -- which is why it lives here and not in the registry.
+    if [ "$frontend_only" -eq 0 ]; then
+        for record in "${VELO_SERVICES[@]}"; do
+            [ "$(svc_field "$record" 5)" = "internal" ] && continue
+            reload_bound_profile "$record" || exit 1
+        done
+    fi
 
     # A registry change arrives WITH the product update, but the list was
     # read before that -- so a newly declared service starts being managed
@@ -802,6 +906,33 @@ update_product() {
         NEW_COMMIT=$(git rev-parse --short HEAD)
         echo "Updated: $CURRENT_COMMIT → $NEW_COMMIT"
         echo ""
+
+        # -- Narrow db env (T-32 item 9) ------------------------------------
+        # docker-compose.yml points postgres/redis at ./backend/.env.db.
+        # That file is NOT in git (it holds passwords) and NOT created by
+        # `update` on a box that was never re-installed -- so the compose
+        # that just arrived in the pull would fail on a missing env_file.
+        # Project it here: AFTER the pull (the library itself may have just
+        # arrived) and BEFORE the first compose command below.
+        #
+        # Sourced lazily for the same reason install_velo.sh sources
+        # nginx-render.sh late: the version that matters is the one in the
+        # checkout as it is NOW, not as it was when this process started.
+        # A checkout that predates T-32 has no library and no .env.db in
+        # its compose either -- skip quietly, nothing to reconcile.
+        if [ -f "$COMPOSE_DIR/scripts/env-render.sh" ]; then
+            # shellcheck source=/dev/null
+            source "$COMPOSE_DIR/scripts/env-render.sh"
+            if write_db_env "$COMPOSE_DIR/backend/.env" "$COMPOSE_DIR/backend/.env.db"; then
+                echo -e "${GREEN}✓ backend/.env.db projected from backend/.env${NC}"
+            else
+                echo -e "${RED}✗ Could not write backend/.env.db${NC}"
+                echo "  postgres/redis read it as their env_file -- the stack"
+                echo "  would come up without database credentials."
+                exit 1
+            fi
+            echo ""
+        fi
 
         # Fool-proof guard for --frontend-only:
         # if backend/ changed between CURRENT_COMMIT and NEW_COMMIT, refuse hard.
@@ -1417,6 +1548,12 @@ case "${1:-}" in
         TIMESTAMP=$(date +%Y%m%d_%H%M%S)
         BACKUP_DIR="$INSTALL_BASE/backups"
         mkdir -p "$BACKUP_DIR"
+        # T-14/T-32 item 8: a full pg_dump is the entire user table --
+        # names, telegram ids, bookings. It used to land with whatever the
+        # process umask gave it (typically 644), readable by every user on
+        # the machine. 700 on the directory, 600 on the files, applied to
+        # BOTH dump paths (`backup` here and `db dump` below).
+        chmod 700 "$BACKUP_DIR"
 
         echo "Creating backup..."
 
@@ -1426,11 +1563,22 @@ case "${1:-}" in
         # password, the bot token lives in BotFather, Stripe keys in Stripe).
         cd_compose
         BACKUP_FILE="$BACKUP_DIR/velo_db_$TIMESTAMP.sql.gz"
+        # umask BEFORE the redirect, not chmod after it: `> "$BACKUP_FILE"`
+        # creates the file with the process umask and the dump starts
+        # streaming into it immediately, so a later chmod would leave a
+        # window in which the PII dump is world-readable. Not a subshell --
+        # PIPESTATUS below must stay readable.
+        OLD_UMASK=$(umask)
+        umask 077
         $COMPOSE_CMD exec -T postgres pg_dump -U velo velo | gzip > "$BACKUP_FILE"
+        # Captured on the VERY next line: any command in between (umask
+        # included) would overwrite PIPESTATUS.
+        DUMP_STATUS=${PIPESTATUS[0]}
+        umask "$OLD_UMASK"
 
         # Abort if pg_dump (first stage of the pipe) failed -- otherwise we
         # would keep a truncated/empty archive and believe it succeeded.
-        if [ "${PIPESTATUS[0]}" -ne 0 ]; then
+        if [ "$DUMP_STATUS" -ne 0 ]; then
             rm -f "$BACKUP_FILE"
             echo -e "${RED}✗ Backup failed (pg_dump error)${NC}"
             exit 1
@@ -1457,12 +1605,20 @@ case "${1:-}" in
                 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
                 OUTPUT="$INSTALL_BASE/backups/db_dump_$TIMESTAMP.sql"
                 mkdir -p "$INSTALL_BASE/backups"
+                # Same file, same directory, same PII as `velo backup` --
+                # and this one is PLAIN sql. Same discipline: 700 on the
+                # directory, umask around the redirect, 600 on the file.
+                chmod 700 "$INSTALL_BASE/backups"
                 echo "Dumping database..."
+                OLD_UMASK=$(umask)
+                umask 077
                 if ! $COMPOSE_CMD exec -T postgres pg_dump -U velo velo > "$OUTPUT"; then
+                    umask "$OLD_UMASK"
                     rm -f "$OUTPUT"
                     echo -e "${RED}✗ Dump failed (pg_dump error)${NC}"
                     exit 1
                 fi
+                umask "$OLD_UMASK"
                 echo -e "${GREEN}✓ Dump saved: $OUTPUT${NC}"
                 ;;
             restore)
@@ -1620,7 +1776,7 @@ case "${1:-}" in
         echo ""
         check_backend_env "$COMPOSE_DIR/backend/.env.example" "$COMPOSE_DIR/backend/.env" || BACKEND_DRIFT=1
         echo ""
-        check_nginx "$COMPOSE_DIR/scripts/nginx-render.sh" "/etc/nginx/sites-available/velo" "${DOMAIN_FRONTEND:-}" "${DOMAIN_API:-}" || NGINX_DRIFT=1
+        check_nginx "$COMPOSE_DIR/scripts/nginx-render.sh" "/etc/nginx/sites-available/velo" "${DOMAIN_FRONTEND:-}" "${DOMAIN_API:-}" "${DOMAIN_PUBLIC:-}" || NGINX_DRIFT=1
         echo ""
 
         check_attendance_deadends

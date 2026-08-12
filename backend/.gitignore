@@ -1,5 +1,13 @@
 # Secrets & Environment
 .env
+# .env.db (the narrow db env projected for postgres/redis, T-32) and any
+# future .env.<suffix> in this directory. NOT a leak being closed: the
+# root .gitignore already carries `.env.*`, and a gitignore pattern
+# without a slash matches at EVERY depth, so backend/.env.db is covered
+# there today (verified with `git check-ignore -v`). This line is here
+# for local explicitness -- the rule sits next to the files it protects,
+# and it survives someone rewriting the root file.
+.env.*
 
 # Python Virtual Environment
 .venv/

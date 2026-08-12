@@ -65,8 +65,15 @@ services:
   postgres:
     image: postgres:16
     container_name: velo-postgres
+    # NARROW env (T-32 item 9): the four keys this container actually
+    # consumes, projected out of backend/.env by scripts/env-render.sh
+    # (install_velo.sh on install, velo-manage.sh on update). It used to
+    # read ./backend/.env -- the WHOLE product env -- so `docker compose
+    # exec postgres env` printed Stripe keys, the bot token, SECRET_KEY
+    # and COMMS_SERVICE_TOKEN. backend/.env stays the single source of
+    # these passwords; .env.db is derived, never edited.
     env_file:
-      - ./backend/.env
+      - ./backend/.env.db
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
@@ -81,8 +88,12 @@ services:
   redis:
     image: redis:7-alpine
     container_name: velo-redis
+    # NARROW env (T-32 item 9), same file as postgres above. redis needs
+    # exactly REDIS_PASSWORD -- for `command` and for the healthcheck --
+    # and nothing else. Compromising redis is no longer compromising
+    # every application secret on the box.
     env_file:
-      - ./backend/.env
+      - ./backend/.env.db
     # CRITICAL-4: Start Redis with password from .env.
     # In development (REDIS_PASSWORD=change-me or empty), still works --
     # clients must include password in REDIS_URL.
