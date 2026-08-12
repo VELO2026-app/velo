@@ -1,7 +1,24 @@
 # =============================================================================
 # VELO -- master-initiated chats + the admin boundary (T3)
 # =============================================================================
-# Band 89760-89799.
+# Band 89800-89839.
+#
+# ⚠ MOVED OFF 89760-89799 ON 2026-08-12, and the reason is not tidiness.
+# That band was claimed here after checking every band declared in this
+# test directory -- which is the only registry visible from this repo.
+# The comms side keeps a SECOND registry (dispatcher plan §5) that this
+# repo cannot see, and in it the T-20 handoff had already reserved
+# 89780-89799. Half of the band was somebody else's.
+#
+# Passive id collision would have been the mild version. _clean_band
+# below selects EVERY user in [BAND_MIN, BAND_MAX] and deletes their
+# chat_threads and diary_events, then COMMITS -- around every test in
+# this file. Running alongside T-20's suite, it would have destroyed
+# their fixture data mid-run and committed the damage. Caught before
+# either side fired.
+#
+# Offsets are untouched (15..39, so 89815..89839 in use): only the base
+# moved, which keeps the diff to two lines and renumbers nothing.
 #
 # TWO THINGS ARE UNDER TEST, and each one exists because its opposite was
 # shipped once:
@@ -38,7 +55,7 @@ from app.modules.masters.models import MasterProfile
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, cleanup_range, fresh_execute, login_user
 
-BAND_MIN, BAND_MAX = 89760, 89799
+BAND_MIN, BAND_MAX = 89800, 89839
 _SEAM = "app.modules.chats.router.comms_request"
 
 CHATS_URL = "/api/v1/chats"
