@@ -1383,6 +1383,11 @@ export interface SetStudentTagRequest {
   tag: string | null
 }
 
+/** Open (or reopen) the conversation with one student, master-side. A SIBLING of ChatCreate rather than an optional field on it: ChatCreate is extra="forbid" and heavily tested, and the two directions differ in more than the id (who may call, what the target must be). Widening the existing body would have put both rule sets behind one schema. */
+export interface StudentChatCreate {
+  student_id: string
+}
+
 /** One recent check-in by the student (on this master's practices). */
 export interface StudentCheckinItem {
   mood: number
