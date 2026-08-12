@@ -18,8 +18,8 @@
 #
 # WHAT IS PROXIED (six of the nine 3b endpoints): create-or-get, list, post
 # message, list messages, mark read, unread count. The operator-queue verbs
-# (claim / status / retag) are section-thread machinery and wait for the
-# support UI -- there is no queue in a student <-> master DM.
+# (claim / status / retag) are section-thread machinery and this proxy has
+# no section threads -- there is no queue in a student <-> master DM.
 #
 # THREAD SHAPE: one eternal DM per (client, operator) pair -- kind "dm", no
 # subject_ref. comms dedups on the pair, so opening the chat twice returns
@@ -31,18 +31,13 @@
 # (master-initiated) reach the SAME thread for the same two people --
 # neither one keys the pair off the caller.
 #
-# THREE WAYS TO OPEN ONE, one machine underneath (_create_or_get_thread):
+# TWO WAYS TO OPEN ONE, one machine underneath (_create_or_get_thread):
 #   POST /chats           -- student -> verified master (the pre-sale channel)
 #   POST /chats/students  -- verified master -> student (the reverse, T3)
-#   POST /chats/support   -- anyone -> the support desk (T3)
-# A SUPPORT thread is an ordinary DM whose operator is the designated
-# support account (settings.support_operator_user_id), a real velo user --
-# comms only knows recipients identity sync shipped it, so nothing
-# synthetic can stand in. Unset setting -> 503, never a 500. Support
-# threads are the ONE case where membership is not "you are one of the two
-# ids": any ADMIN may act on them (the account is the desk, the admins are
-# the staff) and on nothing else -- an ordinary master <-> client thread
-# still 404s for an admin.
+# MEMBERSHIP has no exceptions: you are one of the two ids on the local
+# pointer row, or the thread does not exist as far as you are concerned.
+# No role widens it -- a thread neither of whose ids is the caller 404s for
+# everyone, admins included.
 #
 # FAILURE MODEL: inherited from core/comms.py -- comms unreachable/5xx ->
 # 502, timeout -> 504, modeled 4xx forwarded. A chat outage never takes velo
@@ -62,13 +57,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.comms import comms_request
-from app.core.config import settings
 from app.core.database import get_db_reader, get_db_session
 from app.core.exceptions import (
     BadRequestError,
     ForbiddenError,
     NotFoundError,
-    VeloError,
 )
 from app.modules.auth.dependencies import get_current_user
 from app.modules.chats.models import ChatThread
@@ -127,35 +120,6 @@ class MessageCreate(BaseModel):
     body: str = Field(min_length=1, max_length=4000)
 
 
-def _support_operator_id() -> UUID | None:
-    """The designated support account, or None when support is not set up.
-
-    Read from settings on EVERY call, never cached at import: the value is
-    an operator knob, and a cached parse would make the membership widening
-    below depend on process start time.
-    """
-    raw = settings.support_operator_user_id.strip()
-    if not raw:
-        return None
-    try:
-        return UUID(raw)
-    except ValueError:
-        # Loud, not silent: a typo here reads exactly like "support is off"
-        # (every support thread 404s for every admin) with nothing in the
-        # logs to say why.
-        logger.error("support_operator_user_id_malformed", value=raw)
-        return None
-
-
-def _support_not_configured(detail: str) -> VeloError:
-    """503 with the fix in the message -- never a 500, never a silent 404."""
-    return VeloError(
-        message=detail,
-        code="support_not_configured",
-        status_code=503,
-    )
-
-
 async def _load_thread(
     session: AsyncSession, thread_id: UUID
 ) -> ChatThread:
@@ -171,20 +135,7 @@ async def _load_thread(
 
 
 def _is_participant(thread: ChatThread, user: User) -> bool:
-    if user.id in (thread.client_user_id, thread.operator_user_id):
-        return True
-
-    # THE ONE WIDENING, and it is deliberately a comparison and not a role
-    # check. The support desk is an ACCOUNT, staffed by whichever admin is
-    # on duty, so an admin has to pass membership on a thread they are not
-    # an id in. Scoped to that single operator id: on an ordinary
-    # master <-> client thread this returns False and the admin gets the
-    # same 404 as any stranger. An admin overseeing every private
-    # conversation on the installation is not what this buys.
-    if user.role != UserRole.ADMIN:
-        return False
-    support_id = _support_operator_id()
-    return support_id is not None and thread.operator_user_id == support_id
+    return user.id in (thread.client_user_id, thread.operator_user_id)
 
 
 def _peer_payload(user: User | None) -> dict[str, Any] | None:
@@ -251,10 +202,7 @@ def _counterparty_id(thread: ChatThread, viewer_id: UUID) -> UUID:
     """Whoever the viewer is NOT, in this thread.
 
     A viewer who is the client sees the operator (a student looking at
-    their master). Everyone else -- the operator themselves, or an admin
-    looking at a support thread -- sees the client, because an admin
-    working the support desk needs to know WHO wrote in, not which desk
-    they are standing behind.
+    their master); the operator sees the client.
     """
     if thread.client_user_id == viewer_id:
         return thread.operator_user_id
@@ -270,10 +218,10 @@ async def _local_thread_list(
     """A thread list built from local pointers, peers resolved in one SELECT.
 
     Used by the two callers comms' operator-scoped list cannot serve: a
-    student (a CLIENT there, invisible to that API) and an admin (whose
-    list is "mine + the support desk", which is not an operator scope
-    either). P-1: without the bulk peer SELECT the frontend would need one
-    public-profile request per row.
+    student (a CLIENT there, invisible to that API) and an admin (who is
+    not an operator scope either -- their list is their own threads, on
+    whichever side of the pair). P-1: without the bulk peer SELECT the
+    frontend would need one public-profile request per row.
     """
     peer_ids = {_counterparty_id(row, viewer_id) for row in rows}
     peers: dict[UUID, User] = {}
@@ -314,10 +262,10 @@ async def _create_or_get_thread(
     client_id: UUID,
     operator_id: UUID,
 ) -> tuple[dict[str, Any], UUID, bool]:
-    """The create-or-get machine shared by all three open endpoints.
+    """The create-or-get machine shared by both open endpoints.
 
-    Lifted verbatim out of open_chat when the support and master-initiated
-    routes arrived: the comms call, the PAIR-keyed pointer lookup, the
+    Lifted verbatim out of open_chat when the master-initiated route
+    arrived: the comms call, the PAIR-keyed pointer lookup, the
     re-point-on-id-change branch and the concurrent-first-open SAVEPOINT
     are the parts that must not drift between them. The pair is passed in
     (client, operator) rather than (caller, target) precisely so that
@@ -508,9 +456,9 @@ async def open_student_chat(
     """
     _reject_actor_override(request)
 
-    # Role first: this endpoint exists for the master zone, and an admin
-    # has the support desk instead. 403 and not 404 -- nothing about the
-    # caller's own role is a secret from the caller.
+    # Role first: this endpoint exists for the master zone. 403 and not
+    # 404 -- nothing about the caller's own role is a secret from the
+    # caller.
     if user.role != UserRole.MASTER:
         raise ForbiddenError("Only a master can open a chat with a student")
 
@@ -555,71 +503,6 @@ async def open_student_chat(
     return _open_response(payload, student)
 
 
-@router.post("/support")
-async def open_support_chat(
-    request: Request,
-    user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_db_session),
-) -> Any:
-    """Open the caller's conversation with the support desk, or return it.
-
-    A SIBLING ROUTE and not a field on ChatCreate: that body is
-    extra="forbid" and heavily tested, and an optional master_id would
-    have made "which chat am I opening" a runtime branch on a nullable
-    field. No body at all here -- there is exactly one support desk, and
-    the caller does not get to name it (same stance as _reject_actor_
-    override: an id the client supplies is an id the client can forge).
-
-    NO DIARY CARD. See DiaryEventKind.THREAD_STARTED (diary/models.py):
-    the card means "a conversation with a MASTER began", it is rendered
-    from a master_id/master_name snapshot, and it lives in the practice
-    diary -- the student's personal record of their practice. A support
-    request is an operational fact about the product, not an event in
-    somebody's practice, and writing one would file the support account
-    under "your masters" in the feed.
-    """
-    _reject_actor_override(request)
-
-    support_id = _support_operator_id()
-    if support_id is None:
-        # Three distinguishable misconfigurations, three messages: "never
-        # set up", "typo", and (below) "points at nobody". They need
-        # different actions from the operator, so they must not collapse
-        # into one opaque 503.
-        raw = settings.support_operator_user_id.strip()
-        if not raw:
-            raise _support_not_configured(
-                "Support chat is not configured on this installation: set "
-                "SUPPORT_OPERATOR_USER_ID to the velo user id of the "
-                "support account."
-            )
-        raise _support_not_configured(
-            "Support chat is misconfigured: SUPPORT_OPERATOR_USER_ID is not "
-            "a valid UUID."
-        )
-
-    if support_id == user.id:
-        # The desk cannot file a ticket with itself; a self-pair would also
-        # be the one (client, operator) combination the model has no shape
-        # for.
-        raise BadRequestError("Cannot open a support chat with yourself")
-
-    # Checked BEFORE the comms call so a misconfigured id surfaces as this
-    # 503 with the fix in it, rather than as comms' "unsynced recipient"
-    # 404 forwarded to a user who cannot act on it.
-    support = await session.get(User, support_id)
-    if support is None:
-        raise _support_not_configured(
-            "Support chat is misconfigured: SUPPORT_OPERATOR_USER_ID "
-            f"({support_id}) is not a velo user."
-        )
-
-    payload, _, _ = await _create_or_get_thread(
-        session, client_id=user.id, operator_id=support_id,
-    )
-    return _open_response(payload, support)
-
-
 def _parsed_created_at(payload: dict[str, Any]) -> datetime:
     """The thread's own creation instant, as comms reported it.
 
@@ -651,9 +534,10 @@ async def list_chats(
         is hard False: a master sees their own threads and never anyone
         else's.
 
-      ADMIN   -- their own threads plus every support thread, i.e. EXACTLY
-        the set _require_participant will let them open. Local, because
-        that set is not an operator scope and comms cannot express it.
+      ADMIN   -- their own threads and nothing else (either side of the
+        pair), i.e. EXACTLY the set _require_participant will let them
+        open. Local, because an admin is not an operator scope and comms
+        cannot express it.
         This used to be `is_supervisor=True`, which handed an admin every
         conversation on the installation -- each row enriched with the
         counterparty's real name and avatar, and each row 404ing the
@@ -694,11 +578,6 @@ async def list_chats(
             ChatThread.client_user_id == user.id,
             ChatThread.operator_user_id == user.id,
         )
-        support_id = _support_operator_id()
-        if support_id is not None:
-            visible = or_(
-                visible, ChatThread.operator_user_id == support_id
-            )
         admin_rows = (
             await session.execute(
                 select(ChatThread)

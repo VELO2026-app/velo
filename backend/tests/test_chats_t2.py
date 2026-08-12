@@ -28,7 +28,6 @@ from httpx import AsyncClient
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.core.database import get_session_factory
 from app.modules.chats.models import ChatThread
 from app.modules.diary.models import DiaryEvent, DiaryEventKind
@@ -615,11 +614,12 @@ class TestListing:
         _require_participant never honoured the widening. The listing and
         the membership check disagreed, and the listing was the loose one.
 
-        An admin's list is now local and equals what they can open (own
-        threads + the support desk); the widening is gone, not narrowed.
-        Its replacement is tested in test_chats_t3_support.py. Here we
-        pin the only thing this file can say alone: with no support
-        account configured, an admin's list never reaches comms at all.
+        An admin's list is now local and equals what they can open (their
+        own threads, on either side of the pair); the widening is gone,
+        not narrowed. The populated form is tested in
+        test_chats_t3_students.py. Here we pin the thing this file can say
+        alone: an admin with no threads gets an empty list and the comms
+        seam is never touched at all.
         """
         admin = await login_user(
             client, telegram_id=BAND_MIN + 21, first_name="Admin",
@@ -631,7 +631,6 @@ class TestListing:
             client, telegram_id=BAND_MIN + 21, first_name="Admin",
         )
 
-        monkeypatch.setattr(settings, "support_operator_user_id", "")
         fake = AsyncMock(return_value={"threads": ["EVERY THREAD ON THE BOX"]})
         monkeypatch.setattr(_SEAM, fake)
         resp = await client.get(
