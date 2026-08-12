@@ -2301,6 +2301,16 @@ backend/tests/
 
 ## PHASE 7: Notifications
 
+> **⚠ REPLACED `PROMPT №679`, 2026-08-12 — every `app/modules/notifications/` path below is DEAD.**
+> The whole module (`models.py`/`processor.py`/`service.py`/`formatters.py`/`template_engine.py`/
+> `reminders.py`) was cut out and its tables dropped (`backend/migrations/versions/2026_07_28_
+> 9c0d1e2f3a4b_drop_notifications_tables.py`). It was replaced by an outbox architecture:
+> `backend/app/core/events/` (emit/relay to an external comms microservice via a Redis Stream) +
+> `backend/app/modules/comms_proxy/` (the in-app bell: `GET /notifications`, `/unread-count`,
+> `/read-all`, `/{id}/read`) + `backend/app/modules/chats/` (real one-to-one messaging). Phases 7.1–7.4
+> below are kept as a HISTORICAL record of what Phase 7 originally built and shipped for weeks — not
+> a current file map. Do not go looking for these paths.
+
 ### 7.1: Модель Notification ✅
 
 **Цель:** Хранение уведомлений.

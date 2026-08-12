@@ -125,7 +125,10 @@
 | `promos` | `app/modules/promos/` | Промокоды (Company + Master) |
 | `withdrawals` | `app/modules/withdrawals/` | Запросы на вывод средств |
 | `reports` | `app/modules/reports/` | Жалобы пользователей |
-| `notifications` | `app/modules/notifications/` | Telegram-бот, процессор, шаблоны, напоминания |
+| ~~`notifications`~~ | ~~`app/modules/notifications/`~~ | **REPLACED `PROMPT №679`, 2026-08-12 — module deleted, tables dropped.** See the three rows below. |
+| `core/events` | `app/core/events/` | Transactional outbox: emit + relay to an external comms microservice via Redis Stream |
+| `comms_proxy` | `app/modules/comms_proxy/` | In-app notification bell (unread feed, read/read-all) |
+| `chats` | `app/modules/chats/` | Real one-to-one messaging (threads, messages, unread-count) |
 | `diary` | `app/modules/diary/` | Check-ins, feedbacks, diary entries, insights; append-only `DiaryEvent` journal (`models.py`) + `projections.py` (единственный писатель журнала) + единая лента `GET /diary/feed` (cursor) |
 | `admin` | `app/modules/admin/` | Верификация мастеров, модерация (data-integrity semaphores built Phase 6.8, removed 2026-07-07 `9ca5619` — see §6) |
 | `ai` | `app/modules/ai/` | Розетка AI-саммари (Phase 9) |

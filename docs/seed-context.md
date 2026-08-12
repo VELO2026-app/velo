@@ -10,6 +10,18 @@
 > this document's own text warns of exactly this drift (§"Verify, don't trust, uploaded
 > files").
 
+> **⚠ NEWER LAYER, added `PROMPT №679`, 2026-08-12 — a THIRD seed command this document does not
+> otherwise know about: `velo seed-demo`.** Everything below this note is about `seed`/
+> `seed-practices` only. `seed-demo` (`backend/scripts/seed_demo.py`, added in commit `330a4d70`)
+> is a separate, newer script with different properties: **non-interactive** (`--master-tg
+> <telegram_id> [--extra-masters N]`, no prompts); creates **ONLY masters** (a real master + up to
+> 99 synthetic ones) and their published practices — no ordinary users, no bookings; goes through
+> the real service paths so it **emits proper outbox events** (unlike `seed`, which writes bare-ORM
+> and is invisible to the comms/chat system); and **refuses to run outside `VELO_ROLE=test`** (a
+> hard role gate in `scripts/velo-manage.sh`, not a convention). Built for the T-15 e2e checklist,
+> to give a test stand a living master catalog to walk through. Not a replacement for `seed` or
+> `seed-practices` — a third, narrower tool.
+
 Handoff document. Contains everything needed to continue work at any
 later point: for yourself a month from now, for a new AI chat, for
 the backend developer, for any participant.
