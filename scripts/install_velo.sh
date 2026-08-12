@@ -104,6 +104,14 @@ VELO_ROLE=""
 GIT_BRANCH=""
 DOMAIN_FRONTEND=""
 DOMAIN_API=""
+# OPTIONAL short public domain (T-32 item 6). Empty is the norm and the
+# default: with it empty this installer must behave exactly as it did
+# before the question existed -- same certbot invocation, same nginx
+# output, no extra server block.
+DOMAIN_PUBLIC=""
+# Set by setup_ssl when the optional domain was asked for but did not
+# get a certificate; read by the closing summary.
+PUBLIC_DOMAIN_NO_CERT=0
 SERVER_IP=""
 
 # === Colors ===
@@ -140,6 +148,18 @@ handle_error() {
     exit 1
 }
 trap 'handle_error ${LINENO}' ERR
+
+# Scratch file for the OpenAPI snapshot (start_stack step 2). Declared
+# here, next to the trap that removes it: the path is created with
+# mktemp at the point of use, and this trap is the ONLY guarantee it
+# does not survive an abort. Empty until then -- `rm -f ""` is a no-op.
+# Replaces the fixed, predictable filename this used to carry inside a
+# world-writable directory -- that is a symlink race: any local user
+# can pre-create the path pointing at a file root then overwrites.
+# The old literal is deliberately not repeated here, so that grepping
+# for it over this script stays an unambiguous check (T-32 item 7).
+OPENAPI_TMP=""
+trap 'rm -f "${OPENAPI_TMP:-}"' EXIT
 
 # === Check root ===
 if [ "$EUID" -ne 0 ]; then
@@ -194,7 +214,28 @@ ask_config() {
     fi
     echo ""
 
-    success "Role: $VELO_ROLE · Branch: $GIT_BRANCH · Domains: $DOMAIN_FRONTEND / $DOMAIN_API"
+    # OPTIONAL third domain -- the base for public links (T-32 items 5/6).
+    # Asked HERE, at install time, and not added later on demand, because
+    # both things it feeds are one-shot: backend/.env is generated exactly
+    # once (the generator is a hard no-op afterwards) and the certificate
+    # is issued once. "Add it when we need it" therefore means "wipe the
+    # server", and this install is promised stable for weeks.
+    #
+    # Empty is a first-class answer: everything below branches on it and
+    # the empty path is the untouched one.
+    echo -e "${CYAN}Public link domain (optional)${NC}"
+    echo -e "${YELLOW}A short domain for public links, e.g. vl.example.com.${NC}"
+    echo -e "${YELLOW}Needs its own DNS A-record here. Press Enter to skip --${NC}"
+    echo -e "${YELLOW}links then use the API domain and nothing else changes.${NC}"
+    read -p "Public link domain [none]: " DOMAIN_PUBLIC
+    DOMAIN_PUBLIC="${DOMAIN_PUBLIC// /}"
+    echo ""
+
+    if [ -n "$DOMAIN_PUBLIC" ]; then
+        success "Role: $VELO_ROLE · Branch: $GIT_BRANCH · Domains: $DOMAIN_FRONTEND / $DOMAIN_API / $DOMAIN_PUBLIC"
+    else
+        success "Role: $VELO_ROLE · Branch: $GIT_BRANCH · Domains: $DOMAIN_FRONTEND / $DOMAIN_API"
+    fi
     echo ""
 }
 
@@ -247,7 +288,10 @@ preflight_checks() {
     # Check DNS for both domains
     SERVER_IP=$(curl -s ifconfig.me 2>/dev/null)
 
-    for CHECK_DOMAIN in "$DOMAIN_FRONTEND" "$DOMAIN_API"; do
+    # The optional domain joins the SAME warn-only loop. Deliberately not
+    # a hard gate: it would be stricter than the two REQUIRED domains get,
+    # which is backwards, and certbot failing is already survivable here.
+    for CHECK_DOMAIN in "$DOMAIN_FRONTEND" "$DOMAIN_API" ${DOMAIN_PUBLIC:+"$DOMAIN_PUBLIC"}; do
         local RESOLVED_IP=$(dig +short "$CHECK_DOMAIN" 2>/dev/null | tail -1)
         if [ -z "$RESOLVED_IP" ]; then
             warn "$CHECK_DOMAIN does not resolve. SSL setup may fail."
@@ -800,6 +844,14 @@ generate_env() {
     fi
     echo ""
 
+    # The short domain if the operator gave one, the API domain otherwise.
+    # Written whether or not its certificate was obtained: the value states
+    # the operator's INTENT, and intent self-heals (fix DNS, re-issue, and
+    # the base is true). Falling back to the API domain would freeze a
+    # temporary certbot failure into permanent config that only a hand edit
+    # -- the thing the delivery doctrine forbids -- could undo.
+    local PUBLIC_LINK_HOST="${DOMAIN_PUBLIC:-$DOMAIN_API}"
+
     cat > "$ENV_FILE" << EOF
 # ===========================================================================
 # VELO Backend — Environment ($VELO_ROLE)
@@ -828,6 +880,39 @@ REDIS_PASSWORD=${REDIS_PASSWORD}
 
 # --- CORS ---
 CORS_ORIGINS=https://${DOMAIN_FRONTEND}
+
+# --- Public links ---
+# Base for links that must survive OUTSIDE Telegram (e-mail, browser,
+# PWA), where DNS is real and a third-party host is a live dependency.
+# The short domain if one was given at install, the API domain otherwise.
+#
+# ┌─ KNOWN CEILING (convention §4a) ──────────────────────────────────────
+# │ (1) MECHANICS: nothing reads this variable. Not one line of code
+# │     consumes PUBLIC_LINK_BASE today -- it is declared ahead of its
+# │     consumer.
+# │ (2) STATUS: acknowledged by design.
+# │ (3) REFERENCE: T-35 (zoom-link wrapper, the /z/{code} redirect).
+# │ (4) UNCONSERVATION TRIGGER: the first public redirect handler
+# │     shipping -- at that point this stops being inert and becomes
+# │     the value that handler's URLs are built from.
+# │ (5) SHAPE OF THE FIX: assemble the URL at the edge from this
+# │     variable, per arch decision 13 (late binding: the intent lives
+# │     in the data, the domain lives in env, the URL is built at send
+# │     time). No migration, no domain in code or in profile data.
+# │ (6) REJECTED, AND WHY: "add it later, when something needs it" --
+# │     the honest-looking option, and wrong here. This file is
+# │     generated EXACTLY ONCE (the generator is a hard no-op if it
+# │     exists) and the certificate is issued once, so "later" is not
+# │     an edit, it is a server wipe -- and this install is promised
+# │     stable for weeks. The cost of carrying an unread key is one
+# │     line; the cost of adding it later is the whole box.
+# │
+# │ NOT the same case as TELEGRAM_API_BASE, which T-32 deletes in the
+# │ same pass for looking identical: that one has no consumer AND no
+# │ trigger -- nothing was ever going to read it. This one has both, on
+# │ a named ticket. Delete it and T-35 pays for a wipe.
+# └───────────────────────────────────────────────────────────────────────
+PUBLIC_LINK_BASE=https://${PUBLIC_LINK_HOST}
 
 # --- Telegram ---
 TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
@@ -879,7 +964,7 @@ setup_nginx() {
     # a detector carrying its own second copy of this text that could drift
     # from this one. Proven byte-identical to the old two-step pipeline for
     # fixed domain inputs before this line ever ran.
-    render_nginx_http "$DOMAIN_FRONTEND" "$DOMAIN_API" > /etc/nginx/sites-available/velo
+    render_nginx_http "$DOMAIN_FRONTEND" "$DOMAIN_API" "$DOMAIN_PUBLIC" > /etc/nginx/sites-available/velo
 
     # Enable site
     ln -sf /etc/nginx/sites-available/velo /etc/nginx/sites-enabled/
@@ -927,7 +1012,39 @@ setup_ssl() {
         # can drift from this one. Proven byte-identical to the old inline
         # heredoc + `sed -i` pipeline for fixed domain inputs before this
         # line ever ran.
-        render_nginx_ssl "$DOMAIN_FRONTEND" "$DOMAIN_API" > /etc/nginx/sites-available/velo
+        #
+        # The optional domain is issued SEPARATELY, below, and only joins
+        # this render once its own certificate exists -- an ssl_certificate
+        # pointing at a missing .pem fails `nginx -t`, and this config's
+        # reload is all-or-nothing for all three domains.
+        local SSL_PUBLIC=""
+        if [ -n "$DOMAIN_PUBLIC" ]; then
+            # SEPARATE certbot run, not a third -d on the line above.
+            # Sharing one certificate would mean a mistyped or
+            # not-yet-propagated OPTIONAL domain fails the issuance and
+            # leaves the two REQUIRED domains with no SSL at all -- a
+            # failure mode that does not exist today, and an optional
+            # extra may not introduce it.
+            log "Requesting a separate certificate for $DOMAIN_PUBLIC..."
+            if certbot certonly \
+                --webroot \
+                --webroot-path=/var/www/certbot \
+                -d "$DOMAIN_PUBLIC" \
+                --non-interactive \
+                --agree-tos \
+                --email "admin@$DOMAIN_FRONTEND" \
+                --no-eff-email; then
+                SSL_PUBLIC="$DOMAIN_PUBLIC"
+                success "SSL certificate obtained for $DOMAIN_PUBLIC"
+            else
+                PUBLIC_DOMAIN_NO_CERT=1
+                error "SSL certificate for $DOMAIN_PUBLIC FAILED. Retry later with:"
+                error "  certbot certonly --webroot --webroot-path=/var/www/certbot -d $DOMAIN_PUBLIC"
+                warn "$DOMAIN_PUBLIC stays on plain HTTP; the two main domains are unaffected."
+            fi
+        fi
+
+        render_nginx_ssl "$DOMAIN_FRONTEND" "$DOMAIN_API" "$SSL_PUBLIC" > /etc/nginx/sites-available/velo
 
         # Explicitly checked -- this used to run unconditionally, printing
         # "Nginx updated with SSL" even when `nginx -t` failed and the reload
@@ -942,7 +1059,9 @@ setup_ssl() {
             exit 1
         fi
 
-        # Auto-renewal cron
+        # Auto-renewal cron -- `certbot renew` walks EVERY certificate on
+        # the machine, so the optional domain's separate one is covered by
+        # this same entry with no second hook.
         if ! crontab -l 2>/dev/null | grep -q "certbot renew"; then
             (crontab -l 2>/dev/null; echo "0 3 * * * certbot renew --quiet --post-hook 'systemctl reload nginx'") | crontab -
             success "SSL auto-renewal cron added (daily at 3 AM)"
@@ -959,6 +1078,21 @@ setup_ssl() {
 # yet earlier in this script.
 # shellcheck source=/dev/null
 source "$INSTALL_BASE/repo/scripts/nginx-render.sh"
+
+# Same reason, same place: the narrow db env projection (T-32 item 9).
+# shellcheck source=/dev/null
+source "$INSTALL_BASE/repo/scripts/env-render.sh"
+
+# postgres and redis are fed this file instead of the whole backend/.env,
+# so neither container sees the application's secrets. Runs BEFORE any
+# `docker compose` invocation -- compose fails outright on a missing
+# env_file, and every command in this script from here on uses compose.
+if ! write_db_env "$INSTALL_BASE/repo/backend/.env" "$INSTALL_BASE/repo/backend/.env.db"; then
+    error "Could not write backend/.env.db -- postgres/redis would start"
+    error "without their credentials. Aborting."
+    exit 1
+fi
+success "backend/.env.db written (narrow db env for postgres/redis)"
 
 setup_nginx
 setup_ssl
@@ -1009,9 +1143,14 @@ ensure_shared_network
 # which overrides the process environment. Hence the two passes.
 #
 # Placed BEFORE start_stack on purpose: velo then starts with COMMS_*
-# already in its env_file -- no backend restart needed. The smoke profile
-# is the deliberate default; the real product profile is a parallel track
-# and is dropped into /opt/comms/profile later.
+# already in its env_file -- no backend restart needed.
+#
+# The SAME seam carries the two product-specific values comms cannot know
+# by itself (T-32): PROFILE_DIR, bound to comms-profile/ inside the velo
+# checkout, and the telegram credentials this installer already asked for.
+# Both are written between the passes; pass 2 sources them. Nothing about
+# either is left for a human to do afterwards -- an installer that needs
+# to be finished by hand is not an installer.
 
 # Idempotent KEY=VALUE write into an env file: update in place when the
 # key exists, append when it does not. Values here are absolute paths
@@ -1058,6 +1197,175 @@ registry_branch_for() {
     error "Service '$wanted' is not declared in $conf"
     return 1
 }
+
+# Read one KEY's value out of an env file. `grep`, deliberately not
+# `source`: these files carry secrets and operator input, and sourcing
+# executes whatever a value happens to look like.
+read_env_value() {
+    local file="$1" key="$2"
+    [ -f "$file" ] || return 1
+    grep -m1 "^${key}=" "$file" 2>/dev/null | cut -d= -f2-
+}
+
+# Gate on every value we push into another stack's env file.
+#
+# WHITELIST, not blacklist: we deliver exactly three shapes -- a bot
+# token, a hostname-bearing URL and an absolute path -- and this set
+# covers them with room to spare, so the guarantee is structural
+# instead of a list of characters someone remembered to ban.
+#
+# Two things depend on it. (1) The comms CLI SOURCES its env file; its
+# own comment justifies that by the file holding "openssl-hex and
+# paths", which stops being the whole truth the moment operator input
+# travels through it. (2) upsert_env_var uses '|' as the sed
+# delimiter. Both were true by the composition of the values, not by
+# construction. Now they are true by construction.
+validate_deliverable() {
+    local key="$1" value="$2"
+    if [ -z "$value" ]; then
+        error "Refusing to deliver an empty value for $key."
+        return 1
+    fi
+    # `[[ =~ ]]`, deliberately NOT `grep -Eq '^...$'`: grep anchors PER
+    # LINE, so a value carrying a newline passes it as long as each of
+    # its lines is clean -- and a newline is the one character that
+    # actually matters here, because it injects a whole extra KEY=VALUE
+    # line into a file that gets sourced. Bash anchors the whole string.
+    # (Caught by the negative twin, which is why the twin exists.)
+    if ! [[ "$value" =~ ^[A-Za-z0-9:._/-]+$ ]]; then
+        error "Refusing to deliver $key: value contains characters outside"
+        error "the allowed set [A-Za-z0-9:._/-] (spaces, quotes, \$, backticks,"
+        error "'|' and newlines are rejected -- they would break the env file"
+        error "that the comms CLI sources)."
+        return 1
+    fi
+    return 0
+}
+
+# item 1 -- the product profile reaches comms by BIND, not by a copy.
+#
+# PROFILE_DIR is pointed straight at the profile inside the velo
+# checkout that this installer just cloned. Consequences, all wanted:
+# `velo update` pulls the repo and the new templates are already on the
+# path comms reads (no second copy to keep in sync), and the arch-doc
+# promise "editing a template = a commit in the product repo -> roll
+# out" becomes literally true.
+#
+# comms-deploy.sh needs no changes for this: its own seed step only
+# fills an EMPTY directory, and this one is never empty -- it carries
+# the profile from git. The seeding on pass 1 has already happened into
+# /opt/comms/profile by the time we get here, so nothing is ever
+# written into the git working tree.
+#
+# ┌─ KNOWN CEILING (convention §4a) ────────────────────────────────────
+# │ (1) MECHANICS: binding the live profile to a git checkout means a
+# │     broken types.yaml or template pulled by `velo update` takes the
+# │     RUNNING comms stack down -- it validates the profile at startup
+# │     and refuses to boot on a bad one. With the old copy-based
+# │     scheme a bad commit could not do that.
+# │ (2) STATUS: acknowledged by design -- this is the price of arch
+# │     decision 12 (profile lives in the product repo, delivered by
+# │     bind-mount), knowingly paid for single-source templates.
+# │ (3) REFERENCE: T-32, item 1.
+# │ (4) UNCONSERVATION TRIGGER: a profile edit ever reaching the server
+# │     from something other than a reviewed commit (a web editor, a
+# │     second author, a generated profile) -- at that point the
+# │     checkout stops being a review gate and validation has to move
+# │     in front of the restart.
+# │ (5) SHAPE OF THE FIX: validate the profile in a throwaway container
+# │     BEFORE restarting the live one (`compose run --rm` against the
+# │     loader), and refuse the restart instead of performing it.
+# │ (6) REJECTED, AND WHY:
+# │     - doing that pre-validation NOW: it is extra machinery on every
+# │       single update, able to fail on its own, for a failure mode
+# │       whose recovery is already one command (revert the template
+# │       commit, re-run `velo update`) and which `velo update` reports
+# │       loudly by name;
+# │     - going back to COPYING the profile into /opt/comms/profile: it
+# │       removes this failure mode and kills decision 12 with it --
+# │       two divergent copies of the templates and a manual step to
+# │       keep them equal, which is exactly the defect this task exists
+# │       to remove.
+# └─────────────────────────────────────────────────────────────────────
+deliver_comms_profile() {
+    local comms_env="$1"
+    local profile_dir="$INSTALL_BASE/repo/comms-profile"
+
+    # Fail FAST and by name. Without this the failure still happens --
+    # comms-app refuses to start on a profile that is missing or invalid
+    # -- but it arrives as an opaque container health timeout minutes
+    # later, with the real cause buried in another stack's logs.
+    if [ ! -d "$profile_dir" ]; then
+        error "Product profile not found at $profile_dir"
+        error "The velo checkout must carry comms-profile/ (types.yaml +"
+        error "templates/). comms will not start without a valid profile."
+        exit 1
+    fi
+    if [ ! -f "$profile_dir/types.yaml" ] || [ ! -d "$profile_dir/templates" ]; then
+        error "Profile at $profile_dir is incomplete."
+        error "Expected types.yaml and templates/ -- found:"
+        ls -A "$profile_dir" 2>/dev/null | sed 's/^/  /'
+        exit 1
+    fi
+
+    validate_deliverable "PROFILE_DIR" "$profile_dir" || exit 1
+    upsert_env_var "$comms_env" "PROFILE_DIR" "$profile_dir"
+    success "PROFILE_DIR=$profile_dir (bind: comms reads the profile from the velo checkout)"
+}
+
+# item 2 -- the bot token and the channel mode reach comms from the ONE
+# place they were ever entered: the installer's own prompt.
+#
+# Both values are read back OUT of the velo .env rather than rebuilt
+# from shell variables. Two reasons, both load-bearing:
+#   - byte-equality with what velo itself uses is then a property of
+#     the code, not a coincidence of two formulas staying in step;
+#   - generate_env() is a hard no-op when backend/.env already exists,
+#     so on a re-run over a live box the prompt never happens and those
+#     shell variables do not exist at all.
+#
+# THE GUARD: nothing delivered unless BOTH values are present. A re-run
+# without the prompt would otherwise push emptiness over a working
+# real-mode config and silently mute a live installation. Empty is
+# never an instruction here -- it only ever means "this run had nothing
+# to say".
+deliver_comms_telegram() {
+    local comms_env="$1" velo_env="$2"
+    local token url
+
+    token=$(read_env_value "$velo_env" "TELEGRAM_BOT_TOKEN" || true)
+    url=$(read_env_value "$velo_env" "TELEGRAM_BOT_URL" || true)
+
+    if [ -z "${token:-}" ] || [ -z "${url:-}" ]; then
+        warn "Telegram credentials NOT delivered to comms on this run."
+        warn "backend/.env already existed, so the installer never asked for a"
+        warn "token -- and pushing empty values would break a working comms."
+        warn "Existing TELEGRAM_BOT_TOKEN / TELEGRAM_BOT_URL / CHANNELS_MODE in"
+        warn "$comms_env are left exactly as they are."
+        warn "A clean delivery is a WIPE + fresh install -- never a hand edit"
+        warn "of either .env (the installer is the deliverable; a server edited"
+        warn "by hand is a server nobody can reproduce)."
+        COMMS_TELEGRAM_DELIVERED=0
+        return 0
+    fi
+
+    # Both or neither: TELEGRAM_BOT_URL is derived from the token (it
+    # carries the username Telegram answered with for THAT token), so
+    # moving one without the other is meaningless. And real mode
+    # validates BOTH at startup -- comms refuses to boot on an empty
+    # bot URL, because every deep-link button would be built from it.
+    validate_deliverable "TELEGRAM_BOT_TOKEN" "$token" || exit 1
+    validate_deliverable "TELEGRAM_BOT_URL" "$url" || exit 1
+
+    upsert_env_var "$comms_env" "TELEGRAM_BOT_TOKEN" "$token"
+    upsert_env_var "$comms_env" "TELEGRAM_BOT_URL" "$url"
+    upsert_env_var "$comms_env" "CHANNELS_MODE" "real"
+    COMMS_TELEGRAM_DELIVERED=1
+    success "Telegram credentials delivered to comms; CHANNELS_MODE=real"
+}
+
+# Set by deliver_comms_telegram, read by the install summary.
+COMMS_TELEGRAM_DELIVERED=0
 
 setup_comms() {
     log "Setting up the comms stack (orchestrated)..."
@@ -1114,6 +1422,20 @@ setup_comms() {
     upsert_env_var "$COMMS_ENV" "PRODUCT_ENV_PATH" "$VELO_ENV"
     success "PRODUCT_ENV_PATH=$VELO_ENV written into $COMMS_ENV"
 
+    # -- 3b. Deliver the product PROFILE and the telegram credentials -----
+    # T-32 items 1 and 2. Everything below rides the SAME two-pass seam as
+    # PRODUCT_ENV_PATH above, for the same documented reason: the comms CLI
+    # sources /opt/comms/.env, which overrides the process environment, so
+    # a value only arrives if it is IN THE FILE before pass 2 runs.
+    #
+    # Deliberately done from THIS side and not by teaching comms-deploy.sh
+    # about products: comms is one deploy body for several products
+    # (cbshome next), and everything product-specific -- which profile,
+    # which bot -- is ours to supply. comms stays agnostic; the installer
+    # is the only artifact that knows about VELO.
+    deliver_comms_profile "$COMMS_ENV"
+    deliver_comms_telegram "$COMMS_ENV" "$VELO_ENV"
+
     # -- 4. Pass 2: idempotent re-run -- executes the token hand-over --
     log "comms-deploy install, pass 2 (COMMS_* hand-over into velo .env)..."
     if ! bash "$COMMS_DEPLOY" install; then
@@ -1136,7 +1458,12 @@ setup_comms() {
         fi
     done
     success "COMMS_* variables verified in $VELO_ENV"
-    success "comms stack is up and linked (smoke profile; drop the real product profile into $COMMS_INSTALL_BASE/profile later)"
+    success "comms stack is up and linked (profile: $INSTALL_BASE/repo/comms-profile)"
+    if [ "$COMMS_TELEGRAM_DELIVERED" -eq 1 ]; then
+        success "comms channels: real (bot token delivered by this installer)"
+    else
+        warn "comms channels: UNCHANGED on this run -- see the note above."
+    fi
 }
 
 setup_comms
@@ -1188,21 +1515,29 @@ start_stack() {
 
     # -- 2. Generate frontend types from live backend OpenAPI --
     log "Generating frontend API types from backend OpenAPI..."
+    # Unpredictable path, created 600 by mktemp, removed by the EXIT trap
+    # at the top of this script whichever way we leave. NOT `local`: the
+    # trap must be able to see it.
+    if ! OPENAPI_TMP=$(mktemp -t velo-openapi.XXXXXX); then
+        error "Could not create a temporary file for the OpenAPI snapshot."
+        exit 1
+    fi
     # -f (fail on HTTP error) is required, not cosmetic: without it curl exits
     # 0 on a 500 and writes the error body to the file instead of failing here.
-    if ! curl -sf http://127.0.0.1:8000/openapi.json > /tmp/openapi.json; then
+    if ! curl -sf http://127.0.0.1:8000/openapi.json > "$OPENAPI_TMP"; then
         error "Could not fetch openapi.json from the backend — is it healthy?"
-        rm -f /tmp/openapi.json
+        rm -f "$OPENAPI_TMP"
         exit 1
     fi
     if ! python3 "$INSTALL_BASE/repo/backend/scripts/generate_ts_types.py" \
-        /tmp/openapi.json \
+        "$OPENAPI_TMP" \
         "$INSTALL_BASE/repo/frontend/src/api/generated.ts"; then
         error "Type generation FAILED."
-        rm -f /tmp/openapi.json
+        rm -f "$OPENAPI_TMP"
         exit 1
     fi
-    rm -f /tmp/openapi.json
+    rm -f "$OPENAPI_TMP"
+    OPENAPI_TMP=""
     success "Frontend types generated"
 
     # -- 3. Build and start frontend (picks up fresh generated.ts) --
@@ -1264,9 +1599,15 @@ EOF
     # update` stayed role-blind and ran the pytest suite against the live
     # DB on ANY server. Now the role persists and velo-manage.sh gates the
     # test-only phases (pytest + comms projection resync) on it.
+    # DOMAIN_PUBLIC is recorded even when empty, and that is the point:
+    # `velo doctor` renders the expected nginx config from these values
+    # and diffs it against the live file. Without the third domain here,
+    # every server that opted in would report permanent nginx drift --
+    # the doctor would be lying because we did not tell it what we built.
     cat > "$INSTALL_BASE/velo.conf" << EOF
 DOMAIN_FRONTEND=${DOMAIN_FRONTEND}
 DOMAIN_API=${DOMAIN_API}
+DOMAIN_PUBLIC=${DOMAIN_PUBLIC}
 VELO_ROLE=${VELO_ROLE}
 VELO_BRANCH=${GIT_BRANCH}
 EOF
@@ -1347,19 +1688,34 @@ info "Server: $SERVER_IP ($VELO_ROLE, branch $GIT_BRANCH)"
 info "Frontend: https://$DOMAIN_FRONTEND"
 info "API:      https://$DOMAIN_API"
 info "Health:   https://$DOMAIN_API/health"
-info "Comms:    up on '$SHARED_NETWORK' (internal API, no public port; smoke profile; branch per scripts/services.conf)"
+info "Comms:    up on '$SHARED_NETWORK' (internal API, no public port; profile bound from repo/comms-profile; branch per scripts/services.conf)"
+if [ -n "$DOMAIN_PUBLIC" ]; then
+    if [ "$PUBLIC_DOMAIN_NO_CERT" -eq 1 ]; then
+        warn "Public link base: https://$DOMAIN_PUBLIC — NO CERTIFICATE."
+        warn "  PUBLIC_LINK_BASE in backend/.env points at that domain, but its"
+        warn "  certificate was not issued, so https:// links built from it will"
+        warn "  not work until DNS is fixed and the certificate is re-requested."
+        warn "  Harmless today: no code reads PUBLIC_LINK_BASE yet (see the"
+        warn "  KNOWN CEILING note next to it in backend/.env)."
+        warn "  Re-request: certbot certonly --webroot --webroot-path=/var/www/certbot -d $DOMAIN_PUBLIC"
+        warn "  Then re-render nginx: velo doctor  (shows the drift), then reload."
+    else
+        info "Public:   https://$DOMAIN_PUBLIC  (link base; no consumer yet — T-35)"
+    fi
+fi
 echo ""
 
 info "Directory structure:"
 echo "  $INSTALL_BASE/"
 echo "  ├── repo/              # Git repository (scripts/velo-manage.sh lives here)"
 echo "  ├── scripts/manage.sh  # thin shim -- do not hand-edit, see the file"
-echo "  ├── velo.conf          # this server's domains"
+echo "  ├── velo.conf          # this server's domains (incl. the optional public one)"
 echo "  └── backups/           # daily backups"
 echo "  $COMMS_INSTALL_BASE/"
 echo "  ├── repo/              # comms checkout (CLI: repo/deploy/comms-deploy.sh)"
 echo "  ├── .env               # comms master env (secrets, minted once)"
-echo "  ├── profile/           # per-product profile (smoke seeded -- drop the real one on top)"
+echo "  ├── profile/           # unused here: the live profile is bound from"
+echo "  │                      #   $INSTALL_BASE/repo/comms-profile/"
 echo "  └── backups/           # comms db dumps"
 
 log "Management commands:"
