@@ -72,10 +72,11 @@ import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import BookingConfirmedView from '@/views/user/BookingConfirmedView.vue'
 import { usePracticesStore } from '@/stores/practices'
+import { useAuthStore } from '@/stores/auth'
 import { getPractice } from '@/api/practices'
 import { ApiResponseError } from '@/api/client'
 import * as chatsApi from '@/api/chats'
-import type { PracticeResponse } from '@/api/types'
+import type { PracticeResponse, UserResponse } from '@/api/types'
 
 vi.mock('@/api/practices', async () => {
   const actual = await vi.importActual<typeof import('@/api/practices')>('@/api/practices')
@@ -413,8 +414,36 @@ describe('BookingConfirmedView', () => {
 
       expect(chatsApi.openChat).toHaveBeenCalledWith('master_specific')
       // The thread id comes from the OPEN response, not from anywhere else.
-      expect(chatsApi.sendChatMessage).toHaveBeenCalledWith('thread-7', 'Болит колено')
+      // The body carries the owner-ruled practice caption ahead of the typed
+      // text, blank-line separated: the DM is one eternal thread per pair, so
+      // without it the master cannot tell which practice prompted the question.
+      expect(chatsApi.sendChatMessage).toHaveBeenCalledWith(
+        'thread-7',
+        'Практика: Утренняя медитация, 20 июля в 10:00\n\nБолит колено',
+      )
       expect(push).toHaveBeenCalledWith({ name: 'user-chat', params: { id: 'thread-7' } })
+    })
+
+    it('the caption strips the "(эфир)" title marker and renders the time in the viewer timezone', async () => {
+      // useViewerTimezone reads exactly one field off the real auth store;
+      // Pinia here is real, so setting it directly is the honest double.
+      useAuthStore().user = { timezone: 'Europe/Moscow' } as UserResponse
+      getPracticeMock.mockResolvedValue(practice({ title: 'Утренняя медитация (эфир)' }))
+      vi.mocked(chatsApi.openChat).mockResolvedValue(THREAD)
+      vi.mocked(chatsApi.sendChatMessage).mockResolvedValue(SENT)
+      mount()
+      await flush()
+
+      type('Вопрос')
+      await nextTick()
+      sendBtn()?.click()
+      await flush()
+
+      // 10:00 UTC -> 13:00 Moscow, and no "(эфир)" suffix in the caption.
+      expect(chatsApi.sendChatMessage).toHaveBeenCalledWith(
+        'thread-7',
+        'Практика: Утренняя медитация, 20 июля в 13:00\n\nВопрос',
+      )
     })
 
     it('a successful send clears the field, so returning to this screen does not offer to send the same text again', async () => {

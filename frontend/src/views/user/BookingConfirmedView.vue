@@ -97,6 +97,8 @@ import Banner from '@/components/shared/Banner.vue'
 import { IconSuccess, IconSupport } from '@/components/icons'
 import { openChat, sendChatMessage } from '@/api/chats'
 import { extractApiError } from '@/composables/useApiError'
+import { formatDate, cleanPracticeTitle } from '@/utils/format'
+import { useViewerTimezone } from '@/composables/useViewerTimezone'
 
 const route = useRoute()
 const router = useRouter()
@@ -114,10 +116,24 @@ const practiceId = route.params.practiceId as string
 // bug (fixed e5003b4): trusting that ANY data present is the RIGHT data for
 // what is currently on screen.
 const practice = computed(() => (store.selected?.id === practiceId ? store.selected : null))
+const viewerTz = useViewerTimezone()
 
 // The first message of the DM with this practice's master.
 const masterRequest = ref('')
 const sending = ref(false)
+
+// The thread is ONE eternal DM per (client, master) pair, not one per
+// practice -- so a bare question arrives with no indication of which practice
+// prompted it, and a master running several cannot tell. Owner-ruled: prefix
+// the practice, separated by a blank line so it reads as a caption rather than
+// as the person's own words. Time is rendered in the VIEWER's timezone, the
+// same one the rest of this screen's practice data is shown in.
+function composeRequest(body: string): string {
+  const p = practice.value
+  if (!p) return body
+  const when = formatDate(p.scheduled_at, viewerTz.value)
+  return `Практика: ${cleanPracticeTitle(p.title)}, ${when}\n\n${body}`
+}
 
 async function onSendRequest(): Promise<void> {
   // Two calls, in order: open-or-get the thread, then post the text into it.
@@ -131,7 +147,7 @@ async function onSendRequest(): Promise<void> {
   sending.value = true
   try {
     const thread = await openChat(masterId)
-    await sendChatMessage(thread.id, body)
+    await sendChatMessage(thread.id, composeRequest(body))
     masterRequest.value = ''
     await router.push({ name: 'user-chat', params: { id: thread.id } })
   } catch (e) {
