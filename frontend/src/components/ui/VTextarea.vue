@@ -19,6 +19,7 @@
       v-if="label"
       class="v-textarea__label"
       :class="{ 'v-textarea__label--visually-hidden': hideLabel }"
+      :for="fieldId"
       >{{ label }}</label
     >
     <div class="v-textarea__row">
@@ -29,6 +30,7 @@
           'v-textarea__field--autogrow': autogrow,
           'v-textarea__field--bordered-rest': borderedAtRest,
         }"
+        :id="fieldId"
         :value="modelValue"
         :placeholder="placeholder"
         :rows="rows"
@@ -53,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, nextTick } from 'vue'
+import { ref, watch, onMounted, nextTick, useId } from 'vue'
 import { IconRequired, IconRequiredDone } from '@/components/icons'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 
@@ -65,6 +67,9 @@ defineOptions({ inheritAttrs: false })
 // for the rationale; same merge-safe pattern (Vue fires both handlers if a
 // caller also passes its own `@focus`).
 const { onFieldFocus } = useKeyboardFieldScroll()
+
+// Label/input association (PROMPT №679), same pattern as VInput.vue.
+const fieldId = useId()
 
 const props = withDefaults(
   defineProps<{
@@ -228,7 +233,7 @@ watch(
 }
 
 .v-textarea__field::placeholder {
-  color: var(--velo-text-muted);
+  color: var(--velo-text-placeholder);
 }
 
 .v-textarea__field:disabled {

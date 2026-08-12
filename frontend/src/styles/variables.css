@@ -46,6 +46,12 @@
   --velo-text-primary: #4c6589;
   --velo-text-secondary: rgba(76, 101, 137, 0.7);
   --velo-text-muted: rgba(76, 101, 137, 0.5);
+  /* Placeholder-only (owner-ruled option B, PROMPT №679): --velo-text-muted composited on
+     --velo-bg-card-solid is 2.15:1, below both WCAG bars. 72 usages of --velo-text-muted exist,
+     only 4 are placeholders (VInput/VTextarea) -- darkening the shared token would move 68
+     unreviewed places to fix four. This token is 90% opacity of the same base hue, the minimum
+     clean value that clears 4.5:1 (measured 4.75:1; 85% measures 4.26:1 and still fails). */
+  --velo-text-placeholder: rgba(76, 101, 137, 0.9);
 
   /* === Colors: Borders === */
   --velo-border: #abbfda;

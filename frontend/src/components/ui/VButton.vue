@@ -90,7 +90,10 @@ const normalizedSize = computed(() => (props.size === 'lg' ? 'md' : props.size))
 .v-btn--sm {
   padding: var(--space-2) var(--space-4);
   font-size: var(--text-xs);
-  min-height: 36px;
+  /* 44px touch-target bar (PROMPT №679); reuses the existing --velo-size-44
+     token rather than a raw px, sitting between VInput's 40px affix height
+     and .v-btn--md's 50px, inside the app's existing size range. */
+  min-height: var(--velo-size-44);
 }
 
 .v-btn--md {

@@ -234,6 +234,14 @@ function goHome(): void {
   padding: 0 var(--space-4);
   border: 1.5px solid var(--velo-primary);
   border-radius: var(--radius-full);
+  transition: box-shadow var(--transition-fast);
+}
+
+/* PROMPT №679: .support__other-input (below) is borderless by design; unlike
+   DiaryComposer this wrapper already has a rest-state border, so focus adds
+   a RING around the existing border rather than changing its colour. */
+.support__other:focus-within {
+  box-shadow: 0 0 0 3px var(--velo-glass-blue-60);
 }
 
 .support__other-input {

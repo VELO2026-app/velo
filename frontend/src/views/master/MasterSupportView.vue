@@ -298,6 +298,13 @@ function onGoHome(): void {
   padding: 0 var(--space-4);
   border: 1.5px solid var(--velo-primary);
   border-radius: var(--radius-full);
+  transition: box-shadow var(--transition-fast);
+}
+
+/* PROMPT №679: mirrors user SupportView.vue's identical structure -- ring
+   around the existing border on focus, no colour change to the border. */
+.support__other:focus-within {
+  box-shadow: 0 0 0 3px var(--velo-glass-blue-60);
 }
 
 .support__other-input {

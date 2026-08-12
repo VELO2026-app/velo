@@ -277,6 +277,14 @@ async function onSend(): Promise<void> {
     box-shadow var(--transition-fast);
 }
 
+/* PROMPT №679: .composer__input (below) is borderless by design, so the focus
+   ring targets this wrapper via :focus-within -- reuses the existing focus
+   token, no new token minted. */
+.composer__field:focus-within {
+  border-color: var(--velo-border-input-focus);
+  box-shadow: 0 0 0 3px var(--velo-glass-blue-60);
+}
+
 .composer__input {
   flex: 1;
   min-width: 0;

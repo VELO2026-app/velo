@@ -23,6 +23,7 @@
       v-if="label && !floatingLabel"
       class="v-input__label"
       :class="{ 'v-input__label--visually-hidden': hideLabel }"
+      :for="fieldId"
       >{{ label }}</label
     >
 
@@ -40,13 +41,14 @@
           ref="inputEl"
           class="v-input__field v-input__field--float"
           :type="type"
+          :id="fieldId"
           :value="modelValue"
           :disabled="disabled"
           v-bind="$attrs"
           @focus="onFieldFocus"
           @input="onInput"
         />
-        <label class="v-input__float-label">{{ label }}</label>
+        <label class="v-input__float-label" :for="fieldId">{{ label }}</label>
       </div>
 
       <!-- Affix path: prefix/suffix slots (€ amount, inline action, …). The box
@@ -57,6 +59,7 @@
           ref="inputEl"
           class="v-input__field v-input__field--bare"
           :type="type"
+          :id="fieldId"
           :value="modelValue"
           :placeholder="placeholder"
           :disabled="disabled"
@@ -73,6 +76,7 @@
         ref="inputEl"
         class="v-input__field"
         :type="type"
+        :id="fieldId"
         :value="modelValue"
         :placeholder="placeholder"
         :disabled="disabled"
@@ -95,7 +99,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, useId } from 'vue'
 import { IconRequired, IconRequiredDone } from '@/components/icons'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 
@@ -117,6 +121,13 @@ defineOptions({ inheritAttrs: false })
 // (prefix/suffix slots) each render their OWN <input>, so they silently
 // didn't inherit it. Same fix, same reasoning, applied to all 3 paths now.
 const { onFieldFocus } = useKeyboardFieldScroll()
+
+// Label/input association (PROMPT №679): one id per component instance covers
+// all 3 template branches, since only one is ever mounted at a time. A
+// caller-supplied `id` (arriving through $attrs, bound AFTER this in the
+// template) still wins -- Vue resolves same-element plain attrs by source
+// order, so this is the fallback, not an override.
+const fieldId = useId()
 
 const props = withDefaults(
   defineProps<{
@@ -247,7 +258,7 @@ function onInput(e: Event): void {
 }
 
 .v-input__field::placeholder {
-  color: var(--velo-text-muted);
+  color: var(--velo-text-placeholder);
 }
 
 .v-input__field:disabled {
@@ -286,7 +297,7 @@ function onInput(e: Event): void {
 .v-input__affix {
   flex-shrink: 0;
   font-size: var(--text-base);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-placeholder);
 }
 
 .v-input__field--bare {
@@ -325,7 +336,7 @@ function onInput(e: Event): void {
   transform: translateY(-50%);
   font-family: var(--font-body);
   font-size: var(--text-base);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-placeholder);
   pointer-events: none;
   transition:
     top var(--transition-fast),

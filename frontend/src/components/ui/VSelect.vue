@@ -12,10 +12,11 @@
 
 <template>
   <div class="v-select" :class="{ 'v-select--error': !!error }">
-    <label v-if="label" class="v-select__label">{{ label }}</label>
+    <label v-if="label" class="v-select__label" :for="fieldId">{{ label }}</label>
     <div class="v-select__row">
       <select
         class="v-select__field"
+        :id="fieldId"
         :value="modelValue"
         :disabled="disabled"
         @change="$emit('update:modelValue', ($event.target as HTMLSelectElement).value)"
@@ -42,12 +43,18 @@
 </template>
 
 <script setup lang="ts">
+import { useId } from 'vue'
 import { IconRequired, IconRequiredDone } from '@/components/icons'
 
 export interface SelectOption {
   value: string
   label: string
 }
+
+// Label/input association (PROMPT №679), same pattern as VInput.vue. VSelect
+// does not forward $attrs to the inner <select> (no inheritAttrs:false here),
+// so there is no caller-supplied id to defer to on this element.
+const fieldId = useId()
 
 withDefaults(
   defineProps<{

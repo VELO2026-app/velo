@@ -412,6 +412,7 @@ function goBack(): void {
   letter-spacing: 0.32px;
   color: var(--velo-text-primary);
   outline: none;
+  transition: border-color var(--transition-fast);
 }
 
 .entry__edit-title::placeholder {
@@ -419,8 +420,17 @@ function goBack(): void {
   opacity: 0.5;
 }
 
+/* PROMPT №679: already has a border-bottom at rest -- focus strengthens the
+   SAME border, no new element, reuses the existing focus token. */
+.entry__edit-title:focus {
+  border-bottom-width: 2px;
+  border-bottom-color: var(--velo-border-input-focus);
+  padding-bottom: calc(var(--space-1) - 1px);
+}
+
 .entry__edit-content {
   border: none;
+  border-bottom: 1px solid transparent;
   background: transparent;
   resize: none;
   font-family: var(--font-body);
@@ -429,6 +439,13 @@ function goBack(): void {
   color: var(--velo-text-primary);
   outline: none;
   overflow-y: hidden;
+  transition: border-color var(--transition-fast);
+}
+
+/* PROMPT №679: fully borderless at rest (unlike the title above) -- a
+   border-bottom appears ONLY on focus, as previewed and approved. */
+.entry__edit-content:focus {
+  border-bottom-color: var(--velo-border-input-focus);
 }
 
 /* -- Save bar -- */
