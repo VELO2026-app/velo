@@ -5,7 +5,7 @@
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BadRequestError
@@ -13,6 +13,9 @@ from app.modules.masters.models import MasterProfile
 from app.modules.payments.models import (
     CompanyLedgerType,
     LedgerStatus,
+    MasterLedger,
+    Payment,
+    Purchase,
     UserLedger,
 )
 from app.modules.payments.service import (
@@ -40,18 +43,32 @@ async def _purge(session: AsyncSession, telegram_id: int) -> None:
     ids were already present and every ledger test failed on
     ix_users_telegram_id before a single assertion ran.
 
-    Deleting first makes the file idempotent instead of first-run-only.
-    Deliberately NOT switched to random ids: the fixed ones are readable
-    in a failure message and this file is their only user (verified --
-    `grep -rl '7000[0-9]' backend/tests/` returns this file alone). The
-    cascade takes MasterProfile and any ledger rows with the user.
+    Fixed ids are the house idiom here (the chats suites pin bands too);
+    what this file lacked was their other half, the cleanup.
+
+    ⚠ THE DEPENDENTS MUST GO FIRST, and the list is MEASURED, not assumed.
+    An earlier version of this helper deleted the User alone, claiming in
+    its own comment that "the cascade takes the ledger rows with it". It
+    does not, and the deploy said so: FK master_ledger_user_id_fkey
+    blocked the delete. Every ledger/money FK to users.id is
+    ondelete=RESTRICT ON PURPOSE -- payments/models.py:160 (user_ledger),
+    :204 (master_ledger), :333 (payments), :426 (purchases) -- because a
+    financial record must not vanish with the user it belongs to. Only
+    MasterProfile cascades (masters/models.py:59), so it is not listed.
+    company_ledger carries no users FK at all.
     """
     existing = await session.scalar(
         select(User).where(User.telegram_id == telegram_id)
     )
-    if existing is not None:
-        await session.delete(existing)
-        await session.flush()
+    if existing is None:
+        return
+
+    for model in (UserLedger, MasterLedger, Payment, Purchase):
+        await session.execute(
+            delete(model).where(model.user_id == existing.id)
+        )
+    await session.delete(existing)
+    await session.flush()
 
 
 async def _create_user(session: AsyncSession, telegram_id: int) -> User:
