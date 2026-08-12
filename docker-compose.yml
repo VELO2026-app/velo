@@ -17,6 +17,12 @@
 # both backend/ and frontend/ build contexts.
 # =============================================================================
 
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   app:
     build: ./backend
@@ -35,6 +41,7 @@ services:
       retries: 3
       start_period: 15s
     restart: unless-stopped
+    logging: *default-logging
     # The backend is the ONLY velo service that talks to comms (the comms
     # API is internal, reachable by service name on aivis-shared only).
     # `default` is listed explicitly: once a service carries a `networks:`
@@ -61,6 +68,7 @@ services:
       retries: 3
       start_period: 30s
     restart: unless-stopped
+    logging: *default-logging
 
   postgres:
     image: postgres:16
@@ -84,6 +92,7 @@ services:
       timeout: 3s
       retries: 5
     restart: unless-stopped
+    logging: *default-logging
 
   redis:
     image: redis:7-alpine
@@ -114,6 +123,7 @@ services:
       timeout: 3s
       retries: 5
     restart: unless-stopped
+    logging: *default-logging
 
 volumes:
   velo_postgres_data:
