@@ -81,6 +81,15 @@ missed.
 12. **`viewport-fit=cover` is absent** from the viewport meta — `viewport-fit` occurs zero times in
     `frontend/index.html` `[N]` (the meta does carry `interactive-widget=resizes-visual`). Impact is
     a device claim and is unverified.
+    > ⚠ **DECLINED, `PROMPT №681` — not the trivial one-liner it looks like. `env(safe-area-inset-*)`
+    > already occurs in 5 files** (`DiaryFeedView.vue`, `AdminLayout.vue`, `WelcomeView.vue`,
+    > `VAdminTabBar.vue`, `VTabBar.vue`) `[N]`, and per spec every one of those currently resolves to
+    > `0` because `viewport-fit` is unset — dormant, not broken. **Setting `viewport-fit=cover` activates
+    > that CSS for the first time, on notched devices, across a tab bar and the diary feed** — exactly
+    > the territory this board has already burned multiple cycles tuning (`BG-ROOT`, the Android keyboard
+    > saga). Not a device-claim-and-ship risk: a real layout change with no device pass behind it.
+    > **CLOSE: someone verifies each of the 5 sites on a notched device before the flag is turned on, or
+    > it stays off deliberately.**
 13. **Headings:** ~22 of 84 views render no heading element at all.
 14. **Focus outline removed with no replacement** on 4 fields.
 15. **`VInput`/`VSelect`/`VTextarea` never pair `<label>` with `for`/`id`.**
