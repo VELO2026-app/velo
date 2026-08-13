@@ -20,11 +20,14 @@ Post-state twins (DB rows, not just codes):
 telegram_id band: 89660-89679 (issued for H-R2-8; admin pinned at
 89679).
 
-STRUCTURAL FACT (recorded in the report): under the derived-students
-rule (_is_student_clause: >=1 non-cancelled booking on the master) a
-booked user IS a student, so the PUBLIC -> STUDENTS case was green even
-pre-(B); PUBLIC -> GROUPS and group removal are the discriminating
-flips.
+STRUCTURAL FACT (recorded in the report): a user holding a CONFIRMED
+booking on the master IS a student, so the PUBLIC -> STUDENTS case was
+green even pre-(B); PUBLIC -> GROUPS and group removal are the
+discriminating flips. (T-20, 2026-08-13: the predicate was renamed
+_is_student_clause -> _has_student_entitlement_clause and narrowed from
+">=1 non-cancelled booking" to STUDENT_ENTITLEMENT_STATUSES =
+{CONFIRMED, ATTENDED, NO_SHOW}. Every booking in this file is CONFIRMED,
+so the structural fact above is unchanged.)
 """
 
 import uuid

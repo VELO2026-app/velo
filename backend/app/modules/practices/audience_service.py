@@ -18,10 +18,19 @@
 # via assert_viewer_can_access_practice below.
 #
 # RULE: viewer is NOT blocked by the practice's master (master_student.
-# blocked_at) AND (audience=public) OR (audience=students AND viewer has
-# >=1 non-cancelled booking on that master's practices -- the same derived
-# "Ученики" rule groups_service.py uses) OR (audience=groups AND viewer is
-# a member of >=1 of the practice's target groups).
+# blocked_at) AND (audience=public) OR (audience=students AND viewer holds
+# >=1 booking in STUDENT_ENTITLEMENT_STATUSES on that master's practices)
+# OR (audience=groups AND viewer is a member of >=1 of the practice's
+# target groups).
+#
+# T-20 (owner ruling 2026-08-13): "student" names TWO things and they are
+# SPLIT here, not reconciled. DISPLAY (what a master sees in their students
+# list -- groups_service._derived_students_base) is a CONTACT LIST and is
+# deliberately WIDE: any non-cancelled booking. The RIGHT to enter an
+# audience_kind=students practice is NARROW and lives in this module, in
+# STUDENT_ENTITLEMENT_STATUSES below. This module used to borrow the
+# display rule verbatim (`status != CANCELLED`); it no longer does. Widening
+# the DISPLAY sources is T-37 and is NOT part of this file's job.
 #
 # The three _*_clause() functions are the single source of truth for each
 # condition -- both viewer_audience_clause (composes all three into one SQL
@@ -42,6 +51,47 @@ from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.masters.groups_models import MasterGroupMembership, MasterStudent
 from app.modules.practices.models import AudienceKind, Practice, PracticeAudienceGroup
 
+# T-20: THE GATE's own booking-status set -- the single source for "does
+# this booking make its holder a student of that booking's master, for the
+# purpose of ENTERING an audience_kind=students practice".
+#
+#   CONFIRMED -- holds a seat. The entitlement itself.
+#   ATTENDED  -- was there.
+#   NO_SHOW   -- KEPT DELIBERATELY (owner ruling 2026-08-13): the person WAS
+#                a student; entitlement is not revoked for missing one
+#                session. Narrowing here would silently evict people whose
+#                only sin is an absence the master themselves recorded.
+#   PENDING   -- EXCLUDED. An intent, not an entitlement. Today nothing
+#                creates PENDING (both booking-creation paths write
+#                CONFIRMED explicitly: bookings/service.py create_booking
+#                and waitlist/service.py confirm_waitlist), but Booking.
+#                status carries BOTH default=PENDING and
+#                server_default=PENDING (bookings/models.py), so ANY future
+#                insert that omits status would otherwise mint a student
+#                with access to every students-only practice by that master.
+#                This set closes that latent hole by construction rather
+#                than by relying on both creators continuing to be explicit.
+#   CANCELLED -- EXCLUDED, unchanged.
+#
+# NOT an alias of practices/service.py's ZOOM_VISIBLE_BOOKING_STATUSES /
+# _ACCESS_GRANTING_STATUSES, and the difference is the point: those two ARE
+# each other (one is literally an alias of the other) because they answer
+# the same PER-PRACTICE question -- "may this viewer see THIS practice's
+# zoom link / read THIS restricted practice" -- where a NO_SHOW must not
+# hand out a live meeting link. This set answers a PER-MASTER question:
+# "is this person one of that master's students at all". Same reasoning
+# about PENDING, different membership, different question; aliasing them
+# would let a change to either silently move the other.
+#
+# NOT groups_service._derived_students_base's rule either -- see this
+# module's header: that is the DISPLAY predicate, and display is wide on
+# purpose.
+STUDENT_ENTITLEMENT_STATUSES = {
+    BookingStatus.CONFIRMED.value,
+    BookingStatus.ATTENDED.value,
+    BookingStatus.NO_SHOW.value,
+}
+
 
 def _blocked_clause(user_id: UUID) -> ColumnElement[bool]:
     """True iff `user_id` is blocked by the (correlated) Practice's master."""
@@ -56,12 +106,21 @@ def _blocked_clause(user_id: UUID) -> ColumnElement[bool]:
     )
 
 
-def _is_student_clause(user_id: UUID) -> ColumnElement[bool]:
-    """True iff `user_id` has >= 1 non-cancelled booking on ANY practice by
-    the (correlated) Practice's master. Aliased self-join: the outer query
-    already selects FROM Practice, so the "does this master have OTHER
-    practices this user booked" lookup needs its own reference to avoid
-    colliding with the outer one."""
+def _has_student_entitlement_clause(user_id: UUID) -> ColumnElement[bool]:
+    """True iff `user_id` holds >= 1 booking in STUDENT_ENTITLEMENT_STATUSES
+    on ANY practice by the (correlated) Practice's master.
+
+    T-20 rename (was `_is_student_clause`): the old name claimed to answer
+    "is this person a student", which is ALSO what the master's students
+    LIST answers -- with a different, wider rule. This one answers only
+    "does this person hold the RIGHT to enter this master's students-only
+    practices". Two questions, two names, so no future reader reconciles
+    them back into one by accident.
+
+    Aliased self-join: the outer query already selects FROM Practice, so the
+    "does this master have OTHER practices this user booked" lookup needs
+    its own reference to avoid colliding with the outer one.
+    """
     master_practice = aliased(Practice)
     return (
         select(Booking.id)
@@ -69,7 +128,7 @@ def _is_student_clause(user_id: UUID) -> ColumnElement[bool]:
         .where(
             master_practice.master_id == Practice.master_id,
             Booking.user_id == user_id,
-            Booking.status != BookingStatus.CANCELLED.value,
+            Booking.status.in_(STUDENT_ENTITLEMENT_STATUSES),
         )
         .exists()
     )
@@ -102,7 +161,7 @@ def viewer_audience_clause(user_id: UUID) -> ColumnElement[bool]:
         Practice.audience_kind == AudienceKind.PUBLIC.value,
         and_(
             Practice.audience_kind == AudienceKind.STUDENTS.value,
-            _is_student_clause(user_id),
+            _has_student_entitlement_clause(user_id),
         ),
         and_(
             Practice.audience_kind == AudienceKind.GROUPS.value,
@@ -180,7 +239,7 @@ async def assert_viewer_can_access_practice(
 
     if practice.audience_kind == AudienceKind.STUDENTS.value:
         if not await _clause_true_for(
-            practice.id, _is_student_clause(user_id), session,
+            practice.id, _has_student_entitlement_clause(user_id), session,
         ):
             raise ForbiddenError(
                 "This practice is only open to the master's students",
@@ -279,10 +338,23 @@ async def count_stranded_active_bookings(
     Read-only, evaluates a HYPOTHETICAL audience -- nothing here writes to
     Practice or PracticeAudienceGroup.
 
-    Reuses _blocked_clause/_is_student_clause UNCHANGED: neither depends on
-    audience_kind or target groups, so "is this user blocked" / "is this
-    user a student of this master" mean exactly the same whether the
-    audience is saved or merely proposed. The GROUPS case can't reuse
+    Reuses _blocked_clause/_has_student_entitlement_clause UNCHANGED:
+    neither depends on audience_kind or target groups, so "is this user
+    blocked" / "does this user hold student entitlement with this master"
+    mean exactly the same whether the audience is saved or merely
+    proposed.
+
+    T-20 CONSEQUENCE, deliberate: "active booker" (the caller's
+    _ACTIVE_BOOKING_STATUSES = {PENDING, CONFIRMED}) is no longer a SUBSET
+    of "student" -- PENDING is active-for-capacity but no longer an
+    entitlement. A PENDING-only booker would therefore now be COUNTED as
+    stranded by a narrow-to-students preview. That is the honest answer,
+    not a regression: under the new gate such a booker really would be
+    refused. Unreachable today (nothing creates PENDING -- see
+    STUDENT_ENTITLEMENT_STATUSES), so stranded_count is numerically
+    unchanged for every booking this system can currently produce.
+
+    The GROUPS case can't reuse
     _is_group_member_clause as-is -- that function joins through THIS
     practice's ALREADY-SAVED PracticeAudienceGroup rows, and a proposal
     that hasn't been saved has nothing there to join against -- so it
@@ -323,7 +395,7 @@ async def count_stranded_active_bookings(
             continue
         if proposed_audience_kind == AudienceKind.STUDENTS.value:
             if await _clause_true_for(
-                practice.id, _is_student_clause(user_id), session,
+                practice.id, _has_student_entitlement_clause(user_id), session,
             ):
                 continue
             stranded += 1

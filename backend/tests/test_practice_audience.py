@@ -909,14 +909,22 @@ AUDIENCE_PREVIEW_URL = "/api/v1/practices/{practice_id}/audience-preview"
 async def test_audience_preview_students_never_strands_an_existing_booker(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """Narrowing "public" -> "students" can NEVER strand an existing active
-    booker, even one with no OTHER history with this master: their own
-    active booking on THIS practice is itself a non-cancelled booking with
-    this master, which is exactly _is_student_clause's own definition of
-    "student" -- the same booking that makes them an active booker also,
-    structurally, always makes them a student. Asserting this explicitly so
-    a future change to _is_student_clause's definition can't silently
-    break it without a test noticing."""
+    """Narrowing "public" -> "students" does not strand an existing
+    CONFIRMED booker, even one with no OTHER history with this master:
+    their own booking on THIS practice is itself in
+    STUDENT_ENTITLEMENT_STATUSES, so the same booking that makes them an
+    active booker also makes them a student.
+
+    T-20 (2026-08-13) NARROWED the gate to {CONFIRMED, ATTENDED, NO_SHOW},
+    so this is no longer the blanket "can NEVER strand an ACTIVE booker" it
+    was written as: "active" (_ACTIVE_BOOKING_STATUSES = {PENDING,
+    CONFIRMED}) is no longer a subset of "student". A PENDING-only booker
+    would now be counted as stranded -- correctly, since the gate really
+    would refuse them. Unreachable today (nothing writes PENDING), which is
+    why this test still passes unchanged; the guarantee now rests on
+    CONFIRMED, not on "non-cancelled". Kept so a future change to
+    _has_student_entitlement_clause's definition can't silently break even
+    that narrower guarantee without a test noticing."""
     master = await _make_verified_master(client, db_session, 99332)
     master_id = master["user"]["id"]
     headers = auth_headers(master["session_token"])
