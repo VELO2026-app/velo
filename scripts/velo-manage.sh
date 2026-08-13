@@ -125,13 +125,17 @@ else
     # the product alone rather than refusing to run. Loud, not silent.
     echo -e "${YELLOW}⚠ $SERVICES_CONF not found -- service registry unavailable,${NC}" >&2
     echo -e "${YELLOW}  only the product will be updated by 'velo update'.${NC}" >&2
-    VELO_SERVICES=("velo|aivis-one/velo|$COMPOSE_DIR|conf:VELO_BRANCH|internal|update_product")
+    # Seven fields, matching services.conf -- the fallback must not be
+    # the one record on the box that is missing `access`.
+    VELO_SERVICES=("velo|aivis-one/velo|$COMPOSE_DIR|conf:VELO_BRANCH|internal|update_product|write")
     svc_field() {
         local record="$1" index="$2"
         local IFS='|'
         # shellcheck disable=SC2206
         local fields=($record)
-        printf '%s' "${fields[$((index - 1))]}"
+        # `:-` as in services.conf: a short record must not abort the
+        # script under `set -u`; an absent field reads as empty.
+        printf '%s' "${fields[$((index - 1))]:-}"
     }
     svc_branch() { printf '%s' "$VELO_BRANCH"; }
 fi
@@ -142,6 +146,208 @@ cd_compose() {
         echo -e "${RED}ERROR: $COMPOSE_DIR not found${NC}"
         exit 1
     }
+}
+
+# =============================================================================
+# Registry service dispatch (T-33)
+# =============================================================================
+#
+# Two facts about a registry service decide what any lifecycle command may
+# do with it, and both are asked, never assumed:
+#
+#   svc_installed  -- is it on this box at all?
+#   verb_supported -- does its own CLI implement this verb?
+#
+# EXIT CODE CONVENTION for every registry-driven command below:
+#   0  done, in full
+#   1  something actually failed
+#   2  done as far as possible, INCOMPLETE -- a service could not take
+#      part, and the operator has to know the box is not in the state
+#      the command name implies
+#
+# 2 is not a softer 1. `velo stop` that left a service running is not a
+# failure and not a success, and collapsing it into either loses the only
+# signal that says so. Aggregates take the WORST of what they saw with
+# 1 > 2 > 0: a real failure must never be masked by incompleteness.
+#
+# NOT INSTALLED IS CODE 0, deliberately. A comms-less box is a legitimate
+# configuration (see update_service, which has said so since H-D1), not a
+# degraded one -- there is nothing incomplete about a box doing all of
+# what it has. Code 2 is for a service that IS here and cannot comply;
+# it disappears by itself the day that service learns the verb.
+
+# Is this service present on the box? Mirrors update_service's presence
+# test exactly -- one predicate instead of a copy per command.
+svc_installed() {
+    local record="$1"
+    local dir lifecycle
+    dir=$(svc_field "$record" 3)
+    lifecycle=$(svc_field "$record" 5)
+    [ "$lifecycle" = "internal" ] && return 0
+    [ -d "$dir/.git" ] && [ -f "$dir/$lifecycle" ]
+}
+
+# Print the lifecycle verbs a service's CLI implements, one per line.
+#
+# HOW: read the CLI's TOP-LEVEL dispatcher and take its case labels.
+# Top-level is decided by the `case` and `esac` KEYWORDS sitting at
+# column zero -- not by the labels, which are indented in a top-level
+# dispatcher exactly as they are in a nested one. Taking the block
+# first and the labels second is what keeps a nested `case` (comms has
+# one inside its db subcommand, with labels dump/restore/migrate) from
+# being read as verbs of the service itself.
+#
+# ┌─ KNOWN CEILING (convention §4a) ────────────────────────────────────
+# │ (1) MECHANICS: a service's capabilities are inferred from the SHAPE
+# │     OF ITS SOURCE -- a `case` dispatcher at column zero in another
+# │     repository's file. That is a contract we depend on and never
+# │     agreed with anyone.
+# │ (2) STATUS: acknowledged by design.
+# │ (3) REFERENCE: T-33, item 2.
+# │ (4) UNCONSERVATION TRIGGER: a service's CLI stops being a
+# │     column-zero `case` dispatcher (getopts, a dispatch function, a
+# │     rewrite in another language), OR any service gains a
+# │     machine-readable way to declare what it implements.
+# │ (5) SHAPE OF THE FIX: ask the service instead of reading it -- a
+# │     `capabilities` verb printing its verbs, with this parser kept
+# │     only as the fallback for CLIs that do not have one yet.
+# │ (6) REJECTED, AND WHY:
+# │     - RUNNING the verb and inferring support from the result: an
+# │       unknown verb prints usage and exits 1, which is exactly what
+# │       a verb that ran and failed does. Telling them apart means
+# │       pattern-matching another project's usage text.
+# │     - DECLARING the verbs in services.conf: that file lives in the
+# │       velo repo, so the day a service gains a verb velo would have
+# │       to change -- against the one requirement this design exists
+# │       to satisfy.
+# │
+# │ THE FAILURE MODE TO WATCH: if the shape changes, this returns an
+# │ empty list and velo reports "does not implement" for a service that
+# │ does. That is loud exactly once; by the third time it is background
+# │ noise. Hence an unreadable dispatcher is reported as its OWN state
+# │ (see verb_supported), not as six separate "not implemented" lines.
+# └─────────────────────────────────────────────────────────────────────
+svc_verbs() {
+    local cli="$1"
+    [ -f "$cli" ] || return 1
+    awk '
+        /^case[[:space:]]/ { inblock = 1; next }
+        inblock && /^esac/  { inblock = 0; next }
+        inblock             { print }
+    ' "$cli" \
+        | grep -oE '^[[:space:]]*[a-z][a-z0-9|_-]*\)' \
+        | tr -d ' )' \
+        | tr '|' '\n' \
+        | grep -v '^$' \
+        | sort -u
+}
+
+# Does this service implement VERB?
+#   0  yes
+#   1  no -- CLI read fine, the verb is simply not there
+#   3  the dispatcher could not be read at all (see the marker above)
+verb_supported() {
+    local record="$1" verb="$2"
+    local dir lifecycle verbs
+    dir=$(svc_field "$record" 3)
+    lifecycle=$(svc_field "$record" 5)
+    [ "$lifecycle" = "internal" ] && return 0
+
+    verbs=$(svc_verbs "$dir/$lifecycle") || return 3
+    [ -n "$verbs" ] || return 3
+    printf '%s\n' "$verbs" | grep -qx "$verb"
+}
+
+# Run VERB on one registry service, reporting rather than guessing.
+# Prints nothing of its own on the happy path -- the service's CLI is
+# the one talking. Returns the convention codes above.
+svc_run_verb() {
+    local record="$1" verb="$2"
+    shift 2
+    local name dir lifecycle rc
+    name=$(svc_field "$record" 1)
+    dir=$(svc_field "$record" 3)
+    lifecycle=$(svc_field "$record" 5)
+
+    [ "$lifecycle" = "internal" ] && return 0
+
+    if ! svc_installed "$record"; then
+        echo -e "${YELLOW}⊘ $name: not installed, skipped${NC}"
+        return 0
+    fi
+
+    verb_supported "$record" "$verb"; rc=$?
+    if [ "$rc" -eq 3 ]; then
+        echo -e "${YELLOW}⚠ $name: could not read the lifecycle verbs from${NC}"
+        echo -e "${YELLOW}  $dir/$lifecycle -- its dispatcher is not in the form velo${NC}"
+        echo -e "${YELLOW}  reads (see svc_verbs). Skipping '$verb' rather than guessing.${NC}"
+        return 2
+    fi
+    if [ "$rc" -ne 0 ]; then
+        echo -e "${YELLOW}⊘ $name: no such lifecycle verb -- '$verb' skipped${NC}"
+        echo "  $name implements: $(svc_verbs "$dir/$lifecycle" | tr '\n' ' ')"
+        return 2
+    fi
+
+    if ! bash "$dir/$lifecycle" "$verb" "$@"; then
+        echo -e "${RED}✗ $name: '$verb' failed${NC}"
+        return 1
+    fi
+    return 0
+}
+
+# Does this host alias authenticate to GitHub?
+#
+# `ssh -T` against GitHub exits 1 even on SUCCESS ("does not provide
+# shell access"), so the banner is captured and matched instead of
+# relying on the exit code -- the same trap that made the installer's
+# key test fail on good keys until 2026-07-27.
+github_probe_alias() {
+    local alias="$1" banner
+    banner=$(ssh -T "git@${alias}" 2>&1 || true)
+    echo "$banner" | grep -q "successfully authenticated"
+}
+
+# Fold a per-service code into the aggregate: 1 beats 2 beats 0.
+svc_worst() {
+    local current="$1" incoming="$2"
+    [ "$current" -eq 1 ] || [ "$incoming" -eq 1 ] && { echo 1; return; }
+    [ "$current" -eq 2 ] || [ "$incoming" -eq 2 ] && { echo 2; return; }
+    echo 0
+}
+
+# Walk the registry's services (the product is handled by its caller).
+# direction: "forward" (providers first) or "reverse" (product first).
+# Prints nothing itself; returns the aggregate code.
+svc_walk() {
+    local direction="$1" verb="$2"
+    shift 2
+    local i record agg=0 rc
+    local -a order=()
+
+    for i in "${!VELO_SERVICES[@]}"; do order+=("$i"); done
+    if [ "$direction" = "reverse" ]; then
+        local -a rev=()
+        for ((i = ${#order[@]} - 1; i >= 0; i--)); do rev+=("${order[$i]}"); done
+        order=("${rev[@]}")
+    fi
+
+    for i in "${order[@]}"; do
+        record="${VELO_SERVICES[$i]}"
+        [ "$(svc_field "$record" 5)" = "internal" ] && continue
+        svc_run_verb "$record" "$verb" "$@"; rc=$?
+        agg=$(svc_worst "$agg" "$rc")
+    done
+    return "$agg"
+}
+
+# Closing line for a command that could not cover the whole box.
+svc_report_incomplete() {
+    local verb="$1"
+    echo ""
+    echo -e "${YELLOW}⚠ '$verb' did not cover the whole box -- see the lines above.${NC}"
+    echo -e "${YELLOW}  Containers belonging to the skipped service(s) are in whatever${NC}"
+    echo -e "${YELLOW}  state they were already in; 'docker ps' will still show them.${NC}"
 }
 
 # -- Comms projection resync (TEST CONTOUR ONLY -- Phase 6 / T0 finding #2) ---
@@ -273,6 +479,15 @@ wait_for_backend() {
 # such keys are informational too. Informational still PRINTS (with the
 # default shown) so a human doing a prod audit still sees it -- only the
 # pass/fail verdict changes, the key never goes silent.
+# NOT the same fix as the `grep -m1` -> `tail -n 1` corrections
+# elsewhere in this file, and deliberately left as `head -1`. Those read
+# ENV files, where a repeated key resolves to the last assignment and
+# last-match is simply correct. This greps PYTHON SOURCE across the whole
+# module: a second match can come from a different class or a nested
+# model, in which case neither first nor last is right for certain --
+# there is no correct one-liner. The consumer is `velo doctor` and the
+# consequence is cosmetic (a key reported informational instead of
+# drift), so this stays as it is until someone parses the file properly.
 _config_default_for_key() {
     local key="$1" config_file="$2"
     local py_attr
@@ -667,7 +882,13 @@ reload_bound_profile() {
 
     # grep, not source: that file is full of secrets and this is a
     # read of exactly one key.
-    profile_dir=$(grep -m1 '^PROFILE_DIR=' "$env_file" 2>/dev/null | cut -d= -f2-)
+    # `tail -n 1`, not `grep -m1`: this file is read the way a shell
+    # reads assignments, so a repeated key resolves to the LAST one.
+    # First-match here would act on a stale path while the service used
+    # the current one. Same defect class as the one fixed in
+    # env-render.sh -- the pattern was corrected there and left alive
+    # here, which is how a class survives a fix (repeat audit H-R4).
+    profile_dir=$(grep -E '^PROFILE_DIR=' "$env_file" 2>/dev/null | tail -n 1 | cut -d= -f2-)
     [ -n "$profile_dir" ] || return 0
 
     # Not bound into our checkout -> the pull changed nothing it reads.
@@ -918,11 +1139,49 @@ update_product() {
         # Sourced lazily for the same reason install_velo.sh sources
         # nginx-render.sh late: the version that matters is the one in the
         # checkout as it is NOW, not as it was when this process started.
-        # A checkout that predates T-32 has no library and no .env.db in
-        # its compose either -- skip quietly, nothing to reconcile.
-        if [ -f "$COMPOSE_DIR/scripts/env-render.sh" ]; then
+        #
+        # WHEN THE LIBRARY IS ABSENT there are two states, and they must
+        # not share an outcome. The original guard skipped quietly in both,
+        # which is right for one of them and hid the other:
+        #
+        #   - compose does NOT reference backend/.env.db -> a checkout
+        #     predating T-32. Nothing to reconcile; skip, exit 0.
+        #   - compose DOES reference it -> the delivery is INCOMPLETE. The
+        #     compose that just arrived demands an env_file nothing can
+        #     generate, so every later compose command in this run dies on
+        #     a missing file, several steps from the cause.
+        #
+        # That second state is not hypothetical: T-32 landed in the repo in
+        # pieces on 2026-08-12 and this library was in none of them, while
+        # the compose change was. `velo update` failed with "env file
+        # .../backend/.env.db not found" and the quiet skip above said
+        # nothing on the way past. The compose file is the witness that
+        # tells the two apart, so ask it.
+        ENV_RENDER_LIB="$COMPOSE_DIR/scripts/env-render.sh"
+        if [ ! -f "$ENV_RENDER_LIB" ]; then
+            if grep -q 'backend/\.env\.db' "$COMPOSE_DIR/docker-compose.yml" 2>/dev/null; then
+                echo -e "${RED}✗ Incomplete deployment: scripts/env-render.sh is missing${NC}"
+                echo "  docker-compose.yml points postgres/redis at backend/.env.db,"
+                echo "  and that file is generated by scripts/env-render.sh -- which is"
+                echo "  not in this checkout. Nothing here can produce it, so every"
+                echo "  compose command below would fail on a missing env_file."
+                echo ""
+                echo "  Expected at: $ENV_RENDER_LIB"
+                echo "  Cause: the commit that brought this compose did not bring the"
+                echo "  library with it. Commit the missing file, then re-run:"
+                echo "    velo update"
+                echo ""
+                echo "  The stack is untouched -- the containers still running are the"
+                echo "  ones from before this update."
+                exit 1
+            fi
+            # Pre-T-32 checkout: no library, and no .env.db in its compose
+            # either. Genuinely nothing to do.
+            echo -e "${YELLOW}⊘ scripts/env-render.sh absent and not required by this compose -- skipping${NC}"
+            echo ""
+        else
             # shellcheck source=/dev/null
-            source "$COMPOSE_DIR/scripts/env-render.sh"
+            source "$ENV_RENDER_LIB"
             if write_db_env "$COMPOSE_DIR/backend/.env" "$COMPOSE_DIR/backend/.env.db"; then
                 echo -e "${GREEN}✓ backend/.env.db projected from backend/.env${NC}"
             else
@@ -1328,7 +1587,7 @@ svc_report() {
     branch_expr=$(svc_field "$record" 4)
     lifecycle=$(svc_field "$record" 5)
 
-    if [ "$lifecycle" != "internal" ] && { [ ! -d "$dir/.git" ] || [ ! -f "$dir/$lifecycle" ]; }; then
+    if ! svc_installed "$record"; then
         echo -e "${YELLOW}⊘ $name: not installed${NC}"
         echo ""
         return 0
@@ -1343,7 +1602,19 @@ svc_report() {
         # Its own CLI, its own output format. Parsing it into a uniform
         # table would mean re-implementing its status here and breaking
         # silently the day it changes a column.
-        bash "$dir/$lifecycle" status 2>&1 | sed 's/^/  /'
+        #
+        # Asked, not assumed (T-33 item 2): this used to call `status`
+        # unconditionally, which is the same guessing every other command
+        # here stopped doing. On a service that HAS `status` -- every
+        # service today -- the branch below is the same call it always
+        # was and the output is byte-identical. The alternative branch
+        # exists for the third service that does not, so that its raw
+        # usage text never lands inside our report.
+        if verb_supported "$record" status; then
+            bash "$dir/$lifecycle" status 2>&1 | sed 's/^/  /'
+        else
+            echo -e "  ${YELLOW}⊘ no such lifecycle verb -- 'status' not reported${NC}"
+        fi
     fi
     echo ""
 }
@@ -1352,37 +1623,79 @@ case "${1:-}" in
 
     # === Service Management ===
 
+    # ORDER, and why it is not the same in both directions:
+    #   start   -- FORWARD (providers, then the product). A provider has
+    #              to be answering before the thing that calls it comes
+    #              up; this is the order `depends_on` expresses inside a
+    #              stack, applied between stacks.
+    #   stop    -- REVERSE (product first, then providers). The other way
+    #              round leaves a window in which the product is alive and
+    #              talking to a service that is already gone -- errors in
+    #              the log that describe our shutdown order, not a fault.
+    #   restart -- reverse stop, then forward start. A full cycle, not
+    #              "restart each in registry order".
     start)
-        echo "Starting VELO..."
+        echo "Starting the box..."
+        rc_total=0
+        svc_walk forward start; rc_total=$(svc_worst "$rc_total" "$?")
+
         cd_compose
         ensure_shared_network
-        $COMPOSE_CMD up -d
-        echo -e "${GREEN}✓ Started${NC}"
+        if ! $COMPOSE_CMD up -d; then
+            echo -e "${RED}✗ VELO failed to start${NC}"
+            exit 1
+        fi
+        echo -e "${GREEN}✓ VELO started${NC}"
+
+        # A provider that could not be started does NOT stop the product
+        # from coming up: a box serving users without notifications beats
+        # a box serving nobody. It does change the exit code.
+        [ "$rc_total" -ne 0 ] && svc_report_incomplete start
+        exit "$rc_total"
         ;;
 
     stop)
-        echo "Stopping VELO..."
+        echo "Stopping the box..."
         cd_compose
         $COMPOSE_CMD down
-        echo -e "${GREEN}✓ Stopped${NC}"
+        echo -e "${GREEN}✓ VELO stopped${NC}"
+
+        rc_total=0
+        svc_walk reverse stop; rc_total=$(svc_worst "$rc_total" "$?")
+        [ "$rc_total" -ne 0 ] && svc_report_incomplete stop
+        exit "$rc_total"
         ;;
 
     restart)
         case "${2:-all}" in
             app)
+                # Deliberately narrow and product-only: this is the
+                # "bounce the API" shortcut, not a box-level verb.
                 echo "Restarting app only..."
                 cd_compose
                 $COMPOSE_CMD restart app
+                echo -e "${GREEN}✓ Restarted${NC}"
                 ;;
             *)
-                echo "Restarting all services..."
+                echo "Restarting the box..."
+                rc_total=0
+
                 cd_compose
                 $COMPOSE_CMD down
+                svc_walk reverse stop; rc_total=$(svc_worst "$rc_total" "$?")
+
+                svc_walk forward start; rc_total=$(svc_worst "$rc_total" "$?")
                 ensure_shared_network
-                $COMPOSE_CMD up -d
+                if ! $COMPOSE_CMD up -d; then
+                    echo -e "${RED}✗ VELO failed to start${NC}"
+                    exit 1
+                fi
+                echo -e "${GREEN}✓ Restarted${NC}"
+
+                [ "$rc_total" -ne 0 ] && svc_report_incomplete restart
+                exit "$rc_total"
                 ;;
         esac
-        echo -e "${GREEN}✓ Restarted${NC}"
         ;;
 
     status)
@@ -1454,8 +1767,38 @@ case "${1:-}" in
                 $COMPOSE_CMD logs -f --tail=100
                 ;;
             *)
-                echo "Usage: velo logs [app|db|redis|frontend|all]"
-                exit 1
+                # Registry services are tried AFTER the product's own
+                # names, never before: `velo logs db` has meant the
+                # product's postgres since day one, and a service that
+                # happened to be named `db` must not quietly take that
+                # over. Product vocabulary wins; the registry extends it.
+                target="${2:-}"
+                svc_match=""
+                for record in "${VELO_SERVICES[@]}"; do
+                    [ "$(svc_field "$record" 5)" = "internal" ] && continue
+                    if [ "$(svc_field "$record" 1)" = "$target" ]; then
+                        svc_match="$record"
+                        break
+                    fi
+                done
+
+                if [ -z "$svc_match" ]; then
+                    echo "Usage: velo logs [app|db|redis|frontend|all$(
+                        for record in "${VELO_SERVICES[@]}"; do
+                            [ "$(svc_field "$record" 5)" = "internal" ] && continue
+                            printf '|%s' "$(svc_field "$record" 1)"
+                        done
+                    )]"
+                    exit 1
+                fi
+
+                # Its own CLI decides what "logs" means for it -- which
+                # stream, how much tail, whether it follows. Imposing our
+                # flags here would be velo deciding for a service it does
+                # not own; extra arguments are passed straight through.
+                shift 2 2>/dev/null || shift $#
+                svc_run_verb "$svc_match" logs "$@"
+                exit $?
                 ;;
         esac
         ;;
@@ -1762,6 +2105,146 @@ case "${1:-}" in
     # rather than folded into `version` on purpose: each prints exactly what
     # it checked, and merging two different questions into one report is
     # the same class of bug that made "v1.4" and "still running" lie.
+    rotate-key)
+        # Replace a compromised GitHub deploy key for one registry
+        # service, on a box whose owner has NO command-line access to
+        # GitHub -- only the web UI. That constraint shapes everything
+        # here: this cannot be atomic, so it is made SAFE instead.
+        #
+        # The order is the whole design. The new key is generated
+        # ALONGSIDE the old one, verified with the new key ALONE, and
+        # only then does anything change. Until the probe passes, the
+        # working key is still the working key and ~/.ssh/config has not
+        # been touched -- abandoning the ritual half-way costs nothing.
+        svc_name="${2:-}"
+        if [ -z "$svc_name" ]; then
+            echo "Usage: velo rotate-key <service>"
+            echo "Services in the registry:"
+            for record in "${VELO_SERVICES[@]}"; do
+                echo "  $(svc_field "$record" 1)  ($(svc_field "$record" 2), access: $(svc_field "$record" 7))"
+            done
+            exit 1
+        fi
+
+        # Validated against the registry, never taken as a path
+        # fragment: this name becomes a filename and an ssh host alias.
+        svc_record=""
+        for record in "${VELO_SERVICES[@]}"; do
+            if [ "$(svc_field "$record" 1)" = "$svc_name" ]; then
+                svc_record="$record"
+                break
+            fi
+        done
+        if [ -z "$svc_record" ]; then
+            echo -e "${RED}✗ '$svc_name' is not declared in $SERVICES_CONF${NC}"
+            echo "Known services:"
+            for record in "${VELO_SERVICES[@]}"; do
+                echo "  $(svc_field "$record" 1)"
+            done
+            exit 1
+        fi
+
+        svc_repo=$(svc_field "$svc_record" 2)
+        svc_access=$(svc_field "$svc_record" 7)
+        key_old="/root/.ssh/id_ed25519_${svc_name}_deploy"
+        key_new="${key_old}.new"
+        ssh_alias="github.com-${svc_name}"
+
+        if [ ! -f "$key_old" ]; then
+            echo -e "${RED}✗ No existing key at $key_old${NC}"
+            echo "  Nothing to rotate. A missing key is an install problem,"
+            echo "  not a rotation one -- see install_velo.sh."
+            exit 1
+        fi
+
+        echo "=== Rotating the deploy key for '$svc_name' ==="
+        echo ""
+
+        rm -f "$key_new" "${key_new}.pub"
+        if ! ssh-keygen -t ed25519 -C "${svc_name}-deploy@$(hostname)" -f "$key_new" -N "" >/dev/null; then
+            echo -e "${RED}✗ Could not generate a new key${NC}"
+            exit 1
+        fi
+        echo -e "${GREEN}✓ New key generated at $key_new (the old one is untouched)${NC}"
+        echo ""
+
+        echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
+        echo -e "${CYAN}  New deploy key for ${svc_repo}${NC}"
+        echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
+        echo ""
+        cat "${key_new}.pub"
+        echo ""
+        echo "In a browser:"
+        echo "  1. Open https://github.com/${svc_repo}/settings/keys"
+        echo "  2. 'Add deploy key', paste the key above, give it a title"
+        echo "     that says it is the new one (e.g. '${svc_name} $(date +%Y-%m-%d)')"
+        if [ "$svc_access" = "write" ]; then
+            echo -e "  3. ${RED}Tick 'Allow write access'${NC} -- this repo is declared"
+            echo "     access=write in the registry, and 'velo update' pushes to it."
+        else
+            echo -e "  3. ${GREEN}Leave 'Allow write access' unticked${NC} -- this repo is"
+            echo "     declared access=read in the registry."
+        fi
+        echo "  4. ADD the new key first. Do NOT delete the old one yet --"
+        echo "     if you delete it now and the new key turns out wrong,"
+        echo "     this box loses access to the repo entirely."
+        echo ""
+        read -r -p "Press ENTER once the NEW key is added on GitHub..."
+        echo ""
+
+        # Probed with -i and IdentitiesOnly so ONLY the new key is
+        # offered, and without touching ~/.ssh/config: a failure here
+        # must leave the box exactly as it was found.
+        echo "Testing the new key..."
+        rotate_banner=$(ssh -T -i "$key_new" -o IdentitiesOnly=yes \
+                            -o StrictHostKeyChecking=accept-new \
+                            git@github.com 2>&1 || true)
+        if ! echo "$rotate_banner" | grep -q "successfully authenticated"; then
+            echo -e "${RED}✗ The new key does NOT authenticate to GitHub.${NC}"
+            echo ""
+            echo "GitHub said:"
+            echo "$rotate_banner" | sed 's/^/  /'
+            echo ""
+            echo -e "${GREEN}Nothing was changed.${NC} The old key is still in place and"
+            echo "still working -- ~/.ssh/config has not been touched."
+            echo "Remove the half-added key from GitHub if you like, fix the"
+            echo "cause, and run 'velo rotate-key $svc_name' again."
+            rm -f "$key_new" "${key_new}.pub"
+            exit 1
+        fi
+        echo -e "${GREEN}✓ The new key authenticates${NC}"
+        echo ""
+
+        # Point of no return -- deliberately AFTER the probe.
+        mv -f "$key_new" "$key_old"
+        mv -f "${key_new}.pub" "${key_old}.pub"
+        chmod 600 "$key_old"
+        echo -e "${GREEN}✓ New key installed at $key_old${NC}"
+
+        # The host alias already points at this path, so nothing in
+        # ~/.ssh/config has to change and no git remote moves. That is
+        # why install writes the alias instead of a bare IdentityFile.
+        if github_probe_alias "$ssh_alias"; then
+            echo -e "${GREEN}✓ $ssh_alias authenticates with the new key${NC}"
+        else
+            echo -e "${RED}✗ The alias '$ssh_alias' does not authenticate.${NC}"
+            echo "  The new key works directly, so the alias itself is wrong."
+            echo "  Check /root/.ssh/config -- IdentityFile should be $key_old"
+            exit 1
+        fi
+
+        echo ""
+        echo -e "${YELLOW}ONE STEP LEFT, and it is not optional:${NC}"
+        echo "  Open https://github.com/${svc_repo}/settings/keys and DELETE"
+        echo "  the OLD deploy key. Until you do, the key you are rotating"
+        echo "  away from still opens this repo -- which is the whole point"
+        echo "  of rotating it."
+        echo ""
+        echo "  This box cannot do it: removing a deploy key needs the"
+        echo "  GitHub API, and nothing here holds an API token. The private"
+        echo "  half is already gone from this machine."
+        ;;
+
     doctor)
         echo -e "${CYAN}VELO Doctor -- drift watchman${NC}"
         echo "Checks artifacts written once at install time and never"
@@ -1907,14 +2390,24 @@ case "${1:-}" in
         echo -e "${CYAN}VELO Management Script${NC}"
         echo "Usage: velo {command} [options]"
         echo ""
-        echo "Service Management:"
-        echo "  start               — Start all services"
-        echo "  stop                — Stop all services"
-        echo "  restart [app]       — Restart all (or just app)"
+        echo "Service Management (the whole box: this product AND every"
+        echo "service in scripts/services.conf):"
+        echo "  start               — Start everything (services first, then the product)"
+        echo "  stop                — Stop everything (product first, then services)"
+        echo "  restart [app]       — Full stop+start cycle (or just the app container)"
         echo "  status              — Show status + health check (every service)"
+        echo "  Exit codes: 0 = done · 2 = done but INCOMPLETE (a service could"
+        echo "  not take part; it is named in the output) · 1 = failed"
         echo ""
         echo "Logs:"
-        echo "  logs [app|db|redis|frontend] — View logs (default: app)"
+        echo "  logs [app|db|redis|frontend|<service>] — View logs (default: app)"
+        echo "                        Product names first; then any registry service."
+        echo ""
+        echo "Keys:"
+        echo "  rotate-key <service> — Replace a compromised GitHub deploy key."
+        echo "                        Generates the new key alongside the old one and"
+        echo "                        swaps only after verifying it. Web instructions"
+        echo "                        for GitHub -- no command-line access needed."
         echo ""
         echo "Testing:"
         echo "  test                — Run all tests (backend + frontend)"
