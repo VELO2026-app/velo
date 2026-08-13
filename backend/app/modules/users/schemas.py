@@ -15,6 +15,18 @@
 #     so the frontend never sees the raw credentials blob.
 #   - UserUpdate accepts it so the welcome carousel can mark it done via
 #     PATCH /users/me. The service writes it back into credentials.
+#
+# USER NOTIFICATION PREFERENCES ARE NOT HERE ANY MORE (T-26, owner-ruled
+# 2026-08-13). The four-key credentials["notifications"] store (push /
+# practice_reminders / master_messages / support_messages) is RETIRED from
+# this API: it was write-only -- nothing downstream ever read it, so the user
+# muted and was not muted. Delivery is decided by the comms service, by
+# CATEGORY, and that is now the single source of truth. The student's screen
+# reads and writes it through the proxy (GET/PUT /api/v1/notifications/prefs,
+# app/modules/comms_proxy/router.py). Deliberately NOT kept as a cache: a
+# second place of truth is exactly what the ruling forbade.
+# credentials["master_notifications"] below is a SEPARATE store and is
+# untouched by this change.
 # =============================================================================
 
 import re
@@ -27,63 +39,22 @@ from pydantic import BaseModel, Field, computed_field, field_validator
 
 from app.modules.users.models import UserRole
 
-# Notification preference keys and their defaults (all ON).
-# Stored as a nested object under credentials["notifications"]. Push delivery
-# is NOT wired yet -- these flags are a forward-looking preference store; the
-# UI lets the user set them and they survive relogin, ready for when push and
-# the messages module land. Adding a 5th toggle = one entry here.
-_NOTIFICATION_DEFAULTS: dict[str, bool] = {
-    "push": True,
-    "practice_reminders": True,
-    "master_messages": True,
-    "support_messages": True,
-}
-
-
-class NotificationSettings(BaseModel):
-    """User notification preferences (nested under credentials.notifications).
-
-    All flags default to True. Used both as the typed shape returned inside
-    UserResponse.notifications and as the optional update payload in
-    UserUpdate (where every field is optional for partial updates).
-    """
-
-    push: bool = True
-    practice_reminders: bool = True
-    master_messages: bool = True
-    support_messages: bool = True
-
-
-class NotificationSettingsUpdate(BaseModel):
-    """Partial update for notification preferences.
-
-    Every field optional: only the toggles the user flipped are sent. The
-    service merges them onto the stored object so untouched flags are kept.
-    """
-
-    push: bool | None = None
-    practice_reminders: bool | None = None
-    master_messages: bool | None = None
-    support_messages: bool | None = None
-
-
 # =============================================================================
 # Master notification preferences (E8 contract)
 # =============================================================================
 #
-# The MASTER notifications screen (separate from the frozen 4-key USER screen
-# above) carries nine on/off toggles grouped by area (bookings / participants /
-# messages / analytics) plus a delivery `schedule`. It is persisted under
-# credentials["master_notifications"] -- the SAME schema-on-read JSONB sandbox
-# as credentials["notifications"], with the same defaults-merge-on-read +
-# partial-merge-on-write mechanics. No migration.
+# The MASTER notifications screen carries nine on/off toggles grouped by area
+# (bookings / participants / messages / analytics) plus a delivery `schedule`.
+# It is persisted under credentials["master_notifications"] -- a schema-on-read
+# JSONB sandbox with defaults-merge-on-read + partial-merge-on-write mechanics.
+# No migration. (It was modelled on the 4-key USER store, which T-26 retired --
+# this one is untouched by that change and is its own separate track.)
 #
 # This is a forward-looking preference store: the flags persist and survive
 # relogin, ready for delivery later. NOTHING is delivered off them yet (no
 # push, no quiet-hours scheduler) -- that is a separate track.
 #
-# A master is ALSO a user, so a master reports BOTH `notifications` (4-key) and
-# `master_notifications` (9-key + schedule); that is intended. Exposure of
+# Exposure of
 # `master_notifications` in UserResponse is gated to MASTER CAPABILITY (the user
 # has a verified MasterProfile) rather than a strict role==master check, so an
 # admin who is also a verified master still sees the screen. That flag cannot be
@@ -92,8 +63,9 @@ class NotificationSettingsUpdate(BaseModel):
 # below. The write path in UserUpdate is NOT gated -- a non-master may store the
 # prefs, they simply stay hidden until the account gains master capability.
 #
-# Schema names are deliberately unique so they do not collide with the existing
-# NotificationSettings(+Update) in OpenAPI / generated.ts.
+# Schema names carry the Master* prefix; they used to need it to avoid an
+# OpenAPI collision with the now-retired NotificationSettings(+Update), and they
+# keep it because generated.ts and every caller are named off it.
 
 # Nine toggle defaults: all True except monthly_report.
 _MASTER_NOTIFICATION_DEFAULTS: dict[str, bool] = {
@@ -452,33 +424,13 @@ class UserResponse(BaseModel):
 
     @computed_field  # type: ignore[prop-decorator]
     @property
-    def notifications(self) -> NotificationSettings:
-        """Notification preferences, stored under credentials["notifications"].
-
-        Schema-on-read: any stored keys are layered over the all-true defaults,
-        so a user who has never touched the screen reports every toggle on, and
-        a partial stored object (only some keys) still returns a full set.
-        Unknown/legacy keys in the stored blob are ignored by the model.
-        """
-        stored = self.credentials_in.get("notifications")
-        merged = dict(_NOTIFICATION_DEFAULTS)
-        if isinstance(stored, dict):
-            for key in _NOTIFICATION_DEFAULTS:
-                if isinstance(stored.get(key), bool):
-                    merged[key] = stored[key]
-        return NotificationSettings(**merged)
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
     def master_notifications(self) -> MasterNotificationSettings | None:
         """Master notification preferences, or None without master capability.
 
         Gated on master_capability_in (set by the GET /users/me router when the
         user has a verified MasterProfile) rather than a strict role check, so
-        an admin who is also a verified master still gets the block. A master is
-        also a user, so a capable user reports BOTH the 4-key `notifications`
-        and this 9-key `master_notifications` (+ schedule). Without capability
-        this is None and the block never ships.
+        an admin who is also a verified master still gets the block. Without
+        capability this is None and the block never ships.
 
         Schema-on-read, stored under credentials["master_notifications"]: stored
         toggles are layered over _MASTER_NOTIFICATION_DEFAULTS, and the nested
@@ -589,10 +541,14 @@ class UserUpdate(BaseModel):
     # Email (E11). Same "" clears / null untouched semantics as phone/bio;
     # soft-validated below. Stored in credentials JSONB (no column).
     email: str | None = Field(default=None, max_length=254)
-    # Notification preferences (nested object in credentials). Partial: only
-    # the flipped toggles are sent; the service merges onto the stored object.
-    # "Not sent" leaves all preferences untouched.
-    notifications: NotificationSettingsUpdate | None = Field(default=None)
+    # NOTE: `notifications` (the four-key user store) is deliberately ABSENT --
+    # retired with T-26; the student's preferences live in comms and are written
+    # through PUT /api/v1/notifications/prefs, never through this endpoint.
+    # This model does NOT set extra="forbid" (nothing in this file does), so a
+    # stale cached frontend that still PATCHes {"notifications": {...}} is
+    # SILENTLY IGNORED rather than 422'd. Stated because it is load-bearing for
+    # a Mini App whose bundle is cached on the device: the old screen degrades
+    # to a no-op instead of erroring, and nothing is written anywhere.
     # Master notification preferences (9 toggles + schedule, nested object in
     # credentials["master_notifications"]). Partial: only the flipped toggles
     # and changed schedule sub-fields are sent; the service deep-merges onto

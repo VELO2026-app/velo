@@ -88,12 +88,6 @@ function user(overrides: Partial<UserResponse> = {}): UserResponse {
     phone: null,
     bio: null,
     email: null,
-    notifications: {
-      push: true,
-      practice_reminders: true,
-      master_messages: true,
-      support_messages: true,
-    },
     master_notifications: null,
     role_switch: null,
     ...overrides,
@@ -230,12 +224,14 @@ describe('AdminUsersView', () => {
   describe('ladder + recovery', () => {
     it('shows the loading spinner while the fetch is in flight, then content', async () => {
       let resolveList!: (v: ReturnType<typeof paginated>) => void
-      vi.mocked(adminApi.getUsersList).mockReset().mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolveList = resolve
-          }),
-      )
+      vi.mocked(adminApi.getUsersList)
+        .mockReset()
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveList = resolve
+            }),
+        )
       mount()
       await nextTick()
 
@@ -269,7 +265,9 @@ describe('AdminUsersView', () => {
       mount()
       await flush()
 
-      expect(host?.querySelector('.v-empty__title')?.textContent).toBe('Не удалось загрузить пользователей')
+      expect(host?.querySelector('.v-empty__title')?.textContent).toBe(
+        'Не удалось загрузить пользователей',
+      )
       expect(cards()).toHaveLength(0)
       expect(toastError).toHaveBeenCalledWith('Ошибка загрузки пользователей')
     })
@@ -314,7 +312,7 @@ describe('AdminUsersView', () => {
 
   // ===========================================================================
   describe('confirm flow', () => {
-    it('askMakeMaster opens the dialog with the user\'s name in the message', async () => {
+    it("askMakeMaster opens the dialog with the user's name in the message", async () => {
       mount()
       await flush()
 
@@ -390,12 +388,14 @@ describe('AdminUsersView', () => {
 
     it('closeConfirm guard: a cancel fired in the same tick as confirm (before loading paints) is ignored', async () => {
       let resolveMake!: (v: AdminMasterActionResponse) => void
-      vi.mocked(adminApi.makeMaster).mockReset().mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolveMake = resolve
-          }),
-      )
+      vi.mocked(adminApi.makeMaster)
+        .mockReset()
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveMake = resolve
+            }),
+        )
       mount()
       await flush()
 
@@ -419,12 +419,14 @@ describe('AdminUsersView', () => {
 
     it('doMakeMaster reentrancy guard: a second confirm click in the same tick makes no second API call', async () => {
       let resolveMake!: (v: AdminMasterActionResponse) => void
-      vi.mocked(adminApi.makeMaster).mockReset().mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolveMake = resolve
-          }),
-      )
+      vi.mocked(adminApi.makeMaster)
+        .mockReset()
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveMake = resolve
+            }),
+        )
       mount()
       await flush()
 
@@ -476,12 +478,14 @@ describe('AdminUsersView', () => {
       await flush()
 
       let resolvePage2!: (v: ReturnType<typeof paginated>) => void
-      vi.mocked(adminApi.getUsersList).mockReset().mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolvePage2 = resolve
-          }),
-      )
+      vi.mocked(adminApi.getUsersList)
+        .mockReset()
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolvePage2 = resolve
+            }),
+        )
       const btn = moreBtn()!
       btn.click()
       btn.click() // same tick -- loadingMore is already true reactively

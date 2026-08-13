@@ -589,132 +589,96 @@ async def test_delete_me_no_auth(client: AsyncClient) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Notification preferences (credentials.notifications nested object)
+# Notification preferences: RETIRED from this API (T-26)
 # ---------------------------------------------------------------------------
+#
+# The four-key credentials["notifications"] store used to live here with five
+# tests covering defaults / partial merge / accumulation / relogin. All five
+# are gone with the store: it was write-only (nothing downstream ever read it,
+# so a muted user was not muted) and the truth moved to the comms service,
+# reached through GET/PUT /api/v1/notifications/prefs.
+#
+# What replaces them guards the RETIREMENT rather than the feature -- that the
+# field is really gone, that a stale cached client cannot resurrect it, and
+# that the SEPARATE credentials["master_notifications"] store was not taken
+# down with it.
 
 
-async def test_notifications_default_all_true(client: AsyncClient) -> None:
-    """A fresh user has all notification toggles on (defaults)."""
+async def test_notifications_block_is_gone_from_the_response(
+    client: AsyncClient,
+) -> None:
+    """GET /users/me no longer carries the four-key notifications block."""
     data = await login_user(client, telegram_id=89475, first_name="Notif")
     token = data["session_token"]
 
     response = await client.get("/api/v1/users/me", headers=auth_headers(token))
 
     assert response.status_code == 200
-    notifications = response.json()["notifications"]
-    assert notifications == {
-        "push": True,
-        "practice_reminders": True,
-        "master_messages": True,
-        "support_messages": True,
-    }
+    body = response.json()
+    assert "notifications" not in body
+    # The master store is a DIFFERENT key and survives this change untouched;
+    # null here only because a plain user has no master capability.
+    assert "master_notifications" in body
+    assert body["master_notifications"] is None
 
 
-async def test_notifications_partial_update_keeps_others(
+async def test_stale_client_patching_notifications_is_ignored(
     client: AsyncClient,
 ) -> None:
-    """Flipping one toggle off leaves the other three untouched.
+    """A cached old frontend can still PATCH the retired key -- harmlessly.
 
-    Regression guard for the nested-merge logic: a partial notifications
-    payload must not wipe the flags the client did not send.
+    UserUpdate does not set extra="forbid", so the field is DROPPED rather
+    than 422'd. That is deliberate for a Mini App whose bundle is cached on
+    the device: the old screen degrades to a no-op. This test pins the
+    behaviour so it cannot change by accident -- 200, nothing echoed back,
+    and nothing written into the credentials sandbox.
     """
-    data = await login_user(client, telegram_id=89476, first_name="Partial")
+    data = await login_user(client, telegram_id=89476, first_name="Stale")
     token = data["session_token"]
 
     response = await client.patch(
         "/api/v1/users/me",
         headers=auth_headers(token),
-        json={"notifications": {"push": False}},
+        json={"notifications": {"push": False, "master_messages": False}},
     )
 
     assert response.status_code == 200
-    notifications = response.json()["notifications"]
-    assert notifications["push"] is False
-    # Others stay at their default (true).
-    assert notifications["practice_reminders"] is True
-    assert notifications["master_messages"] is True
-    assert notifications["support_messages"] is True
+    assert "notifications" not in response.json()
 
-
-async def test_notifications_sequential_updates_accumulate(
-    client: AsyncClient,
-) -> None:
-    """Two partial updates accumulate instead of overwriting each other."""
-    data = await login_user(client, telegram_id=89477, first_name="Accum")
-    token = data["session_token"]
-
-    await client.patch(
-        "/api/v1/users/me",
-        headers=auth_headers(token),
-        json={"notifications": {"push": False}},
-    )
-    response = await client.patch(
-        "/api/v1/users/me",
-        headers=auth_headers(token),
-        json={"notifications": {"master_messages": False}},
-    )
-
-    assert response.status_code == 200
-    notifications = response.json()["notifications"]
-    # Both flips persisted; the untouched two remain true.
-    assert notifications["push"] is False
-    assert notifications["master_messages"] is False
-    assert notifications["practice_reminders"] is True
-    assert notifications["support_messages"] is True
-
-
-async def test_notifications_persist_and_survive_relogin(
-    client: AsyncClient,
-) -> None:
-    """Notification prefs persist across GET and survive re-login (merge)."""
-    first = await login_user(client, telegram_id=89478, first_name="Keeper")
-    token1 = first["session_token"]
-    await client.patch(
-        "/api/v1/users/me",
-        headers=auth_headers(token1),
-        json={"notifications": {"support_messages": False, "push": False}},
-    )
-
-    # Re-login with the same telegram_id.
-    second = await login_user(client, telegram_id=89478, first_name="Keeper")
-    token2 = second["session_token"]
-
-    me = await client.get("/api/v1/users/me", headers=auth_headers(token2))
+    # And it did not land in the store behind the API either: a later read is
+    # identical, with no resurrected block.
+    me = await client.get("/api/v1/users/me", headers=auth_headers(token))
     assert me.status_code == 200
-    notifications = me.json()["notifications"]
-    assert notifications["support_messages"] is False
-    assert notifications["push"] is False
-    assert notifications["practice_reminders"] is True
-    assert notifications["master_messages"] is True
+    assert "notifications" not in me.json()
 
 
-async def test_notifications_coexist_with_onboarding_and_phone(
+async def test_retired_key_does_not_disturb_the_rest_of_credentials(
     client: AsyncClient,
 ) -> None:
-    """Setting notifications must not disturb other credentials keys."""
+    """The dropped key must not cost the other credentials fields.
+
+    Same PATCH carries a retired field and two live ones; the live ones are
+    written normally. Guards the `updates` split in the service after the
+    notifications branch was removed from it.
+    """
     data = await login_user(client, telegram_id=89479, first_name="Coexist")
     token = data["session_token"]
 
-    # Set onboarding + phone first.
-    await client.patch(
+    response = await client.patch(
         "/api/v1/users/me",
         headers=auth_headers(token),
-        json={"onboarding_completed": True, "phone": "+7 916 000 11 22"},
-    )
-    # Now flip a notification toggle.
-    await client.patch(
-        "/api/v1/users/me",
-        headers=auth_headers(token),
-        json={"notifications": {"push": False}},
+        json={
+            "onboarding_completed": True,
+            "phone": "+7 916 000 11 22",
+            "notifications": {"push": False},
+        },
     )
 
-    me = await client.get("/api/v1/users/me", headers=auth_headers(token))
-    body = me.json()
-    # All three coexist.
+    assert response.status_code == 200
+    body = response.json()
     assert body["onboarding_completed"] is True
     assert body["phone"] == "+7 916 000 11 22"
-    assert body["notifications"]["push"] is False
-    assert body["notifications"]["practice_reminders"] is True
+    assert "notifications" not in body
 
 
 # ---------------------------------------------------------------------------

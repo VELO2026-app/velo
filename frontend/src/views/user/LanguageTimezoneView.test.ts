@@ -143,7 +143,6 @@ function user(overrides: Partial<UserResponse> = {}): UserResponse {
     phone: null,
     bio: null,
     email: null,
-    notifications: {} as UserResponse['notifications'],
     master_notifications: null,
     role_switch: null,
     ...overrides,
@@ -250,12 +249,14 @@ describe('LanguageTimezoneView', () => {
 
     it('saving guard: a second selection while the first save is in flight is fully ignored -- no second API call, display stays on the first (committed) city', async () => {
       let resolveUpdate!: (u: UserResponse) => void
-      vi.mocked(usersApi.updateMe).mockReset().mockImplementation(
-        () =>
-          new Promise<UserResponse>((resolve) => {
-            resolveUpdate = resolve
-          }),
-      )
+      vi.mocked(usersApi.updateMe)
+        .mockReset()
+        .mockImplementation(
+          () =>
+            new Promise<UserResponse>((resolve) => {
+              resolveUpdate = resolve
+            }),
+        )
       mount()
       await flush()
 

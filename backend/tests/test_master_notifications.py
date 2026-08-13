@@ -265,7 +265,7 @@ async def test_master_notifications_persist_and_survive_relogin(
 
 
 # ---------------------------------------------------------------------------
-# Coexists with onboarding / phone / 4-key notifications (no cross-wipe)
+# Coexists with onboarding / phone (no cross-wipe)
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
 async def test_master_notifications_coexist_with_other_credentials(
@@ -273,11 +273,16 @@ async def test_master_notifications_coexist_with_other_credentials(
     db_session: AsyncSession,
 ) -> None:
     """master_notifications and the other credentials keys do not clobber each
-    other; the 4-key and 9-key notification objects stay distinct."""
+    other.
+
+    T-26 retired the 4-key user `notifications` store this test used to pair
+    against; the retired key is still sent below, now as the STALE-CLIENT case
+    -- it must be dropped without disturbing anything around it.
+    """
     master = await _make_verified_master(client, db_session)
     token = master["session_token"]
 
-    # Set onboarding + phone + the 4-key user notifications.
+    # Set onboarding + phone, and send the retired 4-key block alongside them.
     resp1 = await client.patch(
         ME_URL,
         json={
@@ -308,9 +313,8 @@ async def test_master_notifications_coexist_with_other_credentials(
     assert body["onboarding_completed"] is True
     assert body["phone"] == "+7 916 000 11 22"
 
-    # 4-key notifications intact (push flipped, the rest default).
-    assert body["notifications"]["push"] is False
-    assert body["notifications"]["practice_reminders"] is True
+    # The retired 4-key block was dropped, not stored and not echoed.
+    assert "notifications" not in body
 
     # master_notifications applied (toggle + schedule sub-field merged).
     mn = body["master_notifications"]
@@ -318,8 +322,7 @@ async def test_master_notifications_coexist_with_other_credentials(
     assert mn["schedule"]["to"] == "20:00"
     assert mn["schedule"]["from"] == "08:00"
 
-    # 4-key and 9-key are different shapes -- no key bleed between them.
-    assert "new_feedback" not in body["notifications"]
+    # The retired key's contents did not bleed into the 9-key store.
     assert "push" not in mn
 
 
@@ -446,13 +449,9 @@ async def test_master_notifications_none_for_regular_user(
     body = await _get_me(client, auth["session_token"])
 
     assert body["master_notifications"] is None
-    # Sanity: the user still has the 4-key notifications object.
-    assert body["notifications"] == {
-        "push": True,
-        "practice_reminders": True,
-        "master_messages": True,
-        "support_messages": True,
-    }
+    # Sanity: the retired 4-key store is gone for a plain user too (T-26) --
+    # this half of the pair used to assert it was present.
+    assert "notifications" not in body
 
 
 @pytest.mark.asyncio

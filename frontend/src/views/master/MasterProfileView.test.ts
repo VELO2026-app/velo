@@ -110,12 +110,6 @@ function user(overrides: Partial<UserResponse> & Record<string, unknown> = {}): 
     phone: null,
     bio: null,
     email: null,
-    notifications: {
-      push: true,
-      practice_reminders: true,
-      master_messages: true,
-      support_messages: true,
-    },
     master_notifications: null,
     role_switch: null,
     ...overrides,

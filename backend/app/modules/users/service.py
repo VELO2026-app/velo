@@ -88,23 +88,14 @@ async def update_user(
     if not updates:
         return user
 
-    # -- Nested notifications object (partial merge) --------------------------
-    #
-    # notifications is NOT a flat credential field: it is a nested dict, so the
-    # plain dict.update() used for flat fields below would REPLACE the whole
-    # object and wipe toggles the user did not send. Pull it out first and
-    # merge key-by-key onto whatever is stored, preserving untouched flags.
-    # model_dump(exclude_unset=True) already dropped keys the client omitted,
-    # and None values (no opinion) are skipped here too.
-    notifications_update = updates.pop("notifications", None)
-
     # -- Nested master_notifications object (partial deep-merge) --------------
     #
     # master_notifications is the master-only 9-toggle preference set plus a
     # delivery `schedule`, stored under credentials["master_notifications"]
-    # (schema-on-read sandbox, same idea as the 4-key user "notifications").
-    # Like notifications it must NOT go through the flat path below, so drop it
-    # from `updates`. We re-derive the payload straight from the model with
+    # (a schema-on-read sandbox). Being a nested dict it must NOT go through the
+    # flat path below -- dict.update() would replace the whole object and wipe
+    # toggles the client did not send -- so drop it from `updates` first and
+    # merge key-by-key. We re-derive the payload straight from the model with
     # by_alias=True so the schedule's "from" field (aliased from the `from_`
     # Python keyword) is keyed as "from" -- exactly the key the read side
     # (UserResponse.master_notifications) looks for. exclude_unset drops keys
@@ -143,29 +134,21 @@ async def update_user(
     for field, value in column_updates.items():
         setattr(user, field, value)
 
-    # Apply JSONB-backed fields + the merged notifications object into
+    # Apply JSONB-backed fields + the merged master_notifications object into
     # credentials. We build a NEW dict (copy) and hand it to set_jsonb, which
     # reassigns + flag_modified()s the column. Mutating user.credentials in
     # place would not be detected by SQLAlchemy.
-    if (
-        jsonb_updates
-        or notifications_update is not None
-        or master_notifications_update is not None
-    ):
+    #
+    # T-26: the four-key credentials["notifications"] merge used to live here.
+    # It is gone -- that store is retired and the student's preferences are
+    # written to comms through the proxy. Any blob still holding the old key is
+    # simply left alone: this path no longer reads or writes it, so it is inert
+    # data, not a second source of truth.
+    if jsonb_updates or master_notifications_update is not None:
         new_credentials = dict(user.credentials or {})
 
         if jsonb_updates:
             new_credentials.update(jsonb_updates)
-
-        if notifications_update is not None:
-            # Merge onto the stored notifications object (or {} if absent),
-            # skipping None values (those mean "leave this toggle as is").
-            current = new_credentials.get("notifications")
-            merged = dict(current) if isinstance(current, dict) else {}
-            for key, value in notifications_update.items():
-                if value is not None:
-                    merged[key] = value
-            new_credentials["notifications"] = merged
 
         if master_notifications_update is not None:
             # Same partial-merge idea as notifications, with one extra level:

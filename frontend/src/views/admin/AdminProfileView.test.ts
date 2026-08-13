@@ -92,12 +92,6 @@ function user(overrides: Partial<UserResponse> = {}): UserResponse {
     phone: null,
     bio: null,
     email: null,
-    notifications: {
-      push: true,
-      practice_reminders: true,
-      master_messages: true,
-      support_messages: true,
-    },
     master_notifications: null,
     role_switch: null,
     ...overrides,
@@ -126,8 +120,8 @@ async function flush(): Promise<void> {
 }
 
 function buttonByText(t: string): HTMLButtonElement | undefined {
-  return Array.from(host?.querySelectorAll<HTMLButtonElement>('.v-btn') ?? []).find(
-    (b) => b.textContent?.trim().startsWith(t),
+  return Array.from(host?.querySelectorAll<HTMLButtonElement>('.v-btn') ?? []).find((b) =>
+    b.textContent?.trim().startsWith(t),
   )
 }
 function logoutBtn(): HTMLButtonElement {

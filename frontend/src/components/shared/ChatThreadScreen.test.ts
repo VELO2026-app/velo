@@ -63,7 +63,6 @@ function me(): UserResponse {
     phone: null,
     bio: null,
     email: null,
-    notifications: null,
     master_notifications: null,
     role_switch: null,
   } as unknown as UserResponse

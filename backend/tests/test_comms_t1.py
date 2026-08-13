@@ -395,6 +395,47 @@ class TestNotificationsProxy:
         assert response.status_code == 200
         assert seam.await_args.kwargs["json"] == {"schedule": None}
 
+    async def test_prefs_put_forwards_multi_category_body_verbatim(
+        self, client,
+    ) -> None:
+        """The silence-everything write reaches comms unrepacked (T-26).
+
+        The student screen composes "mute everything" as one PATCH carrying
+        every category it SHOWS. Two things are pinned here, both at the seam
+        velo actually owns:
+
+        1. PASSTHROUGH -- the proxy forwards the categories object key-for-key.
+           The only sanctioned repack on this route is the schedule quiet<->
+           delivery swap, and no schedule is sent, so the body must arrive
+           byte-equal to what the client composed.
+        2. FOUR, NOT FIVE -- `msg_support` is a real declared comms category
+           but it never reaches a student (it goes to whoever OPERATES a
+           thread, i.e. a master), so it is not on the screen and must not be
+           in the write. A switch whose blast radius exceeds what it displays
+           is the same defect as one that silences nothing.
+        """
+        login = await login_user(client, telegram_id=TID_PREFS)
+        seam = AsyncMock(return_value=dict(_QUIET_PREFS))
+        shown = {
+            "reminders": False,
+            "msg_participants": False,
+            "bookings": False,
+            "finance": False,
+        }
+        with patch(_PROXY_SEAM, seam):
+            response = await client.put(
+                "/api/v1/notifications/prefs",
+                headers=auth_headers(login["session_token"]),
+                json={"categories": shown},
+            )
+        assert response.status_code == 200
+        sent = seam.await_args.kwargs["json"]
+        assert sent == {"categories": shown}
+        assert "msg_support" not in sent["categories"]
+        # No schedule was sent -> the key must be absent, not null: omitted
+        # means "leave the window alone", null would CLEAR it.
+        assert "schedule" not in sent
+
     async def test_prefs_unknown_key_rejected(self, client) -> None:
         login = await login_user(client, telegram_id=TID_PREFS)
         seam = AsyncMock()

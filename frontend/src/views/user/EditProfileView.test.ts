@@ -142,7 +142,6 @@ function user(overrides: Partial<UserResponse> = {}): UserResponse {
     phone: null,
     bio: 'Люблю практики',
     email: 'anya@example.com',
-    notifications: {} as UserResponse['notifications'],
     master_notifications: null,
     role_switch: null,
     ...overrides,
@@ -309,11 +308,15 @@ beforeEach(() => {
   pinia = createPinia()
   setActivePinia(pinia)
 
-  vi.mocked(usersApi.updateMe).mockReset().mockImplementation(async (body) => user(body as Partial<UserResponse>))
+  vi.mocked(usersApi.updateMe)
+    .mockReset()
+    .mockImplementation(async (body) => user(body as Partial<UserResponse>))
   vi.mocked(mastersApi.getMyMasterProfile).mockReset().mockResolvedValue(masterProfile())
   vi.mocked(mastersApi.submitMethodChangeRequest).mockReset().mockResolvedValue(masterProfile())
   vi.mocked(mastersApi.updateMasterLanguages).mockReset().mockResolvedValue(masterProfile())
-  vi.mocked(taxonomyApi.getActiveTaxonomy).mockReset().mockRejectedValue(new Error('offline in test'))
+  vi.mocked(taxonomyApi.getActiveTaxonomy)
+    .mockReset()
+    .mockRejectedValue(new Error('offline in test'))
 
   useAuthStore().user = user()
 
@@ -676,7 +679,9 @@ describe('EditProfileView', () => {
     })
 
     it('canDelete requires BOTH consent and the typed word -- neither alone unlocks it', async () => {
-      vi.mocked(mastersApi.getMyMasterProfile).mockResolvedValue(masterProfile({ available_cents: 5000 }))
+      vi.mocked(mastersApi.getMyMasterProfile).mockResolvedValue(
+        masterProfile({ available_cents: 5000 }),
+      )
       useAuthStore().user = user({ role: 'master' })
       mount()
       await flush()
@@ -698,7 +703,9 @@ describe('EditProfileView', () => {
     })
 
     it('"Сначала вывести средства" closes the modal and routes to master-finance', async () => {
-      vi.mocked(mastersApi.getMyMasterProfile).mockResolvedValue(masterProfile({ available_cents: 5000 }))
+      vi.mocked(mastersApi.getMyMasterProfile).mockResolvedValue(
+        masterProfile({ available_cents: 5000 }),
+      )
       useAuthStore().user = user({ role: 'master' })
       mount()
       await flush()
@@ -738,7 +745,9 @@ describe('EditProfileView', () => {
     })
 
     it('cancel resets consent and the typed word -- reopening starts clean', async () => {
-      vi.mocked(mastersApi.getMyMasterProfile).mockResolvedValue(masterProfile({ available_cents: 5000 }))
+      vi.mocked(mastersApi.getMyMasterProfile).mockResolvedValue(
+        masterProfile({ available_cents: 5000 }),
+      )
       useAuthStore().user = user({ role: 'master' })
       mount()
       await flush()

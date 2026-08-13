@@ -1,53 +1,45 @@
 // =============================================================================
-// VELO Frontend -- NotificationsView Screen Tests (probekit-screen-test)
+// VELO Frontend -- NotificationsView Screen Tests (rebuilt for T-26)
 // =============================================================================
 //
-// 132 lines. Four on/off rows (push / practice_reminders / master_messages /
-// support_messages), each auto-saving on flip, silently on success (the switch
-// is its own feedback -- .vue:7-11) and reverting + toasting on failure.
+// The screen changed source of truth. It used to write four flags into our own
+// backend via authStore.updateProfile; those flags silenced nothing and the
+// store is retired. It now reads and writes comms CATEGORIES through the proxy
+// (GET/PUT /api/v1/notifications/prefs, @/api/notifications). So the seam moved
+// too: @/api/notifications is mocked here, the auth store is no longer involved
+// at all, and the old fixture that supplied UserResponse.notifications is gone
+// with the field.
 //
-// PATTERN A (store-backed), sibling of LanguageTimezoneView -- confirmed by
-// reading every import. Real seam: authStore.updateProfile (auth.ts:142) ->
-// updateMe (@/api/users, auth.ts:143). Real useAuthStore, @/api/users mocked.
-// Error branching is ApiResponseError from @/api/client.
+// FOUR THINGS THESE TESTS EXIST FOR, none of which anything asserted before:
+//   1. FOUR, NOT FIVE -- silence-everything writes exactly the categories the
+//      screen SHOWS. `msg_support` is returned by the server (it is a real
+//      declared category) and must never appear in a write: a student is never
+//      the operator side of a thread, so it has no row.
+//   2. THE DERIVED MASTER SWITCH -- its position is computed, never stored.
+//      Re-enabling one row lifts it by itself (owner ruling 2026-08-13), which
+//      is the whole reason a single category can come back without losing the
+//      rest.
+//   3. THE 404 -- an unsynced recipient must DISABLE the switches, not offer a
+//      save with nowhere to go.
+//   4. ONE CATEGORY ADDRESSED BY MORE THAN ONE CONTROL -- the master switch and
+//      a row both write `reminders`. Nothing anywhere tested that before.
 //
-// THE DUAL-BINDING TRAP THAT BIT LanguageTimezoneView IS ABSENT HERE, VERIFIED
-// NOT ASSUMED: VSwitch is bound ONE-WAY -- `:model-value="settings[row.key]"`
-// + `@update:model-value="(value) => onToggle(row.key, value)"` (.vue:29-32).
-// No v-model, so no auto-generated setter races ahead of the handler.
-// `onToggle`'s own `settings[key] = value` (.vue:84) is the ONLY writer, so
-// `previous` (.vue:83) is genuinely the prior value and the catch-path revert
-// (.vue:91) is live code, not dead like LanguageTimezoneView's was pre-fix.
-// The revert test below proves this goes RED on the FIRST mutation attempt
-// (contrast: LanguageTimezoneView's needed the :model-value fix first).
-//
-// VSwitch ITSELF (components/ui/VSwitch.vue) has its own click guard --
-// `toggle()` (VSwitch.vue:47) does `if (props.disabled) return` before ever
-// emitting. Combined with `:disabled="savingKey === row.key"` (.vue:30), this
-// means clicking the CURRENTLY-saving row a second time never even reaches
-// `onToggle` -- the emit never fires. The per-key guard at .vue:82
-// (`if (savingKey.value) return`) is therefore proven by toggling a
-// DIFFERENT, un-disabled row while the first is in flight (recon's framing,
-// confirmed correct by reading VSwitch.vue) -- that IS reachable at the
-// child, and it's the view's own guard, not the child's, that must stop it.
-//
-// MONEY: none. No NBSP dance. Cyrillic fixtures/labels below were still typed
-// directly via the Write tool (not a shell heredoc), per house habit.
-//
-// No modal, no v-show, no fetch ladder (init is synchronous off the store).
-// No order dependence -- every test mounts its own app + fresh Pinia.
+// VSwitch is bound ONE-WAY (`:model-value` + `@update:model-value`), so there
+// is no dual-binding race and the catch-path revert is live code. VSwitch's own
+// `toggle()` returns early when disabled, so a disabled row never even emits --
+// which is what the 404 test leans on.
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
-import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import NotificationsView from '@/views/user/NotificationsView.vue'
-import * as usersApi from '@/api/users'
-import { useAuthStore } from '@/stores/auth'
-import { ApiResponseError } from '@/api/client'
-import type { UserResponse } from '@/api/types'
 
-vi.mock('@/api/users')
+const prefsGet = vi.fn()
+const prefsPut = vi.fn()
+vi.mock('@/api/notifications', () => ({
+  getNotificationPrefs: (...a: unknown[]) => prefsGet(...a),
+  updateNotificationPrefs: (...a: unknown[]) => prefsPut(...a),
+}))
 
 const back = vi.fn()
 vi.mock('vue-router', () => ({
@@ -65,36 +57,30 @@ vi.mock('@/composables/useToast', () => ({
 // Fixtures
 // -----------------------------------------------------------------------------
 
-function user(overrides: Partial<UserResponse> = {}): UserResponse {
+// The comms facade reports one key per category the profile DECLARES -- all
+// five, including the one this screen deliberately does not show.
+function prefs(categories: Record<string, boolean> = {}) {
   return {
-    id: 'user_1',
-    telegram_id: 1,
-    role: 'user',
-    first_name: 'Аня',
-    last_name: 'Иванова',
-    avatar_url: null,
-    timezone: 'Europe/Moscow',
-    language: 'ru',
-    is_active: true,
-    balance_cents: 0,
-    created_at: '2026-01-01T00:00:00Z',
-    last_login_at: null,
-    onboarding_completed: true,
-    master_onboarding_completed: false,
-    phone: null,
-    bio: null,
-    email: null,
-    notifications: {
-      push: true,
-      practice_reminders: true,
-      master_messages: true,
-      support_messages: true,
+    categories: {
+      bookings: true,
+      finance: true,
+      msg_participants: true,
+      msg_support: true,
+      reminders: true,
+      ...categories,
     },
-    master_notifications: null,
-    role_switch: null,
-    ...overrides,
+    schedule: null,
+    timezone: 'Europe/Moscow',
   }
 }
+
+const LABEL = {
+  master: 'Уведомления',
+  reminders: 'Напоминания о практиках',
+  bookings: 'Записи и переносы',
+  msg_participants: 'Сообщения',
+  finance: 'Кошелёк',
+} as const
 
 // -----------------------------------------------------------------------------
 // Mount
@@ -102,37 +88,30 @@ function user(overrides: Partial<UserResponse> = {}): UserResponse {
 
 let app: App | null = null
 let host: HTMLElement | null = null
-let pinia: Pinia
 
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(NotificationsView)
-  app.use(pinia)
   app.mount(host)
   return host
 }
 
-// Save chain: onToggle -> await authStore.updateProfile -> await updateMe,
-// each a microtask hop, then the catch/finally re-render. Same generous
-// headroom as LanguageTimezoneView's (SC-08).
+// onMounted load -> await -> re-render; then each save is another await chain.
 async function flush(): Promise<void> {
   for (let i = 0; i < 8; i++) await nextTick()
 }
 
-const LABEL = {
-  push: 'Push-уведомления',
-  practice_reminders: 'Напоминания о практиках',
-  master_messages: 'Сообщения от мастеров',
-  support_messages: 'Сообщения от поддержки',
-} as const
-
-function switchByLabel(label: string): HTMLButtonElement {
+function rowByLabel(label: string): HTMLElement {
   const row = Array.from(host?.querySelectorAll<HTMLElement>('.notifications__row') ?? []).find(
     (r) => r.querySelector('.notifications__label')?.textContent?.trim() === label,
   )
-  const btn = row?.querySelector<HTMLButtonElement>('.v-switch')
-  if (!btn) throw new Error(`no VSwitch row labelled «${label}»`)
+  if (!row) throw new Error(`no row labelled «${label}»`)
+  return row
+}
+function switchByLabel(label: string): HTMLButtonElement {
+  const btn = rowByLabel(label).querySelector<HTMLButtonElement>('.v-switch')
+  if (!btn) throw new Error(`no VSwitch in row «${label}»`)
   return btn
 }
 function isOn(label: string): boolean {
@@ -141,189 +120,277 @@ function isOn(label: string): boolean {
 function isDisabled(label: string): boolean {
   return switchByLabel(label).disabled
 }
-
-// -----------------------------------------------------------------------------
+// The body of the most recent PUT. Throws rather than returning undefined: a
+// test that reaches here expecting a write and finding none should say so, not
+// fail later on an opaque property access.
+function lastPutBody(): { categories: Record<string, boolean> } {
+  const call = prefsPut.mock.calls.at(-1)
+  if (!call) throw new Error('updateNotificationPrefs was never called')
+  return call[0] as { categories: Record<string, boolean> }
+}
 
 beforeEach(() => {
-  pinia = createPinia()
-  setActivePinia(pinia)
-
-  vi.mocked(usersApi.updateMe)
-    .mockReset()
-    .mockImplementation(async (body) => user(body as Partial<UserResponse>))
-
-  useAuthStore().user = user()
-
-  back.mockReset()
-  toastError.mockReset()
-  toastInfo.mockReset()
-  toastSuccess.mockReset()
+  vi.clearAllMocks()
+  prefsGet.mockResolvedValue(prefs())
+  prefsPut.mockImplementation(() => Promise.resolve(prefs()))
 })
 
 afterEach(() => {
   app?.unmount()
-  host?.remove()
   app = null
+  host?.remove()
   host = null
-  vi.clearAllMocks()
 })
 
-describe('NotificationsView', () => {
-  // ===========================================================================
-  describe('init from the store', () => {
-    it('reflects a mix of true/false from authStore.user.notifications', async () => {
-      useAuthStore().user = user({
-        notifications: {
-          push: false,
-          practice_reminders: true,
-          master_messages: false,
-          support_messages: true,
-        },
-      })
-      mount()
-      await flush()
+// -----------------------------------------------------------------------------
 
-      expect(isOn(LABEL.push)).toBe(false)
-      expect(isOn(LABEL.practice_reminders)).toBe(true)
-      expect(isOn(LABEL.master_messages)).toBe(false)
-      expect(isOn(LABEL.support_messages)).toBe(true)
-    })
+describe('NotificationsView -- shape', () => {
+  it('renders the master row plus one row per shown category, and no others', async () => {
+    mount()
+    await flush()
 
-    it('a MISSING field defaults to true (?? true), only the present field is honoured', async () => {
-      useAuthStore().user = user({ notifications: { push: false } })
-      mount()
-      await flush()
+    const labels = Array.from(host?.querySelectorAll('.notifications__label') ?? []).map((n) =>
+      n.textContent?.trim(),
+    )
 
-      expect(isOn(LABEL.push)).toBe(false)
-      expect(isOn(LABEL.practice_reminders)).toBe(true)
-      expect(isOn(LABEL.master_messages)).toBe(true)
-      expect(isOn(LABEL.support_messages)).toBe(true)
-    })
+    expect(labels).toEqual([
+      LABEL.master,
+      LABEL.reminders,
+      LABEL.bookings,
+      LABEL.msg_participants,
+      LABEL.finance,
+    ])
+    // Five categories come back from the server; four get a row.
+    expect(labels).toHaveLength(5) // 1 master + 4 categories
   })
 
-  // ===========================================================================
-  describe('toggle: success is SILENT (no toast -- the switch is its own feedback)', () => {
-    it('flips the switch, sends the flipped key only, and fires no toast at all', async () => {
-      mount()
-      await flush()
+  it('reflects the server state rather than a local default', async () => {
+    prefsGet.mockResolvedValue(prefs({ bookings: false, finance: false }))
+    mount()
+    await flush()
 
-      switchByLabel(LABEL.practice_reminders).click()
-      await flush()
+    expect(isOn(LABEL.reminders)).toBe(true)
+    expect(isOn(LABEL.bookings)).toBe(false)
+    expect(isOn(LABEL.msg_participants)).toBe(true)
+    expect(isOn(LABEL.finance)).toBe(false)
+    // Something is still enabled -> the master switch reads ON.
+    expect(isOn(LABEL.master)).toBe(true)
+  })
+})
 
-      expect(usersApi.updateMe).toHaveBeenCalledWith({
-        notifications: { practice_reminders: false },
-      })
-      expect(isOn(LABEL.practice_reminders)).toBe(false)
-      expect(toastInfo).not.toHaveBeenCalled()
-      expect(toastSuccess).not.toHaveBeenCalled()
-      expect(toastError).not.toHaveBeenCalled()
-    })
+describe('NotificationsView -- a single category', () => {
+  it('writes only the flipped category', async () => {
+    mount()
+    await flush()
 
-    it('the payload carries ONLY the flipped key -- not the other three settings', async () => {
-      mount()
-      await flush()
+    switchByLabel(LABEL.bookings).click()
+    await flush()
 
-      switchByLabel(LABEL.support_messages).click()
-      await flush()
-
-      const body = vi.mocked(usersApi.updateMe).mock.calls[0]?.[0]
-      expect(body).toEqual({ notifications: { support_messages: false } })
-      expect(Object.keys(body?.notifications ?? {})).toEqual(['support_messages'])
-    })
+    expect(prefsPut).toHaveBeenCalledTimes(1)
+    expect(lastPutBody()).toEqual({ categories: { bookings: false } })
+    expect(isOn(LABEL.bookings)).toBe(false)
+    expect(isOn(LABEL.reminders)).toBe(true)
   })
 
-  // ===========================================================================
-  describe('toggle: revert-on-failure (crown jewel -- LIVE here, unlike LanguageTimezoneView pre-fix)', () => {
-    it('reverts the switch to its previous state and toasts the error', async () => {
-      vi.mocked(usersApi.updateMe).mockRejectedValue(new Error('ECONNRESET'))
-      mount()
-      await flush()
+  it('reverts and toasts when the save fails', async () => {
+    mount()
+    await flush()
+    prefsPut.mockRejectedValueOnce(new Error('boom'))
 
-      expect(isOn(LABEL.master_messages)).toBe(true)
+    switchByLabel(LABEL.finance).click()
+    await flush()
 
-      switchByLabel(LABEL.master_messages).click()
-      await flush()
+    expect(isOn(LABEL.finance)).toBe(true) // reverted, not left off
+    expect(toastError).toHaveBeenCalledWith('Не удалось сохранить настройку')
+  })
+})
 
-      expect(isOn(LABEL.master_messages)).toBe(true) // reverted, not left off
-      expect(toastError).toHaveBeenCalledWith('Не удалось сохранить настройку')
+describe('NotificationsView -- silence everything (four, not five)', () => {
+  it('mutes exactly the four shown categories and never msg_support', async () => {
+    mount()
+    await flush()
+
+    switchByLabel(LABEL.master).click()
+    await flush()
+
+    const body = lastPutBody()
+    expect(body).toEqual({
+      categories: {
+        reminders: false,
+        bookings: false,
+        msg_participants: false,
+        finance: false,
+      },
     })
+    // The one that matters: a declared category with no row is untouched.
+    expect(Object.keys(body.categories)).not.toContain('msg_support')
+    expect(Object.keys(body.categories)).toHaveLength(4)
   })
 
-  // ===========================================================================
-  describe('toggle: save error branching (ApiResponseError vs generic, SC-05)', () => {
-    it('ApiResponseError WITH a detail surfaces the real backend message', async () => {
-      vi.mocked(usersApi.updateMe).mockRejectedValue(
-        new ApiResponseError(422, 'Некорректная настройка', 'validation_error'),
-      )
-      mount()
-      await flush()
+  it('turning it back on re-enables the same four', async () => {
+    prefsGet.mockResolvedValue(
+      prefs({
+        reminders: false,
+        bookings: false,
+        msg_participants: false,
+        finance: false,
+      }),
+    )
+    mount()
+    await flush()
+    expect(isOn(LABEL.master)).toBe(false)
 
-      switchByLabel(LABEL.push).click()
-      await flush()
+    switchByLabel(LABEL.master).click()
+    await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Некорректная настройка')
-    })
-
-    it('ApiResponseError with an EMPTY detail falls back to the generic message', async () => {
-      vi.mocked(usersApi.updateMe).mockRejectedValue(new ApiResponseError(500, '', 'server_error'))
-      mount()
-      await flush()
-
-      switchByLabel(LABEL.push).click()
-      await flush()
-
-      expect(toastError).toHaveBeenCalledWith('Не удалось сохранить настройку')
-    })
-
-    it('a non-ApiResponseError also falls back to the generic message', async () => {
-      vi.mocked(usersApi.updateMe).mockRejectedValue(new Error('ECONNRESET'))
-      mount()
-      await flush()
-
-      switchByLabel(LABEL.push).click()
-      await flush()
-
-      expect(toastError).toHaveBeenCalledWith('Не удалось сохранить настройку')
+    expect(lastPutBody()).toEqual({
+      categories: {
+        reminders: true,
+        bookings: true,
+        msg_participants: true,
+        finance: true,
+      },
     })
   })
+})
 
-  // ===========================================================================
-  describe('toggle: per-key saving guard', () => {
-    it('the in-flight row is disabled; a tap on a DIFFERENT row makes no second API call and does not change its own display', async () => {
-      let resolveUpdate!: (u: UserResponse) => void
-      vi.mocked(usersApi.updateMe).mockReset().mockImplementation(
-        () =>
-          new Promise<UserResponse>((resolve) => {
-            resolveUpdate = resolve
-          }),
-      )
-      mount()
-      await flush()
+describe('NotificationsView -- the derived master switch', () => {
+  it('reads OFF exactly when every shown category is muted', async () => {
+    prefsGet.mockResolvedValue(
+      prefs({
+        reminders: false,
+        bookings: false,
+        msg_participants: false,
+        // finance still enabled -> not "everything off"
+      }),
+    )
+    mount()
+    await flush()
+    expect(isOn(LABEL.master)).toBe(true)
 
-      switchByLabel(LABEL.push).click()
-      await flush()
+    switchByLabel(LABEL.finance).click()
+    await flush()
 
-      // .vue:30's :disabled binding -- the saving row itself is disabled.
-      expect(isDisabled(LABEL.push)).toBe(true)
+    // Now everything shown is muted -- and nobody wrote a master flag.
+    expect(isOn(LABEL.master)).toBe(false)
+    expect(lastPutBody()).toEqual({ categories: { finance: false } })
+  })
 
-      // A DIFFERENT row is NOT disabled at the child, so this click DOES
-      // reach onToggle -- it's the view's own guard (.vue:82) that must stop
-      // it, not VSwitch's.
-      expect(isDisabled(LABEL.practice_reminders)).toBe(false)
-      switchByLabel(LABEL.practice_reminders).click()
-      await flush()
+  it('is lifted by re-enabling ONE row, without restoring the rest', async () => {
+    mount()
+    await flush()
+    switchByLabel(LABEL.master).click()
+    await flush()
+    expect(isOn(LABEL.master)).toBe(false)
 
-      expect(usersApi.updateMe).toHaveBeenCalledTimes(1)
-      expect(usersApi.updateMe).toHaveBeenCalledWith({ notifications: { push: false } })
-      // Guarded out before .vue:84 ever ran -- practice_reminders' own
-      // display is untouched by the ignored click.
-      expect(isOn(LABEL.practice_reminders)).toBe(true)
+    // Ruling 2: rows stay live while silenced, so one category can come back.
+    expect(isDisabled(LABEL.reminders)).toBe(false)
+    switchByLabel(LABEL.reminders).click()
+    await flush()
 
-      resolveUpdate(user({ notifications: { push: false } }))
-      await flush()
+    expect(isOn(LABEL.master)).toBe(true) // lifted by itself
+    expect(isOn(LABEL.reminders)).toBe(true)
+    // The others stayed muted -- that is the point of keeping the rows live.
+    expect(isOn(LABEL.bookings)).toBe(false)
+    expect(isOn(LABEL.msg_participants)).toBe(false)
+    expect(isOn(LABEL.finance)).toBe(false)
+    // And the lift wrote ONE category, not a restore-all.
+    expect(lastPutBody()).toEqual({ categories: { reminders: true } })
+  })
+})
 
-      expect(isOn(LABEL.push)).toBe(false)
-      expect(isDisabled(LABEL.push)).toBe(false)
-    })
+describe('NotificationsView -- one category, two controls', () => {
+  it('stays coherent when the master and a row address the same category', async () => {
+    mount()
+    await flush()
+
+    // Control 1: the row mutes `reminders`.
+    switchByLabel(LABEL.reminders).click()
+    await flush()
+    expect(isOn(LABEL.reminders)).toBe(false)
+    expect(isOn(LABEL.master)).toBe(true) // three others still on
+
+    // Control 2: the master mutes everything, including `reminders` again.
+    switchByLabel(LABEL.master).click()
+    await flush()
+    expect(lastPutBody().categories.reminders).toBe(false)
+    expect(isOn(LABEL.reminders)).toBe(false)
+
+    // Control 1 again, on the same category the master just wrote.
+    switchByLabel(LABEL.reminders).click()
+    await flush()
+    expect(isOn(LABEL.reminders)).toBe(true)
+    expect(isOn(LABEL.master)).toBe(true)
+    // No divergence: the row's own write is the last word for that key.
+    expect(lastPutBody()).toEqual({ categories: { reminders: true } })
+  })
+
+  it('a failed master write leaves every row where it was', async () => {
+    prefsGet.mockResolvedValue(prefs({ bookings: false }))
+    mount()
+    await flush()
+    prefsPut.mockRejectedValueOnce(new Error('boom'))
+
+    switchByLabel(LABEL.master).click()
+    await flush()
+
+    // The whole batch reverts to its per-row prior state, not to a blanket on.
+    expect(isOn(LABEL.reminders)).toBe(true)
+    expect(isOn(LABEL.bookings)).toBe(false)
+    expect(isOn(LABEL.msg_participants)).toBe(true)
+    expect(isOn(LABEL.finance)).toBe(true)
+    expect(isOn(LABEL.master)).toBe(true)
+  })
+})
+
+describe('NotificationsView -- unsynced recipient / comms down', () => {
+  it('shows defaults, DISABLES every switch, and says so', async () => {
+    prefsGet.mockRejectedValue(new Error('404 recipient not synced'))
+    mount()
+    await flush()
+
+    expect(toastError).toHaveBeenCalledWith('Не удалось загрузить настройки уведомлений')
+    expect(isDisabled(LABEL.master)).toBe(true)
+    expect(isDisabled(LABEL.reminders)).toBe(true)
+    expect(isDisabled(LABEL.bookings)).toBe(true)
+    expect(isDisabled(LABEL.msg_participants)).toBe(true)
+    expect(isDisabled(LABEL.finance)).toBe(true)
+  })
+
+  it('never attempts a save while the load has failed', async () => {
+    prefsGet.mockRejectedValue(new Error('502'))
+    mount()
+    await flush()
+
+    // VSwitch's own guard returns before emitting when disabled, so this click
+    // must not reach the view at all -- nothing is written anywhere.
+    switchByLabel(LABEL.reminders).click()
+    switchByLabel(LABEL.master).click()
+    await flush()
+
+    expect(prefsPut).not.toHaveBeenCalled()
+  })
+
+  it('disables only the rows comms did not report', async () => {
+    // A category the profile stopped declaring: we cannot honestly control it,
+    // so its row is disabled rather than shown as a working switch.
+    const partial = prefs()
+    delete (partial.categories as Record<string, boolean>).finance
+    prefsGet.mockResolvedValue(partial)
+    mount()
+    await flush()
+
+    expect(isDisabled(LABEL.finance)).toBe(true)
+    expect(isDisabled(LABEL.reminders)).toBe(false)
+
+    switchByLabel(LABEL.master).click()
+    await flush()
+    // Silence-everything skips it too -- writing an undeclared category is a
+    // 422 from comms, and claiming to mute it would be a lie.
+    expect(Object.keys(lastPutBody().categories)).toEqual([
+      'reminders',
+      'bookings',
+      'msg_participants',
+    ])
   })
 })
