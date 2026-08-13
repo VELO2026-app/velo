@@ -138,12 +138,22 @@ at all.**
 | `master_messages` | `msg_participants` | 2:1 collapse ↓ |
 | `support_messages` | `msg_participants` | 2:1 collapse ↑ |
 
-**`push` names a CHANNEL, and comms preferences have no channel dimension.** Velo's channels are
-`DEFAULT_CHANNELS = ["in_app", "telegram"]` (`core/events/notify.py:51`) — there is no `push`
-channel to switch off. Grepping `channel` across comms' `app/api/prefs.py`, `app/audience/*.py`
-returns **0**; the control fires at **6** in `app/engine/constants.py`, where `DeliveryChannel`
-is defined (`:71`). The preference model is (recipient × category) plus one quiet window.
-**No new CATEGORY can fix `push`; the missing axis is CHANNEL.**
+**`push` names a CHANNEL, and comms preferences have no channel dimension.**
+
+> ⚠ **CORRECTED 2026-08-13 at `№700`, by the executor against its own `№699` wording, and
+> re-derived by Navigator-44.** This section first read *"there is no `push` channel to switch
+> off"*. **That is false: comms defines `DeliveryChannel.PUSH = "push"`
+> (`app/engine/constants.py:80`), alongside `TELEGRAM`, `EMAIL` and `IN_APP`.** What is true is
+> narrower and is the load-bearing half: velo never requests it — `DEFAULT_CHANNELS =
+> ["in_app", "telegram"]` (`core/events/notify.py:51`) — and **the preference model has no
+> channel axis at all.** The wrong sentence would have sent the next reader looking for a switch
+> in the wrong place.
+
+Measured per file rather than by basename, because a first pass collapsed two files both named
+`constants.py` under one label: `app/api/prefs.py`, `app/audience/{__init__,models,prefs,
+quiet_hours,sync}.py` → **0** hits for `channel`; control `app/engine/constants.py` → **6**.
+The preference model is (recipient × category) plus one quiet window.
+**No new CATEGORY can fix `push`; the missing axis is CHANNEL, and it is not ours to add.**
 
 **The two message toggles collide.** Comms assigns the category by thread SIDE, not by who wrote
 (`comms app/notifier.py:193-234`): the **client** gets `msg.participant_message` →
@@ -192,7 +202,36 @@ one-shot data migration to strip orphaned sub-objects would be a *choice*, not a
 **The expensive consequence is a contract break, not a migration.** `generated.ts:1564` declares
 `notifications: NotificationSettings` **non-optional**. Removing the field from `UserResponse`
 regenerates that file (autogen, no-touch, owned by the deploy bot) and breaks the type across
-**18 frontend files** carrying the fixture. That is a `vue-tsc` cost, not an `alembic` one.
+**15 frontend files** that actually supply it. That is a `vue-tsc` cost, not an `alembic` one.
+
+> ⚠ **THE COUNT WAS 18 IN `№699` AND IT WAS WRONG — corrected at `№700` by the executor against
+> its own figure.** 18 was files containing the string `notifications:`, which swept in
+> `generated.ts`, `MasterShell.vue` and `NotificationsView.vue`. **15 files supply the field**, in
+> three forms: 7 × `notifications: {} as UserResponse['notifications']`, 7 × a full literal, and
+> 1 × `notifications: null` (`ChatThreadScreen.test.ts:66`). **The `as UserResponse[…]` form
+> breaks twice** — TS2339 on the indexed access on top of the excess-property error — so those
+> seven are rewritten, not merely trimmed.
+
+### 7a · THE DEPLOY TYPECHECKS, AND THE REGEN LANDS BEFORE IT IN THE SAME RUN
+
+**MEASURED at `№700`, and it decides the commit ordering.** Inside one `velo update`:
+pytest against the live DB (`scripts/velo-manage.sh:1318`) → fetch `openapi.json` (`:1356`) →
+regenerate `generated.ts` (`:1363`) → **velo-bot commits and pushes it** (`:1387-1421`) → then
+the frontend image build.
+
+`scripts/velo-manage.sh` invokes `vue-tsc` **zero** times — and that zero is a FALSE ALL-CLEAR if
+read alone (control: `npm run` appears 3 times in the same file). **The typecheck lives in
+`frontend/Dockerfile:40`: `RUN npm run build`, and `npm run build` = `vue-tsc --noEmit && vite
+build`** (`frontend/package.json`). The Dockerfile says so itself at `:10-11` — *"if tests fail,
+image is not built. This is the gate for `velo update`."* `npm run test` is `vitest run` alone and
+strips types, so **only the build step catches a type error.**
+
+**Consequence: a commit that leaves the fixtures stale does not merely go red on origin — it
+FAILS THE DEPLOY at the frontend image build, after the backend has migrated and after the bot
+has already pushed a commit.** Conversely a commit that retires the field AND fixes all 15
+fixtures is red locally (`generated.ts` still declares it) and **GREEN on the server**, because
+the regen has already landed by the time `vue-tsc` runs. The running container only changes on a
+successful build, so a failed build leaves testers on the working stand either way.
 
 ## 8 · Test surface (MEASURED)
 
@@ -254,7 +293,10 @@ say under any implementation.
 
 - **A — migrate the student screen to comms, as the master's was.** The mute becomes real for
   what can be expressed; `push` is dropped or redefined; the two message rows become one;
-  `bookings` and `finance` remain unmutable with no row. Contract break across 18 files.
+  `bookings` and `finance` remain unmutable with no row. Contract break across 15 files.
+  **RULED BY THE OWNER 2026-08-13 — this is the option that was taken**, with `push` redefined as
+  silence-everything rather than deleted. B and C below are kept as the record of what was
+  weighed, not as live alternatives.
 - **B — keep four rows and map them.** Preserves the approved screen, but the 2:1 collision has
   only two honest resolutions: both rows write one category (the screen then lies — flipping one
   moves the other, the exact defect the master screen had to relabel to escape), or one row stays
