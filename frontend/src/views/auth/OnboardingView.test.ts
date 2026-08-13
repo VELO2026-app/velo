@@ -84,7 +84,6 @@ function user(overrides: Partial<UserResponse> & Record<string, unknown> = {}): 
     phone: null,
     bio: null,
     email: null,
-    master_notifications: null,
     role_switch: null,
     ...overrides,
   } as UserResponse

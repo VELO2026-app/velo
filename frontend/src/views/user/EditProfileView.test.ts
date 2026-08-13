@@ -142,7 +142,6 @@ function user(overrides: Partial<UserResponse> = {}): UserResponse {
     phone: null,
     bio: 'Люблю практики',
     email: 'anya@example.com',
-    master_notifications: null,
     role_switch: null,
     ...overrides,
   }

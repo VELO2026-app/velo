@@ -12,15 +12,16 @@
 #   for the entire request — one DB connection instead of two.
 #   The service no longer needs session.merge().
 #
-# MASTER NOTIFICATIONS (E8): UserResponse.master_notifications is exposed only
-#   when the caller has master capability (a verified MasterProfile). That
-#   check needs the MasterProfile table, which UserResponse cannot read on its
-#   own, so EVERY endpoint here that returns a UserResponse carrying
-#   master_notifications (GET / PATCH /me, POST /me/role) funnels through
-#   _user_response_with_capability(), which computes the capability and sets the
-#   response carrier. Capability -- not strict role==master -- so an admin who
-#   is also a verified master keeps the screen. DELETE /me returns 204 (no
-#   body) and does not need it.
+# MASTER CAPABILITY: UserResponse cannot decide on its own whether an account
+#   has a verified MasterProfile -- that needs the MasterProfile table -- so
+#   EVERY endpoint here returning a UserResponse (GET / PATCH /me, POST /me/role)
+#   funnels through _user_response_with_capability(), which computes it and sets
+#   the response carrier. Capability, NOT a strict role==master check, so an
+#   admin who is also a verified master is treated as one. DELETE /me returns
+#   204 (no body) and does not need it.
+#   ⚠ This carrier existed to gate master_notifications, which T-26 retired; it
+#   is still REQUIRED because role_switch derives the allowed-role set from it.
+#   The same pass also fills master_application.
 # =============================================================================
 
 from fastapi import APIRouter, Depends, status
@@ -49,13 +50,13 @@ async def _user_response_with_capability(
     user: User,
     session: AsyncSession,
 ) -> UserResponse:
-    """Serialize a user and set the master_notifications capability gate.
+    """Serialize a user and set the master-capability carrier.
 
-    master_notifications is shown only when the user has master capability (a
-    verified MasterProfile); UserResponse cannot derive that on its own, so any
-    endpoint returning a UserResponse that carries master_notifications routes
-    through here to set the master_capability_in carrier. Without this the
-    block would silently come back null (the gate defaults to "no capability").
+    "Master capability" means a VERIFIED MasterProfile. UserResponse cannot
+    derive that on its own (it needs another table), so every endpoint returning
+    a UserResponse routes through here to set master_capability_in. Without it
+    the carrier defaults to False and `role_switch` under-derives -- a verified
+    master silently stops being offered MASTER as a switch target.
 
     The session may be the read or the write session for the request -- the
     capability lookup is a plain SELECT and works on either.
@@ -84,7 +85,7 @@ async def get_me(
     The user is loaded by get_current_user (read-only session). The same
     get_db_reader session is reused here (FastAPI caches Depends within a
     request, so this is one DB connection, not two) to check master capability,
-    which gates the master_notifications block (see
+    which the role_switch block is derived from (see
     _user_response_with_capability).
     """
     return await _user_response_with_capability(user, session)
@@ -102,9 +103,9 @@ async def update_me(
     the same session instance (FastAPI caches Depends within a request).
     The user is already bound to the write session — no merge needed.
 
-    Only fields present in the request body are updated. The response carries
-    master_notifications gated by master capability, same as GET /me, so the
-    frontend can read back the freshly-saved master prefs.
+    Only fields present in the request body are updated. The response is built
+    with the master-capability carrier set, same as GET /me, so role_switch
+    derives identically on both.
     """
     updated = await update_user(user, body, session)
     return await _user_response_with_capability(updated, session)
@@ -129,8 +130,8 @@ async def switch_my_role(
 
     get_current_user_write + Depends(get_db_session) share one session
     (TD-029), so the mutation and the user load use the same connection. The
-    response gates master_notifications by master capability (a verified
-    MasterProfile), which is role-independent, like GET /me.
+    response carries master capability (a verified MasterProfile), which is
+    role-independent, like GET /me.
     """
     updated = await switch_user_role(user, body.role, session)
     return await _user_response_with_capability(updated, session)

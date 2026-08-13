@@ -598,16 +598,21 @@ async def test_delete_me_no_auth(client: AsyncClient) -> None:
 # so a muted user was not muted) and the truth moved to the comms service,
 # reached through GET/PUT /api/v1/notifications/prefs.
 #
-# What replaces them guards the RETIREMENT rather than the feature -- that the
-# field is really gone, that a stale cached client cannot resurrect it, and
-# that the SEPARATE credentials["master_notifications"] store was not taken
-# down with it.
+# credentials["master_notifications"] (nine master toggles + a schedule) went
+# the same way in set 2, for a different reason: it was ORPHANED. The master
+# screen moved to comms on 2026-08-07 and stopped writing it, while this API
+# kept accepting and serving it. Its own suite (tests/test_master_notifications
+# .py, 14 tests) went with it; the capability carrier those tests incidentally
+# exercised is covered directly by tests/test_role_switch.py.
+#
+# What replaces both guards the RETIREMENT rather than the feature -- that the
+# fields are really gone and that a stale cached client cannot resurrect them.
 
 
-async def test_notifications_block_is_gone_from_the_response(
+async def test_both_notification_blocks_are_gone_from_the_response(
     client: AsyncClient,
 ) -> None:
-    """GET /users/me no longer carries the four-key notifications block."""
+    """GET /users/me carries neither notification store any more."""
     data = await login_user(client, telegram_id=89475, first_name="Notif")
     token = data["session_token"]
 
@@ -616,22 +621,30 @@ async def test_notifications_block_is_gone_from_the_response(
     assert response.status_code == 200
     body = response.json()
     assert "notifications" not in body
-    # The master store is a DIFFERENT key and survives this change untouched;
-    # null here only because a plain user has no master capability.
-    assert "master_notifications" in body
-    assert body["master_notifications"] is None
+    assert "master_notifications" not in body
+    # But the capability carrier they were gated on is still doing its OTHER
+    # job: role_switch is derived from it. A plain user derives {USER} alone,
+    # so the block is None rather than missing -- proving the field still
+    # computes rather than having been deleted along with the gate.
+    assert "role_switch" in body
+    assert body["role_switch"] is None
 
 
 async def test_stale_client_patching_notifications_is_ignored(
     client: AsyncClient,
 ) -> None:
-    """A cached old frontend can still PATCH the retired key -- harmlessly.
+    """A cached old frontend can still PATCH either retired key -- harmlessly.
 
-    UserUpdate does not set extra="forbid", so the field is DROPPED rather
+    UserUpdate does not set extra="forbid", so the fields are DROPPED rather
     than 422'd. That is deliberate for a Mini App whose bundle is cached on
     the device: the old screen degrades to a no-op. This test pins the
     behaviour so it cannot change by accident -- 200, nothing echoed back,
     and nothing written into the credentials sandbox.
+
+    Both stores are sent in ONE request on purpose: a stale bundle predating
+    T-26 entirely could carry either, and the master one is the likelier of
+    the two to linger, since that screen's own writes stopped a week before
+    the field did.
     """
     data = await login_user(client, telegram_id=89476, first_name="Stale")
     token = data["session_token"]
@@ -639,17 +652,26 @@ async def test_stale_client_patching_notifications_is_ignored(
     response = await client.patch(
         "/api/v1/users/me",
         headers=auth_headers(token),
-        json={"notifications": {"push": False, "master_messages": False}},
+        json={
+            "notifications": {"push": False, "master_messages": False},
+            "master_notifications": {
+                "new_booking": False,
+                "schedule": {"from": "09:00", "to": "21:00", "days": ["mon"]},
+            },
+        },
     )
 
     assert response.status_code == 200
-    assert "notifications" not in response.json()
+    body = response.json()
+    assert "notifications" not in body
+    assert "master_notifications" not in body
 
-    # And it did not land in the store behind the API either: a later read is
+    # And neither landed in the store behind the API: a later read is
     # identical, with no resurrected block.
     me = await client.get("/api/v1/users/me", headers=auth_headers(token))
     assert me.status_code == 200
     assert "notifications" not in me.json()
+    assert "master_notifications" not in me.json()
 
 
 async def test_retired_key_does_not_disturb_the_rest_of_credentials(

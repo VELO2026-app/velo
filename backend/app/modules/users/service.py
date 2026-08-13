@@ -88,27 +88,7 @@ async def update_user(
     if not updates:
         return user
 
-    # -- Nested master_notifications object (partial deep-merge) --------------
-    #
-    # master_notifications is the master-only 9-toggle preference set plus a
-    # delivery `schedule`, stored under credentials["master_notifications"]
-    # (a schema-on-read sandbox). Being a nested dict it must NOT go through the
-    # flat path below -- dict.update() would replace the whole object and wipe
-    # toggles the client did not send -- so drop it from `updates` first and
-    # merge key-by-key. We re-derive the payload straight from the model with
-    # by_alias=True so the schedule's "from" field (aliased from the `from_`
-    # Python keyword) is keyed as "from" -- exactly the key the read side
-    # (UserResponse.master_notifications) looks for. exclude_unset drops keys
-    # the client omitted; None toggles / sub-fields mean "leave as is" and are
-    # skipped during the merge below.
-    updates.pop("master_notifications", None)
-    master_notifications_update = (
-        data.master_notifications.model_dump(exclude_unset=True, by_alias=True)
-        if data.master_notifications is not None
-        else None
-    )
-
-    # Split the REMAINING flat JSONB-backed fields from plain column fields.
+    # Split the flat JSONB-backed fields from plain column fields.
     #
     # None is dropped for JSONB fields, empty string is kept:
     #   - onboarding_completed: only true/false are meaningful; null would
@@ -134,51 +114,20 @@ async def update_user(
     for field, value in column_updates.items():
         setattr(user, field, value)
 
-    # Apply JSONB-backed fields + the merged master_notifications object into
-    # credentials. We build a NEW dict (copy) and hand it to set_jsonb, which
-    # reassigns + flag_modified()s the column. Mutating user.credentials in
-    # place would not be detected by SQLAlchemy.
+    # Apply JSONB-backed fields into credentials. We build a NEW dict (copy) and
+    # hand it to set_jsonb, which reassigns + flag_modified()s the column.
+    # Mutating user.credentials in place would not be detected by SQLAlchemy.
     #
-    # T-26: the four-key credentials["notifications"] merge used to live here.
-    # It is gone -- that store is retired and the student's preferences are
-    # written to comms through the proxy. Any blob still holding the old key is
-    # simply left alone: this path no longer reads or writes it, so it is inert
-    # data, not a second source of truth.
-    if jsonb_updates or master_notifications_update is not None:
+    # T-26: TWO nested-object merges used to sit here, one per notification
+    # store -- the four-key credentials["notifications"] (set 1) and the
+    # nine-key credentials["master_notifications"] (set 2). Both are gone; both
+    # stores live in comms now. A blob still holding either key is left alone:
+    # this path neither reads nor writes them, so old data is inert rather than
+    # a second source of truth. That leaves only flat fields here, which is why
+    # the nested-merge machinery went with them.
+    if jsonb_updates:
         new_credentials = dict(user.credentials or {})
-
-        if jsonb_updates:
-            new_credentials.update(jsonb_updates)
-
-        if master_notifications_update is not None:
-            # Same partial-merge idea as notifications, with one extra level:
-            # the nested `schedule` is merged field-by-field so changing only
-            # `to` keeps the stored `from`/`days`. None values mean "leave as
-            # is" and are skipped (toggles and schedule sub-fields alike).
-            current = new_credentials.get("master_notifications")
-            merged = dict(current) if isinstance(current, dict) else {}
-
-            schedule_update = master_notifications_update.pop("schedule", None)
-
-            for key, value in master_notifications_update.items():
-                if value is not None:
-                    merged[key] = value
-
-            if schedule_update is not None:
-                current_schedule = merged.get("schedule")
-                merged_schedule = (
-                    dict(current_schedule)
-                    if isinstance(current_schedule, dict)
-                    else {}
-                )
-                # from / to overwrite; days replaces the list wholesale.
-                for key, value in schedule_update.items():
-                    if value is not None:
-                        merged_schedule[key] = value
-                merged["schedule"] = merged_schedule
-
-            new_credentials["master_notifications"] = merged
-
+        new_credentials.update(jsonb_updates)
         user.set_jsonb("credentials", new_credentials)
 
     await session.flush()
@@ -314,10 +263,11 @@ async def user_has_master_capability(
 ) -> bool:
     """Whether the user has a VERIFIED MasterProfile (i.e. master capability).
 
-    Used by GET /users/me to gate the master_notifications block. This is the
-    "is effectively a master" check -- deliberately capability-based rather than
+    Used by GET /users/me to derive the role_switch block (it gated
+    master_notifications too, until T-26 retired that). This is the "is
+    effectively a master" check -- deliberately capability-based rather than
     role==MASTER, so an admin (role=ADMIN) who also has a verified MasterProfile
-    still sees the master notifications screen. A missing / pending / rejected
+    is still offered MASTER as a switch target. A missing / pending / rejected
     profile -> False.
 
     Read-only: the caller passes a read session (get_db_reader in the router).
