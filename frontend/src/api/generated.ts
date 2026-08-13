@@ -904,22 +904,6 @@ export interface NotificationScheduleUpdate {
   days?: string[] | null
 }
 
-/** User notification preferences (nested under credentials.notifications). All flags default to True. Used both as the typed shape returned inside UserResponse.notifications and as the optional update payload in UserUpdate (where every field is optional for partial updates). */
-export interface NotificationSettings {
-  push?: boolean
-  practice_reminders?: boolean
-  master_messages?: boolean
-  support_messages?: boolean
-}
-
-/** Partial update for notification preferences. Every field optional: only the toggles the user flipped are sent. The service merges them onto the stored object so untouched flags are kept. */
-export interface NotificationSettingsUpdate {
-  push?: boolean | null
-  practice_reminders?: boolean | null
-  master_messages?: boolean | null
-  support_messages?: boolean | null
-}
-
 /** GET /api/v1/admin/practices -- paginated, scope-filtered list. */
 export interface PaginatedAdminPracticesResponse {
   items: AdminPracticeListItem[]
@@ -1561,7 +1545,6 @@ export interface UserResponse {
   phone: string | null
   bio: string | null
   email: string | null
-  notifications: NotificationSettings
   master_notifications: MasterNotificationSettings | null
   role_switch: RoleSwitchInfo | null
 }
@@ -1583,7 +1566,6 @@ export interface UserUpdate {
   phone?: string | null
   bio?: string | null
   email?: string | null
-  notifications?: NotificationSettingsUpdate | null
   master_notifications?: MasterNotificationSettingsUpdate | null
 }
 
