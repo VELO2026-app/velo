@@ -10,10 +10,12 @@
   topic label + message as its first (or next) message (::sendSupportMessage)
   -- the messaging module (comms sections), NOT the `SupportTicket` model
   VELO-Backend-Tasks.md describes elsewhere (that plan stays Zod's, untouched).
-  ⚠ The success screen's copy ("Поддержка в приложении скоро заработает...")
-  is now FALSE -- written for the old stub, still says there is no in-app
-  channel. NOT rewritten here on purpose: user-facing wording is the owner's
-  call (PROMPT №712 flagged the exact lines, not touched). Attachments stay
+  The success screen's copy was written for the old stub and became FALSE the
+  moment this screen started delivering. Rewritten at PROMPT №712 to the owner's
+  own approved wording, identical to the user screen's: the reply comes back
+  HERE, and email is the fallback for a late answer, not the substitute for a
+  missing channel. ⚠ Do not "improve" it -- wording is the owner's call.
+  Attachments stay
   CAPTURED-LOCALLY-ONLY, unwired, out of that prompt's scope (no
   upload/storage backend exists).
 
@@ -37,10 +39,7 @@
         <IconSupportChat :size="48" />
       </div>
       <h2 class="support__ok-title">Спасибо за обращение</h2>
-      <p class="support__ok-text">
-        Поддержка в приложении скоро заработает. Если вопрос срочный — напишите нам на
-        <a :href="emailHref">support@velo.app</a>.
-      </p>
+      <p class="support__ok-text">Мы получили ваше обращение и ответим здесь же, в приложении.</p>
       <VButton variant="primary" block class="support__ok-cta" @click="onGoHome">
         На главную
       </VButton>
@@ -114,7 +113,9 @@
         </div>
       </section>
 
-      <a class="support__email" :href="emailHref">Или напишите: support@velo.app</a>
+      <a class="support__email" :href="emailHref"
+        >Не дождались ответа? Напишите на support@velo.app</a
+      >
 
       <VButton
         variant="primary"

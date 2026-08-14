@@ -12,10 +12,13 @@
   + message as its first (or next) message (::sendSupportMessage) -- this is the
   messaging module (comms sections), not the `SupportTicket` model
   VELO-Backend-Tasks.md describes elsewhere (that plan stays Zod's, untouched).
-  ⚠ The terminal screen's copy ("Поддержка в приложении скоро заработает...") is
-  now FALSE -- it was written for the old stub and still says there is no
-  in-app channel. NOT rewritten here on purpose: user-facing wording is the
-  owner's call (PROMPT №712 flagged the exact lines, not touched).
+  The terminal screen's copy was written for the old stub and became FALSE the
+  moment this screen started delivering -- it promised a channel that had just
+  arrived and sent the reader to email instead. Rewritten at PROMPT №712 to the
+  owner's own approved wording: the reply comes back HERE, and email is now the
+  fallback for a late answer rather than the substitute for a missing channel.
+  ⚠ Do not "improve" this wording. Words a human reads are the owner's call on
+  this project, and this screen already cost one round of exactly that.
 
   Route: /user/support (name 'user-support').
 -->
@@ -30,10 +33,7 @@
         <IconSupportChat :size="48" />
       </div>
       <h2 class="support__ok-title">Спасибо за обращение</h2>
-      <p class="support__ok-text">
-        Поддержка в приложении скоро заработает. Если вопрос срочный — напишите нам на
-        <a :href="emailHref">support@velo.app</a>.
-      </p>
+      <p class="support__ok-text">Мы получили ваше обращение и ответим здесь же, в приложении.</p>
       <VButton variant="primary" block class="support__ok-cta" @click="goHome">
         На главную
       </VButton>
@@ -75,7 +75,9 @@
         />
       </section>
 
-      <a class="support__email" :href="emailHref">Или напишите: support@velo.app</a>
+      <a class="support__email" :href="emailHref"
+        >Не дождались ответа? Напишите на support@velo.app</a
+      >
 
       <VButton
         variant="primary"
