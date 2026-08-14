@@ -3,8 +3,9 @@
 # №592; T-37 contact-list union PROMPT №706; CANCELLED amendment PROMPT №707)
 # =============================================================================
 #
-# telegram_id ranges: 99700-99799 (original), 89800-89819 (T-37 + its
-# amendment -- the original band is exhausted, see _TID_MIN_T37's own comment)
+# telegram_id ranges: 99700-99799 (original), 89800-89809 (T-37) + 89840-89849
+# (its amendment -- the original band is exhausted, see _TID_MIN_T37's own
+# comment; MOVED 2026-08-14 (PROMPT №710), see that comment for why)
 #
 # ⚠ BACKEND-ONLY, UNPROVEN LOCALLY -- no Postgres reachable in this
 # environment (see test_zoom_lifecycle.py's module docstring for the exact
@@ -94,11 +95,32 @@ _TID_MAX = 99799
 # 100 ids already in use, no run of >=8 free) -- new fixtures below take a
 # SEPARATE band instead of fighting for the last 7 scattered slots. Per the
 # fleet's telegram_id registry: velo's free window is 89760-89899, we hold
-# 89800-89839 within it. T-37 itself used the first 10 (89800-89809); the
-# 2026-08-14 CANCELLED-contact amendment (PROMPT №707) uses the next 10
-# (89810-89819) -- extending this SAME band rather than opening a third one.
+# 89800-89839 within it. T-37 itself used the first 10 (89800-89809).
+#
+# ⚠ MOVED 2026-08-14 (PROMPT №710): the 2026-08-14 CANCELLED-contact amendment
+# (PROMPT №707) originally extended this SAME band with the next 10
+# (89810-89819) -- and that decade COLLIDED, id-for-id, with
+# `test_chats_t3_students.py`'s own BAND_MIN+15..+16 (89815/89816), which
+# claims cleanup over the WHOLE 89800-89839 span and is ALREADY PUBLISHED
+# (commit `69035333`, on `origin/test`) while this file's amendment
+# (`14244b22`) is not. Published claim wins: the amendment's decade moved to
+# `_TID_MIN_T37B`/`_TID_MAX_T37B` below, a range with ZERO hits anywhere in
+# `backend/tests/` (grepped, not assumed). The ORIGINAL T-37 decade
+# (89800-89809) did NOT move -- it is not literally written by
+# `test_chats_t3_students.py` (that file's own header says only its offsets
+# 15..39 are in use, i.e. 89815-89839), so no id-level collision exists there;
+# it remains inside that file's broader cleanup SWEEP, which is a pre-existing
+# condition of the published band, not something this amendment introduced.
 _TID_MIN_T37 = 89800
-_TID_MAX_T37 = 89819
+_TID_MAX_T37 = 89809
+
+# The amendment's own decade (PROMPT №707), relocated (PROMPT №710) to a
+# provably free run -- confirmed by a full-repo scan of every telegram_id
+# literal and band constant in `backend/tests/*.py`: 89840-89898 has zero
+# hits anywhere (89760-89799 is also free, vacated by `69035333`, but
+# 89840-89849 keeps this file's two T-37 decades adjacent in the registry).
+_TID_MIN_T37B = 89840
+_TID_MAX_T37B = 89849
 
 
 # ===================================================================
@@ -123,13 +145,17 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
     # range's users here cascades their chat rows automatically).
     await full_cleanup_range(
         db_session, _TID_MIN, _TID_MAX,
-        delete_users=True, extra_ranges=[(_TID_MIN_T37, _TID_MAX_T37)],
+        delete_users=True, extra_ranges=[
+            (_TID_MIN_T37, _TID_MAX_T37), (_TID_MIN_T37B, _TID_MAX_T37B),
+        ],
     )
     await db_session.commit()
     yield
     await full_cleanup_range(
         db_session, _TID_MIN, _TID_MAX,
-        delete_users=True, extra_ranges=[(_TID_MIN_T37, _TID_MAX_T37)],
+        delete_users=True, extra_ranges=[
+            (_TID_MIN_T37, _TID_MAX_T37), (_TID_MIN_T37B, _TID_MAX_T37B),
+        ],
     )
     await db_session.commit()
 
@@ -1586,6 +1612,9 @@ async def test_derived_students_blocked_excluded_even_as_chat_only_contact(
 # booking_contacts (the union source) now has NO status filter; the SEPARATE
 # booking_for_count subquery keeps != CANCELLED, so a cancelled-only contact
 # is visible but is not counted as a practice anywhere.
+# Band: _TID_MIN_T37B/_TID_MAX_T37B (89840-89849) -- moved here from
+# 89810-89819 (PROMPT №710), which collided id-for-id with
+# `test_chats_t3_students.py`'s published 89800-89839 cleanup span.
 # ===================================================================
 
 
@@ -1595,11 +1624,11 @@ async def test_derived_students_includes_cancelled_only_contact(
 ) -> None:
     """A booking whose ONLY status is CANCELLED still makes its holder a
     contact -- the 2026-08-14 amendment to T-37."""
-    master = await _make_verified_master(client, db_session, 89810)
+    master = await _make_verified_master(client, db_session, 89840)
     master_id = master["user"]["id"]
     headers = auth_headers(master["session_token"])
 
-    student_id = await _login(client, 89811, "CancelledOnly")
+    student_id = await _login(client, 89841, "CancelledOnly")
     practice = await _practice(db_session, master_id, scheduled_hours_from_now=5)
     await _booking(
         db_session, practice, student_id, status=BookingStatus.CANCELLED.value,
@@ -1621,11 +1650,11 @@ async def test_derived_students_blocked_excluded_even_as_cancelled_only_contact(
 ) -> None:
     """The blocked_at exclusion applies to the widened booking source too --
     a cancelled-only contact who is ALSO blocked must not appear."""
-    master = await _make_verified_master(client, db_session, 89812)
+    master = await _make_verified_master(client, db_session, 89842)
     master_id = master["user"]["id"]
     headers = auth_headers(master["session_token"])
 
-    student_id = await _login(client, 89813, "BlockedCancelledOnly")
+    student_id = await _login(client, 89843, "BlockedCancelledOnly")
     practice = await _practice(db_session, master_id, scheduled_hours_from_now=5)
     await _booking(
         db_session, practice, student_id, status=BookingStatus.CANCELLED.value,
@@ -1657,15 +1686,15 @@ async def test_derived_students_practices_count_excludes_cancelled_when_mixed(
     most-active-first: the mixed one (1 countable) must sort AHEAD of a
     cancelled-only one (0 countable) despite the cancelled-only student
     having a LOWER telegram_id / earlier login."""
-    master = await _make_verified_master(client, db_session, 89814)
+    master = await _make_verified_master(client, db_session, 89844)
     master_id = master["user"]["id"]
     headers = auth_headers(master["session_token"])
 
-    cancelled_only_id = await _login(client, 89815, "CancelledOnly2")
+    cancelled_only_id = await _login(client, 89845, "CancelledOnly2")
     p1 = await _practice(db_session, master_id, scheduled_hours_from_now=5)
     await _booking(db_session, p1, cancelled_only_id, status=BookingStatus.CANCELLED.value)
 
-    mixed_id = await _login(client, 89816, "MixedContact")
+    mixed_id = await _login(client, 89846, "MixedContact")
     p2 = await _practice(
         db_session, master_id,
         scheduled_hours_from_now=-5, status=PracticeStatus.COMPLETED.value,
