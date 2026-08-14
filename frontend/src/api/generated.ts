@@ -187,6 +187,10 @@ export interface AdminPromoResponse {
   master_last_name?: string | null
 }
 
+export interface AdminReplyIn {
+  body: string
+}
+
 /** One master's earnings + payouts within the period. */
 export interface AdminRevenuePerMaster {
   master_id: string
@@ -294,7 +298,7 @@ export interface AnnouncementRequest {
   audience?: 'all' | 'masters'
 }
 
-/** POST /admin/masters/{user_id}/method-change-request/approve -- body. R5 stage 4 (operator decision 3=Б): promote is OPTIONAL and defaults to empty, so a bare `{}` body (every caller before this stage, and every approval where the admin didn't pick "add to catalog") behaves exactly as before -- no catalog write. Each entry becomes a new custom direction in the taxonomy catalog (deduped against existing rows). */
+/** POST /admin/masters/{user_id}/method-change-request/approve -- body. R5 stage 4 (operator decision 3=B): promote is OPTIONAL and defaults to empty, so a bare `{}` body (every caller before this stage, and every approval where the admin didn't pick "add to catalog") behaves exactly as before -- no catalog write. Each entry becomes a new custom direction in the taxonomy catalog (deduped against existing rows). */
 export interface ApproveMethodChangeRequest {
   promote?: string[]
   master_only?: string[]
@@ -761,7 +765,7 @@ export interface MasterApplyResponse {
   created_at: string
 }
 
-/** PATCH /api/v1/masters/me/languages -- freely-editable language set (E16). Q2=А: no moderation (unlike methods). Replaces data.profile.languages wholesale with the sent flat list. Empty list clears it. */
+/** PATCH /api/v1/masters/me/languages -- freely-editable language set (E16). Q2=A: no moderation (unlike methods). Replaces data.profile.languages wholesale with the sent flat list. Empty list clears it. */
 export interface MasterLanguagesUpdate {
   languages?: string[]
 }
@@ -859,6 +863,10 @@ export interface MoodDistribution {
   high: number
   mid: number
   low: number
+}
+
+export interface OpenThreadIn {
+  topic?: string | null
 }
 
 /** GET /api/v1/admin/practices -- paginated, scope-filtered list. */
@@ -1294,12 +1302,12 @@ export interface RevokeMasterAdvisory {
   has_warnings: boolean
 }
 
-/** Self role-switch capability (capability-derived, A1=Б). Present in GET /users/me when the derived set contains more than just USER (i.e. there is actually something to switch to). The list is the set of roles this account may switch itself to via POST /users/me/role, derived by derive_allowed_roles() -- the single source of truth shared with the write path. Null when the user can only be a plain user. */
+/** Self role-switch capability (capability-derived, A1=B). Present in GET /users/me when the derived set contains more than just USER (i.e. there is actually something to switch to). The list is the set of roles this account may switch itself to via POST /users/me/role, derived by derive_allowed_roles() -- the single source of truth shared with the write path. Null when the user can only be a plain user. */
 export interface RoleSwitchInfo {
   allowed_roles: UserRole[]
 }
 
-/** POST /api/v1/users/me/role — target role to switch into. A production endpoint (always on; A1=Б). Pydantic validates `role` against UserRole (user/master/admin); anything else is a 422. Whether the caller may actually switch to it is enforced in the service via derive_allowed_roles() -- the capability-derived policy (own role + a VERIFIED MasterProfile + the switched-away-admin marker), the single source of truth shared with the GET /users/me read path. Legacy seeded credentials.role_switch.allowed_roles lists grant nothing. */
+/** POST /api/v1/users/me/role — target role to switch into. A production endpoint (always on; A1=B). Pydantic validates `role` against UserRole (user/master/admin); anything else is a 422. Whether the caller may actually switch to it is enforced in the service via derive_allowed_roles() -- the capability-derived policy (own role + a VERIFIED MasterProfile + the switched-away-admin marker), the single source of truth shared with the GET /users/me read path. Legacy seeded credentials.role_switch.allowed_roles lists grant nothing. */
 export interface RoleSwitchRequest {
   role: UserRole
 }
@@ -1309,6 +1317,11 @@ export interface ScheduleIn {
   from: string
   to: string
   days: string[]
+}
+
+export interface SendMessageIn {
+  topic?: string | null
+  body: string
 }
 
 /** One bar in the check-in weekly chart (label = bucket date, value = %). */
@@ -1521,7 +1534,7 @@ export interface UserUpdate {
   email?: string | null
 }
 
-/** POST /admin/masters/{user_id}/verify -- request body. promote (PROMPT №503 commit 3, mirrors ApproveMethodChangeRequest.promote below): optional list of custom method labels from the applicant's own `methods` that the admin chose to add to the taxonomy catalog. Before this, only an ALREADY-VERIFIED master's later method-change request had any promotion path -- a brand-new applicant's «Свой вариант» text could never become a real catalog chip, no matter what the admin did. Absent/empty -> no catalog write, identical to before this field existed. Deduped against existing rows (_promote_custom_methods) -- admin-picked, not automatic, same editorial-control rationale as the method-change-request flow (operator decision 3=Б): a custom label becomes SHARED vocabulary for every future master/admin the moment it's promoted, so it stays a deliberate admin choice rather than something typo'd free text can trigger unreviewed. */
+/** POST /admin/masters/{user_id}/verify -- request body. promote (PROMPT №503 commit 3, mirrors ApproveMethodChangeRequest.promote below): optional list of custom method labels from the applicant's own `methods` that the admin chose to add to the taxonomy catalog. Before this, only an ALREADY-VERIFIED master's later method-change request had any promotion path -- a brand-new applicant's «Свой вариант» text could never become a real catalog chip, no matter what the admin did. Absent/empty -> no catalog write, identical to before this field existed. Deduped against existing rows (_promote_custom_methods) -- admin-picked, not automatic, same editorial-control rationale as the method-change-request flow (operator decision 3=B): a custom label becomes SHARED vocabulary for every future master/admin the moment it's promoted, so it stays a deliberate admin choice rather than something typo'd free text can trigger unreviewed. */
 export interface VerifyMasterRequest {
   notes?: string | null
   promote?: string[]
