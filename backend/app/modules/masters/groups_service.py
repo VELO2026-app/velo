@@ -21,7 +21,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 import structlog
-from sqlalchemy import and_, delete, func, select
+from sqlalchemy import and_, delete, func, literal_column, select, union
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,6 +35,7 @@ from app.core.exceptions import (
 )
 from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.bookings.service import recalculate_participants
+from app.modules.chats.models import ChatThread
 from app.modules.masters.groups_models import (
     GroupInvite,
     MasterGroup,
@@ -63,17 +64,90 @@ _GROUP_NAME_DELETED = "Удалённые"
 
 
 def _derived_students_base(master_id: UUID):
-    """Same join shape as students_service.list_master_students, widened
-    (owner Q2=A): ANY non-cancelled booking counts (not ATTENDED-only), and
-    anyone MasterStudent.blocked_at'd is excluded. The outer join to
-    MasterStudent + `blocked_at IS NULL` correctly covers BOTH "no
-    master_student row at all" and "row exists but not blocked" -- NULL
-    from the outer join and a genuine NULL blocked_at both satisfy IS NULL.
+    """"Ученики" is a CONTACT LIST (T-37, owner-ruled 2026-08-13/14): the
+    UNION of everyone who has made contact with this master, minus anyone
+    MasterStudent.blocked_at'd. Four sources, each deduped-by-user_id via a
+    SQL UNION (not UNION ALL -- the dedup IS the union, no extra DISTINCT
+    needed):
+      - bookings: ANY non-cancelled booking (owner Q2=A, pre-T-37) on one of
+        this master's practices -- pending/confirmed/attended/no_show all
+        count, cancelled is excluded, UNCHANGED from pre-T-37. ⚠ FLAGGED, not
+        resolved: an earlier framing of this task asserted "a cancelled
+        booking IS a contact and does appear" -- that does not match this
+        code before or after T-37 (cancelled was excluded pre-T-37 too), and
+        the instruction that shaped this build explicitly said "non-cancelled
+        bookings (as today)". Cancelled bookings are NOT a fifth union source
+        here. If that framing reflected an actual, separate ruling, it was
+        never applied to this function and needs its own decision.
+      - chat threads (ChatThread.client_user_id) where this master is the
+        operator -- opening a chat is contact even with zero bookings.
+      - waitlist entries (Waitlist.user_id) on this master's practices, AT
+        ANY STATUS -- owner-ruled 2026-08-14: a declined/expired/left row is
+        still evidence of contact, same reasoning as the cancelled-booking
+        case above.
+      - custom-group membership (MasterGroupMembership.student_user_id) for
+        ANY of this master's groups -- owner-ruled 2026-08-14 "option A":
+        the schema cannot distinguish an invite-token join from the master
+        hand-adding someone, so both count. Consequence stated and accepted:
+        a hand-added member now also appears in the general "Ученики" list,
+        not only their custom group.
+
+    NOT the entitlement predicate (practices/audience_service.py
+    STUDENT_ENTITLEMENT_STATUSES) and NOT students_service.list_master_students
+    (the ATTENDED-only "Мои ученики" CRM count, owner-ruled №609, deliberately
+    NOT unified with this) -- three different questions, kept separate on
+    purpose; see audience_service.py's own header.
+
+    practices_count is a NON-CANCELLED-booking count on THIS master's
+    practices, computed via a LEFT OUTER JOIN back to a master-scoped booking
+    subquery (not an inner join) so a chat/waitlist/group-only contact with
+    zero bookings still appears in the result, with count=0 rather than being
+    silently dropped. It is used ONLY for this query's own ORDER BY (most-
+    active-first) -- no caller of this function currently exposes the number
+    itself in an API response (GroupMemberItem has no such field), so widening
+    it here changes no screen's shape; if a caller ever wants to show it, that
+    is its own visible-change decision, not this one's.
+
+    The outer join to MasterStudent + `blocked_at IS NULL` correctly covers
+    BOTH "no master_student row at all" and "row exists but not blocked" --
+    NULL from the outer join and a genuine NULL blocked_at both satisfy IS
+    NULL.
     """
-    return (
-        select(User, func.count(Booking.id).label("practices_count"))
-        .join(Booking, Booking.user_id == User.id)
+    # Master-scoped, non-cancelled bookings -- reused twice below: once as a
+    # contact SOURCE (its user_ids feed the union), once as the LEFT JOIN
+    # target that computes practices_count without dropping contactless rows.
+    booking_for_master = (
+        select(Booking.id.label("id"), Booking.user_id.label("user_id"))
         .join(Practice, Booking.practice_id == Practice.id)
+        .where(
+            Practice.master_id == master_id,
+            Booking.status != BookingStatus.CANCELLED.value,
+        )
+    ).subquery()
+
+    booking_contacts = select(booking_for_master.c.user_id)
+    chat_contacts = select(ChatThread.client_user_id.label("user_id")).where(
+        ChatThread.operator_user_id == master_id,
+    )
+    waitlist_contacts = (
+        select(Waitlist.user_id.label("user_id"))
+        .join(Practice, Waitlist.practice_id == Practice.id)
+        .where(Practice.master_id == master_id)
+    )
+    group_contacts = (
+        select(MasterGroupMembership.student_user_id.label("user_id"))
+        .join(MasterGroup, MasterGroup.id == MasterGroupMembership.group_id)
+        .where(MasterGroup.master_id == master_id)
+    )
+    contact_ids = union(
+        booking_contacts, chat_contacts, waitlist_contacts, group_contacts,
+    ).subquery()
+
+    return (
+        select(User, func.count(booking_for_master.c.id).label("practices_count"))
+        .select_from(contact_ids)
+        .join(User, User.id == contact_ids.c.user_id)
+        .outerjoin(booking_for_master, booking_for_master.c.user_id == User.id)
         .outerjoin(
             MasterStudent,
             and_(
@@ -81,11 +155,7 @@ def _derived_students_base(master_id: UUID):
                 MasterStudent.student_user_id == User.id,
             ),
         )
-        .where(
-            Practice.master_id == master_id,
-            Booking.status != BookingStatus.CANCELLED.value,
-            MasterStudent.blocked_at.is_(None),
-        )
+        .where(MasterStudent.blocked_at.is_(None))
         .group_by(User.id)
     )
 
@@ -134,19 +204,32 @@ async def is_master_audience_member(
     master_id: UUID, student_id: UUID, session: AsyncSession,
 ) -> bool:
     """True iff `student_id` is someone this master can already see on
-    screen: a derived "Ученики" member (_derived_students_base's own
-    rule -- any non-cancelled booking, not blocked) OR a member of one of
-    this master's own CUSTOM groups (who may have no booking at all).
+    screen: a derived "Ученики" member, i.e. anyone _derived_students_base
+    admits (T-37: bookings, chat threads, waitlist entries, or custom-group
+    membership -- see that function's docstring for the full rule).
 
     Reused by students_service.get_master_student_detail's own gate (P6,
     owner-ruled widen, PROMPT №609) instead of that module writing a THIRD
     definition of "student" -- see that function's docstring.
 
+    T-37 CONSEQUENCE, stated because it changes reachability without
+    changing this function's own code: custom-group membership used to be
+    checked here as a SEPARATE second condition (a student with no booking
+    could only get in through this branch). It is now folded into
+    _derived_students_base itself as one of the four union sources, so a
+    second check here would be redundant -- checking derived-membership
+    alone is now equivalent to the old (derived OR group) check, PLUS it
+    additionally admits chat-only and waitlist-only contacts, which is the
+    whole point of T-37: anyone the master can see on the wide list can open
+    that person's profile.
+
     Deliberately does NOT admit a BLOCKED ("Удалённые") student: excluded
-    from _derived_students_base by construction, and removed from every
-    custom group the moment they're blocked (block_student) -- so neither
-    branch below ever reaches them. That is a separate, undecided scope
-    question, not silently folded in here.
+    from _derived_students_base by construction (MasterStudent.blocked_at
+    IS NULL is one of its own WHERE clauses), and removed from every custom
+    group the moment they're blocked (block_student) -- so a blocked student
+    cannot re-enter through the group-membership union source either. That
+    exclusion is a separate, undecided scope question, not silently folded
+    in here.
     """
     derived_hit = (
         await session.execute(
@@ -158,20 +241,7 @@ async def is_master_audience_member(
             )
         )
     ).scalar_one()
-    if derived_hit > 0:
-        return True
-
-    group_hit = (
-        await session.execute(
-            select(func.count(MasterGroupMembership.id))
-            .join(MasterGroup, MasterGroup.id == MasterGroupMembership.group_id)
-            .where(
-                MasterGroup.master_id == master_id,
-                MasterGroupMembership.student_user_id == student_id,
-            )
-        )
-    ).scalar_one()
-    return group_hit > 0
+    return derived_hit > 0
 
 
 async def _list_derived_students(
@@ -198,7 +268,12 @@ async def _list_derived_students(
 
     rows = (
         await session.execute(
-            base.order_by(func.count(Booking.id).desc(), User.id)
+            # T-37: order by the base query's OWN "practices_count" label
+            # (referenced by name, not by a fresh func.count(Booking.id) --
+            # that would count ALL of a user's bookings across every master,
+            # not this master's, now that Booking is reached through a
+            # master-scoped LEFT JOIN rather than the query's own inner join).
+            base.order_by(literal_column("practices_count").desc(), User.id)
             .limit(limit)
             .offset(offset)
         )

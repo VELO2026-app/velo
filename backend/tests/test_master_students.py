@@ -22,6 +22,10 @@
 #     - T24-20 (PROMPT №638): a master's OWN blocked student now opens too
 #       (narrow allow-path, separate from is_master_audience_member) --
 #       response carries blocked=True/False.
+#     - T-37 (PROMPT №706): a chat-only contact (no booking, no group
+#       membership) also opens -- this file's own code is UNCHANGED; the
+#       gate widened because groups_service.is_master_audience_member did.
+#       Proves the cross-module effect, not a change to this module.
 # =============================================================================
 
 from collections.abc import AsyncGenerator
@@ -33,6 +37,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.bookings.models import Booking, BookingStatus
+from app.modules.chats.models import ChatThread
 from app.modules.diary.models import Checkin, CheckType, Feedback
 from app.modules.masters.groups_models import MasterGroup, MasterGroupMembership
 from app.modules.masters.models import MasterProfile
@@ -495,6 +500,39 @@ async def test_student_detail_custom_group_member_with_no_bookings_opens(
     auth = await login_user(client, telegram_id=91122, first_name="NoBookingAtAll")
     uid = auth["user"]["id"]
     db_session.add(MasterGroupMembership(group_id=group.id, student_user_id=uid))
+    await db_session.commit()
+
+    url = STUDENT_DETAIL_URL.format(student_id=uid)
+    resp = await client.get(url, headers=auth_headers(master["session_token"]))
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["practices_count"] == 0
+    assert data["hours"] == 0
+    assert data["satisfaction_pct"] is None
+    assert data["feedbacks"] == []
+    assert data["recent_checkins"] == []
+
+
+@pytest.mark.asyncio
+async def test_student_detail_chat_only_contact_opens(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """T-37 (PROMPT №706): this endpoint's OWN code is unchanged, but its
+    gate (groups_service.is_master_audience_member) now delegates entirely
+    to the widened _derived_students_base -- so a chat-only contact (no
+    booking, no group membership) opens too. Proves the cross-module effect
+    without touching students_service.py: THIS module's code did not change,
+    only what its dependency admits did. Aggregates stay exactly the same
+    honest zeros the pre-existing widened cases already assert."""
+    master = await _make_verified_master(client, db_session, telegram_id=91918)
+    mid = master["user"]["id"]
+
+    auth = await login_user(client, telegram_id=91919, first_name="ChatOnly")
+    uid = auth["user"]["id"]
+    db_session.add(
+        ChatThread(comms_thread_id=uuid4(), client_user_id=uid, operator_user_id=mid)
+    )
     await db_session.commit()
 
     url = STUDENT_DETAIL_URL.format(student_id=uid)

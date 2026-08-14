@@ -1,8 +1,10 @@
 # =============================================================================
-# VELO Backend -- Tests: Master Groups (P1, PROMPT №590; P3 addenda PROMPT №592)
+# VELO Backend -- Tests: Master Groups (P1, PROMPT №590; P3 addenda PROMPT
+# №592; T-37 contact-list union PROMPT №706)
 # =============================================================================
 #
-# telegram_id range: 99700-99799
+# telegram_id ranges: 99700-99799 (original), 89800-89809 (T-37 addition --
+# the original band is exhausted, see _TID_MIN_T37's own comment)
 #
 # ⚠ BACKEND-ONLY, UNPROVEN LOCALLY -- no Postgres reachable in this
 # environment (see test_zoom_lifecycle.py's module docstring for the exact
@@ -24,6 +26,10 @@
 #   Unblock: back in «Ученики», custom membership NOT restored, tag kept
 #   Derived «Ученики»: non-cancelled (pending/confirmed/attended/no_show)
 #     minus blocked -- widened from the ATTENDED-only students_service query
+#   T-37: the further CONTACT-LIST widening -- chat-only, waitlist-at-any-
+#     status-only, and group-membership-only contacts each appear alone;
+#     dedup across all four sources for one student; the blocked_at exclusion
+#     applies uniformly to the new sources, not just bookings
 #   P3 addenda: GET /masters/me/tags (distinct alphabetical, deduped, empty
 #     when unused); GET .../students/{id}/groups (this master's custom
 #     groups only -- never another master's, never the two virtuals)
@@ -39,7 +45,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.bookings.models import Booking, BookingStatus
+from app.modules.chats.models import ChatThread
 from app.modules.masters.groups_models import (
+    MasterGroup,
     MasterGroupMembership,
     MasterStudent,
 )
@@ -77,6 +85,14 @@ GROUP_SEARCH_URL = "/api/v1/masters/me/groups/search"
 _TID_MIN = 99700
 _TID_MAX = 99799
 
+# T-37 (PROMPT №706): this file's own 99700-99799 band is exhausted (93 of
+# 100 ids already in use, no run of >=8 free) -- new fixtures below take a
+# SEPARATE band instead of fighting for the last 7 scattered slots. Per the
+# fleet's telegram_id registry: velo's free window is 89760-89899, we hold
+# 89800-89839 within it, and this file uses the FIRST 10 of that: 89800-89809.
+_TID_MIN_T37 = 89800
+_TID_MAX_T37 = 89809
+
 
 # ===================================================================
 # Cleanup
@@ -91,10 +107,23 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
     # user_ledger/master_ledger and orphaned refund rows into a
     # ForeignKeyViolationError once the master-groups fixtures started
     # committing (№600).
-    await full_cleanup_range(db_session, _TID_MIN, _TID_MAX, delete_users=True)
+    #
+    # T-37: extra_ranges, NOT a second call -- full_cleanup_range's own
+    # docstring warns that two back-to-back calls silently undo each other
+    # (the H-R1/H-R2 rollback trap); one call cleaning both bands is what it
+    # exists for. chat_threads is not in full_cleanup_range's own delete list
+    # (ChatThread has ondelete="CASCADE" on both user FKs, so deleting the
+    # range's users here cascades their chat rows automatically).
+    await full_cleanup_range(
+        db_session, _TID_MIN, _TID_MAX,
+        delete_users=True, extra_ranges=[(_TID_MIN_T37, _TID_MAX_T37)],
+    )
     await db_session.commit()
     yield
-    await full_cleanup_range(db_session, _TID_MIN, _TID_MAX, delete_users=True)
+    await full_cleanup_range(
+        db_session, _TID_MIN, _TID_MAX,
+        delete_users=True, extra_ranges=[(_TID_MIN_T37, _TID_MAX_T37)],
+    )
     await db_session.commit()
 
 
@@ -217,6 +246,46 @@ async def _waitlist_entry(
     db_session.add(entry)
     await db_session.flush()
     return entry
+
+
+async def _chat_thread(
+    db_session: AsyncSession,
+    master_id: str,
+    client_id: str,
+) -> ChatThread:
+    """T-37: a chat-contact fixture. comms_thread_id is a fake local UUID --
+    the union source only reads client_user_id/operator_user_id, and this
+    table's own module docstring says comms is never asked for domain facts,
+    so nothing here should (or does) reach a live comms stack."""
+    thread = ChatThread(
+        comms_thread_id=uuid4(),
+        client_user_id=client_id,
+        operator_user_id=master_id,
+    )
+    db_session.add(thread)
+    await db_session.flush()
+    return thread
+
+
+async def _group_membership(
+    db_session: AsyncSession,
+    master_id: str,
+    student_id: str,
+    *,
+    group_name: str = "T37 Group",
+) -> MasterGroupMembership:
+    """T-37: a custom-group-membership fixture, written directly (bypassing
+    add_group_member/join_group_by_token) since both produce the IDENTICAL
+    row -- the schema cannot distinguish an invite-token join from a
+    hand-added member (owner-ruled 2026-08-14), so there is nothing a service
+    call would add over a direct insert for this test's purpose."""
+    group = MasterGroup(master_id=master_id, name=group_name)
+    db_session.add(group)
+    await db_session.flush()
+    membership = MasterGroupMembership(group_id=group.id, student_user_id=student_id)
+    db_session.add(membership)
+    await db_session.flush()
+    return membership
 
 
 # ===================================================================
@@ -1366,6 +1435,141 @@ async def test_derived_students_widened_beyond_attended_only(
 
     assert resp.status_code == 200
     assert resp.json()["total"] == len(counted_statuses)  # cancelled excluded
+
+
+# ===================================================================
+# T-37 (PROMPT №706): "Ученики" widened to a CONTACT-LIST union -- chat
+# threads, waitlist entries (any status), and custom-group membership, on
+# top of the pre-existing non-cancelled-booking source. Separate band
+# (_TID_MIN_T37/_TID_MAX_T37): see its declaration above for why.
+# ===================================================================
+
+
+@pytest.mark.asyncio
+async def test_derived_students_includes_chat_only_contact(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """A chat thread with no booking at all is still contact."""
+    master = await _make_verified_master(client, db_session, 89800)
+    master_id = master["user"]["id"]
+    headers = auth_headers(master["session_token"])
+
+    student_id = await _login(client, 89801, "ChatOnly")
+    await _chat_thread(db_session, master_id, student_id)
+    await db_session.commit()
+
+    resp = await client.get(
+        GROUP_MEMBERS_URL.format(group_id="students"), headers=headers
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 1
+    assert resp.json()["items"][0]["id"] == student_id
+
+
+@pytest.mark.asyncio
+async def test_derived_students_includes_waitlist_contact_at_any_status(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """Owner-ruled 2026-08-14: a DECLINED waitlist row still counts -- same
+    reasoning as a cancelled booking counting elsewhere. Not restricted to
+    ACTIVE_STATUSES."""
+    master = await _make_verified_master(client, db_session, 89802)
+    master_id = master["user"]["id"]
+    headers = auth_headers(master["session_token"])
+
+    student_id = await _login(client, 89803, "Declined")
+    practice = await _practice(db_session, master_id, scheduled_hours_from_now=5)
+    await _waitlist_entry(
+        db_session, practice, student_id,
+        position=1, status=WaitlistStatus.DECLINED.value,
+    )
+    await db_session.commit()
+
+    resp = await client.get(
+        GROUP_MEMBERS_URL.format(group_id="students"), headers=headers
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 1
+    assert resp.json()["items"][0]["id"] == student_id
+
+
+@pytest.mark.asyncio
+async def test_derived_students_includes_group_member_with_no_booking(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """Owner-ruled 2026-08-14 (option A): ANY custom-group membership counts
+    -- the schema cannot distinguish an invite-token join from a hand-added
+    member, so a hand-added member (this fixture) now appears in the general
+    "Ученики" list too, not only their custom group."""
+    master = await _make_verified_master(client, db_session, 89804)
+    master_id = master["user"]["id"]
+    headers = auth_headers(master["session_token"])
+
+    student_id = await _login(client, 89805, "GroupOnly")
+    await _group_membership(db_session, master_id, student_id)
+    await db_session.commit()
+
+    resp = await client.get(
+        GROUP_MEMBERS_URL.format(group_id="students"), headers=headers
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 1
+    assert resp.json()["items"][0]["id"] == student_id
+
+
+@pytest.mark.asyncio
+async def test_derived_students_dedupes_across_sources(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """A student who is a booking contact AND a chat contact AND a group
+    member appears exactly ONCE -- UNION (not UNION ALL) is the dedup."""
+    master = await _make_verified_master(client, db_session, 89806)
+    master_id = master["user"]["id"]
+    headers = auth_headers(master["session_token"])
+
+    student_id = await _login(client, 89807, "Everywhere")
+    practice = await _practice(
+        db_session, master_id,
+        scheduled_hours_from_now=-5, status=PracticeStatus.COMPLETED.value,
+    )
+    await _booking(db_session, practice, student_id, status=BookingStatus.ATTENDED.value)
+    await _chat_thread(db_session, master_id, student_id)
+    await _group_membership(db_session, master_id, student_id)
+    await db_session.commit()
+
+    resp = await client.get(
+        GROUP_MEMBERS_URL.format(group_id="students"), headers=headers
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 1
+
+
+@pytest.mark.asyncio
+async def test_derived_students_blocked_excluded_even_as_chat_only_contact(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """The blocked_at exclusion applies uniformly across all four sources,
+    not just the booking one -- a chat-only contact who is ALSO blocked must
+    not reappear through the new union sources."""
+    master = await _make_verified_master(client, db_session, 89808)
+    master_id = master["user"]["id"]
+    headers = auth_headers(master["session_token"])
+
+    student_id = await _login(client, 89809, "BlockedChatOnly")
+    await _chat_thread(db_session, master_id, student_id)
+    db_session.add(MasterStudent(master_id=master_id, student_user_id=student_id, blocked_at=datetime.now(UTC)))
+    await db_session.commit()
+
+    resp = await client.get(
+        GROUP_MEMBERS_URL.format(group_id="students"), headers=headers
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 0
 
 
 # ===================================================================
