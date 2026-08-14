@@ -51,12 +51,16 @@ import structlog
 from redis import asyncio as aioredis
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import TimeoutError as RedisTimeoutError
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_session_factory
-from app.core.events.models import OutboxEvent
+from app.core.events.models import (
+    PAYLOAD_RETENTION_DAYS,
+    REDACTED_PAYLOAD,
+    OutboxEvent,
+)
 
 logger = structlog.get_logger()
 
@@ -66,6 +70,24 @@ _ENVELOPE_DATA_FIELD = "data"
 
 # Redis errors that mean "the pipe is down", not "this event is bad".
 _CONNECTION_ERRORS = (RedisConnectionError, RedisTimeoutError, OSError)
+
+# T-13 redaction pass. Its own slow cadence, deliberately unrelated to
+# the publish interval: shipping is what this loop exists for, tidying
+# is a passenger. An hour costs a redacted row up to one extra hour of
+# life beyond its seven days and costs the loop one indexed UPDATE.
+_REDACTION_INTERVAL_SECONDS = 3600
+
+# Rows per pass. The first run after rollout meets a table that has been
+# accumulating for months, and an unbounded UPDATE there is a long lock
+# on the queue the product writes into. Bounded, the backlog drains over
+# a few hours instead; the remainder is simply the next pass's work.
+_REDACTION_BATCH_SIZE = 1000
+
+# Monotonic clock, not wall time: this only measures an interval, and a
+# clock step (NTP, DST on a misconfigured host) must not skip a pass or
+# stall one for hours. None = "never run in this process", so the first
+# pass happens at startup.
+_last_redaction_at: float | None = None
 
 
 def build_envelope(event: OutboxEvent) -> dict[str, str]:
@@ -205,6 +227,91 @@ async def relay_pending_batch(
         return await _publish_batch(own_session, redis)
 
 
+async def _redact_batch(session: AsyncSession) -> int:
+    """Redact one batch of long-shipped payloads. Returns rows changed.
+
+    Owns no transaction -- the caller commits (production) or rolls
+    back (tests), the same contract as _publish_batch.
+    """
+    cutoff = datetime.now(UTC) - timedelta(days=PAYLOAD_RETENTION_DAYS)
+
+    # The WHERE repeats the partial index's predicate VERBATIM
+    # (published_at IS NOT NULL AND payload <> marker) and adds the age
+    # bound on the indexed column. Both halves are load-bearing:
+    # the planner only picks a partial index when it can prove the
+    # query implies the index predicate, so dropping either one brings
+    # back the sequential scan this index exists to remove.
+    #
+    # `payload <> marker` is also the idempotency guard -- and the two
+    # are the same fact, not two checks that must be kept in step: a
+    # redacted row stops matching, and in doing so leaves the index. A
+    # second pass over already-redacted rows changes nothing because
+    # there is nowhere left for it to look.
+    #
+    # ORM-only rules the app; this is a bulk UPDATE over an ORM entity,
+    # not raw SQL. The literal marker is the one fragment that has to be
+    # SQL text -- a bound parameter would leave the planner unable to
+    # match the index predicate.
+    #
+    # ┌─ KNOWN CEILING (convention §4a) ────────────────────────────────
+    # │ (1) MECHANICS: `published_at IS NOT NULL` means a DEAD-LETTERED
+    # │     row is never redacted. A dead row keeps published_at NULL by
+    # │     design (the truth of its state: it was never shipped), so
+    # │     its personal data is retained indefinitely -- the very thing
+    # │     this pass exists to stop, surviving on one narrow path.
+    # │ (2) STATUS: acknowledged by design.
+    # │ (3) REFERENCE: T-41 (lifetime of dead-lettered payloads).
+    # │ (4) UNCONSERVATION TRIGGER: dead-lettering stops being rare, OR
+    # │     dead-lettered rows acquire a lifetime of their own.
+    # │ (5) SHAPE OF THE FIX: a SEPARATE, longer clock for dead rows --
+    # │     not this one widened to include them.
+    # │ (6) REJECTED, AND WHY: including dead rows here. For a row that
+    # │     never shipped the payload is the ONLY copy of what still has
+    # │     to be delivered AND the only evidence of why it would not
+    # │     go; the requeue path (outbox_admin) exists precisely to ship
+    # │     it later. The costs are not symmetric -- retaining data too
+    # │     long is a policy problem, destroying an undelivered message
+    # │     plus its diagnosis is unrecoverable.
+    # └─────────────────────────────────────────────────────────────────
+    victims = (
+        select(OutboxEvent.id)
+        .where(
+            OutboxEvent.published_at.is_not(None),
+            OutboxEvent.published_at < cutoff,
+            text("payload <> '{\"redacted\": true}'::jsonb"),
+        )
+        .order_by(OutboxEvent.published_at)
+        .limit(_REDACTION_BATCH_SIZE)
+        .scalar_subquery()
+    )
+    result = await session.execute(
+        update(OutboxEvent)
+        .where(OutboxEvent.id.in_(victims))
+        .values(payload=REDACTED_PAYLOAD)
+        .execution_options(synchronize_session=False)
+    )
+    return result.rowcount or 0
+
+
+async def redact_published_payloads(
+    *,
+    session: AsyncSession | None = None,
+) -> int:
+    """Redact one batch of payloads shipped more than the retention
+    window ago. Returns the number of rows changed.
+
+    Same session contract as relay_pending_batch: production calls it
+    without `session` and gets its own committed transaction; tests
+    inject one and own the commit/rollback.
+    """
+    if session is not None:
+        return await _redact_batch(session)
+
+    session_factory = get_session_factory()
+    async with session_factory() as own_session, own_session.begin():
+        return await _redact_batch(own_session)
+
+
 def create_relay_redis() -> aioredis.Redis:
     """The relay's Redis connection, with socket timeouts (H-R3).
 
@@ -223,6 +330,38 @@ def create_relay_redis() -> aioredis.Redis:
         ),
         socket_timeout=settings.comms_relay_socket_timeout_seconds,
     )
+
+
+async def _maybe_redact() -> None:
+    """Run the redaction pass if its own interval has elapsed.
+
+    Swallows everything: tidying may never take the pipe down with it.
+    """
+    global _last_redaction_at
+
+    elapsed = asyncio.get_running_loop().time()
+    if (
+        _last_redaction_at is not None
+        and elapsed - _last_redaction_at < _REDACTION_INTERVAL_SECONDS
+    ):
+        return
+    _last_redaction_at = elapsed
+
+    try:
+        redacted = await redact_published_payloads()
+    except Exception:
+        # Marked BEFORE the attempt, so a failing pass waits out the
+        # full interval instead of retrying on every tick and filling
+        # the log with the same traceback.
+        logger.exception("outbox_redaction_pass_crashed")
+        return
+
+    if redacted:
+        logger.info(
+            "outbox_payloads_redacted",
+            rows=redacted,
+            retention_days=PAYLOAD_RETENTION_DAYS,
+        )
 
 
 async def run_relay() -> None:
@@ -257,6 +396,16 @@ async def run_relay() -> None:
                 # DB down, unexpected bug -- log loudly, keep looping:
                 # the relay must outlive transient trouble.
                 logger.exception("outbox_relay_pass_crashed")
+
+            # T-13 redaction, AFTER publishing and never instead of it.
+            # Three things keep the passenger from delaying the driver:
+            # publishing runs first in every tick; this is gated to once
+            # an hour rather than once a tick; and it has its own
+            # try/except, so a failing UPDATE costs a log line and
+            # nothing else. It is deliberately not a task, a timer or a
+            # script -- the loop already turns.
+            await _maybe_redact()
+
             await asyncio.sleep(settings.comms_relay_interval_seconds)
     finally:
         await redis.aclose()

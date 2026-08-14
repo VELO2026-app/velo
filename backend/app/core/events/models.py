@@ -22,10 +22,40 @@
 #
 # LIFECYCLE COLUMNS:
 #   published_at NULL   -> pending, the relay's scan predicate;
-#   published_at ts     -> shipped (kept for audit; no deletes in T0);
+#   published_at ts     -> shipped;
 #   attempts            -> failed publish attempts (observability +
 #                          the poison-row WARN threshold; NEVER a drop
 #                          limit -- outbox rows are not discarded).
+#
+# ROW LIFETIME AND PII (T-13). The payload of a shipped row is a
+# personal-data document -- user_upserted carries a snapshot of the
+# person (telegram_id, e-mail, locale, timezone), notification_request
+# carries the text parameters of a message to them. What happens to it:
+#
+#   - THE SKELETON IS KEPT FOREVER. All seven columns other than
+#     payload -- id, event_type, created_at, published_at, attempts,
+#     next_attempt_at, dead_lettered_at -- are not personal data, cost
+#     almost nothing, answer the audit question that is actually asked
+#     ("did this event ever leave?"), and keep id monotonic.
+#   - THE PAYLOAD IS REDACTED 7 days after published_at, replaced by
+#     {"redacted": true}. The column is NOT NULL and the marker is more
+#     honest than an empty object: it says something WAS removed rather
+#     than that nothing was there. 7 days is the shape of the question
+#     it has to survive -- replay after downtime needs a day, audit
+#     needs the payload not at all, and a complaint ("I never got the
+#     reschedule notice") is a weekly cycle: noticed in a day or two,
+#     investigated later.
+#   - ROWS ARE NEVER DELETED. Not after a year, not ever. A delete
+#     invites the question "did it eat something that mattered", and
+#     answering it costs twins forever; redaction gives the whole value
+#     without that risk.
+#   - UNPUBLISHED ROWS ARE UNTOUCHABLE, whatever their age. See the
+#     redaction predicate in relay.py -- for a row that never shipped,
+#     the payload is the only copy of what must still be delivered and
+#     the only evidence of why it would not go.
+#
+# The work is done by the relay itself (relay.py, redact_published_
+# payloads), on its own slow cadence -- no cron, no timer, no script.
 #
 # SESSION RULES: no commit here (P-01); emit_event() inserts into the
 # caller's session/transaction.
@@ -34,11 +64,35 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, DateTime, Identity, Index, Integer, String, func
+from sqlalchemy import (
+    BigInteger,
+    DateTime,
+    Identity,
+    Index,
+    Integer,
+    String,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
+
+# T-13. What a redacted payload looks like, and the SQL that recognises
+# one. Declared here, next to the column and the index that depend on
+# them, and imported by the relay -- the redaction predicate has to be
+# written identically in three places (the index, the UPDATE's WHERE,
+# the new value) or the index silently stops being used.
+REDACTED_PAYLOAD: dict[str, Any] = {"redacted": True}
+_REDACTED_PAYLOAD_SQL = "'{\"redacted\": true}'::jsonb"
+_NOT_YET_REDACTED_SQL = f"payload <> {_REDACTED_PAYLOAD_SQL}"
+
+# How long a shipped payload lives. A CONSTANT, not a setting: a knob
+# nobody has asked to turn is a knob without a consumer, and every
+# relay setting lives in core/config.py, which is the production gate
+# this task is explicitly not allowed to touch.
+PAYLOAD_RETENTION_DAYS = 7
 
 
 class OutboxEvent(Base):
@@ -113,6 +167,37 @@ class OutboxEvent(Base):
             "ix_outbox_events_unpublished",
             "id",
             postgresql_where=published_at.is_(None),
+        ),
+        # T-13: the redaction pass runs the OPPOSITE predicate, which
+        # the index above (by construction) does not cover -- without
+        # this one every pass is a sequential scan of a table that only
+        # grows.
+        #
+        # WHY THE PREDICATE IS THE WORK ITSELF, and not the obvious
+        # `published_at IS NOT NULL`: that obvious form would index the
+        # entire shipped history, so the index would grow monotonically
+        # exactly like the table -- correct today, a tax forever. With
+        # "not yet redacted" in the predicate a row LEAVES the index the
+        # moment it is redacted, so the index only ever holds the window
+        # of rows still awaiting work -- roughly seven days of traffic,
+        # no matter how many years the table has been running.
+        #
+        # The 7-day boundary is deliberately NOT here: now() is not
+        # IMMUTABLE and Postgres would reject it. That restriction is
+        # what makes the index non-degrading, so it costs nothing --
+        # the age comparison becomes a range scan on published_at, the
+        # indexed column.
+        #
+        # The UPDATE in relay.py MUST repeat both conditions verbatim.
+        # The planner only uses a partial index when it can prove the
+        # query's predicate implies the index's; a WHERE carrying just
+        # the date would not be matched, and the scan would come back.
+        Index(
+            "ix_outbox_events_pending_redaction",
+            "published_at",
+            postgresql_where=text(
+                f"published_at IS NOT NULL AND {_NOT_YET_REDACTED_SQL}"
+            ),
         ),
     )
 
