@@ -142,13 +142,24 @@ async def _clean_band(db_session: AsyncSession):
     full_cleanup_range also does not enumerate)."""
 
     async def _drain() -> None:
+        # ORDER IS LOAD-BEARING AND IT WAS WRONG UNTIL THE 2026-08-14 DEPLOY.
+        # full_cleanup_range OPENS WITH `await session.rollback()` -- a
+        # deliberate guard, documented at helpers.py's H-R2 -- so ANY
+        # uncommitted work queued before it is discarded, not just a second
+        # cleanup call. The outbox delete used to sit above it and was
+        # silently thrown away every time; the rows then accumulated across
+        # the class until an assertion expecting 1 found 6. Nothing local
+        # could catch it: the backend gate only runs on deploy.
+        # full_cleanup_range FIRST, then our own delete, then ONE commit.
+        await full_cleanup_range(
+            db_session, BAND_MIN, BAND_MAX, delete_users=True,
+        )
+        # Group-targeted rows (target_value="admins") carry no user id, so
+        # full_cleanup_range's user-scoped subqueries cannot see them.
         await db_session.execute(
             delete(OutboxEvent).where(
                 OutboxEvent.payload["type"].astext == "support.thread_created"
             )
-        )
-        await full_cleanup_range(
-            db_session, BAND_MIN, BAND_MAX, delete_users=True,
         )
         await db_session.commit()
 

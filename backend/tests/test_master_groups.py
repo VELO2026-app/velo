@@ -1437,9 +1437,25 @@ async def test_derived_students_widened_beyond_attended_only(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """owner Q2=A: pending/confirmed/attended/no_show ALL count -- only
-    cancelled is excluded. Wider than students_service's ATTENDED-only
-    aggregate (a DIFFERENT, still-existing endpoint)."""
+    """owner Q2=A: pending/confirmed/attended/no_show ALL count. Wider than
+    students_service's ATTENDED-only aggregate (a DIFFERENT, still-existing
+    endpoint).
+
+    ⚠ CANCELLED IS NO LONGER EXCLUDED. This test asserted "cancelled
+    excluded" until the deploy of 2026-08-14 proved it stale: the owner
+    ruled that day (T-37 amendment, PROMPT No.707, commit 14244b22) that a
+    CANCELLED booking IS a contact and the person appears -- on the same
+    logic he had already applied twice, to group membership and to a
+    declined waitlist entry, that the list must not lose someone the master
+    had contact with. The amendment shipped with new tests in its own band
+    and left THIS one, the original, asserting the superseded rule. It went
+    red on the first deploy that ran it, which is the only place backend
+    tests execute here.
+
+    What stays true and is the actual boundary: the cancelled contact
+    APPEARS but contributes NO practice -- `practices_count` must not count
+    a cancelled booking, so a cancelled-only contact shows 0, exactly like
+    a chat-only one."""
     master = await _make_verified_master(client, db_session, 99727)
     master_id = master["user"]["id"]
     headers = auth_headers(master["session_token"])
@@ -1480,7 +1496,19 @@ async def test_derived_students_widened_beyond_attended_only(
     )
 
     assert resp.status_code == 200
-    assert resp.json()["total"] == len(counted_statuses)  # cancelled excluded
+    # +1 for the cancelled student: a cancelled booking is a CONTACT
+    # (owner ruling 2026-08-14), so the person appears in the list.
+    assert resp.json()["total"] == len(counted_statuses) + 1
+
+    # ...and the person is specifically the cancelled one, not an off-by-one.
+    assert cancelled_student_id in {m["id"] for m in resp.json()["items"]}
+
+    # ⚠ The other half of that ruling -- a cancelled-only contact contributes
+    # ZERO practices -- is NOT assertable here and must not be added: this
+    # endpoint's row is {id, name, avatar_url, tag}. There is no
+    # `practices_count` on GroupMemberItem to check, by design. I wrote such
+    # an assertion here first, from memory of the ruling rather than from the
+    # schema, and the schema refuted it before it shipped.
 
 
 # ===================================================================
