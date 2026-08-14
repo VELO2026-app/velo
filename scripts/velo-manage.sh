@@ -408,12 +408,23 @@ ensure_shared_network() {
     docker network create aivis-shared > /dev/null
 }
 
-# Run frontend tests in a throwaway builder container.
-# Uses `docker build --target builder` to get a container with node + source,
-# then runs `npm run test` inside it.
+# Run frontend tests in a throwaway container.
+# Uses `docker build --target source` to get node + deps + source with nothing
+# executed, then runs `npm run test` inside it -- see the note in the body for
+# why it is not `--target builder`.
 run_frontend_tests() {
     echo "Running frontend tests..."
     cd "$COMPOSE_DIR"
+    # --target source, NOT builder. The builder stage runs `npm run test`
+    # itself (it is the production gate), so building it here meant the suite
+    # ran TWICE per invocation -- once inside the build, silently, behind
+    # `-q`, and once again in the container below. On a cold cache that was
+    # ~3.5 minutes of total silence before the output a human is waiting for
+    # even started. The `source` stage stops at `npm ci` + COPY, so this build
+    # prepares the ground and the run below is the only place the suite
+    # executes. The gate is untouched: `docker compose build` still goes
+    # through builder.
+    #
     # The build's own exit code is checked explicitly (not folded into the
     # `docker run` check below): the original bug here was exactly this build
     # failing silently, `docker run` then executing the PREVIOUS successful
@@ -421,7 +432,7 @@ run_frontend_tests() {
     # today's test result. `-q` keeps docker's own noise down; stderr is left
     # unredirected (the old code sent it to /dev/null too) so a real build
     # failure is visible instead of just "FAILED" with no reason.
-    if ! docker build --target builder -t velo-frontend-test -f frontend/Dockerfile frontend/ -q > /dev/null; then
+    if ! docker build --target source -t velo-frontend-test -f frontend/Dockerfile frontend/ -q > /dev/null; then
         echo -e "${RED}✗ Frontend image build FAILED -- nothing was tested${NC}"
         return 1
     fi

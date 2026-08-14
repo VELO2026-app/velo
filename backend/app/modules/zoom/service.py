@@ -42,6 +42,7 @@
 # =============================================================================
 
 import base64
+import binascii
 import enum
 import secrets
 from dataclasses import dataclass
@@ -1056,8 +1057,11 @@ def decode_practice_code(code: str) -> UUID | None:
         return None
     try:
         raw = base64.urlsafe_b64decode(code + "==")
-    except Exception:
+    except (binascii.Error, ValueError):
         # binascii.Error for bad padding/charset; ValueError on some inputs.
+        # Deliberately NOT a bare `except Exception`: a future bug inside
+        # this function, or a MemoryError, must surface rather than be
+        # silently answered with "not a link".
         return None
     if len(raw) != 16:
         return None
@@ -1180,6 +1184,25 @@ async def resolve_zoom_entry(
          poller fills it in later). PENDING bookings resolve to PENDING
          too, see _LIVE_BOOKING_STATUSES.
       6. no live booking -> GUEST.
+
+    AUDIENCE IS DELIBERATELY NOT CHECKED HERE, and two code reviews have
+    now raised it independently -- so it is written down rather than left
+    to be "fixed" by the next reader.
+
+    A practice with audience_kind students/groups is hidden from a
+    non-member by get_practice_detail (404). This resolver does not apply
+    that gate, so an authenticated non-member holding the practice id gets
+    kind=GUEST and the shared link. That asymmetry is intentional and it
+    costs nothing that is not already spent: the ANONYMOUS /z/{code} page
+    hands the same guest link to anybody at all, by design -- the master
+    publishes that link into a Telegram channel himself. Gating the
+    authenticated half while the anonymous half stays open would protect
+    nothing and would break the one thing this feature exists to do.
+
+    An audience gate for Zoom entry is a separate, deliberate non-goal
+    (owner ruling: practices are free today, the mechanism comes later and
+    not from here). If it ever arrives, it belongs on BOTH halves at once,
+    and the landing page's guest button has to go with it.
 
     ANONYMITY IS STRUCTURAL, NOT A RULE: user is None for the public page,
     and steps 4 and 5 cannot fire without a user. A link forwarded out of a
