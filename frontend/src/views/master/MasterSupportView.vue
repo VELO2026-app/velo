@@ -31,9 +31,12 @@
          (operator 2026-06-19); «На главную» is the only exit. -->
     <VHeader v-if="!submitted" title="Поддержка" show-back @back="router.back()" />
 
-    <!-- ===================== TERMINAL (honest — no delivery claim) ===========
-         Mirrors the user SupportView: there is no support backend, so we do NOT
-         say «отправлено». Honest coming-soon wording + the real mailto channel. -->
+    <!-- ===================== TERMINAL (delivery HAS happened) ================
+         Mirrors the user SupportView. Reached only after both calls resolved,
+         so it may state receipt: `submitted` is set inside the try, after
+         sendSupportMessage, and a failure toasts and leaves the form standing.
+         The old text here said there was no support backend and refused to
+         claim delivery -- correct for the stub, false since PROMPT №712. -->
     <div v-if="submitted" class="support__success">
       <div class="support__ok-circle">
         <IconSupportChat :size="48" />
