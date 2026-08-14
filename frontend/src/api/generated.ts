@@ -767,34 +767,6 @@ export interface MasterLanguagesUpdate {
   languages?: string[]
 }
 
-/** Master notification preferences (under credentials.master_notifications). Nine on/off toggles grouped by the master notifications screen (bookings / participants / messages / analytics) plus a delivery `schedule`. All toggles default True except monthly_report. RESPONSE shape returned inside UserResponse.master_notifications (only when role=master). */
-export interface MasterNotificationSettings {
-  new_booking?: boolean
-  booking_cancelled?: boolean
-  reminder?: boolean
-  new_checkin?: boolean
-  new_feedback?: boolean
-  msg_participants?: boolean
-  msg_support?: boolean
-  ai_summary?: boolean
-  monthly_report?: boolean
-  schedule?: NotificationSchedule
-}
-
-/** Partial update for master notification preferences. Every toggle optional; `schedule` optional and itself partial. The service merges the sent toggles and schedule sub-fields onto the stored object so untouched preferences are kept. Used as the optional update payload in UserUpdate. */
-export interface MasterNotificationSettingsUpdate {
-  new_booking?: boolean | null
-  booking_cancelled?: boolean | null
-  reminder?: boolean | null
-  new_checkin?: boolean | null
-  new_feedback?: boolean | null
-  msg_participants?: boolean | null
-  msg_support?: boolean | null
-  ai_summary?: boolean | null
-  monthly_report?: boolean | null
-  schedule?: NotificationScheduleUpdate | null
-}
-
 /** Self-only master profile representation (GET/PATCH /masters/me/*). NOT public -- carries financial fields (frozen_cents, available_cents, payout) and is only ever returned from get_current_master-gated endpoints. MasterPublicResponse below is the actual public schema and MUST stay financial-field-free (see its own docstring). F7: payout field added -- extracted from data.get("payout"). None when master has not configured payout details yet. CR-01: min_withdrawal_cents and withdrawal_fee_cents added from settings so frontend does not hardcode financial constants. */
 export interface MasterProfileResponse {
   user_id: string
@@ -888,20 +860,6 @@ export interface MoodDistribution {
   high: number
   mid: number
   low: number
-}
-
-/** Master delivery-window schedule (nested in master_notifications). RESPONSE shape: defaults are the operator-approved window (08:00-22:00, Mon-Fri). `from` is a Python keyword, so the field is `from_` aliased to "from" -- input accepts "from", output emits "from". Output-only: the read path in UserResponse sanitizes stored values before constructing this, so it never has to reject malformed data here. */
-export interface NotificationSchedule {
-  from?: string
-  to?: string
-  days?: string[]
-}
-
-/** Partial update for the master delivery-window schedule. Every field optional: only the sub-fields the client changed are sent and the service merges them onto the stored schedule (from/to overwrite; days replaces the list wholesale). "from"/"to" must be a 24h "HH:MM" string (else 422); each day code must be a known lowercase weekday (else 422), and an empty days list is allowed. `from` is aliased the same way as in NotificationSchedule. */
-export interface NotificationScheduleUpdate {
-  from?: string | null
-  to?: string | null
-  days?: string[] | null
 }
 
 /** GET /api/v1/admin/practices -- paginated, scope-filtered list. */
@@ -1545,7 +1503,6 @@ export interface UserResponse {
   phone: string | null
   bio: string | null
   email: string | null
-  master_notifications: MasterNotificationSettings | null
   role_switch: RoleSwitchInfo | null
 }
 
@@ -1566,7 +1523,6 @@ export interface UserUpdate {
   phone?: string | null
   bio?: string | null
   email?: string | null
-  master_notifications?: MasterNotificationSettingsUpdate | null
 }
 
 /** POST /admin/masters/{user_id}/verify -- request body. promote (PROMPT №503 commit 3, mirrors ApproveMethodChangeRequest.promote below): optional list of custom method labels from the applicant's own `methods` that the admin chose to add to the taxonomy catalog. Before this, only an ALREADY-VERIFIED master's later method-change request had any promotion path -- a brand-new applicant's «Свой вариант» text could never become a real catalog chip, no matter what the admin did. Absent/empty -> no catalog write, identical to before this field existed. Deduped against existing rows (_promote_custom_methods) -- admin-picked, not automatic, same editorial-control rationale as the method-change-request flow (operator decision 3=Б): a custom label becomes SHARED vocabulary for every future master/admin the moment it's promoted, so it stays a deliberate admin choice rather than something typo'd free text can trigger unreviewed. */
