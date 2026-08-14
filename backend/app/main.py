@@ -157,6 +157,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "if this is genuinely a test server."
         )
 
+    # T-35: the same refusal for Zoom, and it is not symmetry for its own
+    # sake. Under the stub every meeting is a fabricated zoom.us URL that
+    # opens nothing, so no registrant is ever matched and attendance can
+    # never be written -- which is precisely what this release exists to
+    # fix. A server was found running exactly like that with nobody aware:
+    # the links looked real in the UI and nothing said otherwise.
+    # Deliberately loud and at startup, where somebody is watching.
+    if settings.is_zoom_stub_blocked:
+        raise RuntimeError(
+            "Zoom is not configured (stub mode) -- meetings would be fake "
+            "and attendance would never be recorded. Set ZOOM_ACCOUNT_ID, "
+            "ZOOM_CLIENT_ID and ZOOM_CLIENT_SECRET from a Server-to-Server "
+            "OAuth app, or set ALLOW_ZOOM_STUB=true if this server is "
+            "genuinely meant to run without real meetings."
+        )
+
     relay_task: asyncio.Task | None = None
     autofinalizer_task: asyncio.Task | None = None
     zoom_retry_task: asyncio.Task | None = None
