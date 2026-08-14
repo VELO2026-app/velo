@@ -26,6 +26,9 @@
 #       membership) also opens -- this file's own code is UNCHANGED; the
 #       gate widened because groups_service.is_master_audience_member did.
 #       Proves the cross-module effect, not a change to this module.
+#     - T-37 amendment (PROMPT №707, 2026-08-14): a cancelled-only-booking
+#       contact also opens, for the same cross-module reason. practices_count
+#       stays 0 -- this module's ATTENDED-only aggregate was never touched.
 # =============================================================================
 
 from collections.abc import AsyncGenerator
@@ -532,6 +535,41 @@ async def test_student_detail_chat_only_contact_opens(
     uid = auth["user"]["id"]
     db_session.add(
         ChatThread(comms_thread_id=uuid4(), client_user_id=uid, operator_user_id=mid)
+    )
+    await db_session.commit()
+
+    url = STUDENT_DETAIL_URL.format(student_id=uid)
+    resp = await client.get(url, headers=auth_headers(master["session_token"]))
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["practices_count"] == 0
+    assert data["hours"] == 0
+    assert data["satisfaction_pct"] is None
+    assert data["feedbacks"] == []
+    assert data["recent_checkins"] == []
+
+
+@pytest.mark.asyncio
+async def test_student_detail_cancelled_only_contact_opens(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """2026-08-14 amendment to T-37 (PROMPT №707): a booking whose ONLY
+    status is CANCELLED now makes its holder a contact -- so the gate
+    (groups_service.is_master_audience_member, unchanged CODE, widened
+    DEPENDENCY) opens this profile too. This module's own aggregate query
+    (ATTENDED-only, untouched by the amendment) correctly reports
+    practices_count=0 -- a cancelled booking was never attended, so this
+    number is not a new zero the amendment invented, it is the same
+    ATTENDED-only computation this file already had, now simply reachable
+    for a wider set of visitors."""
+    master = await _make_verified_master(client, db_session, telegram_id=91920)
+    mid = master["user"]["id"]
+    practice = await _create_completed_practice(db_session, mid)
+
+    uid, _b = await _attend(
+        client, db_session, practice, 91921, first_name="CancelledOnly",
+        status=BookingStatus.CANCELLED.value,
     )
     await db_session.commit()
 

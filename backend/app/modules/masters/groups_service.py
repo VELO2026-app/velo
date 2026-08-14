@@ -64,21 +64,21 @@ _GROUP_NAME_DELETED = "Удалённые"
 
 
 def _derived_students_base(master_id: UUID):
-    """"Ученики" is a CONTACT LIST (T-37, owner-ruled 2026-08-13/14): the
-    UNION of everyone who has made contact with this master, minus anyone
-    MasterStudent.blocked_at'd. Four sources, each deduped-by-user_id via a
-    SQL UNION (not UNION ALL -- the dedup IS the union, no extra DISTINCT
-    needed):
-      - bookings: ANY non-cancelled booking (owner Q2=A, pre-T-37) on one of
-        this master's practices -- pending/confirmed/attended/no_show all
-        count, cancelled is excluded, UNCHANGED from pre-T-37. ⚠ FLAGGED, not
-        resolved: an earlier framing of this task asserted "a cancelled
-        booking IS a contact and does appear" -- that does not match this
-        code before or after T-37 (cancelled was excluded pre-T-37 too), and
-        the instruction that shaped this build explicitly said "non-cancelled
-        bookings (as today)". Cancelled bookings are NOT a fifth union source
-        here. If that framing reflected an actual, separate ruling, it was
-        never applied to this function and needs its own decision.
+    """"Ученики" is a CONTACT LIST (T-37, owner-ruled 2026-08-13/14; CANCELLED
+    amendment owner-ruled 2026-08-14, PROMPT №707): the UNION of everyone who
+    has made contact with this master, minus anyone MasterStudent.blocked_at'd.
+    Four sources, each deduped-by-user_id via a SQL UNION (not UNION ALL --
+    the dedup IS the union, no extra DISTINCT needed):
+      - bookings: ANY booking status at all on one of this master's
+        practices, INCLUDING CANCELLED -- owner-ruled 2026-08-14 (amendment):
+        his reasoning is that he had already ruled the same way twice (group
+        membership counts, a declined waitlist row counts) on one logic --
+        a contact list must not lose someone the master had contact with --
+        and an exception nobody can explain survives only until the first
+        person who tidies it up. ⚠ THIS SOURCE (booking_contacts, below) IS
+        DELIBERATELY A DIFFERENT QUERY FROM THE ONE THAT FEEDS
+        practices_count (booking_for_count, below) -- see that variable's own
+        comment for why they must never be merged back into one subquery.
       - chat threads (ChatThread.client_user_id) where this master is the
         operator -- opening a chat is contact even with zero bookings.
       - waitlist entries (Waitlist.user_id) on this master's practices, AT
@@ -93,30 +93,38 @@ def _derived_students_base(master_id: UUID):
         not only their custom group.
 
     NOT the entitlement predicate (practices/audience_service.py
-    STUDENT_ENTITLEMENT_STATUSES) and NOT students_service.list_master_students
-    (the ATTENDED-only "Мои ученики" CRM count, owner-ruled №609, deliberately
-    NOT unified with this) -- three different questions, kept separate on
-    purpose; see audience_service.py's own header.
+    STUDENT_ENTITLEMENT_STATUSES, untouched by this amendment -- CANCELLED
+    stays excluded from the RIGHT to enter a students-only practice) and NOT
+    students_service.list_master_students (the ATTENDED-only "Мои ученики"
+    CRM count, owner-ruled №609, deliberately NOT unified with this) --
+    three different questions, kept separate on purpose; see
+    audience_service.py's own header.
 
-    practices_count is a NON-CANCELLED-booking count on THIS master's
-    practices, computed via a LEFT OUTER JOIN back to a master-scoped booking
-    subquery (not an inner join) so a chat/waitlist/group-only contact with
-    zero bookings still appears in the result, with count=0 rather than being
-    silently dropped. It is used ONLY for this query's own ORDER BY (most-
-    active-first) -- no caller of this function currently exposes the number
-    itself in an API response (GroupMemberItem has no such field), so widening
-    it here changes no screen's shape; if a caller ever wants to show it, that
-    is its own visible-change decision, not this one's.
+    practices_count is STILL a NON-CANCELLED-booking count on THIS master's
+    practices (unchanged by the amendment -- see booking_for_count below),
+    computed via a LEFT OUTER JOIN (not an inner join) so a chat/waitlist/
+    group/cancelled-only contact with zero COUNTABLE bookings still appears
+    in the result, with count=0 rather than being silently dropped. It is
+    used ONLY for this query's own ORDER BY (most-active-first) -- no caller
+    of this function currently exposes the number itself in an API response
+    (GroupMemberItem has no such field), so widening it here changes no
+    screen's shape; if a caller ever wants to show it, that is its own
+    visible-change decision, not this one's.
 
     The outer join to MasterStudent + `blocked_at IS NULL` correctly covers
     BOTH "no master_student row at all" and "row exists but not blocked" --
     NULL from the outer join and a genuine NULL blocked_at both satisfy IS
     NULL.
     """
-    # Master-scoped, non-cancelled bookings -- reused twice below: once as a
-    # contact SOURCE (its user_ids feed the union), once as the LEFT JOIN
-    # target that computes practices_count without dropping contactless rows.
-    booking_for_master = (
+    # COUNT source: master-scoped, NON-CANCELLED bookings ONLY. Feeds
+    # practices_count via the LEFT JOIN below, and NOTHING else. Kept
+    # deliberately SEPARATE from booking_contacts (below) -- the pre-
+    # amendment code reused ONE subquery for both the contact source and the
+    # count, which is exactly how "cancelled becomes a contact" would have
+    # silently also become "cancelled counts as a practice" if this single
+    # subquery had simply had its status filter dropped. Two subqueries, two
+    # roles, so widening one can never widen the other by accident.
+    booking_for_count = (
         select(Booking.id.label("id"), Booking.user_id.label("user_id"))
         .join(Practice, Booking.practice_id == Practice.id)
         .where(
@@ -125,7 +133,15 @@ def _derived_students_base(master_id: UUID):
         )
     ).subquery()
 
-    booking_contacts = select(booking_for_master.c.user_id)
+    # CONTACT source: master-scoped bookings at ANY status, INCLUDING
+    # CANCELLED (the 2026-08-14 amendment) -- feeds the union below, nothing
+    # else. No status filter at all: every booking on this master's
+    # practices, however it ended, means the person made contact.
+    booking_contacts = (
+        select(Booking.user_id.label("user_id"))
+        .join(Practice, Booking.practice_id == Practice.id)
+        .where(Practice.master_id == master_id)
+    )
     chat_contacts = select(ChatThread.client_user_id.label("user_id")).where(
         ChatThread.operator_user_id == master_id,
     )
@@ -144,10 +160,10 @@ def _derived_students_base(master_id: UUID):
     ).subquery()
 
     return (
-        select(User, func.count(booking_for_master.c.id).label("practices_count"))
+        select(User, func.count(booking_for_count.c.id).label("practices_count"))
         .select_from(contact_ids)
         .join(User, User.id == contact_ids.c.user_id)
-        .outerjoin(booking_for_master, booking_for_master.c.user_id == User.id)
+        .outerjoin(booking_for_count, booking_for_count.c.user_id == User.id)
         .outerjoin(
             MasterStudent,
             and_(

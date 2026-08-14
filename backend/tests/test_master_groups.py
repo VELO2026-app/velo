@@ -1,10 +1,10 @@
 # =============================================================================
 # VELO Backend -- Tests: Master Groups (P1, PROMPT №590; P3 addenda PROMPT
-# №592; T-37 contact-list union PROMPT №706)
+# №592; T-37 contact-list union PROMPT №706; CANCELLED amendment PROMPT №707)
 # =============================================================================
 #
-# telegram_id ranges: 99700-99799 (original), 89800-89809 (T-37 addition --
-# the original band is exhausted, see _TID_MIN_T37's own comment)
+# telegram_id ranges: 99700-99799 (original), 89800-89819 (T-37 + its
+# amendment -- the original band is exhausted, see _TID_MIN_T37's own comment)
 #
 # ⚠ BACKEND-ONLY, UNPROVEN LOCALLY -- no Postgres reachable in this
 # environment (see test_zoom_lifecycle.py's module docstring for the exact
@@ -30,6 +30,11 @@
 #     status-only, and group-membership-only contacts each appear alone;
 #     dedup across all four sources for one student; the blocked_at exclusion
 #     applies uniformly to the new sources, not just bookings
+#   T-37 amendment (2026-08-14): a CANCELLED-only booking is ALSO a contact;
+#     blocked_at still excludes a cancelled-only contact; a mixed cancelled+
+#     attended contact dedups to one row and sorts by COUNTABLE bookings only
+#     (proves booking_contacts and booking_for_count are genuinely separate
+#     queries, not one subquery serving both roles)
 #   P3 addenda: GET /masters/me/tags (distinct alphabetical, deduped, empty
 #     when unused); GET .../students/{id}/groups (this master's custom
 #     groups only -- never another master's, never the two virtuals)
@@ -89,9 +94,11 @@ _TID_MAX = 99799
 # 100 ids already in use, no run of >=8 free) -- new fixtures below take a
 # SEPARATE band instead of fighting for the last 7 scattered slots. Per the
 # fleet's telegram_id registry: velo's free window is 89760-89899, we hold
-# 89800-89839 within it, and this file uses the FIRST 10 of that: 89800-89809.
+# 89800-89839 within it. T-37 itself used the first 10 (89800-89809); the
+# 2026-08-14 CANCELLED-contact amendment (PROMPT №707) uses the next 10
+# (89810-89819) -- extending this SAME band rather than opening a third one.
 _TID_MIN_T37 = 89800
-_TID_MAX_T37 = 89809
+_TID_MAX_T37 = 89819
 
 
 # ===================================================================
@@ -1570,6 +1577,116 @@ async def test_derived_students_blocked_excluded_even_as_chat_only_contact(
 
     assert resp.status_code == 200
     assert resp.json()["total"] == 0
+
+
+# ===================================================================
+# 2026-08-14 amendment (PROMPT №707): a CANCELLED booking is ALSO a contact
+# -- owner-ruled, same "must not lose someone the master had contact with"
+# logic already applied to group membership and declined waitlist rows.
+# booking_contacts (the union source) now has NO status filter; the SEPARATE
+# booking_for_count subquery keeps != CANCELLED, so a cancelled-only contact
+# is visible but is not counted as a practice anywhere.
+# ===================================================================
+
+
+@pytest.mark.asyncio
+async def test_derived_students_includes_cancelled_only_contact(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """A booking whose ONLY status is CANCELLED still makes its holder a
+    contact -- the 2026-08-14 amendment to T-37."""
+    master = await _make_verified_master(client, db_session, 89810)
+    master_id = master["user"]["id"]
+    headers = auth_headers(master["session_token"])
+
+    student_id = await _login(client, 89811, "CancelledOnly")
+    practice = await _practice(db_session, master_id, scheduled_hours_from_now=5)
+    await _booking(
+        db_session, practice, student_id, status=BookingStatus.CANCELLED.value,
+    )
+    await db_session.commit()
+
+    resp = await client.get(
+        GROUP_MEMBERS_URL.format(group_id="students"), headers=headers
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 1
+    assert resp.json()["items"][0]["id"] == student_id
+
+
+@pytest.mark.asyncio
+async def test_derived_students_blocked_excluded_even_as_cancelled_only_contact(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """The blocked_at exclusion applies to the widened booking source too --
+    a cancelled-only contact who is ALSO blocked must not appear."""
+    master = await _make_verified_master(client, db_session, 89812)
+    master_id = master["user"]["id"]
+    headers = auth_headers(master["session_token"])
+
+    student_id = await _login(client, 89813, "BlockedCancelledOnly")
+    practice = await _practice(db_session, master_id, scheduled_hours_from_now=5)
+    await _booking(
+        db_session, practice, student_id, status=BookingStatus.CANCELLED.value,
+    )
+    db_session.add(
+        MasterStudent(
+            master_id=master_id, student_user_id=student_id,
+            blocked_at=datetime.now(UTC),
+        )
+    )
+    await db_session.commit()
+
+    resp = await client.get(
+        GROUP_MEMBERS_URL.format(group_id="students"), headers=headers
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_derived_students_practices_count_excludes_cancelled_when_mixed(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """A contact with ONE cancelled and ONE attended booking is still a
+    single contact (dedup), and their practices_count -- read here via the
+    ORDER BY it drives, since GroupMemberItem exposes no count field --
+    reflects only the attended booking. Two students, ordered
+    most-active-first: the mixed one (1 countable) must sort AHEAD of a
+    cancelled-only one (0 countable) despite the cancelled-only student
+    having a LOWER telegram_id / earlier login."""
+    master = await _make_verified_master(client, db_session, 89814)
+    master_id = master["user"]["id"]
+    headers = auth_headers(master["session_token"])
+
+    cancelled_only_id = await _login(client, 89815, "CancelledOnly2")
+    p1 = await _practice(db_session, master_id, scheduled_hours_from_now=5)
+    await _booking(db_session, p1, cancelled_only_id, status=BookingStatus.CANCELLED.value)
+
+    mixed_id = await _login(client, 89816, "MixedContact")
+    p2 = await _practice(
+        db_session, master_id,
+        scheduled_hours_from_now=-5, status=PracticeStatus.COMPLETED.value,
+    )
+    await _booking(db_session, p2, mixed_id, status=BookingStatus.CANCELLED.value)
+    p3 = await _practice(
+        db_session, master_id,
+        scheduled_hours_from_now=-3, status=PracticeStatus.COMPLETED.value,
+    )
+    await _booking(db_session, p3, mixed_id, status=BookingStatus.ATTENDED.value)
+    await db_session.commit()
+
+    resp = await client.get(
+        GROUP_MEMBERS_URL.format(group_id="students"), headers=headers
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 2  # deduped: mixed_id appears once, not twice
+    ids_in_order = [item["id"] for item in body["items"]]
+    assert ids_in_order == [mixed_id, cancelled_only_id]  # 1 countable > 0
 
 
 # ===================================================================
