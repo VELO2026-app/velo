@@ -1,7 +1,6 @@
 {
   "description": "Показ 15.08.2026 — один живой мастер с обжитой историей",
   "title_prefix": "[seed]",
-
   "_notes": [
     "ДАТЫ ОТНОСИТЕЛЬНЫЕ: day_offset считается от дня прогона, поэтому профиль",
     "не протухает. Имя файла — метка протокола показа, а не срок годности.",
@@ -20,31 +19,73 @@
     "  - Завершённые практики НЕ публикуются (state: completed), поэтому зум-",
     "    встречи для них не создаются и аккаунт Zoom не засоряется."
   ],
-
   "masters": [
     {
       "key": "main",
       "telegram_id": 6598660049,
       "display_name": "Мастер VELO",
       "bio": "Веду утренние медитации и мягкую йогу. 8 лет практики, 300+ проведённых занятий.",
-      "methods": ["meditation — presence", "meditation — silence", "yoga — hatha", "yoga — nidra"],
+      "methods": [
+        "meditation — presence",
+        "meditation — silence",
+        "yoga — hatha",
+        "yoga — nidra"
+      ],
       "experience_years": 8
     }
   ],
-
   "students": [
-    { "key": "olga",   "telegram_id": 600001, "first_name": "Ольга" },
-    { "key": "nina",   "telegram_id": 600002, "first_name": "Нина" },
-    { "key": "pavel",  "telegram_id": 600003, "first_name": "Павел" },
-    { "key": "irina",  "telegram_id": 600004, "first_name": "Ирина" },
-    { "key": "sergey", "telegram_id": 600005, "first_name": "Сергей" },
-    { "key": "katya",  "telegram_id": 600006, "first_name": "Катя" },
-    { "key": "dmitry", "telegram_id": 600007, "first_name": "Дмитрий" },
-    { "key": "alena",  "telegram_id": 600008, "first_name": "Алёна" },
-    { "key": "maxim",  "telegram_id": 600009, "first_name": "Максим" },
-    { "key": "vera",   "telegram_id": 600010, "first_name": "Вера" }
+    {
+      "key": "olga",
+      "telegram_id": 600001,
+      "first_name": "Ольга"
+    },
+    {
+      "key": "nina",
+      "telegram_id": 600002,
+      "first_name": "Нина"
+    },
+    {
+      "key": "pavel",
+      "telegram_id": 600003,
+      "first_name": "Павел"
+    },
+    {
+      "key": "irina",
+      "telegram_id": 600004,
+      "first_name": "Ирина"
+    },
+    {
+      "key": "sergey",
+      "telegram_id": 600005,
+      "first_name": "Сергей"
+    },
+    {
+      "key": "katya",
+      "telegram_id": 600006,
+      "first_name": "Катя"
+    },
+    {
+      "key": "dmitry",
+      "telegram_id": 600007,
+      "first_name": "Дмитрий"
+    },
+    {
+      "key": "alena",
+      "telegram_id": 600008,
+      "first_name": "Алёна"
+    },
+    {
+      "key": "maxim",
+      "telegram_id": 600009,
+      "first_name": "Максим"
+    },
+    {
+      "key": "vera",
+      "telegram_id": 600010,
+      "first_name": "Вера"
+    }
   ],
-
   "practices": [
     {
       "title": "Утренняя медитация: возвращение в тело",
@@ -63,19 +104,36 @@
           "student": "olga",
           "booking_status": "attended",
           "checkins": [
-            { "type": "post", "mood": 9, "comment": "Первый раз за долгое время досидела до конца без желания сбежать. В теле тепло, в голове тихо." }
+            {
+              "type": "post",
+              "mood": 9,
+              "comment": "Первый раз за долгое время досидела до конца без желания сбежать. В теле тепло, в голове тихо."
+            }
           ],
-          "feedback": { "rating": 9, "comment": "Очень бережный темп. Голос спокойный, не давит. Буду ходить дальше." }
+          "feedback": {
+            "rating": 9,
+            "comment": "Очень бережный темп. Голос спокойный, не давит. Буду ходить дальше."
+          }
         },
         {
           "student": "pavel",
           "booking_status": "attended",
           "checkins": [
-            { "type": "post", "mood": 7, "comment": "Норм. Спина затекла ближе к концу." }
+            {
+              "type": "post",
+              "mood": 7,
+              "comment": "Норм. Спина затекла ближе к концу."
+            }
           ],
-          "feedback": { "rating": 8, "comment": "Хорошо, но хотелось бы больше пауз." }
+          "feedback": {
+            "rating": 8,
+            "comment": "Хорошо, но хотелось бы больше пауз."
+          }
         },
-        { "student": "irina", "booking_status": "no_show" }
+        {
+          "student": "irina",
+          "booking_status": "no_show"
+        }
       ]
     },
     {
@@ -95,24 +153,51 @@
           "student": "sergey",
           "booking_status": "attended",
           "checkins": [
-            { "type": "pre",  "mood": 4, "comment": "Шея каменная после недели за монитором." },
-            { "type": "post", "mood": 8, "comment": "Шея отпустила. Не ожидал такой разницы за час." }
+            {
+              "type": "pre",
+              "mood": 4,
+              "comment": "Шея каменная после недели за монитором."
+            },
+            {
+              "type": "post",
+              "mood": 8,
+              "comment": "Шея отпустила. Не ожидал такой разницы за час."
+            }
           ],
-          "feedback": { "rating": 9, "comment": "То, что нужно после рабочей недели. Спасибо за внимание к деталям в позах." }
+          "feedback": {
+            "rating": 9,
+            "comment": "То, что нужно после рабочей недели. Спасибо за внимание к деталям в позах."
+          }
         },
         {
           "student": "katya",
           "booking_status": "attended",
           "checkins": [
-            { "type": "post", "mood": 6, "comment": "Было тяжеловато, но выдержала." }
+            {
+              "type": "post",
+              "mood": 6,
+              "comment": "Было тяжеловато, но выдержала."
+            }
           ],
-          "feedback": { "rating": 7, "comment": "Хорошая практика, но для новичка местами сложно." }
+          "feedback": {
+            "rating": 7,
+            "comment": "Хорошая практика, но для новичка местами сложно."
+          }
         },
         {
           "student": "olga",
           "booking_status": "attended",
-          "checkins": [{ "type": "post", "mood": 8, "comment": "Хорошо." }],
-          "feedback": { "rating": 8, "comment": "Понравилось." }
+          "checkins": [
+            {
+              "type": "post",
+              "mood": 8,
+              "comment": "Хорошо."
+            }
+          ],
+          "feedback": {
+            "rating": 8,
+            "comment": "Понравилось."
+          }
         }
       ]
     },
@@ -133,26 +218,56 @@
           "student": "dmitry",
           "booking_status": "attended",
           "checkins": [
-            { "type": "pre",  "mood": 3, "comment": "Не сплю нормально уже вторую неделю." },
-            { "type": "post", "mood": 8, "comment": "Отключился на середине и это, кажется, ровно то, что было нужно. Впервые за долгое время лёг спать без телефона." }
+            {
+              "type": "pre",
+              "mood": 3,
+              "comment": "Не сплю нормально уже вторую неделю."
+            },
+            {
+              "type": "post",
+              "mood": 8,
+              "comment": "Отключился на середине и это, кажется, ровно то, что было нужно. Впервые за долгое время лёг спать без телефона."
+            }
           ],
-          "feedback": { "rating": 10, "comment": "Лучшее, что случилось со мной за месяц. Записался на следующую." }
+          "feedback": {
+            "rating": 10,
+            "comment": "Лучшее, что случилось со мной за месяц. Записался на следующую."
+          }
         },
         {
           "student": "alena",
           "booking_status": "attended",
-          "checkins": [{ "type": "post", "mood": 9, "comment": "Уснула. Проснулась другим человеком." }],
-          "feedback": { "rating": 9, "comment": "Очень мягко и глубоко." }
+          "checkins": [
+            {
+              "type": "post",
+              "mood": 9,
+              "comment": "Уснула. Проснулась другим человеком."
+            }
+          ],
+          "feedback": {
+            "rating": 9,
+            "comment": "Очень мягко и глубоко."
+          }
         },
         {
           "student": "nina",
           "booking_status": "attended",
           "checkins": [
-            { "type": "post", "mood": 4, "comment": "Не смогла расслабиться, мысли не отпускали. Наверное, дело во мне." }
+            {
+              "type": "post",
+              "mood": 4,
+              "comment": "Не смогла расслабиться, мысли не отпускали. Наверное, дело во мне."
+            }
           ],
-          "feedback": { "rating": 2, "comment": "Мне не подошло. Слишком долго лежать, я вся извелась. Возможно, стоило предупредить, что практика статичная." }
+          "feedback": {
+            "rating": 2,
+            "comment": "Мне не подошло. Слишком долго лежать, я вся извелась. Возможно, стоило предупредить, что практика статичная."
+          }
         },
-        { "student": "maxim", "booking_status": "no_show" }
+        {
+          "student": "maxim",
+          "booking_status": "no_show"
+        }
       ]
     },
     {
@@ -171,24 +286,49 @@
         {
           "student": "vera",
           "booking_status": "attended",
-          "checkins": [{ "type": "post", "mood": 7, "comment": "Непривычно без голоса ведущего, но интересно." }],
-          "feedback": { "rating": 8, "comment": "Формат необычный, хочу попробовать ещё раз." }
+          "checkins": [
+            {
+              "type": "post",
+              "mood": 7,
+              "comment": "Непривычно без голоса ведущего, но интересно."
+            }
+          ],
+          "feedback": {
+            "rating": 8,
+            "comment": "Формат необычный, хочу попробовать ещё раз."
+          }
         },
         {
           "student": "olga",
           "booking_status": "attended",
-          "checkins": [{ "type": "post", "mood": 9 }],
-          "feedback": { "rating": 9, "comment": "Тишина оказалась легче, чем я думала." }
+          "checkins": [
+            {
+              "type": "post",
+              "mood": 9
+            }
+          ],
+          "feedback": {
+            "rating": 9,
+            "comment": "Тишина оказалась легче, чем я думала."
+          }
         },
-        { "student": "pavel", "booking_status": "attended", "checkins": [{ "type": "post", "mood": 6 }] }
+        {
+          "student": "pavel",
+          "booking_status": "attended",
+          "checkins": [
+            {
+              "type": "post",
+              "mood": 6
+            }
+          ]
+        }
       ]
     },
-
     {
       "title": "Утренняя медитация: настройка на день",
       "master": "main",
       "state": "scheduled",
-      "day_offset": 0,
+      "day_offset": 1,
       "hour": 8,
       "duration_minutes": 45,
       "practice_type": "live",
@@ -196,42 +336,75 @@
       "style": "presence",
       "difficulty": "beginner",
       "max_participants": 20,
-      "description": "Сегодняшняя практика. Мягкий вход в день.",
-      "_why": "Ближайшая практика с заполненными pre-чек-инами — это её карточка на дашборде мастера.",
+      "description": "Ближайшая практика. Мягкий вход в день.",
+      "_why": "Ближайшая практика с заполненными pre-чек-инами — её карточка показывается на дашборде мастера. day_offset=1, а не 0, намеренно: утренний час при offset=0 оказывается в прошлом на любом прогоне после девяти утра, и вся карточка вместе с чек-инами исчезает с экрана.",
       "attendees": [
         {
           "student": "olga",
           "booking_status": "confirmed",
-          "checkins": [{ "type": "pre", "mood": 8, "comment": "Проснулась пораньше специально. Настрой хороший." }]
+          "checkins": [
+            {
+              "type": "pre",
+              "mood": 8,
+              "comment": "Проснулась пораньше специально. Настрой хороший."
+            }
+          ]
         },
         {
           "student": "dmitry",
           "booking_status": "confirmed",
-          "checkins": [{ "type": "pre", "mood": 5, "comment": "Спал плохо, но пришёл. Посмотрим." }]
+          "checkins": [
+            {
+              "type": "pre",
+              "mood": 5,
+              "comment": "Спал плохо, но пришёл. Посмотрим."
+            }
+          ]
         },
         {
           "student": "sergey",
           "booking_status": "confirmed",
-          "checkins": [{ "type": "pre", "mood": 6, "comment": "Тревожно перед сложным днём, хочу выдохнуть." }]
+          "checkins": [
+            {
+              "type": "pre",
+              "mood": 6,
+              "comment": "Тревожно перед сложным днём, хочу выдохнуть."
+            }
+          ]
         },
         {
           "student": "alena",
           "booking_status": "confirmed",
-          "checkins": [{ "type": "pre", "mood": 9, "comment": "Отличное утро!" }]
+          "checkins": [
+            {
+              "type": "pre",
+              "mood": 9,
+              "comment": "Отличное утро!"
+            }
+          ]
         },
         {
           "student": "vera",
           "booking_status": "confirmed",
-          "checkins": [{ "type": "pre", "mood": 3, "comment": "Тяжело. Вчера был очень трудный разговор, до сих пор трясёт. Пришла именно поэтому — надеюсь, поможет собраться." }]
+          "checkins": [
+            {
+              "type": "pre",
+              "mood": 3,
+              "comment": "Тяжело. Вчера был очень трудный разговор, до сих пор трясёт. Пришла именно поэтому — надеюсь, поможет собраться."
+            }
+          ]
         },
-        { "student": "katya", "booking_status": "confirmed" }
+        {
+          "student": "katya",
+          "booking_status": "confirmed"
+        }
       ]
     },
     {
       "title": "Хатха-йога: спина и плечи",
       "master": "main",
       "state": "scheduled",
-      "day_offset": 2,
+      "day_offset": 3,
       "hour": 19,
       "duration_minutes": 75,
       "practice_type": "live",
@@ -244,16 +417,25 @@
       "currency": "eur",
       "description": "Платная практика — для проверки оплаты и брони.",
       "attendees": [
-        { "student": "sergey", "booking_status": "confirmed" },
-        { "student": "katya",  "booking_status": "confirmed" },
-        { "student": "irina",  "booking_status": "confirmed" }
+        {
+          "student": "sergey",
+          "booking_status": "confirmed"
+        },
+        {
+          "student": "katya",
+          "booking_status": "confirmed"
+        },
+        {
+          "student": "irina",
+          "booking_status": "confirmed"
+        }
       ]
     },
     {
       "title": "Йога-нидра: вечер пятницы",
       "master": "main",
       "state": "scheduled",
-      "day_offset": 4,
+      "day_offset": 5,
       "hour": 21,
       "duration_minutes": 60,
       "practice_type": "live",
@@ -263,15 +445,21 @@
       "max_participants": 25,
       "description": "Завершить неделю лёжа.",
       "attendees": [
-        { "student": "dmitry", "booking_status": "confirmed" },
-        { "student": "alena",  "booking_status": "confirmed" }
+        {
+          "student": "dmitry",
+          "booking_status": "confirmed"
+        },
+        {
+          "student": "alena",
+          "booking_status": "confirmed"
+        }
       ]
     },
     {
       "title": "Дыхательная практика: 20 минут для собранности",
       "master": "main",
       "state": "scheduled",
-      "day_offset": 6,
+      "day_offset": 7,
       "hour": 12,
       "duration_minutes": 20,
       "practice_type": "live",
@@ -280,15 +468,17 @@
       "description": "Короткий формат в обеденный перерыв.",
       "_why": "Короткая практика — проверяет фильтр длительности в календаре.",
       "attendees": [
-        { "student": "maxim", "booking_status": "confirmed" }
+        {
+          "student": "maxim",
+          "booking_status": "confirmed"
+        }
       ]
     },
-
     {
       "title": "Круг шеринга: про усталость",
       "master": "main",
       "state": "draft",
-      "day_offset": 8,
+      "day_offset": 9,
       "hour": 20,
       "duration_minutes": 90,
       "practice_type": "live",
@@ -303,7 +493,7 @@
       "title": "Медитация перед сном",
       "master": "main",
       "state": "draft",
-      "day_offset": 9,
+      "day_offset": 10,
       "hour": 22,
       "duration_minutes": 30,
       "practice_type": "live",
