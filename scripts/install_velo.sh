@@ -325,12 +325,24 @@ echo -e "${CYAN}═════════════════════�
 echo -e "${CYAN}  Required DNS records (add BEFORE continuing) ${NC}"
 echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
 echo ""
-echo -e "  Type  Name                Value"
-echo -e "  ────  ──────────────────  ─────────────────"
-echo -e "  A     $DOMAIN_FRONTEND    $SERVER_IP"
-echo -e "  A     $DOMAIN_API         $SERVER_IP"
+printf "  %-5s %-22s %s\n" "Type" "Name" "Value"
+echo -e "  ────  ──────────────────────  ─────────────────"
+# printf, not echo: the columns used to be padded by hand-counted spaces, so
+# the Value column landed wherever the domain name happened to end.
+printf "  A     %-22s %s\n" "$DOMAIN_FRONTEND" "$SERVER_IP"
+printf "  A     %-22s %s\n" "$DOMAIN_API" "$SERVER_IP"
+# The public link domain belongs in this list whenever it was given: it gets
+# its OWN certificate below, so a missing A-record for it fails certbot just
+# as surely as a missing one for the two required domains. Listing only two
+# while the prompt above asked for three is how an operator adds two records,
+# presses ENTER, and discovers the third at certbot time.
+[ -n "$DOMAIN_PUBLIC" ] && printf "  A     %-22s %s\n" "$DOMAIN_PUBLIC" "$SERVER_IP"
 echo ""
-echo -e "${YELLOW}Both records must resolve to this server before SSL setup.${NC}"
+if [ -n "$DOMAIN_PUBLIC" ]; then
+    echo -e "${YELLOW}All three records must resolve to this server before SSL setup.${NC}"
+else
+    echo -e "${YELLOW}Both records must resolve to this server before SSL setup.${NC}"
+fi
 echo ""
 read -p "Press ENTER when DNS records are configured..."
 echo ""
@@ -708,6 +720,53 @@ setup_ssh
 # ==============================================================================
 # CLONE REPOSITORY
 # ==============================================================================
+
+# Provision a GitHub deploy key for EVERY service the registry declares,
+# except the product itself -- its key is the bootstrap that made this
+# file readable in the first place (see setup_ssh).
+#
+# This is what item 5 buys: a fourth service is one record in
+# services.conf and zero lines here. The velo record is deliberately NOT
+# filtered out by name -- it is skipped by its "internal" lifecycle, and
+# passing it through would be harmless anyway: provision_deploy_key is
+# idempotent and its probe would pass on the key that just cloned this.
+provision_service_keys() {
+    local conf="$INSTALL_BASE/repo/scripts/services.conf"
+    if [ ! -f "$conf" ]; then
+        error "Service registry not found at $conf"
+        exit 1
+    fi
+    # shellcheck source=/dev/null
+    source "$conf" || exit 1
+
+    local record name repo access
+    for record in "${VELO_SERVICES[@]}"; do
+        [ "$(svc_field "$record" 5)" = "internal" ] && continue
+        name=$(svc_field "$record" 1)
+        repo=$(svc_field "$record" 2)
+        access=$(svc_field "$record" 7)
+
+        # An undeclared privilege is a stop, not a default. Guessing
+        # "read" would print the wrong instruction to the operator and
+        # the failure would surface days later, as a push that cannot.
+        if [ "$access" != "read" ] && [ "$access" != "write" ]; then
+            error "Service '$name' declares access='$access' in services.conf"
+            error "-- expected 'read' or 'write'. Refusing to guess which"
+            error "instruction to give the operator."
+            exit 1
+        fi
+
+        provision_deploy_key "$name" "$repo" "$access" || exit 1
+    done
+}
+
+# DEFINED HERE, NOT IN THE COMMS SECTION BELOW, AND THAT IS THE WHOLE POINT.
+# It is CALLED a few lines down, right after clone_repo -- and bash executes
+# top to bottom, so a definition that sits 450 lines lower does not exist yet
+# at that moment. It did sit lower (T-33), which made every FRESH install die
+# with "provision_service_keys: command not found" immediately after the
+# clone. Keep the definition above the call; the call itself must stay
+# where it is (see its own comment).
 
 clone_repo() {
     log "Cloning repository (branch: $GIT_BRANCH)..."
@@ -1160,45 +1219,6 @@ registry_field_for() {
         fi
     done
     return 1
-}
-
-# Provision a GitHub deploy key for EVERY service the registry declares,
-# except the product itself -- its key is the bootstrap that made this
-# file readable in the first place (see setup_ssh).
-#
-# This is what item 5 buys: a fourth service is one record in
-# services.conf and zero lines here. The velo record is deliberately NOT
-# filtered out by name -- it is skipped by its "internal" lifecycle, and
-# passing it through would be harmless anyway: provision_deploy_key is
-# idempotent and its probe would pass on the key that just cloned this.
-provision_service_keys() {
-    local conf="$INSTALL_BASE/repo/scripts/services.conf"
-    if [ ! -f "$conf" ]; then
-        error "Service registry not found at $conf"
-        exit 1
-    fi
-    # shellcheck source=/dev/null
-    source "$conf" || exit 1
-
-    local record name repo access
-    for record in "${VELO_SERVICES[@]}"; do
-        [ "$(svc_field "$record" 5)" = "internal" ] && continue
-        name=$(svc_field "$record" 1)
-        repo=$(svc_field "$record" 2)
-        access=$(svc_field "$record" 7)
-
-        # An undeclared privilege is a stop, not a default. Guessing
-        # "read" would print the wrong instruction to the operator and
-        # the failure would surface days later, as a push that cannot.
-        if [ "$access" != "read" ] && [ "$access" != "write" ]; then
-            error "Service '$name' declares access='$access' in services.conf"
-            error "-- expected 'read' or 'write'. Refusing to guess which"
-            error "instruction to give the operator."
-            exit 1
-        fi
-
-        provision_deploy_key "$name" "$repo" "$access" || exit 1
-    done
 }
 
 # Read one service's branch out of the registry.
