@@ -80,6 +80,7 @@ from app.modules.diary.router import (                             # Phase 8.1-8
 from app.modules.ai.router import router as ai_router              # Phase 9.1
 from app.modules.chats.router import router as chats_router  # Phase 6 / T2
 from app.modules.comms_proxy.router import router as notifications_router  # Phase 6 / T1
+from app.modules.support.router import router as support_router  # B34 / T-38
 
 # Model imports for Alembic and relationship resolution.
 from app.modules.promos.models import Promo  # noqa: F401  # Phase 6.7
@@ -300,6 +301,7 @@ app.include_router(practices_insights_router)     # Phase 8.4
 app.include_router(ai_router)                     # Phase 9.1
 app.include_router(notifications_router)          # Phase 6 / T1 (comms proxy)
 app.include_router(chats_router)                   # Phase 6 / T2 (chat proxy)
+app.include_router(support_router)                 # B34 / T-38 (support proxy)
 
 
 # ---------------------------------------------------------------------------
