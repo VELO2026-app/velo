@@ -851,6 +851,51 @@ generate_env() {
     success "Bot: @${TELEGRAM_BOT_USERNAME}"
     echo ""
 
+    # Ask for Zoom -- added T-35 follow-up. Until now the installer asked for
+    # NOTHING about Zoom, so ZOOM_ACCOUNT_ID / ZOOM_CLIENT_ID /
+    # ZOOM_CLIENT_SECRET were absent from every generated .env and
+    # settings.is_zoom_stub was therefore true on EVERY server, prod
+    # included -- silently. Meetings, join links and the whole attendance
+    # chain ran on fabricated zoom.us URLs that look real in the UI and
+    # resolve to nothing. Nothing anywhere said so: unlike Stripe there is
+    # no startup gate for the Zoom stub.
+    #
+    # Same shape as the Stripe question below, and for the same reason: the
+    # honest question is not "which server is this", it is "do you have real
+    # credentials". Server-to-Server OAuth app in the Zoom marketplace ->
+    # Account ID, Client ID, Client Secret.
+    echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}  Zoom${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "${YELLOW}Without real credentials meetings are FAKE: links look${NC}"
+    echo -e "${YELLOW}plausible but open nothing, and attendance is never recorded.${NC}"
+    echo ""
+    read -p "Do you have REAL Zoom credentials for this server? (y/n): " -n 1 -r
+    echo
+    local ZOOM_ACCOUNT_ID ZOOM_CLIENT_ID ZOOM_CLIENT_SECRET ALLOW_ZOOM_STUB
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        read -p "ZOOM_ACCOUNT_ID: " ZOOM_ACCOUNT_ID
+        read -p "ZOOM_CLIENT_ID: " ZOOM_CLIENT_ID
+        read -p "ZOOM_CLIENT_SECRET: " ZOOM_CLIENT_SECRET
+        ALLOW_ZOOM_STUB=false
+        success "Real Zoom credentials recorded — meetings will be REAL."
+    else
+        ZOOM_ACCOUNT_ID=""
+        ZOOM_CLIENT_ID=""
+        ZOOM_CLIENT_SECRET=TEST
+        # ALLOW_ZOOM_STUB=true is what keeps the backend's startup gate from
+        # refusing to boot (main.py). The operator said out loud that this
+        # server has no Zoom app; the gate exists to stop a server running
+        # on fiction WITHOUT anyone saying so, not to stop this.
+        ALLOW_ZOOM_STUB=true
+        warn "No real credentials — Zoom runs in STUB mode: meeting links are"
+        warn "fabricated and attendance will NOT be recorded on this server."
+        warn "ALLOW_ZOOM_STUB=true is written to backend/.env so the backend"
+        warn "starts anyway. Add real keys and REINSTALL to get real meetings."
+    fi
+    echo ""
+
     # Ask for Stripe -- re-derived 2026-07-17, not inherited. The 07-16 default
     # (prod=false, test=true) was reasoned from "prod has a real key" -- that
     # was never true (Stripe has never been connected on EITHER server,
@@ -958,6 +1003,20 @@ TELEGRAM_LINK_DOMAIN=${TELEGRAM_LINK_DOMAIN}
 
 # --- Session ---
 SESSION_TTL_DAYS=30
+
+# --- Zoom ---
+# Server-to-Server OAuth app. Empty (or CLIENT_SECRET=TEST) puts the whole
+# Zoom integration into stub mode: meetings are fabricated, join links open
+# nothing, attendance is never recorded. Asked at install; see the Zoom
+# block in generate_env().
+ZOOM_ACCOUNT_ID=${ZOOM_ACCOUNT_ID}
+ZOOM_CLIENT_ID=${ZOOM_CLIENT_ID}
+ZOOM_CLIENT_SECRET=${ZOOM_CLIENT_SECRET}
+# Set to true ONLY when the operator declared this server has no Zoom app.
+# With it false and the credentials blank/TEST, the backend refuses to start
+# in production -- deliberately: a server whose meetings are fabricated must
+# not look identical to a working one.
+ALLOW_ZOOM_STUB=${ALLOW_ZOOM_STUB}
 
 # --- Stripe ---
 STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
@@ -1803,7 +1862,6 @@ echo -e "  ${CYAN}velo update${NC}          — Pull + rebuild + migrate + test"
 echo -e "  ${CYAN}velo restart${NC}         — Restart all services"
 echo -e "  ${CYAN}velo db connect${NC}      — Open psql"
 echo -e "  ${CYAN}velo backup${NC}          — Manual backup"
-echo -e "  ${CYAN}velo seed${NC}            — Populate DB with test data"
 echo -e "  ${CYAN}bash $COMMS_REPO_DIR/deploy/comms-deploy.sh status${NC} — comms stack (lifecycle is decoupled from velo)"
 echo ""
 

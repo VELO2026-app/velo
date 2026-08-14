@@ -279,6 +279,13 @@ class Settings(BaseSettings):
     # intended for longer -- do not let this guard reach prod silently.
     allow_stripe_stub: bool = False
 
+    # Zoom's twin of the flag above, added by T-35. Same shape on purpose:
+    # a server that genuinely has no Zoom app says so ONCE, explicitly, and
+    # then boots. What it buys is that nobody boots on a fake Zoom by
+    # accident -- see is_zoom_stub_blocked below for why that stopped being
+    # acceptable.
+    allow_zoom_stub: bool = False
+
     # -- Topup limits (Phase 6.3) --
     # All amounts in EUR cents.
     min_topup_cents: int = 100      # EUR 1.00
@@ -786,22 +793,48 @@ class Settings(BaseSettings):
             or self.zoom_client_secret.upper() == "TEST"
         )
 
-    # NOTE: there is deliberately NO is_zoom_stub_blocked / startup-raise
-    # here, unlike is_stripe_stub_blocked. Two reasons, not one:
-    #   1. Stripe stub mode is dangerous because it free-credits real money;
-    #      Zoom stub mode just means no real meeting gets created -- the
-    #      whole E21 design (practices/service.py, cancel_service.py) treats
-    #      every Zoom call as best-effort and NEVER blocks on it succeeding.
-    #      A hard startup guard would contradict that design at the
-    #      infrastructure layer.
-    #   2. Practically: no server has real Zoom credentials configured yet
-    #      (the owner has not created the S2S app). A hard block here would
-    #      crash TEST and prod on the next restart after this code merges,
-    #      for a reason unrelated to whatever that deploy actually changed.
-    # Zoom stub mode is therefore silent-but-logged (_stub_response() below
-    # logs each stubbed call at INFO), not startup-fatal. If Zoom ever
-    # becomes launch-critical, add a real gate then -- do not backfill one
-    # here without re-deciding this trade-off explicitly.
+    @property
+    def is_zoom_stub_blocked(self) -> bool:
+        """True when startup must refuse: stubbed Zoom, not a dev laptop,
+        and not explicitly allowed via ALLOW_ZOOM_STUB.
+
+        THIS OVERRIDES AN EXPLICIT EARLIER DECISION, and the override is
+        the point of writing it down rather than quietly adding a guard.
+
+        What used to stand here said there must be NO gate, for two
+        reasons: (1) Zoom stub mode only means no real meeting is created,
+        and E21 treats every Zoom call as best-effort, so a hard guard
+        would contradict that design; (2) no server had real Zoom
+        credentials yet, so a guard would crash TEST and prod on the next
+        restart for a reason unrelated to that deploy. It closed with:
+        "if Zoom ever becomes launch-critical, add a real gate then -- do
+        not backfill one here without re-deciding this trade-off
+        explicitly."
+
+        T-35 is that moment, and this is that explicit re-decision.
+        The whole feature exists so attendance stops lying: a student who
+        attended must not be recorded NO_SHOW. Under the stub, meetings are
+        fabricated zoom.us URLs that open nothing, no registrant is ever
+        matched, and attendance is not merely degraded -- it can never be
+        written at all. Reason (1) no longer holds: best-effort meeting
+        CREATION is one thing, an entire attendance chain silently running
+        on fiction is another. Reason (2) is spent: it was a statement
+        about a moment in time, and that moment passed the day this
+        shipped.
+
+        The failure this closes was found in production, not in review: a
+        server ran for weeks with no ZOOM_* keys at all, every link looked
+        plausible in the UI, and NOTHING anywhere said so -- not the app,
+        not `velo doctor` (the keys were absent from .env.example too), not
+        the install. Silence was the defect.
+
+        Startup does not become fragile: the installer asks about Zoom and
+        writes ALLOW_ZOOM_STUB=true when the operator answers "no". A
+        server without a Zoom app still boots -- it just has to say out
+        loud that it is running on fiction.
+        """
+        is_dev = self.app_env == "development"
+        return not is_dev and self.is_zoom_stub and not self.allow_zoom_stub
 
 
 # Singleton: one Settings instance for the entire application.
