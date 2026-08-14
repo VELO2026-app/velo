@@ -121,6 +121,17 @@ master.application_received:
 
 system.announcement:
 
+# -- Support: NO category on purpose (owner ruling 2026-08-14, T-38 support
+#    build, PROMPT №710). Emitted once, at support-thread creation, to
+#    group:admins (the same GROUP_ADMINS broadcast master.application_received
+#    already uses in production) -- an unclaimed thread's only signal that
+#    support has traffic. A category would let it be muted like any other
+#    admin-facing type, and this ONE type is the one an operator must not be
+#    able to silence -- the mechanism decision A already uses for
+#    non-mutable-by-mechanism types, applied here for a different reason. --
+
+support.thread_created:
+
 # -- Chat baseline (comms-native msg.* types; velo never emits these,
 #    the messaging engine does; mapping fixed by dispatch plan §6b) --
 
