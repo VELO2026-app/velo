@@ -208,6 +208,14 @@
       >
         <template #trailing><IconArrowRight :size="20" /></template>
       </VListRow>
+      <VListRow
+        title="Поддержка"
+        subtitle="Обращения пользователей и мастеров"
+        clickable
+        @click="router.push({ name: 'admin-support' })"
+      >
+        <template #trailing><IconArrowRight :size="20" /></template>
+      </VListRow>
     </template>
   </div>
 </template>

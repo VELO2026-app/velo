@@ -86,13 +86,21 @@ async def open_support_thread(
     seam detail (mirrors chats/router.py::_open_response -- `created` is
     for this function to act on, not the caller's business).
 
-    `topic` (PROMPT №712, owner ruling B): the form's topic-picker value,
-    OPTIONAL and purely for the admin-group notification's text -- it has
-    no effect on dedup, is not sent to comms at all, and does nothing on a
-    reopen (the notification only fires when `created` is True below). The
-    topic's OTHER, more durable surface is the first message itself --
-    send_support_message prefixes it there, which is what an admin still
-    sees after the creation notification has scrolled away.
+    `topic` (PROMPT №712, owner ruling B): the form's topic-picker value.
+    Has no effect on comms' dedup (kind="dm" alone already makes this an
+    eternal thread) and does nothing on a reopen -- the admin-group
+    notification only fires when `created` is True below, and `title` is
+    only stored by comms on the INSERT path (create_or_get_thread_detailed,
+    comms/app/messaging/threads.py -- a dedup hit returns the existing row
+    untouched). PROMPT №713 adds a THIRD surface for it, on top of the two
+    №712 already built (the notification text, and the message-text
+    prefix in send_support_message): comms' own `title` field, sent here
+    ONLY, so the admin LIST (`_thread_out` already returns `title`
+    verbatim, zero proxy change needed there) can show the topic without
+    fetching each thread's feed -- the two existing channels do not reach
+    a list view at all (notifications aren't queryable per-thread by an
+    admin browsing later; the message prefix needs the feed, which is an
+    N+1 the list must not pay).
     """
     section_id = await get_support_section_id()
 
@@ -104,6 +112,7 @@ async def open_support_thread(
             "operator_kind": "section",
             "operator_value": str(section_id),
             "kind": "dm",
+            "title": topic,
         },
     )
     comms_thread_id = UUID(str(payload["id"]))
@@ -200,6 +209,162 @@ async def send_support_message(
         "POST",
         f"/api/v1/threads/{pointer.comms_thread_id}/messages",
         json={"sender": str(user.id), "body": text},
+    )
+
+
+def _peer_payload(user: User | None) -> dict[str, Any] | None:
+    """The thread opener as a display block -- P-1, same shape and reason
+    as chats/router.py::_peer_payload: a raw client uuid tells an admin
+    nothing, and support has no other endpoint to resolve a name through.
+    """
+    if user is None:
+        return None
+    parts = [p for p in (user.first_name, user.last_name) if p]
+    return {
+        "user_id": str(user.id),
+        "name": " ".join(parts) if parts else None,
+        "avatar_url": user.avatar_url,
+    }
+
+
+async def list_admin_support_threads(
+    session: AsyncSession,
+    *,
+    admin: User,
+    limit: int,
+    cursor: str | None,
+) -> dict[str, Any]:
+    """Every support (section) thread, enriched with the opener's display
+    identity. is_supervisor is hard True, operator is the admin's own id
+    -- both stamped here, never accepted from a caller (support/router.py
+    never binds either name as a request parameter at all).
+    """
+    params: dict[str, Any] = {
+        "operator": str(admin.id),
+        "is_supervisor": True,
+        "limit": limit,
+    }
+    if cursor is not None:
+        params["cursor"] = cursor
+
+    payload = await comms_request("GET", "/api/v1/threads", params=params)
+    threads = payload.get("threads") if isinstance(payload, dict) else None
+    if not isinstance(threads, list):
+        return payload
+
+    # SECTION-only scoping (unchanged from №711): comms' list has no
+    # operator_kind filter, so the DM/section split happens on the page
+    # we already fetched, never widening what next_cursor means -- it is
+    # forwarded verbatim below, so a page that filters to zero threads
+    # still advances correctly on the next call.
+    section_threads = [
+        t
+        for t in threads
+        if isinstance(t, dict) and t.get("operator_kind") == "section"
+    ]
+
+    def _client_uuid(thread: dict[str, Any]) -> UUID | None:
+        try:
+            return UUID(str(thread.get("client")))
+        except (TypeError, ValueError):
+            return None
+
+    client_ids = {
+        cid for t in section_threads if (cid := _client_uuid(t)) is not None
+    }
+    users: dict[UUID, User] = {}
+    if client_ids:
+        result = await session.execute(
+            select(User).where(User.id.in_(client_ids))
+        )
+        users = {u.id: u for u in result.scalars()}
+    for thread in section_threads:
+        thread["opener"] = _peer_payload(users.get(_client_uuid(thread)))
+
+    return {**payload, "threads": section_threads}
+
+
+async def _require_support_thread(
+    session: AsyncSession, thread_id: UUID,
+) -> SupportThread:
+    """Resolve a comms thread id to a KNOWN support thread, or 404.
+
+    THE section-vs-DM boundary for every admin thread/message/claim call
+    below: support_threads is written ONLY by open_support_thread (one
+    row per genuine comms thread create), so a row existing here is proof
+    the id names a real support thread and not a student<->master DM the
+    admin has no business reading through this door. Deliberately 404,
+    not 403 -- existence must not leak (chats/router.py::_load_thread's
+    own stance, same reasoning).
+    """
+    pointer = (
+        await session.execute(
+            select(SupportThread).where(
+                SupportThread.comms_thread_id == thread_id
+            )
+        )
+    ).scalar_one_or_none()
+    if pointer is None:
+        raise NotFoundError("Support thread not found")
+    return pointer
+
+
+async def get_admin_support_messages(
+    session: AsyncSession,
+    *,
+    thread_id: UUID,
+    limit: int,
+    cursor: str | None,
+) -> dict[str, Any]:
+    """A support thread's feed. Read access is universal-for-admins by
+    the owner's own ruling (option A: every admin SEES every thread) --
+    comms' get_thread_feed has no gate of its own either (the product
+    proxy is the sole owner of that check, per comms' trust model), so
+    the ONLY authz this function performs is the section/DM boundary
+    above; there is no per-admin claim requirement to READ.
+    """
+    await _require_support_thread(session, thread_id)
+    params: dict[str, Any] = {"limit": limit}
+    if cursor is not None:
+        params["cursor"] = cursor
+    return await comms_request(
+        "GET", f"/api/v1/threads/{thread_id}/messages", params=params,
+    )
+
+
+async def send_admin_support_message(
+    session: AsyncSession, *, admin: User, thread_id: UUID, body: str,
+) -> dict[str, Any]:
+    """Reply as this admin. Unlike reading, WRITE-authz is not ours to
+    grant: comms' can_post_message admits only the thread's client or its
+    ASSIGNEE, no supervisor bypass (messaging/operators.py, comms
+    `9474751`) -- an admin who has not claimed the thread gets comms' own
+    403 back, forwarded verbatim (forward_403=True) instead of the
+    default infra-fault mapping, so the caller can distinguish "you must
+    claim this first" from "comms is down".
+    """
+    await _require_support_thread(session, thread_id)
+    return await comms_request(
+        "POST",
+        f"/api/v1/threads/{thread_id}/messages",
+        json={"sender": str(admin.id), "body": body},
+        forward_403=True,
+    )
+
+
+async def claim_admin_support_thread(
+    session: AsyncSession, *, admin: User, thread_id: UUID,
+) -> dict[str, Any]:
+    """Claim an unclaimed thread -- the act that grants the right to
+    reply (comms' can_post_message admits the assignee; claiming is how
+    an admin becomes it). Returns comms' own {claimed, thread} verbatim:
+    `claimed=False` means someone else won the race, not an error.
+    """
+    await _require_support_thread(session, thread_id)
+    return await comms_request(
+        "POST",
+        f"/api/v1/threads/{thread_id}/claim",
+        json={"operator": str(admin.id)},
     )
 
 

@@ -534,6 +534,19 @@ const router = createRouter({
           component: () => import('@/views/admin/AdminPromosView.vue'),
         },
         {
+          // B34 (PROMPT №713): support queue, reached from the dashboard --
+          // same pattern as reports (no fourth tab, see AdminSupportView's
+          // own header for why).
+          path: 'support',
+          name: 'admin-support',
+          component: () => import('@/views/admin/AdminSupportView.vue'),
+        },
+        {
+          path: 'support/:id',
+          name: 'admin-support-detail',
+          component: () => import('@/views/admin/AdminSupportDetailView.vue'),
+        },
+        {
           path: '',
           redirect: { name: 'admin-dashboard' },
         },

@@ -26,6 +26,22 @@
 #     and the frontend is entitled to see it;
 #   - comms 5xx -> 502 (an upstream fault is a gateway fault here).
 # The token never appears in logs or error bodies.
+#
+# 403 is special-cased twice over (PROMPT №713, support write-authz):
+# every OTHER call site's 403 means OUR service token broke, an infra
+# fault -- mapped to 502 so a misconfigured COMMS_SERVICE_TOKEN cannot
+# masquerade as "this user's session expired" and log people out
+# (api/client.ts treats any 401 that way). But comms' write-authz on a
+# SECTION thread (can_post_message, messaging/operators.py) returns a
+# GENUINE, per-request, business-meaningful 403 -- "you have not
+# claimed this thread" -- documented as such in comms'
+# AuthorizationError (mapped to HTTP 403 by their API error handler,
+# core/exceptions.py). Swallowing that into a generic 502 would hide
+# exactly the state support/router.py needs to surface. `forward_403`
+# opts a SPECIFIC call site into treating 403 as a real, forwardable
+# 4xx (same shape as _FORWARDABLE_4XX) instead of the infra-fault
+# mapping -- default False, so every existing call site (chats,
+# notifications, the rest of support) is byte-for-byte unchanged.
 # =============================================================================
 
 from typing import Any
@@ -57,6 +73,7 @@ async def comms_request(
     *,
     params: dict[str, Any] | None = None,
     json: dict[str, Any] | None = None,
+    forward_403: bool = False,
 ) -> Any:
     """One request to the internal comms API; returns the parsed JSON body.
 
@@ -66,13 +83,20 @@ async def comms_request(
             "/api/v1/recipients/{id}/inbox").
         params: Optional query parameters.
         json: Optional JSON body.
+        forward_403: When True, a comms 403 is treated as a genuine,
+            forwardable business response (comms' AuthorizationError,
+            e.g. "actor is not the serving operator of this thread")
+            instead of the default infra-fault mapping to 502. See the
+            module header. False everywhere except the one call site
+            that needs it.
 
     Returns:
         The response body parsed as JSON.
 
     Raises:
         HTTPException: 502 (comms unreachable / upstream 5xx), 504
-            (timeout), or the comms 4xx status forwarded verbatim.
+            (timeout), or the comms 4xx status forwarded verbatim
+            (403 included only when forward_403=True).
     """
     base_url = settings.comms_api_url.rstrip("/")
     if not base_url:
@@ -107,28 +131,34 @@ async def comms_request(
         )
         raise _UNAVAILABLE
 
-    # 401/403 from comms mean OUR service token is wrong/expired -- an
-    # infra fault, not the end user's. Forwarding them verbatim is a
+    # 401 from comms always means OUR service token is wrong/expired --
+    # an infra fault, never the end user's. Forwarding it verbatim is a
     # foot-gun: the product frontend treats ANY 401 as "this user's
     # session expired" (api/client.ts) and logs them out, so one
     # misconfigured COMMS_SERVICE_TOKEN would log out every user who
     # opens the bell. Map to 502 (upstream unavailable) and never leak
     # the internal service's auth detail.
-    if response.status_code in (401, 403):
-        logger.error(
-            "comms_auth_error",
-            path=path,
-            status=response.status_code,
-        )
+    if response.status_code == 401:
+        logger.error("comms_auth_error", path=path, status=401)
+        raise _UNAVAILABLE
+
+    # 403 is the SAME infra-fault story UNLESS the caller opted in
+    # (forward_403) -- see the module header for why comms' write-authz
+    # 403 is a genuine business response on the one call site that
+    # needs it.
+    if response.status_code == 403 and not forward_403:
+        logger.error("comms_auth_error", path=path, status=403)
         raise _UNAVAILABLE
 
     if response.status_code >= 400:
         # Only the client-meaningful statuses of the frozen 3b contract
         # are forwarded verbatim: 400 (bad request), 404 (unsynced
         # recipient / missing delivery), 409, 422 (malformed cursor,
-        # unknown category). Anything else the boundary does not model
-        # is an upstream fault -> 502, not a leaked passthrough.
-        if response.status_code not in _FORWARDABLE_4XX:
+        # unknown category) -- plus 403 on the one call site that opted
+        # in above. Anything else the boundary does not model is an
+        # upstream fault -> 502, not a leaked passthrough.
+        forwardable = _FORWARDABLE_4XX | ({403} if forward_403 else set())
+        if response.status_code not in forwardable:
             logger.warning(
                 "comms_unexpected_4xx",
                 path=path,

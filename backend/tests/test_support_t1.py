@@ -1,7 +1,7 @@
 # =============================================================================
 # VELO -- support proxy (B34, T-38)
 # =============================================================================
-# Band 89870-89889.
+# Band 89870-89899 (widened PROMPT №713, see below).
 #
 # ⚠ NOT 89850-89859 as originally picked (PROMPT №711): the merge that landed
 # the teammate's T-35 work brought in test_zoom_public_link.py, which claims
@@ -11,28 +11,44 @@
 # its numbers. Re-scanned backend/tests/*.py fresh under PROMPT №712 (script,
 # not memory): 89860-89897 came back with zero literal hits (89898 is a stale
 # comment reference inside test_master_groups.py, read and discounted, not a
-# real id). Took 89870-89889 for headroom; left 89860-89869 free. Moved only
-# THIS file -- test_master_groups.py's own 89840-89849 vs test_zoom_public_
-# link.py's 89840-89859 collision is a SEPARATE, unrequested fix and is
-# reported, not touched, in this prompt's DONE (minimal scope).
+# real id). Took 89870-89889 for headroom; left 89860-89869 free.
+#
+# ⚠ WIDENED to 89870-89899 (PROMPT №713): re-scanned fresh again (per-id, per
+# matched LINE, comment hits discounted by reading them, not by pattern) --
+# 89890-89899 came back with zero literal hits anywhere in backend/tests/,
+# only comment mentions (test_master_groups.py:133, test_comms_t1.py:5,
+# test_student_entitlement_t20.py:8). Adjacent to this file's own existing
+# band, so widened in place rather than opening a second disjoint pair.
+# test_master_groups.py's own 89840-89849 vs test_zoom_public_link.py's
+# 89840-89859 collision is STILL a separate, unrequested fix, still reported
+# not touched (minimal scope, unchanged from №712).
 #
 # What is under test:
 #   1. LAZY SECTION RESOLUTION -- resolved via comms exactly once per
 #      process (module-level cache), never persisted anywhere of ours.
 #   2. THREAD CREATION -- one eternal thread per user (operator_kind=
 #      "section", kind="dm"), local pointer written, `created` stripped
-#      from the response.
+#      from the response, topic reaches comms' own `title` (PROMPT №713).
 #   3. THE ADMIN SIGNAL -- fires exactly once, on the call that actually
 #      creates the comms thread; a reopen emits nothing new.
 #   4. THE ADMIN LISTING -- is_supervisor/operator are never client-
-#      controllable (not bound as request params at all), and the
-#      response is scoped to SECTION threads even when comms' own page
-#      also carries DM (operator_kind="user") traffic.
+#      controllable (not bound as request params at all), the response is
+#      scoped to SECTION threads even when comms' own page also carries DM
+#      (operator_kind="user") traffic, and (PROMPT №713) each row carries
+#      the opener's resolved display identity.
+#   5. THE SECTION/DM BOUNDARY ON THE NEW ADMIN ROUTES (PROMPT №713) --
+#      /messages (GET+POST) and /claim 404 on a thread id with no local
+#      support_threads row (i.e. a DM), never leaking whether it exists.
+#   6. WRITE-AUTHZ IS COMMS', NOT OURS -- an admin who has not claimed gets
+#      comms' own 403 back on a reply, forwarded rather than swallowed.
 #
-# comms is cut at two seams -- app.modules.support.service.comms_request
-# (section resolution + thread creation) and
-# app.modules.support.router.comms_request (the admin listing) -- no
-# comms stack needed, same idiom as test_chats_t2.py / test_chats_t3_students.py.
+# comms is cut at ONE seam -- app.modules.support.service.comms_request.
+# PROMPT №713 moved the admin listing's comms call into service.py too (it
+# used to live in router.py, its own separate seam) -- every support
+# endpoint now proxies through service.py, so one patched name covers
+# section resolution, thread creation, the admin list, the feed, replies,
+# and claim. No comms stack needed, same idiom as test_chats_t2.py /
+# test_chats_t3_students.py.
 # =============================================================================
 
 from unittest.mock import AsyncMock
@@ -49,9 +65,8 @@ from app.modules.support.models import SupportThread
 from app.modules.users.models import User
 from tests.helpers import auth_headers, fresh_execute, full_cleanup_range, login_user
 
-BAND_MIN, BAND_MAX = 89870, 89889
-_SECTION_SEAM = "app.modules.support.service.comms_request"
-_LIST_SEAM = "app.modules.support.router.comms_request"
+BAND_MIN, BAND_MAX = 89870, 89899
+_COMMS_SEAM = "app.modules.support.service.comms_request"
 
 SUPPORT_URL = "/api/v1/support/threads"
 
@@ -170,7 +185,7 @@ class TestOpenSupportThread:
             _section_payload(),
             _thread_payload(created=True, client=student["user"]["id"]),
         )
-        monkeypatch.setattr(_SECTION_SEAM, fake)
+        monkeypatch.setattr(_COMMS_SEAM, fake)
 
         resp = await client.post(
             SUPPORT_URL, headers=auth_headers(student["session_token"]),
@@ -228,7 +243,7 @@ class TestOpenSupportThread:
         headers = auth_headers(student["session_token"])
 
         monkeypatch.setattr(
-            _SECTION_SEAM,
+            _COMMS_SEAM,
             _creation_seam(
                 _section_payload(),
                 _thread_payload(created=True, client=student["user"]["id"]),
@@ -240,7 +255,7 @@ class TestOpenSupportThread:
         # Second call: comms reports a DEDUP HIT (created=False) -- the
         # real behaviour a repeat open would see.
         monkeypatch.setattr(
-            _SECTION_SEAM,
+            _COMMS_SEAM,
             _creation_seam(
                 _section_payload(),
                 _thread_payload(created=False, client=student["user"]["id"]),
@@ -297,7 +312,7 @@ class TestOpenSupportThread:
                 )
             raise AssertionError(f"unexpected comms path: {path}")
 
-        monkeypatch.setattr(_SECTION_SEAM, AsyncMock(side_effect=_dispatch))
+        monkeypatch.setattr(_COMMS_SEAM, AsyncMock(side_effect=_dispatch))
 
         await client.post(SUPPORT_URL, headers=auth_headers(alice["session_token"]))
         await client.post(SUPPORT_URL, headers=auth_headers(bob["session_token"]))
@@ -313,7 +328,7 @@ class TestOpenSupportThread:
             client, telegram_id=BAND_MIN + 8, first_name="Student",
         )
         monkeypatch.setattr(
-            _SECTION_SEAM,
+            _COMMS_SEAM,
             _creation_seam(
                 _section_payload(),
                 _thread_payload(created=True, client=student["user"]["id"]),
@@ -351,7 +366,7 @@ class TestOpenSupportThread:
         headers = auth_headers(student["session_token"])
 
         monkeypatch.setattr(
-            _SECTION_SEAM,
+            _COMMS_SEAM,
             _creation_seam(
                 _section_payload(),
                 _thread_payload(created=True, client=student["user"]["id"]),
@@ -361,7 +376,7 @@ class TestOpenSupportThread:
         assert first.status_code == 200
 
         monkeypatch.setattr(
-            _SECTION_SEAM,
+            _COMMS_SEAM,
             _creation_seam(
                 _section_payload(),
                 _thread_payload(created=False, client=student["user"]["id"]),
@@ -401,7 +416,7 @@ class TestSendMessage:
         headers = auth_headers(student["session_token"])
 
         monkeypatch.setattr(
-            _SECTION_SEAM,
+            _COMMS_SEAM,
             _creation_seam(
                 _section_payload(),
                 _thread_payload(created=True, client=student["user"]["id"]),
@@ -419,7 +434,7 @@ class TestSendMessage:
                 "created_at": THREAD_CREATED_AT,
             }
         )
-        monkeypatch.setattr(_SECTION_SEAM, fake_message)
+        monkeypatch.setattr(_COMMS_SEAM, fake_message)
 
         resp = await client.post(
             f"{SUPPORT_URL}/messages",
@@ -455,7 +470,7 @@ class TestSendMessage:
         headers = auth_headers(student["session_token"])
 
         monkeypatch.setattr(
-            _SECTION_SEAM,
+            _COMMS_SEAM,
             _creation_seam(
                 _section_payload(),
                 _thread_payload(created=True, client=student["user"]["id"]),
@@ -472,7 +487,7 @@ class TestSendMessage:
                 "created_at": THREAD_CREATED_AT,
             }
         )
-        monkeypatch.setattr(_SECTION_SEAM, fake_message)
+        monkeypatch.setattr(_COMMS_SEAM, fake_message)
 
         await client.post(
             f"{SUPPORT_URL}/messages",
@@ -536,7 +551,7 @@ class TestAdminListing:
             "next_cursor": "opaque-cursor-value",
         }
         fake = AsyncMock(return_value=mixed_page)
-        monkeypatch.setattr(_LIST_SEAM, fake)
+        monkeypatch.setattr(_COMMS_SEAM, fake)
 
         resp = await client.get(SUPPORT_URL, headers=headers)
         assert resp.status_code == 200
@@ -572,10 +587,248 @@ class TestAdminListing:
             "next_cursor": None,
         }
         monkeypatch.setattr(
-            _LIST_SEAM, AsyncMock(return_value=all_dm_page),
+            _COMMS_SEAM, AsyncMock(return_value=all_dm_page),
         )
 
         resp = await client.get(SUPPORT_URL, headers=headers)
         assert resp.status_code == 200
         assert resp.json()["threads"] == []
         assert resp.json()["next_cursor"] is None
+
+    async def test_list_attaches_the_opener_identity_and_the_topic_title(
+        self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
+    ) -> None:
+        """PROMPT №713: 'who' and 'the topic' on the list -- opener is a
+        real user, resolved in bulk (P-1); the topic rides comms' own
+        `title` field, set at creation (service.py::open_support_thread)."""
+        admin = await _make_admin(client, db_session, BAND_MIN + 13)
+        student = await login_user(
+            client, telegram_id=BAND_MIN + 14, first_name="Dana",
+            username="dana",
+        )
+        headers = auth_headers(admin["session_token"])
+
+        page = {
+            "threads": [
+                _thread_payload(
+                    thread_id=THREAD_ID,
+                    client=student["user"]["id"],
+                )
+                | {"title": "Жалоба на мастера"},
+            ],
+            "next_cursor": None,
+        }
+        monkeypatch.setattr(_COMMS_SEAM, AsyncMock(return_value=page))
+
+        resp = await client.get(SUPPORT_URL, headers=headers)
+        assert resp.status_code == 200
+
+        row = resp.json()["threads"][0]
+        assert row["title"] == "Жалоба на мастера"
+        assert row["opener"]["user_id"] == student["user"]["id"]
+        assert row["opener"]["name"] == "Dana"
+
+    async def test_list_opener_is_null_for_an_unresolvable_client(
+        self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
+    ) -> None:
+        """A client id with no matching User degrades to opener=null --
+        never an exception that would take the whole list down."""
+        admin = await _make_admin(client, db_session, BAND_MIN + 15)
+        headers = auth_headers(admin["session_token"])
+
+        page = {
+            "threads": [
+                _thread_payload(thread_id=THREAD_ID, client=str(uuid4())),
+            ],
+            "next_cursor": None,
+        }
+        monkeypatch.setattr(_COMMS_SEAM, AsyncMock(return_value=page))
+
+        resp = await client.get(SUPPORT_URL, headers=headers)
+        assert resp.status_code == 200
+        assert resp.json()["threads"][0]["opener"] is None
+
+
+# ---------------------------------------------------------------------------
+# The admin thread screen: feed, reply, claim
+# ---------------------------------------------------------------------------
+
+
+async def _seed_support_thread(
+    db_session: AsyncSession, *, client_user_id: UUID, comms_thread_id: UUID,
+) -> None:
+    """Insert a local support_threads pointer directly -- the section/DM
+    boundary these tests exercise only needs the ROW to exist, not the
+    full open_support_thread flow that would normally write it."""
+    db_session.add(
+        SupportThread(
+            comms_thread_id=comms_thread_id, client_user_id=client_user_id,
+        )
+    )
+    await db_session.commit()
+
+
+class TestAdminThreadMessages:
+    async def test_get_messages_404s_for_a_thread_id_with_no_local_pointer(
+        self, client: AsyncClient, db_session: AsyncSession,
+    ) -> None:
+        """The section/DM boundary: an id comms would happily serve (it
+        could be a real DM thread) 404s here because it is not in
+        support_threads -- existence must not leak, so this is a plain
+        404, not a 403."""
+        admin = await _make_admin(client, db_session, BAND_MIN + 16)
+        headers = auth_headers(admin["session_token"])
+
+        resp = await client.get(
+            f"{SUPPORT_URL}/{uuid4()}/messages", headers=headers,
+        )
+        assert resp.status_code == 404
+
+    async def test_get_messages_proxies_the_feed_for_a_known_support_thread(
+        self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
+    ) -> None:
+        admin = await _make_admin(client, db_session, BAND_MIN + 17)
+        student = await login_user(
+            client, telegram_id=BAND_MIN + 18, first_name="Cleo",
+        )
+        thread_id = uuid4()
+        # client_user_id is a real FK -> users.id; a bare uuid4() would 500.
+        await _seed_support_thread(
+            db_session,
+            client_user_id=UUID(student["user"]["id"]),
+            comms_thread_id=thread_id,
+        )
+
+        feed = {
+            "messages": [
+                {
+                    "id": str(uuid4()), "thread_id": str(thread_id),
+                    "sender": student["user"]["id"], "body": "[Тема] Помогите",
+                    "created_at": THREAD_CREATED_AT,
+                },
+            ],
+            "next_cursor": None,
+        }
+        fake = AsyncMock(return_value=feed)
+        monkeypatch.setattr(_COMMS_SEAM, fake)
+
+        resp = await client.get(
+            f"{SUPPORT_URL}/{thread_id}/messages",
+            headers=auth_headers(admin["session_token"]),
+        )
+        assert resp.status_code == 200
+        assert resp.json() == feed
+        assert fake.await_args.args[:2] == (
+            "GET", f"/api/v1/threads/{thread_id}/messages",
+        )
+
+
+class TestAdminReply:
+    async def test_reply_forwards_comms_403_when_not_claimed(
+        self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
+    ) -> None:
+        """Comms' own write-authz, not ours -- surfaced, not swallowed."""
+        admin = await _make_admin(client, db_session, BAND_MIN + 19)
+        student = await login_user(
+            client, telegram_id=BAND_MIN + 20, first_name="Erin",
+        )
+        thread_id = uuid4()
+        await _seed_support_thread(
+            db_session,
+            client_user_id=UUID(student["user"]["id"]),
+            comms_thread_id=thread_id,
+        )
+
+        from fastapi import HTTPException
+
+        async def _dispatch(method, path, **kwargs):
+            if path == f"/api/v1/threads/{thread_id}/messages":
+                assert kwargs.get("forward_403") is True
+                raise HTTPException(
+                    status_code=403,
+                    detail="actor is not the serving operator of this thread",
+                )
+            raise AssertionError(f"unexpected path: {path}")
+
+        monkeypatch.setattr(_COMMS_SEAM, AsyncMock(side_effect=_dispatch))
+
+        resp = await client.post(
+            f"{SUPPORT_URL}/{thread_id}/messages",
+            json={"body": "Здравствуйте"},
+            headers=auth_headers(admin["session_token"]),
+        )
+        assert resp.status_code == 403
+
+    async def test_reply_succeeds_and_stamps_the_admin_as_sender(
+        self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
+    ) -> None:
+        admin = await _make_admin(client, db_session, BAND_MIN + 21)
+        student = await login_user(
+            client, telegram_id=BAND_MIN + 22, first_name="Farah",
+        )
+        thread_id = uuid4()
+        await _seed_support_thread(
+            db_session,
+            client_user_id=UUID(student["user"]["id"]),
+            comms_thread_id=thread_id,
+        )
+
+        sent = {
+            "id": str(uuid4()), "thread_id": str(thread_id),
+            "sender": admin["user"]["id"], "body": "Здравствуйте",
+            "created_at": THREAD_CREATED_AT,
+        }
+        fake = AsyncMock(return_value=sent)
+        monkeypatch.setattr(_COMMS_SEAM, fake)
+
+        resp = await client.post(
+            f"{SUPPORT_URL}/{thread_id}/messages",
+            json={"body": "Здравствуйте"},
+            headers=auth_headers(admin["session_token"]),
+        )
+        assert resp.status_code == 200
+        assert resp.json() == sent
+        assert fake.await_args.kwargs["json"]["sender"] == admin["user"]["id"]
+        assert fake.await_args.kwargs["json"]["body"] == "Здравствуйте"
+
+
+class TestClaimThread:
+    async def test_claim_stamps_the_admin_as_operator(
+        self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
+    ) -> None:
+        admin = await _make_admin(client, db_session, BAND_MIN + 23)
+        student = await login_user(
+            client, telegram_id=BAND_MIN + 24, first_name="Gale",
+        )
+        thread_id = uuid4()
+        await _seed_support_thread(
+            db_session,
+            client_user_id=UUID(student["user"]["id"]),
+            comms_thread_id=thread_id,
+        )
+
+        claimed = {"claimed": True, "thread": _thread_payload(
+            thread_id=str(thread_id), client=student["user"]["id"],
+        ) | {"assignee": admin["user"]["id"]}}
+        fake = AsyncMock(return_value=claimed)
+        monkeypatch.setattr(_COMMS_SEAM, fake)
+
+        resp = await client.post(
+            f"{SUPPORT_URL}/{thread_id}/claim", headers=auth_headers(admin["session_token"]),
+        )
+        assert resp.status_code == 200
+        assert resp.json()["claimed"] is True
+        assert fake.await_args.args[:2] == (
+            "POST", f"/api/v1/threads/{thread_id}/claim",
+        )
+        assert fake.await_args.kwargs["json"] == {"operator": admin["user"]["id"]}
+
+    async def test_claim_404s_for_a_thread_id_with_no_local_pointer(
+        self, client: AsyncClient, db_session: AsyncSession,
+    ) -> None:
+        admin = await _make_admin(client, db_session, BAND_MIN + 25)
+        resp = await client.post(
+            f"{SUPPORT_URL}/{uuid4()}/claim",
+            headers=auth_headers(admin["session_token"]),
+        )
+        assert resp.status_code == 404
