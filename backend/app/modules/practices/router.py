@@ -906,8 +906,12 @@ def _public_page(
             ".mark{width:180px;margin-bottom:8px}"
             ".title{font-size:50px;font-weight:400;letter-spacing:.02em;"
             "margin:0 0 16px}"
+            # pre-line, not the default: callers pass "\n" between the
+            # practice title and its time (see the landing endpoint), and
+            # without this HTML collapses that newline into a space --
+            # title and time ran together on one line.
             ".msg{font-size:18px;color:rgba(76,101,137,.7);margin:0 0 33px;"
-            "max-width:320px;line-height:1.5}"
+            "max-width:320px;line-height:1.5;white-space:pre-line}"
             ".btn{display:inline-flex;align-items:center;justify-content:center;"
             "width:100%;max-width:336px;height:50px;font-size:18px;"
             "text-decoration:none;border-radius:9999px;"
@@ -927,6 +931,26 @@ def _public_page(
             f"{buttons}{hint_html}"
             "</body></html>"
         ),
+        # A narrow CSP for the ONLY HTML this backend serves. Everything the
+        # page needs is enumerated, and nothing else is allowed: no scripts
+        # at all (there are none), styles inline plus Google Fonts, fonts
+        # from gstatic. `form-action 'none'` and `base-uri 'none'` cost
+        # nothing here and remove two classes of injection outright, should
+        # a future edit ever put unescaped text into this markup.
+        #
+        # Scoped to this response rather than set in nginx on purpose: the
+        # SPA needs a different policy, and one policy loose enough for both
+        # protects neither.
+        headers={
+            "Content-Security-Policy": (
+                "default-src 'none'; "
+                "style-src 'unsafe-inline' https://fonts.googleapis.com; "
+                "font-src https://fonts.gstatic.com; "
+                "img-src 'self' data:; "
+                "form-action 'none'; base-uri 'none'"
+            ),
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 
@@ -1067,7 +1091,19 @@ async def public_practice_guest_endpoint(
         return _not_a_link_page()
 
     resolution = await resolve_zoom_entry(practice, None, session)
-    if resolution.kind != ZoomEntryKind.GUEST or resolution.url is None:
+    # The https:// guard matches the two siblings in zoom/service.py that
+    # hand out Zoom URLs (get_host_start_url, get_meeting_recording_link):
+    # a stored value that is not an https URL is treated as absent rather
+    # than redirected to. The value comes from Zoom, so this is
+    # defence-in-depth -- but an inconsistency inside one feature is worse
+    # than no guard at all, because the next reader has to work out which
+    # of the three places is right.
+    usable = (
+        resolution.kind == ZoomEntryKind.GUEST
+        and isinstance(resolution.url, str)
+        and resolution.url.startswith("https://")
+    )
+    if not usable:
         # The landing would not have shown this button in these states; a
         # hand-typed or stale URL can still arrive here.
         return _public_page(
