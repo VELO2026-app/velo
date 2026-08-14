@@ -2,35 +2,17 @@
 // VELO Frontend -- MasterSupportView Screen Tests
 // =============================================================================
 //
-// WHY THIS FILE EXISTS, AND WHY IT ALMOST DIDN'T (probekit-screen-test audit,
-// rank 8): the audit's own mechanical grep found 449 lines and 1 computed()
-// but ZERO store/API imports, called that "unusual", and explicitly deferred
-// ranking it until someone read the file -- "may submit via a different seam
-// the mechanical grep missed."
+// UPDATED PROMPT №712 (owner ruling B): onSubmit no longer stubs -- it opens
+// the caller's support thread (@/api/support::openSupportThread) then
+// delivers the topic + message as its first/next message
+// (::sendSupportMessage). Attachments stay CAPTURED-LOCALLY-ONLY (no
+// upload/storage backend exists, out of that prompt's scope too) -- their
+// tests below are unchanged, nothing about them sends anywhere.
 //
-// READ IN FULL before deciding. VERDICT: the grep's blind spot was a false
-// alarm, not a real seam -- there genuinely is no backend call anywhere in
-// this file. The SFC's own banner (.vue:8-13) says so outright: "There is NO
-// support backend yet... this is a stub of the designed flow." onSubmit()
-// (.vue:197-212) does exactly two things: builds a payload object and
-// `console.info`s it, then flips `submitted.value = true`. No fetch, no
-// @/api/* import (checked: only @/components/*, @/composables/
-// useKeyboardFieldScroll, and vue-router), no non-@/api import that reaches a
-// network boundary. The `support@velo.app` mailto: link is the one real
-// channel, and it needs no test (a browser-native href, nothing to assert).
-//
-// So: NOT an inert stub (there IS real branching -- see below), NOT reachable
-// through a missed seam (there is no seam) -- it sits in a third category the
-// audit's five-signal rubric does not have a bucket for: real CLIENT-ONLY form
-// logic with no backend behind it yet. Tested as exactly that: the submit
-// gate (topic + message, with the «Другое» free-text sub-requirement), the
-// attachment cap/dedup/remove logic, the submitted-state transition, and the
-// stub payload SHAPE (so the day a real POST replaces the console.info, this
-// file already pins the contract it should send).
-//
-// PATTERN: no store, no API mock -- nothing to seam. vue-router mocked for
-// `back`/`push` only (no RouterView, no transitive @/router import: checked,
-// this SFC's only vue-router use is `useRouter()`).
+// PATTERN: no store; API mocked at @/api/support (the two functions the SFC
+// calls), toast mocked at @/composables/useToast (error path only -- success
+// never toasts, it flips to the terminal screen). vue-router mocked for
+// `back`/`push` only.
 //
 // TRAPS PRESENT:
 //  - File input `.files` is read-only on a real HTMLInputElement; set via
@@ -48,7 +30,7 @@
 //    for the back button.
 // =============================================================================
 
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import MasterSupportView from '@/views/master/MasterSupportView.vue'
 
@@ -56,6 +38,18 @@ const back = vi.fn()
 const push = vi.fn()
 vi.mock('vue-router', () => ({
   useRouter: () => ({ back, push }),
+}))
+
+const openSupportThread = vi.fn()
+const sendSupportMessage = vi.fn()
+vi.mock('@/api/support', () => ({
+  openSupportThread: (...args: unknown[]) => openSupportThread(...args),
+  sendSupportMessage: (...args: unknown[]) => sendSupportMessage(...args),
+}))
+
+const toastError = vi.fn()
+vi.mock('@/composables/useToast', () => ({
+  useToast: () => ({ error: toastError, success: vi.fn(), info: vi.fn() }),
 }))
 
 let app: App | null = null
@@ -132,6 +126,32 @@ function pickFiles(files: File[]): void {
 function fileInputValue(): string {
   return host?.querySelector<HTMLInputElement>('.support__file-input')?.value ?? 'MISSING'
 }
+
+beforeEach(() => {
+  openSupportThread.mockReset().mockResolvedValue({
+    id: 'thread-1',
+    client: 'master-1',
+    operator_kind: 'section',
+    operator_value: 'section-1',
+    assignee: null,
+    kind: 'dm',
+    status: 'open',
+    subject_type: null,
+    subject_id: null,
+    title: null,
+    priority: null,
+    last_message_at: null,
+    created_at: '2026-08-14T10:00:00Z',
+  })
+  sendSupportMessage.mockReset().mockResolvedValue({
+    id: 'msg-1',
+    thread_id: 'thread-1',
+    sender: 'master-1',
+    body: 'placeholder',
+    created_at: '2026-08-14T10:00:00Z',
+  })
+  toastError.mockReset()
+})
 
 afterEach(() => {
   app?.unmount()
@@ -259,9 +279,8 @@ describe('MasterSupportView', () => {
     })
   })
 
-  describe('submitting (stub flow В -- no backend, honest about it)', () => {
-    it('logs the future-ready ticket shape and flips to the terminal screen', async () => {
-      const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+  describe('submitting (PROMPT №712: opens the thread, then sends the topic label + message)', () => {
+    it('opens with the topic LABEL, sends the same label, and flips to the terminal screen', async () => {
       mount()
       await flush()
       setTextarea('  Проблема с выводом  ')
@@ -270,19 +289,17 @@ describe('MasterSupportView', () => {
       submitBtn().click()
       await flush()
 
-      expect(info).toHaveBeenCalledWith('[support] stub — no backend yet; future ticket payload:', {
-        topic: 'withdrawal',
-        priority: 'P0',
-        custom_topic: null,
-        message: 'Проблема с выводом', // trimmed
-      })
+      expect(openSupportThread).toHaveBeenCalledWith('Проблема с выводом')
+      expect(sendSupportMessage).toHaveBeenCalledWith(
+        'Проблема с выводом',
+        'Проблема с выводом', // trimmed message text (coincidentally same as this topic's label)
+      )
       expect(text()).toContain('Спасибо за обращение')
       // Header hides on the terminal screen -- no back button on a dead end.
       expect(host?.querySelector('[aria-label="Назад"]')).toBeNull()
     })
 
-    it('an «Другое» submission carries the free text as custom_topic, priority from the catalog', async () => {
-      const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+    it('an «Другое» submission sends the TRIMMED free text as the topic label', async () => {
       mount()
       await flush()
       setTextarea('Сообщение')
@@ -294,12 +311,38 @@ describe('MasterSupportView', () => {
       submitBtn().click()
       await flush()
 
-      expect(info).toHaveBeenCalledWith('[support] stub — no backend yet; future ticket payload:', {
-        topic: 'other',
-        priority: 'P2',
-        custom_topic: 'Хочу добавить йога-нидру', // trimmed
-        message: 'Сообщение',
-      })
+      expect(openSupportThread).toHaveBeenCalledWith('Хочу добавить йога-нидру')
+      expect(sendSupportMessage).toHaveBeenCalledWith('Хочу добавить йога-нидру', 'Сообщение')
+    })
+
+    it('attachments are captured locally only -- nothing about them reaches either API call', async () => {
+      mount()
+      await flush()
+      setTextarea('Сообщение')
+      await flush()
+      pickFiles([file('a.png')])
+      await flush()
+
+      submitBtn().click()
+      await flush()
+
+      expect(openSupportThread).toHaveBeenCalledWith('Проблема с выводом')
+      expect(sendSupportMessage).toHaveBeenCalledWith('Проблема с выводом', 'Сообщение')
+    })
+
+    it('a failed open shows a toast, stays on the form, and never sends a message', async () => {
+      openSupportThread.mockReset().mockRejectedValue(new Error('boom'))
+      mount()
+      await flush()
+      setTextarea('Сообщение')
+      await flush()
+
+      submitBtn().click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalled()
+      expect(sendSupportMessage).not.toHaveBeenCalled()
+      expect(text()).not.toContain('Спасибо за обращение')
     })
 
     it('«На главную» from the terminal screen routes to the master dashboard', async () => {

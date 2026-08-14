@@ -31,14 +31,16 @@
 #      the event must live or die with the domain change it announces.
 # =============================================================================
 
+from typing import Any
 from uuid import UUID
 
 import structlog
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
 from app.core.comms import comms_request
+from app.core.exceptions import NotFoundError
 from app.modules.support.models import SupportThread
 from app.modules.users.models import User
 
@@ -76,13 +78,21 @@ async def get_support_section_id() -> UUID:
 
 
 async def open_support_thread(
-    session: AsyncSession, *, user: User,
+    session: AsyncSession, *, user: User, topic: str | None = None,
 ) -> dict:
     """Open (or return) the caller's one eternal support thread.
 
     Returns the comms thread payload verbatim except for the `created`
     seam detail (mirrors chats/router.py::_open_response -- `created` is
     for this function to act on, not the caller's business).
+
+    `topic` (PROMPT №712, owner ruling B): the form's topic-picker value,
+    OPTIONAL and purely for the admin-group notification's text -- it has
+    no effect on dedup, is not sent to comms at all, and does nothing on a
+    reopen (the notification only fires when `created` is True below). The
+    topic's OTHER, more durable surface is the first message itself --
+    send_support_message prefixes it there, which is what an admin still
+    sees after the creation notification has scrolled away.
     """
     section_id = await get_support_section_id()
 
@@ -153,13 +163,48 @@ async def open_support_thread(
     # creation, not per message" -- a plain re-open of an existing thread
     # never re-notifies.
     if created:
-        await _emit_support_thread_created(session, user)
+        await _emit_support_thread_created(session, user, topic=topic)
 
     return {k: v for k, v in payload.items() if k != "created"}
 
 
+async def send_support_message(
+    session: AsyncSession, *, user: User, topic: str | None, body: str,
+) -> dict[str, Any]:
+    """Deliver one message into the caller's OWN support thread.
+
+    The thread must already exist (the form calls open_support_thread
+    first, on every submit -- cheap, idempotent, matches the chats
+    module's own open-then-send split). No thread_id is accepted from the
+    wire: the caller's thread is resolved from the local pointer, exactly
+    like every other actor field in this codebase.
+
+    `topic` (PROMPT №712): prefixed onto the message text so it survives
+    into what an admin actually reads when they open the thread -- the
+    durable half of "the topic must survive into something an operator
+    can see" (the notification-text half lives in
+    _emit_support_thread_created, above).
+    """
+    pointer = (
+        await session.execute(
+            select(SupportThread).where(
+                SupportThread.client_user_id == user.id
+            )
+        )
+    ).scalar_one_or_none()
+    if pointer is None:
+        raise NotFoundError("Open a support thread before sending a message")
+
+    text = f"[{topic}] {body}" if topic else body
+    return await comms_request(
+        "POST",
+        f"/api/v1/threads/{pointer.comms_thread_id}/messages",
+        json={"sender": str(user.id), "body": text},
+    )
+
+
 async def _emit_support_thread_created(
-    session: AsyncSession, user: User,
+    session: AsyncSession, user: User, *, topic: str | None = None,
 ) -> None:
     """Comms (T-38 support build): support.thread_created to group:admins.
 
@@ -169,6 +214,10 @@ async def _emit_support_thread_created(
     production today. Category-less by design (comms-profile/types.yaml):
     an unclaimed section thread has no assignee and comms notifies nobody
     else, so this broadcast must not be mutable by any single admin.
+
+    `topic`, when given, is the immediate half of "the topic survives into
+    something an operator can see" (PROMPT №712) -- the notification text
+    itself, before anyone has even opened the thread.
     """
     from app.core.events.notify import (
         TARGET_GROUP_ADMINS,
@@ -178,6 +227,7 @@ async def _emit_support_thread_created(
     opener = " ".join(
         part for part in (user.first_name, user.last_name) if part
     ) or "Пользователь"
+    topic_clause = f" (тема: {topic})" if topic else ""
     target_type, target_value = TARGET_GROUP_ADMINS
     await emit_notification(
         session,
@@ -185,10 +235,11 @@ async def _emit_support_thread_created(
         target_type=target_type,
         target_value=target_value,
         title="Новое обращение в поддержку",
-        body=f"{opener} написал(а) в поддержку -- требуется ответ.",
+        body=f"{opener} написал(а) в поддержку{topic_clause} -- требуется ответ.",
         action_data={
             "action": "open_admin_support",
             "params": {"user_id": str(user.id)},
             "opener_name": opener,
+            "topic": topic,
         },
     )

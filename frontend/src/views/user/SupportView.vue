@@ -4,15 +4,18 @@
   User support / contact form, reached from the user profile hub («Поддержка»).
   Mirrors MasterSupportView's structure (topic picker + message + submit) but with
   the USER-facing topic catalog and an INTERNAL priority per topic (P0/P1/P2 — NOT
-  shown to the user; it is our future routing/sort signal).
+  shown to the user, and NOT sent anywhere yet either; see PROMPT №712's own
+  report on why a comms thread has no sortable home for it today).
 
-  HONEST STUB: there is NO support backend yet (no ticket model / endpoint — see
-  VELO-Backend-Tasks.md). Submitting does NOT reach a server; it logs the
-  future-ready payload shape (topic + priority + message) and shows an honestly
-  worded terminal screen that points to the real channel (support@velo.app), WITHOUT
-  claiming the message was delivered to a server. When Zod builds the ticket intake
-  (model with a `priority` column + topic + message + user, routed/sorted by
-  priority), the submit lights up here.
+  WIRED (PROMPT №712, owner ruling B): submitting opens the caller's one eternal
+  support thread (@/api/support::openSupportThread) and delivers the topic label
+  + message as its first (or next) message (::sendSupportMessage) -- this is the
+  messaging module (comms sections), not the `SupportTicket` model
+  VELO-Backend-Tasks.md describes elsewhere (that plan stays Zod's, untouched).
+  ⚠ The terminal screen's copy ("Поддержка в приложении скоро заработает...") is
+  now FALSE -- it was written for the old stub and still says there is no
+  in-app channel. NOT rewritten here on purpose: user-facing wording is the
+  owner's call (PROMPT №712 flagged the exact lines, not touched).
 
   Route: /user/support (name 'user-support').
 -->
@@ -78,6 +81,7 @@
         variant="primary"
         block
         :disabled="!canSubmit"
+        :loading="submitting"
         class="support__submit"
         @click="onSubmit"
       >
@@ -94,8 +98,12 @@ import { VHeader } from '@/components/layout'
 import { VButton, VRadioGroup, VTextarea } from '@/components/ui'
 import { IconSupportChat } from '@/components/icons'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
+import { openSupportThread, sendSupportMessage } from '@/api/support'
+import { useToast } from '@/composables/useToast'
+import { extractApiError } from '@/composables/useApiError'
 
 const router = useRouter()
+const toast = useToast()
 
 // Lift the «Сообщение» textarea above the soft keyboard once it settles (shared M5).
 const { onFieldFocus } = useKeyboardFieldScroll()
@@ -131,22 +139,32 @@ const canSubmit = computed(() => {
 })
 
 const submitted = ref(false)
+const submitting = ref(false)
 
-function onSubmit(): void {
-  if (!canSubmit.value) return
+// PROMPT №712 (owner ruling B): the topic picker stays the entry; submit now
+// opens the caller's one eternal support thread and delivers the topic +
+// message as its first (or next) message -- two calls, same open-then-send
+// split api/chats.ts already uses. `priority` stays INTERNAL-only routing
+// metadata (unchanged from the stub): PROMPT №712 measured that a comms
+// thread has no server-side-sortable field for it, so nothing here sends it
+// anywhere yet -- see that prompt's report for the open question.
+async function onSubmit(): Promise<void> {
+  if (!canSubmit.value || submitting.value) return
   const selected = TOPICS.find((t) => t.value === topic.value)
-  // Honest stub: no support backend yet (→ Zod). We do NOT claim server delivery;
-  // this logs the future-ready ticket shape (topic + INTERNAL priority + message)
-  // that the real POST will send once the ticket intake exists. The live channel
-  // meanwhile is the mailto: link on the form.
-  const payload = {
-    topic: topic.value,
-    priority: selected?.priority ?? 'P2',
-    custom_topic: topic.value === 'other' ? otherText.value.trim() : null,
-    message: message.value.trim(),
+  const topicLabel =
+    topic.value === 'other' ? otherText.value.trim() : (selected?.label ?? topic.value)
+  const text = message.value.trim()
+
+  submitting.value = true
+  try {
+    await openSupportThread(topicLabel)
+    await sendSupportMessage(topicLabel, text)
+    submitted.value = true
+  } catch (e) {
+    toast.error(extractApiError(e, 'Не удалось отправить обращение'))
+  } finally {
+    submitting.value = false
   }
-  console.info('[support] stub — no backend yet; future ticket payload:', payload)
-  submitted.value = true
 }
 
 function goHome(): void {

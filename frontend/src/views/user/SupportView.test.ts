@@ -2,23 +2,17 @@
 // VELO Frontend -- SupportView Screen Tests (probekit-screen-test)
 // =============================================================================
 //
-// 313 lines. PATTERN B (local-ref form) -- confirmed by reading every import:
-// no store, no API seam, no fetch ladder. All state is local refs (topic /
-// otherText / message / submitted, .vue:121-133). The only "ladder" is the
-// FORM -> TERMINAL transition driven by `submitted`.
+// PATTERN B (local-ref form) -- confirmed by reading every import: no store,
+// no fetch ladder. State is local refs (topic / otherText / message /
+// submitted / submitting). The FORM -> TERMINAL transition is driven by
+// `submitted`, now set only after two real API calls resolve (PROMPT №712,
+// owner ruling B): open the caller's support thread, then deliver the topic
+// + message as its first message.
 //
-// External boundaries: vue-router (router.back / router.push) and
-// useKeyboardFieldScroll (@/composables, .vue:96,101), mocked so happy-dom
-// doesn't choke on its viewport-focus logic -- the `onFieldFocus` spy is
-// enough, it is never asserted on (this screen has no keyboard-viewport
-// behaviour of its own to test, that composable owns it). No toast anywhere
-// on this screen -- grepped, confirmed.
-//
-// HONEST STUB (.vue:9-15,135-150): onSubmit builds a payload, `console.info`s
-// it, and flips `submitted = true`. No backend, no network call, no router
-// push on submit. Every submit test below asserts exactly that -- the day
-// Zod wires a real ticket-intake POST, these go red as the changelog (same
-// discipline as EditProfileView's delete-stub tests).
+// External boundaries: vue-router (router.back / router.push),
+// useKeyboardFieldScroll, @/api/support (openSupportThread /
+// sendSupportMessage), @/composables/useToast (the error path only --
+// success never toasts, it flips to the terminal screen instead).
 //
 // DRIVEN THROUGH THE DOM THROUGHOUT -- click the radio, type into the
 // textarea/input, click the button -- never by reaching into topic/otherText/
@@ -45,6 +39,18 @@ vi.mock('vue-router', () => ({
 const onFieldFocus = vi.fn()
 vi.mock('@/composables/useKeyboardFieldScroll', () => ({
   useKeyboardFieldScroll: () => ({ onFieldFocus }),
+}))
+
+const openSupportThread = vi.fn()
+const sendSupportMessage = vi.fn()
+vi.mock('@/api/support', () => ({
+  openSupportThread: (...args: unknown[]) => openSupportThread(...args),
+  sendSupportMessage: (...args: unknown[]) => sendSupportMessage(...args),
+}))
+
+const toastError = vi.fn()
+vi.mock('@/composables/useToast', () => ({
+  useToast: () => ({ error: toastError, success: vi.fn(), info: vi.fn() }),
 }))
 
 // -----------------------------------------------------------------------------
@@ -111,10 +117,29 @@ beforeEach(() => {
   back.mockReset()
   push.mockReset()
   onFieldFocus.mockReset()
-  // Every submit logs via console.info (.vue:148) -- silence it here so
-  // tests that don't care about the payload stay quiet; tests that DO care
-  // re-spy locally (vi.spyOn on top of this still captures every call).
-  vi.spyOn(console, 'info').mockImplementation(() => {})
+  toastError.mockReset()
+  openSupportThread.mockReset().mockResolvedValue({
+    id: 'thread-1',
+    client: 'user-1',
+    operator_kind: 'section',
+    operator_value: 'section-1',
+    assignee: null,
+    kind: 'dm',
+    status: 'open',
+    subject_type: null,
+    subject_id: null,
+    title: null,
+    priority: null,
+    last_message_at: null,
+    created_at: '2026-08-14T10:00:00Z',
+  })
+  sendSupportMessage.mockReset().mockResolvedValue({
+    id: 'msg-1',
+    thread_id: 'thread-1',
+    sender: 'user-1',
+    body: 'placeholder',
+    created_at: '2026-08-14T10:00:00Z',
+  })
 })
 
 afterEach(() => {
@@ -220,37 +245,35 @@ describe('SupportView', () => {
   })
 
   // ===========================================================================
-  describe('payload shape + priority mapping (.vue:137-147), console.info spied', () => {
+  describe('the wiring (.vue: onSubmit) -- opens the thread, then sends the topic label + message', () => {
     it.each([
-      ['payment', 'P1'],
-      ['complaint_master', 'P0'],
-      ['practice', 'P1'],
-      ['technical', 'P2'],
-    ] as const)('topic "%s" logs priority %s, custom_topic null', async (topicValue, priority) => {
-      const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
-      mount()
-      await flush()
+      ['payment', 'Проблема с оплатой / транзакцией'],
+      ['complaint_master', 'Жалоба на мастера'],
+      ['practice', 'Проблема с практикой'],
+      ['technical', 'Технический вопрос'],
+    ] as const)(
+      'topic "%s" opens with its LABEL and sends the same label',
+      async (topicValue, label) => {
+        mount()
+        await flush()
 
-      radioByLabel(TOPIC_LABEL[topicValue]).click()
-      await flush()
-      setValue(messageField(), 'Текст обращения')
-      await flush()
-      submitBtn().click()
-      await flush()
+        radioByLabel(TOPIC_LABEL[topicValue]).click()
+        await flush()
+        setValue(messageField(), 'Текст обращения')
+        await flush()
+        submitBtn().click()
+        await flush()
 
-      expect(infoSpy).toHaveBeenCalledWith(
-        '[support] stub — no backend yet; future ticket payload:',
-        {
-          topic: topicValue,
-          priority,
-          custom_topic: null,
-          message: 'Текст обращения',
-        },
-      )
-    })
+        expect(openSupportThread).toHaveBeenCalledWith(label)
+        expect(sendSupportMessage).toHaveBeenCalledWith(label, 'Текст обращения')
+        // Open happens BEFORE send -- the thread must exist first.
+        expect(openSupportThread.mock.invocationCallOrder[0]).toBeLessThan(
+          sendSupportMessage.mock.invocationCallOrder[0]!,
+        )
+      },
+    )
 
-    it('topic "other": custom_topic is the TRIMMED otherText, priority P2', async () => {
-      const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+    it('topic "other": the TRIMMED otherText is sent as the topic label, not the raw value', async () => {
       mount()
       await flush()
 
@@ -262,19 +285,11 @@ describe('SupportView', () => {
       submitBtn().click()
       await flush()
 
-      expect(infoSpy).toHaveBeenCalledWith(
-        '[support] stub — no backend yet; future ticket payload:',
-        {
-          topic: 'other',
-          priority: 'P2',
-          custom_topic: 'Свой вариант',
-          message: 'Текст обращения',
-        },
-      )
+      expect(openSupportThread).toHaveBeenCalledWith('Свой вариант')
+      expect(sendSupportMessage).toHaveBeenCalledWith('Свой вариант', 'Текст обращения')
     })
 
-    it('message is trimmed before it enters the payload', async () => {
-      const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+    it('message is trimmed before it is sent', async () => {
       mount()
       await flush()
 
@@ -283,14 +298,78 @@ describe('SupportView', () => {
       submitBtn().click()
       await flush()
 
-      const payload = infoSpy.mock.calls[0]?.[1] as { message?: string }
-      expect(payload?.message).toBe('Текст с пробелами')
+      expect(sendSupportMessage.mock.calls[0]?.[1]).toBe('Текст с пробелами')
+    })
+
+    it('a failed open shows a toast, stays on the form, and never sends a message', async () => {
+      openSupportThread.mockReset().mockRejectedValue(new Error('boom'))
+      mount()
+      await flush()
+
+      setValue(messageField(), 'У меня вопрос')
+      await flush()
+      submitBtn().click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalled()
+      expect(sendSupportMessage).not.toHaveBeenCalled()
+      expect(isTerminal()).toBe(false)
+    })
+
+    it('a failed send shows a toast and stays on the form', async () => {
+      sendSupportMessage.mockReset().mockRejectedValue(new Error('boom'))
+      mount()
+      await flush()
+
+      setValue(messageField(), 'У меня вопрос')
+      await flush()
+      submitBtn().click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalled()
+      expect(isTerminal()).toBe(false)
+    })
+
+    it('the submit button shows loading while the calls are in flight', async () => {
+      let resolveOpen!: (v: unknown) => void
+      openSupportThread.mockReset().mockReturnValue(
+        new Promise((resolve) => {
+          resolveOpen = resolve
+        }),
+      )
+      mount()
+      await flush()
+
+      setValue(messageField(), 'У меня вопрос')
+      await flush()
+      submitBtn().click()
+      await flush()
+
+      expect(submitBtn().classList.contains('v-btn--loading')).toBe(true)
+
+      resolveOpen({
+        id: 'thread-1',
+        client: 'user-1',
+        operator_kind: 'section',
+        operator_value: 'section-1',
+        assignee: null,
+        kind: 'dm',
+        status: 'open',
+        subject_type: null,
+        subject_id: null,
+        title: null,
+        priority: null,
+        last_message_at: null,
+        created_at: '2026-08-14T10:00:00Z',
+      })
+      await flush()
+      expect(isTerminal()).toBe(true)
     })
   })
 
   // ===========================================================================
   describe('goHome (.vue:152-154)', () => {
-    it('«На главную» on the terminal screen pushes { name: \'user-dashboard\' }', async () => {
+    it("«На главную» on the terminal screen pushes { name: 'user-dashboard' }", async () => {
       mount()
       await flush()
 

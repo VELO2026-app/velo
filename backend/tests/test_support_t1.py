@@ -1,7 +1,20 @@
 # =============================================================================
 # VELO -- support proxy (B34, T-38)
 # =============================================================================
-# Band 89850-89859.
+# Band 89870-89889.
+#
+# ⚠ NOT 89850-89859 as originally picked (PROMPT №711): the merge that landed
+# the teammate's T-35 work brought in test_zoom_public_link.py, which claims
+# 89840-89859 (own file, see its _TID_MIN/_TID_MAX) -- a genuine NEW collision
+# with both this file's old band AND test_master_groups.py's PROMPT №710
+# relocation (89840-89849), neither of which existed when either side picked
+# its numbers. Re-scanned backend/tests/*.py fresh under PROMPT №712 (script,
+# not memory): 89860-89897 came back with zero literal hits (89898 is a stale
+# comment reference inside test_master_groups.py, read and discounted, not a
+# real id). Took 89870-89889 for headroom; left 89860-89869 free. Moved only
+# THIS file -- test_master_groups.py's own 89840-89849 vs test_zoom_public_
+# link.py's 89840-89859 collision is a SEPARATE, unrequested fix and is
+# reported, not touched, in this prompt's DONE (minimal scope).
 #
 # What is under test:
 #   1. LAZY SECTION RESOLUTION -- resolved via comms exactly once per
@@ -36,7 +49,7 @@ from app.modules.support.models import SupportThread
 from app.modules.users.models import User
 from tests.helpers import auth_headers, fresh_execute, full_cleanup_range, login_user
 
-BAND_MIN, BAND_MAX = 89850, 89859
+BAND_MIN, BAND_MAX = 89870, 89889
 _SECTION_SEAM = "app.modules.support.service.comms_request"
 _LIST_SEAM = "app.modules.support.router.comms_request"
 
@@ -290,6 +303,183 @@ class TestOpenSupportThread:
         await client.post(SUPPORT_URL, headers=auth_headers(bob["session_token"]))
 
         assert len(section_calls) == 1
+
+    async def test_topic_enriches_the_creation_notification(
+        self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
+    ) -> None:
+        """PROMPT №712: the topic must survive into something an operator
+        can see -- the immediate half is the notification text itself."""
+        student = await login_user(
+            client, telegram_id=BAND_MIN + 8, first_name="Student",
+        )
+        monkeypatch.setattr(
+            _SECTION_SEAM,
+            _creation_seam(
+                _section_payload(),
+                _thread_payload(created=True, client=student["user"]["id"]),
+            ),
+        )
+
+        resp = await client.post(
+            SUPPORT_URL,
+            json={"topic": "Жалоба на мастера"},
+            headers=auth_headers(student["session_token"]),
+        )
+        assert resp.status_code == 200
+
+        row = (
+            await fresh_execute(
+                select(OutboxEvent).where(
+                    OutboxEvent.payload["type"].astext
+                    == "support.thread_created"
+                )
+            )
+        ).scalar_one()
+        assert "Жалоба на мастера" in row.payload["body"]
+        assert row.payload["action_data"]["topic"] == "Жалоба на мастера"
+
+    async def test_topic_is_optional_and_reopen_never_reenriches(
+        self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
+    ) -> None:
+        """No topic on open -> no crash, no topic clause; and a reopen
+        (created=False) with a DIFFERENT topic must not emit a second,
+        re-enriched notification -- the gate is `created`, not the
+        presence of a topic."""
+        student = await login_user(
+            client, telegram_id=BAND_MIN + 9, first_name="Student",
+        )
+        headers = auth_headers(student["session_token"])
+
+        monkeypatch.setattr(
+            _SECTION_SEAM,
+            _creation_seam(
+                _section_payload(),
+                _thread_payload(created=True, client=student["user"]["id"]),
+            ),
+        )
+        first = await client.post(SUPPORT_URL, headers=headers)
+        assert first.status_code == 200
+
+        monkeypatch.setattr(
+            _SECTION_SEAM,
+            _creation_seam(
+                _section_payload(),
+                _thread_payload(created=False, client=student["user"]["id"]),
+            ),
+        )
+        second = await client.post(
+            SUPPORT_URL,
+            json={"topic": "Другое"},
+            headers=headers,
+        )
+        assert second.status_code == 200
+
+        rows = (
+            await fresh_execute(
+                select(OutboxEvent).where(
+                    OutboxEvent.payload["type"].astext
+                    == "support.thread_created"
+                )
+            )
+        ).scalars().all()
+        assert len(rows) == 1
+        assert "Другое" not in rows[0].payload["body"]
+
+
+# ---------------------------------------------------------------------------
+# Sending a message
+# ---------------------------------------------------------------------------
+
+
+class TestSendMessage:
+    async def test_prefixes_topic_and_delivers_to_the_open_thread(
+        self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
+    ) -> None:
+        student = await login_user(
+            client, telegram_id=BAND_MIN + 10, first_name="Student",
+        )
+        headers = auth_headers(student["session_token"])
+
+        monkeypatch.setattr(
+            _SECTION_SEAM,
+            _creation_seam(
+                _section_payload(),
+                _thread_payload(created=True, client=student["user"]["id"]),
+            ),
+        )
+        opened = await client.post(SUPPORT_URL, headers=headers)
+        assert opened.status_code == 200
+
+        fake_message = AsyncMock(
+            return_value={
+                "id": str(uuid4()),
+                "thread_id": THREAD_ID,
+                "sender": student["user"]["id"],
+                "body": "[Технический вопрос] It won't load",
+                "created_at": THREAD_CREATED_AT,
+            }
+        )
+        monkeypatch.setattr(_SECTION_SEAM, fake_message)
+
+        resp = await client.post(
+            f"{SUPPORT_URL}/messages",
+            json={"topic": "Технический вопрос", "body": "It won't load"},
+            headers=headers,
+        )
+        assert resp.status_code == 200
+
+        call = fake_message.await_args
+        assert call.args[:2] == ("POST", f"/api/v1/threads/{THREAD_ID}/messages")
+        assert call.kwargs["json"]["sender"] == student["user"]["id"]
+        assert call.kwargs["json"]["body"] == "[Технический вопрос] It won't load"
+
+    async def test_without_an_open_thread_is_404(
+        self, client: AsyncClient, db_session: AsyncSession,
+    ) -> None:
+        student = await login_user(
+            client, telegram_id=BAND_MIN + 11, first_name="Student",
+        )
+        resp = await client.post(
+            f"{SUPPORT_URL}/messages",
+            json={"body": "Hello?"},
+            headers=auth_headers(student["session_token"]),
+        )
+        assert resp.status_code == 404
+
+    async def test_no_topic_sends_the_body_unprefixed(
+        self, client: AsyncClient, db_session: AsyncSession, monkeypatch,
+    ) -> None:
+        student = await login_user(
+            client, telegram_id=BAND_MIN + 12, first_name="Student",
+        )
+        headers = auth_headers(student["session_token"])
+
+        monkeypatch.setattr(
+            _SECTION_SEAM,
+            _creation_seam(
+                _section_payload(),
+                _thread_payload(created=True, client=student["user"]["id"]),
+            ),
+        )
+        await client.post(SUPPORT_URL, headers=headers)
+
+        fake_message = AsyncMock(
+            return_value={
+                "id": str(uuid4()),
+                "thread_id": THREAD_ID,
+                "sender": student["user"]["id"],
+                "body": "just a question",
+                "created_at": THREAD_CREATED_AT,
+            }
+        )
+        monkeypatch.setattr(_SECTION_SEAM, fake_message)
+
+        await client.post(
+            f"{SUPPORT_URL}/messages",
+            json={"body": "just a question"},
+            headers=headers,
+        )
+        assert fake_message.await_args.kwargs["json"]["body"] == "just a question"
 
 
 # ---------------------------------------------------------------------------
