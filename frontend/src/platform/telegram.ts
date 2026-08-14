@@ -6,7 +6,7 @@
 // If CDN is blocked (VPN, proxy, downtime), standalone mode still works.
 //
 // TD-F01: added getStartParam() -- reads WebApp.initDataUnsafe.start_param
-// for deep link handling (open_practice__{uuid}).
+// for deep link handling (open_practice__{uuid}, zoom__{code}).
 // =============================================================================
 
 import type { Platform } from './types'

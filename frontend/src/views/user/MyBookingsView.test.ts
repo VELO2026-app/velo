@@ -94,7 +94,6 @@ function booking(
       is_free: true,
       price_cents: 0,
       currency: 'RUB',
-      zoom_link: null,
       ...practice,
     } as BookingWithPracticeResponse['practice'],
   }

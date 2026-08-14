@@ -33,6 +33,7 @@ import type {
   PaginatedReviewsResponse,
   AudiencePreviewRequest,
   AudiencePreviewResponse,
+  ZoomEntryResolveResponse,
 } from '@/api/types'
 
 // ============================================================================
@@ -186,6 +187,30 @@ export function createZoomStartTicket(practiceId: string): Promise<{ ticket: str
  */
 export function retryZoomMeeting(practiceId: string): Promise<PracticeResponse> {
   return api.post<PracticeResponse>(`/api/v1/practices/${practiceId}/zoom/retry`)
+}
+
+/**
+ * T-35: ask the SERVER how the current user enters this practice right now.
+ *
+ * The answer -- personal link, guest link, host, or an honest waiting/failed/
+ * cancelled state -- is a decision, and it deliberately does not live here.
+ * It used to: utils/zoomLink.ts chose between a personal and a shared link,
+ * which made correctness a rule four entry points had to remember. This
+ * endpoint is the same choice made where it can be made correctly, by the
+ * only party that knows whether this person holds a booking attendance will
+ * be written for.
+ *
+ * Keyed by practice id, not by the public /z/{code} code: this screen is also
+ * reached by an ordinary tap from a dashboard, where no code exists.
+ *
+ * 404 when the practice does not exist or is draft/deleted -- a well-formed
+ * deep link naming a deleted practice lands exactly here, and the caller must
+ * render an honest error rather than an empty screen.
+ */
+export function resolveZoomEntry(practiceId: string): Promise<ZoomEntryResolveResponse> {
+  return api.get<ZoomEntryResolveResponse>(
+    `/api/v1/practices/${practiceId}/zoom/resolve`,
+  )
 }
 
 /**

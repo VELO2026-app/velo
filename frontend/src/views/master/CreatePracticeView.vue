@@ -10,7 +10,13 @@
     УЧАСТНИКИ   -- max_participants (null = unlimited)
     ЦЕНА        -- is_free toggle; if paid: price_cents
     ОПИСАНИЕ    -- description, what_to_prepare, contraindications (optional)
-    ПОДКЛЮЧЕНИЕ -- zoom_link (optional)
+
+  T-35: the ПОДКЛЮЧЕНИЕ section is GONE. There is no manual Zoom link to
+  enter any more -- attendance was never recorded for anyone who joined
+  through one, so it was a second way past the very thing the Zoom
+  integration exists to measure. If meeting creation fails, the answer is the
+  retry (master dashboard / practice screen), not a link that breaks
+  attendance.
 
   Submit: POST /api/v1/practices (status defaults to 'draft' in backend).
   On success -> show toast + navigate to master-practices + refreshMyPractices().
@@ -375,30 +381,6 @@
         </div>
       </div>
 
-      <!-- ================================================================
-           Подключение (T21-1, PROMPT №541, owner decision D1): the backend
-           ALWAYS creates a real Zoom meeting automatically on publish -- this
-           field is now an EMERGENCY fallback only (Zoom's daily creation quota
-           can fail it), not the primary link. Kept because a master must
-           never be left with no way to run the session; the honest label
-           says what using it costs.
-           ================================================================ -->
-      <div class="create-practice__section">
-        <h2 class="velo-section-title">Подключение</h2>
-        <p class="create-practice__hint">
-          Ссылка на Zoom создаётся автоматически. Указывайте свою только как запасной вариант —
-          посещение по ней не засчитается автоматически.
-        </p>
-
-        <div class="create-practice__railed">
-          <VInput
-            v-model="form.zoom_link"
-            placeholder="Запасная ссылка на Zoom"
-            @focus="onFieldFocus"
-          />
-        </div>
-      </div>
-
       <!-- Submit -->
       <VButton variant="primary" block size="lg" :loading="submitting" @click="submit">
         Создать практику
@@ -628,8 +610,6 @@ const form = reactive({
   description: '',
   what_to_prepare: '',
   contraindications: '',
-  // «Подключение» — ручной ввод Zoom-ссылки (Q3=А); пусто → null на submit.
-  zoom_link: '',
 })
 
 // -- Validation errors --
@@ -664,7 +644,7 @@ const errors = reactive({
 // group of one). Within a group the ROOT (parent_practice_id === null) is
 // preferred when present. MEASURED, not assumed: series_service.py's
 // _build_child_occurrence copies title, description, what_to_prepare,
-// contraindications, duration_minutes, max_participants, zoom_link,
+// contraindications, duration_minutes, max_participants,
 // is_free, price_cents, currency and the full taxonomy (direction,
 // difficulty, style) VERBATIM from the root to every child at generation
 // time (no per-child override of any of these anywhere in that function) --
@@ -812,7 +792,6 @@ function isMeaningfulDraft(d: DraftShape | null): boolean {
     s(d.description) ||
     s(d.what_to_prepare) ||
     s(d.contraindications) ||
-    s(d.zoom_link) ||
     d.is_recurring,
   )
 }
@@ -1041,8 +1020,6 @@ async function submit(): Promise<void> {
       duration_minutes: parseInt(form.duration_minutes, 10),
       timezone: form.timezone,
       max_participants: form.max_participants_raw ? parseInt(form.max_participants_raw, 10) : null,
-      // «Подключение» — ручная Zoom-ссылка; пусто → null (бэк сгенерит, → Зоду).
-      zoom_link: form.zoom_link.trim() || null,
       is_free: form.is_free,
       price_cents: 0,
       currency: 'eur',

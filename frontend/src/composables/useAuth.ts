@@ -58,14 +58,56 @@ export const pendingDeepLink = ref<{ name: string; params?: Record<string, strin
 /** Timeout for waitUntilReady() in milliseconds (P-3). */
 const READY_TIMEOUT_MS = 10_000
 
+/** T-35: the 22-character public practice code, back into a UUID.
+ *
+ * SECOND COPY, BY DESIGN. The authoritative implementation is
+ * decode_practice_code in backend/app/modules/zoom/service.py. Two copies
+ * exist because the deep-link route takes a UUID path parameter, so the code
+ * must be decoded HERE, before a route can be built -- the split follows the
+ * language boundary, not forgetfulness. Sending the code to an endpoint just
+ * to have it decoded would not remove the copy; it would add a network round
+ * trip to a pure function.
+ *
+ * BOTH SIDES MUST AGREE ON GARBAGE, not merely on valid input: wrong length,
+ * wrong charset and empty all mean "not a route" on both. What this side
+ * CANNOT know is whether a well-formed code names a practice that still
+ * exists -- there is no database here. Such a link routes normally and the
+ * resolve call on the target screen answers 404, which PracticeLiveView
+ * renders as an honest error.
+ */
+function decodePracticeCode(code: string): string | null {
+  if (code.length !== 22) return null
+  if (!/^[A-Za-z0-9_-]{22}$/.test(code)) return null
+  try {
+    const binary = atob(code.replace(/-/g, '+').replace(/_/g, '/') + '==')
+    if (binary.length !== 16) return null
+    const hex = Array.from(binary, (ch) => ch.charCodeAt(0).toString(16).padStart(2, '0')).join('')
+    return (
+      `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-` +
+      `${hex.slice(16, 20)}-${hex.slice(20)}`
+    )
+  } catch {
+    return null
+  }
+}
+
 /**
  * Parse the Telegram startapp parameter into a router location.
  * Returns null if the parameter is absent or unrecognized.
  *
  * Supported formats:
  *   open_practice__{uuid}       -> { name: 'practice-detail', params: { id } }
+ *   zoom__{code}                -> { name: 'practice-live', params: { practiceId } } (T-35)
  *   master_onboarding__{token}  -> { name: 'master-invite', params: { token } }
  *   group_invite__{token}       -> { name: 'group-join', params: { token } } (P4, PROMPT №593)
+ *
+ * T-35: zoom__ is ADDED, open_practice__ is NOT replaced. They are two
+ * different actions, not two formats for one: open_practice__ means "show me
+ * the practice card" and is the live contract of seven notification emitters
+ * (core/events/reminders.py, bookings/service.py, cancel_service.py,
+ * practices/service.py, waitlist/service.py), while zoom__ means "let me into
+ * the Zoom meeting" and lands on the screen that can do that. Removing
+ * open_practice__ would break the button in every notification already sent.
  */
 export function parseStartParam(
   startParam: string | null,
@@ -75,6 +117,21 @@ export function parseStartParam(
   const practiceMatch = startParam.match(/^open_practice__([0-9a-f-]{36})$/)
   if (practiceMatch?.[1]) {
     return { name: 'practice-detail', params: { id: practiceMatch[1] } }
+  }
+
+  // T-35: the public practice code, the same 22 characters that appear in
+  // {PUBLIC_LINK_BASE}/z/{code}. One code, two places -- the landing page's
+  // "Открыть VELO" button carries it straight through as startapp=zoom__<22>
+  // (28 characters against Telegram's 64 limit), so a person who clicked a
+  // channel link arrives here already pointed at the right practice.
+  const zoomMatch = startParam.match(/^zoom__([A-Za-z0-9_-]{22})$/)
+  if (zoomMatch?.[1]) {
+    const practiceId = decodePracticeCode(zoomMatch[1])
+    // A code of the right shape that does not decode is not a route.
+    if (practiceId) {
+      return { name: 'practice-live', params: { practiceId } }
+    }
+    return null
   }
 
   // Batch-INVITE (№258): one-time master invite link issued by an admin.

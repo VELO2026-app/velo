@@ -145,7 +145,6 @@ function practice(overrides: Partial<PracticeResponse> = {}): PracticeResponse {
     timezone: 'UTC',
     max_participants: 10,
     current_participants: 3,
-    zoom_link: null,
     parent_practice_id: null,
     is_free: false,
     price_cents: 2500,
@@ -356,12 +355,11 @@ beforeEach(() => {
   })
 })
 
-// TEMPORARY (T24-38, PROMPT №642/643): mirrors the view's own local
-// PracticeWithSharedLink extension (MasterPracticeDetailView.vue) -- delete
-// alongside it after the next `make gen-types` regen, once zoom_shared_
-// join_url is a real field on PracticeResponse.
-function withSharedLink(p: PracticeResponse, url: string | null): PracticeResponse {
-  return { ...p, zoom_shared_join_url: url } as PracticeResponse
+// T-35: the view's local PracticeWithSharedLink extension is gone -- the
+// field it stood in for is native on PracticeResponse after the T-35 regen,
+// and it is OUR link now (zoom_public_link), never a raw Zoom URL.
+function withPublicLink(p: PracticeResponse, url: string | null): PracticeResponse {
+  return { ...p, zoom_public_link: url }
 }
 
 let insightsFixture: PracticeInsightsResponse | null = null
@@ -594,44 +592,39 @@ describe('MasterPracticeDetailView', () => {
     })
   })
 
-  // T24-38 (PROMPT №642/643): the shared, registration-free Zoom link. Risk
-  // is not "wrong value" -- get_shared_join_url is owner-gated server-side
-  // (practices/service.py) and the value is fetched from a real API
-  // response either way -- it is "the control appears when it should not
-  // (every pre-existing practice, forever, since the migration backfills
-  // nothing)" and "the copy button silently does nothing on failure". Both
-  // are asserted directly below, plus the success path so a future refactor
-  // of onCopySharedLink cannot regress the URL or the toast without a test
-  // noticing.
-  describe('upcoming hub: T24-38 shared guest link', () => {
-    it('is ABSENT when zoom_shared_join_url is null -- the state every practice is in today', async () => {
-      // practice() does not set the field at all, same as a real not-yet-
-      // regenerated PracticeResponse or a pre-migration row.
+  // T-35: the master copies OUR link, never Zoom's. THE RISK THIS PINS is
+  // not "wrong value" but "the raw Zoom URL comes back": handing a master a
+  // guest link to paste into a channel is what produced NO_SHOW for booked
+  // students who clicked it, so the assertion below is on the exact string
+  // reaching the clipboard. Plus the two states around it -- absent when the
+  // server sent no link, and an honest toast when the clipboard refuses.
+  describe('upcoming hub: T-35 public practice link', () => {
+    it('is ABSENT when the server sent no public link (a non-owner response, or a practice that has none)', async () => {
       mount()
       await flush()
 
       expect(host?.querySelector('.pd-shared-link')).toBeNull()
-      expect(text()).not.toContain('Ссылка для гостей без входа в приложение')
+      expect(text()).not.toContain('Ссылка на практику')
     })
 
-    it('RENDERS the label and Копировать button when the backend has minted a link', async () => {
+    it('RENDERS the label and Копировать button when the server sent our link', async () => {
       vi.mocked(practicesApi.getPractice).mockResolvedValue(
-        withSharedLink(practice(), 'https://zoom.us/w/stub123?tk=abc'),
+        withPublicLink(practice(), 'https://velo.link/z/EREREStERERM0RETURVVVQ'),
       )
       mount()
       await flush()
 
       expect(host?.querySelector('.pd-shared-link')).not.toBeNull()
-      expect(text()).toContain('Ссылка для гостей без входа в приложение')
+      expect(text()).toContain('Ссылка на практику')
       const copyBtn = Array.from(host?.querySelectorAll<HTMLElement>('button') ?? []).find(
         (b) => b.textContent?.trim() === 'Копировать',
       )
       expect(copyBtn).toBeDefined()
     })
 
-    it('copying writes the EXACT shared url to the clipboard and toasts success', async () => {
+    it('copying writes OUR link to the clipboard -- never a zoom.us URL, which is the whole point of the wrapper', async () => {
       vi.mocked(practicesApi.getPractice).mockResolvedValue(
-        withSharedLink(practice(), 'https://zoom.us/w/stub123?tk=abc'),
+        withPublicLink(practice(), 'https://velo.link/z/EREREStERERM0RETURVVVQ'),
       )
       mount()
       await flush()
@@ -642,7 +635,8 @@ describe('MasterPracticeDetailView', () => {
       copyBtn?.click()
       await flush()
 
-      expect(writeText).toHaveBeenCalledWith('https://zoom.us/w/stub123?tk=abc')
+      expect(writeText).toHaveBeenCalledWith('https://velo.link/z/EREREStERERM0RETURVVVQ')
+      expect(writeText).not.toHaveBeenCalledWith(expect.stringContaining('zoom.us'))
       expect(toastSuccess).toHaveBeenCalledWith('Ссылка скопирована')
       expect(toastError).not.toHaveBeenCalled()
     })
@@ -650,7 +644,7 @@ describe('MasterPracticeDetailView', () => {
     it('a REJECTED clipboard write surfaces the error toast, not a silent no-op', async () => {
       writeText.mockRejectedValue(new Error('clipboard denied'))
       vi.mocked(practicesApi.getPractice).mockResolvedValue(
-        withSharedLink(practice(), 'https://zoom.us/w/stub123?tk=abc'),
+        withPublicLink(practice(), 'https://velo.link/z/EREREStERERM0RETURVVVQ'),
       )
       mount()
       await flush()

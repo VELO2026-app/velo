@@ -120,10 +120,10 @@
 
           <!-- Action buttons (outside the card, per Figma) -->
           <div class="dashboard__practice-actions">
-            <!-- R1 (№263): honest state — a null link (pending rung) disables
-                 the button rather than reading as broken. T21-1 (PROMPT №541):
-                 D3 ladder -- own registrant link first, else the manual
-                 fallback VISIBLY marked (attendance not counted, D1). -->
+            <!-- R1 (№263): honest state — a null link disables the button
+                 rather than reading as broken. T-35: there is nothing left to
+                 choose between here -- the manual fallback is gone, so this is
+                 the person's OWN registrant link or an honest wait. -->
             <VButton
               variant="secondary"
               block
@@ -141,13 +141,6 @@
               Check-in
             </VButton>
           </div>
-          <VBadge
-            v-if="zoomLinkFor(b).kind === 'manual'"
-            variant="warning"
-            class="dashboard__zoom-note"
-          >
-            Ссылка от мастера — посещение не засчитается автоматически
-          </VBadge>
           <!-- A4 V2 (PROMPT №572): honest permanent-failure state, distinct
                from "still preparing" -- see PracticeLiveView's identical
                badge for the full rationale. -->
@@ -362,15 +355,19 @@ function practiceTitle(b: BookingWithPracticeResponse): string {
 }
 
 /**
- * Zoom button — D3 ladder (T21-1, PROMPT №541): the booking's own registrant
- * link first, else the manual practice.zoom_link visibly marked (attendance
- * not counted), else disabled ("pending"). No per-click GET needed -- both
- * rungs already come with the booking from GET /bookings/me(/upcoming).
+ * Zoom button — the booking's own registrant link, or an honest disabled
+ * state. No per-click round trip: the link already arrives with the booking
+ * from GET /bookings/me(/upcoming).
+ *
+ * T-35: this list does NOT call the resolve endpoint. It does not need to --
+ * every row here belongs to a live booking of this very user, so the only
+ * answer the server could give is the personal link this payload already
+ * carries. The resolve endpoint exists for the single-practice screen, where
+ * the caller may hold no booking at all.
  */
 function zoomLinkFor(b: BookingWithPracticeResponse): ZoomLinkResolution {
   return resolveZoomLink(
     b.zoom_registrant_join_url,
-    b.practice.zoom_link,
     b.practice.zoom_meeting_status,
   )
 }
@@ -381,7 +378,7 @@ function onZoomClick(b: BookingWithPracticeResponse): void {
     platform.openLink(resolved.url)
   } else {
     // Backstop only — the button is disabled in this state (R1).
-    toast.info('Ссылка пока не добавлена мастером')
+    toast.info('Ссылка ещё готовится')
   }
 }
 

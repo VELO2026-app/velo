@@ -158,7 +158,6 @@ function practice(overrides: Partial<PracticeResponse> = {}): PracticeResponse {
     currency: 'EUR',
     max_participants: 10,
     current_participants: 3,
-    zoom_link: null,
     ...overrides,
   } as PracticeResponse
 }
@@ -203,7 +202,6 @@ function booking(
       is_free: false,
       price_cents: 2500,
       currency: 'EUR',
-      zoom_link: null,
       ...nested,
     },
   } as BookingWithPracticeResponse

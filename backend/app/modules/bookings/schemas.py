@@ -115,9 +115,11 @@ class BookingWithPracticeResponse(BaseModel):
     # never anyone else's -- these two endpoints (GET /me, GET /me/upcoming)
     # are already hard-scoped to Booking.user_id == the requesting user, so
     # "this booking" and "this user's own booking" are the same thing here.
-    # None whenever the M-3 gate would also null zoom_link (not confirmed/
-    # attended yet), or when create_registrant_for_booking hasn't succeeded
-    # yet (best-effort, create_failed -- bookings/service.py:311-312).
+    # None when the M-3 gate does not open (booking not confirmed/attended
+    # yet), or when create_registrant_for_booking hasn't succeeded yet
+    # (best-effort, create_failed -- bookings/service.py:311-312). T-35: this
+    # is now the ONLY Zoom URL on this response -- the manual zoom_link the
+    # same gate used to cover no longer exists.
     zoom_registrant_join_url: str | None = None
 
     model_config = {"from_attributes": True}

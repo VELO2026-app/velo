@@ -17,18 +17,34 @@
         "Покинуть практику" -- leave (sets left_at) + back to dashboard
 
   Data:
-    - practicesStore.fetchPractice(practiceId) -> zoom_link (fallback), title, master_name, status
-    - bookingsStore -> the user's booking (booking.id, joined_at, zoom_registrant_join_url)
+    - practicesStore.fetchPractice(practiceId) -> title, master_name, status
+    - bookingsStore -> the user's booking (booking.id, joined_at)
+    - resolveZoomEntry(practiceId) -> HOW THIS USER ENTERS (T-35)
 
   Backend (Phase 5.4, ready):
     POST /bookings/{id}/join   -- confirmed + scheduled/live, 409 if already joined
     POST /bookings/{id}/leave  -- requires joined_at, 400 if not joined
 
-  Zoom link (T21-1, PROMPT №541): resolveZoomLink() ladder -- the booking's
-  own registrant link first, else the manual practice.zoom_link visibly
-  marked (attendance not counted), else "Ссылка готовится". Security
-  (AUDIT-0520-02, now inside resolveZoomLink): only an https:// URL is ever
-  opened, on either rung.
+  Zoom entry (T-35): this screen no longer CHOOSES a link. It asks the server
+  (GET /practices/{id}/zoom/resolve) and renders the answer:
+
+    personal  -- the user's own registrant link; attendance is recorded.
+    guest     -- no live booking, so nothing to record; the shared link. url
+                 may be null (the guest registrant was never minted) -- an
+                 honest line, not a dead button.
+    host      -- the practice's own master, arriving by his own link. url is
+                 always null: he starts through the existing ticket flow.
+    pending   -- a live booking exists but no usable link yet (Zoom does not
+                 always return join_url on create). NEVER downgraded to a
+                 guest link: joining as an unmatchable guest with a confirmed
+                 booking is exactly what produces a false NO_SHOW.
+    failed    -- meeting creation permanently failed.
+    cancelled -- the practice is cancelled.
+
+  This screen is also the DEEP LINK target (startapp=zoom__<22>). A code of
+  valid shape can name a practice that no longer exists; the client cannot
+  know that locally, so the resolve call 404s and this screen shows an honest
+  error instead of an empty state.
 
   Route: /user/practice-live/:practiceId
 -->
@@ -59,24 +75,46 @@
 
     <!-- Actions -->
     <div class="live__actions">
-      <!-- N1 (PROMPT №587, recon №586): no booking for THIS practice at all --
-           canJoin (below) already permanently disables "Войти" in this case
-           (not a security hole: the backend also fail-closes the zoom_link),
-           but a disabled button with no explanation was a UX dead end. An
-           honest inline state instead -- no auto-redirect, no surprise
-           navigation. -->
+      <!-- T-35: a well-formed deep link can name a practice that no longer
+           exists -- the client cannot tell locally (it has no database), so
+           the resolve call 404s and lands here. An honest error, never an
+           empty screen. -->
       <VEmptyState
-        v-if="!myBooking"
+        v-if="resolveFailed"
         icon="warning"
-        title="Вы не записаны на это занятие"
-        description="Чтобы войти, сначала забронируйте практику"
+        title="Практика не найдена"
+        description="Возможно, её удалили или ссылка скопирована не полностью"
       />
+
+      <!-- T-35: the master arriving by his OWN public link. url is null by
+           design here -- he starts as host through the ticket flow, which
+           lives on his own screens; sending him in as a guest would leave his
+           meeting waiting for a host who is standing inside it. -->
+      <VEmptyState
+        v-else-if="zoomEntry?.kind === 'host'"
+        icon="calendar"
+        title="Это ваша практика"
+        description="Начните встречу с экрана мастера — там кнопка «Начать»"
+      />
+
+      <VEmptyState
+        v-else-if="zoomEntry?.kind === 'cancelled'"
+        icon="warning"
+        title="Практика отменена"
+        description="Вход в неё больше не откроется"
+      />
+
       <template v-else>
-        <!-- D3 ladder (PROMPT №541): the manual-link state must be visibly
-             distinct from a real personal link -- silent fall-through is the
-             defect being fixed, so this badge is never optional decoration. -->
-        <VBadge v-if="zoomLink.kind === 'manual'" variant="warning" class="live__zoom-note">
-          Ссылка от мастера — посещение не засчитается автоматически
+        <!-- T-35: no live booking -> the guest link. Attendance writes nothing
+             for this person either way, so nothing is lost by it -- and
+             anyone who DOES hold a live booking gets 'pending' instead, never
+             this. -->
+        <VBadge
+          v-if="zoomEntry?.kind === 'guest'"
+          variant="warning"
+          class="live__zoom-note"
+        >
+          Вы не записаны — вход гостем, посещение не засчитается
         </VBadge>
 
         <!-- A4 V2 (PROMPT №572): honest permanent-failure state, distinct from
@@ -84,8 +122,23 @@
              identical "Ссылка готовится" spinner forever. A participant has
              no retry action (only the master does, MasterDashboardView) --
              this just tells the truth instead of hiding it. -->
-        <VBadge v-if="zoomLink.kind === 'failed'" variant="error" class="live__zoom-note">
+        <VBadge
+          v-if="zoomEntry?.kind === 'failed'"
+          variant="error"
+          class="live__zoom-note"
+        >
           Не удалось создать встречу — обратитесь к мастеру
+        </VBadge>
+
+        <!-- T-35: 'guest' with no url is the minting miss
+             (ensure_shared_registrant is best-effort). NOT 'failed': the
+             meeting exists, only the guest seat in it does not. -->
+        <VBadge
+          v-if="zoomEntry?.kind === 'guest' && !zoomEntry?.url"
+          variant="error"
+          class="live__zoom-note"
+        >
+          Гостевой вход сейчас недоступен
         </VBadge>
 
         <VButton
@@ -96,8 +149,8 @@
           :loading="joining"
           @click="onEnter"
         >
-          <template v-if="zoomLink.kind === 'failed'">Ссылка недоступна</template>
-          <template v-else-if="zoomLink.kind === 'pending'">Ссылка готовится</template>
+          <template v-if="zoomEntry?.kind === 'failed'">Ссылка недоступна</template>
+          <template v-else-if="zoomEntry?.kind === 'pending'">Ссылка готовится</template>
           <template v-else>Войти</template>
         </VButton>
       </template>
@@ -125,7 +178,8 @@ import { useToast } from '@/composables/useToast'
 import { platform } from '@/platform'
 import { VButton, VBackButton, VCard, VBadge, VEmptyState } from '@/components/ui'
 import PracticePlaceholder from '@/components/shared/PracticePlaceholder.vue'
-import { resolveZoomLink } from '@/utils/zoomLink'
+import { resolveZoomEntry } from '@/api/practices'
+import type { ZoomEntryResolveResponse } from '@/api/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -149,26 +203,24 @@ const myBooking = computed(() =>
 const alreadyCheckedIn = computed(() => !!myBooking.value?.has_checkin)
 
 /**
- * D3 ladder (PROMPT №541): the booking's own registrant link first, the
- * manual practice.zoom_link only as a visibly-marked fallback, otherwise
- * "being prepared" -- or, since A4 V2 (PROMPT №572), the honest "failed"
- * state when practice.zoom_meeting_status is create_failed. Never a silent
- * fall-through (AUDIT-0520-02's https guard is now inside resolveZoomLink
- * for both rungs).
+ * T-35: the server's answer for THIS user on THIS practice. null until the
+ * resolve call returns; resolveFailed when it 404s (no such practice, or
+ * draft/deleted -- reachable from a stale deep link).
+ *
+ * The choice is deliberately NOT made here. It used to be: resolveZoomLink()
+ * picked between a personal link and a manual one, which made correctness a
+ * rule this file had to keep. utils/zoomLink.ts still exists for list views
+ * that already hold the personal link in their payload, but it no longer
+ * chooses between two links -- there is only one.
  */
-const zoomLink = computed(() =>
-  resolveZoomLink(
-    myBooking.value?.zoom_registrant_join_url,
-    practice.value?.zoom_link,
-    practice.value?.zoom_meeting_status,
-  ),
-)
+const zoomEntry = ref<ZoomEntryResolveResponse | null>(null)
+const resolveFailed = ref(false)
 
-/** "Войти" is enabled only with a booking and a usable link (neither
- * pending nor permanently failed). */
-const canJoin = computed(
-  () => !!myBooking.value && zoomLink.value.kind !== 'pending' && zoomLink.value.kind !== 'failed',
-)
+/** "Войти" is enabled only when the server handed us a URL to open. That is
+ * true for 'personal' and for 'guest' with a minted link, and false for
+ * 'pending' / 'failed' / 'host' / a guest whose link was never minted -- so
+ * the button cannot open something that does not exist. */
+const canJoin = computed(() => !!zoomEntry.value?.url)
 
 // -- Actions --
 
@@ -177,12 +229,12 @@ const canJoin = computed(
  * A 409 "Already joined" is treated as a no-op -- we still open Zoom.
  */
 async function onEnter(): Promise<void> {
-  if (zoomLink.value.kind === 'pending' || !zoomLink.value.url) return
+  if (!zoomEntry.value?.url) return
   if (joining.value) return
 
   // Capture the link now: the guard above narrows it to a string, but the await
-  // below resets that narrowing (zoomLink is a computed ref).
-  const zoomUrl = zoomLink.value.url
+  // below resets that narrowing (zoomEntry is a ref).
+  const zoomUrl = zoomEntry.value.url
   joining.value = true
   try {
     const booking = myBooking.value
@@ -238,12 +290,19 @@ async function onLeave(): Promise<void> {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (practicesStore.selected?.id !== practiceId) {
     practicesStore.fetchPractice(practiceId)
   }
   // Needed to resolve the user's booking id for join/leave.
   bookingsStore.fetchMyBookings()
+  // T-35: how THIS user enters. Failure here is not a toast -- this screen's
+  // whole purpose is entering the practice, so it becomes the screen's state.
+  try {
+    zoomEntry.value = await resolveZoomEntry(practiceId)
+  } catch {
+    resolveFailed.value = true
+  }
 })
 </script>
 

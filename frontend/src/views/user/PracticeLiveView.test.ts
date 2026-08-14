@@ -29,11 +29,9 @@
 // not itself re-check practice.status. Both confirmed by reading the full
 // template, not assumed from the screen's name.
 //
-// N1 (PROMPT №587): VEmptyState WAS added, but only for one specific case --
-// no booking at all for this practice (`!myBooking`) -- replacing the
-// badges + "Войти" button block. It is not a general loading/error ladder;
-// Check-in and "Покинуть практику" stay rendered regardless (deliberately
-// out of this fix's scope, see the PROMPT).
+// VEmptyState is used for three T-35 states (host / cancelled / resolve-404),
+// not as a general loading/error ladder; Check-in and "Покинуть практику"
+// stay rendered regardless.
 //
 // Because both stores are mocked getters (not reactive refs), state must be
 // set BEFORE mount() -- mutating bookingsState/practicesState mid-test does
@@ -41,12 +39,14 @@
 // the getters read a plain closure variable, so Vue's reactivity system has
 // nothing to track). Every test sets its fixture, then mounts once.
 //
-// ⭐ THE SECURITY GUARD (AUDIT-0520-02, .vue:114): canJoin requires BOTH an
-// active booking AND `zoom_link.startsWith('https://')`. Covered from both
-// sides below (safe link enables + opens; four distinct unsafe shapes disable
-// and never reach platform.openLink) and mutation-proved by hand: commenting
-// out the `.startsWith('https://')` half of hasValidZoom (.vue:114) turns the
-// "http://" test red (Войти becomes enabled) -- reverted before commit.
+// T-35 SUPERSEDES TWO THINGS THIS FILE USED TO COVER, and the report says so
+// rather than letting the coverage look silently dropped:
+//   (a) the AUDIT-0520-02 https guard. It policed a master-typed string; that
+//       field no longer exists, and every URL this screen can open now comes
+//       from our own database through the resolve endpoint.
+//   (b) N1's "Вы не записаны" empty state. A person with no booking is no
+//       longer stonewalled -- they are offered the guest entry, which is what
+//       the wrapper is for. The honest "не засчитается" mark took its place.
 //
 // ⚠ FINDING (not fixed, not asserted as "correct" -- flagged to the navigator
 // in the report): onEnter (.vue:125-154) documents ONLY the 409
@@ -82,6 +82,15 @@ vi.mock('vue-router', () => ({
 const toastError = vi.fn()
 vi.mock('@/composables/useToast', () => ({
   useToast: () => ({ error: toastError, success: vi.fn(), info: vi.fn() }),
+}))
+
+// T-35: the screen asks the server how THIS user enters. Mocked at the API
+// boundary -- the decision under test on this side is what the screen RENDERS
+// for each kind, not how the ladder is computed (that lives in the backend's
+// resolve_zoom_entry and is proved by its own doubles).
+const resolveZoomEntry = vi.fn()
+vi.mock('@/api/practices', () => ({
+  resolveZoomEntry: (...args: unknown[]) => resolveZoomEntry(...args),
 }))
 
 const openLink = vi.fn()
@@ -134,7 +143,6 @@ function practice(overrides: Partial<PracticeResponse> = {}): PracticeResponse {
     timezone: 'UTC',
     max_participants: 20,
     current_participants: 5,
-    zoom_link: 'https://zoom.us/j/123456',
     parent_practice_id: null,
     is_free: true,
     price_cents: 0,
@@ -178,7 +186,6 @@ function booking(
       is_free: true,
       price_cents: 0,
       currency: 'EUR',
-      zoom_link: 'https://zoom.us/j/123456',
     },
     ...overrides,
   }
@@ -237,6 +244,10 @@ beforeEach(() => {
   joinBooking.mockReset()
   leaveBooking.mockReset()
   openLink.mockReset()
+  // Default: a booked user with a working personal link -- the ordinary case
+  // every non-Zoom test in this file assumes.
+  resolveZoomEntry.mockReset()
+  resolveZoomEntry.mockResolvedValue({ kind: 'personal', url: 'https://zoom.us/j/123456' })
   hapticFeedback.mockReset()
   toastError.mockReset()
   push.mockReset()
@@ -288,222 +299,134 @@ describe('PracticeLiveView', () => {
       expect(fetchPractice).not.toHaveBeenCalled()
     })
   })
-
   // ===========================================================================
-  describe('N1 (PROMPT №587): honest "not booked" empty state', () => {
-    it('no matching booking: the empty state renders with the exact copy, and the join button/badges are absent -- Check-in and «Покинуть практику» stay', () => {
-      practicesState.selected = practice({ zoom_link: 'https://zoom.us/j/123456' })
-      bookingsState.bookings = []
+  // T-35: THE SCREEN NO LONGER CHOOSES A LINK.
+  //
+  // What used to live here was the client-side ladder (personal link, else the
+  // manual practice.zoom_link, else "pending") plus the AUDIT-0520-02 https
+  // guard that policed it. Both are gone from this file because both are gone
+  // from the screen: the manual rung was deleted with its column, and the
+  // remaining decision -- personal / guest / host / pending / failed /
+  // cancelled -- is made by the server (GET /practices/{id}/zoom/resolve).
+  //
+  // The https guard is not "dropped": every URL this screen can now open came
+  // out of our own database via that endpoint, not out of a field a master
+  // typed. There is no longer an untrusted string to guard.
+  //
+  // What IS asserted here is that each kind renders honestly and that the
+  // button cannot open something that does not exist.
+  describe('T-35: rendering the server resolution', () => {
+    it('personal: Войти is enabled and opens the personal link -- the outcome the whole feature exists for', async () => {
+      practicesState.selected = practice()
+      bookingsState.bookings = [booking({ joined_at: '2026-07-20T10:00:00Z' })]
+      resolveZoomEntry.mockResolvedValue({ kind: 'personal', url: 'https://zoom.us/j/personal?tk=x' })
       mount()
+      await flush()
 
-      expect(emptyState()).not.toBeNull()
-      expect(emptyState()?.textContent).toContain('Вы не записаны на это занятие')
-      expect(emptyState()?.textContent).toContain('Чтобы войти, сначала забронируйте практику')
-      expect(enterBtn()).toBeNull()
-      expect(checkinBtn()).not.toBeNull()
-      expect(leaveBtn()).not.toBeNull()
+      expect(enterBtn()?.disabled).toBe(false)
+      enterBtn()?.click()
+      await flush()
+      expect(openLink).toHaveBeenCalledWith('https://zoom.us/j/personal?tk=x')
     })
 
-    it('with an active booking: unchanged -- no empty state, the normal join button renders instead', () => {
-      practicesState.selected = practice({ zoom_link: 'https://zoom.us/j/123456' })
-      bookingsState.bookings = [booking()]
-      mount()
-
-      expect(emptyState()).toBeNull()
-      expect(enterBtn()).not.toBeNull()
-    })
-
-    it('does not auto-redirect -- no router.push/back is called just because there is no booking', () => {
+    it('guest: the honest "не засчитается" mark is shown AND the button works -- a person without a booking is let in, not stonewalled', async () => {
       practicesState.selected = practice()
       bookingsState.bookings = []
+      resolveZoomEntry.mockResolvedValue({ kind: 'guest', url: 'https://zoom.us/j/shared' })
       mount()
-
-      expect(push).not.toHaveBeenCalled()
-      expect(back).not.toHaveBeenCalled()
-    })
-  })
-
-  // ===========================================================================
-  describe('⭐ the security guard (AUDIT-0520-02): Войти only for a valid https Zoom link', () => {
-    it('a valid https zoom_link + an active booking: Войти is enabled', () => {
-      practicesState.selected = practice({ zoom_link: 'https://zoom.us/j/123456' })
-      bookingsState.bookings = [booking()]
-      mount()
-
-      expect(enterBtn()?.disabled).toBe(false)
-    })
-
-    it('clicking Войти with a valid link opens EXACTLY that URL via platform.openLink', async () => {
-      practicesState.selected = practice({ zoom_link: 'https://zoom.us/j/999' })
-      bookingsState.bookings = [booking({ joined_at: '2026-07-20T10:01:00Z' })] // already joined -> no API call needed
-      joinBooking.mockResolvedValue({ ok: true, error: '' })
-      mount()
-
-      enterBtn()?.click()
       await flush()
 
-      expect(openLink).toHaveBeenCalledWith('https://zoom.us/j/999')
-      expect(openLink).toHaveBeenCalledTimes(1)
-    })
-
-    it('a non-https link (http://) disables Войти, and clicking it never reaches platform.openLink', () => {
-      practicesState.selected = practice({ zoom_link: 'http://zoom.us/j/123456' })
-      bookingsState.bookings = [booking()]
-      mount()
-
-      expect(enterBtn()?.disabled).toBe(true)
-      enterBtn()?.click() // a disabled <button> fires no click handler in happy-dom either
-      expect(openLink).not.toHaveBeenCalled()
-    })
-
-    it('a javascript: URI disables Войти and never reaches platform.openLink', () => {
-      practicesState.selected = practice({ zoom_link: 'javascript:alert(1)' })
-      bookingsState.bookings = [booking()]
-      mount()
-
-      expect(enterBtn()?.disabled).toBe(true)
+      expect(text()).toContain('Вы не записаны')
+      expect(enterBtn()?.disabled).toBe(false)
       enterBtn()?.click()
-      expect(openLink).not.toHaveBeenCalled()
+      await flush()
+      expect(openLink).toHaveBeenCalledWith('https://zoom.us/j/shared')
     })
 
-    it('an empty zoom_link disables Войти', () => {
-      practicesState.selected = practice({ zoom_link: '' })
-      bookingsState.bookings = [booking()]
-      mount()
-
-      expect(enterBtn()?.disabled).toBe(true)
-    })
-
-    it('no zoom_link (null) disables Войти', () => {
-      practicesState.selected = practice({ zoom_link: null })
-      bookingsState.bookings = [booking()]
-      mount()
-
-      expect(enterBtn()?.disabled).toBe(true)
-    })
-
-    it('a valid https link but NO booking: N1 (PROMPT №587) -- "Войти" is GONE, replaced by the not-booked empty state, not merely disabled', () => {
-      practicesState.selected = practice({ zoom_link: 'https://zoom.us/j/123456' })
+    it('guest with NO url (the minting miss): honest line, button disabled, and it is NOT reported as a failed meeting', async () => {
+      practicesState.selected = practice()
       bookingsState.bookings = []
+      resolveZoomEntry.mockResolvedValue({ kind: 'guest', url: null })
       mount()
-
-      expect(enterBtn()).toBeNull()
-      expect(emptyState()).not.toBeNull()
-    })
-
-    it('a CANCELLED booking for this practice does not count as "my booking" -- N1: the not-booked empty state shows, same as no booking at all', () => {
-      practicesState.selected = practice({ zoom_link: 'https://zoom.us/j/123456' })
-      bookingsState.bookings = [booking({ status: 'cancelled' })]
-      mount()
-
-      expect(enterBtn()).toBeNull()
-      expect(emptyState()).not.toBeNull()
-    })
-  })
-
-  // ===========================================================================
-  describe('D3 link ladder (T21-1, PROMPT №541): personal link first, manual marked, else pending', () => {
-    it('a personal registrant link takes priority over the manual zoom_link -- opens the PERSONAL one', async () => {
-      practicesState.selected = practice({ zoom_link: 'https://zoom.us/j/manual' })
-      bookingsState.bookings = [
-        booking({
-          joined_at: '2026-07-20T10:01:00Z',
-          zoom_registrant_join_url: 'https://zoom.us/w/personal?tk=abc',
-        }),
-      ]
-      mount()
-
-      enterBtn()?.click()
       await flush()
 
-      expect(openLink).toHaveBeenCalledWith('https://zoom.us/w/personal?tk=abc')
-    })
-
-    it('no personal link, but a valid manual zoom_link: Войти is enabled and shows the "not counted" mark', () => {
-      practicesState.selected = practice({ zoom_link: 'https://zoom.us/j/manual' })
-      bookingsState.bookings = [booking()] // no zoom_registrant_join_url in the fixture
-      mount()
-
-      expect(enterBtn()?.disabled).toBe(false)
-      expect(text()).toContain('посещение не засчитается')
-    })
-
-    it('a personal link present: the "not counted" mark does NOT show', () => {
-      practicesState.selected = practice({ zoom_link: 'https://zoom.us/j/manual' })
-      bookingsState.bookings = [
-        booking({ zoom_registrant_join_url: 'https://zoom.us/w/personal?tk=abc' }),
-      ]
-      mount()
-
-      expect(text()).not.toContain('посещение не засчитается')
-    })
-
-    it('neither link exists: Войти is disabled and reads "Ссылка готовится", not the default label', () => {
-      practicesState.selected = practice({ zoom_link: null })
-      bookingsState.bookings = [booking({ zoom_registrant_join_url: null, joined_at: null })]
-      mount()
-
+      expect(text()).toContain('Гостевой вход сейчас недоступен')
+      expect(text()).not.toContain('Не удалось создать встречу')
       expect(enterBtn()?.disabled).toBe(true)
+      enterBtn()?.click()
+      await flush()
+      expect(openLink).not.toHaveBeenCalled()
+    })
+
+    it('pending: honest wait, button disabled, nothing opened -- a confirmed booking is NEVER downgraded to a guest link (that is what produced the false NO_SHOW)', async () => {
+      practicesState.selected = practice()
+      bookingsState.bookings = [booking()]
+      resolveZoomEntry.mockResolvedValue({ kind: 'pending', url: null })
+      mount()
+      await flush()
+
       expect(text()).toContain('Ссылка готовится')
-    })
-
-    // A4 V2 (PROMPT №572): before this, create_failed and pending_creation
-    // rendered the IDENTICAL "Ссылка готовится" state -- a permanently
-    // failed meeting looked exactly like one still being created, forever.
-    it('the meeting permanently FAILED (create_failed): honest distinct state, not "готовится"', () => {
-      practicesState.selected = practice({ zoom_link: null, zoom_meeting_status: 'create_failed' })
-      bookingsState.bookings = [booking({ zoom_registrant_join_url: null, joined_at: null })]
-      mount()
-
       expect(enterBtn()?.disabled).toBe(true)
-      expect(enterBtn()?.textContent).toContain('Ссылка недоступна')
-      expect(text()).not.toContain('Ссылка готовится')
-      expect(text()).toContain('Не удалось создать встречу')
-    })
-
-    it('pending_creation is still the honest "готовится" state, not "failed"', () => {
-      // The discriminator: pending_creation must NOT read as a failure.
-      practicesState.selected = practice({
-        zoom_link: null,
-        zoom_meeting_status: 'pending_creation',
-      })
-      bookingsState.bookings = [booking({ zoom_registrant_join_url: null, joined_at: null })]
-      mount()
-
-      expect(enterBtn()?.disabled).toBe(true)
-      expect(enterBtn()?.textContent).toContain('Ссылка готовится')
-      expect(text()).not.toContain('Не удалось создать встречу')
-    })
-
-    it('a manual zoom_link still wins over create_failed -- the link itself is the source of truth', () => {
-      practicesState.selected = practice({
-        zoom_link: 'https://zoom.us/j/manual',
-        zoom_meeting_status: 'create_failed',
-      })
-      bookingsState.bookings = [booking({ zoom_registrant_join_url: null })]
-      mount()
-
-      expect(enterBtn()?.disabled).toBe(false)
-      expect(text()).toContain('посещение не засчитается')
-      expect(text()).not.toContain('Не удалось создать встречу')
-    })
-
-    it('a non-https personal link is never opened -- falls through to the manual link instead', async () => {
-      practicesState.selected = practice({ zoom_link: 'https://zoom.us/j/manual' })
-      bookingsState.bookings = [
-        booking({
-          joined_at: '2026-07-20T10:01:00Z',
-          zoom_registrant_join_url: 'http://insecure.example/tk=abc',
-        }),
-      ]
-      mount()
-
       enterBtn()?.click()
       await flush()
+      expect(openLink).not.toHaveBeenCalled()
+    })
 
-      expect(openLink).toHaveBeenCalledWith('https://zoom.us/j/manual')
+    it('failed: distinct from pending -- the permanent-failure copy, not the spinner copy', async () => {
+      practicesState.selected = practice()
+      bookingsState.bookings = [booking()]
+      resolveZoomEntry.mockResolvedValue({ kind: 'failed', url: null })
+      mount()
+      await flush()
+
+      expect(text()).toContain('Не удалось создать встречу')
+      expect(text()).not.toContain('Ссылка готовится')
+      expect(enterBtn()?.disabled).toBe(true)
+    })
+
+    it('host: the owner arriving by his own public link is told to start from the master screen, and is NOT handed a guest seat in his own meeting', async () => {
+      practicesState.selected = practice()
+      bookingsState.bookings = []
+      resolveZoomEntry.mockResolvedValue({ kind: 'host', url: null })
+      mount()
+      await flush()
+
+      expect(emptyState()?.textContent).toContain('Это ваша практика')
+      expect(enterBtn()).toBeNull()
+      expect(openLink).not.toHaveBeenCalled()
+    })
+
+    it('cancelled: honest state, no entry offered', async () => {
+      practicesState.selected = practice()
+      bookingsState.bookings = [booking()]
+      resolveZoomEntry.mockResolvedValue({ kind: 'cancelled', url: null })
+      mount()
+      await flush()
+
+      expect(emptyState()?.textContent).toContain('Практика отменена')
+      expect(enterBtn()).toBeNull()
+    })
+
+    it('the resolve call 404s (a well-formed deep link naming a deleted practice): an honest error, NEVER an empty screen', async () => {
+      practicesState.selected = practice()
+      bookingsState.bookings = []
+      resolveZoomEntry.mockRejectedValue(new Error('404'))
+      mount()
+      await flush()
+
+      expect(emptyState()?.textContent).toContain('Практика не найдена')
+      expect(enterBtn()).toBeNull()
+    })
+
+    it('asks the server keyed by PRACTICE ID -- not by a code the screen would have to encode', async () => {
+      practicesState.selected = practice()
+      mount()
+      await flush()
+
+      expect(resolveZoomEntry).toHaveBeenCalledWith('p1')
     })
   })
+
 
   // ===========================================================================
   describe('join flow', () => {
@@ -512,6 +435,10 @@ describe('PracticeLiveView', () => {
       bookingsState.bookings = [booking({ id: 'b1', joined_at: null })]
       joinBooking.mockResolvedValue({ ok: true, error: '' })
       mount()
+      // T-35: the button is disabled until the server's resolution arrives --
+      // it can no longer be pressed on a screen that has not been told what
+      // link (if any) this person gets.
+      await flush()
 
       enterBtn()?.click()
       await flush()
@@ -527,6 +454,10 @@ describe('PracticeLiveView', () => {
       bookingsState.bookings = [booking({ id: 'b1', joined_at: null })]
       joinBooking.mockReturnValue(new Promise(() => {})) // never resolves
       mount()
+      // T-35: the button is disabled until the server's resolution arrives --
+      // it can no longer be pressed on a screen that has not been told what
+      // link (if any) this person gets.
+      await flush()
 
       enterBtn()?.click()
       await flush()
@@ -539,6 +470,10 @@ describe('PracticeLiveView', () => {
       practicesState.selected = practice()
       bookingsState.bookings = [booking({ id: 'b1', joined_at: '2026-07-20T09:00:00Z' })]
       mount()
+      // T-35: the button is disabled until the server's resolution arrives --
+      // it can no longer be pressed on a screen that has not been told what
+      // link (if any) this person gets.
+      await flush()
 
       enterBtn()?.click()
       await flush()
@@ -552,6 +487,10 @@ describe('PracticeLiveView', () => {
       bookingsState.bookings = [booking({ id: 'b1', joined_at: null })]
       joinBooking.mockResolvedValue({ ok: false, error: 'Booking already joined' })
       mount()
+      // T-35: the button is disabled until the server's resolution arrives --
+      // it can no longer be pressed on a screen that has not been told what
+      // link (if any) this person gets.
+      await flush()
 
       enterBtn()?.click()
       await flush()
@@ -565,6 +504,10 @@ describe('PracticeLiveView', () => {
       bookingsState.bookings = [booking({ id: 'b1', joined_at: null })]
       joinBooking.mockResolvedValue({ ok: false, error: 'Practice is full' })
       mount()
+      // T-35: the button is disabled until the server's resolution arrives --
+      // it can no longer be pressed on a screen that has not been told what
+      // link (if any) this person gets.
+      await flush()
 
       enterBtn()?.click()
       await flush()

@@ -8,6 +8,7 @@
 #   POST   /api/v1/practices                     -- create (master only)
 #   POST   /api/v1/practices/{id}/zoom/start-ticket -- one-time Zoom start ticket (556)
 #   POST   /api/v1/practices/{id}/zoom/retry      -- retry a failed Zoom meeting (A4 V2, 572)
+#   GET    /api/v1/practices/{id}/zoom/resolve    -- how THIS user enters (T-35)
 #   GET    /api/v1/practices/zoom/start           -- redeem ticket, redirect to Zoom (556)
 #   GET    /api/v1/practices/{id}                 -- get by id (any auth user)
 #   PATCH  /api/v1/practices/{id}                 -- update (owner master only)
@@ -24,6 +25,12 @@
 #   POST/PATCH/DELETE/CANCEL use get_current_master (verified master).
 #   GET by id uses get_current_user (any authenticated user).
 #   GET /zoom/start uses NEITHER -- the one-time ticket IS the auth (556).
+#   GET /{id}/zoom/resolve uses get_current_user: it is the AUTHENTICATED
+#     half of the T-35 wrapper, and knowing who is asking is the entire
+#     reason it can answer with a personal link at all.
+#
+# PUBLIC ROUTER (T-35): this file also declares `public_router`, mounted at
+#   the ROOT (no /api/v1 prefix) -- see its own block at the bottom.
 #
 # SESSION:
 #   Read endpoints use get_db_reader.
@@ -46,9 +53,11 @@
 #   too, so neither can ever match the other's request.
 # =============================================================================
 
+import html
 from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import structlog
 from fastapi import APIRouter, Depends, Query, Response, status
@@ -65,6 +74,7 @@ from app.modules.auth.dependencies import (
     get_current_user,
 )
 from app.modules.masters.models import MasterProfile
+from app.modules.masters.service import get_master_display_name
 from app.modules.practices.cancel_service import cancel_practice
 from app.modules.practices.listing_service import list_public_practices
 from app.modules.practices.models import Practice
@@ -76,6 +86,7 @@ from app.modules.practices.schemas import (
     PaginatedPracticesResponse,
     PracticeResponse,
     UpdatePracticeRequest,
+    ZoomEntryResolveResponse,
     ZoomStartTicketResponse,
 )
 from app.modules.practices.service import (
@@ -239,20 +250,17 @@ async def create_practice_endpoint(
     await session.flush()
     await session.refresh(practice)
     # F1 (№263): this endpoint is owner-only (master guard + ownership check),
-    # so the response returns the caller's OWN zoom_link — consistent with the
-    # owner-always-sees rule on the detail (M-3) and the master list (Z-6).
+    # so the response carries the caller's OWN owner-only Zoom fields —
+    # consistent with the owner-always-sees rule on the detail and the
+    # master list (Z-6).
     # T21-1: same owner-only posture for the host's own join_url. A freshly
     # created practice has no ZoomMeeting yet (that happens on publish, not
     # here) -- get_host_join_url returns None until then, which is correct.
     from app.modules.zoom.service import (
         get_host_join_url,
-        get_shared_join_url,
         get_zoom_meeting_status,
     )
     host_join_url = await get_host_join_url(practice.id, session)
-    # T24-38 (PROMPT №642): None here too, same reasoning -- a freshly
-    # created practice has no ZoomMeeting yet.
-    shared_join_url = await get_shared_join_url(practice.id, session)
     # A4 V2 (PROMPT №572): None here too, same reasoning as host_join_url --
     # fetched anyway for consistency with the other three owner-only sites
     # (this is also the endpoint V6's deduplicated-practice response flows
@@ -262,8 +270,8 @@ async def create_practice_endpoint(
     audience_group_names = await group_names_for_practice(practice, session)
     return practice_to_response(
         practice, user.first_name,
-        zoom_link_visible=True, zoom_host_join_url=host_join_url,
-        zoom_shared_join_url=shared_join_url,
+        zoom_host_join_url=host_join_url,
+        zoom_public_link_visible=True,
         zoom_meeting_status=zoom_meeting_status,
         deduplicated=deduplicated,
         audience_group_names=audience_group_names,
@@ -397,23 +405,66 @@ async def retry_zoom_meeting_endpoint(
         )
 
     from app.modules.zoom.retry_poller import attempt_zoom_meeting_create
-    from app.modules.zoom.service import get_host_join_url, get_shared_join_url
+    from app.modules.zoom.service import get_host_join_url
 
     await attempt_zoom_meeting_create(meeting, practice, session)
     await session.flush()
     await session.refresh(meeting)
 
     host_join_url = await get_host_join_url(practice.id, session)
-    # T24-38 (PROMPT №642): attempt_zoom_meeting_create above also attempts
-    # the shared registrant when the retry succeeds (retry_poller.py) --
-    # fetched here for the same reason host_join_url is.
-    shared_join_url = await get_shared_join_url(practice.id, session)
     return practice_to_response(
         practice, user.first_name,
-        zoom_link_visible=True,
         zoom_host_join_url=host_join_url,
-        zoom_shared_join_url=shared_join_url,
+        zoom_public_link_visible=True,
         zoom_meeting_status=meeting.status,
+    )
+
+
+# ------------------------------------------------------------------
+# T-35: the authenticated half of the link wrapper.
+#
+# Keyed by practice_id, NOT by the public code, and that is deliberate:
+# practice-live is opened both by the deep link (which carries a code) and by
+# an ordinary tap from a dashboard (which does not). Keying this by the code
+# would force that screen to ENCODE a uuid it already holds, just so this
+# endpoint could immediately decode it back -- a third home for the codec, and
+# the first one with no reason to exist.
+#
+# The LADDER lives in zoom/service.py's resolve_zoom_entry, not here and not
+# on the client. It used to live in frontend/src/utils/zoomLink.ts, where it
+# was a rule each of four entry points had to remember -- and a rule cannot be
+# enforced by construction, which is the second defect this feature closes.
+# ------------------------------------------------------------------
+@router.get(
+    "/{practice_id}/zoom/resolve",
+    response_model=ZoomEntryResolveResponse,
+)
+async def resolve_zoom_entry_endpoint(
+    practice_id: UUID,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_reader),
+) -> ZoomEntryResolveResponse:
+    """How does THIS caller enter THIS practice right now.
+
+    404 (not a `kind`) for a practice that does not exist or is draft/
+    deleted -- the same P-08 shape every other endpoint in this router uses,
+    so a client that mistypes a code gets the module's normal answer rather
+    than a special one. A deep link built from a well-formed code naming a
+    deleted practice lands here: the client cannot tell that case apart
+    locally (it has no database), so this 404 is what it renders an honest
+    error from.
+    """
+    from app.modules.zoom.service import is_publicly_resolvable, resolve_zoom_entry
+
+    practice = (
+        await session.execute(select(Practice).where(Practice.id == practice_id))
+    ).scalar_one_or_none()
+    if practice is None or not is_publicly_resolvable(practice):
+        raise NotFoundError("Practice not found")
+
+    resolution = await resolve_zoom_entry(practice, user, session)
+    return ZoomEntryResolveResponse(
+        kind=resolution.kind.value, url=resolution.url,
     )
 
 
@@ -540,27 +591,26 @@ async def update_practice_endpoint(
     await session.flush()
     await session.refresh(practice)
     # F1 (№263): this endpoint is owner-only (master guard + ownership check),
-    # so the response returns the caller's OWN zoom_link — consistent with the
-    # owner-always-sees rule on the detail (M-3) and the master list (Z-6).
+    # so the response carries the caller's OWN owner-only Zoom fields —
+    # consistent with the owner-always-sees rule on the detail and the
+    # master list (Z-6).
     # T21-1: same owner-only posture for the host's own join_url (may become
     # non-None here if this update is the draft->scheduled publish).
     from app.modules.zoom.service import (
         get_host_join_url,
-        get_shared_join_url,
         get_zoom_meeting_status,
     )
     host_join_url = await get_host_join_url(practice.id, session)
     # T24-38 (PROMPT №642): same reasoning as host_join_url -- becomes
     # non-None here too if this update is the draft->scheduled publish.
-    shared_join_url = await get_shared_join_url(practice.id, session)
     # A4 V2 (PROMPT №572): so a master publishing a draft (creating the Zoom
     # meeting) sees "готовится" immediately instead of a stale None.
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
     audience_group_names = await group_names_for_practice(practice, session)
     return practice_to_response(
         practice, user.first_name,
-        zoom_link_visible=True, zoom_host_join_url=host_join_url,
-        zoom_shared_join_url=shared_join_url,
+        zoom_host_join_url=host_join_url,
+        zoom_public_link_visible=True,
         zoom_meeting_status=zoom_meeting_status,
         audience_group_names=audience_group_names,
     )
@@ -617,25 +667,24 @@ async def delete_practice_endpoint(
     await session.flush()
     await session.refresh(practice)
     # F1 (№263): this endpoint is owner-only (master guard + ownership check),
-    # so the response returns the caller's OWN zoom_link — consistent with the
-    # owner-always-sees rule on the detail (M-3) and the master list (Z-6).
+    # so the response carries the caller's OWN owner-only Zoom fields —
+    # consistent with the owner-always-sees rule on the detail and the
+    # master list (Z-6).
     # T21-1: soft-deleted drafts never had a meeting created (E21 fires on
     # publish only), so this is always None here -- fetched anyway for
     # consistency with the other three owner-only sites.
     from app.modules.zoom.service import (
         get_host_join_url,
-        get_shared_join_url,
         get_zoom_meeting_status,
     )
     host_join_url = await get_host_join_url(practice.id, session)
     # T24-38 (PROMPT №642): soft-deleted drafts never had a meeting created
     # either -- always None here, fetched anyway for consistency.
-    shared_join_url = await get_shared_join_url(practice.id, session)
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
     return practice_to_response(
         practice, user.first_name,
-        zoom_link_visible=True, zoom_host_join_url=host_join_url,
-        zoom_shared_join_url=shared_join_url,
+        zoom_host_join_url=host_join_url,
+        zoom_public_link_visible=True,
         zoom_meeting_status=zoom_meeting_status,
     )
 
@@ -672,26 +721,369 @@ async def cancel_practice_endpoint(
     await session.flush()
     await session.refresh(practice)
     # F1 (№263): this endpoint is owner-only (master guard + ownership check),
-    # so the response returns the caller's OWN zoom_link — consistent with the
-    # owner-always-sees rule on the detail (M-3) and the master list (Z-6).
+    # so the response carries the caller's OWN owner-only Zoom fields —
+    # consistent with the owner-always-sees rule on the detail and the
+    # master list (Z-6).
     # T21-1: cancel_practice deletes the Zoom meeting (zoom/service.py
     # delete_meeting_for_practice) -- get_host_join_url returns None once that
     # row's status flips, which is correct (nothing to join anymore).
     from app.modules.zoom.service import (
         get_host_join_url,
-        get_shared_join_url,
         get_zoom_meeting_status,
     )
     host_join_url = await get_host_join_url(practice.id, session)
     # T24-38 (PROMPT №642): cancel_practice deletes the Zoom meeting too --
     # None once that row's status flips, same as host_join_url.
-    shared_join_url = await get_shared_join_url(practice.id, session)
     # A4 V2 (PROMPT №572): will read 'deleted' after the cancel above --
     # correctly distinct from create_failed/pending_creation.
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
     return practice_to_response(
         practice, user.first_name,
-        zoom_link_visible=True, zoom_host_join_url=host_join_url,
-        zoom_shared_join_url=shared_join_url,
+        zoom_host_join_url=host_join_url,
+        zoom_public_link_visible=True,
         zoom_meeting_status=zoom_meeting_status,
+    )
+
+
+# ==================================================================
+# T-35: PUBLIC ROUTER -- the wrapper every Zoom link now goes through.
+# ==================================================================
+#
+# Mounted at the ROOT, outside /api/v1 (main.py). That is not a style choice:
+# nginx proxies `location /` on the public host straight to this backend, so a
+# root route publishes itself, and the whole point of the exercise is a SHORT
+# link a master can paste into a Telegram channel -- ~49 characters, of which
+# 22 are the code.
+#
+# WHY A SERVER-RENDERED PAGE AND NOT A REDIRECT INTO THE SPA: OpenGraph.
+# Telegram draws its card from og:title / og:description in the HTML it
+# fetches, and an SPA returns an empty shell -- there would be no preview at
+# all. A card carrying the practice title and its time beats any amount of
+# further URL shortening. The page is also instant, with no bundle to load,
+# which matters for someone clicking a minute before the practice starts.
+#
+# The markup below is lifted from frontend/src/views/auth/StandaloneStubView.
+# vue. TWO COPIES EXIST AND THAT IS ACCEPTED (owner ruling): this page changes
+# about once a year, and polishing the landing belongs to the frontend team,
+# who will reconcile them. Note what "lifted" really means, though -- the stub
+# is not self-contained: its design tokens come from
+# frontend/src/styles/variables.css and CANNOT be referenced from this host,
+# so they are RESOLVED TO LITERALS here (--velo-primary #627a9c,
+# --velo-text-primary #4c6589, --velo-text-secondary rgba(76,101,137,.7),
+# --velo-text-muted rgba(76,101,137,.5), --space-5 24px, --text-2xl 50px,
+# --text-base 18px, --text-sm 15px, --velo-content-width 336px,
+# --velo-size-50 50px, --velo-shadow-glow, --radius-full). A change to
+# variables.css will NOT reach this page and will not complain.
+#
+# The mandala ring is deliberately absent: it is a 65 KB raster living in the
+# frontend bundle, and inlining it base64 would take this page from ~4 KB to
+# ~90 KB -- against the instant-page reason the landing is server-rendered at
+# all. The vector wordmark is inlined instead (frontend/public/icons/
+# velo-word-blue.svg, viewBox cropped to the path's own bounding box). The
+# font is the same Google Fonts link the SPA uses, which depends on no host
+# of ours.
+
+public_router = APIRouter(tags=["public"])
+
+# frontend/public/icons/velo-word-blue.svg -- one path, inlined verbatim.
+_VELO_WORDMARK_PATH = (
+    "m160.12 238.04c0.402-1.206 0.854-1.943 1.357-2.211 0.535-0.301 1.038-0.4"
+    "52 1.507-0.452s0.837 0.134 1.105 0.402c0.301 0.268 0.452 0.586 0.452 0.9"
+    "54 0 0.402-0.084 0.821-0.251 1.256l-10.952 30.997c-0.268 0.771-0.687 1.3"
+    "07-1.256 1.608-0.569 0.268-1.206 0.402-1.909 0.402-0.603 0-1.206-0.134-1"
+    ".809-0.402-0.569-0.268-0.971-0.737-1.205-1.407l-10.802-30.846c-0.134-0.3"
+    "68-0.201-0.737-0.201-1.105 0-0.503 0.168-0.938 0.503-1.306 0.335-0.369 0"
+    ".887-0.553 1.658-0.553 0.469 0 1.055 0.151 1.758 0.452 0.737 0.268 1.306"
+    " 1.005 1.708 2.211l8.943 27.279h0.301l9.093-27.279zm29.938 6.078c-0.938 "
+    "0-1.658-0.234-2.16-0.703-0.502-0.502-0.754-1.356-0.754-2.562v-2.813h-11."
+    "906v13.162h10.55c0.469 0 0.821 0.151 1.055 0.452 0.234 0.268 0.352 0.586"
+    " 0.352 0.955 0 0.335-0.151 0.653-0.452 0.954-0.268 0.268-0.587 0.402-0.9"
+    "55 0.402h-10.55v14.368h12.66v-2.813c0-1.206 0.251-2.043 0.754-2.512 0.50"
+    "2-0.502 1.222-0.753 2.16-0.753 1.44 0 2.16 0.837 2.16 2.511v4.371c0 0.73"
+    "7-0.268 1.239-0.804 1.507-0.502 0.235-1.239 0.352-2.21 0.352h-17.835c-1."
+    "54 0-2.311-0.837-2.311-2.512v-30.595c0-1.675 0.771-2.512 2.311-2.512h17."
+    "081c0.971 0 1.708 0.117 2.211 0.352 0.536 0.234 0.804 0.736 0.804 1.507v"
+    "4.371c0 1.674-0.721 2.511-2.161 2.511zm30.675 17.483c1.44 0 2.16 0.838 2"
+    ".16 2.512v5.275c0 0.603-0.268 1.022-0.803 1.256-0.503 0.235-1.24 0.352-2"
+    ".211 0.352h-16.579c-1.54 0-2.311-0.837-2.311-2.512v-30.595c0-0.938 0.168"
+    "-1.591 0.503-1.959 0.368-0.369 0.938-0.553 1.708-0.553 2.143 0 3.215 1.2"
+    "89 3.215 3.868v29.088h11.404v-3.466c0-1.206 0.251-2.043 0.754-2.512 0.50"
+    "2-0.502 1.222-0.754 2.16-0.754zm41.11-8.59c0 3.717-0.637 6.966-1.909 9.7"
+    "46-1.24 2.746-3.082 4.89-5.527 6.43-2.445 1.541-5.476 2.311-9.093 2.311-"
+    "3.717 0-6.815-0.77-9.294-2.311-2.445-1.54-4.27-3.7-5.476-6.48s-1.808-6.0"
+    "29-1.808-9.747c0-3.684 0.602-6.899 1.808-9.645 1.206-2.747 3.031-4.89 5."
+    "476-6.431 2.479-1.541 5.593-2.311 9.344-2.311 3.584 0 6.598 0.77 9.043 2"
+    ".311 2.445 1.507 4.287 3.651 5.527 6.431 1.272 2.746 1.909 5.978 1.909 9"
+    ".696zm-28.335 0c0 4.521 0.955 8.088 2.864 10.7 1.909 2.579 4.89 3.869 8."
+    "942 3.869 4.086 0 7.067-1.29 8.943-3.869 1.875-2.612 2.813-6.179 2.813-1"
+    "0.7 0-4.522-0.938-8.055-2.813-10.601-1.876-2.579-4.84-3.868-8.893-3.868-"
+    "4.052 0-7.05 1.289-8.992 3.868-1.909 2.546-2.864 6.079-2.864 10.601zm4.2"
+    "2 1.708v-3.919h15.172v3.919h-15.172z"
+)
+
+_RU_MONTHS_GENITIVE = (
+    "января", "февраля", "марта", "апреля", "мая", "июня",
+    "июля", "августа", "сентября", "октября", "ноября", "декабря",
+)
+
+
+def _format_practice_when(practice: Practice) -> str:
+    """"14 августа в 19:30" in the PRACTICE's own timezone -- the one the
+    master scheduled it in, which is the time everyone in the channel is
+    talking about. Falls back to UTC if the stored zone is unknown, rather
+    than failing to render a page over a formatting detail."""
+    try:
+        zone = ZoneInfo(practice.timezone)
+    except (ZoneInfoNotFoundError, ValueError):
+        zone = ZoneInfo("UTC")
+    local = practice.scheduled_at.astimezone(zone)
+    return (
+        f"{local.day} {_RU_MONTHS_GENITIVE[local.month - 1]} "
+        f"в {local:%H:%M}"
+    )
+
+
+def _public_page(
+    *,
+    title: str,
+    message: str,
+    status_code: int,
+    og_title: str | None = None,
+    og_description: str | None = None,
+    primary: tuple[str, str] | None = None,
+    secondary: tuple[str, str] | None = None,
+    hint: str | None = None,
+) -> HTMLResponse:
+    """The ONE page this router serves, in every state it has.
+
+    og tags are emitted only when a caller passes them: a code naming nothing
+    has nothing to describe, and inventing a description there would be a
+    preview card for a practice that does not exist.
+
+    Every interpolated value goes through html.escape -- a practice title is
+    master-supplied text, and this is the first place in this system where
+    such text is rendered as HTML rather than handed to a JSON client.
+    """
+    og = ""
+    if og_title is not None:
+        og = (
+            f'<meta property="og:type" content="website">'
+            f'<meta property="og:title" content="{html.escape(og_title)}">'
+            f'<meta property="og:description" '
+            f'content="{html.escape(og_description or "")}">'
+        )
+    buttons = ""
+    for target, (href, label) in (
+        ("primary", primary or ("", "")),
+        ("secondary", secondary or ("", "")),
+    ):
+        if not href:
+            continue
+        buttons += (
+            f'<a class="btn btn--{target}" href="{html.escape(href)}" '
+            f'rel="noopener">{html.escape(label)}</a>'
+        )
+    hint_html = (
+        f'<p class="hint">{html.escape(hint)}</p>' if hint else ""
+    )
+    return HTMLResponse(
+        status_code=status_code,
+        content=(
+            "<!doctype html><html lang='ru'><head><meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+            f"<title>{html.escape(title)}</title>"
+            f"{og}"
+            "<link rel='preconnect' href='https://fonts.googleapis.com'>"
+            "<link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>"
+            "<link rel='stylesheet' href='https://fonts.googleapis.com/css2"
+            "?family=Marmelad&display=swap'>"
+            "<style>"
+            "*{box-sizing:border-box}"
+            "body{margin:0;min-height:100vh;display:flex;flex-direction:column;"
+            "align-items:center;justify-content:center;padding:24px;"
+            "background:#ffffff;color:#4c6589;text-align:center;"
+            "font-family:'Marmelad','Noto Sans',sans-serif}"
+            ".mark{width:180px;margin-bottom:8px}"
+            ".title{font-size:50px;font-weight:400;letter-spacing:.02em;"
+            "margin:0 0 16px}"
+            ".msg{font-size:18px;color:rgba(76,101,137,.7);margin:0 0 33px;"
+            "max-width:320px;line-height:1.5}"
+            ".btn{display:inline-flex;align-items:center;justify-content:center;"
+            "width:100%;max-width:336px;height:50px;font-size:18px;"
+            "text-decoration:none;border-radius:9999px;"
+            "border:1px solid #ffffff;box-shadow:0 0 20.9px 7px #ffffff;"
+            "margin-bottom:12px}"
+            ".btn--primary{background:#627a9c;color:#ffffff}"
+            ".btn--secondary{background:#ffffff;color:#4c6589;"
+            "border:1px solid rgba(76,101,137,.25);box-shadow:none}"
+            ".hint{font-size:15px;color:rgba(76,101,137,.5);margin:16px 0 0;"
+            "max-width:280px;line-height:1.4}"
+            "</style></head><body>"
+            "<svg class='mark' viewBox='134 232 130 42' fill='#4c6589' "
+            "xmlns='http://www.w3.org/2000/svg' aria-hidden='true'>"
+            f"<path d='{_VELO_WORDMARK_PATH}'/></svg>"
+            "<h1 class='title'>VEL\u0398</h1>"
+            f"<p class='msg'>{html.escape(message)}</p>"
+            f"{buttons}{hint_html}"
+            "</body></html>"
+        ),
+    )
+
+
+def _not_a_link_page() -> HTMLResponse:
+    """404 for a code that names nothing: garbage, or a practice that is
+    draft/deleted. NO og tags -- there is nothing truthful to describe, and
+    the title of an unpublished practice must not leak to anyone holding a
+    URL. The two cases are answered identically on purpose: distinguishing
+    them would turn this route into an existence oracle."""
+    return _public_page(
+        title="Ссылка не найдена",
+        message="Эта ссылка не работает. Возможно, практику удалили "
+                "или ссылка скопирована не полностью.",
+        status_code=status.HTTP_404_NOT_FOUND,
+    )
+
+
+async def _load_public_practice(
+    code: str, session: AsyncSession,
+) -> Practice | None:
+    """code -> practice, or None for every "no such link" case.
+
+    decode_practice_code rejects wrong length and wrong charset WITHOUT
+    touching the database -- a scan of malformed codes never reaches
+    Postgres. A well-formed code naming no row is a normal miss.
+    """
+    from app.modules.zoom.service import decode_practice_code, is_publicly_resolvable
+
+    practice_id = decode_practice_code(code)
+    if practice_id is None:
+        return None
+    practice = (
+        await session.execute(select(Practice).where(Practice.id == practice_id))
+    ).scalar_one_or_none()
+    if practice is None or not is_publicly_resolvable(practice):
+        return None
+    return practice
+
+
+@public_router.get("/z/{code}")
+async def public_practice_landing_endpoint(
+    code: str,
+    session: AsyncSession = Depends(get_db_reader),
+) -> Response:
+    """The page behind every link that leaves this system.
+
+    ANONYMOUS BY CONSTRUCTION. A plain browser navigation carries no
+    initData, so this route has no idea who is asking -- and therefore
+    CANNOT hand out a personal link, no matter how it is reached. That is
+    the entire security property of the wrapper: a URL forwarded out of a
+    channel is not a skeleton key to somebody else's attendance. It is
+    enforced by resolve_zoom_entry receiving user=None, not by a rule.
+
+    Status codes (T-35): 404 means "no such link"; 200 means "the link is
+    real, here is its state". Telegram only renders a preview card for 200,
+    which is why an honest state page still returns 200.
+    """
+    from app.modules.zoom.service import ZoomEntryKind, resolve_zoom_entry
+
+    practice = await _load_public_practice(code, session)
+    if practice is None:
+        return _not_a_link_page()
+
+    resolution = await resolve_zoom_entry(practice, None, session)
+    when = _format_practice_when(practice)
+    master_name = await get_master_display_name(practice.master_id, session)
+    deep_link = f"{settings.telegram_bot_url}?startapp=zoom__{code}"
+
+    if resolution.kind == ZoomEntryKind.CANCELLED:
+        # og:description carries the CANCELLATION, not the schedule: a
+        # crawler arriving after the cancellation would otherwise paint a
+        # card for a live practice over an honest page.
+        return _public_page(
+            title=practice.title,
+            message="Практика отменена.",
+            status_code=status.HTTP_200_OK,
+            og_title=practice.title,
+            og_description=f"Практика отменена. Мастер: {master_name}.",
+            primary=(deep_link, "Открыть VELO"),
+            hint="Другие практики — в приложении.",
+        )
+
+    og_description = f"{when}. Мастер: {master_name}."
+
+    # GUEST with no url is the minting miss (ensure_shared_registrant is
+    # best-effort and the retry poller does not cover it -- fixing that is
+    # explicitly out of scope). It is NOT 'failed': the meeting exists, only
+    # the guest seat in it does not. Either way the honest answer is the same
+    # sentence, and the app button still works.
+    guest_available = (
+        resolution.kind == ZoomEntryKind.GUEST and resolution.url is not None
+    )
+    if guest_available:
+        return _public_page(
+            title=practice.title,
+            message=f"{practice.title}\n{when}",
+            status_code=status.HTTP_200_OK,
+            og_title=practice.title,
+            og_description=og_description,
+            primary=(deep_link, "Открыть VELO"),
+            secondary=(f"/z/{code}/guest", "Войти гостем"),
+            hint="Если вы записаны на практику, откройте её в приложении — "
+                 "так посещение будет засчитано.",
+        )
+
+    return _public_page(
+        title=practice.title,
+        message=f"{practice.title}\n{when}",
+        status_code=status.HTTP_200_OK,
+        og_title=practice.title,
+        og_description=og_description,
+        primary=(deep_link, "Открыть VELO"),
+        hint="Гостевой вход сейчас недоступен — откройте практику "
+             "в приложении.",
+    )
+
+
+@public_router.get("/z/{code}/guest")
+async def public_practice_guest_endpoint(
+    code: str,
+    session: AsyncSession = Depends(get_db_reader),
+) -> Response:
+    """The guest button's target: 307 straight into Zoom.
+
+    The raw Zoom URL exists here ONLY as the Location header of one response
+    -- it is in no page body and in no JSON anywhere in this system. The hop
+    itself is unavoidable; the browser has to reach zoom.us somehow. Same
+    shape as zoom_start_redirect_endpoint above, Referrer-Policy included so
+    zoom.us is not handed the shape of our route.
+
+    Anonymous, like the landing: resolve_zoom_entry is called with user=None,
+    so this endpoint cannot return a personal link even by mistake.
+    """
+    from app.modules.zoom.service import ZoomEntryKind, resolve_zoom_entry
+
+    practice = await _load_public_practice(code, session)
+    if practice is None:
+        return _not_a_link_page()
+
+    resolution = await resolve_zoom_entry(practice, None, session)
+    if resolution.kind != ZoomEntryKind.GUEST or resolution.url is None:
+        # The landing would not have shown this button in these states; a
+        # hand-typed or stale URL can still arrive here.
+        return _public_page(
+            title=practice.title,
+            message="Гостевой вход сейчас недоступен.",
+            status_code=status.HTTP_200_OK,
+            og_title=practice.title,
+            og_description=f"{_format_practice_when(practice)}.",
+            primary=(
+                f"{settings.telegram_bot_url}?startapp=zoom__{code}",
+                "Открыть VELO",
+            ),
+        )
+
+    return RedirectResponse(
+        url=resolution.url,
+        status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+        headers={"Referrer-Policy": "no-referrer"},
     )

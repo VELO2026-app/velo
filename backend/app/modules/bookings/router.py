@@ -171,13 +171,15 @@ async def list_my_bookings_endpoint(
     # Fill it here with the same helper the single-booking/detail responses use.
     # Dedup by master_id so a master repeated across the page is looked up once.
     from app.modules.masters.service import get_master_display_name
-    # M-3 gate: expose zoom_link only for confirmed/attended bookings. Imported
-    # locally to match this file's cross-service import style (get_master_-
-    # display_name above) and sidestep any module-load import cycle.
+    # M-3 gate: expose this user's own PERSONAL registrant link only for a
+    # confirmed/attended booking (T-35: the manual zoom_link this gate also
+    # used to cover no longer exists). Imported locally to match this file's
+    # cross-service import style (get_master_display_name above) and sidestep
+    # any module-load import cycle.
     from app.modules.practices.service import ZOOM_VISIBLE_BOOKING_STATUSES
     # A4 V2 (PROMPT №572): batched Zoom meeting status for this page's
     # practices -- NOT gated by ZOOM_VISIBLE_BOOKING_STATUSES (that gate is
-    # for the manual zoom_link fallback, M-3); the meeting STATUS carries no
+    # for the personal join_url below, M-3); the meeting STATUS carries no
     # secret material, same posture as PracticeResponse.zoom_meeting_status.
     from app.modules.zoom.service import get_zoom_meeting_statuses
 
@@ -207,18 +209,17 @@ async def list_my_bookings_endpoint(
                 updated_at=booking.updated_at,
                 has_feedback=has_feedback,
                 has_checkin=has_checkin,
-                # zoom_link (M-3): exposed only for this user's confirmed /
-                # attended booking; the fail-closed factory nulls it otherwise.
+                # T-35: the summary carries no Zoom URL at all any more --
+                # the zoom_link column and its fail-closed gate are gone. The
+                # only link on this response is the personal one below.
                 practice=PracticeSummary.from_practice(
                     practice,
                     master_name=master_names[practice.master_id],
-                    zoom_link_visible=(
-                        booking.status in ZOOM_VISIBLE_BOOKING_STATUSES
-                    ),
                     zoom_meeting_status=zoom_meeting_statuses.get(practice.id),
                 ),
-                # T21-1: same M-3 gate as zoom_link above -- this booking is
-                # already this user's own (query is scoped to Booking.user_id).
+                # T21-1: the M-3 gate, now the only one on this response --
+                # this booking is already this user's own (query is scoped to
+                # Booking.user_id).
                 zoom_registrant_join_url=(
                     zoom_join_url
                     if booking.status in ZOOM_VISIBLE_BOOKING_STATUSES
@@ -290,9 +291,6 @@ async def list_my_upcoming_bookings_endpoint(
             practice=PracticeSummary.from_practice(
                 practice,
                 master_name=master_names[practice.master_id],
-                zoom_link_visible=(
-                    booking.status in ZOOM_VISIBLE_BOOKING_STATUSES
-                ),
                 zoom_meeting_status=zoom_meeting_statuses.get(practice.id),
             ),
             zoom_registrant_join_url=(
@@ -360,12 +358,11 @@ async def get_booking_detail_endpoint(
         left_at=booking.left_at,
         created_at=booking.created_at,
         updated_at=booking.updated_at,
-        # zoom_link (M-3): not exposed on the booking-detail response -- no UI
-        # reads it here, and an authorized viewer gets the link via the
-        # practice detail / dashboard. Nulled explicitly (no schema validator).
-        practice=PracticeResponse.model_validate(practice).model_copy(
-            update={"zoom_link": None},
-        ),
+        # T-35: nothing to null here any more. This used to strip zoom_link
+        # from the embedded practice; the column is gone, and the response
+        # carries no Zoom URL of any kind. An authorized viewer asks
+        # GET /practices/{id}/zoom/resolve for a link.
+        practice=PracticeResponse.model_validate(practice),
     )
 
 

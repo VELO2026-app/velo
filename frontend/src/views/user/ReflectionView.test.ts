@@ -183,7 +183,6 @@ function practice(overrides: Partial<PracticeResponse> = {}): PracticeResponse {
     timezone: 'UTC',
     max_participants: 10,
     current_participants: 3,
-    zoom_link: null,
     parent_practice_id: null,
     is_free: false,
     price_cents: 2500,

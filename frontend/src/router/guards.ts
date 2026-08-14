@@ -25,9 +25,10 @@
 // landing on /user/dashboard with broken state.
 //
 // TD-F01: roleRedirect consumes pendingDeepLink after auth completes.
-// If a startapp=open_practice__{uuid} deep link was parsed during initAuth(),
-// the user is redirected to the practice detail page instead of the dashboard.
-// pendingDeepLink is cleared after first use to prevent stale redirects.
+// If a startapp deep link was parsed during initAuth(), the user is
+// redirected there instead of the dashboard -- open_practice__{uuid} to the
+// practice detail, zoom__{code} to practice-live (T-35). pendingDeepLink is
+// cleared after first use to prevent stale redirects.
 // =============================================================================
 
 import type { NavigationGuardWithThis, RouteLocationNormalized } from 'vue-router'

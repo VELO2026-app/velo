@@ -196,7 +196,6 @@ function practice(id: string, overrides: Partial<PracticeResponse> = {}): Practi
     timezone: 'UTC',
     max_participants: 20,
     current_participants: 5,
-    zoom_link: null,
     parent_practice_id: null,
     is_free: true,
     price_cents: 0,
@@ -215,7 +214,6 @@ const P_SOON = practice('p1', {
   current_participants: 5,
   max_participants: 20,
   checkin_count: 3,
-  zoom_link: 'https://zoom.us/j/111',
 })
 // Five days out, 90 min -> «25 июля, 10:00 • 1 ч 30 м». Second in the list.
 const P_LATER = practice('p2', {
@@ -1068,22 +1066,29 @@ describe('MasterDashboardView', () => {
 
   // ===========================================================================
   describe('Zoom', () => {
-    it('opens a real https link through the platform, not window.open', async () => {
+    it('T-35: with no meeting yet, "Zoom" opens NOTHING and says so -- the manual link it used to open directly no longer exists', async () => {
+      // This test used to press "Zoom" on a practice whose only link was the
+      // master's hand-typed zoom_link and assert it was opened directly. That
+      // column is gone: a link Zoom cannot attribute to anybody is not a
+      // usable fallback, it is the hole the wrapper closes. The platform
+      // boundary itself is still pinned -- by the ticket-flow test below,
+      // which is the ONLY way this button now reaches an external URL.
       mount()
       await flush()
 
-      actionIn(blocks()[0]!, 'Zoom')?.click()
+      const zoomBtn = actionIn(blocks()[0]!, 'Zoom')
+      expect(zoomBtn?.disabled).toBe(true)
+      zoomBtn?.click()
       await flush()
 
-      expect(platformState.openLink).toHaveBeenCalledWith('https://zoom.us/j/111')
-      expect(toastInfo).not.toHaveBeenCalled()
+      expect(platformState.openLink).not.toHaveBeenCalled()
     })
 
     it('T21-1: with no link on either rung, the Zoom button is disabled (not just a nudge on click)', async () => {
       mount()
       await flush()
 
-      // blocks()[1] carries no zoom_link and no host registrant link (T21-1
+      // blocks()[1] carries no host registrant link (T21-1
       // PROMPT №541 supersedes the old "click a live button, get a toast"
       // behaviour -- the button itself is now disabled, same posture as the
       // user-facing screens).
@@ -1094,7 +1099,7 @@ describe('MasterDashboardView', () => {
       expect(platformState.openLink).not.toHaveBeenCalled()
     })
 
-    it('T21-1/PROMPT №565: a personal host registrant link (kind===personal) takes priority over the manual zoom_link, and starts the meeting as host via the ticket flow -- NOT by opening the raw registrant link', async () => {
+    it('T21-1/PROMPT №565: a host registrant link (kind===personal) starts the meeting as host via the ticket flow -- NOT by opening the raw registrant link', async () => {
       // zoom_host_join_url is a plain Zoom REGISTRANT join_url (see
       // MasterDashboardView.vue's onZoom comment) -- opening it directly, as
       // this test used to assert, lands the master on Zoom's "waiting for
@@ -1105,7 +1110,6 @@ describe('MasterDashboardView', () => {
         page([
           practice('withHost', {
             title: 'С хост-ссылкой',
-            zoom_link: 'https://zoom.us/j/manual',
             zoom_host_join_url: 'https://zoom.us/w/host?tk=xyz',
           }),
         ]),
@@ -1188,13 +1192,17 @@ describe('MasterDashboardView', () => {
       expect(actionIn(blocks()[0]!, 'Zoom')?.disabled).toBe(false)
     })
 
-    it('T21-1: no host link but a valid manual zoom_link -- button enabled, "not counted" mark shown', async () => {
+    it('T-35: no host link -- the button is DISABLED and no "не засчитается" fallback is offered any more', async () => {
+      // This test used to assert the opposite: with a manual zoom_link the
+      // button was enabled and merely MARKED as not counting attendance. That
+      // rung is gone with its column -- a link attendance cannot see is not a
+      // degraded option, it is the defect. A master whose meeting failed to
+      // create uses "Повторить" (below), not a hand-typed URL.
       mount()
       await flush()
 
-      // blocks()[0] is P_SOON: https zoom_link, no host link set.
-      expect(actionIn(blocks()[0]!, 'Zoom')?.disabled).toBe(false)
-      expect(host?.textContent).toContain('посещение не засчитается')
+      expect(actionIn(blocks()[0]!, 'Zoom')?.disabled).toBe(true)
+      expect(host?.textContent).not.toContain('посещение не засчитается')
     })
 
     // =========================================================================
@@ -1302,12 +1310,19 @@ describe('MasterDashboardView', () => {
       })
     })
 
-    it('refuses a non-https link on EITHER rung rather than handing it to the platform', async () => {
-      // resolveZoomLink's https guard (utils/zoomLink.ts). A stored `http://`
-      // or a `javascript:` string must never reach openLink on either rung --
-      // the guard is the point.
+    it('refuses a non-https link rather than handing it to the platform', async () => {
+      // resolveZoomLink's https guard (utils/zoomLink.ts). T-35: there is only
+      // ONE rung left to guard -- the host registrant link, which comes from
+      // our own database rather than from a field a master typed. The guard is
+      // kept anyway: it costs nothing and it is the reason a malformed value
+      // degrades to an honest disabled button instead of a broken navigation.
       vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
-        page([practice('bad', { title: 'Плохая ссылка', zoom_link: 'http://zoom.us/j/222' })]),
+        page([
+          practice('bad', {
+            title: 'Плохая ссылка',
+            zoom_host_join_url: 'http://zoom.us/j/222',
+          }),
+        ]),
       )
       mount()
       await flush()

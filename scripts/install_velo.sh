@@ -865,32 +865,21 @@ CORS_ORIGINS=https://${DOMAIN_FRONTEND}
 # PWA), where DNS is real and a third-party host is a live dependency.
 # The short domain if one was given at install, the API domain otherwise.
 #
-# ┌─ KNOWN CEILING (convention §4a) ──────────────────────────────────────
-# │ (1) MECHANICS: nothing reads this variable. Not one line of code
-# │     consumes PUBLIC_LINK_BASE today -- it is declared ahead of its
-# │     consumer.
-# │ (2) STATUS: acknowledged by design.
-# │ (3) REFERENCE: T-35 (zoom-link wrapper, the /z/{code} redirect).
-# │ (4) UNCONSERVATION TRIGGER: the first public redirect handler
-# │     shipping -- at that point this stops being inert and becomes
-# │     the value that handler's URLs are built from.
-# │ (5) SHAPE OF THE FIX: assemble the URL at the edge from this
-# │     variable, per arch decision 13 (late binding: the intent lives
-# │     in the data, the domain lives in env, the URL is built at send
-# │     time). No migration, no domain in code or in profile data.
-# │ (6) REJECTED, AND WHY: "add it later, when something needs it" --
-# │     the honest-looking option, and wrong here. This file is
-# │     generated EXACTLY ONCE (the generator is a hard no-op if it
-# │     exists) and the certificate is issued once, so "later" is not
-# │     an edit, it is a server wipe -- and this install is promised
-# │     stable for weeks. The cost of carrying an unread key is one
-# │     line; the cost of adding it later is the whole box.
-# │
-# │ NOT the same case as TELEGRAM_API_BASE, which T-32 deletes in the
-# │ same pass for looking identical: that one has no consumer AND no
-# │ trigger -- nothing was ever going to read it. This one has both, on
-# │ a named ticket. Delete it and T-35 pays for a wipe.
-# └───────────────────────────────────────────────────────────────────────
+# CONSUMER (T-35, shipped): the Zoom link wrapper reads this. Every
+# practice link a master copies is built here at send time --
+# {PUBLIC_LINK_BASE}/z/{code}, where the code is a 22-character
+# base64url of the practice id (backend/app/modules/zoom/service.py,
+# build_public_practice_link). The same code is the Telegram deep link
+# (startapp=zoom__<22>).
+#
+# The value is NOT decorative: config.py refuses to start in production
+# with it empty. A wrong value is worse than a missing one -- it means
+# links already posted in Telegram channels point at a host that is not
+# us, and nothing in the request path would ever say so.
+#
+# nginx must proxy `location /` on this host to the backend (it does --
+# see scripts/nginx-render.sh), because the route lives at the ROOT,
+# outside /api/v1, so the link stays short.
 PUBLIC_LINK_BASE=https://${PUBLIC_LINK_HOST}
 
 # --- Telegram ---
@@ -1744,12 +1733,13 @@ if [ -n "$DOMAIN_PUBLIC" ]; then
         warn "  PUBLIC_LINK_BASE in backend/.env points at that domain, but its"
         warn "  certificate was not issued, so https:// links built from it will"
         warn "  not work until DNS is fixed and the certificate is re-requested."
-        warn "  Harmless today: no code reads PUBLIC_LINK_BASE yet (see the"
-        warn "  KNOWN CEILING note next to it in backend/.env)."
+        warn "  NOT harmless (T-35): every /z/{code} practice link a master"
+        warn "  copies is built from this value, so those links are dead until"
+        warn "  the certificate exists."
         warn "  Re-request: certbot certonly --webroot --webroot-path=/var/www/certbot -d $DOMAIN_PUBLIC"
         warn "  Then re-render nginx: velo doctor  (shows the drift), then reload."
     else
-        info "Public:   https://$DOMAIN_PUBLIC  (link base; no consumer yet — T-35)"
+        info "Public:   https://$DOMAIN_PUBLIC  (link base for /z/{code} practice links — T-35)"
     fi
 fi
 echo ""
