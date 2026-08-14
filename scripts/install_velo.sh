@@ -227,9 +227,11 @@ ask_config() {
     # Empty is a first-class answer: everything below branches on it and
     # the empty path is the untouched one.
     echo -e "${CYAN}Public link domain (optional)${NC}"
-    echo -e "${YELLOW}A short domain for public links, e.g. vl.example.com.${NC}"
-    echo -e "${YELLOW}Needs its own DNS A-record here. Press Enter to skip --${NC}"
-    echo -e "${YELLOW}links then use the API domain and nothing else changes.${NC}"
+    echo -e "${YELLOW}The host that PARTICIPANTS will see: practice links are${NC}"
+    echo -e "${YELLOW}published into Telegram channels as https://<this>/z/<code>.${NC}"
+    echo -e "${YELLOW}A SUBDOMAIN of a domain you already own, e.g. go.example.com${NC}"
+    echo -e "${YELLOW}-- nothing to buy, one A-record pointing here.${NC}"
+    echo -e "${YELLOW}Press Enter to skip -- links then read https://${DOMAIN_API}/z/...${NC}"
     read -p "Public link domain [none]: " DOMAIN_PUBLIC
     DOMAIN_PUBLIC="${DOMAIN_PUBLIC// /}"
     echo ""
@@ -877,9 +879,14 @@ CORS_ORIGINS=https://${DOMAIN_FRONTEND}
 # links already posted in Telegram channels point at a host that is not
 # us, and nothing in the request path would ever say so.
 #
-# nginx must proxy `location /` on this host to the backend (it does --
+# nginx must proxy "location /" on this host to the backend (it does --
 # see scripts/nginx-render.sh), because the route lives at the ROOT,
 # outside /api/v1, so the link stays short.
+#
+# NOTE for anyone editing the lines above: this heredoc is UNQUOTED
+# (it has to be -- PUBLIC_LINK_HOST and the date stamp must expand), so a
+# backtick here would be executed at install time and vanish from the
+# generated file. Keep comments backtick-free.
 PUBLIC_LINK_BASE=https://${PUBLIC_LINK_HOST}
 
 # --- Telegram ---
@@ -1741,6 +1748,16 @@ if [ -n "$DOMAIN_PUBLIC" ]; then
     else
         info "Public:   https://$DOMAIN_PUBLIC  (link base for /z/{code} practice links — T-35)"
     fi
+else
+    # No public domain was given, so every practice link a master copies will
+    # read https://api.<...>/z/... -- correct, and it is what a PARTICIPANT
+    # sees in a Telegram channel. Said out loud here rather than left to be
+    # discovered in a channel: skipping the prompt is silent, and silence is
+    # how an "api." host ends up in front of end users.
+    warn "Practice links will be published as https://${DOMAIN_API}/z/<code>"
+    warn "  -- no public link domain was given at install. Participants see"
+    warn "  this host in Telegram channels. Changing it later means a"
+    warn "  reinstall (backend/.env is written once)."
 fi
 echo ""
 
