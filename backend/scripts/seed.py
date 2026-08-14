@@ -276,19 +276,46 @@ async def ensure_master(
         session.add(
             MasterProfile(user_id=user.id, data=_verified_profile_data(spec))
         )
-    elif not had_master:
+    else:
+        # An existing profile, which on a reused stand account is the norm.
+        # Two things are fixed here and nothing else:
+        #
+        # 1. status -> verified, when it is not already. A pending
+        #    application on the demo master would make every seeded practice
+        #    unpublishable.
+        # 2. THE METHODS THE PROFILE ASKS FOR ARE MERGED IN. This is not
+        #    cosmetic: create_practice runs _assert_master_confirmed_taxonomy
+        #    (practices/service.py:609), which refuses any direction/style the
+        #    master has not confirmed. Without this merge the seed silently
+        #    depends on whatever the person happened to type into their
+        #    profile earlier -- and fails with "style 'presence' for direction
+        #    'meditation' is not among your confirmed methods".
+        #
+        # MERGED, not replaced: this is a real person's profile. Methods they
+        # added themselves stay; the profile only guarantees that what it is
+        # about to seed is confirmed.
         data = copy.deepcopy(profile.data or {})
         acct = data.setdefault("account", {})
-        acct["status"] = "verified"
-        acct.setdefault(
-            "verification",
-            {
-                "verified_at": datetime.now(UTC).isoformat(),
-                "verified_by": "cli_seed",
-                "notes": "re-verified via velo seed",
-            },
-        )
-        data.setdefault("availability", {})["is_accepting"] = True
+        if not had_master:
+            acct["status"] = "verified"
+            acct.setdefault(
+                "verification",
+                {
+                    "verified_at": datetime.now(UTC).isoformat(),
+                    "verified_by": "cli_seed",
+                    "notes": "re-verified via velo seed",
+                },
+            )
+            data.setdefault("availability", {})["is_accepting"] = True
+
+        prof = data.setdefault("profile", {})
+        existing_methods = list(prof.get("methods") or [])
+        added = [
+            m for m in spec.get("methods", []) if m not in existing_methods
+        ]
+        if added:
+            prof["methods"] = existing_methods + added
+            info(f"  methods added to existing profile: {', '.join(added)}")
         profile.set_jsonb("data", data)
 
     if user.role != UserRole.MASTER.value:
