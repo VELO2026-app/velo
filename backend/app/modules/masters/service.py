@@ -554,7 +554,7 @@ async def update_master_languages(
     languages: list[str],
     session: AsyncSession,
 ) -> MasterProfile:
-    """Replace the master's language set (E16, Q2=А -- no moderation).
+    """Replace the master's language set (E16, Q2=A -- no moderation).
 
     Writes data.profile.languages wholesale. The profile must be bound to the
     caller's write session (the router re-loads it via session.get, mirroring

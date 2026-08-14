@@ -155,13 +155,13 @@ async def switch_user_role(
     target_role: UserRole,
     session: AsyncSession,
 ) -> User:
-    """Switch the caller's own role in place (capability-derived, A1=Б).
+    """Switch the caller's own role in place (capability-derived, A1=B).
 
     Authorization is derived, not seeded: derive_allowed_roles() (shared with
     UserResponse.role_switch -- single source of truth) computes the allowed
     target set from
       - the current role (an admin may take any of the three roles, including
-        MASTER without a master profile -- №254 Q4=А),
+        MASTER without a master profile -- №254 Q4=A),
       - master capability (a VERIFIED MasterProfile unlocks MASTER),
       - the switched-away-admin marker (see below).
     A target outside the derived set -> 403. In particular a non-admin can

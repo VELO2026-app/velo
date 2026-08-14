@@ -117,7 +117,7 @@ async def switch_my_role(
     user: User = Depends(get_current_user_write),
     session: AsyncSession = Depends(get_db_session),
 ) -> UserResponse:
-    """Switch the caller's own role (capability-derived, A1=Б).
+    """Switch the caller's own role (capability-derived, A1=B).
 
     Always on -- no feature flag. Security rests on the derived policy in
     switch_user_role: the allowed target set is computed from the caller's

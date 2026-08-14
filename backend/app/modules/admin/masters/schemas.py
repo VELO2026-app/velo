@@ -35,7 +35,7 @@ class VerifyMasterRequest(BaseModel):
     no catalog write, identical to before this field existed. Deduped against
     existing rows (_promote_custom_methods) -- admin-picked, not automatic, same
     editorial-control rationale as the method-change-request flow (operator
-    decision 3=Б): a custom label becomes SHARED vocabulary for every future
+    decision 3=B): a custom label becomes SHARED vocabulary for every future
     master/admin the moment it's promoted, so it stays a deliberate admin
     choice rather than something typo'd free text can trigger unreviewed.
     """
@@ -114,7 +114,7 @@ class AdminMasterProfileUpdate(BaseModel):
     certifications: list[ShortStr] = Field(default_factory=list, max_length=20)
     languages: list[ShortStr] = Field(default_factory=list, max_length=10)
 
-    # -- User.* (account name, В1=В: both names editable) --
+    # -- User.* (account name, C1=C: both names editable) --
     first_name: str | None = Field(default=None, min_length=1, max_length=100)
     last_name: str | None = Field(default=None, min_length=1, max_length=100)
 
@@ -200,7 +200,7 @@ class RejectMethodChangeRequest(BaseModel):
 class ApproveMethodChangeRequest(BaseModel):
     """POST /admin/masters/{user_id}/method-change-request/approve -- body.
 
-    R5 stage 4 (operator decision 3=Б): promote is OPTIONAL and defaults to
+    R5 stage 4 (operator decision 3=B): promote is OPTIONAL and defaults to
     empty, so a bare `{}` body (every caller before this stage, and every
     approval where the admin didn't pick "add to catalog") behaves exactly
     as before -- no catalog write. Each entry becomes a new custom

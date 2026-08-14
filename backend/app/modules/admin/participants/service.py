@@ -12,7 +12,7 @@
 #   active -> users who opened the app within the period (last_login_at >=
 #             start). Coarse "opened >= 1x since window start" using the
 #             existing User.last_login_at (written on every auth); a per-open
-#             activity journal is deferred (operator Q2=В). No migration.
+#             activity journal is deferred (operator Q2=C). No migration.
 #
 # period + offset reuse app.core.periods (calendar_period_bounds / shift_anchor)
 # for parity with the dashboard stepper. practices_count = non-cancelled

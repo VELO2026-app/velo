@@ -625,7 +625,7 @@ async def approve_method_change(
     request (so the profile response returns method_change_request=None). No
     User.role change. Caller does flush + refresh.
 
-    promote (R5 stage 4, operator decision 3=Б): optional list of custom
+    promote (R5 stage 4, operator decision 3=B): optional list of custom
     method labels the admin chose to add to the taxonomy catalog, so future
     masters can pick them from MethodTaxonomyPicker instead of retyping
     free text. Absent/empty -> no catalog write, identical to pre-stage-4
@@ -773,7 +773,7 @@ async def edit_master_profile(
             prof[key] = sent[key]
     profile.set_jsonb("data", new_data)
 
-    # -- User.* (account name, В1=В) -- load + write only when a name was sent --
+    # -- User.* (account name, C1=C) -- load + write only when a name was sent --
     if "first_name" in sent or "last_name" in sent:
         user = await session.get(User, user_id)
         if user is None:

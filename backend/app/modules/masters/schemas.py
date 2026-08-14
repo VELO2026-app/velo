@@ -66,7 +66,7 @@ class MasterApplyExperience(BaseModel):
     certifications: list[ShortStr] = Field(default_factory=list, max_length=20)
     # E16: languages the master runs practices in (Русский / English). Flat
     # string list, optional at apply time (default []). Freely editable on the
-    # profile later (no moderation, Q2=А).
+    # profile later (no moderation, Q2=A).
     languages: list[ShortStr] = Field(default_factory=list, max_length=10)
 
 
@@ -100,7 +100,7 @@ class MasterApplyResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# One-time master invite claim (Batch-INVITE, C1=Б)
+# One-time master invite claim (Batch-INVITE, C1=B)
 # ---------------------------------------------------------------------------
 class ClaimMasterInviteRequest(BaseModel):
     """POST /masters/invite/claim -- the token from the deeplink.
@@ -144,7 +144,7 @@ class PayoutDetailsUpdate(BaseModel):
 class MasterLanguagesUpdate(BaseModel):
     """PATCH /api/v1/masters/me/languages -- freely-editable language set (E16).
 
-    Q2=А: no moderation (unlike methods). Replaces data.profile.languages
+    Q2=A: no moderation (unlike methods). Replaces data.profile.languages
     wholesale with the sent flat list. Empty list clears it.
     """
 
@@ -216,7 +216,7 @@ class MasterProfileResponse(BaseModel):
     display_name: str | None = None
     bio: str | None = None
     methods: list[str] = Field(default_factory=list)
-    # E16: languages the master runs practices in (freely editable, Q2=А).
+    # E16: languages the master runs practices in (freely editable, Q2=A).
     languages: list[str] = Field(default_factory=list)
     experience_years: int | None = None
     frozen_cents: int

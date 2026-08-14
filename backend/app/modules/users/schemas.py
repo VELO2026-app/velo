@@ -51,7 +51,7 @@ from app.modules.users.models import UserRole
 
 
 class RoleSwitchInfo(BaseModel):
-    """Self role-switch capability (capability-derived, A1=Б).
+    """Self role-switch capability (capability-derived, A1=B).
 
     Present in GET /users/me when the derived set contains more than just
     USER (i.e. there is actually something to switch to). The list is the
@@ -110,7 +110,7 @@ def derive_allowed_roles(
     *,
     admin_home: bool = False,
 ) -> list[UserRole]:
-    """Single source of truth for the self role-switch policy (A1=Б).
+    """Single source of truth for the self role-switch policy (A1=B).
 
     allowed(user) =
       {USER}
@@ -121,7 +121,7 @@ def derive_allowed_roles(
 
     Hard rule ADMIN-NEVER-TARGET: a non-admin can never reach ADMIN here --
     the admin role is granted only via CLI/DB. An admin may switch to MASTER
-    even without a master profile (№254 Q4=А): the master zone then shows
+    even without a master profile (№254 Q4=A): the master zone then shows
     its honest empty/onboarding state.
 
     Used by BOTH the write path (service.switch_user_role) and the read path
@@ -275,7 +275,7 @@ class UserResponse(BaseModel):
         capability (master_capability_in -- set by the router) and the
         switched-away-admin marker. The old seeded
         credentials.role_switch.allowed_roles lists are IGNORED: capability,
-        not seeding, decides (A1=Б).
+        not seeding, decides (A1=B).
 
         This is now the ONLY consumer of master_capability_in -- T-26 retired
         the master_notifications block the carrier was originally built for.
@@ -427,7 +427,7 @@ class UserUpdate(BaseModel):
 class RoleSwitchRequest(BaseModel):
     """POST /api/v1/users/me/role — target role to switch into.
 
-    A production endpoint (always on; A1=Б). Pydantic validates `role` against
+    A production endpoint (always on; A1=B). Pydantic validates `role` against
     UserRole (user/master/admin); anything else is a 422. Whether the caller
     may actually switch to it is enforced in the service via
     derive_allowed_roles() -- the capability-derived policy (own role + a
