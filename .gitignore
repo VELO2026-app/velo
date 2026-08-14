@@ -8,6 +8,14 @@ desc/
 .env
 .env.*
 
+# Dependencies. frontend/.gitignore:2 covers frontend/node_modules/, and the ROOT
+# one was covered by nothing at all until 2026-08-14 — a bare `git add .` here
+# staged a vitest cache file. ⚠ `git check-ignore -v node_modules/` returned exit 0
+# citing a BLANK line of this file, while the same check on a path INSIDE it
+# returned exit 1; `git status` (which showed it as untracked) was the honest
+# witness. Do not read that command's affirmative verdict as coverage.
+node_modules/
+
 # Local handoff / working docs (kickoff, prompts, seed context). NOT code —
 # never committed. Lives next to the project as the single working location
 # (consolidated out of GoogleDrive 2026-06-02). Local-only, not synced.
