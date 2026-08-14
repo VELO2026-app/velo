@@ -482,6 +482,9 @@
   --velo-gap-15: 15px; /* cross-component flex gap (dashboard / master-review / withdrawal) */
   --velo-gap-21: 21px; /* master-review history accordion header gap */
   --velo-inset-12: 12px; /* admin filter / list row horizontal inset */
+  --velo-inset-5: 5px; /* dashboard bell unread-badge horizontal padding -- distinct
+                          role from --velo-radius-badge/--velo-card-gap-icon-title,
+                          which are also 5px but a radius and a gap, not an inset */
 
   /* =========================================================================
    * E3 admin-zone DS-compliance tokens (appearance-preserving; value = prior
@@ -505,6 +508,10 @@
   /* Component-size ramp (value-named; extends --velo-size-40/44/46/50 above).
      Admin count-badges, avatars, id circles, week-nav button, review photo. */
   --velo-size-16: 16px;   /* practice-detail id circle */
+  --velo-size-18: 18px;   /* dashboard bell unread-badge diameter (min-width + height) --
+                             its OWN role, distinct from the count-badge family below
+                             (36/38/48): those are wide admin pills, this is a small
+                             round corner overlay */
   --velo-size-35: 35px;   /* dashboard week-nav button height */
   --velo-size-36: 36px;   /* list count-badge height */
   --velo-size-38: 38px;   /* reports / method-requests count-badge min-width */

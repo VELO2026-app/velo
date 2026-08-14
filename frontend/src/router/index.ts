@@ -211,6 +211,15 @@ const router = createRouter({
           component: () => import('@/views/master/MasterDashboardView.vue'),
         },
         {
+          // The bell feed (T-26, PROMPT №704). Top-level, NOT under `profile/` --
+          // deliberately named 'master-inbox', not 'master-notifications': that
+          // name is already the T-26 preference screen at profile/notifications.
+          path: 'notifications',
+          name: 'master-inbox',
+          meta: { hideTabBar: true },
+          component: () => import('@/views/master/MasterInboxView.vue'),
+        },
+        {
           path: 'practices',
           name: 'master-practices',
           beforeEnter: masterStatusGuard,

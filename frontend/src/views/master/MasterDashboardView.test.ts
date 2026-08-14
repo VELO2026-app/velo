@@ -93,6 +93,7 @@ import MasterDashboardView from '@/views/master/MasterDashboardView.vue'
 import * as mastersApi from '@/api/masters'
 import * as usersApi from '@/api/users'
 import * as practicesApi from '@/api/practices'
+import * as notificationsApi from '@/api/notifications'
 import { useMasterStore } from '@/stores/master'
 import { useAuthStore } from '@/stores/auth'
 import { ApiResponseError } from '@/api/client'
@@ -102,12 +103,15 @@ import type {
   MasterStatsResponse,
   UserResponse,
 } from '@/api/types'
+import type { NotificationList } from '@/api/notifications'
 
 // Both real stores under this screen read from these two modules, so auto-mocking
 // them seams the data half whole. ApiResponseError stays REAL (it lives in
 // @/api/client, untouched), so the profile-error branch is driven by the real class.
 vi.mock('@/api/masters')
 vi.mock('@/api/users')
+// T-26 (PROMPT №704): the bell badge's seam.
+vi.mock('@/api/notifications')
 
 // PROMPT №565: "Zoom", for kind==='personal', now goes through the same
 // ticket flow "Начать" used before the two buttons merged -- only
@@ -172,6 +176,12 @@ const EMPTY_NEW = `Данных пока нет ${DASH} создайте пер�
 // Fixtures. Every datetime is a literal picked against NOW; every practice
 // carries an explicit timezone (see the banner).
 // -----------------------------------------------------------------------------
+
+// T-26 (PROMPT №704): the bell badge's only input. Items are irrelevant to
+// this screen (it only reads `.unread`) -- MasterInboxView.test.ts covers items.
+function notificationPage(overrides: Partial<NotificationList> = {}): NotificationList {
+  return { items: [], next_cursor: null, unread: 0, ...overrides }
+}
 
 function practice(id: string, overrides: Partial<PracticeResponse> = {}): PracticeResponse {
   return {
@@ -520,6 +530,7 @@ beforeEach(() => {
   vi.mocked(usersApi.updateMe)
     .mockReset()
     .mockImplementation(async () => user({ master_onboarding_completed: true }))
+  vi.mocked(notificationsApi.listNotifications).mockReset().mockResolvedValue(notificationPage())
 
   useAuthStore().user = user()
 
@@ -1009,16 +1020,49 @@ describe('MasterDashboardView', () => {
   })
 
   // ===========================================================================
-  describe('the stub actions (asserted as the stubs they are -- SC-09)', () => {
-    it('the bell toasts and never navigates', async () => {
+  // The 'stub actions (SC-09)' describe used to live here with exactly one
+  // test (the bell). T-26 (PROMPT №704) retired the stub; the block had no
+  // other occupant, so it is gone rather than left holding nothing.
+  describe('the bell (T-26, PROMPT №704)', () => {
+    it('the badge shows the real unread count from the list response', async () => {
+      vi.mocked(notificationsApi.listNotifications).mockResolvedValue(
+        notificationPage({ unread: 3 }),
+      )
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.master-dashboard__bell-badge')?.textContent?.trim()).toBe('3')
+    })
+
+    it('unread=0 renders no badge at all (v-if, not a hidden zero)', async () => {
+      vi.mocked(notificationsApi.listNotifications).mockResolvedValue(
+        notificationPage({ unread: 0 }),
+      )
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.master-dashboard__bell-badge')).toBeNull()
+    })
+
+    it('a failed fetch leaves the badge at 0 -- a courtesy, not a break', async () => {
+      vi.mocked(notificationsApi.listNotifications).mockRejectedValue(new Error('down'))
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.master-dashboard__bell-badge')).toBeNull()
+      expect(host?.querySelector('.master-dashboard__bell')).not.toBeNull() // the dashboard itself lives
+    })
+
+    it('tapping the bell navigates to the inbox and toasts nothing', async () => {
+      vi.mocked(notificationsApi.listNotifications).mockResolvedValue(notificationPage())
       mount()
       await flush()
 
       host?.querySelector<HTMLElement>('.master-dashboard__bell')?.click()
       await flush()
 
-      expect(toastInfo).toHaveBeenCalledWith('Уведомления пока недоступны')
-      expect(push).not.toHaveBeenCalled()
+      expect(push).toHaveBeenCalledWith({ name: 'master-inbox' })
+      expect(toastInfo).not.toHaveBeenCalled()
     })
   })
 
@@ -1413,10 +1457,11 @@ describe('MasterDashboardView', () => {
   // ===========================================================================
   // NOT COVERED, deliberately
   //
-  // - The unread bell BADGE (.vue:42): `unreadCount` is `computed(() => 0)`
-  //   (.vue:295) with no feed behind it, so the badge is unreachable by any
-  //   input. A test would assert a literal 0 the screen hardcodes, not a
-  //   behaviour (SC-01). The bell's honest stub -- the toast -- IS covered.
+  // The unread bell BADGE used to be listed here as unreachable (`unreadCount`
+  // was a hardcoded `computed(() => 0)`). T-26 (PROMPT №704) made it real --
+  // see 'the bell' describe block above, which covers exactly what this note
+  // used to say could not be tested: the positive count, the zero-hides-it
+  // case, the failed-fetch courtesy, and the navigation.
   // - The practice ICON (`practiceIconFor`, .vue:141): a pure direction ->
   //   component lookup with its own test (utils/displayHelpers.test.ts). This
   //   screen only forwards `practice` to it.

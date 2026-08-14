@@ -5,7 +5,9 @@
   month / scroll). Rendered inside MasterShell (fog + tab bar from the shell).
 
   Structure (DS-first — every value is a --velo-* token / DS component):
-    - Greeting + notification bell (badge only when unread > 0).
+    - Greeting + notification bell: badge = the real unread count (T-26,
+      PROMPT №704), fetched alongside the stats row; tap -> 'master-inbox'
+      (MasterInboxView.vue). No feed on the dashboard itself.
     - Stats: label + period toggle (Неделя / Месяц) + 3 VStatCard with optional
       delta trend. Period toggle = the user-dashboard pattern (NOT VSegment).
     - "Мои группы" row (VMenuRow) -> master-groups (P2, PROMPT №591; was
@@ -18,9 +20,9 @@
   STUBS (no backend yet -> roadmap for Zod; non-working taps show a toast):
     - Stats: only the practices total is real; participants/income + all deltas
       and the Неделя/Месяц period scoping have no API -> "—", toggle visual-only.
-    - Notification bell (no feed), AI summary "Подробнее" (no master-AI),
-      practice checkin-count + recurrence meta (no fields) -> rendered only
-      when the data exists (v-if), absent for now.
+    - AI summary "Подробнее" (no master-AI), practice checkin-count +
+      recurrence meta (no fields) -> rendered only when the data exists
+      (v-if), absent for now. The bell is NOT in this list any more (T-26).
 -->
 
 <template>
@@ -293,6 +295,7 @@ import { checkinLabel, recurrenceLabel, remainingSessionsLabel } from '@/utils/p
 import { practiceHasEnded } from '@/utils/practiceStatus'
 import { resolveZoomLink, type ZoomLinkResolution } from '@/utils/zoomLink'
 import { getMasterStats } from '@/api/masters'
+import { listNotifications } from '@/api/notifications'
 import { createZoomStartTicket, zoomStartRedirectUrl, retryZoomMeeting } from '@/api/practices'
 import { ApiResponseError } from '@/api/client'
 import type { PracticeResponse, MasterStatsResponse } from '@/api/types'
@@ -358,8 +361,19 @@ watch(period, () => {
   })
 })
 
-// Notifications feed not built yet → no unread count (roadmap for Zod).
-const unreadCount = computed((): number => 0)
+// T-26 (PROMPT №704): a real count, fetched alongside the stats row
+// (onMounted below). The comms `unread` field rides the SAME response as the
+// item list -- no separate unread-count endpoint exists to call here (verified
+// against comms app/api/inbox.py:163-171, T-26 recon №703). A failed fetch
+// leaves this at 0 silently: the badge is a courtesy, same disposition as
+// UserMessagesView.vue's per-thread badges, never a reason to break the
+// dashboard.
+const unreadCount = ref(0)
+
+async function loadUnreadCount(): Promise<void> {
+  const page = await listNotifications()
+  unreadCount.value = page.unread
+}
 
 // =========================================================================
 // Nearest upcoming practices (up to 2). Scheduled/live AND not yet ended;
@@ -391,10 +405,11 @@ function practiceWhen(p: PracticeResponse): string {
   return `${day}, ${time} • ${formatDuration(p.duration_minutes)}`
 }
 
-// -- Stub actions (no backend) --
+// T-26 (PROMPT №704): the bell is no longer a stub -- it opens the real feed.
 function onBell(): void {
-  toast.info('Уведомления пока недоступны')
+  router.push({ name: 'master-inbox' })
 }
+// -- Stub actions (no backend) --
 function onGroups(): void {
   router.push({ name: 'master-groups' })
 }
@@ -535,6 +550,12 @@ onMounted(async () => {
   void loadStats().catch(() => {
     /* leave cards at "—" if the stats fetch fails */
   })
+  // Bell badge (T-26, PROMPT №704); same fire-and-forget disposition as
+  // loadStats above -- a failed fetch leaves the badge at 0 rather than
+  // blocking the dashboard on a courtesy count.
+  void loadUnreadCount().catch(() => {
+    /* leave the badge at 0 if the fetch fails */
+  })
   // Both calls are lazy -- skip if already populated by guard / prior navigation.
   await masterStore.fetchMyProfile()
   await masterStore.fetchMyPractices()
@@ -628,11 +649,18 @@ onUnmounted(() => {
 
 .master-dashboard__bell-badge {
   position: absolute;
+  /* top/right stay LITERAL, not tokenized (PROMPT №704 judgement, argued not
+     assumed): this is a positional nudge tying the badge's corner to the
+     EXACT geometry of THIS 44px circle + 21px icon, not a reusable design
+     magnitude -- there is no other corner-overlay badge anywhere in this
+     codebase (checked: `top: -`/`right: -` on a badge occurs nowhere else),
+     so there is no role to name it after and no second site that would ever
+     read var(--velo-something-minus-1) and know what it means. */
   top: -1px;
   right: -1px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
+  min-width: var(--velo-size-18);
+  height: var(--velo-size-18);
+  padding: 0 var(--velo-inset-5);
   border-radius: var(--radius-xl);
   background: var(--velo-pink-300);
   color: var(--velo-white);
