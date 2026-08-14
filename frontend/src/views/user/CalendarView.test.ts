@@ -166,7 +166,6 @@ function practice(id: string, overrides: Partial<PracticeResponse> = {}): Practi
     timezone: 'UTC',
     max_participants: 20,
     current_participants: 5,
-    zoom_link: null,
     parent_practice_id: null,
     is_free: true,
     price_cents: 0,

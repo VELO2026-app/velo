@@ -148,7 +148,6 @@ def _build_child_occurrence(
         duration_minutes=root.duration_minutes,
         timezone=root.timezone,
         max_participants=root.max_participants,
-        zoom_link=root.zoom_link,
         parent_practice_id=root.id,
         is_free=root.is_free,
         price_cents=root.price_cents,

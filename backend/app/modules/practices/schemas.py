@@ -46,7 +46,6 @@
 #     settings.practice_style_max_length      -- style Field limit
 #     settings.practice_title_max_length      -- title Field limit
 #     settings.practice_description_max_length
-#     settings.practice_zoom_link_max_length
 #     settings.practice_timezone_max_length
 #     settings.practice_max_participants_limit
 #   Change any of these in config.py -- schemas update automatically.
@@ -82,25 +81,6 @@ from app.modules.practices.models import (
     PracticeStatus,
     PracticeType,
 )
-
-
-# -- Zoom link validation (manual field; no Zoom integration / auto-gen) --
-# zoom_link is optional and hand-entered by the master. A non-empty value MUST
-# be an https:// URL: mirrors the frontend guard (CreatePracticeView) and the
-# live-view usability check (AUDIT-0520-02), enforced on the backend -- the
-# source of truth -- so a direct API call cannot store a non-https /
-# javascript: link. Empty / None means "no link". "https://" is a fixed
-# protocol requirement, not a business value, so it is not sourced from config.
-_ZOOM_LINK_REQUIRED_PREFIX = "https://"
-
-
-def _validate_zoom_link(v: str | None) -> str | None:
-    """Reject a non-empty zoom_link that is not an https:// URL."""
-    if v and not v.startswith(_ZOOM_LINK_REQUIRED_PREFIX):
-        raise ValueError(
-            f"zoom_link must start with '{_ZOOM_LINK_REQUIRED_PREFIX}'"
-        )
-    return v
 
 
 # -- Recurrence spec (E3, series only) --
@@ -197,9 +177,6 @@ class CreatePracticeRequest(BaseModel):
     max_participants: int | None = Field(
         default=None, ge=1, le=settings.practice_max_participants_limit,
     )
-    zoom_link: str | None = Field(
-        default=None, max_length=settings.practice_zoom_link_max_length,
-    )
     parent_practice_id: UUID | None = None
 
     # -- Pricing (Phase 4.3/4.4) --
@@ -272,12 +249,6 @@ class CreatePracticeRequest(BaseModel):
                 f"practice_type must be one of {allowed}, got '{v}'"
             )
         return v
-
-    @field_validator("zoom_link")
-    @classmethod
-    def zoom_link_must_be_https(cls, v: str | None) -> str | None:
-        """Manually-entered zoom_link must be an https:// URL (or empty)."""
-        return _validate_zoom_link(v)
 
     @field_validator("difficulty")
     @classmethod
@@ -395,9 +366,6 @@ class UpdatePracticeRequest(BaseModel):
     max_participants: int | None = Field(
         default=None, ge=1, le=settings.practice_max_participants_limit,
     )
-    zoom_link: str | None = Field(
-        default=None, max_length=settings.practice_zoom_link_max_length,
-    )
     # parent_practice_id is DELIBERATELY absent (C2): it is the series
     # identity, set once by the series generator at creation time, not a
     # mutable attribute. It used to be here and flowed into the update
@@ -480,12 +448,6 @@ class UpdatePracticeRequest(BaseModel):
                 f"practice_type must be one of {allowed}, got '{v}'"
             )
         return v
-
-    @field_validator("zoom_link")
-    @classmethod
-    def zoom_link_must_be_https(cls, v: str | None) -> str | None:
-        """Manually-entered zoom_link must be an https:// URL (or empty)."""
-        return _validate_zoom_link(v)
 
     @field_validator("difficulty")
     @classmethod
@@ -679,7 +641,6 @@ class PracticeResponse(BaseModel):
     timezone: str
     max_participants: int | None
     current_participants: int
-    zoom_link: str | None
     parent_practice_id: UUID | None
 
     # -- Pricing --
@@ -751,14 +712,20 @@ class PracticeResponse(BaseModel):
     # attended/no_show above.
     zoom_host_join_url: str | None = None
 
-    # T24-38 (PROMPT №642): the SHARED, registration-free link -- a
-    # deliberate temporary crutch for the launch period (owner ruling, to be
-    # REMOVED later). Same owner-only gating posture as zoom_host_join_url
-    # immediately above (populated only on owner-facing responses; every
-    # other caller leaves the schema default None) -- kept as its OWN field
-    # rather than folded into zoom_host_join_url so deleting the feature
-    # later is a plain field removal, not a disentanglement.
-    zoom_shared_join_url: str | None = None
+    # T-35: OUR public link for this practice -- {PUBLIC_LINK_BASE}/z/{code}.
+    # Replaces zoom_shared_join_url, which used to carry the RAW Zoom guest
+    # URL here; no raw Zoom URL leaves the API on any path any more, so the
+    # master's "Копировать" button cannot hand anyone a link that bypasses
+    # attendance. Same owner-only posture as zoom_host_join_url above.
+    #
+    # That gate is NOT a security boundary, and nothing may be built as if
+    # it were: the code is base64url(practice.id.bytes) -- a deterministic
+    # function of an id any authenticated user already sees in the feed, so
+    # the wrapper adds zero entropy. The gate exists only so that replacing
+    # a field does not silently WIDEN its audience. The one real protection
+    # is that the anonymous branch never returns a personal link, and it
+    # rests on the request being anonymous (zoom/service.py's resolver).
+    zoom_public_link: str | None = None
 
     # A4 V2 (PROMPT №572): this practice's ZoomMeeting.status verbatim
     # ('active' | 'pending_creation' | 'create_failed' | 'deleted'), or None
@@ -784,13 +751,6 @@ class PracticeResponse(BaseModel):
     # detail) leaves the schema default.
     deduplicated: bool = False
 
-    # zoom_link (M-3 access gate) is handled at the response-building layer,
-    # NOT with a model_validator: FastAPI re-validates the returned model
-    # against response_model, which would re-run an "after" validator and wipe
-    # any value the service set. practice_to_response() therefore assigns
-    # zoom_link explicitly -- the real link only on the authorized path, None
-    # everywhere else. Direct model_validate(practice) callers (booking detail,
-    # finalize) null it themselves.
     model_config = {"from_attributes": True}
 
 
@@ -847,23 +807,12 @@ class PracticeSummary(BaseModel):
     price_cents: int
     currency: str
 
-    # E18 + M-3 + Z-7: zoom_link on the summary powers the dashboard
-    # nearest-card "Войти" / Zoom button. It is access-gated (M-3): it must
-    # reach only a user with a CONFIRMED / ATTENDED booking on the practice.
-    # The gate is enforced in from_practice() below -- the SINGLE construction
-    # point for every list-view consumer -- which defaults it to None
-    # (fail-closed). A schema model_validator cannot be used: FastAPI
-    # re-validates the response and would re-run it, wiping the value the
-    # builder set.
-    zoom_link: str | None = None
-
     # A4 V2 (PROMPT №572): same field, same NOT-owner-gated posture as
     # PracticeResponse.zoom_meeting_status above -- powers the SAME
     # pending-vs-failed distinction on list-view Zoom buttons (dashboard
     # nearest card, my-bookings). Set by from_practice() below; no ORM
     # source on Practice itself (ZoomMeeting is a separate table), so
-    # model_validate() alone cannot populate it -- callers must pass it in,
-    # the same shape as zoom_link_visible.
+    # model_validate() alone cannot populate it -- callers must pass it in.
     zoom_meeting_status: str | None = None
 
     model_config = {"from_attributes": True}
@@ -874,21 +823,21 @@ class PracticeSummary(BaseModel):
         practice: Practice,
         *,
         master_name: str | None = None,
-        zoom_link_visible: bool = False,
         zoom_meeting_status: str | None = None,
     ) -> "PracticeSummary":
         """Build a summary from a Practice ORM row -- the single construction
         point for all list-view consumers (bookings / waitlist / purchases).
 
-        zoom_link is FAIL-CLOSED (Z-7): None unless the caller explicitly
-        passes zoom_link_visible=True (warranted only by the requester's own
-        CONFIRMED / ATTENDED booking). Because every summary is built here, no
-        builder can forget to null it. master_name is filled here too -- it has
-        no ORM source on the practice row (it lives on the joined user).
+        T-35: the zoom_link field and its fail-closed zoom_link_visible gate
+        are gone with the column itself. There is no longer any Zoom URL on
+        this schema at all -- a list-view "Войти" button reads the personal
+        registrant link (BookingWithPracticeResponse.zoom_registrant_join_url,
+        which keeps its own M-3 gate) or nothing. master_name is filled here
+        -- it has no ORM source on the practice row (it lives on the joined
+        user).
         """
         summary = cls.model_validate(practice)
         summary.master_name = master_name
-        summary.zoom_link = practice.zoom_link if zoom_link_visible else None
         summary.zoom_meeting_status = zoom_meeting_status
         return summary
 
@@ -900,3 +849,28 @@ class ZoomStartTicketResponse(BaseModel):
     zoom/service.py's ticket-issuance docstring for why."""
 
     ticket: str
+
+
+class ZoomEntryResolveResponse(BaseModel):
+    """GET /api/v1/practices/{id}/zoom/resolve (T-35) -- the SERVER's answer
+    to "how does this person enter this practice right now".
+
+    The choice itself lives on the server (zoom/service.py's
+    resolve_zoom_entry) and this schema only transports it: the client
+    renders `kind` and never decides between two links. That is the point of
+    the endpoint -- the old ladder lived in frontend/src/utils/zoomLink.ts,
+    where it was a rule every entry point had to remember, and a rule cannot
+    be enforced by construction.
+
+    url is deliberately nullable on TWO kinds, and a caller must handle
+    both without collapsing either into 'failed':
+      - 'host'  -- by design; the master starts his own meeting through the
+                   existing start-ticket flow, never through a stored URL.
+      - 'guest' -- when ensure_shared_registrant never succeeded. The
+                   meeting exists; only the guest seat in it does not.
+    """
+
+    kind: Literal[
+        "personal", "host", "guest", "pending", "failed", "cancelled",
+    ]
+    url: str | None = None

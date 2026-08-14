@@ -227,9 +227,11 @@ ask_config() {
     # Empty is a first-class answer: everything below branches on it and
     # the empty path is the untouched one.
     echo -e "${CYAN}Public link domain (optional)${NC}"
-    echo -e "${YELLOW}A short domain for public links, e.g. vl.example.com.${NC}"
-    echo -e "${YELLOW}Needs its own DNS A-record here. Press Enter to skip --${NC}"
-    echo -e "${YELLOW}links then use the API domain and nothing else changes.${NC}"
+    echo -e "${YELLOW}The host that PARTICIPANTS will see: practice links are${NC}"
+    echo -e "${YELLOW}published into Telegram channels as https://<this>/z/<code>.${NC}"
+    echo -e "${YELLOW}A SUBDOMAIN of a domain you already own, e.g. go.example.com${NC}"
+    echo -e "${YELLOW}-- nothing to buy, one A-record pointing here.${NC}"
+    echo -e "${YELLOW}Press Enter to skip -- links then read https://${DOMAIN_API}/z/...${NC}"
     read -p "Public link domain [none]: " DOMAIN_PUBLIC
     DOMAIN_PUBLIC="${DOMAIN_PUBLIC// /}"
     echo ""
@@ -323,12 +325,24 @@ echo -e "${CYAN}═════════════════════�
 echo -e "${CYAN}  Required DNS records (add BEFORE continuing) ${NC}"
 echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
 echo ""
-echo -e "  Type  Name                Value"
-echo -e "  ────  ──────────────────  ─────────────────"
-echo -e "  A     $DOMAIN_FRONTEND    $SERVER_IP"
-echo -e "  A     $DOMAIN_API         $SERVER_IP"
+printf "  %-5s %-22s %s\n" "Type" "Name" "Value"
+echo -e "  ────  ──────────────────────  ─────────────────"
+# printf, not echo: the columns used to be padded by hand-counted spaces, so
+# the Value column landed wherever the domain name happened to end.
+printf "  A     %-22s %s\n" "$DOMAIN_FRONTEND" "$SERVER_IP"
+printf "  A     %-22s %s\n" "$DOMAIN_API" "$SERVER_IP"
+# The public link domain belongs in this list whenever it was given: it gets
+# its OWN certificate below, so a missing A-record for it fails certbot just
+# as surely as a missing one for the two required domains. Listing only two
+# while the prompt above asked for three is how an operator adds two records,
+# presses ENTER, and discovers the third at certbot time.
+[ -n "$DOMAIN_PUBLIC" ] && printf "  A     %-22s %s\n" "$DOMAIN_PUBLIC" "$SERVER_IP"
 echo ""
-echo -e "${YELLOW}Both records must resolve to this server before SSL setup.${NC}"
+if [ -n "$DOMAIN_PUBLIC" ]; then
+    echo -e "${YELLOW}All three records must resolve to this server before SSL setup.${NC}"
+else
+    echo -e "${YELLOW}Both records must resolve to this server before SSL setup.${NC}"
+fi
 echo ""
 read -p "Press ENTER when DNS records are configured..."
 echo ""
@@ -707,6 +721,53 @@ setup_ssh
 # CLONE REPOSITORY
 # ==============================================================================
 
+# Provision a GitHub deploy key for EVERY service the registry declares,
+# except the product itself -- its key is the bootstrap that made this
+# file readable in the first place (see setup_ssh).
+#
+# This is what item 5 buys: a fourth service is one record in
+# services.conf and zero lines here. The velo record is deliberately NOT
+# filtered out by name -- it is skipped by its "internal" lifecycle, and
+# passing it through would be harmless anyway: provision_deploy_key is
+# idempotent and its probe would pass on the key that just cloned this.
+provision_service_keys() {
+    local conf="$INSTALL_BASE/repo/scripts/services.conf"
+    if [ ! -f "$conf" ]; then
+        error "Service registry not found at $conf"
+        exit 1
+    fi
+    # shellcheck source=/dev/null
+    source "$conf" || exit 1
+
+    local record name repo access
+    for record in "${VELO_SERVICES[@]}"; do
+        [ "$(svc_field "$record" 5)" = "internal" ] && continue
+        name=$(svc_field "$record" 1)
+        repo=$(svc_field "$record" 2)
+        access=$(svc_field "$record" 7)
+
+        # An undeclared privilege is a stop, not a default. Guessing
+        # "read" would print the wrong instruction to the operator and
+        # the failure would surface days later, as a push that cannot.
+        if [ "$access" != "read" ] && [ "$access" != "write" ]; then
+            error "Service '$name' declares access='$access' in services.conf"
+            error "-- expected 'read' or 'write'. Refusing to guess which"
+            error "instruction to give the operator."
+            exit 1
+        fi
+
+        provision_deploy_key "$name" "$repo" "$access" || exit 1
+    done
+}
+
+# DEFINED HERE, NOT IN THE COMMS SECTION BELOW, AND THAT IS THE WHOLE POINT.
+# It is CALLED a few lines down, right after clone_repo -- and bash executes
+# top to bottom, so a definition that sits 450 lines lower does not exist yet
+# at that moment. It did sit lower (T-33), which made every FRESH install die
+# with "provision_service_keys: command not found" immediately after the
+# clone. Keep the definition above the call; the call itself must stay
+# where it is (see its own comment).
+
 clone_repo() {
     log "Cloning repository (branch: $GIT_BRANCH)..."
 
@@ -865,32 +926,26 @@ CORS_ORIGINS=https://${DOMAIN_FRONTEND}
 # PWA), where DNS is real and a third-party host is a live dependency.
 # The short domain if one was given at install, the API domain otherwise.
 #
-# ┌─ KNOWN CEILING (convention §4a) ──────────────────────────────────────
-# │ (1) MECHANICS: nothing reads this variable. Not one line of code
-# │     consumes PUBLIC_LINK_BASE today -- it is declared ahead of its
-# │     consumer.
-# │ (2) STATUS: acknowledged by design.
-# │ (3) REFERENCE: T-35 (zoom-link wrapper, the /z/{code} redirect).
-# │ (4) UNCONSERVATION TRIGGER: the first public redirect handler
-# │     shipping -- at that point this stops being inert and becomes
-# │     the value that handler's URLs are built from.
-# │ (5) SHAPE OF THE FIX: assemble the URL at the edge from this
-# │     variable, per arch decision 13 (late binding: the intent lives
-# │     in the data, the domain lives in env, the URL is built at send
-# │     time). No migration, no domain in code or in profile data.
-# │ (6) REJECTED, AND WHY: "add it later, when something needs it" --
-# │     the honest-looking option, and wrong here. This file is
-# │     generated EXACTLY ONCE (the generator is a hard no-op if it
-# │     exists) and the certificate is issued once, so "later" is not
-# │     an edit, it is a server wipe -- and this install is promised
-# │     stable for weeks. The cost of carrying an unread key is one
-# │     line; the cost of adding it later is the whole box.
-# │
-# │ NOT the same case as TELEGRAM_API_BASE, which T-32 deletes in the
-# │ same pass for looking identical: that one has no consumer AND no
-# │ trigger -- nothing was ever going to read it. This one has both, on
-# │ a named ticket. Delete it and T-35 pays for a wipe.
-# └───────────────────────────────────────────────────────────────────────
+# CONSUMER (T-35, shipped): the Zoom link wrapper reads this. Every
+# practice link a master copies is built here at send time --
+# {PUBLIC_LINK_BASE}/z/{code}, where the code is a 22-character
+# base64url of the practice id (backend/app/modules/zoom/service.py,
+# build_public_practice_link). The same code is the Telegram deep link
+# (startapp=zoom__<22>).
+#
+# The value is NOT decorative: config.py refuses to start in production
+# with it empty. A wrong value is worse than a missing one -- it means
+# links already posted in Telegram channels point at a host that is not
+# us, and nothing in the request path would ever say so.
+#
+# nginx must proxy "location /" on this host to the backend (it does --
+# see scripts/nginx-render.sh), because the route lives at the ROOT,
+# outside /api/v1, so the link stays short.
+#
+# NOTE for anyone editing the lines above: this heredoc is UNQUOTED
+# (it has to be -- PUBLIC_LINK_HOST and the date stamp must expand), so a
+# backtick here would be executed at install time and vanish from the
+# generated file. Keep comments backtick-free.
 PUBLIC_LINK_BASE=https://${PUBLIC_LINK_HOST}
 
 # --- Telegram ---
@@ -1164,45 +1219,6 @@ registry_field_for() {
         fi
     done
     return 1
-}
-
-# Provision a GitHub deploy key for EVERY service the registry declares,
-# except the product itself -- its key is the bootstrap that made this
-# file readable in the first place (see setup_ssh).
-#
-# This is what item 5 buys: a fourth service is one record in
-# services.conf and zero lines here. The velo record is deliberately NOT
-# filtered out by name -- it is skipped by its "internal" lifecycle, and
-# passing it through would be harmless anyway: provision_deploy_key is
-# idempotent and its probe would pass on the key that just cloned this.
-provision_service_keys() {
-    local conf="$INSTALL_BASE/repo/scripts/services.conf"
-    if [ ! -f "$conf" ]; then
-        error "Service registry not found at $conf"
-        exit 1
-    fi
-    # shellcheck source=/dev/null
-    source "$conf" || exit 1
-
-    local record name repo access
-    for record in "${VELO_SERVICES[@]}"; do
-        [ "$(svc_field "$record" 5)" = "internal" ] && continue
-        name=$(svc_field "$record" 1)
-        repo=$(svc_field "$record" 2)
-        access=$(svc_field "$record" 7)
-
-        # An undeclared privilege is a stop, not a default. Guessing
-        # "read" would print the wrong instruction to the operator and
-        # the failure would surface days later, as a push that cannot.
-        if [ "$access" != "read" ] && [ "$access" != "write" ]; then
-            error "Service '$name' declares access='$access' in services.conf"
-            error "-- expected 'read' or 'write'. Refusing to guess which"
-            error "instruction to give the operator."
-            exit 1
-        fi
-
-        provision_deploy_key "$name" "$repo" "$access" || exit 1
-    done
 }
 
 # Read one service's branch out of the registry.
@@ -1744,13 +1760,24 @@ if [ -n "$DOMAIN_PUBLIC" ]; then
         warn "  PUBLIC_LINK_BASE in backend/.env points at that domain, but its"
         warn "  certificate was not issued, so https:// links built from it will"
         warn "  not work until DNS is fixed and the certificate is re-requested."
-        warn "  Harmless today: no code reads PUBLIC_LINK_BASE yet (see the"
-        warn "  KNOWN CEILING note next to it in backend/.env)."
+        warn "  NOT harmless (T-35): every /z/{code} practice link a master"
+        warn "  copies is built from this value, so those links are dead until"
+        warn "  the certificate exists."
         warn "  Re-request: certbot certonly --webroot --webroot-path=/var/www/certbot -d $DOMAIN_PUBLIC"
         warn "  Then re-render nginx: velo doctor  (shows the drift), then reload."
     else
-        info "Public:   https://$DOMAIN_PUBLIC  (link base; no consumer yet — T-35)"
+        info "Public:   https://$DOMAIN_PUBLIC  (link base for /z/{code} practice links — T-35)"
     fi
+else
+    # No public domain was given, so every practice link a master copies will
+    # read https://api.<...>/z/... -- correct, and it is what a PARTICIPANT
+    # sees in a Telegram channel. Said out loud here rather than left to be
+    # discovered in a channel: skipping the prompt is silent, and silence is
+    # how an "api." host ends up in front of end users.
+    warn "Practice links will be published as https://${DOMAIN_API}/z/<code>"
+    warn "  -- no public link domain was given at install. Participants see"
+    warn "  this host in Telegram channels. Changing it later means a"
+    warn "  reinstall (backend/.env is written once)."
 fi
 echo ""
 

@@ -187,7 +187,6 @@ function practice(overrides: Partial<PracticeResponse> = {}): PracticeResponse {
     timezone: 'Europe/Moscow',
     max_participants: 10,
     current_participants: 3,
-    zoom_link: 'https://zoom.us/j/1',
     parent_practice_id: null,
     is_free: true,
     price_cents: 0,
@@ -644,7 +643,9 @@ describe('CreatePracticeView', () => {
       typeInto(textareaByPlaceholder('Расскажите подробее о вашей практике'), 'Описание')
       typeInto(textareaByPlaceholder('Противопоказания'), 'Травмы спины')
       typeInto(textareaByPlaceholder('Что подготовить'), 'Коврик')
-      typeInto(inputByPlaceholder('Запасная ссылка на Zoom'), 'https://zoom.us/j/7')
+      // T-35: the «ПОДКЛЮЧЕНИЕ» section (a manual Zoom URL) is gone from this
+      // form -- the column no longer exists, and the POST body below is
+      // asserted with toEqual, so its absence is pinned exactly here.
       await flush()
 
       submitForm()
@@ -664,7 +665,6 @@ describe('CreatePracticeView', () => {
         duration_minutes: 60,
         timezone: 'Europe/Moscow',
         max_participants: 12,
-        zoom_link: 'https://zoom.us/j/7',
         is_free: true,
         price_cents: 0,
         currency: 'eur',
@@ -764,7 +764,6 @@ describe('CreatePracticeView', () => {
       expect(sentBody().description).toBeNull()
       expect(sentBody().what_to_prepare).toBeNull()
       expect(sentBody().contraindications).toBeNull()
-      expect(sentBody().zoom_link).toBeNull()
     })
   })
 

@@ -160,7 +160,6 @@ function practice(overrides: Partial<PracticeResponse> = {}): PracticeResponse {
     timezone: 'Europe/Moscow',
     max_participants: 10,
     current_participants: 3,
-    zoom_link: 'https://zoom.us/j/1',
     parent_practice_id: null,
     is_free: false,
     price_cents: 2599,
@@ -470,7 +469,10 @@ describe('EditPracticeView', () => {
 
       const areas = Array.from(host?.querySelectorAll('textarea') ?? [])
       expect(areas.map((a) => (a as HTMLTextAreaElement).value)).toContain('Травмы спины')
-      expect(field('input[type="url"]')?.value).toBe('https://zoom.us/j/1')
+      // T-35: the Zoom URL input is gone from this form with its column. Its
+      // absence is asserted, not merely un-asserted -- a re-added field would
+      // fail here rather than pass silently.
+      expect(field('input[type="url"]')).toBeNull()
     })
   })
 
@@ -983,19 +985,10 @@ describe('EditPracticeView', () => {
       expect(text()).toContain('Введите название')
     })
 
-    it('refuses a non-https zoom link', async () => {
-      // :506-509. A http:// link is the one field here students act on.
-      mountCached(practice())
-      await flush()
-      typeInto(field('input[type="url"]'), 'http://zoom.us/j/1')
-      await flush()
-
-      button('Сохранить')?.click()
-      await flush()
-
-      expect(practicesApi.updatePractice).not.toHaveBeenCalled()
-      expect(text()).toContain('Ссылка должна начинаться с https://')
-    })
+    // T-35: "refuses a non-https zoom link" lived here. It guarded the manual
+    // Zoom URL field, which no longer exists -- there is nothing left on this
+    // form for a master to type a link into, so the https validator went with
+    // it. Not lost coverage: the value it protected cannot be entered.
 
     it('refuses a zero or negative seat count', async () => {
       // :499-505. A practice capped at 0 is one nobody can book.
@@ -1088,20 +1081,24 @@ describe('EditPracticeView', () => {
     it('trims the title and nulls out an emptied optional field', async () => {
       // `|| null` (:538-546) -- an empty string is not "no contraindications",
       // and the backend distinguishes them.
-      mountCached(practice())
+      //
+      // T-35: this used to empty the Zoom URL field and assert zoom_link came
+      // back null. That field is gone from the form with its column, so the
+      // same rule is pinned on contraindications instead -- the behaviour
+      // under test was never about Zoom, it was about empty-string vs null.
+      mountCached(practice({ contraindications: 'Беременность' }))
       await flush()
       typeInto(titleField(), '  Новое имя  ')
       await flush()
 
-      const zoom = field('input[type="url"]')
-      typeInto(zoom, '')
+      typeInto(field('textarea[placeholder*="Беременность"]'), '')
       await flush()
 
       button('Сохранить')?.click()
       await flush()
 
       expect(sentBody().title).toBe('Новое имя')
-      expect(sentBody().zoom_link).toBeNull()
+      expect(sentBody().contraindications).toBeNull()
     })
 
     it("sends duration as a NUMBER, not the select's string", async () => {

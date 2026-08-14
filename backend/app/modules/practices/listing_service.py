@@ -121,20 +121,13 @@ async def list_master_practices(
     # unconditionally here -- the owner-only gate lives on the shared public
     # detail endpoint (get_practice_detail) instead.
     attendance = await attendance_counts_for_practices(page_practices, session)
-    # T21-1: host join_url for this page (one batched query, same owner-only
-    # posture as zoom_link_visible=True below -- every row here is the
-    # requester's own).
+    # T21-1: host join_url for this page (one batched query, owner-only --
+    # every row here is the requester's own).
     from app.modules.zoom.service import (
         get_host_join_urls,
-        get_shared_join_urls,
         get_zoom_meeting_statuses,
     )
     host_join_urls = await get_host_join_urls([p.id for p in page_practices], session)
-    # T24-38 (PROMPT №642): same owner-only posture as host_join_urls above
-    # -- every row on this page is already the requester's own.
-    shared_join_urls = await get_shared_join_urls(
-        [p.id for p in page_practices], session,
-    )
     # A4 V2 (PROMPT №572): batched Zoom meeting status for this page --
     # MasterDashboardView's "nearest practices" and MasterPracticesView both
     # read practicesUpcoming (this endpoint), and their Zoom button needs to
@@ -149,12 +142,10 @@ async def list_master_practices(
                 p,
                 master_full_name(first, last),
                 # Z-6: the master's OWN list (get_current_master) -- every row
-                # is owned by the requester, so expose zoom_link (the same owner
-                # rule get_practice_detail applies). The master dashboard's
-                # "Войти" button reads zoom_link from this list.
-                zoom_link_visible=True,
+                # is owned by the requester, so the owner-only fields are
+                # exposed here by the same rule get_practice_detail applies.
                 zoom_host_join_url=host_join_urls.get(p.id),
-                zoom_shared_join_url=shared_join_urls.get(p.id),
+                zoom_public_link_visible=True,
                 zoom_meeting_status=zoom_meeting_statuses.get(p.id),
                 **series_meta_kwargs(series_meta.get(p.id)),
                 **attendance_counts_kwargs(attendance.get(p.id)),

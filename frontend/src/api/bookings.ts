@@ -99,8 +99,10 @@ export function getMyStats(): Promise<UserStatsResponse> {
 /**
  * Fetch a single booking with full practice details (screen 18).
  *
- * Backend returns the complete PracticeResponse (zoom_link,
- * contraindications, master_methods, status). Owner-only (404 otherwise).
+ * Backend returns the complete PracticeResponse (contraindications,
+ * master_methods, status). Owner-only (404 otherwise). T-35: no Zoom URL of
+ * any kind is on that response -- a link comes from
+ * GET /practices/{id}/zoom/resolve.
  */
 export function getBooking(bookingId: string): Promise<BookingDetailResponse> {
   return api.get<BookingDetailResponse>(`/api/v1/bookings/${bookingId}`)

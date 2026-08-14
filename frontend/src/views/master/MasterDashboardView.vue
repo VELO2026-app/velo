@@ -221,13 +221,6 @@
             </VButton>
           </div>
           <VBadge
-            v-if="zoomLinkFor(practice).kind === 'manual'"
-            variant="warning"
-            class="master-dashboard__zoom-note"
-          >
-            Ручная ссылка — посещение не засчитается автоматически
-          </VBadge>
-          <VBadge
             v-if="zoomLinkFor(practice).kind === 'failed'"
             variant="error"
             class="master-dashboard__zoom-note"
@@ -417,13 +410,13 @@ function onGroups(): void {
 function openPractice(p: PracticeResponse): void {
   router.push({ name: 'master-practice-detail', params: { id: p.id } })
 }
-// Zoom — D3 ladder (T21-1, PROMPT №541): the master's own host registrant
-// link first, else the manual practice.zoom_link (marked in the template),
-// else nudge -- via the platform abstraction (Telegram-SDK openLink vs
-// window.open). A4 V2 (PROMPT №572): meeting status distinguishes "still
-// preparing" from "permanently failed".
+// Zoom state for one card. T-35: the manual rung is gone (Practice.zoom_link
+// no longer exists), so this no longer CHOOSES between links -- it names the
+// state: the master's own host registrant row exists ('personal', which on
+// this screen means "startable"), the meeting is permanently failed
+// ('failed', A4 V2 / PROMPT №572), or it is still being prepared ('pending').
 function zoomLinkFor(p: PracticeResponse): ZoomLinkResolution {
-  return resolveZoomLink(p.zoom_host_join_url, p.zoom_link, p.zoom_meeting_status)
+  return resolveZoomLink(p.zoom_host_join_url, p.zoom_meeting_status)
 }
 
 // PROMPT №565 (T23-1): "Zoom" for the master's OWN practice (every card on
@@ -435,16 +428,11 @@ function zoomLinkFor(p: PracticeResponse): ZoomLinkResolution {
 // frontend -- we ask the backend for a one-time ticket, then open a plain
 // link to the backend's redirect endpoint (platform.openLink), which
 // redeems the ticket and 302s the browser straight to Zoom. Never fetch()
-// that URL. kind==='manual' has no real meeting to start -- the master's
-// own pasted fallback link opens directly, exactly as before.
+// that URL.
 const startingId = ref<string | null>(null)
 
 async function onZoom(p: PracticeResponse): Promise<void> {
   const resolved = zoomLinkFor(p)
-  if (resolved.kind === 'manual') {
-    platform.openLink(resolved.url as string)
-    return
-  }
   if (resolved.kind === 'pending') {
     toast.info('Ссылка на Zoom ещё готовится')
     return

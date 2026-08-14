@@ -41,7 +41,10 @@
 # existing commit picks them up.
 # =============================================================================
 
+import base64
+import enum
 import secrets
+from dataclasses import dataclass
 from datetime import UTC
 from uuid import UUID
 
@@ -50,9 +53,10 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.redis import get_redis
-from app.modules.bookings.models import Booking
-from app.modules.practices.models import Practice
+from app.modules.bookings.models import Booking, BookingStatus
+from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.users.models import User
 from app.modules.zoom.models import (
     ZoomAttendanceSegment,
@@ -971,3 +975,278 @@ async def get_meeting_recording_link(zoom_meeting_id: str) -> str | None:
         return share_url
 
     return f"{share_url}?pwd={passcode}"
+
+
+# ---------------------------------------------------------------------------
+# T-35: the public link wrapper.
+#
+# WHY THIS EXISTS. Until now three different Zoom URLs left this system: the
+# personal registrant link (the only one attendance can be written from), the
+# shared guest link on ZoomMeeting, and a hand-typed Practice.zoom_link (now
+# gone). A master pasted the SHARED one into a Telegram channel -- where his
+# own booked students also sit. Their personal link is two screens away inside
+# the app, the shared one is right there in the feed, so they clicked it,
+# joined as an unmatchable guest, and the attendance matcher recorded
+# NO_SHOW for a person who was demonstrably present.
+#
+# The wrapper kills that CONSTRUCTIVELY rather than by discipline: if no raw
+# Zoom URL exists outside this backend, a student physically cannot enter past
+# his own personal link -- the resolver hands him that one, because it knows
+# who he is. Nothing here waits on a fix to the matcher (T24's territory).
+#
+# THE CODE IS NOT A SECRET. It is base64url(practice.id.bytes) -- reversible,
+# deterministic, 22 characters, no padding. Any authenticated user already
+# sees practice ids in the feed, so the wrapper adds exactly zero entropy and
+# NOTHING in this feature may be built on the code being unguessable. The one
+# security property is that the ANONYMOUS branch never returns a personal
+# link, and it rests on the request being anonymous, not on the code.
+#
+# Practice.id, not ZoomMeeting.id, is what gets encoded: meetings are deleted
+# and recreated (reschedule, cancel, retry), practices are stable. That is
+# what lets a link posted two weeks ago resolve to the CURRENT meeting at
+# click time instead of a stale one baked into the URL.
+# ---------------------------------------------------------------------------
+
+# base64url of 16 raw bytes is 24 chars with two "=" of padding; we strip it,
+# so every code is exactly this long. The charset is also exactly what
+# Telegram permits in a startapp parameter, which is why the same code works
+# as the deep link "zoom__<22>" (28 chars against a limit of 64).
+PUBLIC_CODE_LENGTH = 22
+
+# SECOND COPY WARNING: frontend/src/composables/useAuth.ts carries a decoder
+# for this same code. Two copies exist because the deep-link route takes a
+# UUID path parameter, so the client must decode BEFORE it can build the
+# route -- the split is a language boundary, not forgetfulness. Routing the
+# decode through yet another endpoint would not remove the copy, it would add
+# a network round trip to a pure function. Both sides must agree on GARBAGE,
+# not just on valid input: wrong length, wrong charset and empty all mean
+# "not a route" on both sides.
+
+
+def encode_practice_code(practice_id: UUID) -> str:
+    """practice.id -> the 22-character code used in /z/{code} and in the
+    Telegram deep link. Deterministic: the same practice always yields the
+    same code, so no table, no TTL and no collision handling exist (a short
+    -link table was considered and rejected -- a migration plus collisions
+    plus expiry to save 15 characters, and a dictionary code would be
+    enumerable where a reversible one is exactly a UUIDv4)."""
+    return base64.urlsafe_b64encode(practice_id.bytes).decode("ascii").rstrip("=")
+
+
+def decode_practice_code(code: str) -> UUID | None:
+    """The code back into a practice id, or None if this is not a code at
+    all -- wrong length, wrong charset, empty. Returns None instead of
+    raising because every caller's honest answer to garbage is the same
+    "no such link" page, and because this must never reach the database on
+    input that cannot possibly name a row.
+
+    A code of the RIGHT shape naming a practice that does not exist is NOT
+    detectable here and must not be: that is a database question, answered
+    by the caller (404).
+
+    KNOWN, HARMLESS: 22 base64url characters carry 132 bits while a UUID is
+    128, so the final character has 4 bits nobody reads -- a handful of
+    non-canonical codes decode to the same practice as the canonical one and
+    resolve normally. Not worth rejecting: the code is not a secret and not a
+    capability (see the section header), so "more than one spelling reaches
+    the same public page" costs nothing, while a canonicality check would be
+    one more rule for the client copy of this function to match exactly.
+    """
+    if len(code) != PUBLIC_CODE_LENGTH:
+        return None
+    try:
+        raw = base64.urlsafe_b64decode(code + "==")
+    except Exception:
+        # binascii.Error for bad padding/charset; ValueError on some inputs.
+        return None
+    if len(raw) != 16:
+        return None
+    return UUID(bytes=raw)
+
+
+def build_public_practice_link(practice_id: UUID) -> str:
+    """The full, shareable link for a practice. Assembled at the edge from
+    settings.public_link_base (arch decision 13, late binding: the intent
+    lives in the data, the domain in env, the URL is built at send time) --
+    no domain is ever stored on a row."""
+    base = settings.public_link_base.rstrip("/")
+    return f"{base}/z/{encode_practice_code(practice_id)}"
+
+
+class ZoomEntryKind(enum.StrEnum):
+    """What the resolver decided about ONE person's entry into ONE practice.
+
+    PERSONAL -- their own registrant link; the only outcome attendance can
+                be written from, and the whole point of the feature.
+    HOST     -- the practice's own master; url is None on purpose, the
+                client uses the existing start-ticket flow instead.
+    GUEST    -- nobody attendance will judge; the shared guest link. url is
+                None when the shared registrant was never minted.
+    PENDING  -- honest "being prepared".
+    FAILED   -- meeting creation is permanently failed; waiting is pointless
+                until someone acts.
+    CANCELLED -- the practice itself is cancelled.
+    """
+
+    PERSONAL = "personal"
+    HOST = "host"
+    GUEST = "guest"
+    PENDING = "pending"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+@dataclass(frozen=True)
+class ZoomEntryResolution:
+    """kind + the URL to send the browser to, if any.
+
+    url is None for HOST (by construction -- the start-ticket flow owns
+    that path) and for GUEST when ensure_shared_registrant never succeeded.
+    Callers must branch on kind and handle a null url on BOTH, never
+    collapse either into FAILED: FAILED means there is no meeting, while
+    a guest with no link means the meeting exists and only the guest seat
+    in it does not. Two different facts.
+    """
+
+    kind: ZoomEntryKind
+    url: str | None
+
+
+def is_publicly_resolvable(practice: Practice) -> bool:
+    """Step 1 of the ladder below, factored out because BOTH entry points
+    (the anonymous /z/{code} page and the authenticated resolve endpoint)
+    must apply it and must apply the SAME one. A draft or soft-deleted
+    practice is answered with 404 -- not a state, an absence: publishing
+    the title of an unpublished practice to anyone holding a guessed URL
+    would be a leak, and the authenticated side already answers 404 for
+    exactly this case (P-08)."""
+    return practice.status not in (
+        PracticeStatus.DRAFT.value,
+        PracticeStatus.DELETED.value,
+    )
+
+
+# Statuses that make a booking LIVE for the purposes of this resolver.
+#
+# Deliberately WIDER than ZOOM_VISIBLE_BOOKING_STATUSES (practices/service.py),
+# and the difference is the whole correctness argument of step 5 below:
+# "no booking" here means "no booking attendance will ever judge", NOT "no
+# right to a personal link right now". A PENDING booking can become CONFIRMED
+# before the practice starts; hand its owner a guest link now and the matcher
+# will find zero seconds against his registrant later and write NO_SHOW --
+# the exact defect this whole feature exists to kill, recreated by our own
+# resolver.
+_LIVE_BOOKING_STATUSES = (
+    BookingStatus.PENDING.value,
+    BookingStatus.CONFIRMED.value,
+    BookingStatus.ATTENDED.value,
+)
+
+
+async def resolve_zoom_entry(
+    practice: Practice,
+    user: User | None,
+    session: AsyncSession,
+) -> ZoomEntryResolution:
+    """Decide how THIS person enters THIS practice, right now.
+
+    A LADDER, evaluated top to bottom, first match wins. The order is
+    load-bearing -- each step exists because the one below it would
+    otherwise mask a state and lie to somebody:
+
+      1. draft/deleted -> not resolvable at all. Enforced by callers via
+         is_publicly_resolvable above, before this function is reached.
+      2. practice cancelled -> CANCELLED. Older than everything, INCLUDING
+         the owner: a cancelled practice is not started.
+      3. NO ACTIVE MEETING -- and note this is a branch on "not active",
+         NOT a check for create_failed. THIS IS THE STEP A FUTURE
+         REFACTOR WILL WANT TO "SIMPLIFY" BACK INTO ONE STATUS: don't.
+         ZoomMeetingStatus has four values plus "no row at all", and three
+         of those five would then fall through to HOST, whose button leads
+         to create_zoom_start_ticket_endpoint, which answers 400
+         zoom_meeting_not_active. pending_creation is not exotic either --
+         series children are born in it (series_service.py).
+           create_failed                      -> FAILED (the owner gets an
+             action: the retry endpoint is owner-only, so he is the only
+             person who CAN act; a student gets "waiting is pointless").
+           pending_creation / deleted / none  -> PENDING (honest "being
+             prepared" -- for pending_creation it is literally true, the
+             retry poller claims those alongside create_failed).
+      4. the owner -> HOST. Reached only with an ACTIVE meeting, so the
+         "Начать" button cannot land on nothing BY CONSTRUCTION.
+      5. a live booking -> PERSONAL when the registrant link exists,
+         PENDING when it does not (Zoom does not always return a tokenized
+         join_url on create -- see ZoomRegistrant.join_url; the retry
+         poller fills it in later). PENDING bookings resolve to PENDING
+         too, see _LIVE_BOOKING_STATUSES.
+      6. no live booking -> GUEST.
+
+    ANONYMITY IS STRUCTURAL, NOT A RULE: user is None for the public page,
+    and steps 4 and 5 cannot fire without a user. A link forwarded out of a
+    channel therefore CANNOT produce somebody else's personal link, no
+    matter what the caller does.
+    """
+    # -- 2. cancelled --
+    if practice.status == PracticeStatus.CANCELLED.value:
+        return ZoomEntryResolution(kind=ZoomEntryKind.CANCELLED, url=None)
+
+    # -- 3. no active meeting --
+    meeting = (
+        await session.execute(
+            select(ZoomMeeting).where(ZoomMeeting.practice_id == practice.id)
+        )
+    ).scalar_one_or_none()
+    if meeting is None or meeting.status != ZoomMeetingStatus.ACTIVE.value:
+        failed = (
+            meeting is not None
+            and meeting.status == ZoomMeetingStatus.CREATE_FAILED.value
+        )
+        if failed:
+            return ZoomEntryResolution(kind=ZoomEntryKind.FAILED, url=None)
+        return ZoomEntryResolution(kind=ZoomEntryKind.PENDING, url=None)
+
+    # -- 4. the owner --
+    if user is not None and practice.master_id == user.id:
+        return ZoomEntryResolution(kind=ZoomEntryKind.HOST, url=None)
+
+    # -- 5. a live booking --
+    if user is not None:
+        booking = (
+            await session.execute(
+                select(Booking).where(
+                    Booking.practice_id == practice.id,
+                    Booking.user_id == user.id,
+                    Booking.status.in_(_LIVE_BOOKING_STATUSES),
+                )
+            )
+        ).scalars().first()
+        if booking is not None:
+            # Imported here rather than at module load: practices/service.py
+            # reaches back into this module, and every cross-service call in
+            # that pair is deliberately lazy.
+            from app.modules.practices.service import (
+                ZOOM_VISIBLE_BOOKING_STATUSES,
+            )
+            join_url = None
+            if booking.status in ZOOM_VISIBLE_BOOKING_STATUSES:
+                join_url = (
+                    await session.execute(
+                        select(ZoomRegistrant.join_url).where(
+                            ZoomRegistrant.zoom_meeting_id == meeting.id,
+                            ZoomRegistrant.booking_id == booking.id,
+                            ZoomRegistrant.status
+                            != ZoomRegistrantStatus.CANCELLED.value,
+                            ZoomRegistrant.join_url.is_not(None),
+                        )
+                    )
+                ).scalars().first()
+            if join_url:
+                return ZoomEntryResolution(
+                    kind=ZoomEntryKind.PERSONAL, url=join_url,
+                )
+            return ZoomEntryResolution(kind=ZoomEntryKind.PENDING, url=None)
+
+    # -- 6. nobody attendance will judge --
+    return ZoomEntryResolution(
+        kind=ZoomEntryKind.GUEST, url=meeting.shared_join_url,
+    )

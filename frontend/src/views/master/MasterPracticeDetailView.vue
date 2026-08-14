@@ -100,22 +100,19 @@
           :difficulty-label="difficultyLabel"
         />
 
-        <!-- T24-38 (PROMPT №642): the SHARED, registration-free Zoom link --
-             a DELIBERATE TEMPORARY CRUTCH for the launch period (owner
-             ruling), never woven into the personal join_url ladder
-             (utils/zoomLink.ts, untouched by this feature). Kept as ONE
-             self-contained, liftable block: this markup + sharedJoinUrl +
-             copyingShared + onCopySharedLink + PracticeWithSharedLink below
-             + the .pd-shared-link* styles are the entire surface -- deleting
-             all of them removes the feature cleanly, no disentanglement.
-             Hidden entirely (v-if) until the backend has actually minted a
-             link (ensure_shared_registrant, zoom/service.py); no separate
-             "not available yet" state needed here, unlike a control whose
-             BACKEND is missing -- this backend exists, the value is just not
-             ready yet, same non-state the master already sees for zoom_host_
-             join_url before a meeting is created. -->
-        <div v-if="sharedJoinUrl" class="pd-shared-link">
-          <span class="pd-shared-link__label">Ссылка для гостей без входа в приложение</span>
+        <!-- T-35: THE link for this practice -- ours, not Zoom's. It used to
+             copy the raw shared Zoom URL (zoom_shared_join_url), which is
+             precisely what put a guest link into channels where booked
+             students also sit: they clicked it, joined unmatchable, and were
+             recorded NO_SHOW. No raw Zoom URL leaves the API any more, so
+             that mistake is not available to make.
+             Shown WITHOUT waiting for a meeting to exist, unlike the old
+             block: this link resolves at CLICK time, so it is already valid
+             for a practice whose Zoom meeting is still being created -- and
+             it keeps working after a reschedule, because it names the
+             practice, never the meeting. -->
+        <div v-if="publicLink" class="pd-shared-link">
+          <span class="pd-shared-link__label">Ссылка на практику — для канала и гостей</span>
           <VButton size="sm" variant="outline" :loading="copyingShared" @click="onCopySharedLink">
             Копировать
           </VButton>
@@ -365,18 +362,6 @@ import type {
   ReviewItem,
 } from '@/api/types'
 
-// TEMPORARY (T24-38, PROMPT №642): zoom_shared_join_url does not exist on
-// PracticeResponse in generated.ts yet -- the backend field
-// (practices/schemas.py) has not been deployed/regenerated. Hand-typed
-// here, scoped to this one view only -- NOT added to api/types.ts, whose
-// own header says backend types "do NOT add manually -- they come from
-// generated.ts". Delete this interface and read practice.value.
-// zoom_shared_join_url directly the first time this file is touched after
-// the next `make gen-types` regen.
-interface PracticeWithSharedLink extends PracticeResponse {
-  zoom_shared_join_url?: string | null
-}
-
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
@@ -424,21 +409,22 @@ const recurrenceLabel = computed((): string | null => {
   return recurrenceDaysLabel(practice.value.recurrence_days) ?? 'Регулярная'
 })
 
-// T24-38 (PROMPT №642): the shared, registration-free link -- see the
-// template block's own comment for the full liftability note. null until
-// the backend has minted one (ensure_shared_registrant, zoom/service.py).
-const sharedJoinUrl = computed(
-  (): string | null =>
-    (practice.value as PracticeWithSharedLink | null)?.zoom_shared_join_url ?? null,
+// T-35: OUR public link for this practice ({PUBLIC_LINK_BASE}/z/{code}),
+// built server-side and returned owner-only. The hand-typed
+// PracticeWithSharedLink interface that used to stand here is gone -- the
+// field is native in generated.ts after the T-35 regen, exactly as that
+// interface's own comment asked of the first person to touch this file.
+const publicLink = computed(
+  (): string | null => practice.value?.zoom_public_link ?? null,
 )
 const copyingShared = ref(false)
 async function onCopySharedLink(): Promise<void> {
-  if (copyingShared.value || !sharedJoinUrl.value) return
+  if (copyingShared.value || !publicLink.value) return
   copyingShared.value = true
   try {
     // Clipboard needs no backend -- same pattern as MasterGroupDetailView's
     // group-invite copy.
-    await navigator.clipboard.writeText(sharedJoinUrl.value)
+    await navigator.clipboard.writeText(publicLink.value)
     toast.success('Ссылка скопирована')
   } catch (e) {
     toast.error(extractApiError(e, 'Не удалось скопировать ссылку'))

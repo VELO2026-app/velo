@@ -69,6 +69,20 @@ class Settings(BaseSettings):
     # "*" for development, specific domains for production.
     cors_origins: str = "*"
 
+    # -- Public links (T-35) --
+    # Origin for links that must survive OUTSIDE Telegram -- today exactly
+    # one consumer: the /z/{code} Zoom entry point (practices/router.py).
+    # install_velo.sh writes it as the optional short domain if one was given
+    # at install, the API domain otherwise; either way nginx proxies "/" on
+    # that host straight to this backend, so a root-level route publishes
+    # itself.
+    #
+    # Empty default + a production gate below, NOT a localhost fallback: a
+    # silently-wrong base is not a broken page, it is links already sitting
+    # in other people's Telegram channels pointing at nothing. Fail at
+    # startup, where somebody is watching.
+    public_link_base: str = ""
+
     # -- Security --
     # No default in production -- app won't start without it. (TD-001)
     secret_key: str = ""
@@ -209,7 +223,6 @@ class Settings(BaseSettings):
     # schema validators, and future admin UI all stay in sync.
     practice_title_max_length: int = 200
     practice_description_max_length: int = 5000
-    practice_zoom_link_max_length: int = 500
     practice_timezone_max_length: int = 50
 
     # Upper cap for max_participants (ge=1 enforced in schema).
@@ -627,6 +640,19 @@ class Settings(BaseSettings):
                 "CORS_ORIGINS must not be '*' in production. "
                 "Set to specific domain(s), e.g. "
                 "'https://app.example.com'."
+            )
+
+        # PUBLIC_LINK_BASE: required in production (T-35). Same shape as the
+        # CORS_ORIGINS gate above -- a misconfiguration that is invisible at
+        # runtime must be loud at startup instead. The value is the origin
+        # every /z/{code} link is built from; empty means every link a master
+        # copies into a channel is malformed, and nothing in the request path
+        # would ever say so.
+        if not is_dev and not self.public_link_base:
+            raise ValueError(
+                "PUBLIC_LINK_BASE is required in production. "
+                "Set to the public origin serving this API, e.g. "
+                "'https://api.example.com'."
             )
 
         # CQ-02: commission_percent must be within valid range.

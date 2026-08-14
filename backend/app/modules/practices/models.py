@@ -220,10 +220,15 @@ class Practice(JSONBMixin, UUIDMixin, TimestampMixin, Base):
         server_default=AudienceKind.PUBLIC.value,
     )
 
-    # -- Zoom (manual for MVP) --
-    zoom_link: Mapped[str | None] = mapped_column(
-        String(500), default=None,
-    )
+    # -- Zoom --
+    # T-35: the hand-typed zoom_link is GONE, column and all. Attendance was
+    # never written for anyone who joined through it, so it was a second hole
+    # of exactly the class the /z/{code} wrapper closes, and it was protected
+    # only by a rule someone had to remember. It is not needed as an escape
+    # hatch either: when meeting creation fails there IS a retry (the poller
+    # in zoom/retry_poller.py and the owner-only retry endpoint) -- the honest
+    # answer is to fix creation, not to hand the master a link that breaks
+    # attendance. A practice's Zoom presence now lives entirely on ZoomMeeting.
 
     # -- Series support (self-referential FK) --
     parent_practice_id: Mapped[UUID | None] = mapped_column(

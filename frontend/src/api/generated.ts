@@ -530,7 +530,6 @@ export interface CreatePracticeRequest {
   duration_minutes: number
   timezone: string
   max_participants?: number | null
-  zoom_link?: string | null
   parent_practice_id?: string | null
   is_free?: boolean
   price_cents?: number
@@ -1085,7 +1084,6 @@ export interface PracticeResponse {
   timezone: string
   max_participants: number | null
   current_participants: number
-  zoom_link: string | null
   parent_practice_id: string | null
   is_free: boolean
   price_cents: number
@@ -1106,7 +1104,7 @@ export interface PracticeResponse {
   created_at: string
   updated_at: string | null
   zoom_host_join_url?: string | null
-  zoom_shared_join_url?: string | null
+  zoom_public_link?: string | null
   zoom_meeting_status?: string | null
   deduplicated?: boolean
 }
@@ -1126,7 +1124,6 @@ export interface PracticeSummary {
   is_free: boolean
   price_cents: number
   currency: string
-  zoom_link?: string | null
   zoom_meeting_status?: string | null
 }
 
@@ -1459,7 +1456,6 @@ export interface UpdatePracticeRequest {
   duration_minutes?: number | null
   timezone?: string | null
   max_participants?: number | null
-  zoom_link?: string | null
   status?: string | null
   is_free?: boolean | null
   price_cents?: number | null
@@ -1582,6 +1578,12 @@ export interface WithdrawalResponse {
   rejected_at: string | null
   created_at: string
   updated_at: string | null
+}
+
+/** GET /api/v1/practices/{id}/zoom/resolve (T-35) -- the SERVER's answer to "how does this person enter this practice right now". The choice itself lives on the server (zoom/service.py's resolve_zoom_entry) and this schema only transports it: the client renders `kind` and never decides between two links. That is the point of the endpoint -- the old ladder lived in frontend/src/utils/zoomLink.ts, where it was a rule every entry point had to remember, and a rule cannot be enforced by construction. url is deliberately nullable on TWO kinds, and a caller must handle both without collapsing either into 'failed': - 'host' -- by design; the master starts his own meeting through the existing start-ticket flow, never through a stored URL. - 'guest' -- when ensure_shared_registrant never succeeded. The meeting exists; only the guest seat in it does not. */
+export interface ZoomEntryResolveResponse {
+  kind: 'personal' | 'host' | 'guest' | 'pending' | 'failed' | 'cancelled'
+  url?: string | null
 }
 
 /** POST /api/v1/practices/{id}/zoom/start-ticket (PROMPT №556, OWNER-1). Deliberately carries a one-time ticket, never a start_url -- see zoom/service.py's ticket-issuance docstring for why. */

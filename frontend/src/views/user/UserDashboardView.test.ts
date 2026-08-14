@@ -194,7 +194,6 @@ function practice(id: string, overrides: Partial<PracticeSummary> = {}): Practic
     is_free: false,
     price_cents: 1000,
     currency: 'EUR',
-    zoom_link: null,
     ...overrides,
   }
 }
@@ -249,7 +248,6 @@ const UP_LIVE = booking(
     duration_minutes: 60,
     status: 'scheduled',
     is_free: false,
-    zoom_link: 'https://zoom.us/j/live1',
   },
 )
 // UP_SOON: tomorrow, free, no zoom link yet, already checked in -- exercises
@@ -263,7 +261,6 @@ const UP_SOON = booking(
     scheduled_at: '2026-07-21T05:00:00Z',
     duration_minutes: 45,
     is_free: true,
-    zoom_link: null,
   },
 )
 
@@ -523,14 +520,27 @@ describe('UserDashboardView', () => {
   // ===========================================================================
   describe('nearest-practice actions', () => {
     it('Zoom: opens the real https link through the platform, not window.open', async () => {
-      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([UP_LIVE])
+      // T-35: the link under test is now the PERSONAL registrant link. This
+      // fixture used to rely on the practice's manual zoom_link, which no
+      // longer exists -- the platform boundary being pinned here is unchanged.
+      const withPersonal = booking(
+        'up_live_personal',
+        { status: 'confirmed', zoom_registrant_join_url: 'https://zoom.us/w/live1?tk=abc' },
+        {
+          title: 'Утренняя практика (эфир)',
+          scheduled_at: '2026-07-20T11:50:00Z',
+          duration_minutes: 60,
+          status: 'scheduled',
+        },
+      )
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([withPersonal])
       mount()
       await flush()
 
       actionIn(nearestBlocks()[0]!, 'Zoom')?.click()
       await flush()
 
-      expect(platformState.openLink).toHaveBeenCalledWith('https://zoom.us/j/live1')
+      expect(platformState.openLink).toHaveBeenCalledWith('https://zoom.us/w/live1?tk=abc')
     })
 
     it('Zoom: disabled (not just unlinked) when the practice has no valid link', async () => {
@@ -548,15 +558,14 @@ describe('UserDashboardView', () => {
       expect(platformState.openLink).not.toHaveBeenCalled()
     })
 
-    // -- D3 link ladder (T21-1, PROMPT №541) --
-    it('Zoom: a personal registrant link takes priority over the manual zoom_link', async () => {
+    // -- T-35: one link or none; the manual rung is gone with its column --
+    it('Zoom: the personal registrant link is what opens', async () => {
       const withPersonal = booking(
         'up_personal',
         { status: 'confirmed', zoom_registrant_join_url: 'https://zoom.us/w/personal?tk=abc' },
         {
           scheduled_at: '2026-07-20T11:50:00Z',
           duration_minutes: 60,
-          zoom_link: 'https://zoom.us/j/live1',
         },
       )
       vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([withPersonal])
@@ -569,23 +578,28 @@ describe('UserDashboardView', () => {
       expect(platformState.openLink).toHaveBeenCalledWith('https://zoom.us/w/personal?tk=abc')
     })
 
-    it('Zoom: no personal link but a valid manual zoom_link -- button enabled, "not counted" mark shown', async () => {
+    it('T-35: no personal link -- the button is DISABLED, and no "не засчитается" fallback is offered', async () => {
+      // The inverse of what this test used to assert. With a manual
+      // Practice.zoom_link the button was ENABLED and merely marked as not
+      // counting attendance -- which is precisely the state that produced a
+      // NO_SHOW for someone who attended. There is nothing to fall back to
+      // now: either this person's own registrant link exists or the honest
+      // answer is "not yet".
       vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([UP_LIVE]) // no zoom_registrant_join_url
       mount()
       await flush()
 
-      expect(actionIn(nearestBlocks()[0]!, 'Zoom')?.disabled).toBe(false)
-      expect(host?.textContent).toContain('посещение не засчитается')
+      expect(actionIn(nearestBlocks()[0]!, 'Zoom')?.disabled).toBe(true)
+      expect(host?.textContent).not.toContain('посещение не засчитается')
     })
 
-    it('Zoom: a personal link present -- the "not counted" mark does not show', async () => {
+    it('Zoom: a personal link present -- no "не засчитается" mark anywhere', async () => {
       const withPersonal = booking(
         'up_personal2',
         { status: 'confirmed', zoom_registrant_join_url: 'https://zoom.us/w/personal?tk=abc' },
         {
           scheduled_at: '2026-07-20T11:50:00Z',
           duration_minutes: 60,
-          zoom_link: 'https://zoom.us/j/live1',
         },
       )
       vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([withPersonal])
@@ -606,7 +620,6 @@ describe('UserDashboardView', () => {
         {
           scheduled_at: '2026-07-20T11:50:00Z',
           duration_minutes: 60,
-          zoom_link: null,
           zoom_meeting_status: 'create_failed',
         },
       )
@@ -625,7 +638,6 @@ describe('UserDashboardView', () => {
         {
           scheduled_at: '2026-07-20T11:50:00Z',
           duration_minutes: 60,
-          zoom_link: null,
           zoom_meeting_status: 'pending_creation',
         },
       )

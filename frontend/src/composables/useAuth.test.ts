@@ -55,4 +55,63 @@ describe('parseStartParam', () => {
     expect(parseStartParam(`group_invite__${'c'.repeat(129)}`)).toBeNull()
     expect(parseStartParam('group_invite__has spaces not url-safe')).toBeNull()
   })
+  // ===========================================================================
+  // T-35: zoom__<22> -- the public practice code as a deep link.
+  //
+  // THREE AXES OF GARBAGE, matched against the backend's decode_practice_code
+  // (zoom/service.py). The two copies exist because this route takes a UUID
+  // path parameter, so the decode must happen here before a route exists --
+  // a language boundary, not a duplication anyone forgot to remove. They must
+  // therefore agree on REJECTION, not just on valid input: what the server
+  // answers 404 to, this must answer "not a route" to.
+  //
+  // The fourth axis -- a well-formed code naming a practice that does not
+  // exist -- is deliberately NOT here and cannot be: there is no database on
+  // this side. That link routes normally and the resolve call on the target
+  // screen 404s (see PracticeLiveView.test.ts).
+  // ===========================================================================
+  describe('T-35: zoom__{code}', () => {
+    it('decodes a real code back into the practice uuid and routes to practice-live', () => {
+      // Built the same way the backend builds it, so the fixture cannot drift
+      // from the algorithm: bytes -> base64url -> strip padding.
+      const uuid = '11111111-2222-3333-4444-555555555555'
+      const bytes = Uint8Array.from(
+        (uuid.replace(/-/g, '').match(/../g) ?? []).map((h) => parseInt(h, 16)),
+      )
+      const code = btoa(String.fromCharCode(...bytes))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '')
+
+      expect(code).toHaveLength(22)
+      expect(parseStartParam(`zoom__${code}`)).toEqual({
+        name: 'practice-live',
+        params: { practiceId: uuid },
+      })
+    })
+
+    it('AXIS 1 -- wrong length: neither 21 nor 23 characters is a route', () => {
+      expect(parseStartParam(`zoom__${'A'.repeat(21)}`)).toBeNull()
+      expect(parseStartParam(`zoom__${'A'.repeat(23)}`)).toBeNull()
+    })
+
+    it('AXIS 2 -- wrong charset: 22 characters outside [A-Za-z0-9_-] is not a route', () => {
+      expect(parseStartParam(`zoom__${'A'.repeat(20)}!!`)).toBeNull()
+      expect(parseStartParam(`zoom__${'A'.repeat(20)}==`)).toBeNull()
+      expect(parseStartParam(`zoom__${'тест'.repeat(5)}аб`)).toBeNull()
+    })
+
+    it('AXIS 3 -- empty: the prefix alone is not a route', () => {
+      expect(parseStartParam('zoom__')).toBeNull()
+      expect(parseStartParam('zoom')).toBeNull()
+    })
+
+    it('does NOT disturb open_practice__{uuid} -- both formats live, they are two different actions', () => {
+      const uuid = '550e8400-e29b-41d4-a716-446655440000'
+      expect(parseStartParam(`open_practice__${uuid}`)).toEqual({
+        name: 'practice-detail',
+        params: { id: uuid },
+      })
+    })
+  })
 })

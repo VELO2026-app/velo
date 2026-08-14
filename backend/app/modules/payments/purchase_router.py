@@ -222,9 +222,9 @@ async def list_my_purchases_endpoint(
                 completed_at=p.completed_at,
                 created_at=p.created_at,
                 updated_at=p.updated_at,
-                # zoom_link (M-3): purchase history is not a zoom entry point,
-                # and a purchase can outlive a cancelled / refunded booking --
-                # the fail-closed factory leaves the link None by default.
+                # T-35: purchase history is not a Zoom entry point, and the
+                # summary no longer carries a Zoom URL of any kind (the
+                # zoom_link column and its fail-closed gate are gone).
                 practice=PracticeSummary.from_practice(
                     practice,
                     master_name=master_names[practice.master_id],

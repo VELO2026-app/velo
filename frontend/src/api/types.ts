@@ -135,6 +135,7 @@ export type {
   WaitlistStatus,
   WaitlistWithPracticeResponse,
   WithdrawalResponse,
+  ZoomEntryResolveResponse,
 } from './generated'
 
 // -- T21-1 bridge: two fields the backend already returns, ahead of the next
@@ -192,18 +193,10 @@ export interface AudiencePreviewResponse {
 }
 
 export interface PracticeResponse extends GeneratedPracticeResponse {
-  /** The practice owner's own Zoom host-registrant link. Populated only on
-   * owner-facing responses; null/undefined otherwise. Optional for the same
-   * fixture-compatibility reason as above. */
-  zoom_host_join_url?: string | null
-  /** A4 V2 (PROMPT №572): this practice's ZoomMeeting.status verbatim
-   * ('active' | 'pending_creation' | 'create_failed' | 'deleted'), or null/
-   * undefined if no ZoomMeeting row exists. NOT owner-gated (unlike
-   * zoom_host_join_url above) -- see the backend schema field's own
-   * docstring. Lets resolveZoomLink (utils/zoomLink.ts) tell "still
-   * preparing" apart from "permanently failed" for BOTH the master and a
-   * booked participant. */
-  zoom_meeting_status?: string | null
+  /* T-35: zoom_host_join_url, zoom_meeting_status and the new
+   * zoom_public_link are all NATIVE in generated.ts now (the T-35 regen
+   * picked them up), so this bridge no longer restates them. zoom_link is
+   * gone from generated.ts entirely -- the column no longer exists. */
   /** A4 V6 (PROMPT №572): True when this response is the master's own
    * EARLIER submission returned again (a window-scoped retry-after-timeout
    * dedup, or the losing side of a genuine concurrent double-tap) instead
@@ -225,10 +218,9 @@ export interface PracticeResponse extends GeneratedPracticeResponse {
 }
 
 export interface PracticeSummary extends GeneratedPracticeSummary {
-  /** Same field, same posture as PracticeResponse.zoom_meeting_status
-   * above -- powers the identical pending-vs-failed distinction on
-   * list-view Zoom buttons (dashboard nearest card, my-bookings). */
-  zoom_meeting_status?: string | null
+  /* T-35: zoom_meeting_status is native in generated.ts now; this alias is
+   * kept so the many existing imports of PracticeSummary from '@/api/types'
+   * keep resolving to one name. */
 }
 
 export interface BookingWithPracticeResponse extends GeneratedBookingWithPracticeResponse {
@@ -238,8 +230,8 @@ export interface BookingWithPracticeResponse extends GeneratedBookingWithPractic
    * this field existed omit it entirely, and the ladder treats a missing
    * field the same as an explicit null. */
   zoom_registrant_join_url?: string | null
-  /** Overrides the generated field's type to OUR bridged PracticeSummary
-   * (zoom_meeting_status) above -- the generated one does not have it yet. */
+  /** Overrides the generated field's type to OUR PracticeSummary alias
+   * above, so both names stay interchangeable at call sites. */
   practice: PracticeSummary
 }
 

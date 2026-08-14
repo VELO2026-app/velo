@@ -11,7 +11,11 @@
   Editable fields (draft / scheduled only -- completed/cancelled are readonly):
     title, description, what_to_prepare, contraindications,
     scheduled_at (date+time), duration_minutes,
-    timezone, max_participants, is_free, price_cents, zoom_link
+    timezone, max_participants, is_free, price_cents
+
+  T-35: zoom_link is gone -- the column no longer exists. A meeting that
+  failed to create is fixed with the retry action, not with a hand-typed link
+  that silently breaks attendance.
 
   State machine action buttons (below form):
     draft      -> "Опубликовать"  PATCH status=scheduled
@@ -199,22 +203,6 @@
             placeholder="Коврик, плед, вода"
             :rows="3"
             autogrow
-          />
-
-          <!-- Zoom (T21-1, PROMPT №541, owner decision D1): the backend now
-               ALWAYS creates a real Zoom meeting automatically on publish --
-               this field is an EMERGENCY fallback only (Zoom's daily creation
-               quota can fail it), kept so a master is never left with no way
-               to run the session. Honest label states the cost of using it. -->
-          <p class="edit-practice__hint">
-            Ссылка создаётся автоматически. Указывайте свою только как запасной вариант — посещение
-            по ней не засчитается автоматически.
-          </p>
-          <VInput
-            v-model="form.zoom_link"
-            label="Запасная Zoom ссылка"
-            type="url"
-            :error="errors.zoom_link"
           />
 
           <!-- W-3: :disabled="anyLoading" prevents Save while an action runs. -->
@@ -455,7 +443,6 @@ const form = reactive({
   description: '',
   what_to_prepare: '',
   contraindications: '',
-  zoom_link: '',
   // P5 port (PROMPT №606): audience_kind + audience_group_ids, mirrors
   // CreatePracticeView's own form fields exactly.
   audience_kind: 'public' as 'public' | 'students' | 'groups',
@@ -481,7 +468,6 @@ const errors = reactive({
   title: '',
   direction: '',
   max_participants: '',
-  zoom_link: '',
   audience_group_ids: '',
 })
 
@@ -564,7 +550,6 @@ function populateForm(p: PracticeResponse): void {
   form.description = p.description ?? ''
   form.what_to_prepare = p.what_to_prepare ?? ''
   form.contraindications = p.contraindications ?? ''
-  form.zoom_link = p.zoom_link ?? ''
   form.audience_kind = p.audience_kind ?? 'public'
   // PracticeResponse carries audience_group_NAMES, not ids (see the field's
   // own docstring in api/types.ts) -- CheckinView composes a message from
@@ -634,7 +619,6 @@ function validate(): boolean {
   errors.title = ''
   errors.direction = ''
   errors.max_participants = ''
-  errors.zoom_link = ''
   errors.audience_group_ids = ''
 
   if (!form.title.trim()) {
@@ -651,10 +635,6 @@ function validate(): boolean {
       errors.max_participants = 'Введите положительное число или оставьте пустым'
       ok = false
     }
-  }
-  if (form.zoom_link && !form.zoom_link.startsWith('https://')) {
-    errors.zoom_link = 'Ссылка должна начинаться с https://'
-    ok = false
   }
   if (form.audience_kind === 'groups' && form.audience_group_ids.length === 0) {
     errors.audience_group_ids = 'Выберите хотя бы одну группу'
@@ -773,7 +753,6 @@ async function commitSave(): Promise<void> {
       duration_minutes: parseInt(form.duration_minutes, 10),
       timezone: form.timezone,
       max_participants: form.max_participants_raw ? parseInt(form.max_participants_raw, 10) : null,
-      zoom_link: form.zoom_link.trim() || null,
       is_free: form.is_free,
       price_cents: form.is_free ? 0 : priceCents.value,
       // P5 port (PROMPT №606): mirrors CreatePracticeView -- group_ids is

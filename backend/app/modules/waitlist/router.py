@@ -127,8 +127,9 @@ async def list_my_waitlist_endpoint(
                 expires_at=entry.expires_at,
                 created_at=entry.created_at,
                 updated_at=entry.updated_at,
-                # zoom_link (M-3): a waitlisted user has no confirmed booking,
-                # so the fail-closed factory leaves the link None by default.
+                # T-35: the summary carries no Zoom URL at all any more (the
+                # zoom_link column and its fail-closed gate are gone), so
+                # there is nothing here for a waitlisted user to be denied.
                 practice=PracticeSummary.from_practice(
                     practice,
                     master_name=master_names[practice.master_id],
