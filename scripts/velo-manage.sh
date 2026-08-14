@@ -2290,37 +2290,21 @@ case "${1:-}" in
     # === Seed ===
 
     seed)
-        echo "Running database seed..."
-        cd_compose
-        SEED_ARGS=""
-        if [ "${2:-}" = "--reset" ]; then
-            SEED_ARGS="--reset"
-        fi
-        $COMPOSE_CMD exec app python scripts/seed.py $SEED_ARGS
-        ;;
-
-    seed-practices)
-        echo "Running seed_practices..."
-        cd_compose
-        # Прокидываем все аргументы (--reset / --clean / --dry-run / --yes
-        # и их комбинации) напрямую в скрипт — он сам их парсит через argparse.
-        shift  # отбрасываем "seed-practices"
-        $COMPOSE_CMD exec app python scripts/seed_practices.py "$@"
-        ;;
-
-    # === Demo-data seed (test contour only, T-31) ===
-
-    seed-demo)
-        # Stand tooling, not a prod feature: same role gate as resync-comms.
+        # Profile-driven seed, test contour only. Same role gate the old
+        # seed-demo carried: seeding invents users and practices, which has
+        # no business happening on a production database.
         if [ "$VELO_ROLE" != "test" ]; then
-            echo -e "${RED}✗ seed-demo is a test-contour ritual; refusing on role '$VELO_ROLE'${NC}"
+            echo -e "${RED}✗ seed is a test-contour ritual; refusing on role '$VELO_ROLE'${NC}"
             exit 1
         fi
         cd_compose
-        # Pass args straight through to the ORM script (it parses/validates):
-        #   velo seed-demo --master-tg <telegram_id> [--extra-masters N]
-        shift  # drop "seed-demo"
-        $COMPOSE_CMD exec -T app python scripts/seed_demo.py "$@"
+        # Args pass straight through to the script, which parses them:
+        #   velo seed                      -- default profile
+        #   velo seed --profile 15082026   -- a named profile
+        #   velo seed --reset              -- wipe seeded data first
+        #   velo seed --list               -- show available profiles
+        shift  # drop "seed"
+        $COMPOSE_CMD exec -T app python scripts/seed.py "$@"
         ;;
 
     # === Roles ===
@@ -2447,12 +2431,10 @@ case "${1:-}" in
         echo "  db dump             — Create SQL dump"
         echo "  db restore <file>   — Restore from dump"
         echo "  db migrate          — Run Alembic migrations"
-        echo "  seed                — Populate DB with test data"
-        echo "  seed --reset        — Clean seed data & re-seed"
-        echo "  seed-practices      — Sync practice schedule from seed_practices.json"
-        echo "  seed-practices --reset    — Clean own data & re-seed from JSON"
-        echo "  seed-practices --clean    — Clean own data only (no re-seed)"
-        echo "  seed-practices --dry-run  — Show plan without writing to DB"
+        echo "  seed                — Seed the stand from a profile (test only)"
+        echo "  seed --profile <name> — Use a named profile (default: default)"
+        echo "  seed --list         — List available profiles"
+        echo "  seed --reset        — Wipe seeded data, then re-seed"
         echo ""
         echo "Roles:"
         echo "  setrole <tg> <A|M|U>  — Set a user's role (admin/master/user)"

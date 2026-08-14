@@ -1,9 +1,0 @@
-{
-  "_comment": "Ручная выдача роли master владельцу проекта (telegram_id 8457062539). Применяется НЕ-разрушающей командой: docker compose exec app python scripts/seed_practices.py promote-master --scenario 8457062539 --yes. Идемпотентно и перезаписываемо — повторный запуск обновит display_name/methods/bio из этого файла (account/verification/payout/stats/баланс сохраняются). display_name — реальное имя владельца; methods/bio пока ПЛЕЙСХОЛДЕРЫ, заменить на реальные и перезапустить. Профиль метится отдельным маркером manual_master_grant, поэтому clean/reset его НИКОГДА не трогают.",
-  "promote_master": {
-    "telegram_id": 8457062539,
-    "display_name": "Tobi Kato",
-    "methods": ["breathwork", "meditation"],
-    "bio": "Ведущая дыхательных и медитативных практик."
-  }
-}
