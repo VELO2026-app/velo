@@ -346,11 +346,36 @@ async def ensure_practice(
     scheduled_at = at(
         spec["day_offset"], spec.get("hour", 10), spec.get("minute", 0)
     )
+    state = spec.get("state", "scheduled")
+    now = datetime.now(UTC)
+
+    if state != "completed" and scheduled_at <= now:
+        raise SystemExit(
+            f"Profile error: '{title}' is state={state} but its day_offset "
+            f"puts it at {scheduled_at:%Y-%m-%d %H:%M} UTC, which is already "
+            f"past. Only state=completed may sit in the past."
+        )
+
+    # CreatePracticeRequest refuses a past scheduled_at (schemas.py:297) -- a
+    # correct rule for the API, and one a seed of HISTORY cannot satisfy. So a
+    # completed practice is created at a placeholder far in the future, passes
+    # validation like any other, and is then moved back to where the profile
+    # wants it. Going through the service still buys what it is here for:
+    # taxonomy confirmation, audience wiring and the dedup window.
+    #
+    # The placeholder is derived from the real date (+400 days) rather than
+    # being a constant, so two completed practices never collide inside the
+    # service's create-dedup window.
+    create_at = (
+        scheduled_at + timedelta(days=400) if state == "completed"
+        else scheduled_at
+    )
+
     body = CreatePracticeRequest(
         practice_type=spec.get("practice_type", "live"),
         title=title,
         description=spec.get("description"),
-        scheduled_at=scheduled_at,
+        scheduled_at=create_at,
         duration_minutes=spec["duration_minutes"],
         timezone=spec.get("timezone", "Europe/Moscow"),
         direction=spec["direction"],
@@ -364,7 +389,6 @@ async def ensure_practice(
     practice, _deduped = await create_practice(master, body, session)
     await session.flush()
 
-    state = spec.get("state", "scheduled")
     if state == "scheduled":
         await update_practice(
             practice.id,
@@ -373,7 +397,9 @@ async def ensure_practice(
             session,
         )
     elif state == "completed":
-        # Straight to completed, bypassing publication -- see the docstring.
+        # Back to the real date, and straight to completed without ever
+        # publishing -- see the docstring for why no Zoom meeting is minted.
+        practice.scheduled_at = scheduled_at
         practice.status = PracticeStatus.COMPLETED.value
     await session.flush()
     return practice
