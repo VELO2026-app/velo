@@ -15,15 +15,24 @@ kind="dm" dedup decision made on the comms side at thread creation
 persisted (support-sections-integration.md #3).
 
 Revision ID: ab1c2d3e4f5a
-Revises: hr13a1b2c3d4
+Revises: hr35a1b2c3d4
 Create Date: 2026-08-14
+
+RE-PARENTED 2026-08-14, and the reason belongs here rather than only in the
+commit message. This was authored against `hr13a1b2c3d4`, which WAS the head
+when it was written. The backend teammate then published `hr35a1b2c3d4`
+(drop practice.zoom_link) declaring the SAME parent, so after the merge the
+chain had TWO HEADS and `alembic upgrade head` would have aborted -- on the
+server, during a deploy, because alembic cannot run locally here at all.
+His is already on `origin/test`, so ours is the one that moves. Nothing about
+this migration's own content changed; only its position in the chain.
 """
 
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = "ab1c2d3e4f5a"
-down_revision: str | None = "hr13a1b2c3d4"
+down_revision: str | None = "hr35a1b2c3d4"
 branch_labels: str | None = None
 depends_on: str | None = None
 
