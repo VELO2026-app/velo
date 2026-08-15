@@ -413,7 +413,42 @@ async def cancel_booking(
     the next waiting user (Phase 5.3).
 
     Uses FOR UPDATE to prevent concurrent cancellation (P-12).
+
+    T-13 (PROMPT №727): locks Practice BEFORE Booking -- NOT the reverse.
+    This used to lock Booking first and Practice only later (inside
+    recalculate_participants), the exact mirror image of the order the Zoom
+    report poller uses on the SAME two tables (report_poller.py's
+    _process_one locks Practice, then ingest_report_for_meeting/
+    apply_legacy_proxy_fallback lock Booking rows). That inversion was a
+    genuine deadlock precondition, not a theoretical one: a CONFIRMED
+    booking on a COMPLETED practice is a normal, non-transient state
+    whenever a real Zoom meeting is involved -- _finalize_practice_core
+    defers exactly these bookings, left unflipped, for the poller to decide
+    later (see its zoom_tracked branch) -- so cancel_booking and the poller
+    could genuinely race the same Practice + Booking rows in opposite lock
+    order. Now matches the order already established by create_booking
+    (above, in this file) and confirm_waitlist (waitlist/service.py's own
+    W1 fix, same peek-then-lock-the-parent-first shape copied here).
     """
+    # Peek the practice_id unlocked -- the booking itself is not loaded yet,
+    # so nothing is locked prematurely by this. NotFoundError here means the
+    # booking id itself does not exist, same case the old code raised on.
+    practice_id_stmt = select(Booking.practice_id).where(Booking.id == booking_id)
+    practice_id = (await session.execute(practice_id_stmt)).scalar_one_or_none()
+    if practice_id is None:
+        raise NotFoundError("Booking not found")
+
+    # Lock Practice FIRST. Reused below for the refund/early-finalize
+    # deadline check and the T-13 completed-practice guard -- no second,
+    # now-redundant unlocked read. recalculate_participants (further down)
+    # re-locks the same already-held row later in this same transaction;
+    # that is a no-op re-acquisition in Postgres, not a second lock, and
+    # create_booking above already does the identical thing.
+    practice_stmt = select(Practice).where(Practice.id == practice_id).with_for_update()
+    practice = (await session.execute(practice_stmt)).scalar_one_or_none()
+    if not practice:
+        raise NotFoundError("Practice not found")
+
     stmt = (
         select(Booking)
         .where(Booking.id == booking_id)
@@ -435,19 +470,30 @@ async def cancel_booking(
             f"{booking.status}"
         )
 
+    # T-13 (PROMPT №727): reachable, not hypothetical -- a Zoom-tracked
+    # practice's still-CONFIRMED bookings are left exactly as CONFIRMED at
+    # practice completion (bookings/service.py's zoom_tracked branch,
+    # _finalize_practice_core), awaiting the report poller's decision.
+    # _finalize_practice_core ALSO unconditionally finalizes every purchase
+    # for the practice at that same moment (money settlement was never
+    # gated on the attendance verdict). So without this guard, cancelling
+    # here would flip booking.status to CANCELLED -- silently pre-empting
+    # whatever the poller was about to decide -- while refund_booking/
+    # early_finalize_booking's own idempotency guard (purchase.status !=
+    # PENDING) would silently no-op the money side, since the purchase is
+    # already COMPLETED. The booking would end up CANCELLED with no refund
+    # and no reversal of the master's already-settled payout: a confusing,
+    # incorrect state, not merely a race. The event already happened; it is
+    # not the user's to retroactively un-happen.
+    if practice.status == PracticeStatus.COMPLETED.value:
+        raise BadRequestError(
+            "Cannot cancel a booking for a practice that has already completed",
+            code="practice_completed",
+        )
+
     booking.status = BookingStatus.CANCELLED.value
     booking.cancelled_at = datetime.now(timezone.utc)
     booking.cancellation_reason = reason
-
-    # Phase 6.5: Refund or early-finalize based on deadline.
-    # Load practice for scheduled_at (read-only, no FOR UPDATE needed).
-    practice_stmt = (
-        select(Practice)
-        .where(Practice.id == booking.practice_id)
-    )
-    practice = (
-        await session.execute(practice_stmt)
-    ).scalar_one()
 
     # Fix 2.3: scheduled_at is NOT NULL in the model, but guard against
     # incomplete ORM objects (e.g. partial loads in tests). Treat missing

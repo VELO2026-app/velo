@@ -547,3 +547,132 @@ async def test_concurrent_cancel_during_poller_lock_is_refused_not_reverted(
         "CONFIRMED) row under lock -- not silently succeed only to be "
         "reverted by the poller's commit (the pre-fix corruption)"
     )
+
+
+# ===================================================================
+# 6. T-13 (PROMPT №727): Practice-then-Booking lock order closes a
+#    genuine cross-table DEADLOCK precondition, not just a data race
+# ===================================================================
+
+
+@pytest.mark.asyncio
+async def test_practice_first_lock_order_no_deadlock_vs_poller(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """T-13: cancel_booking (bookings/service.py) now locks Practice BEFORE
+    Booking -- matching report_poller.py's own order (_process_one locks
+    Practice first, THEN ingest_report_for_meeting/apply_legacy_proxy_
+    fallback lock Booking rows, attendance_service.py). Before this fix,
+    cancel_booking locked Booking first and Practice only later (inside
+    recalculate_participants) -- the exact REVERSE of the poller's order on
+    the SAME two tables. That is a textbook crossed lock-order deadlock
+    precondition under PostgreSQL's own wait-for detector: side A holds
+    Booking + wants Practice, side B holds Practice + wants Booking. The
+    test above (SW1) already proves the SAME-ROW data race is closed; this
+    proves the CROSS-TABLE ordering can no longer deadlock either side.
+
+    Simulates the poller's own lock sequence directly (Practice, then the
+    same Booking row) rather than calling ingest_report_for_meeting itself,
+    to isolate the lock-ORDER question from the attendance-decision logic
+    the SW1 test above already covers. The practice is created COMPLETED
+    with an active Zoom meeting -- the exact "Zoom-tracked, deferred, still
+    CONFIRMED" state _finalize_practice_core produces and this whole fix
+    exists for (see bookings/service.py's zoom_tracked branch + the new
+    completed-practice guard in cancel_booking).
+
+    Ordering forced via asyncio.Event, same idiom as the SW1 test: the
+    poller-side locks Practice FIRST (mirrors production -- the poller
+    reaches the practice row before a concurrent cancel request lands),
+    THEN cancel_booking is attempted concurrently.
+
+    Pre-fix (Booking-then-Practice in cancel_booking): this exact ordering
+    is the deadlock window -- cancel_booking would hold Booking's lock (h
+    ad it reached it) while waiting on Practice, at the same moment the
+    poller-side holds Practice while waiting on the SAME Booking row.
+    PostgreSQL's deadlock detector aborts ONE side with a DBAPIError once
+    both are mutually blocked.
+
+    Post-fix: cancel_booking requests Practice FIRST too, so it simply
+    queues behind the poller-side's Practice lock -- a normal one-directional
+    wait, never a cross-wait -- and asyncio.gather completes with NO
+    exception from either side. The poller-side wins (locked first) and
+    cancel_booking correctly refuses once it re-reads the fresh row under
+    its own lock, same refusal shape as the SW1 test above.
+
+    ⚠ NOT RUN LOCALLY -- same blocker as the SW1 test above (module
+    docstring): no Postgres reachable in this environment; backend test
+    collection itself fails locally on a pre-existing, untouched .env/
+    settings mismatch. Deferred to the deploy gate -- this reasoning is
+    what that run is expected to confirm.
+    """
+    master_id = await _make_master(client, db_session, 79309)
+    practice = await _create_practice(
+        db_session, master_id, status=PracticeStatus.COMPLETED.value,
+    )
+    await _active_zoom_meeting(db_session, practice)
+    auth = await login_user(client, telegram_id=79329, first_name="Deadlock-Racer")
+    user = await db_session.get(User, auth["user"]["id"])
+    booking = Booking(
+        practice_id=practice.id, user_id=user.id,
+        status=BookingStatus.CONFIRMED.value,
+    )
+    db_session.add(booking)
+    await db_session.commit()
+    await db_session.refresh(booking)
+
+    factory = get_session_factory()
+    practice_locked = asyncio.Event()
+    cancel_attempted = asyncio.Event()
+
+    async def poller_side() -> None:
+        async with factory() as session_a:
+            # Mirrors report_poller.py's _process_one: lock Practice first.
+            await session_a.execute(
+                select(Practice).where(Practice.id == practice.id).with_for_update()
+            )
+            practice_locked.set()
+            await cancel_attempted.wait()
+            # Give cancel_booking's Practice-lock request time to actually
+            # queue and block behind this one before we release anything.
+            await asyncio.sleep(0.2)
+            # Now take the SAME Booking row too, mirroring
+            # ingest_report_for_meeting's per-registrant Booking lock,
+            # before releasing both locks on commit.
+            row = (
+                await session_a.execute(
+                    select(Booking).where(Booking.id == booking.id).with_for_update()
+                )
+            ).scalar_one()
+            row.status = BookingStatus.ATTENDED.value
+            row.attendance_decided_via = "zoom_report"
+            await session_a.commit()
+
+    async def canceller() -> BaseException | None:
+        await practice_locked.wait()
+        async with factory() as session_b:
+            cancel_attempted.set()
+            try:
+                await cancel_booking(booking.id, user, session_b)
+            except BadRequestError as exc:
+                return exc
+            await session_b.commit()
+            return None
+
+    # The whole point of the fix: this must complete without asyncio.gather
+    # ever raising -- a pre-fix crossed lock order would surface here as a
+    # DBAPIError (PostgreSQL's deadlock detector aborting one side), not as
+    # a clean BadRequestError from either function's own logic.
+    _, cancel_error = await asyncio.gather(poller_side(), canceller())
+
+    await db_session.refresh(booking)
+    assert booking.status == BookingStatus.ATTENDED.value, (
+        "the poller-side locked Practice first in this ordering -- it must "
+        "win, proving the shared lock order serializes the two writers "
+        "instead of deadlocking or losing an update"
+    )
+    assert isinstance(cancel_error, BadRequestError), (
+        "cancel must be refused once it observes the fresh row under its "
+        "own lock (either the wrong-status guard or the new completed-"
+        "practice guard) -- a raised DBAPIError instead would mean the "
+        "lock order still crosses and PostgreSQL had to break the deadlock"
+    )
