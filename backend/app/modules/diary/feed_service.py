@@ -17,7 +17,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.modules.diary.models import DiaryEvent
+from app.modules.diary.models import DiaryEvent, DiaryEventKind
 from app.modules.users.models import User
 
 
@@ -77,6 +77,13 @@ async def list_diary_feed(
     base = select(DiaryEvent).where(
         DiaryEvent.user_id == user.id,
         DiaryEvent.is_hidden.is_(False),
+        # B41 (owner-ruled 2026-08-15, D=C): "you started a dialogue" is no
+        # longer written (chats/router.py, both open_* endpoints), and
+        # EXISTING rows are hidden here rather than deleted -- reversible,
+        # no schema change, no touch to DiaryEvent.kind's enum or the
+        # uq_diary_events_thread_started partial index. Unconditional: this
+        # kind never surfaces regardless of which category chip is active.
+        DiaryEvent.kind != DiaryEventKind.THREAD_STARTED.value,
     )
 
     kinds = _kinds_for_categories(categories)

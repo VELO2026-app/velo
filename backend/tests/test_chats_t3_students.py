@@ -370,13 +370,11 @@ class TestMasterInitiatedChat:
         assert resp.json()["peer"]["user_id"] == student["user"]["id"]
         assert "created" not in resp.json()
 
-        # The diary card is the student's, and names the master -- same
-        # fact, same owner as when the student opens it themselves.
-        events = await _thread_started_rows(
+        # B41 (owner-ruled 2026-08-15, D=C): no diary card is written for
+        # either party, master-initiated or not.
+        assert await _thread_started_rows(
             db_session, UUID(student["user"]["id"])
-        )
-        assert len(events) == 1
-        assert events[0].snapshot["master_id"] == master["user"]["id"]
+        ) == []
         assert await _thread_started_rows(
             db_session, UUID(master["user"]["id"])
         ) == []
@@ -417,8 +415,8 @@ class TestMasterInitiatedChat:
     ) -> None:
         """The dedup claim, in the order that actually happens: the student
         writes first, the master answers from their own screen. ONE thread,
-        ONE pointer row (uq_chat_threads_pair), ONE diary card -- because
-        both directions key the pair the same way."""
+        ONE pointer row (uq_chat_threads_pair) -- both directions key the
+        pair the same way. (No diary card either way -- B41.)"""
         master = await _make_master(client, db_session, BAND_MIN + 17)
         student = await login_user(
             client, telegram_id=BAND_MIN + 18, first_name="Student",
@@ -456,11 +454,10 @@ class TestMasterInitiatedChat:
             )
         ).scalars().all()
         assert len(rows) == 1
-        assert len(
-            await _thread_started_rows(
-                db_session, UUID(student["user"]["id"])
-            )
-        ) == 1
+        # B41: no diary card is written.
+        assert await _thread_started_rows(
+            db_session, UUID(student["user"]["id"])
+        ) == []
 
     async def test_master_first_then_student_finds_the_same_thread(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch
@@ -498,11 +495,10 @@ class TestMasterInitiatedChat:
             )
         ).scalars().all()
         assert len(rows) == 1
-        assert len(
-            await _thread_started_rows(
-                db_session, UUID(student["user"]["id"])
-            )
-        ) == 1
+        # B41: no diary card is written.
+        assert await _thread_started_rows(
+            db_session, UUID(student["user"]["id"])
+        ) == []
 
     async def test_a_non_master_cannot_open_a_student_chat(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch

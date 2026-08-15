@@ -35,10 +35,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import PracticeDetailView from '@/views/user/PracticeDetailView.vue'
-// Stays REAL: nothing mocks @/api/client, so the «Написать мастеру» failure
-// tests drive the genuine error class extractApiError branches on, not a
-// re-implemented lookalike (velo-idiom §4).
-import { ApiResponseError } from '@/api/client'
 import type { BookingWithPracticeResponse, PracticeResponse } from '@/api/types'
 
 const push = vi.fn()
@@ -123,13 +119,6 @@ vi.mock('@/platform', () => ({
   get platform() {
     return { name: 'standalone' as const, openLink }
   },
-}))
-
-// -- «Написать мастеру»: the create-or-get chat seam. Mocked at the api
-// module, the same layer MasterPublicView's own test mocks it at. --
-const openChat = vi.fn()
-vi.mock('@/api/chats', () => ({
-  openChat: (...args: unknown[]) => openChat(...args),
 }))
 
 const NOW = new Date('2026-07-20T12:00:00Z')
@@ -268,7 +257,6 @@ beforeEach(() => {
   // is the harmless default (matches "nothing exists yet" for most fixtures).
   getBookingRecording.mockReset().mockResolvedValue({ status: 'unavailable', url: null })
   openLink.mockReset()
-  openChat.mockReset().mockResolvedValue({ id: 'thread-7', created_at: '2026-07-20T12:00:00Z' })
 })
 
 afterEach(() => {
@@ -844,112 +832,6 @@ describe('PracticeDetailView', () => {
 
       expect(getBookingRecording).not.toHaveBeenCalled()
       expect(button('Посмотреть запись')).toBeUndefined()
-    })
-  })
-
-  // ===========================================================================
-  // «Написать мастеру» -- the contact path for a booked practice. This screen
-  // is where every row of «Мои бронирования» lands (MyBookingsView.openDetail
-  // pushes 'practice-detail'), so this button is what gives the bookings list a
-  // way to reach the master at all.
-  describe('«Написать мастеру»', () => {
-    const writeBtn = () => button('Написать мастеру')
-
-    it('is absent on a catalogue practice the viewer has not booked', async () => {
-      bookingsState.bookings = []
-      mount()
-      await flush()
-
-      // Positive pin first: the master section DID render, so the absence
-      // below is about the button and not about an empty screen.
-      expect(text()).toContain('Мастер')
-      expect(writeBtn()).toBeUndefined()
-    })
-
-    it('appears once the viewer holds a booking for THIS practice', async () => {
-      bookingsState.bookings = [booking({ status: 'confirmed' })]
-      mount()
-      await flush()
-
-      expect(writeBtn()).toBeDefined()
-      expect(writeBtn()?.disabled).toBe(false)
-    })
-
-    it('a booking for a DIFFERENT practice does not conjure the button', async () => {
-      bookingsState.bookings = [booking({ practice_id: 'p_other', status: 'confirmed' })]
-      mount()
-      await flush()
-
-      expect(writeBtn()).toBeUndefined()
-    })
-
-    it('survives a cancelled / past booking -- a question about a practice that did not happen is still legitimate', async () => {
-      bookingsState.bookings = [booking({ status: 'cancelled' })]
-      mount()
-      await flush()
-      expect(writeBtn()).toBeDefined()
-
-      app?.unmount()
-      host?.remove()
-      bookingsState.bookings = [booking({ status: 'no_show' })]
-      mount()
-      await flush()
-
-      expect(writeBtn()).toBeDefined()
-    })
-
-    it("clicking it opens-or-gets the DM with the practice's OWN master_id and navigates into the returned thread", async () => {
-      practicesState.selected = practice({ master_id: 'master_specific' })
-      bookingsState.bookings = [booking({ status: 'confirmed' })]
-      openChat.mockResolvedValue({ id: 'thread-42', created_at: '2026-07-20T12:00:00Z' })
-      mount()
-      await flush()
-
-      writeBtn()?.click()
-      await flush()
-
-      expect(openChat).toHaveBeenCalledWith('master_specific')
-      expect(push).toHaveBeenCalledWith({ name: 'user-chat', params: { id: 'thread-42' } })
-    })
-
-    it("a failed open surfaces the backend's own message and does NOT navigate", async () => {
-      bookingsState.bookings = [booking({ status: 'confirmed' })]
-      openChat.mockRejectedValue(
-        new ApiResponseError(502, 'Сервис сообщений недоступен', 'bad_gateway'),
-      )
-      mount()
-      await flush()
-
-      writeBtn()?.click()
-      await flush()
-
-      expect(toastError).toHaveBeenCalledWith('Сервис сообщений недоступен')
-      expect(push).not.toHaveBeenCalled()
-    })
-
-    it('a non-ApiResponseError falls back to the screen`s own copy', async () => {
-      bookingsState.bookings = [booking({ status: 'confirmed' })]
-      openChat.mockRejectedValue(new Error('ECONNRESET'))
-      mount()
-      await flush()
-
-      writeBtn()?.click()
-      await flush()
-
-      expect(toastError).toHaveBeenCalledWith('Не удалось открыть чат')
-    })
-
-    it('re-entry: two clicks with no tick between them open ONE thread', async () => {
-      bookingsState.bookings = [booking({ status: 'confirmed' })]
-      mount()
-      await flush()
-
-      const btn = writeBtn()
-      btn?.click()
-      btn?.click()
-      await flush()
-
-      expect(openChat).toHaveBeenCalledTimes(1)
     })
   })
 

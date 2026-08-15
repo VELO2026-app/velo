@@ -65,8 +65,7 @@ from app.core.exceptions import (
 )
 from app.modules.auth.dependencies import get_current_user
 from app.modules.chats.models import ChatThread
-from app.modules.diary.projections import upsert_thread_started_event
-from app.modules.masters.service import get_master_full_name, is_master_verified
+from app.modules.masters.service import is_master_verified
 from app.modules.users.models import User, UserRole
 
 logger = structlog.get_logger()
@@ -386,9 +385,15 @@ async def open_chat(
     """Open the conversation with a master, or return the existing one.
 
     Create-or-get: comms dedups on the (client, operator) pair, so this is
-    the idempotent entry point the UI calls every time the chat is opened --
-    which is precisely what makes the diary self-healing possible (see
-    upsert_thread_started_event).
+    the idempotent entry point the UI calls every time the chat is opened.
+
+    B41 (owner-ruled 2026-08-15, D=C): this used to also write a
+    THREAD_STARTED diary event on first open (see upsert_thread_started_event,
+    projections.py:588 -- kept, now uncalled, see the note there). That write
+    is REMOVED here, not merely gated: no new event, ever. Existing rows are
+    NOT deleted -- they are excluded at the diary feed's own read path
+    instead (feed_service.py:list_diary_feed), which is reversible and does
+    not touch the DiaryEvent schema or its unique index.
     """
     _reject_actor_override(request)
 
@@ -406,27 +411,12 @@ async def open_chat(
     if master is None:
         raise NotFoundError("Master not found")
 
-    payload, comms_thread_id, repointed = await _create_or_get_thread(
+    # B41: `comms_thread_id`/`repointed` used to gate + feed the removed
+    # THREAD_STARTED write below (see the docstring above); neither is
+    # consulted by anything else in this function now.
+    payload, _comms_thread_id, _repointed = await _create_or_get_thread(
         session, client_id=user.id, operator_id=body.master_id,
     )
-
-    # The diary entry belongs to the student's own timeline (ID-5: the diary
-    # is velo's, and it is the student's personal space -- the master gets
-    # nothing). occurred_at comes from the thread, not from now().
-    #
-    # NOT written on a re-point: the conversation with this master already
-    # has its "started" card. comms handed out a new thread id, but nothing
-    # started again in the student's life, and a second card would say
-    # otherwise.
-    if not repointed:
-        await upsert_thread_started_event(
-            session,
-            user_id=user.id,
-            thread_id=comms_thread_id,
-            occurred_at=_parsed_created_at(payload),
-            master_id=body.master_id,
-            master_name=await get_master_full_name(body.master_id, session),
-        )
 
     return _open_response(payload, master)
 
@@ -480,25 +470,11 @@ async def open_student_chat(
     if student is None:
         raise NotFoundError("User not found")
 
-    payload, comms_thread_id, repointed = await _create_or_get_thread(
+    # B41: the THREAD_STARTED diary write that used to happen here (keyed on
+    # `repointed`/`comms_thread_id`) is removed -- see open_chat's docstring.
+    payload, _comms_thread_id, _repointed = await _create_or_get_thread(
         session, client_id=body.student_id, operator_id=user.id,
     )
-
-    # Same card, same owner as the other direction: the fact recorded is
-    # "a conversation with master X began" and it belongs to the STUDENT's
-    # timeline (ID-5), whoever opened it. Idempotent across the two
-    # directions -- the projection keys on the thread id, and the partial
-    # unique index uq_diary_events_thread_started makes that a database
-    # fact rather than a convention.
-    if not repointed:
-        await upsert_thread_started_event(
-            session,
-            user_id=body.student_id,
-            thread_id=comms_thread_id,
-            occurred_at=_parsed_created_at(payload),
-            master_id=user.id,
-            master_name=await get_master_full_name(user.id, session),
-        )
 
     return _open_response(payload, student)
 

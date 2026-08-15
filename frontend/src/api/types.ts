@@ -128,7 +128,6 @@ export type {
   MasterApplicationInfo,
   UserResponse,
   UserRole,
-  UserStatsResponse,
   UserUpdate,
   VerifyMasterRequest,
   WaitlistConfirmResponse,
@@ -150,6 +149,7 @@ import type {
   PracticeResponse as GeneratedPracticeResponse,
   PracticeSummary as GeneratedPracticeSummary,
   UpdatePracticeRequest as GeneratedUpdatePracticeRequest,
+  UserStatsResponse as GeneratedUserStatsResponse,
 } from './generated'
 
 // B26 (PROMPT №724): `export type { X } from './generated'` re-exports X to
@@ -249,6 +249,19 @@ export interface BookingWithPracticeResponse extends GeneratedBookingWithPractic
   /** Overrides the generated field's type to OUR PracticeSummary alias
    * above, so both names stay interchangeable at call sites. */
   practice: PracticeSummary
+}
+
+// -- B52 bridge (PROMPT №736): has_unread_messages on GET /bookings/me/stats,
+// ahead of the next generated.ts regen -- NO DEPLOY this cycle (owner-ruled),
+// so the field the backend now returns cannot reach generated.ts yet. Same
+// "never hand-edited, bridge until a regen picks it up natively" posture as
+// the other bridges above. Optional for the same fixture-compatibility
+// reason: existing test fixtures built before this field existed omit it.
+export interface UserStatsResponse extends GeneratedUserStatsResponse {
+  /** Colour indicator only (owner was explicit: no count) for the profile
+   * "Сообщения" row -- true when ANY of the user's chat threads has unread
+   * messages. See backend/app/modules/bookings/service.py:has_unread_messages. */
+  has_unread_messages?: boolean
 }
 
 // =============================================================================

@@ -206,10 +206,15 @@ async function reload(): Promise<void> {
   try {
     messages.value = await fetchMessages()
     markRead()
+    // B49: flip `loading` BEFORE scrolling. `scrollToBottom` needs `feedEl`
+    // mounted, and Vue only swaps in the v-else feed branch (where `feedEl`
+    // lives) once `loading` goes false. Calling it while still on the
+    // loading branch is a silent no-op (`feedEl.value` is null) -- a fresh
+    // thread landed at the top of the history instead of the newest message.
+    loading.value = false
     await scrollToBottom()
   } catch (e) {
     error.value = extractApiError(e, 'Попробуйте ещё раз')
-  } finally {
     loading.value = false
   }
 }

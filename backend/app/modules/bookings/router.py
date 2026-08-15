@@ -57,6 +57,7 @@ from app.modules.bookings.service import (
     get_booking_by_id,
     get_booking_recording,
     get_user_practice_stats,
+    has_unread_messages,
     join_booking,
     leave_booking,
     list_upcoming_bookings,
@@ -319,9 +320,11 @@ async def get_my_stats_endpoint(
     practices_attended, hours_attended = await get_user_practice_stats(
         user, session,
     )
+    unread = await has_unread_messages(user, session)
     return UserStatsResponse(
         practices_attended=practices_attended,
         hours_attended=hours_attended,
+        has_unread_messages=unread,
     )
 
 

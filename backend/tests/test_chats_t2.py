@@ -11,15 +11,16 @@
 #   2. MEMBERSHIP -- the comms read API is operator-scoped and cannot answer
 #      "is this user in thread T", so a forged thread id must die here. A
 #      stranger gets 404, not 403: 403 would confirm the thread exists.
-#   3. THE DIARY ECHO -- written once per thread, healed if the write was
-#      lost, never duplicated, and timestamped with the thread's own
-#      created_at rather than the moment we noticed.
+#   3. THE DIARY ECHO -- B41 (owner-ruled 2026-08-15, D=C): REMOVED. Opening
+#      a chat used to write a "you started a dialogue" diary card (once per
+#      thread, healed if lost, timestamped at the thread's own created_at).
+#      It no longer does, for either party, on any open path -- covered
+#      negatively below (_diary_rows returns []) rather than positively.
 #
 # comms is cut at the seam (app.modules.chats.router.comms_request) -- no
 # comms stack needed; core/comms.py is exercised separately by T1's suite.
 # =============================================================================
 
-from datetime import datetime
 from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
@@ -133,7 +134,7 @@ async def _diary_rows(
 
 
 class TestOpenChat:
-    async def test_open_stamps_actor_and_records_the_diary_echo(
+    async def test_open_stamps_actor_and_writes_no_diary_echo(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch
     ) -> None:
         student = await login_user(
@@ -174,17 +175,9 @@ class TestOpenChat:
         assert str(pointer.client_user_id) == student["user"]["id"]
         assert str(pointer.operator_user_id) == master["user"]["id"]
 
-        # The diary echo: student's timeline, thread's own instant.
-        events = await _diary_rows(db_session, UUID(student["user"]["id"]))
-        assert len(events) == 1
-        assert events[0].occurred_at == datetime.fromisoformat(
-            THREAD_CREATED_AT
-        )
-        assert events[0].source_id == UUID(THREAD_ID)
-        assert events[0].snapshot["master_id"] == master["user"]["id"]
-
-        # And nothing lands in the master's diary (ID-5: the diary is the
-        # student's personal space).
+        # B41 (owner-ruled 2026-08-15, D=C): opening a chat no longer writes
+        # a "you started a dialogue" diary card, for either party.
+        assert await _diary_rows(db_session, UUID(student["user"]["id"])) == []
         assert await _diary_rows(db_session, UUID(master["user"]["id"])) == []
 
     async def test_reopening_adds_nothing(
@@ -212,7 +205,8 @@ class TestOpenChat:
 
         assert second.status_code == 200
         assert second.json()["id"] == THREAD_ID
-        assert len(await _diary_rows(db_session, UUID(student["user"]["id"]))) == 1
+        # B41: no diary echo is written any more, on either open.
+        assert await _diary_rows(db_session, UUID(student["user"]["id"])) == []
         pointers = (
             await db_session.execute(
                 select(ChatThread).where(
@@ -222,46 +216,13 @@ class TestOpenChat:
         ).scalars().all()
         assert len(pointers) == 1
 
-    async def test_lost_first_response_is_healed_on_the_next_open(
-        self, client: AsyncClient, db_session: AsyncSession, monkeypatch
-    ) -> None:
-        """The reason the projection is upsert-if-absent and not
-        write-on-created: comms says `true` exactly once in a thread's life.
-        If that response never landed here, the retry sees `false` -- and the
-        row must still appear, or the fact is lost forever."""
-        student = await login_user(
-            client, telegram_id=BAND_MIN + 4, first_name="Student",
-        )
-        master = await _make_master(client, db_session, BAND_MIN + 5)
-        headers = auth_headers(student["session_token"])
-
-        monkeypatch.setattr(
-            _SEAM, AsyncMock(return_value=_thread_payload(created=True))
-        )
-        await client.post(
-            CHATS_URL, json={"master_id": master["user"]["id"]}, headers=headers,
-        )
-        # Simulate the loss: the thread exists in comms, our echo does not.
-        await db_session.execute(
-            delete(DiaryEvent).where(
-                DiaryEvent.user_id == UUID(student["user"]["id"])
-            )
-        )
-        await db_session.commit()
-
-        monkeypatch.setattr(
-            _SEAM, AsyncMock(return_value=_thread_payload(created=False))
-        )
-        await client.post(
-            CHATS_URL, json={"master_id": master["user"]["id"]}, headers=headers,
-        )
-
-        events = await _diary_rows(db_session, UUID(student["user"]["id"]))
-        assert len(events) == 1
-        # Healed late, but placed where the conversation actually started.
-        assert events[0].occurred_at == datetime.fromisoformat(
-            THREAD_CREATED_AT
-        )
+    # B41 (owner-ruled 2026-08-15, D=C): `test_lost_first_response_is_healed_
+    # on_the_next_open` lived here -- it proved the upsert-if-absent diary
+    # write self-healed after a lost comms response. REMOVED, not adapted:
+    # there is no write left to heal. The general "lost first response is
+    # absorbed, not duplicated" property for the CHAT POINTER itself (not the
+    # diary echo) is still covered by test_the_losing_insert_is_absorbed
+    # below.
 
     async def test_unverified_master_is_not_reachable(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch
@@ -372,11 +333,8 @@ class TestRepointing:
         assert len(pointers) == 1
         assert pointers[0].comms_thread_id == UUID(new_id)
 
-        # The conversation did not start twice: one card, on the original
-        # instant. A second one would claim something that never happened.
-        events = await _diary_rows(db_session, UUID(student["user"]["id"]))
-        assert len(events) == 1
-        assert events[0].source_id == UUID(THREAD_ID)
+        # B41: no diary card is written on either open, repointed or not.
+        assert await _diary_rows(db_session, UUID(student["user"]["id"])) == []
 
     async def test_the_repointed_thread_is_usable(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch

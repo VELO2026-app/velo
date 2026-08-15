@@ -183,6 +183,54 @@ describe('UserProfileView', () => {
   })
 
   // ===========================================================================
+  // B52: the "Сообщения" row's colour dot, sourced from the SAME getMyStats
+  // response -- no separate seam to mock.
+  describe('B52: unread dot on the "Сообщения" row', () => {
+    it('has_unread_messages: true renders the dot', async () => {
+      vi.mocked(bookingsApi.getMyStats).mockResolvedValue({
+        practices_attended: 0,
+        hours_attended: 0,
+        has_unread_messages: true,
+      })
+      mount()
+      await flush()
+
+      expect(menuRowByLabel('Сообщения')?.querySelector('.v-menu-row__dot')).not.toBeNull()
+    })
+
+    it('has_unread_messages: false renders no dot', async () => {
+      vi.mocked(bookingsApi.getMyStats).mockResolvedValue({
+        practices_attended: 0,
+        hours_attended: 0,
+        has_unread_messages: false,
+      })
+      mount()
+      await flush()
+
+      expect(menuRowByLabel('Сообщения')?.querySelector('.v-menu-row__dot')).toBeNull()
+    })
+
+    it('a fixture built before this field existed (field omitted) also renders no dot', async () => {
+      vi.mocked(bookingsApi.getMyStats).mockResolvedValue({
+        practices_attended: 0,
+        hours_attended: 0,
+      })
+      mount()
+      await flush()
+
+      expect(menuRowByLabel('Сообщения')?.querySelector('.v-menu-row__dot')).toBeNull()
+    })
+
+    it('a failed stats fetch leaves the dot off, same as the stat cards degrading to 0', async () => {
+      vi.mocked(bookingsApi.getMyStats).mockRejectedValue(new Error('ECONNRESET'))
+      mount()
+      await flush()
+
+      expect(menuRowByLabel('Сообщения')?.querySelector('.v-menu-row__dot')).toBeNull()
+    })
+  })
+
+  // ===========================================================================
   describe('hoursLabel formatting (.vue:162-165)', () => {
     it('an integer renders plain, without a trailing separator', async () => {
       vi.mocked(bookingsApi.getMyStats).mockResolvedValue({

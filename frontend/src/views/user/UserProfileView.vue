@@ -10,6 +10,9 @@
 
   Stats source: /bookings/me/stats returns practices_attended + hours_attended,
   computed from attended bookings only, so the two numbers stay consistent.
+  B52: the same response also carries has_unread_messages, a colour-only
+  indicator (no count) for the "Сообщения" row's dot -- one request, no
+  new endpoint, no per-thread poll on this screen.
 
   Menu navigation: items whose target screens (Edit profile, Notifications,
   Language/Timezone, Support, Share) are built in later steps of the profile
@@ -53,7 +56,7 @@
           <VMenuRow label="Мои бронирования" @click="router.push({ name: 'user-bookings' })">
             <template #icon><IconBookings :size="20" /></template>
           </VMenuRow>
-          <VMenuRow label="Сообщения" @click="onMessages">
+          <VMenuRow label="Сообщения" :dot="hasUnreadMessages" @click="onMessages">
             <template #icon><IconMessages :size="20" /></template>
           </VMenuRow>
         </div>
@@ -154,6 +157,8 @@ const displayName = computed(() => {
 // -- Stats (attended practices + hours) from /bookings/me/stats --
 const practicesAttended = ref(0)
 const hoursAttended = ref(0)
+// B52: colour indicator on the "Сообщения" row, same request, no new call.
+const hasUnreadMessages = ref(false)
 
 /**
  * Hours label: integers show without a trailing ".0" (e.g. "12"), while
@@ -215,6 +220,7 @@ onMounted(async () => {
     const stats = await getMyStats()
     practicesAttended.value = stats.practices_attended
     hoursAttended.value = stats.hours_attended
+    hasUnreadMessages.value = stats.has_unread_messages ?? false
   } catch {
     // Non-critical -- profile still renders without fresh counts.
   }

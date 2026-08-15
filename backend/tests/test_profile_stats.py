@@ -17,6 +17,8 @@
 
 from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, patch
+from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
@@ -24,6 +26,7 @@ from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.bookings.models import Booking, BookingStatus
+from app.modules.chats.models import ChatThread
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import (
     Practice,
@@ -34,6 +37,10 @@ from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 
 STATS_URL = "/api/v1/bookings/me/stats"
+
+# B52: comms is cut at the seam bookings.service imports it through, same
+# convention as test_chats_t2.py's _SEAM.
+_COMMS_SEAM = "app.modules.bookings.service.comms_request"
 
 
 # ---------------------------------------------------------------------------
@@ -208,5 +215,93 @@ async def test_stats_isolated_per_user(
 
     assert resp.status_code == 200
     body = resp.json()
+    assert body["practices_attended"] == 0
+    assert body["hours_attended"] == 0.0
+
+
+# ---------------------------------------------------------------------------
+# B52: has_unread_messages -- the profile "Сообщения" row's colour dot
+# ---------------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_stats_no_threads_means_no_unread_and_no_comms_call(
+    client: AsyncClient,
+) -> None:
+    """A user with no chat threads never calls comms at all -- the N in the
+    per-thread fan-out is genuinely zero, not a call that happens to
+    return zero."""
+    auth = await login_user(client, telegram_id=87130, first_name="NoChats")
+    fake = AsyncMock()
+
+    with patch(_COMMS_SEAM, fake):
+        resp = await client.get(
+            STATS_URL, headers=auth_headers(auth["session_token"]),
+        )
+
+    assert resp.status_code == 200
+    assert resp.json()["has_unread_messages"] is False
+    fake.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_stats_flags_unread_from_any_thread(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """One thread with unread > 0 is enough to flip the flag True -- it is
+    a colour, not a count, so which thread or how many never surfaces."""
+    auth = await login_user(client, telegram_id=87131, first_name="HasUnread")
+    master_id = await _make_master(client, db_session, 87132)
+    thread_id = uuid4()
+    db_session.add(
+        ChatThread(
+            comms_thread_id=thread_id,
+            client_user_id=auth["user"]["id"],
+            operator_user_id=master_id,
+        )
+    )
+    await db_session.commit()
+
+    fake = AsyncMock(return_value={"unread": 3})
+    with patch(_COMMS_SEAM, fake):
+        resp = await client.get(
+            STATS_URL, headers=auth_headers(auth["session_token"]),
+        )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["has_unread_messages"] is True
+    # The count itself never reaches the wire -- only the flag.
+    assert "unread" not in body
+    assert "unread_count" not in body
+
+
+@pytest.mark.asyncio
+async def test_stats_unread_flag_degrades_to_false_on_a_comms_failure(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """A comms outage must not break the stat cards that have nothing to do
+    with chat -- practices_attended/hours_attended are pure local
+    aggregates and must still return 200."""
+    auth = await login_user(client, telegram_id=87133, first_name="CommsDown")
+    master_id = await _make_master(client, db_session, 87134)
+    db_session.add(
+        ChatThread(
+            comms_thread_id=uuid4(),
+            client_user_id=auth["user"]["id"],
+            operator_user_id=master_id,
+        )
+    )
+    await db_session.commit()
+
+    fake = AsyncMock(side_effect=RuntimeError("comms unreachable"))
+    with patch(_COMMS_SEAM, fake):
+        resp = await client.get(
+            STATS_URL, headers=auth_headers(auth["session_token"]),
+        )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["has_unread_messages"] is False
     assert body["practices_attended"] == 0
     assert body["hours_attended"] == 0.0

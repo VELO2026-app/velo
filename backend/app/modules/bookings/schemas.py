@@ -245,7 +245,13 @@ class UserStatsResponse(BaseModel):
     Powers the two stat cards on the main profile screen:
       - practices_attended: how many practices the user actually attended.
       - hours_attended: total attended duration in hours (one decimal).
+
+    B52 (owner-ruled 2026-08-15, D=C, ADDITIVE): has_unread_messages powers
+    the profile's "Сообщения" row colour dot. A COLOUR flag only -- never a
+    count, the owner was explicit. See service.has_unread_messages for the
+    comms round-trip this rides on.
     """
 
     practices_attended: int
     hours_attended: float
+    has_unread_messages: bool

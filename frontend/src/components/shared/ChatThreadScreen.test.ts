@@ -184,6 +184,56 @@ describe('ChatThreadScreen', () => {
     expect(chatsApi.markChatRead).toHaveBeenCalledWith(THREAD_ID)
   })
 
+  // B49: scrollToBottom() used to run inside reload()'s try-block WHILE
+  // `loading` was still true -- the feed's v-else branch (and its `feedEl`
+  // ref) does not exist yet on that render, so `if (feedEl.value)` silently
+  // skipped the scroll. Only the LATER poll's own scrollToBottom (loading
+  // already false by then) ever worked, so a thread opened fresh landed at
+  // the top of the history instead of the newest message. happy-dom measures
+  // nothing real, so scrollHeight/scrollTop are stubbed on the prototype
+  // (WeakMap-backed, per-element) -- what's under test is WHETHER the
+  // assignment ran at all, not a real pixel value.
+  function stubGlobalScrollMetrics(scrollHeight: number) {
+    const tops = new WeakMap<Element, number>()
+    const origHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollHeight')
+    const origTop = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollTop')
+    Object.defineProperty(HTMLElement.prototype, 'scrollHeight', {
+      configurable: true,
+      get: () => scrollHeight,
+    })
+    Object.defineProperty(HTMLElement.prototype, 'scrollTop', {
+      configurable: true,
+      get() {
+        return tops.get(this as Element) ?? 0
+      },
+      set(v: number) {
+        tops.set(this as Element, v)
+      },
+    })
+    return {
+      topOf: (el: Element) => tops.get(el) ?? 0,
+      restore: () => {
+        if (origHeight) Object.defineProperty(HTMLElement.prototype, 'scrollHeight', origHeight)
+        if (origTop) Object.defineProperty(HTMLElement.prototype, 'scrollTop', origTop)
+      },
+    }
+  }
+
+  it('B49: autoscrolls to the newest message on the INITIAL load, not only on a later poll', async () => {
+    const metrics = stubGlobalScrollMetrics(500)
+    try {
+      vi.mocked(chatsApi.listChatMessages).mockResolvedValue(feed([msg()]))
+      mount()
+      await flush()
+
+      const feedEl = host?.querySelector<HTMLElement>('[data-testid="chat-feed"]')
+      if (!feedEl) throw new Error('no feed element')
+      expect(metrics.topOf(feedEl)).toBe(500)
+    } finally {
+      metrics.restore()
+    }
+  })
+
   it('the header carries the P-1 peer name; an empty thread invites honestly instead of faking history', async () => {
     mount()
     await flush()

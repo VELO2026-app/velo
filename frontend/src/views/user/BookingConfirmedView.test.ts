@@ -91,9 +91,10 @@ const getPracticeMock = vi.mocked(getPractice)
 vi.mock('@/api/chats')
 
 const push = vi.fn()
+const replace = vi.fn()
 const routeParams: { practiceId: string } = { practiceId: 'p1' }
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push, back: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({ push, back: vi.fn(), replace }),
   useRoute: () => ({ params: routeParams }),
 }))
 
@@ -420,7 +421,11 @@ describe('BookingConfirmedView', () => {
         'thread-7',
         'Практика: Утренняя медитация, 20 июля в 10:00\n\nБолит колено',
       )
-      expect(push).toHaveBeenCalledWith({ name: 'user-chat', params: { id: 'thread-7' } })
+      // B43: replace, not push -- this screen must NOT stay in history once
+      // the thread opens, or `router.back()` from the thread loops back here
+      // instead of landing on the practice screen.
+      expect(replace).toHaveBeenCalledWith({ name: 'user-chat', params: { id: 'thread-7' } })
+      expect(push).not.toHaveBeenCalledWith({ name: 'user-chat', params: { id: 'thread-7' } })
     })
 
     it('the caption strips the "(эфир)" title marker and renders the time in the viewer timezone', async () => {
@@ -477,6 +482,7 @@ describe('BookingConfirmedView', () => {
       expect(toastError).toHaveBeenCalledWith('Сервис сообщений недоступен')
       expect(chatsApi.sendChatMessage).not.toHaveBeenCalled()
       expect(push).not.toHaveBeenCalled()
+      expect(replace).not.toHaveBeenCalled()
       expect(textarea()?.value).toBe('Болит колено')
     })
 
@@ -497,6 +503,7 @@ describe('BookingConfirmedView', () => {
       expect(chatsApi.openChat).toHaveBeenCalledTimes(1)
       expect(toastError).toHaveBeenCalledWith('Сообщение не доставлено')
       expect(push).not.toHaveBeenCalled()
+      expect(replace).not.toHaveBeenCalled()
       expect(textarea()?.value).toBe('Болит колено')
     })
 

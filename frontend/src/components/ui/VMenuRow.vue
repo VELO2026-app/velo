@@ -11,6 +11,9 @@
     <VMenuRow label="Выйти" variant="danger" :show-arrow="false" @click="onLogout">
       <template #icon><IconLogout :size="20" /></template>
     </VMenuRow>
+    <VMenuRow label="Сообщения" dot @click="onMessages">
+      <template #icon><IconMessages :size="20" /></template>
+    </VMenuRow>
 -->
 
 <template>
@@ -24,6 +27,12 @@
   >
     <span v-if="$slots.icon" class="v-menu-row__icon"><slot name="icon" /></span>
     <span class="v-menu-row__text">{{ label }}</span>
+    <!-- B52: colour indicator only -- same 8px dot / --velo-primary the
+         notification bell already uses (NotificationRow.vue), never a
+         count. Mutually exclusive with `badge` in practice (nothing uses
+         both today), but not enforced -- either can render alongside the
+         arrow. -->
+    <span v-if="dot" class="v-menu-row__dot" aria-hidden="true" />
     <span v-if="badge != null && badge !== ''" class="v-menu-row__badge">{{ badge }}</span>
     <span v-if="showArrow" class="v-menu-row__arrow"><IconArrowRight :size="16" /></span>
   </div>
@@ -38,10 +47,13 @@ withDefaults(
     variant?: 'default' | 'primary' | 'danger'
     showArrow?: boolean
     badge?: string | number
+    /** Colour indicator, never a count (B52). */
+    dot?: boolean
   }>(),
   {
     variant: 'default',
     showArrow: true,
+    dot: false,
   },
 )
 
@@ -96,6 +108,16 @@ defineEmits<{
 .v-menu-row--danger .v-menu-row__icon,
 .v-menu-row--danger .v-menu-row__text {
   color: var(--velo-danger-text);
+}
+
+/* Same 8px dot NotificationRow.vue uses for the bell's unread marker --
+   one visual language for "unread", not two. */
+.v-menu-row__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--velo-primary);
+  flex-shrink: 0;
 }
 
 .v-menu-row__badge {

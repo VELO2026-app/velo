@@ -54,6 +54,7 @@
 #   count_base query that required manual filter duplication.
 # =============================================================================
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 from uuid import UUID
@@ -63,6 +64,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.comms import comms_request
 from app.core.config import settings
 from app.core.exceptions import (
     BadRequestError,
@@ -70,6 +72,7 @@ from app.core.exceptions import (
     NotFoundError,
 )
 from app.modules.bookings.models import Booking, BookingStatus
+from app.modules.chats.models import ChatThread
 from app.modules.payments.purchase import (
     create_purchase_for_booking,
     finalize_purchases,
@@ -1548,3 +1551,51 @@ async def get_user_practice_stats(
 
     hours_attended = round(int(total_minutes) / 60, 1)
     return int(practices_attended), hours_attended
+
+
+async def has_unread_messages(user: User, session: AsyncSession) -> bool:
+    """Does this user have any unread chat messages, as the STUDENT side?
+
+    B52 (owner-ruled 2026-08-15, D=C): a COLOUR indicator only (no count)
+    for the profile "Сообщения" row, read via THIS stats call so the
+    profile screen makes exactly one request -- no new endpoint, no
+    per-thread N+1 FROM THE FRONTEND.
+
+    Unread state is not mirrored locally by design (chats/models.py's own
+    header: "no unread counters ... those stay in comms and are read
+    through it"), so satisfying that constraint costs one comms round
+    trip PER THREAD here, server-side, in parallel. Bounded by how many
+    masters this user has messaged -- one eternal DM per pair, typically
+    0-2 for a student -- not by message volume.
+
+    Degrades to False on any comms failure (timeout, 5xx, comms down):
+    this endpoint's other two fields (practices/hours attended) are pure
+    local aggregates that have never depended on comms, and a chat outage
+    must not start breaking the profile's stat cards.
+    """
+    thread_ids = (
+        await session.execute(
+            select(ChatThread.comms_thread_id).where(
+                ChatThread.client_user_id == user.id,
+            )
+        )
+    ).scalars().all()
+    if not thread_ids:
+        return False
+
+    async def _unread_for(thread_id: UUID) -> int:
+        try:
+            resp = await comms_request(
+                "GET",
+                f"/api/v1/threads/{thread_id}/unread-count",
+                params={"participant": str(user.id)},
+            )
+            return int(resp.get("unread", 0))
+        except Exception:
+            logger.warning(
+                "stats_unread_check_failed", thread_id=str(thread_id),
+            )
+            return 0
+
+    counts = await asyncio.gather(*(_unread_for(tid) for tid in thread_ids))
+    return any(c > 0 for c in counts)

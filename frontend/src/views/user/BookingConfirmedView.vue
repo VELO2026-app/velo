@@ -61,7 +61,6 @@
         <VTextarea
           v-model="masterRequest"
           label="Ваш запрос мастеру (по желанию)"
-          placeholder="Концентрация, настрой на работу"
           :rows="2"
           maxlength="4000"
           :disabled="sending"
@@ -149,7 +148,11 @@ async function onSendRequest(): Promise<void> {
     const thread = await openChat(masterId)
     await sendChatMessage(thread.id, composeRequest(body))
     masterRequest.value = ''
-    await router.push({ name: 'user-chat', params: { id: thread.id } })
+    // B43: replace, not push -- this screen must not remain in history once
+    // the thread opens, or `router.back()` from ChatThreadScreen (UserChatView.vue)
+    // pops back here (the request screen) instead of the practice screen this
+    // screen was itself reached from (PracticeDetailView.onPurchased, :19 above).
+    await router.replace({ name: 'user-chat', params: { id: thread.id } })
   } catch (e) {
     toast.error(extractApiError(e, 'Не удалось отправить запрос'))
   } finally {
