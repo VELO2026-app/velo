@@ -17,3 +17,7 @@
 
 ⚠ `T21-7`/`T21-8` in Orc-65's commits mean NOT what's on the board (collision 07-21, history is not rewritten).
 
+`B1`-`B36`+ the board / tester-findings series (LIVE, growing, reached at least `B36` as of 2026-08-15 — **NOT previously registered in this file, which is exactly how the checklist below came to re-use it.** Attested in: this repo's commit subjects/bodies (`git log --oneline --all`, e.g. `B1`/`B2`/`B26`/`B27`), `Agent-Velo/BOARD-REGISTRY.md` (the open-work board itself), and `Agent-Velo/DS-build-plan.md` `▶ RESUME`/`COUNTER`. Registered here 2026-08-15 by Orchestrator-90 (`№734`) on Navigator-47's instruction, precisely because an unregistered live family is a family that gets re-collided.
+
+`TC-A1`-`TC-A8` / `TC-B1`-`TC-B19` the item ids of the owner-gitignored tester checklist `Agent-Velo/_tester/TEST-CHECKLIST-*.md` (UNTRACKED — not in this repo's git history, attested only inside that file itself). Introduced 2026-08-15 (Orchestrator-90, `№734`) to end a collision where the checklist's own local `A`/`B` numbering (`A1`-`A8`, `B1`-`B19`) overlapped the board's `B` series above — same letter, same low numbers, different meaning (e.g. checklist `B16` = "unmatched-participant bucket" vs board `B16` = "doc actualization"). **`TC-` do not reuse for anything else.**
+
