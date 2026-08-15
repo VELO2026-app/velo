@@ -76,13 +76,19 @@
            the send control lives INSIDE the bordered field. B47: this
            consumer's own placeholder wording. B48: the control renders only
            once there is text, replacing the old always-present "Отправить"
-           button. `send-test-id` preserves the existing `chat-send` hook. -->
+           button. `send-test-id` preserves the existing `chat-send` hook.
+           `grow-cap` (PROMPT №741, track 3): the SAME viewport-aware formula
+           diary uses, via useComposerGrowCap -- see that file for the numbers
+           and the CHROME_OFFSET caveat (diary-measured, reused here as an
+           approximation, not re-measured for this screen). -->
       <div class="chat-thread__composer">
         <Composer
           placeholder="Написать сообщение…"
           :max-length="4000"
           :send="handleSend"
+          :grow-cap="growCap"
           send-test-id="chat-send"
+          @composing-change="composing = $event"
         />
       </div>
     </template>
@@ -104,6 +110,7 @@ import {
 } from '@/api/chats'
 import { useAuthStore } from '@/stores/auth'
 import { extractApiError } from '@/composables/useApiError'
+import { useComposerGrowCap } from '@/composables/useComposerGrowCap'
 
 const props = defineProps<{
   threadId: string
@@ -126,6 +133,10 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const messages = ref<ChatMessage[]>([])
 const feedEl = ref<HTMLElement | null>(null)
+
+// PROMPT №741 (track 3, B40): the same viewport-aware cap diary uses.
+const composing = ref(false)
+const growCap = useComposerGrowCap(composing)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -274,9 +285,20 @@ onBeforeUnmount(() => {
 
 <style scoped>
 /* Fill-mode screen (both chat routes hide the tab bar); own rail padding,
-   mirroring the honest-stub predecessor's note in MasterChatView. */
+   mirroring the honest-stub predecessor's note in MasterChatView.
+   B39 (PROMPT №741, track 3): sized to the LIVE visible height, mirroring
+   DiaryFeedView.vue's own corrected formula VERBATIM, including the
+   safe-top subtraction -- copied because that subtraction is load-bearing
+   (binding straight to --velo-vvh alone reintroduces the Telegram-fullscreen
+   overshoot defect DiaryFeedView.vue:689-706 documents finding the hard way),
+   not because this screen independently needed it. `--velo-content-safe-top`
+   is published by AppFrame.vue and inherited here the same way it reaches
+   DiaryFeedView -- no new publisher, no touch to AppFrame/useViewportGeometry/
+   #app-bg (BG-ROOT, closed, untouched). Falls back to 100% (of the frozen
+   ancestor) until --velo-vvh publishes, same fallback DiaryFeedView uses. */
 .chat-thread {
   height: 100%;
+  height: calc(var(--velo-vvh, 100%) - var(--velo-content-safe-top, 0px));
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -292,6 +314,14 @@ onBeforeUnmount(() => {
   padding: 0 var(--velo-rail-pad-x, var(--space-4));
 }
 
+/* B37 (PROMPT №741, track 3): the feed is the ONLY flexible row (flex:1,
+   min-height:0 so it can shrink below content and scroll internally); the
+   composer below is flex:0 0 auto (fixed to its own content) -- ordinary
+   flex competition, the exact mechanism DiaryFeedView.vue's
+   `.diary-feed__body`/`.diary-feed__composer` pair already uses. Once B39
+   sizes `.chat-thread` to the live viewport, growing the composer
+   (B40's growCap) eats into the column's available height and the feed
+   shrinks to match -- "rides up" with zero new code, same as diary. */
 .chat-thread__feed {
   flex: 1;
   min-height: 0;
@@ -304,6 +334,26 @@ onBeforeUnmount(() => {
      layout's measured mainStyle clearance. 88px mirrors the layout's own
      HEADER_FALLBACK for a floating VHeader (MobileLayout.vue, ПРОМТ №164). */
   padding: calc(88px + var(--space-2)) var(--velo-rail-pad-x, var(--space-4)) var(--space-3);
+  /* B45/B46 (PROMPT №741, track 3): the SAME symmetric edge fade
+     DiaryFeedView.vue's `.diary-feed__body` uses -- mirrored value
+     (--space-5), not re-derived. Diary's own comment on this block says it
+     is "appearance only, no overlap, no keyboard-derived value", so there is
+     no viewport math to get wrong by copying it; it either reads right on
+     this screen too or it does not (device-pending either way). */
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--space-5),
+    #000 calc(100% - var(--space-5)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--space-5),
+    #000 calc(100% - var(--space-5)),
+    transparent 100%
+  );
 }
 
 .chat-thread__empty {
@@ -346,6 +396,7 @@ onBeforeUnmount(() => {
 }
 
 .chat-thread__composer {
+  flex: 0 0 auto;
   padding: var(--space-2) var(--velo-rail-pad-x, var(--space-4)) var(--space-3);
 }
 </style>

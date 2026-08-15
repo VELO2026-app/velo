@@ -13,13 +13,13 @@
   Visual/behavioural changes from before this extraction (owner-approved via
   .tmp/composer-unification.html): the send button now sits INSIDE the
   bordered field instead of beside it (B38); the field is solid white in
-  every state instead of a translucent rail that frosts on focus (B50); the
-  autogrow cap is the flat DS token (--velo-textarea-autogrow-max, 240px) in
-  every state instead of the old two-tier 120/300-viewport-bound formula --
-  the viewport-aware version is track 3's job (B37/B39/B45/B46), not
-  reproduced here. Everything else (draft persistence, the collapsed preview,
-  the composingChange contract, the send/failure/in-flight guards) is
-  unchanged in shape, now living in the shared component.
+  every state instead of a translucent rail that frosts on focus (B50).
+  The autogrow cap went flat (--velo-textarea-autogrow-max, 240px) in track 2
+  and is VIEWPORT-AWARE AGAIN as of track 3 (PROMPT №741) via
+  `useComposerGrowCap` -- same formula, same constants, same numbers as
+  before this extraction (see that file). Everything else (draft persistence,
+  the collapsed preview, the composingChange contract, the send/failure/
+  in-flight guards) is unchanged in shape, now living in the shared component.
 -->
 
 <template>
@@ -28,16 +28,18 @@
     :max-length="MAX_LEN"
     :send="handleSend"
     :draft-key="draftKey"
+    :grow-cap="growCap"
     show-draft-preview
     @sent="emit('created')"
-    @composing-change="emit('composingChange', $event)"
+    @composing-change="onComposingChange"
   />
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import Composer, { type ComposerSendResult } from './Composer.vue'
 import { useDiaryStore } from '@/stores/diary'
+import { useComposerGrowCap } from '@/composables/useComposerGrowCap'
 
 const MAX_LEN = 10000
 
@@ -63,6 +65,17 @@ const placeholder = computed(() =>
 
 // (b): diary keeps its existing per-target localStorage key, unchanged shape.
 const draftKey = computed(() => `velo:diary:draft:${props.entryType}`)
+
+// PROMPT №741: mirrors what composingChange used to drive locally before the
+// extraction -- this wrapper needs its OWN copy of `composing` to feed
+// useComposerGrowCap, independent of the shared Composer's internal one.
+const composing = ref(false)
+const growCap = useComposerGrowCap(composing)
+
+function onComposingChange(value: boolean): void {
+  composing.value = value
+  emit('composingChange', value)
+}
 
 // (a): the shared component owns nothing about persistence -- this is the
 // whole reason `send` is a prop.

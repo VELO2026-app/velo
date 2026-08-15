@@ -333,17 +333,14 @@ describe('DiaryComposer -- send path', () => {
   })
 })
 
-// PROMPT №740 (track 2): the old two-tier 120px-collapsed / up-to-300px-
-// composing-bounded-by-viewport formula is GONE, not merely renumbered. B40
-// (owner-approved via .tmp/composer-unification.html) replaces it with ONE
-// flat, structural cap in every state -- the shared Composer's default reads
-// the DS token (--velo-textarea-autogrow-max, 240px) via CSS `max-height`,
-// which jsdom/happy-dom does not resolve from a stylesheet, so what is
-// assertable here is the MECHANISM (grow with content, then stop growing and
-// scroll) rather than a `style.maxHeight` px string the old formula produced
-// by writing it inline. The viewport-aware version these four tests used to
-// pin is deferred to track 3 (B37/B39/B45/B46) and is NOT reproduced.
-describe('DiaryComposer -- autogrow (PROMPT №740: flat structural cap, viewport-aware sizing deferred to track 3)', () => {
+// PROMPT №740 (track 2) flattened the old two-tier 120px-collapsed /
+// up-to-300px-composing-bounded-by-viewport formula to a static CSS token.
+// PROMPT №741 (track 3) RESTORES it -- wired via useComposerGrowCap.ts
+// (composerGrowCap has its own dedicated, numbers-first test file:
+// useComposerGrowCap.test.ts). What belongs HERE is only that DiaryComposer
+// actually PASSES the computed value through to the rendered textarea --
+// the formula itself is proven elsewhere.
+describe('DiaryComposer -- autogrow (PROMPT №741: viewport-aware growCap restored, wired from useComposerGrowCap)', () => {
   it('grows the inline height to fit content while under the cap', async () => {
     mount()
     typeText('a')
@@ -356,19 +353,48 @@ describe('DiaryComposer -- autogrow (PROMPT №740: flat structural cap, viewpor
     expect(textarea().style.height).not.toBe('auto')
   })
 
-  it('no longer writes a JS-computed maxHeight -- the cap is the CSS token, not a per-state formula', async () => {
+  it('idle (not composing): the collapsed 120px cap is wired through to the textarea', async () => {
+    mount()
+    await nextTick()
+    expect(textarea().style.maxHeight).toBe('120px')
+  })
+
+  it('composing on a generous viewport (happy-dom default innerHeight 768): reaches the full 300px target', async () => {
     mount()
     textarea().dispatchEvent(new Event('focus'))
     await nextTick()
-    expect(textarea().style.maxHeight).toBe('')
+    expect(window.innerHeight).toBe(768)
+    expect(textarea().style.maxHeight).toBe('300px')
   })
 
-  it('an explicit growCap prop (track-3 extension point), when supplied, overrides the token via inline style', async () => {
-    // DiaryComposer itself never sets this prop (unchanged this track); this
-    // pins that the WIRE exists on the shared component so a future viewport-
-    // aware caller can use it without another redesign. Exercised directly
-    // against Composer, not through DiaryComposer, since DiaryComposer does
-    // not expose it.
+  it("a short viewport bounds the cap below 300px (the physical limit, not a second guess at the owner's number)", async () => {
+    vi.stubGlobal('innerHeight', 300)
+    mount()
+    textarea().dispatchEvent(new Event('focus'))
+    await nextTick()
+    expect(textarea().style.maxHeight).toBe('124px')
+  })
+
+  it('an extremely short viewport hits the floor, never below 80px', async () => {
+    vi.stubGlobal('innerHeight', 200)
+    mount()
+    textarea().dispatchEvent(new Event('focus'))
+    await nextTick()
+    expect(textarea().style.maxHeight).toBe('80px')
+  })
+
+  it('blur returns the cap to 120px', async () => {
+    mount()
+    textarea().dispatchEvent(new Event('focus'))
+    await nextTick()
+    expect(textarea().style.maxHeight).toBe('300px')
+
+    textarea().dispatchEvent(new Event('blur'))
+    await nextTick()
+    expect(textarea().style.maxHeight).toBe('120px')
+  })
+
+  it('an explicit growCap prop, exercised directly against the shared Composer (not through DiaryComposer, which computes its own), overrides via inline style', async () => {
     const ComposerMod = await import('./Composer.vue')
     const host2 = document.createElement('div')
     document.body.appendChild(host2)

@@ -11,12 +11,16 @@
   existing --velo-bg-card-solid token) / B40 (bounded growth + internal
   scroll, `growCap`, structural to this component; see below).
 
-  What this component does NOT do (deliberately, track 3 -- B37/B39/B45/B46):
-  no visualViewport/keyboard-aware sizing. `growCap` is a NUMBER prop so a
-  future caller CAN inject a viewport-derived value without another redesign,
-  but today's default leaves it undefined and the CSS token
-  (--velo-textarea-autogrow-max, 240px) is the whole mechanism -- exactly what
-  the approved preview demonstrated, structural per B40, not the keyboard work.
+  PROMPT №741 (track 3) restored what track 2 left as an unused extension
+  point: `growCap` is now WIRED by both wrappers from
+  `useComposerGrowCap.ts` (the live visual-viewport signal), and the field
+  also scrolls itself into view on focus via `useKeyboardFieldScroll`
+  (chat had this through VTextarea before track 2 removed the wrap; diary
+  never had it -- both get it now, DS-wide default, additive only). Neither
+  of these touches `#app-bg` / AppFrame's freeze mechanism (BG-ROOT, closed,
+  do not reopen) -- both read an EXISTING published signal
+  (`useViewportGeometry.ts`'s `visibleHeight`) or call the browser's own
+  `scrollIntoView`, no new viewport machinery.
 
   What it absorbs from the two call sites it replaces (recon №735):
   (a) `send` is a PROP (text) => Promise<{ok, error?}> -- no store/API import
@@ -56,7 +60,7 @@
         :disabled="submitting"
         :style="growCap != null ? { maxHeight: `${growCap}px` } : undefined"
         @input="autogrow"
-        @focus="onFocus"
+        @focus="onTextareaFocus"
         @blur="onBlur"
       />
       <span v-if="showingPreview" class="composer__preview">{{ previewText }}</span>
@@ -86,6 +90,7 @@
 import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { IconSend } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
+import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 
 export interface ComposerSendResult {
   ok: boolean
@@ -128,6 +133,10 @@ const emit = defineEmits<{
 }>()
 
 const toast = useToast()
+// DS-wide default (VInput/VSelect/VTextarea already use it): scrolls the
+// field into view once the keyboard settles. Merge-safe -- Vue fires this
+// AND the component's own `onFocus` below, same pattern those components use.
+const { onFieldFocus } = useKeyboardFieldScroll()
 
 const text = ref('')
 const submitting = ref(false)
@@ -181,6 +190,13 @@ function setComposing(on: boolean): void {
 
 function onFocus(): void {
   setComposing(true)
+}
+
+// Composes this component's own composingChange with the DS-wide
+// scroll-into-view default -- both run off the same native focus event.
+function onTextareaFocus(e: FocusEvent): void {
+  onFocus()
+  onFieldFocus(e)
 }
 
 function onBlur(): void {
