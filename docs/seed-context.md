@@ -22,6 +22,21 @@
 > to give a test stand a living master catalog to walk through. Not a replacement for `seed` or
 > `seed-practices` — a third, narrower tool.
 
+> ⛔ **B36, PROMPT №724, 2026-08-15: THE SCRIPT THIS ENTIRE DOCUMENT DESCRIBES IS DELETED.**
+> The seed consolidation (`3184616d`/`8b7aa1a4`) removed both `seed_practices.py` and
+> `seed_demo.py` -- every `velo seed-practices`/`docker compose exec app python
+> scripts/seed_practices.py` command below fails as unrecognised. `scripts/velo-manage.sh`
+> now has exactly ONE seed branch (`seed)`), routing to the profile-driven
+> `backend/scripts/seed.py`. **The one live command:**
+> `velo seed [--profile NAME] [--reset] [--list]` (direct: `python scripts/seed.py
+> [--profile NAME] [--reset] [--list] [--dry-run]`); see the script's own header docstring
+> for the current profile mechanism -- profiles are JSON files in
+> `backend/scripts/seed_profiles/`, not this document's `seed_practices.json`. **Nothing
+> below this banner is corrected line-by-line** -- the whole document, including its own
+> "ACTIVELY MISLEADING" self-grade above, describes a script that no longer exists in the
+> repo at all. Kept for historical/design-rationale reading only (§7/§10's "why" sections
+> may still inform a rewrite); do not run any command quoted below.
+
 Handoff document. Contains everything needed to continue work at any
 later point: for yourself a month from now, for a new AI chat, for
 the backend developer, for any participant.

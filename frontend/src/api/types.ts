@@ -34,6 +34,7 @@ export type {
   AttendanceResponse,
   AuthResponse,
   BookingDetailResponse,
+  BookingRecordingResponse,
   BookingResponse,
   CancelBookingRequest,
   CheckinMetricResponse,
@@ -151,15 +152,30 @@ import type {
   UpdatePracticeRequest as GeneratedUpdatePracticeRequest,
 } from './generated'
 
-// -- P5 bridge (Master GROUPS, PROMPT №594): audience_kind + group_ids, ahead
-// of the next generated.ts regen -- same "never hand-edited" posture as the
-// T21-1 bridge above. Remove once a regen picks these up natively.
-export type PracticeAudienceKind = 'public' | 'students' | 'groups'
+// B26 (PROMPT №724): `export type { X } from './generated'` re-exports X to
+// CONSUMERS of this file but does not bind X for use WITHIN this file (ES
+// module re-export semantics) -- these two are used locally below
+// (AudiencePreviewRequest/Response, PracticeFilters), so they need their own
+// local binding alongside the re-export statements further down.
+import type { AudienceKind, PracticeType } from './generated'
+
+// -- P5 bridge (Master GROUPS, PROMPT №594): audience_kind + group_ids on
+// CreatePracticeRequest/UpdatePracticeRequest ahead of the next generated.ts
+// regen picking up those FIELDS natively -- same "never hand-edited" posture
+// as the T21-1 bridge above. The VALUE UNION itself is no longer hand-typed
+// here (B26, PROMPT №724): generated.ts has carried `AudienceKind` with the
+// identical literal set since 2026-07-27 and it never drifted, so this is
+// now a re-export under the name every existing import already uses. The
+// interfaces below stay bridged -- audience_kind/group_ids are still absent
+// from GeneratedCreatePracticeRequest/GeneratedUpdatePracticeRequest
+// themselves (verified against generated.ts) -- remove the WHOLE bridge
+// (interfaces included) once a regen adds those fields natively.
+export type { AudienceKind as PracticeAudienceKind } from './generated'
 
 export interface CreatePracticeRequest extends GeneratedCreatePracticeRequest {
   /** Default 'public' server-side when omitted -- matches every practice's
    * behavior before this feature existed. */
-  audience_kind?: PracticeAudienceKind
+  audience_kind?: AudienceKind
   /** Required (non-empty) only when audience_kind='groups'; the master's
    * OWN custom groups (rejects another master's group / a system slug with
    * a 400). */
@@ -169,7 +185,7 @@ export interface CreatePracticeRequest extends GeneratedCreatePracticeRequest {
 export interface UpdatePracticeRequest extends GeneratedUpdatePracticeRequest {
   /** Both optional (PATCH semantics): omitted = unchanged. group_ids, when
    * sent, REPLACES the practice's full target-group set. */
-  audience_kind?: PracticeAudienceKind
+  audience_kind?: AudienceKind
   group_ids?: string[]
 }
 
@@ -181,7 +197,7 @@ export interface UpdatePracticeRequest extends GeneratedUpdatePracticeRequest {
 // caller always has a complete proposed state in hand (it's evaluating "if
 // I save the form as it stands"), not a partial PATCH.
 export interface AudiencePreviewRequest {
-  audience_kind: PracticeAudienceKind
+  audience_kind: AudienceKind
   group_ids: string[]
 }
 
@@ -209,7 +225,7 @@ export interface PracticeResponse extends GeneratedPracticeResponse {
    * for the same fixture-compatibility reason as the other bridged fields
    * above -- defaults to 'public' server-side, but existing test fixtures
    * built before this field existed simply omit it. */
-  audience_kind?: PracticeAudienceKind
+  audience_kind?: AudienceKind
   /** The practice's target CUSTOM groups' names (audience_kind='groups'
    * only; empty/undefined otherwise). Static per-practice data, not a
    * per-viewer flag -- CheckinView.vue composes the "Вы не состоите в
@@ -271,22 +287,38 @@ export interface ApiError {
 }
 
 // -- UI union types (narrower than backend str for type safety) --------------
+//
+// B26 (PROMPT №724): this block used to hand-copy SIXTEEN backend-owned
+// vocabularies. FOUR were found byte-identical to a type generated.ts has
+// carried for weeks (PracticeType/PracticeStatus/BookingStatus/
+// WithdrawalStatus below, plus PracticeAudienceKind above) -- those are now
+// re-exports, not copies, so they can no longer drift silently. EVERY type
+// still declared locally in this block carries its OWN comment saying WHY:
+// either the backend serves the field as a bare `string` (no generated union
+// exists to point at), or the union here is a deliberately NARROWER subset
+// of a wider backend vocabulary. Do not mass-replace these with generated.ts
+// imports -- for the ones with no generated counterpart there is nothing to
+// import, and for the deliberate subsets the narrowing is the point.
 
-export type PracticeType = 'live' | 'series' | 'one_on_one' | 'replay'
-export type PracticeStatus = 'draft' | 'scheduled' | 'live' | 'completed' | 'cancelled' | 'deleted'
+export type { PracticeType, PracticeStatus } from './generated'
 // Statuses a CLIENT may PATCH a practice into. 'live' and 'completed' were
 // removed (lifecycle automation): going live and completion are now driven by
 // the backend lifecycle worker off the clock (live at scheduled_at, completed at
 // scheduled_at + duration_minutes), never by the client -- the backend rejects
 // them at the schema layer (422). 'cancelled' is absent for the same reason it
 // always was: that path is POST /practices/{id}/cancel (it handles refunds).
-// NB: PracticeStatus above still carries live/completed -- those are real
-// statuses the backend REPORTS, they just cannot be REQUESTED.
+// NB: PracticeStatus (re-exported above) still carries live/completed -- those
+// are real statuses the backend REPORTS, they just cannot be REQUESTED.
+// Intentionally NARROWER than PracticeStatus, not a generated.ts candidate.
 export type PracticeStatusTransition = 'scheduled' | 'deleted'
 
 // -- Calendar taxonomy facets (match backend data.taxonomy values) --
 // Mirror of settings.practice_allowed_directions in backend/app/core/config.py.
-// Keep in sync when the backend list is extended.
+// Keep in sync when the backend list is extended. NOT a generated.ts
+// re-export candidate: the backend serves `direction` as a bare `string`
+// (verified in generated.ts's CreatePracticeRequest/UpdatePracticeRequest --
+// no closed union exists there to point at), so this hand-copy is the only
+// place any type safety exists for this field at all.
 //
 // FRONT-FIRST (2026-05-28): the 10 keys below reflect the final taxonomy
 // agreed with the operator. The backend currently accepts the OLD 8 keys
@@ -306,15 +338,22 @@ export type PracticeDirection =
   | 'art'
   | 'narrative'
   | 'movement'
+// Same reasoning as PracticeDirection above: backend serves `difficulty` as
+// a bare `string`, no generated union to re-point at.
 export type PracticeDifficulty = 'beginner' | 'medium' | 'high'
-// -- Calendar feed buckets (match backend filter literals) --
+// -- Calendar feed buckets (match backend filter literals) -- these are
+// QUERY-PARAM literals the calendar filter sends, not a field any response
+// object carries -- generated.ts has no counterpart to re-point at.
 export type DurationBucket = 'short' | 'long'
 export type TimeOfDay = 'night' | 'morning' | 'day' | 'evening'
-export type BookingStatus = 'pending' | 'confirmed' | 'attended' | 'no_show' | 'cancelled'
+export type { BookingStatus } from './generated'
+// No generated.ts counterpart for these three -- Purchase/Master/Attendance
+// each expose their status as a bare backend `string`, narrowed here for
+// call-site type safety only.
 export type PurchaseStatus = 'pending' | 'completed' | 'refunded' | 'failed'
 export type MasterStatus = 'pending' | 'verified' | 'rejected'
 export type AttendanceBookingStatus = 'pending' | 'confirmed' | 'attended' | 'no_show'
-export type WithdrawalStatus = 'pending' | 'approved' | 'rejected'
+export type { WithdrawalStatus } from './generated'
 // WaitlistStatus is re-exported from generated.ts -- that file is the
 // SOURCE OF TRUTH for its values, not this comment, so its members are
 // deliberately not enumerated here (PROMPT №614: a REMOVED status added
@@ -351,7 +390,8 @@ export type DiaryEventKind =
   | 'thread_started'
 
 // Filter chips on the feed. Map 1:1 onto backend \`category\` query values
-// (settings.diary_feed_categories). Omitting category = "Все".
+// (settings.diary_feed_categories). Omitting category = "Все". Query-param
+// literal, not a response field -- no generated.ts counterpart to re-point at.
 export type DiaryFeedCategory = 'entries' | 'dreams' | 'feedbacks' | 'checkins' | 'practices'
 
 // Query params for GET /api/v1/diary/feed (cursor pagination).
@@ -385,6 +425,8 @@ export interface PracticeFilters {
   sort_order?: 'asc' | 'desc'
 }
 
+// Admin report-list query-param literals -- not response fields, no
+// generated.ts counterpart to re-point at.
 export type ReportStatusFilter = 'pending' | 'resolved' | 'dismissed'
 export type ReportTargetTypeFilter = 'user' | 'master' | 'practice'
 

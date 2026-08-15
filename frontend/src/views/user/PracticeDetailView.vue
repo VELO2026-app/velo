@@ -514,7 +514,12 @@ async function refreshRecording(): Promise<void> {
   if (!hasEnded(b, now.value)) return
   try {
     const res = await getBookingRecording(b.id)
-    recordingUrl.value = res.status === 'available' ? res.url : null
+    // B27 (PROMPT №724): the generated type has url as optional
+    // (string | null | undefined), the old hand-typed one required it
+    // (string | null) -- ?? null keeps recordingUrl's own ref<string | null>
+    // contract exactly as it was; the backend never actually omits `url` on
+    // an 'available' response, this only guards the wider generated type.
+    recordingUrl.value = res.status === 'available' ? (res.url ?? null) : null
   } catch {
     // Network/auth/unexpected failure -- same rendering as 'error' above:
     // no button. Never a toast; this is a silent "don't show", not a

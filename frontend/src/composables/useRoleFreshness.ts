@@ -58,8 +58,16 @@ let visibilityHandler: (() => void) | null = null
 export async function refreshRoleIfStale(): Promise<void> {
   const now = Date.now()
   if (now - lastFetchAt < NAV_REFRESH_DEBOUNCE_MS) return
-  lastFetchAt = now
-  await useAuthStore().fetchMe()
+  // B2 (PROMPT №724): stamp ONLY on a definitive outcome. Stamping before
+  // the call (the old behaviour) meant a single transport failure silently
+  // consumed the whole debounce/poll window with nothing retried until the
+  // NEXT window opened -- up to NAV_REFRESH_DEBOUNCE_MS/FOREGROUND_POLL_
+  // INTERVAL_MS later. fetchMe()'s return value is the seam this relies on
+  // (stores/auth.ts) -- see its docstring for what counts as definitive.
+  const succeeded = await useAuthStore().fetchMe()
+  if (succeeded) {
+    lastFetchAt = now
+  }
 }
 
 /** The poll tick itself -- always goes through the SAME debounce state as

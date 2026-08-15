@@ -33,7 +33,7 @@ describe('useRoleFreshness', () => {
 
   beforeEach(() => {
     setActivePinia(createPinia())
-    fetchMe = vi.spyOn(useAuthStore(), 'fetchMe').mockResolvedValue(undefined)
+    fetchMe = vi.spyOn(useAuthStore(), 'fetchMe').mockResolvedValue(true)
     __resetRoleFreshnessForTest()
     setVisibility('visible')
   })
@@ -73,6 +73,43 @@ describe('useRoleFreshness', () => {
       vi.advanceTimersByTime(14_999)
       await refreshRoleIfStale()
       expect(fetchMe).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  // -- B2 (PROMPT №724): a failed attempt must not eat the debounce window --
+  // Before this fix, lastFetchAt was stamped BEFORE fetchMe() resolved, so a
+  // single transport failure silently consumed the whole window: the very
+  // next call (even one millisecond later) was suppressed as "not stale yet"
+  // even though no successful fetch had actually happened. These tests fail
+  // on that old behaviour -- confirmed red against it before the fix (see
+  // DONE report) and green against the fixed stamp-only-on-success code.
+  describe('refreshRoleIfStale (failed attempt does not consume the window)', () => {
+    it('a failed fetch leaves lastFetchAt unmoved -- the very next call retries immediately', async () => {
+      fetchMe.mockResolvedValueOnce(false)
+      await refreshRoleIfStale()
+      expect(fetchMe).toHaveBeenCalledTimes(1)
+
+      // Immediately after -- well inside what would be the debounce window
+      // (15s) if lastFetchAt had been stamped. Old (broken) behaviour: this
+      // second call is suppressed and fetchMe is NOT called again. Fixed
+      // behaviour: the window never opened, so this retries right away.
+      fetchMe.mockResolvedValueOnce(true)
+      await refreshRoleIfStale()
+      expect(fetchMe).toHaveBeenCalledTimes(2)
+    })
+
+    it('a failed fetch does not block a later SUCCESSFUL debounce window from opening normally', async () => {
+      fetchMe.mockResolvedValueOnce(false)
+      await refreshRoleIfStale()
+
+      fetchMe.mockResolvedValueOnce(true)
+      await refreshRoleIfStale()
+      expect(fetchMe).toHaveBeenCalledTimes(2)
+
+      // Now a real window IS open (the second call succeeded) -- a third
+      // call right after must be suppressed as usual.
+      await refreshRoleIfStale()
+      expect(fetchMe).toHaveBeenCalledTimes(2)
     })
   })
 

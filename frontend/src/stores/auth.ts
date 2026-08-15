@@ -137,22 +137,37 @@ export const useAuthStore = defineStore('auth', () => {
    * unconditionally `_setUser(me)`, resurrecting a stale user (and the role/
    * masterApplication computeds derived from it) into a session that had
    * already logged out or moved on.
+   *
+   * Returns whether the attempt REACHED A DEFINITIVE OUTCOME (B2, PROMPT
+   * №724): no token / a successful fetch / a discarded-by-race fetch / a 401
+   * all resolve `true` -- each is a real answer, not something worth retrying
+   * sooner. Only a genuine transport failure (network blip, 5xx, anything
+   * this function does not recognise) resolves `false`. useRoleFreshness.ts
+   * uses this to decide whether the debounce/poll window may advance --
+   * before this, the window advanced unconditionally and a single failed
+   * attempt silently ate the whole staleness window with no retry.
    */
-  async function fetchMe(): Promise<void> {
-    if (!token.value) return
+  async function fetchMe(): Promise<boolean> {
+    if (!token.value) return true
     const requestToken = token.value
     try {
       const me = await getMe()
       // The token changed (cleared by logout, or a new session started)
       // while this request was in flight -- the session it was fetched for
       // is gone. Discard the result instead of writing it into whatever
-      // session is current now.
-      if (token.value !== requestToken) return
+      // session is current now. The round trip itself succeeded, so this
+      // still counts as a definitive outcome, not a failure to retry.
+      if (token.value !== requestToken) return true
       _setUser(me)
+      return true
     } catch (error) {
       if (error instanceof ApiResponseError && error.status === 401) {
         _clearSession()
+        return true
       }
+      // Transport failure (network/5xx/unrecognised) -- no definitive answer
+      // was reached. Caller should not treat this as a fresh fetch.
+      return false
     }
   }
 
