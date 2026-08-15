@@ -289,6 +289,29 @@ describe('router/guards', () => {
       masterStoreState.profile = { status: 'verified' }
       expect(await call(masterStatusGuard)).toBe(true)
     })
+
+    // B1 (PROMPT №726): roleGuard('master') admits role=='admin' too, with no
+    // role change involved -- an admin never gets caught by the role-guard
+    // demotion a real master would. Without a forced refetch, an admin whose
+    // master profile is revoked mid-session (role stays 'admin', only the
+    // profile flips to 'suspended') keeps passing on the stale cached
+    // 'verified' value for the rest of the session. These two prove the FIX
+    // by asserting the actual force argument fetchMyProfile is called with --
+    // confirmed red against the pre-fix code (which always calls it with no
+    // argument at all) before this test file was left in its fixed state.
+    it('B1: admin role forces a real refetch, even with an already-cached verified profile', async () => {
+      setAuthUser({ role: 'admin' })
+      masterStoreState.profile = { status: 'verified' }
+      await call(masterStatusGuard)
+      expect(fetchMyProfile).toHaveBeenCalledWith(true)
+    })
+
+    it('B1: a real master keeps the lazy skip-if-loaded behaviour -- no forced refetch', async () => {
+      setAuthUser({ role: 'master' })
+      masterStoreState.profile = { status: 'verified' }
+      await call(masterStatusGuard)
+      expect(fetchMyProfile).toHaveBeenCalledWith(false)
+    })
   })
 
   describe('masterPendingGuard', () => {

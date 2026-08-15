@@ -253,10 +253,23 @@ export const masterStatusGuard: NavigationGuardWithThis<undefined> = async () =>
   const redirect = await noProfileMasterRedirect()
   if (redirect) return redirect
 
+  const auth = useAuthStore()
   const masterStore = useMasterStore()
 
-  // Lazy-fetch profile (skips network if already loaded this session).
-  await masterStore.fetchMyProfile()
+  // B1 (PROMPT №726): roleGuard('master') admits role=='admin' too (no role
+  // change involved -- an admin browses /master/* directly, never switching
+  // their own role column). A REAL master who loses verified status always
+  // gets demoted to role='user' in the SAME backend transaction
+  // (revoke_master / set_role.py to_user), so the freshness tick catches
+  // them via the role guard before this ever runs on stale data. An admin
+  // holding a verified master profile has no such tell: revoke_master's own
+  // role-reset is conditional on `user.role == MASTER`, which is false for
+  // an admin, so their profile can flip to 'suspended' while role stays
+  // 'admin' -- profileLoaded would otherwise cache the old 'verified'
+  // forever. Force a real fetch for exactly this population; a real master
+  // keeps the existing lazy skip-if-loaded behaviour and pays no extra
+  // network call at all.
+  await masterStore.fetchMyProfile(auth.role !== 'master')
 
   if (!masterStore.profile || masterStore.profile.status !== 'verified') {
     return { path: '/master/pending' }
