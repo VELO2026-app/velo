@@ -72,32 +72,18 @@
         </div>
       </div>
 
-      <!-- Composer. NB: VTextarea forwards attrs (incl. class) onto its inner
-           <textarea> (inheritAttrs:false), so the stretch class lives on a
-           wrapper of ours, not on the component. `autogrow` + rows=1 is the DS
-           chat-composer shape: single-line start, grows to the token cap
-           (--velo-textarea-autogrow-max), then scrolls internally. -->
+      <!-- Composer -- shared with DiaryComposer (PROMPT №740, track 2). B38:
+           the send control lives INSIDE the bordered field. B47: this
+           consumer's own placeholder wording. B48: the control renders only
+           once there is text, replacing the old always-present "Отправить"
+           button. `send-test-id` preserves the existing `chat-send` hook. -->
       <div class="chat-thread__composer">
-        <div class="chat-thread__input">
-          <VTextarea
-            v-model="draft"
-            placeholder="Сообщение…"
-            :rows="1"
-            autogrow
-            maxlength="4000"
-            :disabled="sending"
-          />
-        </div>
-        <VButton
-          variant="primary"
-          size="sm"
-          :disabled="sending || !draft.trim()"
-          :loading="sending"
-          data-testid="chat-send"
-          @click="onSend"
-        >
-          Отправить
-        </VButton>
+        <Composer
+          placeholder="Написать сообщение…"
+          :max-length="4000"
+          :send="handleSend"
+          send-test-id="chat-send"
+        />
       </div>
     </template>
   </div>
@@ -106,8 +92,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { VHeader } from '@/components/layout'
-import { VButton, VEmptyState, VLoader, VTextarea } from '@/components/ui'
+import { VEmptyState, VLoader, VButton } from '@/components/ui'
 import { IconMessages } from '@/components/icons'
+import Composer, { type ComposerSendResult } from './Composer.vue'
 import {
   listChatMessages,
   markChatRead,
@@ -116,7 +103,6 @@ import {
   type ChatPeer,
 } from '@/api/chats'
 import { useAuthStore } from '@/stores/auth'
-import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
 
 const props = defineProps<{
@@ -131,7 +117,6 @@ const emit = defineEmits<{ back: [] }>()
 
 const POLL_MS = 12_000
 
-const toast = useToast()
 const authStore = useAuthStore()
 const myId = computed(() => authStore.user?.id ?? '')
 
@@ -140,8 +125,6 @@ const peerTitle = computed(() => props.peer?.name || props.peerFallback)
 const loading = ref(true)
 const error = ref<string | null>(null)
 const messages = ref<ChatMessage[]>([])
-const draft = ref('')
-const sending = ref(false)
 const feedEl = ref<HTMLElement | null>(null)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
@@ -224,7 +207,7 @@ async function reload(): Promise<void> {
  *  additionally marks read and -- only when the reader is already at the
  *  bottom (CH-3) -- follows the conversation down. */
 async function poll(): Promise<void> {
-  if (document.hidden || loading.value || sending.value) return
+  if (document.hidden || loading.value || sendInFlight.value) return
   try {
     const fresh = await fetchMessages()
     const freshNewest = newestId(fresh)
@@ -246,19 +229,34 @@ function onVisibility(): void {
   if (!document.hidden) void poll()
 }
 
-async function onSend(): Promise<void> {
-  const body = draft.value.trim()
-  if (!body || sending.value) return
-  sending.value = true
+// (a): the shared Composer owns the draft and its own submit-button in-flight
+// guard (prevents a double-click double-send) -- this is the persistence
+// callback it calls, unchanged in substance from the old onSend (same
+// endpoint, same local append, same scroll-to-bottom, same error message).
+// Toasting on failure now happens inside Composer itself, from the `error`
+// this returns.
+//
+// `sendInFlight` is a SEPARATE guard the old single-file version also had
+// (as `sending.value` in poll()'s own condition) -- it stops a concurrent
+// poll from racing the optimistic local append: a poll response that lands
+// between "sent" and "appended" would otherwise overwrite `messages.value`
+// with a copy that does not yet include the just-sent message, making it
+// flicker out until the next 12s tick. Composer's internal submitting state
+// is not exposed to this component, so this is tracked independently rather
+// than reached into.
+const sendInFlight = ref(false)
+
+async function handleSend(body: string): Promise<ComposerSendResult> {
+  sendInFlight.value = true
   try {
     const sent = await sendChatMessage(props.threadId, body)
     messages.value = [...messages.value, sent]
-    draft.value = ''
     await scrollToBottom()
+    return { ok: true }
   } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось отправить сообщение'))
+    return { ok: false, error: extractApiError(e, 'Не удалось отправить сообщение') }
   } finally {
-    sending.value = false
+    sendInFlight.value = false
   }
 }
 
@@ -348,16 +346,6 @@ onBeforeUnmount(() => {
 }
 
 .chat-thread__composer {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--space-2);
   padding: var(--space-2) var(--velo-rail-pad-x, var(--space-4)) var(--space-3);
-}
-
-.chat-thread__input {
-  flex: 1;
-  /* Without this the flex item's min-width:auto keeps the textarea's
-     intrinsic width and squeezes the send button off-viewport. */
-  min-width: 0;
 }
 </style>

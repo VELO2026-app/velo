@@ -95,9 +95,15 @@ function unmount(): void {
 
 // createEntry() awaits createDiaryEntry then feed.refresh() (-> listDiaryFeed,
 // itself awaiting useCursorPagination's own chain) then a nextTick + autogrow
-// before emitting. 8 = bisected against a real failure at 7, not guessed.
+// before emitting. Was 8 (bisected against a real failure at 7) before this
+// component wrapped the shared Composer.vue (PROMPT №740): the extra
+// DiaryComposer -> Composer -> handleSend -> diaryStore.createEntry
+// indirection adds one more microtask hop, so 8 started under-flushing
+// (createdCount stayed 0, confirmed reproduced). Re-bisected: FAILS at 8,
+// PASSES at 9 -- 10 kept as the same one-tick margin the original 8-over-7
+// value used.
 async function flush(): Promise<void> {
-  for (let i = 0; i < 8; i++) await nextTick()
+  for (let i = 0; i < 10; i++) await nextTick()
 }
 
 function textarea(): HTMLTextAreaElement {
@@ -327,41 +333,54 @@ describe('DiaryComposer -- send path', () => {
   })
 })
 
-describe("DiaryComposer -- autogrow cap (3, corrected PROMPT №630: the owner's fixed 300px, bounded by available space; collapsed cap unchanged)", () => {
-  it('collapsed cap stays 120px', async () => {
+// PROMPT №740 (track 2): the old two-tier 120px-collapsed / up-to-300px-
+// composing-bounded-by-viewport formula is GONE, not merely renumbered. B40
+// (owner-approved via .tmp/composer-unification.html) replaces it with ONE
+// flat, structural cap in every state -- the shared Composer's default reads
+// the DS token (--velo-textarea-autogrow-max, 240px) via CSS `max-height`,
+// which jsdom/happy-dom does not resolve from a stylesheet, so what is
+// assertable here is the MECHANISM (grow with content, then stop growing and
+// scroll) rather than a `style.maxHeight` px string the old formula produced
+// by writing it inline. The viewport-aware version these four tests used to
+// pin is deferred to track 3 (B37/B39/B45/B46) and is NOT reproduced.
+describe('DiaryComposer -- autogrow (PROMPT №740: flat structural cap, viewport-aware sizing deferred to track 3)', () => {
+  it('grows the inline height to fit content while under the cap', async () => {
     mount()
     typeText('a')
     await nextTick()
-    expect(textarea().style.maxHeight).toBe('120px')
+    // jsdom/happy-dom report scrollHeight as 0 by default (no real layout),
+    // so the JS-set inline height mirrors that -- this pins that autogrow()
+    // still RUNS and writes an explicit height (not left at 'auto'), which is
+    // the behaviour a real browser's non-zero scrollHeight then bounds.
+    expect(textarea().style.height).not.toBe('')
+    expect(textarea().style.height).not.toBe('auto')
   })
 
-  it('composing on a generous viewport reaches the full 300px target', async () => {
-    // happy-dom's default window.innerHeight is 768 (no visualViewport, so the
-    // component falls back to it) -- 768 - 176 (chrome offset) = 592, well
-    // above 300, so the owner's figure applies unbounded.
+  it('no longer writes a JS-computed maxHeight -- the cap is the CSS token, not a per-state formula', async () => {
     mount()
     textarea().dispatchEvent(new Event('focus'))
     await nextTick()
-    expect(window.innerHeight).toBe(768)
-    expect(textarea().style.maxHeight).toBe('300px')
+    expect(textarea().style.maxHeight).toBe('')
   })
 
-  it("a short viewport bounds the cap below 300px (the physical limit, not a second guess at the owner's number)", async () => {
-    vi.stubGlobal('innerHeight', 300)
-    mount()
-    textarea().dispatchEvent(new Event('focus'))
-    await nextTick()
-    // 300 (viewport) - 176 (chrome offset) = 124 -- below the 300px target, so
-    // the bound wins.
-    expect(textarea().style.maxHeight).toBe('124px')
-  })
-
-  it('an extremely short viewport hits the floor, never below 80px', async () => {
-    vi.stubGlobal('innerHeight', 200)
-    mount()
-    textarea().dispatchEvent(new Event('focus'))
-    await nextTick()
-    // 200 - 176 = 24, floored to 80 so the field cannot collapse to one line.
-    expect(textarea().style.maxHeight).toBe('80px')
+  it('an explicit growCap prop (track-3 extension point), when supplied, overrides the token via inline style', async () => {
+    // DiaryComposer itself never sets this prop (unchanged this track); this
+    // pins that the WIRE exists on the shared component so a future viewport-
+    // aware caller can use it without another redesign. Exercised directly
+    // against Composer, not through DiaryComposer, since DiaryComposer does
+    // not expose it.
+    const ComposerMod = await import('./Composer.vue')
+    const host2 = document.createElement('div')
+    document.body.appendChild(host2)
+    const app2 = createApp(ComposerMod.default, {
+      placeholder: 'x',
+      growCap: 111,
+      send: async () => ({ ok: true }),
+    })
+    app2.mount(host2)
+    const ta = host2.querySelector('textarea') as HTMLTextAreaElement
+    expect(ta.style.maxHeight).toBe('111px')
+    app2.unmount()
+    host2.remove()
   })
 })
