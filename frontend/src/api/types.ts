@@ -128,6 +128,7 @@ export type {
   MasterApplicationInfo,
   UserResponse,
   UserRole,
+  UserStatsResponse,
   UserUpdate,
   VerifyMasterRequest,
   WaitlistConfirmResponse,
@@ -149,7 +150,6 @@ import type {
   PracticeResponse as GeneratedPracticeResponse,
   PracticeSummary as GeneratedPracticeSummary,
   UpdatePracticeRequest as GeneratedUpdatePracticeRequest,
-  UserStatsResponse as GeneratedUserStatsResponse,
 } from './generated'
 
 // B26 (PROMPT №724): `export type { X } from './generated'` re-exports X to
@@ -251,18 +251,20 @@ export interface BookingWithPracticeResponse extends GeneratedBookingWithPractic
   practice: PracticeSummary
 }
 
-// -- B52 bridge (PROMPT №736): has_unread_messages on GET /bookings/me/stats,
-// ahead of the next generated.ts regen -- NO DEPLOY this cycle (owner-ruled),
-// so the field the backend now returns cannot reach generated.ts yet. Same
-// "never hand-edited, bridge until a regen picks it up natively" posture as
-// the other bridges above. Optional for the same fixture-compatibility
-// reason: existing test fixtures built before this field existed omit it.
-export interface UserStatsResponse extends GeneratedUserStatsResponse {
-  /** Colour indicator only (owner was explicit: no count) for the profile
-   * "Сообщения" row -- true when ANY of the user's chat threads has unread
-   * messages. See backend/app/modules/bookings/service.py:has_unread_messages. */
-  has_unread_messages?: boolean
-}
+// -- B52 bridge REMOVED (PROMPT No.744): the regen picked the field up natively.
+// The bridge existed only because there was no deploy, so `has_unread_messages`
+// could not reach generated.ts; it declared the field OPTIONAL for fixture
+// compatibility. The 2026-08-16 deploy regenerated generated.ts, which now
+// declares it REQUIRED -- and an interface may not widen a required property to
+// optional, so the bridge became TS2430 and failed the deploy's vue-tsc gate.
+// `UserStatsResponse` is back on the plain re-export list above, exactly as the
+// bridge's own comment instructed ("remove this block once a regen picks it up
+// natively"). ⚠ THE CLASS, worth more than the fix: a bridge that ADDS a field
+// generated.ts lacks is invisible to the local gate, because adding is legal;
+// it only becomes illegal the moment the regen makes the field required. So a
+// hand-written bridge is provably safe locally and provably unsafe on deploy,
+// and the local gate cannot tell you. The runtime guard is unaffected --
+// UserProfileView reads `stats.has_unread_messages ?? false` and still does.
 
 // =============================================================================
 // Frontend-only types (no backend counterpart)

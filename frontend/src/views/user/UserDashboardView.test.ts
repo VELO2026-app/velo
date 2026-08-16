@@ -231,7 +231,7 @@ function page(
 }
 
 function stats(overrides: Partial<UserStatsResponse> = {}): UserStatsResponse {
-  return { practices_attended: 7, hours_attended: 5.5, ...overrides }
+  return { practices_attended: 7, hours_attended: 5.5, has_unread_messages: false, ...overrides }
 }
 
 // -- Nearest-practice fixtures (bookingsStore.upcoming, getUpcomingBookings) --

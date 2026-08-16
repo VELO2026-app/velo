@@ -44,7 +44,7 @@ import UserProfileView from '@/views/user/UserProfileView.vue'
 import * as bookingsApi from '@/api/bookings'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
-import type { UserResponse } from '@/api/types'
+import type { UserResponse, UserStatsResponse } from '@/api/types'
 
 vi.mock('@/api/bookings')
 
@@ -135,7 +135,7 @@ beforeEach(() => {
 
   vi.mocked(bookingsApi.getMyStats)
     .mockReset()
-    .mockResolvedValue({ practices_attended: 0, hours_attended: 0 })
+    .mockResolvedValue({ practices_attended: 0, hours_attended: 0, has_unread_messages: false })
 
   useAuthStore().user = user()
 
@@ -161,6 +161,7 @@ describe('UserProfileView', () => {
       vi.mocked(bookingsApi.getMyStats).mockResolvedValue({
         practices_attended: 7,
         hours_attended: 12,
+        has_unread_messages: false,
       })
       mount()
       await flush()
@@ -210,11 +211,17 @@ describe('UserProfileView', () => {
       expect(menuRowByLabel('Сообщения')?.querySelector('.v-menu-row__dot')).toBeNull()
     })
 
-    it('a fixture built before this field existed (field omitted) also renders no dot', async () => {
+    // The CAST is the point of this test, not an escape from the type. The
+    // contract now declares has_unread_messages REQUIRED (generated.ts, after
+    // the 2026-08-16 regen), so a fixture omitting it can only be built
+    // deliberately -- and what is asserted is the runtime guard that survives
+    // the type change: UserProfileView reads `stats.has_unread_messages ?? false`.
+    // Delete this test only when that `??` goes.
+    it('a malformed response omitting the field renders no dot (the ?? guard)', async () => {
       vi.mocked(bookingsApi.getMyStats).mockResolvedValue({
         practices_attended: 0,
         hours_attended: 0,
-      })
+      } as UserStatsResponse)
       mount()
       await flush()
 
@@ -236,6 +243,7 @@ describe('UserProfileView', () => {
       vi.mocked(bookingsApi.getMyStats).mockResolvedValue({
         practices_attended: 1,
         hours_attended: 12,
+        has_unread_messages: false,
       })
       mount()
       await flush()
@@ -247,6 +255,7 @@ describe('UserProfileView', () => {
       vi.mocked(bookingsApi.getMyStats).mockResolvedValue({
         practices_attended: 1,
         hours_attended: 9.5,
+        has_unread_messages: false,
       })
       mount()
       await flush()
