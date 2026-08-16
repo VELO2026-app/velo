@@ -1515,10 +1515,11 @@ export interface UserResponse {
   role_switch: RoleSwitchInfo | null
 }
 
-/** GET /api/v1/bookings/me/stats -- current user's practice stats. Powers the two stat cards on the main profile screen: - practices_attended: how many practices the user actually attended. - hours_attended: total attended duration in hours (one decimal). */
+/** GET /api/v1/bookings/me/stats -- current user's practice stats. Powers the two stat cards on the main profile screen: - practices_attended: how many practices the user actually attended. - hours_attended: total attended duration in hours (one decimal). B52 (owner-ruled 2026-08-15, D=C, ADDITIVE): has_unread_messages powers the profile's "Сообщения" row colour dot. A COLOUR flag only -- never a count, the owner was explicit. See service.has_unread_messages for the comms round-trip this rides on. */
 export interface UserStatsResponse {
   practices_attended: number
   hours_attended: number
+  has_unread_messages: boolean
 }
 
 /** PATCH /api/v1/users/me — updatable profile fields. All fields are optional. Only provided fields are updated. avatar_url is excluded — managed by Telegram (future: Bot API). Empty strings are rejected (min_length=1). To clear a field, send null explicitly: {"last_name": null}. timezone and language are NOT NULL in DB — sending null for them is rejected by _reject_null_for_required_fields (mode="before"). onboarding_completed is written into the credentials JSONB by the service layer (not a column). null is meaningless here, so only true/false are accepted; "not sent" leaves it untouched. phone and bio also live in the credentials JSONB (schema-on-read, same pattern). Unlike the name fields, they allow an EMPTY STRING as a valid value: sending "" clears the field (stored as "" in credentials). They have no min_length for that reason -- only a max_length cap. "Not sent" leaves them untouched; null is treated the same as "not sent" by the service (dropped), so use "" (not null) to clear. */
