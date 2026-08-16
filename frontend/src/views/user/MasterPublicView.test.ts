@@ -251,7 +251,10 @@ describe('MasterPublicView', () => {
       expect(content()?.textContent).toContain('Верифицирован')
     })
 
-    it('FIXED (B11 item 2, PROMPT №587): a 404 ApiResponseError shows "Мастер не найден" with the backend\'s own detail, and NO retry action', async () => {
+    it('FIXED (B11 item 2, PROMPT №587): a 404 ApiResponseError shows "Мастер не найден" with the mapped table phrase, and NO retry action', async () => {
+      // B8 (PROMPT №747): 'not_found' IS a real backend code --
+      // extractApiError now returns its table phrase regardless of the
+      // mocked detail text.
       vi.mocked(mastersApi.getPublicMaster).mockRejectedValue(
         new ApiResponseError(404, 'Мастер не найден или не верифицирован', 'not_found'),
       )
@@ -259,7 +262,7 @@ describe('MasterPublicView', () => {
       await flush()
 
       expect(emptyTitle()).toBe('Мастер не найден')
-      expect(emptyDesc()).toBe('Мастер не найден или не верифицирован')
+      expect(emptyDesc()).toBe('Запрошенный ресурс не найден')
       expect(emptyState()?.textContent).not.toContain('Повторить')
     })
 
@@ -274,6 +277,10 @@ describe('MasterPublicView', () => {
     })
 
     it('FIXED corollary: a 500 ApiResponseError (backend reachable, real server error) ALSO gets the retryable state, not "не найден"', async () => {
+      // B8 (PROMPT №747): 'internal_error' IS a real backend code --
+      // extractApiError now returns its table phrase (which happens to read
+      // almost identically to this mock's detail, plus a trailing
+      // "Попробуйте ещё раз") regardless of the mocked detail text.
       vi.mocked(mastersApi.getPublicMaster).mockRejectedValue(
         new ApiResponseError(500, 'Внутренняя ошибка сервера', 'internal_error'),
       )
@@ -281,7 +288,7 @@ describe('MasterPublicView', () => {
       await flush()
 
       expect(emptyTitle()).toBe('Не удалось загрузить') // no longer "не найден" -- the master likely DOES exist
-      expect(emptyDesc()).toBe('Внутренняя ошибка сервера')
+      expect(emptyDesc()).toBe('Внутренняя ошибка сервера. Попробуйте ещё раз')
       expect(emptyState()?.textContent).toContain('Повторить')
     })
 

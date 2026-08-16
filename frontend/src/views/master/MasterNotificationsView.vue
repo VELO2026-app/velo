@@ -37,11 +37,15 @@
         <h2 class="mn-section__title">{{ group.title }}</h2>
         <div v-for="row in group.rows" :key="row.key" class="mn-card">
           <div class="mn-card__text">
-            <span class="mn-card__title">{{ row.label }}</span>
+            <span class="mn-card__title-row">
+              <span class="mn-card__title">{{ row.label }}</span>
+              <VBadge v-if="isStub(row.key)" variant="muted" class="mn-card__soon">Скоро</VBadge>
+            </span>
             <span v-if="row.sub" class="mn-card__sub">{{ row.sub }}</span>
           </div>
           <VSwitch
             :model-value="toggles[row.key]"
+            :disabled="isStub(row.key)"
             :aria-label="row.label"
             @update:model-value="(v) => onToggle(row.key, v)"
           />
@@ -85,12 +89,9 @@
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
-import { VSwitch, VDayPicker } from '@/components/ui'
+import { VSwitch, VDayPicker, VBadge } from '@/components/ui'
 import TimePickerSheet from '@/components/shared/TimePickerSheet.vue'
-import {
-  getNotificationPrefs,
-  updateNotificationPrefs,
-} from '@/api/notifications'
+import { getNotificationPrefs, updateNotificationPrefs } from '@/api/notifications'
 import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
@@ -180,6 +181,15 @@ const CATEGORY_BY_KEY: Partial<Record<ToggleKey, string>> = {
   reminder: 'reminders',
   msg_participants: 'msg_participants',
   msg_support: 'msg_support',
+}
+
+// Owner ruling 2026-08-16 (PROMPT №746): a stub row -- no comms category yet
+// -- stays VISIBLE but its switch is DISABLED (VSwitch's own `disabled`, not
+// a moved-then-reverted flip) and carries a short "Скоро" marker. Not
+// deleted, not made to persist -- forthcoming controls on an in-progress
+// screen are normal, per his standard on this.
+function isStub(key: ToggleKey): boolean {
+  return !CATEGORY_BY_KEY[key]
 }
 
 // Defaults mirror the operator-approved design (all on except the monthly report).
@@ -272,26 +282,22 @@ function onToggle(key: ToggleKey, value: boolean): void {
   // whether a category is muted).
   const prev = toggles[key]
   const prevBookingPair =
-    category === 'bookings'
-      ? { nb: toggles.new_booking, bc: toggles.booking_cancelled }
-      : null
+    category === 'bookings' ? { nb: toggles.new_booking, bc: toggles.booking_cancelled } : null
   toggles[key] = value
   if (category === 'bookings') {
     // ONE category behind two rows -- keep them visually in sync.
     toggles.new_booking = value
     toggles.booking_cancelled = value
   }
-  updateNotificationPrefs({ categories: { [category]: value } }).catch(
-    (error) => {
-      toggles[key] = prev
-      if (prevBookingPair) {
-        toggles.new_booking = prevBookingPair.nb
-        toggles.booking_cancelled = prevBookingPair.bc
-      }
-      toast.error('Не удалось сохранить настройку')
-      console.warn('preference save failed', error)
-    },
-  )
+  updateNotificationPrefs({ categories: { [category]: value } }).catch((error) => {
+    toggles[key] = prev
+    if (prevBookingPair) {
+      toggles.new_booking = prevBookingPair.nb
+      toggles.booking_cancelled = prevBookingPair.bc
+    }
+    toast.error('Не удалось сохранить настройку')
+    console.warn('preference save failed', error)
+  })
 }
 function onScheduleDays(days: string[]): void {
   schedule.days = days
@@ -357,6 +363,12 @@ function onScheduleDays(days: string[]): void {
   flex-direction: column;
   gap: var(--velo-gap-3);
   min-width: 0;
+}
+
+.mn-card__title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--velo-gap-3);
 }
 
 .mn-card__title {

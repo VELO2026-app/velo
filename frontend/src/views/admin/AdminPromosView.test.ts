@@ -156,7 +156,9 @@ describe('AdminPromosView', () => {
       expect(host?.querySelector('.admin-promos__loader')).not.toBeNull()
     })
 
-    it('error: shows the error state AND toasts the REAL backend detail', async () => {
+    it('error: shows the error state AND toasts the generic fallback (unmapped code)', async () => {
+      // B8 (PROMPT №747): 'db_down' is not a real backend code -- unmapped,
+      // lands on the call site's own fallback (.vue:209).
       vi.mocked(adminApi.getAdminPromos).mockRejectedValue(
         new ApiResponseError(503, 'База промокодов недоступна', 'db_down'),
       )
@@ -164,7 +166,7 @@ describe('AdminPromosView', () => {
       await flush()
 
       expect(text()).toContain('Не удалось загрузить промокоды')
-      expect(toastError).toHaveBeenCalledWith('База промокодов недоступна')
+      expect(toastError).toHaveBeenCalledWith('Ошибка загрузки промокодов')
     })
 
     it('error: falls back to a generic toast on a non-API error', async () => {
@@ -575,6 +577,8 @@ describe('AdminPromosView', () => {
       // is_active is only flipped after the await succeeds (AdminPromosView.vue:246-248).
       // An optimistic flip would tell the admin a code is dead while it keeps
       // discounting every purchase.
+      // B8 (PROMPT №747): 'already' is not a real backend code -- unmapped,
+      // lands on the call site's own fallback (.vue:256).
       vi.mocked(adminApi.getAdminPromos).mockResolvedValue(page([promo('p1')]))
       vi.mocked(adminApi.deactivateAdminPromo).mockRejectedValue(
         new ApiResponseError(409, 'Промокод уже деактивирован', 'already'),
@@ -588,7 +592,7 @@ describe('AdminPromosView', () => {
 
       expect(text()).toContain('Активен')
       expect(cards()[0]?.className).not.toContain('pcard--inactive')
-      expect(toastError).toHaveBeenCalledWith('Промокод уже деактивирован')
+      expect(toastError).toHaveBeenCalledWith('Не удалось деактивировать промокод')
       expect(toastSuccess).not.toHaveBeenCalled()
     })
 

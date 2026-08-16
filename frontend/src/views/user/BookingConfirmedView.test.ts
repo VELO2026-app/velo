@@ -220,7 +220,10 @@ describe('BookingConfirmedView', () => {
       expect(loader()).toBeNull()
     })
 
-    it('error: the real backend message renders in the combined rung', async () => {
+    it('error: the mapped table phrase for a real code renders in the combined rung', async () => {
+      // B8 (PROMPT №747): 'not_found' IS a real backend code --
+      // extractApiError now returns its table phrase regardless of the
+      // mocked detail text.
       getPracticeMock.mockRejectedValue(
         new ApiResponseError(404, 'Практика не существует', 'not_found'),
       )
@@ -228,7 +231,7 @@ describe('BookingConfirmedView', () => {
       await flush()
 
       expect(emptyTitle()).toBe('Практика не найдена')
-      expect(emptyDesc()).toBe('Практика не существует')
+      expect(emptyDesc()).toBe('Запрошенный ресурс не найден')
       expect(loader()).toBeNull()
       expect(content()).toBeNull()
     })
@@ -466,7 +469,9 @@ describe('BookingConfirmedView', () => {
       expect(sendBtn()?.disabled).toBe(true)
     })
 
-    it("a failed OPEN surfaces the backend's own message and does not navigate -- and the text survives for a retry", async () => {
+    it('a failed OPEN falls back to the generic message (unmapped code) and does not navigate -- and the text survives for a retry', async () => {
+      // B8 (PROMPT №747): 'bad_gateway' is not a real backend code --
+      // unmapped, lands on the call site's own fallback (.vue:157).
       getPracticeMock.mockResolvedValue(practice())
       vi.mocked(chatsApi.openChat).mockRejectedValue(
         new ApiResponseError(502, 'Сервис сообщений недоступен', 'bad_gateway'),
@@ -479,7 +484,7 @@ describe('BookingConfirmedView', () => {
       sendBtn()?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Сервис сообщений недоступен')
+      expect(toastError).toHaveBeenCalledWith('Не удалось отправить запрос')
       expect(chatsApi.sendChatMessage).not.toHaveBeenCalled()
       expect(push).not.toHaveBeenCalled()
       expect(replace).not.toHaveBeenCalled()
@@ -487,6 +492,9 @@ describe('BookingConfirmedView', () => {
     })
 
     it('a thread that opens but a message that fails is NOT treated as success: no navigation, the text stays, and the failure is named', async () => {
+      // B8 (PROMPT №747): 'internal_error' IS a real backend code --
+      // extractApiError now returns its table phrase regardless of the
+      // mocked detail text.
       getPracticeMock.mockResolvedValue(practice())
       vi.mocked(chatsApi.openChat).mockResolvedValue(THREAD)
       vi.mocked(chatsApi.sendChatMessage).mockRejectedValue(
@@ -501,7 +509,7 @@ describe('BookingConfirmedView', () => {
       await flush()
 
       expect(chatsApi.openChat).toHaveBeenCalledTimes(1)
-      expect(toastError).toHaveBeenCalledWith('Сообщение не доставлено')
+      expect(toastError).toHaveBeenCalledWith('Внутренняя ошибка сервера. Попробуйте ещё раз')
       expect(push).not.toHaveBeenCalled()
       expect(replace).not.toHaveBeenCalled()
       expect(textarea()?.value).toBe('Болит колено')

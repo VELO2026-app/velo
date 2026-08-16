@@ -329,7 +329,9 @@ describe('OnboardingView', () => {
       expect(onDone).toHaveBeenCalledTimes(1)
     })
 
-    it('a failed save toasts the REAL backend message and does NOT emit done', async () => {
+    it('a failed save toasts the generic fallback (unmapped code) and does NOT emit done', async () => {
+      // B8 (PROMPT №747): 'server_error' is not a real backend code --
+      // unmapped, lands on the call site's own fallback (.vue:251).
       vi.mocked(usersApi.updateMe).mockRejectedValue(
         new ApiResponseError(500, 'Сервис недоступен', 'server_error'),
       )
@@ -344,7 +346,7 @@ describe('OnboardingView', () => {
       primaryButton().click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Сервис недоступен')
+      expect(toastError).toHaveBeenCalledWith('Не удалось сохранить. Попробуйте ещё раз.')
       expect(onDone).not.toHaveBeenCalled()
       // Stays on the timezone step so the user can retry, not bounced back
       // to slide 0.

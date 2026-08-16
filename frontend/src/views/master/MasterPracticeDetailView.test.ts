@@ -395,9 +395,13 @@ describe('MasterPracticeDetailView', () => {
       expect(host?.querySelector('.hero-card')).toBeNull()
     })
 
-    it('error: surfaces the REAL backend detail, not a hardcoded fallback', async () => {
-      // .vue:589 keeps e.detail when it is an ApiResponseError, and :description
-      // binds it (.vue:83). The detail is what tells the master WHY.
+    it('error: shows the mapped table phrase for a real code, not the raw detail', async () => {
+      // .vue:83 -- title is a static constant, :description binds
+      // extractApiError's result (.vue:626). B8 (PROMPT №747):
+      // 'practice_not_found' IS in the table (defensive entry -- not
+      // currently raised by the backend, only named in exceptions.py's own
+      // usage-example comment, but covered anyway) -- its table phrase wins
+      // over the mocked detail text.
       vi.mocked(practicesApi.getPractice).mockRejectedValue(
         new ApiResponseError(404, 'Практика не найдена или удалена', 'practice_not_found'),
       )
@@ -405,7 +409,7 @@ describe('MasterPracticeDetailView', () => {
       await flush()
 
       expect(text()).toContain('Не удалось загрузить практику')
-      expect(text()).toContain('Практика не найдена или удалена')
+      expect(text()).toContain('Практика не найдена')
     })
 
     it('error: falls back to a generic message on a non-API error', async () => {
@@ -420,23 +424,27 @@ describe('MasterPracticeDetailView', () => {
       // getAttendance sits in load()'s try (.vue:580-584), unlike loadReviews
       // which is deliberately non-fatal. Roster and stats are the point of this
       // screen, so a half-rendered hero would be worse than the error state.
+      // B8 (PROMPT №747): 'server_error' is not a real backend code --
+      // unmapped, lands on load()'s own fallback (.vue:626).
       vi.mocked(practicesApi.getAttendance).mockRejectedValue(
         new ApiResponseError(500, 'Список участников недоступен', 'server_error'),
       )
       mount()
       await flush()
 
-      expect(text()).toContain('Список участников недоступен')
+      expect(text()).toContain('Ошибка загрузки')
       expect(host?.querySelector('.hero-card')).toBeNull()
     })
 
     it('«Повторить» re-runs the load and recovers', async () => {
+      // B8 (PROMPT №747): 'unavailable' is not a real backend code --
+      // unmapped, lands on load()'s own fallback (.vue:626).
       vi.mocked(practicesApi.getPractice)
         .mockRejectedValueOnce(new ApiResponseError(503, 'Сервис недоступен', 'unavailable'))
         .mockResolvedValue(practice({ title: 'Вечерняя йога' }))
       mount()
       await flush()
-      expect(text()).toContain('Сервис недоступен')
+      expect(text()).toContain('Ошибка загрузки')
 
       const retry = Array.from(host?.querySelectorAll('button') ?? []).find(
         (b) => b.textContent?.trim() === 'Повторить',
@@ -1253,9 +1261,11 @@ describe('MasterPracticeDetailView', () => {
       expect(dialogDismissed()).toBe(true)
     })
 
-    it('surfaces the REAL backend detail on failure and does NOT claim success', async () => {
+    it('falls back to the generic message on failure (unmapped code) and does NOT claim success', async () => {
       // Telling a master their practice is cancelled when it is not leaves
       // participants showing up to a session nobody runs.
+      // B8 (PROMPT №747): 'practice_live' is not a real backend code --
+      // unmapped, lands on doCancel's own fallback (.vue:584).
       vi.mocked(practicesApi.getPractice).mockResolvedValue(practice({ status: 'scheduled' }))
       vi.mocked(practicesApi.cancelPractice).mockRejectedValue(
         new ApiResponseError(409, 'Практика уже началась', 'practice_live'),
@@ -1267,7 +1277,7 @@ describe('MasterPracticeDetailView', () => {
       dialogButton('Отменить')?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Практика уже началась')
+      expect(toastError).toHaveBeenCalledWith('Не удалось отменить практику')
       expect(toastSuccess).not.toHaveBeenCalled()
       expect(back).not.toHaveBeenCalled()
       expect(refreshMyPractices).not.toHaveBeenCalled()
@@ -1372,7 +1382,9 @@ describe('MasterPracticeDetailView', () => {
       expect(dialogDismissed()).toBe(true)
     })
 
-    it('surfaces the REAL backend detail on failure and does NOT claim success', async () => {
+    it('falls back to the generic message on failure (unmapped code) and does NOT claim success', async () => {
+      // B8 (PROMPT №747): 'not_a_draft' is not a real backend code --
+      // unmapped, lands on doDelete's own fallback (.vue:600).
       vi.mocked(practicesApi.getPractice).mockResolvedValue(practice({ status: 'draft' }))
       vi.mocked(practicesApi.deletePractice).mockRejectedValue(
         new ApiResponseError(409, 'Черновик уже опубликован', 'not_a_draft'),
@@ -1384,7 +1396,7 @@ describe('MasterPracticeDetailView', () => {
       dialogButton('Удалить')?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Черновик уже опубликован')
+      expect(toastError).toHaveBeenCalledWith('Не удалось удалить практику')
       expect(toastSuccess).not.toHaveBeenCalled()
       expect(back).not.toHaveBeenCalled()
     })

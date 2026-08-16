@@ -333,15 +333,17 @@ describe('ReflectionView', () => {
     })
 
     it('the meta line reports the honest no-show status and NO date', async () => {
-      // .vue:40-47. The date is the one thing a no-show must not dwell on, and
+      // .vue:40-49. The date is the one thing a no-show must not dwell on, and
       // this screen renders none -- unlike its two FormShell siblings, which both
       // put a formatted scheduled_at in this slot. That asymmetry is the design
-      // («Не состоялась», F1), so it is worth a test rather than an assumption.
+      // (F1), so it is worth a test rather than an assumption.
+      // B30 (PROMPT №747): was «Не состоялась» -- false, the practice DID
+      // happen, the person missed it; now the owner's word, "Вы не пришли".
       getPracticeMock.mockResolvedValue(practice({ scheduled_at: '2026-07-20T13:00:00.000Z' }))
       mount()
       await flush()
 
-      expect(text()).toContain('Не состоялась')
+      expect(text()).toContain('Вы не пришли')
       expect(text()).not.toContain('20 июля')
       expect(text()).not.toContain('13:00')
     })
@@ -512,20 +514,21 @@ describe('ReflectionView', () => {
   // Invert them against CheckinView.test.ts:484-520 when they do.
   // ===========================================================================
   describe('a FAILED practice load renders the error rung, not a form (№445)', () => {
-    it('surfaces the REAL backend message the store holds', async () => {
+    it('surfaces the generic fallback the store holds (no code set)', async () => {
       // The two halves that made this a gap rather than a missing feature: the data
       // was always there (practicesStore.selectedError, one property from the
       // template) and FormShell could always render it (:68) -- only the binding was
-      // missing. Asserting the store side still proves the rung shows the REAL
-      // message and not a constant of its own (SC-05).
+      // missing. Asserting the store side still proves the rung is wired to
+      // it rather than a separate constant of its own (SC-05).
+      // B8 (PROMPT №747): no third arg means code defaults to 'unknown' --
+      // unmapped, lands on practices.ts's own fallback (:52).
       getPracticeMock.mockRejectedValue(new ApiResponseError(404, 'Практика не найдена'))
       mount()
       await flush()
 
-      expect(usePracticesStore().selectedError).toBe('Практика не найдена')
+      expect(usePracticesStore().selectedError).toBe('Не удалось загрузить практику')
       expect(errorRung()).not.toBeNull()
       expect(text()).toContain('Не удалось загрузить практику')
-      expect(text()).toContain('Практика не найдена')
       expect(button('Повторить')).toBeDefined()
     })
 
@@ -804,7 +807,6 @@ describe('ReflectionView', () => {
       // screen. beforeEach cleared the state, so this is the cold case.
       mount()
       await flush()
-
       ;(host?.querySelector('.v-back') as HTMLElement).click()
       await flush()
 

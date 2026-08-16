@@ -140,10 +140,10 @@ describe('AdminWithdrawalsView', () => {
       expect(text()).not.toContain('Запросов на вывод нет')
     })
 
-    it('error: shows the error state AND toasts the REAL backend detail', async () => {
-      // The template's description is a hardcoded constant, but the TOAST gets
-      // e.detail verbatim (AdminWithdrawalsView.vue:191-192) -- so the real
-      // reason does reach the admin, just through the toast rather than the card.
+    it('error: shows the error state AND toasts the generic fallback (unmapped code)', async () => {
+      // B8 (PROMPT №747): this comment used to say the toast gets e.detail
+      // verbatim -- that mechanism is gone. 'psp_down' is not a real backend
+      // code, so it lands on the call site's own fallback (.vue:191).
       vi.mocked(adminApi.getAdminWithdrawals).mockRejectedValue(
         new ApiResponseError(503, 'Платёжный провайдер недоступен', 'psp_down'),
       )
@@ -151,7 +151,7 @@ describe('AdminWithdrawalsView', () => {
       await flush()
 
       expect(text()).toContain('Не удалось загрузить')
-      expect(toastError).toHaveBeenCalledWith('Платёжный провайдер недоступен')
+      expect(toastError).toHaveBeenCalledWith('Ошибка загрузки выплат')
     })
 
     it('error: falls back to a generic toast on a non-API error', async () => {
@@ -456,6 +456,8 @@ describe('AdminWithdrawalsView', () => {
       // loadInitial gates its error state on `items.length === 0`
       // (AdminWithdrawalsView.vue:29) and loadMore never sets `error` at all --
       // a page-2 failure must not blank a queue the admin is working through.
+      // B8 (PROMPT №747): 'oops' is not a real backend code -- unmapped,
+      // lands on the call site's own fallback (.vue:204).
       vi.mocked(adminApi.getAdminWithdrawals).mockResolvedValue(page([wd('w1')], 5))
       mount()
       await flush()
@@ -468,7 +470,7 @@ describe('AdminWithdrawalsView', () => {
 
       expect(rows()).toHaveLength(1)
       expect(text()).not.toContain('Не удалось загрузить')
-      expect(toastError).toHaveBeenCalledWith('Сеть отвалилась')
+      expect(toastError).toHaveBeenCalledWith('Ошибка загрузки')
     })
   })
 

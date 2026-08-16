@@ -237,7 +237,9 @@ function practice(overrides: Partial<PracticeResponse> = {}): PracticeResponse {
  * default. `status: 'completed'` mirrors what this screen actually meets -- a
  * feedback is post-practice.
  */
-function booking(overrides: Partial<BookingWithPracticeResponse> = {}): BookingWithPracticeResponse {
+function booking(
+  overrides: Partial<BookingWithPracticeResponse> = {},
+): BookingWithPracticeResponse {
   return {
     id: 'b1',
     practice_id: 'p1',
@@ -466,20 +468,21 @@ describe('FeedbackView', () => {
   // (its submit is a stub with no endpoint).
   // ===========================================================================
   describe('a FAILED practice load renders the error rung, not a form (№445)', () => {
-    it('surfaces the REAL backend message the store holds', async () => {
+    it('surfaces the generic fallback the store holds (no code set)', async () => {
       // The two halves that made this a gap rather than a design: the data was
-      // always there (practicesStore.selectedError, stores/practices.ts:101) and
+      // always there (practicesStore.selectedError, stores/practices.ts:52) and
       // the shell could always render it (FormShell.vue:68) -- only the binding was
-      // missing. Asserting the store side still proves the rung shows the REAL
-      // message rather than a constant of its own (SC-05).
+      // missing. Asserting the store side still proves the rung is wired to
+      // it rather than a separate constant of its own (SC-05).
+      // B8 (PROMPT №747): no third arg means code defaults to 'unknown' --
+      // unmapped, lands on practices.ts's own fallback (:52).
       getPracticeMock.mockRejectedValue(new ApiResponseError(404, 'Практика не найдена'))
       mount()
       await flush()
 
-      expect(usePracticesStore().selectedError).toBe('Практика не найдена')
+      expect(usePracticesStore().selectedError).toBe('Не удалось загрузить практику')
       expect(errorRung()).not.toBeNull()
       expect(text()).toContain('Не удалось загрузить практику')
-      expect(text()).toContain('Практика не найдена')
       expect(button('Повторить')).toBeDefined()
     })
 
@@ -793,10 +796,10 @@ describe('FeedbackView', () => {
       expect(toastError).not.toHaveBeenCalled()
     })
 
-    it('a FAILED submit surfaces the REAL backend message and never claims success', async () => {
-      // extractApiError returns e.detail for an ApiResponseError
-      // (useApiError.ts:25), so this is the backend's own words -- not a hardcoded
-      // constant (contrast SC-05).
+    it('a FAILED submit falls back to the generic message (no code set) and never claims success', async () => {
+      // B8 (PROMPT №747): extractApiError no longer reads e.detail. No third
+      // arg means code defaults to 'unknown' -- unmapped, lands on
+      // diaryStore.submitFeedback's own fallback (stores/diary.ts:113).
       upsertFeedbackMock.mockRejectedValue(new ApiResponseError(400, 'Feedback window has closed'))
       mount()
       await flush()
@@ -804,7 +807,7 @@ describe('FeedbackView', () => {
       submitBtn()?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Feedback window has closed')
+      expect(toastError).toHaveBeenCalledWith('Не удалось отправить feedback')
       expect(successTitle()).toBe('')
       expect(text()).toContain('Как прошла практика?')
     })
@@ -824,7 +827,7 @@ describe('FeedbackView', () => {
       expect(getMyBookingsMock).toHaveBeenCalledTimes(1)
     })
 
-    it('a non-API failure falls back to the store\'s own message', async () => {
+    it("a non-API failure falls back to the store's own message", async () => {
       upsertFeedbackMock.mockRejectedValue(new TypeError('boom'))
       mount()
       await flush()
@@ -914,7 +917,7 @@ describe('FeedbackView', () => {
       await flush()
     })
 
-    it('the VIEW\'s own guard is what blocks the second tap -- not the store\'s', async () => {
+    it("the VIEW's own guard is what blocks the second tap -- not the store's", async () => {
       // `upsertFeedback` called once proves only that ONE of the two guards held:
       // the view's (.vue:111) or the store's (diary.ts:97). $onAction counts the
       // calls the VIEW makes, so this isolates .vue:111. Delete that line and this

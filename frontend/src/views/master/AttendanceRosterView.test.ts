@@ -296,14 +296,17 @@ describe('AttendanceRosterView', () => {
       expect(errorDesc()).toBe('Ошибка загрузки')
     })
 
-    it('failure (ApiResponseError): shows the real backend detail', async () => {
+    it('failure (ApiResponseError): shows the mapped table phrase for a real code', async () => {
+      // B8 (PROMPT №747): 'not_found' IS a real backend code --
+      // extractApiError now returns its table phrase regardless of the
+      // mocked detail text.
       vi.mocked(practicesApi.getAttendance).mockRejectedValue(
         new ApiResponseError(404, 'Практика не найдена', 'not_found'),
       )
       mount()
       await flush()
 
-      expect(errorDesc()).toBe('Практика не найдена')
+      expect(errorDesc()).toBe('Запрошенный ресурс не найден')
     })
 
     it('«Повторить» recovers to content', async () => {

@@ -799,7 +799,9 @@ describe('MasterApplyView', () => {
       expect(stepTitle()).toBe('Шаг 3: Документы') // still here, not navigated away
     })
 
-    it('failure (ApiResponseError): toasts the real backend detail', async () => {
+    it('failure (ApiResponseError): toasts the generic fallback (unmapped code)', async () => {
+      // B8 (PROMPT №747): 'already_applied' is not a real backend code --
+      // unmapped, lands on the call site's own fallback (.vue:438).
       vi.mocked(mastersApi.applyMaster).mockRejectedValue(
         new ApiResponseError(409, 'Заявка уже подана', 'already_applied'),
       )
@@ -810,7 +812,7 @@ describe('MasterApplyView', () => {
       skipBtn().click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Заявка уже подана')
+      expect(toastError).toHaveBeenCalledWith('Не удалось отправить заявку')
     })
   })
 

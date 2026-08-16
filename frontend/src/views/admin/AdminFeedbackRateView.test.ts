@@ -129,7 +129,9 @@ function statValue(label: string): string {
 /** VRatingBar's own rendered value text, found by its label (.v-rating-bar__label). */
 function ratingValue(label: string): string {
   const bars = Array.from(host?.querySelectorAll<HTMLElement>('.v-rating-bar') ?? [])
-  const bar = bars.find((b) => b.querySelector('.v-rating-bar__label')?.textContent?.trim() === label)
+  const bar = bars.find(
+    (b) => b.querySelector('.v-rating-bar__label')?.textContent?.trim() === label,
+  )
   if (!bar) throw new Error(`no rating bar labelled «${label}»`)
   return bar.querySelector('.v-rating-bar__value')?.textContent?.trim() ?? ''
 }
@@ -154,12 +156,14 @@ describe('AdminFeedbackRateView', () => {
   describe('ladder (THREE rungs -- see banner)', () => {
     it('loading -> content', async () => {
       let resolveGet!: (v: FeedbackMetricResponse) => void
-      vi.mocked(adminApi.getFeedbackMetric).mockReset().mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolveGet = resolve
-          }),
-      )
+      vi.mocked(adminApi.getFeedbackMetric)
+        .mockReset()
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveGet = resolve
+            }),
+        )
       mount()
       await nextTick()
 
@@ -180,14 +184,16 @@ describe('AdminFeedbackRateView', () => {
       expect(errorDesc()).toBe('Ошибка загрузки')
     })
 
-    it('failure (ApiResponseError): shows the real backend detail', async () => {
+    it('failure (ApiResponseError): shows the generic fallback (unmapped code)', async () => {
+      // B8 (PROMPT №747): 'server_error' is not a real backend code --
+      // unmapped, lands on the call site's own fallback (.vue:132).
       vi.mocked(adminApi.getFeedbackMetric).mockRejectedValue(
         new ApiResponseError(500, 'Сервис метрик недоступен', 'server_error'),
       )
       mount()
       await flush()
 
-      expect(errorDesc()).toBe('Сервис метрик недоступен')
+      expect(errorDesc()).toBe('Ошибка загрузки')
     })
 
     it('«Повторить» recovers to content after a failure', async () => {

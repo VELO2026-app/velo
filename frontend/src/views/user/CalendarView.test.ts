@@ -333,11 +333,10 @@ describe('CalendarView', () => {
       expect(practiceCards()).toHaveLength(0)
     })
 
-    it('error: shows the REAL backend message, and the ordering means error wins over empty (not "Нет практик")', async () => {
-      // extractApiError only surfaces e.detail for a REAL ApiResponseError
-      // (checked useApiError.ts directly) -- a plain Error always falls back
-      // to the hardcoded string, so this has to be the real class to prove
-      // backend-message propagation rather than the screen's own fallback.
+    it('error: shows the generic fallback (unmapped code), and the ordering means error wins over empty (not "Нет практик")', async () => {
+      // B8 (PROMPT №747): extractApiError no longer surfaces e.detail at all
+      // -- the old comment's premise is gone. 'service_unavailable' is not a
+      // real backend code, so this lands on the call site's own fallback.
       vi.mocked(practicesApi.getPractices).mockRejectedValue(
         new ApiResponseError(503, 'Сервис недоступен', 'service_unavailable'),
       )
@@ -346,7 +345,9 @@ describe('CalendarView', () => {
 
       const err = emptyByTitle('Не удалось загрузить')
       expect(err).toBeDefined()
-      expect(norm(err?.querySelector('.v-empty__desc')?.textContent)).toBe('Сервис недоступен')
+      expect(norm(err?.querySelector('.v-empty__desc')?.textContent)).toBe(
+        'Не удалось загрузить календарь',
+      )
       // The same underlying condition (weekPractices=[]) that would show
       // "empty" is ALSO true here -- proving error precedes it, not just
       // that error renders in isolation.

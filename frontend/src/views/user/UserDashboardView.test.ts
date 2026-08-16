@@ -474,7 +474,9 @@ describe('UserDashboardView', () => {
       expect(toastError).not.toHaveBeenCalled()
     })
 
-    it('error: renders the SAME empty DOM as a genuine empty result, but toasts the REAL backend message (W15, empty != error)', async () => {
+    it('error: renders the SAME empty DOM as a genuine empty result, but toasts the generic fallback (unmapped code) (W15, empty != error)', async () => {
+      // B8 (PROMPT №747): 'service_unavailable' is not a real backend code --
+      // unmapped, lands on bookings.ts's own fallback (:150).
       vi.mocked(bookingsApi.getUpcomingBookings).mockRejectedValue(
         new ApiResponseError(503, 'Сервис бронирований недоступен', 'service_unavailable'),
       )
@@ -485,7 +487,7 @@ describe('UserDashboardView', () => {
       // the toast, not the markup (that IS the W15 fix; see banner).
       expect(emptyState()).not.toBeNull()
       expect(text()).toContain('Нет предстоящих практик')
-      expect(toastError).toHaveBeenCalledWith('Сервис бронирований недоступен')
+      expect(toastError).toHaveBeenCalledWith('Не удалось загрузить ближайшую практику')
     })
 
     it('error fallback: a non-ApiResponseError toasts the fallback, not a raw exception message (SC-05)', async () => {

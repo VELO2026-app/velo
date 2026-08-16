@@ -237,14 +237,16 @@ describe('AdminReportDetailView', () => {
       expect(btnByText('Повторить')).toBeDefined()
     })
 
-    it('failure (ApiResponseError): the error rung carries the real backend detail', async () => {
+    it('failure (ApiResponseError): the error rung carries the generic fallback (unmapped code)', async () => {
+      // B8 (PROMPT №747): 'server_error' is not a real backend code --
+      // unmapped, lands on the call site's own fallback (.vue:224).
       vi.mocked(adminApi.getReportById).mockRejectedValue(
         new ApiResponseError(500, 'Сервер недоступен', 'server_error'),
       )
       mount('r_missing')
       await flush()
 
-      expect(text()).toContain('Сервер недоступен')
+      expect(text()).toContain('Ошибка загрузки жалобы')
     })
 
     it('SW8: «Повторить» recovers to content after a failure', async () => {
@@ -338,7 +340,9 @@ describe('AdminReportDetailView', () => {
       expect(push).toHaveBeenCalledWith({ name: 'admin-reports' })
     })
 
-    it('failure: toasts (detail / fallback) and the report STAYS pending (no navigation)', async () => {
+    it('failure: toasts the generic fallback (unmapped code) and the report STAYS pending (no navigation)', async () => {
+      // B8 (PROMPT №747): 'already_decided' is not a real backend code --
+      // unmapped, lands on the call site's own fallback (.vue:244).
       vi.mocked(adminApi.resolveReport).mockRejectedValue(
         new ApiResponseError(409, 'Жалоба уже обработана', 'already_decided'),
       )
@@ -350,7 +354,7 @@ describe('AdminReportDetailView', () => {
       resolveBtn().click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Жалоба уже обработана')
+      expect(toastError).toHaveBeenCalledWith('Ошибка при обработке')
       expect(push).not.toHaveBeenCalled()
       expect(resolveBtn()).toBeDefined() // still pending, actions still shown
     })
@@ -399,7 +403,9 @@ describe('AdminReportDetailView', () => {
       expect(adminApi.dismissReport).toHaveBeenCalledWith('r_pending', 'Не подтверждено')
     })
 
-    it('failure: toasts (detail / the SAME shared fallback as resolve) and the report STAYS pending', async () => {
+    it('failure: toasts the generic fallback (unmapped code, the SAME shared fallback as resolve) and the report STAYS pending', async () => {
+      // B8 (PROMPT №747): 'already_decided' is not a real backend code --
+      // unmapped, lands on the call site's own fallback (.vue:259).
       vi.mocked(adminApi.dismissReport).mockRejectedValue(
         new ApiResponseError(409, 'Жалоба уже обработана', 'already_decided'),
       )
@@ -409,7 +415,7 @@ describe('AdminReportDetailView', () => {
       dismissBtn().click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Жалоба уже обработана')
+      expect(toastError).toHaveBeenCalledWith('Ошибка при обработке')
       expect(push).not.toHaveBeenCalled()
       expect(dismissBtn()).toBeDefined()
     })

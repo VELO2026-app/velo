@@ -201,7 +201,7 @@ import {
 import { ApiResponseError } from '@/api/client'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import { useToast } from '@/composables/useToast'
-import { extractApiError } from '@/composables/useApiError'
+import { errorMessage, extractApiError } from '@/composables/useApiError'
 import type { GroupMemberItem, GroupListItem, GroupKind } from '@/api/groups'
 
 const route = useRoute()
@@ -405,10 +405,9 @@ async function onDeleteConfirm(): Promise<void> {
     // Same group_in_use translation as MasterGroupsView's own delete
     // handler -- the backend's message names the blocking practice(s) in
     // English, not something to relay verbatim to a human.
+    // B8 (PROMPT №746): phrase now lives in errorMessages.ts.
     if (e instanceof ApiResponseError && e.code === 'group_in_use') {
-      toast.error(
-        'Эта группа — единственная аудитория одной из практик. Сначала измените аудиторию практики, затем удалите группу.',
-      )
+      toast.error(errorMessage('group_in_use'))
     } else {
       toast.error(extractApiError(e, 'Не удалось удалить группу'))
     }

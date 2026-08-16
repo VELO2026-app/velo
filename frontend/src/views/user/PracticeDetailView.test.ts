@@ -525,7 +525,8 @@ describe('PracticeDetailView', () => {
       mount()
       await flush()
 
-      expect(text()).toContain('Неявка')
+      // B30 (PROMPT №746, owner wording): was 'Неявка'.
+      expect(text()).toContain('Вы не пришли')
       expect(text()).not.toContain('Отменена')
     })
   })

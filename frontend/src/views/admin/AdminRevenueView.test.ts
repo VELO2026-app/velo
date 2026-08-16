@@ -126,9 +126,13 @@ describe('AdminRevenueView', () => {
       expect(text()).not.toContain('По мастерам')
     })
 
-    it('error: surfaces the REAL backend detail in the card, not a fallback', async () => {
-      // :description="error" (AdminRevenueView.vue:37) + error.value = e.detail
-      // (:130). Unlike its sibling screens, this one really does propagate.
+    it('error: surfaces the generic fallback in the card (unmapped code)', async () => {
+      // :description="error" (AdminRevenueView.vue:37) + error.value =
+      // extractApiError(e, 'Ошибка загрузки') (:130). B8 (PROMPT №747):
+      // 'reports_down' is not a real backend code -- unmapped, lands on that
+      // fallback; extractApiError no longer reads e.detail at all, so this
+      // screen no longer differs from its siblings the way the old comment
+      // described.
       vi.mocked(adminApi.getAdminRevenue).mockRejectedValue(
         new ApiResponseError(503, 'Хранилище отчётов недоступно', 'reports_down'),
       )
@@ -136,7 +140,7 @@ describe('AdminRevenueView', () => {
       await flush()
 
       expect(text()).toContain('Не удалось загрузить выручку')
-      expect(text()).toContain('Хранилище отчётов недоступно')
+      expect(text()).toContain('Ошибка загрузки')
     })
 
     it('error: falls back to a generic message on a non-API error', async () => {

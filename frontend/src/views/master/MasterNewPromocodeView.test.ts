@@ -441,9 +441,11 @@ describe('MasterNewPromocodeView', () => {
       expect(push).toHaveBeenCalledWith({ name: 'master-promocodes' })
     })
 
-    it('surfaces the REAL backend detail on an ApiResponseError and STAYS on the form', async () => {
-      // «Код уже занят» is the message that tells the master what to change.
-      // Navigating away on failure would strand them with no promo and no reason.
+    it('falls back to the generic message on an ApiResponseError (unmapped code) and STAYS on the form', async () => {
+      // Navigating away on failure would strand the master with no promo and
+      // no reason -- that part of the intent stands regardless of the text.
+      // B8 (PROMPT №747): 'promo_code_taken' is not a real backend code --
+      // unmapped, lands on the call site's own fallback (.vue:157).
       vi.mocked(promosApi.createPromo).mockRejectedValue(
         new ApiResponseError(409, 'Такой код уже существует', 'promo_code_taken'),
       )
@@ -456,7 +458,7 @@ describe('MasterNewPromocodeView', () => {
       button('Создать промокод')?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Такой код уже существует')
+      expect(toastError).toHaveBeenCalledWith('Не удалось создать промокод')
       expect(push).not.toHaveBeenCalled()
       expect(toastSuccess).not.toHaveBeenCalled()
     })

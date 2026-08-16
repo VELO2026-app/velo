@@ -98,7 +98,12 @@ describe('useAdminStore', () => {
       expect(store.pendingModeration).toBe(7)
     })
 
-    it('on failure: records the backend detail via extractApiError and leaves loaded false', async () => {
+    it('on failure: falls back to the generic message via extractApiError and leaves loaded false', async () => {
+      // B8 (PROMPT №747): 'server_error' is not a real backend code (the
+      // base-class default is 'internal_error') and extractApiError no
+      // longer reads e.detail at all, so an unmapped code -- real or, as
+      // here, a fixture that was never realistic -- lands on the call
+      // site's own fallback (admin.ts:60), never on the mocked detail.
       vi.mocked(adminApi.getAdminStats).mockRejectedValue(
         new ApiResponseError(500, 'Внутренняя ошибка сервера', 'server_error'),
       )
@@ -107,7 +112,7 @@ describe('useAdminStore', () => {
 
       await store.fetchDashboard()
 
-      expect(store.dashboardError).toBe('Внутренняя ошибка сервера')
+      expect(store.dashboardError).toBe('Не удалось загрузить статистику')
       expect(store.loaded).toBe(false)
       expect(store.loading).toBe(false)
       expect(store.stats).toBeNull()
@@ -190,7 +195,9 @@ describe('useAdminStore', () => {
       expect(store.overviewError).toBe('')
     })
 
-    it('on failure: records the backend detail and leaves the previous overview alone', async () => {
+    it('on failure: falls back to the generic message and leaves the previous overview alone', async () => {
+      // B8 (PROMPT №747): 'bad_period' is not a real backend code -- same
+      // reasoning as fetchDashboard's test above.
       vi.mocked(adminApi.getAdminStatsOverview).mockRejectedValue(
         new ApiResponseError(400, 'Неверный период', 'bad_period'),
       )
@@ -198,7 +205,7 @@ describe('useAdminStore', () => {
 
       await store.fetchOverview('month')
 
-      expect(store.overviewError).toBe('Неверный период')
+      expect(store.overviewError).toBe('Не удалось загрузить статистику за период')
       expect(store.overviewLoading).toBe(false)
       expect(store.overview).toBeNull()
     })

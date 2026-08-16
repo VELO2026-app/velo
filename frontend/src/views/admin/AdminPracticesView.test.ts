@@ -266,14 +266,16 @@ describe('AdminPracticesView', () => {
 
   // ===========================================================================
   describe('error message branch (.vue:128)', () => {
-    it('ApiResponseError: the description shows the REAL backend detail', async () => {
+    it('ApiResponseError: the description shows the generic fallback (unmapped code)', async () => {
+      // B8 (PROMPT №747): 'server_error' is not a real backend code -- same
+      // fallback as the non-ApiResponseError case below.
       vi.mocked(adminApi.getAdminPractices).mockRejectedValue(
         new ApiResponseError(500, 'Сервер недоступен', 'server_error'),
       )
       mount()
       await flush()
 
-      expect(host?.querySelector('.v-empty__desc')?.textContent).toBe('Сервер недоступен')
+      expect(host?.querySelector('.v-empty__desc')?.textContent).toBe('Ошибка загрузки')
     })
 
     it('a non-ApiResponseError falls back to "Ошибка загрузки"', async () => {

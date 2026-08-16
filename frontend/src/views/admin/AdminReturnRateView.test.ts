@@ -136,12 +136,14 @@ describe('AdminReturnRateView', () => {
   describe('ladder (THREE rungs -- see banner)', () => {
     it('loading -> content', async () => {
       let resolveGet!: (v: ReturnMetricResponse) => void
-      vi.mocked(adminApi.getReturnMetric).mockReset().mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolveGet = resolve
-          }),
-      )
+      vi.mocked(adminApi.getReturnMetric)
+        .mockReset()
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveGet = resolve
+            }),
+        )
       mount()
       await nextTick()
 
@@ -162,14 +164,16 @@ describe('AdminReturnRateView', () => {
       expect(errorDesc()).toBe('Ошибка загрузки')
     })
 
-    it('failure (ApiResponseError): shows the real backend detail', async () => {
+    it('failure (ApiResponseError): shows the generic fallback (unmapped code)', async () => {
+      // B8 (PROMPT №747): 'server_error' is not a real backend code --
+      // unmapped, lands on the call site's own fallback (.vue:101).
       vi.mocked(adminApi.getReturnMetric).mockRejectedValue(
         new ApiResponseError(500, 'Сервис метрик недоступен', 'server_error'),
       )
       mount()
       await flush()
 
-      expect(errorDesc()).toBe('Сервис метрик недоступен')
+      expect(errorDesc()).toBe('Ошибка загрузки')
     })
 
     it('«Повторить» recovers to content after a failure', async () => {

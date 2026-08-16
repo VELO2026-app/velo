@@ -53,7 +53,10 @@ describe('useBookingsStore', () => {
       expect(refreshFeed).toHaveBeenCalledTimes(1)
     })
 
-    it('on failure: returns the backend error detail and does NOT fire diary.refreshFeed', async () => {
+    it('on failure: falls back to the generic message (unmapped code) and does NOT fire diary.refreshFeed', async () => {
+      // B8 (PROMPT №747): 'cancel_window_closed' is not a real backend code
+      // and extractApiError no longer reads e.detail -- an unmapped code
+      // lands on the call site's own fallback (bookings.ts:185).
       vi.mocked(bookingsApi.cancelBooking).mockRejectedValue(
         new ApiResponseError(400, 'Too close to start time', 'cancel_window_closed'),
       )
@@ -61,7 +64,7 @@ describe('useBookingsStore', () => {
 
       const result = await store.cancelBooking('booking_1')
 
-      expect(result).toEqual({ ok: false, error: 'Too close to start time' })
+      expect(result).toEqual({ ok: false, error: 'Не удалось отменить бронирование' })
       expect(refreshFeed).not.toHaveBeenCalled()
     })
 
@@ -89,7 +92,9 @@ describe('useBookingsStore', () => {
       expect(bookingsApi.getMyBookings).toHaveBeenCalled()
     })
 
-    it('on failure (e.g. 409 already joined): returns the backend error detail', async () => {
+    it('on failure (e.g. 409 already joined): falls back to the generic message (unmapped code)', async () => {
+      // B8 (PROMPT №747): 'already_joined' is not a real backend code --
+      // unmapped, lands on the call site's own fallback (bookings.ts:202).
       vi.mocked(bookingsApi.joinBooking).mockRejectedValue(
         new ApiResponseError(409, 'Already joined', 'already_joined'),
       )
@@ -97,7 +102,7 @@ describe('useBookingsStore', () => {
 
       const result = await store.joinBooking('booking_1')
 
-      expect(result).toEqual({ ok: false, error: 'Already joined' })
+      expect(result).toEqual({ ok: false, error: 'Не удалось войти в практику' })
     })
   })
 
@@ -114,7 +119,9 @@ describe('useBookingsStore', () => {
       expect(bookingsApi.leaveBooking).toHaveBeenCalledWith('booking_1')
     })
 
-    it('on failure (e.g. never joined): returns the backend error detail', async () => {
+    it('on failure (e.g. never joined): falls back to the generic message (unmapped code)', async () => {
+      // B8 (PROMPT №747): 'not_joined' is not a real backend code --
+      // unmapped, lands on the call site's own fallback (bookings.ts:217).
       vi.mocked(bookingsApi.leaveBooking).mockRejectedValue(
         new ApiResponseError(400, 'Not joined yet', 'not_joined'),
       )
@@ -122,7 +129,7 @@ describe('useBookingsStore', () => {
 
       const result = await store.leaveBooking('booking_1')
 
-      expect(result).toEqual({ ok: false, error: 'Not joined yet' })
+      expect(result).toEqual({ ok: false, error: 'Не удалось покинуть практику' })
     })
   })
 
@@ -139,7 +146,10 @@ describe('useBookingsStore', () => {
       expect(bookingsApi.skipCheckin).toHaveBeenCalledWith('booking_1')
     })
 
-    it('on failure: returns the backend error detail', async () => {
+    it('on failure: returns the mapped table phrase for a real backend code', async () => {
+      // B8 (PROMPT №747): 'not_found' IS a real backend code (VeloError base
+      // default, errorMessages.ts) -- extractApiError now returns its table
+      // phrase regardless of the mocked detail text.
       vi.mocked(bookingsApi.skipCheckin).mockRejectedValue(
         new ApiResponseError(404, 'Booking not found', 'not_found'),
       )
@@ -147,7 +157,7 @@ describe('useBookingsStore', () => {
 
       const result = await store.skipCheckin('booking_1')
 
-      expect(result).toEqual({ ok: false, error: 'Booking not found' })
+      expect(result).toEqual({ ok: false, error: 'Запрошенный ресурс не найден' })
     })
   })
 })

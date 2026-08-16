@@ -160,7 +160,11 @@ describe('MasterGroupCreateView', () => {
     expect(groupsApi.createGroup).toHaveBeenCalledWith('VIP', 'Для продвинутых')
   })
 
-  it('409 duplicate name: shows the inline field error AND a toast, does not navigate', async () => {
+  it('409 duplicate name (conflict): shows the mapped table phrase inline AND as a toast, does not navigate', async () => {
+    // B8 (PROMPT №747): 'conflict' IS a real backend code (VeloError base
+    // default) -- extractApiError now returns its table phrase regardless
+    // of the mocked detail text, and BOTH fieldError and the toast read
+    // from the same `message` (.vue:128-130), so both now show it.
     vi.mocked(groupsApi.createGroup).mockRejectedValue(
       new ApiResponseError(409, "Группа с именем 'VIP' уже существует", 'conflict'),
     )
@@ -171,8 +175,10 @@ describe('MasterGroupCreateView', () => {
     submitBtn()?.click()
     await flush()
 
-    expect(toastError).toHaveBeenCalledWith("Группа с именем 'VIP' уже существует")
-    expect(host?.querySelector('.v-input__error')?.textContent).toContain('уже существует')
+    expect(toastError).toHaveBeenCalledWith(
+      'Конфликт с текущим состоянием — попробуйте обновить страницу',
+    )
+    expect(host?.querySelector('.v-input__error')?.textContent).toContain('Конфликт')
     expect(push).not.toHaveBeenCalled()
   })
 })

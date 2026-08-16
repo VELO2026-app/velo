@@ -72,7 +72,9 @@ describe('diary store', () => {
       expect(diaryApi.listDiaryFeed).toHaveBeenCalled()
     })
 
-    it('surfaces the REAL backend message on failure and does NOT refresh', async () => {
+    it('falls back to the generic message on failure (unmapped code) and does NOT refresh', async () => {
+      // B8 (PROMPT №747): 'already_submitted' is not a real backend code --
+      // unmapped, lands on the call site's own fallback.
       vi.mocked(diaryApi.upsertCheckin).mockRejectedValue(
         new ApiResponseError(409, 'Check-in уже отправлен', 'already_submitted'),
       )
@@ -81,7 +83,7 @@ describe('diary store', () => {
       const result = await store.submitCheckin('p1', CHECKIN)
 
       expect(result.ok).toBe(false)
-      expect(result.error).toBe('Check-in уже отправлен')
+      expect(result.error).toBe('Не удалось отправить check-in')
       expect(diaryApi.listDiaryFeed).not.toHaveBeenCalled()
     })
 
@@ -127,7 +129,9 @@ describe('diary store', () => {
       expect(diaryApi.listDiaryFeed).toHaveBeenCalled()
     })
 
-    it('surfaces the REAL backend message on failure', async () => {
+    it('falls back to the generic message on failure (unmapped code)', async () => {
+      // B8 (PROMPT №747): 'rating_required' is not a real backend code --
+      // unmapped, lands on the call site's own fallback.
       vi.mocked(diaryApi.upsertFeedback).mockRejectedValue(
         new ApiResponseError(400, 'Оценка обязательна', 'rating_required'),
       )
@@ -136,7 +140,7 @@ describe('diary store', () => {
       const result = await store.submitFeedback('p1', FEEDBACK)
 
       expect(result.ok).toBe(false)
-      expect(result.error).toBe('Оценка обязательна')
+      expect(result.error).toBe('Не удалось отправить feedback')
     })
   })
 

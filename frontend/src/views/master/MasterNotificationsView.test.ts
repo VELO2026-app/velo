@@ -18,8 +18,11 @@
 //   schedule {from,to,days} -> comms quiet hours (proxy converts semantics)
 //   new_checkin / new_feedback / ai_summary / monthly_report -> STILL LOCAL
 //       stubs (no comms types yet; explicit disposition, Master-chat
-//       2026-07-28) -- their remount-loss behaviour is asserted below as the
-//       real, current, honest state of those four rows.
+//       2026-07-28). Owner ruling 2026-08-16 (PROMPT №746): these four stay
+//       VISIBLE, DISABLED (VSwitch's own `disabled`, click is a no-op -- not
+//       moved-then-reverted), each carrying a short "Скоро" marker. This
+//       superseded the earlier "flips visually, lost on remount" shape;
+//       asserted below.
 //
 // TimePickerSheet (.vue:68-74) wraps VBottomSheet, teleported to
 // document.body, `v-if="open"` -- absent from the DOM entirely when closed,
@@ -111,9 +114,9 @@ function isOn(label: string): boolean {
 }
 
 function dayBtn(label: string): HTMLButtonElement {
-  const btn = Array.from(host?.querySelectorAll<HTMLButtonElement>('.v-day-picker__day') ?? []).find(
-    (b) => b.textContent?.trim() === label,
-  )
+  const btn = Array.from(
+    host?.querySelectorAll<HTMLButtonElement>('.v-day-picker__day') ?? [],
+  ).find((b) => b.textContent?.trim() === label)
   if (!btn) throw new Error(`no day button labelled «${label}»`)
   return btn
 }
@@ -261,19 +264,37 @@ describe('MasterNotificationsView', () => {
       expect(toastError).not.toHaveBeenCalled()
     })
 
-    it('a STUB row (Ежемесячный отчет) writes NOTHING and is lost on remount -- still the honest local stub', async () => {
+    it('a STUB row (Ежемесячный отчет) is DISABLED -- a click does nothing, not merely unpersisted', async () => {
+      // B8/B31 owner ruling 2026-08-16 (PROMPT №746): a stub row stays
+      // visible but its switch is disabled outright (VSwitch's own
+      // `disabled`, which no-ops the click at the component level) --
+      // superseding the earlier "flips then reverts on remount" honest-stub
+      // shape this test used to assert.
       mount()
       await flush()
+
+      expect(isOn('Ежемесячный отчет')).toBe(false) // default
       switchByRow('Ежемесячный отчет').click()
       await flush()
-      expect(isOn('Ежемесячный отчет')).toBe(true)
+
+      expect(isOn('Ежемесячный отчет')).toBe(false) // click was a no-op
       expect(prefsPut).not.toHaveBeenCalled()
+    })
 
-      unmountOnly()
-      mount() // fresh instance -- stub keys have no store behind them
-      await flush()
+    it('a STUB row (Ежемесячный отчет) carries the "Скоро" marker; a live row does not', () => {
+      mount()
 
-      expect(isOn('Ежемесячный отчет')).toBe(false) // hardcoded default
+      const stubRow = Array.from(host?.querySelectorAll<HTMLElement>('.mn-card') ?? []).find(
+        (r) => r.querySelector('.mn-card__title')?.textContent?.trim() === 'Ежемесячный отчет',
+      )
+      const liveRow = Array.from(host?.querySelectorAll<HTMLElement>('.mn-card') ?? []).find(
+        (r) => r.querySelector('.mn-card__title')?.textContent?.trim() === 'Новое бронирование',
+      )
+
+      expect(stubRow?.querySelector('.v-badge')?.textContent?.trim()).toBe('Скоро')
+      expect(stubRow?.querySelector('.v-switch')?.hasAttribute('disabled')).toBe(true)
+      expect(liveRow?.querySelector('.v-badge')).toBeNull()
+      expect(liveRow?.querySelector('.v-switch')?.hasAttribute('disabled')).toBe(false)
     })
 
     it('a failed load (comms down / recipient unsynced) leaves the defaults on screen -- degrade, never crash', async () => {
@@ -298,16 +319,12 @@ describe('MasterNotificationsView', () => {
       expect(isOn('Новое бронирование')).toBe(false)
     })
 
-    it('"Ежемесячный отчет" (Аналитика, the ONE default-OFF row) toggles on', async () => {
-      mount()
-      await flush()
-
-      expect(isOn('Ежемесячный отчет')).toBe(false) // default
-      switchByRow('Ежемесячный отчет').click()
-      await flush()
-
-      expect(isOn('Ежемесячный отчет')).toBe(true)
-    })
+    // The former "default-OFF row toggles on" case lived here and used
+    // «Ежемесячный отчет» as its example -- the one row this file's own
+    // defaults comment calls out as default-off. It is now a disabled stub
+    // (PROMPT №746) and no live row is default-off, so there is no row left
+    // to carry this scenario; its disabled-click behaviour is covered above
+    // ('a STUB row (Ежемесячный отчет) is DISABLED...').
 
     it('toggling one row does not affect a sibling row with its OWN category (msg_* are independent)', async () => {
       mount()
@@ -340,7 +357,7 @@ describe('MasterNotificationsView', () => {
       expect(prefsPut).toHaveBeenCalledWith({ categories: { msg_support: false } })
     })
 
-    it('P-2 twin: the msg_participants row is worded as one\'s OWN threads AND writes msg_participants', async () => {
+    it("P-2 twin: the msg_participants row is worded as one's OWN threads AND writes msg_participants", async () => {
       mount()
       await flush()
 

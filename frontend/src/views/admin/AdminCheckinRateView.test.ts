@@ -84,7 +84,13 @@ function seriesPoint(overrides: Partial<SeriesPoint> = {}): SeriesPoint {
 }
 
 function lowPractice(overrides: Partial<LowCheckinPractice> = {}): LowCheckinPractice {
-  return { id: 'lp_1', title: 'Утренняя медитация', checkin_rate_pct: 42.4, total: 25, ...overrides }
+  return {
+    id: 'lp_1',
+    title: 'Утренняя медитация',
+    checkin_rate_pct: 42.4,
+    total: 25,
+    ...overrides,
+  }
 }
 
 function checkinMetric(overrides: Partial<CheckinMetricResponse> = {}): CheckinMetricResponse {
@@ -163,12 +169,14 @@ describe('AdminCheckinRateView', () => {
   describe('ladder (THREE rungs -- see banner)', () => {
     it('loading -> content', async () => {
       let resolveGet!: (v: CheckinMetricResponse) => void
-      vi.mocked(adminApi.getCheckinMetric).mockReset().mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolveGet = resolve
-          }),
-      )
+      vi.mocked(adminApi.getCheckinMetric)
+        .mockReset()
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveGet = resolve
+            }),
+        )
       mount()
       await nextTick()
 
@@ -189,14 +197,16 @@ describe('AdminCheckinRateView', () => {
       expect(errorDesc()).toBe('Ошибка загрузки')
     })
 
-    it('failure (ApiResponseError): shows the real backend detail', async () => {
+    it('failure (ApiResponseError): shows the generic fallback (unmapped code)', async () => {
+      // B8 (PROMPT №747): 'server_error' is not a real backend code --
+      // unmapped, lands on the call site's own fallback (.vue:103).
       vi.mocked(adminApi.getCheckinMetric).mockRejectedValue(
         new ApiResponseError(500, 'Сервис метрик недоступен', 'server_error'),
       )
       mount()
       await flush()
 
-      expect(errorDesc()).toBe('Сервис метрик недоступен')
+      expect(errorDesc()).toBe('Ошибка загрузки')
     })
 
     it('«Повторить» recovers to content after a failure', async () => {

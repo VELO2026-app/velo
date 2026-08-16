@@ -303,7 +303,9 @@ describe('AdminMastersView', () => {
       expect(toastError).toHaveBeenCalledWith('Ошибка загрузки мастеров')
     })
 
-    it('failure (ApiResponseError): the error rung shows AND the toast carries the real backend detail', async () => {
+    it('failure (ApiResponseError): the error rung shows AND the toast carries the generic fallback (unmapped code)', async () => {
+      // B8 (PROMPT №747): 'server_error' is not a real backend code --
+      // unmapped, lands on the call site's own fallback (.vue:260).
       vi.mocked(adminApi.getMastersList).mockRejectedValue(
         new ApiResponseError(500, 'Сервер недоступен', 'server_error'),
       )
@@ -313,7 +315,7 @@ describe('AdminMastersView', () => {
       expect(host?.querySelector('.v-empty__title')?.textContent).toBe(
         'Не удалось загрузить мастеров',
       )
-      expect(toastError).toHaveBeenCalledWith('Сервер недоступен')
+      expect(toastError).toHaveBeenCalledWith('Ошибка загрузки мастеров')
     })
 
     it('"Повторить" re-calls load and recovers from error to content', async () => {

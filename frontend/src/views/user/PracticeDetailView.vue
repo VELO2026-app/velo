@@ -379,7 +379,10 @@ const STATUS_LABEL: Record<BookingStatus, string> = {
   pending: 'Ожидает',
   confirmed: 'Вы записаны',
   attended: 'Завершена',
-  no_show: 'Неявка',
+  // B30 (PROMPT №746, owner wording): was 'Неявка', inconsistent with
+  // MyBookingsView's 'Не состоялась' for the same status -- now identical
+  // to it there too.
+  no_show: 'Вы не пришли',
   cancelled: 'Отменена',
 }
 

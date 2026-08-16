@@ -50,7 +50,7 @@ import { useRouter } from 'vue-router'
 import { VBackButton, VCard, VButton } from '@/components/ui'
 import { inviteMaster } from '@/api/admin'
 import { ApiResponseError } from '@/api/client'
-import { extractApiError } from '@/composables/useApiError'
+import { errorMessage, extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
@@ -71,7 +71,8 @@ async function onCreate(): Promise<void> {
       // admin can act on beyond reporting it — the raw backend string ("...is
       // not configured") is not a human message. Deliberately does not touch
       // the 503 or the code itself, both test-pinned.
-      toast.error('Ссылки для приглашений временно недоступны. Сообщите в поддержку.')
+      // B8 (PROMPT №746): phrase now lives in errorMessages.ts, not here.
+      toast.error(errorMessage('bot_url_not_configured'))
     } else {
       toast.error(extractApiError(e, 'Не удалось создать ссылку'))
     }

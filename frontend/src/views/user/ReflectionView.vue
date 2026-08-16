@@ -38,14 +38,15 @@
     @retry="loadPractice"
     @submit="onSubmit"
   >
-    <!-- Practice meta — мастер | honest no-show статус (F1: «Не состоялась»). -->
+    <!-- Practice meta — мастер | honest no-show статус (B30, PROMPT №747:
+         "Вы не пришли", the owner's word for this status on a user surface;
+         was F1's «Не состоялась», the same false claim MyBookingsView and
+         PracticeDetailView carried before №746). -->
     <template #practice-meta>
       <span class="form-shell__practice-meta-cell">
         с {{ practice?.master_name ?? 'Мастером' }}
       </span>
-      <span class="form-shell__practice-meta-cell">
-        <IconCalendar :size="14" /> Не состоялась
-      </span>
+      <span class="form-shell__practice-meta-cell"> <IconCalendar :size="14" /> Вы не пришли </span>
     </template>
 
     <!-- No #selection slot: a no-show reflection has no rating slider. -->

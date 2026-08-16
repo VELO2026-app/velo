@@ -1123,7 +1123,9 @@ describe('CreatePracticeView', () => {
       expect(replace).toHaveBeenCalledWith({ name: 'master-practices' })
     })
 
-    it('a FAILED create surfaces the real backend detail and never claims success', async () => {
+    it('a FAILED create falls back to the generic message (unmapped code) and never claims success', async () => {
+      // B8 (PROMPT №747): 'past_date' is not a real backend code -- unmapped,
+      // lands on the call site's own fallback.
       vi.mocked(practicesApi.createPractice).mockRejectedValue(
         new ApiResponseError(422, 'Дата практики в прошлом', 'past_date'),
       )
@@ -1134,7 +1136,7 @@ describe('CreatePracticeView', () => {
       submitForm()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Дата практики в прошлом')
+      expect(toastError).toHaveBeenCalledWith('Не удалось создать практику')
       expect(toastSuccess).not.toHaveBeenCalled()
       expect(practicesApi.updatePractice).not.toHaveBeenCalled()
       expect(replace).not.toHaveBeenCalled()
@@ -1155,10 +1157,11 @@ describe('CreatePracticeView', () => {
 
     it('a create that succeeds but FAILS to publish leaves the master on the form', async () => {
       // The two writes share one try/catch (:810-878), so a failed publish is
-      // reported with the CREATE's message -- «Не удалось создать практику» --
-      // even though the POST succeeded and a draft now exists server-side. This
-      // pins the behaviour as it is, and deliberately does NOT assert it is
-      // right: see the NOT COVERED note at the foot of this file.
+      // reported with the CREATE's fallback -- «Не удалось создать практику»
+      // -- even though the POST succeeded and a draft now exists server-side.
+      // This pins the behaviour as it is, and deliberately does NOT assert it
+      // is right: see the NOT COVERED note at the foot of this file.
+      // B8 (PROMPT №747): 'bad_state' is not a real backend code -- unmapped.
       vi.mocked(practicesApi.updatePractice).mockRejectedValue(
         new ApiResponseError(409, 'Нельзя опубликовать', 'bad_state'),
       )
@@ -1174,7 +1177,7 @@ describe('CreatePracticeView', () => {
       await flush()
 
       expect(practicesApi.createPractice).toHaveBeenCalledTimes(1)
-      expect(toastError).toHaveBeenCalledWith('Нельзя опубликовать')
+      expect(toastError).toHaveBeenCalledWith('Не удалось создать практику')
       expect(toastSuccess).not.toHaveBeenCalled()
       expect(replace).not.toHaveBeenCalled()
       // clearDraft() runs only AFTER a successful publish (:859-860), so the

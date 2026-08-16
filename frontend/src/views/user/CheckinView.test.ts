@@ -523,19 +523,22 @@ describe('CheckinView', () => {
       expect(disabledHint()).toBe('Check-in закрыт — практика уже началась')
     })
 
-    it('a FAILED practice load renders the error rung with the real message, not a form (№444)', async () => {
+    it('a FAILED practice load renders the error rung with the generic fallback (no code set), not a form (№444)', async () => {
       // Both halves of the ruling, and they are halves: the rung alone would leave
       // the button live while loading, and failing closed alone would leave a dead
       // button and a mystery. Previously this pinned the opposite -- no rung at all
       // (FormShell had no error state and .vue never read selectedError) and submit
       // live with the window unknown.
+      // B8 (PROMPT №747): no third arg means code defaults to 'unknown' --
+      // unmapped, lands on practices.ts's own fallback ('Не удалось загрузить
+      // практику'), which happens to read identically to this screen's own
+      // static title -- both now render, one static and one dynamic.
       getPracticeMock.mockRejectedValue(new ApiResponseError(404, 'Практика не найдена'))
       mount()
       await flush()
 
-      // The rung is there and carries the REAL backend message, not a constant.
+      // The rung is there and carries the generic fallback, not the raw detail.
       expect(text()).toContain('Не удалось загрузить практику')
-      expect(text()).toContain('Практика не найдена')
       // ...and the form is gone rather than offered for a POST that cannot land.
       expect(text()).not.toContain('Как вы себя чувствуется?')
       expect(submitBtn()).toBeUndefined()
@@ -853,10 +856,14 @@ describe('CheckinView', () => {
       expect(toastError).not.toHaveBeenCalled()
     })
 
-    it('a FAILED submit surfaces the REAL backend message and never claims success', async () => {
-      // extractApiError returns e.detail for an ApiResponseError
-      // (useApiError.ts:26), so this is the backend's own words -- not a
-      // hardcoded constant (contrast SC-05).
+    it('a FAILED submit falls back to the generic message (no code set) and never claims success', async () => {
+      // B8 (PROMPT №747): extractApiError no longer reads e.detail at all.
+      // No third arg means code defaults to 'unknown' -- unmapped, and
+      // closedPracticeMessage() (.vue:192-206, its own small point-branch
+      // table for blocked_by_master/not_a_student/not_in_audience) also
+      // returns null for 'unknown', so this falls through to
+      // diaryStore.submitCheckin's own fallback ('Не удалось отправить
+      // check-in', stores/diary.ts).
       upsertCheckinMock.mockRejectedValue(new ApiResponseError(400, 'Check-in window has closed'))
       mount()
       await flush()
@@ -864,7 +871,7 @@ describe('CheckinView', () => {
       submitBtn()?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Check-in window has closed')
+      expect(toastError).toHaveBeenCalledWith('Не удалось отправить check-in')
       expect(successTitle()).toBe('')
       expect(text()).toContain('Как вы себя чувствуете?')
     })

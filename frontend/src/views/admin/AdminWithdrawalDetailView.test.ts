@@ -363,8 +363,15 @@ describe('AdminWithdrawalDetailView', () => {
   })
 
   describe('approve: failure', () => {
-    it('surfaces the REAL backend detail and does NOT claim success', async () => {
-      // «Insufficient platform balance» is exactly what the admin must see.
+    it('falls back to the generic message on failure (unmapped code) and does NOT claim success', async () => {
+      // B8 (PROMPT №747): 'no_funds' is not a real backend code -- unmapped,
+      // lands on the call site's own fallback (.vue:202). The old comment
+      // here argued the specific detail "is exactly what the admin must
+      // see" -- true as an intent, but this fixture never reflected reality
+      // (real VeloError messages are English; §747 measured zero Cyrillic
+      // detail/message literals across backend/app). If this admin-facing
+      // case genuinely needs its own specific phrase, that is a real code +
+      // a table entry to add, not a reason to keep reading e.detail.
       vi.mocked(adminApi.approveWithdrawal).mockRejectedValue(
         new ApiResponseError(409, 'Недостаточно средств на счёте платформы', 'no_funds'),
       )
@@ -376,7 +383,7 @@ describe('AdminWithdrawalDetailView', () => {
       tfaSubmit()?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Недостаточно средств на счёте платформы')
+      expect(toastError).toHaveBeenCalledWith('Ошибка одобрения выплаты')
       expect(toastSuccess).not.toHaveBeenCalled()
       expect(back).not.toHaveBeenCalled()
     })
@@ -483,7 +490,9 @@ describe('AdminWithdrawalDetailView', () => {
       expect(back).toHaveBeenCalled()
     })
 
-    it('surfaces the REAL backend detail on failure and stays put', async () => {
+    it('falls back to the generic message on failure (unmapped code) and stays put', async () => {
+      // B8 (PROMPT №747): 'already_done' is not a real backend code --
+      // unmapped, lands on the call site's own fallback (.vue:222).
       vi.mocked(adminApi.rejectWithdrawal).mockRejectedValue(
         new ApiResponseError(409, 'Запрос уже обработан', 'already_done'),
       )
@@ -500,7 +509,7 @@ describe('AdminWithdrawalDetailView', () => {
       bodyButton('Отклонить выплату')?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Запрос уже обработан')
+      expect(toastError).toHaveBeenCalledWith('Ошибка отклонения выплаты')
       expect(toastSuccess).not.toHaveBeenCalled()
       expect(back).not.toHaveBeenCalled()
     })

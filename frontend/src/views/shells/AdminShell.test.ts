@@ -251,11 +251,9 @@ describe('AdminShell', () => {
       expect(toastError).not.toHaveBeenCalled()
     })
 
-    it('a failed fetch toasts the REAL store-derived error message', async () => {
-      // extractApiError only pulls a message out of an ApiResponseError
-      // (useApiError.ts:31) -- a plain Error falls to the fallback string, so
-      // the fixture must be the real error shape the store actually branches
-      // on, not a generic Error.
+    it('a failed fetch toasts the generic store-derived fallback (unmapped code)', async () => {
+      // B8 (PROMPT №747): 'server_error' is not a real backend code --
+      // unmapped, lands on admin.ts's fetchDashboard fallback (:60).
       vi.mocked(adminApi.getAdminStats).mockRejectedValue(
         new ApiResponseError(500, 'Сеть недоступна', 'server_error'),
       )
@@ -263,8 +261,8 @@ describe('AdminShell', () => {
       await mount('admin-dashboard')
       await flush()
 
-      expect(adminStore.dashboardError).toBe('Сеть недоступна')
-      expect(toastError).toHaveBeenCalledWith('Сеть недоступна')
+      expect(adminStore.dashboardError).toBe('Не удалось загрузить статистику')
+      expect(toastError).toHaveBeenCalledWith('Не удалось загрузить статистику')
     })
   })
 })

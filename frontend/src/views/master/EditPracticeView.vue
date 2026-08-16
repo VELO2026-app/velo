@@ -351,7 +351,7 @@ import { formatShortDate, todayLocalISO } from '@/utils/format'
 import { masterPracticeBadge } from '@/utils/practiceStatus'
 import { plural } from '@/utils/plural'
 import { ApiResponseError } from '@/api/client'
-import { extractApiError } from '@/composables/useApiError'
+import { errorMessage, extractApiError } from '@/composables/useApiError'
 import {
   DURATION_OPTIONS,
   AUDIENCE_OPTIONS,
@@ -769,10 +769,11 @@ async function commitSave(): Promise<void> {
     // raw, English, API-shaped message (e.detail) -- must never reach a human
     // directly. Same codes, same translation, same pattern as
     // CreatePracticeView's submit() catch (PROMPT №556, OWNER-2).
+    // B8 (PROMPT №746): both phrases now live in errorMessages.ts.
     if (e instanceof ApiResponseError && e.code === 'direction_not_confirmed') {
-      toast.error('Это направление ещё не подтверждено в вашем профиле')
+      toast.error(errorMessage('direction_not_confirmed'))
     } else if (e instanceof ApiResponseError && e.code === 'style_not_confirmed') {
-      toast.error('Этот вид практики ещё не подтверждён в вашем профиле')
+      toast.error(errorMessage('style_not_confirmed'))
     } else {
       toast.error(extractApiError(e, 'Ошибка сохранения'))
     }

@@ -247,14 +247,16 @@ describe('AdminMethodRequestsView', () => {
       expect(toastError).toHaveBeenCalledWith('Ошибка загрузки заявок')
     })
 
-    it('failure (ApiResponseError): the toast carries the real backend detail', async () => {
+    it('failure (ApiResponseError): the toast carries the generic fallback (unmapped code)', async () => {
+      // B8 (PROMPT №747): 'server_error' is not a real backend code --
+      // unmapped, lands on the call site's own fallback (.vue:204).
       vi.mocked(adminApi.getMethodChangeRequests).mockRejectedValue(
         new ApiResponseError(500, 'Сервер недоступен', 'server_error'),
       )
       mount()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Сервер недоступен')
+      expect(toastError).toHaveBeenCalledWith('Ошибка загрузки заявок')
     })
 
     it('"Повторить" calls loadInitial and recovers from error to content', async () => {
@@ -438,7 +440,9 @@ describe('AdminMethodRequestsView', () => {
       expect(host?.querySelector('.amr__count')?.textContent).toBe('1')
     })
 
-    it('failure: toasts the real detail and the row STAYS', async () => {
+    it('failure: toasts the generic fallback (unmapped code) and the row STAYS', async () => {
+      // B8 (PROMPT №747): 'already_decided' is not a real backend code --
+      // unmapped, lands on the call site's own fallback (.vue:254).
       vi.mocked(adminApi.approveMethodChange).mockRejectedValue(
         new ApiResponseError(409, 'Заявка уже обработана', 'already_decided'),
       )
@@ -448,7 +452,7 @@ describe('AdminMethodRequestsView', () => {
       btnByText(cardByName('Мастер Совпавший'), 'Одобрить')?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Заявка уже обработана')
+      expect(toastError).toHaveBeenCalledWith('Ошибка при одобрении')
       expect(cardByName('Мастер Совпавший')).toBeDefined()
       expect(cards()).toHaveLength(2)
     })
@@ -604,7 +608,9 @@ describe('AdminMethodRequestsView', () => {
       expect(() => cardByName('Мастер Совпавший')).toThrow()
     })
 
-    it('failure: toasts the real detail and the row stays', async () => {
+    it('failure: toasts the generic fallback (unmapped code) and the row stays', async () => {
+      // B8 (PROMPT №747): 'already_decided' is not a real backend code --
+      // unmapped, lands on the call site's own fallback (.vue:302).
       vi.mocked(adminApi.rejectMethodChange).mockRejectedValue(
         new ApiResponseError(409, 'Заявка уже обработана', 'already_decided'),
       )
@@ -618,7 +624,7 @@ describe('AdminMethodRequestsView', () => {
       btnByText(sheetOverlay()!, 'Отклонить заявку')?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Заявка уже обработана')
+      expect(toastError).toHaveBeenCalledWith('Ошибка при отклонении')
       expect(cardByName('Мастер Совпавший')).toBeDefined()
     })
 

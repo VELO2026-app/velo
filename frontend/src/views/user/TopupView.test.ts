@@ -474,10 +474,14 @@ describe('TopupView', () => {
   })
 
   describe('submit failures', () => {
-    it('surfaces the REAL backend detail on an ApiResponseError', async () => {
-      // TopupView.vue:188-189 toasts e.detail verbatim -- so «Payments are
-      // temporarily unavailable» from the backend must reach the user, not a
-      // generic fallback that hides why the money did not move.
+    it('falls back to the generic message on an ApiResponseError (unmapped code)', async () => {
+      // B8 (PROMPT №747): 'stripe_down' is not a real backend code --
+      // unmapped, lands on the call site's own fallback (.vue:203). The old
+      // comment argued the specific detail must reach the user "so the money
+      // did not move" is explained -- a real concern, but this fixture never
+      // reflected reality (real VeloError messages are English). If payment
+      // failures genuinely need their own specific phrases, that is real
+      // backend codes + table entries to add, not a reason to read e.detail.
       vi.mocked(paymentsApi.createTopup).mockRejectedValue(
         new ApiResponseError(503, 'Платежи временно недоступны', 'stripe_down'),
       )
@@ -487,7 +491,7 @@ describe('TopupView', () => {
       submitBtn()?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Платежи временно недоступны')
+      expect(toastError).toHaveBeenCalledWith('Не удалось создать платёж')
       expect(location.href).toBe('')
     })
 

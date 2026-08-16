@@ -189,12 +189,14 @@ describe('AdminReportsView', () => {
   describe('ladder + recovery', () => {
     it('shows the loading spinner while the initial fetch is in flight, then content', async () => {
       let resolveList!: (v: ReturnType<typeof paginated>) => void
-      vi.mocked(adminApi.getReports).mockReset().mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolveList = resolve
-          }),
-      )
+      vi.mocked(adminApi.getReports)
+        .mockReset()
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveList = resolve
+            }),
+        )
       mount()
       await nextTick()
 
@@ -225,14 +227,16 @@ describe('AdminReportsView', () => {
       expect(toastError).toHaveBeenCalledWith('Ошибка загрузки обращений')
     })
 
-    it('failure (ApiResponseError): the toast carries the real backend detail', async () => {
+    it('failure (ApiResponseError): the toast carries the generic fallback (unmapped code)', async () => {
+      // B8 (PROMPT №747): 'server_error' is not a real backend code --
+      // unmapped, lands on the call site's own fallback (.vue:194).
       vi.mocked(adminApi.getReports).mockRejectedValue(
         new ApiResponseError(500, 'Сервер недоступен', 'server_error'),
       )
       mount()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Сервер недоступен')
+      expect(toastError).toHaveBeenCalledWith('Ошибка загрузки обращений')
     })
 
     it('"Повторить" calls loadInitial and recovers from error to content', async () => {
@@ -267,14 +271,16 @@ describe('AdminReportsView', () => {
       let resolveA!: (v: ReturnType<typeof paginated>) => void
       let resolveB!: (v: ReturnType<typeof paginated>) => void
       let callCount = 0
-      vi.mocked(adminApi.getReports).mockReset().mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            callCount += 1
-            if (callCount === 1) resolveA = resolve
-            else resolveB = resolve
-          }),
-      )
+      vi.mocked(adminApi.getReports)
+        .mockReset()
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              callCount += 1
+              if (callCount === 1) resolveA = resolve
+              else resolveB = resolve
+            }),
+        )
 
       // Filter A: "Открытая" only -> apiStatus 'pending' (generation 2, in flight).
       await applyStatusFilter('Открытая')

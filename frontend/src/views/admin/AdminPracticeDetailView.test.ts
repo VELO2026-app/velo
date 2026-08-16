@@ -247,14 +247,16 @@ describe('AdminPracticeDetailView', () => {
       expect(text()).not.toContain('Практика недоступна') // the OTHER rung -- not this one
     })
 
-    it('failure (ApiResponseError): the error rung shows the real backend detail', async () => {
+    it('failure (ApiResponseError): the error rung shows the mapped table phrase for a real code', async () => {
+      // B8 (PROMPT №747): 'not_found' IS a real backend code -- extractApiError
+      // now returns its table phrase regardless of the mocked detail text.
       vi.mocked(adminApi.getAdminPracticeDetail).mockRejectedValue(
         new ApiResponseError(404, 'Практика не найдена', 'not_found'),
       )
       mount('p_missing')
       await flush()
 
-      expect(errorDesc()).toBe('Практика не найдена')
+      expect(errorDesc()).toBe('Запрошенный ресурс не найден')
     })
 
     it('«Повторить» recovers to content after a failure', async () => {

@@ -340,12 +340,14 @@ describe('DetailView', () => {
       expect(text()).not.toContain('Не удалось загрузить запись')
     })
 
-    it('a failed fetch shows the rung AND surfaces the REAL backend message', async () => {
+    it('a failed fetch shows the rung AND surfaces the mapped table phrase for a real code', async () => {
       // SC-05, and this screen is the GOOD half of it: «Не удалось загрузить
       // запись» is the screen's own constant (.vue:44) but the description is
-      // bound to `:description="loadError"` (.vue:45), so the backend's words
-      // really do reach the DOM. Both halves asserted so neither is read as
-      // proof of the other.
+      // bound to `:description="loadError"` (.vue:45). Both halves asserted
+      // so neither is read as proof of the other.
+      // B8 (PROMPT №747): 'not_found' IS a real backend code --
+      // extractApiError now returns its table phrase regardless of the
+      // mocked detail text.
       vi.mocked(diaryApi.getCheckin).mockRejectedValue(
         new ApiResponseError(404, 'Check-in удалён или не ваш', 'not_found'),
       )
@@ -356,7 +358,7 @@ describe('DetailView', () => {
         'Не удалось загрузить запись',
       )
       expect(bodyEl().querySelector('.v-empty__desc')?.textContent).toBe(
-        'Check-in удалён или не ваш',
+        'Запрошенный ресурс не найден',
       )
       expect(bodyEl().querySelector('.detail__card')).toBeNull()
       expect(bodyEl().querySelector('.detail__pill')).toBeNull()
@@ -518,8 +520,8 @@ describe('DetailView', () => {
     })
   })
 
-  describe('the date line is the READER\'s clock', () => {
-    it('renders created_at in the user\'s timezone -- not the runner\'s, not UTC', async () => {
+  describe("the date line is the READER's clock", () => {
+    it("renders created_at in the user's timezone -- not the runner's, not UTC", async () => {
       // dateLine = formatFeedDateTime(created_at, tz) where tz is
       // `authStore.user?.timezone ?? 'UTC'` (.vue:113,163-165). Pinned three ways
       // apart (see the banner): 22:30Z is 01:30 on the 17th in MOSCOW (right),
@@ -533,9 +535,7 @@ describe('DetailView', () => {
       mount()
       await flush()
 
-      expect(bodyEl().querySelector('.detail__date')?.textContent).toBe(
-        '17 июля • Пятница • 01:30',
-      )
+      expect(bodyEl().querySelector('.detail__date')?.textContent).toBe('17 июля • Пятница • 01:30')
       expect(text()).not.toContain('02:30') // the runner's zone
       expect(text()).not.toContain('22:30') // the UTC fallback
     })
@@ -550,12 +550,10 @@ describe('DetailView', () => {
       mount()
       await flush()
 
-      expect(bodyEl().querySelector('.detail__date')?.textContent).toBe(
-        '16 июля • Четверг • 10:00',
-      )
+      expect(bodyEl().querySelector('.detail__date')?.textContent).toBe('16 июля • Четверг • 10:00')
     })
 
-    it('a feedback\'s date line comes off ITS created_at, through the same clock', async () => {
+    it("a feedback's date line comes off ITS created_at, through the same clock", async () => {
       // createdAt (.vue:162) coalesces checkin ?? feedback. The feedback half of
       // the branch must reach the same formatter with the same zone.
       routeParams.type = 'feedback'
@@ -566,14 +564,12 @@ describe('DetailView', () => {
       mount()
       await flush()
 
-      expect(bodyEl().querySelector('.detail__date')?.textContent).toBe(
-        '17 июля • Пятница • 01:30',
-      )
+      expect(bodyEl().querySelector('.detail__date')?.textContent).toBe('17 июля • Пятница • 01:30')
     })
   })
 
   describe('the comment', () => {
-    it('renders the row\'s full comment', async () => {
+    it("renders the row's full comment", async () => {
       vi.mocked(diaryApi.getCheckin).mockResolvedValue(
         checkin({ comment: 'Проснулся до будильника и это было хорошо.' }),
       )
@@ -598,7 +594,7 @@ describe('DetailView', () => {
       expect(bodyEl().querySelector('.detail__content')).toBeNull()
     })
 
-    it('a feedback\'s null comment takes the same fallback -- the coalesce does not leak the other kind', async () => {
+    it("a feedback's null comment takes the same fallback -- the coalesce does not leak the other kind", async () => {
       // comment = `checkin?.comment ?? feedback?.comment ?? null` (.vue:160). On
       // the feedback branch `checkin` is null, so the chain must fall THROUGH to
       // feedback rather than short-circuit. Asserted on the null case because
@@ -614,7 +610,7 @@ describe('DetailView', () => {
   })
 
   describe('the linked practice header', () => {
-    it('fetches THAT practice by the row\'s practice_id and renders it above the pill', async () => {
+    it("fetches THAT practice by the row's practice_id and renders it above the pill", async () => {
       // The id must come from the ROW's practice_id (.vue:198,202,206) -- fetching
       // anything else would head a private entry with a stranger's class.
       vi.mocked(diaryApi.getCheckin).mockResolvedValue(checkin({ practice_id: 'p7' }))
@@ -634,7 +630,7 @@ describe('DetailView', () => {
       )
     })
 
-    it('the practice time is shown in the READER\'s zone, not the practice\'s own', async () => {
+    it("the practice time is shown in the READER's zone, not the practice's own", async () => {
       // practiceTime = formatTime(scheduled_at, tz) where tz is the USER's
       // (.vue:169-171) -- deliberately NOT practice.timezone, which is what
       // EditPracticeView uses (a master edits in the practice's zone; a reader
@@ -730,9 +726,7 @@ describe('DetailView', () => {
       expect(bodyEl().querySelector('.detail__context')?.textContent).toBe(
         'Перед практикой: Утренняя йога с Мастером',
       )
-      expect(bodyEl().querySelector('.practice-list-card__master-name')?.textContent).toBe(
-        'Мастер',
-      )
+      expect(bodyEl().querySelector('.practice-list-card__master-name')?.textContent).toBe('Мастер')
       expect(text()).not.toContain('null')
     })
 

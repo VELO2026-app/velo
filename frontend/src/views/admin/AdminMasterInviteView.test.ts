@@ -207,7 +207,12 @@ describe('AdminMasterInviteView', () => {
       )
     })
 
-    it('failure (ApiResponseError, unrecognized code): falls back to the real backend detail', async () => {
+    it('failure (ApiResponseError, internal_error): returns the mapped table phrase', async () => {
+      // B8 (PROMPT №747): 'internal_error' IS a real backend code (VeloError
+      // base default) -- extractApiError now returns its table phrase
+      // regardless of the mocked detail text. This test's title used to
+      // call the code "unrecognized" -- true before №746, no longer true now
+      // that all 24 genuinely-raised codes have a table entry.
       vi.mocked(adminApi.inviteMaster).mockRejectedValue(
         new ApiResponseError(500, 'Что-то пошло не так', 'internal_error'),
       )
@@ -217,7 +222,7 @@ describe('AdminMasterInviteView', () => {
       createBtn().click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Что-то пошло не так')
+      expect(toastError).toHaveBeenCalledWith('Внутренняя ошибка сервера. Попробуйте ещё раз')
     })
 
     it('re-generating replaces the result card in place with a NEW link', async () => {

@@ -403,17 +403,20 @@ describe('EditPracticeView', () => {
       expect(titleField()?.value).toBe('Утренняя практика')
     })
 
-    it('a failed fetch surfaces the REAL backend detail and offers no form', async () => {
+    it('a failed fetch shows the mapped table phrase for a real code, and offers no form', async () => {
       // The empty state's «Практика не найдена» is the screen's OWN constant
       // (:58) -- the backend's message reaches the master only through the toast
-      // (:477). Asserting both, and claiming neither is the other (SC-05).
+      // (:611). Asserting both, and claiming neither is the other (SC-05).
+      // B8 (PROMPT №747): 'not_found' IS a real backend code --
+      // extractApiError now returns its table phrase regardless of the
+      // mocked detail text.
       vi.mocked(practicesApi.getPractice).mockRejectedValue(
         new ApiResponseError(404, 'Практика удалена', 'not_found'),
       )
       mount()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Практика удалена')
+      expect(toastError).toHaveBeenCalledWith('Запрошенный ресурс не найден')
       expect(text()).toContain('Практика не найдена')
       expect(titleField()).toBeNull()
       expect(button('Сохранить')).toBeUndefined()
@@ -754,10 +757,12 @@ describe('EditPracticeView', () => {
       expect(push).toHaveBeenCalledWith({ name: 'master-practices' })
     })
 
-    it('a FAILED cancel surfaces the real reason and never claims the refunds ran', async () => {
+    it('a FAILED cancel falls back to the generic message (unmapped code) and never claims the refunds ran', async () => {
       // Telling a master «возвраты выполнены» when the POST failed is the worst
       // outcome on this screen: they walk away believing their students were
       // paid back.
+      // B8 (PROMPT №747): 'already_live' is not a real backend code --
+      // unmapped, lands on the call site's own fallback (.vue:822).
       vi.mocked(practicesApi.cancelPractice).mockRejectedValue(
         new ApiResponseError(409, 'Практика уже началась', 'already_live'),
       )
@@ -769,7 +774,7 @@ describe('EditPracticeView', () => {
       cancelModalConfirm()?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Практика уже началась')
+      expect(toastError).toHaveBeenCalledWith('Не удалось отменить')
       expect(toastSuccess).not.toHaveBeenCalled()
       expect(push).not.toHaveBeenCalled()
       expect(refreshMyPractices).not.toHaveBeenCalled()
@@ -869,7 +874,9 @@ describe('EditPracticeView', () => {
       expect(push).toHaveBeenCalledWith({ name: 'master-practices' })
     })
 
-    it('a FAILED delete surfaces the real reason and never claims it is gone', async () => {
+    it('a FAILED delete falls back to the generic message (unmapped code) and never claims it is gone', async () => {
+      // B8 (PROMPT №747): 'not_draft' is not a real backend code --
+      // unmapped, lands on the call site's own fallback (.vue:848).
       vi.mocked(practicesApi.deletePractice).mockRejectedValue(
         new ApiResponseError(409, 'Черновик уже опубликован', 'not_draft'),
       )
@@ -881,7 +888,7 @@ describe('EditPracticeView', () => {
       confirmDialogConfirm('Удалить')?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Черновик уже опубликован')
+      expect(toastError).toHaveBeenCalledWith('Не удалось удалить')
       expect(toastSuccess).not.toHaveBeenCalled()
       expect(push).not.toHaveBeenCalled()
     })
@@ -941,7 +948,9 @@ describe('EditPracticeView', () => {
       expect(push).toHaveBeenCalledWith({ name: 'master-practices' })
     })
 
-    it('a FAILED publish surfaces the real reason and stays put', async () => {
+    it('a FAILED publish falls back to the generic message (unmapped code) and stays put', async () => {
+      // B8 (PROMPT №747): 'past_date' is not a real backend code -- unmapped,
+      // lands on the call site's own fallback (.vue:798).
       vi.mocked(practicesApi.updatePractice).mockRejectedValue(
         new ApiResponseError(422, 'Дата практики в прошлом', 'past_date'),
       )
@@ -951,7 +960,7 @@ describe('EditPracticeView', () => {
       button('Опубликовать практику')?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Дата практики в прошлом')
+      expect(toastError).toHaveBeenCalledWith('Не удалось опубликовать')
       expect(toastSuccess).not.toHaveBeenCalled()
       expect(push).not.toHaveBeenCalled()
     })
@@ -1127,7 +1136,11 @@ describe('EditPracticeView', () => {
       expect(push).not.toHaveBeenCalled()
     })
 
-    it('a FAILED save surfaces the real reason and does NOT claim it saved', async () => {
+    it('a FAILED save falls back to the generic message (unmapped code) and does NOT claim it saved', async () => {
+      // B8 (PROMPT №747): 'has_bookings' is not a real backend code --
+      // unmapped, lands on the shared save catch's own fallback (.vue:779,
+      // the same catch direction_not_confirmed/style_not_confirmed fall
+      // through from).
       vi.mocked(practicesApi.updatePractice).mockRejectedValue(
         new ApiResponseError(422, 'Нельзя перенести практику с бронированиями', 'has_bookings'),
       )
@@ -1137,7 +1150,7 @@ describe('EditPracticeView', () => {
       button('Сохранить')?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Нельзя перенести практику с бронированиями')
+      expect(toastError).toHaveBeenCalledWith('Ошибка сохранения')
       expect(toastSuccess).not.toHaveBeenCalled()
     })
 

@@ -958,11 +958,12 @@ describe('DiaryFeedView', () => {
       expect(host?.querySelector('.diary-feed__undo')).toBeNull()
     })
 
-    it('a failed restore surfaces the REAL backend message as a toast', async () => {
-      // Contrast with the feed path above: THIS failure is not silent. The store
-      // returns { ok:false, error } and .vue:524 toasts it. ApiResponseError is
-      // the real class, so extractApiError returns e.detail rather than the
-      // fallback -- proving the backend's own words reach the user.
+    it('a failed restore surfaces the mapped table phrase for a real code as a toast', async () => {
+      // Contrast with the feed path above: THIS failure is not silent. The
+      // store returns { ok:false, error } and .vue:524 toasts it.
+      // B8 (PROMPT №747): 'conflict' IS a real backend code --
+      // extractApiError now returns its table phrase regardless of the
+      // mocked detail text.
       routeQuery.deleted = 'entry_7'
       vi.mocked(diaryApi.listDiaryFeed).mockResolvedValue(page([NOTE]))
       vi.mocked(diaryApi.restoreDiaryEntry).mockRejectedValue(
@@ -974,7 +975,9 @@ describe('DiaryFeedView', () => {
       buttonIn(host!, 'Отменить')?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Запись уже восстановлена')
+      expect(toastError).toHaveBeenCalledWith(
+        'Конфликт с текущим состоянием — попробуйте обновить страницу',
+      )
       expect(host?.querySelector('.diary-feed__undo')).toBeNull()
     })
 

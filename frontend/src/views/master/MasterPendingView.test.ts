@@ -93,8 +93,17 @@ import { createApp, nextTick, reactive, type App } from 'vue'
 import MasterPendingView from '@/views/master/MasterPendingView.vue'
 import * as mastersApi from '@/api/masters'
 import { ApiResponseError } from '@/api/client'
-import { MASTER_APPLIED_KEY, masterApprovedSeenKey, masterRejectionSeenKey } from '@/utils/constants'
-import type { MasterApplicationInfo, MasterProfileResponse, UserResponse, UserRole } from '@/api/types'
+import {
+  MASTER_APPLIED_KEY,
+  masterApprovedSeenKey,
+  masterRejectionSeenKey,
+} from '@/utils/constants'
+import type {
+  MasterApplicationInfo,
+  MasterProfileResponse,
+  UserResponse,
+  UserRole,
+} from '@/api/types'
 
 vi.mock('@/api/masters')
 
@@ -460,7 +469,7 @@ describe('MasterPendingView', () => {
       expect(host?.querySelector('.pending-view__reason-label')?.textContent).toBe('Причина:')
     })
 
-    it('the profile\'s reason wins over the /users/me copy', async () => {
+    it("the profile's reason wins over the /users/me copy", async () => {
       // `profile?.rejection_reason ?? masterApplication?.rejection_reason` (:169).
       // Both can be populated; only one is the fresher read.
       authState.role = 'master'
@@ -709,10 +718,12 @@ describe('MasterPendingView', () => {
       await flush()
     })
 
-    it('a FAILED withdraw surfaces the real 409 and keeps the application alive', async () => {
+    it('a FAILED withdraw shows the mapped table phrase for a real code and keeps the application alive', async () => {
       // The race the screen was written for (:235-238): an admin decided while
       // the dialog was open. Claiming success here would tell an applicant they
       // withdrew an application that is now verified.
+      // B8 (PROMPT №747): 'conflict' IS a real backend code -- extractApiError
+      // now returns its table phrase regardless of the mocked detail text.
       vi.mocked(mastersApi.withdrawMasterApplication).mockRejectedValue(
         new ApiResponseError(409, 'Only a pending application can be withdrawn', 'conflict'),
       )
@@ -723,7 +734,9 @@ describe('MasterPendingView', () => {
       dialogButton('Отозвать')?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Only a pending application can be withdrawn')
+      expect(toastError).toHaveBeenCalledWith(
+        'Конфликт с текущим состоянием — попробуйте обновить страницу',
+      )
       expect(toastSuccess).not.toHaveBeenCalled()
       expect(replace).not.toHaveBeenCalled()
       // NOT dropped: the application still exists, and masterPendingGuard needs

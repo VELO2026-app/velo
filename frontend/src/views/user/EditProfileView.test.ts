@@ -430,7 +430,11 @@ describe('EditProfileView', () => {
       expect(toastInfo).toHaveBeenCalledWith('Нет изменений')
     })
 
-    it('save error: ApiResponseError surfaces the REAL backend detail, does not navigate', async () => {
+    it('save error: ApiResponseError shows the mapped table phrase for validation_error, does not navigate', async () => {
+      // B8 (PROMPT №747): 'validation_error' IS a real code -- assigned by
+      // the frontend itself for any raw Pydantic 422 (client.ts:195), added
+      // to the table as part of this repair round. extractApiError now
+      // returns its phrase regardless of the mocked detail text.
       vi.mocked(usersApi.updateMe).mockRejectedValue(
         new ApiResponseError(422, 'Имя слишком длинное', 'validation_error'),
       )
@@ -442,7 +446,7 @@ describe('EditProfileView', () => {
       saveBtn().click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Имя слишком длинное')
+      expect(toastError).toHaveBeenCalledWith('Проверьте введённые данные')
       expect(back).not.toHaveBeenCalled()
     })
 
@@ -593,7 +597,9 @@ describe('EditProfileView', () => {
       expect(mastersApi.getMyMasterProfile).toHaveBeenCalledTimes(2)
     })
 
-    it('submit error: ApiResponseError surfaces the real detail; generic error falls back (SC-05)', async () => {
+    it('submit error: ApiResponseError falls back to the generic message (unmapped code); generic error falls back too (SC-05)', async () => {
+      // B8 (PROMPT №747): 'request_pending' is not a real backend code --
+      // unmapped, lands on the call site's own fallback (.vue:297).
       vi.mocked(mastersApi.getMyMasterProfile).mockResolvedValue(
         masterProfile({ methods: ['Медитация'], method_change_request: null }),
       )
@@ -609,7 +615,7 @@ describe('EditProfileView', () => {
       methodsSubmitBtn()?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Запрос уже отправлен')
+      expect(toastError).toHaveBeenCalledWith('Не удалось отправить запрос')
     })
   })
 

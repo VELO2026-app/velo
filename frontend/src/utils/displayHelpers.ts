@@ -248,11 +248,15 @@ export const FEED_KIND_TITLE: Record<DiaryEventKind, string> = {
 
 /**
  * Outcome badge label for a practice_outcome card.
- * attended -> "Done" (teal), no_show -> "Не состоялась".
+ * attended -> "Done" (teal), no_show -> "Вы не пришли".
+ *
+ * B30 (PROMPT №747): was 'Не состоялась' -- false, the practice DID happen,
+ * the person missed it. Feeds DiaryFeedCard.vue and DiaryThreadCard.vue via
+ * useDiaryCardModel's outcomeLabel, both user-facing (DetailView.vue).
  */
 export const OUTCOME_LABEL: Record<string, string> = {
   attended: 'Done',
-  no_show: 'Не состоялась',
+  no_show: 'Вы не пришли',
 }
 
 // ---------------------------------------------------------------------------

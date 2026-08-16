@@ -231,9 +231,10 @@ async function onPurchase(): Promise<void> {
     if (e instanceof ApiResponseError) {
       // F-03: switch on machine-readable code instead of string-matching message.
       // Backend sets unique codes via BadRequestError("...", code="...").
-      if (e.code === 'insufficient_balance') {
-        toast.error('Недостаточно средств на балансе')
-      } else if (e.code === 'practice_full') {
+      // insufficient_balance no longer needs its own branch (B8, PROMPT
+      // №746): its phrase now lives in errorMessages.ts and the generic
+      // extractApiError() branch below finds it there.
+      if (e.code === 'practice_full') {
         // Места кончились в гонке — закрываем попап и поднимаем полноэкранный
         // стейт «Места закончились» (вместо тоста). Решение оператора 2026-06-04.
         resetState()
@@ -242,7 +243,11 @@ async function onPurchase(): Promise<void> {
       } else if (e.status === 409) {
         toast.error('Вы уже записаны на эту практику')
       } else {
-        toast.error(e.detail)
+        // B8 (PROMPT №746): was toast.error(e.detail) -- the backend's raw,
+        // often-English message. extractApiError() now looks e.code up in
+        // errorMessages.ts first; an unmapped code falls back to this
+        // Russian sentence, never to e.detail.
+        toast.error(extractApiError(e, 'Не удалось оформить бронирование'))
       }
     } else {
       toast.error('Ошибка при бронировании')

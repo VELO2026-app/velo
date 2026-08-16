@@ -335,7 +335,9 @@ describe('AdminCatalogView', () => {
       expect(addDirectionInput().value).toBe('') // input cleared
     })
 
-    it('failure (ApiResponseError): toasts the real detail', async () => {
+    it('failure (ApiResponseError): toasts the generic fallback (unmapped code)', async () => {
+      // B8 (PROMPT №747): 'duplicate' is not a real backend code -- unmapped,
+      // lands on the call site's own fallback (.vue:234).
       vi.mocked(taxonomyApi.createTaxonomyDirection).mockRejectedValue(
         new ApiResponseError(409, 'Такое направление уже есть', 'duplicate'),
       )
@@ -347,7 +349,7 @@ describe('AdminCatalogView', () => {
       addDirectionBtn()?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Такое направление уже есть')
+      expect(toastError).toHaveBeenCalledWith('Не удалось добавить направление')
     })
 
     it("failure (non-ApiResponseError): falls back to addDirection's OWN fallback string", async () => {
@@ -450,7 +452,9 @@ describe('AdminCatalogView', () => {
       expect(styleInput(dirCards()[2]!).value).toBe('Стиль C')
     })
 
-    it('failure (ApiResponseError): toasts the real detail', async () => {
+    it('failure (ApiResponseError): toasts the generic fallback (unmapped code)', async () => {
+      // B8 (PROMPT №747): 'duplicate' is not a real backend code -- unmapped,
+      // lands on the call site's own fallback (.vue:254).
       vi.mocked(taxonomyApi.createTaxonomyStyle).mockRejectedValue(
         new ApiResponseError(409, 'Такой вид уже есть', 'duplicate'),
       )
@@ -463,7 +467,7 @@ describe('AdminCatalogView', () => {
       styleAddBtn(cardA)?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Такой вид уже есть')
+      expect(toastError).toHaveBeenCalledWith('Не удалось добавить вид')
     })
 
     it("failure (non-ApiResponseError): falls back to addStyle's OWN fallback string", async () => {
@@ -533,7 +537,9 @@ describe('AdminCatalogView', () => {
       expect(taxonomyApi.getFullTaxonomy).toHaveBeenCalledTimes(2)
     })
 
-    it('failure (ApiResponseError): toasts the real detail', async () => {
+    it('failure (ApiResponseError): toasts the generic fallback (unmapped code)', async () => {
+      // B8 (PROMPT №747): 'duplicate' is not a real backend code -- unmapped,
+      // lands on the call site's own fallback (.vue:285).
       vi.mocked(taxonomyApi.updateTaxonomyDirection).mockRejectedValue(
         new ApiResponseError(409, 'Такая метка уже занята', 'duplicate'),
       )
@@ -548,7 +554,7 @@ describe('AdminCatalogView', () => {
       iconBtn(cardA, 'Сохранить')?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Такая метка уже занята')
+      expect(toastError).toHaveBeenCalledWith('Не удалось сохранить')
     })
 
     it("failure (non-ApiResponseError): falls back to saveDirectionLabel's OWN fallback string", async () => {

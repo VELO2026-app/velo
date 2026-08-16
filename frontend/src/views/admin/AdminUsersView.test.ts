@@ -271,14 +271,16 @@ describe('AdminUsersView', () => {
       expect(toastError).toHaveBeenCalledWith('Ошибка загрузки пользователей')
     })
 
-    it('failure (ApiResponseError): the toast carries the real backend detail', async () => {
+    it('failure (ApiResponseError): the toast carries the generic fallback (unmapped code)', async () => {
+      // B8 (PROMPT №747): 'server_error' is not a real backend code --
+      // unmapped, lands on the call site's own fallback (.vue:167).
       vi.mocked(adminApi.getUsersList).mockRejectedValue(
         new ApiResponseError(500, 'Сервер недоступен', 'server_error'),
       )
       mount()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Сервер недоступен')
+      expect(toastError).toHaveBeenCalledWith('Ошибка загрузки пользователей')
     })
 
     it('"Повторить" calls load(true) and recovers from error to content', async () => {
@@ -340,7 +342,10 @@ describe('AdminUsersView', () => {
       expect(adminApi.getUsersList).toHaveBeenCalledTimes(2)
     })
 
-    it('failure (ApiResponseError): toasts the real detail, dialog STAYS OPEN (deliberate, not fixed here)', async () => {
+    it('failure (ApiResponseError): toasts the mapped table phrase for a real code, dialog STAYS OPEN (deliberate, not fixed here)', async () => {
+      // B8 (PROMPT №747): 'already_master' IS a real backend code --
+      // extractApiError now returns its table phrase regardless of the
+      // mocked detail text.
       vi.mocked(adminApi.makeMaster).mockRejectedValue(
         new ApiResponseError(409, 'Пользователь уже мастер', 'already_master'),
       )
@@ -352,7 +357,7 @@ describe('AdminUsersView', () => {
       modalButtonByText('Назначить')?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Пользователь уже мастер')
+      expect(toastError).toHaveBeenCalledWith('Вы уже мастер')
       // .vue:209-211 never resets confirm.open on the catch path -- asserted
       // as the real, intentional behaviour, not an oversight.
       expect(modalIsOpen()).toBe(true)

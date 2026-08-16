@@ -342,12 +342,15 @@ describe('EntryView', () => {
       expect(bodyEl().querySelector('.entry__content')?.textContent).toBe('Из сети')
     })
 
-    it('a failed fetch shows the rung AND surfaces the REAL backend message', async () => {
+    it('a failed fetch shows the rung AND surfaces the mapped table phrase for a real code', async () => {
       // SC-05, and this screen is the GOOD half of it: «Не удалось загрузить
       // запись» is the screen's own constant (.vue:76) but the description is
-      // bound to `:description="loadError"` (.vue:77), so the backend's words
-      // really do reach the DOM -- unlike DiaryFeedView, which hardcodes both.
-      // Both halves asserted so neither is read as proof of the other.
+      // bound to `:description="loadError"` (.vue:77) -- unlike DiaryFeedView,
+      // which hardcodes both. Both halves asserted so neither is read as
+      // proof of the other.
+      // B8 (PROMPT №747): 'not_found' IS a real backend code --
+      // extractApiError now returns its table phrase regardless of the
+      // mocked detail text.
       vi.mocked(diaryApi.getDiaryEntry).mockRejectedValue(
         new ApiResponseError(404, 'Запись удалена или не ваша', 'not_found'),
       )
@@ -357,7 +360,9 @@ describe('EntryView', () => {
       expect(bodyEl().querySelector('.v-empty__title')?.textContent).toBe(
         'Не удалось загрузить запись',
       )
-      expect(bodyEl().querySelector('.v-empty__desc')?.textContent).toBe('Запись удалена или не ваша')
+      expect(bodyEl().querySelector('.v-empty__desc')?.textContent).toBe(
+        'Запрошенный ресурс не найден',
+      )
       expect(bodyEl().querySelector('.entry__card')).toBeNull()
     })
 
@@ -411,8 +416,8 @@ describe('EntryView', () => {
     })
   })
 
-  describe('the date line is the READER\'s clock', () => {
-    it('renders created_at in the user\'s timezone, not the runner\'s', async () => {
+  describe("the date line is the READER's clock", () => {
+    it("renders created_at in the user's timezone, not the runner's", async () => {
       // entryDate = formatFeedDateTime(created_at, authStore.user.timezone)
       // (.vue:214-216). 22:30Z is 01:30 the NEXT DAY in Moscow -- so a screen
       // that fell back to UTC (or to the runner's zone) would show the user a
@@ -424,9 +429,7 @@ describe('EntryView', () => {
       mount()
       await flush()
 
-      expect(bodyEl().querySelector('.entry__date')?.textContent).toBe(
-        '17 июля • Пятница • 01:30',
-      )
+      expect(bodyEl().querySelector('.entry__date')?.textContent).toBe('17 июля • Пятница • 01:30')
     })
 
     it('falls back to UTC when the user has no timezone at all', async () => {
@@ -439,9 +442,7 @@ describe('EntryView', () => {
       mount()
       await flush()
 
-      expect(bodyEl().querySelector('.entry__date')?.textContent).toBe(
-        '16 июля • Четверг • 10:00',
-      )
+      expect(bodyEl().querySelector('.entry__date')?.textContent).toBe('16 июля • Четверг • 10:00')
     })
   })
 
@@ -472,12 +473,16 @@ describe('EntryView', () => {
       await flush()
 
       expect(practicesApi.getPractice).toHaveBeenCalledWith('p7')
-      expect(bodyEl().querySelector('.practice-list-card__title')?.textContent).toBe('Утренняя йога')
+      expect(bodyEl().querySelector('.practice-list-card__title')?.textContent).toBe(
+        'Утренняя йога',
+      )
       expect(bodyEl().querySelector('.practice-list-card__master-name')?.textContent).toBe('Анна')
-      expect(bodyEl().querySelector('.practice-list-card__dur')?.textContent?.trim()).toBe('1 ч 30 м')
+      expect(bodyEl().querySelector('.practice-list-card__dur')?.textContent?.trim()).toBe(
+        '1 ч 30 м',
+      )
     })
 
-    it('the practice time is shown in the READER\'s zone, not the practice\'s own', async () => {
+    it("the practice time is shown in the READER's zone, not the practice's own", async () => {
       // practiceTime = formatTime(scheduled_at, tz) where tz is the USER's
       // (.vue:198-200) -- deliberately NOT practice.timezone, which is what
       // EditPracticeView uses (a master edits in the practice's zone; a reader
@@ -666,7 +671,7 @@ describe('EntryView', () => {
       })
     })
 
-    it('on success it shows the SERVER\'s entry, not the text that was typed', async () => {
+    it("on success it shows the SERVER's entry, not the text that was typed", async () => {
       // updateEntry re-points selectedEntry at the RESPONSE (stores/diary.ts:301-303),
       // so the view rung re-renders from the server's record. If the screen echoed
       // the local ref instead, a backend that normalised or rejected part of the
@@ -689,9 +694,11 @@ describe('EntryView', () => {
       expect(bodyEl().querySelector('.entry__content')?.textContent).toBe('Нормализовано сервером')
     })
 
-    it('a FAILED save surfaces the real reason and KEEPS the user in the editor', async () => {
+    it('a FAILED save falls back to the generic message (unmapped code) and KEEPS the user in the editor', async () => {
       // .vue:274-277. Dropping back to view mode on a failure would show the user
       // the OLD text with no warning that their edit evaporated.
+      // B8 (PROMPT №747): 'too_long' is not a real backend code -- unmapped,
+      // lands on diaryStore.updateEntry's own fallback (stores/diary.ts:313).
       vi.mocked(diaryApi.updateDiaryEntry).mockRejectedValue(
         new ApiResponseError(422, 'Текст слишком длинный', 'too_long'),
       )
@@ -705,7 +712,7 @@ describe('EntryView', () => {
       button('Сохранить')?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Текст слишком длинный')
+      expect(toastError).toHaveBeenCalledWith('Не удалось обновить запись')
       expect(contentArea()?.value).toBe('Мой текст')
       expect(button('Сохранить')).toBeDefined()
     })
@@ -811,7 +818,7 @@ describe('EntryView', () => {
       expect(menuItem('Редактировать')?.classList.contains('v-menu-item--danger')).toBe(false)
     })
 
-    it('a successful delete hands the undo to the feed carrying THIS entry\'s id', async () => {
+    it("a successful delete hands the undo to the feed carrying THIS entry's id", async () => {
       // .vue:296. THE assertion of this file. The delete is soft
       // (api/diary.ts:239-244) and restoreDiaryEntry is its inverse -- but the only
       // way a user can ever reach that inverse is this query param, which
@@ -835,10 +842,12 @@ describe('EntryView', () => {
       expect(toastError).not.toHaveBeenCalled()
     })
 
-    it('a FAILED delete says why and NEVER navigates -- no undo bar for a delete that did not happen', async () => {
+    it('a FAILED delete shows the mapped table phrase for a real code and NEVER navigates -- no undo bar for a delete that did not happen', async () => {
       // .vue:290-293. Navigating on a failure would hand the feed a `deleted=` id,
       // which raises «Запись удалена / Отменить» over an entry that is still there
       // -- the screen would be lying, and the offered undo would restore nothing.
+      // B8 (PROMPT №747): 'conflict' IS a real backend code -- extractApiError
+      // now returns its table phrase regardless of the mocked detail text.
       vi.mocked(diaryApi.deleteDiaryEntry).mockRejectedValue(
         new ApiResponseError(409, 'Запись уже удалена', 'conflict'),
       )
@@ -850,7 +859,9 @@ describe('EntryView', () => {
       menuItem('Удалить')?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Запись уже удалена')
+      expect(toastError).toHaveBeenCalledWith(
+        'Конфликт с текущим состоянием — попробуйте обновить страницу',
+      )
       expect(replace).not.toHaveBeenCalled()
       expect(push).not.toHaveBeenCalled()
       // Still on the entry, still readable -- the failure cost the user nothing.

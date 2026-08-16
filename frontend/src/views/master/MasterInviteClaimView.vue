@@ -54,6 +54,7 @@ import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { claimMasterInvite } from '@/api/masters'
 import { ApiResponseError } from '@/api/client'
+import { errorMessage } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import VButton from '@/components/ui/VButton.vue'
 import VLoader from '@/components/ui/VLoader.vue'
@@ -82,11 +83,12 @@ async function claim(): Promise<void> {
     // token up and it's unknown/consumed) is the dead-link state. A network
     // blip, timeout, or any other unexpected error is transient -- offer a
     // retry instead of telling the user their one-time link is burned.
+    // B8 (PROMPT №746): description phrase now lives in errorMessages.ts.
+    // errorTitle stays here -- it is this screen's own framing, not a
+    // generic error phrase the table is meant to hold one of.
     if (e instanceof ApiResponseError && e.code === 'invite_invalid') {
       errorTitle.value = 'Ссылка недействительна'
-      errorDescription.value =
-        'Приглашение одноразовое: возможно, оно уже использовано или ссылка ' +
-        'повреждена. Запросите новую ссылку у администратора.'
+      errorDescription.value = errorMessage('invite_invalid')
     } else {
       transientError.value = true
     }

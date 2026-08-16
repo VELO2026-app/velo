@@ -442,7 +442,7 @@ import TimePickerSheet from '@/components/shared/TimePickerSheet.vue'
 import UseTemplateBlock from '@/components/shared/UseTemplateBlock.vue'
 import Banner from '@/components/shared/Banner.vue'
 import { ApiResponseError } from '@/api/client'
-import { extractApiError } from '@/composables/useApiError'
+import { errorMessage, extractApiError } from '@/composables/useApiError'
 import {
   DURATION_OPTIONS,
   AUDIENCE_OPTIONS,
@@ -1088,10 +1088,11 @@ async function submit(): Promise<void> {
     // raw, English, API-shaped message (e.detail) -- must never reach a human
     // directly. Same pattern as MasterInviteClaimView's invite_invalid: switch
     // on the machine-readable code, not the message text.
+    // B8 (PROMPT №746): both phrases now live in errorMessages.ts.
     if (e instanceof ApiResponseError && e.code === 'direction_not_confirmed') {
-      toast.error('Это направление ещё не подтверждено в вашем профиле')
+      toast.error(errorMessage('direction_not_confirmed'))
     } else if (e instanceof ApiResponseError && e.code === 'style_not_confirmed') {
-      toast.error('Этот вид практики ещё не подтверждён в вашем профиле')
+      toast.error(errorMessage('style_not_confirmed'))
     } else {
       toast.error(extractApiError(e, 'Не удалось создать практику'))
     }

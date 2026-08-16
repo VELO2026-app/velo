@@ -287,7 +287,10 @@ describe('LanguageTimezoneView', () => {
 
   // ===========================================================================
   describe('timezone: save error branching (ApiResponseError vs generic)', () => {
-    it('ApiResponseError WITH a detail surfaces the real backend message', async () => {
+    it('ApiResponseError with validation_error shows the mapped table phrase', async () => {
+      // B8 (PROMPT №747): 'validation_error' IS a real code -- assigned by
+      // the frontend itself for any raw Pydantic 422 (client.ts:195), added
+      // to the table as part of this repair round.
       vi.mocked(usersApi.updateMe).mockRejectedValue(
         new ApiResponseError(422, 'Некорректный часовой пояс', 'validation_error'),
       )
@@ -297,7 +300,7 @@ describe('LanguageTimezoneView', () => {
       cityRow('Берлин')?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Некорректный часовой пояс')
+      expect(toastError).toHaveBeenCalledWith('Проверьте введённые данные')
     })
 
     it('ApiResponseError with an EMPTY detail falls back to the generic message', async () => {

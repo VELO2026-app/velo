@@ -291,6 +291,7 @@ import { getMasterStats } from '@/api/masters'
 import { listNotifications } from '@/api/notifications'
 import { createZoomStartTicket, zoomStartRedirectUrl, retryZoomMeeting } from '@/api/practices'
 import { ApiResponseError } from '@/api/client'
+import { errorMessage } from '@/composables/useApiError'
 import type { PracticeResponse, MasterStatsResponse } from '@/api/types'
 
 const router = useRouter()
@@ -452,8 +453,9 @@ async function onZoom(p: PracticeResponse): Promise<void> {
     }
     platform.openLink(url)
   } catch (e) {
+    // B8 (PROMPT №746): phrase now lives in errorMessages.ts.
     if (e instanceof ApiResponseError && e.code === 'zoom_meeting_not_active') {
-      toast.error('Встреча Zoom для этой практики недоступна')
+      toast.error(errorMessage('zoom_meeting_not_active'))
     } else {
       toast.error('Не удалось начать встречу. Попробуйте ещё раз')
     }

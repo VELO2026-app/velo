@@ -415,9 +415,14 @@ describe('MasterFinanceView', () => {
       expect(mastersApi.getMyWithdrawals).toHaveBeenCalled()
     })
 
-    it('surfaces the REAL backend detail on failure and KEEPS the amount', async () => {
-      // «Insufficient funds» from the server is the only thing that tells the
-      // master why. Clearing the field on failure would also make them retype it.
+    it('falls back to the generic message on failure (unmapped code) and KEEPS the amount', async () => {
+      // Clearing the field on failure would make the master retype it --
+      // that part of the intent stands regardless of the message shown.
+      // B8 (PROMPT №747): 'no_funds' is not a real backend code (confirmed:
+      // grep backend/app for it returns nothing) -- unmapped, lands on the
+      // call site's own fallback (.vue:514). Its message text happens to
+      // read identically to the table's real 'insufficient_balance' phrase,
+      // but the CODE does not match, so the table is never consulted here.
       vi.mocked(mastersApi.createWithdrawal).mockRejectedValue(
         new ApiResponseError(409, 'Недостаточно средств на балансе', 'no_funds'),
       )
@@ -429,7 +434,7 @@ describe('MasterFinanceView', () => {
       button('Запросить вывод')?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Недостаточно средств на балансе')
+      expect(toastError).toHaveBeenCalledWith('Не удалось создать запрос')
       expect(toastSuccess).not.toHaveBeenCalled()
       expect(amountField()?.value).toBe('100')
     })
@@ -567,7 +572,9 @@ describe('MasterFinanceView', () => {
       expect(toastSuccess).toHaveBeenCalledWith('Реквизиты сохранены')
     })
 
-    it('surfaces the REAL backend detail when saving fails', async () => {
+    it('falls back to the generic message when saving fails (unmapped code)', async () => {
+      // B8 (PROMPT №747): 'bad_iban' is not a real backend code -- unmapped,
+      // lands on the call site's own fallback (.vue:405).
       vi.mocked(mastersApi.updatePayoutDetails).mockRejectedValue(
         new ApiResponseError(422, 'IBAN не прошёл проверку', 'bad_iban'),
       )
@@ -584,7 +591,7 @@ describe('MasterFinanceView', () => {
       button('Сохранить')?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('IBAN не прошёл проверку')
+      expect(toastError).toHaveBeenCalledWith('Не удалось сохранить реквизиты')
       expect(toastSuccess).not.toHaveBeenCalled()
     })
   })

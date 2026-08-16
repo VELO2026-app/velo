@@ -480,14 +480,16 @@ describe('AdminMasterReviewView', () => {
       expect(retry).toBeDefined()
     })
 
-    it('failure (ApiResponseError): the error rung carries the real backend detail', async () => {
+    it('failure (ApiResponseError): the error rung carries the generic fallback (unmapped code)', async () => {
+      // B8 (PROMPT №747): 'server_error' is not a real backend code --
+      // unmapped, lands on the call site's own fallback (.vue:707).
       vi.mocked(adminApi.getMasterById).mockRejectedValue(
         new ApiResponseError(500, 'Сервер недоступен', 'server_error'),
       )
       mount('m_missing')
       await flush()
 
-      expect(text()).toContain('Сервер недоступен')
+      expect(text()).toContain('Ошибка загрузки данных')
     })
 
     it('SW7: «Повторить» recovers to content after a failure', async () => {
@@ -588,7 +590,9 @@ describe('AdminMasterReviewView', () => {
       expect(push).toHaveBeenCalledWith({ name: 'admin-masters' })
     })
 
-    it('failure: toasts (detail / fallback), does NOT navigate, actions stay visible', async () => {
+    it('failure: toasts the generic fallback (unmapped code), does NOT navigate, actions stay visible', async () => {
+      // B8 (PROMPT №747): 'already_decided' is not a real backend code --
+      // unmapped, lands on the call site's own fallback (.vue:944).
       vi.mocked(adminApi.verifyMaster).mockRejectedValue(
         new ApiResponseError(409, 'Заявка уже обработана', 'already_decided'),
       )
@@ -598,7 +602,7 @@ describe('AdminMasterReviewView', () => {
       footBtn('Одобрить')?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Заявка уже обработана')
+      expect(toastError).toHaveBeenCalledWith('Ошибка верификации')
       expect(push).not.toHaveBeenCalled()
       expect(footBtn('Одобрить')).toBeDefined()
     })
@@ -1171,6 +1175,8 @@ describe('AdminMasterReviewView', () => {
     })
 
     it('failure: NO toast fires (this path only sets fieldError, unlike verify/reject/revoke) -- editor STAYS open', async () => {
+      // B8 (PROMPT №747): 'duplicate' is not a real backend code -- unmapped,
+      // lands on the call site's own fallback (.vue:846).
       vi.mocked(adminApi.editMasterProfile).mockRejectedValue(
         new ApiResponseError(409, 'Занято другим мастером', 'duplicate'),
       )
@@ -1184,7 +1190,7 @@ describe('AdminMasterReviewView', () => {
       saveBtn('Имя-визитка').click()
       await flush()
 
-      expect(rowErrorText('Имя-визитка')).toBe('Занято другим мастером')
+      expect(rowErrorText('Имя-визитка')).toBe('Не удалось сохранить')
       expect(toastError).not.toHaveBeenCalled()
       expect(toastSuccess).not.toHaveBeenCalled()
       expect(host?.querySelector('.mreview__edit')).not.toBeNull() // still editing

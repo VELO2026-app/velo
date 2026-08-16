@@ -947,9 +947,10 @@ describe('AnalyticsView', () => {
       expect(paymentsPane().querySelector('.analytics__income')).toBeNull()
     })
 
-    it('error: surfaces the REAL backend detail, not a fallback', async () => {
-      // paymentsError = e.detail for an ApiResponseError (.vue:495), rendered
-      // straight into the card (.vue:179).
+    it('error: falls back to the generic message (unmapped code)', async () => {
+      // B8 (PROMPT №747): the old comment said paymentsError = e.detail --
+      // that mechanism is gone. 'ledger_down' is not a real backend code,
+      // so it lands on the call site's own fallback (.vue:487).
       vi.mocked(mastersApi.getTransactions).mockRejectedValue(
         new ApiResponseError(503, 'Реестр платежей недоступен', 'ledger_down'),
       )
@@ -957,7 +958,7 @@ describe('AnalyticsView', () => {
       await flush()
 
       expect(paymentsPane().querySelector('.analytics__pay-error')).not.toBeNull()
-      expect(paneText(paymentsPane())).toContain('Реестр платежей недоступен')
+      expect(paneText(paymentsPane())).toContain('Ошибка загрузки')
     })
 
     it('error: falls back to a generic message on a non-API error', async () => {

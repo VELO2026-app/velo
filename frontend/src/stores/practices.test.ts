@@ -49,7 +49,9 @@ describe('usePracticesStore', () => {
       expect(store.selectedError).toBeNull()
     })
 
-    it('on failure: records the backend detail, clears selected', async () => {
+    it('on failure: records the mapped table phrase for a real backend code, clears selected', async () => {
+      // B8 (PROMPT №747): 'not_found' IS a real backend code -- extractApiError
+      // now returns its table phrase regardless of the mocked detail text.
       vi.mocked(practicesApi.getPractice).mockRejectedValue(
         new ApiResponseError(404, 'Практика не найдена', 'not_found'),
       )
@@ -58,7 +60,7 @@ describe('usePracticesStore', () => {
 
       await store.fetchPractice('missing')
 
-      expect(store.selectedError).toBe('Практика не найдена')
+      expect(store.selectedError).toBe('Запрошенный ресурс не найден')
       expect(store.selected).toBeNull()
       expect(store.selectedLoading).toBe(false)
     })

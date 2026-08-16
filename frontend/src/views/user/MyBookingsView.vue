@@ -209,7 +209,10 @@ function badgeFor(b: BookingWithPracticeResponse): BookingBadge | null {
   // Past statuses -> status badge.
   if (b.status === 'attended') return { label: 'Завершена', variant: 'done' }
   if (b.status === 'cancelled') return { label: 'Отменена', variant: 'cancelled' }
-  if (b.status === 'no_show') return { label: 'Не состоялась', variant: 'no_show' }
+  // B30 (PROMPT №746, owner wording): was 'Не состоялась' -- false, the
+  // practice DID happen, the person missed it. 'Вы не пришли' is the owner's
+  // literal word, used identically on PracticeDetailView's status row.
+  if (b.status === 'no_show') return { label: 'Вы не пришли', variant: 'no_show' }
   // AT-2: confirmed AND already ended -> a Zoom-tracked practice awaiting its
   // attendance report (bookings/service.py deliberately leaves it CONFIRMED
   // until the report ripens or the deadline fallback fires). Distinguish
