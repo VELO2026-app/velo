@@ -44,6 +44,15 @@ set -uo pipefail
 INSTALL_BASE="/opt/velo"
 COMPOSE_DIR="$INSTALL_BASE/repo"
 COMPOSE_CMD="docker compose"
+# T-45 item 6: readable progress on build/up/restart ONLY -- a SEPARATE
+# variable, not a change to COMPOSE_CMD itself. COMPOSE_CMD's default
+# (TTY spinner) output goes straight into pipes/parsers elsewhere in this
+# file (psql -tAc, pg_dump | gzip, ps -q, ruff under CI) and the cost of
+# breaking one of those is asymmetric with the benefit here: a corrupted
+# backup surfaces at restore time, in the worst possible moment to find
+# out. Used ONLY at the handful of call sites where a progress spinner
+# exists at all (build, up, restart) -- see each site below.
+COMPOSE_CMD_PROGRESS="$COMPOSE_CMD --progress plain"
 
 CONF_FILE="$INSTALL_BASE/velo.conf"
 if [ ! -f "$CONF_FILE" ]; then
@@ -63,6 +72,29 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
+
+# -- Shared temp-file cleanup (T-45 item 5) -----------------------------------
+# ONE registry, ONE trap, for the WHOLE script -- not one mktemp/trap pair per
+# call site. `trap ... EXIT` does not stack in bash: a second, independent
+# `trap ... EXIT` anywhere else in this file would SILENTLY REPLACE this one,
+# and whichever temp path only the first trap knew about would leak on abort.
+# That is not hypothetical here -- update_all() below already sets its own
+# EXIT trap for the self-update snapshot file, on exactly the `update` path
+# that also fetches openapi.json into a temp file. Closing the CLASS (not
+# just the two known /tmp/openapi.json call sites) means every mktemp'd path
+# in this script, present or future, registers HERE instead of installing
+# its own trap: update_all's snapshot cleanup and gen-types' (and update's)
+# openapi.json cleanup share this one call, and `gen-types` -- which never
+# goes through update_all -- gets a working trap for the first time.
+VELO_CLEANUP_PATHS=""
+velo_cleanup_register() {
+    # Word-splits on the existing trap command below by design: paths come
+    # from our own mktemp calls, never from user input, so no path here
+    # contains whitespace.
+    VELO_CLEANUP_PATHS="$VELO_CLEANUP_PATHS $1"
+}
+# shellcheck disable=SC2086  # deliberate word-split -- see velo_cleanup_register
+trap 'rm -f $VELO_CLEANUP_PATHS' EXIT
 
 # -- Server role (Phase 6 / T0 finding #2) ------------------------------------
 # test | prod, written into velo.conf by install_velo.sh. The role gates the
@@ -965,7 +997,10 @@ update_all() {
         exec bash "$snapshot" "$@"
     fi
     # In the snapshot run: clean up after ourselves whichever way we exit.
-    trap 'rm -f "${VELO_SNAPSHOT_PATH:-}"' EXIT
+    # Registers into the ONE shared trap set near the top of this file
+    # (T-45 item 5) -- an independent `trap ... EXIT` here would silently
+    # replace that one, not add to it.
+    velo_cleanup_register "$VELO_SNAPSHOT_PATH"
 
     if [ "${VELO_BRANCH_INFERRED:-0}" = "1" ]; then
         echo -e "${YELLOW}ℹ VELO_BRANCH not recorded in $CONF_FILE -- inferred '${VELO_BRANCH}' from role '${VELO_ROLE}'${NC}"
@@ -1037,8 +1072,18 @@ update_product() {
         #                     and `app` container restart. Only frontend gets
         #                     rebuilt. Refuses to run if backend/ changed in
         #                     the pulled commits (fool-proof guard).
+        #   --skip-doctor     Skip the pre-flight backend/.env drift gate
+        #                     (T-45 item 4). The gate exists so a key added
+        #                     to the app in the commits just pulled fails
+        #                     LOUDLY before anything is touched, instead of
+        #                     as a boot-loop after containers are already
+        #                     down (2026-08-14). This is the way OUT of
+        #                     that gate when it is itself the thing in the
+        #                     way of the fix -- e.g. fixing backend/.env is
+        #                     exactly what this run is for.
         SKIP_TESTS=0
         FRONTEND_ONLY=0
+        SKIP_DOCTOR=0
         shift  # drop "update" / "deploy"
         while [ $# -gt 0 ]; do
             case "$1" in
@@ -1049,9 +1094,10 @@ update_product() {
                 # fails the build no matter which flag you pass.
                 --skip-tests|--notests) SKIP_TESTS=1 ;;
                 --frontend-only) FRONTEND_ONLY=1 ;;
+                --skip-doctor) SKIP_DOCTOR=1 ;;
                 *)
                     echo -e "${RED}Unknown option: $1${NC}"
-                    echo "Usage: velo update [--skip-tests|--notests] [--frontend-only]"
+                    echo "Usage: velo update [--skip-tests|--notests] [--frontend-only] [--skip-doctor]"
                     exit 1
                     ;;
             esac
@@ -1138,6 +1184,36 @@ update_product() {
         NEW_COMMIT=$(git rev-parse --short HEAD)
         echo "Updated: $CURRENT_COMMIT → $NEW_COMMIT"
         echo ""
+
+        # -- Doctor gate (T-45 item 4) ---------------------------------------
+        # Runs HERE deliberately: after the pull (so it reads the .env.example
+        # that just arrived, not the one from before this update) and before
+        # the first thing that touches a container. A gate reading the
+        # pre-pull file is useless by construction -- that IS the 2026-08-14
+        # incident: a key the app started requiring landed in a commit, the
+        # box's backend/.env predates it, and nothing caught the gap before
+        # the restart cycle did, as a boot loop, with containers already down.
+        # check_backend_env (defined above, also `velo doctor`'s own backend
+        # check) already gives the exact missing key name and a clean exit
+        # code -- reused as-is, not reimplemented.
+        if [ "$SKIP_DOCTOR" -eq 0 ]; then
+            if ! check_backend_env "$COMPOSE_DIR/backend/.env.example" "$COMPOSE_DIR/backend/.env"; then
+                echo ""
+                echo -e "${RED}✗ backend/.env drift detected -- refusing to update${NC}"
+                echo "  A key the app now requires is missing from the real backend/.env"
+                echo "  (see the ✗ line(s) above for which one). Nothing past the pull"
+                echo "  has been touched -- code is updated, containers are not."
+                echo ""
+                echo "  Fix backend/.env, then re-run: velo update"
+                echo "  To roll out anyway (NOT recommended): velo update --skip-doctor"
+                exit 1
+            fi
+            echo -e "${GREEN}✓ backend/.env: no drift${NC}"
+            echo ""
+        else
+            echo -e "${YELLOW}⊘ backend/.env drift gate skipped (--skip-doctor)${NC}"
+            echo ""
+        fi
 
         # -- Narrow db env (T-32 item 9) ------------------------------------
         # docker-compose.yml points postgres/redis at ./backend/.env.db.
@@ -1234,7 +1310,7 @@ update_product() {
             # through to `up -d`, which restarted the PREVIOUS app image --
             # and everything after it (migrations, backend tests) then ran
             # and passed against code that was never rebuilt.
-            if ! $COMPOSE_CMD build app; then
+            if ! $COMPOSE_CMD_PROGRESS build app; then
                 echo -e "${RED}✗ BACKEND BUILD FAILED${NC}"
                 echo "Nothing was deployed -- the previous app image is still running."
                 echo "Fix the code and run: velo update"
@@ -1282,7 +1358,7 @@ update_product() {
                 echo -e "${RED}✗ Cannot create docker network aivis-shared${NC}"
                 exit 1
             }
-            if ! $COMPOSE_CMD up -d app postgres redis; then
+            if ! $COMPOSE_CMD_PROGRESS up -d app postgres redis; then
                 echo -e "${RED}✗ BACKEND RESTART FAILED${NC}"
                 echo "The previous app container is still running. Stopping here,"
                 echo "before migrations/tests/type-regen can run against old code."
@@ -1364,20 +1440,29 @@ update_product() {
 
         echo ""
         echo "Generating frontend API types from backend OpenAPI..."
-        if ! curl -sf http://127.0.0.1:8000/openapi.json > /tmp/openapi.json; then
+        # Unpredictable path (T-45 item 5, closing the class T-32 started in
+        # install_velo.sh): a fixed name in a world-writable /tmp is a
+        # symlink race. Registered into the ONE shared cleanup trap near the
+        # top of this file, not a trap of its own -- see that comment for why.
+        OPENAPI_TMP=$(mktemp -t velo-openapi.XXXXXX) || {
+            echo -e "${RED}✗ Could not create a temporary file for the OpenAPI snapshot${NC}"
+            exit 1
+        }
+        velo_cleanup_register "$OPENAPI_TMP"
+        if ! curl -sf http://127.0.0.1:8000/openapi.json > "$OPENAPI_TMP"; then
             echo -e "${RED}✗ Failed to fetch openapi.json from backend${NC}"
             echo "Check logs: velo logs app"
-            rm -f /tmp/openapi.json
+            rm -f "$OPENAPI_TMP"
             exit 1
         fi
         if ! python3 "$COMPOSE_DIR/backend/scripts/generate_ts_types.py" \
-            /tmp/openapi.json \
+            "$OPENAPI_TMP" \
             "$COMPOSE_DIR/frontend/src/api/generated.ts"; then
             echo -e "${RED}✗ Type generation failed${NC}"
-            rm -f /tmp/openapi.json
+            rm -f "$OPENAPI_TMP"
             exit 1
         fi
-        rm -f /tmp/openapi.json
+        rm -f "$OPENAPI_TMP"
         echo -e "${GREEN}✓ Frontend types generated${NC}"
 
         # -- 3a. Commit & push regenerated generated.ts if it drifted --
@@ -1443,13 +1528,13 @@ Triggered by velo update on commit $NEW_COMMIT" || {
         # image while printing success -- the gate would exist but never fire.
         # This script has no `set -e`, so the check must be explicit (same
         # shape as the backend build gate above).
-        if ! $COMPOSE_CMD build frontend; then
+        if ! $COMPOSE_CMD_PROGRESS build frontend; then
             echo -e "${RED}✗ FRONTEND BUILD FAILED (unit tests run inside the build)${NC}"
             echo "Nothing was deployed -- the previous frontend image is still running."
             echo "Fix the code and run: velo update"
             exit 1
         fi
-        $COMPOSE_CMD up -d frontend
+        $COMPOSE_CMD_PROGRESS up -d frontend
 
         # Health check
         echo ""
@@ -1652,7 +1737,7 @@ case "${1:-}" in
 
         cd_compose
         ensure_shared_network
-        if ! $COMPOSE_CMD up -d; then
+        if ! $COMPOSE_CMD_PROGRESS up -d; then
             echo -e "${RED}✗ VELO failed to start${NC}"
             exit 1
         fi
@@ -1684,7 +1769,7 @@ case "${1:-}" in
                 # "bounce the API" shortcut, not a box-level verb.
                 echo "Restarting app only..."
                 cd_compose
-                $COMPOSE_CMD restart app
+                $COMPOSE_CMD_PROGRESS restart app
                 echo -e "${GREEN}✓ Restarted${NC}"
                 ;;
             *)
@@ -1697,7 +1782,7 @@ case "${1:-}" in
 
                 svc_walk forward start; rc_total=$(svc_worst "$rc_total" "$?")
                 ensure_shared_network
-                if ! $COMPOSE_CMD up -d; then
+                if ! $COMPOSE_CMD_PROGRESS up -d; then
                     echo -e "${RED}✗ VELO failed to start${NC}"
                     exit 1
                 fi
@@ -2352,19 +2437,28 @@ case "${1:-}" in
         # exits 0 on a 500 and writes the error body to the file, so the `||`
         # guard below would never fire and the generator would run against a
         # backend error page instead of an OpenAPI schema.
-        if ! curl -sf http://127.0.0.1:8000/openapi.json > /tmp/openapi.json; then
+        #
+        # Unpredictable path, registered into the ONE shared cleanup trap
+        # near the top of this file (T-45 item 5) -- this command never runs
+        # through update_all, so before this it had no EXIT trap at all.
+        OPENAPI_TMP=$(mktemp -t velo-openapi.XXXXXX) || {
+            echo -e "${RED}✗ Could not create a temporary file for the OpenAPI snapshot${NC}"
+            exit 1
+        }
+        velo_cleanup_register "$OPENAPI_TMP"
+        if ! curl -sf http://127.0.0.1:8000/openapi.json > "$OPENAPI_TMP"; then
             echo -e "${RED}✗ Cannot reach backend API. Is it running?${NC}"
-            rm -f /tmp/openapi.json
+            rm -f "$OPENAPI_TMP"
             exit 1
         fi
         if ! python3 "$COMPOSE_DIR/backend/scripts/generate_ts_types.py" \
-            /tmp/openapi.json \
+            "$OPENAPI_TMP" \
             "$COMPOSE_DIR/frontend/src/api/generated.ts"; then
             echo -e "${RED}✗ Type generation FAILED${NC}"
-            rm -f /tmp/openapi.json
+            rm -f "$OPENAPI_TMP"
             exit 1
         fi
-        rm -f /tmp/openapi.json
+        rm -f "$OPENAPI_TMP"
         echo -e "${GREEN}✓ generated.ts updated${NC}"
 
         # Manual regeneration does NOT commit or push -- that is `velo update`'s

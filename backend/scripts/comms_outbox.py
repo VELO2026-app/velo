@@ -22,7 +22,6 @@ import argparse
 import asyncio
 import sys
 from pathlib import Path
-from uuid import UUID
 
 # -- sys.path bootstrap (same as backfill_comms_sync.py) ---------------------
 _SCRIPTS_DIR = Path(__file__).resolve().parent
@@ -36,6 +35,21 @@ from app.core.events.outbox_admin import (  # noqa: E402
     list_dead_events,
     requeue_events,
 )
+
+
+def _event_id(raw: str) -> int:
+    """argparse type for an OutboxEvent.id (BigInteger, not UUID -- T-46
+    item 2). Raising ValueError here is what gives argparse its own
+    clean "invalid event_id value: '...'" + usage, not a traceback --
+    the CLI's own contract for a malformed argument.
+    """
+    try:
+        value = int(raw)
+    except ValueError:
+        raise ValueError(f"not an integer event id: {raw!r}") from None
+    if value <= 0:
+        raise ValueError(f"event id must be positive, got: {value}")
+    return value
 
 
 async def _list_dead() -> None:
@@ -54,7 +68,7 @@ async def _list_dead() -> None:
         )
 
 
-async def _requeue(ids: list[UUID], requeue_all: bool) -> None:
+async def _requeue(ids: list[int], requeue_all: bool) -> None:
     session_factory = get_session_factory()
     async with session_factory() as session:
         revived = await requeue_events(
@@ -82,8 +96,8 @@ async def main() -> None:
         "requeue", help="revive dead events (attempts kept -- history)",
     )
     requeue.add_argument(
-        "event_ids", nargs="*", type=UUID,
-        help="event id(s) to revive",
+        "event_ids", nargs="*", type=_event_id,
+        help="event id(s) to revive (OutboxEvent.id, an integer)",
     )
     requeue.add_argument(
         "--all", action="store_true", dest="requeue_all",

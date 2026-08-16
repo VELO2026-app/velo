@@ -50,6 +50,7 @@ from datetime import UTC, datetime, timedelta
 import structlog
 from redis import asyncio as aioredis
 from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import ResponseError as RedisResponseError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 from sqlalchemy import or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -70,6 +71,53 @@ _ENVELOPE_DATA_FIELD = "data"
 
 # Redis errors that mean "the pipe is down", not "this event is bad".
 _CONNECTION_ERRORS = (RedisConnectionError, RedisTimeoutError, OSError)
+
+# T-46. CRITERION for what belongs in an infra branch (this tuple, or the
+# ResponseError handling below): does the exception describe the STATE OF
+# THE INFRASTRUCTURE (unreachable, refused, misconfigured), or the
+# BADNESS OF THIS EVENT (its own payload/shape rejected on its own
+# terms)? The former gets no attempts charged and no dead-letter -- the
+# row gets a fair try again once the state clears. The latter is poison
+# and must keep paying for itself, or a truly bad row loops forever.
+#
+# ┌─ KNOWN CEILING (convention §4a) ──────────────────────────────────────
+# │ (1) MECHANICS: ResponseError is Redis answering, not Redis being
+# │     unreachable -- OOM under maxmemory, READONLY on a failed-over
+# │     replica, an ACL/permission rejection, a missing module. All of
+# │     these are infrastructure state, not this event's fault, so
+# │     ResponseError gets its own except clause (below _CONNECTION_
+# │     ERRORS, its own log key) that charges no attempts and sets no
+# │     dead_lettered_at -- same outcome as the connection branch.
+# │ (2) STATUS: acknowledged by design.
+# │ (3) REFERENCE: T-46 (relay's ResponseError was falling into the
+# │     poison branch and dead-lettering healthy events).
+# │ (4) UNCONSERVATION TRIGGER: relay.py grows a pipeline, an EVAL/
+# │     EVALSHA call, or cluster mode. Only then do ResponseError's
+# │     OTHER subclasses become reachable here -- ExecAbortError (a
+# │     queued command in a MULTI/EXEC failed), NoScriptError (an EVALSHA
+# │     script was never loaded), MovedError/AskError/ClusterDownError/
+# │     MasterDownError/ClusterCrossSlotError/SlotNotCoveredError/
+# │     TryAgainError (cluster topology) -- and some of those describe
+# │     THIS command's shape, not infrastructure state, and would need
+# │     re-classifying on their own terms.
+# │ (5) SHAPE OF THE FIX: narrow the except clause from the whole
+# │     ResponseError class down to the specific infra-shaped subclasses
+# │     that still apply once the trigger above has happened.
+# │ (6) REJECTED, AND WHY -- price paid today: ResponseError CAN depend
+# │     on an event's own content (an XADD argument larger than
+# │     proto-max-bulk-len is refused as a ResponseError on that specific
+# │     row). Charging it to the infra branch means the per-event loop's
+# │     `break` (see _publish_batch) halts the WHOLE pass at that row,
+# │     every tick, forever -- the id-order scan re-selects it first on
+# │     every pass. The pre-T-46 ceiling on this (eventual dead-letter,
+# │     which frees the head of the queue) is gone for this class. What
+# │     limits it today: relay issues exactly one Redis command (XADD),
+# │     with no pipeline, no scripting, no cluster -- so this is the one
+# │     command whose ResponseError causes can be enumerated (see (1)).
+# │     The only way out of a genuinely content-caused case is a human
+# │     reading the log (see outbox_relay_redis_rejected below) and
+# │     intervening directly against the row.
+# └─────────────────────────────────────────────────────────────────────
 
 # T-13 redaction pass. Its own slow cadence, deliberately unrelated to
 # the publish interval: shipping is what this loop exists for, tidying
@@ -145,6 +193,23 @@ async def _publish_batch(
             # to rows that never got a fair try.
             logger.warning(
                 "outbox_relay_redis_unreachable",
+                error=str(exc),
+                pending_from_event_id=event.id,
+            )
+            break
+        except RedisResponseError as exc:
+            # T-46: also infra (see the §4a marker above _CONNECTION_
+            # ERRORS) -- Redis is reachable and answered, but refused the
+            # write (OOM, READONLY, ACL, missing module). Same outcome as
+            # the connection branch (no attempts charged, pass aborted),
+            # but its OWN log key: "unreachable" would tell an operator
+            # to go fix a Redis that is, in this case, alive and
+            # reachable -- a diagnosis that sends them chasing the wrong
+            # thing. Kept as a SEPARATE clause from _CONNECTION_ERRORS on
+            # purpose, not folded into that tuple: the tuple's name would
+            # start lying about what it holds.
+            logger.warning(
+                "outbox_relay_redis_rejected",
                 error=str(exc),
                 pending_from_event_id=event.id,
             )

@@ -13,8 +13,6 @@
 # transaction.
 # =============================================================================
 
-from uuid import UUID
-
 import structlog
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,18 +37,24 @@ async def list_dead_events(session: AsyncSession) -> list[OutboxEvent]:
 async def requeue_events(
     session: AsyncSession,
     *,
-    event_ids: list[UUID] | None = None,
+    event_ids: list[int] | None = None,
     requeue_all: bool = False,
 ) -> int:
     """Revive dead rows: clear dead_lettered_at AND next_attempt_at, so
     the next relay pass picks them up immediately.
+
+    event_ids are OutboxEvent.id values -- a BigInteger publication
+    sequence (models.py), NOT a UUID (T-46 item 2: the CLI used to
+    parse them as UUID, which meant the one recovery path for a
+    relay-buried event could never accept the number the operator
+    actually had).
 
     attempts is DELIBERATELY kept (history): an unfixed poison re-dies
     after a single further failure, loudly, instead of buying another
     ~30 minutes of backoff ladder -- revival without a fix should fail
     fast. Exactly one of event_ids / requeue_all must be given. Returns
     the number of revived rows; ids that are not dead (or unknown) are
-    simply not matched. Caller commits.
+    simply not matched -- a clean 0, never a traceback. Caller commits.
     """
     if requeue_all == bool(event_ids):
         raise ValueError("pass exactly one of event_ids / requeue_all")

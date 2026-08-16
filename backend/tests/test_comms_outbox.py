@@ -34,6 +34,8 @@ from unittest.mock import patch
 import pytest
 from redis import asyncio as aioredis
 from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import DataError as RedisDataError
+from redis.exceptions import ResponseError as RedisResponseError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 from sqlalchemy import delete, or_, select, update
 
@@ -54,6 +56,7 @@ from app.core.events.relay import (
     relay_pending_batch,
 )
 from app.modules.users.models import User
+from scripts.comms_outbox import _event_id
 from tests.helpers import (
     auth_headers,
     cleanup_range,
@@ -366,7 +369,9 @@ class TestRelayHardening:
     autouse _clean_band drains our rows. NOTE for the band registry:
     the issued band 89680-89699 is NOT consumed -- this suite creates
     no users (synthetic recipient_ids only), recorded in the H-R3
-    report.
+    report. T-46 (ResponseError classification + BigInteger requeue)
+    adds to this same class on the same terms: no users, no band --
+    the 89860-89879 band offered for that handoff was not needed either.
     """
 
     async def _emit_synth(self, session, tag: str):
@@ -528,6 +533,72 @@ class TestRelayHardening:
         assert await relay_pending_batch(redis, session=db_session) == (1, 0)
         await db_session.rollback()
 
+    async def test_response_error_is_infra_not_poison(
+        self, db_session, relay_redis
+    ):
+        """T-46 item 1: a redis ResponseError (OOM/READONLY/ACL-shaped --
+        Redis reachable, but refusing the write) is classified the SAME
+        as a connection error -- attempts, next_attempt_at AND
+        dead_lettered_at all untouched, the pass aborts without an
+        exception escaping. Twin of test_infra_error_..., same
+        assertions, different exception class -- this is exactly the
+        case that used to fall into the poison branch and eventually
+        dead-letter a healthy event."""
+        redis, _stream = relay_redis
+        await _park_foreign_pending(db_session)
+        e = await self._emit_synth(db_session, "respinfra")
+        e.attempts = settings.comms_relay_max_attempts - 1
+        await db_session.flush()
+
+        with patch.object(
+            redis, "xadd",
+            side_effect=RedisResponseError("OOM command not allowed"),
+        ):
+            assert await relay_pending_batch(redis, session=db_session) == (0, 0)
+
+        events = await _synth_events(db_session)
+        row = next(x for x in events if x.id == e.id)
+        assert row.attempts == settings.comms_relay_max_attempts - 1
+        assert row.next_attempt_at is None
+        assert row.dead_lettered_at is None
+        assert row.published_at is None
+
+        # Pipe back up -> ships normally, same as the connection-error twin.
+        assert await relay_pending_batch(redis, session=db_session) == (1, 0)
+        await db_session.rollback()
+
+    async def test_data_error_stays_poison_despite_response_error_carveout(
+        self, db_session, relay_redis
+    ):
+        """T-46 item 1, the negative twin: DataError is NOT a ResponseError
+        subclass (redis.exceptions hierarchy) -- confirms the new
+        ResponseError branch did not accidentally widen to swallow a
+        genuinely-bad event. Same shape as the existing poison tests:
+        attempts increments, the row stays pending (not dead yet at 1
+        failure), and the rest of the batch is unaffected."""
+        redis, _stream = relay_redis
+        await _park_foreign_pending(db_session)
+        poison = await self._emit_synth(db_session, "de-p")
+        alive = await self._emit_synth(db_session, "de-a")
+
+        real_xadd = redis.xadd
+
+        async def xadd_bad_data(stream_name, fields, *a, **kw):
+            if json.loads(fields["data"])["recipient_id"] == f"{SYNTH}de-p":
+                raise RedisDataError("invalid input for XADD")
+            return await real_xadd(stream_name, fields, *a, **kw)
+
+        with patch.object(redis, "xadd", side_effect=xadd_bad_data):
+            assert await relay_pending_batch(redis, session=db_session) == (1, 1)
+
+        events = await _synth_events(db_session)
+        dead_row = next(x for x in events if x.id == poison.id)
+        alive_row = next(x for x in events if x.id == alive.id)
+        assert dead_row.attempts == 1  # poison, not infra: charged
+        assert dead_row.published_at is None
+        assert alive_row.published_at is not None  # head-of-line unaffected
+        await db_session.rollback()
+
     async def test_relay_redis_factory_carries_socket_timeouts(self):
         """done-when item 4: the timeouts are visible in from_url."""
         captured: dict = {}
@@ -610,6 +681,49 @@ class TestRelayHardening:
             assert x.dead_lettered_at is None
             assert x.next_attempt_at is None
         await db_session.rollback()
+
+    async def test_requeue_by_number_survives_a_repeat(self, db_session):
+        """T-46 item 2, service level: OutboxEvent.id is a BigInteger
+        publication sequence (models.py), and requeue_events already
+        matched on it correctly -- the actual defect was one layer up,
+        in the CLI's argparse (see test_event_id_cli_boundary below).
+        This is the REPEAT axis: requeuing the same already-alive id a
+        second time matches nothing (it is no longer dead-lettered) and
+        returns 0, not an error."""
+        await _park_foreign_pending(db_session)
+        e = await self._emit_synth(db_session, "rpt")
+        e.dead_lettered_at = datetime.now(UTC)
+        await db_session.flush()
+
+        first = await requeue_events(db_session, event_ids=[e.id])
+        assert first == 1
+        second = await requeue_events(db_session, event_ids=[e.id])
+        assert second == 0  # already revived -- no longer matched, no error
+        await db_session.rollback()
+
+    async def test_event_id_cli_boundary(self):
+        """T-46 item 2, CLI level: this is the actual defect location --
+        comms_outbox.py used to parse event_ids as UUID while
+        OutboxEvent.id is BigInteger (models.py:104-108), so an operator
+        could never requeue the number relay had actually dead-lettered.
+        Exercises the real _event_id argparse type function, not a
+        reimplementation: REPEAT/EMPTY are service-level (see above and
+        test_requeue_all_and_argument_validation); this is the
+        WRONG-TYPE axis (bad argument shape) plus the valid-BigInteger
+        happy path, both confirmed end-to-end via a live subprocess run
+        against the real CLI (see the T-46 report) -- this unit-level
+        twin is the permanent regression guard.
+        """
+        assert _event_id("42") == 42
+        assert _event_id(str(2**40)) == 2**40  # BigInteger range, not UUID
+        with pytest.raises(ValueError, match="not an integer"):
+            _event_id("not-a-number")
+        with pytest.raises(ValueError, match="not an integer"):
+            _event_id("3f9a1c2e-...")  # UUID-shaped -- the old, wrong type
+        with pytest.raises(ValueError, match="positive"):
+            _event_id("0")
+        with pytest.raises(ValueError, match="positive"):
+            _event_id("-5")
 
 
 class TestIdentitySync:
