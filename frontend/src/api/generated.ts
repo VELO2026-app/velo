@@ -1515,7 +1515,7 @@ export interface UserResponse {
   role_switch: RoleSwitchInfo | null
 }
 
-/** GET /api/v1/bookings/me/stats -- current user's practice stats. Powers the two stat cards on the main profile screen: - practices_attended: how many practices the user actually attended. - hours_attended: total attended duration in hours (one decimal). B52 (owner-ruled 2026-08-15, D=C, ADDITIVE): has_unread_messages powers the profile's "Сообщения" row colour dot. A COLOUR flag only -- never a count, the owner was explicit. See service.has_unread_messages for the comms round-trip this rides on. */
+/** GET /api/v1/bookings/me/stats -- current user's practice stats. Powers the two stat cards on the main profile screen: - practices_attended: how many practices the user actually attended. - hours_attended: total attended duration in hours (one decimal). B52 (owner-ruled 2026-08-15, D=C, ADDITIVE): has_unread_messages powers the profile's "Сообщения" row colour dot. A COLOUR flag only -- never a count, the owner was explicit. See service.has_unread_messages for the comms round-trip this rides on. THE SAME QUESTION IS ANSWERED A SECOND TIME ELSEWHERE, and that is not a duplicate to be tidied away: a master's hub needs a NUMBER, and it reads GET /api/v1/chats/unread-summary (chats/router.py). Merging the two would mean the student profile makes a second request for its dot -- which is precisely what the B52 ruling above exists to forbid. The full reasoning lives on that endpoint; do not unify without reading it. */
 export interface UserStatsResponse {
   practices_attended: number
   hours_attended: number
