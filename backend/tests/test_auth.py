@@ -164,13 +164,20 @@ class TestValidateTelegramInitData:
     @pytest.mark.parametrize(
         "user_json",
         [
-            {"first_name": "NoId"},   # MISSING axis: no id at all
-            {"id": "12345"},          # id present but not an integer
-            {"id": None},
-            {"id": True},             # bool is an int subclass in Python
-            [1, 2, 3],                # valid JSON, not a user object
-            "text",
-            42,
+            # Named explicitly: pytest labels dict/list params by position
+            # (user_json0, user_json1, ...), so a failure named the case
+            # without saying which shape broke -- exactly the thing a
+            # failure line has to answer.
+            pytest.param({"first_name": "NoId"}, id="no-id-key"),
+            pytest.param({"id": "12345"}, id="id-is-a-string"),
+            pytest.param({"id": None}, id="id-is-null"),
+            # bool is an int subclass in Python -- excluded on purpose.
+            pytest.param({"id": True}, id="id-is-a-bool"),
+            # Valid JSON, but not a user object: these reached .get() and
+            # raised AttributeError before T-47 closed it.
+            pytest.param([1, 2, 3], id="json-list"),
+            pytest.param("text", id="json-string"),
+            pytest.param(42, id="json-number"),
         ],
     )
     def test_user_json_without_usable_id(self, user_json: object) -> None:
@@ -433,11 +440,19 @@ class TestClientIpExtraction:
     @pytest.mark.parametrize(
         "forwarded",
         [
-            "not-an-ip",
-            "",
-            "1.2.3.4\nX-Injected: 1",
-            "'; DROP TABLE audit_logs; --",
-            "A" * 5000,
+            # Explicit ids: pytest derives a case name from the VALUE, and
+            # these values are hostile to that. The 5000-character one alone
+            # produced a 5085-character test id -- every -v line, every CI
+            # log and every failure report carried five thousand letter As,
+            # burying the tests around it. The empty string produced a
+            # nameless "[]" case, and the injection/SQL-shaped ones read as
+            # an incident rather than a fixture to anyone scanning a log.
+            # The values under test are unchanged; only the labels are.
+            pytest.param("not-an-ip", id="not-an-ip"),
+            pytest.param("", id="empty"),
+            pytest.param("1.2.3.4\nX-Injected: 1", id="header-injection"),
+            pytest.param("'; DROP TABLE audit_logs; --", id="sql-shaped"),
+            pytest.param("A" * 5000, id="5000-chars"),
         ],
     )
     def test_unusable_header_falls_back_to_peer(self, forwarded: str) -> None:
