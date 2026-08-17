@@ -15,13 +15,16 @@ from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.exceptions import TooManyRequestsError
+from app.core.middleware import _extract_client_ip
 from app.modules.auth.service import (
+    _SOURCE_RATE_LIMIT_MULTIPLIER,
     TelegramValidationError,
+    check_source_rate_limit,
     validate_telegram_init_data,
 )
 from app.modules.users.models import User
 from tests.helpers import BOT_TOKEN, auth_headers, build_init_data, login_user
-
 
 # ---------------------------------------------------------------------------
 # validate_telegram_init_data
@@ -96,6 +99,98 @@ class TestValidateTelegramInitData:
         params["hash"] = h
         init_data = urlencode(params)
         with pytest.raises(TelegramValidationError, match="Missing user"):
+            validate_telegram_init_data(init_data, BOT_TOKEN)
+
+    # -- T-47: the signed value and the parsed value are one value ---------
+    #
+    # These describe a CLASS of input, deliberately not a working exploit:
+    # the point is that the string whose HMAC we verified is the string we
+    # hand to json.loads, with no second decoding pass in between. A value
+    # that would MEAN SOMETHING ELSE after another decode is the shape of
+    # the class; the marker below is the cheapest member of it.
+
+    def test_parsed_value_is_the_signed_value(self) -> None:
+        """A signed value that a second decoding pass would alter is parsed
+        exactly as signed.
+
+        The marker is a percent-escape sequence inside a signed string
+        field: decoding is not idempotent, so a second pass would turn it
+        into different characters. If the value coming back still carries
+        the marker verbatim, then nothing re-decoded it after the signature
+        check -- which is the property under test. If it comes back
+        transformed, some later reader is parsing something Telegram never
+        signed."""
+        marker = "%41%42"
+        user_data = {"id": 12345, "first_name": marker}
+        init_data = build_init_data(user_data)
+        result = validate_telegram_init_data(init_data, BOT_TOKEN)
+        assert result["first_name"] == marker
+
+    def test_signed_value_with_reserved_characters_survives(self) -> None:
+        """The same property for characters that are meaningful to a URL
+        parser (&, =, +). These are the ones a decoding pass is most likely
+        to mangle, and a real Telegram display name can contain them."""
+        user_data = {"id": 12345, "first_name": "A&B=C+D"}
+        init_data = build_init_data(user_data)
+        result = validate_telegram_init_data(init_data, BOT_TOKEN)
+        assert result["first_name"] == "A&B=C+D"
+
+    def test_repeat_same_init_data_twice(self) -> None:
+        """REPEAT axis: validation is pure -- the same initData validated
+        twice gives the same answer. Pinned because anti-replay lived here
+        once (see the note in service.py) and could be reintroduced without
+        noticing that it breaks the legitimate logout -> re-login flow."""
+        user_data = {"id": 12345, "first_name": "Test"}
+        init_data = build_init_data(user_data)
+        first = validate_telegram_init_data(init_data, BOT_TOKEN)
+        second = validate_telegram_init_data(init_data, BOT_TOKEN)
+        assert first == second
+
+    def test_empty_user_value(self) -> None:
+        """EMPTY axis: a signed but empty user value is rejected cleanly --
+        a TelegramValidationError, not a JSONDecodeError escaping as a
+        500."""
+        params = {"auth_date": str(int(time.time())), "user": ""}
+        data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(params.items()))
+        secret_key = hmac.new(
+            b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256
+        ).digest()
+        params["hash"] = hmac.new(
+            secret_key, data_check_string.encode(), hashlib.sha256
+        ).hexdigest()
+        with pytest.raises(TelegramValidationError):
+            validate_telegram_init_data(urlencode(params), BOT_TOKEN)
+
+    @pytest.mark.parametrize(
+        "user_json",
+        [
+            {"first_name": "NoId"},   # MISSING axis: no id at all
+            {"id": "12345"},          # id present but not an integer
+            {"id": None},
+            {"id": True},             # bool is an int subclass in Python
+            [1, 2, 3],                # valid JSON, not a user object
+            "text",
+            42,
+        ],
+    )
+    def test_user_json_without_usable_id(self, user_json: object) -> None:
+        """MISSING axis, and a defect T-47 closed while writing it: signed
+        initData whose user field carries no usable integer id used to pass
+        validation, and the caller's telegram_user["id"] then raised --
+        KeyError for a dict without id, AttributeError for JSON that is not
+        an object at all. Both surfaced as a 500 on external input. Every
+        shape here must now be a clean TelegramValidationError."""
+        init_data = build_init_data(user_json)
+        with pytest.raises(TelegramValidationError):
+            validate_telegram_init_data(init_data, BOT_TOKEN)
+
+    def test_future_auth_date_still_rejected(self) -> None:
+        """Pre-existing guard, re-pinned here because T-47 edited this
+        function: an auth_date in the future must not pass just because it
+        is not 'expired'."""
+        future = int(time.time()) + 86400
+        init_data = build_init_data({"id": 12345}, auth_date=future)
+        with pytest.raises(TelegramValidationError):
             validate_telegram_init_data(init_data, BOT_TOKEN)
 
 
@@ -286,3 +381,139 @@ async def test_logout_all_other_user_unaffected(
     # User B is unaffected.
     r_b = await client.get("/api/v1/users/me", headers=auth_headers(token_b))
     assert r_b.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# T-47 finding 2: the audited client IP is the one nginx reported
+# ---------------------------------------------------------------------------
+#
+# Pure-function tests against the middleware helper. No users, no band: the
+# helper takes an ASGI scope and returns a string, and driving it directly
+# covers both branches far more precisely than a request could.
+
+
+def _scope(peer: str | None, forwarded: str | None = None) -> dict:
+    """Minimal ASGI scope: a TCP peer and optionally an XFF header."""
+    scope: dict = {
+        "client": (peer, 12345) if peer else None,
+        "headers": [],
+    }
+    if forwarded is not None:
+        scope["headers"].append(
+            (b"x-forwarded-for", forwarded.encode("latin-1"))
+        )
+    return scope
+
+
+class TestClientIpExtraction:
+    """X-Forwarded-For is honoured only from our own proxy, and only when
+    it is really an address."""
+
+    @pytest.mark.parametrize("peer", ["127.0.0.1", "172.18.0.1", "10.0.0.5"])
+    def test_header_honoured_from_proxy_peer(self, peer: str) -> None:
+        """Trusted branch: the request came through nginx on the docker
+        network, so the forwarded client address is the real one."""
+        assert _extract_client_ip(_scope(peer, "8.8.8.8")) == "8.8.8.8"
+
+    def test_first_hop_taken_from_a_chain(self) -> None:
+        """X-Forwarded-For may be 'client, proxy1, proxy2'."""
+        scope = _scope("172.18.0.1", "8.8.8.8, 10.0.0.1")
+        assert _extract_client_ip(scope) == "8.8.8.8"
+
+    def test_ipv6_forwarded_address(self) -> None:
+        scope = _scope("172.18.0.1", "2001:4860:4860::8888")
+        assert _extract_client_ip(scope) == "2001:4860:4860::8888"
+
+    def test_header_ignored_from_public_peer(self) -> None:
+        """Untrusted branch, the integrity half of finding 2: a request that
+        did NOT come through our proxy cannot choose what the audit log
+        records. Its own peer address is already the truthful answer."""
+        assert _extract_client_ip(_scope("8.8.8.8", "1.1.1.1")) == "8.8.8.8"
+
+    @pytest.mark.parametrize(
+        "forwarded",
+        [
+            "not-an-ip",
+            "",
+            "1.2.3.4\nX-Injected: 1",
+            "'; DROP TABLE audit_logs; --",
+            "A" * 5000,
+        ],
+    )
+    def test_unusable_header_falls_back_to_peer(self, forwarded: str) -> None:
+        """A header that is not an address never reaches the audit column --
+        the peer is used instead."""
+        scope = _scope("172.18.0.1", forwarded)
+        assert _extract_client_ip(scope) == "172.18.0.1"
+
+    def test_over_long_header_cannot_exceed_the_column(self) -> None:
+        """The availability half of finding 2, and the sharper one.
+        AuditLog.ip_address is String(45) and record_audit writes into the
+        caller's session with the commit deferred, so an over-long value did
+        not spoil one audit row -- it raised on flush and rolled back the
+        whole operation, financial ones included. Whatever comes back here
+        must always fit the column."""
+        for length in (46, 100, 5000):
+            got = _extract_client_ip(_scope("172.18.0.1", "1" * length))
+            assert got is not None
+            assert len(got) <= 45
+
+    def test_no_header_and_no_client(self) -> None:
+        """Nothing to report is reported as nothing, not as a guess."""
+        assert _extract_client_ip(_scope("172.18.0.1")) == "172.18.0.1"
+        assert _extract_client_ip(_scope(None)) is None
+
+
+# ---------------------------------------------------------------------------
+# T-47 finding 4: the per-source limiter runs before any signature check
+# ---------------------------------------------------------------------------
+
+
+class TestSourceRateLimit:
+    """check_source_rate_limit is keyed on the client address and applies
+    before the HMAC verification, so signature guessing costs a counter."""
+
+    async def test_under_limit_passes(self) -> None:
+        redis = MagicMock()
+        redis.incr = AsyncMock(return_value=1)
+        redis.expire = AsyncMock()
+        with patch(
+            "app.modules.auth.service.get_redis", return_value=redis
+        ):
+            await check_source_rate_limit("8.8.8.8")
+        # TTL is set on the first increment only -- otherwise every request
+        # slides the window and the limit never fires.
+        redis.expire.assert_awaited_once()
+
+    async def test_over_limit_raises_429(self) -> None:
+        limit = (
+            settings.auth_rate_limit_max_requests
+            * _SOURCE_RATE_LIMIT_MULTIPLIER
+        )
+        redis = MagicMock()
+        redis.incr = AsyncMock(return_value=limit + 1)
+        redis.expire = AsyncMock()
+        with patch(
+            "app.modules.auth.service.get_redis", return_value=redis
+        ), pytest.raises(TooManyRequestsError) as exc:
+            await check_source_rate_limit("8.8.8.8")
+        # 429, not 400: nothing was wrong with the request except its rate,
+        # and 429 is the only code a client knows how to back off on.
+        assert exc.value.status_code == 429
+
+    async def test_limit_is_looser_than_the_per_account_one(self) -> None:
+        """NAT is the reason. One address can be an entire mobile carrier's
+        worth of legitimate people opening the Mini App, so this limit must
+        sit well above the per-telegram_id one rather than replace it."""
+        assert _SOURCE_RATE_LIMIT_MULTIPLIER > 1
+
+    async def test_missing_source_is_not_limited(self) -> None:
+        """No address to key on: skipped rather than funnelled into one
+        shared bucket, which would turn a limiter into an outage."""
+        redis = MagicMock()
+        redis.incr = AsyncMock()
+        with patch(
+            "app.modules.auth.service.get_redis", return_value=redis
+        ):
+            await check_source_rate_limit(None)
+        redis.incr.assert_not_awaited()

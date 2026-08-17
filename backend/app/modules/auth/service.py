@@ -39,7 +39,7 @@ import hmac
 import json
 import secrets
 from datetime import UTC, datetime
-from urllib.parse import parse_qs, unquote
+from urllib.parse import parse_qs
 from uuid import UUID
 
 import structlog
@@ -49,6 +49,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.events import emit_user_upserted  # Phase 6 / T0
+from app.core.exceptions import TooManyRequestsError
 from app.core.redis import get_redis
 from app.core.telegram_links import normalize_telegram_url
 from app.core.i18n import normalize_language
@@ -153,12 +154,58 @@ def validate_telegram_init_data(init_data: str, bot_token: str) -> dict:
     # ERR-03: guard against malformed JSON in user field.
     # Without this, a corrupted or forged user value causes an
     # unhandled JSONDecodeError -> 500 instead of a clean 400.
+    #
+    # T-47: parsed WITHOUT a second decoding pass, and that is the whole
+    # point -- do not "restore" one here.
+    #
+    # parse_qs (above) already percent-decodes, so `parsed` holds decoded
+    # values and the data-check-string built from them is what the HMAC was
+    # computed over. Applying urllib's unquote() again at this line meant the
+    # string whose signature we verified and the string we actually parsed
+    # could be TWO DIFFERENT STRINGS: decoding is not idempotent, so for a
+    # class of inputs the second pass changes the value AFTER the signature
+    # check has already passed on the first one. Everything downstream --
+    # including the telegram_id used to look a user up -- then came from
+    # something Telegram never signed.
+    #
+    # The rule this restores: the value that was signed and the value that is
+    # used must be the same object, not two values that usually agree. A
+    # check that the second decode "did not change anything" would not do:
+    # that keeps two values and adds a rule about them, when the fix is to
+    # have one value.
+    #
+    # Consequence, stated plainly: initData whose `user` was percent-encoded
+    # a second time by some client no longer parses. Such input was never
+    # signed in the form we were reading it, so refusing it is correct.
+    # Genuine Telegram initData is unaffected -- it is signed exactly as it
+    # arrives after one decoding pass.
     try:
-        user_data = json.loads(unquote(user_data_str))
+        user_data = json.loads(user_data_str)
     except json.JSONDecodeError:
         raise TelegramValidationError(
             "Invalid user data in initData"
         ) from None
+
+    # T-47: the id must exist and be an integer before this value is handed
+    # back. Found while writing the MISSING-field double for this handoff:
+    # signed initData whose user JSON simply had no "id" passed validation,
+    # and the caller's telegram_user["id"] then raised KeyError -- an
+    # unhandled 500 on external input, the same class ERR-03 above closes
+    # for malformed JSON. Telegram always sends an integer id, so nothing
+    # legitimate is refused here.
+    #
+    # The isinstance(dict) check is not redundant with ERR-03: `[1,2,3]` and
+    # `"text"` are perfectly valid JSON, so json.loads accepts them, and it
+    # was .get() below that then raised AttributeError -- a 500 by another
+    # route. Both shapes are refused here, together.
+    #
+    # bool is excluded deliberately: it is a subclass of int in Python, and
+    # a JSON `true` reaching a telegram_id lookup is not a user id.
+    if not isinstance(user_data, dict):
+        raise TelegramValidationError("Invalid user data in initData")
+    user_id = user_data.get("id")
+    if not isinstance(user_id, int) or isinstance(user_id, bool):
+        raise TelegramValidationError("Invalid user data in initData")
 
     return user_data
 
@@ -175,6 +222,63 @@ def validate_telegram_init_data(init_data: str, bot_token: str) -> dict:
 # by validate_telegram_init_data(), which rejects initData whose auth_date is
 # older than auth_init_data_ttl_seconds (or set in the future), and abusive
 # bursts are bounded by check_auth_rate_limit() below.
+
+
+# T-47: the per-source limiter, applied BEFORE the signature is checked.
+#
+# The multiplier, not a new config key: config.py is a production gate this
+# handoff deliberately does not touch, and a knob with no operator asking for
+# it is not worth the .env.example entry, the doctor drift check and the
+# compatibility burden on existing boxes. It rides the two settings that
+# already exist (auth_rate_limit_max_requests / _window_seconds) so tuning
+# the auth limits still moves both together.
+#
+# WHY SO MUCH LOOSER than the per-telegram_id limit. This key is an IP
+# address, and Telegram clients sit behind carrier NAT -- one address can be
+# an entire mobile network's worth of legitimate people opening the Mini App
+# at once. The per-account limit stays tight because it names one account;
+# this one only has to make signature grinding cost a counter instead of
+# costing nothing, so it is set where a burst of real users never reaches it.
+# The two limits are about different things and neither replaces the other.
+_SOURCE_RATE_LIMIT_MULTIPLIER = 20
+
+
+async def check_source_rate_limit(source: str | None) -> None:
+    """Cheap per-source limit, checked BEFORE the HMAC verification.
+
+    T-47: check_auth_rate_limit below keys on telegram_id, which is only
+    known AFTER initData has been parsed -- so before this function existed,
+    an attacker guessing signatures was bounded by nothing but the cost of a
+    HMAC, and the counter they would eventually trip was one they never
+    reached. This runs first, on something known at connection time.
+
+    A missing source (no client in scope) is not rate limited here: there is
+    nothing to key on, and inventing a shared key would put every such
+    request into one bucket -- turning a limiter into an outage.
+
+    Args:
+        source: Client address, already validated by the middleware.
+
+    Raises:
+        TooManyRequestsError: If the per-source limit is exceeded.
+    """
+    if not source:
+        return
+
+    redis = get_redis()
+    rate_key = f"auth_rate_src:{source}"
+    count = await redis.incr(rate_key)
+    if count == 1:
+        # TTL on first increment only -- otherwise every request slides the
+        # window forward and the limit never triggers (same pattern as the
+        # per-telegram_id limiter below).
+        await redis.expire(rate_key, settings.auth_rate_limit_window_seconds)
+
+    limit = settings.auth_rate_limit_max_requests * _SOURCE_RATE_LIMIT_MULTIPLIER
+    if count > limit:
+        raise TooManyRequestsError(
+            "Too many auth attempts. Please try again later."
+        )
 
 
 async def check_auth_rate_limit(telegram_id: int) -> None:

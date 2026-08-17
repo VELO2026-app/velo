@@ -14,11 +14,12 @@
 #
 # HIERARCHY:
 #   VeloError (base — all our exceptions inherit from this)
-#   ├── UnauthorizedError  → 401 (missing or invalid token)
-#   ├── NotFoundError      → 404
-#   ├── ForbiddenError     → 403
-#   ├── ConflictError      → 409 (e.g., double booking)
-#   └── BadRequestError    → 400 (e.g., invalid input beyond Pydantic)
+#   ├── UnauthorizedError    → 401 (missing or invalid token)
+#   ├── NotFoundError        → 404
+#   ├── ForbiddenError       → 403
+#   ├── ConflictError        → 409 (e.g., double booking)
+#   ├── BadRequestError      → 400 (e.g., invalid input beyond Pydantic)
+#   └── TooManyRequestsError → 429 (rate limited; T-47)
 #
 # USAGE (in future modules):
 #   from app.core.exceptions import NotFoundError
@@ -119,3 +120,22 @@ class BadRequestError(VeloError):
         code: str = "bad_request",
     ) -> None:
         super().__init__(message=message, code=code, status_code=400)
+
+
+class TooManyRequestsError(VeloError):
+    """Rate limit exceeded (HTTP 429).
+
+    Examples: repeated auth attempts from one source, abusive bursts.
+
+    T-47: added because rate limiting used to answer 400, which tells a
+    caller "your request was malformed" when the request was fine and the
+    only problem was its rate -- and denies well-behaved clients the one
+    status code they know how to back off from.
+    """
+
+    def __init__(
+        self,
+        message: str = "Too many requests",
+        code: str = "too_many_requests",
+    ) -> None:
+        super().__init__(message=message, code=code, status_code=429)
