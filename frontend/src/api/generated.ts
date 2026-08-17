@@ -591,7 +591,7 @@ export interface DiaryFeedItem {
   created_at: string
 }
 
-/** GET /api/v1/diary/feed -- cursor-paginated unified timeline. `next_cursor` is the occurred_at of the last item when a full page was returned (more may remain); null marks the end of the feed. The client passes it back as the `cursor` query param for the next page. */
+/** GET /api/v1/diary/feed -- cursor-paginated unified timeline. `next_cursor` is an opaque cursor packing the last item's (occurred_at, id) when a full page was returned (more may remain); null marks the end of the feed. The client passes it back verbatim as the `cursor` query param for the next page -- it is not a bare timestamp (SW12: occurred_at alone cannot order ties, see feed_service.list_diary_feed). */
 export interface DiaryFeedResponse {
   items: DiaryFeedItem[]
   next_cursor: string | null
