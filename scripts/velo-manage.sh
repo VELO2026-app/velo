@@ -492,6 +492,83 @@ run_frontend_tests() {
     fi
 }
 
+# T-44: diff the two copies of the shared codec vector against each other.
+#
+# WHY A CONTAINER AT ALL. The public practice code has two decoders, one per
+# language (backend/app/modules/zoom/service.py, frontend/src/composables/
+# useAuth.ts) -- a language boundary, not a duplication anyone forgot. Each
+# side's own suite checks its decoder against its own copy of the vector,
+# which catches "codec changed, table not updated" but is blind to the worse
+# case: somebody edits ONE side's codec AND that side's table. Both suites
+# stay green -- each is internally consistent -- and the copies have silently
+# drifted. Only comparing the two tables catches that, and no existing
+# process can: the backend suite runs inside the app image (no frontend/
+# there), the frontend suite inside an image built from frontend/ alone (no
+# backend/ there). So: a throwaway container with the whole checkout mounted.
+#
+# python:3.12-slim, not repo-app: it is already on any box that has ever
+# built the backend (its Dockerfile's FROM) and `docker image prune -f`
+# leaves tagged images alone, so this pulls nothing in practice -- while not
+# depending on how compose happened to name the project's own image. The
+# mount is read-only; this step can only ever report.
+#
+# NOT skipped when docker is missing -- a red is correct there. `velo test`
+# and `velo update` cannot reach this line without a working docker anyway,
+# and a skip is exactly how this check would rot into decoration.
+run_codec_vector_diff() {
+    echo "Checking the shared codec vector (T-44)..."
+    docker run --rm -v "$COMPOSE_DIR:/repo:ro" python:3.12-slim python -c '
+import json, sys
+
+START = "T-44 CODEC VECTOR START"
+END = "T-44 CODEC VECTOR END"
+SIDES = {
+    "backend": "/repo/backend/tests/test_zoom_public_link.py",
+    "frontend": "/repo/frontend/src/composables/useAuth.test.ts",
+}
+
+parsed = {}
+for side, path in SIDES.items():
+    try:
+        text = open(path, encoding="utf-8").read()
+    except OSError as exc:
+        sys.exit("cannot read %s side (%s): %s" % (side, path, exc))
+    if START not in text or END not in text:
+        sys.exit("vector sentinels missing from the %s side (%s)" % (side, path))
+    body = text.split(START, 1)[1].split(END, 1)[0]
+    chunk = body[body.find("{"):body.rfind("}") + 1]
+    try:
+        parsed[side] = json.loads(chunk)
+    except json.JSONDecodeError as exc:
+        sys.exit("the %s side vector is not valid JSON: %s" % (side, exc))
+
+# Parsed, not byte-compared: the two files quote the block differently
+# (triple quotes vs a template literal) and that is allowed. The DATA is what
+# must match.
+if parsed["backend"] == parsed["frontend"]:
+    print("  the two copies agree (%d cases)" % len(parsed["backend"]["cases"]))
+    sys.exit(0)
+
+be = {c["input"]: c["expect"] for c in parsed["backend"]["cases"]}
+fe = {c["input"]: c["expect"] for c in parsed["frontend"]["cases"]}
+for key in sorted(set(be) | set(fe)):
+    b, f = be.get(key, "<absent>"), fe.get(key, "<absent>")
+    if b != f:
+        print("  DIVERGED on input %r: backend=%r frontend=%r" % (key, b, f))
+if be == fe:
+    print("  the case tables agree; the difference is elsewhere in the block")
+sys.exit(1)
+' || {
+        echo -e "${RED}✗ The two copies of the codec vector have DRIFTED${NC}"
+        echo "  backend/tests/test_zoom_public_link.py"
+        echo "  frontend/src/composables/useAuth.test.ts"
+        echo "  Both decoders and BOTH copies of the table change together."
+        return 1
+    }
+    echo -e "${GREEN}✓ Codec vector: both copies agree${NC}"
+    return 0
+}
+
 # Poll the backend /health endpoint until it responds, or fail after timeout.
 # Avoids a race where we hit the API (openapi.json / health) before the `app`
 # container is actually listening -- previously masked by the test step that
@@ -1416,6 +1493,15 @@ update_product() {
                 echo ""
                 echo -e "${YELLOW}⊘ Backend tests skipped on role '$VELO_ROLE' (deploy gate is the test server)${NC}"
             elif [ $SKIP_TESTS -eq 0 ]; then
+                # T-44: runs BEFORE the suite -- it is a two-second file
+                # comparison, and a drifted vector is worth reporting
+                # before, not after, two minutes of pytest.
+                echo ""
+                if ! run_codec_vector_diff; then
+                    echo "Fix the code and run: velo update"
+                    exit 1
+                fi
+
                 echo ""
                 echo "Running backend tests..."
                 if ! $COMPOSE_CMD exec -T app python -m pytest tests/ -v --tb=short; then
@@ -1932,23 +2018,42 @@ case "${1:-}" in
             exit 1
         fi
         FAILED=0
+        # T-44: the codec vector check belongs to NEITHER side -- it compares
+        # the two copies -- so every branch below runs it, including the
+        # single-sided ones. Whichever side you are testing, you want to know
+        # its table no longer matches the other's.
         case "${2:-all}" in
             backend)
-                echo "=== Backend Tests ==="
+                echo "=== Codec Vector (T-44) ==="
                 cd_compose
+                if ! run_codec_vector_diff; then
+                    FAILED=1
+                fi
+                echo ""
+                echo "=== Backend Tests ==="
                 if ! $COMPOSE_CMD exec -T app python -m pytest tests/ -v --tb=short; then
                     FAILED=1
                 fi
                 ;;
             frontend)
+                echo "=== Codec Vector (T-44) ==="
+                if ! run_codec_vector_diff; then
+                    FAILED=1
+                fi
+                echo ""
                 echo "=== Frontend Tests ==="
                 if ! run_frontend_tests; then
                     FAILED=1
                 fi
                 ;;
             all|"")
-                echo "=== Backend Tests ==="
+                echo "=== Codec Vector (T-44) ==="
                 cd_compose
+                if ! run_codec_vector_diff; then
+                    FAILED=1
+                fi
+                echo ""
+                echo "=== Backend Tests ==="
                 if ! $COMPOSE_CMD exec -T app python -m pytest tests/ -v --tb=short; then
                     FAILED=1
                 fi

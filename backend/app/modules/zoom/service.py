@@ -1014,6 +1014,14 @@ async def get_meeting_recording_link(zoom_meeting_id: str) -> str | None:
 # as the deep link "zoom__<22>" (28 chars against a limit of 64).
 PUBLIC_CODE_LENGTH = 22
 
+# base64url's alphabet, character for character what the client copy's
+# /^[A-Za-z0-9_-]{22}$/ allows. Used by decode_practice_code to reject a
+# wrong charset BEFORE decoding -- see the T-44 note in that function for
+# why the decoder alone does not do it.
+_PUBLIC_CODE_ALPHABET = (
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+)
+
 # SECOND COPY WARNING: frontend/src/composables/useAuth.ts carries a decoder
 # for this same code. Two copies exist because the deep-link route takes a
 # UUID path parameter, so the client must decode BEFORE it can build the
@@ -1022,6 +1030,21 @@ PUBLIC_CODE_LENGTH = 22
 # a network round trip to a pure function. Both sides must agree on GARBAGE,
 # not just on valid input: wrong length, wrong charset and empty all mean
 # "not a route" on both sides.
+#
+# T-44: that agreement is no longer held by discipline alone. A shared vector
+# -- the same JSON table of inputs and expected outcomes -- is duplicated
+# VERBATIM in both test files:
+#   backend/tests/test_zoom_public_link.py
+#   frontend/src/composables/useAuth.test.ts
+# Each side runs its own decoder against its own copy (catching "I changed
+# the codec and not the table"), and `velo test` / `velo update` additionally
+# diff the two copies against each other in a container that can see both
+# trees (catching "I changed one side's codec AND its table, leaving the
+# other side behind" -- which no single-sided test can see).
+# CHANGE THIS DECODER ONLY IN PAIRS: this function, useAuth.ts's
+# decodePracticeCode, and BOTH copies of the vector. T-44 was opened because
+# this comment used to be the only thing holding them together, and the two
+# had already drifted: Python accepted "+" and "/" where the client did not.
 
 
 def encode_practice_code(practice_id: UUID) -> str:
@@ -1055,6 +1078,20 @@ def decode_practice_code(code: str) -> UUID | None:
     """
     if len(code) != PUBLIC_CODE_LENGTH:
         return None
+    # T-44: the charset gate this docstring has always promised ("wrong
+    # charset" -> None) but did not have. It is NOT redundant with the
+    # decoder below: urlsafe_b64decode translates - -> + and _ -> / and then
+    # calls the STANDARD decoder, which happily accepts a literal "+" or "/"
+    # that was already in the input. So "AAAAAAAAAAAAAAAAAAAA++" decoded to a
+    # perfectly good UUID here while the client copy (useAuth.ts, which tests
+    # the alphabet with a regex BEFORE atob) rejected it -- Python accepted a
+    # strict superset of what the client accepted, which is exactly the
+    # silent divergence T-44's shared vector exists to catch. Checked with
+    # str.strip(), not a regex, to keep this cheap and dependency-free; the
+    # alphabet is base64url's, character for character what the client's
+    # /^[A-Za-z0-9_-]{22}$/ allows.
+    if code.strip(_PUBLIC_CODE_ALPHABET) != "":
+        return None
     try:
         raw = base64.urlsafe_b64decode(code + "==")
     except (binascii.Error, ValueError):
@@ -1064,6 +1101,13 @@ def decode_practice_code(code: str) -> UUID | None:
         # silently answered with "not a link".
         return None
     if len(raw) != 16:
+        # UNREACHABLE for input that passed both gates above, and kept
+        # deliberately: 22 characters of the alphabet plus "==" always
+        # decode to exactly 16 bytes (verified over 200k random codes --
+        # it is arithmetic, not luck). This survives as the guard that
+        # would catch a future change to PUBLIC_CODE_LENGTH, which is why
+        # the shared vector documents the axis instead of carrying a
+        # fabricated example for it.
         return None
     return UUID(bytes=raw)
 

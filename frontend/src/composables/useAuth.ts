@@ -74,8 +74,28 @@ const READY_TIMEOUT_MS = 10_000
  * exists -- there is no database here. Such a link routes normally and the
  * resolve call on the target screen answers 404, which PracticeLiveView
  * renders as an honest error.
+ *
+ * T-44: that agreement is no longer held by discipline alone. A shared
+ * vector -- the same JSON table of inputs and expected outcomes -- is
+ * duplicated VERBATIM in both test files:
+ *   frontend/src/composables/useAuth.test.ts
+ *   backend/tests/test_zoom_public_link.py
+ * Each side runs its own decoder against its own copy (catching "I changed
+ * the codec and not the table"), and `velo test` / `velo update` additionally
+ * diff the two copies against each other in a container that can see both
+ * trees (catching "I changed one side's codec AND its table, leaving the
+ * other side behind" -- which no single-sided test can see).
+ * CHANGE THIS DECODER ONLY IN PAIRS: this function, decode_practice_code in
+ * backend/app/modules/zoom/service.py, and BOTH copies of the vector. T-44
+ * was opened because the comments were the only thing holding them together,
+ * and the two had already drifted: Python accepted "+" and "/" (its decoder
+ * translates - and _ into them and then accepts either spelling) where the
+ * regex below rejects them. The backend now gates the alphabet explicitly.
+ *
+ * Exported for the vector test, which must exercise the CODEC rather than
+ * the codec wrapped in parseStartParam's own route-shaped regex.
  */
-function decodePracticeCode(code: string): string | null {
+export function decodePracticeCode(code: string): string | null {
   if (code.length !== 22) return null
   if (!/^[A-Za-z0-9_-]{22}$/.test(code)) return null
   try {
