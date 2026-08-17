@@ -201,7 +201,7 @@ _TAXONOMY_FIELDS = ("direction", "style", "difficulty")
 
 async def _owned_root_parent_or_400(
     master_id: UUID, parent_id: UUID | None, session: AsyncSession,
-) -> None:
+) -> Practice | None:
     """H-R2 (3.4): a series occurrence may only attach to (a) an EXISTING
     practice, (b) owned by THIS master, (c) that is itself a ROOT (no
     grandchildren -- occurrences of occurrences are not a thing).
@@ -211,9 +211,13 @@ async def _owned_root_parent_or_400(
     reflex as _owned_group_ids_or_400 below (a 400/404 split would leak
     which foreign practice ids exist). Also converts what would be a raw
     FK IntegrityError (-> 500) on a nonexistent id into a clean 400.
+
+    Returns the validated parent (None when parent_id is None) so the
+    caller can inherit from it without a second fetch -- T-23 (owner-ruled
+    2026-08-17) needs the parent's audience_kind and group rows.
     """
     if parent_id is None:
-        return
+        return None
     parent = await session.get(Practice, parent_id)
     if (
         parent is None
@@ -223,6 +227,7 @@ async def _owned_root_parent_or_400(
         raise BadRequestError(
             "parent_practice_id must be your own root practice"
         )
+    return parent
 
 
 async def _owned_group_ids_or_400(
@@ -977,9 +982,33 @@ async def create_practice(
     await _owned_group_ids_or_400(user.id, body.group_ids, session)
     # H-R2 (3.4): validate parent_practice_id BEFORE anything is inserted
     # -- same placement discipline as the group check above.
-    await _owned_root_parent_or_400(
+    parent = await _owned_root_parent_or_400(
         user.id, body.parent_practice_id, session,
     )
+
+    # T-23 (owner-ruled 2026-08-17): a manually-attached child (this path;
+    # the auto-generated recurrence path already does this in
+    # series_service.py's _build_child_occurrence) must not silently default
+    # PUBLIC under a restricted root. The hole was made by SILENCE, not by
+    # disagreement -- so the rule is symmetric: no audience_kind in the
+    # request INHERITS the parent's (audience_kind + its
+    # PracticeAudienceGroup rows, copied after flush below); an EXPLICIT
+    # audience_kind that DIFFERS from the parent's is REFUSED rather than
+    # silently overwriting the master's stated intent. No parent -> the
+    # request's own audience_kind (default PUBLIC) is unaffected.
+    inherited_group_source_id: UUID | None = None
+    effective_audience_kind = body.audience_kind
+    if parent is not None:
+        if "audience_kind" in body.model_fields_set:
+            if body.audience_kind != parent.audience_kind:
+                raise BadRequestError(
+                    "audience_kind conflicts with the parent practice's "
+                    f"audience_kind ({parent.audience_kind!r}) -- omit "
+                    "audience_kind to inherit it, or match it explicitly"
+                )
+        else:
+            effective_audience_kind = parent.audience_kind
+            inherited_group_source_id = parent.id
 
     practice = Practice(
         master_id=user.id,
@@ -996,7 +1025,7 @@ async def create_practice(
         is_free=body.is_free,
         price_cents=price_cents,
         currency=body.currency,
-        audience_kind=body.audience_kind,
+        audience_kind=effective_audience_kind,
     )
 
     # Calendar taxonomy -> data.taxonomy (JSONB sandbox).
@@ -1037,7 +1066,22 @@ async def create_practice(
         # prepared to handle.
         raise
 
-    if body.group_ids:
+    if inherited_group_source_id is not None and effective_audience_kind == AudienceKind.GROUPS.value:
+        # Copy the PARENT's target groups, not body.group_ids -- silence
+        # inherits the whole restriction, and body.group_ids is empty here
+        # by construction (the caller sent neither field). Same shape as
+        # series_service.py's root_group_ids copy for Path A.
+        parent_group_ids = list(
+            (
+                await session.execute(
+                    select(PracticeAudienceGroup.group_id).where(
+                        PracticeAudienceGroup.practice_id == inherited_group_source_id,
+                    )
+                )
+            ).scalars().all()
+        )
+        await _set_practice_audience_groups(practice.id, parent_group_ids, session)
+    elif body.group_ids:
         await _set_practice_audience_groups(practice.id, body.group_ids, session)
 
     logger.info(

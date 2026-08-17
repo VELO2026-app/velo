@@ -627,6 +627,56 @@ async def test_feed_cursor_pagination(
     assert page3["next_cursor"] is None
 
 
+@pytest.mark.asyncio
+async def test_feed_cursor_pagination_survives_tied_timestamps(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """SW12: a series cancellation deliberately stamps one shared occurred_at
+    on every DiaryEvent it fans out (cancel_service.py, "W-3"). A plain
+    occurred_at cursor drops whichever tied rows miss the page before the
+    cursor advances past their timestamp, permanently, because Postgres does
+    not order ties. Total-ordering on (occurred_at, id) must return every row
+    exactly once even when a tie group straddles a page boundary.
+    """
+    auth = await login_user(client, telegram_id=90012, first_name="Tied")
+    token = auth["session_token"]
+    user_id = UUID(auth["user"]["id"])
+
+    shared_ts = datetime.now(UTC)
+    tied_ids = []
+    for n in range(4):
+        event = DiaryEvent(
+            user_id=user_id,
+            kind=DiaryEventKind.PRACTICE_CANCELLED_BY_MASTER.value,
+            occurred_at=shared_ts,
+            source_type="practice",
+            source_id=UUID(int=n + 1),
+            snapshot={"practice_title": f"Tied occurrence {n}"},
+        )
+        db_session.add(event)
+        await db_session.flush()
+        tied_ids.append(str(event.id))
+    await db_session.commit()
+
+    assert len(set(tied_ids)) == 4  # sanity: 4 distinct rows, all row IDs.
+
+    # Page through with a limit smaller than the tie group -- the failure
+    # mode is a page boundary landing INSIDE 4 rows sharing one timestamp.
+    seen: set[str] = set()
+    cursor = None
+    for _ in range(10):  # generous upper bound; a stuck cursor would loop
+        page = await _feed(client, token, limit=2, cursor=cursor)
+        seen.update(i["id"] for i in page["items"])
+        cursor = page["next_cursor"]
+        if cursor is None:
+            break
+
+    assert set(tied_ids) <= seen, (
+        f"tied rows dropped by pagination: missing {set(tied_ids) - seen}"
+    )
+
+
 # ===================================================================
 # Isolation + auth
 # ===================================================================

@@ -475,6 +475,104 @@ async def test_create_practice_with_own_groups_returns_group_names(
 
 
 # ===================================================================
+# T-23 (owner-ruled 2026-08-17): manually-attached series child inherits
+# the parent's audience on SILENCE, is refused on an EXPLICIT conflict.
+# The auto-generated recurrence path (series_service.py) already did this
+# correctly; POST /practices with parent_practice_id had no such copy at
+# all -- a child attached under a restricted root defaulted PUBLIC and was
+# both bookable by an outsider and listed in the public feed.
+# ===================================================================
+
+
+@pytest.mark.asyncio
+async def test_create_practice_child_silently_inherits_restricted_parent_audience(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """A child attached via parent_practice_id with NO audience_kind in the
+    request takes the parent's audience_kind. Same shape as
+    test_create_booking_rejects_a_viewer_outside_the_audience above, plus
+    the parent_practice_id attach this repo had zero coverage for."""
+    master = await _make_verified_master(client, db_session, 99345)
+    headers = auth_headers(master["session_token"])
+    root = await _create_practice(
+        db_session, master["user"]["id"], audience_kind=AudienceKind.STUDENTS.value,
+    )
+    await db_session.commit()
+
+    created = await client.post(
+        PRACTICES_URL,
+        json=_practice_body(parent_practice_id=str(root.id)),  # no audience_kind key
+        headers=headers,
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["audience_kind"] == "students"
+    child_id = created.json()["id"]
+
+    stranger = await login_user(client, telegram_id=99346, first_name="Stranger")
+    resp = await client.post(
+        BOOKINGS_URL,
+        json={"practice_id": child_id},
+        headers=auth_headers(stranger["session_token"]),
+    )
+
+    assert resp.status_code == 403
+    assert resp.json()["error"] == "not_a_student"
+
+
+@pytest.mark.asyncio
+async def test_create_practice_child_inherits_restricted_parents_group_targets(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """Silence also copies the parent's PracticeAudienceGroup rows, not
+    just the audience_kind label -- a 'groups' parent with no group_ids
+    copied would leave the child restricted-but-targetless."""
+    master = await _make_verified_master(client, db_session, 99347)
+    headers = auth_headers(master["session_token"])
+    group = await _custom_group(db_session, master["user"]["id"], name="Клуб")
+    root = await _create_practice(
+        db_session, master["user"]["id"], audience_kind=AudienceKind.GROUPS.value,
+    )
+    await _target_group(db_session, root.id, group.id)
+    await db_session.commit()
+
+    created = await client.post(
+        PRACTICES_URL,
+        json=_practice_body(parent_practice_id=str(root.id)),  # no audience_kind, no group_ids
+        headers=headers,
+    )
+
+    assert created.status_code == 201, created.text
+    assert created.json()["audience_kind"] == "groups"
+    assert created.json()["audience_group_names"] == ["Клуб"]
+    assert await _target_group_ids(db_session, created.json()["id"]) == {group.id}
+
+
+@pytest.mark.asyncio
+async def test_create_practice_child_explicit_audience_conflicting_with_parent_is_refused(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """An EXPLICIT audience_kind that disagrees with the parent's is a 400,
+    never a silent overwrite of either side's stated intent."""
+    master = await _make_verified_master(client, db_session, 99348)
+    headers = auth_headers(master["session_token"])
+    root = await _create_practice(
+        db_session, master["user"]["id"], audience_kind=AudienceKind.STUDENTS.value,
+    )
+    await db_session.commit()
+
+    resp = await client.post(
+        PRACTICES_URL,
+        json=_practice_body(
+            parent_practice_id=str(root.id),
+            audience_kind=AudienceKind.PUBLIC.value,
+        ),
+        headers=headers,
+    )
+
+    assert resp.status_code == 400
+
+
+# ===================================================================
 # Update-practice audience switching (PROMPT №596, FIX 3 -- previously
 # untested branch matrix in update_practice, practices/service.py)
 # ===================================================================

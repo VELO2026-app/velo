@@ -75,14 +75,12 @@ from app.core.mixins import TimestampMixin, UUIDMixin
 class LedgerStatus(enum.StrEnum):
     """Transaction lifecycle status.
 
-    PENDING:   awaiting external confirmation (e.g. Stripe webhook).
-    DONE:      confirmed and included in balance calculations.
-    CANCELLED: voided, excluded from balance calculations.
+    PENDING: awaiting external confirmation (e.g. Stripe webhook).
+    DONE:    confirmed and included in balance calculations.
     """
 
     PENDING = "pending"
     DONE = "done"
-    CANCELLED = "cancelled"
 
 
 class CompanyLedgerType(enum.StrEnum):

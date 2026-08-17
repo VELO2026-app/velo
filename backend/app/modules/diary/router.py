@@ -436,11 +436,12 @@ async def list_diary_feed_endpoint(
         ge=1,
         le=settings.diary_feed_max_page_size,
     ),
-    cursor: datetime | None = Query(
+    cursor: str | None = Query(
         default=None,
         description=(
-            "occurred_at of the last item from the previous page; "
-            "returns events strictly older than this."
+            "Opaque cursor from the previous page's next_cursor; "
+            "returns events strictly before it, in total order. "
+            "Echo it back verbatim -- do not construct or parse it."
         ),
     ),
     category: list[
