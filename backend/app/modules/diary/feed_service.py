@@ -18,6 +18,7 @@ from sqlalchemy import or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.exceptions import BadRequestError
 from app.modules.diary.models import DiaryEvent, DiaryEventKind
 from app.modules.users.models import User
 
@@ -143,8 +144,31 @@ async def list_diary_feed(
             )
         )
 
-    if cursor is not None:
-        cursor_ts, cursor_id = _decode_cursor(cursor)
+    if cursor:
+        # `if cursor:` and not `is not None` deliberately. An empty string is
+        # what a client sends when it echoes back a null next_cursor: most
+        # HTTP clients serialise a None query param as "cursor=" rather than
+        # dropping it (httpx does, which is how the suite found this), so ""
+        # arrives meaning "no cursor", not "this cursor". Treating it as a
+        # real cursor sent it to _decode_cursor, where partition() left the
+        # timestamp half empty and datetime.fromisoformat("") raised -- an
+        # unhandled ValueError, i.e. a 500 caused by an ordinary first-page
+        # request. A whitespace-only cursor is NOT folded in here: it is
+        # malformed rather than absent, and now answers 400 like any other
+        # malformed cursor.
+        try:
+            cursor_ts, cursor_id = _decode_cursor(cursor)
+        except ValueError as exc:
+            # The cursor is opaque to clients and only ever echoed back, so
+            # a malformed one is a bad request -- not a server fault. Raised
+            # here rather than left to escape: _decode_cursor is documented
+            # to raise ValueError, nothing above caught it, and every caller
+            # of this function takes its cursor straight off the wire.
+            raise BadRequestError(
+                "Invalid cursor. Echo back next_cursor verbatim, "
+                "or omit it for the first page.",
+                code="invalid_cursor",
+            ) from exc
         base = base.where(
             tuple_(DiaryEvent.occurred_at, DiaryEvent.id) < tuple_(cursor_ts, cursor_id)
         )

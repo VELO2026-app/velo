@@ -508,6 +508,19 @@ async def test_create_practice_child_silently_inherits_restricted_parent_audienc
     assert created.json()["audience_kind"] == "students"
     child_id = created.json()["id"]
 
+    # Publish it (draft -> scheduled), the same step the group-audience test
+    # below takes and for the same reason: POST /practices creates a DRAFT,
+    # and a draft is refused at the booking gate on STATUS ("Practice is not
+    # available for booking", 400) before the audience gate is ever reached.
+    # Without this the assertion below passes or fails for the wrong reason --
+    # it was reading a status refusal as if it were an audience refusal.
+    published = await client.patch(
+        f"{PRACTICES_URL}/{child_id}",
+        json={"status": "scheduled"},
+        headers=headers,
+    )
+    assert published.status_code == 200, published.text
+
     stranger = await login_user(client, telegram_id=99346, first_name="Stranger")
     resp = await client.post(
         BOOKINGS_URL,
