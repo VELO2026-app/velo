@@ -517,3 +517,51 @@ class TestSourceRateLimit:
         ):
             await check_source_rate_limit(None)
         redis.incr.assert_not_awaited()
+
+    @pytest.mark.parametrize(
+        "source",
+        ["127.0.0.1", "::1", "172.18.0.1", "10.0.0.5", "192.168.1.7"],
+    )
+    async def test_non_routable_source_is_not_limited(
+        self, source: str
+    ) -> None:
+        """REGRESSION, and the reason this test exists at all: the first
+        version of this limiter keyed on every address, so the whole backend
+        suite -- 644 logins, all from 127.0.0.1, far above the ceiling --
+        landed in ONE counter and went red from the hundredth login on.
+
+        A loopback or private address is not a remote attacker; it is our own
+        infrastructure showing through (the test client, a health check, or
+        the nginx peer used as fallback when no X-Forwarded-For was present).
+        Keying on it bounds nobody and shares one counter between everybody
+        it cannot tell apart. Asserting on incr specifically: the address must
+        be rejected BEFORE the counter, not merely forgiven after it."""
+        redis = MagicMock()
+        redis.incr = AsyncMock(return_value=10**6)
+        with patch(
+            "app.modules.auth.service.get_redis", return_value=redis
+        ):
+            await check_source_rate_limit(source)
+        redis.incr.assert_not_awaited()
+
+    @pytest.mark.parametrize(
+        "source", ["8.8.8.8", "2001:4860:4860::8888"]
+    )
+    async def test_routable_source_is_still_limited(
+        self, source: str
+    ) -> None:
+        """The other half of the same rule: a real remote client, v4 or v6,
+        is still counted. The exemption above must not have turned the
+        limiter off for the traffic it exists to bound."""
+        limit = (
+            settings.auth_rate_limit_max_requests
+            * _SOURCE_RATE_LIMIT_MULTIPLIER
+        )
+        redis = MagicMock()
+        redis.incr = AsyncMock(return_value=limit + 1)
+        redis.expire = AsyncMock()
+        with patch(
+            "app.modules.auth.service.get_redis", return_value=redis
+        ), pytest.raises(TooManyRequestsError):
+            await check_source_rate_limit(source)
+        redis.incr.assert_awaited_once()

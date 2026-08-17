@@ -36,6 +36,7 @@
 
 import hashlib
 import hmac
+import ipaddress
 import json
 import secrets
 from datetime import UTC, datetime
@@ -256,6 +257,27 @@ async def check_source_rate_limit(source: str | None) -> None:
     nothing to key on, and inventing a shared key would put every such
     request into one bucket -- turning a limiter into an outage.
 
+    THE SAME RULE, for the same reason, applies to any address that is not a
+    routable public one. This is not a softening -- it is the original rule
+    applied where it actually bites, and it was found the hard way: keyed on
+    every address, the first version put the entire backend test suite (644
+    logins from 127.0.0.1, far above the ceiling below) into ONE bucket and
+    turned the whole suite red. A loopback or private address is never a
+    remote attacker; it is our own infrastructure showing through -- the test
+    client, a health check, or the nginx peer used as fallback when no
+    X-Forwarded-For was present. Limiting on it does not bound an attacker,
+    it only shares one counter between everybody it cannot tell apart.
+
+    Named honestly, the failure mode this leaves: if nginx ever stopped
+    setting X-Forwarded-For, every request would resolve to the proxy's own
+    private address and this limiter would silently stop applying. That is a
+    degradation to OFF. The alternative -- keying on the shared fallback --
+    is a degradation to OUTAGE for every client at once, which is what the
+    suite just demonstrated. Between a control that stops helping and a
+    control that takes the service down, this one may only do the former.
+    The per-telegram_id limiter below is unaffected either way, and it is
+    the one that names a specific account.
+
     Args:
         source: Client address, already validated by the middleware.
 
@@ -263,6 +285,15 @@ async def check_source_rate_limit(source: str | None) -> None:
         TooManyRequestsError: If the per-source limit is exceeded.
     """
     if not source:
+        return
+
+    try:
+        if not ipaddress.ip_address(source).is_global:
+            return
+    except ValueError:
+        # Not an address at all -- the middleware should never produce this,
+        # and guessing at a key for it is exactly what the paragraph above
+        # forbids.
         return
 
     redis = get_redis()
