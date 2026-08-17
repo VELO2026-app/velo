@@ -156,6 +156,13 @@ const userEmail = computed(
 //   - ADDED: threads where this master is himself the client (a master may
 //     open a chat with another master).
 // For a row on one's OWN profile, «mine» is the correct reading of both.
+//
+// T-53 removed the support pool from the chat LIST as well (it was a privacy
+// leak), so it is now absent from both this number and that screen. Do not
+// read that as «the two agree»: a thread where the master is himself the
+// client counts HERE and never shows up in that list, because comms scopes an
+// operator's list by assignee. That gap is the approved meaning above, not a
+// bug to reconcile.
 const messagesCount = ref(0)
 
 async function loadMessagesCount(): Promise<void> {

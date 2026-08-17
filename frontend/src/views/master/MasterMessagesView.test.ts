@@ -13,11 +13,16 @@
 // as-is, and the fallback wording is the master's («Ученик», not «Мастер»).
 //
 // UNREAD SINCE T-51: comms attaches it to the row itself (with_unread), so
-// there are no per-thread calls left to mock. The master-specific state is
-// the POOL ROW -- an unclaimed support thread, visible to every operator and
-// belonging to none -- which arrives with NO `unread` key at all. That
-// missing key is the whole point: it is what keeps a master's badge from
-// lighting up over a support queue nobody has claimed yet.
+// there are no per-thread calls left to mock.
+//
+// THE POOL-ROW CASE WAS RETRACTED IN T-53, and it is worth saying why rather
+// than just deleting it. This file used to assert that a master's list can
+// hold a row with no `unread` key -- the unclaimed support thread every
+// operator sees. True of the code then. T-53 removed those rows from the
+// master's list entirely (a privacy leak, not a badge question), so that row
+// can no longer arrive here and a test for it would document an unreachable
+// state. The screen still reads `t.unread ?? 0`, because the field is
+// optional in the shared type and IS absent on the student list.
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -142,14 +147,13 @@ describe('MasterMessagesView', () => {
     expect(chatsApi.listChats).toHaveBeenCalledTimes(1)
   })
 
-  it('POOL ROW: a thread with no `unread` key renders no badge, and the neighbouring badge is untouched', async () => {
-    // An unclaimed support/section thread reaches every operator's list but
-    // belongs to none of them, so comms omits the key rather than sending a
-    // zero. Rendering it as 0 would be a lie of a different kind -- it would
-    // claim the master has read a queue that is not theirs.
+  it('an explicit zero renders no badge, and the neighbouring badge is untouched', async () => {
+    // What replaced the retracted pool-row case (see the header). Zero is
+    // now the only badge-less state this screen can reach, and it must stay
+    // distinguishable from a count of its own.
     vi.mocked(chatsApi.listChats).mockResolvedValue({
       threads: [
-        commsThread(),
+        commsThread({ unread: 0 }),
         commsThread({ id: 'thread-2', client: 'student-2', unread: 4 }),
       ],
       next_cursor: null,

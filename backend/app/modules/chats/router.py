@@ -85,6 +85,13 @@ router = APIRouter(prefix="/api/v1/chats", tags=["chats"])
 # session. Listed explicitly so the rejection message can name the offender.
 _ACTOR_PARAMS = ("client", "sender", "participant", "operator", "is_supervisor")
 
+# The only operator form this proxy deals in. Written by
+# _create_or_get_thread and read by _keep_only_user_form_threads -- one
+# constant so the write side and the privacy filter provably agree on the
+# same string. The other form comms knows, "section", belongs to
+# modules/support and never to a personal chat list.
+_USER_OPERATOR_KIND = "user"
+
 
 def _reject_actor_override(request: Request) -> None:
     """Refuse a request that tries to name its own actor.
@@ -165,6 +172,97 @@ def _peer_payload(user: User | None) -> dict[str, Any] | None:
         "name": " ".join(parts) if parts else None,
         "avatar_url": user.avatar_url,
     }
+
+
+def _keep_only_user_form_threads(payload: Any) -> None:
+    """Drop every thread from a comms list that is not a user-form DM.
+
+    WHY THIS EXISTS -- A PRIVACY LEAK, not tidying. comms' operator-scoped
+    read returns `assignee == me` OR `(section thread AND assignee IS
+    NULL)`: the UNCLAIMED SUPPORT QUEUE reaches every operator, with no
+    supervisor involved. velo has no support screen for a master, so those
+    rows were a stranger's support request sitting in a master's personal
+    chat list -- carrying the opener's real name, avatar and velo uuid via
+    the peer block, plus `title`, which is the topic text the opener typed
+    -- and 404ing when tapped, because a section thread has no row in the
+    chat_threads projection. A privacy exposure stitched to a dead end.
+
+    This is a RECURRENCE. The admin branch of list_chats was cured of the
+    same shape (see its "This used to be `is_supervisor=True`" note): every
+    conversation on the installation, every row named and avatared, every
+    one 404ing on open. The master branch was not revisited then because
+    its is_supervisor is already False -- but it never leaked through the
+    supervisor flag, it leaks through the pool.
+
+    ALLOWLIST, NOT DENYLIST, and the difference is where the unknown
+    falls. comms' OperatorKind is closed today (user / section), so both
+    predicates behave identically right now. They differ on what has not
+    happened yet: a denylist admits any form nobody thought about -- a
+    third kind if comms adds one, and a row whose `operator_kind` key is
+    missing or mangled -- straight into a master's personal list, named
+    and avatared. The failure costs are asymmetric: an allowlist mistake
+    hides a row (visible, reported, nothing escapes); a denylist mistake
+    shows an unforeseen row (invisible to us, discovered from outside).
+    In a privacy-class predicate that choice only goes one way.
+
+    A CLAIMED section thread (assignee == the caller) is dropped by the
+    same predicate, deliberately. It is dead in both directions anyway --
+    no projection row, so _require_participant 404s it -- and the rule
+    this module lives by is that listed and openable must be the same set.
+    When a support screen exists it gets its own surface and its own
+    projection rows; it does not get lodged in the personal list.
+
+    REJECTED: filtering by the local projection ("keep rows that have a
+    chat_threads row"), which is tempting because it literally mirrors the
+    admin branch. The admin branch BUILDS its list from the projection;
+    this branch receives the list from comms, where the projection is a
+    lookup table, not the source. The projection can legitimately lack a
+    row for a live DM -- _create_or_get_thread re-points on an id change,
+    and `velo resync-comms` truncates it outright -- and in that window a
+    projection filter would delete a master's OWN conversations from the
+    screen. That trades a leak for data loss. Thread FORM does not depend
+    on projection state.
+
+    ORDER MATTERS: this runs BEFORE _attach_peers_from_comms. Names and
+    avatars we are about to discard must not be resolved at all -- the
+    leak is not created even momentarily inside the process -- and the
+    discarded rows stay out of the bulk SELECT.
+
+    `next_cursor` is left exactly as comms sent it: the filter must not
+    quietly change what pagination means. Same stance as the mirror-image
+    filter on the admin support list (support/service.py), which keeps
+    section threads and drops the rest on the page it already fetched.
+
+    # KNOWN CEILING (a filtered page is shorter than the requested limit;
+    # acknowledged by design):
+    #   1. Mechanics: comms fills a page up to `limit` and we remove rows
+    #      from it, so the caller can receive fewer than `limit` threads
+    #      while next_cursor still points at more. A page can even filter
+    #      to zero and still have a successor.
+    #   2. Status: acknowledged by design.
+    #   3. Backlog ref: none -- the condition is invisible today, see the
+    #      trigger.
+    #   4. Promotion trigger: the master's list gains paged loading, i.e.
+    #      the frontend starts using next_cursor. Today MasterMessagesView
+    #      calls listChats() once with no cursor and has no infinite
+    #      scroll, so a short page is never read as "the end".
+    #   5. Agreed fix: top the page back up to `limit` -- over-fetch from
+    #      comms, or walk to the next page -- inside this proxy.
+    #   6. Rejected: making comms narrow the result instead. The pool is
+    #      visible to an operator CORRECTLY; comms does not know that this
+    #      product has no support screen, and must not be taught to.
+    """
+    if not isinstance(payload, dict):
+        return
+    threads = payload.get("threads")
+    if not isinstance(threads, list):
+        return
+    payload["threads"] = [
+        t
+        for t in threads
+        if isinstance(t, dict)
+        and t.get("operator_kind") == _USER_OPERATOR_KIND
+    ]
 
 
 async def _attach_peers_from_comms(payload: Any, session: AsyncSession) -> None:
@@ -260,7 +358,7 @@ async def _local_thread_list(
     *,
     viewer_id: UUID,
 ) -> dict[str, Any]:
-    """A thread list built from local pointers, peers resolved in one SELECT.
+    """Local-pointer rows, peers in one SELECT, unread in one comms call.
 
     Used by the two callers comms' operator-scoped list cannot serve: a
     student (a CLIENT there, invisible to that API) and an admin (who is
@@ -337,7 +435,7 @@ async def _create_or_get_thread(
         "/api/v1/threads",
         json={
             "client": str(client_id),
-            "operator_kind": "user",
+            "operator_kind": _USER_OPERATOR_KIND,
             "operator_value": str(operator_id),
             "kind": "dm",
         },
@@ -588,11 +686,18 @@ async def list_chats(
     UNREAD IN EVERY BRANCH, no per-row calls anywhere (T-51). The master
     branch asks comms for it inline (with_unread); the two local branches
     get it in one batch call inside _local_thread_list. A row the caller
-    takes no part in carries NO `unread` key -- for a master that is the
-    POOL ROW (an unclaimed support/section thread, visible to every
-    operator and belonging to none), and the missing key is exactly what
-    keeps a master's badge from lighting up over someone else's support
-    queue.
+    takes no part in carries NO `unread` key -- reachable in the LOCAL
+    branches, where a comms_thread_id in the projection may be stale or
+    foreign, and there the missing key is the drift detector it was built
+    to be. In the MASTER branch it is not reachable: after the privacy
+    filter every row left is a user-form thread this master is the
+    assignee of, so participation -- and therefore the key -- is
+    guaranteed.
+
+    THE SUPPORT QUEUE IS NOT IN THIS LIST (T-53). comms hands every
+    operator the unclaimed section pool; _keep_only_user_form_threads
+    drops it before anything is resolved. See that function -- it is a
+    privacy filter, not a cosmetic one.
 
     FAILURE ASYMMETRY, PRE-EXISTING AND NOT INTRODUCED HERE. If comms is
     down the master branch 502s and the two local branches return 200 with
@@ -621,6 +726,10 @@ async def list_chats(
         if cursor is not None:
             params["cursor"] = cursor
         payload = await comms_request("GET", "/api/v1/threads", params=params)
+        # Privacy filter FIRST -- see _keep_only_user_form_threads. The
+        # unclaimed support queue reaches every operator, and nothing about
+        # it may be resolved, enriched or returned here.
+        _keep_only_user_form_threads(payload)
         await _attach_peers_from_comms(payload, session)
         return payload
 
@@ -682,6 +791,16 @@ async def unread_summary(
     threads where the master is himself the client come in (a master can
     open a chat with another master). For a row on one's OWN profile that
     is the right meaning.
+
+    WHERE THAT LEAVES THIS NUMBER AND THE CHAT LIST (T-53). The support
+    pool is now gone from BOTH: out of this aggregate because there is no
+    participation in it, and out of GET /chats because the master branch
+    filters it. What remains is a real and permanent difference, not a
+    drift: a thread where the master is himself the CLIENT counts HERE and
+    never appears in that list, because comms scopes an operator's list by
+    assignee and the assignee there is the other master. That asymmetry is
+    the approved T-51 meaning of this number -- "mine, in whatever role" --
+    and reading the two as "should match" is the mistake to avoid.
 
     # KNOWN CEILING (velo answers "do I have unread" on TWO surfaces;
     # acknowledged by design):

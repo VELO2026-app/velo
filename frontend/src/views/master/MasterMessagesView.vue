@@ -90,9 +90,10 @@ const error = ref<string | null>(null)
 const threads = ref<ChatThread[]>([])
 
 // Badges arrive WITH the rows (T-51): the list carries `unread` per thread,
-// so there is no second pass and nothing to hold them in. A row without the
-// key is one this master takes no part in -- an unclaimed support thread in
-// the shared pool -- and it renders with no badge rather than a zero.
+// so there is no second pass and nothing to hold them in. Every row a master
+// gets is a DM they are the assignee of, so the key is always there -- the
+// `?? 0` at the call site is the type's optionality, not a state this screen
+// can reach. (It IS reachable on the student list, which shares the type.)
 async function load(): Promise<void> {
   loading.value = true
   error.value = null

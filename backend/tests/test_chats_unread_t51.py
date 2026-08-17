@@ -1,7 +1,13 @@
 # =============================================================================
-# VELO -- unread without N+1: one comms call per screen (T-51)
+# VELO -- unread without N+1 (T-51) + the master-list privacy filter (T-53)
 # =============================================================================
 # Band 89760-89799.
+#
+# TWO DELIVERIES, ONE FILE, ON PURPOSE: T-53 reuses this band and every
+# builder here (_make_master, _comms_thread, the band drain), and both
+# deliveries make claims about the SAME surface -- what a master's chat
+# list contains. Splitting them would have duplicated the fixtures and
+# put two halves of one contract in two places.
 #
 # ON THIS BAND, because the neighbouring file warns about it. The header of
 # test_chats_t3_students.py records that it MOVED OFF 89760-89799 in August
@@ -39,6 +45,7 @@
 # app.modules.bookings.service.comms_request) -- no comms stack needed.
 # =============================================================================
 
+from copy import deepcopy
 from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
@@ -285,21 +292,37 @@ class TestMasterListBranch:
         rows = resp.json()["threads"]
         assert [r["unread"] for r in rows] == [3, 0]
 
-    async def test_pool_row_arrives_without_the_key_and_keeps_it_that_way(
+    async def test_every_row_left_in_a_masters_list_carries_the_unread_key(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch
     ) -> None:
-        """An unclaimed support thread reaches every operator's list and
-        belongs to none of them, so comms sends no `unread`. The proxy must
-        not helpfully invent a 0 -- that would put a badge on somebody
-        else's queue."""
+        """RETRACTION OF A T-51 CLAIM, and why the old one was right then.
+
+        T-51 asserted here that a master's list can contain a row with NO
+        `unread` key -- the unclaimed support POOL ROW, which comms hands
+        every operator and which belongs to none of them. That was true of
+        the code as it stood, and the assertion was the honest one to make.
+
+        T-53 removed the pool from this list entirely (it was a privacy
+        leak, not a badge question), so the state that assertion described
+        is no longer reachable HERE: everything the master branch returns
+        is a user-form thread they are the assignee of, hence a
+        participant, hence always keyed. Documenting an unreachable state
+        is what this project forbids, so the claim is inverted rather than
+        deleted -- the key is now guaranteed, and that is worth holding.
+
+        The absence RULE itself is untouched and still tested, on the local
+        branches where it remains reachable (see
+        test_id_absent_from_counts_gets_no_key_not_a_zero).
+        """
         master = await _make_master(client, db_session, BAND_MIN + 7)
-        pool_row = _comms_thread(str(uuid4()))
-        pool_row["operator_kind"] = "section"
         monkeypatch.setattr(
             _CHATS_SEAM,
             AsyncMock(
                 return_value={
-                    "threads": [pool_row, _comms_thread(str(uuid4()), unread=4)],
+                    "threads": [
+                        _comms_thread(str(uuid4()), unread=4),
+                        _comms_thread(str(uuid4()), unread=0),
+                    ],
                     "next_cursor": None,
                 }
             ),
@@ -309,8 +332,8 @@ class TestMasterListBranch:
             CHATS_URL, headers=auth_headers(master["session_token"]),
         )
         rows = resp.json()["threads"]
-        assert "unread" not in rows[0]
-        assert rows[1]["unread"] == 4
+        assert len(rows) == 2
+        assert all("unread" in r for r in rows)
 
     async def test_comms_down_still_fails_the_master_list_as_it_always_has(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch
@@ -331,6 +354,258 @@ class TestMasterListBranch:
             CHATS_URL, headers=auth_headers(master["session_token"]),
         )
         assert resp.status_code == 502
+
+
+class TestMasterListPrivacyFilter:
+    """T-53. The unclaimed support queue must not appear in a personal list.
+
+    comms' operator read returns `assignee == me` OR `(section thread AND
+    assignee IS NULL)` -- so the support pool reaches EVERY operator with
+    no supervisor flag involved. velo has no master-facing support screen,
+    so those rows were a stranger's support request in a master's own chat
+    list: opener name, avatar and uuid through the peer block, plus
+    `title`, which is the topic the opener typed -- and a 404 on tap.
+
+    These are privacy assertions, not cosmetic ones: they check the
+    RESPONSE BODY, not just the row list, because what matters is what
+    leaves the process.
+    """
+
+    async def test_unclaimed_support_thread_is_dropped_from_a_masters_list(
+        self, client: AsyncClient, db_session: AsyncSession, monkeypatch
+    ) -> None:
+        master = await _make_master(client, db_session, BAND_MIN + 28)
+        mine = _comms_thread(str(uuid4()), unread=1)
+        pool = _comms_thread(str(uuid4()), operator_kind="section")
+        monkeypatch.setattr(
+            _CHATS_SEAM,
+            AsyncMock(
+                return_value={"threads": [pool, mine], "next_cursor": None}
+            ),
+        )
+
+        resp = await client.get(
+            CHATS_URL, headers=auth_headers(master["session_token"]),
+        )
+        assert resp.status_code == 200
+        rows = resp.json()["threads"]
+        assert [r["id"] for r in rows] == [mine["id"]]
+
+    async def test_nothing_about_a_dropped_row_reaches_the_response_body(
+        self, client: AsyncClient, db_session: AsyncSession, monkeypatch
+    ) -> None:
+        """The strong form: the opener's identity is never resolved and the
+        topic never forwarded.
+
+        Checked against the whole serialized body rather than the row list,
+        because the leak was in what the endpoint RETURNS -- name, avatar,
+        uuid via the peer block that _attach_peers_from_comms stamps on
+        every row unconditionally, and `title`, which comms returns
+        verbatim and which the opener wrote. If the filter ever moved to
+        after the enrichment, the rows would still look right and this
+        assertion would still fail.
+        """
+        master = await _make_master(client, db_session, BAND_MIN + 29)
+        stranger = await login_user(
+            client, telegram_id=BAND_MIN + 30, first_name="Zinaida",
+        )
+        stranger_id = stranger["user"]["id"]
+        pool = _comms_thread(
+            str(uuid4()),
+            operator_kind="section",
+            client=stranger_id,
+            title="I cannot withdraw my money",
+        )
+        monkeypatch.setattr(
+            _CHATS_SEAM,
+            AsyncMock(
+                return_value={
+                    "threads": [pool, _comms_thread(str(uuid4()), unread=0)],
+                    "next_cursor": None,
+                }
+            ),
+        )
+
+        resp = await client.get(
+            CHATS_URL, headers=auth_headers(master["session_token"]),
+        )
+        body = resp.text
+        assert "Zinaida" not in body
+        assert stranger_id not in body
+        assert "I cannot withdraw my money" not in body
+        assert pool["id"] not in body
+
+    async def test_a_masters_own_support_thread_is_dropped_too(
+        self, client: AsyncClient, db_session: AsyncSession, monkeypatch
+    ) -> None:
+        """A master who wrote to support is the CLIENT of a section thread,
+        so comms hands it to them like any other pool row -- and it goes
+        with the rest. Not a loss: their own support conversation has its
+        own screen (/api/v1/support), which owns that surface. The personal
+        chat list is for DMs.
+        """
+        master = await _make_master(client, db_session, BAND_MIN + 31)
+        own_support = _comms_thread(
+            str(uuid4()),
+            operator_kind="section",
+            client=master["user"]["id"],
+            title="Where is my payout",
+        )
+        monkeypatch.setattr(
+            _CHATS_SEAM,
+            AsyncMock(
+                return_value={"threads": [own_support], "next_cursor": None}
+            ),
+        )
+
+        resp = await client.get(
+            CHATS_URL, headers=auth_headers(master["session_token"]),
+        )
+        assert resp.json()["threads"] == []
+        assert "Where is my payout" not in resp.text
+
+    async def test_a_claimed_section_thread_is_dropped_by_the_same_predicate(
+        self, client: AsyncClient, db_session: AsyncSession, monkeypatch
+    ) -> None:
+        """THIS TESTS THE FILTER'S INPUT HANDLING, NOT A REACHABLE PRODUCT
+        STATE -- and the distinction is deliberate.
+
+        A master cannot claim a section thread today: the claim endpoint is
+        admin-gated, and an admin is served by a different branch of
+        list_chats entirely. So this row is not something the product can
+        produce. What is being pinned is the PREDICATE: it decides on the
+        thread's FORM, so a claimed section thread falls out exactly like
+        an unclaimed one, with no second rule and no exception to maintain.
+        A claimed section thread would be just as unopenable (no projection
+        row -> 404), so keeping it would only restore half the defect.
+        """
+        master = await _make_master(client, db_session, BAND_MIN + 32)
+        claimed = _comms_thread(
+            str(uuid4()),
+            operator_kind="section",
+            assignee=master["user"]["id"],
+            unread=7,
+        )
+        monkeypatch.setattr(
+            _CHATS_SEAM,
+            AsyncMock(
+                return_value={"threads": [claimed], "next_cursor": None}
+            ),
+        )
+
+        resp = await client.get(
+            CHATS_URL, headers=auth_headers(master["session_token"]),
+        )
+        assert resp.json()["threads"] == []
+
+    async def test_unknown_form_and_missing_key_do_not_pass(
+        self, client: AsyncClient, db_session: AsyncSession, monkeypatch
+    ) -> None:
+        """Allowlist, not denylist: what we did not foresee stays out.
+
+        Neither input occurs today -- comms' OperatorKind is closed and the
+        thread shape is frozen -- so this pins the DIRECTION the predicate
+        fails in. A denylist would admit both of these into a personal
+        list, named and avatared, and we would learn about it from outside.
+        """
+        master = await _make_master(client, db_session, BAND_MIN + 33)
+        future_form = _comms_thread(str(uuid4()), operator_kind="team")
+        keyless = _comms_thread(str(uuid4()))
+        del keyless["operator_kind"]
+        mine = _comms_thread(str(uuid4()), unread=2)
+        monkeypatch.setattr(
+            _CHATS_SEAM,
+            AsyncMock(
+                return_value={
+                    "threads": [future_form, keyless, mine],
+                    "next_cursor": None,
+                }
+            ),
+        )
+
+        resp = await client.get(
+            CHATS_URL, headers=auth_headers(master["session_token"]),
+        )
+        assert [r["id"] for r in resp.json()["threads"]] == [mine["id"]]
+
+    async def test_a_page_filtered_to_zero_keeps_next_cursor_verbatim(
+        self, client: AsyncClient, db_session: AsyncSession, monkeypatch
+    ) -> None:
+        """The filter must not quietly redefine pagination: an emptied page
+        still advances, and the cursor comes back exactly as comms sent it.
+        (The short-page consequence itself is a KNOWN CEILING on the filter
+        -- harmless until the master list gains paged loading.)"""
+        master = await _make_master(client, db_session, BAND_MIN + 34)
+        monkeypatch.setattr(
+            _CHATS_SEAM,
+            AsyncMock(
+                return_value={
+                    "threads": [
+                        _comms_thread(str(uuid4()), operator_kind="section"),
+                        _comms_thread(str(uuid4()), operator_kind="section"),
+                    ],
+                    "next_cursor": "opaque-cursor-from-comms",
+                }
+            ),
+        )
+
+        resp = await client.get(
+            CHATS_URL, headers=auth_headers(master["session_token"]),
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["threads"] == []
+        assert body["next_cursor"] == "opaque-cursor-from-comms"
+
+    async def test_repeated_request_filters_identically(
+        self, client: AsyncClient, db_session: AsyncSession, monkeypatch
+    ) -> None:
+        """The predicate is pure: asking twice answers twice the same, and
+        applying it is not something that can happen 'more'."""
+        master = await _make_master(client, db_session, BAND_MIN + 35)
+        # Built ONCE: _comms_thread mints fresh client/operator uuids per
+        # call, and rebuilding per request would compare the fixture's
+        # randomness instead of the filter's determinism.
+        page = {
+            "threads": [
+                _comms_thread(
+                    "11111111-1111-4111-8111-111111111111",
+                    operator_kind="section",
+                ),
+                _comms_thread(
+                    "22222222-2222-4222-8222-222222222222", unread=1,
+                ),
+            ],
+            "next_cursor": None,
+        }
+        monkeypatch.setattr(
+            _CHATS_SEAM,
+            AsyncMock(side_effect=lambda *a, **k: deepcopy(page)),
+        )
+        headers = auth_headers(master["session_token"])
+
+        first = await client.get(CHATS_URL, headers=headers)
+        second = await client.get(CHATS_URL, headers=headers)
+        assert first.json() == second.json()
+        assert len(first.json()["threads"]) == 1
+
+    async def test_malformed_payloads_do_not_take_the_list_down(
+        self, client: AsyncClient, db_session: AsyncSession, monkeypatch
+    ) -> None:
+        """Missing pieces are survived, not asserted away: the filter is as
+        defensive as the enrichment it guards."""
+        master = await _make_master(client, db_session, BAND_MIN + 36)
+        for payload in (
+            {"threads": [], "next_cursor": None},
+            {"threads": "not-a-list"},
+            {"threads": [None, "junk"], "next_cursor": None},
+            {},
+        ):
+            monkeypatch.setattr(_CHATS_SEAM, AsyncMock(return_value=payload))
+            resp = await client.get(
+                CHATS_URL, headers=auth_headers(master["session_token"]),
+            )
+            assert resp.status_code == 200, payload
 
 
 class TestLocalListBranches:
