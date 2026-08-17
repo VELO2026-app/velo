@@ -47,6 +47,9 @@ COPY scripts/ ./scripts/
 COPY pyproject.toml ./
 COPY alembic.ini ./
 COPY migrations/ ./migrations/
+# T-14: documentation, not a secret (.env itself is never copied in) --
+# needed by test_config.py's sync test, which runs inside this image.
+COPY .env.example ./
 
 ENV PATH="/opt/venv/bin:$PATH"
 ENV PYTHONDONTWRITEBYTECODE=1

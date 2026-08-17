@@ -44,15 +44,30 @@ set -uo pipefail
 INSTALL_BASE="/opt/velo"
 COMPOSE_DIR="$INSTALL_BASE/repo"
 COMPOSE_CMD="docker compose"
-# T-45 item 6: readable progress on build/up/restart ONLY -- a SEPARATE
-# variable, not a change to COMPOSE_CMD itself. COMPOSE_CMD's default
-# (TTY spinner) output goes straight into pipes/parsers elsewhere in this
-# file (psql -tAc, pg_dump | gzip, ps -q, ruff under CI) and the cost of
-# breaking one of those is asymmetric with the benefit here: a corrupted
-# backup surfaces at restore time, in the worst possible moment to find
-# out. Used ONLY at the handful of call sites where a progress spinner
-# exists at all (build, up, restart) -- see each site below.
-COMPOSE_CMD_PROGRESS="$COMPOSE_CMD --progress plain"
+
+# T-45 item 6, NARROWED (2026-08-17): the first attempt swapped the whole
+# renderer to `--progress plain` (a COMPOSE_CMD_PROGRESS variable, applied
+# at every build/up/restart call site). Reverted after seeing it live: it
+# traded the actual complaint (a paused-looking spinner during `up`/
+# `restart` reads as "containers didn't come up") for a much bigger loss
+# -- the compact, colored, per-layer display disappeared everywhere it was
+# applied, including `build`, which was never the complaint (its default
+# output already shows elapsed time per step -- see the two live update
+# logs from 2026-08-16/17, `[+] Building 252.0s (19/19) FINISHED` and
+# per-image timers ticking mid-build). COMPOSE_CMD is unchanged again,
+# everywhere, on purpose.
+#
+# Narrower fix: the spinner is not actually frozen during `up`/`restart` --
+# it is waiting on a real thing (a container reporting healthy, a slow
+# migration) with nothing new to draw in the meantime, and the compact
+# renderer gives no cue that a pause is expected rather than a hang. One
+# line of context BEFORE the call, not a different renderer, fixes the
+# actual misreading without touching output the rest of this file parses
+# or pipes (psql -tAc, pg_dump | gzip, ps -q).
+compose_progress_note() {
+    echo -e "${CYAN}(the spinner below may pause for several seconds while${NC}"
+    echo -e "${CYAN} containers report healthy -- that is normal, not a hang)${NC}"
+}
 
 CONF_FILE="$INSTALL_BASE/velo.conf"
 if [ ! -f "$CONF_FILE" ]; then
@@ -1310,7 +1325,7 @@ update_product() {
             # through to `up -d`, which restarted the PREVIOUS app image --
             # and everything after it (migrations, backend tests) then ran
             # and passed against code that was never rebuilt.
-            if ! $COMPOSE_CMD_PROGRESS build app; then
+            if ! $COMPOSE_CMD build app; then
                 echo -e "${RED}✗ BACKEND BUILD FAILED${NC}"
                 echo "Nothing was deployed -- the previous app image is still running."
                 echo "Fix the code and run: velo update"
@@ -1358,7 +1373,8 @@ update_product() {
                 echo -e "${RED}✗ Cannot create docker network aivis-shared${NC}"
                 exit 1
             }
-            if ! $COMPOSE_CMD_PROGRESS up -d app postgres redis; then
+            compose_progress_note
+            if ! $COMPOSE_CMD up -d app postgres redis; then
                 echo -e "${RED}✗ BACKEND RESTART FAILED${NC}"
                 echo "The previous app container is still running. Stopping here,"
                 echo "before migrations/tests/type-regen can run against old code."
@@ -1528,13 +1544,14 @@ Triggered by velo update on commit $NEW_COMMIT" || {
         # image while printing success -- the gate would exist but never fire.
         # This script has no `set -e`, so the check must be explicit (same
         # shape as the backend build gate above).
-        if ! $COMPOSE_CMD_PROGRESS build frontend; then
+        if ! $COMPOSE_CMD build frontend; then
             echo -e "${RED}✗ FRONTEND BUILD FAILED (unit tests run inside the build)${NC}"
             echo "Nothing was deployed -- the previous frontend image is still running."
             echo "Fix the code and run: velo update"
             exit 1
         fi
-        $COMPOSE_CMD_PROGRESS up -d frontend
+        compose_progress_note
+        $COMPOSE_CMD up -d frontend
 
         # Health check
         echo ""
@@ -1737,7 +1754,8 @@ case "${1:-}" in
 
         cd_compose
         ensure_shared_network
-        if ! $COMPOSE_CMD_PROGRESS up -d; then
+        compose_progress_note
+        if ! $COMPOSE_CMD up -d; then
             echo -e "${RED}✗ VELO failed to start${NC}"
             exit 1
         fi
@@ -1769,7 +1787,8 @@ case "${1:-}" in
                 # "bounce the API" shortcut, not a box-level verb.
                 echo "Restarting app only..."
                 cd_compose
-                $COMPOSE_CMD_PROGRESS restart app
+                compose_progress_note
+                $COMPOSE_CMD restart app
                 echo -e "${GREEN}✓ Restarted${NC}"
                 ;;
             *)
@@ -1782,7 +1801,8 @@ case "${1:-}" in
 
                 svc_walk forward start; rc_total=$(svc_worst "$rc_total" "$?")
                 ensure_shared_network
-                if ! $COMPOSE_CMD_PROGRESS up -d; then
+                compose_progress_note
+                if ! $COMPOSE_CMD up -d; then
                     echo -e "${RED}✗ VELO failed to start${NC}"
                     exit 1
                 fi

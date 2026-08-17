@@ -19,7 +19,11 @@ __pycache__/
 .git/
 .gitignore
 .env
-.env.example
+# .env.example intentionally NOT excluded (T-14): it is documentation, not
+# a secret, and test_config.py's sync test (config.py's placeholder
+# literals vs this file) needs it present inside the built image, where
+# the backend test suite actually runs. .env itself stays excluded above --
+# real secrets never enter the build context.
 docker-compose*.yml
 Dockerfile
 *.egg-info/
