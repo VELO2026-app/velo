@@ -8,7 +8,7 @@
 #
 # Invoked from the host through the `velo` wrapper:
 #     velo setrole <telegram_id> <A|M|U> [--yes]
-#     velo setrole                      # list current admins & masters
+#     velo setrole                      # list current admins & masters.
 # which runs, inside the app container:
 #     python scripts/set_role.py <args>
 #
