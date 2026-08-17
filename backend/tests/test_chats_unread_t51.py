@@ -1,13 +1,28 @@
 # =============================================================================
-# VELO -- unread without N+1 (T-51) + the master-list privacy filter (T-53)
+# VELO -- unread without N+1 (T-51), master-list privacy filter (T-53),
+# enrichment guards itself (T-56)
 # =============================================================================
 # Band 89760-89799.
 #
-# TWO DELIVERIES, ONE FILE, ON PURPOSE: T-53 reuses this band and every
-# builder here (_make_master, _comms_thread, the band drain), and both
-# deliveries make claims about the SAME surface -- what a master's chat
-# list contains. Splitting them would have duplicated the fixtures and
-# put two halves of one contract in two places.
+# THREE DELIVERIES, ONE FILE, ON PURPOSE: T-53 and T-56 reuse this band and
+# every builder here (_make_master, _comms_thread, the band drain), and all
+# three make claims about the SAME surface -- what a master's chat list
+# contains and who gets named in it. Splitting them would have duplicated
+# the fixtures and put the halves of one contract in three places.
+#
+# BAND OFFSETS ARE REUSED ACROSS TESTS, and that is a choice, not an
+# oversight. Occupancy as of T-56: +0..+36 are taken (note +1..+3 and
+# +10..+12 are consumed by `for offset in (...)` loops, so a grep for the
+# literal `BAND_MIN + N` under-reports them), leaving +37..+39. The T-56
+# class below therefore uses those three and reuses them from test to
+# test. This is safe because _clean_band drains the whole range BEFORE and
+# AFTER every test and the suite runs sequentially (no xdist in this
+# repo), so an offset is scoped to one test, not to the file. The same
+# technique is already in use in test_chats_t3_students.py, where
+# BAND_MIN + 16 lives in two different tests.
+#
+# FOR WHOEVER COMES NEXT: this band is now FULL. There are no gaps left in
+# the middle -- the next delivery on this surface needs a new range.
 #
 # ON THIS BAND, because the neighbouring file warns about it. The header of
 # test_chats_t3_students.py records that it MOVED OFF 89760-89799 in August
@@ -45,8 +60,9 @@
 # app.modules.bookings.service.comms_request) -- no comms stack needed.
 # =============================================================================
 
+import json
 from copy import deepcopy
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from uuid import UUID, uuid4
 
 import pytest
@@ -55,6 +71,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.chats.models import ChatThread
+from app.modules.chats.router import _attach_peers_from_comms
 from app.modules.masters.models import MasterProfile
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, cleanup_range, login_user
@@ -154,7 +171,7 @@ def _comms_thread(thread_id: str, **extra) -> dict:
     return {
         "id": thread_id,
         "client": str(uuid4()),
-        "operator_kind": "user",
+        "operator_kind": "user",  # overridable through **extra
         "operator_value": str(uuid4()),
         "assignee": None,
         "kind": "dm",
@@ -354,6 +371,241 @@ class TestMasterListBranch:
             CHATS_URL, headers=auth_headers(master["session_token"]),
         )
         assert resp.status_code == 502
+
+
+class TestPeerEnrichmentGuardsItself:
+    """T-56. The enrichment refuses to name a row it does not own.
+
+    WHY THE GUARD MOVED INSIDE. _attach_peers_from_comms has been the
+    instrument of a privacy leak twice -- the admin branch reading with
+    is_supervisor=True, and the master branch receiving the unclaimed
+    support queue -- and both times the caller was cured while the
+    function stayed willing to name whoever it was handed. A third caller
+    written without a filter would reproduce the defect whole.
+
+    THESE TESTS CALL THE FUNCTION DIRECTLY, AND THAT IS THE POINT. The
+    input they use cannot be produced through HTTP: the outer filter
+    (_keep_only_user_form_threads) removes foreign rows before the
+    enrichment ever sees them, and removing that filter to reach this code
+    path would be testing a construction the product does not have. What
+    is pinned here is the FUNCTION'S CONTRACT under a caller that does not
+    filter -- the caller who does not exist yet. Nothing below documents a
+    reachable product state.
+
+    THE OUTER FILTER IS NOT REDUNDANT because of any of this, and
+    TestMasterListPrivacyFilter above still guards it. This guard decides
+    whose names are RESOLVED; that filter decides what reaches the
+    RESPONSE, where `client` and `title` ride out with or without a name.
+    """
+
+    async def _stranger(
+        self, client: AsyncClient, db_session: AsyncSession, offset: int
+    ) -> User:
+        """A real, resolvable user with a name AND an avatar.
+
+        Both matter: if the row's client did not resolve, `peer` would be
+        null anyway and the assertions below would pass without the guard
+        doing anything -- the test would be vacuous.
+        """
+        auth = await login_user(
+            client, telegram_id=BAND_MIN + offset, first_name="Zinaida",
+        )
+        user = await db_session.get(User, UUID(auth["user"]["id"]))
+        user.avatar_url = "https://cdn.example.com/zinaida.jpg"
+        await db_session.commit()
+        return user
+
+    async def test_a_foreign_row_keeps_its_place_but_gets_no_peer(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """Not dropped, not raised on -- just not named.
+
+        Composition of the response is the caller's decision, so the row
+        stays. `peer` is ABSENT rather than null: absent means "not ours,
+        never attempted", null means "attempted, not found", and the
+        second one is already taken by a user-form row whose client does
+        not resolve.
+        """
+        stranger = await self._stranger(client, db_session, 37)
+        payload = {
+            "threads": [
+                _comms_thread(
+                    str(uuid4()),
+                    operator_kind="section",
+                    client=str(stranger.id),
+                    title="I cannot withdraw my money",
+                ),
+            ],
+            "next_cursor": None,
+        }
+
+        await _attach_peers_from_comms(payload, db_session)
+
+        (row,) = payload["threads"]
+        assert "peer" not in row
+        body = json.dumps(payload)
+        assert "Zinaida" not in body
+        assert "cdn.example.com" not in body
+
+    async def test_a_row_without_operator_kind_is_treated_as_foreign(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """Allowlist: the unforeseen falls to the safe side, and a missing
+        key is as unforeseen as an unknown value."""
+        stranger = await self._stranger(client, db_session, 37)
+        keyless = _comms_thread(str(uuid4()), client=str(stranger.id))
+        del keyless["operator_kind"]
+        payload = {"threads": [keyless], "next_cursor": None}
+
+        await _attach_peers_from_comms(payload, db_session)
+
+        assert "peer" not in payload["threads"][0]
+        assert "Zinaida" not in json.dumps(payload)
+
+    async def test_user_form_rows_are_still_enriched_alongside_foreign_ones(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """The positive half of the pair: the guard must not cost the
+        normal path anything. One call, one bulk SELECT, the legitimate
+        row named and the foreign one untouched."""
+        stranger = await self._stranger(client, db_session, 37)
+        legit = await self._stranger(client, db_session, 38)
+        mine = _comms_thread(str(uuid4()), client=str(legit.id), unread=1)
+        theirs = _comms_thread(
+            str(uuid4()), operator_kind="section", client=str(stranger.id),
+        )
+        payload = {"threads": [theirs, mine], "next_cursor": None}
+
+        await _attach_peers_from_comms(payload, db_session)
+
+        assert "peer" not in payload["threads"][0]
+        assert payload["threads"][1]["peer"]["user_id"] == str(legit.id)
+
+    async def test_an_unresolvable_user_form_client_still_gets_peer_null(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """The pre-existing degrade path is untouched: comms may know a
+        uuid velo does not, and that row gets null -- attempted, not
+        found -- which is exactly the value a foreign row must NOT get."""
+        payload = {
+            "threads": [_comms_thread(str(uuid4()), client=str(uuid4()))],
+            "next_cursor": None,
+        }
+
+        await _attach_peers_from_comms(payload, db_session)
+
+        assert payload["threads"][0]["peer"] is None
+
+    async def test_the_caller_is_warned_once_with_a_count_and_the_forms(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """One warning per CALL, not per row, and it names the caller's
+        mistake rather than the data's.
+
+        `forms` is the set of DISTINCT forms seen: a hundred section rows
+        must not put the word "section" in the log a hundred times. A row
+        with no operator_kind at all is reported under a sentinel, because
+        an empty string would blend into the real values when read.
+        """
+        payload = {
+            "threads": [
+                _comms_thread(str(uuid4()), operator_kind="section"),
+                _comms_thread(str(uuid4()), operator_kind="section"),
+                _comms_thread(str(uuid4()), operator_kind="team"),
+                _comms_thread(str(uuid4()), unread=0),
+            ],
+            "next_cursor": None,
+        }
+        del payload["threads"][3]["operator_kind"]
+
+        with patch("app.modules.chats.router.logger") as mock_logger:
+            await _attach_peers_from_comms(payload, db_session)
+
+        assert mock_logger.warning.call_count == 1
+        _, kwargs = mock_logger.warning.call_args
+        assert kwargs["skipped"] == 4
+        assert kwargs["forms"] == ["<no operator_kind>", "section", "team"]
+
+    async def test_a_clean_page_warns_about_nothing(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """The other half of the signal: silence on the normal path. A
+        warning on every master's list request would drown the one that
+        means something."""
+        legit = await self._stranger(client, db_session, 37)
+        payload = {
+            "threads": [_comms_thread(str(uuid4()), client=str(legit.id))],
+            "next_cursor": None,
+        }
+
+        with patch("app.modules.chats.router.logger") as mock_logger:
+            await _attach_peers_from_comms(payload, db_session)
+
+        mock_logger.warning.assert_not_called()
+
+    async def test_a_row_that_is_not_a_mapping_stays_silent(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """Junk in the payload is a MALFORMED UPSTREAM RESPONSE, not
+        evidence about the caller -- a different diagnosis with a
+        different owner. It keeps the silent skip it has always had and is
+        counted in neither `skipped` nor `forms`."""
+        legit = await self._stranger(client, db_session, 37)
+        payload = {
+            "threads": [
+                None,
+                "junk",
+                _comms_thread(str(uuid4()), client=str(legit.id)),
+            ],
+            "next_cursor": None,
+        }
+
+        with patch("app.modules.chats.router.logger") as mock_logger:
+            await _attach_peers_from_comms(payload, db_session)
+
+        mock_logger.warning.assert_not_called()
+        assert payload["threads"][2]["peer"]["user_id"] == str(legit.id)
+
+    async def test_calling_twice_changes_nothing(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """The function mutates in place, so idempotence is worth pinning:
+        a foreign row does not acquire a key on the second pass, and a
+        named row keeps the same name."""
+        stranger = await self._stranger(client, db_session, 37)
+        legit = await self._stranger(client, db_session, 38)
+        payload = {
+            "threads": [
+                _comms_thread(
+                    str(uuid4()),
+                    operator_kind="section",
+                    client=str(stranger.id),
+                ),
+                _comms_thread(str(uuid4()), client=str(legit.id)),
+            ],
+            "next_cursor": None,
+        }
+
+        await _attach_peers_from_comms(payload, db_session)
+        first = deepcopy(payload)
+        await _attach_peers_from_comms(payload, db_session)
+
+        assert payload == first
+
+    async def test_empty_and_shapeless_payloads_are_survived(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """Nothing to enrich is not an error, and nothing to warn about
+        either."""
+        for payload in (
+            {"threads": [], "next_cursor": None},
+            {"threads": "not-a-list"},
+            {},
+            "not-a-dict",
+        ):
+            with patch("app.modules.chats.router.logger") as mock_logger:
+                await _attach_peers_from_comms(payload, db_session)
+            mock_logger.warning.assert_not_called()
 
 
 class TestMasterListPrivacyFilter:

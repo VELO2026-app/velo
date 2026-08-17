@@ -86,11 +86,41 @@ router = APIRouter(prefix="/api/v1/chats", tags=["chats"])
 _ACTOR_PARAMS = ("client", "sender", "participant", "operator", "is_supervisor")
 
 # The only operator form this proxy deals in. Written by
-# _create_or_get_thread and read by _keep_only_user_form_threads -- one
-# constant so the write side and the privacy filter provably agree on the
-# same string. The other form comms knows, "section", belongs to
-# modules/support and never to a personal chat list.
+# _create_or_get_thread and read by _is_user_form_row -- one constant so
+# the write side and the privacy checks provably agree on the same string.
+# The other form comms knows, "section", belongs to modules/support and
+# never to a personal chat list.
 _USER_OPERATOR_KIND = "user"
+
+# Stands in for "the row had no operator_kind at all" in the warning
+# _attach_peers_from_comms emits. A sentinel rather than None or "": it
+# sorts next to the real forms without a special key, and it cannot be
+# mistaken for one -- comms' forms are bare identifiers, so the angle
+# brackets and the space are unproducible upstream. (`null` inside a JSON
+# log line reads as a serialization artifact, which is the opposite of the
+# distinctness this marker exists for.)
+_FORM_KEY_ABSENT = "<no operator_kind>"
+
+
+def _is_user_form_row(thread: Any) -> bool:
+    """Is this comms row a user-form DM -- the only form this proxy owns?
+
+    THE ONE ALLOWLIST, read from two places on purpose: the outer filter
+    (_keep_only_user_form_threads, which decides what reaches the RESPONSE)
+    and the inner guard (_attach_peers_from_comms, which decides whose
+    names get RESOLVED). Two copies of this predicate would drift on a
+    casing or on a new value and would drift silently, which is precisely
+    the failure both callers exist to prevent.
+
+    Allowlist, not denylist: anything unforeseen -- a third form, a
+    mangled payload, a row that is not a mapping at all -- answers False
+    and is handled as foreign. See _keep_only_user_form_threads for the
+    full reasoning on why the unknown falls to that side.
+    """
+    return (
+        isinstance(thread, dict)
+        and thread.get("operator_kind") == _USER_OPERATOR_KIND
+    )
 
 
 def _reject_actor_override(request: Request) -> None:
@@ -228,6 +258,16 @@ def _keep_only_user_form_threads(payload: Any) -> None:
     leak is not created even momentarily inside the process -- and the
     discarded rows stay out of the bulk SELECT.
 
+    THE GUARD INSIDE _attach_peers_from_comms DOES NOT REPLACE THIS ONE,
+    and removing this one because that one exists would put the leak back.
+    They answer different questions. That guard decides whose names get
+    RESOLVED; this filter decides what reaches the RESPONSE. A section row
+    carries more than a name: `client` is the opener's velo uuid and
+    `title` is the topic text they typed. Drop this filter and both go
+    back on the wire -- quieter, without a name attached, but still a
+    stranger's id and a stranger's words in someone's personal chat list.
+    The two are a pair; neither is redundant.
+
     `next_cursor` is left exactly as comms sent it: the filter must not
     quietly change what pagination means. Same stance as the mirror-image
     filter on the admin support list (support/service.py), which keeps
@@ -257,12 +297,7 @@ def _keep_only_user_form_threads(payload: Any) -> None:
     threads = payload.get("threads")
     if not isinstance(threads, list):
         return
-    payload["threads"] = [
-        t
-        for t in threads
-        if isinstance(t, dict)
-        and t.get("operator_kind") == _USER_OPERATOR_KIND
-    ]
+    payload["threads"] = [t for t in threads if _is_user_form_row(t)]
 
 
 async def _attach_peers_from_comms(payload: Any, session: AsyncSession) -> None:
@@ -279,6 +314,53 @@ async def _attach_peers_from_comms(payload: Any, session: AsyncSession) -> None:
     Defensive on purpose: an id that does not parse or does not resolve
     gets `peer: null` instead of an exception -- a cosmetic block must
     never take the list down with it.
+
+    ONLY USER-FORM ROWS ARE RESOLVED (T-56), and this guard lives HERE
+    rather than only in the caller because this function has twice been
+    the instrument of a privacy leak and both cures were applied to the
+    caller instead: the admin branch reading with is_supervisor=True, and
+    the master branch receiving the unclaimed support queue. Each time it
+    stayed willing to name whoever it was handed. A third caller written
+    without a filter would reproduce the defect whole, so the willingness
+    is what had to go.
+
+    A foreign row is NOT resolved and NOT counted into the bulk SELECT,
+    and it comes back WITHOUT a `peer` key at all -- distinct from the
+    `peer: null` a user-form row gets when its client does not resolve.
+    Absent means "not ours, never attempted"; null means "attempted, not
+    found". Those are different facts and they stay different values.
+
+    THIS GUARD DOES NOT DECIDE THE COMPOSITION OF THE RESPONSE, and must
+    not start: foreign rows are left in the list, not dropped, and nothing
+    is raised. Deciding what the caller returns is the caller's job --
+    _keep_only_user_form_threads does it for the one caller there is, and
+    for a reason this guard cannot cover (see its docstring: `client` and
+    `title` ride out in the row itself, with or without a name).
+
+    # KNOWN CEILING (the guard here is incomplete by construction;
+    # acknowledged by design):
+    #   1. Mechanics: this function enriches whatever it is handed. It can
+    #      refuse to NAME a foreign row, but it cannot keep that row out
+    #      of a caller's response without taking over a decision that is
+    #      not its own -- so a caller that skips the outer filter still
+    #      returns the row, uuid and title included.
+    #   2. Status: acknowledged by design.
+    #   3. Backlog ref: none. This is the agreed split of responsibility,
+    #      not deferred work.
+    #   4. Promotion trigger: a SECOND caller appears. One caller means
+    #      the split is bookkeeping; two means it is a contract, and the
+    #      division should be revisited deliberately at that point rather
+    #      than inherited.
+    #   5. Agreed fix, when that happens: make the filtered projection the
+    #      only way to obtain rows -- a function that RETURNS the enriched
+    #      user-form rows, leaving no unfiltered path to call at all.
+    #   6. Rejected: raising on a foreign row -- a cosmetic block would
+    #      then take the whole list down, which contradicts the paragraph
+    #      above it. Also rejected: dropping foreign rows here. It reads
+    #      like the stronger fix and is the more dangerous one: this
+    #      function would start deciding response composition, the outer
+    #      filter would look redundant to the next reviewer, and removing
+    #      it would silently put `client` and `title` back on the wire.
     """
     if not isinstance(payload, dict):
         return
@@ -294,13 +376,45 @@ async def _attach_peers_from_comms(payload: Any, session: AsyncSession) -> None:
         except (TypeError, ValueError):
             return None
 
-    ids = {cid for t in threads if (cid := _client_uuid(t)) is not None}
+    # A row that is not a mapping at all is skipped in silence, as it
+    # always has been: that is a malformed comms payload, a different
+    # diagnosis with a different owner. The warning below is addressed to
+    # the CALLER of this function, and only well-formed rows of the wrong
+    # FORM are evidence about the caller.
+    foreign = [
+        t
+        for t in threads
+        if isinstance(t, dict) and not _is_user_form_row(t)
+    ]
+    if foreign:
+        logger.warning(
+            "chat_peer_enrichment_skipped_foreign_rows",
+            skipped=len(foreign),
+            forms=sorted(
+                {
+                    str(t.get("operator_kind"))
+                    if "operator_kind" in t
+                    else _FORM_KEY_ABSENT
+                    for t in foreign
+                }
+            ),
+            hint=(
+                "caller passed rows this proxy does not own; filter them "
+                "before enrichment (see _keep_only_user_form_threads)"
+            ),
+        )
+
+    ids = {
+        cid
+        for t in threads
+        if _is_user_form_row(t) and (cid := _client_uuid(t)) is not None
+    }
     users: dict[UUID, User] = {}
     if ids:
         result = await session.execute(select(User).where(User.id.in_(ids)))
         users = {u.id: u for u in result.scalars()}
     for thread in threads:
-        if isinstance(thread, dict):
+        if _is_user_form_row(thread):
             thread["peer"] = _peer_payload(users.get(_client_uuid(thread)))
 
 
