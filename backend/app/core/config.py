@@ -36,6 +36,34 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.telegram_links import normalize_telegram_url
 
+# T-14. Literal placeholders shipped in backend/.env.example -- copying
+# that file verbatim instead of running the installer (which generates
+# real secrets via openssl) leaves a box running on these forever,
+# silently: every one of them is non-empty, so no "key present" check
+# (velo doctor included) ever catches it.
+#
+# THESE VALUES ARE DUPLICATED, NOT DERIVED: config.py cannot read
+# .env.example at runtime (it is imported by Alembic before the app's
+# working directory is guaranteed, and coupling a security gate to a
+# documentation file's parse-ability is its own hazard). The values here
+# and the values in .env.example are two copies of the same fact -- change
+# one, change the other, or this gate goes quietly blind. Kept honest by
+# test_config.py's sync test, which reads .env.example and asserts every
+# literal below is still present in it -- the mismatch fails a test run
+# instead of aging silently for years (same defect class as T-35's
+# two-language codec and T-13's three-place predicate).
+_PLACEHOLDER_SECRET_KEY = "change-me-in-production"
+_PLACEHOLDER_POSTGRES_PASSWORD = "change-me"
+# DATABASE_URL / REDIS_URL embed the same placeholder INSIDE a templated
+# connection string (postgresql+asyncpg://velo:change-me@postgres:5432/velo),
+# so this is a substring check, not equality -- but the boundary is exact
+# (colon before, at-sign after), not a bare "change-me" search: a real
+# generated password merely starting with those letters renders as
+# ":change-me1AbcXyz...@", which does not contain ":change-me@", and a
+# host/db name that happens to contain "change-me" elsewhere in the URL is
+# not a boundary match either.
+_PLACEHOLDER_URL_FRAGMENT = ":change-me@"
+
 
 class Settings(BaseSettings):
     """Application settings, loaded from environment variables.
@@ -835,6 +863,66 @@ class Settings(BaseSettings):
         """
         is_dev = self.app_env == "development"
         return not is_dev and self.is_zoom_stub and not self.allow_zoom_stub
+
+    @property
+    def placeholder_secret_keys(self) -> list[str]:
+        """Names of settings still holding their literal .env.example
+        placeholder value -- SECRET_KEY, POSTGRES_PASSWORD, DATABASE_URL,
+        REDIS_URL. Empty list means none of the four are placeholders.
+
+        CRITERION: exact match against the known literal for the atomic
+        secrets (SECRET_KEY, POSTGRES_PASSWORD) -- a real secret that
+        merely starts with the same characters does not equal the
+        literal, so it passes. For the URL-shaped fields the placeholder
+        is embedded inside a templated connection string, so this checks
+        for the exact ":change-me@" fragment (colon/at-sign boundaries)
+        instead of a bare substring -- a real password beginning
+        "change-me..." does not produce that exact fragment, and a
+        host/db name that happens to contain "change-me" elsewhere in the
+        URL is not a boundary match.
+
+        KNOWN GAP: REDIS_PASSWORD is NOT covered here -- it has no
+        Settings field at all. It exists only for docker-compose to start
+        the redis container with --requirepass; production never has
+        backend/.env as a physical file for THIS process (docker-compose's
+        env_file injects it as a bare OS env var into the container), and
+        pydantic-settings silently ignores an OS env var that matches no
+        field -- there is nothing on this class to check. The risk is
+        covered INDIRECTLY: by .env.example's own convention
+        REDIS_PASSWORD and the password embedded in REDIS_URL are the
+        same value, so a left-over "change-me" is still caught here via
+        REDIS_URL. If an operator ever sets the two to DIFFERENT values,
+        the app simply fails to connect to Redis -- a loud failure at
+        startup, not a silent one. A redis_password field is deliberately
+        NOT added to close this gap: it would be Settings surface with no
+        runtime consumer, the exact kind of dead field this file already
+        warns against elsewhere (see zoom_attendance_threshold_minutes
+        above).
+        """
+        offenders: list[str] = []
+        if self.secret_key == _PLACEHOLDER_SECRET_KEY:
+            offenders.append("SECRET_KEY")
+        if self.postgres_password == _PLACEHOLDER_POSTGRES_PASSWORD:
+            offenders.append("POSTGRES_PASSWORD")
+        if _PLACEHOLDER_URL_FRAGMENT in self.database_url:
+            offenders.append("DATABASE_URL")
+        if _PLACEHOLDER_URL_FRAGMENT in self.redis_url:
+            offenders.append("REDIS_URL")
+        return offenders
+
+    @property
+    def is_placeholder_secret_blocked(self) -> bool:
+        """True when startup must refuse: a literal .env.example
+        placeholder is still live in a non-dev environment.
+
+        No ALLOW_* opt-out exists for this one, unlike Stripe/Zoom stub
+        mode -- there is no server, including TEST, on which running
+        production secrets equal to "change-me" is a legitimate,
+        intended configuration. TEST is expected to generate its own
+        secrets via install_velo.sh, the same as prod.
+        """
+        is_dev = self.app_env == "development"
+        return not is_dev and bool(self.placeholder_secret_keys)
 
 
 # Singleton: one Settings instance for the entire application.
