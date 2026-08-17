@@ -58,6 +58,16 @@ export interface ChatThread {
   kind?: string
   status?: string
   last_message_at?: string | null
+  /** Unread for the CALLER, attached by the backend list (T-51).
+   *
+   *  OPTIONAL ON PURPOSE, and the absence carries meaning: the key is
+   *  missing on a row the caller takes no part in -- for a master, an
+   *  unclaimed support thread sitting in the shared pool. Zero means "your
+   *  thread, nothing to read". Do not default it to 0 here; default at the
+   *  render site, so the two states stay distinguishable in code that
+   *  cares. Also absent for every row when comms is unreachable: no badge
+   *  beats a false badge. */
+  unread?: number
 }
 
 export interface ChatThreadList {
@@ -81,6 +91,17 @@ export interface ChatMessageList {
 
 export interface ChatUnread {
   unread: number
+}
+
+/** Caller's unread state across every conversation (GET /chats/unread-summary).
+ *
+ *  `unread_messages` powers the master hub badge. The student profile does
+ *  NOT use this: its dot rides inline on bookings /me/stats, because B52
+ *  rules that screen to exactly one request. See the endpoint docstring. */
+export interface ChatUnreadSummary {
+  has_unread: boolean
+  threads_with_unread: number
+  unread_messages: number
 }
 
 export function openChat(masterId: string): Promise<ChatThread> {
@@ -109,6 +130,6 @@ export function markChatRead(threadId: string): Promise<ChatUnread> {
   return api.post<ChatUnread>(`/api/v1/chats/${threadId}/read`, {})
 }
 
-export function getChatUnreadCount(threadId: string): Promise<ChatUnread> {
-  return api.get<ChatUnread>(`/api/v1/chats/${threadId}/unread-count`)
+export function getChatUnreadSummary(): Promise<ChatUnreadSummary> {
+  return api.get<ChatUnreadSummary>('/api/v1/chats/unread-summary')
 }

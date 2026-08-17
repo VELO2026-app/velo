@@ -20,6 +20,15 @@
 # message, list messages, mark read, unread count. The operator-queue verbs
 # (claim / status / retag) are section-thread machinery and this proxy has
 # no section threads -- there is no queue in a student <-> master DM.
+# Plus one AGGREGATE read that is not a 3b mirror: GET /unread-summary, the
+# participant-wide unread state behind the master hub's badge (T-51).
+#
+# BADGES ARE NOT FETCHED PER ROW ANY MORE. The lists carry `unread` inline
+# -- comms computes it for the master branch, one batch call covers a local
+# page -- and the key is ABSENT, never zero, on a row the caller takes no
+# part in. Zero means "your thread, nothing to read"; absent means "not
+# yours". A frontend that reads it as required, or defaults it to 0 in the
+# type rather than at the render site, throws that distinction away.
 #
 # THREAD SHAPE: one eternal DM per (client, operator) pair -- kind "dm", no
 # subject_ref. comms dedups on the pair, so opening the chat twice returns
@@ -208,6 +217,43 @@ def _counterparty_id(thread: ChatThread, viewer_id: UUID) -> UUID:
     return thread.client_user_id
 
 
+async def _unread_by_thread(
+    thread_ids: Sequence[UUID], *, participant: UUID,
+) -> dict[str, int]:
+    """Unread counts for a page of local rows, in ONE comms call.
+
+    ABSENCE IS AN ANSWER, and this function passes it through untouched.
+    comms OMITS a thread the participant takes no part in -- and, by the
+    same single rule, an id that matches no thread at all. A zero would
+    mean "your thread, nothing to read"; an absent key means "not yours"
+    (or "your pointer row is out of sync with comms", which is the same
+    signal and the reason a silent zero was rejected upstream). Callers
+    must therefore attach the key only where comms returned one.
+
+    Degrades to {} on any comms failure: the list is local and must
+    render without badges rather than 502 on a chat outage.
+    """
+    if not thread_ids:
+        # comms would answer {} -- no reason to spend the round trip.
+        return {}
+    try:
+        payload = await comms_request(
+            "POST",
+            "/api/v1/threads/unread-counts",
+            json={
+                "participant": str(participant),
+                "thread_ids": [str(t) for t in thread_ids],
+            },
+        )
+    except Exception:
+        logger.warning(
+            "chat_list_unread_failed", participant=str(participant),
+        )
+        return {}
+    counts = payload.get("counts") if isinstance(payload, dict) else None
+    return counts if isinstance(counts, dict) else {}
+
+
 async def _local_thread_list(
     session: AsyncSession,
     rows: Sequence[ChatThread],
@@ -221,6 +267,13 @@ async def _local_thread_list(
     not an operator scope either -- their list is their own threads, on
     whichever side of the pair). P-1: without the bulk peer SELECT the
     frontend would need one public-profile request per row.
+
+    UNREAD RIDES ALONG (T-51), in one comms call for the whole page, so
+    the frontend needs none of its own. `participant` is the SESSION's
+    viewer, never anything off the wire. The page limit is 1..100 and
+    comms' batch takes 100, so a page always fits and never needs
+    splitting. A row whose id comms omitted carries NO `unread` key --
+    see _unread_by_thread.
     """
     peer_ids = {_counterparty_id(row, viewer_id) for row in rows}
     peers: dict[UUID, User] = {}
@@ -230,20 +283,24 @@ async def _local_thread_list(
         )
         peers = {u.id: u for u in result.scalars()}
 
-    return {
-        "threads": [
-            {
-                "id": str(row.comms_thread_id),
-                "operator_value": str(row.operator_user_id),
-                "created_at": row.created_at.isoformat(),
-                "peer": _peer_payload(
-                    peers.get(_counterparty_id(row, viewer_id))
-                ),
-            }
-            for row in rows
-        ],
-        "next_cursor": None,
-    }
+    unread = await _unread_by_thread(
+        [row.comms_thread_id for row in rows], participant=viewer_id,
+    )
+
+    threads: list[dict[str, Any]] = []
+    for row in rows:
+        thread: dict[str, Any] = {
+            "id": str(row.comms_thread_id),
+            "operator_value": str(row.operator_user_id),
+            "created_at": row.created_at.isoformat(),
+            "peer": _peer_payload(peers.get(_counterparty_id(row, viewer_id))),
+        }
+        count = unread.get(str(row.comms_thread_id))
+        if count is not None:
+            thread["unread"] = int(count)
+        threads.append(thread)
+
+    return {"threads": threads, "next_cursor": None}
 
 
 async def _require_participant(
@@ -527,6 +584,25 @@ async def list_chats(
     activity ordering and its cursor (created_at desc, next_cursor null --
     the same deal the student list has always had). Ordering a page by
     "who wrote last" needs comms, and comms cannot be asked this question.
+
+    UNREAD IN EVERY BRANCH, no per-row calls anywhere (T-51). The master
+    branch asks comms for it inline (with_unread); the two local branches
+    get it in one batch call inside _local_thread_list. A row the caller
+    takes no part in carries NO `unread` key -- for a master that is the
+    POOL ROW (an unclaimed support/section thread, visible to every
+    operator and belonging to none), and the missing key is exactly what
+    keeps a master's badge from lighting up over someone else's support
+    queue.
+
+    FAILURE ASYMMETRY, PRE-EXISTING AND NOT INTRODUCED HERE. If comms is
+    down the master branch 502s and the two local branches return 200 with
+    no badges. That split is not new and unread did not create it: the
+    master's list IS comms' list -- one call before this change, the same
+    one call with one more parameter after it. No new failure surface was
+    added to that branch; the local branches gained a call that is
+    explicitly allowed to fail quietly. Do not "fix" the asymmetry by
+    inventing a fallback list for a master -- an empty list on a chat
+    outage is a product decision nobody made.
     """
     _reject_actor_override(request)
 
@@ -537,6 +613,9 @@ async def list_chats(
             # that the admin branch no longer routes through here: nothing
             # this proxy sends comms ever widens the read.
             "is_supervisor": False,
+            # Opt-in additive key (T-51): comms' list shape is frozen and
+            # unchanged without it.
+            "with_unread": True,
             "limit": limit,
         }
         if cursor is not None:
@@ -575,6 +654,68 @@ async def list_chats(
         )
     ).scalars().all()
     return await _local_thread_list(session, rows, viewer_id=user.id)
+
+
+# Declared ABOVE every /{thread_id} route: a literal segment must not be
+# reachable as a thread id.
+@router.get("/unread-summary")
+async def unread_summary(
+    request: Request,
+    user: User = Depends(get_current_user),
+) -> Any:
+    """The caller's unread state across all their conversations.
+
+    One call, three numbers: has_unread for a dot, threads_with_unread and
+    unread_messages for a badge. `participant` is the SESSION's user and
+    nothing else -- comms trusts whatever we send, so this proxy is the
+    only thing standing between a forged id and someone else's unread
+    state.
+
+    Serves the master hub's «Сообщения» badge, which used to list every
+    thread and ask for each one's count (T-51: the third and most
+    expensive N+1 in the product, paid on every hub open).
+
+    WHAT THE NUMBER MEANS CHANGED, deliberately and with owner sign-off.
+    It is now "my unread, in whatever role I hold": unclaimed support
+    threads drop out (a master takes no part in them, and they were only
+    ever in the sum because the pool is visible to operators), while
+    threads where the master is himself the client come in (a master can
+    open a chat with another master). For a row on one's OWN profile that
+    is the right meaning.
+
+    # KNOWN CEILING (velo answers "do I have unread" on TWO surfaces;
+    # acknowledged by design):
+    #   1. Mechanics: this endpoint returns a COUNT for the master hub,
+    #      while GET /api/v1/bookings/me/stats carries a BOOLEAN
+    #      (has_unread_messages) inline for the student profile. Two
+    #      surfaces, one underlying question, both reading the same comms
+    #      summary.
+    #   2. Status: acknowledged by design.
+    #   3. Backlog ref: none. This is not a deferred cleanup -- it is what
+    #      the B52 ruling costs, and the cost was accepted when the ruling
+    #      was made.
+    #   4. Promotion trigger: the owner revokes B52, i.e. the student
+    #      profile is allowed a SECOND request for its dot. Nothing
+    #      observable at runtime will ever signal this -- both surfaces
+    #      read one aggregate and cannot disagree -- so there is no
+    #      metric to watch and none is invented here.
+    #   5. Agreed fix: once B52 is revoked, the profile screen calls this
+    #      endpoint too and the boolean leaves UserStatsResponse entirely
+    #      (deleted, not deprecated).
+    #   6. Rejected: unifying the two NOW by dropping
+    #      has_unread_messages and having the profile call this endpoint.
+    #      B52 (owner-ruled 2026-08-15) says the student profile makes
+    #      exactly ONE request; that unification adds a second one, so it
+    #      does not tidy the contract -- it breaks a ruling. Also
+    #      rejected: adding the count to UserStatsResponse instead, which
+    #      keeps one request but puts a master's number in the student
+    #      screen's schema.
+    """
+    _reject_actor_override(request)
+    return await comms_request(
+        "GET",
+        f"/api/v1/participants/{user.id}/unread-summary",
+    )
 
 
 @router.post("/{thread_id}/messages")
@@ -638,6 +779,34 @@ async def unread_count(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_reader),
 ) -> Any:
+    """One thread's unread count for the caller.
+
+    # KNOWN CEILING (route with no frontend caller since T-51;
+    # acknowledged by design):
+    #   1. Mechanics: the lists now carry `unread` inline, so no screen
+    #      calls this route any more. Its TypeScript wrapper was deleted
+    #      with the callers; the route itself was not.
+    #   2. Status: acknowledged by design.
+    #   3. Backlog ref: none -- it is kept for two active reasons, below.
+    #   4. Promotion trigger: BOTH of its two jobs disappear -- the
+    #      stranger-404 matrix stops covering this verb (tests
+    #      test_chats_t2.py / test_chats_t3_students.py), AND the owner
+    #      gains another sanctioned way to query comms directly from the
+    #      server.
+    #   5. Agreed fix: delete the route together with its row in the
+    #      failure matrix, in one change, once both jobs are gone.
+    #   6. Rejected: deleting it now as "a route with no callers". It is
+    #      (a) a member of the four-verb failure matrix -- post /
+    #      messages / read / unread-count all 404 for a stranger BEFORE
+    #      reaching comms, and dropping a verb narrows what that matrix
+    #      proves while the surface itself stays exposed; and (b) the
+    #      ONLY sanctioned end-to-end probe the owner has: comms has no
+    #      public port and no nginx route, and the server permits only
+    #      install_velo.sh and velo commands, so `curl` into comms is not
+    #      available. Verifying "the list shows the same numbers as the
+    #      per-thread count" is possible through this proxy and nowhere
+    #      else.
+    """
     _reject_actor_override(request)
     await _require_participant(session, thread_id, user)
     return await comms_request(

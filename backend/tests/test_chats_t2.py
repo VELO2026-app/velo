@@ -599,11 +599,18 @@ class TestListing:
         assert resp.json() == {"threads": [], "next_cursor": None}
         fake.assert_not_awaited()
 
-    async def test_student_list_is_local_and_touches_no_comms(
+    async def test_student_list_rows_are_local_and_comms_only_counts_unread(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch
     ) -> None:
-        """A client is invisible to the operator-scoped comms API, so their
-        own list can only come from the local pointers."""
+        """A client is invisible to the operator-scoped comms API, so the
+        ROWS can only come from the local pointers -- unchanged.
+
+        Since T-51 comms IS asked one thing about this page: the unread
+        counts, in a single batch call. The property that matters is
+        therefore no longer "comms is not touched" but "comms does not
+        supply the rows" -- asserted by feeding it a poisoned counts map
+        and checking the rows still come from the pointer table.
+        """
         student = await login_user(
             client, telegram_id=BAND_MIN + 22, first_name="Student",
         )
@@ -616,7 +623,12 @@ class TestListing:
             CHATS_URL, json={"master_id": master["user"]["id"]}, headers=headers,
         )
 
-        fake = AsyncMock(return_value={"threads": ["SHOULD NOT BE USED"]})
+        fake = AsyncMock(
+            return_value={
+                "counts": {THREAD_ID: 4},
+                "threads": ["SHOULD NOT BE USED"],
+            }
+        )
         monkeypatch.setattr(_SEAM, fake)
         resp = await client.get(CHATS_URL, headers=headers)
 
@@ -624,7 +636,10 @@ class TestListing:
         threads = resp.json()["threads"]
         assert [t["id"] for t in threads] == [THREAD_ID]
         assert threads[0]["operator_value"] == master["user"]["id"]
-        fake.assert_not_awaited()
+        assert threads[0]["unread"] == 4
+        # Exactly one call, and it is the batch -- never a list fetch.
+        assert fake.await_count == 1
+        assert fake.await_args.args[1] == "/api/v1/threads/unread-counts"
 
 
 # ---------------------------------------------------------------------------
@@ -736,7 +751,7 @@ class TestPeerEnrichment:
             CHATS_URL, json={"master_id": master["user"]["id"]}, headers=headers,
         )
 
-        fake = AsyncMock(return_value={"threads": ["SHOULD NOT BE USED"]})
+        fake = AsyncMock(return_value={"counts": {}})
         monkeypatch.setattr(_SEAM, fake)
         resp = await client.get(CHATS_URL, headers=headers)
 
@@ -744,9 +759,11 @@ class TestPeerEnrichment:
         (thread,) = resp.json()["threads"]
         assert thread["peer"]["user_id"] == master["user"]["id"]
         assert thread["peer"]["name"] == "Master"
-        # Enrichment is local knowledge (ID-11 pointer + users): the
-        # student's list still never touches comms.
-        fake.assert_not_awaited()
+        # Enrichment is local knowledge (ID-11 pointer + users): the only
+        # thing comms is asked for on this page is unread counts (T-51),
+        # and it supplies no part of the peer block.
+        assert fake.await_count == 1
+        assert fake.await_args.args[1] == "/api/v1/threads/unread-counts"
 
     async def test_master_list_is_enriched_and_a_stray_client_survives(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch

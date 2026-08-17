@@ -11,6 +11,13 @@
 // Sibling of UserMessagesView.test.ts (same seam, same states); what is
 // DIFFERENT here and therefore tested here: the comms thread shape renders
 // as-is, and the fallback wording is the master's («Ученик», not «Мастер»).
+//
+// UNREAD SINCE T-51: comms attaches it to the row itself (with_unread), so
+// there are no per-thread calls left to mock. The master-specific state is
+// the POOL ROW -- an unclaimed support thread, visible to every operator and
+// belonging to none -- which arrives with NO `unread` key at all. That
+// missing key is the whole point: it is what keeps a master's badge from
+// lighting up over a support queue nobody has claimed yet.
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -78,7 +85,6 @@ beforeEach(() => {
   push.mockReset()
   back.mockReset()
   vi.mocked(chatsApi.listChats).mockReset()
-  vi.mocked(chatsApi.getChatUnreadCount).mockReset().mockResolvedValue({ unread: 0 })
 })
 
 afterEach(() => {
@@ -122,18 +128,39 @@ describe('MasterMessagesView', () => {
     expect(row(0).querySelector('.chat-row__name')?.textContent?.trim()).toBe('Ученик')
   })
 
-  it('unread badge renders per thread', async () => {
+  it('unread badge renders from the row itself, with no extra request', async () => {
     vi.mocked(chatsApi.listChats).mockResolvedValue({
-      threads: [commsThread()],
+      threads: [commsThread({ unread: 2 })],
       next_cursor: null,
     })
-    vi.mocked(chatsApi.getChatUnreadCount).mockResolvedValue({ unread: 2 })
     mount()
     await flush()
 
     expect(
       row(0).querySelector('[data-testid="chat-unread"]')?.textContent?.trim(),
     ).toBe('2')
+    expect(chatsApi.listChats).toHaveBeenCalledTimes(1)
+  })
+
+  it('POOL ROW: a thread with no `unread` key renders no badge, and the neighbouring badge is untouched', async () => {
+    // An unclaimed support/section thread reaches every operator's list but
+    // belongs to none of them, so comms omits the key rather than sending a
+    // zero. Rendering it as 0 would be a lie of a different kind -- it would
+    // claim the master has read a queue that is not theirs.
+    vi.mocked(chatsApi.listChats).mockResolvedValue({
+      threads: [
+        commsThread(),
+        commsThread({ id: 'thread-2', client: 'student-2', unread: 4 }),
+      ],
+      next_cursor: null,
+    })
+    mount()
+    await flush()
+
+    expect(row(0).querySelector('[data-testid="chat-unread"]')).toBeNull()
+    expect(
+      row(1).querySelector('[data-testid="chat-unread"]')?.textContent?.trim(),
+    ).toBe('4')
   })
 
   it("clicking a row navigates to 'master-chat' with that thread's id", async () => {

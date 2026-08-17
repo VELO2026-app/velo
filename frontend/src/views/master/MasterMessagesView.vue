@@ -66,7 +66,7 @@
         :key="t.id"
         :peer="t.peer"
         peer-fallback="Ученик"
-        :unread="unreadByThread[t.id] ?? 0"
+        :unread="t.unread ?? 0"
         @open="openThread(t.id)"
       />
     </div>
@@ -74,13 +74,13 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import { VButton, VEmptyState, VLoader } from '@/components/ui'
 import { IconMessages } from '@/components/icons'
 import ChatListRow from '@/components/shared/ChatListRow.vue'
-import { getChatUnreadCount, listChats, type ChatThread } from '@/api/chats'
+import { listChats, type ChatThread } from '@/api/chats'
 import { extractApiError } from '@/composables/useApiError'
 
 const router = useRouter()
@@ -88,8 +88,11 @@ const router = useRouter()
 const loading = ref(true)
 const error = ref<string | null>(null)
 const threads = ref<ChatThread[]>([])
-const unreadByThread = reactive<Record<string, number>>({})
 
+// Badges arrive WITH the rows (T-51): the list carries `unread` per thread,
+// so there is no second pass and nothing to hold them in. A row without the
+// key is one this master takes no part in -- an unclaimed support thread in
+// the shared pool -- and it renders with no badge rather than a zero.
 async function load(): Promise<void> {
   loading.value = true
   error.value = null
@@ -97,20 +100,8 @@ async function load(): Promise<void> {
     threads.value = (await listChats()).threads
   } catch (e) {
     error.value = extractApiError(e, 'Попробуйте ещё раз')
-    loading.value = false
-    return
   }
   loading.value = false
-
-  await Promise.all(
-    threads.value.map(async (t) => {
-      try {
-        unreadByThread[t.id] = (await getChatUnreadCount(t.id)).unread
-      } catch {
-        unreadByThread[t.id] = 0
-      }
-    }),
-  )
 }
 
 function openThread(id: string): void {

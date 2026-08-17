@@ -126,7 +126,7 @@ import {
 } from '@/components/icons'
 import { useMasterStore } from '@/stores/master'
 import { useAuthStore } from '@/stores/auth'
-import { getChatUnreadCount, listChats } from '@/api/chats'
+import { getChatUnreadSummary } from '@/api/chats'
 
 const router = useRouter()
 const masterStore = useMasterStore()
@@ -143,18 +143,24 @@ const userEmail = computed(
   () => (authStore.user as { email?: string | null } | null | undefined)?.email ?? '',
 )
 
-// «Сообщения» unread badge -- REAL since T2 (H-T2-UI): the sum of per-thread
-// unread counts. Loaded lazily on mount and silent on failure (the badge is
-// a courtesy, the hub must render regardless of the chat proxy's health).
+// «Сообщения» unread badge -- ONE call since T-51 (was: list every thread,
+// then one unread-count request per thread, on every hub open). Loaded lazily
+// on mount and silent on failure (the badge is a courtesy, the hub must
+// render regardless of the chat proxy's health).
+//
+// THE NUMBER MEANS SOMETHING SLIGHTLY DIFFERENT NOW, and the owner signed off
+// on the shift. It is «my unread, in whatever role I hold»:
+//   - GONE: unread sitting in the UNCLAIMED support queue. Those threads are
+//     visible to every operator, so their counts used to land in this sum --
+//     a master's own badge lighting up over a queue that is nobody's yet.
+//   - ADDED: threads where this master is himself the client (a master may
+//     open a chat with another master).
+// For a row on one's OWN profile, «mine» is the correct reading of both.
 const messagesCount = ref(0)
 
 async function loadMessagesCount(): Promise<void> {
   try {
-    const { threads } = await listChats()
-    const counts = await Promise.all(
-      threads.map((t) => getChatUnreadCount(t.id).then((r) => r.unread, () => 0)),
-    )
-    messagesCount.value = counts.reduce((sum, n) => sum + n, 0)
+    messagesCount.value = (await getChatUnreadSummary()).unread_messages
   } catch {
     messagesCount.value = 0
   }

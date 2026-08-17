@@ -54,7 +54,6 @@
 #   count_base query that required manual filter duplication.
 # =============================================================================
 
-import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 from uuid import UUID
@@ -72,7 +71,6 @@ from app.core.exceptions import (
     NotFoundError,
 )
 from app.modules.bookings.models import Booking, BookingStatus
-from app.modules.chats.models import ChatThread
 from app.modules.payments.purchase import (
     create_purchase_for_booking,
     finalize_purchases,
@@ -1554,48 +1552,43 @@ async def get_user_practice_stats(
 
 
 async def has_unread_messages(user: User, session: AsyncSession) -> bool:
-    """Does this user have any unread chat messages, as the STUDENT side?
+    """Does this user have any unread chat messages, in ANY of their roles?
 
     B52 (owner-ruled 2026-08-15, D=C): a COLOUR indicator only (no count)
     for the profile "Сообщения" row, read via THIS stats call so the
     profile screen makes exactly one request -- no new endpoint, no
     per-thread N+1 FROM THE FRONTEND.
 
-    Unread state is not mirrored locally by design (chats/models.py's own
-    header: "no unread counters ... those stay in comms and are read
-    through it"), so satisfying that constraint costs one comms round
-    trip PER THREAD here, server-side, in parallel. Bounded by how many
-    masters this user has messaged -- one eternal DM per pair, typically
-    0-2 for a student -- not by message volume.
+    ONE COMMS CALL, not one per thread (T-51). comms aggregates across
+    every thread the participant takes part in, so the local pointer
+    scan and the parallel fan-out are gone.
+
+    "AS THE STUDENT SIDE" WOULD NOW BE FALSE, and the phrasing is gone
+    with the loop that made it true. The old code asked only about
+    threads where the caller is the CLIENT; the summary counts all three
+    participant roles comms knows -- client, assignee, and DM operator.
+    For a student the two are identical (a student cannot be an operator
+    of anything), so nothing about this screen changes. For a caller who
+    is also a master it is WIDER, and honestly so: the row says "you have
+    unread messages", not "your student conversations have unread
+    messages".
+
+    Unread state is still not mirrored locally by design (chats/models.py:
+    "no unread counters ... those stay in comms and are read through it")
+    -- that constraint now costs one round trip instead of N.
 
     Degrades to False on any comms failure (timeout, 5xx, comms down):
     this endpoint's other two fields (practices/hours attended) are pure
     local aggregates that have never depended on comms, and a chat outage
-    must not start breaking the profile's stat cards.
+    must not start breaking the profile's stat cards. An indicator that
+    goes dark is honest; one that lies is not.
     """
-    thread_ids = (
-        await session.execute(
-            select(ChatThread.comms_thread_id).where(
-                ChatThread.client_user_id == user.id,
-            )
+    try:
+        summary = await comms_request(
+            "GET",
+            f"/api/v1/participants/{user.id}/unread-summary",
         )
-    ).scalars().all()
-    if not thread_ids:
+        return bool(summary.get("has_unread", False))
+    except Exception:
+        logger.warning("stats_unread_check_failed", user_id=str(user.id))
         return False
-
-    async def _unread_for(thread_id: UUID) -> int:
-        try:
-            resp = await comms_request(
-                "GET",
-                f"/api/v1/threads/{thread_id}/unread-count",
-                params={"participant": str(user.id)},
-            )
-            return int(resp.get("unread", 0))
-        except Exception:
-            logger.warning(
-                "stats_unread_check_failed", thread_id=str(thread_id),
-            )
-            return 0
-
-    counts = await asyncio.gather(*(_unread_for(tid) for tid in thread_ids))
-    return any(c > 0 for c in counts)

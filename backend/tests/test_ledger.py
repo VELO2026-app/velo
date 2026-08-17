@@ -57,8 +57,9 @@ from tests.helpers import login_user
 # rows are three per run, and a wipe is a routine operation on it.
 #
 # The 11-digit block cannot overlap the 5-digit bands the other suites pin
-# (test_chats_t2 89720-89759, test_chats_t3_students 89760-89799,
-# test_comms_* 89400-89599) -- verified, not assumed.
+# (test_chats_t2 89720-89759, test_chats_t3_students 89800-89839,
+# test_chats_unread_t51 89760-89799, test_comms_* 89400-89599) -- verified,
+# not assumed.
 _RUN_BLOCK = 70_000_000_000 + (uuid4().int % 100_000_000) * 10
 
 

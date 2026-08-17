@@ -223,14 +223,27 @@ async def test_stats_isolated_per_user(
 # B52: has_unread_messages -- the profile "Сообщения" row's colour dot
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_stats_no_threads_means_no_unread_and_no_comms_call(
+async def test_stats_asks_comms_once_even_with_no_threads(
     client: AsyncClient,
 ) -> None:
-    """A user with no chat threads never calls comms at all -- the N in the
-    per-thread fan-out is genuinely zero, not a call that happens to
-    return zero."""
+    """ONE call, always -- and a user with no threads is answered by comms,
+    not by a local short-circuit.
+
+    This test used to assert the opposite (zero calls), and it was right to:
+    the old implementation listed the user's local thread pointers and fanned
+    out one request per row, so an empty pointer set meant N=0 requests.
+    Since T-51 there is no fan-out to size -- the aggregate is asked of comms
+    directly, which answers "nothing unread" for a participant it has never
+    heard of. The property worth holding is now the constant: exactly one
+    call, whatever the thread count."""
     auth = await login_user(client, telegram_id=87130, first_name="NoChats")
-    fake = AsyncMock()
+    fake = AsyncMock(
+        return_value={
+            "has_unread": False,
+            "threads_with_unread": 0,
+            "unread_messages": 0,
+        }
+    )
 
     with patch(_COMMS_SEAM, fake):
         resp = await client.get(
@@ -239,16 +252,22 @@ async def test_stats_no_threads_means_no_unread_and_no_comms_call(
 
     assert resp.status_code == 200
     assert resp.json()["has_unread_messages"] is False
-    fake.assert_not_called()
+    assert fake.await_count == 1
 
 
 @pytest.mark.asyncio
-async def test_stats_flags_unread_from_any_thread(
+async def test_stats_flags_unread_from_the_aggregate(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """One thread with unread > 0 is enough to flip the flag True -- it is
-    a colour, not a count, so which thread or how many never surfaces."""
+    """Unread anywhere flips the flag True -- it is a colour, not a count,
+    so the numbers behind it never surface.
+
+    B52 is unchanged by T-51: the response still carries one boolean and no
+    count, and the screen still makes exactly one request. What changed is
+    where the boolean comes from -- comms' own `has_unread`, computed across
+    every role the user holds, instead of any(count > 0) over rows this
+    service selected."""
     auth = await login_user(client, telegram_id=87131, first_name="HasUnread")
     master_id = await _make_master(client, db_session, 87132)
     thread_id = uuid4()
@@ -261,7 +280,13 @@ async def test_stats_flags_unread_from_any_thread(
     )
     await db_session.commit()
 
-    fake = AsyncMock(return_value={"unread": 3})
+    fake = AsyncMock(
+        return_value={
+            "has_unread": True,
+            "threads_with_unread": 1,
+            "unread_messages": 3,
+        }
+    )
     with patch(_COMMS_SEAM, fake):
         resp = await client.get(
             STATS_URL, headers=auth_headers(auth["session_token"]),
@@ -270,9 +295,11 @@ async def test_stats_flags_unread_from_any_thread(
     assert resp.status_code == 200
     body = resp.json()
     assert body["has_unread_messages"] is True
-    # The count itself never reaches the wire -- only the flag.
+    # The counts stay behind the seam -- only the flag is on the wire.
     assert "unread" not in body
     assert "unread_count" not in body
+    assert "unread_messages" not in body
+    assert "threads_with_unread" not in body
 
 
 @pytest.mark.asyncio

@@ -250,6 +250,13 @@ class UserStatsResponse(BaseModel):
     the profile's "Сообщения" row colour dot. A COLOUR flag only -- never a
     count, the owner was explicit. See service.has_unread_messages for the
     comms round-trip this rides on.
+
+    THE SAME QUESTION IS ANSWERED A SECOND TIME ELSEWHERE, and that is not
+    a duplicate to be tidied away: a master's hub needs a NUMBER, and it
+    reads GET /api/v1/chats/unread-summary (chats/router.py). Merging the
+    two would mean the student profile makes a second request for its dot
+    -- which is precisely what the B52 ruling above exists to forbid. The
+    full reasoning lives on that endpoint; do not unify without reading it.
     """
 
     practices_attended: int

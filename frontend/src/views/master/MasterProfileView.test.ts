@@ -129,8 +129,8 @@ function mount(): HTMLElement {
 }
 
 // mount -> onMounted (role check, sync) -> loadMessagesCount fire-and-forget
-// (listChats await + Promise.all of getChatUnreadCount, 2 awaits) -> re-render
-// (1); in parallel fetchMyProfile await (1) -> re-render (1). 6 leaves margin.
+// (ONE getChatUnreadSummary await since T-51) -> re-render (1); in parallel
+// fetchMyProfile await (1) -> re-render (1). 6 leaves margin.
 async function flush(): Promise<void> {
   for (let i = 0; i < 6; i++) await nextTick()
 }
@@ -175,7 +175,11 @@ beforeEach(() => {
 
   vi.mocked(mastersApi.getMyMasterProfile).mockReset().mockResolvedValue(profile())
   vi.mocked(chatsApi.listChats).mockReset().mockResolvedValue({ threads: [], next_cursor: null })
-  vi.mocked(chatsApi.getChatUnreadCount).mockReset().mockResolvedValue({ unread: 0 })
+  vi.mocked(chatsApi.getChatUnreadSummary).mockReset().mockResolvedValue({
+    has_unread: false,
+    threads_with_unread: 0,
+    unread_messages: 0,
+  })
   push.mockReset()
   replace.mockReset()
 
@@ -203,7 +207,7 @@ describe('MasterProfileView', () => {
       await flush()
 
       expect(mastersApi.getMyMasterProfile).toHaveBeenCalledTimes(1)
-      expect(chatsApi.listChats).toHaveBeenCalledTimes(1)
+      expect(chatsApi.getChatUnreadSummary).toHaveBeenCalledTimes(1)
     })
 
     it('a non-master role fetches NEITHER -- the master-only endpoint would 403', async () => {
@@ -213,7 +217,7 @@ describe('MasterProfileView', () => {
       await flush()
 
       expect(mastersApi.getMyMasterProfile).not.toHaveBeenCalled()
-      expect(chatsApi.listChats).not.toHaveBeenCalled()
+      expect(chatsApi.getChatUnreadSummary).not.toHaveBeenCalled()
     })
   })
 
@@ -274,62 +278,55 @@ describe('MasterProfileView', () => {
     })
   })
 
-  describe('messages badge (real since T2)', () => {
-    it('sums unread counts across every thread', async () => {
-      vi.mocked(chatsApi.listChats).mockResolvedValue({
-        threads: [
-          { id: 't1', created_at: '2026-08-01T00:00:00Z' },
-          { id: 't2', created_at: '2026-08-02T00:00:00Z' },
-        ],
-        next_cursor: null,
+  describe('messages badge (real since T2, one call since T-51)', () => {
+    it('shows the aggregate the backend computed', async () => {
+      vi.mocked(chatsApi.getChatUnreadSummary).mockResolvedValue({
+        has_unread: true,
+        threads_with_unread: 2,
+        unread_messages: 5,
       })
-      vi.mocked(chatsApi.getChatUnreadCount).mockImplementation(async (id: string) =>
-        id === 't1' ? { unread: 3 } : { unread: 2 },
-      )
       mount()
       await flush()
 
       expect(badgeOn('Сообщения')).toBe('5')
     })
 
-    it('no badge at all when every thread is fully read', async () => {
-      vi.mocked(chatsApi.listChats).mockResolvedValue({
-        threads: [{ id: 't1', created_at: '2026-08-01T00:00:00Z' }],
-        next_cursor: null,
+    it('ONE request for the badge -- the hub no longer walks the thread list', async () => {
+      // The point of T-51 on this screen: the cost of opening the hub stopped
+      // scaling with how many conversations the master has.
+      vi.mocked(chatsApi.getChatUnreadSummary).mockResolvedValue({
+        has_unread: true,
+        threads_with_unread: 9,
+        unread_messages: 17,
       })
-      vi.mocked(chatsApi.getChatUnreadCount).mockResolvedValue({ unread: 0 })
+      mount()
+      await flush()
+
+      expect(chatsApi.getChatUnreadSummary).toHaveBeenCalledTimes(1)
+      expect(chatsApi.listChats).not.toHaveBeenCalled()
+      expect(Object.keys(chatsApi)).not.toContain('getChatUnreadCount')
+    })
+
+    it('no badge at all when everything is read', async () => {
+      vi.mocked(chatsApi.getChatUnreadSummary).mockResolvedValue({
+        has_unread: false,
+        threads_with_unread: 0,
+        unread_messages: 0,
+      })
       mount()
       await flush()
 
       expect(badgeOn('Сообщения')).toBeNull()
     })
 
-    it('a failed listChats degrades to no badge -- the hub must not fail on it', async () => {
-      vi.mocked(chatsApi.listChats).mockRejectedValue(new Error('network'))
+    it('a failed summary degrades to no badge -- the hub must not fail on it', async () => {
+      vi.mocked(chatsApi.getChatUnreadSummary).mockRejectedValue(new Error('network'))
       mount()
       await flush()
 
       expect(badgeOn('Сообщения')).toBeNull()
       // The rest of the hub is unaffected -- the badge is a courtesy, not a gate.
       expect(displayName()).not.toBe('')
-    })
-
-    it('a single failed per-thread unread count counts as 0 for THAT thread only', async () => {
-      vi.mocked(chatsApi.listChats).mockResolvedValue({
-        threads: [
-          { id: 't1', created_at: '2026-08-01T00:00:00Z' },
-          { id: 't2', created_at: '2026-08-02T00:00:00Z' },
-        ],
-        next_cursor: null,
-      })
-      vi.mocked(chatsApi.getChatUnreadCount).mockImplementation(async (id: string) => {
-        if (id === 't1') throw new Error('boom')
-        return { unread: 4 }
-      })
-      mount()
-      await flush()
-
-      expect(badgeOn('Сообщения')).toBe('4')
     })
   })
 

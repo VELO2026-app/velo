@@ -8,9 +8,10 @@
   The honest stub is retired: the T2 chat proxy is live. The list comes from
   GET /api/v1/chats -- for a student that is the LOCAL pointer list (ID-11;
   created_at-ordered, no comms round-trip) with the P-1 `peer` block, so no
-  per-row profile lookups. Per-thread unread badges are individual
-  unread-count calls on mount (approved plan §4: the list itself is NOT
-  polled; activity ordering/badges-in-list is behind the ID-11 trigger).
+  per-row profile lookups. Unread badges ride ON the list rows since T-51 --
+  the backend fetches the whole page's counts from comms in one call, so this
+  screen makes exactly one request. The list is still NOT polled (approved
+  plan §4); activity ordering is still behind the ID-11 trigger.
 
   Opening a row -> 'user-chat' (/user/profile/messages/:id). Visual restyle
   to the «3 Students» design is phase «б».
@@ -70,7 +71,7 @@
         :key="t.id"
         :peer="t.peer"
         peer-fallback="Мастер"
-        :unread="unreadByThread[t.id] ?? 0"
+        :unread="t.unread ?? 0"
         @open="openThread(t.id)"
       />
     </div>
@@ -78,13 +79,13 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import { VButton, VEmptyState, VLoader } from '@/components/ui'
 import { IconMessages } from '@/components/icons'
 import ChatListRow from '@/components/shared/ChatListRow.vue'
-import { getChatUnreadCount, listChats, type ChatThread } from '@/api/chats'
+import { listChats, type ChatThread } from '@/api/chats'
 import { extractApiError } from '@/composables/useApiError'
 
 const router = useRouter()
@@ -92,8 +93,10 @@ const router = useRouter()
 const loading = ref(true)
 const error = ref<string | null>(null)
 const threads = ref<ChatThread[]>([])
-const unreadByThread = reactive<Record<string, number>>({})
-
+// Badges arrive WITH the rows (T-51): the list carries `unread` per thread,
+// so the second pass of per-thread calls is gone. If comms is unreachable
+// the backend still returns the list, just without the keys -- no badge,
+// never a false one.
 async function load(): Promise<void> {
   loading.value = true
   error.value = null
@@ -101,22 +104,8 @@ async function load(): Promise<void> {
     threads.value = (await listChats()).threads
   } catch (e) {
     error.value = extractApiError(e, 'Попробуйте ещё раз')
-    loading.value = false
-    return
   }
   loading.value = false
-
-  // Badges arrive after the rows: a failed count silently stays 0 -- the
-  // badge is a courtesy, never a reason to break the list.
-  await Promise.all(
-    threads.value.map(async (t) => {
-      try {
-        unreadByThread[t.id] = (await getChatUnreadCount(t.id)).unread
-      } catch {
-        unreadByThread[t.id] = 0
-      }
-    }),
-  )
 }
 
 function openThread(id: string): void {

@@ -3,16 +3,19 @@
 // =============================================================================
 //
 // The student's chats list over GET /api/v1/chats: LOCAL pointer rows
-// (ID-11) carrying the P-1 `peer` display block, plus per-thread
-// unread-count calls for the badges. The seam is @/api/chats, mocked whole.
+// (ID-11) carrying the P-1 `peer` display block AND, since T-51, the row's
+// own `unread`. The seam is @/api/chats, mocked whole.
 //
 // What is under test, and why:
 //   1. NAMES ARRIVE FROM THE ROW ITSELF -- P-1 exists so the list renders
 //      without per-row profile lookups; the test proves no other api module
 //      is touched. peer=null degrades to «Мастер», never breaks the row.
-//   2. BADGES ARE A COURTESY -- negative-twin pair: a failed unread-count
-//      leaves that row at no-badge while THE SIBLING ROW'S badge still
-//      arrives (post-state, not just absence-of-exception).
+//   2. BADGES ARRIVE WITH THE ROWS -- ONE request for the whole screen
+//      (T-51: the per-thread fan-out is gone, and its wrapper with it).
+//      Three row states stay distinguishable: a count, an explicit 0, and
+//      NO KEY AT ALL -- the last one meaning "not the caller's thread", or
+//      "comms was unreachable when the backend built this page". Both of
+//      those render as no badge; neither is faked into a zero.
 //   3. A ROW OPENS ITS THREAD -- push('user-chat', {id}).
 //   4. The three list states (empty / error+retry / rows) are distinct.
 //
@@ -81,7 +84,6 @@ beforeEach(() => {
   push.mockReset()
   back.mockReset()
   vi.mocked(chatsApi.listChats).mockReset()
-  vi.mocked(chatsApi.getChatUnreadCount).mockReset().mockResolvedValue({ unread: 0 })
 })
 
 afterEach(() => {
@@ -125,14 +127,14 @@ describe('UserMessagesView', () => {
     expect(row(0).querySelector('.chat-row__name')?.textContent?.trim()).toBe('Мастер')
   })
 
-  it('per-thread unread badges: a positive count shows, zero shows nothing', async () => {
+  it('unread badges ride on the rows: a positive count shows, an explicit zero shows nothing', async () => {
     vi.mocked(chatsApi.listChats).mockResolvedValue({
-      threads: [thread(), thread({ id: 'thread-2', operator_value: 'master-2' })],
+      threads: [
+        thread({ unread: 3 }),
+        thread({ id: 'thread-2', operator_value: 'master-2', unread: 0 }),
+      ],
       next_cursor: null,
     })
-    vi.mocked(chatsApi.getChatUnreadCount).mockImplementation(async (id) => ({
-      unread: id === 'thread-1' ? 3 : 0,
-    }))
     mount()
     await flush()
 
@@ -142,14 +144,17 @@ describe('UserMessagesView', () => {
     expect(badge(1)).toBeUndefined()
   })
 
-  it('negative twin: ONE failed unread-count stays badge-less while the sibling badge still arrives', async () => {
+  it('a MISSING unread key is not a zero: the row renders badge-less and the sibling badge still arrives', async () => {
+    // The key is absent on a row the caller takes no part in, and on every
+    // row when the backend could not reach comms. Neither may be invented
+    // into a 0 -- the row simply carries no badge, and the rest of the page
+    // is unaffected.
     vi.mocked(chatsApi.listChats).mockResolvedValue({
-      threads: [thread(), thread({ id: 'thread-2', operator_value: 'master-2' })],
+      threads: [
+        thread(),
+        thread({ id: 'thread-2', operator_value: 'master-2', unread: 5 }),
+      ],
       next_cursor: null,
-    })
-    vi.mocked(chatsApi.getChatUnreadCount).mockImplementation(async (id) => {
-      if (id === 'thread-1') throw new Error('comms hiccup')
-      return { unread: 5 }
     })
     mount()
     await flush()
@@ -159,6 +164,24 @@ describe('UserMessagesView', () => {
     expect(
       row(1).querySelector('[data-testid="chat-unread"]')?.textContent?.trim(),
     ).toBe('5')
+  })
+
+  it('ONE api call for the whole screen -- the per-thread fan-out is gone', async () => {
+    vi.mocked(chatsApi.listChats).mockResolvedValue({
+      threads: [
+        thread({ unread: 1 }),
+        thread({ id: 'thread-2', operator_value: 'master-2', unread: 2 }),
+        thread({ id: 'thread-3', operator_value: 'master-3', unread: 3 }),
+      ],
+      next_cursor: null,
+    })
+    mount()
+    await flush()
+
+    expect(chatsApi.listChats).toHaveBeenCalledTimes(1)
+    // Three rows, still one request: the count no longer scales with rows.
+    expect(rows()).toHaveLength(3)
+    expect(Object.keys(chatsApi)).not.toContain('getChatUnreadCount')
   })
 
   it("clicking a row navigates to 'user-chat' with that thread's id", async () => {

@@ -234,7 +234,7 @@ class TestAdminBoundary:
 
 
 class TestAdminList:
-    async def test_admin_list_is_own_threads_only_and_never_touches_comms(
+    async def test_admin_list_is_own_threads_only_and_comms_never_supplies_rows(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch
     ) -> None:
         """The replacement for is_supervisor=True. Two threads exist; the
@@ -243,7 +243,14 @@ class TestAdminList:
 
         The strong form of the assertion is the loop at the end: EVERY id
         in the list opens. The old behavior failed exactly there -- it
-        listed every thread on the box and 404'd on all of them."""
+        listed every thread on the box and 404'd on all of them.
+
+        SINCE T-51 comms is asked exactly one thing about this page -- the
+        unread counts for the rows we already selected locally. The
+        anti-widening property is therefore stated as "comms supplies no
+        ROWS", not "comms is untouched": the poisoned payload below would
+        still leak every thread on the box if the branch ever went back to
+        asking comms for its list."""
         # Somebody else's conversation -- the leak that must not reappear.
         student = await login_user(
             client, telegram_id=BAND_MIN + 33, first_name="Student",
@@ -276,7 +283,12 @@ class TestAdminList:
         )
         assert mine.status_code == 200, mine.text
 
-        fake = AsyncMock(return_value={"threads": ["EVERY THREAD ON THE BOX"]})
+        fake = AsyncMock(
+            return_value={
+                "threads": ["EVERY THREAD ON THE BOX"],
+                "counts": {THIRD_THREAD_ID: 2, OTHER_THREAD_ID: 99},
+            }
+        )
         monkeypatch.setattr(_SEAM, fake)
         resp = await client.get(
             CHATS_URL, headers=auth_headers(admin["session_token"]),
@@ -288,8 +300,16 @@ class TestAdminList:
         assert ids == {THIRD_THREAD_ID}
         assert OTHER_THREAD_ID not in ids
         # Local, not comms: the operator-scoped API cannot express "the
-        # threads this admin is an id in" and is not asked to.
-        fake.assert_not_awaited()
+        # threads this admin is an id in" and is not asked to. The ONE call
+        # made is the unread batch, and it asks about the admin's own rows
+        # only -- a count returned for a foreign thread cannot smuggle that
+        # thread into the page.
+        assert fake.await_count == 1
+        assert fake.await_args.args[1] == "/api/v1/threads/unread-counts"
+        assert fake.await_args.kwargs["json"]["thread_ids"] == [
+            THIRD_THREAD_ID
+        ]
+        assert threads[0]["unread"] == 2
 
         by_id = {t["id"]: t for t in threads}
         assert (
