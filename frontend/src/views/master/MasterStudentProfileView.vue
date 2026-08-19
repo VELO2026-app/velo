@@ -222,7 +222,7 @@
          verbatim, not redesigned. -->
     <VConfirmDialog
       :open="unblockConfirmOpen"
-      :title="`Разблокировать ${name}?`"
+      :title="`Разблокировать?`"
       :message="`${name} вернется в группу «Ученики» и снова сможет видеть и бронировать ваши практики.`"
       confirm-label="Разблокировать"
       danger
