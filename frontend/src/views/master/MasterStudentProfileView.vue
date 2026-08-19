@@ -225,7 +225,6 @@
       :title="`Разблокировать?`"
       :message="`${name} вернется в группу «Ученики» и снова сможет видеть и бронировать ваши практики.`"
       confirm-label="Разблокировать"
-      danger
       warning-panel
       cancel-variant="primary"
       title-strong
