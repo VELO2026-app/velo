@@ -216,10 +216,14 @@
       @close="reportFormOpen = false"
     />
 
-    <!-- Unblock confirm (T24-20). Same copy/structure the row's own unblock
-         dialog used before T24-19 removed it (MasterGroupDetailView.vue,
-         P3 PROMPT №592 + T24-28..31 styling, PROMPT №634) -- relocated
-         verbatim, not redesigned. -->
+    <!-- Unblock confirm (T24-20). Structure taken from the row's own
+         unblock dialog before T24-19 removed it (MasterGroupDetailView.vue,
+         P3 PROMPT №592 + T24-28..31 styling, PROMPT №634).
+         NO LONGER VERBATIM: the title dropped the name (the TargetUserCard
+         below it already shows it -- the old copy named her three times in
+         one dialog) and the `danger` flag is gone (unblocking is not a
+         destructive action; the red icon read as a warning against doing
+         it). The MESSAGE keeps the name on purpose. -->
     <VConfirmDialog
       :open="unblockConfirmOpen"
       :title="`Разблокировать?`"

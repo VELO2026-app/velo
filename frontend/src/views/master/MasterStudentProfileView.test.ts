@@ -1377,7 +1377,11 @@ describe('MasterStudentProfileView', () => {
       expect(host?.querySelector('.v-menu__trigger')).not.toBeNull()
     })
 
-    it("clicking it opens the unblock confirm with the same copy the row's own dialog used before T24-19", async () => {
+    // The title dropped the name: the TargetUserCard directly below the
+    // title already shows it, so the old copy said "Анна Кузнецова" three
+    // times in one dialog. The MESSAGE still names her -- that sentence is
+    // about what happens TO her and reads wrong without it.
+    it('clicking it opens the unblock confirm -- title without the name, message with it', async () => {
       vi.mocked(mastersApi.getStudent)
         .mockReset()
         .mockResolvedValue(detail({ blocked: true }))
@@ -1388,7 +1392,7 @@ describe('MasterStudentProfileView', () => {
       await flush()
 
       const dialogText = liveModal()?.textContent ?? ''
-      expect(dialogText).toContain('Разблокировать Анна Кузнецова?')
+      expect(dialogText).toContain('Разблокировать?')
       expect(dialogText).toContain(
         'Анна Кузнецова вернется в группу «Ученики» и снова сможет видеть и бронировать ваши практики.',
       )
