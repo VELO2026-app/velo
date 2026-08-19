@@ -4,8 +4,46 @@
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.helpers import auth_headers, login_user
+from tests.helpers import auth_headers, full_cleanup_range, login_user
+
+# telegram_id range for this test file (T-58).
+#
+# The file had NO cleanup of its own. Its rows survived every run and
+# were collected -- silently -- by test_insights.py, whose declared
+# 89441-89519 happens to cover all of these numbers and whose cleanup
+# deletes users. That is not hygiene, it is a dependency on a
+# neighbouring file that is written down nowhere: narrow test_insights
+# or move it, and this file starts accumulating with nothing to connect
+# cause to effect.
+#
+# ⚠ THIS RANGE OVERLAPS test_insights.py (89441-89519), AND NOT ONLY ON
+# PAPER: 89442, 89443, 89451 and 89452 are used by both files. Recorded
+# in KNOWN_OVERLAPS in tests/telegram_id_bands.py rather than fixed --
+# separating them means moving ids, which T-58 was scoped out of. Do not
+# widen this range; it is exactly the numbers below.
+_TID_MIN = 89442
+_TID_MAX = 89484
+
+
+@pytest.fixture(autouse=True)
+async def _clean_users_band(db_session: AsyncSession):
+    """Sweep this file's own numbers, before and after every test.
+
+    Before as well as after: a previous run interrupted mid-file leaves
+    rows behind, and a stale user with the same telegram_id makes the
+    next login return the OLD user instead of creating one.
+    """
+    await full_cleanup_range(
+        db_session, _TID_MIN, _TID_MAX, delete_users=True
+    )
+    await db_session.commit()
+    yield
+    await full_cleanup_range(
+        db_session, _TID_MIN, _TID_MAX, delete_users=True
+    )
+    await db_session.commit()
 
 
 # ---------------------------------------------------------------------------

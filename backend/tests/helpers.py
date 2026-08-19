@@ -95,11 +95,19 @@ def build_init_data(
 
 async def login_user(
     client: AsyncClient,
-    telegram_id: int = 77001,
+    telegram_id: int,
     first_name: str = "TestUser",
     username: str = "testuser",
 ) -> dict:
     """Create a user via POST /auth/telegram and return the response dict.
+
+    `telegram_id` IS REQUIRED, and used to default to 77001 (T-58). The
+    default was a trap laid for whoever wrote the next test file: a
+    forgotten argument produced a user in somebody else's band, silently
+    and with no way to notice until their cleanup deleted it mid-run.
+    Nothing broke when the default was removed -- every one of the 639
+    call sites in the suite already passed an id explicitly -- which is
+    precisely why it had to go before the first one did not.
 
     Uses real PostgreSQL and Redis (runs on test VPS).
     Only patches telegram_bot_token for HMAC validation.

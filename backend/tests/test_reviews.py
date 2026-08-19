@@ -25,7 +25,7 @@ from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.bookings.models import Booking, BookingStatus
@@ -37,9 +37,25 @@ from tests.helpers import auth_headers, login_user
 
 REVIEWS_URL = "/api/v1/practices/{practice_id}/reviews"
 
-# telegram_id range for this test file.
-_TID_MIN = 89000
-_TID_MAX = 89999
+# telegram_id ranges for this test file (T-58).
+#
+# This used to be a single _TID_MIN/_TID_MAX pair spanning 89000-89999 --
+# the entire 89xxx space -- while the file actually uses four small
+# clusters inside it. The span was not documentation, it was the
+# argument to a cleanup that SELECTS every user in range and deletes
+# them with their bookings and feedbacks, around every test in this
+# file. Eleven other files declare bands inside that span; each of them
+# was having its fixtures swept by this one whenever the runner put us
+# first.
+#
+# Declared as disjoint ranges rather than one widened pair, because a
+# pair would have to cover the gap between 89022 and 89900 and the gap
+# is where the other eleven live. NOT ONE telegram_id MOVED -- only
+# what this file claims and deletes changed.
+_TID_RANGES = (
+    (89000, 89022),   # single reviewers and the 89020+i participant loop
+    (89900, 89999),   # the later fixtures, up to the lone 89999
+)
 
 
 # ===================================================================
@@ -61,7 +77,12 @@ async def _do_cleanup(session: AsyncSession) -> None:
 
     user_ids_subq = (
         select(User.id).where(
-            User.telegram_id.between(_TID_MIN, _TID_MAX),
+            or_(
+                *(
+                    User.telegram_id.between(low, high)
+                    for low, high in _TID_RANGES
+                )
+            ),
         )
     )
 
@@ -105,7 +126,12 @@ async def _do_cleanup(session: AsyncSession) -> None:
     # 7. users.
     await session.execute(
         User.__table__.delete().where(
-            User.telegram_id.between(_TID_MIN, _TID_MAX),
+            or_(
+                *(
+                    User.telegram_id.between(low, high)
+                    for low, high in _TID_RANGES
+                )
+            ),
         )
     )
     await session.commit()
