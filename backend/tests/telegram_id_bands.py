@@ -52,6 +52,7 @@ assignments.
 from __future__ import annotations
 
 import ast
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -305,14 +306,20 @@ BLIND_ZONE: dict[str, CleanupRecord | None] = {
 # ---------------------------------------------------------------------------
 # Readers -- AST only
 # ---------------------------------------------------------------------------
-def _module_assignments(tree: ast.Module) -> dict[str, ast.expr]:
-    """Module-level `NAME = value` only.
+def _module_assignments(tree: ast.Module) -> dict[str, list[ast.expr]]:
+    """Module-level `NAME = value` only -- EVERY assignment, not the last.
 
     Not nested in a function, not inside a comment, not in a string. A
     band written in prose about a neighbour is not a declaration, and
     this is the line that enforces it.
+
+    A list per name rather than one value, because the first version of
+    this reader kept only the last write and therefore ANSWERED a file
+    that declared its band twice, silently and with the wrong number.
+    Callers below either demand exactly one assignment or report the
+    ambiguity; none of them picks a winner.
     """
-    out: dict[str, ast.expr] = {}
+    out: dict[str, list[ast.expr]] = {}
     for node in tree.body:
         if not isinstance(node, ast.Assign):
             continue
@@ -322,10 +329,16 @@ def _module_assignments(tree: ast.Module) -> dict[str, ast.expr]:
                 target.elts, node.value.elts, strict=False
             ):
                 if isinstance(name_node, ast.Name):
-                    out[name_node.id] = value
+                    out.setdefault(name_node.id, []).append(value)
         elif isinstance(target, ast.Name):
-            out[target.id] = node.value
+            out.setdefault(target.id, []).append(node.value)
     return out
+
+
+def _sole(assigns: dict[str, list[ast.expr]], name: str) -> ast.expr | None:
+    """The value of `name`, only if the module assigns it exactly once."""
+    values = assigns.get(name, [])
+    return values[0] if len(values) == 1 else None
 
 
 def _const_int(node: ast.expr | None) -> int | None:
@@ -350,32 +363,108 @@ def declared_bands(tests_dir: Path | None = None) -> list[Band]:
     return bands
 
 
-def _ranges_in(path: Path) -> list[tuple[int, int]]:
+@dataclass(frozen=True)
+class BandSource:
+    """One declaration of a band, and how it was written."""
+
+    written_as: str
+    ranges: tuple[tuple[int, int], ...]
+
+
+def band_sources(path: Path) -> list[BandSource]:
+    """EVERY band declaration in a file, in the order the reader finds
+    them.
+
+    More than one entry means the file says two different things about
+    its own band. This function does not choose between them -- see
+    multiple_declarations() for why choosing is the bug.
+    """
     try:
         tree = ast.parse(path.read_text())
     except SyntaxError:
         return []
     assigns = _module_assignments(tree)
+    sources: list[BandSource] = []
 
-    multi = assigns.get(_BAND_RANGES_NAME)
-    if isinstance(multi, ast.Tuple):
+    for value in assigns.get(_BAND_RANGES_NAME, []):
+        if not isinstance(value, ast.Tuple):
+            continue
         ranges: list[tuple[int, int]] = []
-        for item in multi.elts:
+        for item in value.elts:
             if isinstance(item, ast.Tuple) and len(item.elts) == 2:
                 low = _const_int(item.elts[0])
                 high = _const_int(item.elts[1])
                 if low is not None and high is not None:
                     ranges.append((low, high))
-        return ranges
+        if ranges:
+            sources.append(BandSource(_BAND_RANGES_NAME, tuple(ranges)))
 
-    low = high = None
-    for name in _BAND_LOW_NAMES:
-        low = low if low is not None else _const_int(assigns.get(name))
-    for name in _BAND_HIGH_NAMES:
-        high = high if high is not None else _const_int(assigns.get(name))
-    if low is None or high is None:
+    for low_name, high_name in zip(
+        _BAND_LOW_NAMES, _BAND_HIGH_NAMES, strict=True
+    ):
+        lows = assigns.get(low_name, [])
+        highs = assigns.get(high_name, [])
+        if not lows or not highs:
+            continue
+        if len(lows) > 1 or len(highs) > 1:
+            # Written more than once under the same name. Recorded as
+            # separate sources so the count is right and the report can
+            # show what was found; the values are read pairwise.
+            for low_value, high_value in zip(lows, highs, strict=False):
+                low, high = _const_int(low_value), _const_int(high_value)
+                if low is not None and high is not None:
+                    sources.append(
+                        BandSource(f"{low_name}/{high_name}", ((low, high),))
+                    )
+            continue
+        low, high = _const_int(lows[0]), _const_int(highs[0])
+        if low is not None and high is not None:
+            sources.append(
+                BandSource(f"{low_name}/{high_name}", ((low, high),))
+            )
+    return sources
+
+
+def _ranges_in(path: Path) -> list[tuple[int, int]]:
+    """The ranges a file claims, when it claims them unambiguously.
+
+    A file with several conflicting sources still returns its first one
+    here -- declared_bands() and the overlap check keep working on the
+    tree -- but multiple_declarations() fails the suite for it, so such
+    a file cannot sit in the tree unnoticed while these ranges are
+    trusted.
+    """
+    sources = band_sources(path)
+    if not sources:
         return []
-    return [(low, high)]
+    return list(sources[0].ranges)
+
+
+def multiple_declarations(
+    tests_dir: Path | None = None,
+) -> list[tuple[str, list[BandSource]]]:
+    """Files that declare their band more than once.
+
+    NOT A STYLE COMPLAINT. The reader has three ways to resolve this and
+    all three are silent: a name assigned twice used to keep the LAST
+    value; two different names from the same group resolve to whichever
+    comes FIRST in the tuple above; and _TID_RANGES wins outright over
+    any pair. Whichever one fires, the file gets a band that need not be
+    the one its cleanup actually sweeps -- and every check downstream
+    then compares confidently against the wrong thing. That is worse
+    than the blind zone: there the check knows it does not know, here it
+    would be sure and mistaken.
+
+    So this reports rather than resolves. Deciding which declaration is
+    the real one is the author's job, not a heuristic's.
+    """
+    directory = tests_dir or TESTS_DIR
+    out = []
+    for path in sorted(directory.glob("test_*.py")):
+        sources = band_sources(path)
+        if len(sources) > 1:
+            out.append((path.name, sources))
+    return out
 
 
 def incomplete_declarations(tests_dir: Path | None = None) -> list[str]:
@@ -388,14 +477,144 @@ def incomplete_declarations(tests_dir: Path | None = None) -> list[str]:
         except SyntaxError:
             continue
         has_low = any(
-            _const_int(assigns.get(n)) is not None for n in _BAND_LOW_NAMES
+            _const_int(_sole(assigns, n)) is not None
+            for n in _BAND_LOW_NAMES
         )
         has_high = any(
-            _const_int(assigns.get(n)) is not None for n in _BAND_HIGH_NAMES
+            _const_int(_sole(assigns, n)) is not None
+            for n in _BAND_HIGH_NAMES
         )
         if has_low != has_high:
             out.append(path.name)
     return out
+
+
+# The parameter names a helper's default id hides behind. Matched by
+# SUFFIX, not equality: the tree uses `telegram_id`, `master_telegram_id`
+# and `admin_telegram_id`, and an exact match would silently skip two of
+# the three.
+_TELEGRAM_ID_SUFFIX = "telegram_id"
+
+
+@dataclass(frozen=True)
+class DefaultOutOfBand:
+    file: str
+    function: str
+    parameter: str
+    value: int
+    ranges: tuple[tuple[int, int], ...]
+
+
+def _resolve_int(
+    node: ast.expr, assigns: dict[str, list[ast.expr]]
+) -> int | None:
+    """A default's numeric value, when it can be read WITHOUT guessing.
+
+    Three shapes, all of which appear or plausibly will: a literal, a
+    module constant (`= _TID_MIN`), and a constant plus a literal
+    (`= _TID_MIN + 5`). Anything else -- a call, an f-string, arithmetic
+    on two names -- returns None and is skipped in silence. Evaluating
+    other people's expressions is exactly how two inventories were
+    miscounted while T-58 was being written; a default this reader
+    cannot read is left to the human, not guessed at.
+    """
+    value = _const_int(node)
+    if value is not None:
+        return value
+    if isinstance(node, ast.Name):
+        return _const_int(_sole(assigns, node.id))
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        left = _resolve_int(node.left, assigns)
+        right = _const_int(node.right)
+        if left is not None and right is not None:
+            return left + right
+    return None
+
+
+def defaults_out_of_band(
+    tests_dir: Path | None = None,
+) -> list[DefaultOutOfBand]:
+    """Helper defaults holding an id outside their own file's band.
+
+    THE DEFAULT ITSELF IS NOT THE PROBLEM. A local
+    `telegram_id: int = 94900` next to a declared 94000-94999 is good
+    practice -- it stops the same number being repeated in twenty call
+    sites. (The one removed in T-58 was different in kind: it sat in the
+    SHARED helpers.py, where a forgotten argument put a user in a band
+    belonging to whichever file happened to be calling.) What this finds
+    is a default that has drifted out of its file's band -- typically by
+    being copied into a new file along with the helper around it, which
+    nothing today would notice.
+
+    THIS IS NOT THE OVERLAP CHECK IN ANOTHER FORM, and the distinction
+    is worth keeping when someone later reads them side by side.
+    test_admin_practices and test_admin_stats_overview both default an
+    admin to 94900 and both are INSIDE their own declared bands, so this
+    check is silent about them -- their problem is that the two bands
+    are the same band, which is the overlap check's question and is
+    recorded in KNOWN_OVERLAPS. Two checks, two questions; neither is a
+    duplicate of the other.
+
+    SILENT BY DESIGN in three situations:
+      - the file declares no band (the blind zone -- there is nothing to
+        compare against, and inventing a comparison would turn thirty-odd
+        legitimate files into false alarms);
+      - the file's band is inverted (low above high). Nothing can be
+        inside such a band, so this check would emit one complaint per
+        helper for a single defect that lives in the DECLARATION. The
+        marker belongs to inverted(), which points at the band itself;
+      - the file declares its band more than once, so which band to
+        compare against is itself unknown -- multiple_declarations()
+        fails for it and pointing a second finger would only obscure
+        the first.
+    """
+    directory = tests_dir or TESTS_DIR
+    ambiguous = {name for name, _ in multiple_declarations(directory)}
+    found: list[DefaultOutOfBand] = []
+    for path in sorted(directory.glob("test_*.py")):
+        if path.name in ambiguous:
+            continue
+        ranges = _ranges_in(path)
+        if not ranges or any(low > high for low, high in ranges):
+            continue
+        try:
+            tree = ast.parse(path.read_text())
+        except SyntaxError:
+            continue
+        assigns = _module_assignments(tree)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                continue
+            args = node.args
+            positional = list(args.posonlyargs) + list(args.args)
+            defaulted = list(
+                zip(
+                    positional[len(positional) - len(args.defaults):],
+                    args.defaults,
+                    strict=True,
+                )
+            )
+            defaulted += [
+                (arg, default)
+                for arg, default in zip(
+                    args.kwonlyargs, args.kw_defaults, strict=True
+                )
+                if default is not None
+            ]
+            for arg, default in defaulted:
+                if not arg.arg.endswith(_TELEGRAM_ID_SUFFIX):
+                    continue
+                value = _resolve_int(default, assigns)
+                if value is None:
+                    continue
+                if any(low <= value <= high for low, high in ranges):
+                    continue
+                found.append(
+                    DefaultOutOfBand(
+                        path.name, node.name, arg.arg, value, tuple(ranges)
+                    )
+                )
+    return found
 
 
 def cleanup_record(path: Path) -> CleanupRecord | None:
@@ -422,7 +641,7 @@ def cleanup_record(path: Path) -> CleanupRecord | None:
             if value is not None:
                 return value
             if isinstance(arg, ast.Name):
-                return _const_int(assigns.get(arg.id))
+                return _const_int(_sole(assigns, arg.id))
             return None
 
         low, high = resolve(node.args[1]), resolve(node.args[2])
@@ -570,11 +789,47 @@ def known_overlap_pairs() -> set[frozenset[str]]:
     return {frozenset(entry.files) for entry in KNOWN_OVERLAPS}
 
 
+def _subtract(
+    windows: list[tuple[int, int]],
+    cut: Iterable[tuple[int, int]],
+) -> list[tuple[int, int]]:
+    """Remove every `cut` range from `windows`, splitting where needed."""
+    result = list(windows)
+    for cut_low, cut_high in cut:
+        remaining: list[tuple[int, int]] = []
+        for low, high in result:
+            if cut_high < low or cut_low > high:
+                remaining.append((low, high))
+                continue
+            if low < cut_low:
+                remaining.append((low, cut_low - 1))
+            if cut_high < high:
+                remaining.append((cut_high + 1, high))
+        result = remaining
+    return sorted(result)
+
+
 def free_windows(
     space: tuple[int, int] = (89000, 89999),
     bands: list[Band] | None = None,
+    reserved: Iterable[tuple[int, int]] | None = None,
 ) -> list[tuple[int, int]]:
-    """Unclaimed stretches inside a space, from the declarations."""
+    """Stretches inside `space` that are free to claim.
+
+    RESERVED RANGES ARE SUBTRACTED, NOT ANNOTATED (T-59). This function
+    feeds the map that replaced the deleted document, and the map's whole
+    reason to exist is that a person choosing a band should be able to
+    take a line at face value. Returning 89600-89699 with a footnote
+    saying part of it is reserved recreates the artefact we buried: a
+    register that is only correct if you read the small print. A
+    reserved range is printed on its own line in the map instead, so it
+    stays visible without being offered.
+
+    `reserved` is a parameter rather than a straight read of RESERVED so
+    that the behaviour can be pinned on ranges we control -- otherwise
+    every double here rides on whatever single reservation happens to
+    exist today and moves when it moves.
+    """
     items = sorted(
         (b for b in (bands if bands is not None else declared_bands())
          if b.high >= space[0] and b.low <= space[1]),
@@ -588,7 +843,9 @@ def free_windows(
         cursor = max(cursor, band.high + 1)
     if cursor <= space[1]:
         windows.append((cursor, space[1]))
-    return windows
+
+    cut = RESERVED if reserved is None else reserved
+    return _subtract(windows, cut)
 
 
 # ---------------------------------------------------------------------------
@@ -612,13 +869,20 @@ def render_map() -> str:
     for band in sorted(bands, key=lambda b: (b.low, b.file)):
         lines.append(f"  {band.low}-{band.high}  {band.file}")
 
+    # Free means free: reserved stretches are already subtracted by
+    # free_windows, not footnoted here. A line in this section can be
+    # taken at face value, which is the one thing the document this
+    # replaced could not promise.
     lines += ["", "FREE WINDOWS IN 89xxx", "---------------------"]
     for low, high in free_windows():
-        note = ""
-        for (rlow, rhigh), why in RESERVED.items():
-            if low <= rhigh and rlow <= high:
-                note = f"   <- overlaps reserved {rlow}-{rhigh}: {why}"
-        lines.append(f"  {low}-{high}  ({high - low + 1} numbers){note}")
+        lines.append(f"  {low}-{high}  ({high - low + 1} numbers)")
+
+    # Printed on its own, so subtracting it does not make it invisible:
+    # the next person needs to know the gap is deliberate and not a
+    # stretch somebody forgot to claim.
+    lines += ["", "RESERVED (not free, not claimed by a file)", "-" * 36]
+    for (low, high), why in sorted(RESERVED.items()):
+        lines.append(f"  {low}-{high}  {why}")
 
     lines += ["", "KNOWN OVERLAPS (recorded, not fixed)", "-" * 36]
     for entry in KNOWN_OVERLAPS:

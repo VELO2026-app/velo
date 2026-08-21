@@ -26,13 +26,16 @@ from tests.telegram_id_bands import (
     BLIND_ZONE,
     KNOWN_OVERLAPS,
     Band,
+    band_sources,
     cleanup_record,
     declared_bands,
+    defaults_out_of_band,
     find_overlaps,
     free_windows,
     incomplete_declarations,
     inverted,
     known_overlap_pairs,
+    multiple_declarations,
     out_of_space,
     render_map,
     undeclared_files,
@@ -136,6 +139,50 @@ class TestTheTreeItself:
             + "\n".join(drifted)
         )
 
+    def test_no_file_declares_its_band_twice(self) -> None:
+        """A second declaration is not a duplicate, it is a fork.
+
+        The reader would resolve it -- last write wins for a repeated
+        name, first name in the tuple wins across names, _TID_RANGES
+        wins outright -- and every resolution is silent. The file would
+        then be compared, confidently, against a band its cleanup may
+        not sweep. That is worse than the blind zone: there the check
+        knows it does not know; here it would be sure and wrong.
+        """
+        forks = multiple_declarations()
+        assert not forks, (
+            "these files declare a band more than once, and the reader "
+            "would pick one of them SILENTLY:\n"
+            + "\n".join(
+                f"  {name}: "
+                + "; ".join(
+                    f"{source.written_as} -> {list(source.ranges)}"
+                    for source in sources
+                )
+                for name, sources in forks
+            )
+            + "\n\nDelete the declarations that are not the real one. "
+            "Nothing here will choose for you."
+        )
+
+    def test_no_default_id_sits_outside_its_own_band(self) -> None:
+        """Local defaults are legitimate; a local default in somebody
+        else's band is not.
+
+        Nothing in the tree violates this today. The check exists for
+        the day a helper is copied into a new file with its number still
+        attached -- which nothing else would notice.
+        """
+        strays = defaults_out_of_band()
+        assert not strays, (
+            "helper defaults hold ids outside their file's own band:\n"
+            + "\n".join(
+                f"  {s.file}: {s.function}({s.parameter}={s.value}) "
+                f"but the file declares {list(s.ranges)}"
+                for s in strays
+            )
+        )
+
     def test_no_half_written_declarations(self) -> None:
         """One bound without the other reads as "no band" to every
         grep, and the file most likely to be wrong is the one that
@@ -215,7 +262,58 @@ class TestEmpty:
         assert out_of_space([]) == []
 
     def test_free_windows_of_an_empty_space_is_the_whole_space(self) -> None:
-        assert free_windows((89000, 89999), []) == [(89000, 89999)]
+        """With nothing declared AND nothing reserved, everything is free.
+
+        T-58 asserted this against the live RESERVED, and was right at
+        the time: free_windows then returned the reserved stretch too and
+        the map footnoted it. T-59 subtracts reserved ranges instead, so
+        the same call now answers about the real reservation rather than
+        about emptiness. The property worth holding is the one below --
+        no bands and no reservations means one unbroken window -- and it
+        is now stated with both inputs empty instead of relying on what
+        happens to be reserved this month.
+        """
+        assert free_windows((89000, 89999), [], []) == [(89000, 89999)]
+
+    def test_a_reservation_is_subtracted_not_footnoted(self) -> None:
+        """The whole point of T-59: a line in the map can be taken at
+        face value. A reserved stretch in the middle of an otherwise
+        free space splits it in two."""
+        assert free_windows((100, 200), [], [(150, 159)]) == [
+            (100, 149),
+            (160, 200),
+        ]
+
+    def test_a_reservation_at_the_edge_shortens_the_window(self) -> None:
+        assert free_windows((100, 200), [], [(190, 200)]) == [(100, 189)]
+        assert free_windows((100, 200), [], [(100, 110)]) == [(111, 200)]
+
+    def test_a_reservation_covering_everything_leaves_no_window(
+        self,
+    ) -> None:
+        """Not an empty range, no range: a window of zero numbers would
+        be offered to somebody."""
+        assert free_windows((100, 200), [], [(50, 300)]) == []
+
+    def test_a_reservation_outside_the_space_changes_nothing(self) -> None:
+        assert free_windows((100, 200), [], [(500, 600)]) == [(100, 200)]
+
+    def test_several_reservations_are_all_subtracted(self) -> None:
+        assert free_windows(
+            (100, 200), [], [(110, 119), (150, 159)]
+        ) == [(100, 109), (120, 149), (160, 200)]
+
+    def test_a_reservation_is_subtracted_from_a_gap_between_bands(
+        self,
+    ) -> None:
+        """The realistic shape: the space is already carved up by
+        declared bands and the reservation lands inside one of the
+        gaps."""
+        bands = [Band("a.py", 100, 149), Band("b.py", 300, 399)]
+        assert free_windows((100, 399), bands, [(200, 249)]) == [
+            (150, 199),
+            (250, 299),
+        ]
 
     def test_free_windows_between_declared_bands(self) -> None:
         bands = [Band("a.py", 89000, 89099), Band("b.py", 89200, 89299)]
@@ -296,6 +394,325 @@ class TestMissingPieces:
         assert record is not None
         assert (record.low, record.high, record.width) == (1000, 9999, 9000)
         assert record.delete_users is True
+
+
+class TestDefaultsAgainstTheirBand:
+    """T-59. A helper default holding an id from somebody else's band.
+
+    Defaults themselves are legitimate and there are 48 of them in the
+    tree; this is not a campaign against them. The failure mode is
+    narrow: a helper gets copied into a new file with its number still
+    attached, and the number is now in the wrong band. Nothing today
+    would notice.
+    """
+
+    def test_a_default_inside_the_band_is_clean(self, tmp_path: Path) -> None:
+        _write(
+            tmp_path,
+            "test_ok.py",
+            "_TID_MIN = 94000\n_TID_MAX = 94999\n"
+            "def _make_admin(telegram_id: int = 94900): ...\n",
+        )
+        assert defaults_out_of_band(tmp_path) == []
+
+    def test_a_default_outside_the_band_is_reported_with_everything_needed(
+        self, tmp_path: Path
+    ) -> None:
+        """The message has to carry the file, the function, the parameter
+        name, the value AND the band -- a report that says only "wrong"
+        makes the reader re-derive what the checker already knew."""
+        _write(
+            tmp_path,
+            "test_copied.py",
+            "_TID_MIN = 95000\n_TID_MAX = 95999\n"
+            "def _make_admin(telegram_id: int = 94900): ...\n",
+        )
+        (stray,) = defaults_out_of_band(tmp_path)
+        assert stray.file == "test_copied.py"
+        assert stray.function == "_make_admin"
+        assert stray.parameter == "telegram_id"
+        assert stray.value == 94900
+        assert stray.ranges == ((95000, 95999),)
+
+    def test_all_three_parameter_names_are_matched_by_suffix(
+        self, tmp_path: Path
+    ) -> None:
+        """The tree uses telegram_id, master_telegram_id and
+        admin_telegram_id. Matching the exact name would silently skip
+        two of the three -- and the two skipped ones are the helpers that
+        create the OTHER party, which is where a copied number hides
+        best."""
+        _write(
+            tmp_path,
+            "test_names.py",
+            "_TID_MIN = 95000\n_TID_MAX = 95999\n"
+            "def a(telegram_id: int = 1): ...\n"
+            "def b(master_telegram_id: int = 2): ...\n"
+            "def c(admin_telegram_id: int = 3): ...\n"
+            "def d(practice_id: int = 4): ...\n",
+        )
+        found = {s.parameter for s in defaults_out_of_band(tmp_path)}
+        assert found == {
+            "telegram_id",
+            "master_telegram_id",
+            "admin_telegram_id",
+        }
+
+    def test_a_default_in_the_second_of_several_ranges_is_clean(
+        self, tmp_path: Path
+    ) -> None:
+        """test_reviews.py is exactly this shape after T-58: two
+        clusters, and its default lives in the second one. A check that
+        looked at the first declared range only would fail the file that
+        motivated the multi-range form."""
+        _write(
+            tmp_path,
+            "test_multi.py",
+            "_TID_RANGES = ((89000, 89022), (89900, 89999))\n"
+            "def _make(telegram_id: int = 89900): ...\n",
+        )
+        assert defaults_out_of_band(tmp_path) == []
+
+    def test_a_file_without_a_band_is_not_a_violation(
+        self, tmp_path: Path
+    ) -> None:
+        """The blind zone stays blind. Thirty-odd files declare nothing
+        and pass literals to their cleanup; inventing a comparison for
+        them would turn legitimate code into a wall of false alarms and
+        the check would be switched off within a week."""
+        _write(
+            tmp_path,
+            "test_nodecl.py",
+            "def _make_admin(telegram_id: int = 57900): ...\n",
+        )
+        assert defaults_out_of_band(tmp_path) == []
+
+    def test_an_inverted_band_is_left_to_the_check_that_owns_it(
+        self, tmp_path: Path
+    ) -> None:
+        """Nothing fits inside an inverted band, so this check would emit
+        one complaint per helper for a single defect that lives in the
+        DECLARATION. inverted() reports it once, pointing at the band.
+        Silence here is deliberate, not an oversight."""
+        _write(
+            tmp_path,
+            "test_inverted.py",
+            "_TID_MIN = 95999\n_TID_MAX = 95000\n"
+            "def a(telegram_id: int = 95500): ...\n"
+            "def b(telegram_id: int = 95501): ...\n",
+        )
+        assert defaults_out_of_band(tmp_path) == []
+        assert len(inverted(declared_bands(tmp_path))) == 1
+
+    def test_a_boundary_value_is_inside(self, tmp_path: Path) -> None:
+        _write(
+            tmp_path,
+            "test_edge.py",
+            "_TID_MIN = 95000\n_TID_MAX = 95999\n"
+            "def a(telegram_id: int = 95000): ...\n"
+            "def b(telegram_id: int = 95999): ...\n",
+        )
+        assert defaults_out_of_band(tmp_path) == []
+
+    def test_a_module_constant_default_is_resolved(
+        self, tmp_path: Path
+    ) -> None:
+        """`= _TID_MIN` and `= _TID_MIN + 5` are readable without
+        guessing, and both are plausible ways to write a default that
+        cannot drift."""
+        _write(
+            tmp_path,
+            "test_const.py",
+            "_TID_MIN = 95000\n_TID_MAX = 95999\n"
+            "def a(telegram_id: int = _TID_MIN): ...\n"
+            "def b(telegram_id: int = _TID_MIN + 5): ...\n",
+        )
+        assert defaults_out_of_band(tmp_path) == []
+
+    def test_an_unreadable_default_is_skipped_not_guessed(
+        self, tmp_path: Path
+    ) -> None:
+        """A call, an f-string, arithmetic on two names: the checker
+        stops rather than evaluates. Two hand inventories were miscounted
+        during T-58 by exactly this kind of cleverness."""
+        _write(
+            tmp_path,
+            "test_expr.py",
+            "_TID_MIN = 95000\n_TID_MAX = 95999\n"
+            "def a(telegram_id: int = int(str(1000))): ...\n",
+        )
+        assert defaults_out_of_band(tmp_path) == []
+
+    def test_a_non_numeric_default_is_not_a_violation(
+        self, tmp_path: Path
+    ) -> None:
+        """`telegram_id: int | None = None` is a legitimate signature."""
+        _write(
+            tmp_path,
+            "test_none.py",
+            "_TID_MIN = 95000\n_TID_MAX = 95999\n"
+            "def a(telegram_id=None): ...\n"
+            'def b(telegram_id="x"): ...\n',
+        )
+        assert defaults_out_of_band(tmp_path) == []
+
+    def test_a_parameter_without_a_default_is_out_of_scope(
+        self, tmp_path: Path
+    ) -> None:
+        _write(
+            tmp_path,
+            "test_nodefault.py",
+            "_TID_MIN = 95000\n_TID_MAX = 95999\n"
+            "def a(telegram_id: int): ...\n",
+        )
+        assert defaults_out_of_band(tmp_path) == []
+
+    def test_keyword_only_and_nested_functions_are_checked_too(
+        self, tmp_path: Path
+    ) -> None:
+        """A helper defined inside a fixture creates users exactly like a
+        top-level one, and a keyword-only parameter is still a default."""
+        _write(
+            tmp_path,
+            "test_nested.py",
+            "_TID_MIN = 95000\n_TID_MAX = 95999\n"
+            "def outer():\n"
+            "    def inner(*, telegram_id: int = 1234): ...\n"
+            "    return inner\n",
+        )
+        (stray,) = defaults_out_of_band(tmp_path)
+        assert (stray.function, stray.value) == ("inner", 1234)
+
+    def test_repeat_gives_the_same_answer(self, tmp_path: Path) -> None:
+        _write(
+            tmp_path,
+            "test_rep.py",
+            "_TID_MIN = 95000\n_TID_MAX = 95999\n"
+            "def a(telegram_id: int = 1): ...\n",
+        )
+        assert defaults_out_of_band(tmp_path) == defaults_out_of_band(
+            tmp_path
+        )
+
+    def test_an_empty_directory_is_clean(self, tmp_path: Path) -> None:
+        assert defaults_out_of_band(tmp_path) == []
+
+    def test_an_unparseable_file_does_not_take_the_check_down(
+        self, tmp_path: Path
+    ) -> None:
+        _write(tmp_path, "test_broken.py", "def (:\n")
+        assert defaults_out_of_band(tmp_path) == []
+
+
+class TestMultipleDeclarations:
+    """T-59. A file that says two different things about its own band.
+
+    The reader has three ways to resolve this and every one of them is
+    silent, so the file ends up compared -- confidently -- against a
+    band its cleanup may not sweep. Worse than the blind zone: there the
+    check knows it does not know; here it would be sure and wrong.
+    """
+
+    def test_one_declaration_is_clean(self, tmp_path: Path) -> None:
+        _write(tmp_path, "test_one.py", "_TID_MIN = 1\n_TID_MAX = 2\n")
+        assert multiple_declarations(tmp_path) == []
+
+    def test_no_declaration_is_clean(self, tmp_path: Path) -> None:
+        """The blind zone must NOT be turned into a false alarm on
+        thirty-odd files -- absence of a declaration is the state this
+        check is explicitly silent about."""
+        _write(tmp_path, "test_none.py", "X = 1\n")
+        assert multiple_declarations(tmp_path) == []
+
+    def test_the_same_name_written_twice(self, tmp_path: Path) -> None:
+        """The first hole: the reader used to keep the LAST assignment,
+        so the file answered with a number its own cleanup might not
+        use."""
+        _write(
+            tmp_path,
+            "test_twice.py",
+            "_TID_MIN = 100\n_TID_MAX = 199\n"
+            "_TID_MIN = 500\n_TID_MAX = 599\n",
+        )
+        ((name, sources),) = multiple_declarations(tmp_path)
+        assert name == "test_twice.py"
+        assert {src.ranges for src in sources} == {
+            ((100, 199),),
+            ((500, 599),),
+        }
+
+    def test_two_different_names_from_the_same_group(
+        self, tmp_path: Path
+    ) -> None:
+        """The second hole: _BAND_LOW_NAMES is scanned in order and the
+        FIRST non-empty one won, regardless of which name the file's
+        cleanup actually reads."""
+        _write(
+            tmp_path,
+            "test_names.py",
+            "BAND_MIN, BAND_MAX = 100, 199\n_TID_MIN = 500\n_TID_MAX = 599\n",
+        )
+        ((_, sources),) = multiple_declarations(tmp_path)
+        assert {src.written_as for src in sources} == {
+            "BAND_MIN/BAND_MAX",
+            "_TID_MIN/_TID_MAX",
+        }
+
+    def test_ranges_form_alongside_a_pair(self, tmp_path: Path) -> None:
+        """The third hole: _TID_RANGES returned early and the pair was
+        never even looked at."""
+        _write(
+            tmp_path,
+            "test_both.py",
+            "_TID_RANGES = ((100, 199),)\n_TID_MIN = 500\n_TID_MAX = 599\n",
+        )
+        ((_, sources),) = multiple_declarations(tmp_path)
+        assert {src.written_as for src in sources} == {
+            "_TID_RANGES",
+            "_TID_MIN/_TID_MAX",
+        }
+
+    def test_the_defaults_check_stays_quiet_about_an_ambiguous_file(
+        self, tmp_path: Path
+    ) -> None:
+        """One defect, one finger. Which band to compare against is
+        precisely what is unknown here, so a second complaint would only
+        obscure the first."""
+        _write(
+            tmp_path,
+            "test_fork.py",
+            "_TID_MIN = 100\n_TID_MAX = 199\n"
+            "_TID_MIN = 500\n_TID_MAX = 599\n"
+            "def a(telegram_id: int = 9999): ...\n",
+        )
+        assert defaults_out_of_band(tmp_path) == []
+        assert len(multiple_declarations(tmp_path)) == 1
+
+    def test_band_sources_reports_everything_it_found(
+        self, tmp_path: Path
+    ) -> None:
+        """The report must show what was found, not a winner: choosing
+        is the bug being fixed."""
+        _write(
+            tmp_path,
+            "test_src.py",
+            "_TID_RANGES = ((1, 2),)\nBAND_MIN, BAND_MAX = 10, 20\n",
+        )
+        sources = band_sources(tmp_path / "test_src.py")
+        assert len(sources) == 2
+
+    def test_repeat_gives_the_same_answer(self, tmp_path: Path) -> None:
+        _write(
+            tmp_path,
+            "test_rep.py",
+            "_TID_MIN = 1\n_TID_MAX = 2\n_TID_MIN = 3\n_TID_MAX = 4\n",
+        )
+        assert multiple_declarations(tmp_path) == multiple_declarations(
+            tmp_path
+        )
+
+    def test_an_empty_directory_is_clean(self, tmp_path: Path) -> None:
+        assert multiple_declarations(tmp_path) == []
 
 
 class TestTheMap:
