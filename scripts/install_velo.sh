@@ -61,7 +61,10 @@ set -uo pipefail
 
 # === Fixed configuration (does not vary by server) ===
 INSTALL_BASE="/opt/velo"
-GITHUB_REPO="aivis-one/velo"
+# The product moved to its own GitHub organisation on 2026-08-21. Only the
+# PRODUCT moved: services (comms today) stay under aivis-one, so their slugs
+# in scripts/services.conf are unchanged and must not be "fixed" to match.
+GITHUB_REPO="VELO2026-app/velo"
 DEPLOY_USER="velo"
 DOCKER_COMPOSE_FILE="docker-compose.yml"
 REPO_URL=""  # set after SSH key setup
@@ -81,7 +84,12 @@ TELEGRAM_LINK_DOMAIN="telegram.me"
 # mechanics live in comms/deploy/ (comms repo) and are never duplicated here.
 COMMS_INSTALL_BASE="/opt/comms"
 COMMS_REPO_DIR="$COMMS_INSTALL_BASE/repo"
-COMMS_GITHUB_REPO="aivis-one/comms"
+# NO comms slug here. It was declared at this spot until 2026-08-21 and read
+# by nothing: setup_comms takes it from the service registry (field 2), which
+# is the single source of truth. A second declaration that looks canonical but
+# steers nothing is worse than no declaration -- editing it changes NOTHING
+# while reading as if it had. Found during the org move: the dead copy would
+# have been the obvious thing to edit, and the edit would have been a no-op.
 # SSH via a DEDICATED deploy key, ALWAYS (owner ruling: all keys strictly
 # private -- no anonymous-HTTPS assumption, even while the repo happens to
 # be public today). One code path regardless of repo visibility, so closing

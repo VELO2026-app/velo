@@ -174,7 +174,7 @@ else
     echo -e "${YELLOW}  only the product will be updated by 'velo update'.${NC}" >&2
     # Seven fields, matching services.conf -- the fallback must not be
     # the one record on the box that is missing `access`.
-    VELO_SERVICES=("velo|aivis-one/velo|$COMPOSE_DIR|conf:VELO_BRANCH|internal|update_product|write")
+    VELO_SERVICES=("velo|VELO2026-app/velo|$COMPOSE_DIR|conf:VELO_BRANCH|internal|update_product|write")
     svc_field() {
         local record="$1" index="$2"
         local IFS='|'
