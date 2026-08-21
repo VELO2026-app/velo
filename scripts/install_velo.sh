@@ -25,7 +25,9 @@ set -uo pipefail
 #      comms deploy mechanics stay in the comms repo, nothing is duplicated
 #      here) and wires the token seam: COMMS_* land in backend/.env
 #      BEFORE the velo stack ever starts, so no backend restart is needed
-#   9. Starts the Docker stack (app + postgres + redis + frontend)
+#   9. Starts the Docker stack: backend + postgres + redis, then RUNS THE
+#      MIGRATIONS (the schema is created here and nowhere else on a fresh
+#      box), then generates the API types, then the frontend
 #  10. Installs the "velo" command as a thin shim onto the tracked
 #      scripts/velo-manage.sh -- see that file for why
 #
@@ -37,7 +39,10 @@ set -uo pipefail
 # (PIPESTATUS on the backup dump) had been added to only one copy, one was
 # missing the `setrole` command outright. Three texts claiming to describe
 # the same thing is what let them quietly stop agreeing. There is one text
-# now. The only two things that legitimately differ per server -- which
+# now. A fourth divergence surfaced on 2026-08-21, long after the merge:
+# NONE of the three copies ran `alembic upgrade head`, so no fresh install
+# ever created the database schema -- see the note at that step in
+# start_stack() for how it stayed hidden. The only two things that legitimately differ per server -- which
 # branch to track, which domains to serve, and whether a real Stripe key
 # exists -- are asked for below, not hardcoded.
 #
@@ -609,21 +614,36 @@ setup_deploy_user
 # ==============================================================================
 
 # Provision ONE GitHub deploy key: generate if absent, add the host alias
-# if absent, then TEST -- and only interrupt the operator if the test
-# fails.
+# if absent, then PRINT THE KEY AND WAIT -- always -- and only then test.
 #
-# ORDER IS THE POINT (T-33 item 6). This used to print the key and block
-# on ENTER unconditionally, then test afterwards; a reinstall of a box
-# whose keys GitHub already knows stopped twice to ask for something
-# already done. Test first, and a reinstall is silent.
+# THE BLOCK IS UNCONDITIONAL, and there is exactly one of it per registry
+# record. Every record prints its key and waits for ENTER, whether or not
+# GitHub already holds that key: two records means two prompts, twelve
+# means twelve. The operator counts them against the registry, so no
+# branch may skip a prompt because the key exists or because the probe
+# would have passed.
 #
-# WHY THAT WORKS AT ALL -- and it is worth knowing before you "clean up"
-# after a wipe: the wipe ritual removes /opt/* and the docker state, and
-# does NOT touch /root/.ssh. The keys therefore survive it, GitHub still
-# holds the public halves, and the probe below passes on the first try.
-# Delete /root/.ssh as part of a wipe and every reinstall goes back to
-# asking for two GitHub steps by hand -- this silence is a consequence
-# of that directory surviving, not of anything clever here.
+# THIS REVERSES T-33 item 6, which had the probe run FIRST and returned
+# early when it passed, so that a reinstall on a box with surviving keys
+# was silent. That silence cost a live migration on 2026-08-21: the repo
+# moved to a new GitHub organisation, the old key was still a deploy key
+# on the OLD repo, and the probe passed anyway -- `ssh -T` only reports
+# that GitHub RECOGNISES the key, never that the key opens THIS repo or
+# that it may write to it. The clone then succeeded because the new repo
+# happened to be public, so the run looked perfect end to end while the
+# box held no write access at all. Nothing would have surfaced until the
+# first `velo update` failed to push generated.ts.
+#
+# So the probe cannot be a gate on the prompt: it answers a narrower
+# question than the prompt asks. A run that silently skipped keys already
+# added is also indistinguishable from a run that broke before reaching
+# them -- the operator has no way to tell the two apart.
+#
+# THE COST IS ONE ENTER PER SERVICE ON A REINSTALL, and it is deliberate.
+# The wipe removes /opt/* and the docker state and does NOT touch
+# /root/.ssh, so the keys survive and the answer to each prompt is
+# usually a bare ENTER -- but it is the OPERATOR who decides that, with
+# the repo URL and the key on screen in front of him.
 #
 #   $1 name    service id (key file and host alias are named after it)
 #   $2 repo    owner/repo, for the URL printed to the operator
@@ -634,6 +654,17 @@ provision_deploy_key() {
     local name="$1" repo="$2" access="$3"
     local key="/root/.ssh/id_ed25519_${name}_deploy"
     local alias="github.com-${name}"
+
+    # An undeclared privilege is a stop, not a default. The check lives
+    # HERE, where the key is created, so it covers the bootstrap's own
+    # product call as well as every service provision_service_keys passes
+    # in -- the copy in that loop only ever guarded the loop.
+    if [ "$access" != "read" ] && [ "$access" != "write" ]; then
+        error "Service '$name' declares access='$access' -- expected 'read'"
+        error "or 'write'. Refusing to guess which instruction to give the"
+        error "operator."
+        return 1
+    fi
 
     mkdir -p /root/.ssh
     chmod 700 /root/.ssh
@@ -659,13 +690,6 @@ EOF
         chmod 600 /root/.ssh/config
     fi
 
-    # The alias has to exist before this runs -- that is why the config
-    # block is written above and not after the interactive step.
-    if github_probe "$alias"; then
-        success "GitHub connection OK ($name)"
-        return 0
-    fi
-
     echo ""
     echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
     echo -e "${CYAN}  GitHub Deploy Key -- ${name} repo${NC}"
@@ -682,9 +706,22 @@ EOF
         echo -e "${GREEN}READ-ONLY is enough: do NOT tick 'Allow write access'.${NC}"
         echo -e "${YELLOW}(nothing on this box ever pushes to ${repo}.)${NC}"
     fi
+    echo -e "${YELLOW}Already added from an earlier install? Press ENTER, it is a no-op.${NC}"
     echo ""
-    read -r -p "Press ENTER after adding the deploy key to GitHub..."
+    # < /dev/tty so the pause survives `curl ... | bash`, where stdin is
+    # the script text itself and a bare `read` consumes a line of it
+    # instead of waiting for the operator.
+    read -r -p "Press ENTER after adding the deploy key to GitHub..." < /dev/tty
 
+    # The probe runs HERE and nowhere else: it verifies what the operator
+    # just did. Running it before the prompt is what let a key GitHub
+    # already knew skip the block entirely.
+    #
+    # NOTE WHAT IT DOES NOT PROVE. `ssh -T` reports that GitHub recognises
+    # the key, full stop. It does not say the key is attached to ${repo},
+    # and it does not say the key may write there -- a key that is a
+    # deploy key on some OTHER repository passes this probe cleanly. The
+    # narrower claims are checked after the clone; see verify_repo_access.
     if github_probe "$alias"; then
         success "GitHub connection OK ($name)"
         return 0
@@ -694,6 +731,7 @@ EOF
     error "Make sure the key is added to: https://github.com/${repo}/settings/keys"
     return 1
 }
+
 
 # `ssh -T` against GitHub exits 1 even on SUCCESS ("does not provide
 # shell access"), and under `set -o pipefail` (top of file) the old
@@ -734,10 +772,11 @@ setup_ssh
 # file readable in the first place (see setup_ssh).
 #
 # This is what item 5 buys: a fourth service is one record in
-# services.conf and zero lines here. The velo record is deliberately NOT
-# filtered out by name -- it is skipped by its "internal" lifecycle, and
-# passing it through would be harmless anyway: provision_deploy_key is
-# idempotent and its probe would pass on the key that just cloned this.
+# services.conf and zero lines here. The velo record is skipped by its
+# "internal" lifecycle rather than by name -- but it is no longer true
+# that passing it through would be harmless: the key block is
+# unconditional now, so the product would print a second prompt for a key
+# the operator has already dealt with in setup_ssh.
 provision_service_keys() {
     local conf="$INSTALL_BASE/repo/scripts/services.conf"
     if [ ! -f "$conf" ]; then
@@ -754,17 +793,15 @@ provision_service_keys() {
         repo=$(svc_field "$record" 2)
         access=$(svc_field "$record" 7)
 
-        # An undeclared privilege is a stop, not a default. Guessing
-        # "read" would print the wrong instruction to the operator and
-        # the failure would surface days later, as a push that cannot.
-        if [ "$access" != "read" ] && [ "$access" != "write" ]; then
-            error "Service '$name' declares access='$access' in services.conf"
-            error "-- expected 'read' or 'write'. Refusing to guess which"
-            error "instruction to give the operator."
-            exit 1
-        fi
-
+        # The access value is validated inside provision_deploy_key, which
+        # is where the key is created -- one copy, covering the product's
+        # bootstrap call too. It used to be checked here as well, which
+        # guarded only this loop.
         provision_deploy_key "$name" "$repo" "$access" || exit 1
+
+        # Read access is provable now, without a checkout. Services are
+        # read-only by declaration, so this is the whole claim for them.
+        verify_repo_access "$name" "$repo" "$access" "" || exit 1
     done
 }
 
@@ -791,6 +828,23 @@ clone_repo() {
 }
 
 clone_repo
+
+# Sourced from the checkout that clone_repo just made -- the same place
+# services.conf comes from, and for the same reason: one text, shipped as
+# code. Nothing before the clone could have used it anyway.
+# shellcheck source=/dev/null
+source "$INSTALL_BASE/repo/scripts/lib-github.sh" || {
+    error "Cannot source $INSTALL_BASE/repo/scripts/lib-github.sh"
+    exit 1
+}
+
+# The clone proves this key can READ the repo -- but only because the
+# clone happened, and on a PUBLIC repo it does not even prove attachment.
+# WRITE is the claim `velo update` depends on and the one nothing so far
+# has tested, so it is tested here, at install time, against a checkout
+# that exists. Failing here costs one re-add on GitHub; failing later
+# costs a broken update on a live box.
+verify_repo_access "velo" "$GITHUB_REPO" "write" "$INSTALL_BASE/repo" || exit 1
 
 # Only now can the registry be read -- it ships inside the checkout that
 # clone_repo just made. Everything after this point is registry-driven.
@@ -1645,7 +1699,38 @@ start_stack() {
         fi
     done
 
-    # -- 2. Generate frontend types from live backend OpenAPI --
+    # -- 2. Create the database schema --
+    #
+    # THIS STEP WAS MISSING UNTIL 2026-08-21 and the gap is instructive.
+    # `alembic upgrade head` appeared NOWHERE in this installer: the schema
+    # was only ever created by `velo update`, which does run it. So a fresh
+    # install produced a stack that started, passed its health check,
+    # generated types and reported success -- against a database with no
+    # tables at all. It stayed invisible for as long as reinstalls ran on
+    # top of a surviving postgres volume, where the tables were left over
+    # from some earlier `velo update`. The first reinstall that dropped the
+    # volume (`docker compose down -v`) exposed it: every request to
+    # /auth/telegram returned 500 on `relation "users" does not exist`, and
+    # the frontend showed its "open me in Telegram" stub, because that stub
+    # covers "not authenticated" as well as "not in Telegram".
+    #
+    # It sits AFTER the health check (the app must be up to exec into) and
+    # BEFORE type generation, so a schema failure stops the install rather
+    # than letting it walk on to the cosmetic steps.
+    #
+    # /health passing is NOT evidence the schema exists -- it does not touch
+    # these tables. Do not read a green health check as a working database.
+    log "Running database migrations..."
+    if ! docker compose exec -T app python -m alembic upgrade head; then
+        error "Database migrations FAILED — the schema was NOT created."
+        error "The stack is up but the app cannot work: every write will"
+        error "fail on a missing table. Check logs: docker compose logs app"
+        error "Then re-run:  velo db migrate"
+        exit 1
+    fi
+    success "Database schema is up to date"
+
+    # -- 3. Generate frontend types from live backend OpenAPI --
     log "Generating frontend API types from backend OpenAPI..."
     # Unpredictable path, created 600 by mktemp, removed by the EXIT trap
     # at the top of this script whichever way we leave. NOT `local`: the
@@ -1672,7 +1757,7 @@ start_stack() {
     OPENAPI_TMP=""
     success "Frontend types generated"
 
-    # -- 3. Build and start frontend (picks up fresh generated.ts) --
+    # -- 4. Build and start frontend (picks up fresh generated.ts) --
     log "Building frontend..."
     if ! docker compose build --no-cache frontend; then
         error "Frontend image build FAILED (unit tests run inside the build)."

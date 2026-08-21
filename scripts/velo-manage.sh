@@ -163,6 +163,23 @@ fi
 # -- Service registry ---------------------------------------------------------
 # ONE declaration of what this product runs; see the file's header. Sourced
 # from the checkout, so a registry change ships like any other code change.
+# Shared GitHub access verification, from the same checkout as the
+# registry below. Missing on a pre-2026-08-21 checkout (or a half-finished
+# update): define a stub that REFUSES rather than one that waves things
+# through -- a verification that silently returns success is the exact
+# failure this file was written to end.
+GITHUB_LIB="$COMPOSE_DIR/scripts/lib-github.sh"
+if [ -f "$GITHUB_LIB" ]; then
+    # shellcheck source=/dev/null
+    source "$GITHUB_LIB"
+else
+    verify_repo_access() {
+        echo -e "${RED}✗ $GITHUB_LIB not found -- cannot verify repo access.${NC}" >&2
+        echo "  Update the checkout ('velo update') and retry." >&2
+        return 1
+    }
+fi
+
 SERVICES_CONF="$COMPOSE_DIR/scripts/services.conf"
 if [ -f "$SERVICES_CONF" ]; then
     # shellcheck source=/dev/null
@@ -2451,6 +2468,22 @@ case "${1:-}" in
             echo -e "${RED}✗ The alias '$ssh_alias' does not authenticate.${NC}"
             echo "  The new key works directly, so the alias itself is wrong."
             echo "  Check /root/.ssh/config -- IdentityFile should be $key_old"
+            exit 1
+        fi
+
+        # The two probes above answer "does GitHub recognise this key".
+        # Neither answers "does it open THIS repo" or "may it write there"
+        # -- a deploy key for a DIFFERENT repository passes both. That gap
+        # shipped a box with no write access on 2026-08-21; ask the repo
+        # directly before declaring the rotation done.
+        svc_dir=$(svc_field "$svc_record" 3)
+        if ! verify_repo_access "$svc_name" "$svc_repo" "$svc_access" "$svc_dir"; then
+            echo ""
+            echo -e "${RED}✗ The new key is installed but does not have the access${NC}"
+            echo -e "${RED}  the registry declares (${svc_access}).${NC}"
+            echo "  The old key still works if you have not deleted it yet --"
+            echo "  fix the key on GitHub as printed above, then re-run:"
+            echo "    velo rotate-key $svc_name"
             exit 1
         fi
 
