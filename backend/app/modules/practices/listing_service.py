@@ -211,6 +211,7 @@ async def list_public_practices(
     limit: int = 20,
     offset: int = 0,
     master_id: UUID | None = None,
+    master_ids: list[UUID] | None = None,
     practice_type: list[str] | None = None,
     direction: list[str] | None = None,
     difficulty: list[str] | None = None,
@@ -236,6 +237,11 @@ async def list_public_practices(
     matches that status exactly (no future-only restriction). Supports
     filtering by master, type, date range, and the Calendar facets
     (direction / difficulty / style / duration_bucket / time_of_day).
+
+    master_id filters to ONE master; master_ids to a SET of them (internal
+    parameter, not exposed by the public route). An empty master_ids list
+    means "nobody", not "everybody" -- it yields an empty page. Passing both
+    ANDs them.
 
     Multi-value semantics (Calendar "Выбрать практики"):
       - Within one facet, values are OR-ed (.in_()).
@@ -275,6 +281,24 @@ async def list_public_practices(
 
     if master_id is not None:
         filters.append(Practice.master_id == master_id)
+
+    # master_ids (Curator GROUPS GT-2): the SET form of the filter above,
+    # for callers that show one feed across several masters -- a curator
+    # group's page is the first. NOT exposed by the public route: it is an
+    # internal parameter, so no client can hand-pick an arbitrary master set.
+    #
+    # `is not None`, NOT truthiness. An EMPTY list is a real answer -- "this
+    # group has no visible masters" -- and must yield an empty page. Written
+    # as `if master_ids:` it would fall through and serve the entire
+    # platform feed instead, which is the whole point of the distinction.
+    # SQLAlchemy renders .in_([]) as a false predicate, so the empty case
+    # needs no branch of its own.
+    #
+    # Both together AND, like any other pair of filters: master_id narrows
+    # master_ids rather than replacing it. No caller does that today; the
+    # behaviour is stated so nobody has to guess later.
+    if master_ids is not None:
+        filters.append(Practice.master_id.in_(master_ids))
 
     # practice_type: multi-select (OR within facet).
     if practice_type:

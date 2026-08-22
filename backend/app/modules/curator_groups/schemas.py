@@ -117,3 +117,111 @@ class PaginatedCuratorGroupMembersResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+# ===========================================================================
+# Member-facing schemas (GT-2, tz-curator-groups.md 5.2 "Участник")
+# ===========================================================================
+
+
+CuratorGroupRelationLiteral = Literal["curator", "master", "student"]
+
+
+class CuratorGroupCuratorRef(BaseModel):
+    """The group's owner, as anyone in the group may see them.
+
+    A strict subset of MasterPublicResponse -- the declared isolation
+    boundary in masters/schemas.py. Nothing financial, nothing contact-like,
+    and no status: a group is only ever visible while its curator is
+    verified (I-6), so exposing the status would only ever print one value.
+    """
+
+    user_id: UUID
+    display_name: str | None
+    avatar_url: str | None
+
+
+class CuratorGroupMineItem(BaseModel):
+    """One row of GET /curator-groups/mine.
+
+    `relation` is the viewer's own tie to this group and is what the
+    frontend keys the row's chip off. No `transfer_offered` here: the
+    transfer table has no writer until GT-4, and a field that is always
+    false is a promise the UI would build on.
+    """
+
+    id: UUID
+    name: str
+    description: str | None
+    curator: CuratorGroupCuratorRef
+    masters_count: int
+    students_count: int
+    relation: CuratorGroupRelationLiteral
+
+
+class CuratorGroupMineResponse(BaseModel):
+    """GET /curator-groups/mine."""
+
+    items: list[CuratorGroupMineItem]
+
+
+class CuratorGroupViewer(BaseModel):
+    """The requesting user's own tie to the group being viewed."""
+
+    relation: CuratorGroupRelationLiteral
+
+
+class CuratorGroupPageResponse(BaseModel):
+    """GET /curator-groups/{id} -- the group as a member sees it.
+
+    Deliberately NOT the same shape as CuratorGroupResponse (the curator's
+    own row): that one is a management view keyed by ownership, this one
+    carries `curator` and `viewer` because the reader is not necessarily
+    the owner. Two shapes rather than one with half the fields null.
+    """
+
+    id: UUID
+    name: str
+    description: str | None
+    curator: CuratorGroupCuratorRef
+    masters_count: int
+    students_count: int
+    viewer: CuratorGroupViewer
+    created_at: datetime
+
+
+class CuratorGroupMasterItem(BaseModel):
+    """One master in a group's roster.
+
+    Fields are a STRICT SUBSET of MasterPublicResponse plus is_curator --
+    the isolation boundary is reused, not restated. reviews_count is
+    deliberately absent: the roster card does not show it, and it would cost
+    a second aggregate per page for nothing.
+
+    Only VISIBLE masters appear here (verified right now, I-4), so a
+    suspended master-member drops out of the list and out of the total --
+    the same predicate that drives masters_count, so the two cannot
+    disagree.
+    """
+
+    user_id: UUID
+    display_name: str | None
+    avatar_url: str | None
+    methods: list[str] = []
+    experience_years: int | None
+    practices_count: int
+    is_curator: bool
+
+
+class PaginatedCuratorGroupMastersResponse(BaseModel):
+    """GET /curator-groups/{id}/masters.
+
+    `total` counts the curator too: they lead the roster (I-2 keeps them out
+    of curator_group_member, but they are the school's first master), so
+    total == masters_count + 1 by construction.
+    """
+
+    items: list[CuratorGroupMasterItem]
+    total: int
+    limit: int
+    offset: int

@@ -35,25 +35,41 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_reader, get_db_session
-from app.modules.auth.dependencies import get_current_master
+from app.modules.auth.dependencies import (
+    get_current_master,
+    get_current_user,
+    get_current_user_write,
+)
 from app.modules.curator_groups.schemas import (
     CreateCuratorGroupRequest,
     CuratorGroupListResponse,
+    CuratorGroupMasterItem,
     CuratorGroupMemberItem,
+    CuratorGroupMineItem,
+    CuratorGroupMineResponse,
+    CuratorGroupPageResponse,
     CuratorGroupResponse,
+    PaginatedCuratorGroupMastersResponse,
     PaginatedCuratorGroupMembersResponse,
     UpdateCuratorGroupRequest,
 )
 from app.modules.curator_groups.service import (
     create_curator_group,
     delete_curator_group,
+    get_curator_group_page,
     get_group_counts,
+    leave_curator_group,
     list_curator_group_members,
     list_curator_groups,
+    list_group_masters,
+    list_group_practice_master_ids,
+    list_my_curator_groups,
     remove_curator_group_member,
     update_curator_group,
 )
 from app.modules.masters.models import MasterProfile
+from app.modules.practices.listing_service import list_public_practices
+from app.modules.practices.schemas import PaginatedPracticesResponse
 from app.modules.users.models import User
 
 logger = structlog.get_logger()
@@ -224,4 +240,133 @@ async def remove_curator_group_member_endpoint(
     """
     user, _profile = master_tuple
     await remove_curator_group_member(user.id, group_id, user_id, session)
+    await session.flush()
+
+
+# =============================================================================
+# MEMBER-FACING ROUTER (GT-2, tz-curator-groups.md 5.2 "Участник")
+# =============================================================================
+#
+#   GET    /api/v1/curator-groups/mine
+#   GET    /api/v1/curator-groups/{group_id}
+#   GET    /api/v1/curator-groups/{group_id}/masters
+#   GET    /api/v1/curator-groups/{group_id}/practices
+#   DELETE /api/v1/curator-groups/{group_id}/membership
+#
+# A SECOND APIRouter in this same file, as this module's header promised in
+# GT-1 -- included by its own line in main.py, the shape practices_router /
+# practices_public_router already uses. One file, because the two routers
+# share a service layer and splitting them would only mean two imports of
+# the same functions.
+#
+# AUTH: get_current_user, not get_current_master -- a student member is not
+# a master and must still read the page. Authorization is the RELATION to
+# the group, resolved in the service; there is no role check here at all.
+#
+# /mine is declared BEFORE /{group_id}: a static path must win over a
+# dynamic sibling, or "mine" would be parsed as a group id and answer 422.
+# =============================================================================
+
+member_router = APIRouter(prefix="/api/v1/curator-groups", tags=["curator-groups"])
+
+
+@member_router.get("/mine", response_model=CuratorGroupMineResponse)
+async def list_my_curator_groups_endpoint(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_reader),
+) -> CuratorGroupMineResponse:
+    """Groups I belong to -- curated first, then by when I joined.
+
+    Only ACTIVE groups (I-6): one whose curator is currently suspended
+    disappears from this list and comes back on re-verification, with no row
+    written either way.
+    """
+    items = await list_my_curator_groups(user.id, session)
+    return CuratorGroupMineResponse(
+        items=[CuratorGroupMineItem(**item) for item in items],
+    )
+
+
+@member_router.get("/{group_id}", response_model=CuratorGroupPageResponse)
+async def get_curator_group_page_endpoint(
+    group_id: UUID,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_reader),
+) -> CuratorGroupPageResponse:
+    """One group's page. 404 unless I have a relation to it and it is active.
+
+    A group that does not exist, one whose curator is suspended, and one I
+    simply do not belong to all answer identically (P-08).
+    """
+    page = await get_curator_group_page(group_id, user.id, session)
+    return CuratorGroupPageResponse(**page)
+
+
+@member_router.get(
+    "/{group_id}/masters",
+    response_model=PaginatedCuratorGroupMastersResponse,
+)
+async def list_group_masters_endpoint(
+    group_id: UUID,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_reader),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> PaginatedCuratorGroupMastersResponse:
+    """The school's masters: the curator first, then visible members (I-4).
+
+    Fields are a strict subset of MasterPublicResponse -- the isolation
+    boundary is reused rather than restated.
+    """
+    items, total = await list_group_masters(
+        group_id, user.id, session, limit=limit, offset=offset,
+    )
+    return PaginatedCuratorGroupMastersResponse(
+        items=[CuratorGroupMasterItem(**item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@member_router.get(
+    "/{group_id}/practices", response_model=PaginatedPracticesResponse,
+)
+async def list_group_practices_endpoint(
+    group_id: UUID,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_reader),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> PaginatedPracticesResponse:
+    """Upcoming practices by the school's masters.
+
+    This is the PUBLIC FEED narrowed to a set of masters, not a new query:
+    the status/time gate, the audience clause with its owner-bypass, the
+    block clause and the per-user is_booked/is_paid flags all come from
+    list_public_practices unchanged. A master who blocked this viewer
+    contributes no practices even though they still appear in the roster
+    above -- blocking hides practices, not people.
+    """
+    master_ids = await list_group_practice_master_ids(group_id, user.id, session)
+    return await list_public_practices(
+        session, user=user, limit=limit, offset=offset, master_ids=master_ids,
+    )
+
+
+@member_router.delete(
+    "/{group_id}/membership", status_code=status.HTTP_204_NO_CONTENT,
+)
+async def leave_curator_group_endpoint(
+    group_id: UUID,
+    user: User = Depends(get_current_user_write),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Leave a group. Idempotent; 409 curator_cannot_leave for the owner.
+
+    Deliberately NOT gated on the group being active (I-5): a member of a
+    group whose curator is suspended must still be able to walk out, and a
+    404 here would trap them until an admin re-verified somebody else.
+    """
+    await leave_curator_group(group_id, user.id, session)
     await session.flush()
