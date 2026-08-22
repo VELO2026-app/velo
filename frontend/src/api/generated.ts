@@ -571,9 +571,27 @@ export interface CreateWithdrawalRequest {
   amount_cents: number
 }
 
+/** The group's owner, as anyone in the group may see them. A strict subset of MasterPublicResponse -- the declared isolation boundary in masters/schemas.py. Nothing financial, nothing contact-like, and no status: a group is only ever visible while its curator is verified (I-6), so exposing the status would only ever print one value. */
+export interface CuratorGroupCuratorRef {
+  user_id: string
+  display_name: string | null
+  avatar_url: string | null
+}
+
 /** GET /masters/me/curator-groups. */
 export interface CuratorGroupListResponse {
   items: CuratorGroupResponse[]
+}
+
+/** One master in a group's roster. Fields are a STRICT SUBSET of MasterPublicResponse plus is_curator -- the isolation boundary is reused, not restated. reviews_count is deliberately absent: the roster card does not show it, and it would cost a second aggregate per page for nothing. Only VISIBLE masters appear here (verified right now, I-4), so a suspended master-member drops out of the list and out of the total -- the same predicate that drives masters_count, so the two cannot disagree. */
+export interface CuratorGroupMasterItem {
+  user_id: string
+  display_name: string | null
+  avatar_url: string | null
+  methods?: string[]
+  experience_years: number | null
+  practices_count: number
+  is_curator: boolean
 }
 
 /** One row of a curator group's roster. is_visible is ALWAYS true for a student and reflects the live MasterProfile status for a master (I-4). The curator sees a suspended master as a row with is_visible=false -- "in the shadow" -- rather than watching them vanish, because the row is real and comes back by itself when the admin re-verifies. */
@@ -586,6 +604,34 @@ export interface CuratorGroupMemberItem {
   is_visible: boolean
 }
 
+/** One row of GET /curator-groups/mine. `relation` is the viewer's own tie to this group and is what the frontend keys the row's chip off. No `transfer_offered` here: the transfer table has no writer until GT-4, and a field that is always false is a promise the UI would build on. */
+export interface CuratorGroupMineItem {
+  id: string
+  name: string
+  description: string | null
+  curator: CuratorGroupCuratorRef
+  masters_count: number
+  students_count: number
+  relation: 'curator' | 'master' | 'student'
+}
+
+/** GET /curator-groups/mine. */
+export interface CuratorGroupMineResponse {
+  items: CuratorGroupMineItem[]
+}
+
+/** GET /curator-groups/{id} -- the group as a member sees it. Deliberately NOT the same shape as CuratorGroupResponse (the curator's own row): that one is a management view keyed by ownership, this one carries `curator` and `viewer` because the reader is not necessarily the owner. Two shapes rather than one with half the fields null. */
+export interface CuratorGroupPageResponse {
+  id: string
+  name: string
+  description: string | null
+  curator: CuratorGroupCuratorRef
+  masters_count: number
+  students_count: number
+  viewer: CuratorGroupViewer
+  created_at: string
+}
+
 /** One curator group, as its curator sees it. masters_count counts only VISIBLE masters -- members with kind='master' whose MasterProfile is verified right now (I-4). A suspended master keeps their row and disappears from this number until re-verification; the number and the roster's is_visible flag are computed from the same predicate, so they cannot disagree. students_count counts every kind='student' row. Visibility is a rule about masters; a student has no MasterProfile to be verified. No `transfer` field here. TZ 5.2 lists one, and it is deliberately absent until GT-4 writes curator_group_transfer: a hardcoded `null` would be a field with no writer, which is a lie the frontend would build on. */
 export interface CuratorGroupResponse {
   id: string
@@ -594,6 +640,11 @@ export interface CuratorGroupResponse {
   masters_count: number
   students_count: number
   created_at: string
+}
+
+/** The requesting user's own tie to the group being viewed. */
+export interface CuratorGroupViewer {
+  relation: 'curator' | 'master' | 'student'
 }
 
 /** Single diary entry in API responses. */
@@ -927,6 +978,14 @@ export interface PaginatedBookingsResponse {
 /** GET /api/v1/users/me/checkins -- paginated list. */
 export interface PaginatedCheckinsResponse {
   items: CheckinResponse[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** GET /curator-groups/{id}/masters. `total` counts the curator too: they lead the roster (I-2 keeps them out of curator_group_member, but they are the school's first master), so total == masters_count + 1 by construction. */
+export interface PaginatedCuratorGroupMastersResponse {
+  items: CuratorGroupMasterItem[]
   total: number
   limit: number
   offset: number
