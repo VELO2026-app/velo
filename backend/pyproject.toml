@@ -51,6 +51,11 @@ build-backend = "setuptools.build_meta"
 [tool.ruff]
 line-length = 88
 target-version = "py312"
+# Ruff defaults to `.ruff_cache` beside the project root, which inside the
+# image is /app -- copied in as root while the process runs as `velo`
+# (Dockerfile), so the cache init fails and ruff exits BEFORE reading a
+# single rule. Same trap pytest hit, same cure as its cache_dir below.
+cache-dir = "/tmp/.ruff_cache"
 
 [tool.ruff.lint]
 select = [
