@@ -12,18 +12,31 @@
 # P-01: nothing here commits. The router flushes; get_db_session commits.
 # =============================================================================
 
+import secrets
 from uuid import UUID
 
 from sqlalchemy import ColumnElement, Select, and_, case, delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.config import settings
+from app.core.exceptions import (
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    VeloError,
+)
 from app.modules.curator_groups.models import (
     CuratorGroup,
+    CuratorGroupInvite,
     CuratorGroupMember,
     CuratorMemberKind,
 )
+
+# Read, not written: MasterStudent carries the curator's block (I-9), and
+# the same row is what join_group_by_token checks in masters/. Importing a
+# model does not modify its module.
+from app.modules.masters.groups_models import MasterStudent
 from app.modules.masters.models import MasterProfile
 
 # Imported, never restated: "draft and deleted do not count" must have one
@@ -38,7 +51,9 @@ from app.modules.users.models import User
 _NAME_TAKEN_CODE = "curator_group_name_taken"
 
 
-def _verified_profile_exists(user_id_col: ColumnElement) -> ColumnElement[bool]:
+def _verified_profile_exists(
+    user_id_col: ColumnElement | UUID,
+) -> ColumnElement[bool]:
     """Correlated EXISTS: this user has a verified MasterProfile RIGHT NOW.
 
     ONE place where the JSONB path to the account status is spelled out, for
@@ -62,6 +77,12 @@ def _verified_profile_exists(user_id_col: ColumnElement) -> ColumnElement[bool]:
     with users is enforced at the database level. `MasterProfile.id` raises
     AttributeError at query-build time, i.e. inside the request, not at
     import.
+
+    Takes a COLUMN or a plain id. Given a column it correlates to the outer
+    query, which is how the roster, the counters and _active_group_clause
+    use it; given a UUID it is a self-contained EXISTS that can be selected
+    on its own, which is what the capability check (GT-3) needs. One
+    predicate, two shapes, still one JSONB path.
     """
     return (
         select(MasterProfile.user_id)
@@ -846,3 +867,352 @@ async def leave_curator_group(
             CuratorGroupMember.user_id == user_id,
         )
     )
+
+
+# ===========================================================================
+# Invite links and joining (GT-3, tz-curator-groups.md 3.4 / 5.2)
+#
+# A group has TWO reusable links, one per kind, held apart by
+# UNIQUE (group_id, kind). Everything below is the master_group invite
+# machinery parameterised by that kind -- read from the body of
+# get_or_create_group_invite / join_group_by_token, not from their names.
+# ===========================================================================
+
+
+_INVITE_DEEPLINK_KIND = "curator_group_invite__"
+
+
+async def _has_master_capability(user_id: UUID, session: AsyncSession) -> bool:
+    """Does this account hold master CAPABILITY right now?
+
+    Capability, not role: a verified master browsing in user mode
+    (role=user) still joins a master link as a master, because the profile
+    is what makes them a teacher and the role is only which zone of the app
+    they happen to be looking at.
+
+    users/service.py::user_has_master_capability answers the same question
+    in a different layer -- it takes a loaded User and runs its own SELECT
+    for the /users/me role-switch block. This is NOT a duplicate of it: it
+    reuses _verified_profile_exists, so the JSONB path to the account status
+    is still written down exactly once in this module, and it runs inside
+    the caller's transaction alongside the other join checks rather than
+    opening its own read.
+    """
+    return bool(
+        (
+            await session.execute(select(_verified_profile_exists(user_id)))
+        ).scalar()
+    )
+
+
+async def _blocked_by_curator(
+    curator_user_id: UUID, user_id: UUID, session: AsyncSession,
+) -> bool:
+    """Has the curator blocked this person (I-9)?
+
+    Same row and same question as join_group_by_token's own block guard: a
+    block must not be walked around by re-opening an invite link the person
+    already had in a chat.
+    """
+    row = (
+        await session.execute(
+            select(MasterStudent.id).where(
+                MasterStudent.master_id == curator_user_id,
+                MasterStudent.student_user_id == user_id,
+                MasterStudent.blocked_at.is_not(None),
+            )
+        )
+    ).scalar_one_or_none()
+    return row is not None
+
+
+async def _membership_row(
+    group_id: UUID, user_id: UUID, session: AsyncSession,
+) -> CuratorGroupMember | None:
+    return (
+        await session.execute(
+            select(CuratorGroupMember).where(
+                CuratorGroupMember.group_id == group_id,
+                CuratorGroupMember.user_id == user_id,
+            )
+        )
+    ).scalar_one_or_none()
+
+
+async def get_or_create_curator_group_invite(
+    curator_user_id: UUID,
+    group_id: UUID,
+    kind: str,
+    session: AsyncSession,
+) -> dict:
+    """Create-or-return the group's link for ONE kind.
+
+    Idempotent by design, not by accident: the curator taps «Пригласить»
+    again expecting the link they already pasted into a channel to keep
+    working, not a fresh one that silently kills it. Rotating is a separate,
+    explicit action (revoke, then create).
+
+    The bot-url guard runs FIRST, before the group is even resolved -- same
+    order as get_or_create_group_invite, and for the same reason: composing
+    a link with an empty prefix produces a broken url that looks like a
+    working one, which is worse than an honest 503.
+
+    Raises:
+        VeloError 503 (bot_url_not_configured): telegram_bot_url unset.
+        NotFoundError: the group is not this curator's, or does not exist.
+    """
+    if not settings.telegram_bot_url:
+        raise VeloError(
+            message="telegram_bot_url is not configured",
+            code="bot_url_not_configured",
+            status_code=503,
+        )
+
+    group = await _get_group_or_404(curator_user_id, group_id, session)
+
+    existing = (
+        await session.execute(
+            select(CuratorGroupInvite).where(
+                CuratorGroupInvite.group_id == group.id,
+                CuratorGroupInvite.kind == kind,
+            )
+        )
+    ).scalar_one_or_none()
+
+    if existing is None:
+        token = secrets.token_urlsafe(32)
+        invite = CuratorGroupInvite(group_id=group.id, kind=kind, token=token)
+        try:
+            async with session.begin_nested():
+                session.add(invite)
+                await session.flush()
+        except IntegrityError:
+            # Lost a concurrent create race for this (group, kind). The
+            # winner's row is the answer -- returning a second token would
+            # mean two live links where the constraint allows one.
+            existing = (
+                await session.execute(
+                    select(CuratorGroupInvite).where(
+                        CuratorGroupInvite.group_id == group.id,
+                        CuratorGroupInvite.kind == kind,
+                    )
+                )
+            ).scalar_one()
+            token = existing.token
+    else:
+        token = existing.token
+
+    return {
+        "kind": kind,
+        "invite_url": (
+            f"{settings.telegram_bot_url}"
+            f"?startapp={_INVITE_DEEPLINK_KIND}{token}"
+        ),
+    }
+
+
+async def revoke_curator_group_invite(
+    curator_user_id: UUID,
+    group_id: UUID,
+    kind: str,
+    session: AsyncSession,
+) -> None:
+    """Drop the link of ONE kind. Idempotent; the other kind is untouched.
+
+    After this the next create mints a NEW token, and the old link stops
+    resolving everywhere -- preview and join alike, since both go through
+    the same row. That is the whole rotation story: there is no revocation
+    list, because a revoked link has no row to find.
+    """
+    group = await _get_group_or_404(curator_user_id, group_id, session)
+    await session.execute(
+        delete(CuratorGroupInvite).where(
+            CuratorGroupInvite.group_id == group.id,
+            CuratorGroupInvite.kind == kind,
+        )
+    )
+
+
+async def _resolve_invite_or_404(
+    token: str, session: AsyncSession,
+) -> tuple[CuratorGroupInvite, CuratorGroup]:
+    """Token -> (invite, group), or 404.
+
+    FOUR different failures collapse into one answer: the token was never
+    real, it was revoked, the group is inactive (I-6), or the group is gone.
+    Telling them apart would let anyone holding an old link watch a
+    curator's verification status change.
+
+    Deleted groups need no branch of their own -- ON DELETE CASCADE removed
+    the invite row along with the group, so a token from a deleted group is
+    indistinguishable from garbage at the storage level, not just in the
+    response.
+    """
+    row = (
+        await session.execute(
+            select(CuratorGroupInvite, CuratorGroup)
+            .join(CuratorGroup, CuratorGroup.id == CuratorGroupInvite.group_id)
+            .where(CuratorGroupInvite.token == token, _active_group_clause())
+        )
+    ).one_or_none()
+    if row is None:
+        raise NotFoundError("Invite not found")
+    return row[0], row[1]
+
+
+async def preview_curator_group_invite(
+    token: str, user_id: UUID, session: AsyncSession,
+) -> dict:
+    """What the person sees before deciding, and why they cannot, if so.
+
+    PREVIEW IS A HINT, JOIN IS THE GATE. Everything checked here is checked
+    again by join, because the world moves between opening the card and
+    tapping the button: the curator can be revoked, the link revoked, the
+    person blocked. Preview exists so the screen can explain a refusal, not
+    so join can skip one.
+
+    The refusal order mirrors join's exactly (see join_curator_group_by_token
+    for why it is that order); the only difference is that this function
+    returns the reason and that one raises it.
+    """
+    invite, group = await _resolve_invite_or_404(token, session)
+    masters_count, students_count = await get_group_counts(group.id, session)
+    refs = await _curator_refs([group.curator_user_id], session)
+
+    member = await _membership_row(group.id, user_id, session)
+    relation = member.kind if member is not None else None
+    reason: str | None = None
+
+    if group.curator_user_id == user_id:
+        reason = "own_group"
+    elif await _blocked_by_curator(group.curator_user_id, user_id, session):
+        reason = "blocked_by_curator"
+    elif invite.kind == CuratorMemberKind.MASTER.value and not (
+        await _has_master_capability(user_id, session)
+    ):
+        reason = "master_required"
+    elif member is not None and not _is_upgrade(invite.kind, member.kind):
+        # Already inside and this link would change nothing. The upgrade
+        # case deliberately falls through with reason=None: the link still
+        # does something for a student holding a master invite.
+        reason = "already_member"
+
+    return {
+        "group": {
+            "id": group.id,
+            "name": group.name,
+            "description": group.description,
+            "curator_name": refs[group.curator_user_id]["display_name"],
+            "masters_count": masters_count,
+            "students_count": students_count,
+        },
+        "kind": invite.kind,
+        "can_join": reason is None,
+        "reason": reason,
+        "relation": relation,
+    }
+
+
+def _is_upgrade(invite_kind: str, member_kind: str) -> bool:
+    """Would this link promote an existing member?
+
+    Only one direction exists: student -> master. There is no demotion --
+    a master member opening a student link keeps their kind (TZ 3.4), so
+    holding a master relation is never something a link can take away.
+    """
+    return (
+        invite_kind == CuratorMemberKind.MASTER.value
+        and member_kind == CuratorMemberKind.STUDENT.value
+    )
+
+
+async def join_curator_group_by_token(
+    token: str, user_id: UUID, session: AsyncSession,
+) -> dict:
+    """Join a group by invite token, or say why not.
+
+    THE ORDER OF THE CHECKS IS A DECISION, not the order they happened to
+    be written in, because the answer for someone who trips two of them at
+    once depends on it:
+
+      1. token / activity -- 404, and it hides everything below it
+      2. own_group (409)  -- BEFORE the block check, so a curator's answer
+         cannot depend on whether a stale master_student row happens to
+         exist for them
+      3. blocked (403)    -- BEFORE capability, because a block is about
+         THIS school while master_required is a property of the account:
+         a blocked person must not be told "you merely need verification",
+         which reads as an invitation to go get verified and come back
+      4. capability (403) -- only for a master link
+      5. membership       -- last: it decides what to write, not whether to
+
+    Idempotent. Joining twice returns the same row, and the second call
+    reports already_member=true without touching joined_at.
+
+    KNOWN CAVEAT on a lost race: two simultaneous first joins by one person
+    both observe "no row", one wins the insert and the other catches the
+    IntegrityError. Both then report already_member=false, though only one
+    of them created anything. The row is correct either way -- the flag is
+    computed from what the request observed before writing, which is what
+    its docstring in the schema says it means, and no caller does anything
+    destructive with it.
+    """
+    invite, group = await _resolve_invite_or_404(token, session)
+
+    if group.curator_user_id == user_id:
+        raise ConflictError(
+            "This is your own group", code="own_group",
+        )
+
+    if await _blocked_by_curator(group.curator_user_id, user_id, session):
+        raise ForbiddenError(
+            "The curator has restricted your access",
+            code="blocked_by_curator",
+        )
+
+    if invite.kind == CuratorMemberKind.MASTER.value and not (
+        await _has_master_capability(user_id, session)
+    ):
+        raise ForbiddenError(
+            "This link is for verified masters",
+            code="master_required",
+        )
+
+    member = await _membership_row(group.id, user_id, session)
+
+    if member is None:
+        row = CuratorGroupMember(
+            group_id=group.id, user_id=user_id, kind=invite.kind,
+        )
+        try:
+            async with session.begin_nested():
+                session.add(row)
+                await session.flush()
+            relation = invite.kind
+        except IntegrityError:
+            # Lost a concurrent join. The winner's row is the answer; if it
+            # is a student row and this was a master link, the upgrade still
+            # applies -- otherwise the loser of the race would silently be
+            # denied the promotion the link grants.
+            winner = await _membership_row(group.id, user_id, session)
+            if winner is not None and _is_upgrade(invite.kind, winner.kind):
+                winner.kind = CuratorMemberKind.MASTER.value
+                await session.flush()
+            relation = winner.kind if winner is not None else invite.kind
+        already_member = False
+    else:
+        already_member = True
+        if _is_upgrade(invite.kind, member.kind):
+            # The ONLY mutation of an existing membership row in this
+            # module. joined_at is deliberately NOT refreshed: the person
+            # has been in this school since the day they walked in, and
+            # kind describes their role, not their arrival.
+            member.kind = CuratorMemberKind.MASTER.value
+            await session.flush()
+        relation = member.kind
+
+    return {
+        "group_id": group.id,
+        "relation": relation,
+        "already_member": already_member,
+    }

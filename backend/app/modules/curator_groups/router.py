@@ -41,7 +41,10 @@ from app.modules.auth.dependencies import (
     get_current_user_write,
 )
 from app.modules.curator_groups.schemas import (
+    CreateCuratorGroupInviteRequest,
     CreateCuratorGroupRequest,
+    CuratorGroupInvitePreviewResponse,
+    CuratorGroupInviteResponse,
     CuratorGroupListResponse,
     CuratorGroupMasterItem,
     CuratorGroupMemberItem,
@@ -49,6 +52,9 @@ from app.modules.curator_groups.schemas import (
     CuratorGroupMineResponse,
     CuratorGroupPageResponse,
     CuratorGroupResponse,
+    CuratorMemberKindLiteral,
+    JoinCuratorGroupRequest,
+    JoinCuratorGroupResponse,
     PaginatedCuratorGroupMastersResponse,
     PaginatedCuratorGroupMembersResponse,
     UpdateCuratorGroupRequest,
@@ -58,13 +64,17 @@ from app.modules.curator_groups.service import (
     delete_curator_group,
     get_curator_group_page,
     get_group_counts,
+    get_or_create_curator_group_invite,
+    join_curator_group_by_token,
     leave_curator_group,
     list_curator_group_members,
     list_curator_groups,
     list_group_masters,
     list_group_practice_master_ids,
     list_my_curator_groups,
+    preview_curator_group_invite,
     remove_curator_group_member,
+    revoke_curator_group_invite,
     update_curator_group,
 )
 from app.modules.masters.models import MasterProfile
@@ -243,6 +253,67 @@ async def remove_curator_group_member_endpoint(
     await session.flush()
 
 
+@router.post(
+    "/me/curator-groups/{group_id}/invites",
+    response_model=CuratorGroupInviteResponse,
+)
+async def create_curator_group_invite_endpoint(
+    group_id: UUID,
+    body: CreateCuratorGroupInviteRequest,
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_session),
+) -> CuratorGroupInviteResponse:
+    """Get (or mint) this group's reusable link for one kind.
+
+    Repeat calls return the SAME url -- the curator expects the link they
+    already shared to keep working. Rotation is revoke + create, on purpose.
+
+    503 bot_url_not_configured when telegram_bot_url is unset: a link with
+    an empty prefix would look valid and resolve nowhere.
+    """
+    user, _profile = master_tuple
+    invite = await get_or_create_curator_group_invite(
+        user.id, group_id, body.kind, session,
+    )
+    await session.flush()
+    logger.info(
+        "curator_group_invite_issued",
+        group_id=str(group_id),
+        kind=body.kind,
+        curator_id=str(user.id),
+    )
+    return CuratorGroupInviteResponse(**invite)
+
+
+@router.delete(
+    "/me/curator-groups/{group_id}/invites/{kind}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def revoke_curator_group_invite_endpoint(
+    group_id: UUID,
+    kind: CuratorMemberKindLiteral,
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Revoke one kind of link. The other kind keeps working.
+
+    Idempotent. Afterwards the old token resolves nowhere -- preview and
+    join both read the same row, so there is no revocation list to keep.
+
+    P-11: `kind` is a Literal in the path, so an unknown value is a 422 from
+    FastAPI rather than a hand-rolled Enum() lookup raising into a 500.
+    """
+    user, _profile = master_tuple
+    await revoke_curator_group_invite(user.id, group_id, kind, session)
+    await session.flush()
+    logger.info(
+        "curator_group_invite_revoked",
+        group_id=str(group_id),
+        kind=kind,
+        curator_id=str(user.id),
+    )
+
+
 # =============================================================================
 # MEMBER-FACING ROUTER (GT-2, tz-curator-groups.md 5.2 "Участник")
 # =============================================================================
@@ -285,6 +356,55 @@ async def list_my_curator_groups_endpoint(
     return CuratorGroupMineResponse(
         items=[CuratorGroupMineItem(**item) for item in items],
     )
+
+
+@member_router.get(
+    "/invites/{token}", response_model=CuratorGroupInvitePreviewResponse,
+)
+async def preview_curator_group_invite_endpoint(
+    token: str,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_reader),
+) -> CuratorGroupInvitePreviewResponse:
+    """The card behind an invite link, and why joining is refused, if it is.
+
+    DECLARED BEFORE /{group_id} ON PURPOSE: FastAPI matches routes in
+    declaration order, so the dynamic sibling below would swallow "invites"
+    and answer 422 for a path that is not a UUID.
+
+    Refusals are described here, not raised -- except 404, which stays
+    indistinguishable across unknown token, revoked token, inactive group
+    and deleted group.
+    """
+    preview = await preview_curator_group_invite(token, user.id, session)
+    return CuratorGroupInvitePreviewResponse(**preview)
+
+
+@member_router.post("/join", response_model=JoinCuratorGroupResponse)
+async def join_curator_group_endpoint(
+    body: JoinCuratorGroupRequest,
+    user: User = Depends(get_current_user_write),
+    session: AsyncSession = Depends(get_db_session),
+) -> JoinCuratorGroupResponse:
+    """Join by token. Revalidates everything the preview showed.
+
+    The preview is a hint and this is the gate: between the two the curator
+    can be revoked, the link revoked and the joiner blocked, so nothing is
+    taken on trust from the earlier call.
+
+    404 invite_not_found | 409 own_group | 403 blocked_by_curator |
+    403 master_required.
+    """
+    result = await join_curator_group_by_token(body.token, user.id, session)
+    await session.flush()
+    logger.info(
+        "curator_group_joined",
+        group_id=str(result["group_id"]),
+        relation=result["relation"],
+        already_member=result["already_member"],
+        user_id=str(user.id),
+    )
+    return JoinCuratorGroupResponse(**result)
 
 
 @member_router.get("/{group_id}", response_model=CuratorGroupPageResponse)
