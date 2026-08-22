@@ -49,9 +49,15 @@ def _verified_profile_exists(user_id_col: ColumnElement) -> ColumnElement[bool]:
 
     The JSONB comparison mirrors admin/users/service.py::list_masters, which
     filters master rows by the identical expression.
+
+    Projects user_id, NOT id: MasterProfile has no surrogate key -- its
+    PRIMARY KEY IS user_id (masters/models.py), which is how the one-to-one
+    with users is enforced at the database level. `MasterProfile.id` raises
+    AttributeError at query-build time, i.e. inside the request, not at
+    import.
     """
     return (
-        select(MasterProfile.id)
+        select(MasterProfile.user_id)
         .where(
             MasterProfile.user_id == user_id_col,
             MasterProfile.data["account"]["status"].as_string() == "verified",
