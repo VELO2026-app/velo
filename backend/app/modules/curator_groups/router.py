@@ -52,18 +52,24 @@ from app.modules.curator_groups.schemas import (
     CuratorGroupMineResponse,
     CuratorGroupPageResponse,
     CuratorGroupResponse,
+    CuratorGroupTransferRef,
     CuratorMemberKindLiteral,
     JoinCuratorGroupRequest,
     JoinCuratorGroupResponse,
+    OfferCuratorGroupTransferRequest,
     PaginatedCuratorGroupMastersResponse,
     PaginatedCuratorGroupMembersResponse,
     UpdateCuratorGroupRequest,
 )
 from app.modules.curator_groups.service import (
+    accept_curator_group_transfer,
+    cancel_curator_group_transfer,
     create_curator_group,
+    decline_curator_group_transfer,
     delete_curator_group,
     get_curator_group_page,
     get_group_counts,
+    get_group_transfer_ref,
     get_or_create_curator_group_invite,
     join_curator_group_by_token,
     leave_curator_group,
@@ -72,6 +78,7 @@ from app.modules.curator_groups.service import (
     list_group_masters,
     list_group_practice_master_ids,
     list_my_curator_groups,
+    offer_curator_group_transfer,
     preview_curator_group_invite,
     remove_curator_group_member,
     revoke_curator_group_invite,
@@ -125,14 +132,16 @@ async def create_curator_group_endpoint(
     logger.info(
         "curator_group_created", group_id=str(group.id), curator_id=str(user.id),
     )
-    # A group one statement old has no members; counting would be a query
-    # asked to return zeros.
+    # A group one statement old has no members and cannot have a pending
+    # transfer; counting or looking either up would be queries asked to
+    # return nothing.
     return CuratorGroupResponse(
         id=group.id,
         name=group.name,
         description=group.description,
         masters_count=0,
         students_count=0,
+        transfer=None,
         created_at=group.created_at,
     )
 
@@ -164,12 +173,16 @@ async def update_curator_group_endpoint(
     )
     await session.flush()
     masters_count, students_count = await get_group_counts(group.id, session)
+    # A rename does not touch a pending offer, but the reply carries it:
+    # this endpoint returns CuratorGroupResponse, and that schema has one
+    # field set for everyone who receives it (see its docstring).
     return CuratorGroupResponse(
         id=group.id,
         name=group.name,
         description=group.description,
         masters_count=masters_count,
         students_count=students_count,
+        transfer=await get_group_transfer_ref(group.id, session),
         created_at=group.created_at,
     )
 
@@ -314,6 +327,57 @@ async def revoke_curator_group_invite_endpoint(
     )
 
 
+@router.post(
+    "/me/curator-groups/{group_id}/transfer",
+    response_model=CuratorGroupTransferRef,
+)
+async def offer_curator_group_transfer_endpoint(
+    group_id: UUID,
+    body: OfferCuratorGroupTransferRequest,
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_session),
+) -> CuratorGroupTransferRef:
+    """Offer the group to one of its visible master members (I-10).
+
+    409 transfer_pending when an offer is already open -- a second offer
+    never silently replaces the first. 404 transfer_target_not_member for a
+    student, a stranger, a suspended master or the curator themselves,
+    indistinguishably.
+    """
+    user, _profile = master_tuple
+    ref = await offer_curator_group_transfer(
+        user.id, group_id, body.to_user_id, session,
+    )
+    await session.flush()
+    logger.info(
+        "curator_group_transfer_offered",
+        group_id=str(group_id),
+        to_user_id=str(body.to_user_id),
+        curator_id=str(user.id),
+    )
+    return CuratorGroupTransferRef(**ref)
+
+
+@router.delete(
+    "/me/curator-groups/{group_id}/transfer",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def cancel_curator_group_transfer_endpoint(
+    group_id: UUID,
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Withdraw the pending offer. Idempotent: no offer is still 204."""
+    user, _profile = master_tuple
+    await cancel_curator_group_transfer(user.id, group_id, session)
+    await session.flush()
+    logger.info(
+        "curator_group_transfer_cancelled",
+        group_id=str(group_id),
+        curator_id=str(user.id),
+    )
+
+
 # =============================================================================
 # MEMBER-FACING ROUTER (GT-2, tz-curator-groups.md 5.2 "Участник")
 # =============================================================================
@@ -405,6 +469,51 @@ async def join_curator_group_endpoint(
         user_id=str(user.id),
     )
     return JoinCuratorGroupResponse(**result)
+
+
+@member_router.post(
+    "/{group_id}/transfer/accept", response_model=CuratorGroupPageResponse,
+)
+async def accept_curator_group_transfer_endpoint(
+    group_id: UUID,
+    user: User = Depends(get_current_user_write),
+    session: AsyncSession = Depends(get_db_session),
+) -> CuratorGroupPageResponse:
+    """Take over the group. One transaction, checks before mutations.
+
+    404 transfer_not_found covers "no offer", "not addressed to you" and
+    "group inactive" alike -- accept changes who owns a school, so it must
+    not confirm that an offer exists to somebody guessing at group ids.
+    403 master_required if the caller is no longer verified; 409
+    curator_group_name_taken if they already curate a group by this name,
+    checked BEFORE anything is written.
+    """
+    page = await accept_curator_group_transfer(group_id, user.id, session)
+    await session.flush()
+    logger.info(
+        "curator_group_transfer_accepted",
+        group_id=str(group_id),
+        new_curator_id=str(user.id),
+    )
+    return CuratorGroupPageResponse(**page)
+
+
+@member_router.post(
+    "/{group_id}/transfer/decline", status_code=status.HTTP_204_NO_CONTENT,
+)
+async def decline_curator_group_transfer_endpoint(
+    group_id: UUID,
+    user: User = Depends(get_current_user_write),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Refuse the offer. Idempotent, and 204 even if it was not yours.
+
+    Where accept answers 404 to a non-addressee, decline answers 204: it
+    changes nothing, so reporting success is honest and says nothing about
+    whether an offer existed.
+    """
+    await decline_curator_group_transfer(group_id, user.id, session)
+    await session.flush()
 
 
 @member_router.get("/{group_id}", response_model=CuratorGroupPageResponse)

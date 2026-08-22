@@ -30,6 +30,7 @@ from app.modules.curator_groups.models import (
     CuratorGroup,
     CuratorGroupInvite,
     CuratorGroupMember,
+    CuratorGroupTransfer,
     CuratorMemberKind,
 )
 
@@ -167,7 +168,9 @@ async def _counts_for_groups(
 
 
 def _group_payload(
-    group: CuratorGroup, counts: tuple[int, int],
+    group: CuratorGroup,
+    counts: tuple[int, int],
+    transfer: dict | None = None,
 ) -> dict:
     """ORM row + its counts -> the dict the router validates into a schema."""
     masters_count, students_count = counts
@@ -177,6 +180,7 @@ def _group_payload(
         "description": group.description,
         "masters_count": masters_count,
         "students_count": students_count,
+        "transfer": transfer,
         "created_at": group.created_at,
     }
 
@@ -207,8 +211,13 @@ async def list_curator_groups(
         .scalars()
         .all()
     )
-    counts = await _counts_for_groups([g.id for g in groups], session)
-    return [_group_payload(g, counts.get(g.id, (0, 0))) for g in groups]
+    group_ids = [g.id for g in groups]
+    counts = await _counts_for_groups(group_ids, session)
+    transfers = await _transfer_refs_for_groups(group_ids, session)
+    return [
+        _group_payload(g, counts.get(g.id, (0, 0)), transfers.get(g.id))
+        for g in groups
+    ]
 
 
 async def create_curator_group(
@@ -452,6 +461,11 @@ async def remove_curator_group_member(
             CuratorGroupMember.user_id == user_id,
         )
     )
+    # GT-4: one of the TWO points where a pending transfer dies with its
+    # addressee (TZ 3.4). Removing the person you offered the group to
+    # retracts the offer in the same transaction -- otherwise it would sit
+    # there addressed to somebody no longer in the group.
+    await _drop_pending_transfer_for(group.id, user_id, session)
 
 
 async def get_group_counts(
@@ -638,11 +652,14 @@ async def list_my_curator_groups(
     ).all()
 
     groups = curated + [g for g, _kind in joined]
-    counts = await _counts_for_groups([g.id for g in groups], session)
+    group_ids = [g.id for g in groups]
+    counts = await _counts_for_groups(group_ids, session)
     refs = await _curator_refs([g.curator_user_id for g in groups], session)
+    transfers = await _transfer_refs_for_groups(group_ids, session)
 
     def _item(group: CuratorGroup, relation: str) -> dict:
         masters_count, students_count = counts.get(group.id, (0, 0))
+        offer = transfers.get(group.id)
         return {
             "id": group.id,
             "name": group.name,
@@ -651,6 +668,12 @@ async def list_my_curator_groups(
             "masters_count": masters_count,
             "students_count": students_count,
             "relation": relation,
+            # True only for the person the group is being offered TO. The
+            # curator sees False on their own pending offer: this flag says
+            # "somebody is waiting on you", and nobody is waiting on them.
+            "transfer_offered": (
+                offer is not None and offer["to_user_id"] == user_id
+            ),
         }
 
     return [_item(g, CURATOR_RELATION) for g in curated] + [
@@ -673,6 +696,7 @@ async def get_curator_group_page(
         "masters_count": masters_count,
         "students_count": students_count,
         "viewer": {"relation": relation},
+        "transfer": await _transfer_for_viewer(group, user_id, session),
         "created_at": group.created_at,
     }
 
@@ -867,6 +891,12 @@ async def leave_curator_group(
             CuratorGroupMember.user_id == user_id,
         )
     )
+    # GT-4: the OTHER of the two points (TZ 3.4). Note this runs even
+    # though the function above deliberately never checked whether the
+    # group is active -- walking out of an inactive group still retracts
+    # the offer made to you. Auto-cancel follows the membership, not the
+    # group's visibility.
+    await _drop_pending_transfer_for(group.id, user_id, session)
 
 
 # ===========================================================================
@@ -1216,3 +1246,313 @@ async def join_curator_group_by_token(
         "relation": relation,
         "already_member": already_member,
     }
+
+
+# ===========================================================================
+# Transfer of ownership (GT-4, tz-curator-groups.md 3.4 / 3.5)
+#
+# curator_group_transfer has held one invariant since GT-1 and no writer:
+# UNIQUE (group_id) -- at most one pending offer per group. This section is
+# that writer. A row IS the offer: cancelling is a DELETE, declining is a
+# DELETE, and "no offer" is the absence of a row rather than a state anyone
+# has to interpret.
+# ===========================================================================
+
+
+async def _pending_transfer(
+    group_id: UUID, session: AsyncSession,
+) -> CuratorGroupTransfer | None:
+    return (
+        await session.execute(
+            select(CuratorGroupTransfer).where(
+                CuratorGroupTransfer.group_id == group_id
+            )
+        )
+    ).scalar_one_or_none()
+
+
+async def _transfer_refs_for_groups(
+    group_ids: list[UUID], session: AsyncSession,
+) -> dict[UUID, dict]:
+    """Pending offers for many groups in ONE query, keyed by group.
+
+    Batched for the same reason the counters are: the curator's list can
+    hold any number of groups, and a lookup per row would turn one page
+    into N round trips. Groups without an offer are simply absent, and
+    callers read the dict through .get() -- "no offer" is the absence of a
+    row, here as in the table.
+
+    to_display_name comes from users/helpers.py::display_name, NOT the
+    master-profile rule -- see CuratorGroupTransferRef's docstring.
+    """
+    if not group_ids:
+        return {}
+    rows = (
+        await session.execute(
+            select(
+                CuratorGroupTransfer.group_id,
+                CuratorGroupTransfer.to_user_id,
+                CuratorGroupTransfer.requested_at,
+                User.first_name,
+                User.last_name,
+            )
+            .outerjoin(User, User.id == CuratorGroupTransfer.to_user_id)
+            .where(CuratorGroupTransfer.group_id.in_(group_ids))
+        )
+    ).all()
+    return {
+        gid: {
+            "to_user_id": to_user_id,
+            "to_display_name": display_name(first_name, last_name),
+            "requested_at": requested_at,
+        }
+        for gid, to_user_id, requested_at, first_name, last_name in rows
+    }
+
+
+async def _transfer_ref(
+    transfer: CuratorGroupTransfer | None, session: AsyncSession,
+) -> dict | None:
+    """One offer in the shape the responses report, or None."""
+    if transfer is None:
+        return None
+    refs = await _transfer_refs_for_groups([transfer.group_id], session)
+    return refs.get(transfer.group_id)
+
+
+async def get_group_transfer_ref(
+    group_id: UUID, session: AsyncSession,
+) -> dict | None:
+    """This group's pending offer, or None -- for the curator's own replies.
+
+    Public because the router builds CuratorGroupResponse by hand on create
+    and patch; every other caller goes through the batched form, which is
+    what the list endpoint needs. No viewer filter here: the two callers are
+    curator-only endpoints behind get_current_master with ownership already
+    resolved. The page endpoint, which IS read by non-owners, goes through
+    _transfer_for_viewer instead.
+    """
+    refs = await _transfer_refs_for_groups([group_id], session)
+    return refs.get(group_id)
+
+
+async def _drop_pending_transfer_for(
+    group_id: UUID, user_id: UUID, session: AsyncSession,
+) -> None:
+    """Drop the offer if it was addressed to this person leaving the group.
+
+    TZ 3.4 names EXACTLY TWO points where an offer disappears because its
+    addressee is gone -- leave and remove_member -- and this helper is why
+    there are two call sites and not two copies. A third copy would be the
+    one that gets forgotten when the rule changes.
+
+    Scoped to (group, addressee): somebody else walking out of the same
+    group must not cancel a pending offer they have nothing to do with.
+    """
+    await session.execute(
+        delete(CuratorGroupTransfer).where(
+            CuratorGroupTransfer.group_id == group_id,
+            CuratorGroupTransfer.to_user_id == user_id,
+        )
+    )
+
+
+async def offer_curator_group_transfer(
+    curator_user_id: UUID,
+    group_id: UUID,
+    to_user_id: UUID,
+    session: AsyncSession,
+) -> dict:
+    """Offer the group to a visible master member of it.
+
+    THE ELIGIBLE SET IS EXACTLY THE ROSTER (I-10): kind='master' and
+    verified right now. Reusing _visible_master_ids rather than writing a
+    second membership query is what keeps "who can receive this group" and
+    "who is shown as a teacher of this school" from ever disagreeing.
+
+    A student, a stranger, a suspended master and the curator themselves all
+    get the SAME 404 -- the curator already knows who is in their group, so
+    distinguishing the cases would buy nothing and would leak the
+    verification status of a member who is currently in the shadow.
+
+    A second offer while one is pending is a 409, never a silent overwrite:
+    the first addressee may already be looking at the banner, and replacing
+    the offer under them would retract it without anyone saying so.
+    """
+    group = await _get_group_or_404(curator_user_id, group_id, session)
+
+    if await _pending_transfer(group.id, session) is not None:
+        raise ConflictError(
+            "This group already has a pending transfer",
+            code="transfer_pending",
+        )
+
+    if to_user_id not in await _visible_master_ids(group.id, session):
+        raise NotFoundError("Transfer target is not a member of this group")
+
+    transfer = CuratorGroupTransfer(group_id=group.id, to_user_id=to_user_id)
+    try:
+        async with session.begin_nested():
+            session.add(transfer)
+            await session.flush()
+    except IntegrityError:
+        # Lost a race with another offer on the same group. UNIQUE
+        # (group_id) is the real guard; the pre-check above is the fast
+        # path that produces a clean 409 instead of a 500.
+        raise ConflictError(
+            "This group already has a pending transfer",
+            code="transfer_pending",
+        ) from None
+
+    # Re-read rather than hand-building the dict: the row was just flushed,
+    # so this reports what the table holds, not what we meant to put there.
+    refs = await _transfer_refs_for_groups([group.id], session)
+    return refs[group.id]
+
+
+async def cancel_curator_group_transfer(
+    curator_user_id: UUID, group_id: UUID, session: AsyncSession,
+) -> None:
+    """Withdraw the pending offer. Idempotent: no offer -> still 204."""
+    group = await _get_group_or_404(curator_user_id, group_id, session)
+    await session.execute(
+        delete(CuratorGroupTransfer).where(
+            CuratorGroupTransfer.group_id == group.id
+        )
+    )
+
+
+async def _transfer_for_viewer(
+    group: CuratorGroup, viewer_id: UUID, session: AsyncSession,
+) -> dict | None:
+    """The offer as THIS viewer is allowed to see it (TZ 5.2).
+
+    Two people see it: the curator, who made it, and the addressee, who has
+    to answer it. Everyone else gets None -- not a redacted object, not a
+    missing key. A member who is not part of the deal does not learn that
+    one is under way.
+    """
+    transfer = await _pending_transfer(group.id, session)
+    if transfer is None:
+        return None
+    if viewer_id not in (group.curator_user_id, transfer.to_user_id):
+        return None
+    return await _transfer_ref(transfer, session)
+
+
+async def accept_curator_group_transfer(
+    group_id: UUID, user_id: UUID, session: AsyncSession,
+) -> dict:
+    """Become the curator of this group. One transaction, seven steps.
+
+    THE ORDER IS THE CONTRACT (TZ 3.5), and every check happens BEFORE the
+    first mutation:
+
+      1. the offer exists and is addressed to the caller; the group is
+         active; the caller is a verified master right now; the caller has
+         no group of their own by this name
+      2. curator_user_id := caller
+      3. the caller's own member row is deleted (I-2: a curator is not a
+         member of their own group)
+      4. the previous curator gets a member row, kind='master', joined_at
+         = now()
+      5. the offer row is deleted
+      6. invite links and every other membership are left alone -- the
+         tokens already in people's chats keep working
+      7. the reply is the group page as the NEW curator sees it
+
+    THE NAME COLLISION IS CHECKED IN STEP 1, NOT CAUGHT IN STEP 2. UNIQUE
+    (curator_user_id, name) would raise on the rename-by-ownership at step
+    2 -- after which three more mutations would already be queued behind a
+    broken transaction. Asking first turns a rollback into a clean 409.
+
+    STEP 4 CREATES A kind='master' ROW WITHOUT A CAPABILITY GATE, unlike
+    join, which insists on it (I-3). That is deliberate and not an
+    oversight: the previous curator's verified status was the precondition
+    for the group being ACTIVE, and an inactive group never reaches step 1 --
+    so by the time step 4 runs, their capability has just been proven by the
+    call itself. I-3 governs joining by link; a transfer is not a join.
+
+    404 covers "no offer", "not addressed to you" and "group inactive"
+    alike: accept changes who owns a school, so it must not confirm that an
+    offer exists to somebody probing group ids.
+    """
+    group, _relation = await _relation_or_404(group_id, user_id, session)
+
+    transfer = await _pending_transfer(group.id, session)
+    if transfer is None or transfer.to_user_id != user_id:
+        raise NotFoundError("Transfer not found")
+
+    if not await _has_master_capability(user_id, session):
+        raise ForbiddenError(
+            "Only a verified master can take over a group",
+            code="master_required",
+        )
+
+    clash = (
+        await session.execute(
+            select(CuratorGroup.id).where(
+                CuratorGroup.curator_user_id == user_id,
+                CuratorGroup.name == group.name,
+            )
+        )
+    ).scalar_one_or_none()
+    if clash is not None:
+        raise ConflictError(
+            f"You already curate a group named '{group.name}'",
+            code=_NAME_TAKEN_CODE,
+        )
+
+    previous_curator_id = group.curator_user_id
+
+    group.curator_user_id = user_id
+
+    await session.execute(
+        delete(CuratorGroupMember).where(
+            CuratorGroupMember.group_id == group.id,
+            CuratorGroupMember.user_id == user_id,
+        )
+    )
+
+    session.add(
+        CuratorGroupMember(
+            group_id=group.id,
+            user_id=previous_curator_id,
+            kind=CuratorMemberKind.MASTER.value,
+        )
+    )
+
+    await session.execute(
+        delete(CuratorGroupTransfer).where(
+            CuratorGroupTransfer.group_id == group.id
+        )
+    )
+
+    await session.flush()
+
+    return await get_curator_group_page(group.id, user_id, session)
+
+
+async def decline_curator_group_transfer(
+    group_id: UUID, user_id: UUID, session: AsyncSession,
+) -> None:
+    """Refuse the offer. Idempotent, and silent about offers not yours.
+
+    DECLINE ANSWERS 204 WHERE ACCEPT ANSWERS 404, and the asymmetry is the
+    point. Accept changes who owns a school, so it has to tell "there is no
+    offer" apart from "the offer is not yours" -- and it refuses to, which
+    is what closes off probing. Decline changes nothing: refusing something
+    that was never offered to you leaves the world in the state you asked
+    for, so reporting success is honest and reveals nothing about whether an
+    offer existed.
+
+    Not gated on the group being active, for the same reason leave is not:
+    an answer the addressee is entitled to give must not depend on somebody
+    else's verification status.
+    """
+    await session.execute(
+        delete(CuratorGroupTransfer).where(
+            CuratorGroupTransfer.group_id == group_id,
+            CuratorGroupTransfer.to_user_id == user_id,
+        )
+    )

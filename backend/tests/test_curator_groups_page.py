@@ -281,7 +281,17 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
 async def test_curator_sees_the_page_as_curator(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """The owner reads their own group through the MEMBER endpoint too."""
+    """The owner reads their own group through the MEMBER endpoint too.
+
+    AMENDED BY GT-4. This test used to assert `"transfer" not in body`, and
+    that was RIGHT when it was written: through GT-3 the field genuinely did
+    not exist, because curator_group_transfer had no writer and a hardcoded
+    null would have been a promise with nothing behind it. GT-4 gave it a
+    writer, so the field is now always present -- and null for a group with
+    no pending offer, which is what this group is. The assertion is
+    tightened rather than dropped: `is None` still fails if the field ever
+    starts carrying something for a group nobody has offered anywhere.
+    """
     curator = await _make_verified_master(
         client, db_session, _TID_CURATOR, display_name="Мастер VELO",
     )
@@ -296,7 +306,7 @@ async def test_curator_sees_the_page_as_curator(
     assert body["viewer"]["relation"] == "curator"
     assert body["curator"]["user_id"] == curator["user"]["id"]
     assert body["curator"]["display_name"] == "Мастер VELO"
-    assert "transfer" not in body
+    assert body["transfer"] is None
 
 
 @pytest.mark.asyncio

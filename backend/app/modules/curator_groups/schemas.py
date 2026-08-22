@@ -61,6 +61,39 @@ class UpdateCuratorGroupRequest(BaseModel):
     description: CuratorGroupDescriptionStr | None = None
 
 
+class OfferCuratorGroupTransferRequest(BaseModel):
+    """POST /masters/me/curator-groups/{id}/transfer.
+
+    to_user_id only: the eligible set is the group's visible masters, and
+    the service checks membership against exactly the roster it shows, so
+    there is nothing else for the caller to state.
+    """
+
+    to_user_id: UUID
+
+
+class CuratorGroupTransferRef(BaseModel):
+    """A pending offer to hand the group over.
+
+    ONE schema for all three places that report an offer (the curator's own
+    row, that row after a PATCH, and the group page). Three flat triples of
+    the same fields would drift the first time one of them gained a fourth.
+
+    to_display_name uses display_name(first_name, last_name) from
+    users/helpers.py, NOT the master-profile lookup _curator_display_name
+    uses. The tree holds two different naming rules and this is a deliberate
+    pick between them: the addressee here is a PERSON being offered
+    something, not a public master card, and the profile-based rule may
+    return None -- which would leave the confirm dialog reading "offer sent
+    to —". display_name always yields something, falling back to the
+    neutral «Участник».
+    """
+
+    to_user_id: UUID
+    to_display_name: str
+    requested_at: datetime
+
+
 class CuratorGroupResponse(BaseModel):
     """One curator group, as its curator sees it.
 
@@ -73,9 +106,18 @@ class CuratorGroupResponse(BaseModel):
     students_count counts every kind='student' row. Visibility is a rule
     about masters; a student has no MasterProfile to be verified.
 
-    No `transfer` field here. TZ 5.2 lists one, and it is deliberately absent
-    until GT-4 writes curator_group_transfer: a hardcoded `null` would be a
-    field with no writer, which is a lie the frontend would build on.
+    `transfer` describes the group's pending hand-over, or null when there
+    is none. Until GT-4 this field did not exist at all -- deliberately, so
+    that a hardcoded null could not become a promise the frontend built on.
+    It appears now BECAUSE it acquired a writer, which is the only reason a
+    field ever should.
+
+    PATCH returns this schema too, so renaming a group now reports the
+    pending transfer alongside the new name. That is an intended widening,
+    not a leak: one response shape has one field set, and the alternative --
+    two flavours of CuratorGroupResponse, with and without -- is exactly the
+    duplication CuratorGroupTransferRef exists to avoid. A rename does not
+    touch the offer.
     """
 
     id: UUID
@@ -83,6 +125,7 @@ class CuratorGroupResponse(BaseModel):
     description: str | None
     masters_count: int
     students_count: int
+    transfer: CuratorGroupTransferRef | None = None
     created_at: datetime
 
 
@@ -145,9 +188,15 @@ class CuratorGroupMineItem(BaseModel):
     """One row of GET /curator-groups/mine.
 
     `relation` is the viewer's own tie to this group and is what the
-    frontend keys the row's chip off. No `transfer_offered` here: the
-    transfer table has no writer until GT-4, and a field that is always
-    false is a promise the UI would build on.
+    frontend keys the row's chip off.
+
+    `transfer_offered` is true ONLY for the person being offered the group,
+    and it is a bool rather than the full ref on purpose: this is a list
+    row, and everything the offer contains is already known to whoever it
+    was made to. The curator sees false here even for their own pending
+    offer -- the list says "somebody is waiting on YOU", and nobody is.
+    Until GT-4 the field was absent because a field that is always false is
+    a promise with no writer behind it.
     """
 
     id: UUID
@@ -157,6 +206,7 @@ class CuratorGroupMineItem(BaseModel):
     masters_count: int
     students_count: int
     relation: CuratorGroupRelationLiteral
+    transfer_offered: bool = False
 
 
 class CuratorGroupMineResponse(BaseModel):
@@ -178,6 +228,13 @@ class CuratorGroupPageResponse(BaseModel):
     own row): that one is a management view keyed by ownership, this one
     carries `curator` and `viewer` because the reader is not necessarily
     the owner. Two shapes rather than one with half the fields null.
+
+    `transfer` is filled for exactly two people -- the curator and the
+    person being offered the group -- and is null for every other member
+    (TZ 5.2). Null rather than an absent key: the field exists for everyone,
+    only its value differs, which keeps one OpenAPI shape instead of two.
+    A member who is not part of the deal learns nothing about it, not even
+    that one is under way.
     """
 
     id: UUID
@@ -187,6 +244,7 @@ class CuratorGroupPageResponse(BaseModel):
     masters_count: int
     students_count: int
     viewer: CuratorGroupViewer
+    transfer: CuratorGroupTransferRef | None = None
     created_at: datetime
 
 
