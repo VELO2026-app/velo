@@ -70,7 +70,15 @@ select = [
     "RUF",    # ruff-specific
     "ASYNC",  # async linting
 ]
-ignore = ["RUF012", "B008"]
+# RUF001/002/003 (ambiguous-unicode in strings / docstrings / comments):
+# this product's user-facing text IS Russian, so every «Не удалось» and every
+# Russian comment trips them -- 59 findings on the tree, all of them the
+# linter being right about Unicode and wrong about this codebase. Disabled
+# rather than whitelisted: allowed-confusables would mean listing most of the
+# Cyrillic alphabet and maintaining that list forever. Nothing is lost on
+# identifiers -- E741/E742/E743 cover ambiguous names and stay on; these three
+# rules only ever look at string, docstring and comment CONTENT.
+ignore = ["RUF012", "B008", "RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.format]
 # ruff format replaces black — same style, faster.
