@@ -1,11 +1,12 @@
 # ТЗ: Кураторские группы («Группы для Мастеров») и роль Мастера-Куратора
 
-**Редакция:** 3 от 2026-08-22. Все решения владельца внесены (раздел 11); открытых вопросов
-нет, осталась одна ставка с дефолтом (Q-NOTIF).
-**База:** `VELO2026-app/velo`, ветка `test` @ `7446684` (единственная ветка: репозиторий
-Компании новый, `main` ещё не заведён).
-**Банд на базе:** 982 бэк-теста (`tests/*.py`, подсчёт `def test_`), ~2355 фронт-спеков (grep `it(`/`test(`).
-**Место в репо:** `docs/tz-curator-groups.md`, коммитит владелец.
+**Редакция:** 4 от 2026-08-22. Все решения владельца внесены (раздел 11); открытых вопросов
+нет, осталась одна ставка с дефолтом (Q-NOTIF). Что изменилось против ред. 3 -- раздел 13:
+шесть правок по находкам поставок GT-1 и GT-2, все по телу кода.
+**База:** `VELO2026-app/velo`, ветка `test` @ `6746579` (единственная ветка: репозиторий
+Компании новый, `main` ещё не заведён). Закрыты GT-0, GT-1, GT-2.
+**Банд на базе:** 1276 бэк-тестов (`tests/*.py`, подсчёт `def test_`), ~2355 фронт-спеков (grep `it(`/`test(`).
+**Место в репо:** `tz-curator-groups.md` в корне, коммитит владелец.
 **Статус:** не хэндоффер. Нарезка на хэндофферы (P1..P5) -- раздел 8; диспетчер заполняет
 файлы/строки/базу поставки сам, здесь их нет намеренно.
 
@@ -85,9 +86,16 @@
   `get_current_master` (`auth/dependencies.py`) = role==master + профиль существует +
   `data.account.status == "verified"`, 403 с кодами `master_profile_not_found` /
   `master_profile_not_verified`. `get_current_admin` -- role==admin.
-- **Ревок сохраняет данные.** `revoke_master` (`admin/masters/service.py`) переводит
-  `account.status -> "suspended"`, `role -> user`, строки не удаляет; ре-грант -- через
-  `make_master`/re-verify. На это опирается I-6: группа «замораживается» статусом куратора и
+- **Ревок сохраняет данные, но сбрасывает И роль.** `revoke_master`
+  (`admin/masters/service.py`) переводит `account.status -> "suspended"` **и**
+  `User.role -> user`, строки не удаляет. Два следствия, проверенные по телу в GT-1:
+  (1) `get_current_master` проверяет роль ПЕРВОЙ, поэтому ревокнутый мастер получает 403 с
+  общим кодом `forbidden`, а не `master_profile_not_verified` -- до ветки статуса запрос не
+  доходит; состояние «профиль suspended при роли master» через админские эндпоинты и
+  `set_role.py` недостижимо. (2) Ре-грант -- **только** `POST /admin/users/{user_id}/make-master`
+  (ветка re-verify, `admin/users/service.py`): `POST /admin/masters/{id}/verify` идёт через
+  `_load_pending_profile` и на любом статусе, кроме `pending`, отвечает 409
+  `Application is not pending`. На ревок опирается I-6: группа «замораживается» статусом куратора и
   оживает сама.
 - **Группы учеников мастера** (P1-P6, №590-611): `masters/groups_models.py`
   (`master_group` UNIQUE(master_id,name); `master_group_membership`
@@ -227,7 +235,7 @@ router.py`; админский read-only список -- `admin_router.py`/`admi
 | `account.status` | Эффективно | Что видит |
 |---|---|---|
 | verified | куратор своих групп | кураторские эндпоинты 200; группы активны |
-| suspended | не мастер | `get_current_master` -> 403 `master_profile_not_verified`; все его группы неактивны (404 участникам, пропадают из `mine`) |
+| suspended (после `/revoke`) | не мастер | `get_current_master` -> 403 **`forbidden`** (роль сброшена в `user` и проверяется первой, см. §2), а не `master_profile_not_verified`; все его группы неактивны (404 участникам, пропадают из `mine`). Возврат -- `make-master`, не `/verify` |
 | pending / rejected | не мастер | то же; групп у него быть не может (создание требует verified) -- кроме случая «был verified, создал, потом rejected/suspended» -- обрабатывается как suspended |
 | нет профиля | не мастер | 403 `master_profile_not_found`; групп нет |
 
@@ -237,6 +245,13 @@ router.py`; админский read-only список -- `admin_router.py`/`admi
 
 **Отношение пользователя к группе:** нет / curator (выведено) / master / student.
 Для `master` дополнительно: verified (показан) / не verified (скрыт, I-4).
+
+**Участник, заблокированный куратором** (`master_student(master=curator).blocked_at`): группу
+видит, ростер и счётчики получает, из фида теряет ТОЛЬКО практики того, кто его заблокировал
+(предикат `_blocked_clause` коррелирован к мастеру практики, не к куратору группы). I-9 -- про
+ВСТУПЛЕНИЕ по ссылке и про уже состоящего молчит намеренно: блок закрывает дверь новым, а
+рычаг против уже вошедшего -- удаление участника куратором. Проверено по телу и закреплено
+тестом в GT-2.
 
 **Инвайт (на вид `kind`):** нет строки / есть строка. Открытие ссылки:
 
@@ -385,6 +400,9 @@ GET    /api/v1/curator-groups/{id}/practices?limit&offset
        дефолтный фид (scheduled|live, будущее), viewer_audience_clause применяется как есть
        -> чужая закрытая практика и практики заблокировавшего тебя мастера не видны; 404 как выше
 DELETE /api/v1/curator-groups/{id}/membership   -> 204 (выход; идемпотентно); 409 curator_cannot_leave
+       АКТИВНОСТЬ ГРУППЫ ЗДЕСЬ НЕ ПРОВЕРЯЕТСЯ (I-5): участник неактивной группы обязан
+       иметь возможность выйти, иначе он заперт в школе до ре-верификации чужого куратора.
+       Нет строки / нет группы / группа неактивна -> 204; caller -- куратор -> 409
        если caller -- адресат ожидающей передачи, предложение удаляется тут же
 POST   /api/v1/curator-groups/{id}/transfer/accept   -> 200 CuratorGroupPageResponse (3.5)
        404 transfer_not_found (нет предложения / не адресат / группа неактивна -- неразличимо)
@@ -421,7 +439,9 @@ GET    /api/v1/admin/curator-groups?limit&offset
 `curator_group_name_taken`, `curator_cannot_leave`, `invite_not_found`, `master_required`,
 `blocked_by_curator`, `own_group`, `transfer_pending`, `transfer_target_not_member`,
 `transfer_not_found`. Повторно используются: `master_profile_not_found`,
-`master_profile_not_verified`, `bot_url_not_configured`; в P5 -- `not_in_audience`.
+`bot_url_not_configured`; в P5 -- `not_in_audience`. Ревокнутый мастер получает 403 `forbidden`
+(§2), `master_profile_not_verified` достижим только при профиле не-verified и роли master,
+чего админские пути не производят.
 404 -- всегда без раскрытия причины (P-08).
 
 ### 5.4. Точки врезки в существующее (v1)
@@ -454,7 +474,7 @@ curator_group.curator_user_id AND mp.data->'account'->>'status' = 'verified'`. �
 
 | Вход | ПОВТОР | ПУСТОТА | НЕХВАТКА |
 |---|---|---|---|
-| create group | то же имя у того же куратора -> 409 (UNIQUE + pre-check + IntegrityError-backstop, как `create_group`) | имя «» / пробелы -> 422; description пробелы -> NULL | не verified-мастер -> 403 `master_profile_not_verified` |
+| create group | то же имя у того же куратора -> 409 (UNIQUE + pre-check + IntegrityError-backstop, как `create_group`) | имя «» / пробелы -> 422 (нужен `strip_whitespace=True`: прецедентный `GroupNameStr` его НЕ ставит и пропускает имя из одного пробела); description пробелы -> NULL | не мастер / ревокнутый -> 403 `forbidden`; профиля нет -> 403 `master_profile_not_found` |
 | patch group | имя = своё же -> 200 без изменений; имя другой своей группы -> 409 | description «» при `provided` -> NULL; не прислан -> не трогаем | 404 чужая/нет |
 | delete group | второй delete -> 404 | группа с 0 участников -> 204 | 404 чужая |
 | members list | один user не может быть в двух kind (UNIQUE) | 0 строк -> `total=0` | suspended master -> `is_visible=false`, не 404 |
@@ -755,7 +775,8 @@ GET /api/v1/masters/me/curator-groups/{id}/delete-preview
 | `test_curator_group_page.py` (P1 #4-5) | 66200-66399 |
 | `test_curator_invites.py` (P2 #1-4) | 67000-67199 |
 | `test_curator_transfer.py` (P2 #5-6) | 67200-67399 |
-| `test_curator_audience.py` (P5 #1-7) | 68000-68399 |
+| `test_curator_audience.py` (P5 #1-5) | 68000-68199 |
+| `test_curator_audience_advisory.py` (P5 #6-7) | 68200-68399 |
 | `test_admin_curator_groups.py` (P4) | 69000-69099 |
 
 Каждый файл чистит только свой поддиапазон (урок TD-TGID-56XXX). Хелперы -- `tests/helpers.py`
@@ -822,11 +843,14 @@ Q-TR1..TR3=ок, Q-MOCK=без макетов, Q-ADMINDEL=админ групп�
 
 - **Макеты.** Решено: не будут (Q-MOCK). 6.2-6.3 и 8.5 описывают состав и данные экранов;
   визуал -- реюз DS.
-- **Фильтр `is_active` в ростерах.** Не читал тело `list_group_members` целиком; правило в 5.4
-  («повторить прецедент») -- по принципу «не изобретать, чего нет в прецеденте», а не по
-  проверенному факту.
-- **`full_cleanup_range` vs `cleanup_range`.** Какой из двух хелперов нужен новым файлам --
-  зависит от того, какие таблицы они засевают; решается в хэндоффере по телу `tests/helpers.py`.
+- **Фильтр `is_active` в ростерах -- ЗАКРЫТО (GT-1).** Тело `_list_custom_group_members`
+  (`masters/groups_service.py`) по `User.is_active` не фильтрует; кураторские ростеры повторяют
+  это.
+- **`full_cleanup_range` vs `cleanup_range` -- ЗАКРЫТО (GT-1).** Нужен
+  `full_cleanup_range(..., delete_users=True)`: все четыре таблицы висят на `users` /
+  `curator_group` с `ON DELETE CASCADE` и уходят каскадом, шагов в `helpers.py` не требуется.
+  `cleanup_range` не годится -- он не удаляет пользователей, строки `curator_group` пережили бы
+  прогон и второй прогон упёрся бы в 409 на том же имени.
 - **Наследование аудитории у детей серии после PATCH родителя.** В 8.5 зафиксировано как
   «зеркало существующего для `groups`» без пересказа: тело этой ветки `series_service` /
   `service.py` (строки про INHERITS/REFUSED) я читал фрагментами, формулировать правило по
@@ -837,3 +861,31 @@ Q-TR1..TR3=ок, Q-MOCK=без макетов, Q-ADMINDEL=админ групп�
 - **Кто ведёт comms.** В документах проекта эта сторона названа именем «Zod» (36 файлов);
   владелец его не опознал. Для ТЗ важен только факт отдельного стека; имя в документе не
   используется.
+- **Реестр тест-бандов -- НЕ таблица в `VELO-Backend.md` §8** (найдено GT-1). Живой реестр --
+  `backend/tests/telegram_id_bands.py`: он парсит AST тест-файлов и читает module-level
+  `_TID_MIN`/`_TID_MAX` (или `BAND_MIN`/`TID_MIN`/`_TID_RANGES`), заменив собой удалённый
+  `docs/telegram-id-bands.md`. Таблица в §8 жива и уже неверна («admin | 87xxx», при том что
+  87000-87999 держит `test_diary_entries.py`) -- дописывать в неё ничего не нужно. Новый
+  тест-файл ОБЯЗАН объявить банд в форме, которую реестр читает, иначе `test_telegram_id_bands.py`
+  роняет прогон ратчетом «слепая зона не растёт». Диапазоны раздела 9 сверять командой
+  `python -m tests.telegram_id_bands`, а не грепом.
+
+---
+
+## 13. Что изменилось в ред. 4 против ред. 3
+
+Шесть правок, все -- по телу кода, найденные поставками GT-1 и GT-2; ни одна не меняет
+решений владельца.
+
+| # | Что | Где | Откуда |
+|---|---|---|---|
+| 1 | Ревокнутый мастер даёт 403 **`forbidden`**, а не `master_profile_not_verified`: `revoke_master` сбрасывает и `User.role`, а `get_current_master` проверяет роль первой | §2, §3.4, §5.3, §5.5 | GT-1, по телу `admin/masters/service.py` + `auth/dependencies.py` |
+| 2 | Ре-верификация -- `POST /admin/users/{id}/make-master`, а НЕ `/verify`: `verify_master` требует статус `pending` и на `suspended` отвечает 409 | §2 | GT-1, по телу `_load_pending_profile` |
+| 3 | Выход из группы не проверяет активность (I-5): участник неактивной группы обязан мочь выйти | §5.2 | решение владельца по гейту GT-2 |
+| 4 | Добавлено состояние «участник, заблокированный куратором»: видит группу, теряет только практики заблокировавшего | §3.4 | GT-2, по телу `_blocked_clause` |
+| 5 | Банд на базе 982 -> 1276; диапазон P5 68000-68399 разделён на два файла | шапка, §9 | пересчёт |
+| 6 | Закрыты три пункта «не установлено» (`is_active`, `full_cleanup_range`, реестр бандов) и добавлен четвёртый -- про реестр `telegram_id_bands.py` | §12 | GT-1 |
+
+Плюс уточнение в §5.5: `strip_whitespace=True` в `CuratorGroupNameStr` -- осознанное расхождение
+с прецедентным `GroupNameStr`, который имя из одного пробела пропускает (согласовано на гейте
+GT-1; сам прецедент вне забора и не правился).
