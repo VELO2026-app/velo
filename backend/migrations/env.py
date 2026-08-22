@@ -47,6 +47,12 @@ from app.modules.promos.models import Promo  # noqa: F401  # Phase 6.7
 from app.modules.practices.taxonomy_models import TaxonomyDirection, TaxonomyStyle  # noqa: F401  # R5
 from app.core.events.models import OutboxEvent  # noqa: F401  # Phase 6 / T0
 from app.modules.chats.models import ChatThread  # noqa: F401  # Phase 6 / T2
+from app.modules.curator_groups.models import (  # noqa: F401  # Curator GROUPS P1
+    CuratorGroup,
+    CuratorGroupInvite,
+    CuratorGroupMember,
+    CuratorGroupTransfer,
+)
 
 # ---------------------------------------------------------------------------
 # Alembic Config object — provides access to alembic.ini values.
