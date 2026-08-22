@@ -489,6 +489,12 @@ export interface CreateCompanyPromoRequest {
   first_purchase_only?: boolean
 }
 
+/** POST /masters/me/curator-groups. */
+export interface CreateCuratorGroupRequest {
+  name: string
+  description?: string | null
+}
+
 /** POST /api/v1/diary body. */
 export interface CreateDiaryEntryRequest {
   content: string
@@ -563,6 +569,31 @@ export interface CreateStyleRequest {
 /** POST /api/v1/masters/me/withdraw -- request body. amount_cents is the total withdrawal amount (fee deducted from it). Minimum enforced in service against settings.min_withdrawal_cents. */
 export interface CreateWithdrawalRequest {
   amount_cents: number
+}
+
+/** GET /masters/me/curator-groups. */
+export interface CuratorGroupListResponse {
+  items: CuratorGroupResponse[]
+}
+
+/** One row of a curator group's roster. is_visible is ALWAYS true for a student and reflects the live MasterProfile status for a master (I-4). The curator sees a suspended master as a row with is_visible=false -- "in the shadow" -- rather than watching them vanish, because the row is real and comes back by itself when the admin re-verifies. */
+export interface CuratorGroupMemberItem {
+  user_id: string
+  name: string
+  avatar_url: string | null
+  kind: 'master' | 'student'
+  joined_at: string
+  is_visible: boolean
+}
+
+/** One curator group, as its curator sees it. masters_count counts only VISIBLE masters -- members with kind='master' whose MasterProfile is verified right now (I-4). A suspended master keeps their row and disappears from this number until re-verification; the number and the roster's is_visible flag are computed from the same predicate, so they cannot disagree. students_count counts every kind='student' row. Visibility is a rule about masters; a student has no MasterProfile to be verified. No `transfer` field here. TZ 5.2 lists one, and it is deliberately absent until GT-4 writes curator_group_transfer: a hardcoded `null` would be a field with no writer, which is a lie the frontend would build on. */
+export interface CuratorGroupResponse {
+  id: string
+  name: string
+  description: string | null
+  masters_count: number
+  students_count: number
+  created_at: string
 }
 
 /** Single diary entry in API responses. */
@@ -896,6 +927,14 @@ export interface PaginatedBookingsResponse {
 /** GET /api/v1/users/me/checkins -- paginated list. */
 export interface PaginatedCheckinsResponse {
   items: CheckinResponse[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** GET /masters/me/curator-groups/{id}/members. */
+export interface PaginatedCuratorGroupMembersResponse {
+  items: CuratorGroupMemberItem[]
   total: number
   limit: number
   offset: number
@@ -1442,6 +1481,12 @@ export interface TopupResponse {
   checkout_url: string
   amount_cents: number
   currency: string
+}
+
+/** PATCH /masters/me/curator-groups/{id}. `name` is always required -- a group always has one. `description` is a PARTIAL update. The router computes `"description" in body.model_dump(exclude_unset=True)` and passes it as description_provided, which is the only way to tell "the key was absent" (leave the column alone) from "the key was sent as null/empty" (write NULL). A bare `str | None = None` cannot distinguish the two and would wipe an existing description on every plain rename -- the exact bug RenameGroupRequest was rewritten to prevent. */
+export interface UpdateCuratorGroupRequest {
+  name: string
+  description?: string | null
 }
 
 /** PATCH /api/v1/diary/{id} body. All fields optional. Only provided fields are updated. */
