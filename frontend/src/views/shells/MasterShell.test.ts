@@ -22,8 +22,8 @@
 // import worth avoiding when nothing requires it.
 //
 // TRAPS ABSENT:
-//  - fogTuning's per-route PIXEL tuning (ctaSafeFog/compactBottomFog/formFog/
-//    dashboardFog/masterProfileFog, .vue:117-254) is deliberately OUT of this
+//  - fogTuning's per-route PIXEL tuning (ctaSafeFog/compactBottomFog/formFog,
+//    .vue:117-215) is deliberately OUT of this
 //    file's scope -- checked that Vitest here never loads component <style>
 //    (no `test.css` in vitest.config.ts), so getComputedStyle always reads
 //    empty custom properties and every fog-tuning function silently takes its

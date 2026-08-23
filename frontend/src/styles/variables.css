@@ -324,23 +324,16 @@
      top-hard over its hero is intentional (FOG-2). Read by MasterShell.formFog();
      tune here to the measured header height. */
   --velo-fog-pd-top-hard-form: 88px;
-  /* master-profile top clearance (operator PE-1, 2026-07-01): the profile hub is
-     HEADERLESS (no VHeader → islandH=0), so MobileLayout applies the 88px
-     HEADER_FALLBACK + the default z1 gap ≈104px empty band above the first card.
-     This NEGATIVE top-gap pulls that clearance down (top = 88 + this); the fog
-     fade still lands the card crisp because its opaque boundary tracks the reduced
-     paddingTop. Scoped to master-profile via MasterShell.masterProfileFog(); tune
-     the gap here (−40 ⇒ ~48px). Does NOT touch MobileLayout / HEADER_FALLBACK. */
-  --velo-fog-mp-top-gap: -40px;
-  /* Reusable SHORT top-fog clearance for HEADERLESS list heads (operator DB-1b,
-     PROMPT №273). A dashboard-style screen with no VHeader has islandH=0, so
-     MobileLayout applies the 88px HEADER_FALLBACK + the default z1 gap ≈104px —
-     an oversized empty band above the first row. This NEGATIVE top-gap pulls that
-     fallback band down (top = 88 + this), the same mechanism as the
-     master-profile-only --velo-fog-mp-top-gap but as a shared token other
-     headerless heads can adopt. Read via MasterShell.dashboardFog(); tune here
-     (−40 ⇒ ~48px top). Does NOT touch MobileLayout / the HEADER_FALLBACK constant. */
-  --velo-fog-z1-short: -40px;
+  /* HEADERLESS top clearance: a screen that renders NO floating header (no
+     VHeader teleports → the island stays empty) gets top = this token EXACTLY.
+     Declared per route via meta.headerless (router/index.ts), read by
+     MobileLayout. The 88px HEADER_FALLBACK is NOT applied there — it exists
+     only to cover the pre-measurement race on screens that DO have a header,
+     and reserving it on a headerless screen left a phantom ≈104px band.
+     Replaces the retired negative-compensation tokens --velo-fog-mp-top-gap
+     (PE-1) and --velo-fog-z1-short (DB-1b), whose `88 + (−40)` coupled two
+     magic numbers. 48px = the visual result those fixes shipped with. */
+  --velo-fog-headerless-top: 48px;
   /* Header-island clearance (G-1) is no longer a fixed token pair: MobileLayout
      MEASURES the floating island's height (ResizeObserver) and clears exactly
      that much, so any island (short greeting or tall title+weekstrip) gets the

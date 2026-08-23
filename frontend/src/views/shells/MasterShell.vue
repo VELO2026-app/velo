@@ -214,42 +214,16 @@ function formFog() {
   return formFogCache
 }
 
-// master-dashboard (DB-1, 2026-06-30 → DB-1b, PROMPT №273): the greeting was
-// removed, leaving an oversized top band. The hub is HEADERLESS (bell lives in the
-// content, no VHeader → islandH=0), so the 88px HEADER_FALLBACK dominates and the
-// earlier +8 (--space-2) gap only trimmed 8px off it (88+8=96px). Pull the band
-// down with the reusable short-top-fog token --velo-fog-z1-short (negative top-gap,
-// top = 88 + this ⇒ ~48px), mirroring the headerless master-profile fix. Tunable
-// in variables.css.
-let dashFogCache: { topGap: number } | null = null
-function dashboardFog() {
-  if (dashFogCache) return dashFogCache
-  const cs = getComputedStyle(document.documentElement)
-  dashFogCache = { topGap: fogPx(cs, '--velo-fog-z1-short', -40) }
-  return dashFogCache
-}
-
-// master-profile (PE-1, 2026-07-01): the profile hub is HEADERLESS (no VHeader →
-// islandH=0), so MobileLayout applies the 88px HEADER_FALLBACK + the default z1 gap
-// ≈104px empty band above the first card. A NEGATIVE top-gap pulls that clearance
-// down (top = HEADER_FALLBACK + this); the fog fade still lands the card crisp
-// because its opaque boundary tracks the reduced paddingTop. Bottom fog unchanged
-// (the hub keeps its tab bar). Reuses the fogPx reader; value in --velo-fog-mp-top-gap.
-// Does NOT touch MobileLayout shared logic / the HEADER_FALLBACK constant.
-let mpFogCache: { topGap: number } | null = null
-function masterProfileFog() {
-  if (mpFogCache) return mpFogCache
-  const cs = getComputedStyle(document.documentElement)
-  mpFogCache = { topGap: fogPx(cs, '--velo-fog-mp-top-gap', -40) }
-  return mpFogCache
-}
+// master-dashboard (DB-1b) + master-profile (PE-1) are HEADERLESS hubs: the
+// ROUTES declare meta.headerless (router/index.ts) and MobileLayout pads by
+// --velo-fog-headerless-top (48px — the visual result the old negative-topGap
+// fixes 88 + (−40) shipped with). The shell carries no headerless code;
+// requirement statement: MobileLayout.vue, [FE-3] block at mainStyle.
 
 const fogTuning = computed(() => {
   const name = route.name as string
   if (FORM_FOG_ROUTES.includes(name)) return formFog()
   if (COMPACT_BOTTOM_FOG_ROUTES.includes(name)) return compactBottomFog()
-  if (name === 'master-dashboard') return dashboardFog()
-  if (name === 'master-profile') return masterProfileFog()
   return CTA_SAFE_FOG_ROUTES.includes(name) ? ctaSafeFog() : {}
 })
 

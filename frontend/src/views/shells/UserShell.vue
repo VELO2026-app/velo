@@ -66,9 +66,7 @@ const isDiaryRoute = computed(() => DIARY_ROUTES.includes(route.name as string))
 const CHAT_ROUTES = ['user-chat']
 const isChatRoute = computed(() => CHAT_ROUTES.includes(route.name as string))
 
-const isFillRoute = computed(
-  () => DIARY_ROUTES.includes(route.name as string) || isChatRoute.value,
-)
+const isFillRoute = computed(() => DIARY_ROUTES.includes(route.name as string) || isChatRoute.value)
 
 // Focused full-screen form flows (check-in / feedback / no-show reflection)
 // hide the tab bar too: they have their own "Close" + submit/skip actions, and
@@ -137,4 +135,7 @@ function practiceDetailFog() {
   return pdFogCache
 }
 const fogTuning = computed(() => (route.name === 'practice-detail' ? practiceDetailFog() : {}))
+// [FE-3] headerless top clearance for user-booking-confirmed lives on the ROUTE
+// (meta.headerless, router/index.ts) — the shell carries no headerless code.
+// Requirement statement + scenarios: MobileLayout.vue, [FE-3] block at mainStyle.
 </script>
