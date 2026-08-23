@@ -9,8 +9,10 @@
       REAL since the chat landed (TD-ASK-MASTER retired): "Отправить запрос"
       opens-or-gets the eternal DM with THIS practice's master
       (POST /api/v1/chats is create-or-get, so a second tap lands in the same
-      thread), posts the typed text as a message and navigates into the
-      thread. Same shape as «Задать вопрос» on MasterPublicView, plus the
+      thread) and posts the typed text as a message. [FE-1] The send SHALL NOT
+      open the chat afterwards: a success toast lands and the user returns to
+      «Моя практика» (practice-detail), which renders the already-booked
+      state. Same shape as «Задать вопрос» on MasterPublicView, plus the
       message: the master id comes from the loaded practice (master_id is
       non-null on PracticeResponse), so nothing extra is fetched.
     - No in-page navigation buttons: the bottom tab bar handles it (this route
@@ -148,11 +150,35 @@ async function onSendRequest(): Promise<void> {
     const thread = await openChat(masterId)
     await sendChatMessage(thread.id, composeRequest(body))
     masterRequest.value = ''
-    // B43: replace, not push -- this screen must not remain in history once
-    // the thread opens, or `router.back()` from ChatThreadScreen (UserChatView.vue)
-    // pops back here (the request screen) instead of the practice screen this
-    // screen was itself reached from (PracticeDetailView.onPurchased, :19 above).
-    await router.replace({ name: 'user-chat', params: { id: thread.id } })
+    toast.success('Запрос отправлен мастеру')
+    // [FE-1] Requirement: post-send navigation (capability: user-booking)
+    // After a successful send the app SHALL NOT open the chat thread; it
+    // SHALL show the «Запрос отправлен мастеру» toast and land the user on
+    // «Моя практика» (practice-detail, booked state), and the confirmation
+    // screen SHALL NOT remain in the back-stack. Supersedes the B43 rule
+    // (which only said "not in history" for the chat entry).
+    //
+    // Scenario: normal flow (practice detail -> here via push)
+    // - WHEN history.state.back is /user/practices/:id
+    // - THEN router.back() -- no new history entry; Back from the practice
+    //   screen keeps going where it originally would. (This is also the FE-2
+    //   guarantee: back leads to «Моя практика», never back into the loop
+    //   request -> messages -> request.)
+    //
+    // Scenario: deep link / reload (nothing usable behind)
+    // - WHEN history.state.back does not match /user/practices/:id
+    // - THEN router.replace() to practice-detail -- this screen leaves the
+    //   history (B43's own concern), a dead back-press cannot resurrect it.
+    //
+    // Rationale: practice-detail renders the booked state from bookingsStore,
+    // already refreshed by PracticeDetailView.onPurchased BEFORE this screen
+    // was pushed -- no extra fetch is needed here.
+    const back = router.options.history.state?.back
+    if (typeof back === 'string' && /^\/user\/practices\/[^/]+$/.test(back)) {
+      router.back()
+    } else {
+      await router.replace({ name: 'practice-detail', params: { id: practiceId } })
+    }
   } catch (e) {
     toast.error(extractApiError(e, 'Не удалось отправить запрос'))
   } finally {

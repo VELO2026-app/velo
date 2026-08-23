@@ -91,17 +91,30 @@ const getPracticeMock = vi.mocked(getPractice)
 vi.mock('@/api/chats')
 
 const push = vi.fn()
+const back = vi.fn()
 const replace = vi.fn()
 const routeParams: { practiceId: string } = { practiceId: 'p1' }
+// [FE-1] The send path decides back-vs-replace by reading the history entry
+// directly behind us (`router.options.history.state.back`) -- the seam under
+// the two navigation scenarios. In the normal flow (detail -> here via push)
+// the practice screen sits there; on a deep link / reload nothing does.
+// Mutable per test, reset in beforeEach.
+const historyState: { back: string | null } = { back: null }
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push, back: vi.fn(), replace }),
+  useRouter: () => ({
+    push,
+    back,
+    replace,
+    options: { history: { state: historyState } },
+  }),
   useRoute: () => ({ params: routeParams }),
 }))
 
 const toastInfo = vi.fn()
 const toastError = vi.fn()
+const toastSuccess = vi.fn()
 vi.mock('@/composables/useToast', () => ({
-  useToast: () => ({ error: toastError, success: vi.fn(), info: toastInfo }),
+  useToast: () => ({ error: toastError, success: toastSuccess, info: toastInfo }),
 }))
 
 function practice(overrides: Partial<PracticeResponse> = {}): PracticeResponse {
@@ -187,6 +200,10 @@ beforeEach(() => {
   vi.mocked(chatsApi.openChat).mockReset()
   vi.mocked(chatsApi.sendChatMessage).mockReset()
   push.mockReset()
+  back.mockReset()
+  replace.mockReset()
+  historyState.back = null
+  toastSuccess.mockReset()
   routeParams.practiceId = 'p1'
 })
 
@@ -352,13 +369,20 @@ describe('BookingConfirmedView', () => {
   })
 
   // ===========================================================================
-  // ask-master, REAL (was the TD-ASK-MASTER stub: field hard-disabled, button
-  // hard-disabled, a «Вопросы мастеру — скоро» hint and a handler that only
-  // toasted). It now opens-or-gets the DM with THIS practice's master and posts
-  // the typed text as a message. The two tests that pinned the stub are gone --
-  // they asserted `disabled === true` unconditionally, which is exactly the
-  // behaviour being removed.
-  describe('ask-master (real: opens the DM and sends the text)', () => {
+  // [FE-1] ask-master (capability: user-booking) -- REAL since the chat landed
+  // (was the TD-ASK-MASTER stub: field hard-disabled, button hard-disabled, a
+  // «Вопросы мастеру — скоро» hint; the two tests that pinned the stub are
+  // gone -- they asserted `disabled === true` unconditionally, which is
+  // exactly the behaviour being removed).
+  //
+  // Requirement: a successful send opens-or-gets the DM with THIS practice's
+  // master, posts the typed text, and SHALL NOT open the chat -- a success
+  // toast lands and the user is returned to «Моя практика» (practice-detail).
+  // Full statement + scenarios: BookingConfirmedView.vue [FE-1]. The tests
+  // below pin both scenarios (back when the practice screen is behind in
+  // history; replace otherwise) and both failure paths (no navigation, the
+  // text survives for a retry).
+  describe('ask-master (real: sends the DM and returns to the practice screen)', () => {
     const THREAD = { id: 'thread-7', created_at: '2026-08-01T10:30:00+00:00' }
     const SENT = {
       id: 'msg-1',
@@ -403,10 +427,11 @@ describe('BookingConfirmedView', () => {
       expect(sendBtn()?.disabled).toBe(true)
     })
 
-    it("sending: opens the thread with the fetched practice's OWN master_id, posts the trimmed text, then navigates into the thread", async () => {
+    it("sending: opens the thread with the fetched practice's OWN master_id, posts the trimmed text, toasts, and returns to the practice screen -- the chat is NOT opened", async () => {
       getPracticeMock.mockResolvedValue(practice({ master_id: 'master_specific' }))
       vi.mocked(chatsApi.openChat).mockResolvedValue(THREAD)
       vi.mocked(chatsApi.sendChatMessage).mockResolvedValue(SENT)
+      historyState.back = '/user/practices/p1' // the normal flow: the detail screen sits right behind us
       mount()
       await flush()
 
@@ -424,11 +449,52 @@ describe('BookingConfirmedView', () => {
         'thread-7',
         'Практика: Утренняя медитация, 20 июля в 10:00\n\nБолит колено',
       )
-      // B43: replace, not push -- this screen must NOT stay in history once
-      // the thread opens, or `router.back()` from the thread loops back here
-      // instead of landing on the practice screen.
-      expect(replace).toHaveBeenCalledWith({ name: 'user-chat', params: { id: 'thread-7' } })
-      expect(push).not.toHaveBeenCalledWith({ name: 'user-chat', params: { id: 'thread-7' } })
+      // [FE-1] Scenario: normal flow -- toast + step BACK into «Моя практика»;
+      // no new history entry, nothing else navigated. Pins the FE-2 check too:
+      // back leads to the practice screen, not back into the request loop.
+      expect(toastSuccess).toHaveBeenCalledWith('Запрос отправлен мастеру')
+      expect(back).toHaveBeenCalledTimes(1)
+      expect(push).not.toHaveBeenCalled()
+      expect(replace).not.toHaveBeenCalled()
+    })
+
+    it('T1 deep link / reload (no practice screen behind in history): REPLACE to practice-detail -- this screen must NOT stay in history', async () => {
+      getPracticeMock.mockResolvedValue(practice())
+      vi.mocked(chatsApi.openChat).mockResolvedValue(THREAD)
+      vi.mocked(chatsApi.sendChatMessage).mockResolvedValue(SENT)
+      historyState.back = null // fresh history entry: nothing behind us
+      mount()
+      await flush()
+
+      type('Болит колено')
+      await nextTick()
+      sendBtn()?.click()
+      await flush()
+
+      expect(toastSuccess).toHaveBeenCalledWith('Запрос отправлен мастеру')
+      // [FE-1] Scenario: deep link / reload -- exactly one navigation, and it
+      // is the booked practice screen; never the chat, never a stacked push.
+      expect(replace).toHaveBeenCalledTimes(1)
+      expect(replace).toHaveBeenCalledWith({ name: 'practice-detail', params: { id: 'p1' } })
+      expect(back).not.toHaveBeenCalled()
+      expect(push).not.toHaveBeenCalled()
+    })
+
+    it('a history entry behind us that is NOT the practice screen does not fool the back-branch: replace wins', async () => {
+      getPracticeMock.mockResolvedValue(practice())
+      vi.mocked(chatsApi.openChat).mockResolvedValue(THREAD)
+      vi.mocked(chatsApi.sendChatMessage).mockResolvedValue(SENT)
+      historyState.back = '/user/bookings' // came from somewhere else / re-entered
+      mount()
+      await flush()
+
+      type('Болит колено')
+      await nextTick()
+      sendBtn()?.click()
+      await flush()
+
+      expect(replace).toHaveBeenCalledWith({ name: 'practice-detail', params: { id: 'p1' } })
+      expect(back).not.toHaveBeenCalled()
     })
 
     it('the caption strips the "(эфир)" title marker and renders the time in the viewer timezone', async () => {
@@ -488,6 +554,7 @@ describe('BookingConfirmedView', () => {
       expect(chatsApi.sendChatMessage).not.toHaveBeenCalled()
       expect(push).not.toHaveBeenCalled()
       expect(replace).not.toHaveBeenCalled()
+      expect(back).not.toHaveBeenCalled()
       expect(textarea()?.value).toBe('Болит колено')
     })
 
@@ -512,6 +579,7 @@ describe('BookingConfirmedView', () => {
       expect(toastError).toHaveBeenCalledWith('Внутренняя ошибка сервера. Попробуйте ещё раз')
       expect(push).not.toHaveBeenCalled()
       expect(replace).not.toHaveBeenCalled()
+      expect(back).not.toHaveBeenCalled()
       expect(textarea()?.value).toBe('Болит колено')
     })
 
