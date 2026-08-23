@@ -47,7 +47,8 @@ function buildRouter(): Router {
       {
         path: '/user/booking-confirmed/:practiceId',
         name: 'user-booking-confirmed',
-        meta: { activeTab: '/user/calendar' },
+        // Same meta as router/index.ts: headerless is declared on the ROUTE.
+        meta: { activeTab: '/user/calendar', headerless: true },
         component: StubChild,
       },
       { path: '/user/diary', name: 'user-diary', component: StubChild },
@@ -218,6 +219,27 @@ describe('UserShell', () => {
       await flush()
 
       expect(mainEl().classList.contains('mobile-layout__main--fog')).toBe(false)
+    })
+  })
+
+  describe('headerless top clearance ([FE-3])', () => {
+    // NOT the <style> pixel polish the banner excludes: this pins the SEMANTIC
+    // chain route meta → MobileLayout padding. No component CSS loads in this
+    // DOM, so the token read falls back to the JS default (48) -- exactly the
+    // number that makes the contract testable. The fixture route above mirrors
+    // router/index.ts's meta, so this is the end-to-end wiring, not shell math.
+    it('booking-confirmed (meta.headerless) pads main by the token, not the phantom header fallback', async () => {
+      await mount('user-booking-confirmed', { practiceId: 'p1' })
+      await flush()
+
+      expect(mainEl().style.paddingTop).toBe('48px')
+    })
+
+    it('a route without the meta keeps the clearance contract (unmeasured island: 88 + 16)', async () => {
+      await mount('user-dashboard')
+      await flush()
+
+      expect(mainEl().style.paddingTop).toBe('104px')
     })
   })
 })

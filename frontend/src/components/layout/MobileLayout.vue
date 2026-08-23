@@ -144,6 +144,10 @@ let fogDefaultsCache: {
   // the fade ~136px above a hideTabBar list's true bottom. See --velo-fog-list-*.
   listBotFade: number
   listBotHard: number
+  // Top clearance for HEADERLESS screens (route meta.headerless) — the semantic
+  // token, read here so every headerless route shares one source. See
+  // --velo-fog-headerless-top and the [FE-3] block at mainStyle.
+  headerlessTop: number
 } | null = null
 function fogDefaults() {
   if (fogDefaultsCache) return fogDefaultsCache
@@ -159,6 +163,7 @@ function fogDefaults() {
     botHard: tok('--velo-fog-z4', 90),
     listBotFade: tok('--velo-fog-list-z3', 48),
     listBotHard: tok('--velo-fog-list-z4', 0),
+    headerlessTop: tok('--velo-fog-headerless-top', 48),
   }
   return fogDefaultsCache
 }
@@ -188,7 +193,29 @@ const mainStyle = computed(() => {
   // explicit fogBot* prop always wins (e.g. practice-detail's operator tuning).
   const botFade = props.fogBotFade ?? (props.hideTabBar ? d.listBotFade : d.botFade)
   const botHard = props.fogBotHard ?? (props.hideTabBar ? d.listBotHard : d.botHard)
-  const top = islandH.value > 0 ? islandH.value + topGap : HEADER_FALLBACK + topGap
+  // [FE-3] Requirement: headerless top clearance (capability: layout-fog)
+  // A screen whose route declares meta.headerless SHALL NOT reserve header
+  // clearance: its top clearance SHALL be exactly --velo-fog-headerless-top,
+  // NOT the HEADER_FALLBACK + z1 gap (≈104px phantom band).
+  //
+  // Scenario: a headerless route (user-booking-confirmed, master-dashboard,
+  // master-profile — no VHeader ever teleports there)
+  // - WHEN route.meta.headerless === true
+  // - THEN main pads by the token only — no island measurement, no fallback,
+  //   no gap arithmetic.
+  //
+  // Rationale: the route declaration is the ONLY holder of "this screen will
+  // never have a header" that is known SYNCHRONOUSLY at first paint (any
+  // teleport-based signal cannot tell "not yet" from "never"; that race is
+  // exactly what HEADER_FALLBACK exists to cover on headered screens). Replaces
+  // the retired negative-topGap compensation (88 + (−40)), which coupled two
+  // magic numbers. If a screen ever gains a header, drop the meta on its route.
+  const top =
+    route.meta.headerless === true
+      ? d.headerlessTop
+      : islandH.value > 0
+        ? islandH.value + topGap
+        : HEADER_FALLBACK + topGap
   // Bottom clearance: clear the floating tab bar (160) when present; without it,
   // a fog list pads exactly to its bottom fade zone so the last item rests crisp
   // and only dissolves on scroll; a plain (no-fog) detail keeps a small 24 base.

@@ -140,7 +140,10 @@ const router = createRouter({
           name: 'user-booking-confirmed',
           component: () => import('@/views/user/BookingConfirmedView.vue'),
           // Post-booking screen has no own tab; light up Calendar in the bar.
-          meta: { activeTab: '/user/calendar' },
+          // [FE-3] No VHeader ever mounts here — tell MobileLayout via meta so it
+          // must not reserve header clearance (top = --velo-fog-headerless-top;
+          // requirement statement: MobileLayout.vue, [FE-3] block at mainStyle).
+          meta: { activeTab: '/user/calendar', headerless: true },
         },
         {
           path: 'bookings',
@@ -208,6 +211,9 @@ const router = createRouter({
           // №257 honest entry: a master with NO application is led to the
           // apply wizard; pending/rejected keep the dashboard as before.
           beforeEnter: masterNoProfileGuard,
+          // HEADERLESS hub (DB-1b): no VHeader teleports here — MobileLayout
+          // pads by --velo-fog-headerless-top instead of the header fallback.
+          meta: { headerless: true },
           component: () => import('@/views/master/MasterDashboardView.vue'),
         },
         {
@@ -275,6 +281,9 @@ const router = createRouter({
         {
           path: 'profile',
           name: 'master-profile',
+          // HEADERLESS hub (PE-1): no VHeader teleports here — MobileLayout
+          // pads by --velo-fog-headerless-top instead of the header fallback.
+          meta: { headerless: true },
           component: () => import('@/views/master/MasterProfileView.vue'),
         },
         // Master profile sub-screens reached from the master profile hub; back-nav
