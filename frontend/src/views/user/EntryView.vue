@@ -112,6 +112,7 @@
               class="entry__edit-title"
               type="text"
               placeholder="Заголовок (необязательно)"
+              aria-label="Заголовок записи"
               :maxlength="MAX_TITLE_LEN"
               :disabled="saving"
             />
@@ -119,6 +120,7 @@
               ref="editEl"
               v-model="editContent"
               class="entry__edit-content"
+              aria-label="Текст записи"
               rows="3"
               :maxlength="MAX_CONTENT_LEN"
               :disabled="saving"

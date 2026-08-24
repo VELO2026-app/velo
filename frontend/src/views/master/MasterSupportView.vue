@@ -67,6 +67,7 @@
               type="text"
               class="support__other-input"
               placeholder="Укажите ваш вариант"
+              aria-label="Свой вариант темы"
               @focus="onFieldFocus"
             />
             <IconArrowRight :size="18" class="support__other-arrow" />
@@ -98,6 +99,7 @@
             type="file"
             multiple
             class="support__file-input"
+            aria-label="Прикрепить файл"
             @change="onFilesPicked"
           />
           <div v-if="attachments.length" class="support__thumbs">

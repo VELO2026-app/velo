@@ -50,6 +50,7 @@
         type="text"
         class="popup__promo-input"
         placeholder="Промокод"
+        aria-label="Промокод"
         :disabled="purchasing"
         @keydown.enter="onApplyPromo"
       />

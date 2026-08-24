@@ -259,6 +259,7 @@
                 min="1"
                 class="create-practice__end-control create-practice__count-input"
                 placeholder="Число повторений"
+                aria-label="Число повторений"
                 @focus="onFieldFocus"
               />
             </VCard>

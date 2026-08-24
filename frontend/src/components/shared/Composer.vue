@@ -55,6 +55,7 @@
         v-model="text"
         class="composer__input"
         :placeholder="placeholder"
+        :aria-label="placeholder"
         rows="1"
         :maxlength="maxLength"
         :disabled="submitting"

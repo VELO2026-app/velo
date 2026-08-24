@@ -58,6 +58,7 @@
               type="text"
               class="support__other-input"
               placeholder="Укажите ваш вариант"
+              aria-label="Свой вариант темы"
               @focus="onFieldFocus"
             />
           </div>
