@@ -152,13 +152,20 @@ watch(
   font-size: var(--text-lg);
   color: var(--velo-text-primary);
   text-align: center;
-  transition: border-color var(--transition-fast);
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
+/* [FE-33] Focus emphasis without geometry: was border-width 1 -> 2px, an
+   instant thickening (the transition only covered colour) -- the digit box
+   visibly jerked. The 1px border stays; the ring is an outer box-shadow:
+   paints outside the box, zero layout impact, follows the same radius. Reads
+   as the same emphasis, without the jump. */
 .tfa__box:focus {
   outline: none;
   border-color: var(--velo-primary);
-  border-width: 2px;
+  box-shadow: 0 0 0 1px var(--velo-primary);
 }
 
 .tfa__box--filled {

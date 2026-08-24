@@ -272,10 +272,16 @@ async function onSend(): Promise<void> {
   box-shadow: 0 0 0 3px var(--velo-glass-blue-60);
 }
 
-.composer--composing .composer__field {
-  align-items: flex-end;
-  border-radius: 20px;
-  border-color: var(--velo-nav-active-bg);
+/* [FE-33] Focus must not MOVE anything. The old composing rule flipped the
+   field's align-items center -> flex-end, which dropped the EMPTY field (and
+   its placeholder + caret) a few px on tap -- felt as the whole input sinking.
+   The field stays `align-items: center` at ALL times; only the SEND SLOT
+   bottom-aligns once composing: the slot renders nothing while the field is
+   empty (B48: the button is v-if'd on text), so the alignment change is
+   invisible exactly when a jump would be noticeable, and pins the button to
+   the bottom edge once the field grows multiline (the original intent). */
+.composer--composing .composer__slot {
+  align-self: flex-end;
 }
 
 .composer__input {
@@ -290,6 +296,10 @@ async function onSend(): Promise<void> {
   letter-spacing: 0.32px;
   line-height: 1.3;
   color: var(--velo-text-primary);
+  /* [FE-33] Explicit caret colour: without it some engines fall back to a
+     computed/inherit chain that renders the caret barely visible on the white
+     pill. Same token as the text -- dark enough to read at a glance. */
+  caret-color: var(--velo-text-primary);
   padding: var(--space-2) 0;
   /* B40: bounded growth, then internal scroll -- token by default, `growCap`
      overrides via inline style (see template). */
