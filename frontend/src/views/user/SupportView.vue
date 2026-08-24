@@ -275,8 +275,10 @@ function goHome(): void {
   color: var(--velo-text-primary);
 }
 
+/* [FE-25] Readable placeholder: view-local field, same contract as the kit's
+   VInput/VTextarea -- the placeholder-specific token, NOT --velo-text-muted. */
 .support__other-input::placeholder {
-  color: var(--velo-text-muted);
+  color: var(--velo-text-placeholder);
 }
 
 /* -- Email fallback + submit -- */

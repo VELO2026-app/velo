@@ -348,10 +348,12 @@ const matchingGroups = computed((): GroupListItem[] => {
 
 /* T24-21: placeholder 16px (--text-16) -- the FIELD's own text stays the DS
    default (--text-base, 18px, VInput's shared size); only the placeholder is
-   smaller, per the owner's measurement. Colour: kept at VInput's existing
-   --velo-text-muted (rgba of --velo-text-primary at 50%) -- the owner
-   measured 60%, no exact 60%-opacity token exists yet (DS-first: flagged in
-   the report rather than minting one silently). */
+   smaller, per the owner's measurement. Colour is NOT set here on purpose:
+   it inherits VInput's [FE-25] --velo-text-placeholder (the readable
+   placeholder-only token). The pre-FE-25 comment claimed "kept at
+   --velo-text-muted 50%" and recorded a moot 60%-opacity ask (2.57:1) --
+   both superseded by the owner's option-B ruling (probekit sweep 2026-08,
+   item 9; variables.css:49). */
 .groups__search-field :deep(.v-input__field::placeholder) {
   font-size: var(--text-16);
 }

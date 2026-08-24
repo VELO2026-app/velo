@@ -325,8 +325,9 @@ async function onPurchase(): Promise<void> {
   border-color: var(--velo-border-input-focus);
 }
 
+/* [FE-25] Readable placeholder token (same contract as VInput/VTextarea). */
 .popup__promo-input::placeholder {
-  color: var(--velo-text-muted);
+  color: var(--velo-text-placeholder);
 }
 
 /* Discount line */

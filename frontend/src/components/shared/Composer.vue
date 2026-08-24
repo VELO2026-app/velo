@@ -298,9 +298,11 @@ async function onSend(): Promise<void> {
   transition: color var(--transition-fast);
 }
 
+/* [FE-25] Readable placeholder token. Was --velo-text-primary + opacity 0.6
+   (≈2.57:1 on the white composer bar) -- readable now, and one source of
+   truth with VInput/VTextarea instead of a hand-rolled fade. */
 .composer__input::placeholder {
-  color: var(--velo-text-primary);
-  opacity: 0.6;
+  color: var(--velo-text-placeholder);
 }
 
 .composer__preview {

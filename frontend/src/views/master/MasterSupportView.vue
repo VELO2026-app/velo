@@ -340,8 +340,11 @@ function onGoHome(): void {
   color: var(--velo-text-primary);
 }
 
+/* [FE-25] Readable placeholder: view-local field, same contract as the kit's
+   VInput/VTextarea -- the placeholder-specific token (90% base hue, 4.75:1 on
+   the white card), NOT --velo-text-muted (2.15:1). */
 .support__other-input::placeholder {
-  color: var(--velo-text-muted);
+  color: var(--velo-text-placeholder);
 }
 
 .support__other-arrow {

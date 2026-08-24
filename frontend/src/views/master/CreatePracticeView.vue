@@ -1334,7 +1334,8 @@ async function submit(): Promise<void> {
   border-color: var(--velo-border-input-focus);
 }
 
+/* [FE-25] Readable placeholder token (same contract as VInput/VTextarea). */
 .create-practice__count-input::placeholder {
-  color: var(--velo-text-muted);
+  color: var(--velo-text-placeholder);
 }
 </style>
