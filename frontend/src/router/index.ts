@@ -67,6 +67,14 @@ const router = createRouter({
         {
           path: 'dashboard',
           name: 'user-dashboard',
+          // [FE-3] Headerless top clearance, follow-up: the dashboard's only
+          // floating header was the GREETING, removed 2026-06-04 -- since then
+          // nothing teleports into the island, but MobileLayout cannot tell
+          // "not yet" from "never" and reserved HEADER_FALLBACK+gap = 104px of
+          // phantom band above «Ближайшие практики» forever. Declaring the
+          // route headerless pads by the token exactly (48px). If this screen
+          // ever gains a floating header again, drop this meta.
+          meta: { headerless: true },
           component: () => import('@/views/user/UserDashboardView.vue'),
         },
         {

@@ -42,7 +42,10 @@ function buildRouter(): Router {
   return createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/user/dashboard', name: 'user-dashboard', component: StubChild },
+      // Same meta as router/index.ts: headerless is declared on the ROUTE
+      // ([FE-3] follow-up -- the greeting removal left the dashboard without
+      // any floating header, so it joins the headerless contract).
+      { path: '/user/dashboard', name: 'user-dashboard', meta: { headerless: true }, component: StubChild },
       { path: '/user/calendar', name: 'user-calendar', component: StubChild },
       {
         path: '/user/booking-confirmed/:practiceId',
@@ -235,8 +238,19 @@ describe('UserShell', () => {
       expect(mainEl().style.paddingTop).toBe('48px')
     })
 
-    it('a route without the meta keeps the clearance contract (unmeasured island: 88 + 16)', async () => {
+    // [FE-3] follow-up: the dashboard's greeting was removed 2026-06-04 and
+    // nothing has teleported into the island since -- the 104px it kept
+    // reserving was a phantom band above «Ближайшие практики» (operator
+    // 2026-08-24). Now pinned to the headerless contract.
+    it('user-dashboard (greeting long gone) pads by the token too', async () => {
       await mount('user-dashboard')
+      await flush()
+
+      expect(mainEl().style.paddingTop).toBe('48px')
+    })
+
+    it('a route without the meta keeps the clearance contract (unmeasured island: 88 + 16)', async () => {
+      await mount('user-unlisted')
       await flush()
 
       expect(mainEl().style.paddingTop).toBe('104px')
