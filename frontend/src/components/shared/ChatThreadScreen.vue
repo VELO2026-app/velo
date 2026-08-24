@@ -334,23 +334,25 @@ onBeforeUnmount(() => {
      layout's measured mainStyle clearance. 88px mirrors the layout's own
      HEADER_FALLBACK for a floating VHeader (MobileLayout.vue, ПРОМТ №164). */
   padding: calc(88px + var(--space-2)) var(--velo-rail-pad-x, var(--space-4)) var(--space-3);
-  /* B45/B46 (PROMPT №741, track 3): the SAME symmetric edge fade
-     DiaryFeedView.vue's `.diary-feed__body` uses -- mirrored value
-     (--space-5), not re-derived. Diary's own comment on this block says it
-     is "appearance only, no overlap, no keyboard-derived value", so there is
-     no viewport math to get wrong by copying it; it either reads right on
-     this screen too or it does not (device-pending either way). */
+  /* B45/B46: the symmetric edge fade DiaryFeedView uses (bottom unchanged,
+     --space-5). [FE-4] TOP fade widened to this feed's own top padding
+     (88px HEADER_FALLBACK + --space-2 = 96px): the floating VHeader with the
+     back button is ~96px tall, and the old 24px fade left scrolled bubbles
+     passing UNDER the button fully opaque for ~70px -- the control visually
+     collided with the dialog content. The fade now ends exactly where the
+     at-rest content begins, so the first message is never clipped while
+     everything scrolled toward the header dissolves before reaching it. */
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0,
-    #000 var(--space-5),
+    #000 calc(88px + var(--space-2)),
     #000 calc(100% - var(--space-5)),
     transparent 100%
   );
   mask-image: linear-gradient(
     to bottom,
     transparent 0,
-    #000 var(--space-5),
+    #000 calc(88px + var(--space-2)),
     #000 calc(100% - var(--space-5)),
     transparent 100%
   );
