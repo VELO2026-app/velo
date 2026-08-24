@@ -216,7 +216,7 @@ function formFog() {
 
 // master-dashboard (DB-1b) + master-profile (PE-1) are HEADERLESS hubs: the
 // ROUTES declare meta.headerless (router/index.ts) and MobileLayout pads by
-// --velo-fog-headerless-top (48px — the visual result the old negative-topGap
+// --velo-fog-headerless-top (34px — the unified result the old negative-topGap
 // fixes 88 + (−40) shipped with). The shell carries no headerless code;
 // requirement statement: MobileLayout.vue, [FE-3] block at mainStyle.
 

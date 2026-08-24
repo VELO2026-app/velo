@@ -163,7 +163,7 @@ function fogDefaults() {
     botHard: tok('--velo-fog-z4', 90),
     listBotFade: tok('--velo-fog-list-z3', 48),
     listBotHard: tok('--velo-fog-list-z4', 0),
-    headerlessTop: tok('--velo-fog-headerless-top', 48),
+    headerlessTop: tok('--velo-fog-headerless-top', 34),
   }
   return fogDefaultsCache
 }
@@ -220,11 +220,17 @@ const mainStyle = computed(() => {
   // a fog list pads exactly to its bottom fade zone so the last item rests crisp
   // and only dissolves on scroll; a plain (no-fog) detail keeps a small 24 base.
   const bottom = props.hideTabBar ? (props.fog ? botFade + botHard : 24) : 160
+  // [FE-3] The fog's hard zone must never reach PAST the clearance: on the
+  // headerless dashboard (top = 34) the default topHard (40) overlapped the
+  // first 6px of content — the top of the first heading's glyphs was masked
+  // away («Б» clipped). Clamp the mask to the padding: content at rest is
+  // always fully opaque; scrolled content still dissolves across [0, top].
+  const topHardEff = Math.min(topHard, top)
   return {
     paddingTop: `${top}px`,
     paddingBottom: `${bottom}px`,
-    '--fog-top-hard': `${topHard}px`,
-    '--fog-top-fade': `${Math.max(0, top - topHard)}px`,
+    '--fog-top-hard': `${topHardEff}px`,
+    '--fog-top-fade': `${Math.max(0, top - topHardEff)}px`,
     '--fog-bot-fade': `${botFade}px`,
     '--fog-bot-hard': `${botHard}px`,
   }

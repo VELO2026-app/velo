@@ -45,7 +45,20 @@ function buildRouter(): Router {
       // Same meta as router/index.ts: headerless is declared on the ROUTE
       // ([FE-3] follow-up -- the greeting removal left the dashboard without
       // any floating header, so it joins the headerless contract).
-      { path: '/user/dashboard', name: 'user-dashboard', meta: { headerless: true }, component: StubChild },
+      {
+        path: '/user/dashboard',
+        name: 'user-dashboard',
+        meta: { headerless: true },
+        component: StubChild,
+      },
+      // [FE-3] profile hub: same contract (retires its margin-top hack);
+      // topup screens are headerless too (fixture route mirrors router meta).
+      {
+        path: '/user/profile',
+        name: 'user-profile',
+        meta: { headerless: true },
+        component: StubChild,
+      },
       { path: '/user/calendar', name: 'user-calendar', component: StubChild },
       {
         path: '/user/booking-confirmed/:practiceId',
@@ -228,14 +241,14 @@ describe('UserShell', () => {
   describe('headerless top clearance ([FE-3])', () => {
     // NOT the <style> pixel polish the banner excludes: this pins the SEMANTIC
     // chain route meta → MobileLayout padding. No component CSS loads in this
-    // DOM, so the token read falls back to the JS default (48) -- exactly the
+    // DOM, so the token read falls back to the JS default (34) -- exactly the
     // number that makes the contract testable. The fixture route above mirrors
     // router/index.ts's meta, so this is the end-to-end wiring, not shell math.
     it('booking-confirmed (meta.headerless) pads main by the token, not the phantom header fallback', async () => {
       await mount('user-booking-confirmed', { practiceId: 'p1' })
       await flush()
 
-      expect(mainEl().style.paddingTop).toBe('48px')
+      expect(mainEl().style.paddingTop).toBe('34px')
     })
 
     // [FE-3] follow-up: the dashboard's greeting was removed 2026-06-04 and
@@ -246,7 +259,16 @@ describe('UserShell', () => {
       await mount('user-dashboard')
       await flush()
 
-      expect(mainEl().style.paddingTop).toBe('48px')
+      expect(mainEl().style.paddingTop).toBe('34px')
+    })
+
+    // [FE-3] the profile hub's own margin-top compensation is retired; the
+    // route meta carries the clearance now -- tab-to-tab tops are identical.
+    it('user-profile (margin-hack retired) pads by the token too', async () => {
+      await mount('user-profile')
+      await flush()
+
+      expect(mainEl().style.paddingTop).toBe('34px')
     })
 
     it('a route without the meta keeps the clearance contract (unmeasured island: 88 + 16)', async () => {
