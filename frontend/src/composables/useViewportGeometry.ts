@@ -189,6 +189,9 @@ function publish(vv: VisualViewport): void {
   root.style.setProperty('--velo-vvh', `${vv.height}px`)
   root.style.setProperty('--velo-vv-offset', `${vv.offsetTop}px`)
   root.classList.toggle('is-keyboard-open', _keyboardOpen.value)
+  // [FE-7] root pan is undone by the scroll/touchend listeners inside
+  // useViewportGeometry() (the pan always fires a window scroll event);
+  // publish() itself stays pure geometry.
 }
 
 function resetState(): void {
@@ -240,11 +243,69 @@ export function useViewportGeometry(): void {
     }, ORIENTATION_SETTLE_MS)
   }
 
+  // [FE-7] iOS keyboard PAN undo (device-measured 2026-08-24, iPhone/Telegram):
+  // WebKit does not honour index.html's `interactive-widget=resizes-visual`
+  // (Chromium-only), so on focus it BOTH shrinks the visual viewport AND pans
+  // the ROOT document up to "reveal" the caret -- a pan that bypasses the
+  // ROOT-LOCK's overflow:hidden (global.css rule 0 documents the same escape
+  // on Android). The app column is already sized to the live visible height
+  // (the composer sits exactly on the keyboard's top edge), so the pan is
+  // pure damage: the whole screen rides up (device HUD: scrollY 154, diary
+  // top -154, composer 175px above the keyboard) and the pan also STAYS after
+  // the keyboard closes. ROOT-LOCK already guarantees the root can never
+  // scroll legitimately -- any scrollY != 0 is this escape, so we zero it.
+  //
+  // NEVER during an active touch (device finding, same session): a
+  // programmatic scrollTo(0,0) fired mid-gesture CANCELS the native inner
+  // scroll outright (the feed refused to scroll at all). So the undo runs on
+  // touchend (after the gesture released) and on viewport publishes that land
+  // outside a gesture; during the gesture itself the pan may ride up and is
+  // snapped back the instant the finger lifts. `overscroll-behavior` (CSS,
+  // global.css + the diary feed) keeps the gesture from chaining to the root
+  // in the first place, so normally there is nothing to snap.
+  let touching = false
+
+  function keepRootUnpanned(): void {
+    if (window.scrollY !== 0) window.scrollTo(0, 0)
+  }
+
+  function onRootScroll(): void {
+    if (!touching) keepRootUnpanned()
+  }
+
+  function onTouchStart(): void {
+    touching = true
+  }
+
+  function onTouchEnd(e: TouchEvent): void {
+    touching = false
+    // [FE-7] If this very tap is a FOCUS tap, do not scroll AT ALL this
+    // frame: a programmatic scrollTo racing iOS's own tap-to-focus pipeline
+    // CANCELS the keyboard activation outright. "Focus tap" includes the
+    // composer PILL as a whole -- with unsent text the tap lands on the
+    // preview SPAN while the textarea itself is still hidden, so matching
+    // input/textarea alone misses it (the exact device bug: keyboard stopped
+    // opening on the second tap once text existed).
+    const t = e.changedTouches[0]
+    const el = t ? document.elementFromPoint(t.clientX, t.clientY) : null
+    if (el?.closest('input, textarea, select, [contenteditable], .composer__field')) return
+    // Non-focus tap / scroll release: snap AFTER the gesture pipeline settles
+    // (rAF), never synchronously inside the event.
+    window.requestAnimationFrame(() => keepRootUnpanned())
+  }
+
   onMounted(() => {
     if (!vv) return
     vv.addEventListener('resize', schedule)
     vv.addEventListener('scroll', schedule)
     window.addEventListener('orientationchange', onOrientationChange)
+    // [FE-7] the pan itself fires a root scroll (NOT a visualViewport event on
+    // iOS), so the undo needs its own listener to catch it the moment it starts.
+    window.addEventListener('scroll', onRootScroll, { passive: true })
+    // [FE-7] touch gating -- see keepRootUnpanned: no programmatic scroll
+    // mid-gesture (it cancels the native inner scroll), snap back on release.
+    window.addEventListener('touchstart', onTouchStart, { passive: true })
+    window.addEventListener('touchend', onTouchEnd, { passive: true })
     setShift()
     // K3f (moved verbatim from useBackgroundStabilizer.ts): clear stale
     // keyboard state the instant the route changes, dismiss the keyboard,
@@ -267,6 +328,9 @@ export function useViewportGeometry(): void {
     vv?.removeEventListener('resize', schedule)
     vv?.removeEventListener('scroll', schedule)
     window.removeEventListener('orientationchange', onOrientationChange)
+    window.removeEventListener('scroll', onRootScroll)
+    window.removeEventListener('touchstart', onTouchStart)
+    window.removeEventListener('touchend', onTouchEnd)
     stopAfterEach?.()
     stopAfterEach = null
     resetState()

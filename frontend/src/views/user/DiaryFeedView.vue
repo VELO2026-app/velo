@@ -16,7 +16,10 @@
 -->
 
 <template>
-  <div class="diary-feed" :class="{ 'diary-feed--composing': composing }">
+  <div
+    class="diary-feed"
+    :class="{ 'diary-feed--composing': composing }"
+  >
     <!-- Header -->
     <header class="diary-feed__header">
       <!-- Left: exit back-pill (immersive diary has no tab bar; this returns
@@ -235,24 +238,16 @@
       />
     </div>
 
-    <!-- Tap-catcher -- PROMPT №668 (ruling 6): the write-mode fog this used
-         to BE (`№665`) is deleted outright, not neutralised -- no background,
-         no blur, no visual trace. What survives is the ONE thing this prompt
-         was told to keep working: tapping the feed while composing blurs the
-         field instead of navigating a card underneath. It is still a plain,
-         non-focusable `position:absolute` layer over `.diary-feed` (its
-         containing block, unchanged) with `pointer-events` toggled by
-         `composing` -- the exact mechanism a native "outside tap" blur has
-         always depended on (see step 9 in diary-behaviour-map.md, unchanged
-         since before any of this saga). Scoped back to `.diary-feed`'s own
-         box, not the full viewport -- the only reason it was ever widened to
-         `position:fixed;inset:0` was to carry the fog edge-to-edge, and that
-         reason is gone with the fog. -->
-    <div
-      class="diary-feed__tap-catcher"
-      :class="{ 'diary-feed__tap-catcher--on': composing }"
-      aria-hidden="true"
-    />
+    <!-- [FE-7] OUTSIDE-TAP BLUR, tap-only by construction: the old absolute
+         tap-catcher layer (PROMPT №668) sat in the TOUCH path with
+         pointer-events:auto while composing -- and iOS picks the scroll
+         target from the touchstart element, so every scroll gesture that
+         began on the layer was dead on arrival (device-measured: "feed does
+         not scroll with the keyboard open"). The layer is GONE; the blur now
+         rides a CLICK capture on the root (clicks fire after the gesture, so
+         scrolling is untouched -- a scrolled finger never clicks). Header and
+         composer rows are exempt so their buttons keep working; see
+         onRootClickCapture. -->
 
     <!-- Category filter (screen 42), opened from the "..." menu -->
     <DiaryFilterModal
@@ -416,6 +411,32 @@ const writeTarget = computed(() => diaryWriteTarget(activeCategories.value))
 // (the tap-catcher and the composer's own compose-time styling key off it).
 watch(writeTarget, (target) => {
   if (!target) composing.value = false
+})
+
+// [FE-7] Outside-tap blur without a touch wall (replaces the retired
+// tap-catcher layer; see the template comment for why the layer had to go:
+// iOS picks the scroll target from the touchstart element). A CLICK is the
+// browser's own "that was a tap" verdict -- it never fires for a scroll
+// gesture, so intercepting here cannot break scrolling. Document-level
+// CAPTURE listener (template-bound capture on the root proved brittle in the
+// test harness); scoped by the event's own path: only clicks that originate
+// INSIDE .diary-feed and outside the header/composer rows. Teleported modals
+// (filter/search, in body) are outside .diary-feed and stay untouched.
+function onDocClickCapture(e: MouseEvent): void {
+  if (!composing.value) return
+  const target = e.target as HTMLElement | null
+  if (!target?.closest('.diary-feed')) return
+  if (target.closest('.diary-feed__header, .diary-feed__composer')) return
+  ;(document.activeElement as HTMLElement | null)?.blur?.()
+  e.stopPropagation()
+  e.preventDefault()
+}
+
+onMounted(() => {
+  document.addEventListener('click', onDocClickCapture, true)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocClickCapture, true)
 })
 
 function openFilter(): void {
@@ -809,6 +830,9 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  /* [FE-7] never chain this scroller's overscroll to the root -- the iOS
+     gesture-pan the whole FE-7 fix exists to undo. */
+  overscroll-behavior-y: contain;
   padding: var(--space-5) var(--velo-rail-pad-x);
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -951,31 +975,11 @@ onBeforeUnmount(() => {
   padding-bottom: calc(var(--space-4) + 5px + env(safe-area-inset-bottom, 0px));
 }
 
-/* -- Tap-catcher (ruling 6, PROMPT №668) --
-   PROMPT №665 built this element as the write-mode FOG (`--velo-write-frost`
-   wash + `blur(--velo-write-blur)`), full-viewport, `position:fixed`. Ruling
-   6 (diary-behaviour-spec.md §1, owner-ruled the SAME day) reversed that:
-   "the diary's content stays fully visible and unobscured the whole time he
-   is writing... the opposite of everything the fog was built to do." So the
-   fog is DELETED, not hidden -- no `background`, no `backdrop-filter`
-   anywhere in this rule. What's kept is the mechanism underneath the fog,
-   which was always separate from it: a non-focusable, `pointer-events`-toggled
-   layer so a tap on the feed while composing blurs the field (native
-   "clicking a non-focusable element blurs whatever was focused") instead of
-   also triggering whatever card happens to be under the tap. Scoped BACK to
-   `.diary-feed` (`position:absolute`, its containing block, unchanged) --
-   `position:fixed;inset:0` was only ever needed to carry the fog to the true
-   screen edges past the 402px frame; with no fog to carry, there is nothing
-   left that needs to escape `.diary-feed`'s own box. `z-index: var(--z-content)`
-   keeps it above the (again fully opaque, never dimmed) feed content and
-   below the header/composer rows' own `--z-sticky`, exactly as before. */
-.diary-feed__tap-catcher {
-  position: absolute;
-  inset: 0;
-  z-index: var(--z-content);
-  pointer-events: none;
-}
-.diary-feed__tap-catcher--on {
-  pointer-events: auto;
-}
+/* -- [FE-7] Tap-catcher: RETIRED. The absolute layer sat in the touch path
+   with pointer-events:auto while composing -- iOS resolves the scroll target
+   from the touchstart element, so every scroll gesture over the layer died
+   (the "feed does not scroll with the keyboard open" device bug). The
+   outside-tap blur now rides a CLICK capture on the root
+   (onRootClickCapture): clicks fire after the gesture, so scrolling is
+   untouched. The whole №665/№668 history is preserved in git. */
 </style>

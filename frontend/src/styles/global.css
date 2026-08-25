@@ -44,6 +44,11 @@ html {
   height: 100lvh; /* pre-JS-paint fallback, overridden by the var below once JS runs */
   height: var(--velo-frozen-vh, 100lvh);
   overflow: hidden;
+  /* [FE-7] root rubber-band/pan off at the document level too (body already
+     has it): iOS pans the LAYOUT viewport even under overflow:hidden when the
+     keyboard opens; this plus the touchend snap in useViewportGeometry keeps
+     the root at scrollY 0 without fighting an active gesture. */
+  overscroll-behavior: none;
 }
 
 body {
@@ -67,6 +72,36 @@ body {
      the live viewport, or switching them from fixed to absolute would silently
      keep them viewport-tracking. This makes body itself the containing block. */
   position: relative;
+}
+
+/* [FE-7] KEYBOARD-TIME DOCUMENT SHRINK (device-measured 2026-08-24, iPhone/
+   Telegram): while the keyboard is open, the live visible area is
+   --velo-vvh (412 in the HUD session) but html/body/#app stay at the FROZEN
+   height (720) -- a 308px hidden tail. Whatever element still carries that
+   tail, WebKit's focus pan finds it and scrolls IT (first the window
+   [scrollY 154, fixed by the scroll-0 listener], then -- with html/body
+   already shrunk -- the #app/body element itself: HUD round 2 showed
+   scrollY 0 yet diary top -154). So EVERY layer shrinks, #app included:
+   with no scroll range left on any element, the pan has nothing to ride.
+   The photo background sits under the keyboard in this state anyway (the
+   visible 412 IS the whole world while typing). At rest the class is
+   absent -> rule inert -> byte-identical layout. Complements, does not
+   replace, the ROOT-LOCK: frozen at rest, live while typing. */
+html.is-keyboard-open,
+html.is-keyboard-open body,
+html.is-keyboard-open #app {
+  height: var(--velo-vvh, var(--velo-frozen-vh, 100lvh));
+}
+
+/* [FE-7] AppFrame carries its OWN frozen height (+ min-height:100vh), so the
+   html/body/#app shrink above never reaches it -- HUD round 3: #app shrunk,
+   yet .mobile-layout__main still measured 720 (AppFrame 720 → layout
+   min-height:100% → main 720) and the pan rode THAT. The frame joins the
+   shrink (and drops its min-height for the duration); min-height:0 matters as
+   much as height -- 100vh would otherwise keep it tall on its own. */
+html.is-keyboard-open .app-frame {
+  height: var(--velo-vvh, var(--velo-frozen-vh, 100lvh));
+  min-height: 0;
 }
 
 /* === Typography === */
@@ -275,6 +310,11 @@ ol {
    sizing; MasterChatView is now a static honest-stub with no keyboard reads
    at all). */
 html.is-keyboard-open .velo-kbd-scroll {
+  /* [FE-7] contain first: an inner scroller must never chain its overscroll
+     to the root (the iOS gesture that pans the whole document). Applies in
+     every state, not just keyboard-open, but rides this selector to keep all
+     scroller rules in one place. */
+  overscroll-behavior-y: contain;
   /* Scroll region (and its %-based fog mask) shrink to the visible area, so a
      sticky composer sits just above the keyboard and the focused field is
      reachable; the fog fade follows the new bottom instead of clipping a band.

@@ -206,6 +206,14 @@ function onBlur(): void {
 
 function focusField(): void {
   if (composing.value) return
+  // [FE-7] Optimistic composing: with unsent text the textarea is hidden
+  // behind the collapsed preview span (v-show), and .focus() on a
+  // display:none element is a silent no-op in WebKit -- the "keyboard stops
+  // opening on the second tap once text exists" bug. Flipping composing
+  // FIRST un-hides the field; the focus() one tick later then lands on a
+  // visible element. If the programmatic focus is still refused, the field
+  // is at least visible, so the user's next tap is a NATIVE focus.
+  setComposing(true)
   void nextTick(() => inputEl.value?.focus())
 }
 
