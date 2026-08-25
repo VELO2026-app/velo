@@ -28,14 +28,8 @@ export default defineConfig({
       // Include these file types in precache.
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        // Don't precache source maps. /pitch/ is a standalone static page
-        // (investor pitch), not part of the SPA -- keep its ~570KB out of
-        // every client's precache.
-        globIgnores: ['**/*.map', 'pitch/**'],
-        // Keep /pitch/ out of the SPA navigation fallback too: without this,
-        // a client that already has the SW installed gets the app shell
-        // instead of the pitch when opening /pitch/.
-        navigateFallbackDenylist: [/^\/pitch/],
+        // Don't precache source maps.
+        globIgnores: ['**/*.map'],
         // Runtime caching gives the service worker a valid strategy even when
         // the precache manifest is empty. Without this, workbox-build aborts
         // with "Couldn't find configuration for either precaching or runtime
