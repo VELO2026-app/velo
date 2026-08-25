@@ -183,6 +183,29 @@ const showingPreview = computed(
 )
 const previewText = computed(() => text.value.replace(/\s*\n\s*/g, ' ').trim())
 
+// [FE-9] The autogrow INLINE HEIGHT is session state, not persistent state.
+// Left in the element across a blur (textarea v-show-hidden behind the
+// preview span), it went stale: on re-focus the field showed the old
+// multi-hundred-px height, the cap sliced a ~137px window at a half-line
+// scroll offset (the "top empty line"), and the first keystroke re-grew the
+// container from the full scrollHeight ("container big again after delete").
+// Hide -> reset to the natural one-line height; show -> recompute from the
+// LIVE layout (the element is back in flow, scrollHeight is real again) and
+// park the scroll on the caret's end.
+watch(showingPreview, (hidden) => {
+  const el = inputEl.value
+  if (!el) return
+  if (hidden) {
+    el.style.height = ''
+    el.scrollTop = 0
+  } else {
+    void nextTick(() => {
+      autogrow()
+      el.scrollTop = el.selectionStart === el.value.length ? el.scrollHeight : 0
+    })
+  }
+})
+
 function setComposing(on: boolean): void {
   if (composing.value === on) return
   composing.value = on
@@ -220,11 +243,17 @@ function focusField(): void {
 // B40: bounded growth, then internal scroll -- the CSS max-height (either the
 // `growCap` inline style or the --velo-textarea-autogrow-max token) is the
 // cap; this only feeds the textarea's own scrollHeight into it.
+// [FE-9] Caret-follow: when typing at the END of a long text (the common
+// diary case), keep the caret's line inside the internal scroll window --
+// browsers do this inconsistently for programmatically-resized textareas.
 function autogrow(): void {
   const el = inputEl.value
   if (!el) return
   el.style.height = 'auto'
   el.style.height = `${el.scrollHeight}px`
+  if (el.selectionStart === el.value.length) {
+    el.scrollTop = el.scrollHeight
+  }
 }
 
 async function onSend(): Promise<void> {
@@ -254,20 +283,24 @@ async function onSend(): Promise<void> {
   width: 100%;
 }
 
-/* B38 + B50: one bordered, solid-white pill; the send slot lives INSIDE it.
-   align-items: center at rest (single line); composing bottom-aligns so the
-   growing field still sits level with the button (mirrors the pre-extraction
-   diary composer's own idle/composing split). */
+/* B38 + B50: one bordered, solid-white field; the send slot lives INSIDE it.
+   [FE-9] FIXED-PIXEL RADIUS, ALWAYS: the old `--radius-full` (9999px) clamps
+   to half the box height -- the taller the autogrow field got, the rounder it
+   read (capsule -> ellipse; the "border-radius grows with the text" bug).
+   24px rounds the CORNERS only, identically at 1 line and at 50. The send
+   slot is bottom-aligned in EVERY state (single-line included): its position
+   then depends on nothing but the field's bottom edge, which sits pinned
+   above the keyboard -- text volume cannot move the button. */
 .composer__field {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: var(--space-2);
   width: 100%;
   min-height: var(--velo-size-50);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
   box-sizing: border-box;
   border: 1.26px solid rgba(255, 255, 255, 0.6);
-  border-radius: var(--radius-full);
+  border-radius: 24px;
   background: var(--velo-bg-card-solid);
   box-shadow: 0 0 14px 2px rgba(255, 255, 255, 0.4);
   cursor: text;
@@ -279,18 +312,6 @@ async function onSend(): Promise<void> {
 .composer__field:focus-within {
   border-color: var(--velo-border-input-focus);
   box-shadow: 0 0 0 3px var(--velo-glass-blue-60);
-}
-
-/* [FE-33] Focus must not MOVE anything. The old composing rule flipped the
-   field's align-items center -> flex-end, which dropped the EMPTY field (and
-   its placeholder + caret) a few px on tap -- felt as the whole input sinking.
-   The field stays `align-items: center` at ALL times; only the SEND SLOT
-   bottom-aligns once composing: the slot renders nothing while the field is
-   empty (B48: the button is v-if'd on text), so the alignment change is
-   invisible exactly when a jump would be noticeable, and pins the button to
-   the bottom edge once the field grows multiline (the original intent). */
-.composer--composing .composer__slot {
-  align-self: flex-end;
 }
 
 .composer__input {
@@ -307,9 +328,26 @@ async function onSend(): Promise<void> {
   color: var(--velo-text-primary);
   /* [FE-33] Explicit caret colour: without it some engines fall back to a
      computed/inherit chain that renders the caret barely visible on the white
-     pill. Same token as the text -- dark enough to read at a glance. */
+     field. Same token as the text -- dark enough to read at a glance. */
   caret-color: var(--velo-text-primary);
   padding: var(--space-2) 0;
+  /* [FE-9] Vertical centring belongs to the FIELD, not the container: the
+     field row is flex-end (the send button pins to the bottom edge at every
+     height), which used to slam the one-line textarea DOWN -- placeholder
+     sat 8px off the bottom with ~13px of dead air above (34px text band vs
+     20.8px line). auto margins re-centre the text vertically in the band
+     while flex-end keeps the button pinned; when the text grows past the
+     band the margins collapse to 0 and the field fills as before. */
+  margin: auto 0;
+  /* [FE-9] No user text may break the geometry: unbreakable strings (a 2k
+     "word", a pasted URL) used to force a horizontal scroll inside the field.
+     Wrapping ANYWHERE keeps every glyph inside the column; pre-wrap preserves
+     the author's own line breaks; overflow-x is hidden so nothing can ever
+     stick out sideways. Vertical growth is capped (B40 below) -> internal
+     scroll, never a taller container. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-x: hidden;
   /* B40: bounded growth, then internal scroll -- token by default, `growCap`
      overrides via inline style (see template). */
   max-height: var(--velo-textarea-autogrow-max);

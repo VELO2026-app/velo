@@ -15,39 +15,38 @@ import { ref } from 'vue'
 import {
   composerGrowCap,
   useComposerGrowCap,
-  COMPOSING_HEIGHT_TARGET,
-  COMPOSING_CHROME_OFFSET,
+  COMPOSING_HEIGHT_CEILING,
   COMPOSING_HEIGHT_FLOOR,
   COLLAPSED_HEIGHT_CAP,
 } from './useComposerGrowCap'
 
-describe('composerGrowCap (pure formula)', () => {
+describe('composerGrowCap (pure formula, [FE-9]: clamp(round(vh/3), 80, 240))', () => {
   it('not composing: flat 120px regardless of viewport height', () => {
     expect(composerGrowCap(false, 768)).toBe(COLLAPSED_HEIGHT_CAP)
     expect(composerGrowCap(false, 200)).toBe(COLLAPSED_HEIGHT_CAP)
     expect(composerGrowCap(false, 1200)).toBe(COLLAPSED_HEIGHT_CAP)
   })
 
-  it('composing on a generous viewport (768, e.g. no keyboard/happy-dom default) reaches the full 300px target', () => {
-    // 768 - 176 = 592, well above 300 -- the target applies unbounded.
-    expect(composerGrowCap(true, 768)).toBe(COMPOSING_HEIGHT_TARGET)
-    expect(composerGrowCap(true, 768)).toBe(300)
+  it('a keyboard-shrunk viewport (412, the device-measured session) caps at a third -- 137px, context stays visible', () => {
+    // round(412 / 3) = 137: ~5-6 lines of text, the old flat 300px target
+    // ate three quarters of this viewport.
+    expect(composerGrowCap(true, 412)).toBe(137)
   })
 
-  it("a short viewport (300) bounds the cap below 300px -- the physical limit, not a second guess at the owner's number", () => {
-    // 300 - 176 = 124 -- below the 300px target, so the bound wins.
-    expect(composerGrowCap(true, 300)).toBe(124)
+  it('a generous viewport (768, no keyboard) reaches the 240px ceiling', () => {
+    // round(768 / 3) = 256, clamped down to CEILING.
+    expect(composerGrowCap(true, 768)).toBe(COMPOSING_HEIGHT_CEILING)
+    expect(composerGrowCap(true, 768)).toBe(240)
   })
 
-  it('an extremely short viewport (200) hits the floor, never below 80px', () => {
-    // 200 - 176 = 24, floored to 80 so the field cannot collapse to one line.
-    expect(composerGrowCap(true, 200)).toBe(COMPOSING_HEIGHT_FLOOR)
-    expect(composerGrowCap(true, 200)).toBe(80)
+  it('an extremely short viewport (150) hits the floor, never below 80px', () => {
+    // round(150 / 3) = 50, floored to 80 so the field cannot collapse.
+    expect(composerGrowCap(true, 150)).toBe(COMPOSING_HEIGHT_FLOOR)
+    expect(composerGrowCap(true, 150)).toBe(80)
   })
 
-  it('the constants match what shipped before track 2 flattened them (regression guard on the numbers themselves)', () => {
-    expect(COMPOSING_HEIGHT_TARGET).toBe(300)
-    expect(COMPOSING_CHROME_OFFSET).toBe(176)
+  it('the constants ([FE-9] rework): ceiling matches the CSS token, floor and idle cap unchanged', () => {
+    expect(COMPOSING_HEIGHT_CEILING).toBe(240)
     expect(COMPOSING_HEIGHT_FLOOR).toBe(80)
     expect(COLLAPSED_HEIGHT_CAP).toBe(120)
   })

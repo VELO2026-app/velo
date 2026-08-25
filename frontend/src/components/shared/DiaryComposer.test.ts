@@ -359,24 +359,24 @@ describe('DiaryComposer -- autogrow (PROMPT №741: viewport-aware growCap resto
     expect(textarea().style.maxHeight).toBe('120px')
   })
 
-  it('composing on a generous viewport (happy-dom default innerHeight 768): reaches the full 300px target', async () => {
+  it('composing on a generous viewport (happy-dom default innerHeight 768): reaches the 240px ceiling ([FE-9])', async () => {
     mount()
     textarea().dispatchEvent(new Event('focus'))
     await nextTick()
     expect(window.innerHeight).toBe(768)
-    expect(textarea().style.maxHeight).toBe('300px')
+    expect(textarea().style.maxHeight).toBe('240px')
   })
 
-  it("a short viewport bounds the cap below 300px (the physical limit, not a second guess at the owner's number)", async () => {
+  it('a short viewport caps at a third of it ([FE-9]: round(300/3))', async () => {
     vi.stubGlobal('innerHeight', 300)
     mount()
     textarea().dispatchEvent(new Event('focus'))
     await nextTick()
-    expect(textarea().style.maxHeight).toBe('124px')
+    expect(textarea().style.maxHeight).toBe('100px')
   })
 
   it('an extremely short viewport hits the floor, never below 80px', async () => {
-    vi.stubGlobal('innerHeight', 200)
+    vi.stubGlobal('innerHeight', 150)
     mount()
     textarea().dispatchEvent(new Event('focus'))
     await nextTick()
@@ -387,7 +387,7 @@ describe('DiaryComposer -- autogrow (PROMPT №741: viewport-aware growCap resto
     mount()
     textarea().dispatchEvent(new Event('focus'))
     await nextTick()
-    expect(textarea().style.maxHeight).toBe('300px')
+    expect(textarea().style.maxHeight).toBe('240px')
 
     textarea().dispatchEvent(new Event('blur'))
     await nextTick()
