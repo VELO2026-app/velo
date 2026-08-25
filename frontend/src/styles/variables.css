@@ -470,6 +470,12 @@
   /* Auto-grow textarea cap (~9 rows) before the field switches to internal
      scroll. No SVG source for the cap (operator F1=А); single-role -> semantic. */
   --velo-textarea-autogrow-max: 240px;
+  /* [FE-4] Chat-thread top fog + feed clearance, ONE number: 88px floating
+     VHeader (HEADER_FALLBACK) + --space-2 gap = 96px. Consumed by BOTH the
+     feed's padding and its mask stops (ChatThreadScreen.vue); the mask must
+     read it as a plain var() -- iOS WebKit does not evaluate calc() inside
+     mask-image gradient stops. */
+  --velo-chat-fog-top: 96px;
   /* Micro inter-element spacing (gap / margin) below --space-2=8 granularity */
   --velo-gap-2: 2px;
   --velo-gap-3: 3px;
