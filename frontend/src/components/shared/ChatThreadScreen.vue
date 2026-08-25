@@ -45,28 +45,36 @@
     </div>
 
     <template v-else>
-      <div ref="feedEl" class="chat-thread__feed" data-testid="chat-feed">
-        <!-- Empty thread: an honest invitation, not a fake history. -->
-        <div v-if="messages.length === 0" class="chat-thread__empty">
-          Сообщений пока нет — напишите первое.
-        </div>
+      <!-- [FE-4] The fog lives on the WRAPPER, not the scroller: iOS WebKit
+           silently skips painting a mask attached to the scroll container's
+           own scrolled content (mask + overflow scroll = broken on-device,
+           device-proven: computed GRAD yet zero visible clipping, while the
+           diary -- identical mask on a NON-scrolling parent's child pattern --
+           fades fine). Wrapper masks + inner scroller is the working shape. -->
+      <div ref="wrapEl" class="chat-thread__feed-wrap">
+        <div ref="feedEl" class="chat-thread__feed" data-testid="chat-feed">
+          <!-- Empty thread: an honest invitation, not a fake history. -->
+          <div v-if="messages.length === 0" class="chat-thread__empty">
+            Сообщений пока нет — напишите первое.
+          </div>
 
-        <div
-          v-for="m in messages"
-          :key="m.id"
-          class="chat-thread__row"
-          :class="{ 'chat-thread__row--mine': m.sender === myId }"
-        >
           <div
-            class="chat-thread__bubble"
-            :class="{ 'chat-thread__bubble--mine': m.sender === myId }"
-            :data-testid="m.sender === myId ? 'bubble-mine' : 'bubble-peer'"
+            v-for="m in messages"
+            :key="m.id"
+            class="chat-thread__row"
+            :class="{ 'chat-thread__row--mine': m.sender === myId }"
           >
-            <div class="chat-thread__body">
-              {{ m.body }}
-            </div>
-            <div class="chat-thread__time">
-              {{ formatTime(m.created_at) }}
+            <div
+              class="chat-thread__bubble"
+              :class="{ 'chat-thread__bubble--mine': m.sender === myId }"
+              :data-testid="m.sender === myId ? 'bubble-mine' : 'bubble-peer'"
+            >
+              <div class="chat-thread__body">
+                {{ m.body }}
+              </div>
+              <div class="chat-thread__time">
+                {{ formatTime(m.created_at) }}
+              </div>
             </div>
           </div>
         </div>
@@ -133,6 +141,61 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const messages = ref<ChatMessage[]>([])
 const feedEl = ref<HTMLElement | null>(null)
+
+// [FE-4] The fog must reach the REAL header, not a guess. The teleported
+// VHeader island's height varies (back-pill row + title + island padding,
+// taller than the hardcoded 96px the first fog shipped with -- the mask WAS
+// rendering, device-proven, but ended above the header's bottom edge, so
+// bubbles emerged fully opaque right under the title). Same pattern
+// MobileLayout uses for its own clearance: measure the island, follow it.
+const fogTop = ref(96)
+let islandObserver: ResizeObserver | null = null
+
+// The wrapEl carries the fog vars INLINE as literal px strings -- the exact
+// recipe MobileLayout's own (device-proven, owner-praised) fog uses: mask
+// stops must be PLAIN var() (no fallback chains) whose values are inline px.
+// [FE-4] The NUMBERS are MobileLayout's too, 1:1: hard zone = --velo-fog-z2
+// (40), fade = (island height + --velo-fog-z1 gap) - hard -- the same
+// arithmetic mainStyle runs for the master pages' fog. Read from the same
+// tokens at runtime so a re-tune of z1/z2 re-tunes both fogs together.
+const wrapEl = ref<HTMLElement | null>(null)
+
+function cssTok(name: string, fallback: number): number {
+  const v = parseInt(
+    getComputedStyle(document.documentElement).getPropertyValue(name),
+    10,
+  )
+  return Number.isFinite(v) ? v : fallback
+}
+
+function measureIsland(): void {
+  const island = document.querySelector('.mobile-layout__island')
+  if (!island) return
+  const h = Math.round(island.getBoundingClientRect().height)
+  if (h > 0) fogTop.value = h + 8
+  const hard = cssTok('--velo-fog-z2', 40)
+  const gap = cssTok('--velo-fog-z1', 16)
+  const islandH = h > 0 ? h : 88
+  wrapEl.value?.style.setProperty('--chat-fog-hard', `${hard}px`)
+  wrapEl.value?.style.setProperty(
+    '--chat-fog-fade',
+    `${Math.max(0, islandH + gap - hard)}px`,
+  )
+  wrapEl.value?.style.setProperty('--chat-fog-live', `${fogTop.value}px`)
+  feedEl.value?.style.setProperty('--chat-fog-live', `${fogTop.value}px`)
+}
+
+onMounted(() => {
+  measureIsland()
+  islandObserver = new ResizeObserver(measureIsland)
+  const island = document.querySelector('.mobile-layout__island')
+  if (island) islandObserver.observe(island)
+})
+
+onBeforeUnmount(() => {
+  islandObserver?.disconnect()
+  islandObserver = null
+})
 
 // PROMPT №741 (track 3, B40): the same viewport-aware cap diary uses.
 const composing = ref(false)
@@ -322,38 +385,60 @@ onBeforeUnmount(() => {
    sizes `.chat-thread` to the live viewport, growing the composer
    (B40's growCap) eats into the column's available height and the feed
    shrinks to match -- "rides up" with zero new code, same as diary. */
-.chat-thread__feed {
+/* [FE-4] Fog carrier: the NON-scrolling wrapper owns the mask; the feed
+   inside scrolls. The recipe is MobileLayout's own fog copied LITERALLY
+   (the owner confirms it renders beautifully on his device): PLAIN var()
+   stops whose values are set INLINE as px strings by the component, a
+   hard-transparent zone of --velo-fog-z2 (40px) then a long fade to opaque
+   -- the same z1/z2 arithmetic mainStyle runs for the master pages' fog.
+   The BOTTOM keeps a modest 24px (not the master pages' 70+90): there is
+   no 160px tab bar under this feed -- the composer sits at its bottom edge,
+   and a master-sized bottom fade would swallow the last messages.
+   var(--x, fallback) chains inside mask stops computed fine but never
+   painted on-device -- do not reintroduce them. */
+.chat-thread__feed-wrap {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  /* Fill-mode screens own their top clearance: VHeader teleports into the
-     MobileLayout island and FLOATS over the feed, and fill mode drops the
-     layout's measured mainStyle clearance. 88px mirrors the layout's own
-     HEADER_FALLBACK for a floating VHeader (MobileLayout.vue, ПРОМТ №164). */
-  padding: calc(88px + var(--space-2)) var(--velo-rail-pad-x, var(--space-4)) var(--space-3);
-  /* B45/B46 (PROMPT №741, track 3): the SAME symmetric edge fade
-     DiaryFeedView.vue's `.diary-feed__body` uses -- mirrored value
-     (--space-5), not re-derived. Diary's own comment on this block says it
-     is "appearance only, no overlap, no keyboard-derived value", so there is
-     no viewport math to get wrong by copying it; it either reads right on
-     this screen too or it does not (device-pending either way). */
+  --chat-fog-hard: 40px;
+  --chat-fog-fade: 64px;
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0,
-    #000 var(--space-5),
-    #000 calc(100% - var(--space-5)),
+    transparent var(--chat-fog-hard),
+    #000 calc(var(--chat-fog-hard) + var(--chat-fog-fade)),
+    #000 calc(100% - 24px),
     transparent 100%
   );
   mask-image: linear-gradient(
     to bottom,
     transparent 0,
-    #000 var(--space-5),
-    #000 calc(100% - var(--space-5)),
+    transparent var(--chat-fog-hard),
+    #000 calc(var(--chat-fog-hard) + var(--chat-fog-fade)),
+    #000 calc(100% - 24px),
     transparent 100%
   );
+}
+
+.chat-thread__feed {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* [FE-4] Diary-feed parity, property for property (the diary's fog is the
+     one configuration PROVEN to render in this Telegram/iOS webview):
+     the momentum scrolling layer + overscroll containment the diary body
+     carries. */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  /* Fill-mode top clearance: the floating VHeader island's measured height
+     (fallback 96px = HEADER_FALLBACK 88 + gap 8), set as --chat-fog-live by
+     the component so padding and mask share ONE live number. */
+  padding: var(--chat-fog-live, var(--velo-chat-fog-top, 96px))
+    var(--velo-rail-pad-x, var(--space-4)) var(--space-3);
 }
 
 .chat-thread__empty {

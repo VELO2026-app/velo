@@ -332,8 +332,11 @@
      and reserving it on a headerless screen left a phantom ≈104px band.
      Replaces the retired negative-compensation tokens --velo-fog-mp-top-gap
      (PE-1) and --velo-fog-z1-short (DB-1b), whose `88 + (−40)` coupled two
-     magic numbers. 48px = the visual result those fixes shipped with. */
-  --velo-fog-headerless-top: 48px;
+      magic numbers. [FE-3] 2026-08-24: 34px — one baseline with the floating
+      islands (calc(--space-3 + 20px) = 34): first text line equidistant from
+      the top edge everywhere, so tab switches do not jump. */
+
+  --velo-fog-headerless-top: 34px;
   /* Header-island clearance (G-1) is no longer a fixed token pair: MobileLayout
      MEASURES the floating island's height (ResizeObserver) and clears exactly
      that much, so any island (short greeting or tall title+weekstrip) gets the
@@ -467,6 +470,12 @@
   /* Auto-grow textarea cap (~9 rows) before the field switches to internal
      scroll. No SVG source for the cap (operator F1=А); single-role -> semantic. */
   --velo-textarea-autogrow-max: 240px;
+  /* [FE-4] Chat-thread top fog + feed clearance, ONE number: 88px floating
+     VHeader (HEADER_FALLBACK) + --space-2 gap = 96px. Consumed by BOTH the
+     feed's padding and its mask stops (ChatThreadScreen.vue); the mask must
+     read it as a plain var() -- iOS WebKit does not evaluate calc() inside
+     mask-image gradient stops. */
+  --velo-chat-fog-top: 96px;
   /* Micro inter-element spacing (gap / margin) below --space-2=8 granularity */
   --velo-gap-2: 2px;
   --velo-gap-3: 3px;

@@ -72,7 +72,7 @@ const router = createRouter({
           // nothing teleports into the island, but MobileLayout cannot tell
           // "not yet" from "never" and reserved HEADER_FALLBACK+gap = 104px of
           // phantom band above «Ближайшие практики» forever. Declaring the
-          // route headerless pads by the token exactly (48px). If this screen
+          // route headerless pads by the token exactly (34px). If this screen
           // ever gains a floating header again, drop this meta.
           meta: { headerless: true },
           component: () => import('@/views/user/UserDashboardView.vue'),
@@ -100,6 +100,14 @@ const router = createRouter({
         {
           path: 'profile',
           name: 'user-profile',
+          // [FE-3] Headerless hub, same contract as the dashboard ([FE-3]
+          // follow-up): no VHeader ever teleports here, and the view used to
+          // cancel the phantom 104px clearance with a hand-rolled
+          // margin-top: calc(50px - 104px) hack. Route meta retires the hack:
+          // top = --velo-fog-headerless-top (34px), identical to the dashboard
+          // tab -- tab-to-tab tops no longer shift. If this screen ever gains
+          // a floating header, drop this meta.
+          meta: { headerless: true },
           component: () => import('@/views/user/UserProfileView.vue'),
         },
         {
@@ -186,16 +194,21 @@ const router = createRouter({
         {
           path: 'topup',
           name: 'user-topup',
+          // [FE-3] No floating header (own inline title) -- headerless contract,
+          // was the phantom 104px band.
+          meta: { headerless: true },
           component: () => import('@/views/user/TopupView.vue'),
         },
         {
           path: 'topup/success',
           name: 'user-topup-success',
+          meta: { headerless: true },
           component: () => import('@/views/user/TopupSuccessView.vue'),
         },
         {
           path: 'topup/cancel',
           name: 'user-topup-cancel',
+          meta: { headerless: true },
           component: () => import('@/views/user/TopupCancelView.vue'),
         },
         {

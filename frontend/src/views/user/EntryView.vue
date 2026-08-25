@@ -112,6 +112,7 @@
               class="entry__edit-title"
               type="text"
               placeholder="Заголовок (необязательно)"
+              aria-label="Заголовок записи"
               :maxlength="MAX_TITLE_LEN"
               :disabled="saving"
             />
@@ -119,6 +120,7 @@
               ref="editEl"
               v-model="editContent"
               class="entry__edit-content"
+              aria-label="Текст записи"
               rows="3"
               :maxlength="MAX_CONTENT_LEN"
               :disabled="saving"
@@ -415,9 +417,10 @@ function goBack(): void {
   transition: border-color var(--transition-fast);
 }
 
+/* [FE-25] Readable placeholder token. Was --velo-text-primary + opacity 0.5
+   (2.15:1) -- same contract as every other field in the app now. */
 .entry__edit-title::placeholder {
-  color: var(--velo-text-primary);
-  opacity: 0.5;
+  color: var(--velo-text-placeholder);
 }
 
 /* PROMPT №679: already has a border-bottom at rest -- focus strengthens the
