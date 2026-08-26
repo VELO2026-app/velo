@@ -111,14 +111,25 @@ class AudienceKind(enum.StrEnum):
               practices (the same "derived «Ученики»" rule groups_service.py
               already uses).
     GROUPS:   members of at least one of the practice's target CUSTOM groups
-              (practice_audience_group). A blocked student is EXCLUDED from
-              all three -- see practices/audience_service.py, the single
-              shared predicate every enforcement point below reuses.
+              (practice_audience_group).
+    CURATOR_GROUPS: the curator and every member of at least one of the
+              practice's target SCHOOLS (practice_audience_curator_group,
+              P5/GT-11) -- AND only while the master still belongs to that
+              school. That second half has no counterpart in the three
+              kinds above and is the point of this one: a school's
+              audience is lent to a teacher, not given. A master who leaves
+              or is removed stops broadcasting to a room that is no longer
+              theirs, without anyone editing the practice.
+
+    A blocked student is EXCLUDED from all four -- see
+    practices/audience_service.py, the single shared predicate every
+    enforcement point reuses.
     """
 
     PUBLIC = "public"
     STUDENTS = "students"
     GROUPS = "groups"
+    CURATOR_GROUPS = "curator_groups"
 
 
 class Practice(JSONBMixin, UUIDMixin, TimestampMixin, Base):
@@ -298,5 +309,51 @@ class PracticeAudienceGroup(UUIDMixin, Base):
     def __repr__(self) -> str:
         return (
             f"<PracticeAudienceGroup practice_id={self.practice_id} "
+            f"group_id={self.group_id}>"
+        )
+
+
+class PracticeAudienceCuratorGroup(UUIDMixin, Base):
+    """One of a practice's target SCHOOLS (audience_kind='curator_groups').
+
+    Strict mirror of PracticeAudienceGroup above -- same UNIQUE, same
+    CASCADE-both-ways, same FK-by-table-name. Kept as a SEPARATE table
+    rather than a `kind` column on the existing one: the two point at
+    different tables (master_group vs curator_group), and a single table
+    with two nullable FKs would need a check constraint to say "exactly one
+    of these" and would let a row exist with neither.
+
+    group_id references curator_groups/models.py's CuratorGroup by table
+    name only (no Python import) -- the same cross-module pattern
+    PracticeAudienceGroup uses for master_group, and for the same reason: a
+    practices -> curator_groups import here would meet the audience
+    predicate's need to read curator_group and close a cycle.
+
+    ondelete=CASCADE on group_id is load-bearing, not tidiness: when a
+    school is deleted its rows go, the audience predicate finds no target
+    schools, and the practice becomes invisible to everyone but its master.
+    That is the intended fail-closed outcome, not an accident of FK setup.
+    """
+
+    __tablename__ = "practice_audience_curator_group"
+    __table_args__ = (
+        UniqueConstraint(
+            "practice_id", "group_id",
+            name="uq_practice_audience_curator_group",
+        ),
+    )
+
+    practice_id: Mapped[UUID] = mapped_column(
+        ForeignKey("practices.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    group_id: Mapped[UUID] = mapped_column(
+        ForeignKey("curator_group.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<PracticeAudienceCuratorGroup practice_id={self.practice_id} "
             f"group_id={self.group_id}>"
         )

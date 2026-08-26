@@ -22,6 +22,7 @@ from app.core.exceptions import BadRequestError
 from app.modules.practices.models import (
     AudienceKind,
     Practice,
+    PracticeAudienceCuratorGroup,
     PracticeAudienceGroup,
     PracticeStatus,
     PracticeType,
@@ -272,6 +273,26 @@ async def generate_series_occurrences(
             ).scalars().all()
         )
 
+    # SECURITY (C1, P5/GT-11): the same hole on the new table. A
+    # 'curator_groups' series whose children carried no target-school rows
+    # would leave every occurrence matching none of the audience clause's
+    # branches -- and _build_child_occurrence copies audience_kind but not
+    # the rows, so each child would be a 'curator_groups' practice that no
+    # school can see and the master cannot explain. Worse in the other
+    # direction if the kind were ever defaulted: publicly bookable copies of
+    # a restricted series.
+    root_curator_group_ids: list[UUID] = []
+    if root.audience_kind == AudienceKind.CURATOR_GROUPS.value:
+        root_curator_group_ids = list(
+            (
+                await session.execute(
+                    select(PracticeAudienceCuratorGroup.group_id).where(
+                        PracticeAudienceCuratorGroup.practice_id == root.id,
+                    )
+                )
+            ).scalars().all()
+        )
+
     children: list[Practice] = []
     for start_utc in starts:
         child = _build_child_occurrence(root, start_utc)
@@ -281,6 +302,13 @@ async def generate_series_occurrences(
         for group_id in root_group_ids:
             session.add(
                 PracticeAudienceGroup(
+                    practice_id=child.id,
+                    group_id=group_id,
+                )
+            )
+        for group_id in root_curator_group_ids:
+            session.add(
+                PracticeAudienceCuratorGroup(
                     practice_id=child.id,
                     group_id=group_id,
                 )
@@ -384,6 +412,42 @@ async def propagate_audience_to_children(
             for group_id in root_group_ids:
                 session.add(
                     PracticeAudienceGroup(
+                        practice_id=child_id,
+                        group_id=group_id,
+                    )
+                )
+
+    # 3. The same, on the target-SCHOOL table (P5/GT-11). The delete is
+    #    UNCONDITIONAL, exactly like the one above: a root switched from
+    #    'curator_groups' to anything else must not leave its children
+    #    carrying school rows, or a later switch back would resurrect an
+    #    audience the master abandoned -- the litter problem the single-
+    #    practice path solves in update_practice.
+    #
+    #    BOTH deletes and both inserts sit under the SAME child_ids list,
+    #    filtered once by _TERMINAL_CHILD_STATUSES above. The existing
+    #    comment on that filter says applying it to only one write leaves a
+    #    child with the old kind and the new rows; with two tables there are
+    #    now four writes to keep under it, and the reason has not changed.
+    await session.execute(
+        delete(PracticeAudienceCuratorGroup).where(
+            PracticeAudienceCuratorGroup.practice_id.in_(child_ids),
+        )
+    )
+    if root.audience_kind == AudienceKind.CURATOR_GROUPS.value:
+        root_curator_group_ids = list(
+            (
+                await session.execute(
+                    select(PracticeAudienceCuratorGroup.group_id).where(
+                        PracticeAudienceCuratorGroup.practice_id == root.id,
+                    )
+                )
+            ).scalars().all()
+        )
+        for child_id in child_ids:
+            for group_id in root_curator_group_ids:
+                session.add(
+                    PracticeAudienceCuratorGroup(
                         practice_id=child_id,
                         group_id=group_id,
                     )

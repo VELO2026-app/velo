@@ -210,6 +210,11 @@ class CreatePracticeRequest(BaseModel):
     # another master's group / a system slug with a 400).
     audience_kind: AudienceKind = AudienceKind.PUBLIC
     group_ids: list[UUID] = Field(default_factory=list)
+    # P5/GT-11: the same field for the fourth audience, pointed at the
+    # master's SCHOOLS instead of their own custom groups. Separate field
+    # rather than a shared one because the ids come from different tables
+    # and the service validates them against different ownership rules.
+    curator_group_ids: list[UUID] = Field(default_factory=list)
 
     @field_validator("audience_kind")
     @classmethod
@@ -228,6 +233,15 @@ class CreatePracticeRequest(BaseModel):
         ='groups' -- reject a contradiction (group_ids sent with a
         different kind, or 'groups' with an empty list) at the schema
         level, same posture as _check_recurrence_requires_series above."""
+        if self.group_ids and self.curator_group_ids:
+            # NEW in GT-11: the previous validator had no such case to
+            # reject. Two audience target sets at once is not a narrower
+            # audience, it is an ambiguous one -- audience_kind can only
+            # name one of them, so the other would be stored and silently
+            # ignored until somebody switched kinds and resurrected it.
+            raise ValueError(
+                "group_ids and curator_group_ids cannot be used together"
+            )
         if self.audience_kind == AudienceKind.GROUPS.value:
             if not self.group_ids:
                 raise ValueError(
@@ -236,6 +250,17 @@ class CreatePracticeRequest(BaseModel):
         elif self.group_ids:
             raise ValueError(
                 "group_ids is only allowed when audience_kind='groups'"
+            )
+        if self.audience_kind == AudienceKind.CURATOR_GROUPS.value:
+            if not self.curator_group_ids:
+                raise ValueError(
+                    "curator_group_ids must be non-empty when "
+                    "audience_kind='curator_groups'"
+                )
+        elif self.curator_group_ids:
+            raise ValueError(
+                "curator_group_ids is only allowed when "
+                "audience_kind='curator_groups'"
             )
         return self
 
@@ -399,6 +424,9 @@ class UpdatePracticeRequest(BaseModel):
     # style's own W-1 note below).
     audience_kind: AudienceKind | None = None
     group_ids: list[UUID] | None = None
+    # P5/GT-11: same PATCH semantics as group_ids above -- omitted means
+    # unchanged, sent replaces the whole set, an empty list clears it.
+    curator_group_ids: list[UUID] | None = None
 
     @field_validator("audience_kind")
     @classmethod
@@ -423,6 +451,10 @@ class UpdatePracticeRequest(BaseModel):
         with an empty group_ids. See the fields' own docstring for why a
         one-sided send (only audience_kind, or only group_ids) is left to
         the service instead."""
+        if self.group_ids and self.curator_group_ids:
+            raise ValueError(
+                "group_ids and curator_group_ids cannot be used together"
+            )
         if self.audience_kind is not None and self.group_ids is not None:
             if self.audience_kind == AudienceKind.GROUPS.value and not self.group_ids:
                 raise ValueError(
@@ -431,6 +463,26 @@ class UpdatePracticeRequest(BaseModel):
             if self.audience_kind != AudienceKind.GROUPS.value and self.group_ids:
                 raise ValueError(
                     "group_ids is only allowed when audience_kind='groups'"
+                )
+        if (
+            self.audience_kind is not None
+            and self.curator_group_ids is not None
+        ):
+            if (
+                self.audience_kind == AudienceKind.CURATOR_GROUPS.value
+                and not self.curator_group_ids
+            ):
+                raise ValueError(
+                    "curator_group_ids must be non-empty when "
+                    "audience_kind='curator_groups'"
+                )
+            if (
+                self.audience_kind != AudienceKind.CURATOR_GROUPS.value
+                and self.curator_group_ids
+            ):
+                raise ValueError(
+                    "curator_group_ids is only allowed when "
+                    "audience_kind='curator_groups'"
                 )
         return self
 
@@ -569,9 +621,14 @@ class AudiencePreviewRequest(BaseModel):
 
     audience_kind: AudienceKind
     group_ids: list[UUID] = []
+    curator_group_ids: list[UUID] = []
 
     @model_validator(mode="after")
     def _check_group_ids_match_audience_kind(self) -> "AudiencePreviewRequest":
+        if self.group_ids and self.curator_group_ids:
+            raise ValueError(
+                "group_ids and curator_group_ids cannot be used together"
+            )
         if self.audience_kind == AudienceKind.GROUPS.value and not self.group_ids:
             raise ValueError(
                 "group_ids must be non-empty when audience_kind='groups'"
@@ -579,6 +636,22 @@ class AudiencePreviewRequest(BaseModel):
         if self.audience_kind != AudienceKind.GROUPS.value and self.group_ids:
             raise ValueError(
                 "group_ids is only allowed when audience_kind='groups'"
+            )
+        if (
+            self.audience_kind == AudienceKind.CURATOR_GROUPS.value
+            and not self.curator_group_ids
+        ):
+            raise ValueError(
+                "curator_group_ids must be non-empty when "
+                "audience_kind='curator_groups'"
+            )
+        if (
+            self.audience_kind != AudienceKind.CURATOR_GROUPS.value
+            and self.curator_group_ids
+        ):
+            raise ValueError(
+                "curator_group_ids is only allowed when "
+                "audience_kind='curator_groups'"
             )
         return self
 

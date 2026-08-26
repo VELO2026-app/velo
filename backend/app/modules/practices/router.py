@@ -638,7 +638,12 @@ async def preview_audience_change_endpoint(
     at check-in time (owner-ruled)."""
     user, _profile = master_tuple
     stranded_count = await preview_audience_change(
-        practice_id, user, body.audience_kind.value, body.group_ids, session,
+        practice_id,
+        user,
+        body.audience_kind.value,
+        body.group_ids,
+        session,
+        curator_group_ids=body.curator_group_ids,
     )
     return AudiencePreviewResponse(stranded_count=stranded_count)
 

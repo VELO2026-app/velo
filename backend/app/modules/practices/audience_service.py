@@ -48,8 +48,23 @@ from sqlalchemy.orm import aliased
 
 from app.core.exceptions import ForbiddenError
 from app.modules.bookings.models import Booking, BookingStatus
+
+# Model imports only. curator_groups/ is NOT imported here for its
+# helpers -- see _curator_profile_verified below for why the predicate is
+# written locally instead.
+from app.modules.curator_groups.models import (
+    CuratorGroup,
+    CuratorGroupMember,
+    CuratorMemberKind,
+)
 from app.modules.masters.groups_models import MasterGroupMembership, MasterStudent
-from app.modules.practices.models import AudienceKind, Practice, PracticeAudienceGroup
+from app.modules.masters.models import MasterProfile
+from app.modules.practices.models import (
+    AudienceKind,
+    Practice,
+    PracticeAudienceCuratorGroup,
+    PracticeAudienceGroup,
+)
 
 # T-20: THE GATE's own booking-status set -- the single source for "does
 # this booking make its holder a student of that booking's master, for the
@@ -151,6 +166,123 @@ def _is_group_member_clause(user_id: UUID) -> ColumnElement[bool]:
     )
 
 
+def _curator_profile_verified(user_id_col: ColumnElement) -> ColumnElement[bool]:
+    """Correlated EXISTS: this user holds a verified MasterProfile right now.
+
+    THIRD COPY OF THIS PREDICATE IN THE TREE, deliberately. The twins are
+    curator_groups/service.py::_verified_profile_exists (the schools module's
+    own) and admin/curator_groups/service.py::_profile_verified (ruled a
+    considered duplicate in GT-9). Both are private to their modules, and
+    importing a private helper across a module boundary would tie the
+    audience gate -- the single predicate guarding every practice on the
+    platform -- to the internals of two other modules. A copy is the cheaper
+    trade; all three are named here so the next reader finds them together.
+
+    Projects user_id, not id: MasterProfile's PRIMARY KEY *is* user_id
+    (masters/models.py), and MasterProfile.id raises AttributeError while
+    the query is being built.
+    """
+    return (
+        select(MasterProfile.user_id)
+        .where(
+            MasterProfile.user_id == user_id_col,
+            MasterProfile.data["account"]["status"].as_string() == "verified",
+        )
+        .exists()
+    )
+
+
+def _master_in_curator_group_clause(
+    master_id_col: ColumnElement,
+) -> ColumnElement[bool]:
+    """True iff this master still belongs to the (correlated) CuratorGroup.
+
+    THE HEART OF THIS AUDIENCE (owner ruling, 2026-08-22). The other three
+    audience kinds ask only about the VIEWER; this one also asks about the
+    master, because a school's audience is lent to a teacher rather than
+    given. A master who leaves the school, or is removed by its curator,
+    stops broadcasting into a room that is no longer theirs -- and stops
+    the moment the membership row goes, with nobody editing the practice.
+
+    Belongs = curator of the school, OR a kind='master' member whose own
+    profile is verified right now. The verification check is not
+    decoration: a suspended master is already hidden from the school's
+    roster (I-4), and a hidden teacher whose practices still reached the
+    school would contradict the page one screen away.
+
+    Correlated to CuratorGroup: the calling query must have curator_group in
+    its FROM.
+    """
+    return or_(
+        CuratorGroup.curator_user_id == master_id_col,
+        select(CuratorGroupMember.id)
+        .where(
+            CuratorGroupMember.group_id == CuratorGroup.id,
+            CuratorGroupMember.user_id == master_id_col,
+            CuratorGroupMember.kind == CuratorMemberKind.MASTER.value,
+            _curator_profile_verified(master_id_col),
+        )
+        .exists(),
+    )
+
+
+def _viewer_in_curator_group_clause(user_id: UUID) -> ColumnElement[bool]:
+    """True iff this viewer belongs to the (correlated) CuratorGroup at all.
+
+    ANY kind of membership counts, and so does being the curator -- the
+    school sees its own practices whether you teach there or study there.
+    Deliberately NOT symmetrical with the master clause above: the master
+    side asks "is this person still entitled to use this room", the viewer
+    side asks "is this person in the room". Two different questions that
+    happen to touch the same table.
+
+    No verification check here either: a student has no MasterProfile to
+    verify, and a suspended master-member is still a member of the school
+    (GT-1 kept their row and only hid them from the roster). Losing sight of
+    the school's practices is not part of what suspension means.
+    """
+    return or_(
+        CuratorGroup.curator_user_id == user_id,
+        select(CuratorGroupMember.id)
+        .where(
+            CuratorGroupMember.group_id == CuratorGroup.id,
+            CuratorGroupMember.user_id == user_id,
+        )
+        .exists(),
+    )
+
+
+def _is_curator_group_audience_clause(user_id: UUID) -> ColumnElement[bool]:
+    """True iff `user_id` may see the (correlated) Practice through one of
+    its target SCHOOLS.
+
+    Three conditions on the SAME school row, all required:
+      1. the school is ACTIVE -- its curator is verified right now (I-6),
+         the same rule that makes an inactive school a 404 for its own
+         members;
+      2. the viewer belongs to that school;
+      3. the practice's master still belongs to that school.
+
+    EXISTS rather than a join, so a viewer who is in two of the practice's
+    target schools yields ONE row in the feed, not two. Same shape as
+    _is_group_member_clause next door, for the same reason.
+    """
+    return (
+        select(PracticeAudienceCuratorGroup.id)
+        .join(
+            CuratorGroup,
+            CuratorGroup.id == PracticeAudienceCuratorGroup.group_id,
+        )
+        .where(
+            PracticeAudienceCuratorGroup.practice_id == Practice.id,
+            _curator_profile_verified(CuratorGroup.curator_user_id),
+            _viewer_in_curator_group_clause(user_id),
+            _master_in_curator_group_clause(Practice.master_id),
+        )
+        .exists()
+    )
+
+
 def viewer_audience_clause(user_id: UUID) -> ColumnElement[bool]:
     """SQL boolean expression correlated to the module-level Practice table
     -- the caller's query MUST select FROM Practice (directly, or via a
@@ -166,6 +298,10 @@ def viewer_audience_clause(user_id: UUID) -> ColumnElement[bool]:
         and_(
             Practice.audience_kind == AudienceKind.GROUPS.value,
             _is_group_member_clause(user_id),
+        ),
+        and_(
+            Practice.audience_kind == AudienceKind.CURATOR_GROUPS.value,
+            _is_curator_group_audience_clause(user_id),
         ),
     )
     return and_(~_blocked_clause(user_id), audience_ok)
@@ -257,14 +393,38 @@ async def assert_viewer_can_access_practice(
             )
         return
 
+    if practice.audience_kind == AudienceKind.CURATOR_GROUPS.value:
+        # SAME machine code as the groups branch, on purpose: "you are not
+        # in the audience" is one fact to the person refused, the frontend
+        # already has a message for it, and a distinct code would tell a
+        # stranger WHICH kind of restriction they hit -- i.e. which school
+        # membership is worth probing for.
+        #
+        # ONE clause covers three failures indistinguishably: the school is
+        # frozen, the viewer is not in it, or the MASTER has left it. The
+        # third has no equivalent in any branch above, and it is the reason
+        # this audience can go dark with nobody touching the practice.
+        if not await _clause_true_for(
+            practice.id, _is_curator_group_audience_clause(user_id), session,
+        ):
+            raise ForbiddenError(
+                "You are not a member of this practice's target school(s)",
+                code="not_in_audience",
+            )
+        return
+
     # FAIL-CLOSED (P5 hardening, PROMPT №596): an unrecognized audience_kind
     # is DENIED, not silently allowed -- matches viewer_audience_clause's SQL
     # `or_`, which likewise matches none of its three explicit branches and
-    # so evaluates false for anything else. AudienceKind has exactly three
+    # so evaluates false for anything else. AudienceKind has exactly four
     # members today (models.py), so this is unreachable in practice; it
-    # exists so a future 4th value fails closed here too, instead of
-    # silently falling through to the GROUPS rule (the previous implicit-
-    # else shape) or, worse, being allowed.
+    # exists so a future 5th value fails closed here too, instead of
+    # silently falling through to the last rule above (the previous
+    # implicit-else shape) or, worse, being allowed.
+    #
+    # GT-11: the 4th value this guard was written for has now ARRIVED and
+    # has its own branch above. The guard stays. It was never about that
+    # particular missing value -- it is about there always being one.
     raise ForbiddenError(
         "Unrecognized audience_kind", code="not_in_audience",
     )
@@ -327,6 +487,7 @@ async def count_stranded_active_bookings(
     proposed_audience_kind: str,
     proposed_group_ids: list[UUID],
     session: AsyncSession,
+    proposed_curator_group_ids: list[UUID] | None = None,
 ) -> int:
     """Owner Q15 (PROMPT №613): how many of `booker_ids` (this practice's
     CURRENT active bookers -- the caller, practices/service.py, already owns
@@ -353,6 +514,24 @@ async def count_stranded_active_bookings(
     refused. Unreachable today (nothing creates PENDING -- see
     STUDENT_ENTITLEMENT_STATUSES), so stranded_count is numerically
     unchanged for every booking this system can currently produce.
+
+    CURATOR_GROUPS (P5/GT-11) is the GROUPS case again, with ONE deliberate
+    difference: the membership lookup also accepts the school's CURATOR.
+    A curator holds no curator_group_member row at all (I-2 -- ownership
+    lives in curator_group.curator_user_id and nowhere else), so a literal
+    mirror of the query below would report a curator who booked their own
+    school's practice as stranded by an audience they are the centre of.
+    Named here because the next reader's instinct will be to "align" this
+    with its model.
+
+    WHAT THIS FUNCTION DELIBERATELY DOES NOT CHECK for that kind: whether
+    the practice's MASTER still belongs to the proposed schools. That
+    condition can black out the audience entirely, but it is not a
+    consequence of the change being previewed -- the master is not editing
+    their own membership here. Folding it in would answer a question nobody
+    asked ("would this practice be visible at all") with a number the master
+    reads as "this is what your edit costs", and alarm them at a moment when
+    they have done nothing.
 
     The GROUPS case can't reuse
     _is_group_member_clause as-is -- that function joins through THIS
@@ -382,6 +561,39 @@ async def count_stranded_active_bookings(
             .all()
         )
 
+    proposed_school_ids = proposed_curator_group_ids or []
+    proposed_school_member_ids: set[UUID] = set()
+    if (
+        proposed_audience_kind == AudienceKind.CURATOR_GROUPS.value
+        and proposed_school_ids
+    ):
+        proposed_school_member_ids = set(
+            (
+                await session.execute(
+                    select(CuratorGroupMember.user_id).where(
+                        CuratorGroupMember.group_id.in_(proposed_school_ids),
+                        CuratorGroupMember.user_id.in_(booker_ids),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        # The curators of the proposed schools, added separately -- see the
+        # docstring: they have no membership row to find.
+        proposed_school_member_ids |= set(
+            (
+                await session.execute(
+                    select(CuratorGroup.curator_user_id).where(
+                        CuratorGroup.id.in_(proposed_school_ids),
+                        CuratorGroup.curator_user_id.in_(booker_ids),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+
     stranded = 0
     for user_id in booker_ids:
         # Already outside every audience today -- not this change's doing.
@@ -402,6 +614,11 @@ async def count_stranded_active_bookings(
             continue
         if proposed_audience_kind == AudienceKind.GROUPS.value:
             if user_id in proposed_member_ids:
+                continue
+            stranded += 1
+            continue
+        if proposed_audience_kind == AudienceKind.CURATOR_GROUPS.value:
+            if user_id in proposed_school_member_ids:
                 continue
             stranded += 1
             continue
