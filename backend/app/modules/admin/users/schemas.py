@@ -34,6 +34,15 @@ class AdminMasterListItem(BaseModel):
         honest stub -- FE shows "-").
       - available_cents: MasterProfile.available_cents, a plain column already
         loaded by the list_masters join -- zero extra cost.
+
+    P4/GT-9:
+      - curator_groups_count: how many curator groups this master OWNS, in
+        the same batched shape as the two counts above. Counts ACTIVE AND
+        FROZEN alike: revoking a master's verification does not dissolve
+        their schools, and an admin looking at the person needs to see what
+        is still attached to them. Same None semantics as its neighbours --
+        null only if a master somehow falls outside the batch, which should
+        not happen; the FE shows "-".
     """
 
     id: UUID
@@ -47,6 +56,7 @@ class AdminMasterListItem(BaseModel):
     methods: list[str] = Field(default_factory=list)
     practices_count: int | None = None
     students_count: int | None = None
+    curator_groups_count: int | None = None
     available_cents: int | None = None
 
 

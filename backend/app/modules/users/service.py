@@ -1,477 +1,368 @@
 # =============================================================================
-# VELO Backend -- Admin Users Service (Phase 3.2, updated F8-fix)
+# VELO Backend — Users Service
 # =============================================================================
 #
-# Queries for admin user/master listings.
-# All read-only -- use get_db_reader in router.
+# RESPONSIBILITIES:
+#   1. Get user by ID
+#   2. Update user profile (partial update)
 #
-# USERS LIST:
-#   Filters: role, is_active
-#   Order: created_at DESC (newest first)
+# PATTERN:
+#   Functions accept AsyncSession and return ORM objects.
+#   Router handles HTTP concerns, service handles domain logic.
 #
-# MASTERS LIST:
-#   Joins User + MasterProfile, filters by JSONB account.status.
-#   Shortcuts /pending and /rejected are just status filters.
+# TD-029 fix: removed session.merge() from update_user.
+#   Previously the user came from get_current_user (read-only session),
+#   requiring an explicit merge into the write session. Now the router
+#   uses get_current_user_write, which loads the user via the same
+#   get_db_session instance as the endpoint — merge is unnecessary.
 #
-# F8-fix (W-1):
-#   get_master_by_id() -- single master lookup by user_id.
-#   Used by GET /admin/masters/{user_id} so the frontend review screen
-#   can do a proper single-resource fetch instead of scanning 100 items.
+# ONBOARDING:
+#   onboarding_completed is not a column -- it lives in the credentials
+#   JSONB sandbox. update_user routes it there via set_jsonb() (JSONBMixin),
+#   which flag_modified()s the column so SQLAlchemy emits the UPDATE.
+#   Plain setattr would target a non-existent column and silently no-op.
 # =============================================================================
-
-import copy
-from datetime import UTC, datetime
-from typing import Literal
-from uuid import UUID
 
 import structlog
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.events import (  # Phase 6 / T0
-    GROUP_ADMINS,
-    GROUP_MASTERS,
-    sync_membership_delta,
-)
-from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
-from app.modules.admin.users.schemas import (
-    AdminMasterDetail,
-    AdminMasterListItem,
-    PaginatedMastersResponse,
-    PaginatedUsersResponse,
-)
-from app.modules.bookings.models import Booking, BookingStatus
-
-# Model import only -- the curator_groups module's own service is not
-# touched from here (its helpers are private and stay that way).
-from app.modules.curator_groups.models import CuratorGroup
+from app.core.events import emit_user_upserted  # Phase 6 / T0
+from app.core.exceptions import ForbiddenError
 from app.modules.masters.models import MasterProfile
-from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.users.models import User, UserRole
 from app.modules.users.schemas import (
-    UserResponse,
-    credentials_without_admin_home,
+    UserUpdate,
+    derive_allowed_roles,
     has_admin_home,
 )
 
 logger = structlog.get_logger()
 
-# R8: countable practices for the list-card "Практик" stat -- mirrors
-# masters/stats_service._NON_COUNTED_PRACTICE_STATUSES (drafts/deletes never
-# ran, a cancelled practice did not take place). Duplicated locally rather
-# than importing a private name across modules.
-_NON_COUNTED_PRACTICE_STATUSES = (
-    PracticeStatus.DRAFT.value,
-    PracticeStatus.DELETED.value,
-    PracticeStatus.CANCELLED.value,
+# Fields that are not real columns and must be written into the
+# credentials JSONB sandbox instead of via setattr.
+#
+# onboarding_completed: bool flag (welcome flow).
+# master_onboarding_completed: bool flag (master-zone welcome flow, E15) --
+#   the exact same lifecycle as onboarding_completed, persisted so the master
+#   onboarding survives re-login.
+# phone / bio / email: profile fields (schema-on-read). They allow an empty
+#   string "" as a valid stored value (means "cleared"); None is still dropped
+#   below, so clearing is done by sending "", not null. This reuses the
+#   exact same write path as onboarding_completed -- no special-casing.
+#   email (E11): Telegram provides none, so it is captured via the profile
+#   edit form and stored here (additive JSONB, no column, no migration).
+_JSONB_CREDENTIAL_FIELDS = frozenset(
+    {"onboarding_completed", "master_onboarding_completed", "phone", "bio", "email"}
 )
 
 
-async def list_users(
+async def update_user(
+    user: User,
+    data: UserUpdate,
     session: AsyncSession,
-    *,
-    limit: int = 20,
-    offset: int = 0,
-    role: str | None = None,
-    is_active: bool | None = None,
-) -> PaginatedUsersResponse:
-    """List all users with optional filters and pagination."""
-    # -- Base query --
-    query = select(User).order_by(User.created_at.desc())
-    count_query = select(func.count(User.id))
+) -> User:
+    """Apply partial update to user profile.
 
-    # -- Filters --
-    if role is not None:
-        try:
-            role_enum = UserRole(role)
-        except ValueError:
-            raise BadRequestError(f"Invalid role: {role}") from None
-        query = query.where(User.role == role_enum)
-        count_query = count_query.where(User.role == role_enum)
+    Only fields explicitly provided in the request body are updated.
+    Uses model_dump(exclude_unset=True) to distinguish between
+    "field not sent" and "field sent as null".
 
-    if is_active is not None:
-        query = query.where(User.is_active == is_active)
-        count_query = count_query.where(User.is_active == is_active)
+    Column fields (first_name, last_name, timezone, language) are applied
+    via setattr. JSONB-backed fields (onboarding_completed) are merged into
+    the credentials dict via set_jsonb() so the change is tracked.
 
-    # -- Total count --
-    total_result = await session.execute(count_query)
-    total = total_result.scalar_one()
+    The user object must already be bound to the provided session
+    (TD-029: ensured by get_current_user_write in the router).
 
-    # -- Paginated items --
-    query = query.limit(limit).offset(offset)
-    result = await session.execute(query)
-    users = result.scalars().all()
+    Args:
+        user: Current user ORM object, bound to the write session.
+        data: Validated update payload.
+        session: Read-write database session (same session that loaded user).
 
-    return PaginatedUsersResponse(
-        items=[UserResponse.model_validate(u) for u in users],
-        total=total,
-        limit=limit,
-        offset=offset,
-    )
-
-
-async def _practices_counts_for_masters(
-    master_ids: list[UUID],
-    session: AsyncSession,
-) -> dict[UUID, int]:
-    """Map master_id -> all-time countable-practice count, for a page.
-
-    ONE bounded query regardless of page size (GROUP BY master_id), same
-    read-model shape as practices/enrichment_service.py
-    attendance_counts_for_practices. "Countable" mirrors
-    masters/stats_service._count_practices: excludes
-    draft/deleted/cancelled (never ran / not real sessions).
+    Returns:
+        Updated user ORM object.
     """
-    if not master_ids:
-        return {}
-    rows = (
-        await session.execute(
-            select(Practice.master_id, func.count(Practice.id))
-            .where(
-                Practice.master_id.in_(master_ids),
-                Practice.status.notin_(_NON_COUNTED_PRACTICE_STATUSES),
-            )
-            .group_by(Practice.master_id)
-        )
-    ).all()
-    return dict(rows)
+    updates = data.model_dump(exclude_unset=True)
 
+    if not updates:
+        return user
 
-async def _curator_groups_counts_for_masters(
-    master_ids: list[UUID],
-    session: AsyncSession,
-) -> dict[UUID, int]:
-    """Map master_id -> number of curator groups they OWN, for a page.
+    # -- Nested notifications object (partial merge) --------------------------
+    #
+    # notifications is NOT a flat credential field: it is a nested dict, so the
+    # plain dict.update() used for flat fields below would REPLACE the whole
+    # object and wipe toggles the user did not send. Pull it out first and
+    # merge key-by-key onto whatever is stored, preserving untouched flags.
+    # model_dump(exclude_unset=True) already dropped keys the client omitted,
+    # and None values (no opinion) are skipped here too.
+    notifications_update = updates.pop("notifications", None)
 
-    ONE bounded query regardless of page size (GROUP BY curator_user_id),
-    same shape as the two counts around it.
-
-    ACTIVE AND FROZEN GROUPS BOTH COUNT. A revoked master's schools do not
-    disappear -- they stop being visible to their members (I-6) and stay
-    attached to the person, which is exactly what an admin looking at that
-    person needs to know. Filtering by the curator's current status here
-    would make the number drop the moment it matters most.
-
-    Ownership only: a master who merely teaches in somebody else's school
-    is not counted, because curator_group.curator_user_id is the single
-    place ownership lives (I-2 keeps the curator out of the membership
-    table).
-    """
-    if not master_ids:
-        return {}
-    rows = (
-        await session.execute(
-            select(CuratorGroup.curator_user_id, func.count(CuratorGroup.id))
-            .where(CuratorGroup.curator_user_id.in_(master_ids))
-            .group_by(CuratorGroup.curator_user_id)
-        )
-    ).all()
-    return dict(rows)
-
-
-async def _students_counts_for_masters(
-    master_ids: list[UUID],
-    session: AsyncSession,
-) -> dict[UUID, int]:
-    """Map master_id -> all-time DISTINCT attended-student count, for a page.
-
-    ONE bounded query regardless of page size (GROUP BY master_id via the
-    Practice join). A student is counted once per master even if they
-    attended several of that master's practices.
-    """
-    if not master_ids:
-        return {}
-    rows = (
-        await session.execute(
-            select(
-                Practice.master_id,
-                func.count(func.distinct(Booking.user_id)),
-            )
-            .select_from(Booking)
-            .join(Practice, Booking.practice_id == Practice.id)
-            .where(
-                Practice.master_id.in_(master_ids),
-                Booking.status == BookingStatus.ATTENDED.value,
-            )
-            .group_by(Practice.master_id)
-        )
-    ).all()
-    return dict(rows)
-
-
-async def list_masters(
-    session: AsyncSession,
-    *,
-    limit: int = 20,
-    offset: int = 0,
-    # L-04 fix: type aligned with router Literal (P-11).
-    status: Literal["pending", "verified", "rejected"] | None = None,
-) -> PaginatedMastersResponse:
-    """List masters (users with MasterProfile) with optional status filter.
-
-    Joins User + MasterProfile. Filters by JSONB data.account.status.
-    Sequential scan on master_profiles (small table, no GIN index for MVP).
-
-    R8: the rich-card fields on AdminMasterListItem cost at most 2 extra
-    bounded queries for the WHOLE page (practices_counts + students_counts,
-    both GROUP BY master_id -- no N+1). methods and available_cents are free:
-    methods comes off the profile row already in hand, available_cents is a
-    plain column already loaded by the join.
-    """
-    # -- Base query: join User + MasterProfile --
-    query = (
-        select(User, MasterProfile)
-        .join(MasterProfile, User.id == MasterProfile.user_id)
-        .order_by(MasterProfile.created_at.desc())
-    )
-    count_query = select(func.count(MasterProfile.user_id)).select_from(
-        MasterProfile
+    # -- Nested master_notifications object (partial deep-merge) --------------
+    #
+    # master_notifications is the master-only 9-toggle preference set plus a
+    # delivery `schedule`, stored under credentials["master_notifications"]
+    # (schema-on-read sandbox, same idea as the 4-key user "notifications").
+    # Like notifications it must NOT go through the flat path below, so drop it
+    # from `updates`. We re-derive the payload straight from the model with
+    # by_alias=True so the schedule's "from" field (aliased from the `from_`
+    # Python keyword) is keyed as "from" -- exactly the key the read side
+    # (UserResponse.master_notifications) looks for. exclude_unset drops keys
+    # the client omitted; None toggles / sub-fields mean "leave as is" and are
+    # skipped during the merge below.
+    updates.pop("master_notifications", None)
+    master_notifications_update = (
+        data.master_notifications.model_dump(exclude_unset=True, by_alias=True)
+        if data.master_notifications is not None
+        else None
     )
 
-    # -- Status filter (JSONB) --
-    if status is not None:
-        jsonb_filter = (
-            MasterProfile.data["account"]["status"].as_string() == status
-        )
-        query = query.where(jsonb_filter)
-        count_query = count_query.where(jsonb_filter)
-
-    # -- Total count --
-    total_result = await session.execute(count_query)
-    total = total_result.scalar_one()
-
-    # -- Paginated items --
-    query = query.limit(limit).offset(offset)
-    result = await session.execute(query)
-    rows = result.all()
-
-    master_ids = [user.id for user, _profile in rows]
-    practices_by_master = await _practices_counts_for_masters(
-        master_ids, session
-    )
-    students_by_master = await _students_counts_for_masters(
-        master_ids, session
-    )
-    curator_groups_by_master = await _curator_groups_counts_for_masters(
-        master_ids, session
-    )
-
-    items = [
-        AdminMasterListItem(
-            id=user.id,
-            telegram_id=user.telegram_id,
-            first_name=user.first_name,
-            last_name=user.last_name,
-            avatar_url=user.avatar_url,
-            role=str(user.role),
-            is_active=user.is_active,
-            master_status=profile.data.get("account", {}).get(
-                "status", "unknown"
-            ),
-            methods=profile.data.get("profile", {}).get("methods", []),
-            practices_count=practices_by_master.get(user.id, 0),
-            students_count=students_by_master.get(user.id, 0),
-            curator_groups_count=curator_groups_by_master.get(user.id, 0),
-            available_cents=profile.available_cents,
-        )
-        for user, profile in rows
-    ]
-
-    return PaginatedMastersResponse(
-        items=items,
-        total=total,
-        limit=limit,
-        offset=offset,
-    )
-
-
-async def get_master_by_id(
-    user_id: UUID,
-    session: AsyncSession,
-) -> AdminMasterDetail:
-    """Fetch a single master by user_id, with profile detail (T3).
-
-    Joins User + MasterProfile. Raises NotFoundError if the user has
-    no MasterProfile (i.e. never applied). Carries the review-screen profile
-    fields (methods / experience_years / bio) read from data.profile — additive
-    over the F8-fix (W-1) list-item shape, no migration.
-
-    Used by GET /api/v1/admin/masters/{user_id}.
-    """
-    stmt = (
-        select(User, MasterProfile)
-        .join(MasterProfile, User.id == MasterProfile.user_id)
-        .where(User.id == user_id)
-    )
-    result = await session.execute(stmt)
-    row = result.one_or_none()
-
-    if row is None:
-        raise NotFoundError("Master not found")
-
-    user, profile = row
-    prof = profile.data.get("profile", {})
-    return AdminMasterDetail(
-        id=user.id,
-        telegram_id=user.telegram_id,
-        first_name=user.first_name,
-        last_name=user.last_name,
-        avatar_url=user.avatar_url,
-        role=str(user.role),
-        is_active=user.is_active,
-        master_status=profile.data.get("account", {}).get("status", "unknown"),
-        methods=prof.get("methods", []),
-        experience_years=prof.get("experience_years", 0),
-        bio=prof.get("bio"),
-        # Batch H: additional admin-editable fields (display_name = визитка;
-        # email/phone/certifications admin-only, not public).
-        display_name=prof.get("display_name"),
-        email=prof.get("email"),
-        phone=prof.get("phone"),
-        languages=prof.get("languages", []),
-        certifications=prof.get("certifications", []),
-    )
-
-
-# ---------------------------------------------------------------------------
-# Explicit admin make-master (PROMPT №292)
-# ---------------------------------------------------------------------------
-# Distinct from the application-approval path (admin/masters verify_master):
-# this is a direct admin grant from the all-users screen, with no prior
-# application. It ports scripts/set_role.py `to_master`: create/re-verify a
-# MasterProfile and set role=master. Additive JSONB, no migration.
-
-# String stub for master-profile fields left blank on an admin grant; the
-# admin can edit them later (mirrors scripts/set_role.py EDIT).
-_MAKE_MASTER_EDIT = "Отредактировать"
-
-
-def _admin_make_master_data(user: User) -> dict:
-    """Verified MasterProfile.data for an explicit admin make-master grant.
-
-    Mirrors scripts/set_role.py `_build_verified_data` (which mirrors
-    masters/service._build_data) with account.status pre-set to 'verified'.
-    Blank profile fields are stubbed; the master/admin edits them later.
-    """
-    now_iso = datetime.now(UTC).isoformat()
-    return {
-        "account": {
-            "status": "verified",
-            "applied_at": now_iso,
-            "verification": {
-                "verified_at": now_iso,
-                "verified_by": "admin_make_master",
-                "notes": "master granted via admin make-master",
-            },
-            "rejections": [],
-        },
-        "profile": {
-            "display_name": user.first_name or _MAKE_MASTER_EDIT,
-            "email": None,
-            "phone": None,
-            "bio": _MAKE_MASTER_EDIT,
-            "methods": [],
-            "experience_years": 0,
-            "certifications": [],
-        },
-        "documents": [],
-        "availability": {"is_accepting": True, "note": None},
-        "settings": {
-            "auto_confirm_bookings": True,
-            "max_participants_default": 20,
-        },
-        "stats": {
-            "total_practices": 0,
-            "total_participants": 0,
-            "avg_rating": None,
-        },
-        "seed": {"source": "admin_make_master", "granted_at": now_iso},
+    # Split the REMAINING flat JSONB-backed fields from plain column fields.
+    #
+    # None is dropped for JSONB fields, empty string is kept:
+    #   - onboarding_completed: only true/false are meaningful; null would
+    #     store {"onboarding_completed": null}, and bool(None) reads back as
+    #     False, silently re-triggering onboarding.
+    #   - phone / bio: "not sent" and null both mean "leave untouched"; an
+    #     empty string "" is a real value meaning "cleared" and IS written.
+    # So clearing phone/bio is done by sending "" (not null). This keeps the
+    # single shared write path -- "" passes the `is not None` guard, null does
+    # not.
+    jsonb_updates = {
+        field: value
+        for field, value in updates.items()
+        if field in _JSONB_CREDENTIAL_FIELDS and value is not None
+    }
+    column_updates = {
+        field: value
+        for field, value in updates.items()
+        if field not in _JSONB_CREDENTIAL_FIELDS
     }
 
+    # Apply plain column fields.
+    for field, value in column_updates.items():
+        setattr(user, field, value)
 
-async def make_master(
-    user_id: UUID,
-    admin: User,
-    session: AsyncSession,
-) -> MasterProfile:
-    """Explicitly promote a user to master (admin button, PROMPT №292).
+    # Apply JSONB-backed fields + the merged notifications object into
+    # credentials. We build a NEW dict (copy) and hand it to set_jsonb, which
+    # reassigns + flag_modified()s the column. Mutating user.credentials in
+    # place would not be detected by SQLAlchemy.
+    if (
+        jsonb_updates
+        or notifications_update is not None
+        or master_notifications_update is not None
+    ):
+        new_credentials = dict(user.credentials or {})
 
-    Ports scripts/set_role.py `to_master`: if the user has no MasterProfile,
-    create a verified one; if a non-verified profile exists, re-verify it in
-    place; then set role=master and clear any switched-away-admin marker (R-1,
-    credentials_without_admin_home). This is an EXPLICIT admin grant, distinct
-    from verify_master (the application-approval path).
+        if jsonb_updates:
+            new_credentials.update(jsonb_updates)
 
-    Idempotent-reject: a user who is already a master -> 409 (already_master).
-    Write session (get_db_session); the caller flushes (P-01, no commit here).
-    """
-    user = await session.get(User, user_id)
-    if user is None:
-        raise NotFoundError("User not found")
+        if notifications_update is not None:
+            # Merge onto the stored notifications object (or {} if absent),
+            # skipping None values (those mean "leave this toggle as is").
+            current = new_credentials.get("notifications")
+            merged = dict(current) if isinstance(current, dict) else {}
+            for key, value in notifications_update.items():
+                if value is not None:
+                    merged[key] = value
+            new_credentials["notifications"] = merged
 
-    if user.role == UserRole.MASTER:
-        raise ConflictError(
-            message="User is already a master", code="already_master"
-        )
+        if master_notifications_update is not None:
+            # Same partial-merge idea as notifications, with one extra level:
+            # the nested `schedule` is merged field-by-field so changing only
+            # `to` keeps the stored `from`/`days`. None values mean "leave as
+            # is" and are skipped (toggles and schedule sub-fields alike).
+            current = new_credentials.get("master_notifications")
+            merged = dict(current) if isinstance(current, dict) else {}
 
-    profile = await session.get(MasterProfile, user_id)
-    # Phase 6 / T0: master capability BEFORE this grant -- an approved
-    # applicant who never self-switched arrives here already verified
-    # (capability held, no delta); everyone else gains it below.
-    had_master = (
-        profile is not None
-        and (profile.data or {}).get("account", {}).get("status") == "verified"
-    )
-    if profile is None:
-        profile = MasterProfile(
-            user_id=user_id, data=_admin_make_master_data(user)
-        )
-        session.add(profile)
-    else:
-        status = (profile.data or {}).get("account", {}).get("status")
-        if status != "verified":
-            # Re-verify an existing pending/rejected/suspended profile in place.
-            data = copy.deepcopy(profile.data or {})
-            acct = data.setdefault("account", {})
-            acct["status"] = "verified"
-            acct.setdefault(
-                "verification",
-                {
-                    "verified_at": datetime.now(UTC).isoformat(),
-                    "verified_by": "admin_make_master",
-                    "notes": "re-verified via admin make-master",
-                },
-            )
-            data.setdefault("availability", {})["is_accepting"] = True
-            profile.set_jsonb("data", data)
+            schedule_update = master_notifications_update.pop("schedule", None)
 
-    # Set role=master and clear the switched-away-admin marker (R-1): an
-    # authoritative role change makes this the account's home role.
-    # Phase 6 / T0: admin capability BEFORE the write -- clearing the
-    # marker below (or demoting an admin-role holder) IS the drop.
-    had_admin = (
-        user.role == UserRole.ADMIN.value or has_admin_home(user.credentials)
-    )
-    user.role = UserRole.MASTER.value
-    cleared = credentials_without_admin_home(user.credentials)
-    if cleared != (user.credentials or {}):
-        user.set_jsonb("credentials", cleared)
+            for key, value in master_notifications_update.items():
+                if value is not None:
+                    merged[key] = value
 
-    # Phase 6 / T0: project both capability deltas into the comms
-    # contact book, same transaction (ID-2). Master: only when the
-    # profile was not verified before (see had_master above). Admin:
-    # role is master now and the marker is gone -> capability is False;
-    # emit iff it was held.
-    await sync_membership_delta(
-        session, user, group_key=GROUP_MASTERS, had=had_master, has=True
-    )
-    await sync_membership_delta(
-        session, user, group_key=GROUP_ADMINS, had=had_admin, has=False
-    )
+            if schedule_update is not None:
+                current_schedule = merged.get("schedule")
+                merged_schedule = (
+                    dict(current_schedule)
+                    if isinstance(current_schedule, dict)
+                    else {}
+                )
+                # from / to overwrite; days replaces the list wholesale.
+                for key, value in schedule_update.items():
+                    if value is not None:
+                        merged_schedule[key] = value
+                merged["schedule"] = merged_schedule
+
+            new_credentials["master_notifications"] = merged
+
+        user.set_jsonb("credentials", new_credentials)
+
+    await session.flush()
+
+    # Phase 6 / T0: re-sync the comms identity projection when a field
+    # of the user_upserted snapshot changed. `language` / `timezone`
+    # are columns, `email` lives in credentials -- all three arrive
+    # through this PATCH. The event is a full snapshot (idempotent),
+    # emitted in THIS transaction (ID-2); name/bio edits do not touch
+    # the projection and stay silent.
+    if {"language", "timezone", "email"} & updates.keys():
+        await emit_user_upserted(session, user)
 
     logger.info(
-        "admin_make_master",
-        admin_id=str(admin.id),
-        user_id=str(user_id),
+        "user_profile_updated",
+        user_id=str(user.id),
+        fields=list(updates.keys()),
     )
-    return profile
+
+    return user
+
+
+async def switch_user_role(
+    user: User,
+    target_role: UserRole,
+    session: AsyncSession,
+) -> User:
+    """Switch the caller's own role in place (capability-derived, A1=Б).
+
+    Authorization is derived, not seeded: derive_allowed_roles() (shared with
+    UserResponse.role_switch -- single source of truth) computes the allowed
+    target set from
+      - the current role (an admin may take any of the three roles, including
+        MASTER without a master profile -- №254 Q4=А),
+      - master capability (a VERIFIED MasterProfile unlocks MASTER),
+      - the switched-away-admin marker (see below).
+    A target outside the derived set -> 403. In particular a non-admin can
+    NEVER switch to ADMIN (admin is granted only via CLI/DB), and a switch to
+    MASTER without capability is a plain 403 (the old 409
+    master_profile_required is gone together with the seeded allow-lists).
+
+    Round-trip marker: when an admin switches away, credentials.role_switch.
+    home_role = "admin" is recorded so the derivation keeps ADMIN in their
+    set and they can come back; the marker is cleared on the switch back.
+    It is server-written only -- "role_switch" is not PATCHable.
+
+    The role is rewritten directly on the User row (same mechanism as admin
+    master-verify), so all existing role guards keep working unchanged.
+    Switching to the current role is a harmless no-op (USER/own role is
+    always in the set).
+
+    The user object must already be bound to the provided write session
+    (ensured by get_current_user_write in the router).
+    """
+    is_admin_home = has_admin_home(user.credentials)
+    allowed = derive_allowed_roles(
+        user.role,
+        await user_has_master_capability(user, session),
+        admin_home=is_admin_home,
+    )
+
+    if target_role not in allowed:
+        raise ForbiddenError(
+            "Role not allowed for this account",
+            code="role_not_allowed",
+        )
+
+    # Maintain the admin round-trip marker (see docstring).
+    was_admin = user.role == UserRole.ADMIN or is_admin_home
+    if was_admin:
+        new_credentials = dict(user.credentials or {})
+        role_switch = dict(new_credentials.get("role_switch") or {})
+        if target_role == UserRole.ADMIN:
+            role_switch.pop("home_role", None)
+        else:
+            role_switch["home_role"] = UserRole.ADMIN.value
+        if role_switch:
+            new_credentials["role_switch"] = role_switch
+        else:
+            new_credentials.pop("role_switch", None)
+        user.set_jsonb("credentials", new_credentials)
+
+    user.role = target_role
+    await session.flush()
+
+    logger.info(
+        "user_role_switched",
+        user_id=str(user.id),
+        new_role=target_role.value,
+    )
+
+    return user
+
+
+async def reset_user_to_onboarding(
+    user: User,
+    session: AsyncSession,
+) -> User:
+    """MVP "delete account": send the user back through onboarding.
+
+    PRODUCT DECISION (MVP): "Удалить аккаунт" does NOT erase data or
+    deactivate the account. It only clears the onboarding_completed flag in
+    the credentials JSONB. On the next Telegram login the user is treated as
+    if new (App.vue shows the welcome/onboarding flow again), while their old
+    data (name, phone, bio, bookings) stays in place and resurfaces.
+
+    is_active is intentionally NOT touched: login must still succeed so the
+    user lands in onboarding rather than being locked out.
+
+    FUTURE: real deletion / deactivation will change THIS function body only;
+    the DELETE /users/me contract stays the same so the frontend does not move.
+
+    Mechanism mirrors update_user's JSONB path: copy credentials, drop the
+    flag, set_jsonb() so SQLAlchemy emits the UPDATE.
+    """
+    new_credentials = dict(user.credentials or {})
+    new_credentials["onboarding_completed"] = False
+    user.set_jsonb("credentials", new_credentials)
+
+    await session.flush()
+
+    logger.info(
+        "user_account_reset_to_onboarding",
+        user_id=str(user.id),
+    )
+
+    return user
+
+
+async def user_has_master_capability(
+    user: User,
+    session: AsyncSession,
+) -> bool:
+    """Whether the user has a VERIFIED MasterProfile (i.e. master capability).
+
+    Used by GET /users/me to gate the master_notifications block. This is the
+    "is effectively a master" check -- deliberately capability-based rather than
+    role==MASTER, so an admin (role=ADMIN) who also has a verified MasterProfile
+    still sees the master notifications screen. A missing / pending / rejected
+    profile -> False.
+
+    Read-only: the caller passes a read session (get_db_reader in the router).
+    """
+    stmt = select(MasterProfile).where(MasterProfile.user_id == user.id)
+    result = await session.execute(stmt)
+    profile = result.scalar_one_or_none()
+    if profile is None:
+        return False
+    return profile.data.get("account", {}).get("status") == "verified"
+
+
+async def get_master_account(
+    user: User,
+    session: AsyncSession,
+) -> dict | None:
+    """Return the user's MasterProfile ``data.account`` block, or None (T5).
+
+    One indexed SELECT (same shape as user_has_master_capability). The GET
+    /users/me path uses this to derive BOTH master capability
+    (status=="verified") AND the application state (status + rejection_reason)
+    surfaced to a role='user' applicant, from a single profile load. None when
+    the user has no MasterProfile.
+    """
+    stmt = select(MasterProfile).where(MasterProfile.user_id == user.id)
+    result = await session.execute(stmt)
+    profile = result.scalar_one_or_none()
+    if profile is None:
+        return None
+    account = profile.data.get("account")
+    return account if isinstance(account, dict) else None

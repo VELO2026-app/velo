@@ -41,6 +41,10 @@ from app.modules.admin.users.schemas import (
     PaginatedUsersResponse,
 )
 from app.modules.bookings.models import Booking, BookingStatus
+
+# Model import only -- the curator_groups module's own service is not
+# touched from here (its helpers are private and stay that way).
+from app.modules.curator_groups.models import CuratorGroup
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.users.models import User, UserRole
@@ -133,6 +137,38 @@ async def _practices_counts_for_masters(
     return dict(rows)
 
 
+async def _curator_groups_counts_for_masters(
+    master_ids: list[UUID],
+    session: AsyncSession,
+) -> dict[UUID, int]:
+    """Map master_id -> number of curator groups they OWN, for a page.
+
+    ONE bounded query regardless of page size (GROUP BY curator_user_id),
+    same shape as the two counts around it.
+
+    ACTIVE AND FROZEN GROUPS BOTH COUNT. A revoked master's schools do not
+    disappear -- they stop being visible to their members (I-6) and stay
+    attached to the person, which is exactly what an admin looking at that
+    person needs to know. Filtering by the curator's current status here
+    would make the number drop the moment it matters most.
+
+    Ownership only: a master who merely teaches in somebody else's school
+    is not counted, because curator_group.curator_user_id is the single
+    place ownership lives (I-2 keeps the curator out of the membership
+    table).
+    """
+    if not master_ids:
+        return {}
+    rows = (
+        await session.execute(
+            select(CuratorGroup.curator_user_id, func.count(CuratorGroup.id))
+            .where(CuratorGroup.curator_user_id.in_(master_ids))
+            .group_by(CuratorGroup.curator_user_id)
+        )
+    ).all()
+    return dict(rows)
+
+
 async def _students_counts_for_masters(
     master_ids: list[UUID],
     session: AsyncSession,
@@ -216,6 +252,9 @@ async def list_masters(
     students_by_master = await _students_counts_for_masters(
         master_ids, session
     )
+    curator_groups_by_master = await _curator_groups_counts_for_masters(
+        master_ids, session
+    )
 
     items = [
         AdminMasterListItem(
@@ -232,6 +271,7 @@ async def list_masters(
             methods=profile.data.get("profile", {}).get("methods", []),
             practices_count=practices_by_master.get(user.id, 0),
             students_count=students_by_master.get(user.id, 0),
+            curator_groups_count=curator_groups_by_master.get(user.id, 0),
             available_cents=profile.available_cents,
         )
         for user, profile in rows
