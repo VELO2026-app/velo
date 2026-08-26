@@ -50,6 +50,7 @@ from app.modules.practices.models import (
     PracticeType,
 )
 from app.modules.users.models import User, UserRole
+from app.modules.waitlist.models import Waitlist, WaitlistStatus
 from tests.helpers import (
     auth_headers,
     fresh_execute,
@@ -176,6 +177,38 @@ async def _create_practice(
     await db_session.flush()
     await db_session.commit()
     return practice
+
+
+def _practice_body(**overrides) -> dict:
+    """A body POST /practices actually accepts.
+
+    direction and difficulty are REQUIRED by CreatePracticeRequest -- the
+    first version of these tests omitted both and got a 422 that looked like
+    an audience rejection. Kept in one helper so a future required field is
+    added once rather than in four payloads.
+
+    The taxonomy gate (_assert_master_confirmed_taxonomy) fails OPEN for a
+    master whose profile.methods is empty, which is what _make_verified_master
+    above creates -- so "meditation" needs no confirmed method here. That is
+    the documented behaviour of the gate, not an accident this test relies
+    on quietly.
+    """
+    base: dict = {
+        "practice_type": "live",
+        "direction": "meditation",
+        "difficulty": "beginner",
+        "title": "Практика школы",
+        "description": "x",
+        "scheduled_at": (datetime.now(UTC) + timedelta(hours=48)).isoformat(),
+        "duration_minutes": 60,
+        "timezone": "UTC",
+        "max_participants": 20,
+        "is_free": True,
+        "price_cents": 0,
+        "currency": "eur",
+    }
+    base.update(overrides)
+    return base
 
 
 async def _revoke(client: AsyncClient, admin_token: str, user_id: str) -> None:
@@ -613,10 +646,16 @@ async def test_a_confirmed_booking_survives_leaving_the_school(
         db_session, school.id, holder["user"]["id"],
         CuratorMemberKind.STUDENT,
     )
+    # Check-in is open on the interval [scheduled_at - checkin_window_hours,
+    # scheduled_at) -- diary/checkins_service.py. The first version of this
+    # test put the practice half an hour in the PAST, which is on the closed
+    # side of that interval, and the 400 it produced said nothing about
+    # audience at all. +1h is inside the window (24h wide by default) and
+    # still in the future.
     started = await _create_practice(
         db_session, teacher["user"]["id"], schools=[school],
-        status=PracticeStatus.LIVE.value, hours_from_now=-0.5,
-        title="Live School Practice",
+        status=PracticeStatus.SCHEDULED.value, hours_from_now=1,
+        title="Soon School Practice",
     )
     db_session.add(
         Booking(
@@ -691,6 +730,20 @@ async def test_waitlist_confirm_refuses_someone_who_left_while_queued(
     )
     assert joined.status_code == 201, joined.text
     entry_id = joined.json()["id"]
+
+    # confirm_waitlist refuses anything but a NOTIFIED entry, and it does so
+    # BEFORE the audience gate -- so a WAITING entry never reaches the
+    # branch under test and answers 400 instead. The notification normally
+    # arrives from process_waitlist when a spot frees up; here the entry is
+    # promoted directly, because what is being tested is the gate after it,
+    # not the promotion. expires_at is set in the future so the lazy-expiry
+    # step (which runs before the gate too) leaves it alone.
+    entry = await db_session.get(Waitlist, UUID(entry_id))
+    entry.status = WaitlistStatus.NOTIFIED.value
+    entry.notified_at = datetime.now(UTC)
+    entry.expires_at = datetime.now(UTC) + timedelta(minutes=30)
+    await db_session.flush()
+    await db_session.commit()
 
     await db_session.delete(
         await db_session.get(CuratorGroupMember, membership.id)
@@ -812,19 +865,11 @@ async def test_creating_a_school_practice_through_the_api(
 
     resp = await client.post(
         PRACTICES_URL,
-        json={
-            "title": "Утро в школе",
-            "description": "x",
-            "practice_type": "live",
-            "scheduled_at": (
-                datetime.now(UTC) + timedelta(hours=48)
-            ).isoformat(),
-            "duration_minutes": 60,
-            "timezone": "UTC",
-            "is_free": True,
-            "audience_kind": "curator_groups",
-            "curator_group_ids": [str(school.id)],
-        },
+        json=_practice_body(
+            title="Утро в школе",
+            audience_kind="curator_groups",
+            curator_group_ids=[str(school.id)],
+        ),
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 201, resp.text
@@ -849,31 +894,21 @@ async def test_an_empty_or_absent_school_list_is_rejected(
     same request with one school succeeding."""
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     school = await _school(db_session, curator["user"]["id"])
-    base = {
-        "title": "Проверка",
-        "description": "x",
-        "practice_type": "live",
-        "scheduled_at": (datetime.now(UTC) + timedelta(hours=48)).isoformat(),
-        "duration_minutes": 60,
-        "timezone": "UTC",
-        "is_free": True,
-    }
     headers = auth_headers(curator["session_token"])
 
     for payload in (
-        {**base, "audience_kind": "curator_groups"},
-        {**base, "audience_kind": "curator_groups", "curator_group_ids": []},
+        _practice_body(audience_kind="curator_groups"),
+        _practice_body(audience_kind="curator_groups", curator_group_ids=[]),
     ):
         resp = await client.post(PRACTICES_URL, json=payload, headers=headers)
         assert resp.status_code == 422, resp.text
 
     ok = await client.post(
         PRACTICES_URL,
-        json={
-            **base,
-            "audience_kind": "curator_groups",
-            "curator_group_ids": [str(school.id)],
-        },
+        json=_practice_body(
+            audience_kind="curator_groups",
+            curator_group_ids=[str(school.id)],
+        ),
         headers=headers,
     )
     assert ok.status_code == 201, ok.text
@@ -885,21 +920,14 @@ async def test_schools_sent_with_another_audience_kind_are_rejected(
 ) -> None:
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     school = await _school(db_session, curator["user"]["id"])
-    base = {
-        "title": "Проверка",
-        "description": "x",
-        "practice_type": "live",
-        "scheduled_at": (datetime.now(UTC) + timedelta(hours=48)).isoformat(),
-        "duration_minutes": 60,
-        "timezone": "UTC",
-        "is_free": True,
-        "curator_group_ids": [str(school.id)],
-    }
     headers = auth_headers(curator["session_token"])
 
     for kind in ("public", "students", "groups"):
         resp = await client.post(
-            PRACTICES_URL, json={**base, "audience_kind": kind},
+            PRACTICES_URL,
+            json=_practice_body(
+                audience_kind=kind, curator_group_ids=[str(school.id)],
+            ),
             headers=headers,
         )
         assert resp.status_code == 422, kind
@@ -916,20 +944,11 @@ async def test_group_ids_and_curator_group_ids_together_are_rejected(
 
     resp = await client.post(
         PRACTICES_URL,
-        json={
-            "title": "Проверка",
-            "description": "x",
-            "practice_type": "live",
-            "scheduled_at": (
-                datetime.now(UTC) + timedelta(hours=48)
-            ).isoformat(),
-            "duration_minutes": 60,
-            "timezone": "UTC",
-            "is_free": True,
-            "audience_kind": "curator_groups",
-            "group_ids": [str(uuid4())],
-            "curator_group_ids": [str(school.id)],
-        },
+        json=_practice_body(
+            audience_kind="curator_groups",
+            group_ids=[str(uuid4())],
+            curator_group_ids=[str(school.id)],
+        ),
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 422, resp.text
@@ -964,21 +983,14 @@ async def test_a_school_the_master_does_not_belong_to_is_rejected(
     )
     await _revoke(client, admin_token, frozen_curator["user"]["id"])
 
-    base = {
-        "title": "Проверка",
-        "description": "x",
-        "practice_type": "live",
-        "scheduled_at": (datetime.now(UTC) + timedelta(hours=48)).isoformat(),
-        "duration_minutes": 60,
-        "timezone": "UTC",
-        "is_free": True,
-        "audience_kind": "curator_groups",
-    }
     headers = auth_headers(outsider["session_token"])
 
     for ids in ([str(theirs.id)], [str(uuid4())], [str(frozen.id)]):
         resp = await client.post(
-            PRACTICES_URL, json={**base, "curator_group_ids": ids},
+            PRACTICES_URL,
+            json=_practice_body(
+                audience_kind="curator_groups", curator_group_ids=ids,
+            ),
             headers=headers,
         )
         assert resp.status_code == 400, ids
@@ -986,7 +998,9 @@ async def test_a_school_the_master_does_not_belong_to_is_rejected(
     own = await _school(db_session, outsider["user"]["id"], name="Своя")
     ok = await client.post(
         PRACTICES_URL,
-        json={**base, "curator_group_ids": [str(own.id)]},
+        json=_practice_body(
+            audience_kind="curator_groups", curator_group_ids=[str(own.id)],
+        ),
         headers=headers,
     )
     assert ok.status_code == 201, ok.text
