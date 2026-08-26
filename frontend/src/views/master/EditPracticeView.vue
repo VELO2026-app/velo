@@ -361,7 +361,7 @@ import {
 import { ensureTaxonomyCatalog, parseMethods } from '@/utils/methodTaxonomy'
 import { eurStringToCents, centsToEurString } from '@/utils/currency'
 import type { TaxonomyListResponse } from '@/api/taxonomy'
-import type { PracticeResponse } from '@/api/types'
+import type { PracticeAudienceKind, PracticeResponse } from '@/api/types'
 import type { GroupListItem } from '@/api/groups'
 
 const route = useRoute()
@@ -445,7 +445,15 @@ const form = reactive({
   contraindications: '',
   // P5 port (PROMPT №606): audience_kind + audience_group_ids, mirrors
   // CreatePracticeView's own form fields exactly.
-  audience_kind: 'public' as 'public' | 'students' | 'groups',
+  //
+  // GT-11 (P5/curator groups): the union is NO LONGER hand-typed here. It
+  // used to read `'public' | 'students' | 'groups'`, and the day the backend
+  // added a fourth value the regenerated AudienceKind stopped fitting into
+  // it -- loadPractice() below assigns straight from the API response, so
+  // `vue-tsc` failed the whole build on a file nobody had touched. Widening
+  // it by hand would only move the same break to the fifth value; taking the
+  // type from the generated contract removes the copy that can drift.
+  audience_kind: 'public' as PracticeAudienceKind,
   audience_group_ids: [] as string[],
 })
 
