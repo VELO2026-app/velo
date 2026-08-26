@@ -604,6 +604,13 @@ export interface CuratorGroupCuratorRef {
   avatar_url: string | null
 }
 
+/** GET /masters/me/curator-groups/{id}/delete-preview. What deleting the school costs: who is in it, and how many upcoming practices -- across EVERY master of the school, the curator included -- are aimed at it. The counters are the same two the group page reports, from the same helper, so the dialog and the page cannot disagree. */
+export interface CuratorGroupDeletePreviewResponse {
+  masters_count: number
+  students_count: number
+  upcoming_practices_targeting_group: number
+}
+
 /** The card shown to someone who opened an invite link. curator_name is a STRING here, not the {user_id, display_name, avatar_url} object the group page returns: whoever is looking has no relation to the group yet, so they get the school's name and its curator's name, not a handle to go look the curator up with. */
 export interface CuratorGroupInvitePreviewGroup {
   id: string
@@ -627,6 +634,11 @@ export interface CuratorGroupInvitePreviewResponse {
 export interface CuratorGroupInviteResponse {
   kind: 'master' | 'student'
   invite_url: string
+}
+
+/** GET /curator-groups/{id}/leave-preview. How many of MY OWN upcoming practices target this school -- i.e. what I am about to switch off by walking out. A student always sees 0: they teach nothing, and that is a real answer rather than a reason to refuse the question. */
+export interface CuratorGroupLeavePreviewResponse {
+  upcoming_practices_targeting_group: number
 }
 
 /** GET /masters/me/curator-groups. */
@@ -683,6 +695,11 @@ export interface CuratorGroupPageResponse {
   viewer: CuratorGroupViewer
   transfer?: CuratorGroupTransferRef | null
   created_at: string
+}
+
+/** GET /masters/me/curator-groups/{id}/members/{user_id}/remove-preview. The same number for the member the curator is about to remove. Zero for a student, and zero -- not 404 -- for somebody who is not in the group at all: the removal itself is idempotent and answers 204 on that same target, so the advisory must not be stricter than the action it describes. */
+export interface CuratorGroupRemovePreviewResponse {
+  upcoming_practices_targeting_group: number
 }
 
 /** One curator group, as its curator sees it. masters_count counts only VISIBLE masters -- members with kind='master' whose MasterProfile is verified right now (I-4). A suspended master keeps their row and disappears from this number until re-verification; the number and the roster's is_visible flag are computed from the same predicate, so they cannot disagree. students_count counts every kind='student' row. Visibility is a rule about masters; a student has no MasterProfile to be verified. `transfer` describes the group's pending hand-over, or null when there is none. Until GT-4 this field did not exist at all -- deliberately, so that a hardcoded null could not become a promise the frontend built on. It appears now BECAUSE it acquired a writer, which is the only reason a field ever should. PATCH returns this schema too, so renaming a group now reports the pending transfer alongside the new name. That is an intended widening, not a leak: one response shape has one field set, and the alternative -- two flavours of CuratorGroupResponse, with and without -- is exactly the duplication CuratorGroupTransferRef exists to avoid. A rename does not touch the offer. */
@@ -1285,6 +1302,8 @@ export interface PracticeResponse {
   difficulty?: string | null
   audience_kind?: AudienceKind
   audience_group_names?: string[]
+  audience_curator_group_names?: string[]
+  audience_unavailable?: boolean
   recurrence_days?: number[] | null
   total_sessions?: number | null
   completed_sessions?: number | null
