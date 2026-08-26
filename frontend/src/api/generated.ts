@@ -45,6 +45,23 @@ export interface AddGroupMemberRequest {
   student_user_id: string
 }
 
+/** The school's owner, as the admin list shows them. Two fields, not the member-facing three: the admin list is a table, and avatar_url would cost a column nobody reads at this density. The admin who needs more opens the master's own page. */
+export interface AdminCuratorGroupCuratorRef {
+  user_id: string
+  display_name: string
+}
+
+/** One school in the admin list. is_active IS A FIELD, NOT A FILTER, and this is the only place in the system where a frozen school is visible at all. For its own members an inactive group is indistinguishable from a deleted one (404, I-6) -- which is right for them and useless for an admin, who is the person being asked "why has my school gone quiet". Both kinds live in one listing precisely so that question has an answer on screen. masters_count counts VISIBLE masters only (kind='master' whose profile is verified right now, I-4); students_count counts every kind='student' row. Same rule the group page reports, so the two cannot disagree about the same school. */
+export interface AdminCuratorGroupListItem {
+  id: string
+  name: string
+  curator: AdminCuratorGroupCuratorRef
+  masters_count: number
+  students_count: number
+  is_active: boolean
+  created_at: string
+}
+
 /** Response for verify/reject actions. */
 export interface AdminMasterActionResponse {
   user_id: string
@@ -64,6 +81,7 @@ export interface AdminMasterDetail {
   methods?: string[]
   practices_count?: number | null
   students_count?: number | null
+  curator_groups_count?: number | null
   available_cents?: number | null
   experience_years?: number
   bio?: string | null
@@ -74,7 +92,7 @@ export interface AdminMasterDetail {
   certifications?: string[]
 }
 
-/** Single item in admin masters list -- user data + master status. CR-01: role narrowed from str to UserRole for type safety. R8: rich-card fields, additive over the F8-fix shape. - methods: read straight off the already-joined MasterProfile.data.profile (zero extra cost -- see list_masters). - practices_count / students_count: real all-time aggregates, computed in ONE batched query each over the page's master_ids (no N+1, mirrors practices/enrichment_service.py attendance_counts_for_practices). None only if a master somehow falls outside the batch (should not happen; honest stub -- FE shows "-"). - available_cents: MasterProfile.available_cents, a plain column already loaded by the list_masters join -- zero extra cost. */
+/** Single item in admin masters list -- user data + master status. CR-01: role narrowed from str to UserRole for type safety. R8: rich-card fields, additive over the F8-fix shape. - methods: read straight off the already-joined MasterProfile.data.profile (zero extra cost -- see list_masters). - practices_count / students_count: real all-time aggregates, computed in ONE batched query each over the page's master_ids (no N+1, mirrors practices/enrichment_service.py attendance_counts_for_practices). None only if a master somehow falls outside the batch (should not happen; honest stub -- FE shows "-"). - available_cents: MasterProfile.available_cents, a plain column already loaded by the list_masters join -- zero extra cost. P4/GT-9: - curator_groups_count: how many curator groups this master OWNS, in the same batched shape as the two counts above. Counts ACTIVE AND FROZEN alike: revoking a master's verification does not dissolve their schools, and an admin looking at the person needs to see what is still attached to them. Same None semantics as its neighbours -- null only if a master somehow falls outside the batch, which should not happen; the FE shows "-". */
 export interface AdminMasterListItem {
   id: string
   telegram_id?: number | null
@@ -87,6 +105,7 @@ export interface AdminMasterListItem {
   methods?: string[]
   practices_count?: number | null
   students_count?: number | null
+  curator_groups_count?: number | null
   available_cents?: number | null
 }
 
@@ -1006,6 +1025,14 @@ export interface OfferCuratorGroupTransferRequest {
 
 export interface OpenThreadIn {
   topic?: string | null
+}
+
+/** GET /api/v1/admin/curator-groups. */
+export interface PaginatedAdminCuratorGroupsResponse {
+  items: AdminCuratorGroupListItem[]
+  total: number
+  limit: number
+  offset: number
 }
 
 /** GET /api/v1/admin/practices -- paginated, scope-filtered list. */
