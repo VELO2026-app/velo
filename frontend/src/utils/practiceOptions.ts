@@ -1,7 +1,7 @@
 // Shared practice form options.
 // Used by CreatePracticeView and EditPracticeView to avoid duplication (W-2).
 
-import type { PracticeDirection } from '@/api/types'
+import type { PracticeDirection, PracticeAudienceKind } from '@/api/types'
 import type { TaxonomyListResponse } from '@/api/taxonomy'
 
 export const DURATION_OPTIONS: { label: string; value: string }[] = [
@@ -17,7 +17,13 @@ export const DURATION_OPTIONS: { label: string; value: string }[] = [
 // between Create and Edit for the same reason as DURATION_OPTIONS above --
 // originally lived only in CreatePracticeView; extracted here so Edit's port
 // doesn't duplicate the option list a second time.
-export const AUDIENCE_OPTIONS: { label: string; value: string }[] = [
+// GT-11: values are the CONTRACT type (generated.ts's AudienceKind via the
+// types.ts alias), so a typo'd kind stops compiling instead of silently
+// posting. The fourth kind ('curator_groups', schools) is backend-side since
+// GT-11 but deliberately NOT offered here yet -- the selector grows its
+// school multi-select in FE-24, and an option without its picker would let
+// a master pick a kind whose targets they cannot set.
+export const AUDIENCE_OPTIONS: { label: string; value: PracticeAudienceKind }[] = [
   { value: 'public', label: 'Публичная' },
   { value: 'students', label: 'Все ученики' },
   { value: 'groups', label: 'Конкретные группы' },

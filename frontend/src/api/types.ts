@@ -221,10 +221,13 @@ export interface PracticeResponse extends GeneratedPracticeResponse {
    * detail, update, delete, cancel), same fixture-compatibility reason as
    * the other bridged fields above. */
   deduplicated?: boolean
-  /** P5 (PROMPT №594): 'public' | 'students' | 'groups'. Optional/undefined
-   * for the same fixture-compatibility reason as the other bridged fields
-   * above -- defaults to 'public' server-side, but existing test fixtures
-   * built before this field existed simply omit it. */
+  /** P5 (PROMPT №594): the practice's audience kind. The VALUE SET is
+   * generated.ts's AudienceKind (public/students/groups/curator_groups --
+   * GT-11 added the fourth) and is deliberately not restated here: comments
+   * that enumerate unions drift the day the contract grows. Optional/
+   * undefined for the same fixture-compatibility reason as the other bridged
+   * fields above -- defaults to 'public' server-side, but existing test
+   * fixtures built before this field existed simply omit it. */
   audience_kind?: AudienceKind
   /** The practice's target CUSTOM groups' names (audience_kind='groups'
    * only; empty/undefined otherwise). Static per-practice data, not a
