@@ -88,36 +88,7 @@ async def update_user(
     if not updates:
         return user
 
-    # -- Nested notifications object (partial merge) --------------------------
-    #
-    # notifications is NOT a flat credential field: it is a nested dict, so the
-    # plain dict.update() used for flat fields below would REPLACE the whole
-    # object and wipe toggles the user did not send. Pull it out first and
-    # merge key-by-key onto whatever is stored, preserving untouched flags.
-    # model_dump(exclude_unset=True) already dropped keys the client omitted,
-    # and None values (no opinion) are skipped here too.
-    notifications_update = updates.pop("notifications", None)
-
-    # -- Nested master_notifications object (partial deep-merge) --------------
-    #
-    # master_notifications is the master-only 9-toggle preference set plus a
-    # delivery `schedule`, stored under credentials["master_notifications"]
-    # (schema-on-read sandbox, same idea as the 4-key user "notifications").
-    # Like notifications it must NOT go through the flat path below, so drop it
-    # from `updates`. We re-derive the payload straight from the model with
-    # by_alias=True so the schedule's "from" field (aliased from the `from_`
-    # Python keyword) is keyed as "from" -- exactly the key the read side
-    # (UserResponse.master_notifications) looks for. exclude_unset drops keys
-    # the client omitted; None toggles / sub-fields mean "leave as is" and are
-    # skipped during the merge below.
-    updates.pop("master_notifications", None)
-    master_notifications_update = (
-        data.master_notifications.model_dump(exclude_unset=True, by_alias=True)
-        if data.master_notifications is not None
-        else None
-    )
-
-    # Split the REMAINING flat JSONB-backed fields from plain column fields.
+    # Split the flat JSONB-backed fields from plain column fields.
     #
     # None is dropped for JSONB fields, empty string is kept:
     #   - onboarding_completed: only true/false are meaningful; null would
@@ -143,59 +114,20 @@ async def update_user(
     for field, value in column_updates.items():
         setattr(user, field, value)
 
-    # Apply JSONB-backed fields + the merged notifications object into
-    # credentials. We build a NEW dict (copy) and hand it to set_jsonb, which
-    # reassigns + flag_modified()s the column. Mutating user.credentials in
-    # place would not be detected by SQLAlchemy.
-    if (
-        jsonb_updates
-        or notifications_update is not None
-        or master_notifications_update is not None
-    ):
+    # Apply JSONB-backed fields into credentials. We build a NEW dict (copy) and
+    # hand it to set_jsonb, which reassigns + flag_modified()s the column.
+    # Mutating user.credentials in place would not be detected by SQLAlchemy.
+    #
+    # T-26: TWO nested-object merges used to sit here, one per notification
+    # store -- the four-key credentials["notifications"] (set 1) and the
+    # nine-key credentials["master_notifications"] (set 2). Both are gone; both
+    # stores live in comms now. A blob still holding either key is left alone:
+    # this path neither reads nor writes them, so old data is inert rather than
+    # a second source of truth. That leaves only flat fields here, which is why
+    # the nested-merge machinery went with them.
+    if jsonb_updates:
         new_credentials = dict(user.credentials or {})
-
-        if jsonb_updates:
-            new_credentials.update(jsonb_updates)
-
-        if notifications_update is not None:
-            # Merge onto the stored notifications object (or {} if absent),
-            # skipping None values (those mean "leave this toggle as is").
-            current = new_credentials.get("notifications")
-            merged = dict(current) if isinstance(current, dict) else {}
-            for key, value in notifications_update.items():
-                if value is not None:
-                    merged[key] = value
-            new_credentials["notifications"] = merged
-
-        if master_notifications_update is not None:
-            # Same partial-merge idea as notifications, with one extra level:
-            # the nested `schedule` is merged field-by-field so changing only
-            # `to` keeps the stored `from`/`days`. None values mean "leave as
-            # is" and are skipped (toggles and schedule sub-fields alike).
-            current = new_credentials.get("master_notifications")
-            merged = dict(current) if isinstance(current, dict) else {}
-
-            schedule_update = master_notifications_update.pop("schedule", None)
-
-            for key, value in master_notifications_update.items():
-                if value is not None:
-                    merged[key] = value
-
-            if schedule_update is not None:
-                current_schedule = merged.get("schedule")
-                merged_schedule = (
-                    dict(current_schedule)
-                    if isinstance(current_schedule, dict)
-                    else {}
-                )
-                # from / to overwrite; days replaces the list wholesale.
-                for key, value in schedule_update.items():
-                    if value is not None:
-                        merged_schedule[key] = value
-                merged["schedule"] = merged_schedule
-
-            new_credentials["master_notifications"] = merged
-
+        new_credentials.update(jsonb_updates)
         user.set_jsonb("credentials", new_credentials)
 
     await session.flush()
@@ -223,13 +155,13 @@ async def switch_user_role(
     target_role: UserRole,
     session: AsyncSession,
 ) -> User:
-    """Switch the caller's own role in place (capability-derived, A1=Б).
+    """Switch the caller's own role in place (capability-derived, A1=B).
 
     Authorization is derived, not seeded: derive_allowed_roles() (shared with
     UserResponse.role_switch -- single source of truth) computes the allowed
     target set from
       - the current role (an admin may take any of the three roles, including
-        MASTER without a master profile -- №254 Q4=А),
+        MASTER without a master profile -- №254 Q4=A),
       - master capability (a VERIFIED MasterProfile unlocks MASTER),
       - the switched-away-admin marker (see below).
     A target outside the derived set -> 403. In particular a non-admin can
@@ -331,10 +263,11 @@ async def user_has_master_capability(
 ) -> bool:
     """Whether the user has a VERIFIED MasterProfile (i.e. master capability).
 
-    Used by GET /users/me to gate the master_notifications block. This is the
-    "is effectively a master" check -- deliberately capability-based rather than
+    Used by GET /users/me to derive the role_switch block (it gated
+    master_notifications too, until T-26 retired that). This is the "is
+    effectively a master" check -- deliberately capability-based rather than
     role==MASTER, so an admin (role=ADMIN) who also has a verified MasterProfile
-    still sees the master notifications screen. A missing / pending / rejected
+    is still offered MASTER as a switch target. A missing / pending / rejected
     profile -> False.
 
     Read-only: the caller passes a read session (get_db_reader in the router).
