@@ -96,7 +96,11 @@ from app.modules.curator_groups.models import (  # noqa: E402
 )
 from app.modules.diary.models import Checkin, CheckType, Feedback  # noqa: E402
 from app.modules.masters.models import MasterProfile  # noqa: E402
-from app.modules.practices.models import Practice, PracticeStatus  # noqa: E402
+from app.modules.practices.models import (  # noqa: E402
+    AudienceKind,
+    Practice,
+    PracticeStatus,
+)
 from app.modules.practices.schemas import (  # noqa: E402
     CreatePracticeRequest,
     UpdatePracticeRequest,
@@ -342,6 +346,7 @@ async def ensure_practice(
     session: AsyncSession,
     master: User,
     spec: dict,
+    schools: dict[str, CuratorGroup] | None = None,
 ) -> Practice | None:
     """Create one practice in the state the profile asks for.
 
@@ -403,6 +408,24 @@ async def ensure_practice(
         else scheduled_at
     )
 
+    # P5/GT-12: a practice may be aimed at a curator group. The profile
+    # names the SCHOOL, not a UUID -- nothing in a profile is a UUID, people
+    # and groups are all referred to by their own keys and names, and a seed
+    # that demanded ids could not be written by hand.
+    audience_spec = spec.get("audience") or {}
+    school_name = audience_spec.get("curator_group")
+    audience_kwargs: dict = {}
+    if school_name:
+        # KeyError on an unknown name, exactly as a bad "master" key raises
+        # today -- a profile typo should fail loudly, not seed a practice
+        # nobody can see. Same posture the curator_groups section already
+        # takes with its people keys.
+        school = (schools or {})[school_name]
+        audience_kwargs = {
+            "audience_kind": AudienceKind.CURATOR_GROUPS,
+            "curator_group_ids": [school.id],
+        }
+
     body = CreatePracticeRequest(
         practice_type=spec.get("practice_type", "live"),
         title=title,
@@ -417,6 +440,7 @@ async def ensure_practice(
         is_free=spec.get("is_free", True),
         price_cents=spec.get("price_cents", 0),
         currency=spec.get("currency", "eur"),
+        **audience_kwargs,
     )
     practice, _deduped = await create_practice(master, body, session)
     await session.flush()
@@ -764,6 +788,11 @@ async def seed_profile(
                 f"  practice [{p.get('state', 'scheduled'):9}] "
                 f"{when:%Y-%m-%d %H:%M}  {p['duration_minutes']:>3} min  "
                 f"{prefix} {p['title']}"
+                + (
+                    f"  -> школа «{p['audience']['curator_group']}»"
+                    if (p.get("audience") or {}).get("curator_group")
+                    else ""
+                )
             )
         # A dry run that stays silent about a section it would write is a
         # dry run that lies, and the person reading it has no other way to
@@ -796,11 +825,31 @@ async def seed_profile(
     await session.flush()
     ok(f"students {stats['students']}")
 
+    # -- curator groups, built from the people above --
+    # BEFORE practices, not after: a practice may target a school
+    # ("audience": {"curator_group": ...}), and create_practice validates
+    # that the school exists and that this master belongs to it. Schools
+    # need only the masters and students created above, so moving the
+    # section up costs nothing and removes an ordering trap.
+    #
+    # One namespace for the roster keys: a school is assembled out of the
+    # masters and students the profile already declares, so nobody is
+    # invented here and a typo in a key fails loudly (KeyError), exactly as
+    # it does for a practice's "master".
+    people: dict[str, User] = {**masters, **students}
+    schools: dict[str, CuratorGroup] = {}
+    for spec in profile.get("curator_groups", []):
+        curator = masters[spec["curator"]]
+        school = await ensure_curator_group(session, curator, spec, people)
+        schools[spec["name"]] = school
+        stats["curator_groups"] += 1
+        ok(f"school   {spec['name']}")
+
     # -- practices, and everything hanging off them --
     for spec in profile.get("practices", []):
         master = masters[spec["master"]]
         spec = {**spec, "title": f"{prefix} {spec['title']}"}
-        practice = await ensure_practice(session, master, spec)
+        practice = await ensure_practice(session, master, spec, schools)
         if practice is None:
             continue
         stats["practices"] += 1
@@ -835,18 +884,6 @@ async def seed_profile(
             f"practice [{spec.get('state', 'scheduled'):9}] "
             f"{spec['title']}"
         )
-
-    # -- curator groups, built from the people above --
-    # One namespace for the roster keys: a school is assembled out of the
-    # masters and students the profile already declares, so nobody is
-    # invented here and a typo in a key fails loudly (KeyError), exactly as
-    # it does for a practice's "master".
-    people: dict[str, User] = {**masters, **students}
-    for spec in profile.get("curator_groups", []):
-        curator = masters[spec["curator"]]
-        await ensure_curator_group(session, curator, spec, people)
-        stats["curator_groups"] += 1
-        ok(f"school   {spec['name']}")
 
     return stats
 

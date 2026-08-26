@@ -13,6 +13,7 @@
 # =============================================================================
 
 import secrets
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import ColumnElement, Select, and_, case, delete, func, select
@@ -45,7 +46,11 @@ from app.modules.masters.models import MasterProfile
 # master. Reading from masters/service.py does not modify it -- six other
 # modules already import from there, and there is no cycle.
 from app.modules.masters.service import _NON_COUNTABLE_PRACTICE_STATUSES
-from app.modules.practices.models import Practice
+from app.modules.practices.models import (
+    Practice,
+    PracticeAudienceCuratorGroup,
+    PracticeStatus,
+)
 from app.modules.users.helpers import display_name
 from app.modules.users.models import User
 
@@ -1556,3 +1561,142 @@ async def decline_curator_group_transfer(
             CuratorGroupTransfer.to_user_id == user_id,
         )
     )
+
+
+# ===========================================================================
+# Advisory previews (P5/GT-12, tz-curator-groups.md 8.5)
+#
+# Three read-only counts behind three confirm dialogs. NOTHING HERE BLOCKS
+# ANYTHING: leave, remove_curator_group_member and delete_curator_group are
+# byte-for-byte unchanged, and a caller who never asks these questions gets
+# the same behaviour as before. The point is that the person doing something
+# irreversible sees its price first.
+# ===========================================================================
+
+
+_UPCOMING_PRACTICE_STATUSES = (
+    PracticeStatus.SCHEDULED.value,
+    PracticeStatus.LIVE.value,
+)
+
+
+async def _upcoming_practices_targeting_group(
+    group_id: UUID,
+    master_ids: list[UUID],
+    session: AsyncSession,
+) -> int:
+    """Upcoming practices by these masters that target this school.
+
+    "UPCOMING" IS THE FEED'S OWN DEFINITION, read from the body of
+    list_public_practices rather than reinvented: status in
+    {scheduled, live} AND scheduled_at strictly in the future. Strictly --
+    a practice starting this instant is not upcoming, and the feed says so
+    with `>` rather than `>=`.
+
+    A DRAFT IS NOT COUNTED. It is visible to nobody but its author, so its
+    audience is nobody's business yet; counting it would inflate the number
+    in the dialog with practices that were never reaching the school in the
+    first place.
+
+    Each occurrence of a series counts on its own -- every child carries its
+    own audience rows and its own date, so "how many sessions go dark" is a
+    count of sessions, not of series.
+
+    An empty master list yields 0 without a query: the school has nobody who
+    could be pointing a practice at it.
+    """
+    if not master_ids:
+        return 0
+    return (
+        await session.execute(
+            select(func.count(Practice.id))
+            .join(
+                PracticeAudienceCuratorGroup,
+                PracticeAudienceCuratorGroup.practice_id == Practice.id,
+            )
+            .where(
+                PracticeAudienceCuratorGroup.group_id == group_id,
+                Practice.master_id.in_(master_ids),
+                Practice.status.in_(_UPCOMING_PRACTICE_STATUSES),
+                Practice.scheduled_at > datetime.now(UTC),
+            )
+        )
+    ).scalar_one()
+
+
+async def leave_preview(
+    group_id: UUID, user_id: UUID, session: AsyncSession,
+) -> dict:
+    """What this person switches off by leaving the school.
+
+    Resolved through _relation_or_404, so a stranger gets the same 404 the
+    group page gives them, and an INACTIVE school gives 404 too. That last
+    part is asymmetric with leave() itself, which deliberately does not
+    check activity (I-5: a member of a frozen school must still be able to
+    walk out). The asymmetry is a decision, not an oversight: an advisory
+    does not have to be reachable wherever the action is, and a second,
+    softer resolver here would be a copy of the access rule that drifts from
+    the original. Practical consequence for the frontend: on a frozen school
+    the exit dialog shows no advice while the button still works.
+
+    THE CURATOR GETS A NUMBER, not a 409. They cannot leave (the group would
+    be orphaned), but they are the one person who might hand the school over
+    instead, and seeing the price of walking away is exactly the input for
+    that decision. Refusing to answer would hide from the owner facts about
+    their own school.
+    """
+    group, _relation = await _relation_or_404(group_id, user_id, session)
+    count = await _upcoming_practices_targeting_group(
+        group.id, [user_id], session,
+    )
+    return {"upcoming_practices_targeting_group": count}
+
+
+async def remove_member_preview(
+    curator_user_id: UUID,
+    group_id: UUID,
+    user_id: UUID,
+    session: AsyncSession,
+) -> dict:
+    """What the curator switches off by removing this member.
+
+    404 only for a group that is not this curator's -- never for the member.
+    remove_curator_group_member answers 204 for somebody who is not in the
+    group, and an advisory that refused the same target would be stricter
+    than the action it is advising about.
+    """
+    group = await _get_group_or_404(curator_user_id, group_id, session)
+    count = await _upcoming_practices_targeting_group(
+        group.id, [user_id], session,
+    )
+    return {"upcoming_practices_targeting_group": count}
+
+
+async def delete_group_preview(
+    curator_user_id: UUID, group_id: UUID, session: AsyncSession,
+) -> dict:
+    """What deleting the school costs -- people and practices.
+
+    The practice count spans EVERY master of the school: the visible member
+    masters plus the curator, who holds no membership row (I-2) and would be
+    missed by a literal read of the roster. Their own practices go dark with
+    the school like anyone else's.
+
+    masters_count / students_count come from get_group_counts, the same
+    helper the group page uses, so the dialog cannot report a different
+    school size than the page behind it.
+    """
+    group = await _get_group_or_404(curator_user_id, group_id, session)
+    masters_count, students_count = await get_group_counts(group.id, session)
+    master_ids = [
+        group.curator_user_id,
+        *await _visible_master_ids(group.id, session),
+    ]
+    count = await _upcoming_practices_targeting_group(
+        group.id, master_ids, session,
+    )
+    return {
+        "masters_count": masters_count,
+        "students_count": students_count,
+        "upcoming_practices_targeting_group": count,
+    }

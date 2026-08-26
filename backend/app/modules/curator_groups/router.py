@@ -43,14 +43,17 @@ from app.modules.auth.dependencies import (
 from app.modules.curator_groups.schemas import (
     CreateCuratorGroupInviteRequest,
     CreateCuratorGroupRequest,
+    CuratorGroupDeletePreviewResponse,
     CuratorGroupInvitePreviewResponse,
     CuratorGroupInviteResponse,
+    CuratorGroupLeavePreviewResponse,
     CuratorGroupListResponse,
     CuratorGroupMasterItem,
     CuratorGroupMemberItem,
     CuratorGroupMineItem,
     CuratorGroupMineResponse,
     CuratorGroupPageResponse,
+    CuratorGroupRemovePreviewResponse,
     CuratorGroupResponse,
     CuratorGroupTransferRef,
     CuratorMemberKindLiteral,
@@ -67,12 +70,14 @@ from app.modules.curator_groups.service import (
     create_curator_group,
     decline_curator_group_transfer,
     delete_curator_group,
+    delete_group_preview,
     get_curator_group_page,
     get_group_counts,
     get_group_transfer_ref,
     get_or_create_curator_group_invite,
     join_curator_group_by_token,
     leave_curator_group,
+    leave_preview,
     list_curator_group_members,
     list_curator_groups,
     list_group_masters,
@@ -81,6 +86,7 @@ from app.modules.curator_groups.service import (
     offer_curator_group_transfer,
     preview_curator_group_invite,
     remove_curator_group_member,
+    remove_member_preview,
     revoke_curator_group_invite,
     update_curator_group,
 )
@@ -378,6 +384,46 @@ async def cancel_curator_group_transfer_endpoint(
     )
 
 
+@router.get(
+    "/me/curator-groups/{group_id}/members/{user_id}/remove-preview",
+    response_model=CuratorGroupRemovePreviewResponse,
+)
+async def remove_member_preview_endpoint(
+    group_id: UUID,
+    user_id: UUID,
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_reader),
+) -> CuratorGroupRemovePreviewResponse:
+    """How many upcoming practices this member aims at the school.
+
+    ADVISORY: nothing is blocked and nothing is written. Removal itself is
+    unchanged and still idempotent, so this answers 0 rather than 404 for a
+    target who is not in the group.
+    """
+    user, _profile = master_tuple
+    preview = await remove_member_preview(user.id, group_id, user_id, session)
+    return CuratorGroupRemovePreviewResponse(**preview)
+
+
+@router.get(
+    "/me/curator-groups/{group_id}/delete-preview",
+    response_model=CuratorGroupDeletePreviewResponse,
+)
+async def delete_group_preview_endpoint(
+    group_id: UUID,
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_reader),
+) -> CuratorGroupDeletePreviewResponse:
+    """What deleting this school costs -- members and upcoming practices.
+
+    ADVISORY: deletion is still never blocked (I-11).
+    """
+    user, _profile = master_tuple
+    preview = await delete_group_preview(user.id, group_id, session)
+    return CuratorGroupDeletePreviewResponse(**preview)
+
+
+
 # =============================================================================
 # MEMBER-FACING ROUTER (GT-2, tz-curator-groups.md 5.2 "Участник")
 # =============================================================================
@@ -514,6 +560,29 @@ async def decline_curator_group_transfer_endpoint(
     """
     await decline_curator_group_transfer(group_id, user.id, session)
     await session.flush()
+
+
+@member_router.get(
+    "/{group_id}/leave-preview",
+    response_model=CuratorGroupLeavePreviewResponse,
+)
+async def leave_preview_endpoint(
+    group_id: UUID,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_reader),
+) -> CuratorGroupLeavePreviewResponse:
+    """How many of MY upcoming practices target this school.
+
+    ADVISORY: leaving is unchanged and still unconditional (I-5). Declared
+    with a static suffix under the dynamic {group_id}, so unlike /mine and
+    /invites/{token} it needs no special ordering -- but it is kept next to
+    the page route it belongs to rather than at the end of the file.
+
+    The curator gets a number too: they cannot leave, and that is exactly
+    why the price of leaving is what they weigh a transfer against.
+    """
+    preview = await leave_preview(group_id, user.id, session)
+    return CuratorGroupLeavePreviewResponse(**preview)
 
 
 @member_router.get("/{group_id}", response_model=CuratorGroupPageResponse)

@@ -75,6 +75,9 @@ from app.modules.auth.dependencies import (
 )
 from app.modules.masters.models import MasterProfile
 from app.modules.masters.service import get_master_display_name
+from app.modules.practices.audience_service import (
+    curator_group_audience_is_dark,
+)
 from app.modules.practices.cancel_service import cancel_practice
 from app.modules.practices.listing_service import list_public_practices
 from app.modules.practices.models import Practice
@@ -91,6 +94,7 @@ from app.modules.practices.schemas import (
 )
 from app.modules.practices.service import (
     create_practice,
+    curator_group_names_for_practice,
     delete_practice,
     get_practice_detail,
     group_names_for_practice,
@@ -268,6 +272,12 @@ async def create_practice_endpoint(
     # have a real status).
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
     audience_group_names = await group_names_for_practice(practice, session)
+    audience_curator_group_names = await curator_group_names_for_practice(
+        practice, session,
+    )
+    audience_unavailable = await curator_group_audience_is_dark(
+        practice, session,
+    )
     return practice_to_response(
         practice, user.first_name,
         zoom_host_join_url=host_join_url,
@@ -275,6 +285,8 @@ async def create_practice_endpoint(
         zoom_meeting_status=zoom_meeting_status,
         deduplicated=deduplicated,
         audience_group_names=audience_group_names,
+        audience_curator_group_names=audience_curator_group_names,
+        audience_unavailable=audience_unavailable,
     )
 
 
@@ -607,12 +619,20 @@ async def update_practice_endpoint(
     # meeting) sees "готовится" immediately instead of a stale None.
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
     audience_group_names = await group_names_for_practice(practice, session)
+    audience_curator_group_names = await curator_group_names_for_practice(
+        practice, session,
+    )
+    audience_unavailable = await curator_group_audience_is_dark(
+        practice, session,
+    )
     return practice_to_response(
         practice, user.first_name,
         zoom_host_join_url=host_join_url,
         zoom_public_link_visible=True,
         zoom_meeting_status=zoom_meeting_status,
         audience_group_names=audience_group_names,
+        audience_curator_group_names=audience_curator_group_names,
+        audience_unavailable=audience_unavailable,
     )
 
 

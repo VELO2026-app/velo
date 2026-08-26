@@ -627,3 +627,57 @@ async def count_stranded_active_bookings(
         stranded += 1
 
     return stranded
+
+
+async def curator_group_audience_is_dark(
+    practice: Practice, session: AsyncSession,
+) -> bool:
+    """Does this practice reach NOBODY through its target schools?
+
+    P5/GT-12. Answers the master's question, not a viewer's: "my practice is
+    set to my school and nobody can see it -- why". True exactly when
+    audience_kind is 'curator_groups' and not one of the target schools is
+    still usable, i.e. the practice is visible only to its own master and to
+    whoever already holds a booking (H-R2-8 grandfather).
+
+    NOT A NEGATION OF _is_curator_group_audience_clause, and deliberately a
+    separate function rather than a reuse of it: that clause asks about a
+    VIEWER, and there is no viewer here. Two of its three conditions carry
+    over (the school is active, the master still belongs to it) and the
+    third -- "the viewer belongs to the school" -- has no meaning for this
+    question. Rewriting the shared clause to take an optional viewer would
+    have put an if inside the predicate that guards every practice on the
+    platform; a second function reusing the same two bricks is cheaper and
+    cannot change anyone's access.
+
+    A dark practice has NOT lost its target rows -- they are all still
+    there, and so are the names (see curator_group_names_for_practice). The
+    master needs both halves: the flag says "nobody sees this", the names
+    say WHICH school it was pointed at. Reporting the flag while blanking
+    the names would tell them something is broken without telling them what
+    to fix.
+
+    Always False for the other three audience kinds -- not None, not
+    absent: a public practice's audience cannot become unavailable, and a
+    tri-state here would make every consumer handle a case that does not
+    exist.
+    """
+    if practice.audience_kind != AudienceKind.CURATOR_GROUPS.value:
+        return False
+
+    usable = (
+        await session.execute(
+            select(PracticeAudienceCuratorGroup.id)
+            .join(
+                CuratorGroup,
+                CuratorGroup.id == PracticeAudienceCuratorGroup.group_id,
+            )
+            .where(
+                PracticeAudienceCuratorGroup.practice_id == practice.id,
+                _curator_profile_verified(CuratorGroup.curator_user_id),
+                _master_in_curator_group_clause(practice.master_id),
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return usable is None

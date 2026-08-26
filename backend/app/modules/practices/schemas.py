@@ -735,8 +735,31 @@ class PracticeResponse(BaseModel):
     # this practice targets), not a per-viewer flag -- the frontend uses it
     # to compose the "Вы не состоите в группе «...»" check-in error message
     # without a second round-trip.
+    #
+    # P5/GT-12, the two curator-group fields. Neither is auto-populated,
+    # same as audience_group_names above.
+    #
+    # audience_curator_group_names: the target SCHOOLS' names, filled at the
+    # same three call sites and therefore seen by the same circle -- see
+    # curator_group_names_for_practice's docstring for why that circle
+    # includes a booked non-owner and why it is wider here than for
+    # 'groups'.
+    #
+    # audience_unavailable: TRUE when this practice reaches nobody through
+    # its schools -- the master left them, they were frozen, or they were
+    # deleted. It is a fact about the PRACTICE, not about the viewer asking:
+    # the same value goes to everyone who can read the response, because
+    # "this practice is dark" is not a per-person answer. Always false for
+    # the other three kinds; never null, so no consumer has to handle a
+    # state that cannot occur.
+    #
+    # The two are independent on purpose: a frozen school leaves the flag
+    # true AND the names full. Without the names the master learns that
+    # something is wrong and not what.
     audience_kind: AudienceKind = AudienceKind.PUBLIC
     audience_group_names: list[str] = []
+    audience_curator_group_names: list[str] = []
+    audience_unavailable: bool = False
 
     # -- Series meta (E3 batch 2; computed by the service for series roots) --
     # Populated only for a `series` practice whose ROOT carries a recurrence

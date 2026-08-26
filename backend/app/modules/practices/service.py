@@ -94,7 +94,10 @@ from app.modules.curator_groups.models import (
 )
 from app.modules.masters.groups_models import MasterGroup
 from app.modules.masters.models import MasterProfile
-from app.modules.practices.audience_service import count_stranded_active_bookings
+from app.modules.practices.audience_service import (
+    count_stranded_active_bookings,
+    curator_group_audience_is_dark,
+)
 from app.modules.practices.enrichment_service import (
     attendance_counts_for_practices,
     attendance_counts_kwargs,
@@ -369,6 +372,52 @@ async def group_names_for_practice(
         )
         .where(PracticeAudienceGroup.practice_id == practice.id)
         .order_by(MasterGroup.name)
+    )
+    return list((await session.execute(stmt)).scalars().all())
+
+
+async def curator_group_names_for_practice(
+    practice: Practice, session: AsyncSession,
+) -> list[str]:
+    """PracticeResponse.audience_curator_group_names -- the practice's target
+    SCHOOLS' names, alphabetical. Empty for anything but
+    audience_kind='curator_groups'.
+
+    Mirror of group_names_for_practice above; that function is untouched and
+    keeps its own `if audience_kind != GROUPS: return []` first line, so the
+    two never answer for each other.
+
+    WHO SEES THESE NAMES is the same circle as the older field's, on
+    purpose: filled at the same three call sites, one of which (the practice
+    detail) is NOT owner-gated. That is not an oversight there and not one
+    here -- a viewer holding a booking reaches the detail by the H-R2-8
+    grandfather, and the name is exactly what lets the frontend say "Вы не
+    состоите в школе «...»" without a second round-trip. A stranger never
+    reaches the field at all: the detail's audience gate answers 404 first.
+
+    FOR THIS AUDIENCE THE CIRCLE IS WIDER THAN FOR 'groups', and that is
+    fine. A target school holds not only the master's own students but other
+    masters of the school too, so a colleague may read the name here where
+    a custom group would only ever have been seen by its members. A school's
+    name is known to everyone inside it; there is nothing to leak.
+
+    NAMES SURVIVE WHAT THE FLAG REPORTS. audience_unavailable can be true
+    while this list is full -- a frozen school still has a name, and its
+    rows are still there. The pair is deliberate and must not be
+    "harmonised": the flag says nobody can see the practice, the names say
+    which school it was aimed at, and a master given the first without the
+    second cannot tell what to fix.
+    """
+    if practice.audience_kind != AudienceKind.CURATOR_GROUPS.value:
+        return []
+    stmt = (
+        select(CuratorGroup.name)
+        .join(
+            PracticeAudienceCuratorGroup,
+            PracticeAudienceCuratorGroup.group_id == CuratorGroup.id,
+        )
+        .where(PracticeAudienceCuratorGroup.practice_id == practice.id)
+        .order_by(CuratorGroup.name)
     )
     return list((await session.execute(stmt)).scalars().all())
 
@@ -769,6 +818,8 @@ def practice_to_response(
     zoom_meeting_status: str | None = None,
     deduplicated: bool = False,
     audience_group_names: list[str] | None = None,
+    audience_curator_group_names: list[str] | None = None,
+    audience_unavailable: bool | None = None,
 ) -> PracticeResponse:
     """Build PracticeResponse from ORM object with master_name and master_methods.
 
@@ -845,6 +896,14 @@ def practice_to_response(
     # default ([]).
     if audience_group_names is not None:
         resp.audience_group_names = audience_group_names
+    # P5/GT-12: same "no ORM attribute, set after model_validate" shape as
+    # the line above. None means "the caller did not compute it", which is
+    # not the same as false -- a caller that skips the lookup leaves the
+    # schema default in place rather than asserting the practice is fine.
+    if audience_curator_group_names is not None:
+        resp.audience_curator_group_names = audience_curator_group_names
+    if audience_unavailable is not None:
+        resp.audience_unavailable = audience_unavailable
 
     return resp
 
@@ -1341,6 +1400,16 @@ async def get_practice_detail(
     # в группе «...»" client-side without a second round-trip -- see this
     # endpoint's own callers for the full message-mapping story.
     audience_group_names = await group_names_for_practice(practice, session)
+    # P5/GT-12: a second, independent lookup rather than one query fused
+    # with the line above -- the two answer different questions against
+    # different tables, and saving one round trip on an owner-facing
+    # response is not worth a join nobody can read.
+    audience_curator_group_names = await curator_group_names_for_practice(
+        practice, session,
+    )
+    audience_unavailable = await curator_group_audience_is_dark(
+        practice, session,
+    )
     return practice_to_response(
         practice,
         master_name,
@@ -1352,6 +1421,8 @@ async def get_practice_detail(
         zoom_public_link_visible=is_owner,
         zoom_meeting_status=zoom_meeting_status,
         audience_group_names=audience_group_names,
+        audience_curator_group_names=audience_curator_group_names,
+        audience_unavailable=audience_unavailable,
         **series_meta_kwargs(series_meta.get(practice.id)),
         **attendance_counts_kwargs(attendance.get(practice.id)),
     )

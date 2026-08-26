@@ -382,3 +382,53 @@ class JoinCuratorGroupResponse(BaseModel):
     group_id: UUID
     relation: CuratorMemberKindLiteral
     already_member: bool
+
+
+# ===========================================================================
+# Advisory previews (P5/GT-12, tz-curator-groups.md 8.5)
+# ===========================================================================
+#
+# ADVISORY, NOT A GATE. None of the three endpoints these back blocks
+# anything: leaving (I-5), removing a member and deleting a school all work
+# exactly as they did. They exist so the confirm dialog can say "N upcoming
+# practices aimed at this school will go dark" instead of letting the person
+# find out afterwards.
+
+
+class CuratorGroupLeavePreviewResponse(BaseModel):
+    """GET /curator-groups/{id}/leave-preview.
+
+    How many of MY OWN upcoming practices target this school -- i.e. what I
+    am about to switch off by walking out. A student always sees 0: they
+    teach nothing, and that is a real answer rather than a reason to refuse
+    the question.
+    """
+
+    upcoming_practices_targeting_group: int
+
+
+class CuratorGroupRemovePreviewResponse(BaseModel):
+    """GET /masters/me/curator-groups/{id}/members/{user_id}/remove-preview.
+
+    The same number for the member the curator is about to remove. Zero for
+    a student, and zero -- not 404 -- for somebody who is not in the group
+    at all: the removal itself is idempotent and answers 204 on that same
+    target, so the advisory must not be stricter than the action it
+    describes.
+    """
+
+    upcoming_practices_targeting_group: int
+
+
+class CuratorGroupDeletePreviewResponse(BaseModel):
+    """GET /masters/me/curator-groups/{id}/delete-preview.
+
+    What deleting the school costs: who is in it, and how many upcoming
+    practices -- across EVERY master of the school, the curator included --
+    are aimed at it. The counters are the same two the group page reports,
+    from the same helper, so the dialog and the page cannot disagree.
+    """
+
+    masters_count: int
+    students_count: int
+    upcoming_practices_targeting_group: int
