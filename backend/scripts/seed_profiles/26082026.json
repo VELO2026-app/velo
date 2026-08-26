@@ -1,0 +1,192 @@
+{
+  "description": "Показ 26.08.2026 -- школы (кураторские группы, P1-P4): одна школа, два мастера, живой ростер",
+  "title_prefix": "[школа]",
+  "_notes": [
+    "ЗАЧЕМ ОТДЕЛЬНЫЙ ПРОФИЛЬ, а не строка в 15082026.json: имя профиля -- метка",
+    "  конкретного протокола показа (см. шапку seed.py), и дописать школу в",
+    "  августовский профиль значило бы задним числом изменить то, что этот",
+    "  протокол означал. Профили дешевле файлов, чем правок истории.",
+    "",
+    "СВОЙ title_prefix -- НЕ '[seed]'. reset_seed_data удаляет практики по",
+    "  префиксу из ПРОФИЛЯ, поэтому два профиля с одинаковым префиксом стирали",
+    "  бы практики друг друга: 'velo seed --profile A --reset' снёс бы демо B.",
+    "  Разные префиксы -- разные наборы практик.",
+    "",
+    "СВОЙ БЛОК СИНТЕТИЧЕСКИХ ID (6002xx), чтобы люди двух профилей не",
+    "  пересекались. ВНИМАНИЕ: изоляции по пользователям это НЕ даёт --",
+    "  reset удаляет ВСЕХ синтетиков 600001..699999, а не только своих. Значит",
+    "  --reset любого профиля уносит учеников всех профилей. Это поведение",
+    "  файла старше этой поставки; здесь оно просто названо.",
+    "",
+    "КУРАТОР -- ЖИВОЙ МАСТЕР (main, тот же telegram_id, что в августовском",
+    "  профиле): школа должна принадлежать реальному аккаунту, с которого",
+    "  показывают. Под правило --reset про синтетические id он не подпадает,",
+    "  поэтому школа удаляется отдельным шагом по паре (куратор, имя), а сам",
+    "  аккаунт, роль и профиль мастера остаются.",
+    "",
+    "ВТОРОЙ МАСТЕР СИНТЕТИЧЕСКИЙ (600201): школа с одним человеком не",
+    "  показывает механику -- пустой ростер, masters_count=1 (только куратор),",
+    "  фид из практик одного мастера. Нужен непустой ростер и фид от двоих.",
+    "",
+    "МЕТОДЫ МАСТЕРА ОБЯЗАНЫ ПОКРЫВАТЬ КАЖДУЮ ПАРУ direction/style из practices:",
+    "  create_practice проверяет их через _assert_master_confirmed_taxonomy",
+    "  (practices/service.py) и отказывает по неподтверждённым.",
+    "",
+    "ДАТЫ ОТНОСИТЕЛЬНЫЕ (day_offset от дня прогона). Будущие практики стоят на",
+    "  +1 и дальше, а не на 0: утренний час при offset=0 оказывается в прошлом",
+    "  на любом прогоне после девяти утра, и практика исчезает из фида."
+  ],
+  "masters": [
+    {
+      "key": "main",
+      "telegram_id": 6598660049,
+      "display_name": "Мастер VELO",
+      "bio": "Веду утренние медитации, мягкую йогу и дыхательные практики. Куратор школы «Тихое утро».",
+      "methods": [
+        "meditation — presence",
+        "meditation — silence",
+        "yoga — hatha",
+        "breathwork",
+        "circles — sharing"
+      ],
+      "experience_years": 8
+    },
+    {
+      "key": "school_master",
+      "telegram_id": 600201,
+      "display_name": "Ирина Соколова",
+      "bio": "Преподаю женские круги и мягкую йогу. Веду занятия в школе «Тихое утро».",
+      "methods": [
+        "circles — sharing",
+        "yoga — hatha",
+        "womens"
+      ],
+      "experience_years": 5
+    }
+  ],
+  "students": [
+    {
+      "key": "olga",
+      "telegram_id": 600202,
+      "first_name": "Ольга"
+    },
+    {
+      "key": "nina",
+      "telegram_id": 600203,
+      "first_name": "Нина"
+    },
+    {
+      "key": "pavel",
+      "telegram_id": 600204,
+      "first_name": "Павел"
+    },
+    {
+      "key": "irina",
+      "telegram_id": 600205,
+      "first_name": "Ирина"
+    },
+    {
+      "key": "sergey",
+      "telegram_id": 600206,
+      "first_name": "Сергей"
+    },
+    {
+      "key": "outsider",
+      "telegram_id": 600207,
+      "first_name": "Кирилл"
+    }
+  ],
+  "practices": [
+    {
+      "title": "Утренняя медитация: возвращение в тело",
+      "master": "main",
+      "state": "scheduled",
+      "day_offset": 1,
+      "hour": 8,
+      "duration_minutes": 45,
+      "practice_type": "live",
+      "direction": "meditation",
+      "style": "presence",
+      "difficulty": "beginner",
+      "max_participants": 20,
+      "description": "Мягкий вход в день через дыхание и сканирование тела.",
+      "_why": "Практика куратора. В фиде школы она должна стоять рядом с практикой второго мастера -- это и показывает, что фид школьный, а не персональный.",
+      "attendees": [
+        {
+          "student": "olga",
+          "booking_status": "confirmed"
+        },
+        {
+          "student": "nina",
+          "booking_status": "confirmed"
+        }
+      ]
+    },
+    {
+      "title": "Женский круг: тихое утро",
+      "master": "school_master",
+      "state": "scheduled",
+      "day_offset": 3,
+      "hour": 11,
+      "duration_minutes": 90,
+      "practice_type": "live",
+      "direction": "circles",
+      "style": "sharing",
+      "difficulty": "beginner",
+      "max_participants": 12,
+      "description": "Круг для тех, кто хочет быть услышанной.",
+      "_why": "Практика мастера-участника. Без неё фид школы -- это фид куратора, и механику не видно.",
+      "attendees": [
+        {
+          "student": "irina",
+          "booking_status": "confirmed"
+        }
+      ]
+    },
+    {
+      "title": "Хатха для спины: вечерняя",
+      "master": "school_master",
+      "state": "scheduled",
+      "day_offset": 5,
+      "hour": 19,
+      "duration_minutes": 60,
+      "practice_type": "live",
+      "direction": "yoga",
+      "style": "hatha",
+      "difficulty": "beginner",
+      "max_participants": 15,
+      "description": "Спокойная практика на раскрытие грудного отдела.",
+      "attendees": []
+    },
+    {
+      "title": "Дыхание: короткая практика",
+      "master": "main",
+      "state": "draft",
+      "day_offset": 7,
+      "hour": 9,
+      "duration_minutes": 30,
+      "practice_type": "live",
+      "direction": "breathwork",
+      "difficulty": "beginner",
+      "description": "Черновик.",
+      "_why": "Черновик в фиде школы не виден никому, включая автора -- это состояние стоит уметь показать."
+    }
+  ],
+  "curator_groups": [
+    {
+      "curator": "main",
+      "name": "Тихое утро",
+      "description": "Школа мягких утренних практик: медитация, дыхание, круги.",
+      "masters": [
+        "school_master"
+      ],
+      "students": [
+        "olga",
+        "nina",
+        "pavel",
+        "irina"
+      ],
+      "_why": "sergey и outsider намеренно ОСТАВЛЕНЫ ВНЕ школы: без человека снаружи не показать, что страница школы для постороннего -- 404, а фид школы уже фильтр, а не весь каталог."
+    }
+  ]
+}
