@@ -52,7 +52,12 @@
            diary -- identical mask on a NON-scrolling parent's child pattern --
            fades fine). Wrapper masks + inner scroller is the working shape. -->
       <div ref="wrapEl" class="chat-thread__feed-wrap">
-        <div ref="feedEl" class="chat-thread__feed" data-testid="chat-feed">
+        <div
+          ref="feedEl"
+          class="chat-thread__feed"
+          data-testid="chat-feed"
+          @scroll="rememberBottomState"
+        >
           <!-- Empty thread: an honest invitation, not a fake history. -->
           <div v-if="messages.length === 0" class="chat-thread__empty">
             Сообщений пока нет — напишите первое.
@@ -161,10 +166,7 @@ let islandObserver: ResizeObserver | null = null
 const wrapEl = ref<HTMLElement | null>(null)
 
 function cssTok(name: string, fallback: number): number {
-  const v = parseInt(
-    getComputedStyle(document.documentElement).getPropertyValue(name),
-    10,
-  )
+  const v = parseInt(getComputedStyle(document.documentElement).getPropertyValue(name), 10)
   return Number.isFinite(v) ? v : fallback
 }
 
@@ -177,10 +179,7 @@ function measureIsland(): void {
   const gap = cssTok('--velo-fog-z1', 16)
   const islandH = h > 0 ? h : 88
   wrapEl.value?.style.setProperty('--chat-fog-hard', `${hard}px`)
-  wrapEl.value?.style.setProperty(
-    '--chat-fog-fade',
-    `${Math.max(0, islandH + gap - hard)}px`,
-  )
+  wrapEl.value?.style.setProperty('--chat-fog-fade', `${Math.max(0, islandH + gap - hard)}px`)
   wrapEl.value?.style.setProperty('--chat-fog-live', `${fogTop.value}px`)
   feedEl.value?.style.setProperty('--chat-fog-live', `${fogTop.value}px`)
 }
@@ -195,6 +194,8 @@ onMounted(() => {
 onBeforeUnmount(() => {
   islandObserver?.disconnect()
   islandObserver = null
+  feedWrapObserver?.disconnect()
+  feedWrapObserver = null
 })
 
 // PROMPT №741 (track 3, B40): the same viewport-aware cap diary uses.
@@ -236,6 +237,32 @@ function readerNearBottom(): boolean {
   return isNearBottom(el.scrollTop, el.scrollHeight, el.clientHeight)
 }
 
+/* [owner pass] KEEP-BOTTOM ON GEOMETRY SHIFTS: the column is sized to the
+ * LIVE viewport, so the feed's height changes whenever the keyboard opens or
+ * closes -- on a shrink the visible window loses its bottom edge and the last
+ * message slides under the fold ("saw it without the keyboard, must see it
+ * with it"). The decision CANNOT be made from the post-resize geometry (a
+ * keyboard subtracts 150-300px, blowing past NEAR_BOTTOM_PX), so the
+ * bottom-state is remembered from the reader's own scroll events and the
+ * resize consults the PRE-shift state: pinned -> re-pin, instant scrollTop
+ * (never smooth); reading history -> untouched (CH-3). Attached from
+ * reload() once the v-else branch mounts the wrap; idempotent. */
+let pinnedToBottom = true
+
+function rememberBottomState(): void {
+  pinnedToBottom = readerNearBottom()
+}
+
+let feedWrapObserver: ResizeObserver | null = null
+
+function attachKeepBottom(): void {
+  if (feedWrapObserver || !wrapEl.value) return
+  feedWrapObserver = new ResizeObserver(() => {
+    if (pinnedToBottom) void scrollToBottom()
+  })
+  feedWrapObserver.observe(wrapEl.value)
+}
+
 /** One page, newest-first from comms -> stored oldest-first for rendering. */
 async function fetchMessages(): Promise<ChatMessage[]> {
   const page = await listChatMessages(props.threadId)
@@ -270,6 +297,8 @@ async function reload(): Promise<void> {
     // thread landed at the top of the history instead of the newest message.
     loading.value = false
     await scrollToBottom()
+    // [owner pass] keep-bottom: the wrap is mounted only now (v-else branch).
+    attachKeepBottom()
   } catch (e) {
     error.value = extractApiError(e, 'Попробуйте ещё раз')
     loading.value = false

@@ -16,10 +16,7 @@
 -->
 
 <template>
-  <div
-    class="diary-feed"
-    :class="{ 'diary-feed--composing': composing }"
-  >
+  <div class="diary-feed" :class="{ 'diary-feed--composing': composing }">
     <!-- Header -->
     <header class="diary-feed__header">
       <!-- Left: exit back-pill (immersive diary has no tab bar; this returns
@@ -172,7 +169,7 @@
          an ordinary message list, not stand still. Plain `flex: 1 1 auto`
          (in <style>) is the whole mechanism now; nothing here reacts to
          `composing` any more except the mask/dim rules below it. -->
-    <div ref="scrollEl" class="diary-feed__body">
+    <div ref="scrollEl" class="diary-feed__body" @scroll="rememberBottomState">
       <!-- Initial loading -->
       <div v-if="initialLoading" class="diary-feed__state">
         <VLoader size="lg" />
@@ -219,16 +216,11 @@
       </template>
     </div>
 
-    <!-- Undo bar: shown after deleting an entry (Figma screen 58) -->
-    <div v-if="deletedEntryId" class="diary-feed__undo">
-      <span class="diary-feed__undo-text">Запись удалена</span>
-      <button type="button" class="diary-feed__undo-btn" :disabled="undoing" @click="onUndoDelete">
-        Отменить
-      </button>
-    </div>
-
-    <!-- Composer. Hidden on read-only filters (practices / checkins / feedbacks);
-         entry routes to Дневник (note) or Сонник (dream) per the active filter. -->
+    <!-- Composer -- ABSOLUTE OVERLAY over the scroll container (owner spec,
+         Apple Liquid Glass). The feed REALLY scrolls under the glass: its
+         entries pass beneath the pill and are blurred by the pill's
+         backdrop-filter -- never faked with opacity. The overlay itself is
+         pinned to the screen root and NOTHING about it animates on scroll. -->
     <div class="diary-feed__composer">
       <DiaryComposer
         v-if="writeTarget"
@@ -236,6 +228,14 @@
         @created="onComposerCreated"
         @composing-change="composing = $event"
       />
+    </div>
+
+    <!-- Undo bar: shown after deleting an entry (Figma screen 58) -->
+    <div v-if="deletedEntryId" class="diary-feed__undo">
+      <span class="diary-feed__undo-text">Запись удалена</span>
+      <button type="button" class="diary-feed__undo-btn" :disabled="undoing" @click="onUndoDelete">
+        Отменить
+      </button>
     </div>
 
     <!-- [FE-7] OUTSIDE-TAP BLUR, tap-only by construction: the old absolute
@@ -437,6 +437,9 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocClickCapture, true)
+  // [owner pass] keep-bottom teardown, same lifecycle as the rest.
+  feedResizeObserver?.disconnect()
+  feedResizeObserver = null
 })
 
 function openFilter(): void {
@@ -595,11 +598,16 @@ onMounted(async () => {
   // not immediately fire and load an older page.
   if (diaryStore.feedScrollTop > 0 && scrollEl.value) {
     scrollEl.value.scrollTop = diaryStore.feedScrollTop
+    rememberBottomState()
   } else {
     scrollToBottom()
   }
   await nextTick()
   setupObserver()
+  // [owner pass] keep-bottom, attached once the initial position has settled
+  // (its own first fire re-pins -- a no-op right after scrollToBottom, and a
+  // correct re-pin when a restored offset happens to be near the bottom).
+  attachKeepBottom()
 })
 
 // -- Scroll helpers (chat-mode) ----------------------------------------------
@@ -610,6 +618,36 @@ function scrollToBottom(): void {
   diaryStore.feedScrollTop = 0
   const el = scrollEl.value
   if (el) el.scrollTop = el.scrollHeight
+}
+
+// -- Keep-bottom on geometry shifts (owner pass) -----------------------------
+// The screen is sized to the LIVE viewport, so the feed's height changes with
+// the keyboard: on a shrink the visible window loses its bottom edge and the
+// LAST entry slides under the fold -- "saw it without the keyboard, must see
+// it with the keyboard". The decision CANNOT read the post-shift geometry
+// (the shrink alone exceeds any threshold), so the bottom-state is remembered
+// from the reader's own scroll events and the resize consults the PRE-shift
+// state: pinned -> re-pin, instant scrollTop only (never smooth -- a smooth
+// scroll mid-keyboard-animation is a visible double jump); reading history
+// -> untouched. Attached after the initial position settles (see onMounted).
+const KEEP_BOTTOM_NEAR_PX = 160
+
+let pinnedToBottom = true
+
+function rememberBottomState(): void {
+  const el = scrollEl.value
+  if (!el) return
+  pinnedToBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= KEEP_BOTTOM_NEAR_PX
+}
+
+let feedResizeObserver: ResizeObserver | null = null
+
+function attachKeepBottom(): void {
+  if (feedResizeObserver || !scrollEl.value) return
+  feedResizeObserver = new ResizeObserver(() => {
+    if (pinnedToBottom) scrollToBottom()
+  })
+  feedResizeObserver.observe(scrollEl.value)
 }
 
 // Top-align: результаты фильтра/поиска показываем СВЕРХУ (с top-align враппера),
@@ -833,23 +871,21 @@ onBeforeUnmount(() => {
   /* [FE-7] never chain this scroller's overscroll to the root -- the iOS
      gesture-pan the whole FE-7 fix exists to undo. */
   overscroll-behavior-y: contain;
-  padding: var(--space-5) var(--velo-rail-pad-x);
+  /* [owner spec] The feed runs the FULL height under the absolute composer
+     overlay; entries really pass beneath the glass. The 100px bottom padding
+     is the clearance: the last entry can always be scrolled clear ABOVE the
+     floating pill. */
+  padding: var(--space-5) var(--velo-rail-pad-x) 100px;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    transparent 0,
-    #000 var(--space-5),
-    #000 calc(100% - var(--space-5)),
-    transparent 100%
-  );
-  mask-image: linear-gradient(
-    to bottom,
-    transparent 0,
-    #000 var(--space-5),
-    #000 calc(100% - var(--space-5)),
-    transparent 100%
-  );
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--space-5), #000 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--space-5), #000 100%);
+  /* [FE-7 follow-up, HUD round] The BOTTOM fade is GONE (owner: "под инпутом
+     в дневнике сейчас там туман"): the feed's bottom dissolve sat right above
+     the composer and let the background picture ghost through entries' last
+     pixels -- under the input the content must end CRISP. Only the TOP fade
+     remains (the header transition). The keyboard-time strip below the app is
+     handled separately (global.css #app-bg cap). */
   /* Chat-mode: a flex column so the thread wrapper can pin a short feed to the
      bottom (next to the composer). When the feed overflows, this has no effect
      and the area scrolls normally. */
@@ -948,14 +984,28 @@ onBeforeUnmount(() => {
    -- must outrank the tap-catcher's `--z-content`, or it would intercept
    taps meant for the send button and the field. */
 .diary-feed__composer {
-  position: relative;
-  z-index: var(--z-sticky);
-  flex: 0 0 auto;
-  display: flex;
-  justify-content: center;
-  /* +20px bottom so the composer buttons clear the screen edge / Telegram chrome. */
-  padding: var(--space-3) var(--velo-rail-pad-x)
-    calc(var(--space-4) + 20px + env(safe-area-inset-bottom, 0px));
+  /* [owner spec, Apple Liquid Glass] The overlay: absolute over the scroll
+     container, 16px rails, 12px off the bottom, above the feed. The glass
+     pill itself (see Composer.vue) does the frost -- this wrapper is pure
+     positioning, transparent, and NOTHING here (bottom/blur/transform/
+     opacity) ever animates: the glass is static, only the content moves
+     under it. */
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  /* Owner pass: 12px sat TOO tight against the screen edge -- restored the
+     pre-spec clearance (16 + 20 + safe-area), where the pill rode before. */
+  bottom: calc(var(--space-4) + 20px + env(safe-area-inset-bottom, 0px));
+  z-index: 20;
+}
+
+/* [owner pass] Keyboard state: while typing the pill drops ~20px closer to
+   the keyboard (36 -> 16 + safe-area) -- the rest clearance is screen-edge
+   padding, the composing one is a hair over the keys. Two stable states,
+   NO transition on bottom (the static-glass rule: nothing animates while
+   content scrolls; the state flips once with the keyboard). */
+.diary-feed--composing .diary-feed__composer {
+  bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
 }
 
 /* While writing (keyboard up) drop the composer's extra bottom offset so the
@@ -971,9 +1021,10 @@ onBeforeUnmount(() => {
    the column's flex space again -- deliberately: that competition IS how
    "the feed rides up as the composer grows" (ruling 6, requirement 2)
    happens, with zero new code. */
-.diary-feed--composing .diary-feed__composer {
-  padding-bottom: calc(var(--space-4) + 5px + env(safe-area-inset-bottom, 0px));
-}
+/* [owner spec] The composing padding-bottom override is RETIRED with the
+   flex row itself: the composer is an absolute overlay now (16/16/12), and
+   with the keyboard open the whole shrunk screen carries it -- no padding
+   to adjust. */
 
 /* -- [FE-7] Tap-catcher: RETIRED. The absolute layer sat in the touch path
    with pointer-events:auto while composing -- iOS resolves the scroll target

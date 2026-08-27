@@ -66,12 +66,12 @@
       />
       <span v-if="showingPreview" class="composer__preview">{{ previewText }}</span>
 
-      <!-- B38: the slot is now a CHILD of the bordered field, not an outside
-           sibling. B48: v-if, not merely disabled -- absent while empty,
-           exactly like the source this component replaces. -->
+      <!-- [owner pass] The send control is ALWAYS rendered -- supersedes B48's
+           v-if-while-empty: Telegram-style permanence. An empty tap is a
+           no-op (onSend's canSend guard), never a send. B48's other half
+           stands: no disabled mic/kb placeholder ever (T24-3). -->
       <div class="composer__slot">
         <button
-          v-if="canSend"
           type="button"
           class="composer__btn"
           aria-label="Отправить"
@@ -283,14 +283,13 @@ async function onSend(): Promise<void> {
   width: 100%;
 }
 
-/* B38 + B50: one bordered, solid-white field; the send slot lives INSIDE it.
-   [FE-9] FIXED-PIXEL RADIUS, ALWAYS: the old `--radius-full` (9999px) clamps
-   to half the box height -- the taller the autogrow field got, the rounder it
-   read (capsule -> ellipse; the "border-radius grows with the text" bug).
-   24px rounds the CORNERS only, identically at 1 line and at 50. The send
-   slot is bottom-aligned in EVERY state (single-line included): its position
-   then depends on nothing but the field's bottom edge, which sits pinned
-   above the keyboard -- text volume cannot move the button. */
+/* [Apple Liquid Glass, owner spec] Multi-layer glass -- NOT plain
+   glassmorphism: translucent white surface + backdrop blur/saturate (on a
+   ::before layer of its own -- the field itself never carries
+   backdrop-filter on iOS WebKit, that shimmered), crisp top / soft bottom
+   edge highlights, a floating drop shadow, and a separate ::after
+   refraction sheen in soft-light. NOTHING animates on scroll: the glass is
+   static, only the content moves under it. */
 .composer__field {
   display: flex;
   align-items: flex-end;
@@ -299,26 +298,105 @@ async function onSend(): Promise<void> {
   min-height: var(--velo-size-50);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
   box-sizing: border-box;
-  border: 1.26px solid rgba(255, 255, 255, 0.6);
-  border-radius: 24px;
-  background: var(--velo-bg-card-solid);
-  box-shadow: 0 0 14px 2px rgba(255, 255, 255, 0.4);
+  position: relative;
+  /* Owns the ::before/::after layers (relative anchor) and their stacking
+     context (translateZ) -- the frost child's z:-1 stays contained. */
+  transform: translateZ(0);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 22px;
+  background: transparent;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.15),
+    0 8px 24px rgba(0, 0, 0, 0.08);
   cursor: text;
+  /* [owner spec] Focus glow transition: box-shadow / border-color ONLY --
+     non-layout properties, zero geometry change, zero layout shift. */
   transition:
-    border-color var(--transition-fast),
-    box-shadow var(--transition-fast);
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
 }
 
-.composer__field:focus-within {
-  border-color: var(--velo-border-input-focus);
-  box-shadow: 0 0 0 3px var(--velo-glass-blue-60);
+/* The frost layer: white 12% surface over blur(18) saturate(180). On its own
+   child layer (z -1) so the field's text repaints never race the backdrop
+   sampling -- the iOS-stable shape for glass over moving content. Its fill
+   brightens with focus (below) -- transition lives here, on the base. */
+.composer__field::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.12);
+  transition: background-color 0.2s ease;
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  z-index: -1;
 }
+
+/* The refraction sheen: a diagonal light gradient blended soft-light over
+   the surface -- the highlight that reads as bent glass. */
+.composer__field::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.35),
+    rgba(255, 255, 255, 0.05) 45%,
+    rgba(255, 255, 255, 0.18)
+  );
+  mix-blend-mode: soft-light;
+}
+
+/* [owner spec] FOCUS = the glass LIGHTS UP FROM INSIDE, not a ring: brighter
+   rim (.7), the frost fill lifts 0.12 -> 0.16, the inset top highlight
+   sharpens, a hairline white halo and a SOFT COLD glow breathe around the
+   pill -- no bright blue border, no neon, no geometry change. */
+.composer__field:focus-within {
+  border-color: rgba(255, 255, 255, 0.7);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.2),
+    0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 0 18px rgba(150, 190, 255, 0.2),
+    0 8px 30px rgba(0, 0, 0, 0.08);
+}
+
+.composer__field:focus-within::before {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* Accessibility, same language: keyboard navigation (:focus-visible) gets a
+   TOUCH stronger glass -- a firmer hairline and a larger cool glow, still
+   Liquid Glass, never a blue ring. :has() degrades gracefully: engines
+   without it simply keep the :focus-within glow above. */
+.composer__field:has(.composer__input:focus-visible) {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.25),
+    0 0 0 2px rgba(255, 255, 255, 0.35),
+    0 0 26px rgba(150, 190, 255, 0.32),
+    0 8px 30px rgba(0, 0, 0, 0.08);
+}
+
+/* [FE-9 kept verbatim below] The send slot lives INSIDE the field; the
+   FIXED-PIXEL radius principle (no --radius-full capsule-growth) carries over
+   to the 22px Liquid Glass radius above. The old displacement-recipe blocks
+   (glass-defs, black frost dial, url() distortion) are retired in favour of
+   the owner's Apple Liquid Glass spec at the top of this file. */
 
 .composer__input {
   flex: 1;
   min-width: 0;
   border: none;
   outline: none;
+  /* [owner spec] No browser focus chrome on the textarea itself -- the glass
+     field's :focus-within glow (above) IS the focus state, one surface, no
+     double indication. */
+  -webkit-appearance: none;
+  appearance: none;
   resize: none;
   background: transparent;
   font-family: var(--font-body);
@@ -397,6 +475,13 @@ async function onSend(): Promise<void> {
   cursor: pointer;
   background: var(--velo-nav-active-bg);
   color: var(--velo-white);
+  /* [Liquid Glass fix] position + z 1 lift the disc ABOVE the field's ::after
+     soft-light sheen: a positioned pseudo paints over non-positioned
+     children, and the white sheen was washing the slate disc out to
+     "lost". It renders on top of the glass light now -- and clicks were never
+     affected (::after is pointer-events: none). */
+  position: relative;
+  z-index: 1;
   transition:
     opacity var(--transition-fast),
     background var(--transition-fast);

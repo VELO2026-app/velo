@@ -148,9 +148,11 @@ afterEach(() => {
 })
 
 describe('DiaryComposer -- idle state (1: no chevron, one slot; T24-3: no mic)', () => {
-  it('renders NO action button while empty, no kb-collapse button, but the slot still reserves its width', () => {
+  it('renders the send button even while empty (owner pass: always-present), no kb-collapse button', () => {
     mount()
-    expect(slotButtonCount()).toBe(0)
+    // [owner pass] Supersedes B48's empty-absence: the disc is permanent,
+    // Telegram-style; an empty tap is guarded inside onSend.
+    expect(slotButtonCount()).toBe(1)
     expect(host!.querySelector('.composer__btn--kb')).toBeNull()
     expect(host!.querySelector('.composer__slot')).not.toBeNull()
   })
@@ -166,9 +168,11 @@ describe('DiaryComposer -- idle state (1: no chevron, one slot; T24-3: no mic)',
   })
 })
 
-describe('DiaryComposer -- the single action slot (4: empty <-> send, never a disabled mic)', () => {
-  it('typing makes the send button appear; clearing removes it again (empty slot)', async () => {
+describe('DiaryComposer -- the single action slot (owner pass: always-rendered send, never a disabled mic)', () => {
+  it('the send button is present in EVERY text state -- empty, typed, cleared again', async () => {
     mount()
+    expect(slotButtonCount()).toBe(1)
+
     typeText('hello')
     await nextTick()
     expect(slotBtn().getAttribute('aria-label')).toBe('Отправить')
@@ -176,14 +180,18 @@ describe('DiaryComposer -- the single action slot (4: empty <-> send, never a di
 
     typeText('')
     await nextTick()
-    expect(slotButtonCount()).toBe(0)
+    expect(slotButtonCount()).toBe(1)
   })
 
-  it('whitespace-only text never shows the send button', async () => {
+  it('whitespace-only text keeps the button but clicking it never sends', async () => {
     mount()
     typeText('   \n   ')
     await nextTick()
-    expect(slotButtonCount()).toBe(0)
+    expect(slotButtonCount()).toBe(1)
+
+    slotBtn().click()
+    await flush()
+    expect(diaryApi.createDiaryEntry).not.toHaveBeenCalled()
   })
 
   it('the kb-collapse button never reappears once composing', async () => {
@@ -191,15 +199,17 @@ describe('DiaryComposer -- the single action slot (4: empty <-> send, never a di
     textarea().dispatchEvent(new Event('focus'))
     await nextTick()
     expect(host!.querySelector('.composer__btn--kb')).toBeNull()
-    // Composing with no text yet: the slot stays empty, not a placeholder button.
-    expect(slotButtonCount()).toBe(0)
+    // Composing with no text yet: the SEND disc (not a placeholder) is what sits there.
+    expect(slotButtonCount()).toBe(1)
   })
 
-  it('the slot has no button and cannot be clicked while the field is empty (mic removed, T24-3)', () => {
+  it('the empty-field click is a no-op -- the guard holds, nothing is sent (mic removed, T24-3)', () => {
     mount()
     const slot = host!.querySelector('.composer__slot')
     expect(slot).not.toBeNull()
-    expect(slot!.querySelector('.composer__btn')).toBeNull()
+    expect(slot!.querySelector('.composer__btn')).not.toBeNull()
+
+    slot!.querySelector('.composer__btn')!.dispatchEvent(new Event('click'))
     expect(diaryApi.createDiaryEntry).not.toHaveBeenCalled()
   })
 })
