@@ -344,6 +344,14 @@ async def test_student_stranger_hidden_master_and_self_are_all_404(
 
     Paired with a real offer succeeding on the same group, so "404" cannot
     mean the endpoint is broken.
+
+    AMENDED: this used to assert the generic `not_found`, and that was RIGHT
+    when it was written -- the raise site carried no machine code, so the
+    generic one was literally what came back. The code is now
+    `transfer_target_not_member`, which is a STRONGER assertion, not a
+    weaker one: it still cannot tell the four refused cases apart (student,
+    stranger, hidden master, self all share it), so nothing is disclosed,
+    but a 404 arriving from some unrelated resolver no longer passes.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     heir = await _make_verified_master(
@@ -367,7 +375,7 @@ async def test_student_stranger_hidden_master_and_self_are_all_404(
     for who in (student, stranger, hidden, curator):
         resp = await _offer(client, curator, group["id"], who)
         assert resp.status_code == 404, who["user"]["id"]
-        assert resp.json()["error"] == "not_found"
+        assert resp.json()["error"] == "transfer_target_not_member"
 
     assert await _transfer_rows(group["id"]) == []
     assert (await _offer(client, curator, group["id"], heir)).status_code == 200
@@ -657,6 +665,12 @@ async def test_accept_by_anyone_but_the_addressee_is_404(
 
     The curator is included deliberately: they made the offer and still
     cannot take it.
+
+    AMENDED: this used to assert the generic `not_found`, right at the time
+    for the same reason as the offer test above. `transfer_not_found` is
+    still one code for both "no offer exists" and "the offer is not yours",
+    so the refusal to distinguish them -- the whole point of this test --
+    is untouched.
     """
     curator, heir, group = await _group_with_heir(client, db_session)
     other = await _make_verified_master(
@@ -675,7 +689,7 @@ async def test_accept_by_anyone_but_the_addressee_is_404(
     for who in (other, student, curator):
         resp = await _accept(client, who, group["id"])
         assert resp.status_code == 404, who["user"]["id"]
-        assert resp.json()["error"] == "not_found"
+        assert resp.json()["error"] == "transfer_not_found"
 
     assert await _curator_of(group["id"]) == UUID(curator["user"]["id"])
     assert (await _accept(client, heir, group["id"])).status_code == 200

@@ -64,6 +64,27 @@ export const ERROR_MESSAGES: Record<string, string> = {
   practice_not_found: 'Практика не найдена',
   role_not_allowed: 'Эта роль недоступна для вашего аккаунта',
 
+  // Curator groups (schools). Nine codes; six were already reachable before
+  // this table knew about them, three were added to their raise sites so the
+  // 404s stopped arriving as the generic `not_found`. Every one of the three
+  // is deliberately ONE code for several causes -- see each phrase.
+  curator_group_name_taken: 'У вас уже есть школа с таким названием',
+  curator_cannot_leave:
+    'Куратор не может покинуть свою школу. Передайте её другому мастеру или удалите.',
+  own_group: 'Это ваша школа',
+  master_required: 'Ссылка предназначена для верифицированных мастеров',
+  blocked_by_curator: 'Вступление в эту школу недоступно',
+  transfer_pending:
+    'Предложение уже отправлено. Сначала отмените его, затем предложите другому мастеру.',
+  // One code for: неизвестный токен, отозванная ссылка, удалённая школа и
+  // школа с неверифицированным куратором. Различать их нельзя намеренно:
+  // иначе по ссылке можно было бы выведать существование школы.
+  invite_not_found: 'Приглашение недействительно',
+  // One code for «предложения нет» и «предложение адресовано не вам».
+  transfer_not_found: 'Предложение о передаче не найдено',
+  // One code for ученика, постороннего, скрытого мастера и самого куратора.
+  transfer_target_not_member: 'Передать школу можно только мастеру из её состава',
+
   // VeloError base-class defaults (no module-specific code set).
   unauthorized: 'Сессия истекла — войдите заново',
   not_found: 'Запрошенный ресурс не найден',

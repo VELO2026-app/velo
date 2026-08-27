@@ -499,8 +499,15 @@ async def test_garbage_token_is_404_everywhere(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     joiner = await login_user(client, telegram_id=_TID_STUDENT_A)
-    assert (await _preview(client, joiner, "not-a-token")).status_code == 404
-    assert (await _join(client, joiner, "not-a-token")).status_code == 404
+    previewed = await _preview(client, joiner, "not-a-token")
+    joined = await _join(client, joiner, "not-a-token")
+    assert previewed.status_code == 404
+    assert joined.status_code == 404
+    # One code for all four causes (unknown token, revoked token, inactive
+    # group, deleted group): the frontend must not be able to tell them
+    # apart, and neither can this test.
+    assert previewed.json()["error"] == "invite_not_found"
+    assert joined.json()["error"] == "invite_not_found"
 
 
 @pytest.mark.asyncio

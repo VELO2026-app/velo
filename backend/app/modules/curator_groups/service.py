@@ -1091,7 +1091,7 @@ async def _resolve_invite_or_404(
         )
     ).one_or_none()
     if row is None:
-        raise NotFoundError("Invite not found")
+        raise NotFoundError("Invite not found", code="invite_not_found")
     return row[0], row[1]
 
 
@@ -1393,7 +1393,10 @@ async def offer_curator_group_transfer(
         )
 
     if to_user_id not in await _visible_master_ids(group.id, session):
-        raise NotFoundError("Transfer target is not a member of this group")
+        raise NotFoundError(
+            "Transfer target is not a member of this group",
+            code="transfer_target_not_member",
+        )
 
     transfer = CuratorGroupTransfer(group_id=group.id, to_user_id=to_user_id)
     try:
@@ -1486,7 +1489,7 @@ async def accept_curator_group_transfer(
 
     transfer = await _pending_transfer(group.id, session)
     if transfer is None or transfer.to_user_id != user_id:
-        raise NotFoundError("Transfer not found")
+        raise NotFoundError("Transfer not found", code="transfer_not_found")
 
     if not await _has_master_capability(user_id, session):
         raise ForbiddenError(
