@@ -69,6 +69,21 @@ function toggle(): void {
   font-family: var(--font-body);
   text-align: left;
   cursor: pointer;
+  position: relative;
+}
+
+/* [FE-26] 44px touch-target bar: the row's own height is label-sized
+   (~20-27px) and must not grow -- consent/«Сделать регулярной» rows are
+   deliberately compact, and 44px min-height would blow up every form's
+   spacing. The invisible overlay extends the tappable zone ~12px above/
+   below and around instead: the 20px box alone reaches 44px, and rows
+   WITH a label were already wide enough. Adjacent stacked checkboxes'
+   zones can meet in the row gap -- a seam tap then goes to the later
+   row, which for adjacent checkbox rows is an acceptable miss. */
+.v-checkbox::after {
+  content: '';
+  position: absolute;
+  inset: -12px -10px;
 }
 
 .v-checkbox--disabled {
