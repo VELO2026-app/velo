@@ -37,6 +37,20 @@ export const MIN_WITHDRAWAL_EUROS = 50
 export const WITHDRAWAL_FEE_EUROS = 2
 
 // ---------------------------------------------------------------------------
+// Composer voice-message stub (owner pass, 2026-08-27)
+// Used by: DiaryComposer, ChatThreadScreen (both pass it to the shared Composer)
+// ---------------------------------------------------------------------------
+
+/**
+ * VISUAL STUB ONLY -- no voice-message functionality exists yet. Shows the
+ * mic disc in the composer row, OUTSIDE the field (narrowing the input from
+ * the right, Telegram-style). EMPTY FIELD ONLY: the first real character
+ * unmounts the disc and the input springs back to full width -- as if it
+ * never existed. Flip to false and the disc never renders at all.
+ */
+export const COMPOSER_VOICE_STUB = true
+
+// ---------------------------------------------------------------------------
 // Master onboarding (WS-1, item 2)
 // Used by: MasterApplyView (set), master store $reset (clear), masterPendingGuard (read)
 // ---------------------------------------------------------------------------

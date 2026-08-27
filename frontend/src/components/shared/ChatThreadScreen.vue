@@ -100,6 +100,7 @@
           :max-length="4000"
           :send="handleSend"
           :grow-cap="growCap"
+          :voice-stub="COMPOSER_VOICE_STUB"
           send-test-id="chat-send"
           @composing-change="composing = $event"
         />
@@ -114,6 +115,7 @@ import { VHeader } from '@/components/layout'
 import { VEmptyState, VLoader, VButton } from '@/components/ui'
 import { IconMessages } from '@/components/icons'
 import Composer, { type ComposerSendResult } from './Composer.vue'
+import { COMPOSER_VOICE_STUB } from '@/utils/constants'
 import {
   listChatMessages,
   markChatRead,

@@ -47,7 +47,10 @@
 -->
 
 <template>
-  <div class="composer" :class="{ 'composer--composing': composing }">
+  <div
+    class="composer"
+    :class="{ 'composer--composing': composing, 'composer--single': singleLine }"
+  >
     <div class="composer__field" @click="focusField">
       <textarea
         v-show="!showingPreview"
@@ -84,12 +87,33 @@
         </button>
       </div>
     </div>
+
+    <!-- [owner pass] Voice-message STUB, flag-gated: a Telegram-style mic
+         disc OUTSIDE the field -- a sibling on the same line, to the field's
+         right, VISUALLY IDENTICAL to the send disc (same solid fill, same
+         geometry, its own icon). It is what narrows the input from the
+         right. EMPTY FIELD ONLY (Telegram's own rule): the first real
+         character unmounts it and the field springs back to full width --
+         as if the disc never existed; clearing the text brings it back.
+         NOT functional -- no click handler at all (pointerdown.prevent only,
+         so a stray tap never steals the field's focus/keyboard); wire the
+         real recorder or delete this when voice messages land.
+         v-if, not visibility: off (flag or text) = zero reserved space. -->
+    <button
+      v-if="voiceStub && !canSend"
+      type="button"
+      class="composer__btn composer__btn--side"
+      aria-label="Голосовое сообщение"
+      @pointerdown.prevent
+    >
+      <IconMic :size="20" />
+    </button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, nextTick, watch, onMounted } from 'vue'
-import { IconSend } from '@/components/icons'
+import { IconSend, IconMic } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 
@@ -118,6 +142,12 @@ const props = withDefaults(
     /** Preserves the `chat-send` test hook without a caller needing to know
      *  this component's internal class names. */
     sendTestId?: string
+    /** [owner pass] Voice-message VISUAL STUB (see COMPOSER_VOICE_STUB in
+     *  constants): a mic disc OUTSIDE the field, on its line to the right,
+     *  narrowing the input. Empty field only -- any real text unmounts it.
+     *  No functionality -- the tap is deliberately inert. v-if: unset/false
+     *  never reserves space (width as before the stub existed). */
+    voiceStub?: boolean
   }>(),
   {
     maxLength: 4000,
@@ -125,6 +155,7 @@ const props = withDefaults(
     growCap: undefined,
     showDraftPreview: false,
     sendTestId: undefined,
+    voiceStub: false,
   },
 )
 
@@ -143,6 +174,13 @@ const text = ref('')
 const submitting = ref(false)
 const composing = ref(false)
 const inputEl = ref<HTMLTextAreaElement | null>(null)
+
+// [owner pass] Capsule state: while the text is ONE line the field is a
+// narrow, fully-round-ended pill; from the second line on it is the spacious
+// 22px glass card. Measured (not newline-counted): a wrapped-only line is
+// still "2 lines" to the eye, and scrollHeight is the truth the height
+// itself already uses. See autogrow() for the threshold.
+const singleLine = ref(true)
 
 const canSend = computed(() => text.value.trim().length > 0)
 
@@ -198,6 +236,10 @@ watch(showingPreview, (hidden) => {
   if (hidden) {
     el.style.height = ''
     el.scrollTop = 0
+    // The collapsed preview is a ONE-LINE readout by definition -- the pill
+    // collapses back to the capsule regardless of how tall the full draft
+    // measures; re-show runs autogrow() and restores the true state.
+    singleLine.value = true
   } else {
     void nextTick(() => {
       autogrow()
@@ -251,6 +293,12 @@ function autogrow(): void {
   if (!el) return
   el.style.height = 'auto'
   el.style.height = `${el.scrollHeight}px`
+  // [owner pass] Capsule threshold: one measured line band is ~29px (16px
+  // text @1.3 line-height + 8px textarea padding), two lines ~58px. The 45px
+  // cut sits between them with double-margin on both sides -- no font-metric
+  // fragility, and it can never disagree with the height the same function
+  // just set. Empty field: stays true (never flipped off).
+  singleLine.value = el.scrollHeight < 45
   if (el.selectionStart === el.value.length) {
     el.scrollTop = el.scrollHeight
   }
@@ -294,7 +342,12 @@ async function onSend(): Promise<void> {
   display: flex;
   align-items: flex-end;
   gap: var(--space-2);
-  width: 100%;
+  /* [voice stub] The field FLEXES (no longer width:100%): the outside side
+     disc (mic stub) claims its own column to the right, the field takes
+     everything else. Flag off -> no sibling -> full width, byte-identical
+     to the pre-stub layout. */
+  flex: 1;
+  min-width: 0;
   min-height: var(--velo-size-50);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
   box-sizing: border-box;
@@ -311,10 +364,63 @@ async function onSend(): Promise<void> {
     0 8px 24px rgba(0, 0, 0, 0.08);
   cursor: text;
   /* [owner spec] Focus glow transition: box-shadow / border-color ONLY --
-     non-layout properties, zero geometry change, zero layout shift. */
+     non-layout properties, zero geometry change, zero layout shift.
+     [owner pass] border-radius + padding joined in: the capsule <-> card
+     swap (below) animates the same way, still non-composite-cheap and
+     layout-stable -- the field's height never animates, only its shape. */
   transition:
     box-shadow 0.2s ease,
-    border-color 0.2s ease;
+    border-color 0.2s ease,
+    border-radius 0.25s ease,
+    padding 0.25s ease;
+}
+
+/* [owner pass] ONE line = a slim CAPSULE: fully round ends (999px clamps to
+   height/2 = a perfect semicircle on the 44px band) and a tight gut -- the
+   left padding pushes the text clear of the round end, the right collapses
+   so the send disc nests INTO the capsule's cap (Telegram's own collapsed
+   bar). The band is genuinely SLIM now: 4px paddings + a 36px disc = 44px
+   total (the multi-line card runs ~60px natural). From the second line the
+   field is the spacious 22px card above -- driven by the measured
+   singleLine state, not newline counting. Glass layers need no touch:
+   ::before/::after inherit the radius, so the frost and the sheen follow
+   the capsule on their own. */
+.composer--single .composer__field {
+  min-height: var(--velo-size-44);
+  border-radius: 999px;
+  padding: var(--space-1) var(--space-1) var(--space-1) 20px;
+}
+
+/* [owner pass] The discs shrink with the CAPSULE -- scoped to the root's
+   --single state so BOTH discs follow: the send disc inside the field AND
+   the outside mic disc. 36px on the 44px band, disc centre on the cap's
+   centre circle; the slot reservation follows the send disc (no width jump
+   when the line count flips -- everything swaps together with the shape). */
+.composer--single .composer__slot {
+  width: 36px;
+  height: 36px;
+}
+
+.composer--single .composer__btn {
+  width: 36px;
+  height: 36px;
+}
+
+/* Optical balance in the small disc: the 20px icon that reads right in the
+   44px disc crowds the 36px one -- a hair smaller keeps the same weight. */
+.composer--single .composer__btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* FE-26 is not sacrificed for the slim look: the visible discs are 36px,
+   but a -4px transparent skirt grows each TAPPABLE target back to 44px.
+   The buttons are already position:relative (the z:1 glass fix), so the
+   skirt is pure hit area -- no visuals, no layout. */
+.composer--single .composer__btn::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
 }
 
 /* The frost layer: white 12% surface over blur(18) saturate(180). On its own
