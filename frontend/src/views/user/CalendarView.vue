@@ -35,10 +35,9 @@
           :selected-date="store.selectedDate"
           :days-with-practices="store.daysWithPractices"
           :local-date-key="store.localDateKey"
-          :can-go-prev="store.canGoPrev"
+          :max-back-days="store.maxBackDays"
           @select-day="store.selectDay"
-          @prev-week="store.prevWeek"
-          @next-week="store.nextWeek"
+          @shift-days="store.shiftDays"
         />
       </div>
     </Teleport>
@@ -167,11 +166,7 @@ import CalendarFilterModal from '@/components/shared/CalendarFilterModal.vue'
 import { IconCheck, IconClock } from '@/components/icons'
 import { formatDateShort } from '@/utils/format'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
-import {
-  DIFFICULTY_LABEL,
-  DURATION_BUCKET_LABEL,
-  TIME_OF_DAY_LABEL,
-} from '@/utils/displayHelpers'
+import { DIFFICULTY_LABEL, DURATION_BUCKET_LABEL, TIME_OF_DAY_LABEL } from '@/utils/displayHelpers'
 // T2 stage 2 (2026-07-15): direction chip label goes through directionLabel()
 // (hardcoded first, catalog second, raw value last resort), NOT the strict
 // DIRECTION_LABEL[Record<PracticeDirection,string>] -- a catalog-only

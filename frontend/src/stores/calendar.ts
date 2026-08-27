@@ -145,6 +145,14 @@ export const useCalendarStore = defineStore('calendar', () => {
     () => localDateKey(weekAnchor.value) !== localDateKey(new Date()),
   )
 
+  // [ribbon] Day-granular back limit for the strip's drag: how many days the
+  // visible window may still move BACK before it starts at today. Same
+  // contract as canGoPrev (that one is just `> 0`), expressed in days so the
+  // drag can clamp/rubber-band mid-gesture instead of only at commit.
+  const maxBackDays = computed<number>(() =>
+    Math.max(0, Math.round((weekAnchor.value.getTime() - todayMidnight().getTime()) / 86_400_000)),
+  )
+
   // -- Derived: set of local-day keys that have at least one practice --
   // Markers are computed in the VIEWER'S profile timezone (F5) so a practice
   // shows under the same day its card time is rendered in. Falls back to 'UTC'
@@ -176,13 +184,21 @@ export const useCalendarStore = defineStore('calendar', () => {
 
   // -- Actions --
 
+  let loadToken = 0
   /**
    * Load every practice in the current week in one request.
    * date_from/date_to are the local Monday 00:00 .. Sunday 23:59:59.999.
    * Facet filters are passed through to the backend.
+   *
+   * [ribbon perf] `silent`: a scroll-driven reload must not churn the UI
+   * state (loader/error) -- the ribbon commit is a background refresh for
+   * the new window's day markers. The token drops stale responses: rapid
+   * scroll/arrow sequences fire overlapping requests and the LAST one owns
+   * the truth -- an earlier response landing late must not clobber it.
    */
-  async function loadWeek(): Promise<void> {
-    loading.value = true
+  async function loadWeek(silent = false): Promise<void> {
+    const token = ++loadToken
+    if (!silent) loading.value = true
     error.value = null
 
     const week = days.value
@@ -199,6 +215,20 @@ export const useCalendarStore = defineStore('calendar', () => {
     to.setHours(23, 59, 59, 999)
     to.setDate(to.getDate() + 1)
 
+    // [ribbon] The selected day may sit OUTSIDE the visible week -- the
+    // ribbon scrolls freely while the selection keeps its date (shiftDays).
+    // Widen the fetched range to cover the selected date too, so the list
+    // below never empties on a scroll; the client still groups by
+    // calendarDateInTz, so nothing leaks into the wrong day.
+    const selDay = parseLocalDateKey(selectedDate.value)
+    const selFrom = new Date(selDay)
+    selFrom.setDate(selDay.getDate() - 1)
+    const selTo = new Date(selDay)
+    selTo.setHours(23, 59, 59, 999)
+    selTo.setDate(selDay.getDate() + 1)
+    if (selFrom < from) from.setTime(selFrom.getTime())
+    if (selTo > to) to.setTime(selTo.getTime())
+
     const query: PracticeFilters = {
       ...filters,
       date_from: from.toISOString(),
@@ -210,12 +240,14 @@ export const useCalendarStore = defineStore('calendar', () => {
     try {
       // A week (+- 1 day buffer) of practices is small; one page covers it.
       const res = await getPractices(query, 100, 0)
+      if (token !== loadToken) return // superseded by a newer load
       weekPractices.value = res.items
     } catch (e) {
+      if (token !== loadToken) return // superseded -- keep the newer truth
       error.value = extractApiError(e, 'Не удалось загрузить календарь')
       weekPractices.value = []
     } finally {
-      loading.value = false
+      if (token === loadToken) loading.value = false
     }
   }
 
@@ -246,6 +278,33 @@ export const useCalendarStore = defineStore('calendar', () => {
   async function nextWeek(): Promise<void> {
     shiftWindow(7)
     await loadWeek()
+  }
+
+  /**
+   * [ribbon] Day-granular shift from the strip's drag: move the VISIBLE
+   * WINDOW by `delta` days, clamped so it never starts before today.
+   *
+   * [owner pass] Scroll is SCROLL: the SELECTED day keeps its own date while
+   * it stays inside the visible window -- no highlight jumping, no list churn
+   * under the ribbon. Only when the selection has scrolled out of view does
+   * it land on the nearest VISIBLE day (the first / the fifth column), so
+   * the list below always has a day to show. The reload is SILENT (marker
+   * refresh, no loader/error churn).
+   */
+  async function shiftDays(delta: number): Promise<void> {
+    const clamped = Math.max(delta, -maxBackDays.value)
+    if (clamped === 0) return
+    const a = new Date(weekAnchor.value)
+    a.setDate(a.getDate() + clamped)
+    weekAnchor.value = a
+    // Scroll is ONLY scroll -- FULL STOP. The selection NEVER moves: in the
+    // default state (today selected, today = the first visible day) a clamp
+    // to the visible window would re-introduce exactly the bug this action
+    // exists to kill -- every scroll dragging the selection (and the list
+    // below) along. The list keeps showing the selected day regardless of
+    // how far the ribbon scrolls, because loadWeek widens its range to
+    // cover the selected date (see there).
+    await loadWeek(true)
   }
 
   /** Replace facet filters and reload the current week. */
@@ -287,6 +346,7 @@ export const useCalendarStore = defineStore('calendar', () => {
     // derived
     days,
     canGoPrev,
+    maxBackDays,
     daysWithPractices,
     selectedDayPractices,
     // actions
@@ -294,6 +354,7 @@ export const useCalendarStore = defineStore('calendar', () => {
     selectDay,
     prevWeek,
     nextWeek,
+    shiftDays,
     applyFilters,
     init,
     // helpers (exported for the view: local day key of a Date)
