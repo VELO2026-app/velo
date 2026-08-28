@@ -136,19 +136,24 @@ function selectZone(i: number): void {
   border-radius: var(--radius-md);
   background: var(--velo-bg-card-solid);
   opacity: 0.8;
-  /* Inactive cards sit slightly smaller + dimmer; the active zone's card
-     grows and brightens. Both ride the same slow, soft curve. */
-  transform: scale(0.92);
+  /* Inactive cards sit smaller, dimmer and slightly out of focus (owner
+     pass: a light ~10%-strength blur); the active zone's card grows,
+     brightens and sharpens. All on the same slow, soft curve -- the blur
+     rides the card so it covers the icon and the label together. */
+  transform: scale(0.8);
+  filter: blur(2px);
   transform-origin: center;
   transition:
     transform var(--mood-slider-icon-duration) var(--mood-slider-ease),
-    opacity var(--mood-slider-icon-duration) var(--mood-slider-ease);
+    opacity var(--mood-slider-icon-duration) var(--mood-slider-ease),
+    filter var(--mood-slider-icon-duration) var(--mood-slider-ease);
   cursor: pointer;
 }
 
 .mood-slider__card--active {
   opacity: 1;
   transform: scale(1.08);
+  filter: blur(0);
 }
 
 .mood-slider__icon {
@@ -176,6 +181,11 @@ function selectZone(i: number): void {
   height: 22px;
   display: flex;
   align-items: center;
+  /* [owner pass] The track is 20% shorter than the row and centred -- the
+     input rides inside the wrap, so the thumb's % stays consistent with
+     what the user sees. */
+  width: 80%;
+  margin: 0 auto;
 }
 
 .mood-slider__track {
