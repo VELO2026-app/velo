@@ -177,6 +177,47 @@ describe('useCalendarStore', () => {
     })
   })
 
+  describe('shiftDays (ribbon scroll)', () => {
+    it('scroll is ONLY scroll: the window moves, the SELECTED day never does', async () => {
+      const store = useCalendarStore()
+      await store.init()
+      const before = store.selectedDate // today, = window start (the default state)
+
+      await store.shiftDays(3)
+      expect(store.selectedDate).toBe(before) // <-- the invariant
+      // The window itself moved.
+      const expectedAnchor = new Date(NOW_ISO)
+      expectedAnchor.setUTCDate(expectedAnchor.getUTCDate() + 3)
+      expect(store.localDateKey(store.days[0]!)).toBe(expectedAnchor.toISOString().slice(0, 10))
+
+      // Back to today: still no selection change, clamped at the today limit.
+      await store.shiftDays(-10)
+      expect(store.selectedDate).toBe(before)
+      expect(store.localDateKey(store.days[0]!)).toBe(NOW_ISO.slice(0, 10))
+    })
+
+    it('the fetch range is widened to cover the out-of-window selected day', async () => {
+      const store = useCalendarStore()
+      await store.init()
+      await store.shiftDays(9) // selection (today) is now 9 days behind the window
+
+      const query = vi.mocked(practicesApi.getPractices).mock.calls.at(-1)![0]!
+      const from = new Date(query.date_from!).toISOString().slice(0, 10)
+      // date_from must reach BACK to the selected day (today) - 1 day buffer.
+      const selMinus1 = new Date(NOW_ISO)
+      selMinus1.setUTCDate(selMinus1.getUTCDate() - 1)
+      expect(from).toBe(selMinus1.toISOString().slice(0, 10))
+    })
+
+    it('a zero (clamped) shift is a no-op: no reload', async () => {
+      const store = useCalendarStore()
+      await store.init()
+      const calls = vi.mocked(practicesApi.getPractices).mock.calls.length
+      await store.shiftDays(-5) // at today: clamps to 0
+      expect(vi.mocked(practicesApi.getPractices).mock.calls.length).toBe(calls)
+    })
+  })
+
   describe('applyFilters', () => {
     it('applies a facet filter and reloads with it in the query', async () => {
       const store = useCalendarStore()

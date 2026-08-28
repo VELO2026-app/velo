@@ -2,9 +2,7 @@
   VELO Frontend -- UserDashboardView (Phase F3.1, updated DS-dashboard)
 
   Main user screen. Shows:
-    - Greeting with user's first name
     - Check-in alert banner (amber) -- confirmed booking in check-in window
-    - Feedback alert banner (teal)  -- attended booking in feedback window
     - "Ближайшие практики" -- live-aware list: the active session (if any) pinned
                               first, then up to 2 soonest upcoming (max 3), each
                               with Zoom + Check-in
@@ -29,6 +27,13 @@
   Screen 16 (AI-summary): tapping the summary card navigates to 'user-ai-summary'
   (currently a placeholder screen -- the user AI backend does not exist yet).
   The mood trend indicator stays static (illustration, not a control).
+
+  [FE-13] The dashboard carries ONLY the check-in reminder now. The feedback
+  and no-show reflection banners were removed here (not their routes/screens):
+  per the task, all other events move to the notification center (FE-12, not
+  built yet). Until it exists, feedback stays reachable from PracticeDetailView's
+  own in-window button (F9.1), and reflection is temporarily unreachable from
+  the UI -- a deliberate, owner-accepted gap, not an oversight.
 -->
 
 <template>
@@ -46,32 +51,6 @@
       @click="goToCheckin(checkinAlert.practice_id)"
     >
       <template #icon><IconClock :size="28" /></template>
-    </Banner>
-
-    <!-- Feedback alert banner (shared Banner) -->
-    <Banner
-      v-if="feedbackAlert"
-      variant="success"
-      title="Оставьте feedback!"
-      :body="`${feedbackAlert.practice.title} • ${dayLabelOf(feedbackAlert.practice.scheduled_at, viewerTz)}`"
-      :clickable="true"
-      class="dashboard__alert"
-      @click="goToFeedback(feedbackAlert.practice_id)"
-    >
-      <template #icon><IconFeedback :size="28" /></template>
-    </Banner>
-
-    <!-- No-show reflection banner (shared Banner; copy rotates per booking) -->
-    <Banner
-      v-if="reflectionAlert"
-      variant="success"
-      :title="pickReflectionVariant(reflectionAlert.practice_id).bannerTitle"
-      :body="`${reflectionAlert.practice.title} • ${dayLabelOf(reflectionAlert.practice.scheduled_at, viewerTz)}`"
-      :clickable="true"
-      class="dashboard__alert"
-      @click="goToReflection(reflectionAlert.practice_id)"
-    >
-      <template #icon><IconReflection :size="28" /></template>
     </Banner>
 
     <!-- ================================================================
@@ -206,8 +185,6 @@ import { useToast } from '@/composables/useToast'
 import { VLoader, VButton, VBadge, VStatCard, VCard } from '@/components/ui'
 import {
   IconClock,
-  IconFeedback,
-  IconReflection,
   IconCheck,
   IconArrowRight,
   IconMoodMid,
@@ -215,12 +192,11 @@ import {
 } from '@/components/icons'
 import PracticeListCard from '@/components/shared/PracticeListCard.vue'
 import Banner from '@/components/shared/Banner.vue'
-import { formatDateShort, formatTime, formatDuration, dayLabelOf } from '@/utils/format'
+import { formatDateShort, formatTime, formatDuration } from '@/utils/format'
 import { platform } from '@/platform'
-import { isInCheckinWindow, isInFeedbackWindow } from '@/composables/usePracticeWindows'
+import { isInCheckinWindow } from '@/composables/usePracticeWindows'
 import { isLiveNow, isFree } from '@/utils/bookingStatus'
 import { selectNearestBookings } from '@/utils/nearestBookings'
-import { pickReflectionVariant } from '@/utils/reflectionVariants'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import { CHECKIN_WINDOW_H } from '@/utils/constants'
 import { resolveZoomLink, type ZoomLinkResolution } from '@/utils/zoomLink'
@@ -275,35 +251,13 @@ const checkinAlertTime = computed((): string => {
   return ` • через ${hours} ч`
 })
 
-/** First attended booking currently in the feedback window, not yet done. */
-const feedbackAlert = computed((): BookingWithPracticeResponse | null => {
-  return (
-    bookingsStore.bookings.find((b) => {
-      if (b.status !== 'attended') return false
-      // Hide once the user has already left feedback (no re-submit via banner).
-      if (b.has_feedback) return false
-      const scheduledMs = new Date(b.practice.scheduled_at).getTime()
-      return isInFeedbackWindow(scheduledMs, b.practice.duration_minutes, now.value)
-    }) ?? null
-  )
-})
-
-/**
- * First no-show booking still in the reflection window, not yet reflected this
- * session. Mirrors feedbackAlert but for `no_show` (F4=А: same 72h window as
- * feedback). Session dismiss only — no backend `has_reflection` flag yet
- * (TD-REFLECTION); the client `dismissedReflections` set hides it after submit.
- */
-const reflectionAlert = computed((): BookingWithPracticeResponse | null => {
-  return (
-    bookingsStore.bookings.find((b) => {
-      if (b.status !== 'no_show') return false
-      if (bookingsStore.dismissedReflections.includes(b.practice_id)) return false
-      const scheduledMs = new Date(b.practice.scheduled_at).getTime()
-      return isInFeedbackWindow(scheduledMs, b.practice.duration_minutes, now.value)
-    }) ?? null
-  )
-})
+// [FE-13] feedbackAlert/reflectionAlert lived here. Removed: the dashboard
+// keeps ONLY the check-in reminder -- feedback and no-show reflection events
+// belong to the notification center (FE-12). Until it exists, feedback is
+// reachable from PracticeDetailView's own button (F9.1); reflection from
+// nowhere (its route/screen stay for the notification center to link to).
+// The store's dismissedCheckins/dismissedReflections sets are untouched --
+// CheckinView/ReflectionView still use them.
 
 // =========================================================================
 // Nearest practice
@@ -456,13 +410,8 @@ function goToCheckin(practiceId: string): void {
   router.push({ name: 'user-checkin', params: { practiceId } })
 }
 
-function goToFeedback(practiceId: string): void {
-  router.push({ name: 'user-feedback', params: { practiceId } })
-}
-
-function goToReflection(practiceId: string): void {
-  router.push({ name: 'user-reflection', params: { practiceId } })
-}
+// [FE-13] goToFeedback/goToReflection removed with their banners (FE-12
+// owns those navigations now); the check-in banner's handler stays.
 
 // =========================================================================
 // Lifecycle

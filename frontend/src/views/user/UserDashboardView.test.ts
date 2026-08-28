@@ -23,7 +23,7 @@
 // non-zero stat value is therefore proof the seam is read, not just defaulted.
 //
 // A THIRD trap, found only by reading stores/bookings.ts (.vue:221,237-292 vs
-// .vue:315-317): checkinAlert/feedbackAlert/reflectionAlert search
+// .vue:315-317): checkinAlert [FE-13: the only banner left] searches
 // `bookingsStore.bookings` (the PAGINATED list, fed by getMyBookings via
 // fetchMyBookings/pagination.refresh), while the nearest-practice section reads
 // `bookingsStore.upcoming` (a SEPARATE list from a SEPARATE endpoint,
@@ -35,7 +35,7 @@
 // TIME IS PINNED to 2026-07-20T12:00:00Z with fake timers -- this screen reads
 // the wall clock in FOUR places that decide what renders: the reactive `now`
 // ref + 60s setInterval (.vue:225-226,459-461) driving isInCheckinWindow/
-// isInFeedbackWindow/isLiveNow; and formatDateShort/dayLabelOf internally
+// isLiveNow; and formatDateShort internally
 // compare against `new Date()` for "Сегодня"/"Завтра" (utils/format.ts:67,176).
 // All fixture datetimes are literals relative to that frozen instant.
 //
@@ -60,10 +60,12 @@
 //
 // isInCheckinWindow / isInFeedbackWindow (composables/usePracticeWindows.ts)
 // have NO existing unit test of their own (grepped: no usePracticeWindows.test.ts
-// in the repo) -- this file is currently the ONLY place their boundary behavior
-// is exercised, via the three banners. Each window is proven from both sides
-// (in-window shows the banner, out-of-window does not), per the operator's
-// explicit ask, not because the skill demands it for every dependency.
+// in the repo). [FE-13] this file used to exercise BOTH via three banners;
+// the feedback/reflection banners are gone (notification-center move, FE-12),
+// so only isInCheckinWindow's boundaries are still proven here, from both
+// sides (in-window shows the banner, out-of-window does not), per the
+// operator's explicit ask. isInFeedbackWindow has no boundary test in-repo
+// again until FE-12's notification center needs it.
 //
 // v-if throughout (grepped: zero v-show in this template or its direct
 // children -- Banner.vue, PracticeListCard.vue, VCard.vue, VStatCard.vue,
@@ -277,33 +279,8 @@ const CHECKIN_OUT = booking(
   { status: 'confirmed', has_checkin: false, checkin_skipped: false },
   { title: 'Далёкая практика', scheduled_at: '2026-07-21T18:00:00Z', duration_minutes: 60 },
 )
-const FEEDBACK_IN = booking(
-  'bk_feedback',
-  { status: 'attended', has_feedback: false },
-  // ends 11:00Z, NOW=12:00Z -> 1h into the 72h feedback window.
-  { title: 'Утренняя практика', scheduled_at: '2026-07-20T10:00:00Z', duration_minutes: 60 },
-)
-// Ended 2026-07-16T09:00Z; feedback window closed at +72h = 2026-07-19T09:00Z,
-// well before NOW -- window is OVER, not "hasn't started".
-const FEEDBACK_OUT = booking(
-  'bk_feedback_out',
-  { status: 'attended', has_feedback: false },
-  { title: 'Старая практика', scheduled_at: '2026-07-16T08:00:00Z', duration_minutes: 60 },
-)
-// practice_id is the TOP-LEVEL booking field pickReflectionVariant reads
-// (.vue:68 -- reflectionAlert.practice_id, NOT practice.id), fixed to a value
-// whose stableHash lands on index 0 (VARIANT_WELLBEING) so the expected
-// banner title is a known literal, not a guess.
-const REFLECT_IN = booking(
-  'bk_reflect',
-  { status: 'no_show', practice_id: 'practice_r1' },
-  { title: 'Дневная практика', scheduled_at: '2026-07-20T10:00:00Z', duration_minutes: 60 },
-)
-const REFLECT_OUT = booking(
-  'bk_reflect_out',
-  { status: 'no_show', practice_id: 'practice_r1' },
-  { title: 'Старая практика', scheduled_at: '2026-07-16T08:00:00Z', duration_minutes: 60 },
-)
+// [FE-13] FEEDBACK_IN/FEEDBACK_OUT/REFLECT_IN/REFLECT_OUT fixtures removed
+// together with the banners and their describe blocks.
 
 // -----------------------------------------------------------------------------
 // Mount
@@ -796,82 +773,6 @@ describe('UserDashboardView', () => {
       await flush()
 
       expect(bannerTitled('Пора на check-in!')).toBeUndefined()
-    })
-  })
-
-  // ===========================================================================
-  describe('feedback banner', () => {
-    it('in-window: shows the banner with the real day label and navigates on click', async () => {
-      vi.mocked(bookingsApi.getMyBookings).mockResolvedValue(page([FEEDBACK_IN]))
-      mount()
-      await flush()
-
-      const b = bannerTitled('Оставьте feedback!')
-      expect(b).toBeDefined()
-      expect(bannerBody(b!)).toBe('Утренняя практика • Сегодня')
-
-      b!.click()
-      await flush()
-      expect(push).toHaveBeenCalledWith({
-        name: 'user-feedback',
-        params: { practiceId: 'pr_bk_feedback' },
-      })
-    })
-
-    it('out-of-window: does not show once the 72h window has closed', async () => {
-      vi.mocked(bookingsApi.getMyBookings).mockResolvedValue(page([FEEDBACK_OUT]))
-      mount()
-      await flush()
-
-      expect(bannerTitled('Оставьте feedback!')).toBeUndefined()
-    })
-
-    it('hidden once feedback is already left, even inside the window', async () => {
-      vi.mocked(bookingsApi.getMyBookings).mockResolvedValue(
-        page([{ ...FEEDBACK_IN, has_feedback: true }]),
-      )
-      mount()
-      await flush()
-
-      expect(bannerTitled('Оставьте feedback!')).toBeUndefined()
-    })
-  })
-
-  // ===========================================================================
-  describe('reflection banner (no-show)', () => {
-    it('in-window: shows the DETERMINISTIC variant for its practiceId and navigates on click', async () => {
-      vi.mocked(bookingsApi.getMyBookings).mockResolvedValue(page([REFLECT_IN]))
-      mount()
-      await flush()
-
-      // 'practice_r1' hashes to variant index 0 -- see fixture comment.
-      const b = bannerTitled('Как ваше самочувствие?')
-      expect(b).toBeDefined()
-      expect(bannerBody(b!)).toBe('Дневная практика • Сегодня')
-
-      b!.click()
-      await flush()
-      expect(push).toHaveBeenCalledWith({
-        name: 'user-reflection',
-        params: { practiceId: 'practice_r1' },
-      })
-    })
-
-    it('out-of-window: does not show once the window has closed', async () => {
-      vi.mocked(bookingsApi.getMyBookings).mockResolvedValue(page([REFLECT_OUT]))
-      mount()
-      await flush()
-
-      expect(bannerTitled('Как ваше самочувствие?')).toBeUndefined()
-    })
-
-    it('hidden when dismissed this session (localStorage-persisted dismissal, driven directly)', async () => {
-      vi.mocked(bookingsApi.getMyBookings).mockResolvedValue(page([REFLECT_IN]))
-      mount()
-      useBookingsStore().dismissReflection('practice_r1')
-      await flush()
-
-      expect(bannerTitled('Как ваше самочувствие?')).toBeUndefined()
     })
   })
 

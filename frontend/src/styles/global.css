@@ -104,6 +104,18 @@ html.is-keyboard-open .app-frame {
   min-height: 0;
 }
 
+/* [FE-7 follow-up, HUD-verified] The background layer joins the SAME shrink
+   as html/body/#app/.app-frame above: the HUD round showed `kbd:YES
+   vvh:411.66 appbg.h:720` -- with the keyboard open the app ends at 411.66
+   while the frozen 720px mandala layer keeps painting below it, and the iOS
+   visual-viewport offset exposes that tail as a mandala strip right UNDER
+   the composer (button bottom 382, app bottom ~411). Capped to the live
+   height, the strip below the app shows body's own white instead. The HUD's
+   `appbg.h:` readout verifies this live: expect ~vvh when kbd:YES. */
+html.is-keyboard-open #app-bg {
+  height: var(--velo-vvh, var(--velo-frozen-vh, 100lvh));
+}
+
 /* === Typography === */
 h1,
 h2,

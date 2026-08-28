@@ -453,7 +453,7 @@ import {
 import { ensureTaxonomyCatalog, parseMethods } from '@/utils/methodTaxonomy'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import type { TaxonomyListResponse } from '@/api/taxonomy'
-import type { RecurrenceSpec, PracticeResponse, PracticeDirection } from '@/api/types'
+import type { RecurrenceSpec, PracticeResponse, PracticeDirection, PracticeAudienceKind } from '@/api/types'
 
 const router = useRouter()
 const toast = useToast()
@@ -606,7 +606,13 @@ const form = reactive({
   // multi-select of the master's OWN custom groups when kind='groups'.
   // Default 'public' -- matches every practice's behavior before this
   // feature existed.
-  audience_kind: 'public' as 'public' | 'students' | 'groups',
+  // GT-11: the union comes from the CONTRACT (PracticeAudienceKind is a
+  // re-export of generated.ts's AudienceKind), never hand-typed here. The
+  // hand-typed triple this replaced is exactly what broke EditPracticeView's
+  // build the day the backend added the fourth value ('curator_groups') --
+  // AUDIENCE_OPTIONS (practiceOptions.ts) still lists three until FE-24
+  // ports the selector, but the TYPE no longer lies about what can come back.
+  audience_kind: 'public' as PracticeAudienceKind,
   audience_group_ids: [] as string[],
   description: '',
   what_to_prepare: '',

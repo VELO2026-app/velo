@@ -45,6 +45,18 @@ defineEmits<{ click: [] }>()
   color: var(--velo-text-primary);
   cursor: pointer;
   transition: opacity var(--transition-fast);
+  position: relative;
+}
+
+/* [FE-26] 44px touch-target bar: the pill STAYS 63x40 visually (it floats in
+   the MobileLayout island -- growing it would shift the island's measured
+   geometry, which three FE-3 rounds tuned); only the tappable zone grows,
+   +2px above/below via an invisible overlay. Width is already >= 44. Same
+   hit-area-overlay pattern as VModal close / VSwitch / VCheckbox. */
+.v-back::after {
+  content: '';
+  position: absolute;
+  inset: -2px 0;
 }
 
 .v-back:hover,

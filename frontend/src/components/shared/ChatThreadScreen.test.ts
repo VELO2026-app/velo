@@ -272,18 +272,22 @@ describe('ChatThreadScreen', () => {
     expect(composerTextarea().value).toBe('не потеряй меня')
   })
 
-  // PROMPT №740 (track 2, B48): the send control used to be an
-  // always-rendered, merely-disabled VButton. The shared Composer makes it
-  // ABSENT while empty (v-if, not :disabled) -- matching DiaryComposer's
-  // pre-existing behaviour, now shared. `sendBtn()` (queries
-  // `[data-testid="chat-send"]`) returns null while there is nothing to send.
-  it('send button does not render on an empty/whitespace draft; appears once there is content', async () => {
+  // PROMPT №740 (track 2, B48) used to make the send control ABSENT while
+  // empty (v-if, not :disabled). [owner pass] That is superseded: the disc is
+  // ALWAYS rendered, Telegram-style -- an empty/whitespace tap is a guarded
+  // no-op inside onSend, never a send.
+  it('send button renders on an empty/whitespace draft too; an empty tap sends nothing', async () => {
     mount()
     await flush()
 
-    expect(host?.querySelector('[data-testid="chat-send"]')).toBeNull()
+    expect(host?.querySelector('[data-testid="chat-send"]')).not.toBeNull()
     await type('   ')
-    expect(host?.querySelector('[data-testid="chat-send"]')).toBeNull()
+    expect(host?.querySelector('[data-testid="chat-send"]')).not.toBeNull()
+
+    sendBtn()!.click()
+    await flush()
+    expect(chatsApi.sendChatMessage).not.toHaveBeenCalled()
+
     await type('а')
     expect(sendBtn()).not.toBeNull()
   })

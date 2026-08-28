@@ -63,6 +63,18 @@ function toggle(): void {
   transition: background-color var(--transition-base);
 }
 
+/* [FE-26] 44px touch-target bar: the track STAYS 42x25 visually (it sits in
+   tight settings rows next to its label -- growing the track would reflow
+   every row); the tappable zone grows to 44x45 via an invisible overlay
+   centred on the control. Taps land on the overlay = the button itself.
+   A disabled button suppresses pointer events entirely, disabled state
+   is unaffected. */
+.v-switch::after {
+  content: '';
+  position: absolute;
+  inset: -10px -1px;
+}
+
 .v-switch--on {
   background: var(--velo-primary);
 }

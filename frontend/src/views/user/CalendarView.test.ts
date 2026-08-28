@@ -105,6 +105,7 @@ import CalendarView from '@/views/user/CalendarView.vue'
 import * as practicesApi from '@/api/practices'
 import * as taxonomyApi from '@/api/taxonomy'
 import { useAuthStore } from '@/stores/auth'
+import { useCalendarStore } from '@/stores/calendar'
 import { ApiResponseError } from '@/api/client'
 import type { PracticeResponse, PaginatedPracticesResponse, UserResponse } from '@/api/types'
 
@@ -238,24 +239,14 @@ function cardBadge(c: HTMLElement): string {
   return norm(c.querySelector('.v-badge')?.textContent).trim()
 }
 function dayCellByNum(num: number): HTMLButtonElement | undefined {
+  // [ribbon] The pill label is DD.MM now -- match the day part before the dot
+  // so every "find day N" call site keeps its original intent.
   return Array.from(host?.querySelectorAll<HTMLButtonElement>('.week-strip__day') ?? []).find(
-    (b) => b.querySelector('.week-strip__num')?.textContent?.trim() === String(num),
+    (b) => Number(b.querySelector('.week-strip__num')?.textContent?.trim().split('.')[0]) === num,
   )
 }
 function dayCellHasDot(b: HTMLButtonElement): boolean {
   return !!b.querySelector('.week-strip__dot--visible')
-}
-function nextWeekBtn(): HTMLButtonElement | undefined {
-  return (
-    host?.querySelector<HTMLButtonElement>('.week-strip__arrow[aria-label="Следующая неделя"]') ??
-    undefined
-  )
-}
-function prevWeekBtn(): HTMLButtonElement | undefined {
-  return (
-    host?.querySelector<HTMLButtonElement>('.week-strip__arrow[aria-label="Предыдущая неделя"]') ??
-    undefined
-  )
 }
 function selectPill(): HTMLButtonElement | undefined {
   return host?.querySelector<HTMLButtonElement>('.calendar__select-pill') ?? undefined
@@ -483,17 +474,16 @@ describe('CalendarView', () => {
       expect(practiceCards().map(cardTitle)).toEqual(['Завтрашняя'])
     })
 
-    it('next/prev week reload with a shifted date range; prev is disabled at the current (today-anchored) window', async () => {
+    it('next/prev week reload with a shifted date range (arrows removed, owner pass -- the store action stays the seam)', async () => {
       mount()
       await flush()
 
-      expect(prevWeekBtn()?.disabled).toBe(true) // window starts today -- can't go earlier
+      expect(practicesApi.getPractices).toHaveBeenCalledTimes(1)
 
-      nextWeekBtn()?.click()
+      await useCalendarStore().nextWeek()
       await flush()
 
       expect(practicesApi.getPractices).toHaveBeenCalledTimes(2)
-      expect(prevWeekBtn()?.disabled).toBe(false) // now one window ahead -- prev is live
     })
 
     it('next-week loading: while the shifted week\'s fetch is in flight, the loader shows and stale old-week data does not flash "Нет практик" (regression, BUG №461)', async () => {
@@ -509,7 +499,7 @@ describe('CalendarView', () => {
       expect(practiceCards()).toHaveLength(1) // sanity: current week has content
 
       vi.mocked(practicesApi.getPractices).mockReturnValue(new Promise(() => {}))
-      nextWeekBtn()?.click()
+      void useCalendarStore().nextWeek()
       await flush()
 
       expect(loader()).not.toBeNull()

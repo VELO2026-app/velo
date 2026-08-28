@@ -113,15 +113,28 @@ function textarea(): HTMLTextAreaElement {
 }
 
 function slotBtn(): HTMLButtonElement {
-  const btns = host?.querySelectorAll('.composer__btn') ?? []
-  if (btns.length !== 1) throw new Error(`expected exactly 1 .composer__btn, found ${btns.length}`)
+  // [voice stub] The send control is the disc INSIDE the slot -- the mic
+  // stub (flag-gated, see COMPOSER_VOICE_STUB) is also a .composer__btn but
+  // lives OUTSIDE the slot as its sibling.
+  const btns = host?.querySelectorAll('.composer__slot .composer__btn') ?? []
+  if (btns.length !== 1)
+    throw new Error(`expected exactly 1 slot .composer__btn, found ${btns.length}`)
   return btns[0] as HTMLButtonElement
 }
 
-// T24-3: the slot wrapper is always present (constant width); the button
-// inside it renders only once there is text.
+// T24-3: the slot wrapper is always present (constant width); the send disc
+// inside it is ALWAYS rendered too (owner pass supersedes B48's
+// v-if-while-empty -- an empty tap is a guarded no-op, never a send).
 function slotButtonCount(): number {
-  return host?.querySelectorAll('.composer__btn').length ?? 0
+  return host?.querySelectorAll('.composer__slot .composer__btn').length ?? 0
+}
+
+// [voice stub] The mic disc -- a VISUAL placeholder (no functionality, tap
+// inert). Lives OUTSIDE the field, a sibling on the same line. Present
+// while COMPOSER_VOICE_STUB is on; v-if releases its space entirely when
+// off (the field then stretches back to full width).
+function micBtn(): HTMLButtonElement | null {
+  return (host?.querySelector('.composer__btn--side') as HTMLButtonElement) ?? null
 }
 
 function typeText(value: string): void {
@@ -147,12 +160,50 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('DiaryComposer -- idle state (1: no chevron, one slot; T24-3: no mic)', () => {
-  it('renders NO action button while empty, no kb-collapse button, but the slot still reserves its width', () => {
+describe('DiaryComposer -- idle state (1: no chevron, one slot; T24-3: no mic placeholder; voice stub flag-on)', () => {
+  it('renders the send button even while empty (owner pass: always-present), no kb-collapse button', () => {
     mount()
-    expect(slotButtonCount()).toBe(0)
+    // [owner pass] Supersedes B48's empty-absence: the disc is permanent,
+    // Telegram-style; an empty tap is guarded inside onSend.
+    expect(slotButtonCount()).toBe(1)
     expect(host!.querySelector('.composer__btn--kb')).toBeNull()
     expect(host!.querySelector('.composer__slot')).not.toBeNull()
+  })
+
+  it('[voice stub] COMPOSER_VOICE_STUB on: mic disc renders OUTSIDE the field, same line, styled like send', () => {
+    mount()
+    const mic = micBtn()
+    expect(mic).not.toBeNull()
+    expect(mic!.getAttribute('aria-label')).toBe('Голосовое сообщение')
+    // OUTSIDE the field -- a sibling of .composer__field in the root row,
+    // not a child of it: it is what narrows the input from the right.
+    expect(mic!.closest('.composer__field')).toBeNull()
+    expect(mic!.parentElement?.classList.contains('composer')).toBe(true)
+    // Same disc as send (shared .composer__btn base, solid fill) -- only
+    // the icon differs. The send control's own home is untouched: still
+    // exactly one disc inside the slot.
+    expect(mic!.classList.contains('composer__btn')).toBe(true)
+    expect(slotButtonCount()).toBe(1)
+    // Inert by design: no handler is attached, a tap is a plain no-op -- the
+    // recorder arrives with the real voice-messages feature.
+  })
+
+  it('[voice stub] the first real character UNMOUNTS the mic -- the field is exactly as if it never existed', async () => {
+    mount()
+    expect(micBtn()).not.toBeNull()
+
+    typeText('hello')
+    await nextTick()
+    expect(micBtn()).toBeNull()
+
+    typeText('')
+    await nextTick()
+    expect(micBtn()).not.toBeNull()
+
+    // Whitespace-only keeps the mic -- the same trim() guard canSend uses.
+    typeText('   ')
+    await nextTick()
+    expect(micBtn()).not.toBeNull()
   })
 
   it('placeholder follows entryType', () => {
@@ -166,9 +217,11 @@ describe('DiaryComposer -- idle state (1: no chevron, one slot; T24-3: no mic)',
   })
 })
 
-describe('DiaryComposer -- the single action slot (4: empty <-> send, never a disabled mic)', () => {
-  it('typing makes the send button appear; clearing removes it again (empty slot)', async () => {
+describe('DiaryComposer -- the single action slot (owner pass: always-rendered send, never a disabled mic)', () => {
+  it('the send button is present in EVERY text state -- empty, typed, cleared again', async () => {
     mount()
+    expect(slotButtonCount()).toBe(1)
+
     typeText('hello')
     await nextTick()
     expect(slotBtn().getAttribute('aria-label')).toBe('Отправить')
@@ -176,14 +229,18 @@ describe('DiaryComposer -- the single action slot (4: empty <-> send, never a di
 
     typeText('')
     await nextTick()
-    expect(slotButtonCount()).toBe(0)
+    expect(slotButtonCount()).toBe(1)
   })
 
-  it('whitespace-only text never shows the send button', async () => {
+  it('whitespace-only text keeps the button but clicking it never sends', async () => {
     mount()
     typeText('   \n   ')
     await nextTick()
-    expect(slotButtonCount()).toBe(0)
+    expect(slotButtonCount()).toBe(1)
+
+    slotBtn().click()
+    await flush()
+    expect(diaryApi.createDiaryEntry).not.toHaveBeenCalled()
   })
 
   it('the kb-collapse button never reappears once composing', async () => {
@@ -191,15 +248,17 @@ describe('DiaryComposer -- the single action slot (4: empty <-> send, never a di
     textarea().dispatchEvent(new Event('focus'))
     await nextTick()
     expect(host!.querySelector('.composer__btn--kb')).toBeNull()
-    // Composing with no text yet: the slot stays empty, not a placeholder button.
-    expect(slotButtonCount()).toBe(0)
+    // Composing with no text yet: the SEND disc (not a placeholder) is what sits there.
+    expect(slotButtonCount()).toBe(1)
   })
 
-  it('the slot has no button and cannot be clicked while the field is empty (mic removed, T24-3)', () => {
+  it('the empty-field click is a no-op -- the guard holds, nothing is sent (mic removed, T24-3)', () => {
     mount()
     const slot = host!.querySelector('.composer__slot')
     expect(slot).not.toBeNull()
-    expect(slot!.querySelector('.composer__btn')).toBeNull()
+    expect(slot!.querySelector('.composer__btn')).not.toBeNull()
+
+    slot!.querySelector('.composer__btn')!.dispatchEvent(new Event('click'))
     expect(diaryApi.createDiaryEntry).not.toHaveBeenCalled()
   })
 })

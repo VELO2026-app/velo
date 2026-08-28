@@ -162,6 +162,16 @@ onUnmounted(() => {
   transition: all var(--transition-fast);
 }
 
+/* [FE-26] 44px touch-target bar: the × stays 32x32 visually (the modal
+   header is deliberately tight); the tappable zone becomes 44x44 via an
+   invisible overlay. The overlay is transparent, so it rides over the
+   modal's own padding harmlessly. */
+.v-modal__close::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+
 .v-modal__close:hover {
   background: var(--velo-border);
   color: var(--velo-text-primary);
