@@ -284,12 +284,13 @@ export const useCalendarStore = defineStore('calendar', () => {
    * [ribbon] Day-granular shift from the strip's drag: move the VISIBLE
    * WINDOW by `delta` days, clamped so it never starts before today.
    *
-   * [owner pass] Scroll is SCROLL: the SELECTED day keeps its own date while
-   * it stays inside the visible window -- no highlight jumping, no list churn
-   * under the ribbon. Only when the selection has scrolled out of view does
-   * it land on the nearest VISIBLE day (the first / the fifth column), so
-   * the list below always has a day to show. The reload is SILENT (marker
-   * refresh, no loader/error churn).
+   * [owner pass] Scroll is ONLY scroll -- the SELECTED day keeps its own
+   * date, always: no highlight jumping, no list churn under the ribbon (in
+   * the default state today = the first visible day, so any clamp would
+   * drag the selection along -- the exact bug this avoids). The list keeps
+   * showing the selected day however far the ribbon scrolls, because
+   * loadWeek widens its range to cover the selected date. The reload is
+   * SILENT (a marker refresh -- no loader/error churn).
    */
   async function shiftDays(delta: number): Promise<void> {
     const clamped = Math.max(delta, -maxBackDays.value)
