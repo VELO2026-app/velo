@@ -1,3 +1,19 @@
+name: velo
+# The compose PROJECT name, declared rather than inferred.
+#
+# Unset, compose derives it from the directory holding this file, which is an
+# accident of the checkout layout: two stacks whose files both sit in `deploy/`
+# resolve to ONE project, and one whose file sits in a repository root becomes
+# `repo`. Same project means one label namespace -- `ps` from either directory
+# lists the other's containers, every `up -d` reports the other's as orphans,
+# and `down --remove-orphans` from either destroys the other.
+#
+# CONVENTION for every service on these servers: declare it here, first line,
+# equal to the service name. A stack that does not is one directory rename away
+# from colliding with a stack it has never heard of.
+#
+# Nothing observes this except a live docker daemon, so no test covers it.
+
 # =============================================================================
 # VELO Platform -- Docker Compose (root, CRITICAL-4: Redis auth)
 # =============================================================================
@@ -126,8 +142,14 @@ services:
     logging: *default-logging
 
 volumes:
+  # Physical names pinned, so that they do NOT carry the project name as a
+  # prefix. Unpinned, `velo_postgres_data` under project `velo` would land on disk as
+  # `velo_velo_postgres_data` -- the service name twice -- and would move again the day
+  # the project name did. Pinned, the name on disk is the name written here.
   velo_postgres_data:
+    name: velo_postgres_data
   velo_redis_data:
+    name: velo_redis_data
 
 networks:
   # Shared bus between the velo stack and the comms stack. EXTERNAL: it is
