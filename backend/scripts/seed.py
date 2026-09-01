@@ -94,6 +94,17 @@ from app.modules.curator_groups.models import (  # noqa: E402
     CuratorGroupMember,
     CuratorMemberKind,
 )
+from app.modules.curator_groups.service import (  # noqa: E402
+    CAN_CREATE_GROUPS_KEY,
+)
+
+# The seed profile's FIELD name, deliberately a separate constant from
+# CAN_CREATE_GROUPS_KEY above even though the two spell the same word: one
+# is a key in a JSON file people edit by hand, the other is a key inside
+# stored JSONB. Named once because both readers of it fail SILENTLY on a
+# typo -- the demo curator would simply have no right, and the only symptom
+# would be a dead button on the stand.
+_PROFILE_FIELD_CAN_CREATE_GROUPS = "can_create_groups"
 from app.modules.diary.models import Checkin, CheckType, Feedback  # noqa: E402
 from app.modules.masters.models import MasterProfile  # noqa: E402
 from app.modules.practices.models import (  # noqa: E402
@@ -201,6 +212,15 @@ def _verified_profile_data(fields: dict) -> dict:
                 "notes": "seeded via velo seed",
             },
             "rejections": [],
+            # GT-15: founding schools is a right the admin grants, not a
+            # consequence of being verified. Written explicitly here (unlike
+            # the verify endpoint, which writes the key only when true)
+            # because this literal spells out the whole account block, and a
+            # reader comparing a seeded profile against a real one should
+            # not have to wonder whether a missing key means anything.
+            CAN_CREATE_GROUPS_KEY: bool(
+                fields.get(_PROFILE_FIELD_CAN_CREATE_GROUPS, False)
+            ),
         },
         "profile": {
             "display_name": fields["display_name"],
@@ -300,6 +320,15 @@ async def ensure_master(
         #    profile earlier -- and fails with "style 'presence' for direction
         #    'meditation' is not among your confirmed methods".
         #
+        # 3. THE RIGHT TO FOUND SCHOOLS IS GRANTED WHEN THE PROFILE ASKS FOR
+        #    IT (GT-15). Needed for the same reason as (2): the stand's demo
+        #    curator has to be able to press "create a school" on camera, and
+        #    on a REUSED account this branch runs instead of the fresh-profile
+        #    literal -- so a flag written only there would silently never
+        #    appear. GRANT-ONLY, exactly like the methods merge above and for
+        #    the same reason: a seed profile that says nothing about the right
+        #    must not take away a right a real admin granted this person.
+        #
         # MERGED, not replaced: this is a real person's profile. Methods they
         # added themselves stay; the profile only guarantees that what it is
         # about to seed is confirmed.
@@ -316,6 +345,12 @@ async def ensure_master(
                 },
             )
             data.setdefault("availability", {})["is_accepting"] = True
+
+        if spec.get(_PROFILE_FIELD_CAN_CREATE_GROUPS) and not acct.get(
+            CAN_CREATE_GROUPS_KEY
+        ):
+            acct[CAN_CREATE_GROUPS_KEY] = True
+            info("  can_create_groups granted on existing profile")
 
         prof = data.setdefault("profile", {})
         existing_methods = list(prof.get("methods") or [])

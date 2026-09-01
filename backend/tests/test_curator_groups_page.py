@@ -119,10 +119,22 @@ async def _make_verified_master(
     if experience_years is not None:
         profile_block["experience_years"] = experience_years
 
+    # GT-15: founding a school is now a separate admin-granted right, not
+    # a consequence of verification -- so a fixture that omitted it would
+    # build a master who is verified and still cannot create the group
+    # every test below starts by creating. Set here rather than asserted
+    # on: this file is about what a curator does WITH a school, and the
+    # right itself is covered in test_curator_group_permission.py.
     db_session.add(
         MasterProfile(
             user_id=UUID(user_id),
-            data={"account": {"status": "verified"}, "profile": profile_block},
+            data={
+                "account": {
+                    "status": "verified",
+                    "can_create_groups": True,
+                },
+                "profile": profile_block,
+            },
         )
     )
     await db_session.flush()

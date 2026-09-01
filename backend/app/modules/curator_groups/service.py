@@ -55,6 +55,63 @@ from app.modules.users.helpers import display_name
 from app.modules.users.models import User
 
 _NAME_TAKEN_CODE = "curator_group_name_taken"
+_NO_CREATE_RIGHT_CODE = "group_creation_not_allowed"
+
+# GT-15. THE ONE SPELLING of the admin-granted right, for the reason
+# masters/models.py gives about its own JSONB: data is a dict with no model
+# behind it, so a mistyped key does not fail -- it reads back as None and the
+# gate silently opens or silently shuts. Written here once and imported by
+# every writer (admin/masters verify + toggle, scripts/seed) and every reader
+# (this module's gate, admin/users' list, the router's list response).
+CAN_CREATE_GROUPS_KEY = "can_create_groups"
+
+
+def master_can_create_groups(data: dict | None) -> bool:
+    """Does this profile carry the admin-granted right to found a school?
+
+    ABSENT AND false ARE THE SAME STATE and this function is the single
+    place that says so. Verification writes the key only when the admin
+    ticked the box, the admin toggle writes an explicit boolean either way,
+    and a profile created by any other path (master apply, admin
+    make-master, an older seed) has no key at all -- three origins, one
+    meaning, no caller that has to remember which is which.
+
+    Takes the dict, not the profile, so a caller holding a row from a join
+    (admin/users' list) and a caller holding the ORM object (the router)
+    ask the same question through the same body.
+    """
+    account = (data or {}).get("account") or {}
+    return bool(account.get(CAN_CREATE_GROUPS_KEY))
+
+
+def _can_create_groups_exists(
+    user_id_col: ColumnElement | UUID,
+) -> ColumnElement[bool]:
+    """The same question as master_can_create_groups, asked in SQL.
+
+    Twin of _verified_profile_exists below, and shaped like it on purpose:
+    a boolean CLAUSE drops into a WHERE unchanged, and the gate needs the
+    answer inside the writer's transaction without pulling the profile row
+    into Python just to read one key.
+
+    NULL-safe by construction: a profile with no such key extracts to NULL,
+    CAST(NULL AS BOOLEAN) is NULL, and IS TRUE turns that into false. So
+    "no key" and "false" answer identically here too -- the SQL half of the
+    rule master_can_create_groups states in Python.
+
+    Projects user_id, NOT id: MasterProfile's PRIMARY KEY IS user_id and it
+    has no surrogate key at all.
+    """
+    return (
+        select(MasterProfile.user_id)
+        .where(
+            MasterProfile.user_id == user_id_col,
+            MasterProfile.data["account"][CAN_CREATE_GROUPS_KEY]
+            .as_boolean()
+            .is_(True),
+        )
+        .exists()
+    )
 
 
 def _verified_profile_exists(
@@ -233,6 +290,24 @@ async def create_curator_group(
 ) -> CuratorGroup:
     """Create a group and thereby become its curator (I-1).
 
+    GT-15: THE ONE GATE ON THE RIGHT TO FOUND A SCHOOL. The flag means
+    exactly "may found a NEW school", never "may own one" -- accepting a
+    transfer still makes a flagless master a curator, deliberately, because
+    a curator who wants to hand their school over must have someone to hand
+    it to, and gating the transfer would leave schools locked to owners who
+    want out with deletion as the only exit. The other nine curator
+    endpoints do not ask this question at all: they are about a school that
+    already exists.
+
+    Nor does the flag freeze anything. Revoking it closes this function and
+    nothing else; the admin lever that freezes what a master already built
+    is revoke_master, which exists and is proven, and a second way to do
+    the same thing would be two mechanisms obliged to agree.
+
+    ASKED BEFORE THE NAME IS LOOKED UP, not after: a master with no right
+    must not be able to learn from the status code whether some name is
+    already taken under their own account.
+
     The pre-check is the fast path that produces a clean 409; the UNIQUE
     index is the actual guard, and the IntegrityError backstop is what makes
     two simultaneous creates of the same name resolve to "one row, one 409"
@@ -240,6 +315,19 @@ async def create_curator_group(
     masters/groups_service.py -- and the reason all three exist is that the
     SELECT and the INSERT are not one atomic step.
     """
+    allowed = (
+        await session.execute(
+            select(_can_create_groups_exists(curator_user_id))
+        )
+    ).scalar()
+    if not allowed:
+        # Deliberately NOT master_profile_not_verified: this master IS
+        # verified, and the frontend owes them a different sentence.
+        raise ForbiddenError(
+            "Creating curator groups is not allowed for this master",
+            code=_NO_CREATE_RIGHT_CODE,
+        )
+
     existing = (
         await session.execute(
             select(CuratorGroup).where(

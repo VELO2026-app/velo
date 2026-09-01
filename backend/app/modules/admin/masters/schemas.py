@@ -54,6 +54,31 @@ class VerifyMasterRequest(BaseModel):
             "visible to another master's picker."
         ),
     )
+    can_create_groups: bool = Field(
+        default=False,
+        description=(
+            "GT-15: may this master found curator groups (schools)? The "
+            "admin's second decision in the same dialog, defaulting to no. "
+            "Absent or false writes nothing at all -- see verify_master."
+        ),
+    )
+
+
+class SetMasterGroupRightRequest(BaseModel):
+    """PATCH /admin/masters/{user_id}/can-create-groups -- request body.
+
+    GT-15. ONE toggle rather than a grant endpoint and a revoke endpoint:
+    the thing being set is a single boolean, and a pair of verbs would make
+    "grant twice" and "revoke what was never granted" two separate
+    questions to answer instead of one idempotent write.
+
+    Not routed through a second verification: verify_master goes through
+    _load_pending_profile, which answers 409 on anything that is not
+    pending -- so an already-verified master could never be reached that
+    way, which is precisely the master this endpoint exists for.
+    """
+
+    can_create_groups: bool
 
 
 class RejectMasterRequest(BaseModel):
@@ -127,6 +152,19 @@ class AdminMasterActionResponse(BaseModel):
 
     user_id: UUID
     status: str
+
+
+class MasterGroupRightResponse(BaseModel):
+    """PATCH /admin/masters/{user_id}/can-create-groups -- the right, after.
+
+    Returns the flag rather than the account status: the status is not what
+    this call changes, and echoing it would invite the reader to think it
+    might be. The value is what was just written, so an idempotent second
+    call answers exactly like the first.
+    """
+
+    user_id: UUID
+    can_create_groups: bool
 
 
 class RevokeMasterAdvisory(BaseModel):

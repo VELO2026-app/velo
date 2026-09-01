@@ -83,6 +83,7 @@ from app.modules.curator_groups.service import (
     list_group_masters,
     list_group_practice_master_ids,
     list_my_curator_groups,
+    master_can_create_groups,
     offer_curator_group_transfer,
     preview_curator_group_invite,
     remove_curator_group_member,
@@ -105,11 +106,20 @@ async def list_curator_groups_endpoint(
     master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
     session: AsyncSession = Depends(get_db_reader),
 ) -> CuratorGroupListResponse:
-    """Groups I curate, newest first. Empty list when I curate none."""
-    user, _profile = master_tuple
+    """Groups I curate, newest first. Empty list when I curate none.
+
+    GT-15: also answers whether I may found a NEW one. Read off the profile
+    get_current_master already loaded -- that dependency and this endpoint
+    both take get_db_reader, so it is the same session and the same object,
+    and the answer costs no query at all. This is the one place a curator
+    endpoint reads the flag; the gate itself is in the service, and the
+    other nine endpoints do not consult it (see create_curator_group).
+    """
+    user, profile = master_tuple
     items = await list_curator_groups(user.id, session)
     return CuratorGroupListResponse(
         items=[CuratorGroupResponse(**item) for item in items],
+        can_create_groups=master_can_create_groups(profile.data),
     )
 
 

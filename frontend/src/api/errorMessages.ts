@@ -29,7 +29,22 @@
 // distinct codes" figure counted that comment line; corrected here). Kept
 // anyway, at zero cost, so a future raise site is covered without anyone
 // needing to remember this table. ONE MORE, validation_error, is not a
-// VeloError.code at all -- see its own comment below. Total table size: 24.
+// VeloError.code at all -- see its own comment below.
+//
+// RE-MEASURED (GT-15). The paragraph above is a snapshot of the №747
+// reconciliation and has drifted twice since -- GT-14 added nine curator
+// codes and GT-15 adds a tenth, neither round updating the totals. Today,
+// re-running that same command: 34 codes raised as a literal, 30 of them
+// here, 4 deliberately absent (practice_full and zoom_meeting_not_failed
+// for the reasons above, plus invalid_cursor and too_many_requests, which
+// no screen shows a phrase for). Total table size: 34.
+//
+// AND THAT COMMAND HAS A BLIND SPOT worth naming rather than repeating: it
+// matches a STRING LITERAL after `code=`, so a code raised through a
+// constant is invisible to it. Two are: curator_group_name_taken
+// (_NAME_TAKEN_CODE) and group_creation_not_allowed (_NO_CREATE_RIGHT_CODE),
+// both in curator_groups/service.py. Counting raise sites rather than
+// literals puts the real number at 36.
 //
 // SEEDED from the 7 call sites that already carried a hand-written Russian
 // phrase for a specific code (verbatim, not re-worded -- those were written
@@ -64,11 +79,18 @@ export const ERROR_MESSAGES: Record<string, string> = {
   practice_not_found: 'Практика не найдена',
   role_not_allowed: 'Эта роль недоступна для вашего аккаунта',
 
-  // Curator groups (schools). Nine codes; six were already reachable before
+  // Curator groups (schools). Ten codes; six were already reachable before
   // this table knew about them, three were added to their raise sites so the
-  // 404s stopped arriving as the generic `not_found`. Every one of the three
-  // is deliberately ONE code for several causes -- see each phrase.
+  // 404s stopped arriving as the generic `not_found`, and the tenth
+  // (group_creation_not_allowed, GT-15) arrives with its raise site. Three of
+  // the ten are deliberately ONE code for several causes -- see each phrase.
   curator_group_name_taken: 'У вас уже есть школа с таким названием',
+  // GT-15. NOT master_profile_not_verified: this master IS verified, and
+  // telling them their profile is unconfirmed would send them to the wrong
+  // screen to fix a thing that is not broken. Founding a school is a right
+  // an admin grants, and only an admin can grant it.
+  group_creation_not_allowed:
+    'Заводить школы может мастер, которому администратор выдал это право',
   curator_cannot_leave:
     'Куратор не может покинуть свою школу. Передайте её другому мастеру или удалите.',
   own_group: 'Это ваша школа',

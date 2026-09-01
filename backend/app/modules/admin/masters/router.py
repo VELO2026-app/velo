@@ -23,11 +23,13 @@ from app.modules.admin.masters.schemas import (
     ApproveMethodChangeRequest,
     EditMasterMethodsRequest,
     InviteMasterResponse,
+    MasterGroupRightResponse,
     MethodChangeActionResponse,
     PaginatedMethodChangeRequestsResponse,
     RejectMasterRequest,
     RejectMethodChangeRequest,
     RevokeMasterAdvisory,
+    SetMasterGroupRightRequest,
     VerifyMasterRequest,
 )
 from app.modules.admin.masters.service import (
@@ -40,9 +42,11 @@ from app.modules.admin.masters.service import (
     reject_master,
     reject_method_change,
     revoke_master,
+    set_master_group_right,
     verify_master,
 )
 from app.modules.auth.dependencies import get_current_admin
+from app.modules.curator_groups.service import master_can_create_groups
 from app.modules.users.models import User
 
 logger = structlog.get_logger()
@@ -106,10 +110,15 @@ async def verify_master_endpoint(
     Updates profile status to 'verified'. body.promote (PROMPT №503 commit 3):
     optional custom method labels to add to the taxonomy catalog -- absent/
     empty writes nothing, identical to before this field existed.
+
+    body.can_create_groups (GT-15): may this master found schools? Absent
+    or false writes no key at all; the right is granted or taken back later
+    through PATCH /{user_id}/can-create-groups.
     """
     profile = await verify_master(
         user_id, admin, body.notes, session,
         promote=body.promote, master_only=body.master_only,
+        can_create_groups=body.can_create_groups,
     )
 
     await session.flush()
@@ -153,6 +162,36 @@ async def revoke_master_endpoint(
     advisory = await revoke_master(user_id, admin, session)
     await session.flush()
     return advisory
+
+
+@router.patch(
+    "/{user_id}/can-create-groups",
+    response_model=MasterGroupRightResponse,
+)
+async def set_master_group_right_endpoint(
+    user_id: UUID,
+    body: SetMasterGroupRightRequest,
+    admin: User = Depends(get_current_admin),
+    session: AsyncSession = Depends(get_db_session),
+) -> MasterGroupRightResponse:
+    """Grant or revoke this master's right to found schools (GT-15).
+
+    Separate from verify because a master verified yesterday is exactly who
+    this is for, and the verify path only admits pending applications.
+    Idempotent both ways. Revoking closes the creation of NEW schools and
+    touches nothing this master already built -- that lever is /revoke.
+    """
+    profile = await set_master_group_right(
+        user_id, admin, body.can_create_groups, session,
+    )
+
+    await session.flush()
+    await session.refresh(profile)
+
+    return MasterGroupRightResponse(
+        user_id=profile.user_id,
+        can_create_groups=master_can_create_groups(profile.data),
+    )
 
 
 @router.patch(

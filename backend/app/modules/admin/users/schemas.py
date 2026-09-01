@@ -43,6 +43,25 @@ class AdminMasterListItem(BaseModel):
         is still attached to them. Same None semantics as its neighbours --
         null only if a master somehow falls outside the batch, which should
         not happen; the FE shows "-".
+
+    GT-15:
+      - can_create_groups: whether the admin has granted this master the
+        right to FOUND schools. Read off the profile row the list already
+        joined -- zero extra cost, like methods and available_cents.
+
+        ITS NONE-SEMANTICS DELIBERATELY DIFFER FROM ITS NEIGHBOURS above,
+        which is why this says so out loud. Those are `int | None` because
+        a count can genuinely be unknown: null means "this master fell
+        outside the batch". A right cannot be unknown here -- the profile
+        is in hand on every row -- so this is a plain bool defaulting to
+        false, and false always means "no right", never "could not tell".
+        A `| None` would invent a third state that the data cannot
+        produce, and the FE would need a "-" branch that never renders.
+
+        Distinct from curator_groups_count next to it: the count says what
+        this master already owns (schools survive both a revoked right and
+        a revoked verification), the flag says what they may found next.
+        A master with three schools and no flag is a normal state.
     """
 
     id: UUID
@@ -58,6 +77,7 @@ class AdminMasterListItem(BaseModel):
     students_count: int | None = None
     curator_groups_count: int | None = None
     available_cents: int | None = None
+    can_create_groups: bool = False
 
 
 class AdminMasterDetail(AdminMasterListItem):

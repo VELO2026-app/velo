@@ -130,9 +130,23 @@ class CuratorGroupResponse(BaseModel):
 
 
 class CuratorGroupListResponse(BaseModel):
-    """GET /masters/me/curator-groups."""
+    """GET /masters/me/curator-groups.
+
+    can_create_groups (GT-15) rides on the LIST, not on an item: it is a
+    property of the master, not of any one school, and this is the screen
+    where the "create a school" button lives -- so the frontend learns
+    whether to offer it from the call it already makes, with no second
+    request and no endpoint invented for one boolean.
+
+    A plain bool with a false default, NOT bool | None: its neighbours
+    upstream (curator_groups_count and the other admin counters) use null
+    for "this row fell outside the batch", and a right has no such state --
+    the profile is always in hand when this is answered. False here always
+    means "no right", never "could not tell".
+    """
 
     items: list[CuratorGroupResponse]
+    can_create_groups: bool = False
 
 
 class CuratorGroupMemberItem(BaseModel):

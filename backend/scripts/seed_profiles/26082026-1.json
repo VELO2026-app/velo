@@ -47,6 +47,7 @@
       "key": "main",
       "telegram_id": 6598660049,
       "display_name": "Мастер VELO",
+      "can_create_groups": true,
       "bio": "Веду утренние медитации, мягкую йогу и дыхательные практики. Куратор школы «Тихое утро».",
       "methods": [
         "meditation — presence",

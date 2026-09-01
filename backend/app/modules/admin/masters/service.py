@@ -56,6 +56,12 @@ from app.modules.admin.masters.schemas import (
     PaginatedMethodChangeRequestsResponse,
     RevokeMasterAdvisory,
 )
+
+# GT-15: the key is imported, never retyped. MasterProfile.data has no
+# model behind it, so a typo in a writer would not fail -- it would write a
+# key nobody reads, and the master would be told they had a right they do
+# not have. curator_groups owns the spelling because it owns the gate.
+from app.modules.curator_groups.service import CAN_CREATE_GROUPS_KEY
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.practices.taxonomy_models import TaxonomyDirection
@@ -107,6 +113,7 @@ async def verify_master(
     session: AsyncSession,
     promote: list[str] | None = None,
     master_only: list[str] | None = None,
+    can_create_groups: bool = False,
 ) -> MasterProfile:
     """Verify a pending master application (T4, PROMPT №295).
 
@@ -135,6 +142,17 @@ async def verify_master(
     TaxonomyDirection row (_scope_custom_methods_to_master), so the new
     master's own create-practice picker offers it even though no other
     master ever sees it.
+
+    can_create_groups (GT-15): the admin's tick for "this master may found
+    schools", made in this same dialog because verifying a master and
+    deciding what they may do with the account is one decision, not a
+    process with a queue. WRITTEN ONLY WHEN TRUE. False and absent read
+    identically (curator_groups/service.py::master_can_create_groups), so
+    stamping an always-false key onto every profile the platform verifies
+    would buy nothing and mean the key's presence stopped telling anyone
+    anything. Later grants and revocations go through
+    set_master_group_right, not through here -- this path is reachable
+    only while the application is still pending.
     """
     profile = await _load_pending_profile(user_id, session)
 
@@ -146,6 +164,8 @@ async def verify_master(
         "verified_by": str(admin.id),
         "notes": notes,
     }
+    if can_create_groups:
+        new_data["account"][CAN_CREATE_GROUPS_KEY] = True
     profile.set_jsonb("data", new_data)
 
     # Phase 6 / T0: pending -> verified IS the master-capability delta
@@ -359,6 +379,70 @@ async def revoke_master(
         has_warnings=advisory.has_warnings,
     )
     return advisory
+
+
+async def set_master_group_right(
+    user_id: UUID,
+    admin: User,
+    can_create_groups: bool,
+    session: AsyncSession,
+) -> MasterProfile:
+    """Grant or revoke the right to found schools, after verification (GT-15).
+
+    The right has to be movable without re-issuing anything: a master
+    verified last week is exactly who an admin wants to hand it to, and
+    verify_master cannot reach them -- _load_pending_profile answers 409 on
+    a verified profile. So this is its own endpoint rather than a second
+    trip through verification.
+
+    VERIFIED ONLY (_load_verified_master, 409 otherwise): the right is
+    consumed inside get_current_master's shadow, so granting it to a
+    pending or suspended profile would record a permission that cannot be
+    exercised and that nothing would clear.
+
+    IDEMPOTENT IN BOTH DIRECTIONS -- the write is an assignment, not a
+    toggle, so granting twice and revoking what was never granted are both
+    "the flag now says what you asked for" rather than errors or flips.
+    Revocation writes an explicit false rather than dropping the key: an
+    admin reading raw JSONB should be able to tell "decided against" from
+    "never came up", even though the gate treats them the same.
+
+    WHAT REVOCATION DOES NOT DO IS FREEZE ANYTHING. Schools this master
+    already founded keep working in full -- page, roster, invites,
+    transfers. The lever for freezing what a master built is revoke_master,
+    and it stays the only one.
+    """
+    _user, profile = await _load_verified_master(
+        user_id, session, for_update=True
+    )
+
+    # -- P-03: deepcopy + set_jsonb --
+    new_data = copy.deepcopy(profile.data)
+    new_data.setdefault("account", {})[CAN_CREATE_GROUPS_KEY] = (
+        can_create_groups
+    )
+    profile.set_jsonb("data", new_data)
+
+    # M-01: an admin decision about what an account may do is auditable for
+    # the same reason verify/reject/revoke are.
+    await record_audit(
+        event="master_group_right_set",
+        actor_id=admin.id,
+        actor_type="admin",
+        target_type="master_profile",
+        target_id=user_id,
+        data={"can_create_groups": can_create_groups},
+        session=session,
+    )
+
+    logger.info(
+        "master_group_right_set",
+        user_id=str(user_id),
+        admin_id=str(admin.id),
+        can_create_groups=can_create_groups,
+    )
+
+    return profile
 
 
 async def reject_master(

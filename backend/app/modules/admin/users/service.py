@@ -45,6 +45,12 @@ from app.modules.bookings.models import Booking, BookingStatus
 # Model import only -- the curator_groups module's own service is not
 # touched from here (its helpers are private and stay that way).
 from app.modules.curator_groups.models import CuratorGroup
+
+# GT-15: the reader is imported, not re-implemented. The rule that an
+# absent key and an explicit false are the same state has to be stated in
+# ONE body, or the admin list will one day disagree with the gate about
+# who may found a school.
+from app.modules.curator_groups.service import master_can_create_groups
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.users.models import User, UserRole
@@ -273,6 +279,7 @@ async def list_masters(
             students_count=students_by_master.get(user.id, 0),
             curator_groups_count=curator_groups_by_master.get(user.id, 0),
             available_cents=profile.available_cents,
+            can_create_groups=master_can_create_groups(profile.data),
         )
         for user, profile in rows
     ]
@@ -330,6 +337,10 @@ async def get_master_by_id(
         phone=prof.get("phone"),
         languages=prof.get("languages", []),
         certifications=prof.get("certifications", []),
+        # GT-15: inherited from AdminMasterListItem, so it has to be filled
+        # here too -- left to its default the detail screen would report
+        # "no right" for every master, including the ones who have it.
+        can_create_groups=master_can_create_groups(profile.data),
     )
 
 

@@ -100,9 +100,18 @@ async def _make_verified_master(
     user.role = UserRole.MASTER
     await db_session.flush()
 
+    # GT-15: founding a school is now a separate admin-granted right, not
+    # a consequence of verification -- so a fixture that omitted it would
+    # build a master who is verified and still cannot create the group
+    # every test below starts by creating. Set here rather than asserted
+    # on: this file is about what a curator does WITH a school, and the
+    # right itself is covered in test_curator_group_permission.py.
     profile = MasterProfile(
         user_id=user_id,
-        data={"account": {"status": "verified"}, "profile": {"bio": "m"}},
+        data={
+            "account": {"status": "verified", "can_create_groups": True},
+            "profile": {"bio": "m"},
+        },
     )
     db_session.add(profile)
     await db_session.flush()
