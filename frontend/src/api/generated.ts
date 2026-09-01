@@ -83,6 +83,7 @@ export interface AdminMasterDetail {
   students_count?: number | null
   curator_groups_count?: number | null
   available_cents?: number | null
+  can_create_groups?: boolean
   experience_years?: number
   bio?: string | null
   display_name?: string | null
@@ -92,7 +93,7 @@ export interface AdminMasterDetail {
   certifications?: string[]
 }
 
-/** Single item in admin masters list -- user data + master status. CR-01: role narrowed from str to UserRole for type safety. R8: rich-card fields, additive over the F8-fix shape. - methods: read straight off the already-joined MasterProfile.data.profile (zero extra cost -- see list_masters). - practices_count / students_count: real all-time aggregates, computed in ONE batched query each over the page's master_ids (no N+1, mirrors practices/enrichment_service.py attendance_counts_for_practices). None only if a master somehow falls outside the batch (should not happen; honest stub -- FE shows "-"). - available_cents: MasterProfile.available_cents, a plain column already loaded by the list_masters join -- zero extra cost. P4/GT-9: - curator_groups_count: how many curator groups this master OWNS, in the same batched shape as the two counts above. Counts ACTIVE AND FROZEN alike: revoking a master's verification does not dissolve their schools, and an admin looking at the person needs to see what is still attached to them. Same None semantics as its neighbours -- null only if a master somehow falls outside the batch, which should not happen; the FE shows "-". */
+/** Single item in admin masters list -- user data + master status. CR-01: role narrowed from str to UserRole for type safety. R8: rich-card fields, additive over the F8-fix shape. - methods: read straight off the already-joined MasterProfile.data.profile (zero extra cost -- see list_masters). - practices_count / students_count: real all-time aggregates, computed in ONE batched query each over the page's master_ids (no N+1, mirrors practices/enrichment_service.py attendance_counts_for_practices). None only if a master somehow falls outside the batch (should not happen; honest stub -- FE shows "-"). - available_cents: MasterProfile.available_cents, a plain column already loaded by the list_masters join -- zero extra cost. P4/GT-9: - curator_groups_count: how many curator groups this master OWNS, in the same batched shape as the two counts above. Counts ACTIVE AND FROZEN alike: revoking a master's verification does not dissolve their schools, and an admin looking at the person needs to see what is still attached to them. Same None semantics as its neighbours -- null only if a master somehow falls outside the batch, which should not happen; the FE shows "-". GT-15: - can_create_groups: whether the admin has granted this master the right to FOUND schools. Read off the profile row the list already joined -- zero extra cost, like methods and available_cents. ITS NONE-SEMANTICS DELIBERATELY DIFFER FROM ITS NEIGHBOURS above, which is why this says so out loud. Those are `int | None` because a count can genuinely be unknown: null means "this master fell outside the batch". A right cannot be unknown here -- the profile is in hand on every row -- so this is a plain bool defaulting to false, and false always means "no right", never "could not tell". A `| None` would invent a third state that the data cannot produce, and the FE would need a "-" branch that never renders. Distinct from curator_groups_count next to it: the count says what this master already owns (schools survive both a revoked right and a revoked verification), the flag says what they may found next. A master with three schools and no flag is a normal state. */
 export interface AdminMasterListItem {
   id: string
   telegram_id?: number | null
@@ -107,6 +108,7 @@ export interface AdminMasterListItem {
   students_count?: number | null
   curator_groups_count?: number | null
   available_cents?: number | null
+  can_create_groups?: boolean
 }
 
 /** PATCH /admin/masters/{user_id}/profile -- partial admin edit of EVERY master-authored field (batch H). ALL fields optional; only the keys the client actually SENDS are applied (the service reads model_dump(exclude_unset=True)), so a partial PATCH never clobbers an unsent sibling. Constraints are reused from the apply form (MasterApplyProfile / MasterApplyExperience, masters/schemas.py:49-70) and users/me (UserUpdate first/last, users/schemas.py:577-578) so admin-edit validation can never drift from what the master could originally submit. Field homes: display_name / email / phone / bio / methods / experience_years / certifications / languages -> MasterProfile.data.profile.* first_name / last_name -> User.* (the account name shown in admin lists) */
@@ -641,9 +643,10 @@ export interface CuratorGroupLeavePreviewResponse {
   upcoming_practices_targeting_group: number
 }
 
-/** GET /masters/me/curator-groups. */
+/** GET /masters/me/curator-groups. can_create_groups (GT-15) rides on the LIST, not on an item: it is a property of the master, not of any one school, and this is the screen where the "create a school" button lives -- so the frontend learns whether to offer it from the call it already makes, with no second request and no endpoint invented for one boolean. A plain bool with a false default, NOT bool | None: its neighbours upstream (curator_groups_count and the other admin counters) use null for "this row fell outside the batch", and a right has no such state -- the profile is always in hand when this is answered. False here always means "no right", never "could not tell". */
 export interface CuratorGroupListResponse {
   items: CuratorGroupResponse[]
+  can_create_groups?: boolean
 }
 
 /** One master in a group's roster. Fields are a STRICT SUBSET of MasterPublicResponse plus is_curator -- the isolation boundary is reused, not restated. reviews_count is deliberately absent: the roster card does not show it, and it would cost a second aggregate per page for nothing. Only VISIBLE masters appear here (verified right now, I-4), so a suspended master-member drops out of the list and out of the total -- the same predicate that drives masters_count, so the two cannot disagree. */
@@ -935,6 +938,12 @@ export interface MasterApplyResponse {
   user_id: string
   status: string
   created_at: string
+}
+
+/** PATCH /admin/masters/{user_id}/can-create-groups -- the right, after. Returns the flag rather than the account status: the status is not what this call changes, and echoing it would invite the reader to think it might be. The value is what was just written, so an idempotent second call answers exactly like the first. */
+export interface MasterGroupRightResponse {
+  user_id: string
+  can_create_groups: boolean
 }
 
 /** PATCH /api/v1/masters/me/languages -- freely-editable language set (E16). Q2=A: no moderation (unlike methods). Replaces data.profile.languages wholesale with the sent flat list. Empty list clears it. */
@@ -1533,6 +1542,11 @@ export interface SeriesPoint {
   value: number
 }
 
+/** PATCH /admin/masters/{user_id}/can-create-groups -- request body. GT-15. ONE toggle rather than a grant endpoint and a revoke endpoint: the thing being set is a single boolean, and a pair of verbs would make "grant twice" and "revoke what was never granted" two separate questions to answer instead of one idempotent write. Not routed through a second verification: verify_master goes through _load_pending_profile, which answers 409 on anything that is not pending -- so an already-verified master could never be reached that way, which is precisely the master this endpoint exists for. */
+export interface SetMasterGroupRightRequest {
+  can_create_groups: boolean
+}
+
 /** PUT /masters/me/students/{student_user_id}/tag. tag: null clears the tag (deletes the master_student row if it would otherwise be empty -- i.e. not blocked either). */
 export interface SetStudentTagRequest {
   tag: string | null
@@ -1750,6 +1764,7 @@ export interface VerifyMasterRequest {
   notes?: string | null
   promote?: string[]
   master_only?: string[]
+  can_create_groups?: boolean
 }
 
 /** Response from POST /waitlist/{id}/confirm. Returns both the converted waitlist entry and the new booking id. */
