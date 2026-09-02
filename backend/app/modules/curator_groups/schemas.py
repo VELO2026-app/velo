@@ -13,7 +13,14 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, StringConstraints
+from pydantic import (
+    AfterValidator,
+    AnyUrl,
+    BaseModel,
+    BeforeValidator,
+    StringConstraints,
+    UrlConstraints,
+)
 
 # strip_whitespace=True is a DELIBERATE divergence from GroupNameStr
 # (masters/groups_schemas.py), which has min_length=1 without stripping.
@@ -35,6 +42,90 @@ CuratorGroupDescriptionStr = Annotated[str, StringConstraints(max_length=500)]
 
 CuratorMemberKindLiteral = Literal["master", "student"]
 
+# ===========================================================================
+# The school's avatar url (GT-17)
+#
+# THE FIRST FIELD IN THIS BACKEND THAT TAKES A URL FROM A USER. Every other
+# avatar_url in the tree is an OUTPUT copied from Telegram, and every zoom
+# link is minted by the Zoom API -- checked by grep before this was
+# written, and it is why there is no precedent to copy and why this block
+# is as long as it is. The value ends up in an <img src> in front of every
+# member of the school.
+# ===========================================================================
+
+# The column's width, spelled here because the AFTER validator below has to
+# compare against the same number the database enforces. Kept next to the
+# type that uses it rather than imported from the model: schemas do not
+# import models anywhere in this module, and a mismatch is caught by the
+# test that stores a 500-character url.
+_AVATAR_URL_MAX = 500
+
+
+def _blank_to_none(value: Any) -> Any:
+    """"" and "   " mean NO AVATAR, exactly as they do for description.
+
+    A BEFORE validator rather than a service-side normalisation, unlike
+    _normalized_description: an empty string is not a url and would be
+    rejected by the url validator below before any service saw it. Running
+    first is what turns "the curator cleared the field" into None instead
+    of a 422 about a malformed url.
+
+    Only strings are touched. None passes through, and so does anything
+    else -- the url validator is the one entitled to complain about types.
+    """
+    return None if isinstance(value, str) and not value.strip() else value
+
+
+def _fits_the_column(value: AnyUrl) -> AnyUrl:
+    """Reject a url whose NORMALISED form would not fit the column.
+
+    THIS IS NOT A DUPLICATE OF UrlConstraints(max_length=...) BELOW, and
+    removing it reopens a 500. UrlConstraints measures what arrived;
+    Pydantic then NORMALISES -- punycode for the host, percent-encoding for
+    the path -- and the result can be several times longer. Measured, not
+    guessed: "https://пример.рф/" + "я" * 200 + ".png" is 222 characters
+    on the wire, passes max_length=500, and becomes 1234 characters
+    stored. For a Russian-language product a Cyrillic path is ordinary,
+    and without this validator it would reach VARCHAR(500) and come back
+    as a database error, not a 422.
+
+    Checking the STORED length here is also what keeps the service free of
+    a "the string did not fit" branch. There is no such state to handle.
+    """
+    stored = str(value)
+    if len(stored) > _AVATAR_URL_MAX:
+        raise ValueError(
+            f"URL is {len(stored)} characters once normalised, which is "
+            f"more than the {_AVATAR_URL_MAX} stored"
+        )
+    return value
+
+
+CuratorGroupAvatarUrl = Annotated[
+    AnyUrl,
+    # HTTPS ONLY, AS AN ALLOW-LIST AND NOT A DENY-LIST. javascript:, data:
+    # and file: are closed by the same clause that closes every scheme
+    # nobody thought of, which is the point -- a filter that forbids the
+    # three known-bad schemes is a filter that admits the fourth. http is
+    # excluded too, and not for security theatre: it is mixed content on an
+    # https page, so the browser blocks or warns and the picture does not
+    # appear anyway.
+    #
+    # AnyUrl + allowed_schemes rather than HttpUrl: HttpUrl permits http,
+    # and narrowing it afterwards would mean two places deciding the same
+    # thing.
+    UrlConstraints(allowed_schemes=["https"], max_length=_AVATAR_URL_MAX),
+    AfterValidator(_fits_the_column),
+]
+
+# The field type: blank -> None BEFORE the url rules, so None never reaches
+# them. NO HOST ALLOW-LIST, deliberately -- a curator hosts the picture on
+# their own site and we cannot know which, so a list would become support
+# nobody performs.
+CuratorGroupAvatarUrlField = Annotated[
+    CuratorGroupAvatarUrl | None, BeforeValidator(_blank_to_none)
+]
+
 
 class CreateCuratorGroupRequest(BaseModel):
     """POST /masters/me/curator-groups."""
@@ -55,10 +146,22 @@ class UpdateCuratorGroupRequest(BaseModel):
     NULL). A bare `str | None = None` cannot distinguish the two and would
     wipe an existing description on every plain rename -- the exact bug
     RenameGroupRequest was rewritten to prevent.
+
+    avatar_url (GT-17) is a PARTIAL update by the same mechanism and for
+    the same reason -- the router computes avatar_url_provided the same
+    way. Absent key: the column is untouched. Present and null (or blank):
+    the avatar is removed. Present and a url: it is replaced.
+
+    CREATION DOES NOT TAKE AN AVATAR, only this update does. A school is
+    founded with a name and a description; the picture is attached
+    afterwards. Not an omission -- widening CreateCuratorGroupRequest would
+    touch a schema five test files exercise, for a field the create screen
+    has no input for.
     """
 
     name: CuratorGroupNameStr
     description: CuratorGroupDescriptionStr | None = None
+    avatar_url: CuratorGroupAvatarUrlField = None
 
 
 class OfferCuratorGroupTransferRequest(BaseModel):
@@ -123,6 +226,14 @@ class CuratorGroupResponse(BaseModel):
     id: UUID
     name: str
     description: str | None
+    # GT-17. `str | None` ON THE WAY OUT, never the validated url type,
+    # here and in the three other school responses. A response model that
+    # validated urls would validate what is ALREADY in the database, so one
+    # bad row would fail the whole page -- and it could not be repaired,
+    # because the PATCH that would fix it renders through the same schema.
+    # Validation belongs on the way in, once. Also matches the six other
+    # avatar_url fields in the tree, all of which are plain str | None.
+    avatar_url: str | None = None
     masters_count: int
     students_count: int
     transfer: CuratorGroupTransferRef | None = None
@@ -290,6 +401,7 @@ class CuratorGroupMineItem(BaseModel):
     id: UUID
     name: str
     description: str | None
+    avatar_url: str | None = None
     curator: CuratorGroupCuratorRef
     masters_count: int
     students_count: int
@@ -328,6 +440,7 @@ class CuratorGroupPageResponse(BaseModel):
     id: UUID
     name: str
     description: str | None
+    avatar_url: str | None = None
     curator: CuratorGroupCuratorRef
     masters_count: int
     students_count: int
@@ -415,6 +528,7 @@ class CuratorGroupInvitePreviewGroup(BaseModel):
     id: UUID
     name: str
     description: str | None
+    avatar_url: str | None = None
     curator_name: str | None
     masters_count: int
     students_count: int

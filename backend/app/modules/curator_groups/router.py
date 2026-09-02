@@ -155,11 +155,14 @@ async def create_curator_group_endpoint(
     )
     # A group one statement old has no members and cannot have a pending
     # transfer; counting or looking either up would be queries asked to
-    # return nothing.
+    # return nothing. It has no picture either -- creation does not take
+    # one (GT-17) -- and that is stated rather than left to the default,
+    # like the two counters above.
     return CuratorGroupResponse(
         id=group.id,
         name=group.name,
         description=group.description,
+        avatar_url=None,
         masters_count=0,
         students_count=0,
         transfer=None,
@@ -176,11 +179,22 @@ async def update_curator_group_endpoint(
     master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
     session: AsyncSession = Depends(get_db_session),
 ) -> CuratorGroupResponse:
-    """Rename and/or edit description. 404 if it is not my group or gone.
+    """Rename, edit description, set or clear the avatar. 404 if not mine.
 
-    `description` is partial: exclude_unset below is what distinguishes an
-    absent key (leave the column) from an explicit null/empty one (write
-    NULL).
+    `description` and `avatar_url` are partial: exclude_unset below is what
+    distinguishes an absent key (leave the column) from an explicit
+    null/empty one (write NULL).
+
+    `name` IS STILL REQUIRED -- a school always has one -- so every avatar
+    change also carries a name, and the client is expected to send the
+    current one. Sending a stale one renames the school back and now says
+    so in the journal; see the delivery report's observations.
+
+    str(body.avatar_url) HERE, NOT IN THE SERVICE: the schema hands over a
+    Pydantic AnyUrl (normalised -- punycode host, percent-encoded path)
+    and the column takes text. Converting at the boundary keeps the
+    service's parameter a plain `str | None`, so nothing downstream has to
+    know a url type exists.
     """
     user, _profile = master_tuple
     update_data = body.model_dump(exclude_unset=True)
@@ -191,6 +205,10 @@ async def update_curator_group_endpoint(
         session,
         description=body.description,
         description_provided="description" in update_data,
+        avatar_url=(
+            str(body.avatar_url) if body.avatar_url is not None else None
+        ),
+        avatar_url_provided="avatar_url" in update_data,
         actor=user,
     )
     await session.flush()
@@ -202,6 +220,7 @@ async def update_curator_group_endpoint(
         id=group.id,
         name=group.name,
         description=group.description,
+        avatar_url=group.avatar_url,
         masters_count=masters_count,
         students_count=students_count,
         transfer=await get_group_transfer_ref(group.id, session),

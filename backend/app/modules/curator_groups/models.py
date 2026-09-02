@@ -73,6 +73,29 @@ class CuratorGroup(UUIDMixin, TimestampMixin, Base):
     description is Text, not String(N): the 500-char cap lives at the schema
     layer (CuratorGroupDescriptionStr), same split as MasterGroup.description
     and Practice.description.
+
+    avatar_url (GT-17) BREAKS THAT SPLIT ON PURPOSE -- String(500), not
+    Text with a schema cap. The cap is in the column because the column is
+    what the value has to fit: a URL is normalised on the way in (punycode
+    host, percent-encoded path), and the normalised form can be several
+    times longer than what was typed. The schema therefore has to check the
+    length of the STORED string against this exact number, so the number
+    has to be here, once, rather than implied by a Text column with no
+    limit at all. See CuratorGroupAvatarUrl in schemas.py.
+
+    Mirrors User.avatar_url (users/models.py:86) in every other respect:
+    String(500), nullable, an EXTERNAL url, no index. Not indexed because
+    nothing queries by it and never will -- it is a value to render, not to
+    find rows by.
+
+    NO FALLBACK LIVES HERE OR ANYWHERE ON THE BACKEND. The frontend's
+    VAvatar.vue already falls back to initials on @error and resets that
+    flag when `url` changes; its own comment records why (t.me was pulled
+    at the registry level and every Telegram userpic died with it, so a url
+    can be valid in the database and dead on the network). Do not add a
+    reachability check here: fetching an arbitrary user-supplied URL from
+    the backend is an SSRF surface opened for a problem the client already
+    solved.
     """
 
     __tablename__ = "curator_group"
@@ -88,6 +111,7 @@ class CuratorGroup(UUIDMixin, TimestampMixin, Base):
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, default=None)
+    avatar_url: Mapped[str | None] = mapped_column(String(500), default=None)
 
     def __repr__(self) -> str:
         return (
@@ -231,6 +255,7 @@ class CuratorGroupEventKind(enum.StrEnum):
     GROUP_CREATED = "group_created"
     GROUP_RENAMED = "group_renamed"
     GROUP_DESCRIPTION_CHANGED = "group_description_changed"
+    GROUP_AVATAR_CHANGED = "group_avatar_changed"
     MEMBER_JOINED = "member_joined"
     MEMBER_PROMOTED = "member_promoted"
     MEMBER_REMOVED = "member_removed"
@@ -350,6 +375,7 @@ class CuratorGroupEvent(Base):
     | group_created             | actor_name                             |
     | group_renamed             | actor_name, old_name, new_name         |
     | group_description_changed | actor_name                             |
+    | group_avatar_changed      | actor_name, had_avatar_before          |
     | member_joined             | actor_name, kind                       |
     | member_promoted           | actor_name                             |
     | member_removed            | actor_name, kind, target_user_id,      |
@@ -361,6 +387,17 @@ class CuratorGroupEvent(Base):
     | transfer_accepted         | actor_name, target_user_id, target_name|
     | transfer_declined         | actor_name, target_user_id, target_name|
     | transfer_cancelled        | actor_name, target_user_id, target_name|
+
+    NO AVATAR URL IS STORED IN data EITHER, and for a reason of its own
+    (GT-17): a url dies while the journal lives forever, so "set the
+    picture to <this>" would decay into a dead link sitting in a feed, and
+    the first reader to render `data` as an <img> would ship a broken
+    image. had_avatar_before carries what the entry actually needs -- it
+    separates "attached a picture for the first time" from "changed or
+    removed one". It deliberately does NOT separate removal from
+    replacement: for a notification those read the same ("the curator
+    changed the school's picture"), and a second flag can be added the day
+    they need to differ.
 
     NO INVITE TOKEN IS EVER STORED IN data, in any form, for any reason.
     The token is a raw secret (secrets.token_urlsafe(32)) and this is a

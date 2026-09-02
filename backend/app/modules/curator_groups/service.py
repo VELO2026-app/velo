@@ -247,6 +247,7 @@ def _group_payload(
         "id": group.id,
         "name": group.name,
         "description": group.description,
+        "avatar_url": group.avatar_url,
         "masters_count": masters_count,
         "students_count": students_count,
         "transfer": transfer,
@@ -594,34 +595,47 @@ async def update_curator_group(
     *,
     description: str | None = None,
     description_provided: bool = False,
+    avatar_url: str | None = None,
+    avatar_url_provided: bool = False,
     actor: User,
 ) -> CuratorGroup:
-    """Rename and/or edit the description of one of my groups.
+    """Rename and/or edit the description or the avatar of one of my groups.
 
     description_provided comes from the router's own exclude_unset check --
     see UpdateCuratorGroupRequest. When it is False the column is not
-    touched at all, byte for byte.
+    touched at all, byte for byte. avatar_url_provided (GT-17) is the same
+    mechanism for the same reason.
+
+    THE AVATAR ARRIVES HERE AS A str, ALREADY NORMALISED AND VALIDATED.
+    The schema owns the url rules -- https only, and a length check against
+    what the column actually holds -- so this function has no "is it a
+    url" branch and no "did it fit" branch. Neither state can reach it.
+    The router does the str() conversion, because what the schema hands it
+    is a Pydantic AnyUrl and the column takes text.
 
     Renaming to the group's CURRENT name is a no-op, not a self-conflict:
     the duplicate lookup runs only when the name actually changes, so the
     group's own row can never be mistaken for a competitor.
 
-    GT-16: TWO SEPARATE EVENTS, not one "group updated". One PATCH can
-    change both fields, and they are not the same news: a rename is
-    something the school's members may need to be told about, a
-    description edit is not. One combined event would force the
+    GT-16, EXTENDED BY GT-17: UP TO THREE SEPARATE EVENTS, not one "group
+    updated". One PATCH can change all three fields, and they are not the
+    same news: a rename is something the school's members may need to be
+    told about, a description edit is not, and an avatar change is its own
+    third thing. One combined event would force the
     notification work to reopen `data` and re-derive which of the two
     happened -- a decision this function already has in hand and can
     simply record. Each is written only if that field ACTUALLY changed,
     so renaming to the current name (the no-op above) writes nothing.
 
-    Both land in one transaction and therefore share created_at to the
+    They land in one transaction and therefore share created_at to the
     byte; their relative order in the feed comes from seq, which is why
-    seq exists (see the model docstring).
+    seq exists (see the model docstring). That order carries no meaning
+    between them -- the three changes are independent.
     """
     group = await _get_group_or_404(curator_user_id, group_id, session)
     old_name = group.name
     old_description = group.description
+    old_avatar_url = group.avatar_url
 
     if group.name != name:
         dup = (
@@ -641,6 +655,13 @@ async def update_curator_group(
 
     if description_provided:
         group.description = _normalized_description(description)
+
+    if avatar_url_provided:
+        # No normalisation step of its own: the schema already turned ""
+        # and whitespace into None, so what arrives is either a validated
+        # url or the absence of one. _normalized_description exists because
+        # a description is free text the schema cannot judge; a url is not.
+        group.avatar_url = avatar_url
 
     try:
         async with session.begin_nested():
@@ -665,6 +686,22 @@ async def update_curator_group(
             actor,
             CuratorGroupEventKind.GROUP_DESCRIPTION_CHANGED,
             session,
+        )
+    if old_avatar_url != group.avatar_url:
+        # Written on any real change, INCLUDING removal -- taking the
+        # picture down is a change the curator made and may want to see.
+        # Not written when the same url is sent again, and this is the one
+        # comparison that only works because the schema stores the
+        # NORMALISED form: "https://example.com" and
+        # "https://example.com/" are the same picture, and if raw text were
+        # stored they would compare unequal and the feed would report a
+        # change that did not happen.
+        _record_group_event(
+            group.id,
+            actor,
+            CuratorGroupEventKind.GROUP_AVATAR_CHANGED,
+            session,
+            data={"had_avatar_before": old_avatar_url is not None},
         )
     return group
 
@@ -1041,6 +1078,7 @@ async def list_my_curator_groups(
             "id": group.id,
             "name": group.name,
             "description": group.description,
+            "avatar_url": group.avatar_url,
             "curator": refs[group.curator_user_id],
             "masters_count": masters_count,
             "students_count": students_count,
@@ -1069,6 +1107,7 @@ async def get_curator_group_page(
         "id": group.id,
         "name": group.name,
         "description": group.description,
+        "avatar_url": group.avatar_url,
         "curator": refs[group.curator_user_id],
         "masters_count": masters_count,
         "students_count": students_count,
@@ -1571,6 +1610,15 @@ async def preview_curator_group_invite(
             "id": group.id,
             "name": group.name,
             "description": group.description,
+            # GT-17. THE MOST LOAD-BEARING PLACE THE AVATAR GOES, and the
+            # only one a grep for "school" would miss: this is the card a
+            # person reads before deciding whether to join, where a picture
+            # says more than the name does. It is also a NESTED dict passed
+            # to a nested model by **, which the AST check over
+            # `Schema(...)` kwargs cannot see into -- so losing this key
+            # would fail nowhere. Covered by its own test, not by a line in
+            # a list of places.
+            "avatar_url": group.avatar_url,
             "curator_name": refs[group.curator_user_id]["display_name"],
             "masters_count": masters_count,
             "students_count": students_count,
