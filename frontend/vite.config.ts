@@ -64,6 +64,13 @@ export default defineConfig({
   server: {
     // Dev server port (only used if someone runs `npm run dev` locally).
     port: 5173,
+    // Dev-only tunnel opt-in (LOCAL DEVELOPMENT, never set in prod): Telegram
+    // WebApp needs HTTPS + a public host, so a dev stand is often reached
+    // through a tunnel domain. Vite blocks unknown Host headers since v5 --
+    // start the dev server with the hosts allowlisted, e.g.
+    //   VITE_ALLOWED_HOSTS=dev.velo-test.xyz npm run dev
+    // Without the variable this stays at Vite's default (localhost + IPs).
+    allowedHosts: process.env.VITE_ALLOWED_HOSTS?.split(','),
     // Proxy API requests to backend during local development.
     // In production, Nginx handles this routing.
     proxy: {
