@@ -29,8 +29,12 @@
 
 <template>
   <div class="onboarding">
-    <!-- Skip: visible on intro steps only (not on the timezone step). -->
-    <div class="onboarding__skip-row">
+    <!-- Skip: visible on intro steps only (not on the timezone step).
+         FE-36: on the timezone step the row collapses to zero -- it reserved
+         24px for a button that never renders there, dead height the search
+         results badly need above the keyboard. The reserve still stands
+         BETWEEN intro steps (no layout jump 0↔1↔2). -->
+    <div class="onboarding__skip-row" :class="{ 'onboarding__skip-row--tz': isTimezoneStep }">
       <button
         v-if="!isTimezoneStep"
         type="button"
@@ -273,6 +277,10 @@ async function finish(): Promise<void> {
   min-height: 24px;
 }
 
+.onboarding__skip-row--tz {
+  min-height: 0;
+}
+
 .onboarding__skip {
   background: transparent;
   border: none;
@@ -300,7 +308,10 @@ async function finish(): Promise<void> {
 
 .onboarding__body--form {
   justify-content: center;
-  gap: var(--space-5);
+  /* FE-36: tighter than the intro slides -- the timezone step must fit its
+     field + first search results above an open keyboard, and every gap here
+     is height the results lose. */
+  gap: var(--space-3);
 }
 
 .onboarding__illustration {
@@ -337,8 +348,8 @@ async function finish(): Promise<void> {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-5);
-  padding-top: var(--space-4);
+  gap: var(--space-3);
+  padding-top: var(--space-3);
 }
 
 .onboarding__button {
@@ -373,5 +384,29 @@ async function finish(): Promise<void> {
 .onboarding__button:focus-visible {
   outline: 2px solid var(--velo-primary);
   outline-offset: 2px;
+}
+
+/* === FE-36: keyboard-open compaction for the timezone step ===
+   When the keyboard opens, global.css shrinks .app-frame to --velo-vvh, so
+   the whole column (footer included) must fit the VISIBLE area. A centered
+   column taller than that overflows both ways -- the search results below
+   the field land under the keyboard and scrollIntoView can't rescue them.
+   While typing: top-align the form body (nothing to center around anymore),
+   halve the gaps, slim the frame paddings. The button and dots stay put --
+   only their breathing room shrinks. Inert at rest: html.is-keyboard-open
+   exists only while the keyboard is open (useViewportGeometry). */
+:global(html.is-keyboard-open) .onboarding {
+  padding-top: var(--space-3);
+  padding-bottom: var(--space-3);
+}
+
+:global(html.is-keyboard-open) .onboarding__body--form {
+  justify-content: flex-start;
+  gap: var(--space-2);
+}
+
+:global(html.is-keyboard-open) .onboarding__footer {
+  gap: var(--space-2);
+  padding-top: var(--space-2);
 }
 </style>
