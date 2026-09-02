@@ -10,8 +10,8 @@
 # Coverage:
 #   GET /masters/me/stats
 #     - empty state (zeros + null deltas)
-#     - practices_count: countable practices scheduled in the current period
-#     - excludes draft / deleted / cancelled
+#     - practices_count: COMPLETED practices scheduled in the current period
+#     - excludes draft / scheduled / live / deleted / cancelled
 #     - excludes practices scheduled outside the period
 #     - participants_count: DISTINCT attended users across the master's
 #       practices in the period
@@ -113,6 +113,11 @@ async def _create_practice(
     the moment two such rows are both non-deleted. The counter suffix keeps
     every row unique on the index key without touching scheduled_at (which
     the period-window assertions depend on). No test asserts an exact title.
+
+    The `status` default is COMPLETED on purpose, and after GT-20 that is the
+    ONLY status practices_count counts. Before GT-20 the default was merely one
+    countable status among several; changing it now would quietly zero the
+    counting assertions below instead of failing on the status it changed to.
     """
     practice = Practice(
         master_id=UUID(master_id),
@@ -211,7 +216,13 @@ async def test_stats_empty_state(
 async def test_practices_count_current_period(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """Counts the master's practices scheduled in the current period."""
+    """Counts the master's COMPLETED practices scheduled in the current period.
+
+    The assertion is untouched: _create_practice defaults to COMPLETED, so both
+    rows counted before GT-20 and count after. Only the wording was imprecise.
+    It said "scheduled", which under the new rule reads as the opposite of what
+    is being asserted -- a scheduled-but-unfinished practice does NOT count.
+    """
     master = await _make_verified_master(client, db_session)
     master_id = master["user"]["id"]
     now = datetime.now(UTC)
@@ -229,7 +240,16 @@ async def test_practices_count_current_period(
 async def test_practices_excludes_non_counted_statuses(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """Draft / deleted / cancelled practices are not counted."""
+    """Only COMPLETED counts: every other practice status is excluded.
+
+    The old assertion -- draft / deleted / cancelled are not counted -- was
+    right and still holds; it was simply no longer the whole rule. GT-20
+    narrowed the counter to Practice.status == COMPLETED, which excludes
+    SCHEDULED and LIVE as well: a practice still ahead, or running right now,
+    has not happened yet. The loop asserts the full exclusion set rather than
+    the three statuses that happened to be excluded before, so the test stays
+    exactly as strong as the rule it guards.
+    """
     master = await _make_verified_master(client, db_session)
     master_id = master["user"]["id"]
     now = datetime.now(UTC)
@@ -240,6 +260,8 @@ async def test_practices_excludes_non_counted_statuses(
     )
     for status in (
         PracticeStatus.DRAFT.value,
+        PracticeStatus.SCHEDULED.value,
+        PracticeStatus.LIVE.value,
         PracticeStatus.DELETED.value,
         PracticeStatus.CANCELLED.value,
     ):
@@ -377,7 +399,12 @@ async def test_income_surfaces(
 async def test_month_period(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """The month period counts a practice scheduled in the current month."""
+    """The month period counts a COMPLETED practice in the current month.
+
+    Wording only. The practice is created COMPLETED (helper default), so the
+    assertion held before GT-20 and holds after; "a practice scheduled in the
+    current month" no longer describes what is counted.
+    """
     master = await _make_verified_master(client, db_session)
     master_id = master["user"]["id"]
     now = datetime.now(UTC)
