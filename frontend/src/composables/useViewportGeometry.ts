@@ -55,6 +55,14 @@ import { resetKeyboardViewportState } from '@/utils/keyboardViewportState'
 // useBackgroundStabilizer.ts.
 const NAV_SUPPRESS_MS = 350
 
+// [FE-44] CLOSE-SETTLE window (ms): how long the close-time hold lasts --
+// the root freeze (html.is-keyboard-closing -> body position:fixed,
+// global.css), the publish suppression and the final truth re-check all key
+// off this ONE timer. Must outlast BOTH the fold animation (~250-300ms) AND
+// iOS's late focus-scroll restore, which can land well after the keyboard is
+// visually gone (the "old above-keyboard view flashes back" report).
+const KEYBOARD_CLOSE_SETTLE_MS = 700
+
 // PROMPT №663: settle window (ms) before trusting a post-rotation reading as
 // the new rest baseline -- same VALUE and REASON as
 // useBackgroundStabilizer's own ORIENTATION_SETTLE_MS (rotation dimensions
@@ -220,6 +228,20 @@ export function useViewportGeometry(): void {
       resetState()
       return
     }
+    // [FE-44] A RISING height while the keyboard is open is the CLOSE (or
+    // the native expand()) animating: intermediate resizes lag the visual
+    // reveal, and every one of them used to re-assert the keyboard cap at a
+    // stale smaller height -- the keyboard slid away faster than the events
+    // arrived, exposing body-white, and only the FINAL resize restored the
+    // full height (the owner's "уезжает плохо: белый фон, потом
+    // растягивается"). The iOS keyboard is an OVERLAY: an app already at
+    // full height is simply progressively revealed -- nothing to track.
+    // So: drop the cap on the FIRST rising frame and hold at-rest geometry
+    // through the animation, exactly like the K3f navigation window above.
+    if (_keyboardOpen.value && vv.height > _visibleHeight.value) {
+      beginCloseHold()
+      return
+    }
     publish(vv)
   }
 
@@ -241,6 +263,93 @@ export function useViewportGeometry(): void {
       _restHeight.value = 0
       schedule()
     }, ORIENTATION_SETTLE_MS)
+  }
+
+  // [FE-44] Keyboard-close helpers. TWO tiers of close detection:
+  //  - focus lands on ANOTHER editable (field-to-field move -- the keyboard
+  //    stays): skip entirely.
+  //  - focus left every editable (or the first RISING resize arrived, see
+  //    setShift): the keyboard IS closing -> beginCloseHold(). A delayed-only
+  //    heal left the app capped at the stale keyboard-open height for the
+  //    whole close animation, painting body-white in the space the keyboard
+  //    vacates (the FE-44 device report). Resetting early is safe in BOTH
+  //    worlds: if close-resizes DO fire afterwards, the suppression window
+  //    holds at-rest geometry while the keyboard itself still covers the area
+  //    below -- nothing white is ever exposed; if they never fire, the app is
+  //    already at rest when the keyboard finishes sliding.
+  //    PLUS the root-pan undo: FE-7's own device HUD measured the focus pan
+  //    SURVIVING the keyboard close (scrollY stayed 154 with no scroll event
+  //    afterwards to trigger onRootScroll) -- the panned root displaces the
+  //    whole app column and, on iOS, drags the position:fixed background
+  //    layer along without repainting it: body-white bottom band that NO
+  //    keyboard-state reset can cure. So the close path zeroes the pan too,
+  //    rAF-deferred exactly like onTouchEnd (never synchronously inside the
+  //    event pipeline).
+  function unpanRootSoon(): void {
+    window.requestAnimationFrame(() => keepRootUnpanned())
+  }
+
+  // [FE-44] The close-time end-jump ("моргание"): the app returns to FULL
+  // height the moment the close starts, but the VISUAL viewport only grows
+  // back over the ~250ms animation -- mid-flight the document is taller than
+  // the visible area, a scroll range EXISTS, and iOS's own close-time
+  // restore scrolls into it, then clamps back to 0 when the range collapses
+  // at animation end: one visible jolt right after the keyboard leaves.
+  // Pinning the root to 0 on EVERY frame of the close window (skipping
+  // active touches -- FE-7's mid-gesture rule) leaves iOS nothing to clamp:
+  // scrollY is already 0 when the range disappears.
+  let closePinRaf = 0
+  let closeSettleTimer = 0
+
+  function pinRootDuringClose(): void {
+    if (closePinRaf) window.cancelAnimationFrame(closePinRaf)
+    const until = Date.now() + NAV_SUPPRESS_MS + 100 // past the animation
+    const pin = (): void => {
+      if (!touching) keepRootUnpanned()
+      closePinRaf = Date.now() < until ? window.requestAnimationFrame(pin) : 0
+    }
+    closePinRaf = window.requestAnimationFrame(pin)
+  }
+
+  /** [FE-44] The ONE close path (focusout with no editable target, or the
+   * first rising resize while open): drop the keyboard cap immediately,
+   * suppress re-caps for the fold animation, freeze the root (body fixed --
+   * see global.css) long enough to also swallow iOS's LATE focus-scroll
+   * restore, and re-check truth after everything settles. */
+  function beginCloseHold(): void {
+    suppressUntil = Date.now() + NAV_SUPPRESS_MS
+    resetState()
+    pinRootDuringClose()
+    document.documentElement.classList.add('is-keyboard-closing')
+    window.clearTimeout(closeSettleTimer)
+    closeSettleTimer = window.setTimeout(() => {
+      document.documentElement.classList.remove('is-keyboard-closing')
+      unpanRootSoon()
+      schedule()
+    }, KEYBOARD_CLOSE_SETTLE_MS)
+  }
+
+  /** [FE-44] A genuine (re)open outranks any close hold: focus landing on
+   * an editable cancels the suppression AND the root freeze so the cap
+   * re-asserts from the very first falling resize, at full scroll physics. */
+  function onFocusIn(e: FocusEvent): void {
+    const t = e.target
+    if (t instanceof HTMLElement && t.closest('input, textarea, select, [contenteditable]')) {
+      suppressUntil = 0
+      document.documentElement.classList.remove('is-keyboard-closing')
+      window.clearTimeout(closeSettleTimer)
+    }
+  }
+
+  function onFocusOut(e: FocusEvent): void {
+    const next = e.relatedTarget
+    if (next instanceof HTMLElement && next.closest('input, textarea, select, [contenteditable]')) {
+      return
+    }
+    // At rest (nothing keyboard-open to close) the hold is a no-op -- a
+    // focused BUTTON blurring must not freeze the root for 700ms.
+    if (!_keyboardOpen.value) return
+    beginCloseHold()
   }
 
   // [FE-7] iOS keyboard PAN undo (device-measured 2026-08-24, iPhone/Telegram):
@@ -306,6 +415,9 @@ export function useViewportGeometry(): void {
     // mid-gesture (it cancels the native inner scroll), snap back on release.
     window.addEventListener('touchstart', onTouchStart, { passive: true })
     window.addEventListener('touchend', onTouchEnd, { passive: true })
+    // [FE-44] keyboard-close safety net -- see onFocusOut/onFocusIn.
+    window.addEventListener('focusout', onFocusOut)
+    window.addEventListener('focusin', onFocusIn)
     setShift()
     // K3f (moved verbatim from useBackgroundStabilizer.ts): clear stale
     // keyboard state the instant the route changes, dismiss the keyboard,
@@ -324,6 +436,12 @@ export function useViewportGeometry(): void {
       window.cancelAnimationFrame(rafId)
       rafId = 0
     }
+    if (closePinRaf) {
+      window.cancelAnimationFrame(closePinRaf)
+      closePinRaf = 0
+    }
+    window.clearTimeout(closeSettleTimer)
+    document.documentElement.classList.remove('is-keyboard-closing')
     window.clearTimeout(orientationResetId)
     vv?.removeEventListener('resize', schedule)
     vv?.removeEventListener('scroll', schedule)
@@ -331,6 +449,8 @@ export function useViewportGeometry(): void {
     window.removeEventListener('scroll', onRootScroll)
     window.removeEventListener('touchstart', onTouchStart)
     window.removeEventListener('touchend', onTouchEnd)
+    window.removeEventListener('focusout', onFocusOut)
+    window.removeEventListener('focusin', onFocusIn)
     stopAfterEach?.()
     stopAfterEach = null
     resetState()

@@ -730,21 +730,20 @@ onBeforeUnmount(() => {
    sliding under them any more. The scrollbar is hidden app-wide. */
 /* PROMPT №663 (ruling 4 rebuild): a flex COLUMN, not an absolute-positioning
    host any more -- header / feed / composer are its three rows, in DOM
-   order, none of them overlapping. Sized to the LIVE visible height
-   (`--velo-vvh`, published by useViewportGeometry.ts), NOT 100% of the
-   frozen ancestor (`AppFrame`'s `--velo-frozen-vh`): a normal-flow column
+   order, none of them overlapping. While the keyboard is OPEN it is sized
+   to the LIVE visible height (`--velo-vvh`, published by
+   useViewportGeometry.ts), NOT 100% of the frozen ancestor (`AppFrame`'s
+   `--velo-frozen-vh`): a normal-flow column
    sized to the FROZEN height would still put the composer at the frozen
    box's bottom while only the SHRUNKEN visible area is actually on screen --
    the same Android defect, merely restructured (this is the device-measured
-   finding behind diary-behaviour-spec.md §4.1). Falls back to 100% (of the
-   frozen ancestor, same as before) until the var publishes, mirroring
-   AppFrame.vue's own `height: 100lvh; height: var(--velo-frozen-vh, 100lvh)`
-   fallback pattern. Second-order effect this is expected to produce
-   (REASONED, not yet device-confirmed): if the document is never taller than
-   what's actually visible, the browser has nothing to auto-scroll into view,
-   so the native pan that currently carries the header off the top edge
-   should not trigger at all -- ruling 2 satisfied structurally rather than by
-   a compensating rule. */
+   finding behind diary-behaviour-spec.md §4.1). [FE-44] corrects the REST
+   state: the live-height binding now applies ONLY under
+   `html.is-keyboard-open` (see the gated rule below) -- at rest the column
+   is a plain 100% of the frozen ancestor, immune to a STALE `--velo-vvh`
+   left over from a keyboard close whose resize event was missed (that
+   staleness capped the whole screen at the keyboard-open height: mandala
+   top, body-white bottom, the owner's screenshot). */
 /* PROMPT №664: `--velo-vvh` is the RAW visual-viewport height -- it does NOT
    know about AppFrame's safe-area `padding-top` the way a PERCENTAGE height
    would (a percentage always resolves against the parent's content box,
@@ -766,10 +765,33 @@ onBeforeUnmount(() => {
 .diary-feed {
   position: relative;
   height: 100%;
-  height: calc(var(--velo-vvh, 100%) - var(--velo-content-safe-top, 0px));
+  /* Same value as the 100% above (AppFrame's content box = frozen-vh minus
+     its safe-area padding), but as an INTERPOLABLE px calc: the FE-44 close
+     transition animates between this and the keyboard-open height, and
+     px<->percentage pairs don't interpolate. The 100% line above stays as
+     the pre-JS-paint fallback. */
+  height: calc(var(--velo-frozen-vh, 100%) - var(--velo-content-safe-top, 0px));
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+/* [FE-44] The live-height cap ONLY while the keyboard is open -- the class
+   IS the keyboard state. When it drops (resize-driven publish, resetState on
+   navigation, or the focusout recheck useViewportGeometry now runs), full
+   height returns even if no closing resize event ever fires. No masking
+   white blocks anywhere -- the background layer regains the full viewport
+   on the same class removal. */
+:global(html.is-keyboard-open) .diary-feed {
+  height: calc(var(--velo-vvh, 100%) - var(--velo-content-safe-top, 0px));
+}
+
+/* [FE-44] The close expands at the keyboard's own speed (see the twin rule
+   in global.css): while the closing class holds, the height transition
+   interpolates from the capped value above to the at-rest px calc below. */
+:global(html.is-keyboard-closing) .diary-feed {
+  height: calc(var(--velo-frozen-vh, 100%) - var(--velo-content-safe-top, 0px));
+  transition: height 250ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 /* -- Header: its own row, top of the column (ruling 4) --

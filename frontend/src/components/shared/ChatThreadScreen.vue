@@ -392,10 +392,28 @@ onBeforeUnmount(() => {
    ancestor) until --velo-vvh publishes, same fallback DiaryFeedView uses. */
 .chat-thread {
   height: 100%;
-  height: calc(var(--velo-vvh, 100%) - var(--velo-content-safe-top, 0px));
+  /* Same value as the 100% above, as an INTERPOLABLE px calc -- see the
+     twin comment in DiaryFeedView.vue (FE-44 close transition). */
+  height: calc(var(--velo-frozen-vh, 100%) - var(--velo-content-safe-top, 0px));
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+/* [FE-44] Same correction as DiaryFeedView's: the live-height binding is
+   keyboard-ONLY. This screen copied the diary formula verbatim (B39), so it
+   inherited the same staleness defect -- a missed close-resize left the chat
+   capped at the keyboard-open height. The class gate makes the at-rest
+   height structural (100% of the frozen ancestor). */
+:global(html.is-keyboard-open) .chat-thread {
+  height: calc(var(--velo-vvh, 100%) - var(--velo-content-safe-top, 0px));
+}
+
+/* [FE-44] Close expands at the keyboard's own speed (twin of the global.css
+   rule + DiaryFeedView's own). */
+:global(html.is-keyboard-closing) .chat-thread {
+  height: calc(var(--velo-frozen-vh, 100%) - var(--velo-content-safe-top, 0px));
+  transition: height 250ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 .chat-thread__center {

@@ -136,6 +136,48 @@ html.is-keyboard-open #app-bg {
   height: var(--velo-vvh, var(--velo-frozen-vh, 100lvh));
 }
 
+/* [FE-44] CLOSE-TIME ROOT FREEZE. iOS WebKit restores its focus-time root
+   scroll LATE -- after the keyboard has visually folded, it can scroll the
+   document into the (by then collapsed) range for a frame: the owner sees
+   the OLD above-keyboard view flash back before our snap kills it. rAF
+   pinning races that restore and loses on timing; the structural fix is the
+   classic iOS keyboard freeze: while the keyboard folds (and a short settle
+   after), body is position:fixed -- a fixed box contributes no scroll
+   range, so the late restore has NOTHING to move and the flash is
+   impossible, not merely out-raced. Pixel-identical box (top:0, full width,
+   the same frozen height body already carries), toggled under the keyboard
+   / after settle, so the switch itself is never visible. Cleared early on a
+   genuine reopen (useViewportGeometry's focusin path). */
+html.is-keyboard-closing body {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+}
+
+/* [FE-44] CLOSE ANIMATES AT THE KEYBOARD'S OWN SPEED. The keyboard-open
+   state tracks the native fold frame-by-frame (smooth by construction); the
+   close, since FE-44, drops the cap in ONE step -- visually a faster,
+   abrupter motion than the open ("скорость разной не была"). While the
+   closing class holds, every capped height TRANSITIONS from its
+   keyboard-open value to the at-rest value over ~250ms with an ease-out
+   curve -- the same order as the soft keyboard's own animation -- so the
+   expand reads as one continuous reveal at the same speed. Scoped to the
+   CLOSING state ONLY (never to the open state, whose frame-by-frame
+   tracking is already perfect and must not start chasing its own targets,
+   nor to rest, where heights are frozen and must snap). The transition
+   lives in the after-change style, which is exactly what the closing class
+   provides at the moment the cap drops. All values involved are
+   interpolable px (frozen-vh and vvh are px; the diary/chat columns'
+   at-rest heights are px calcs of the same vars -- see their SFCs). */
+html.is-keyboard-closing,
+html.is-keyboard-closing body,
+html.is-keyboard-closing #app,
+html.is-keyboard-closing .app-frame,
+html.is-keyboard-closing #app-bg {
+  transition: height 250ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
 /* === Typography === */
 h1,
 h2,
@@ -310,6 +352,16 @@ ol {
   z-index: -1;
   background: url('/bg/background.png') center / cover no-repeat;
   pointer-events: none;
+  /* [FE-44] Own compositing layer -- the standard iOS WebKit insurance for
+     full-screen position:fixed layers: after keyboard interactions WebKit
+     is known to leave fixed layers with stale raster (the close pan moves
+     them with the layout viewport and never repaints the vacated band --
+     body-white where the keyboard was, surviving every keyboard-state
+     reset). Promoting the layer makes WebKit re-composite it when the root
+     is zeroed back. This is a STATIC promotion, not the per-frame
+     transform/counter-shift the canon above forbids -- it never animates,
+     it just owns its layer. */
+  transform: translateZ(0);
 }
 
 /* #app is the full-width mount root (AppFrame is only 402px, so #app itself
