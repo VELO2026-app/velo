@@ -61,6 +61,13 @@ function buildRouter(): Router {
         meta: { hideTabBar: true },
         component: StubChild,
       },
+      // [FE-45] the group-create form: fog + form-grade tuning in the SFC.
+      {
+        path: '/master/groups/new',
+        name: 'master-group-create',
+        meta: { hideTabBar: true },
+        component: StubChild,
+      },
       { path: '/master/profile', name: 'master-profile', component: StubChild },
       // Absent from every FOG_ROUTES / hideTabBar list in the SFC -- the
       // default-branch baseline.
@@ -173,6 +180,13 @@ describe('MasterShell', () => {
       await flush()
 
       expect(mainEl().classList.contains('mobile-layout__main--fog')).toBe(false)
+    })
+
+    it('[FE-45] master-group-create gets the fog mask (keyboard-safe header-overlap fix; pixel tuning via FORM_FOG_ROUTES)', async () => {
+      await mount('master-group-create')
+      await flush()
+
+      expect(mainEl().classList.contains('mobile-layout__main--fog')).toBe(true)
     })
   })
 

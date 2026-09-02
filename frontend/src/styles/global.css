@@ -129,11 +129,22 @@ html.is-keyboard-open .app-frame {
    vvh:411.66 appbg.h:720` -- with the keyboard open the app ends at 411.66
    while the frozen 720px mandala layer keeps painting below it, and the iOS
    visual-viewport offset exposes that tail as a mandala strip right UNDER
-   the composer (button bottom 382, app bottom ~411). Capped to the live
-   height, the strip below the app shows body's own white instead. The HUD's
-   `appbg.h:` readout verifies this live: expect ~vvh when kbd:YES. */
+   the composer (button bottom 382, app bottom ~411).
+   [FE-45 follow-up 2, owner: "мандала уезжает"] The cap used to SHRINK THE
+   BOX -- but the mandala is `cover`, so a 720->412 box re-ran the cover
+   layout over a different aspect and the whole pattern visibly shifted
+   while typing. CLIP instead of shrink: the BOX keeps its frozen height
+   (the pattern lays out pixel-identically to rest), and the PAINTING stops
+   at the live viewport. Same anti-strip guarantee as the original cap
+   (nothing paints below the live bottom, where the visual-viewport offset
+   could expose it), zero pattern movement -- and on close the clip simply
+   drops, so the folding keyboard reveals an already-painted mandala (no
+   transition, no white band). Clip follows --velo-vvh frame-by-frame during
+   the open animation exactly like the old height did. */
 html.is-keyboard-open #app-bg {
-  height: var(--velo-vvh, var(--velo-frozen-vh, 100lvh));
+  clip-path: inset(
+    0 0 calc(var(--velo-frozen-vh, 100lvh) - var(--velo-vvh, var(--velo-frozen-vh, 100lvh))) 0
+  );
 }
 
 /* [FE-44] CLOSE-TIME ROOT FREEZE. iOS WebKit restores its focus-time root

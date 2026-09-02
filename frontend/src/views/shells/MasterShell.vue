@@ -71,8 +71,10 @@ const FOG_ROUTES = [
   // doesn't collide with content on scroll (operator tester-fix 2026-06-17).
   'master-student-profile',
   // Master GROUPS (P2, PROMPT №591): list + per-group member list are both
-  // long scrolling lists, same treatment as master-students. The create
-  // form stays CRISP (not listed here) per the fog rule above.
+  // long scrolling lists, same treatment as master-students. The create form
+  // is fogged too, but through the FORMS block below with the taller top-hard
+  // ([FE-45]: its floating «Новая группа» VHeader overlapped the legend row
+  // while typing -- same rationale as the practice/promocode forms).
   'master-groups',
   'master-group-detail',
   // Notifications: long settings list — fog so the «Уведомления» header doesn't
@@ -96,6 +98,11 @@ const FOG_ROUTES = [
   'master-practice-new',
   'master-practice-edit',
   'master-promocode-new',
+  // [FE-45] The group-create form joins the other create forms here: with the
+  // keyboard open its floating «Новая группа» header rode over the form's
+  // legend/first fields. Fog brings the keyboard-safe mask; the pixel tuning
+  // comes from FORM_FOG_ROUTES below (the taller form top-hard).
+  'master-group-create',
   'master-profile',
   // Edit-profile + language/timezone: fog so content doesn't smudge under the
   // floating header on scroll (operator FOG-1, 2026-06-30). Both are keyboard
@@ -195,6 +202,11 @@ const FORM_FOG_ROUTES = [
   'master-practice-edit',
   'master-promocode-new',
   'master-finance',
+  // [FE-45] Group-create carries the same ~88px transparent floating VHeader
+  // (`<VHeader title="Новая группа" show-back />`) -- without the form-grade
+  // top-hard its legend/fields ghosted under the header's lower half on
+  // scroll. Same treatment, no view-side margin hacks.
+  'master-group-create',
 ]
 let formFogCache: {
   topGap: number

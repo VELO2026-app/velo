@@ -15,7 +15,7 @@
 // and the test would pass for the wrong reason.
 // =============================================================================
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, defineComponent, h, type App } from 'vue'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 
@@ -102,5 +102,83 @@ describe('useKeyboardFieldScroll (unmount cleanup, owed by 3ad1433d)', () => {
     host = null
 
     expect(resizeListeners.size).toBe(0)
+  })
+})
+
+// =============================================================================
+// [FE-45 follow-up] The settle scroll's SEMANTICS: minimal, only-if-needed.
+// It used to be an unconditional scrollIntoView({block:'center'}) -- which
+// re-centered fields that were already fully visible, sweeping the form's
+// upper rows out of view ("улетает наверх, хотя место есть"). The new contract
+// prefers scrollIntoViewIfNeeded(false) (no-op when visible, nearest-edge
+// reveal when not), with scrollIntoView({block:'nearest'}) as the fallback
+// when the WebKit-ism is absent. Pinned by stubbing both APIs and firing the
+// settle timer (happy-dom has no layout, so the real scroll is a no-op --
+// what is provable here is WHICH API and ARGUMENTS the settle path calls).
+// =============================================================================
+describe('useKeyboardFieldScroll -- settle scroll semantics ([FE-45 follow-up])', () => {
+  let callsIfNeeded: unknown[][] = []
+  let callsIntoView: unknown[][] = []
+
+  function stubScrollApis(): void {
+    callsIfNeeded = []
+    callsIntoView = []
+    ;(Element.prototype as unknown as Record<string, unknown>).scrollIntoViewIfNeeded = function (
+      this: Element,
+      ...args: unknown[]
+    ) {
+      callsIfNeeded.push([this, ...args])
+    }
+    ;(Element.prototype as unknown as Record<string, unknown>).scrollIntoView = function (
+      this: Element,
+      ...args: unknown[]
+    ) {
+      callsIntoView.push([this, ...args])
+    }
+  }
+
+  function restoreScrollApis(): void {
+    delete (Element.prototype as unknown as Record<string, unknown>).scrollIntoViewIfNeeded
+    delete (Element.prototype as unknown as Record<string, unknown>).scrollIntoView
+  }
+
+  beforeEach(() => {
+    installVisualViewport()
+    stubScrollApis()
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    restoreScrollApis()
+    app?.unmount()
+    host?.remove()
+    app = null
+    host = null
+    inputEl = null
+  })
+
+  it('settle fires scrollIntoViewIfNeeded(false) -- minimal, never a forced centering', () => {
+    mount()
+    inputEl!.dispatchEvent(new FocusEvent('focus'))
+    // The kick-on-focus arms the settle timer (SETTLE_MS = 120).
+    vi.advanceTimersByTime(130)
+
+    expect(callsIfNeeded.length).toBeGreaterThanOrEqual(1)
+    // Called on the FIELD element, with centerIfNeeded=false.
+    expect(callsIfNeeded[0]![0]).toBe(inputEl)
+    expect(callsIfNeeded[0]![1]).toBe(false)
+    // The old forced-center path is NOT used when the WebKit API exists.
+    expect(callsIntoView).toHaveLength(0)
+  })
+
+  it('without the WebKit API, falls back to scrollIntoView({block:"nearest"}) -- not center', () => {
+    delete (Element.prototype as unknown as Record<string, unknown>).scrollIntoViewIfNeeded
+    mount()
+    inputEl!.dispatchEvent(new FocusEvent('focus'))
+    vi.advanceTimersByTime(130)
+
+    expect(callsIntoView.length).toBeGreaterThanOrEqual(1)
+    expect(callsIntoView[0]![1]).toEqual({ block: 'nearest' })
   })
 })
