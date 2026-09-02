@@ -34,7 +34,9 @@ import structlog
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db_reader, get_db_session
+from app.core.exceptions import NotFoundError
 from app.modules.auth.dependencies import (
     get_current_master,
     get_current_user,
@@ -102,7 +104,48 @@ from app.modules.users.models import User
 
 logger = structlog.get_logger()
 
-router = APIRouter(prefix="/api/v1/masters", tags=["curator-groups"])
+
+def _require_curator_groups_enabled() -> None:
+    """The schools killswitch, checked ONCE PER ROUTER (GT-19).
+
+    Mounted as a router-level dependency on both routers in this module,
+    which is 23 of the feature's 24 operations in two lines. The
+    alternative -- the same `if` copied into 23 endpoints -- is 23 places
+    to forget one, and a forgotten one does not fail any test that only
+    checks the endpoints somebody remembered. The 24th operation, the
+    admin list of schools, stays available deliberately; see the flag's
+    own comment in core/config.py.
+
+    404, NOT 503, AND NO MACHINE CODE. A 503 announces that the feature
+    exists and is broken, which invites retries during the incident the
+    flag was pulled for; a dedicated code would become the one reliable
+    way to detect that the killswitch is down. To a client, schools simply
+    do not exist -- indistinguishable from a build that never had them.
+
+    RUNS BEFORE THE PATH DEPENDENCIES, and that is observable rather than
+    assumed: measured with a two-dependency FastAPI app before this was
+    written, the router dependency fired and the path dependency was never
+    called. The consequence matters for the tests -- with the flag off an
+    UNAUTHENTICATED caller gets 404, not 401/403, and so does a plain user
+    where get_current_master would otherwise answer 403. Any test
+    expecting 403 on these paths while the flag is off is wrong about the
+    layer, not about the code.
+
+    Reads settings directly, like the six other boolean toggles in this
+    codebase; there is no shared helper, because the audience side
+    (practices/audience_service.py) needs a SQL-shaped answer, not a
+    dependency, and one abstraction over two different shapes would fit
+    neither.
+    """
+    if not settings.curator_groups_enabled:
+        raise NotFoundError("Not found")
+
+
+router = APIRouter(
+    prefix="/api/v1/masters",
+    tags=["curator-groups"],
+    dependencies=[Depends(_require_curator_groups_enabled)],
+)
 
 
 @router.get("/me/curator-groups", response_model=CuratorGroupListResponse)
@@ -536,7 +579,11 @@ async def delete_group_preview_endpoint(
 # dynamic sibling, or "mine" would be parsed as a group id and answer 422.
 # =============================================================================
 
-member_router = APIRouter(prefix="/api/v1/curator-groups", tags=["curator-groups"])
+member_router = APIRouter(
+    prefix="/api/v1/curator-groups",
+    tags=["curator-groups"],
+    dependencies=[Depends(_require_curator_groups_enabled)],
+)
 
 
 @member_router.get("/mine", response_model=CuratorGroupMineResponse)

@@ -574,6 +574,55 @@ class Settings(BaseSettings):
     # enough that feedback eligibility and hours can never hang indefinitely.
     zoom_attendance_decision_deadline_minutes: int = 120
 
+    # -- Curator groups / schools killswitch (GT-19) --
+    # AN EMERGENCY BRAKE, NOT A ROLLOUT TOGGLE. Default True: the feature
+    # ships on, and this exists so it can be taken off the air without a
+    # revert. The opposite default ("off until switched on") would make it a
+    # rollout flag, which nobody asked for.
+    #
+    # WHY SCHOOLS NEED A BRAKE AT ALL, unlike the four worker toggles above:
+    # they change what OTHER PEOPLE see. A practice with
+    # audience_kind='curator_groups' is hidden from anyone outside the
+    # target school, so a fault in school membership or in a curator's
+    # verification state removes practices from the calendars of people who
+    # have never heard of schools. That is the blast radius this flag is
+    # sized for.
+    #
+    # WHAT False MEANS -- schools cease to exist, not "freeze":
+    #   - all 23 school endpoints answer 404 (router-level dependencies on
+    #     both routers in curator_groups/router.py);
+    #   - the 'curator_groups' audience becomes unreachable, so such a
+    #     practice is visible to its OWN MASTER only and disappears from
+    #     everyone else's feed (practices/audience_service.py).
+    # Freezing mutations while keeping reads (the other candidate) was
+    # rejected precisely because it does not stop the audience from cutting
+    # other people's feeds -- a brake that misses the main thing is worse
+    # than none, because it gets pulled and believed.
+    #
+    # 404 AND NO MACHINE CODE. A 503 would announce "this feature exists and
+    # is broken", inviting retries during the very incident the flag was
+    # pulled for; a dedicated error code would become the one reliable way
+    # to detect that the killswitch is down.
+    #
+    # THE ADMIN LIST OF SCHOOLS STAYS AVAILABLE ON PURPOSE -- the operator
+    # needs to see what they switched off, and whether it is time to switch
+    # it back. The cockpit does not go dark with the engine. It is read-only,
+    # admin-gated, and cannot affect anyone outside schools, so it is not
+    # what this flag is for.
+    #
+    # KNOWN AND ACCEPTED, not overlooked: with the flag off a master can
+    # still CREATE a practice targeting a school (that validation lives in
+    # practices/schemas.py). Such a practice is dark to everyone, its owner
+    # included in the sense that audience_unavailable=true is returned to
+    # them immediately, and it affects nobody -- so it is outside what the
+    # brake exists to stop. Forbidding creation would be the third candidate
+    # meaning ("new schools only"), which was considered and not chosen.
+    #
+    # Flipping this back to True restores everything with no rows touched:
+    # the flag writes nothing and no journal event records it (the fact that
+    # it was pulled lives in the deployment, not in a school's history).
+    curator_groups_enabled: bool = True
+
     # -- Admin (Phase 2.3 / 6.6 / 3.3) --
     # Max length of admin notes on master verify/reject actions
     # and withdrawal approve/reject notes.

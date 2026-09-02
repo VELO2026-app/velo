@@ -42,10 +42,11 @@
 
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, and_, or_, select
+from sqlalchemy import ColumnElement, and_, false, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
+from app.core.config import settings
 from app.core.exceptions import ForbiddenError
 from app.modules.bookings.models import Booking, BookingStatus
 
@@ -266,7 +267,31 @@ def _is_curator_group_audience_clause(user_id: UUID) -> ColumnElement[bool]:
     EXISTS rather than a join, so a viewer who is in two of the practice's
     target schools yields ONE row in the feed, not two. Same shape as
     _is_group_member_clause next door, for the same reason.
+
+    THE SCHOOLS KILLSWITCH IS CHECKED HERE, AND HERE IS THE WHOLE READ
+    SIDE OF IT (GT-19). One false() closes both consumers at once, because
+    both reach the question through this clause:
+      - viewer_audience_clause -- the CURATOR_GROUPS arm of its or_()
+        evaluates false, so such a practice leaves every feed except its
+        own master's (list_public_practices ORs in
+        `Practice.master_id == user.id` separately);
+      - assert_viewer_can_access_practice -- its CURATOR_GROUPS branch asks
+        this same clause via _clause_true_for and raises not_in_audience
+        when it is false.
+    That is why neither of them grew an `if` of its own. A copy in each
+    would be two places to keep in step for one fact, and the whole point
+    of a killswitch is one check rather than fifteen.
+
+    NOT GATED: the H-R2-8 read grandfather in practices/service.py, which
+    runs BEFORE the audience assert -- somebody holding an access-granting
+    booking keeps reading the practice they paid for. Switching a feature
+    off must not retroactively remove access that already exists; this
+    brake exists to stop the audience from cutting into other people's
+    calendars, not to cancel purchases.
     """
+    if not settings.curator_groups_enabled:
+        return false()
+
     return (
         select(PracticeAudienceCuratorGroup.id)
         .join(
@@ -664,6 +689,16 @@ async def curator_group_audience_is_dark(
     """
     if practice.audience_kind != AudienceKind.CURATOR_GROUPS.value:
         return False
+
+    # GT-19: with the schools killswitch off the audience IS dark, and the
+    # master is told so. This is the one place the flag is REPORTED rather
+    # than merely enforced, and deliberately so: the owner of a practice
+    # nobody can see needs to know that, and audience_unavailable already
+    # means exactly "nobody sees this". It leaks nothing -- the field
+    # reaches the owner and whoever is being refused, never a stranger,
+    # because the audience gate answers first.
+    if not settings.curator_groups_enabled:
+        return True
 
     usable = (
         await session.execute(
