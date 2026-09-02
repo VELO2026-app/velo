@@ -1,1 +1,0 @@
-# VELO Backend Application Package

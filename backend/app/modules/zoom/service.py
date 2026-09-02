@@ -749,54 +749,6 @@ async def get_host_join_urls(
 
 
 # ---------------------------------------------------------------------------
-# T24-38 (PROMPT №642): read-only shared-link lookups for the master-only
-# PracticeResponse.zoom_shared_join_url. Same owner-only posture as
-# get_host_join_url[s] above -- callers gate the call itself on is_owner,
-# not this function (mirrors that pair exactly, see practices/service.py).
-# Unlike get_host_join_url[s], no join to zoom_registrants: the value lives
-# directly on ZoomMeeting (see that model's shared_registrant_id/
-# shared_join_url docstring for why).
-# ---------------------------------------------------------------------------
-
-
-async def get_shared_join_url(
-    practice_id: UUID,
-    session: AsyncSession,
-) -> str | None:
-    """This practice's shared registrant join_url, or None if there is no
-    USABLE one -- meeting not active, or Zoom hasn't returned one yet."""
-    return (
-        await session.execute(
-            select(ZoomMeeting.shared_join_url).where(
-                ZoomMeeting.practice_id == practice_id,
-                ZoomMeeting.status == ZoomMeetingStatus.ACTIVE.value,
-            )
-        )
-    ).scalar_one_or_none()
-
-
-async def get_shared_join_urls(
-    practice_ids: list[UUID],
-    session: AsyncSession,
-) -> dict[UUID, str]:
-    """Batched form of get_shared_join_url for a list endpoint (master's own
-    practice list) -- one query, no N+1, same pattern as get_host_join_urls
-    above."""
-    if not practice_ids:
-        return {}
-    rows = (
-        await session.execute(
-            select(ZoomMeeting.practice_id, ZoomMeeting.shared_join_url).where(
-                ZoomMeeting.practice_id.in_(practice_ids),
-                ZoomMeeting.status == ZoomMeetingStatus.ACTIVE.value,
-                ZoomMeeting.shared_join_url.is_not(None),
-            )
-        )
-    ).all()
-    return {row[0]: row[1] for row in rows}
-
-
-# ---------------------------------------------------------------------------
 # A4 V2 (PROMPT №572): read-only ZoomMeetingStatus lookups for
 # PracticeResponse.zoom_meeting_status / PracticeSummary.zoom_meeting_status.
 # Unlike get_host_join_url[s] above, this is NOT owner-gated -- the status
