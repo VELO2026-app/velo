@@ -30,7 +30,14 @@
 #       UNAUTHENTICATED caller also gets 404 here, and a plain user gets 404
 #       where get_current_master would otherwise answer 403. Any expectation
 #       of 401/403 on these paths with the flag off is wrong about the layer.
-#   403 not_in_audience (flag off, a school practice) -> the audience clause
+#   404 not_found (flag off, a school practice detail) -> the audience
+#       clause refuses, and the DETAIL ENDPOINT CONVERTS that refusal:
+#       practices/service.py catches ForbiddenError from
+#       assert_viewer_can_access_practice and re-raises NotFoundError, so a
+#       viewer outside the audience cannot learn the practice exists. The
+#       gate's own code (403 not_in_audience) never reaches this client --
+#       reading the gate and stopping there is a mistake about the layer.
+#   403 not_in_audience -> the audience clause
 #       inside assert_viewer_can_access_practice.
 #   200 for the practice's own master -> list_public_practices ORs in
 #       `Practice.master_id == user.id`, which the flag does not touch.
@@ -485,7 +492,7 @@ async def test_a_school_practice_leaves_every_feed_except_its_masters(
 async def test_a_school_practice_detail_is_refused_by_the_audience_gate(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """403 not_in_audience for a member, from the audience layer.
+    """404 for a member: the audience layer refuses, the endpoint converts.
 
     Not 404 and not the killswitch's own code: the practice still exists
     and the refusal is the ordinary "you are not in this practice's
@@ -519,8 +526,15 @@ async def test_a_school_practice_detail_is_refused_by_the_audience_gate(
         refused = await client.get(
             url, headers=auth_headers(curator["session_token"]),
         )
-        assert refused.status_code == 403, refused.text
-        assert refused.json()["error"] == "not_in_audience"
+        # 404, NOT the 403 the audience gate itself raises. The detail
+        # endpoint catches ForbiddenError from
+        # assert_viewer_can_access_practice and re-raises NotFoundError
+        # ("Practice not found", practices/service.py), so a viewer outside
+        # the audience cannot even learn the practice exists. Reading the
+        # gate and expecting its code here is a mistake about the LAYER --
+        # what reaches the client comes from the caller above the gate.
+        assert refused.status_code == 404, refused.text
+        assert refused.json()["error"] == "not_found"
 
         owner = await client.get(
             url, headers=auth_headers(teacher["session_token"]),
@@ -646,12 +660,14 @@ async def test_a_booking_holder_keeps_reading_the_practice_they_paid_for(
     )
 
     db_session.add(
+        # Three columns and no money: the price lives on the Purchase,
+        # not the Booking (see bookings/models.py). Same construction as
+        # test_curator_audience_advisory.py, which builds a booking for the
+        # same purpose next door.
         Booking(
             user_id=UUID(booker["user"]["id"]),
             practice_id=practice.id,
             status=BookingStatus.CONFIRMED.value,
-            price_cents=0,
-            currency="eur",
         )
     )
     await db_session.commit()
@@ -666,7 +682,12 @@ async def test_a_booking_holder_keeps_reading_the_practice_they_paid_for(
         refused = await client.get(
             url, headers=auth_headers(curator["session_token"]),
         )
-        assert refused.status_code == 403, refused.text
+        # 404 for the same reason as the audience-gate test above: the
+        # detail endpoint converts the gate's 403 so the practice's
+        # existence is not disclosed. The pair that matters here is
+        # 200-vs-404 between the booking holder and somebody without a
+        # booking, not the particular refusal code.
+        assert refused.status_code == 404, refused.text
 
 
 @pytest.mark.asyncio
