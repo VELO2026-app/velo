@@ -13,7 +13,6 @@
     - "Мои группы" row (VMenuRow) -> master-groups (P2, PROMPT №591; was
       "Мои ученики" -> master-students).
     - Zero state only: "Создать первую практику" (VButton) -> create.
-    - "Саммари недели" (VCard placeholder).
     - "Ближайшие практики": up to 2 upcoming practice cards, each with
       "Изменить" -> edit and "Check-ins" -> attendance.
 
@@ -23,6 +22,12 @@
     - AI summary "Подробнее" (no master-AI), practice checkin-count +
       recurrence meta (no fields) -> rendered only when the data exists
       (v-if), absent for now. The bell is NOT in this list any more (T-26).
+
+  [owner pass] The "Саммари недели" section (heading + VCard teaser ->
+  master-summary) is REMOVED from the dashboard entirely -- no master-AI
+  backend exists and the placeholder card carried no information. The
+  master-summary route itself stays (reachable elsewhere); nothing else
+  here changed.
 -->
 
 <template>
@@ -97,21 +102,6 @@
       >
         Создать практику
       </VButton>
-
-      <!-- ================================================================
-           САММАРИ НЕДЕЛИ (honest placeholder — no master-AI backend yet;
-           honesty-cleanup 2026-07-12: dropped the fabricated insight text)
-           ================================================================ -->
-      <h2 class="velo-section-title">Саммари недели</h2>
-      <!-- The whole block opens the full summary on tap (operator tester-fix
-           2026-06-17; «Подробнее» button removed) — the target screen still has
-           real content («Требуют внимания»), so the tap-through stays. -->
-      <VCard v-if="!isNewMaster" clickable @click="router.push({ name: 'master-summary' })">
-        <p class="master-dashboard__summary-text">Сводка появится с аналитикой</p>
-      </VCard>
-      <VCard v-else>
-        <p class="master-dashboard__empty-text">Данных пока нет — создайте первую практику</p>
-      </VCard>
 
       <!-- ================================================================
            БЛИЖАЙШИЕ ПРАКТИКИ (up to 2)
@@ -692,20 +682,6 @@ onUnmounted(() => {
   font-size: var(--text-sm);
   line-height: 1.5;
   padding: var(--space-1) var(--space-2);
-}
-
-/* -- Summary teaser: 2-line clamp + ellipsis so the card reads as "tap to
-      expand" (mirrors the diary feed card, Variant B). -- */
-.master-dashboard__summary-text {
-  margin: 0;
-  color: var(--velo-text-secondary);
-  font-size: var(--text-sm);
-  line-height: 1.5;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  overflow: hidden;
 }
 
 /* -- Loading row -- */
