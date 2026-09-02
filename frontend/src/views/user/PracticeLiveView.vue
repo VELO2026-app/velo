@@ -109,11 +109,7 @@
              for this person either way, so nothing is lost by it -- and
              anyone who DOES hold a live booking gets 'pending' instead, never
              this. -->
-        <VBadge
-          v-if="zoomEntry?.kind === 'guest'"
-          variant="warning"
-          class="live__zoom-note"
-        >
+        <VBadge v-if="zoomEntry?.kind === 'guest'" variant="warning" class="live__zoom-note">
           Вы не записаны — вход гостем, посещение не засчитается
         </VBadge>
 
@@ -122,11 +118,7 @@
              identical "Ссылка готовится" spinner forever. A participant has
              no retry action (only the master does, MasterDashboardView) --
              this just tells the truth instead of hiding it. -->
-        <VBadge
-          v-if="zoomEntry?.kind === 'failed'"
-          variant="error"
-          class="live__zoom-note"
-        >
+        <VBadge v-if="zoomEntry?.kind === 'failed'" variant="error" class="live__zoom-note">
           Не удалось создать встречу — обратитесь к мастеру
         </VBadge>
 
@@ -312,8 +304,13 @@ onMounted(async () => {
   flex-direction: column;
   gap: var(--space-5);
   /* Horizontal rail comes from MobileLayout (--velo-rail-pad-x); only vertical
-     padding here so content sits on the single 24px rail (no double inset). */
-  padding: var(--space-5) 0;
+     padding here so content sits on the single 24px rail (no double inset).
+     NO top padding: this route is headerless (FE-48), so MobileLayout already
+     clears the top by --velo-fog-headerless-top -- the ONE shared default
+     every headerless screen sits on. Our own padding here is how the back
+     button ended up 61px down (34 shared + 27 local); the shared token is
+     the single knob for the top clearance across all screens. */
+  padding: 0 0 var(--space-5);
   min-height: 100%;
 }
 

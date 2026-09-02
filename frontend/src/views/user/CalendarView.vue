@@ -344,12 +344,19 @@ onMounted(() => {
   gap: var(--space-4);
 }
 
-/* Floating island variant (G-1): teleported into MobileLayout's island layer.
-   Rail-aligned with the +20px top offset; the date-nav cluster (title + week
-   strip) catches taps as a unit while the practice list scrolls under it. */
+/* Floating island variant (G-1): teleported into MobileLayout's ISLAND LAYER
+   (see the <Teleport> above) -- NOT inside __main, so the route's headerless
+   clearance (main's padding) never reaches it. The island carries its own
+   top offset, and the offset's SOURCE is the shared token -- same as VHeader's
+   island and the diary's header row: one knob (--velo-fog-headerless-top)
+   moves every screen's top together. The hand-rolled calc(space-3 + 20px)
+   that used to live here was the same 34px by VALUE but a separate SOURCE --
+   which is why the calendar alone didn't move when the token dropped to 20.
+   The date-nav cluster (title + week strip) catches taps as a unit while the
+   practice list scrolls under it. */
 .calendar__island--floating {
   gap: var(--space-3);
-  padding: calc(var(--space-3) + 20px) var(--velo-rail-pad-x) var(--space-3);
+  padding: var(--velo-fog-headerless-top) var(--velo-rail-pad-x) var(--space-3);
   pointer-events: auto;
 }
 

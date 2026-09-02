@@ -88,7 +88,13 @@ defineEmits<{
 .v-header--floating {
   position: static;
   z-index: auto;
-  padding: calc(var(--space-3) + 20px) var(--velo-rail-pad-x) var(--space-3);
+  /* Top offset from the SHARED token (was a hand-rolled calc(space-3 + 20px)
+     = the same 34px by value, but a separate source -- headered screens
+     wouldn't move with --velo-fog-headerless-top changes; FE-48 sweep). The
+     island's measured height adapts automatically (MobileLayout ResizeObserver);
+     HEADER_FALLBACK (88, MobileLayout) still safely over-reserves the
+     pre-measurement frame by the token's delta. */
+  padding: var(--velo-fog-headerless-top) var(--velo-rail-pad-x) var(--space-3);
   pointer-events: none;
 }
 

@@ -813,8 +813,10 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  /* +20px top so the islands clear the Telegram chrome / screen edge. */
-  padding: calc(var(--space-3) + 20px) var(--velo-rail-pad-x) var(--space-3);
+  /* Top pad from the SHARED token (same value the hand-rolled calc produced:
+     14 + 20 = 34px -- swept to the token so every screen's top clearance has
+     ONE source; tuning --velo-fog-headerless-top moves all of them at once). */
+  padding: var(--velo-fog-headerless-top) var(--velo-rail-pad-x) var(--space-3);
 }
 
 /* PROMPT №663: the compensating `top: var(--velo-vv-offset)` rule that used

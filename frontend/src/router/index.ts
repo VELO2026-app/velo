@@ -185,6 +185,12 @@ const router = createRouter({
           path: 'practice-live/:practiceId',
           name: 'practice-live',
           component: () => import('@/views/user/PracticeLiveView.vue'),
+          // [FE-48] Own navigation: the screen draws the shared VBackButton
+          // pill itself (same DS element the diary uses), so the floating
+          // header's clearance must NOT be reserved -- without this flag
+          // MobileLayout left a dead empty block between the Telegram header
+          // and the screen's own back button.
+          meta: { headerless: true },
         },
         {
           path: 'ai-summary',
