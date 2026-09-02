@@ -8,15 +8,6 @@
                               with Zoom; Check-in hides while the session is
                               live or already checked in (FE-47)
     - "Ваш прогресс"       -- attended count + hours, from GET /bookings/me/stats
-    - "AI-саммари"         -- placeholder card, all-time attended count + hours
-                              + mood trend indicator; the whole card is tappable.
-                              (W8 fix, PROMPT №387: this used to carry a week/month
-                              toggle that only relabeled the sentence -- the
-                              number never changed, since GET /bookings/me/stats
-                              has no period param and adding one is real backend
-                              work, not this fix's scope. Removed the toggle
-                              rather than ship a control that lies about what
-                              it's showing -- BUILD-FULL-DESIGN honesty.)
 
   Check-in window:  scheduled_at - CHECKIN_WINDOW_H  .. scheduled_at
   Feedback window:  scheduled_at + duration_minutes   .. + FEEDBACK_WINDOW_H
@@ -25,9 +16,12 @@
   practices_attended + hours_attended), a server-side aggregate over ALL attended
   bookings -- so the numbers are complete, not limited to the first bookings page.
 
-  Screen 16 (AI-summary): tapping the summary card navigates to 'user-ai-summary'
-  (currently a placeholder screen -- the user AI backend does not exist yet).
-  The mood trend indicator stays static (illustration, not a control).
+  [FE-37, owner pass] The "AI-саммари" section (heading + the «За всё время»
+  card with the mood trend indicator and the tap-through to 'user-ai-summary')
+  is REMOVED from the dashboard entirely -- the user AI backend does not exist
+  and the placeholder card carried no information the «Ваш прогресс» stats do
+  not already show. The 'user-ai-summary' route itself stays; nothing else
+  here changed.
 
   [FE-13] The dashboard carries ONLY the check-in reminder now. The feedback
   and no-show reflection banners were removed here (not their routes/screens):
@@ -151,35 +145,6 @@
         <VStatCard class="dashboard__stat" :value="practiceHours" label="Часов в практике" />
       </div>
     </section>
-
-    <!-- ================================================================
-         AI SUMMARY (placeholder)
-         ================================================================ -->
-    <section class="dashboard__section">
-      <h3 class="dashboard__section-title">AI-саммари</h3>
-
-      <!-- Whole card is the tap target → AI-summary screen (16). VCard `clickable`
-           supplies role="button" + tabindex + Enter/Space + cursor (DS a11y).
-           No period toggle (W8 fix, PROMPT №387): the underlying number is an
-           all-time aggregate (GET /bookings/me/stats has no period param), so
-           a week/month switch that only reworded the sentence without changing
-           the number was actively misleading, not just decorative. -->
-      <VCard clickable @click="router.push({ name: 'user-ai-summary' })">
-        <p class="dashboard__ai-text">
-          За всё время вы посетили <strong>{{ attendedCount }}</strong> практик и провели в практике
-          <strong>{{ practiceHours }}</strong> часов.
-        </p>
-
-        <!-- Mood trend indicator: from -> to. Non-clickable (static). -->
-        <div v-if="attendedCount > 0" class="dashboard__ai-mood">
-          <span class="dashboard__ai-mood-label">с</span>
-          <IconMoodMid :size="40" />
-          <IconArrowRight :size="16" class="dashboard__ai-mood-arrow" />
-          <IconMoodHigh :size="40" />
-          <span class="dashboard__ai-mood-label">до</span>
-        </div>
-      </VCard>
-    </section>
   </div>
 </template>
 
@@ -189,8 +154,8 @@ import { useRouter } from 'vue-router'
 import { useBookingsStore } from '@/stores/bookings'
 import { getMyStats } from '@/api/bookings'
 import { useToast } from '@/composables/useToast'
-import { VLoader, VButton, VBadge, VStatCard, VCard } from '@/components/ui'
-import { IconClock, IconCheck, IconArrowRight, IconMoodMid, IconMoodHigh } from '@/components/icons'
+import { VLoader, VButton, VBadge, VStatCard } from '@/components/ui'
+import { IconClock, IconCheck } from '@/components/icons'
 import PracticeListCard from '@/components/shared/PracticeListCard.vue'
 import Banner from '@/components/shared/Banner.vue'
 import { formatDateShort, formatTime, formatDuration } from '@/utils/format'
@@ -543,33 +508,5 @@ onUnmounted(() => {
    from the shared VStatCard component. */
 .dashboard__stat {
   height: 104px;
-}
-
-/* ===== AI summary ===== */
-.dashboard__ai-text {
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
-  color: var(--velo-text-primary);
-  line-height: 1.6;
-  margin: 0;
-}
-
-/* Mood trend indicator (static, non-clickable) */
-.dashboard__ai-mood {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  margin-top: var(--space-4);
-}
-
-.dashboard__ai-mood-label {
-  font-family: var(--font-body);
-  font-size: var(--text-base);
-  color: var(--velo-text-primary);
-}
-
-.dashboard__ai-mood-arrow {
-  color: var(--velo-text-muted);
 }
 </style>

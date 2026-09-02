@@ -381,14 +381,6 @@ function statCard(label: string): HTMLElement {
 function statValue(label: string): string {
   return norm(statCard(label).querySelector('.v-stat__value')?.textContent).trim()
 }
-function aiCard(): HTMLElement {
-  const card = host?.querySelector<HTMLElement>('.v-card')
-  if (!card) throw new Error('the AI-summary card did not render')
-  return card
-}
-function aiMood(): HTMLElement | null {
-  return host?.querySelector('.dashboard__ai-mood') ?? null
-}
 
 // -----------------------------------------------------------------------------
 
@@ -826,8 +818,8 @@ describe('UserDashboardView', () => {
   })
 
   // ===========================================================================
-  describe('progress stats + AI summary', () => {
-    it('renders the REAL fetched numbers (not the silent-degrade default) in both the progress cards and the AI text', async () => {
+  describe('progress stats ([FE-37] the AI-summary section is removed)', () => {
+    it('renders the REAL fetched numbers (not the silent-degrade default) in the progress cards', async () => {
       vi.mocked(bookingsApi.getMyStats).mockResolvedValue(
         stats({ practices_attended: 12, hours_attended: 9 }),
       )
@@ -836,8 +828,19 @@ describe('UserDashboardView', () => {
 
       expect(statValue('Практик пройдено')).toBe('12')
       expect(statValue('Часов в практике')).toBe('9')
-      expect(text()).toContain('вы посетили')
-      expect(text()).toContain('12')
+    })
+
+    it('[FE-37] the AI-summary section is fully gone: no heading, no card, no route out', async () => {
+      mount()
+      await flush()
+
+      expect(
+        Array.from(host?.querySelectorAll('.dashboard__section-title') ?? []).some(
+          (h) => h.textContent?.trim() === 'AI-саммари',
+        ),
+      ).toBe(false)
+      expect(host?.querySelector('.v-card')).toBeNull()
+      expect(host?.textContent).not.toContain('За всё время')
     })
 
     it('half-decimal hours render with a comma, not a dot (ru locale)', async () => {
@@ -858,33 +861,6 @@ describe('UserDashboardView', () => {
       // No error rung exists for this section by design -- confirming ABSENCE,
       // not skipping the check.
       expect(host?.querySelector('.dashboard__stats-grid .dashboard__error')).toBeNull()
-    })
-
-    it('mood trend indicator: hidden at zero attended, shown once attended > 0', async () => {
-      vi.mocked(bookingsApi.getMyStats).mockResolvedValue(stats({ practices_attended: 0 }))
-      mount()
-      await flush()
-      expect(aiMood()).toBeNull()
-
-      app?.unmount()
-      host?.remove()
-      pinia = createPinia()
-      setActivePinia(pinia)
-      useAuthStore().user = user()
-      vi.mocked(bookingsApi.getMyStats).mockResolvedValue(stats({ practices_attended: 3 }))
-      mount()
-      await flush()
-      expect(aiMood()).not.toBeNull()
-    })
-
-    it('the AI-summary card navigates on click (whole card is the tap target)', async () => {
-      mount()
-      await flush()
-
-      aiCard().click()
-      await flush()
-
-      expect(push).toHaveBeenCalledWith({ name: 'user-ai-summary' })
     })
   })
 
