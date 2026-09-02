@@ -353,36 +353,78 @@ async def test_a_school_whose_only_event_was_pruned_reads_empty_not_404(
 
 
 @pytest.mark.asyncio
-async def test_only_the_curator_reads_the_journal(
+async def test_a_master_member_of_the_school_still_cannot_read_its_journal(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """A master member, a student and an outsider all get 404.
+    """MEMBERSHIP DOES NOT HELP: a master inside the school gets 404.
 
-    404 and not 403, the shape every curator endpoint uses: 403 would
-    confirm to a stranger that the school exists. All three are in one
-    test because the interesting claim is that MEMBERSHIP DOES NOT HELP --
-    the master and the student are inside the school and still cannot
-    read it, which a test using only an outsider would not show.
+    This is the interesting half of "curator only" -- an outsider being
+    refused proves nothing about ownership, since they would be refused by
+    any check at all. This master is a real member row of this very group
+    and is still refused, which is what pins the refusal to
+    curator_user_id rather than to membership.
 
-    The curator's own 200 is asserted last so that "404" cannot come from
-    a wrong URL or a missing route.
+    404 and not 403, the shape every curator endpoint uses: 403 would tell
+    a caller the school exists. Note that the code differs from the
+    non-master case below, and deliberately -- see that test.
+
+    A second verified master OUTSIDE the school is refused too, so the 404
+    cannot be read as "members get a special code". The curator's own 200
+    is asserted last, so none of the 404s can come from a wrong URL or a
+    route that does not exist.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     member = await _make_verified_master(client, db_session, _TID_MASTER_B)
-    student = await login_user(client, telegram_id=_TID_STUDENT)
-    outsider = await login_user(client, telegram_id=_TID_OUTSIDER)
+    stranger = await _make_verified_master(client, db_session, _TID_HEIR)
     group_id = await _make_group(client, curator)
 
     await _seed_member(
         db_session, group_id, member, CuratorMemberKind.MASTER.value,
     )
+
+    for auth in (member, stranger):
+        resp = await _journal(client, auth, group_id)
+        assert resp.status_code == 404, resp.text
+
+    assert (await _journal(client, curator, group_id)).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_a_non_master_is_refused_by_the_dependency_not_by_ownership(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """A student member and an outsider both get 403, NOT 404.
+
+    THE CODE IS DIFFERENT FROM THE MASTER CASE AND THAT IS CORRECT, which
+    is why this is its own test rather than a third item in the loop
+    above. The journal hangs off the /masters/me/ router, so
+    get_current_master runs BEFORE the ownership check and answers 403
+    "Master access required" -- a statement about the caller's account,
+    not about any school. Ownership is never consulted, so there is
+    nothing for it to leak.
+
+    The student here is a real member row of the school, which is the
+    point: a student can never reach the journal at all, not even to be
+    told 404. Being inside the school does not move them past a
+    master-only dependency.
+
+    Both callers assert the same code for different reasons -- one is a
+    member, one is a stranger -- so the 403 is shown to come from the
+    account and not from the relationship.
+    """
+    curator = await _make_verified_master(client, db_session, _TID_CURATOR)
+    student = await login_user(client, telegram_id=_TID_STUDENT)
+    outsider = await login_user(client, telegram_id=_TID_OUTSIDER)
+    group_id = await _make_group(client, curator)
+
     await _seed_member(
         db_session, group_id, student, CuratorMemberKind.STUDENT.value,
     )
 
-    for auth in (member, student, outsider):
+    for auth in (student, outsider):
         resp = await _journal(client, auth, group_id)
-        assert resp.status_code == 404, resp.text
+        assert resp.status_code == 403, resp.text
+        assert resp.json()["error"] == "forbidden"
 
     assert (await _journal(client, curator, group_id)).status_code == 200
 
@@ -1138,12 +1180,15 @@ async def test_declining_an_offer_that_was_never_made_records_nothing(
     do not exist.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    outsider = await _make_verified_master(client, db_session, _TID_HEIR)
+    # A plain user, not a master: decline sits behind get_current_user_write,
+    # so mastery is not needed to reach it -- and `outsider` means a plain
+    # user everywhere in this file, which is worth keeping true.
+    nobody = await login_user(client, telegram_id=_TID_OUTSIDER)
     group_id = await _make_group(client, curator)
 
     resp = await client.post(
         DECLINE_URL.format(group_id=group_id),
-        headers=auth_headers(outsider["session_token"]),
+        headers=auth_headers(nobody["session_token"]),
     )
     assert resp.status_code == 204, resp.text
 
