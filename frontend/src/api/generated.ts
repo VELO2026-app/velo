@@ -633,6 +633,7 @@ export interface CuratorGroupInvitePreviewGroup {
   id: string
   name: string
   description: string | null
+  avatar_url?: string | null
   curator_name: string | null
   masters_count: number
   students_count: number
@@ -690,6 +691,7 @@ export interface CuratorGroupMineItem {
   id: string
   name: string
   description: string | null
+  avatar_url?: string | null
   curator: CuratorGroupCuratorRef
   masters_count: number
   students_count: number
@@ -707,6 +709,7 @@ export interface CuratorGroupPageResponse {
   id: string
   name: string
   description: string | null
+  avatar_url?: string | null
   curator: CuratorGroupCuratorRef
   masters_count: number
   students_count: number
@@ -725,6 +728,7 @@ export interface CuratorGroupResponse {
   id: string
   name: string
   description: string | null
+  avatar_url?: string | null
   masters_count: number
   students_count: number
   transfer?: CuratorGroupTransferRef | null
@@ -1684,10 +1688,11 @@ export interface TopupResponse {
   currency: string
 }
 
-/** PATCH /masters/me/curator-groups/{id}. `name` is always required -- a group always has one. `description` is a PARTIAL update. The router computes `"description" in body.model_dump(exclude_unset=True)` and passes it as description_provided, which is the only way to tell "the key was absent" (leave the column alone) from "the key was sent as null/empty" (write NULL). A bare `str | None = None` cannot distinguish the two and would wipe an existing description on every plain rename -- the exact bug RenameGroupRequest was rewritten to prevent. */
+/** PATCH /masters/me/curator-groups/{id}. `name` is always required -- a group always has one. `description` is a PARTIAL update. The router computes `"description" in body.model_dump(exclude_unset=True)` and passes it as description_provided, which is the only way to tell "the key was absent" (leave the column alone) from "the key was sent as null/empty" (write NULL). A bare `str | None = None` cannot distinguish the two and would wipe an existing description on every plain rename -- the exact bug RenameGroupRequest was rewritten to prevent. avatar_url (GT-17) is a PARTIAL update by the same mechanism and for the same reason -- the router computes avatar_url_provided the same way. Absent key: the column is untouched. Present and null (or blank): the avatar is removed. Present and a url: it is replaced. CREATION DOES NOT TAKE AN AVATAR, only this update does. A school is founded with a name and a description; the picture is attached afterwards. Not an omission -- widening CreateCuratorGroupRequest would touch a schema five test files exercise, for a field the create screen has no input for. */
 export interface UpdateCuratorGroupRequest {
   name: string
   description?: string | null
+  avatar_url?: string | null
 }
 
 /** PATCH /api/v1/diary/{id} body. All fields optional. Only provided fields are updated. */
