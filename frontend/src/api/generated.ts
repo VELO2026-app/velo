@@ -1014,7 +1014,7 @@ export interface MasterReviewItem {
   created_at: string
 }
 
-/** GET /api/v1/masters/me/stats?period=week|month. practices_count -- master's practices scheduled in the period (excludes draft / deleted / cancelled). participants_count -- distinct users with an ATTENDED booking across those practices. income_cents -- gross booked turnover for the period, reused verbatim from the E2 finance projection. The dashboard renders practices/participants; the finance screen renders income. Each *_delta_pct is the signed percent change vs the previous period, or null when the previous period was non-positive (S-1). */
+/** GET /api/v1/masters/me/stats?period=week|month. practices_count -- master's COMPLETED practices scheduled in the period. Completed only (GT-20): a practice that is still ahead, running, cancelled, draft or deleted does not count, so a period with nothing finished yet reads 0. The grid answers "what happened", not "what is scheduled". participants_count -- distinct users with an ATTENDED booking across those practices. An ATTENDED booking only ever exists on a completed practice, so this count and practices_count are always about the same sessions. income_cents -- gross booked turnover for the period, reused verbatim from the E2 finance projection. The dashboard renders practices/participants; the finance screen renders income. Each *_delta_pct is the signed percent change vs the previous period, or null when the previous period was non-positive (S-1). */
 export interface MasterStatsResponse {
   practices_count: number
   practices_delta_pct: number | null
