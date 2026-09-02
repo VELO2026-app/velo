@@ -253,8 +253,8 @@ const UP_LIVE = booking(
   },
 )
 // UP_SOON: tomorrow, free, no zoom link yet, already checked in -- exercises
-// the free badge, the Zoom-disabled state, and the Check-in-disabled state on
-// ONE card (has_checkin true).
+// the free badge, the Zoom-disabled state, and [FE-47] the Check-in HIDDEN
+// state (has_checkin true -> not rendered, not disabled) on ONE card.
 const UP_SOON = booking(
   'up_soon',
   { status: 'confirmed', has_checkin: true },
@@ -628,24 +628,55 @@ describe('UserDashboardView', () => {
       expect(host?.textContent).not.toContain('Не удалось создать встречу')
     })
 
-    it('Check-in: disabled when the booking already has one, enabled otherwise', async () => {
+    it('[FE-47] Check-in: NOT rendered while live or already checked in -- lone Zoom keeps the row intact', async () => {
       vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([UP_SOON, UP_LIVE])
       mount()
       await flush()
 
       const blocks = nearestBlocks()
-      // blocks[0] is UP_LIVE (pinned live-first) -- has_checkin false -> enabled.
-      const liveCheckin = actionIn(blocks[0]!, 'Check-in')
-      expect(liveCheckin?.disabled).toBe(false)
-      // blocks[1] is UP_SOON -- has_checkin true -> disabled.
-      const soonCheckin = actionIn(blocks[1]!, 'Check-in')
-      expect(soonCheckin?.disabled).toBe(true)
+      // blocks[0] is UP_LIVE (pinned live-first): session in progress
+      // («В эфире») -> NO Check-in button at all -- hidden, not disabled.
+      expect(actionIn(blocks[0]!, 'Check-in')).toBeUndefined()
+      // blocks[1] is UP_SOON: has_checkin true -> NO Check-in either.
+      expect(actionIn(blocks[1]!, 'Check-in')).toBeUndefined()
 
-      liveCheckin?.click()
+      // Grid rebuild: Zoom is now each row's ONLY child -> one button, no
+      // empty twin column (the :only-child rule spans it; DOM-wise the row
+      // must hold exactly one action).
+      const liveActions = blocks[0]!.querySelector('.dashboard__practice-actions')!
+      expect(liveActions.children.length).toBe(1)
+      expect(liveActions.children[0]!.textContent?.trim()).toBe('Zoom')
+      expect(actionIn(blocks[0]!, 'Zoom')).toBeDefined()
+    })
+
+    it('[FE-47] Check-in: rendered, enabled and routes while upcoming and not yet checked in (Zoom keeps its column)', async () => {
+      // Fresh upcoming booking: not live (starts tomorrow), has_checkin false.
+      const fresh = booking(
+        'up_fresh',
+        { status: 'confirmed', has_checkin: false },
+        {
+          title: 'Свежая практика',
+          scheduled_at: '2026-07-21T05:00:00Z',
+          duration_minutes: 45,
+        },
+      )
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([fresh])
+      mount()
+      await flush()
+
+      // Both actions present -- the two-column row is intact.
+      const actions = nearestBlocks()[0]!.querySelector('.dashboard__practice-actions')!
+      expect(actions.children.length).toBe(2)
+
+      const checkin = actionIn(nearestBlocks()[0]!, 'Check-in')
+      expect(checkin).toBeDefined()
+      expect(checkin!.disabled).toBe(false)
+
+      checkin!.click()
       await flush()
       expect(push).toHaveBeenCalledWith({
         name: 'user-checkin',
-        params: { practiceId: 'pr_up_live' },
+        params: { practiceId: 'pr_up_fresh' },
       })
     })
 

@@ -5,7 +5,8 @@
     - Check-in alert banner (amber) -- confirmed booking in check-in window
     - "Ближайшие практики" -- live-aware list: the active session (if any) pinned
                               first, then up to 2 soonest upcoming (max 3), each
-                              with Zoom + Check-in
+                              with Zoom; Check-in hides while the session is
+                              live or already checked in (FE-47)
     - "Ваш прогресс"       -- attended count + hours, from GET /bookings/me/stats
     - "AI-саммари"         -- placeholder card, all-time attended count + hours
                               + mood trend indicator; the whole card is tappable.
@@ -111,10 +112,16 @@
             >
               Zoom
             </VButton>
+            <!-- [FE-47] Check-in is NOT RENDERED (not disabled) when the
+                 session is already live («В эфире») or the booking already
+                 has a check-in -- a disabled button reads as broken here.
+                 When it drops out, Zoom becomes the row's only child and
+                 spans it (see :only-child in the styles) -- no empty column.
+                 Zoom's own availability rules are untouched. -->
             <VButton
+              v-if="!isLive(b) && !b.has_checkin"
               variant="primary"
               block
-              :disabled="b.has_checkin"
               @click="goToCheckin(b.practice_id)"
             >
               Check-in
@@ -183,13 +190,7 @@ import { useBookingsStore } from '@/stores/bookings'
 import { getMyStats } from '@/api/bookings'
 import { useToast } from '@/composables/useToast'
 import { VLoader, VButton, VBadge, VStatCard, VCard } from '@/components/ui'
-import {
-  IconClock,
-  IconCheck,
-  IconArrowRight,
-  IconMoodMid,
-  IconMoodHigh,
-} from '@/components/icons'
+import { IconClock, IconCheck, IconArrowRight, IconMoodMid, IconMoodHigh } from '@/components/icons'
 import PracticeListCard from '@/components/shared/PracticeListCard.vue'
 import Banner from '@/components/shared/Banner.vue'
 import { formatDateShort, formatTime, formatDuration } from '@/utils/format'
@@ -291,8 +292,11 @@ const nearestBookings = computed((): BookingWithPracticeResponse[] =>
  * and makes it appear/disappear exactly on schedule, no backend/cron dependency.
  *
  * Per-card (TASK-2): «Бесплатно»/«Оплачено» use the shared isFree() directly in
- * the template, and the Check-in button disables on the booking's own
- * has_checkin (one check-in per booking) -- mirrors the banner.
+ * the template, and -- [FE-47] -- the Check-in button is NOT rendered at all
+ * while the session is live or the booking's own has_checkin is true (it used
+ * to merely disable on has_checkin; a dead disabled button reads as broken,
+ * and the lone Zoom now spans the action row instead of leaving an empty
+ * column). Zoom's availability rules are unchanged.
  */
 function isLive(b: BookingWithPracticeResponse): boolean {
   return isLiveNow(b, now.value)
@@ -320,10 +324,7 @@ function practiceTitle(b: BookingWithPracticeResponse): string {
  * the caller may hold no booking at all.
  */
 function zoomLinkFor(b: BookingWithPracticeResponse): ZoomLinkResolution {
-  return resolveZoomLink(
-    b.zoom_registrant_join_url,
-    b.practice.zoom_meeting_status,
-  )
+  return resolveZoomLink(b.zoom_registrant_join_url, b.practice.zoom_meeting_status)
 }
 
 function onZoomClick(b: BookingWithPracticeResponse): void {
@@ -484,6 +485,13 @@ onUnmounted(() => {
   /* Figma: 15 — близко к --space-3 (14), но точно 15 для соответствия */
   gap: var(--velo-gap-15);
   margin-top: 15px;
+}
+
+/* [FE-47] Check-in unmounts while the session is live or already checked
+   in -- Zoom then becomes the only child and must take the WHOLE row, not
+   hug one column next to an empty twin. */
+.dashboard__practice-actions > :only-child {
+  grid-column: 1 / -1;
 }
 
 .dashboard__zoom-note {
