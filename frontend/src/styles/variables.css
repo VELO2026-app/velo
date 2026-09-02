@@ -334,9 +334,12 @@
      (PE-1) and --velo-fog-z1-short (DB-1b), whose `88 + (−40)` coupled two
       magic numbers. [FE-3] 2026-08-24: 34px — one baseline with the floating
       islands (calc(--space-3 + 20px) = 34): first text line equidistant from
-      the top edge everywhere, so tab switches do not jump. */
+      the top edge everywhere, so tab switches do not jump. [FE-48] 2026-09-02:
+      owner ruling 20px — the back pills / first content sit higher (the 34px
+      baseline read as dead space above live screens); ONE token moves every
+      headerless screen together. */
 
-  --velo-fog-headerless-top: 34px;
+  --velo-fog-headerless-top: 20px;
   /* Header-island clearance (G-1) is no longer a fixed token pair: MobileLayout
      MEASURES the floating island's height (ResizeObserver) and clears exactly
      that much, so any island (short greeting or tall title+weekstrip) gets the

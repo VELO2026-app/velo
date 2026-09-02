@@ -108,6 +108,7 @@ import { useBalanceStore } from '@/stores/balance'
 import { purchasePractice, previewPurchase } from '@/api/bookings'
 import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
+import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import { formatDate, formatMoney } from '@/utils/format'
 import type { PracticeResponse, PreviewPurchaseResponse } from '@/api/types'
 
@@ -149,9 +150,15 @@ watch(
 )
 
 // -- Computed --
-const formattedDate = computed(() =>
-  formatDate(props.practice.scheduled_at, props.practice.timezone),
-)
+// [FE-52] The date renders in the VIEWER's own profile timezone (the F5
+// product decision: the profile decides, same as the calendar cards and the
+// bookings list). Formatting via practice.timezone showed the MASTER's wall
+// clock -- a Berlin viewer was offered "15:00" for a practice that starts at
+// noon their time. scheduled_at stays the UTC instant it is; only the
+// rendering zone changes.
+const viewerTimezone = useViewerTimezone()
+
+const formattedDate = computed(() => formatDate(props.practice.scheduled_at, viewerTimezone.value))
 
 const promoApplied = computed(() => preview.value !== null && preview.value.discount_cents > 0)
 

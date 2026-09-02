@@ -40,6 +40,15 @@ html {
   font-size: var(--text-base);
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
+  /* [FE caret fix] The app is a LIGHT-UI app: every token is static light
+     (no Telegram-theme token swapping), so declare it to the engine. Without
+     this, iOS/WebKit under a dark SYSTEM scheme falls back to the UA's
+     dark-scheme form-control defaults -- and renders the text caret WHITE
+     (invisible on every light field), ignoring the author `color`. This is
+     the root cause; the caret-color in the inputs reset below is the
+     belt-and-braces half (same fix Composer.vue applies locally, which is
+     why the diary field was the one place the caret was visible). */
+  color-scheme: light;
   height: 100vh; /* pre-JS-paint fallback for engines without lvh */
   height: 100lvh; /* pre-JS-paint fallback, overridden by the var below once JS runs */
   height: var(--velo-frozen-vh, 100lvh);
@@ -60,6 +69,17 @@ body {
   overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* [FE-36 follow-up] THE COLUMN MUST NEVER BE CONTENT-SIZED. Measured live
+     (Chromium probe): in some sessions html computes to display:flex (source
+     untraced -- not our CSS/JS, not the Telegram SDK, not @tma.js; flaky, but
+     it happened) and body then becomes a flex ITEM with auto basis -- it
+     sizes to the CONTENT's max-content instead of filling the viewport. A
+     short results list (one narrow city row) shrank the whole app column to
+     348 of 390px, with an empty gap on the right -- the owner-visible
+     "narrowed view, huge right padding". width:100% pins body to the
+     containing block under EITHER display: inert while html is block,
+     a fill-guarantee if anything ever flexes html again. */
+  width: 100%;
   height: 100vh;
   height: 100lvh;
   height: var(--velo-frozen-vh, 100lvh);
@@ -104,16 +124,60 @@ html.is-keyboard-open .app-frame {
   min-height: 0;
 }
 
-/* [FE-7 follow-up, HUD-verified] The background layer joins the SAME shrink
-   as html/body/#app/.app-frame above: the HUD round showed `kbd:YES
-   vvh:411.66 appbg.h:720` -- with the keyboard open the app ends at 411.66
-   while the frozen 720px mandala layer keeps painting below it, and the iOS
-   visual-viewport offset exposes that tail as a mandala strip right UNDER
-   the composer (button bottom 382, app bottom ~411). Capped to the live
-   height, the strip below the app shows body's own white instead. The HUD's
-   `appbg.h:` readout verifies this live: expect ~vvh when kbd:YES. */
-html.is-keyboard-open #app-bg {
-  height: var(--velo-vvh, var(--velo-frozen-vh, 100lvh));
+/* [FE-7 follow-up, HUD-verified -> SUPERSEDED by FE-43] This layer used to
+   shrink (FE-7) and then clip (FE-45 follow-up 2) to --velo-vvh while
+   typing. Both left a band below the live bottom that painted NOTHING: the
+   iOS focus pan (visualViewport.offsetTop) and the open/close animation
+   frames transiently expose exactly that region, and body's own white
+   showed through -- the "большая белая область снизу" on the practice-create
+   form (FE-43). [FE-43] The background must CONTINUOUSLY fill everything
+   the visual viewport can ever show: the layer keeps its frozen height in
+   EVERY state (the rule below is intentionally empty/removed) -- the
+   mandala never re-lays (cover over a constant box, FE-45's goal) and
+   nothing can ever be white (FE-43's goal). What the old HUD round called
+   a "mandala strip under the composer" is re-read here as the background
+   legitimately continuing below the app's typing-time bottom -- the same
+   below-the-fold look the screen has at rest. */
+
+/* [FE-44] CLOSE-TIME ROOT FREEZE. iOS WebKit restores its focus-time root
+   scroll LATE -- after the keyboard has visually folded, it can scroll the
+   document into the (by then collapsed) range for a frame: the owner sees
+   the OLD above-keyboard view flash back before our snap kills it. rAF
+   pinning races that restore and loses on timing; the structural fix is the
+   classic iOS keyboard freeze: while the keyboard folds (and a short settle
+   after), body is position:fixed -- a fixed box contributes no scroll
+   range, so the late restore has NOTHING to move and the flash is
+   impossible, not merely out-raced. Pixel-identical box (top:0, full width,
+   the same frozen height body already carries), toggled under the keyboard
+   / after settle, so the switch itself is never visible. Cleared early on a
+   genuine reopen (useViewportGeometry's focusin path). */
+html.is-keyboard-closing body {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+}
+
+/* [FE-44] CLOSE ANIMATES AT THE KEYBOARD'S OWN SPEED. The keyboard-open
+   state tracks the native fold frame-by-frame (smooth by construction); the
+   close, since FE-44, drops the cap in ONE step -- visually a faster,
+   abrupter motion than the open ("скорость разной не была"). While the
+   closing class holds, every capped height TRANSITIONS from its
+   keyboard-open value to the at-rest value over ~250ms with an ease-out
+   curve -- the same order as the soft keyboard's own animation -- so the
+   expand reads as one continuous reveal at the same speed. Scoped to the
+   CLOSING state ONLY (never to the open state, whose frame-by-frame
+   tracking is already perfect and must not start chasing its own targets,
+   nor to rest, where heights are frozen and must snap). The transition
+   lives in the after-change style, which is exactly what the closing class
+   provides at the moment the cap drops. All values involved are
+   interpolable px (frozen-vh and vvh are px; the diary/chat columns'
+   at-rest heights are px calcs of the same vars -- see their SFCs). */
+html.is-keyboard-closing,
+html.is-keyboard-closing body,
+html.is-keyboard-closing #app,
+html.is-keyboard-closing .app-frame {
+  transition: height 250ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 /* === Typography === */
@@ -166,6 +230,14 @@ textarea {
   font-family: inherit;
   font-size: inherit;
   color: inherit;
+  /* [FE caret fix] Pin the caret to the field ink instead of `auto`. On iOS
+     the caret otherwise rides the UA form-control colour (white under a dark
+     system colour-scheme, see the color-scheme note on html) rather than the
+     author `color`, and disappears on the light fields. Same rule Composer
+     applies locally -- promoted here to the app-wide field standard. Every
+     field in the app paints a light surface with this ink (card-solid or
+     frosted glass), so one token covers all of them. */
+  caret-color: var(--velo-text-primary);
 }
 
 /* === Lists === */
@@ -282,6 +354,16 @@ ol {
   z-index: -1;
   background: url('/bg/background.png') center / cover no-repeat;
   pointer-events: none;
+  /* [FE-44] Own compositing layer -- the standard iOS WebKit insurance for
+     full-screen position:fixed layers: after keyboard interactions WebKit
+     is known to leave fixed layers with stale raster (the close pan moves
+     them with the layout viewport and never repaints the vacated band --
+     body-white where the keyboard was, surviving every keyboard-state
+     reset). Promoting the layer makes WebKit re-composite it when the root
+     is zeroed back. This is a STATIC promotion, not the per-frame
+     transform/counter-shift the canon above forbids -- it never animates,
+     it just owns its layer. */
+  transform: translateZ(0);
 }
 
 /* #app is the full-width mount root (AppFrame is only 402px, so #app itself

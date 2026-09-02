@@ -229,4 +229,143 @@ describe('useViewportGeometry() integration', () => {
     expect(fromWrapper.value).toBe(keyboardOpen.value)
     expect(fromWrapper).toBe(keyboardOpen) // literally the same object, not a copy
   })
+
+  // [FE-44] The owner's device screenshot: keyboard closed, yet the diary
+  // stayed capped at the keyboard-open height -- the closing keyboard's LAST
+  // visualViewport resize never fired, so publish() never ran again and both
+  // `html.is-keyboard-open` and `--velo-vvh` kept their keyboard-open values.
+  // The fix: focusout (which cannot be missed -- no keyboard without a
+  // focused field) resets the state SYNCHRONOUSLY when focus leaves every
+  // editable, with a delayed recheck as the backstop.
+  it('[FE-44] focusout heals a stale keyboard-open state even when NO resize event fires', async () => {
+    const root = document.documentElement
+    // At rest: baseline seeds, keyboard closed.
+    setBrowserViewport(828, 828, 0)
+    mount()
+    await flush()
+    expect(keyboardOpen.value).toBe(false)
+    expect(root.classList.contains('is-keyboard-open')).toBe(false)
+
+    // Keyboard opens (resize fires): class on, --velo-vvh capped.
+    setBrowserViewport(828, 500, 0)
+    vvListeners.resize?.()
+    await flush()
+    expect(keyboardOpen.value).toBe(true)
+    expect(root.classList.contains('is-keyboard-open')).toBe(true)
+    expect(root.style.getPropertyValue('--velo-vvh')).toBe('500px')
+
+    // The MISSED close: the viewport object heals to full height, but NO
+    // resize event fires. The stale state must still be in place here --
+    // that is the bug's premise.
+    setBrowserViewport(828, 828, 0)
+    expect(root.classList.contains('is-keyboard-open')).toBe(true)
+
+    // focusout (to nothing) -> healed IMMEDIATELY, not after a delay: the
+    // keyboard vacates its area over ~250ms and the app must already be at
+    // full height when that space becomes visible.
+    window.dispatchEvent(new FocusEvent('focusout'))
+    expect(root.classList.contains('is-keyboard-open')).toBe(false)
+    expect(root.style.getPropertyValue('--velo-vvh')).toBe('')
+    expect(keyboardOpen.value).toBe(false)
+
+    // ...AND the root pan is zeroed (rAF-deferred): the close pan surviving
+    // keyboard-dismiss was FE-7's own device measurement (scrollY 154), and
+    // it paints the white band no keyboard-state reset can reach.
+    const scrollTo = vi.fn()
+    Object.defineProperty(window, 'scrollY', { value: 154, configurable: true })
+    window.scrollTo = scrollTo
+    window.dispatchEvent(new FocusEvent('focusout'))
+    await new Promise((r) => setTimeout(r, 0)) // rAF lands on a macrotask
+    expect(scrollTo).toHaveBeenCalledWith(0, 0)
+
+    // The settle timer (700ms) must not resurrect the open state either --
+    // its re-check publishes at-rest truth.
+    await new Promise((r) => setTimeout(r, 800))
+    await flush()
+    expect(keyboardOpen.value).toBe(false)
+    expect(root.classList.contains('is-keyboard-open')).toBe(false)
+    expect(root.classList.contains('is-keyboard-closing')).toBe(false)
+  })
+
+  // [FE-44] The guard: a field-to-field focus move keeps the keyboard up --
+  // focusout must NOT reset anything there.
+  it('[FE-44] focusout to ANOTHER editable (keyboard stays) does not reset the open state', async () => {
+    const root = document.documentElement
+    setBrowserViewport(828, 500, 0)
+    mount()
+    await flush()
+    expect(root.classList.contains('is-keyboard-open')).toBe(true)
+
+    const fieldA = document.createElement('input')
+    const fieldB = document.createElement('input')
+    document.body.append(fieldA, fieldB)
+    fieldA.focus()
+    window.dispatchEvent(new FocusEvent('focusout', { relatedTarget: fieldB }))
+    expect(root.classList.contains('is-keyboard-open')).toBe(true)
+    expect(root.style.getPropertyValue('--velo-vvh')).toBe('500px')
+    fieldA.remove()
+    fieldB.remove()
+  })
+
+  // [FE-44] The owner's "уезжает плохо: белый фон, потом растягивается":
+  // intermediate close-resizes arrive LAGGING the visual reveal, and every
+  // one of them used to re-assert the cap at a stale smaller height. The
+  // first RISING frame must drop the cap and hold at-rest for the whole
+  // animation -- the iOS keyboard is an overlay, a full-height app is simply
+  // revealed, never white.
+  it('[FE-44] intermediate close-resizes (rising heights) never re-cap the app', async () => {
+    const root = document.documentElement
+    setBrowserViewport(828, 500, 0)
+    mount()
+    await flush()
+    expect(root.classList.contains('is-keyboard-open')).toBe(true)
+
+    // Close animation frame 1: rising, still far from rest (the OLD behavior
+    // read delta 828-650=178 > 150 as "still open" and re-capped).
+    setBrowserViewport(828, 650, 0)
+    vvListeners.resize?.()
+    await flush()
+    expect(root.classList.contains('is-keyboard-open')).toBe(false)
+    expect(root.style.getPropertyValue('--velo-vvh')).toBe('')
+
+    // Suppressed frames AND the final one stay at rest -- no late stretch.
+    setBrowserViewport(828, 780, 0)
+    vvListeners.resize?.()
+    await flush()
+    expect(root.classList.contains('is-keyboard-open')).toBe(false)
+
+    setBrowserViewport(828, 828, 0)
+    vvListeners.resize?.()
+    await new Promise((r) => setTimeout(r, 400)) // window expires
+    await flush()
+    expect(root.classList.contains('is-keyboard-open')).toBe(false)
+  })
+
+  // [FE-44] focusin on an editable cancels the close suppression -- a quick
+  // reopen must re-assert the cap from its first falling resize, not after
+  // the window times out.
+  it('[FE-44] a reopen during the close window re-asserts the cap immediately', async () => {
+    const root = document.documentElement
+    setBrowserViewport(828, 500, 0)
+    mount()
+    await flush()
+    expect(root.classList.contains('is-keyboard-open')).toBe(true)
+
+    window.dispatchEvent(new FocusEvent('focusout')) // close starts, suppressed
+    expect(root.classList.contains('is-keyboard-open')).toBe(false)
+
+    // The user focuses a field again before the window ends: focusin bubbles
+    // from the element (window-level listener, target = the field).
+    const field = document.createElement('input')
+    document.body.append(field)
+    field.focus()
+    field.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+
+    setBrowserViewport(828, 500, 0)
+    vvListeners.resize?.()
+    await flush()
+    expect(root.classList.contains('is-keyboard-open')).toBe(true)
+    expect(root.style.getPropertyValue('--velo-vvh')).toBe('500px')
+    field.remove()
+  })
 })

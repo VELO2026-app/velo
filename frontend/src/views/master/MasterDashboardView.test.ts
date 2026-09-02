@@ -48,9 +48,7 @@
 //
 // v-if, not v-show (SC-14): grepped -- this template has no v-show, so a pane
 // that is not on screen is genuinely absent from the DOM and host.textContent
-// spans only what is rendered. Queries are still scoped per practice block,
-// because `.master-dashboard__empty-text` legitimately appears TWICE at once
-// (the summary placeholder .vue:110 and the nearest-practice empty card .vue:190).
+// spans only what is rendered. Queries are still scoped per practice block.
 //
 // NBSP (velo-idiom §11): no money is formatted here -- income_cents is returned
 // by the stats endpoint and deliberately NOT rendered (.vue:253-254), formatMoney
@@ -474,18 +472,14 @@ function periodButton(label: string): HTMLButtonElement | undefined {
   )
 }
 
-/** VCards in document order: [0] is always the «Саммари недели» card (.vue:106-111);
- *  [1] is the nearest-practices empty card, present only when there is nothing to show. */
+/** VCards in document order: [0] is the nearest-practices empty card,
+ *  present only when there is nothing to show. ([owner pass] the «Саммари
+ *  недели» teaser card that used to be [0] is removed with its section.) */
 function cards(): HTMLElement[] {
   return Array.from(host?.querySelectorAll<HTMLElement>('.v-card') ?? [])
 }
-function summaryCard(): HTMLElement {
-  const card = cards()[0]
-  if (!card) throw new Error('the summary card did not render')
-  return card
-}
 function nearestEmptyCard(): HTMLElement | undefined {
-  return cards()[1]
+  return cards()[0]
 }
 
 function sectionTitles(): string[] {
@@ -581,7 +575,7 @@ describe('MasterDashboardView', () => {
 
     it('loading: the practices half has its OWN loader, under a resolved profile', async () => {
       // .vue:120-124 -- practicesLoading gates only the «Ближайшие практики»
-      // section, so the stats and the summary stay on screen while it spins.
+      // section, so the stats stay on screen while it spins.
       vi.mocked(mastersApi.getMyPractices).mockReturnValue(new Promise(() => {}))
       mount()
       await flush()
@@ -600,7 +594,7 @@ describe('MasterDashboardView', () => {
       expect(blocks()).toHaveLength(0)
       expect(createCta()).toBeDefined()
       expect(norm(nearestEmptyCard()?.textContent).trim()).toBe(EMPTY_NEW)
-      expect(sectionTitles()).toEqual(['Саммари недели', 'Ближайшая практика'])
+      expect(sectionTitles()).toEqual(['Ближайшая практика'])
     })
 
     it('content: renders each upcoming practice with its own date, time and duration', async () => {
@@ -772,7 +766,7 @@ describe('MasterDashboardView', () => {
       mockBucketedPractices([P_SOON])
       mount()
       await flush()
-      expect(sectionTitles()).toEqual(['Саммари недели', 'Ближайшая практика'])
+      expect(sectionTitles()).toEqual(['Ближайшая практика'])
 
       app?.unmount()
       host?.remove()
@@ -783,13 +777,13 @@ describe('MasterDashboardView', () => {
       mount()
       await flush()
 
-      expect(sectionTitles()).toEqual(['Саммари недели', 'Ближайшие практики'])
+      expect(sectionTitles()).toEqual(['Ближайшие практики'])
     })
   })
 
   // ===========================================================================
   describe('isNewMaster -- the zero state is about PRACTICES EVER, not upcoming', () => {
-    it('a master with only past practices is NOT new: real headings, real summary', async () => {
+    it('a master with only past practices is NOT new: real headings, real empty card', async () => {
       // practicesTotal is 3 even though nothing is upcoming (.vue:247-249).
       vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
         page([P_COMPLETED, P_JUST_ENDED, P_CANCELLED]),
@@ -799,9 +793,6 @@ describe('MasterDashboardView', () => {
 
       expect(text()).toContain('Статистика')
       expect(text()).not.toContain('Моя статистика')
-      // The summary card is tappable and teases real content...
-      expect(summaryCard().className).toContain('v-card--clickable')
-      expect(summaryCard().textContent?.trim()).toBe('Сводка появится с аналитикой')
       // ...and the empty card says «нет предстоящих», not «нет данных».
       expect(norm(nearestEmptyCard()?.textContent).trim()).toBe('Нет предстоящих практик')
     })
@@ -817,18 +808,13 @@ describe('MasterDashboardView', () => {
       expect(text()).not.toContain('Создать первую практику')
     })
 
-    it('a brand-new master gets «Моя статистика» and an inert summary card', async () => {
+    it('a brand-new master gets «Моя статистика» and the new-master empty card', async () => {
       mockBucketedPractices([])
       mount()
       await flush()
 
       expect(text()).toContain('Моя статистика')
-      expect(summaryCard().className).not.toContain('v-card--clickable')
-      expect(norm(summaryCard().textContent).trim()).toBe(EMPTY_NEW)
-
-      summaryCard().click()
-      await flush()
-      expect(push).not.toHaveBeenCalled()
+      expect(norm(nearestEmptyCard()?.textContent).trim()).toBe(EMPTY_NEW)
     })
 
     it('hides the CTA once something is upcoming', async () => {
@@ -1004,16 +990,6 @@ describe('MasterDashboardView', () => {
 
       expect(push).toHaveBeenCalledWith({ name: 'master-groups' })
       expect(toastInfo).not.toHaveBeenCalled()
-    })
-
-    it('the summary card opens the full weekly summary', async () => {
-      mount()
-      await flush()
-
-      summaryCard().click()
-      await flush()
-
-      expect(push).toHaveBeenCalledWith({ name: 'master-summary' })
     })
   })
 

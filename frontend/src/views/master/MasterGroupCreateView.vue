@@ -141,6 +141,21 @@ async function onCreate(): Promise<void> {
   flex-direction: column;
 }
 
+/* [FE-45 follow-up, owner: "не так сильно двигается"] While typing, the
+   scroll region (.velo-kbd-scroll main) correctly shrinks to the visible
+   area -- but this form pins its submit via margin-top:auto inside a
+   min-height:100% column, so the whole form used to compress and the button
+   flew up ~300px with the keyboard. Keep the column at its AT-REST height
+   (the frozen-vh px) instead: header/legend/fields stay exactly where they
+   were, the submit waits under the keyboard (reachable by scrolling main --
+   that is what the capped scroller is for), and on close nothing jumps
+   (the column never changed height). Inert at rest: the class is absent.
+   The practice/promocode forms need nothing -- their CTAs are in-flow, so
+   their content was already stationary. */
+html.is-keyboard-open .new-group {
+  min-height: var(--velo-frozen-vh, 100lvh);
+}
+
 .new-group__content {
   flex: 1;
   display: flex;

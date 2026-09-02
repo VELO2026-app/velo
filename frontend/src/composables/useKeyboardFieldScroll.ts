@@ -5,6 +5,19 @@
 // A @focus handler that scrolls a text field into view AFTER the soft keyboard
 // finishes animating in.
 //
+// [FE-45 follow-up] MINIMAL-SCROLL semantics: the scroll fires ONLY when the
+// field is not already fully visible, and then just enough to reveal it.
+// The old unconditional scrollIntoView({block:'center'}) re-centered the field
+// in the scrollport EVEN WHEN IT ALREADY FIT -- on the group-create form
+// (whose column keeps its at-rest height while typing, see that SFC) focusing
+// «Описание» used to sweep the legend/title/name field up out of view
+// («улетает наверх, хотя место есть»). scrollIntoViewIfNeeded(false) is the
+// exact "only if needed, nearest edge" primitive, present in every WebKit and
+// Chromium this app runs in (Safari 4+); scrollIntoView({block:'nearest'}) is
+// the standard-spelled fallback for anything else. A field genuinely under
+// the keyboard still gets scrolled clear -- that is this composable's whole
+// job and is unchanged.
+//
 // The previous per-view handlers (MasterSupportView SP-1, EditProfileView PE-2c)
 // scrolled on focus AND on EVERY visualViewport `resize` frame — but the keyboard
 // animates over several frames, so scrolling mid-animation raced the keyboard and
@@ -44,7 +57,20 @@ export function useKeyboardFieldScroll() {
     const el = e.target as HTMLElement | null
     if (!el) return
 
-    const bring = (): void => el.scrollIntoView({ block: 'center' })
+    // [FE-45 follow-up] See the banner: only-if-needed, minimal scroll. The
+    // old block:'center' re-centered regardless of visibility.
+    // scrollIntoViewIfNeeded is a WebKit/Chromium non-standard (absent from
+    // TS DOM lib) -- typed locally, feature-detected at runtime.
+    const bring = (): void => {
+      const needs = el as HTMLElement & {
+        scrollIntoViewIfNeeded?: (centerIfNeeded?: boolean) => void
+      }
+      if (typeof needs.scrollIntoViewIfNeeded === 'function') {
+        needs.scrollIntoViewIfNeeded(false)
+        return
+      }
+      el.scrollIntoView({ block: 'nearest' })
+    }
 
     const vv = window.visualViewport
     if (!vv) {
