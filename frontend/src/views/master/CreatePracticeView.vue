@@ -453,7 +453,12 @@ import {
 import { ensureTaxonomyCatalog, parseMethods } from '@/utils/methodTaxonomy'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import type { TaxonomyListResponse } from '@/api/taxonomy'
-import type { RecurrenceSpec, PracticeResponse, PracticeDirection, PracticeAudienceKind } from '@/api/types'
+import type {
+  RecurrenceSpec,
+  PracticeResponse,
+  PracticeDirection,
+  PracticeAudienceKind,
+} from '@/api/types'
 
 const router = useRouter()
 const toast = useToast()
@@ -1121,6 +1126,19 @@ async function submit(): Promise<void> {
      gutter (.create-practice__railed) so every form block aligns to one rail
      width — sealed and no-seal identical (NP-12/NP-3b). */
   --cp-seal-gutter: calc(var(--space-2) + 22px);
+}
+
+/* [FE-43] Same recipe as MasterGroupCreateView (FE-45 follow-up): while
+   typing, the scroll region (.velo-kbd-scroll main) shrinks to the visible
+   area -- this form's min-height:100% column used to compress with it, so
+   focusing the participants-count field reshuffled the whole layout
+   ("экран дёргается"). Keep the column at its AT-REST height instead:
+   fields stay exactly where they were, the below-the-fold part waits under
+   the keyboard (reachable by scrolling main), and the open -> close -> open
+   cycle has nothing to recompute -- no jump in either direction. Inert at
+   rest (the class is absent). */
+html.is-keyboard-open .create-practice {
+  min-height: var(--velo-frozen-vh, 100lvh);
 }
 
 /* No-seal blocks (use-template / make-recurring / participants / payment /

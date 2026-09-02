@@ -124,28 +124,20 @@ html.is-keyboard-open .app-frame {
   min-height: 0;
 }
 
-/* [FE-7 follow-up, HUD-verified] The background layer joins the SAME shrink
-   as html/body/#app/.app-frame above: the HUD round showed `kbd:YES
-   vvh:411.66 appbg.h:720` -- with the keyboard open the app ends at 411.66
-   while the frozen 720px mandala layer keeps painting below it, and the iOS
-   visual-viewport offset exposes that tail as a mandala strip right UNDER
-   the composer (button bottom 382, app bottom ~411).
-   [FE-45 follow-up 2, owner: "мандала уезжает"] The cap used to SHRINK THE
-   BOX -- but the mandala is `cover`, so a 720->412 box re-ran the cover
-   layout over a different aspect and the whole pattern visibly shifted
-   while typing. CLIP instead of shrink: the BOX keeps its frozen height
-   (the pattern lays out pixel-identically to rest), and the PAINTING stops
-   at the live viewport. Same anti-strip guarantee as the original cap
-   (nothing paints below the live bottom, where the visual-viewport offset
-   could expose it), zero pattern movement -- and on close the clip simply
-   drops, so the folding keyboard reveals an already-painted mandala (no
-   transition, no white band). Clip follows --velo-vvh frame-by-frame during
-   the open animation exactly like the old height did. */
-html.is-keyboard-open #app-bg {
-  clip-path: inset(
-    0 0 calc(var(--velo-frozen-vh, 100lvh) - var(--velo-vvh, var(--velo-frozen-vh, 100lvh))) 0
-  );
-}
+/* [FE-7 follow-up, HUD-verified -> SUPERSEDED by FE-43] This layer used to
+   shrink (FE-7) and then clip (FE-45 follow-up 2) to --velo-vvh while
+   typing. Both left a band below the live bottom that painted NOTHING: the
+   iOS focus pan (visualViewport.offsetTop) and the open/close animation
+   frames transiently expose exactly that region, and body's own white
+   showed through -- the "большая белая область снизу" on the practice-create
+   form (FE-43). [FE-43] The background must CONTINUOUSLY fill everything
+   the visual viewport can ever show: the layer keeps its frozen height in
+   EVERY state (the rule below is intentionally empty/removed) -- the
+   mandala never re-lays (cover over a constant box, FE-45's goal) and
+   nothing can ever be white (FE-43's goal). What the old HUD round called
+   a "mandala strip under the composer" is re-read here as the background
+   legitimately continuing below the app's typing-time bottom -- the same
+   below-the-fold look the screen has at rest. */
 
 /* [FE-44] CLOSE-TIME ROOT FREEZE. iOS WebKit restores its focus-time root
    scroll LATE -- after the keyboard has visually folded, it can scroll the
@@ -184,8 +176,7 @@ html.is-keyboard-closing body {
 html.is-keyboard-closing,
 html.is-keyboard-closing body,
 html.is-keyboard-closing #app,
-html.is-keyboard-closing .app-frame,
-html.is-keyboard-closing #app-bg {
+html.is-keyboard-closing .app-frame {
   transition: height 250ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
