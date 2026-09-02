@@ -129,10 +129,12 @@ function slotButtonCount(): number {
   return host?.querySelectorAll('.composer__slot .composer__btn').length ?? 0
 }
 
-// [voice stub] The mic disc -- a VISUAL placeholder (no functionality, tap
-// inert). Lives OUTSIDE the field, a sibling on the same line. Present
-// while COMPOSER_VOICE_STUB is on; v-if releases its space entirely when
-// off (the field then stretches back to full width).
+// [voice stub / FE-42] The mic disc -- a VISUAL placeholder (no
+// functionality, tap inert). Lives OUTSIDE the field, a sibling on the same
+// line. DiaryComposer no longer renders it at all ([FE-42]: voice-stub not
+// passed -> v-if unmounts, zero reserved space); the flag-on behaviour is
+// pinned against the shared Composer directly (see the FE-42 chat-path
+// regression test below).
 function micBtn(): HTMLButtonElement | null {
   return (host?.querySelector('.composer__btn--side') as HTMLButtonElement) ?? null
 }
@@ -160,7 +162,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('DiaryComposer -- idle state (1: no chevron, one slot; T24-3: no mic placeholder; voice stub flag-on)', () => {
+describe('DiaryComposer -- idle state (1: no chevron, one slot; T24-3: no mic placeholder; [FE-42] mic hidden)', () => {
   it('renders the send button even while empty (owner pass: always-present), no kb-collapse button', () => {
     mount()
     // [owner pass] Supersedes B48's empty-absence: the disc is permanent,
@@ -170,27 +172,12 @@ describe('DiaryComposer -- idle state (1: no chevron, one slot; T24-3: no mic pl
     expect(host!.querySelector('.composer__slot')).not.toBeNull()
   })
 
-  it('[voice stub] COMPOSER_VOICE_STUB on: mic disc renders OUTSIDE the field, same line, styled like send', () => {
+  it('[FE-42] mic hidden in the diary: no mic disc in ANY state -- empty, with text, whitespace-only', async () => {
+    // DiaryComposer no longer passes voice-stub; the shared Composer's mic
+    // is a v-if on that prop, so off = fully unmounted, ZERO reserved space
+    // (the field spans the whole line in every state).
     mount()
-    const mic = micBtn()
-    expect(mic).not.toBeNull()
-    expect(mic!.getAttribute('aria-label')).toBe('Голосовое сообщение')
-    // OUTSIDE the field -- a sibling of .composer__field in the root row,
-    // not a child of it: it is what narrows the input from the right.
-    expect(mic!.closest('.composer__field')).toBeNull()
-    expect(mic!.parentElement?.classList.contains('composer')).toBe(true)
-    // Same disc as send (shared .composer__btn base, solid fill) -- only
-    // the icon differs. The send control's own home is untouched: still
-    // exactly one disc inside the slot.
-    expect(mic!.classList.contains('composer__btn')).toBe(true)
-    expect(slotButtonCount()).toBe(1)
-    // Inert by design: no handler is attached, a tap is a plain no-op -- the
-    // recorder arrives with the real voice-messages feature.
-  })
-
-  it('[voice stub] the first real character UNMOUNTS the mic -- the field is exactly as if it never existed', async () => {
-    mount()
-    expect(micBtn()).not.toBeNull()
+    expect(micBtn()).toBeNull()
 
     typeText('hello')
     await nextTick()
@@ -198,12 +185,39 @@ describe('DiaryComposer -- idle state (1: no chevron, one slot; T24-3: no mic pl
 
     typeText('')
     await nextTick()
-    expect(micBtn()).not.toBeNull()
+    expect(micBtn()).toBeNull()
+  })
 
-    // Whitespace-only keeps the mic -- the same trim() guard canSend uses.
-    typeText('   ')
+  it('[FE-42] chat path regression (voiceStub on, against the shared Composer directly): mic renders outside the field and unmounts on the first character', async () => {
+    // ChatThreadScreen still passes COMPOSER_VOICE_STUB -- the mic stub's
+    // behaviour must survive the diary hiding it. Exercised against
+    // Composer.vue directly (same pattern as the growCap test at the bottom
+    // of this file); DiaryComposer itself must NOT render it.
+    const ComposerMod = await import('./Composer.vue')
+    const host2 = document.createElement('div')
+    document.body.appendChild(host2)
+    const app2 = createApp(ComposerMod.default, {
+      placeholder: 'x',
+      voiceStub: true,
+      send: async () => ({ ok: true }),
+    })
+    app2.mount(host2)
+
+    const mic = host2.querySelector('.composer__btn--side') as HTMLButtonElement | null
+    expect(mic).not.toBeNull()
+    expect(mic!.getAttribute('aria-label')).toBe('Голосовое сообщение')
+    // OUTSIDE the field -- a sibling of .composer__field in the root row,
+    // not a child of it: it is what narrows the input from the right.
+    expect(mic!.closest('.composer__field')).toBeNull()
+
+    const ta = host2.querySelector('textarea') as HTMLTextAreaElement
+    ta.value = 'hello'
+    ta.dispatchEvent(new Event('input'))
     await nextTick()
-    expect(micBtn()).not.toBeNull()
+    expect(host2.querySelector('.composer__btn--side')).toBeNull()
+
+    app2.unmount()
+    host2.remove()
   })
 
   it('placeholder follows entryType', () => {
