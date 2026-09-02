@@ -10,7 +10,7 @@
 # =============================================================================
 
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, StringConstraints
@@ -171,6 +171,80 @@ class PaginatedCuratorGroupMembersResponse(BaseModel):
     """GET /masters/me/curator-groups/{id}/members."""
 
     items: list[CuratorGroupMemberItem]
+    total: int
+    limit: int
+    offset: int
+
+
+# ===========================================================================
+# The school journal (GT-16)
+# ===========================================================================
+
+
+class CuratorGroupEventActor(BaseModel):
+    """Who did the thing, as the journal recorded them at the time.
+
+    NOT NULLABLE, and that is a consequence of how the row is built rather
+    than an optimism about the data. All thirteen event kinds are
+    somebody's action, actor_id is NOT NULL, and the name is frozen INTO
+    the row when the event is written -- so there is no state in which the
+    journal knows an event happened but cannot say who did it. A `| None`
+    here would be a branch the frontend has to handle and the backend
+    cannot produce.
+
+    display_name IS A SNAPSHOT, NOT A LOOKUP. It is whatever the person
+    was called when they acted, and it does not follow later renames --
+    deliberately: "Мария удалила Петра" is a record of the past and must
+    keep saying Мария. See CuratorGroupEvent's docstring for the full
+    argument, and do not replace this with a join to users.
+
+    user_id is still the live handle: whoever reads the feed can go look
+    the person up if they are still around.
+    """
+
+    user_id: UUID
+    display_name: str
+
+
+class CuratorGroupEventItem(BaseModel):
+    """One line of a school's journal.
+
+    `event` is a plain str, not a Literal over the thirteen kinds. The set
+    is expected to grow -- notifications next, practice publication after
+    that -- and a Literal here would turn every new backend event into a
+    frontend type error before anyone had decided how to render it. The
+    vocabulary lives in CuratorGroupEventKind; this field carries whatever
+    the backend wrote.
+
+    `data` is a free-form object whose keys depend on `event`. The contract
+    per kind is tabulated in CuratorGroupEvent's docstring and is written
+    down there rather than modelled here for the reason JSONB is JSONB:
+    thirteen small nested schemas would have to be edited in lockstep with
+    a table that is going to gain rows.
+
+    NO seq. The ordering column is not exposed and must not be: it is
+    globally monotonic across every school, so handing it to a curator
+    would hand them a counter of platform-wide activity -- read the feed
+    twice and the gap tells you how busy everyone else was. `id` is the
+    UUID, which identifies without measuring.
+
+    created_at answers WHEN this happened. It does NOT establish the order
+    within one request: two events from a single PATCH share it to the
+    byte. The response is already in order -- newest first -- and that
+    order comes from a column the client never sees.
+    """
+
+    id: UUID
+    event: str
+    actor: CuratorGroupEventActor
+    data: dict[str, Any]
+    created_at: datetime
+
+
+class PaginatedCuratorGroupEventsResponse(BaseModel):
+    """GET /masters/me/curator-groups/{id}/journal."""
+
+    items: list[CuratorGroupEventItem]
     total: int
     limit: int
     offset: int

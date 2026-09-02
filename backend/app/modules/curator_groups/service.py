@@ -14,6 +14,7 @@
 
 import secrets
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import ColumnElement, Select, and_, case, delete, func, select
@@ -28,7 +29,13 @@ from app.core.exceptions import (
     VeloError,
 )
 from app.modules.curator_groups.models import (
+    EVENT_DATA_ACTOR_NAME,
+    EVENT_DATA_KIND,
+    EVENT_DATA_TARGET_NAME,
+    EVENT_DATA_TARGET_USER_ID,
     CuratorGroup,
+    CuratorGroupEvent,
+    CuratorGroupEventKind,
     CuratorGroupInvite,
     CuratorGroupMember,
     CuratorGroupTransfer,
@@ -248,6 +255,206 @@ def _group_payload(
 
 
 # ===========================================================================
+# The school journal (GT-16)
+#
+# THIRTEEN kinds of event, written from twelve functions below. Everything
+# that decides WHAT a record looks like lives here and in the model's
+# docstring; the call sites decide only WHEN.
+# ===========================================================================
+
+
+def _record_group_event(
+    group_id: UUID,
+    actor: User,
+    event: CuratorGroupEventKind,
+    session: AsyncSession,
+    *,
+    data: dict[str, Any] | None = None,
+) -> None:
+    """Append one event to a school's journal, in the caller's transaction.
+
+    SYNCHRONOUS AND IN THE SAME TRANSACTION as the action it records, not
+    an outbox row and not a background task. An event written separately
+    would survive a rollback that the action itself did not, and a journal
+    that reports things which did not happen is worse than no journal --
+    the reader has no way to tell which entries to distrust. The cost is
+    one INSERT on operations that happen a handful of times in a school's
+    life.
+
+    NOT AWAITED, and that is not an oversight: this is session.add, which
+    is synchronous. The INSERT goes out with the caller's flush, which is
+    also what puts it inside the caller's transaction and inside any
+    savepoint the caller opened.
+
+    ONE function rather than twelve copies of session.add. Twelve copies
+    would be twelve places to forget actor_name -- and a missing
+    actor_name does not fail, it just leaves the journal saying that
+    somebody did something.
+
+    actor_name is stamped HERE, for every event, from the User the caller
+    already holds: every one of the twelve call sites sits behind
+    get_current_user or get_current_master, so the actor is in hand and no
+    call site needs to look one up. See the model docstring for why the
+    name is frozen into data instead of joined at read time.
+
+    P-01: no commit. The caller's endpoint owns the transaction.
+
+    WHY THE TWELVE WRITERS GAINED A KEYWORD-ONLY `actor: User` INSTEAD OF
+    HAVING THEIR EXISTING UUID PARAMETER RETYPED. Retyping was the tidier
+    shape -- one value instead of an id beside the object that contains
+    it -- and it was measured and rejected: it means 53 substitutions
+    inside eleven functions, two of which (accept_curator_group_transfer,
+    join_curator_group_by_token) carry lost-race branches, in a delivery
+    whose suite cannot be run where it is written. The redundancy that
+    remains is bounded: `actor` and the acting id come off the same object
+    one line apart at every call site, and the acting id is what each
+    function's own ownership check already uses -- a mismatch would
+    surface as a 404 long before it surfaced in the journal.
+    """
+    payload: dict[str, Any] = {
+        EVENT_DATA_ACTOR_NAME: display_name(
+            actor.first_name, actor.last_name,
+        ),
+    }
+    if data:
+        payload.update(data)
+
+    session.add(
+        CuratorGroupEvent(
+            group_id=group_id,
+            actor_id=actor.id,
+            event=event.value,
+            data=payload,
+        )
+    )
+
+
+async def _frozen_name(user_id: UUID, session: AsyncSession) -> str:
+    """The display name of the OTHER party, read once to be frozen.
+
+    Four events name two different people -- who removed whom, who offered
+    the school to whom, who accepted it from whom, whose offer was
+    declined. The actor's name is free (the caller holds the User), but
+    the target's is not: nothing in curator_group_member or
+    curator_group_transfer stores a name, so it has to be fetched.
+
+    ONE SELECT BY PRIMARY KEY, and it is bought on purpose. The
+    alternative is storing target_user_id alone, which leaves the journal
+    reading "Мария удалила 9f3c..." -- exactly as useless as the reverse
+    case that made the actor's name get frozen in the first place. These
+    are operations that happen a few times in a school's life.
+
+    display_name(first, last), NOT the master-profile lookup
+    _curator_display_name uses. The tree holds two naming rules and this
+    is a deliberate pick between them, the same one CuratorGroupTransferRef
+    made and for the same reason: a journal entry is about a PERSON, not a
+    public master card, and the profile-based rule can return None -- which
+    would put "Мария удалила —" in the feed. display_name always yields
+    something, falling back to the neutral «Участник».
+
+    A user who no longer exists yields that same fallback rather than an
+    error: the journal would rather say «Участник» than refuse to record
+    what happened.
+    """
+    row = (
+        await session.execute(
+            select(User.first_name, User.last_name).where(
+                User.id == user_id
+            )
+        )
+    ).first()
+    if row is None:
+        return display_name(None, None)
+    return display_name(row.first_name, row.last_name)
+
+
+def _target_data(user_id: UUID, name: str) -> dict[str, Any]:
+    """The frozen other-party pair, spelled once for its four writers."""
+    return {
+        EVENT_DATA_TARGET_USER_ID: str(user_id),
+        EVENT_DATA_TARGET_NAME: name,
+    }
+
+
+# ===========================================================================
+# Reading the journal (GT-16)
+# ===========================================================================
+
+
+async def list_curator_group_events(
+    curator_user_id: UUID,
+    group_id: UUID,
+    session: AsyncSession,
+    *,
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[dict], int]:
+    """One school's journal, newest first, for its curator only.
+
+    THE CURATOR AND NOBODY ELSE. Not the master members, not the students:
+    the feed says who was removed and who walked out, which is management
+    information about people rather than a chronicle for the community to
+    read about itself. Enforced by _get_group_or_404 on curator_user_id, so
+    a member asking gets 404 and not 403 -- the same shape every curator
+    endpoint uses (P-08), and 403 would confirm the school exists.
+
+    ORDER BY seq DESC AND NOTHING ELSE. No tie-break, because seq is
+    unique and there is nothing to break: a tie-break exists to rescue a
+    sort key that is not an order, and the lesson from GT-9's shifting
+    pages is better spent on not sorting by one. created_at is not in the
+    ORDER BY at all -- two events from one PATCH share it to the byte (see
+    the model docstring).
+
+    total is a COUNT on every page request. Free today; see the delivery
+    report's observations for why it will not stay free forever.
+    """
+    group = await _get_group_or_404(curator_user_id, group_id, session)
+
+    base = select(CuratorGroupEvent).where(
+        CuratorGroupEvent.group_id == group.id
+    )
+
+    total = (
+        await session.execute(
+            select(func.count()).select_from(base.subquery())
+        )
+    ).scalar_one()
+
+    rows = (
+        await session.execute(
+            base.order_by(CuratorGroupEvent.seq.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+    ).scalars().all()
+
+    # NO JOIN TO users, deliberately -- see the model docstring. The
+    # actor's name comes out of the row's own data, frozen when the thing
+    # happened, so a person who has since renamed themselves or been
+    # deleted still appears as they were. actor is never None: actor_id is
+    # NOT NULL and every event kind is somebody's action.
+    return (
+        [
+            {
+                "id": row.id,
+                "event": row.event,
+                "actor": {
+                    "user_id": row.actor_id,
+                    "display_name": (row.data or {}).get(
+                        EVENT_DATA_ACTOR_NAME
+                    )
+                    or display_name(None, None),
+                },
+                "data": row.data or {},
+                "created_at": row.created_at,
+            }
+            for row in rows
+        ],
+        total,
+    )
+
+
+# ===========================================================================
 # Group CRUD
 # ===========================================================================
 
@@ -287,6 +494,8 @@ async def create_curator_group(
     name: str,
     session: AsyncSession,
     description: str | None = None,
+    *,
+    actor: User,
 ) -> CuratorGroup:
     """Create a group and thereby become its curator (I-1).
 
@@ -356,6 +565,15 @@ async def create_curator_group(
             f"A curator group named '{name}' already exists",
             code=_NAME_TAKEN_CODE,
         ) from None
+
+    # GT-16. AFTER the savepoint closes, not inside it. Inside, a name
+    # collision would roll the event back with the group -- the correct
+    # outcome, and what the twin asserts -- but writing it here means the
+    # entry cannot outlive its subject even if the savepoint's shape
+    # changes later.
+    _record_group_event(
+        group.id, actor, CuratorGroupEventKind.GROUP_CREATED, session,
+    )
     return group
 
 
@@ -376,6 +594,7 @@ async def update_curator_group(
     *,
     description: str | None = None,
     description_provided: bool = False,
+    actor: User,
 ) -> CuratorGroup:
     """Rename and/or edit the description of one of my groups.
 
@@ -386,8 +605,23 @@ async def update_curator_group(
     Renaming to the group's CURRENT name is a no-op, not a self-conflict:
     the duplicate lookup runs only when the name actually changes, so the
     group's own row can never be mistaken for a competitor.
+
+    GT-16: TWO SEPARATE EVENTS, not one "group updated". One PATCH can
+    change both fields, and they are not the same news: a rename is
+    something the school's members may need to be told about, a
+    description edit is not. One combined event would force the
+    notification work to reopen `data` and re-derive which of the two
+    happened -- a decision this function already has in hand and can
+    simply record. Each is written only if that field ACTUALLY changed,
+    so renaming to the current name (the no-op above) writes nothing.
+
+    Both land in one transaction and therefore share created_at to the
+    byte; their relative order in the feed comes from seq, which is why
+    seq exists (see the model docstring).
     """
     group = await _get_group_or_404(curator_user_id, group_id, session)
+    old_name = group.name
+    old_description = group.description
 
     if group.name != name:
         dup = (
@@ -416,6 +650,22 @@ async def update_curator_group(
             f"A curator group named '{name}' already exists",
             code=_NAME_TAKEN_CODE,
         ) from None
+
+    # GT-16. Recorded from the values captured BEFORE the assignments
+    # above -- after them the old name exists nowhere, and a journal entry
+    # whose old_name equals its new_name says nothing happened.
+    if old_name != group.name:
+        _record_group_event(
+            group.id, actor, CuratorGroupEventKind.GROUP_RENAMED, session,
+            data={"old_name": old_name, "new_name": group.name},
+        )
+    if old_description != group.description:
+        _record_group_event(
+            group.id,
+            actor,
+            CuratorGroupEventKind.GROUP_DESCRIPTION_CHANGED,
+            session,
+        )
     return group
 
 
@@ -535,8 +785,10 @@ async def remove_curator_group_member(
     group_id: UUID,
     user_id: UUID,
     session: AsyncSession,
+    *,
+    actor: User,
 ) -> None:
-    """Remove a member. Idempotent -- no rowcount check, no 404 on a miss.
+    """Remove a member. Idempotent -- no 404 on a miss.
 
     Same shape as remove_group_member() in masters/groups_service.py: the
     caller asked for "this person is not in this group", and that is the
@@ -546,19 +798,51 @@ async def remove_curator_group_member(
     success -- the curator is not a member row (I-2), so there is no special
     branch for it. A branch would exist only to produce a different status
     code for a request that changes nothing either way.
+
+    GT-16: THE DELETE NOW RETURNS `kind`, WHICH IS WHY IT IS NOT A BARE
+    DELETE ANY MORE. The idempotence above is unchanged -- a miss is still
+    success -- but the journal needs two things this function used to
+    throw away: whether a row died at all (or a second removal of the same
+    person would write a second "member removed" for somebody who was
+    already gone) and what kind of member it was (which lives only in the
+    row being deleted). RETURNING answers both inside the same statement,
+    so nothing extra is queried.
     """
     group = await _get_group_or_404(curator_user_id, group_id, session)
-    await session.execute(
-        delete(CuratorGroupMember).where(
-            CuratorGroupMember.group_id == group.id,
-            CuratorGroupMember.user_id == user_id,
+    removed = (
+        await session.execute(
+            delete(CuratorGroupMember)
+            .where(
+                CuratorGroupMember.group_id == group.id,
+                CuratorGroupMember.user_id == user_id,
+            )
+            .returning(CuratorGroupMember.kind)
         )
-    )
+    ).first()
+
     # GT-4: one of the TWO points where a pending transfer dies with its
     # addressee (TZ 3.4). Removing the person you offered the group to
     # retracts the offer in the same transaction -- otherwise it would sit
     # there addressed to somebody no longer in the group.
-    await _drop_pending_transfer_for(group.id, user_id, session)
+    transfer_cancelled = await _drop_pending_transfer_for(
+        group.id, user_id, session,
+    )
+
+    if removed is None:
+        # Nothing was there. No event: the journal records what happened,
+        # and nothing happened.
+        return
+
+    data = {
+        EVENT_DATA_KIND: removed.kind,
+        **_target_data(user_id, await _frozen_name(user_id, session)),
+    }
+    if transfer_cancelled:
+        data["transfer_cancelled"] = True
+    _record_group_event(
+        group.id, actor, CuratorGroupEventKind.MEMBER_REMOVED, session,
+        data=data,
+    )
 
 
 async def get_group_counts(
@@ -944,7 +1228,11 @@ async def list_group_practice_master_ids(
 
 
 async def leave_curator_group(
-    group_id: UUID, user_id: UUID, session: AsyncSession,
+    group_id: UUID,
+    user_id: UUID,
+    session: AsyncSession,
+    *,
+    actor: User,
 ) -> None:
     """Leave a group. Idempotent, and NOT gated on the group being active.
 
@@ -960,6 +1248,10 @@ async def leave_curator_group(
 
     The curator cannot leave because leaving would orphan the group: the
     ways out are transferring it (GT-4) or deleting it (GT-1).
+
+    GT-16: the actor and the member are THE SAME PERSON here, so this
+    event carries no target pair -- "X left" is a whole sentence. Written
+    only when a row actually died, for the same reason as member_removed.
     """
     group = (
         await session.execute(
@@ -978,18 +1270,36 @@ async def leave_curator_group(
             code="curator_cannot_leave",
         )
 
-    await session.execute(
-        delete(CuratorGroupMember).where(
-            CuratorGroupMember.group_id == group.id,
-            CuratorGroupMember.user_id == user_id,
+    left = (
+        await session.execute(
+            delete(CuratorGroupMember)
+            .where(
+                CuratorGroupMember.group_id == group.id,
+                CuratorGroupMember.user_id == user_id,
+            )
+            .returning(CuratorGroupMember.kind)
         )
-    )
+    ).first()
+
     # GT-4: the OTHER of the two points (TZ 3.4). Note this runs even
     # though the function above deliberately never checked whether the
     # group is active -- walking out of an inactive group still retracts
     # the offer made to you. Auto-cancel follows the membership, not the
     # group's visibility.
-    await _drop_pending_transfer_for(group.id, user_id, session)
+    transfer_cancelled = await _drop_pending_transfer_for(
+        group.id, user_id, session,
+    )
+
+    if left is None:
+        return
+
+    data: dict[str, Any] = {EVENT_DATA_KIND: left.kind}
+    if transfer_cancelled:
+        data["transfer_cancelled"] = True
+    _record_group_event(
+        group.id, actor, CuratorGroupEventKind.MEMBER_LEFT, session,
+        data=data,
+    )
 
 
 # ===========================================================================
@@ -1067,6 +1377,8 @@ async def get_or_create_curator_group_invite(
     group_id: UUID,
     kind: str,
     session: AsyncSession,
+    *,
+    actor: User,
 ) -> dict:
     """Create-or-return the group's link for ONE kind.
 
@@ -1109,6 +1421,21 @@ async def get_or_create_curator_group_invite(
             async with session.begin_nested():
                 session.add(invite)
                 await session.flush()
+            # GT-16: ONLY when a link was actually minted. This endpoint is
+            # create-or-return, so the curator's second press of «Пригласить»
+            # returns the same token and must not add a line to the feed.
+            #
+            # THE TOKEN IS NOT RECORDED, HERE OR ANYWHERE. It is a raw
+            # secret and the journal is a readable, paginated list; only the
+            # link's KIND goes in. Do not add the token for debugging -- see
+            # the model docstring.
+            _record_group_event(
+                group.id,
+                actor,
+                CuratorGroupEventKind.INVITE_CREATED,
+                session,
+                data={EVENT_DATA_KIND: kind},
+            )
         except IntegrityError:
             # Lost a concurrent create race for this (group, kind). The
             # winner's row is the answer -- returning a second token would
@@ -1139,6 +1466,8 @@ async def revoke_curator_group_invite(
     group_id: UUID,
     kind: str,
     session: AsyncSession,
+    *,
+    actor: User,
 ) -> None:
     """Drop the link of ONE kind. Idempotent; the other kind is untouched.
 
@@ -1146,14 +1475,31 @@ async def revoke_curator_group_invite(
     resolving everywhere -- preview and join alike, since both go through
     the same row. That is the whole rotation story: there is no revocation
     list, because a revoked link has no row to find.
+
+    GT-16: recorded, and this is one of the two events the journal exists
+    for most plainly -- "why did the link I handed out stop working" has
+    no other answer once the row is gone. Only when a row actually died:
+    revoking a link that was never minted changes nothing.
     """
     group = await _get_group_or_404(curator_user_id, group_id, session)
-    await session.execute(
-        delete(CuratorGroupInvite).where(
-            CuratorGroupInvite.group_id == group.id,
-            CuratorGroupInvite.kind == kind,
+    revoked = (
+        await session.execute(
+            delete(CuratorGroupInvite)
+            .where(
+                CuratorGroupInvite.group_id == group.id,
+                CuratorGroupInvite.kind == kind,
+            )
+            .returning(CuratorGroupInvite.kind)
         )
-    )
+    ).first()
+    if revoked is not None:
+        _record_group_event(
+            group.id,
+            actor,
+            CuratorGroupEventKind.INVITE_REVOKED,
+            session,
+            data={EVENT_DATA_KIND: revoked.kind},
+        )
 
 
 async def _resolve_invite_or_404(
@@ -1250,7 +1596,11 @@ def _is_upgrade(invite_kind: str, member_kind: str) -> bool:
 
 
 async def join_curator_group_by_token(
-    token: str, user_id: UUID, session: AsyncSession,
+    token: str,
+    user_id: UUID,
+    session: AsyncSession,
+    *,
+    actor: User,
 ) -> dict:
     """Join a group by invite token, or say why not.
 
@@ -1279,6 +1629,24 @@ async def join_curator_group_by_token(
     computed from what the request observed before writing, which is what
     its docstring in the schema says it means, and no caller does anything
     destructive with it.
+
+    GT-16: TWO of the thirteen event kinds are written here, and WHICH ONE
+    follows the same branch that decides `relation`, never the link's kind:
+
+      - a first join writes member_joined ONCE, carrying the kind the row
+        was created with. A master link used by a newcomer is one
+        member_joined with kind='master', NOT a member_joined followed by
+        a member_promoted -- nobody was promoted, they arrived as a
+        master.
+      - a master link used by an existing student writes member_promoted
+        and nothing else. They did not join; they were already here.
+      - a master link used by an existing MASTER writes nothing at all.
+        Idempotent above means idempotent in the journal too, or pressing
+        the same link twice would fill the feed.
+      - the lost-race branch writes member_promoted only if the upgrade
+        actually applied. The row the winner created is the winner's news
+        and the winner recorded it; this request writes only what IT
+        changed, which is the promotion or nothing.
     """
     invite, group = await _resolve_invite_or_404(token, session)
 
@@ -1312,16 +1680,33 @@ async def join_curator_group_by_token(
                 session.add(row)
                 await session.flush()
             relation = invite.kind
+            _record_group_event(
+                group.id,
+                actor,
+                CuratorGroupEventKind.MEMBER_JOINED,
+                session,
+                data={EVENT_DATA_KIND: invite.kind},
+            )
         except IntegrityError:
             # Lost a concurrent join. The winner's row is the answer; if it
             # is a student row and this was a master link, the upgrade still
             # applies -- otherwise the loser of the race would silently be
             # denied the promotion the link grants.
             winner = await _membership_row(group.id, user_id, session)
-            if winner is not None and _is_upgrade(invite.kind, winner.kind):
+            promoted = winner is not None and _is_upgrade(
+                invite.kind, winner.kind,
+            )
+            if promoted:
                 winner.kind = CuratorMemberKind.MASTER.value
                 await session.flush()
             relation = winner.kind if winner is not None else invite.kind
+            if promoted:
+                _record_group_event(
+                    group.id,
+                    actor,
+                    CuratorGroupEventKind.MEMBER_PROMOTED,
+                    session,
+                )
         already_member = False
     else:
         already_member = True
@@ -1332,6 +1717,12 @@ async def join_curator_group_by_token(
             # kind describes their role, not their arrival.
             member.kind = CuratorMemberKind.MASTER.value
             await session.flush()
+            _record_group_event(
+                group.id,
+                actor,
+                CuratorGroupEventKind.MEMBER_PROMOTED,
+                session,
+            )
         relation = member.kind
 
     return {
@@ -1431,7 +1822,7 @@ async def get_group_transfer_ref(
 
 async def _drop_pending_transfer_for(
     group_id: UUID, user_id: UUID, session: AsyncSession,
-) -> None:
+) -> bool:
     """Drop the offer if it was addressed to this person leaving the group.
 
     TZ 3.4 names EXACTLY TWO points where an offer disappears because its
@@ -1441,13 +1832,25 @@ async def _drop_pending_transfer_for(
 
     Scoped to (group, addressee): somebody else walking out of the same
     group must not cancel a pending offer they have nothing to do with.
+
+    RETURNS WHETHER AN OFFER ACTUALLY DIED, and THE RESULT HAS A READER --
+    the journal (GT-16). The departure event carries transfer_cancelled
+    only when there was something to cancel; without this return value the
+    call site would have to either guess or run its own SELECT. Do not
+    narrow this back to None on the grounds that nothing uses it.
+
+    The retraction is deliberately NOT an event of its own: it has no
+    actor. Nobody cancelled the offer -- it stopped having an addressee,
+    which is a consequence of the departure and belongs inside that
+    departure's record.
     """
-    await session.execute(
+    result = await session.execute(
         delete(CuratorGroupTransfer).where(
             CuratorGroupTransfer.group_id == group_id,
             CuratorGroupTransfer.to_user_id == user_id,
         )
     )
+    return bool(result.rowcount)
 
 
 async def offer_curator_group_transfer(
@@ -1455,6 +1858,8 @@ async def offer_curator_group_transfer(
     group_id: UUID,
     to_user_id: UUID,
     session: AsyncSession,
+    *,
+    actor: User,
 ) -> dict:
     """Offer the group to a visible master member of it.
 
@@ -1503,19 +1908,58 @@ async def offer_curator_group_transfer(
     # Re-read rather than hand-building the dict: the row was just flushed,
     # so this reports what the table holds, not what we meant to put there.
     refs = await _transfer_refs_for_groups([group.id], session)
+
+    # GT-16: the addressee's frozen name comes FREE here -- the re-read
+    # above already computed it for the reply, by the same
+    # display_name(first, last) rule the journal uses. This is the one
+    # target of four that costs no extra query.
+    _record_group_event(
+        group.id,
+        actor,
+        CuratorGroupEventKind.TRANSFER_OFFERED,
+        session,
+        data=_target_data(to_user_id, refs[group.id]["to_display_name"]),
+    )
     return refs[group.id]
 
 
 async def cancel_curator_group_transfer(
-    curator_user_id: UUID, group_id: UUID, session: AsyncSession,
+    curator_user_id: UUID,
+    group_id: UUID,
+    session: AsyncSession,
+    *,
+    actor: User,
 ) -> None:
-    """Withdraw the pending offer. Idempotent: no offer -> still 204."""
+    """Withdraw the pending offer. Idempotent: no offer -> still 204.
+
+    GT-16: RETURNING carries the addressee out of the row being deleted --
+    after the DELETE nothing remembers who the offer was for, and the
+    journal entry has to say. It also answers whether there was an offer
+    at all, so cancelling nothing writes nothing.
+
+    Distinct from the auto-retraction inside leave/remove, which is not an
+    event: that one has no actor. This one does -- the curator changed
+    their mind.
+    """
     group = await _get_group_or_404(curator_user_id, group_id, session)
-    await session.execute(
-        delete(CuratorGroupTransfer).where(
-            CuratorGroupTransfer.group_id == group.id
+    cancelled = (
+        await session.execute(
+            delete(CuratorGroupTransfer)
+            .where(CuratorGroupTransfer.group_id == group.id)
+            .returning(CuratorGroupTransfer.to_user_id)
         )
-    )
+    ).first()
+    if cancelled is not None:
+        _record_group_event(
+            group.id,
+            actor,
+            CuratorGroupEventKind.TRANSFER_CANCELLED,
+            session,
+            data=_target_data(
+                cancelled.to_user_id,
+                await _frozen_name(cancelled.to_user_id, session),
+            ),
+        )
 
 
 async def _transfer_for_viewer(
@@ -1537,7 +1981,11 @@ async def _transfer_for_viewer(
 
 
 async def accept_curator_group_transfer(
-    group_id: UUID, user_id: UUID, session: AsyncSession,
+    group_id: UUID,
+    user_id: UUID,
+    session: AsyncSession,
+    *,
+    actor: User,
 ) -> dict:
     """Become the curator of this group. One transaction, seven steps.
 
@@ -1572,6 +2020,16 @@ async def accept_curator_group_transfer(
     404 covers "no offer", "not addressed to you" and "group inactive"
     alike: accept changes who owns a school, so it must not confirm that an
     offer exists to somebody probing group ids.
+
+    GT-16: the event's target is THE PREVIOUS CURATOR, and it is read from
+    previous_curator_id -- the local captured at step 2, BEFORE the
+    assignment. This is the one place in the module where that matters
+    enough to say out loud: after `group.curator_user_id = user_id` the
+    previous owner exists nowhere in this function's reach, so taking "the
+    group's curator" at record time would write the ACTOR as the target
+    and the feed would read "Пётр принял школу от Петра". The capture is
+    not a convenience; moving the record above it, or re-reading the group
+    instead, silently produces that sentence.
     """
     group, _relation = await _relation_or_404(group_id, user_id, session)
 
@@ -1624,13 +2082,28 @@ async def accept_curator_group_transfer(
         )
     )
 
+    _record_group_event(
+        group.id,
+        actor,
+        CuratorGroupEventKind.TRANSFER_ACCEPTED,
+        session,
+        data=_target_data(
+            previous_curator_id,
+            await _frozen_name(previous_curator_id, session),
+        ),
+    )
+
     await session.flush()
 
     return await get_curator_group_page(group.id, user_id, session)
 
 
 async def decline_curator_group_transfer(
-    group_id: UUID, user_id: UUID, session: AsyncSession,
+    group_id: UUID,
+    user_id: UUID,
+    session: AsyncSession,
+    *,
+    actor: User,
 ) -> None:
     """Refuse the offer. Idempotent, and silent about offers not yours.
 
@@ -1645,12 +2118,52 @@ async def decline_curator_group_transfer(
     Not gated on the group being active, for the same reason leave is not:
     an answer the addressee is entitled to give must not depend on somebody
     else's verification status.
+
+    GT-16: THIS FUNCTION DELIBERATELY NEVER LOADED THE GROUP, and the
+    journal needs it to -- but only after the DELETE reports that an offer
+    really died. curator_group_transfer has three columns (group_id,
+    to_user_id, requested_at) and no from_user_id: whoever offered is
+    IMPLICITLY the group's curator, so the target of this event cannot be
+    read out of the row being deleted. Hence one SELECT, and it runs only
+    on the path that writes -- declining an offer that was never made
+    still costs nothing and still answers 204.
+
+    The 204-vs-404 asymmetry above is untouched: the SELECT decides what
+    to record, never what to answer.
     """
-    await session.execute(
-        delete(CuratorGroupTransfer).where(
-            CuratorGroupTransfer.group_id == group_id,
-            CuratorGroupTransfer.to_user_id == user_id,
+    declined = (
+        await session.execute(
+            delete(CuratorGroupTransfer)
+            .where(
+                CuratorGroupTransfer.group_id == group_id,
+                CuratorGroupTransfer.to_user_id == user_id,
+            )
+            .returning(CuratorGroupTransfer.group_id)
         )
+    ).first()
+    if declined is None:
+        return
+
+    offered_by = (
+        await session.execute(
+            select(CuratorGroup.curator_user_id).where(
+                CuratorGroup.id == declined.group_id
+            )
+        )
+    ).scalar_one_or_none()
+    if offered_by is None:
+        # The group vanished under us -- the FK would refuse the event
+        # anyway, and there is no school left to hold a journal.
+        return
+
+    _record_group_event(
+        declined.group_id,
+        actor,
+        CuratorGroupEventKind.TRANSFER_DECLINED,
+        session,
+        data=_target_data(
+            offered_by, await _frozen_name(offered_by, session),
+        ),
     )
 
 

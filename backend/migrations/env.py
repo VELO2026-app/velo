@@ -49,6 +49,7 @@ from app.core.events.models import OutboxEvent  # noqa: F401  # Phase 6 / T0
 from app.modules.chats.models import ChatThread  # noqa: F401  # Phase 6 / T2
 from app.modules.curator_groups.models import (  # noqa: F401  # Curator GROUPS P1
     CuratorGroup,
+    CuratorGroupEvent,
     CuratorGroupInvite,
     CuratorGroupMember,
     CuratorGroupTransfer,

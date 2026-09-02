@@ -44,6 +44,8 @@ from app.modules.curator_groups.schemas import (
     CreateCuratorGroupInviteRequest,
     CreateCuratorGroupRequest,
     CuratorGroupDeletePreviewResponse,
+    CuratorGroupEventActor,
+    CuratorGroupEventItem,
     CuratorGroupInvitePreviewResponse,
     CuratorGroupInviteResponse,
     CuratorGroupLeavePreviewResponse,
@@ -60,6 +62,7 @@ from app.modules.curator_groups.schemas import (
     JoinCuratorGroupRequest,
     JoinCuratorGroupResponse,
     OfferCuratorGroupTransferRequest,
+    PaginatedCuratorGroupEventsResponse,
     PaginatedCuratorGroupMastersResponse,
     PaginatedCuratorGroupMembersResponse,
     UpdateCuratorGroupRequest,
@@ -78,6 +81,7 @@ from app.modules.curator_groups.service import (
     join_curator_group_by_token,
     leave_curator_group,
     leave_preview,
+    list_curator_group_events,
     list_curator_group_members,
     list_curator_groups,
     list_group_masters,
@@ -142,6 +146,7 @@ async def create_curator_group_endpoint(
     user, _profile = master_tuple
     group = await create_curator_group(
         user.id, body.name, session, description=body.description,
+        actor=user,
     )
     await session.flush()
     await session.refresh(group)
@@ -186,6 +191,7 @@ async def update_curator_group_endpoint(
         session,
         description=body.description,
         description_provided="description" in update_data,
+        actor=user,
     )
     await session.flush()
     masters_count, students_count = await get_group_counts(group.id, session)
@@ -262,6 +268,53 @@ async def list_curator_group_members_endpoint(
     )
 
 
+@router.get(
+    "/me/curator-groups/{group_id}/journal",
+    response_model=PaginatedCuratorGroupEventsResponse,
+)
+async def list_curator_group_events_endpoint(
+    group_id: UUID,
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_reader),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> PaginatedCuratorGroupEventsResponse:
+    """What has happened in my school, newest first (GT-16).
+
+    THE CURATOR ONLY -- a master member or a student asking gets 404, from
+    the ownership check in the service, not 403: the journal reports who
+    was removed and who walked out, and 403 would confirm to a stranger
+    that the school exists.
+
+    Built with NAMED arguments rather than Schema(**item), unlike most of
+    this router: the item carries a nested actor object, and **-splatting a
+    dict past a nested model is exactly the call shape a static check
+    cannot see into.
+    """
+    user, _profile = master_tuple
+    items, total = await list_curator_group_events(
+        user.id, group_id, session, limit=limit, offset=offset,
+    )
+    return PaginatedCuratorGroupEventsResponse(
+        items=[
+            CuratorGroupEventItem(
+                id=item["id"],
+                event=item["event"],
+                actor=CuratorGroupEventActor(
+                    user_id=item["actor"]["user_id"],
+                    display_name=item["actor"]["display_name"],
+                ),
+                data=item["data"],
+                created_at=item["created_at"],
+            )
+            for item in items
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
 @router.delete(
     "/me/curator-groups/{group_id}/members/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -278,7 +331,9 @@ async def remove_curator_group_member_endpoint(
     the user, whose membership is exactly what the caller is asserting away.
     """
     user, _profile = master_tuple
-    await remove_curator_group_member(user.id, group_id, user_id, session)
+    await remove_curator_group_member(
+        user.id, group_id, user_id, session, actor=user,
+    )
     await session.flush()
 
 
@@ -302,7 +357,7 @@ async def create_curator_group_invite_endpoint(
     """
     user, _profile = master_tuple
     invite = await get_or_create_curator_group_invite(
-        user.id, group_id, body.kind, session,
+        user.id, group_id, body.kind, session, actor=user,
     )
     await session.flush()
     logger.info(
@@ -333,7 +388,9 @@ async def revoke_curator_group_invite_endpoint(
     FastAPI rather than a hand-rolled Enum() lookup raising into a 500.
     """
     user, _profile = master_tuple
-    await revoke_curator_group_invite(user.id, group_id, kind, session)
+    await revoke_curator_group_invite(
+        user.id, group_id, kind, session, actor=user,
+    )
     await session.flush()
     logger.info(
         "curator_group_invite_revoked",
@@ -362,7 +419,7 @@ async def offer_curator_group_transfer_endpoint(
     """
     user, _profile = master_tuple
     ref = await offer_curator_group_transfer(
-        user.id, group_id, body.to_user_id, session,
+        user.id, group_id, body.to_user_id, session, actor=user,
     )
     await session.flush()
     logger.info(
@@ -385,7 +442,9 @@ async def cancel_curator_group_transfer_endpoint(
 ) -> None:
     """Withdraw the pending offer. Idempotent: no offer is still 204."""
     user, _profile = master_tuple
-    await cancel_curator_group_transfer(user.id, group_id, session)
+    await cancel_curator_group_transfer(
+        user.id, group_id, session, actor=user,
+    )
     await session.flush()
     logger.info(
         "curator_group_transfer_cancelled",
@@ -515,7 +574,9 @@ async def join_curator_group_endpoint(
     404 invite_not_found | 409 own_group | 403 blocked_by_curator |
     403 master_required.
     """
-    result = await join_curator_group_by_token(body.token, user.id, session)
+    result = await join_curator_group_by_token(
+        body.token, user.id, session, actor=user,
+    )
     await session.flush()
     logger.info(
         "curator_group_joined",
@@ -544,7 +605,9 @@ async def accept_curator_group_transfer_endpoint(
     curator_group_name_taken if they already curate a group by this name,
     checked BEFORE anything is written.
     """
-    page = await accept_curator_group_transfer(group_id, user.id, session)
+    page = await accept_curator_group_transfer(
+        group_id, user.id, session, actor=user,
+    )
     await session.flush()
     logger.info(
         "curator_group_transfer_accepted",
@@ -568,7 +631,9 @@ async def decline_curator_group_transfer_endpoint(
     changes nothing, so reporting success is honest and says nothing about
     whether an offer existed.
     """
-    await decline_curator_group_transfer(group_id, user.id, session)
+    await decline_curator_group_transfer(
+        group_id, user.id, session, actor=user,
+    )
     await session.flush()
 
 
@@ -676,5 +741,5 @@ async def leave_curator_group_endpoint(
     group whose curator is suspended must still be able to walk out, and a
     404 here would trap them until an admin re-verified somebody else.
     """
-    await leave_curator_group(group_id, user.id, session)
+    await leave_curator_group(group_id, user.id, session, actor=user)
     await session.flush()
