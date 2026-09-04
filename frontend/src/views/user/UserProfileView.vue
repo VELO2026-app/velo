@@ -59,6 +59,11 @@
           <VMenuRow label="Сообщения" :dot="hasUnreadMessages" @click="onMessages">
             <template #icon><IconMessages :size="20" /></template>
           </VMenuRow>
+          <!-- FE-19 (GT P3): schools. The only "groups" concept a plain user
+               meets -- the master's student groups are invisible to them. -->
+          <VMenuRow label="Мои группы" @click="router.push({ name: 'user-curator-groups' })">
+            <template #icon><IconGroup :size="20" /></template>
+          </VMenuRow>
         </div>
       </div>
 
@@ -137,6 +142,7 @@ import {
   IconSupport,
   IconShare,
   IconLogout,
+  IconGroup,
 } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { getMyStats } from '@/api/bookings'

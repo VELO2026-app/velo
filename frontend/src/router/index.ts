@@ -167,6 +167,25 @@ const router = createRouter({
           component: () => import('@/views/user/MyBookingsView.vue'),
         },
         {
+          // FE-19 (GT P3): "Мои группы" in the user zone means SCHOOLS
+          // (curator groups) -- the master's student groups are a master-zone
+          // concept a plain user never sees. Entry row: UserProfileView,
+          // «Аккаунт» section.
+          path: 'groups',
+          name: 'user-curator-groups',
+          meta: { hideTabBar: true },
+          component: () => import('@/views/user/UserCuratorGroupsView.vue'),
+        },
+        {
+          path: 'groups/:id',
+          name: 'user-curator-group',
+          meta: { hideTabBar: true },
+          // ONE page for both zones (TZ 6.3) -- the master zone mounts this
+          // same view below; the action set keys off viewer.relation and the
+          // zone only picks the back target.
+          component: () => import('@/views/user/CuratorGroupPageView.vue'),
+        },
+        {
           path: 'checkin/:practiceId',
           name: 'user-checkin',
           component: () => import('@/views/user/CheckinView.vue'),
