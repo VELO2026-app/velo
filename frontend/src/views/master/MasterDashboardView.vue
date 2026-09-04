@@ -90,6 +90,15 @@
       </VMenuRow>
 
       <!-- ================================================================
+           ГРУППЫ МАСТЕРОВ (FE-20 / GT P3 -- schools, a DIFFERENT entity
+           from the row above: «Мои группы» is the master's own student
+           groups; this one is curator groups the master curates or joined)
+           ================================================================ -->
+      <VMenuRow label="Группы мастеров" @click="onCuratorGroups">
+        <template #icon><IconBroadcast :size="24" /></template>
+      </VMenuRow>
+
+      <!-- ================================================================
            ZERO-STATE CTA
            ================================================================ -->
       <!-- Shown whenever there is no upcoming practice (not only brand-new
@@ -264,6 +273,7 @@ import {
   IconCheckin,
   IconRepeat,
   IconHourglass,
+  IconBroadcast,
 } from '@/components/icons'
 import { useMasterStore } from '@/stores/master'
 import { useAuthStore } from '@/stores/auth'
@@ -396,6 +406,10 @@ function onBell(): void {
 // -- Stub actions (no backend) --
 function onGroups(): void {
   router.push({ name: 'master-groups' })
+}
+// FE-20 (GT P3): schools list (curator groups), under the student-groups row.
+function onCuratorGroups(): void {
+  router.push({ name: 'master-curator-groups' })
 }
 // Tap the card → the practice screen (edit/cancel/delete live there via «…»).
 function openPractice(p: PracticeResponse): void {

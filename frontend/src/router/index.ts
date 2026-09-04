@@ -427,6 +427,34 @@ const router = createRouter({
           component: () => import('@/views/master/MasterGroupDetailView.vue'),
         },
         {
+          // FE-20 (GT P3): SCHOOLS, deliberately named «Группы мастеров» --
+          // «Мои группы» one row above means the master's own STUDENT groups
+          // (master_group), a different entity. Entry row: MasterDashboardView,
+          // under that «Мои группы» row.
+          path: 'curator-groups',
+          name: 'master-curator-groups',
+          beforeEnter: masterStatusGuard,
+          meta: { hideTabBar: true },
+          component: () => import('@/views/master/MasterCuratorGroupsView.vue'),
+        },
+        {
+          path: 'curator-groups/new',
+          name: 'master-curator-group-create',
+          beforeEnter: masterStatusGuard,
+          meta: { hideTabBar: true },
+          component: () => import('@/views/master/MasterCuratorGroupCreateView.vue'),
+        },
+        {
+          path: 'curator-groups/:id',
+          name: 'master-curator-group',
+          beforeEnter: masterStatusGuard,
+          meta: { hideTabBar: true },
+          // The SAME page component the user zone mounts (TZ 6.3) -- the
+          // server's viewer.relation drives the action set; this route's
+          // name prefix is all the view reads to pick its back target.
+          component: () => import('@/views/user/CuratorGroupPageView.vue'),
+        },
+        {
           path: 'summary',
           name: 'master-summary',
           beforeEnter: masterStatusGuard,
