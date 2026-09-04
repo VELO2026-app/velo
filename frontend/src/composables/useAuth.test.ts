@@ -55,6 +55,30 @@ describe('parseStartParam', () => {
     expect(parseStartParam(`group_invite__${'c'.repeat(129)}`)).toBeNull()
     expect(parseStartParam('group_invite__has spaces not url-safe')).toBeNull()
   })
+
+  it('parses curator_group_invite__{token} (FE-18) -- ONE kind for both link flavours', () => {
+    const token = 'z'.repeat(43)
+    expect(parseStartParam(`curator_group_invite__${token}`)).toEqual({
+      name: 'curator-group-join',
+      params: { token },
+    })
+  })
+
+  it('rejects a curator_group_invite token outside the 16..128 charset/length bound', () => {
+    expect(parseStartParam('curator_group_invite__tooshort')).toBeNull()
+    expect(parseStartParam(`curator_group_invite__${'c'.repeat(129)}`)).toBeNull()
+    expect(parseStartParam('curator_group_invite__has spaces not url-safe')).toBeNull()
+  })
+
+  it('does not disturb group_invite__{token} -- the two invite prefixes stay separate routes', () => {
+    const token = 'a'.repeat(43)
+    expect(parseStartParam(`group_invite__${token}`)).toEqual({
+      name: 'group-join',
+      params: { token },
+    })
+    expect(parseStartParam('curator_group_invite__')).toBeNull()
+    expect(parseStartParam('curator_group_invite')).toBeNull()
+  })
   // ===========================================================================
   // T-35: zoom__<22> -- the public practice code as a deep link.
   //
@@ -238,9 +262,7 @@ describe('T-44: shared codec vector', () => {
 
   it('MECHANISM 1 -- the real decoder agrees with this side of the vector', () => {
     for (const c of vector.cases) {
-      expect(decodePracticeCode(c.input), `vector case "${c.input}" (${c.why})`).toBe(
-        c.expect,
-      )
+      expect(decodePracticeCode(c.input), `vector case "${c.input}" (${c.why})`).toBe(c.expect)
     }
   })
 

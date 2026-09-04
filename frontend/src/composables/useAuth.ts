@@ -120,6 +120,7 @@ export function decodePracticeCode(code: string): string | null {
  *   zoom__{code}                -> { name: 'practice-live', params: { practiceId } } (T-35)
  *   master_onboarding__{token}  -> { name: 'master-invite', params: { token } }
  *   group_invite__{token}       -> { name: 'group-join', params: { token } } (P4, PROMPT №593)
+ *   curator_group_invite__{token} -> { name: 'curator-group-join', params: { token } } (FE-18)
  *
  * T-35: zoom__ is ADDED, open_practice__ is NOT replaced. They are two
  * different actions, not two formats for one: open_practice__ means "show me
@@ -168,6 +169,16 @@ export function parseStartParam(
   const groupInviteMatch = startParam.match(/^group_invite__([A-Za-z0-9_-]{16,128})$/)
   if (groupInviteMatch?.[1]) {
     return { name: 'group-join', params: { token: groupInviteMatch[1] } }
+  }
+
+  // Curator-group (school) invite (FE-18): a school's reusable link. ONE kind
+  // for BOTH flavours -- master and student links differ only in the token's
+  // row, and which one this is comes from the SERVER's preview
+  // (GET /curator-groups/invites/{token}), never from anything parseable
+  // here. Same token_urlsafe(32) charset/length bound as the kinds above.
+  const curatorInviteMatch = startParam.match(/^curator_group_invite__([A-Za-z0-9_-]{16,128})$/)
+  if (curatorInviteMatch?.[1]) {
+    return { name: 'curator-group-join', params: { token: curatorInviteMatch[1] } }
   }
 
   return null

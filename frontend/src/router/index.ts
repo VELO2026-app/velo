@@ -449,6 +449,17 @@ const router = createRouter({
       component: () => import('@/views/master/GroupJoinView.vue'),
     },
     {
+      // FE-18 (GT P3): landing for a SCHOOL's reusable invite deeplink
+      // (startapp=curator_group_invite__<token>). Standalone like group-join,
+      // no beforeEnter guard: any authenticated user may open the preview,
+      // and the SERVER decides (preview can_join/reason) whether joining is
+      // offered, refused, or an upgrade. The token carries no kind -- the
+      // master/student flavour is resolved by GET /curator-groups/invites/{token}.
+      path: '/curator-groups/join/:token',
+      name: 'curator-group-join',
+      component: () => import('@/views/master/CuratorGroupJoinView.vue'),
+    },
+    {
       path: '/master/pending',
       name: 'master-pending',
       beforeEnter: masterPendingGuard,
