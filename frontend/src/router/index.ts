@@ -550,6 +550,15 @@ const router = createRouter({
           component: () => import('@/views/admin/AdminMasterReviewView.vue'),
         },
         {
+          // FE-23 (GT P4): read-only list of ALL schools incl. frozen -- the
+          // only place an inactive school is visible. Entered from
+          // AdminMastersView; a tap opens the curator's review page (the
+          // existing revoke lever is the one moderation action for schools).
+          path: 'curator-groups',
+          name: 'admin-curator-groups',
+          component: () => import('@/views/admin/AdminCuratorGroupsView.vue'),
+        },
+        {
           // M3: master methods change-request moderation queue.
           path: 'method-requests',
           name: 'admin-method-requests',
