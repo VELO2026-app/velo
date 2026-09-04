@@ -88,6 +88,26 @@
     <template v-else-if="practice">
       <!-- ===================== UPCOMING hub (WI-B) ===================== -->
       <div v-if="isUpcoming" class="practice-detail__content">
+        <!-- FE-24 (GT P5): the school audience stopped matching this master
+             (they left or were removed from every targeted school, or a
+             school froze). Nobody but the master and the already-booked can
+             see the practice; existing bookings stay valid. The school NAMES
+             still arrive filled -- on purpose, so the master knows WHAT to
+             fix -- this banner just points at the edit screen. -->
+        <div v-if="practice.audience_unavailable" class="pd-audience-warn">
+          <span class="pd-audience-warn__text">
+            Школа недоступна — практику не видит никто, кроме вас и уже записавшихся. Смените
+            аудиторию.
+          </span>
+          <VButton
+            size="sm"
+            variant="outline"
+            @click="router.push({ name: 'master-practice-edit', params: { id: practice.id } })"
+          >
+            Изменить аудиторию
+          </VButton>
+        </div>
+
         <!-- Hero (shared PracticeHeroCard — FORK4). Recurrence-days line is
              intentionally NOT shown (FORK2: no recurrence model). -->
         <PracticeHeroCard
@@ -414,9 +434,7 @@ const recurrenceLabel = computed((): string | null => {
 // PracticeWithSharedLink interface that used to stand here is gone -- the
 // field is native in generated.ts after the T-35 regen, exactly as that
 // interface's own comment asked of the first person to touch this file.
-const publicLink = computed(
-  (): string | null => practice.value?.zoom_public_link ?? null,
-)
+const publicLink = computed((): string | null => practice.value?.zoom_public_link ?? null)
 const copyingShared = ref(false)
 async function onCopySharedLink(): Promise<void> {
   if (copyingShared.value || !publicLink.value) return
@@ -665,6 +683,25 @@ onMounted(load)
 /* See the template block's own comment (above the markup) for the full
    liftability note -- this rule + its sibling below are part of that same
    removable unit. */
+/* FE-24: the audience-unavailable warning -- the same white card plate as
+   the shared-link row above, but the peach attention pair of tokens (a
+   "something needs a decision" tone, not an error red). */
+.pd-audience-warn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--velo-bg-card-solid);
+  border: 1px solid var(--velo-border-card);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.pd-audience-warn__text {
+  font-size: var(--text-sm);
+  color: var(--velo-peach-700);
+  line-height: 1.5;
+}
+
 .pd-shared-link {
   display: flex;
   align-items: center;

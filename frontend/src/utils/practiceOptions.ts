@@ -20,14 +20,25 @@ export const DURATION_OPTIONS: { label: string; value: string }[] = [
 // GT-11: values are the CONTRACT type (generated.ts's AudienceKind via the
 // types.ts alias), so a typo'd kind stops compiling instead of silently
 // posting. The fourth kind ('curator_groups', schools) is backend-side since
-// GT-11 but deliberately NOT offered here yet -- the selector grows its
-// school multi-select in FE-24, and an option without its picker would let
-// a master pick a kind whose targets they cannot set.
+// GT-11 and OFFERED by audienceOptions() below only when this master can
+// actually target at least one school (FE-24) -- an option without its
+// picker would let a master pick a kind whose targets they cannot set.
 export const AUDIENCE_OPTIONS: { label: string; value: PracticeAudienceKind }[] = [
   { value: 'public', label: 'Публичная' },
   { value: 'students', label: 'Все ученики' },
   { value: 'groups', label: 'Конкретные группы' },
 ]
+
+/** FE-24: the option list with the fourth kind added when the master
+ *  belongs to at least one school (relation curator or master -- the two
+ *  relations the backend validates curator_group_ids against). Zero
+ *  eligible schools -> the exact three options above, unchanged. */
+export function audienceOptions(
+  hasSchools: boolean,
+): { label: string; value: PracticeAudienceKind }[] {
+  if (!hasSchools) return AUDIENCE_OPTIONS
+  return [...AUDIENCE_OPTIONS, { value: 'curator_groups', label: 'Школы' }]
+}
 
 // -- Timezone options (iOS-style world list, 2026-05-29) ----------------------
 // One reference city per unique world UTC offset, from UTC-11 to UTC+14,

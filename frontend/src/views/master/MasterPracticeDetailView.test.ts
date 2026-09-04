@@ -1520,3 +1520,38 @@ describe('MasterPracticeDetailView', () => {
   //    (stores/diary.ts:363-374) belong to the store's own tests. The mock here
   //    reproduces only the write, which is all this screen observes.
 })
+
+// -- Audience-unavailable warning (FE-24 / GT P5) ------------------------------
+
+describe('MasterPracticeDetailView -- audience_unavailable (FE-24 / GT P5)', () => {
+  it('flag true: the warning renders on an upcoming practice and its button opens the EDIT screen', async () => {
+    vi.mocked(practicesApi.getPractice).mockResolvedValue(
+      practice({
+        audience_kind: 'curator_groups',
+        audience_curator_group_names: ['Тихая школа'],
+        audience_unavailable: true,
+      }),
+    )
+    mount()
+    await flush()
+
+    expect(text()).toContain('Школа недоступна')
+    // The names still arrive filled (deliberate: the flag alone would not say
+    // WHAT to fix) -- the banner explains the consequence instead.
+    expect(text()).toContain('Смените аудиторию')
+
+    const edit = Array.from(host?.querySelectorAll<HTMLElement>('button') ?? []).find((b) =>
+      b.textContent?.includes('Изменить аудиторию'),
+    )
+    edit?.click()
+    await flush()
+    expect(push).toHaveBeenCalledWith({ name: 'master-practice-edit', params: { id: 'p1' } })
+  })
+
+  it('flag absent/false: no warning at all', async () => {
+    mount()
+    await flush()
+
+    expect(text()).not.toContain('Школа недоступна')
+  })
+})

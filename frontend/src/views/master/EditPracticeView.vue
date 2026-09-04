@@ -154,37 +154,33 @@
           />
 
           <!-- ================================================================
-               Для кого практика (P5 port, PROMPT №606): mirrors
-               CreatePracticeView's audience block, adapted to Edit's FLAT
-               layout (Реш. В, above -- no velo-section-title sections here,
-               so no section wrapper is dragged in with it; a plain
-               edit-practice__field-label instead, matching the Дата/Время
-               fields above).
+               Для кого практика (P5 port, PROMPT №606; FE-24: the shared
+               PracticeAudiencePicker, the same component Create uses --
+               the local copy of the chips block is gone). Edit's FLAT
+               layout keeps its own field label (no velo-section-title
+               sections here, Реш. В above).
                ================================================================ -->
           <div class="edit-practice__field edit-practice__audience">
             <label class="edit-practice__field-label">Для кого практика</label>
-            <VRadioGroup v-model="form.audience_kind" :options="AUDIENCE_OPTIONS" />
-
-            <template v-if="form.audience_kind === 'groups'">
-              <div v-if="customGroups.length" class="edit-practice__audience-chips">
-                <VChip
-                  v-for="g in customGroups"
-                  :key="g.id"
-                  size="md"
-                  clickable
-                  :active="form.audience_group_ids.includes(g.id)"
-                  @click="onAudienceGroupChipClick(g.id)"
-                >
-                  {{ g.name }}
-                </VChip>
-              </div>
-              <p v-else class="edit-practice__audience-empty">
-                Пока нет ни одной группы. Создайте группу на экране «Мои группы».
-              </p>
-              <span v-if="errors.audience_group_ids" class="edit-practice__field-error">{{
-                errors.audience_group_ids
-              }}</span>
-            </template>
+            <PracticeAudiencePicker
+              v-model:kind="form.audience_kind"
+              v-model:group-ids="form.audience_group_ids"
+              v-model:curator-group-ids="form.audience_curator_group_ids"
+              :groups="customGroups"
+              :schools="eligibleSchools"
+              :error="errors.audience_group_ids"
+            />
+            <!-- Review P1: the practice targets a school whose name this
+                 master has TWICE (different curators) -- the wire carries
+                 names, not ids, so the selection is not restored silently.
+                 The empty selection blocks submit until a conscious pick. -->
+            <p
+              v-if="form.audience_kind === 'curator_groups' && ambiguousSchoolNames.length"
+              class="edit-practice__audience-ambiguous"
+            >
+              Название «{{ ambiguousSchoolNames.join('», «') }}» совпадает у нескольких ваших школ —
+              выберите, какую иметь в виду, и сохраните.
+            </p>
           </div>
 
           <VTextarea v-model="form.description" label="Описание" :rows="4" autogrow />
@@ -331,8 +327,6 @@ import {
   VLoader,
   VEmptyState,
   VConfirmDialog,
-  VRadioGroup,
-  VChip,
 } from '@/components/ui'
 import DatePickerSheet from '@/components/shared/DatePickerSheet.vue'
 import TimePickerSheet from '@/components/shared/TimePickerSheet.vue'
@@ -347,6 +341,7 @@ import {
   previewAudienceChange,
 } from '@/api/practices'
 import { getGroups } from '@/api/groups'
+import { getMyCuratorGroups } from '@/api/curatorGroups'
 import { formatShortDate, todayLocalISO } from '@/utils/format'
 import { masterPracticeBadge } from '@/utils/practiceStatus'
 import { plural } from '@/utils/plural'
@@ -354,7 +349,6 @@ import { ApiResponseError } from '@/api/client'
 import { errorMessage, extractApiError } from '@/composables/useApiError'
 import {
   DURATION_OPTIONS,
-  AUDIENCE_OPTIONS,
   catalogDirectionOptions,
   catalogStylesForDirection,
 } from '@/utils/practiceOptions'
@@ -363,6 +357,8 @@ import { eurStringToCents, centsToEurString } from '@/utils/currency'
 import type { TaxonomyListResponse } from '@/api/taxonomy'
 import type { PracticeAudienceKind, PracticeResponse } from '@/api/types'
 import type { GroupListItem } from '@/api/groups'
+import PracticeAudiencePicker from '@/components/shared/PracticeAudiencePicker.vue'
+import type { AudienceSchoolOption } from '@/components/shared/PracticeAudiencePicker.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -455,6 +451,9 @@ const form = reactive({
   // type from the generated contract removes the copy that can drift.
   audience_kind: 'public' as PracticeAudienceKind,
   audience_group_ids: [] as string[],
+  // FE-24 (GT P5): the schools multi-select's ids -- the mirror of
+  // audience_group_ids, sent only for audience_kind='curator_groups'.
+  audience_curator_group_ids: [] as string[],
 })
 
 // P5 port (PROMPT №606): this master's own custom groups, for «Конкретные
@@ -462,15 +461,15 @@ const form = reactive({
 // CreatePracticeView.
 const customGroups = ref<GroupListItem[]>([])
 
-// Named wrapper (same B7-hook reasoning as CreatePracticeView.
-// onAudienceGroupChipClick -- an inline multi-statement @click handler can
-// be reformatted by the pre-commit hook's prettier pass and lose its
-// semicolon, breaking the Vue template compiler).
-function onAudienceGroupChipClick(groupId: string): void {
-  const idx = form.audience_group_ids.indexOf(groupId)
-  if (idx === -1) form.audience_group_ids.push(groupId)
-  else form.audience_group_ids.splice(idx, 1)
-}
+// FE-24 (GT P5): the schools this master may target (relation curator or
+// master). Populates the fourth option + its chips; empty for a master in
+// no school, which keeps the radio at the classic three options.
+const eligibleSchools = ref<AudienceSchoolOption[]>([])
+
+// Review P1: names from PracticeResponse that match MORE than one eligible
+// school (possible: uniqueness is per curator, not global). Rendered as a
+// warning -- the master must pick the chip consciously.
+const ambiguousSchoolNames = ref<string[]>([])
 
 const errors = reactive({
   title: '',
@@ -570,6 +569,11 @@ function populateForm(p: PracticeResponse): void {
   // resolved yet when populateForm first runs (the cached-practice branch
   // in onMounted can beat it).
   resolveAudienceGroupIds()
+  // FE-24 (GT P5): the same name -> id resolution for schools. A school
+  // name also uniquely identifies a school FOR THIS PICKER'S PURPOSES: the
+  // eligible list holds only schools this master belongs to, and a curator
+  // cannot have two schools by one name (curator_group_name_taken, I-7).
+  resolveAudienceCuratorGroupIds()
 }
 
 // Resolve form.audience_kind === 'groups' names -> ids once customGroups is
@@ -579,6 +583,30 @@ function resolveAudienceGroupIds(): void {
   if (form.audience_kind !== 'groups' || !practice.value) return
   const names = new Set(practice.value.audience_group_names ?? [])
   form.audience_group_ids = customGroups.value.filter((g) => names.has(g.name)).map((g) => g.id)
+}
+
+// FE-24 (GT P5): the mirror for audience_kind === 'curator_groups'.
+//
+// Review P1: a school name is unique only PER CURATOR. Two eligible schools
+// of different curators may share a name, and PracticeResponse carries NAMES,
+// not ids -- a blind name->id match would silently select BOTH, widening the
+// audience to a whole second school on the next save. An ambiguous name is
+// therefore NOT auto-selected at all: the master consciously picks the chip,
+// and the warning below names the collision.
+function resolveAudienceCuratorGroupIds(): void {
+  ambiguousSchoolNames.value = []
+  if (form.audience_kind !== 'curator_groups' || !practice.value) return
+  const names = new Set(practice.value.audience_curator_group_names ?? [])
+  const ids: string[] = []
+  for (const name of names) {
+    const matches = eligibleSchools.value.filter((s) => s.name === name)
+    if (matches.length > 1) {
+      ambiguousSchoolNames.value.push(name)
+      continue
+    }
+    if (matches.length === 1) ids.push(matches[0]!.id)
+  }
+  form.audience_curator_group_ids = ids
 }
 
 // -- Load practice --
@@ -602,6 +630,24 @@ onMounted(async () => {
     customGroups.value = res.items.filter((g) => g.kind === 'custom')
     resolveAudienceGroupIds()
   })
+
+  // FE-24 (GT P5): the eligible schools, same fire-and-forget placement --
+  // runs on both the cached and network branches, and re-resolves the
+  // school selection afterward for the same race populateForm() documents
+  // above. A failure degrades to "no schools" (fourth option hidden) --
+  // an edit of an EXISTING curator_groups practice still resolves its
+  // chips once the list arrives; if it never does, saving is blocked by
+  // the honest empty-selection validation, never by a lie.
+  void getMyCuratorGroups()
+    .then((res) => {
+      eligibleSchools.value = res.items
+        .filter((g) => g.relation === 'curator' || g.relation === 'master')
+        .map((g) => ({ id: g.id, name: g.name }))
+      resolveAudienceCuratorGroupIds()
+    })
+    .catch(() => {
+      eligibleSchools.value = []
+    })
 
   const cached = masterStore.practices.find((p) => p.id === practiceId)
   if (cached) {
@@ -648,6 +694,11 @@ function validate(): boolean {
     errors.audience_group_ids = 'Выберите хотя бы одну группу'
     ok = false
   }
+  // FE-24 (GT P5): the mirror check for schools.
+  if (form.audience_kind === 'curator_groups' && form.audience_curator_group_ids.length === 0) {
+    errors.audience_group_ids = 'Выберите хотя бы одну школу'
+    ok = false
+  }
   return ok
 }
 
@@ -662,11 +713,21 @@ function audienceChanged(): boolean {
   if (!practice.value) return false
   const savedKind = practice.value.audience_kind ?? 'public'
   if (form.audience_kind !== savedKind) return true
-  if (form.audience_kind !== 'groups') return false
+  if (form.audience_kind !== 'groups' && form.audience_kind !== 'curator_groups') return false
 
   // Same name -> id resolution resolveAudienceGroupIds() already uses --
   // recomputed fresh here (not read off `form`, which may have already
   // been edited) so this reflects what's actually SAVED, not the pending edit.
+  if (form.audience_kind === 'curator_groups') {
+    // FE-24 (GT P5): the mirror comparison for schools.
+    const savedSchoolNames = new Set(practice.value.audience_curator_group_names ?? [])
+    const savedSchoolIds = new Set(
+      eligibleSchools.value.filter((s) => savedSchoolNames.has(s.name)).map((s) => s.id),
+    )
+    if (form.audience_curator_group_ids.length !== savedSchoolIds.size) return true
+    return form.audience_curator_group_ids.some((id) => !savedSchoolIds.has(id))
+  }
+
   const savedNames = new Set(practice.value.audience_group_names ?? [])
   const savedIds = new Set(
     customGroups.value.filter((g) => savedNames.has(g.name)).map((g) => g.id),
@@ -686,6 +747,9 @@ async function save(): Promise<void> {
       preview = await previewAudienceChange(practiceId, {
         audience_kind: form.audience_kind,
         group_ids: form.audience_kind === 'groups' ? form.audience_group_ids : [],
+        // FE-24 (GT P5): the mirror target array for schools.
+        curator_group_ids:
+          form.audience_kind === 'curator_groups' ? form.audience_curator_group_ids : [],
       })
     } catch (e) {
       saving.value = false
@@ -763,10 +827,13 @@ async function commitSave(): Promise<void> {
       max_participants: form.max_participants_raw ? parseInt(form.max_participants_raw, 10) : null,
       is_free: form.is_free,
       price_cents: form.is_free ? 0 : priceCents.value,
-      // P5 port (PROMPT №606): mirrors CreatePracticeView -- group_ids is
-      // only meaningful (and only sent) for audience_kind='groups'.
+      // P5 port (PROMPT №606) / FE-24 (GT P5): mirrors CreatePracticeView --
+      // each target array is only meaningful (and only sent non-empty) for
+      // its own kind; the two are mutually exclusive on the wire.
       audience_kind: form.audience_kind,
       group_ids: form.audience_kind === 'groups' ? form.audience_group_ids : [],
+      curator_group_ids:
+        form.audience_kind === 'curator_groups' ? form.audience_curator_group_ids : [],
     })
     practice.value = updated
     confirmDialog.visible = false
@@ -944,6 +1011,15 @@ async function remove(): Promise<void> {
   font-size: var(--text-sm);
   color: var(--velo-text-muted);
   margin: var(--space-3) 0 0;
+}
+
+/* Review P1: same-name schools collision warning -- peach attention pair,
+   the "needs a conscious decision" tone used app-wide. */
+.edit-practice__audience-ambiguous {
+  font-size: var(--text-sm);
+  color: var(--velo-peach-700);
+  line-height: 1.5;
+  margin: var(--space-2) 0 0;
 }
 
 .edit-practice__field-error {

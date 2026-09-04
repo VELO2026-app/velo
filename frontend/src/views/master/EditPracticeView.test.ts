@@ -77,6 +77,7 @@ import { createApp, nextTick, type App } from 'vue'
 import EditPracticeView from '@/views/master/EditPracticeView.vue'
 import * as practicesApi from '@/api/practices'
 import * as groupsApi from '@/api/groups'
+import * as cgApi from '@/api/curatorGroups'
 import { ApiResponseError } from '@/api/client'
 import type { MasterProfileResponse, PracticeResponse, UpdatePracticeRequest } from '@/api/types'
 
@@ -86,6 +87,9 @@ vi.mock('@/api/practices')
 // Mocked wholesale -- an unmocked call here would hit the real network in
 // EVERY test in this file, not just the audience-specific ones below.
 vi.mock('@/api/groups')
+
+// FE-24 (GT P5): the schools fetch for the fourth option -- same reason.
+vi.mock('@/api/curatorGroups')
 
 // Seamed at the helper, not at @/api/taxonomy: the real one caches for the whole
 // file (see the banner). Resolving null = catalog cold -> hardcoded fallback.
@@ -321,6 +325,7 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue(practice({ status: 'cancelled' }))
   vi.mocked(groupsApi.getGroups).mockReset().mockResolvedValue({ items: [] })
+  vi.mocked(cgApi.getMyCuratorGroups).mockReset().mockResolvedValue({ items: [] })
   refreshMyPractices.mockReset().mockResolvedValue(undefined)
   push.mockReset()
   back.mockReset()
@@ -1434,6 +1439,8 @@ describe('EditPracticeView', () => {
       expect(practicesApi.previewAudienceChange).toHaveBeenCalledWith('p1', {
         audience_kind: 'students',
         group_ids: [],
+        // FE-24 (GT P5): the mirror array, empty for non-school kinds.
+        curator_group_ids: [],
       })
       expect(document.body.querySelector('.v-confirm__actions')).toBeNull()
       expect(practicesApi.updatePractice).toHaveBeenCalledTimes(1)
@@ -1527,4 +1534,90 @@ describe('EditPracticeView', () => {
   // A test for it would have to poke `deleting` directly, which is the form-half
   // mocking Pattern C exists to forbid (velo-idiom Step 3). The guard's three
   // LIVE flags are each proven by the re-entry tests above.
+})
+
+// -- «Школы» audience (FE-24 / GT P5) ------------------------------------------
+
+describe('EditPracticeView -- «Школы» audience (FE-24 / GT P5)', () => {
+  it('a curator_groups practice prefills its school chips from NAMES (no ids on the wire) and saves the ids', async () => {
+    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+      items: [
+        {
+          id: 'sc1',
+          name: 'Тихая школа',
+          description: null,
+          curator: { user_id: 'u1', display_name: 'Мария Иванова', avatar_url: null },
+          masters_count: 2,
+          students_count: 3,
+          relation: 'master',
+        },
+      ],
+    })
+    mountCached(
+      practice({ audience_kind: 'curator_groups', audience_curator_group_names: ['Тихая школа'] }),
+    )
+    await flush()
+
+    // Selected WITHOUT a user tap: names resolved against the eligible list.
+    const chip = Array.from(host?.querySelectorAll<HTMLElement>('.v-chip') ?? []).find((c) =>
+      c.textContent?.includes('Тихая школа'),
+    )
+    expect(chip?.className).toContain('v-chip--active')
+
+    button('Сохранить')?.click()
+    await flush()
+
+    const call = vi.mocked(practicesApi.updatePractice).mock.calls[0]
+    expect(call?.[1]?.audience_kind).toBe('curator_groups')
+    expect(call?.[1]?.curator_group_ids).toEqual(['sc1'])
+    expect(call?.[1]?.group_ids).toEqual([])
+  })
+
+  // Review P1: a school name is unique only PER CURATOR. The wire carries
+  // NAMES, not ids -- a blind name->id match would silently select BOTH
+  // same-named schools and widen the audience on the next save. The
+  // ambiguous name must NOT be auto-selected; the master picks consciously.
+  it('same-name schools: ambiguous name is not auto-selected, warned about, and a conscious pick saves exactly ONE id', async () => {
+    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+      items: [
+        {
+          id: 'sc_a',
+          name: 'Дубль',
+          description: null,
+          curator: { user_id: 'u1', display_name: 'Куратор Один', avatar_url: null },
+          masters_count: 1,
+          students_count: 0,
+          relation: 'master',
+        },
+        {
+          id: 'sc_b',
+          name: 'Дубль',
+          description: null,
+          curator: { user_id: 'u2', display_name: 'Куратор Два', avatar_url: null },
+          masters_count: 1,
+          students_count: 0,
+          relation: 'curator',
+        },
+      ],
+    })
+    mountCached(
+      practice({ audience_kind: 'curator_groups', audience_curator_group_names: ['Дубль'] }),
+    )
+    await flush()
+
+    // NOT silently widened: no chip is active, the collision is named.
+    const chips = Array.from(host?.querySelectorAll<HTMLElement>('.v-chip') ?? [])
+    expect(chips.length).toBe(2)
+    expect(chips.every((c) => !c.className.includes('v-chip--active'))).toBe(true)
+    expect(text()).toContain('совпадает у нескольких ваших школ')
+
+    // A conscious pick saves exactly ONE target, not both.
+    chips[0]?.click()
+    await flush()
+    button('Сохранить')?.click()
+    await flush()
+
+    const call = vi.mocked(practicesApi.updatePractice).mock.calls[0]
+    expect(call?.[1]?.curator_group_ids).toEqual(['sc_a'])
+  })
 })
