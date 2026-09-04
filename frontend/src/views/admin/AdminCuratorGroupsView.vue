@@ -62,7 +62,12 @@
       </div>
     </template>
 
-    <VCard v-else><p class="admin-list__empty">Школ пока нет</p></VCard>
+    <VCard v-else>
+      <p class="admin-list__empty">
+        Школ пока нет. Школу создаёт сам верифицированный мастер — отдельной выдачи прав не
+        предусмотрено (рычаг админа — верификация мастера).
+      </p>
+    </VCard>
   </div>
 </template>
 

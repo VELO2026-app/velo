@@ -461,6 +461,13 @@
 
       <!-- Actions -->
       <div v-if="isPending" class="mreview__foot">
+        <!-- Q-GRANT=Б (owner-ruled): there is no separate "allow schools"
+             grant -- verification IS it. Surfaced here so the admin is not
+             left hunting for a field that deliberately does not exist. -->
+        <p class="mreview__grant-note">
+          Одобрение верифицирует мастера — он сразу сможет сам создавать школы (кураторские группы).
+          Отдельной выдачи прав не предусмотрено.
+        </p>
         <VButton variant="ghost" :disabled="anyLoading" @click="openReject">Отклонить</VButton>
         <VButton variant="primary" :loading="verifying" :disabled="anyLoading" @click="onVerify">
           Одобрить
@@ -472,6 +479,10 @@
         </VCard>
         <!-- A1: revoke a verified master (soft-freeze, data preserved) -->
         <div v-if="isVerified" class="mreview__foot">
+          <p class="mreview__grant-note">
+            Отзыв верификации замораживает все школы этого куратора — участники перестанут их
+            видеть; данные сохранятся и оживут при повторной верификации.
+          </p>
           <VButton variant="danger" :loading="revoking" :disabled="anyLoading" @click="openRevoke">
             Отозвать мастера
           </VButton>
@@ -1307,6 +1318,8 @@ onMounted(loadMaster)
   bottom: 0;
   z-index: var(--z-sticky);
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: var(--velo-gap-15);
   margin-top: var(--space-1);
   padding: var(--space-3) 0;
@@ -1316,6 +1329,15 @@ onMounted(loadMaster)
 
 .mreview__foot :deep(.v-btn) {
   flex: 1;
+}
+
+/* Q-GRANT=Б note: full-width line above the buttons (they keep their row). */
+.mreview__grant-note {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--velo-text-muted);
 }
 
 /* -- Processed (non-pending) note -- */
