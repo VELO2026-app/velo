@@ -36,6 +36,11 @@
       Пригласить мастера
     </VButton>
 
+    <!-- FE-23 (GT P4): all schools incl. frozen, read-only. -->
+    <VButton variant="outline" block @click="router.push({ name: 'admin-curator-groups' })">
+      Школы
+    </VButton>
+
     <!-- Loading -->
     <div v-if="loading" class="admin-list__loader"><VLoader size="lg" /></div>
 
@@ -59,6 +64,12 @@
             <VBadge :variant="masterStatusVariant(m.master_status)" class="mcard__badge">
               <component :is="badgeIcon(m.master_status)" :size="14" />
               {{ badgeLabel(m.master_status) }}
+            </VBadge>
+            <!-- FE-23 (GT P4): schools badge -- counts ACTIVE and FROZEN
+                 alike (revocation does not dissolve them, and the admin
+                 needs to see what is still attached to the person). -->
+            <VBadge v-if="(m.curator_groups_count ?? 0) > 0" variant="blue" class="mcard__badge">
+              Куратор
             </VBadge>
           </div>
         </div>

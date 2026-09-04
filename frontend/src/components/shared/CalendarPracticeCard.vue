@@ -22,6 +22,14 @@
         <IconCheck v-if="badge.paid" :size="12" />
         {{ badge.label }}
       </VBadge>
+      <!-- FE-24 (GT P5): the school-audience marker. Shown for BOTH the
+           reachable and the lended-out-and-lost case -- the flag and the
+           school NAMES diverge on purpose (a frozen school still reports its
+           name so the master knows WHAT to fix, only the audience clause
+           stopped matching), and this badge never guesses which one it is. -->
+      <VBadge v-if="practice.audience_kind === 'curator_groups'" variant="muted">
+        Для школы
+      </VBadge>
     </template>
   </PracticeListCard>
 </template>

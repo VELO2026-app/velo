@@ -167,6 +167,25 @@ const router = createRouter({
           component: () => import('@/views/user/MyBookingsView.vue'),
         },
         {
+          // FE-19 (GT P3): "Мои группы" in the user zone means SCHOOLS
+          // (curator groups) -- the master's student groups are a master-zone
+          // concept a plain user never sees. Entry row: UserProfileView,
+          // «Аккаунт» section.
+          path: 'groups',
+          name: 'user-curator-groups',
+          meta: { hideTabBar: true },
+          component: () => import('@/views/user/UserCuratorGroupsView.vue'),
+        },
+        {
+          path: 'groups/:id',
+          name: 'user-curator-group',
+          meta: { hideTabBar: true },
+          // ONE page for both zones (TZ 6.3) -- the master zone mounts this
+          // same view below; the action set keys off viewer.relation and the
+          // zone only picks the back target.
+          component: () => import('@/views/user/CuratorGroupPageView.vue'),
+        },
+        {
           path: 'checkin/:practiceId',
           name: 'user-checkin',
           component: () => import('@/views/user/CheckinView.vue'),
@@ -408,6 +427,34 @@ const router = createRouter({
           component: () => import('@/views/master/MasterGroupDetailView.vue'),
         },
         {
+          // FE-20 (GT P3): SCHOOLS, deliberately named «Группы мастеров» --
+          // «Мои группы» one row above means the master's own STUDENT groups
+          // (master_group), a different entity. Entry row: MasterDashboardView,
+          // under that «Мои группы» row.
+          path: 'curator-groups',
+          name: 'master-curator-groups',
+          beforeEnter: masterStatusGuard,
+          meta: { hideTabBar: true },
+          component: () => import('@/views/master/MasterCuratorGroupsView.vue'),
+        },
+        {
+          path: 'curator-groups/new',
+          name: 'master-curator-group-create',
+          beforeEnter: masterStatusGuard,
+          meta: { hideTabBar: true },
+          component: () => import('@/views/master/MasterCuratorGroupCreateView.vue'),
+        },
+        {
+          path: 'curator-groups/:id',
+          name: 'master-curator-group',
+          beforeEnter: masterStatusGuard,
+          meta: { hideTabBar: true },
+          // The SAME page component the user zone mounts (TZ 6.3) -- the
+          // server's viewer.relation drives the action set; this route's
+          // name prefix is all the view reads to pick its back target.
+          component: () => import('@/views/user/CuratorGroupPageView.vue'),
+        },
+        {
           path: 'summary',
           name: 'master-summary',
           beforeEnter: masterStatusGuard,
@@ -447,6 +494,17 @@ const router = createRouter({
       path: '/groups/join/:token',
       name: 'group-join',
       component: () => import('@/views/master/GroupJoinView.vue'),
+    },
+    {
+      // FE-18 (GT P3): landing for a SCHOOL's reusable invite deeplink
+      // (startapp=curator_group_invite__<token>). Standalone like group-join,
+      // no beforeEnter guard: any authenticated user may open the preview,
+      // and the SERVER decides (preview can_join/reason) whether joining is
+      // offered, refused, or an upgrade. The token carries no kind -- the
+      // master/student flavour is resolved by GET /curator-groups/invites/{token}.
+      path: '/curator-groups/join/:token',
+      name: 'curator-group-join',
+      component: () => import('@/views/master/CuratorGroupJoinView.vue'),
     },
     {
       path: '/master/pending',
@@ -490,6 +548,15 @@ const router = createRouter({
           path: 'masters/:id',
           name: 'admin-master-review',
           component: () => import('@/views/admin/AdminMasterReviewView.vue'),
+        },
+        {
+          // FE-23 (GT P4): read-only list of ALL schools incl. frozen -- the
+          // only place an inactive school is visible. Entered from
+          // AdminMastersView; a tap opens the curator's review page (the
+          // existing revoke lever is the one moderation action for schools).
+          path: 'curator-groups',
+          name: 'admin-curator-groups',
+          component: () => import('@/views/admin/AdminCuratorGroupsView.vue'),
         },
         {
           // M3: master methods change-request moderation queue.

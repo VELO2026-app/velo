@@ -297,38 +297,26 @@
       </div>
 
       <!-- ================================================================
-           Для кого практика  (P5, PROMPT №594): audience_kind single-select,
-           + a multi-select of the master's own custom groups when 'groups'
-           is chosen. No SVG mock exists -- MINIMAL DS-language design.
+           Для кого практика  (P5, PROMPT №594; FE-24: the shared
+           PracticeAudiencePicker -- kinds radio + target chips for BOTH
+           targeted kinds): student groups and schools. No SVG mock exists --
+           MINIMAL DS-language design.
            ================================================================ -->
       <div class="create-practice__section">
         <h2 class="velo-section-title">Для кого практика</h2>
 
         <div class="create-practice__railed">
           <VCard class="create-practice__repeat" padding="none">
-            <VRadioGroup v-model="form.audience_kind" :options="createAudienceOptions" />
+            <PracticeAudiencePicker
+              v-model:kind="form.audience_kind"
+              v-model:group-ids="form.audience_group_ids"
+              v-model:curator-group-ids="form.audience_curator_group_ids"
+              :groups="customGroups"
+              :schools="eligibleSchools"
+              :error="errors.audience_group_ids"
+              students-label="Все мои ученики"
+            />
           </VCard>
-
-          <template v-if="form.audience_kind === 'groups'">
-            <div v-if="customGroups.length" class="create-practice__audience-chips">
-              <VChip
-                v-for="g in customGroups"
-                :key="g.id"
-                size="md"
-                clickable
-                :active="form.audience_group_ids.includes(g.id)"
-                @click="onAudienceGroupChipClick(g.id)"
-              >
-                {{ g.name }}
-              </VChip>
-            </div>
-            <p v-else class="create-practice__audience-empty">
-              Пока нет ни одной группы. Создайте группу на экране «Мои группы».
-            </p>
-            <span v-if="errors.audience_group_ids" class="create-practice__field-error">{{
-              errors.audience_group_ids
-            }}</span>
-          </template>
         </div>
       </div>
 
@@ -428,7 +416,6 @@ import {
   VCheckbox,
   VRadioGroup,
   VDayPicker,
-  VChip,
 } from '@/components/ui'
 import { IconRequired, IconRequiredDone } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
@@ -436,7 +423,10 @@ import { useAuthStore } from '@/stores/auth'
 import { useMasterStore } from '@/stores/master'
 import { createPractice, updatePractice } from '@/api/practices'
 import { getGroups } from '@/api/groups'
+import { getMyCuratorGroups } from '@/api/curatorGroups'
 import type { GroupListItem } from '@/api/groups'
+import PracticeAudiencePicker from '@/components/shared/PracticeAudiencePicker.vue'
+import type { AudienceSchoolOption } from '@/components/shared/PracticeAudiencePicker.vue'
 import { formatShortDate, todayLocalISO } from '@/utils/format'
 import DatePickerSheet from '@/components/shared/DatePickerSheet.vue'
 import TimePickerSheet from '@/components/shared/TimePickerSheet.vue'
@@ -446,7 +436,6 @@ import { ApiResponseError } from '@/api/client'
 import { errorMessage, extractApiError } from '@/composables/useApiError'
 import {
   DURATION_OPTIONS,
-  AUDIENCE_OPTIONS,
   catalogDirectionOptions,
   catalogStylesForDirection,
 } from '@/utils/practiceOptions'
@@ -464,16 +453,9 @@ const router = useRouter()
 const toast = useToast()
 
 // T24-24 (PROMPT №639): "Все ученики" -> "Все мои ученики", on THIS screen
-// ONLY. AUDIENCE_OPTIONS is shared with EditPracticeView.vue (practiceOptions.ts
-// says so explicitly) -- editing the label there would have silently changed
-// BOTH screens, exactly the "one-word edit made by search-and-replace" trap
-// the instruction warned about (the same string is also byte-scanned as a
-// substring of MasterSummaryView's unrelated "Все ученики в порядке", not
-// touched -- a different sentence, not this label). A local mapped copy
-// keeps Edit byte-identical.
-const createAudienceOptions = AUDIENCE_OPTIONS.map((o) =>
-  o.value === 'students' ? { ...o, label: 'Все мои ученики' } : o,
-)
+// ONLY -- passed to the shared PracticeAudiencePicker as `students-label`.
+// practiceOptions.ts's shared label stays byte-identical for Edit (the
+// mapped copy that used to live here is the picker's concern now).
 
 // Lift the focused field above the soft keyboard once it settles (shared M5
 // composable — replaces the bespoke 300ms scrollFieldIntoView, K3).
@@ -502,6 +484,11 @@ const masterStore = useMasterStore()
 const catalog = ref<TaxonomyListResponse | null>(null)
 // P5 (PROMPT №594): the master's own custom groups (loaded in onMounted below).
 const customGroups = ref<GroupListItem[]>([])
+// FE-24 (GT P5): schools this master may target (relation curator or master
+// -- the two the backend validates curator_group_ids against). Loaded from
+// /curator-groups/mine; empty for a master in no school, which simply keeps
+// the fourth audience option out of the radio.
+const eligibleSchools = ref<AudienceSchoolOption[]>([])
 onMounted(() => {
   void masterStore.fetchMyPractices()
   void ensureTaxonomyCatalog().then((c) => {
@@ -526,6 +513,19 @@ onMounted(() => {
       // path for a master who actually has groups. (Also avoids an
       // unhandled promise rejection.)
       toast.error('Не удалось загрузить группы')
+    })
+  // FE-24 (GT P5): the eligible schools. A failure here degrades to "no
+  // schools" (the fourth option stays hidden) -- honest, same discipline as
+  // the groups catch above but quieter: there is no screen to point at from
+  // a practice form, and the toast would claim a list the user never opened.
+  void getMyCuratorGroups()
+    .then((res) => {
+      eligibleSchools.value = res.items
+        .filter((g) => g.relation === 'curator' || g.relation === 'master')
+        .map((g) => ({ id: g.id, name: g.name }))
+    })
+    .catch(() => {
+      eligibleSchools.value = []
     })
 })
 
@@ -561,15 +561,6 @@ const RECURRENCE_END_OPTIONS = [
 
 // «Платно» убрано (operator 2026-06-18 Q2=А) — пока только бесплатные практики.
 const PAYMENT_OPTIONS = [{ value: 'free', label: 'Бесплатно' }]
-
-// Named wrapper (B7-hook edge: an inline multi-statement @click handler can
-// be reformatted across lines by the pre-commit hook's prettier pass and
-// lose its semicolon, breaking the Vue template compiler).
-function onAudienceGroupChipClick(groupId: string): void {
-  const idx = form.audience_group_ids.indexOf(groupId)
-  if (idx === -1) form.audience_group_ids.push(groupId)
-  else form.audience_group_ids.splice(idx, 1)
-}
 
 // Уровень сложности — локальные мужские лейблы под слово «уровень» (Q1=Б);
 // глобальный DIFFICULTY_LABEL (женский род, под «практика») не трогаем.
@@ -619,6 +610,10 @@ const form = reactive({
   // ports the selector, but the TYPE no longer lies about what can come back.
   audience_kind: 'public' as PracticeAudienceKind,
   audience_group_ids: [] as string[],
+  // FE-24 (GT P5): the schools multi-select's ids -- sent ONLY when
+  // audience_kind === 'curator_groups' (group_ids and curator_group_ids are
+  // mutually exclusive on the wire, a 422 otherwise).
+  audience_curator_group_ids: [] as string[],
   description: '',
   what_to_prepare: '',
   contraindications: '',
@@ -960,6 +955,12 @@ function validate(): boolean {
     errors.audience_group_ids = 'Выберите хотя бы одну группу'
     ok = false
   }
+  // FE-24 (GT P5): the mirror check for schools -- curator_group_ids must be
+  // non-empty when the kind is 'curator_groups' (same backend rule).
+  if (form.audience_kind === 'curator_groups' && form.audience_curator_group_ids.length === 0) {
+    errors.audience_group_ids = 'Выберите хотя бы одну школу'
+    ok = false
+  }
   return ok
 }
 
@@ -1037,10 +1038,13 @@ async function submit(): Promise<void> {
       currency: 'eur',
       // E3: when recurring, send the series spec; non-recurring → null.
       recurrence: form.is_recurring ? buildRecurrence() : null,
-      // P5 (PROMPT №594): audience_kind + group_ids (only meaningful --
-      // and only sent -- for 'groups').
+      // P5 (PROMPT №594) / FE-24 (GT P5): audience_kind + the ONE target
+      // array the chosen kind reads (mutually exclusive on the wire -- a
+      // 422 otherwise; the unused one is always sent as an empty array).
       audience_kind: form.audience_kind,
       group_ids: form.audience_kind === 'groups' ? form.audience_group_ids : [],
+      curator_group_ids:
+        form.audience_kind === 'curator_groups' ? form.audience_curator_group_ids : [],
     })
 
     // A4 V6 (PROMPT №572): `deduplicated` is the EXPLICIT backend signal that

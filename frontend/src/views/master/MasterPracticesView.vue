@@ -99,6 +99,20 @@
                 ><IconHourglass :size="16" /> {{ remainingSessionsLabel(p) }}</span
               >
             </div>
+            <!-- Review P2 / GT P5: the list card marks an unreachable school
+                 audience too, with a straight jump into the edit screen --
+                 not only the detail view the master may never open. -->
+            <div v-if="p.audience_unavailable" class="mp-card__meta mp-card__meta--row2">
+              <span
+                class="mp-stat mp-stat--warn"
+                role="button"
+                tabindex="0"
+                @click.stop="goEdit(p.id)"
+                @keydown.enter.stop.prevent="goEdit(p.id)"
+              >
+                <IconWarning :size="16" /> Школа недоступна — смените аудиторию
+              </span>
+            </div>
           </article>
         </template>
         <VEmptyState
@@ -166,7 +180,14 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import { VButton, VLoader, VEmptyState, VSegmentTrack, VRatingBadges } from '@/components/ui'
-import { IconPlus, IconGroup, IconCheckin, IconRepeat, IconHourglass } from '@/components/icons'
+import {
+  IconPlus,
+  IconGroup,
+  IconCheckin,
+  IconRepeat,
+  IconHourglass,
+  IconWarning,
+} from '@/components/icons'
 import { useMasterStore } from '@/stores/master'
 import { useDiaryStore } from '@/stores/diary'
 import { useToast } from '@/composables/useToast'
@@ -309,6 +330,11 @@ function goNew(): void {
 }
 function goDetail(id: string): void {
   router.push({ name: 'master-practice-detail', params: { id } })
+}
+
+/** Review P2: straight from the list's audience warning into the editor. */
+function goEdit(id: string): void {
+  router.push({ name: 'master-practice-edit', params: { id } })
 }
 
 /** Lazily fetch the bucket a tab needs -- each tab paginates independently
@@ -479,6 +505,14 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: var(--velo-gap-6);
+}
+
+/* Review P2: the unreachable-school-audience warning inside a list card --
+   peach attention pair (the same tokens the detail screen's banner uses),
+   clickable straight into the editor. */
+.mp-stat--warn {
+  color: var(--velo-peach-700);
+  cursor: pointer;
 }
 
 .mp-stat :deep(svg) {

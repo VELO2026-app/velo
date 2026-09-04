@@ -82,6 +82,7 @@ import { createApp, nextTick, type App } from 'vue'
 import CreatePracticeView from '@/views/master/CreatePracticeView.vue'
 import * as practicesApi from '@/api/practices'
 import * as groupsApi from '@/api/groups'
+import * as cgApi from '@/api/curatorGroups'
 import { ApiResponseError } from '@/api/client'
 import type {
   CreatePracticeRequest,
@@ -96,6 +97,10 @@ vi.mock('@/api/practices')
 // above) -- an unmocked call here would hit the real network in EVERY test
 // in this file, not just the audience-specific ones below.
 vi.mock('@/api/groups')
+
+// FE-24 (GT P5): the fourth option fetches the master's eligible schools on
+// mount -- mocked wholesale for the same reason as groups above.
+vi.mock('@/api/curatorGroups')
 
 // Seamed at the helper, not at @/api/taxonomy: the real one caches for the whole
 // file (see the banner). Resolving null = catalog cold -> hardcoded fallback.
@@ -400,6 +405,7 @@ beforeEach(() => {
   fetchMyPractices.mockReset().mockResolvedValue(undefined)
   refreshMyPractices.mockReset().mockResolvedValue(undefined)
   vi.mocked(groupsApi.getGroups).mockReset().mockResolvedValue({ items: [] })
+  vi.mocked(cgApi.getMyCuratorGroups).mockReset().mockResolvedValue({ items: [] })
   push.mockReset()
   back.mockReset()
   replace.mockReset()
@@ -670,8 +676,11 @@ describe('CreatePracticeView', () => {
         currency: 'eur',
         recurrence: null,
         // P5 (PROMPT №594): untouched «Для кого практика» -> the default.
+        // FE-24 (GT P5): curator_group_ids always ships too -- an empty
+        // array for every non-school kind, the exact mirror of group_ids.
         audience_kind: 'public',
         group_ids: [],
+        curator_group_ids: [],
       })
     })
 
@@ -1646,4 +1655,72 @@ describe('CreatePracticeView', () => {
   //    message, a retry of the PATCH alone, or a rollback is a product decision,
   //    not a defect this file may invent an assertion for. Flagged, not fixed.
   // ==========================================================================
+})
+
+// -- «Школы» audience (FE-24 / GT P5) ------------------------------------------
+
+describe('CreatePracticeView -- «Школы» audience (FE-24 / GT P5)', () => {
+  const school = (id: string, name: string, relation: 'curator' | 'master' | 'student') => ({
+    id,
+    name,
+    description: null,
+    curator: { user_id: 'u1', display_name: 'Мария Иванова', avatar_url: null },
+    masters_count: 2,
+    students_count: 3,
+    relation,
+  })
+
+  it('no eligible schools: the fourth option stays out of the radio entirely', async () => {
+    mount()
+    await flush()
+
+    expect(button('Школы')).toBeUndefined()
+  })
+
+  it('with eligible schools: option appears, student-relation schools are filtered out, and a picked chip ships curator_group_ids', async () => {
+    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+      items: [
+        school('sc1', 'Тихая школа', 'curator'),
+        school('sc2', 'Утренняя школа', 'master'),
+        school('sc3', 'Ученическая', 'student'),
+      ],
+    })
+    mount()
+    await flush()
+    await fillMinimalForm()
+
+    button('Школы')?.click()
+    await flush()
+
+    // Only curator|master relations are targetable -- the student one is out.
+    const chips = Array.from(host?.querySelectorAll<HTMLElement>('.v-chip') ?? [])
+    expect(chips.map((c) => c.textContent?.trim())).toEqual(['Тихая школа', 'Утренняя школа'])
+
+    chips[0]?.click()
+    await flush()
+    submitForm()
+    await flush()
+
+    expect(sentBody().audience_kind).toBe('curator_groups')
+    expect(sentBody().curator_group_ids).toEqual(['sc1'])
+    // Mutually exclusive on the wire: the unused array ships empty.
+    expect(sentBody().group_ids).toEqual([])
+  })
+
+  it('«Школы» with nothing picked blocks submit with the field error', async () => {
+    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+      items: [school('sc1', 'Тихая школа', 'curator')],
+    })
+    mount()
+    await flush()
+    await fillMinimalForm()
+
+    button('Школы')?.click()
+    await flush()
+    submitForm()
+    await flush()
+
+    expect(vi.mocked(practicesApi.createPractice)).not.toHaveBeenCalled()
+    expect(text()).toContain('Выберите хотя бы одну школу')
+  })
 })

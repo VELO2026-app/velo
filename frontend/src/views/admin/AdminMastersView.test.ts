@@ -603,5 +603,35 @@ describe('AdminMastersView', () => {
 
       expect(push).toHaveBeenCalledWith({ name: 'admin-master-invite' })
     })
+
+    // FE-23 (GT P4): the «Куратор» badge keys off curator_groups_count > 0
+    // (counts ACTIVE and FROZEN schools alike), and «Школы» opens the
+    // read-only schools list.
+    it('shows the «Куратор» badge only for masters owning schools, and «Школы» opens the list', async () => {
+      vi.mocked(adminApi.getMastersList)
+        .mockReset()
+        .mockResolvedValue(
+          paginated(
+            [
+              master({ id: 'm_cur', first_name: 'Анна', curator_groups_count: 2 }),
+              master({ id: 'm_plain', first_name: 'Борис', curator_groups_count: 0 }),
+              master({ id: 'm_null', first_name: 'Вера', curator_groups_count: null }),
+            ],
+            3,
+          ),
+        )
+      mount()
+      await flush()
+
+      const cards = Array.from(host?.querySelectorAll('.mcard') ?? [])
+      expect(cards.length).toBe(3)
+      expect(cards[0]?.textContent).toContain('Куратор')
+      expect(cards[1]?.textContent).not.toContain('Куратор')
+      expect(cards[2]?.textContent).not.toContain('Куратор')
+
+      buttonByText('Школы')?.click()
+      await flush()
+      expect(push).toHaveBeenCalledWith({ name: 'admin-curator-groups' })
+    })
   })
 })
