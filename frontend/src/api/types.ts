@@ -15,6 +15,8 @@
 
 export type {
   AISummaryResponse,
+  AdminCuratorGroupCuratorRef,
+  AdminCuratorGroupListItem,
   AdminMasterActionResponse,
   AdminMasterDetail,
   AdminMasterListItem,
@@ -44,10 +46,28 @@ export type {
   ClaimMasterInviteResponse,
   CreateBookingRequest,
   CreateCompanyPromoRequest,
+  CreateCuratorGroupInviteRequest,
+  CreateCuratorGroupRequest,
   CreateDiaryEntryRequest,
   CreateMasterPromoRequest,
   CreateReportRequest,
   CreateWithdrawalRequest,
+  CuratorGroupCuratorRef,
+  CuratorGroupDeletePreviewResponse,
+  CuratorGroupInvitePreviewGroup,
+  CuratorGroupInvitePreviewResponse,
+  CuratorGroupInviteResponse,
+  CuratorGroupLeavePreviewResponse,
+  CuratorGroupListResponse,
+  CuratorGroupMasterItem,
+  CuratorGroupMemberItem,
+  CuratorGroupMineItem,
+  CuratorGroupMineResponse,
+  CuratorGroupPageResponse,
+  CuratorGroupRemovePreviewResponse,
+  CuratorGroupResponse,
+  CuratorGroupTransferRef,
+  CuratorGroupViewer,
   DiaryEntryResponse,
   DiaryFeedItem,
   DiaryFeedResponse,
@@ -59,6 +79,8 @@ export type {
   FeedbackResponse,
   IncomeResponse,
   InviteMasterResponse,
+  JoinCuratorGroupRequest,
+  JoinCuratorGroupResponse,
   LowCheckinPractice,
   MasterApplyExperience,
   MasterApplyProfile,
@@ -73,10 +95,14 @@ export type {
   MethodChangeRequest,
   MethodChangeRequestSubmit,
   MoodDistribution,
+  OfferCuratorGroupTransferRequest,
+  PaginatedAdminCuratorGroupsResponse,
   PaginatedAdminPracticesResponse,
   PaginatedAdminWithdrawalsResponse,
   PaginatedBookingsResponse,
   PaginatedCheckinsResponse,
+  PaginatedCuratorGroupMastersResponse,
+  PaginatedCuratorGroupMembersResponse,
   PaginatedDiaryEntriesResponse,
   PaginatedFeedbacksResponse,
   PaginatedMasterReviewsResponse,
@@ -123,6 +149,7 @@ export type {
   TopUser,
   TopupRequest,
   TopupResponse,
+  UpdateCuratorGroupRequest,
   UpdateDiaryEntryRequest,
   UpdateReportRequest,
   MasterApplicationInfo,
@@ -199,6 +226,10 @@ export interface UpdatePracticeRequest extends GeneratedUpdatePracticeRequest {
 export interface AudiencePreviewRequest {
   audience_kind: AudienceKind
   group_ids: string[]
+  /** FE-24 (GT P5): the mirror of group_ids for audience_kind=
+   *  'curator_groups' -- the generated schema carries it natively; this
+   *  bridge adds it in the same shape. Mutually exclusive with group_ids. */
+  curator_group_ids?: string[]
 }
 
 export interface AudiencePreviewResponse {
