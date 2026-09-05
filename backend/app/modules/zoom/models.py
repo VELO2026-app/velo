@@ -297,10 +297,12 @@ class ZoomGuestName(UUIDMixin, TimestampMixin, Base):
 
     __table_args__ = (
         # Blank and whitespace-only names rejected by the DATABASE, not by a
-        # caller that does not exist yet (GT-21b item 4). First expression
-        # CHECK in this tree -- the others are IN (...) and BETWEEN.
+        # caller that does not exist yet (GT-21b item 4). The expression is a
+        # regex, not length(btrim(...)): btrim's default trim set is the SPACE
+        # character alone, so a name of tabs or newlines passed it (found by
+        # the suite, fixed in gt21cd3e4f5a). First regex CHECK in this tree.
         CheckConstraint(
-            "length(btrim(display_name)) > 0",
+            "display_name ~ '[^[:space:]]'",
             name="ck_zoom_guest_names_display_name_not_blank",
         ),
         # Leads with practice_id, so no separate index on it -- same rule as
