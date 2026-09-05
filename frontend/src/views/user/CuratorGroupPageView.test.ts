@@ -35,8 +35,9 @@ vi.mock('vue-router', () => ({
 
 const toastSuccess = vi.fn()
 const toastError = vi.fn()
+const toastInfo = vi.fn()
 vi.mock('@/composables/useToast', () => ({
-  useToast: () => ({ success: toastSuccess, error: toastError, info: vi.fn() }),
+  useToast: () => ({ success: toastSuccess, error: toastError, info: toastInfo }),
 }))
 
 // CalendarPracticeCard reads the viewer timezone through the auth store;
@@ -94,11 +95,13 @@ function openMenu(): void {
 function pageFixture(
   relation: 'curator' | 'master' | 'student',
   transfer: CuratorGroupPageResponse['transfer'] = null,
+  avatarUrl: string | null = null,
 ): CuratorGroupPageResponse {
   return {
     id: 'g1',
     name: 'Тихая школа',
     description: 'Практики тишины',
+    avatar_url: avatarUrl,
     curator: { user_id: 'u1', display_name: 'Мария Иванова', avatar_url: null },
     masters_count: 2,
     students_count: 5,
@@ -208,6 +211,14 @@ function mockHappyLoad(
     students_count: 5,
     upcoming_practices_targeting_group: 0,
   })
+  // BE-19: the journal is fetched only for the curator; the green default is
+  // an empty feed so the relation-matrix tests stay about the roster.
+  vi.mocked(cgApi.getCuratorGroupJournal).mockResolvedValue({
+    items: [],
+    total: 0,
+    limit: 20,
+    offset: 0,
+  })
 }
 
 beforeEach(() => {
@@ -218,6 +229,7 @@ beforeEach(() => {
   replace.mockReset()
   toastSuccess.mockReset()
   toastError.mockReset()
+  toastInfo.mockReset()
   mockHappyLoad('student')
 })
 
@@ -464,12 +476,17 @@ describe('CuratorGroupPageView -- curator management', () => {
     fields[0]!.dispatchEvent(new Event('input'))
     fields[1]!.value = ''
     fields[1]!.dispatchEvent(new Event('input'))
+    // BE-20: the third field is the avatar link -- untouched here, so the
+    // key must be ABSENT from the PATCH (not null: the school has no avatar
+    // to remove, and an always-sent key would wipe pictures on plain renames).
+    expect(fields[2]!.value).toBe('')
     await flush()
 
     vi.mocked(cgApi.updateCuratorGroup).mockResolvedValue({
       id: 'g1',
       name: 'Новое имя',
       description: null,
+      avatar_url: null,
       masters_count: 2,
       students_count: 5,
       transfer: null,
@@ -478,8 +495,101 @@ describe('CuratorGroupPageView -- curator management', () => {
     buttonWith('Сохранить')?.click()
     await flush()
 
-    expect(cgApi.updateCuratorGroup).toHaveBeenCalledWith('g1', 'Новое имя', null)
+    expect(cgApi.updateCuratorGroup).toHaveBeenCalledWith('g1', 'Новое имя', null, undefined)
     expect(text()).toContain('Новое имя')
+  })
+
+  it('BE-20: avatar link is PATCHed when typed, and «сохранено как …» surfaces the normalization', async () => {
+    mockHappyLoad('curator')
+    mount()
+    await flush()
+
+    openMenu()
+    await flush()
+    buttonWith('Редактировать')?.click()
+    await flush()
+
+    const fields = Array.from(
+      document.body.querySelectorAll('input, textarea'),
+    ) as HTMLInputElement[]
+    fields[2]!.value = 'https://CDN.Example.COM/school.png'
+    fields[2]!.dispatchEvent(new Event('input'))
+    await flush()
+
+    // The server stores the URL normalized -- NOT byte-equal to the input.
+    vi.mocked(cgApi.updateCuratorGroup).mockResolvedValue({
+      id: 'g1',
+      name: 'Тихая школа',
+      description: 'Практики тишины',
+      avatar_url: 'https://cdn.example.com/school.png',
+      masters_count: 2,
+      students_count: 5,
+      transfer: null,
+      created_at: '2026-08-01T00:00:00Z',
+    })
+    buttonWith('Сохранить')?.click()
+    await flush()
+
+    expect(cgApi.updateCuratorGroup).toHaveBeenCalledWith(
+      'g1',
+      'Тихая школа',
+      'Практики тишины',
+      'https://CDN.Example.COM/school.png',
+    )
+    expect(toastInfo).toHaveBeenCalledWith(
+      'Ссылка на аватар сохранена как https://cdn.example.com/school.png',
+    )
+    // The normalized form lands on the page too.
+    const img = document.body.querySelector('.cgp__school-avatar img')
+    expect(img?.getAttribute('src')).toBe('https://cdn.example.com/school.png')
+  })
+
+  it('BE-20: clearing the link on a school that HAS an avatar PATCHes null (remove)', async () => {
+    vi.mocked(cgApi.getCuratorGroupPage).mockResolvedValue(
+      pageFixture('curator', null, 'https://cdn.example.com/old.png'),
+    )
+    mount()
+    await flush()
+
+    // The intro renders the school's own avatar (not the curator's).
+    expect(document.body.querySelector('.cgp__school-avatar img')?.getAttribute('src')).toBe(
+      'https://cdn.example.com/old.png',
+    )
+
+    openMenu()
+    await flush()
+    buttonWith('Редактировать')?.click()
+    await flush()
+
+    const fields = Array.from(
+      document.body.querySelectorAll('input, textarea'),
+    ) as HTMLInputElement[]
+    expect(fields[2]!.value).toBe('https://cdn.example.com/old.png')
+    fields[2]!.value = ''
+    fields[2]!.dispatchEvent(new Event('input'))
+    await flush()
+
+    vi.mocked(cgApi.updateCuratorGroup).mockResolvedValue({
+      id: 'g1',
+      name: 'Тихая школа',
+      description: 'Практики тишины',
+      avatar_url: null,
+      masters_count: 2,
+      students_count: 5,
+      transfer: null,
+      created_at: '2026-08-01T00:00:00Z',
+    })
+    buttonWith('Сохранить')?.click()
+    await flush()
+
+    expect(cgApi.updateCuratorGroup).toHaveBeenCalledWith(
+      'g1',
+      'Тихая школа',
+      'Практики тишины',
+      null,
+    )
+    expect(toastInfo).not.toHaveBeenCalled()
+    expect(document.body.querySelector('.cgp__school-avatar')).toBeNull()
   })
 
   it('invite sheets: the menu items mint the right kind', async () => {
@@ -691,5 +801,203 @@ describe('CuratorGroupPageView -- transfer', () => {
     await flush()
 
     expect(text()).not.toContain('куратором')
+  })
+})
+
+// -- Журнал школы (BE-19) -------------------------------------------------------
+
+describe('CuratorGroupPageView -- journal (BE-19)', () => {
+  function eventFixture(
+    id: string,
+    event: string,
+    actor: string,
+    data: Record<string, unknown> = {},
+    createdAt = '2026-09-01T12:00:00Z',
+  ) {
+    return {
+      id,
+      event,
+      actor: { user_id: `u_${id}`, display_name: actor },
+      data,
+      created_at: createdAt,
+    }
+  }
+
+  it("CURATOR: the feed renders in the RESPONSE's order, frozen actor names and all", async () => {
+    mockHappyLoad('curator')
+    vi.mocked(cgApi.getCuratorGroupJournal).mockResolvedValue({
+      items: [
+        eventFixture('e1', 'member_removed', 'Мария Иванова', {
+          kind: 'student',
+          target_user_id: 's1',
+          target_name: 'Анна',
+          actor_name: 'Мария Иванова',
+        }),
+        eventFixture('e2', 'group_renamed', 'Мария Иванова', {
+          old_name: 'Тихое утро',
+          new_name: 'Тихая школа',
+          actor_name: 'Мария Иванова',
+        }),
+        eventFixture('e3', 'transfer_accepted', 'Пётр Сомов', {
+          target_user_id: 'u1',
+          target_name: 'Мария Иванова',
+          actor_name: 'Пётр Сомов',
+        }),
+      ],
+      total: 3,
+      limit: 20,
+      offset: 0,
+    })
+    mount()
+    await flush()
+
+    expect(cgApi.getCuratorGroupJournal).toHaveBeenCalledWith('g1', 20, 0)
+    expect(text()).toContain('Журнал школы')
+    // The sentence per kind: actor (frozen) + line.
+    expect(text()).toContain('Мария Иванова — удалил(а) участника: Анна')
+    expect(text()).toContain('Мария Иванова — переименовал(а) школу: «Тихое утро» → «Тихая школа»')
+    expect(text()).toContain('Пётр Сомов — принял(а) школу — прежний куратор: Мария Иванова')
+    // The response order is authoritative (a hidden seq column sorted it) --
+    // e1 must read ABOVE e2 even though e2's kind sorts first alphabetically.
+    const feed = text()
+    expect(feed.indexOf('удалил(а) участника')).toBeLessThan(feed.indexOf('переименовал(а) школу'))
+    // No «Показать ещё» when everything is in.
+    expect(buttonWith('Показать ещё')).toBeFalsy()
+  })
+
+  it('STUDENT and MASTER: no journal section, no journal call (404 by design)', async () => {
+    for (const relation of ['student', 'master'] as const) {
+      mockHappyLoad(relation)
+      mount()
+      await flush()
+
+      expect(text()).not.toContain('Журнал школы')
+      expect(cgApi.getCuratorGroupJournal).not.toHaveBeenCalled()
+      app?.unmount()
+      host?.remove()
+      document.body.innerHTML = ''
+      vi.clearAllMocks()
+      mockHappyLoad('student')
+    }
+  })
+
+  it("«Показать ещё» appends the next page at the FEED's end, offset forwarded", async () => {
+    mockHappyLoad('curator')
+    const page1 = Array.from({ length: 20 }, (_, i) =>
+      eventFixture(`e${i}`, 'member_joined', `Участник ${i}`, { kind: 'student' }),
+    )
+    vi.mocked(cgApi.getCuratorGroupJournal)
+      .mockResolvedValueOnce({ items: page1, total: 21, limit: 20, offset: 0 })
+      .mockResolvedValueOnce({
+        items: [eventFixture('e20', 'member_left', 'Участник 20', { kind: 'master' })],
+        total: 21,
+        limit: 20,
+        offset: 20,
+      })
+    mount()
+    await flush()
+
+    buttonWith('Показать ещё')?.click()
+    await flush()
+
+    expect(cgApi.getCuratorGroupJournal).toHaveBeenLastCalledWith('g1', 20, 20)
+    const feed = text()
+    expect(feed.indexOf('Участник 0')).toBeLessThan(feed.indexOf('вышел(а) из школы (мастер)'))
+    // All 21 in -- the pager is gone.
+    expect(buttonWith('Показать ещё')).toBeFalsy()
+  })
+
+  it('an unknown event kind (the vocabulary grows) renders the raw string, never crashes', async () => {
+    mockHappyLoad('curator')
+    vi.mocked(cgApi.getCuratorGroupJournal).mockResolvedValue({
+      items: [eventFixture('e_x', 'practice_published', 'Пётр Сомов')],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    })
+    mount()
+    await flush()
+
+    expect(text()).toContain('Пётр Сомов — practice_published')
+  })
+
+  it("a rename through the edit sheet refreshes the journal's first page", async () => {
+    mockHappyLoad('curator')
+    mount()
+    await flush()
+
+    expect(cgApi.getCuratorGroupJournal).toHaveBeenCalledTimes(1)
+
+    openMenu()
+    await flush()
+    buttonWith('Редактировать')?.click()
+    await flush()
+    vi.mocked(cgApi.updateCuratorGroup).mockResolvedValue({
+      id: 'g1',
+      name: 'Новое имя',
+      description: null,
+      avatar_url: null,
+      masters_count: 2,
+      students_count: 5,
+      transfer: null,
+      created_at: '2026-08-01T00:00:00Z',
+    })
+    buttonWith('Сохранить')?.click()
+    await flush()
+
+    expect(cgApi.getCuratorGroupJournal).toHaveBeenCalledTimes(2)
+  })
+
+  it('journal failure: honest «недоступно» state with a working retry', async () => {
+    mockHappyLoad('curator')
+    vi.mocked(cgApi.getCuratorGroupJournal).mockRejectedValueOnce(new Error('blip'))
+    mount()
+    await flush()
+
+    expect(text()).toContain('Журнал недоступен')
+
+    vi.mocked(cgApi.getCuratorGroupJournal).mockResolvedValueOnce({
+      items: [eventFixture('e1', 'group_created', 'Мария Иванова')],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    })
+    buttonWith('Повторить')?.click()
+    await flush()
+
+    expect(text()).toContain('Мария Иванова — создал(а) школу')
+  })
+
+  it('closing an invite sheet refreshes the journal (mint-on-open and revoke both write events)', async () => {
+    mockHappyLoad('curator')
+    mount()
+    await flush()
+
+    expect(cgApi.getCuratorGroupJournal).toHaveBeenCalledTimes(1)
+
+    openMenu()
+    await flush()
+    vi.mocked(cgApi.createCuratorGroupInvite).mockResolvedValue({
+      kind: 'master',
+      invite_url: 'https://t.me/bot?startapp=curator_group_invite__tok',
+    })
+    buttonWith('Пригласить мастера')?.click()
+    await flush()
+    expect(cgApi.createCuratorGroupInvite).toHaveBeenCalledWith('g1', 'master')
+
+    // Dismiss the sheet via its overlay (VModal's @click.self) -- the page's
+    // close handler must catch the journal up with the mint it just caused.
+    document.body.querySelector<HTMLElement>('.v-modal__overlay')?.click()
+    await flush()
+
+    expect(cgApi.getCuratorGroupJournal).toHaveBeenCalledTimes(2)
+  })
+
+  it('empty feed: the quiet «Событий пока нет» note', async () => {
+    mockHappyLoad('curator')
+    mount()
+    await flush()
+
+    expect(text()).toContain('Событий пока нет')
   })
 })

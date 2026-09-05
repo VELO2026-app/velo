@@ -106,7 +106,21 @@
       </VEmptyState>
 
       <template v-else-if="page">
-        <p v-if="page.description" class="cgp__description">{{ page.description }}</p>
+        <!-- School avatar (BE-20) + description. The avatar is a LINK, not an
+             upload -- the platform has no file storage -- and it may be absent
+             (founding takes no picture; a PATCH attaches it afterwards). -->
+        <div v-if="page.description || page.avatar_url" class="cgp__intro">
+          <VAvatar
+            v-if="page.avatar_url"
+            class="cgp__school-avatar"
+            :name="page.name"
+            :url="page.avatar_url"
+            size="md"
+          />
+          <p v-if="page.description" class="cgp__description">
+            {{ page.description }}
+          </p>
+        </div>
 
         <div class="cgp__meta">
           <VAvatar
@@ -224,11 +238,49 @@
           </template>
           <VEmptyState v-else variant="note" title="Учеников пока нет" />
         </template>
+
+        <!-- Журнал школы (BE-19): the curator's own event feed. Members never
+             see it -- the backend answers 404 to everyone but the owner, and
+             the journal names who was removed and who walked out. -->
+        <template v-if="isCurator">
+          <h2 class="velo-section-title cgp__section">Журнал школы</h2>
+          <div v-if="journalLoading && !journal.length" class="cgp__state">
+            <VLoader size="lg" />
+          </div>
+          <template v-else-if="journal.length">
+            <div v-for="ev in journal" :key="ev.id" class="cgp__journal-row">
+              <!-- The actor's name is a SNAPSHOT frozen at write time -- it is
+                   rendered as-is, never looked up (a renamed or deleted person
+                   keeps their place in history). -->
+              <p class="cgp__journal-text">
+                <strong>{{ ev.actor.display_name }}</strong> — {{ journalLine(ev) }}
+              </p>
+              <p class="cgp__journal-date">
+                {{ formatFeedDateTime(ev.created_at, viewerTimezone || 'UTC') }}
+              </p>
+            </div>
+            <VButton
+              v-if="journal.length < journalTotal"
+              variant="outline"
+              block
+              :loading="journalLoading"
+              @click="loadJournal(false)"
+            >
+              Показать ещё
+            </VButton>
+          </template>
+          <VEmptyState v-else-if="!journalError" variant="note" title="Событий пока нет" />
+          <VEmptyState v-else icon="warning" title="Журнал недоступен">
+            <template #action>
+              <VButton variant="outline" size="sm" @click="loadJournal(true)"> Повторить </VButton>
+            </template>
+          </VEmptyState>
+        </template>
       </template>
     </div>
 
-    <!-- Edit school (curator): name + description, the same sheet shape
-         MasterGroupDetailView's rename uses. -->
+    <!-- Edit school (curator): name + description + avatar link, the same
+         sheet shape MasterGroupDetailView's rename uses. -->
     <VBottomSheet
       :open="editOpen"
       title="Изменить название и описание"
@@ -246,20 +298,35 @@
         :rows="3"
         autogrow
       />
+      <!-- BE-20: the avatar is a URL, not an upload (no file storage in the
+           platform). Left empty on a school that HAS one, it means "remove";
+           the server stores the link normalized, and the save surface shows
+           «сохранено как …» when it round-trips differently. -->
+      <VInput
+        v-model="editAvatar"
+        label="Ссылка на аватар"
+        placeholder="https://example.com/school.png"
+        inputmode="url"
+      />
+      <p class="cgp__edit-hint">
+        Ссылка на картинку школы. Оставьте поле пустым, чтобы убрать аватар.
+      </p>
     </VBottomSheet>
 
-    <!-- Invite links: one sheet per kind, minted on open. -->
+    <!-- Invite links: one sheet per kind, minted on open. Closing either
+         sheet also refreshes the journal -- minting on open and revoking
+         inside both write journal events the curator should see appear. -->
     <CuratorGroupInviteSheet
       :open="inviteKind === 'master'"
       kind="master"
       :group-id="groupId"
-      @close="inviteKind = null"
+      @close="onInviteSheetClosed"
     />
     <CuratorGroupInviteSheet
       :open="inviteKind === 'student'"
       kind="student"
       :group-id="groupId"
-      @close="inviteKind = null"
+      @close="onInviteSheetClosed"
     />
 
     <!-- Transfer picker (FE-21): the eligible set is exactly the VISIBLE
@@ -351,6 +418,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   deleteCuratorGroup,
   getCuratorGroupDeletePreview,
+  getCuratorGroupJournal,
   getCuratorGroupLeavePreview,
   getCuratorGroupMasters,
   getCuratorGroupMembers,
@@ -364,6 +432,7 @@ import {
 } from '@/api/curatorGroups'
 import { ApiResponseError } from '@/api/client'
 import type {
+  CuratorGroupEventItem,
   CuratorGroupMasterItem,
   CuratorGroupMemberItem,
   CuratorGroupPageResponse,
@@ -371,7 +440,9 @@ import type {
   PracticeResponse,
 } from '@/api/types'
 import { extractApiError } from '@/composables/useApiError'
+import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import { useToast } from '@/composables/useToast'
+import { formatFeedDateTime } from '@/utils/format'
 import CalendarPracticeCard from '@/components/shared/CalendarPracticeCard.vue'
 import CuratorGroupInviteSheet from '@/components/shared/CuratorGroupInviteSheet.vue'
 import CuratorGroupTransferBanner from '@/components/shared/CuratorGroupTransferBanner.vue'
@@ -398,6 +469,9 @@ import VTextarea from '@/components/ui/VTextarea.vue'
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
+// The journal renders WHEN in the viewer's own time, like every other time
+// on the platform (the card feed already goes through this composable).
+const viewerTimezone = useViewerTimezone()
 
 const groupId = computed(() => String(route.params.id ?? ''))
 
@@ -477,12 +551,16 @@ async function load(): Promise<void> {
         fetchAllPages((offset) =>
           getCuratorGroupMembers(groupId.value, { kind: 'master', limit: PAGE, offset }),
         ),
+        // The journal is the curator's privilege -- fetched with the rosters
+        // it reports on, one screenful at a time («Показать ещё» appends).
+        loadJournal(true),
       ])
       students.value = studentItems
       hiddenMasters.value = masterMemberItems.filter((m) => !m.is_visible)
     } else {
       students.value = []
       hiddenMasters.value = []
+      journal.value = []
     }
   } catch (e) {
     if (e instanceof ApiResponseError && e.status === 404) {
@@ -515,6 +593,9 @@ async function reloadRosters(): Promise<void> {
     ])
     students.value = studentItems
     hiddenMasters.value = masterMemberItems.filter((m) => !m.is_visible)
+    // Every caller of reloadRosters just did something the journal records
+    // (a removal, an accepted transfer) -- bring its first page along too.
+    void loadJournal(true)
   }
 }
 
@@ -523,6 +604,86 @@ onMounted(load)
 watch(groupId, () => {
   if (groupId.value) void load()
 })
+
+// -- Журнал школы (BE-19) ------------------------------------------------------
+
+const journal = ref<CuratorGroupEventItem[]>([])
+const journalTotal = ref(0)
+const journalLoading = ref(false)
+const journalError = ref(false)
+const JOURNAL_PAGE = 20
+
+/** Reset=true replaces the feed (first page / refresh); false appends the
+ *  next one. The response's order is authoritative -- a hidden seq column
+ *  sorted it, and created_at CANNOT (two events of one PATCH share it to the
+ *  byte) -- so rows are stored exactly as they arrive, never re-sorted. */
+async function loadJournal(reset: boolean): Promise<void> {
+  if (journalLoading.value) return
+  journalLoading.value = true
+  if (reset) journalError.value = false
+  try {
+    const res = await getCuratorGroupJournal(
+      groupId.value,
+      JOURNAL_PAGE,
+      reset ? 0 : journal.value.length,
+    )
+    journal.value = reset ? res.items : [...journal.value, ...res.items]
+    journalTotal.value = res.total
+  } catch {
+    // 404 to a curator is the frozen-school indistinguishability (P-08) --
+    // unreachable here (the page itself already 404ed), so this catch is
+    // the plain network branch.
+    journalError.value = true
+  } finally {
+    journalLoading.value = false
+  }
+}
+
+/** The sentence half after the actor's frozen name. One line per event kind,
+ *  RU, gender-neutral «-л(а)». Unknown kinds (the vocabulary grows --
+ *  notifications next) render the raw event string rather than crashing. */
+function journalLine(ev: CuratorGroupEventItem): string {
+  const d = ev.data as {
+    kind?: 'master' | 'student'
+    old_name?: string
+    new_name?: string
+    had_avatar_before?: boolean
+    target_name?: string
+  }
+  const flavour = d.kind === 'master' ? 'мастеров' : 'учеников'
+  switch (ev.event) {
+    case 'group_created':
+      return 'создал(а) школу'
+    case 'group_renamed':
+      return `переименовал(а) школу: «${d.old_name ?? '—'}» → «${d.new_name ?? '—'}»`
+    case 'group_description_changed':
+      return 'изменил(а) описание'
+    case 'group_avatar_changed':
+      return d.had_avatar_before ? 'обновил(а) аватар школы' : 'добавил(а) аватар школы'
+    case 'member_joined':
+      return d.kind === 'master' ? 'вступил(а) мастером' : 'вступил(а) учеником'
+    case 'member_promoted':
+      return 'повышен(а) до мастера (вступил(а) по ссылке мастеров)'
+    case 'member_removed':
+      return `удалил(а) участника: ${d.target_name ?? '—'}`
+    case 'member_left':
+      return d.kind === 'master' ? 'вышел(а) из школы (мастер)' : 'вышел(а) из школы'
+    case 'invite_created':
+      return `выпустил(а) ссылку для ${flavour}`
+    case 'invite_revoked':
+      return `отозвал(а) ссылку для ${flavour}`
+    case 'transfer_offered':
+      return `предложил(а) школу мастеру: ${d.target_name ?? '—'}`
+    case 'transfer_accepted':
+      return `принял(а) школу — прежний куратор: ${d.target_name ?? '—'}`
+    case 'transfer_declined':
+      return `отклонил(а) предложение школы от: ${d.target_name ?? '—'}`
+    case 'transfer_cancelled':
+      return `отменил(а) передачу школы (адресат: ${d.target_name ?? '—'})`
+    default:
+      return ev.event
+  }
+}
 
 // -- Advisory previews (FE-24 wiring on this page's three dialogs) ----------
 //
@@ -688,12 +849,18 @@ async function onDeleteConfirm(): Promise<void> {
 const editOpen = ref(false)
 const editName = ref('')
 const editDescription = ref('')
+/** BE-20: the avatar LINK. '' in a school that has one means "remove" (an
+ *  edit sheet always states every field, so blank is a statement, not an
+ *  absence); in a school that has none it means "still none" -- the key is
+ *  simply not sent. */
+const editAvatar = ref('')
 const saving = ref(false)
 
 function onEditClick(close: () => void): void {
   close()
   editName.value = page.value?.name ?? ''
   editDescription.value = page.value?.description ?? ''
+  editAvatar.value = page.value?.avatar_url ?? ''
   editOpen.value = true
 }
 
@@ -705,7 +872,11 @@ async function onEditSave(): Promise<void> {
     // Empty description means "clear it": null is the explicit clear, never
     // an absent key (an edit dialog always states both fields).
     const desc = editDescription.value.trim()
-    const res = await updateCuratorGroup(groupId.value, name, desc === '' ? null : desc)
+    const avatarInput = editAvatar.value.trim()
+    const hadAvatar = !!page.value?.avatar_url
+    const avatar: string | null | undefined =
+      avatarInput !== '' ? avatarInput : hadAvatar ? null : undefined
+    const res = await updateCuratorGroup(groupId.value, name, desc === '' ? null : desc, avatar)
     // PATCH answers with the CURATOR's own row (CuratorGroupResponse -- no
     // viewer/curator fields), so merge the renamed fields into the page
     // instead of replacing it; res.transfer carries the pending offer along
@@ -715,11 +886,21 @@ async function onEditSave(): Promise<void> {
         ...page.value,
         name: res.name,
         description: res.description,
+        avatar_url: res.avatar_url ?? null,
         transfer: res.transfer ?? null,
       }
     }
     editOpen.value = false
     toast.success('Группа обновлена')
+    // §12 trap: the server stores the URL NORMALIZED (lowercase host,
+    // trailing slash, punycode) -- what returns is not what was typed, and
+    // a silent difference reads as "the link got corrupted". Say it.
+    if (typeof avatar === 'string' && (res.avatar_url ?? '') !== avatar && res.avatar_url) {
+      toast.info(`Ссылка на аватар сохранена как ${res.avatar_url}`)
+    }
+    // A rename / re-description / re-avatar is exactly what the journal
+    // records -- refresh its first page so the feed does not lie by omission.
+    void loadJournal(true)
   } catch (e) {
     toast.error(extractApiError(e, 'Не удалось обновить группу'))
   } finally {
@@ -734,6 +915,13 @@ const inviteKind = ref<'master' | 'student' | null>(null)
 function openInvite(kind: 'master' | 'student', close: () => void): void {
   close()
   inviteKind.value = kind
+}
+
+function onInviteSheetClosed(): void {
+  inviteKind.value = null
+  // Minting on open and revoking inside both write journal events -- the
+  // curator closing the sheet should see the feed catch up, not reload.
+  if (isCurator.value) void loadJournal(true)
 }
 
 // -- Transfer (FE-21) --
@@ -829,6 +1017,17 @@ function onTransferDeclined(): void {
   padding: var(--space-6) 0;
 }
 
+/* School intro (BE-20): optional avatar beside the description. */
+.cgp__intro {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.cgp__school-avatar {
+  flex-shrink: 0;
+}
+
 .cgp__description {
   font-family: var(--font-body);
   font-size: var(--text-xs);
@@ -866,6 +1065,40 @@ function onTransferDeclined(): void {
   font-size: var(--text-xs);
   color: var(--velo-text-secondary);
   margin: 0;
+}
+
+/* Журнал школы (BE-19): one quiet line per event, newest first. */
+.cgp__journal-row {
+  padding: var(--space-2) 0;
+  border-bottom: var(--velo-border-width, 1px) solid var(--velo-border-card);
+}
+
+.cgp__journal-row:last-of-type {
+  border-bottom: none;
+}
+
+.cgp__journal-text {
+  font-size: var(--text-sm);
+  color: var(--velo-text-primary);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.cgp__journal-text strong {
+  font-weight: 600;
+}
+
+.cgp__journal-date {
+  font-size: var(--text-xs);
+  color: var(--velo-text-muted, var(--velo-text-secondary));
+  margin: var(--space-1) 0 0;
+}
+
+/* The avatar-link hint inside the edit sheet (BE-20). */
+.cgp__edit-hint {
+  font-size: var(--text-xs);
+  color: var(--velo-text-secondary);
+  margin: 0 0 var(--space-2);
 }
 
 .cgp__master,

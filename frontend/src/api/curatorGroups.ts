@@ -15,7 +15,7 @@
 //          (+ can_create_groups, BE-18: the admin-issued right to FOUND a
 //          school rides on this list -- it is where the "create" button lives)
 //   POST   /                                     -- create {name, description?}
-//   PATCH  /{id}                                 -- rename/redescribe
+//   PATCH  /{id}                                 -- rename/redescribe/avatar
 //   DELETE /{id}                                 -- delete (never blocked, I-11)
 //   GET    /{id}/members                         -- roster (?kind&search&limit&offset)
 //   DELETE /{id}/members/{user_id}               -- remove member (idempotent)
@@ -25,6 +25,8 @@
 //   DELETE /{id}/transfer                        -- cancel offer
 //   GET    /{id}/delete-preview                  -- advisory before deleting
 //   GET    /{id}/members/{user_id}/remove-preview -- advisory before removing
+//   GET    /{id}/journal                         -- the school's event feed,
+//                                                   CURATOR ONLY (BE-19)
 //
 // MEMBER / ANY USER (prefix /api/v1/curator-groups):
 //   GET    /mine                                 -- my ACTIVE schools + relation
@@ -62,6 +64,7 @@ import type {
   JoinCuratorGroupResponse,
   OfferCuratorGroupTransferRequest,
   PaginatedAdminCuratorGroupsResponse,
+  PaginatedCuratorGroupEventsResponse,
   PaginatedCuratorGroupMastersResponse,
   PaginatedCuratorGroupMembersResponse,
   PaginatedPracticesResponse,
@@ -98,7 +101,8 @@ export function getCuratorGroups(): Promise<CuratorGroupListResponse> {
  *  fine (I-7).
  *
  *  `description` is omitted from the body when undefined/blank -- the caller
- *  trims; the backend normalizes '' to NULL on its own. */
+ *  trims; the backend normalizes '' to NULL on its own. CREATION DOES NOT
+ *  TAKE AN AVATAR (BE-20) -- the picture is attached by a PATCH afterwards. */
 export function createCuratorGroup(
   name: string,
   description?: string,
@@ -107,22 +111,32 @@ export function createCuratorGroup(
   return api.post<CuratorGroupResponse>(CURATOR_BASE, body)
 }
 
-/** PATCH /masters/me/curator-groups/{id} -- rename and/or redescribe. 404 if
- *  not my group or gone.
+/** PATCH /masters/me/curator-groups/{id} -- rename and/or redescribe and/or
+ *  re-avatar. 404 if not my group or gone. `name` is ALWAYS sent -- the
+ *  backend requires it on every PATCH, so an edit sheet must state the
+ *  current name too (the §12 trap: a stale screen would rename the school
+ *  back to a stale name and journal a rename nobody asked for).
  *
- *  `description` is a PARTIAL update with three states, and this wrapper maps
- *  them to the wire exactly (the backend reads exclude_unset):
+ *  `description` and `avatarUrl` are PARTIAL updates with three states each,
+ *  and this wrapper maps them to the wire exactly (the backend reads
+ *  exclude_unset):
  *    undefined -> key ABSENT -> leave the column alone
  *    null      -> key present, null -> write NULL (clear it)
  *    string    -> key present -> write it
- *  Passing `''` is not distinguished from null server-side; prefer null. */
+ *  Passing `''` is not distinguished from null server-side; prefer null.
+ *
+ *  The server stores the avatar URL NORMALIZED (lowercase host, trailing
+ *  slash, punycode) -- what comes back in the response is NOT byte-equal to
+ *  what was sent, and callers are expected to surface «сохранено как …». */
 export function updateCuratorGroup(
   id: string,
   name: string,
   description?: string | null,
+  avatarUrl?: string | null,
 ): Promise<CuratorGroupResponse> {
-  const body: UpdateCuratorGroupRequest =
-    description === undefined ? { name } : { name, description }
+  const body: UpdateCuratorGroupRequest = { name }
+  if (description !== undefined) body.description = description
+  if (avatarUrl !== undefined) body.avatar_url = avatarUrl
   return api.patch<CuratorGroupResponse>(`${CURATOR_BASE}/${id}`, body)
 }
 
@@ -226,6 +240,27 @@ export function getCuratorGroupRemovePreview(
   return api.get<CuratorGroupRemovePreviewResponse>(
     `${CURATOR_BASE}/${id}/members/${userId}/remove-preview`,
   )
+}
+
+/** GET /masters/me/curator-groups/{id}/journal -- what has happened in my
+ *  school, newest first (BE-19). CURATOR ONLY: a master member or a student
+ *  gets 404 (never 403 -- the journal names who was removed and who walked
+ *  out, and a 403 would confirm a school's existence to a stranger).
+ *
+ *  Three rules the renderer must respect, straight from the contract:
+ *   - the actor's display_name is a SNAPSHOT frozen at write time -- do not
+ *     look the person up, the row IS the answer;
+ *   - the feed arrives pre-sorted by a hidden seq column -- do NOT re-sort by
+ *     created_at, which two events of one PATCH share to the byte;
+ *   - `event` is a plain string that will grow (notifications next) -- render
+ *     unknown kinds with an honest fallback, never crash on them. */
+export function getCuratorGroupJournal(
+  id: string,
+  limit = 20,
+  offset = 0,
+): Promise<PaginatedCuratorGroupEventsResponse> {
+  const qs = buildQuery({ limit, offset })
+  return api.get<PaginatedCuratorGroupEventsResponse>(`${CURATOR_BASE}/${id}/journal${qs}`)
 }
 
 // =============================================================================

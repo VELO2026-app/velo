@@ -36,6 +36,7 @@ import {
   leaveCuratorGroup,
   acceptCuratorGroupTransfer,
   declineCuratorGroupTransfer,
+  getCuratorGroupJournal,
   getAdminCuratorGroups,
 } from '@/api/curatorGroups'
 import { api } from '@/api/client'
@@ -192,6 +193,34 @@ describe('updateCuratorGroup body -- the three-state description', () => {
   })
 })
 
+// avatar_url (BE-20) is a second three-state partial alongside description --
+// and the one whose ABSENT state is load-bearing: an edit sheet that always
+// sent the key would wipe the picture on every plain rename.
+describe('updateCuratorGroup -- avatar_url three-state (BE-20)', () => {
+  it('undefined: key ABSENT (a plain rename leaves the picture alone)', async () => {
+    await updateCuratorGroup('g1', 'Новое имя', 'Новое описание')
+
+    const [, body] = vi.mocked(api.patch).mock.calls[0]!
+    expect(body).toEqual({ name: 'Новое имя', description: 'Новое описание' })
+    expect(Object.keys(body as object)).not.toContain('avatar_url')
+  })
+
+  it('null: key present as null (remove the avatar)', async () => {
+    await updateCuratorGroup('g1', 'Новое имя', null, null)
+
+    const [, body] = vi.mocked(api.patch).mock.calls[0]!
+    expect(body).toEqual({ name: 'Новое имя', description: null, avatar_url: null })
+  })
+
+  it('string: key present with the value', async () => {
+    await updateCuratorGroup('g1', 'Новое имя', undefined, 'https://cdn.example.com/a.png')
+
+    const [, body] = vi.mocked(api.patch).mock.calls[0]!
+    expect(body).toEqual({ name: 'Новое имя', avatar_url: 'https://cdn.example.com/a.png' })
+    expect(Object.keys(body as object)).not.toContain('description')
+  })
+})
+
 describe('invite + transfer + join bodies', () => {
   it('createCuratorGroupInvite posts {kind} under the group path', async () => {
     await createCuratorGroupInvite('g1', 'master')
@@ -260,13 +289,21 @@ describe('paginated listings default to limit=20&offset=0', () => {
     expect(api.get).toHaveBeenCalledWith(`/api/v1/admin/curator-groups?limit=20&offset=0`)
   })
 
+  it('getCuratorGroupJournal rides the CURATOR prefix (BE-19, curator-only feed)', async () => {
+    await getCuratorGroupJournal('g1')
+
+    expect(api.get).toHaveBeenCalledWith(`${G}/g1/journal?limit=20&offset=0`)
+  })
+
   it('explicit pagination is forwarded', async () => {
     await getCuratorGroupMasters('g1', 5, 20)
     await getCuratorGroupPractices('g1', 5, 20)
     await getAdminCuratorGroups(5, 20)
+    await getCuratorGroupJournal('g1', 5, 20)
 
     expect(api.get).toHaveBeenNthCalledWith(1, `${M}/g1/masters?limit=5&offset=20`)
     expect(api.get).toHaveBeenNthCalledWith(2, `${M}/g1/practices?limit=5&offset=20`)
     expect(api.get).toHaveBeenNthCalledWith(3, `/api/v1/admin/curator-groups?limit=5&offset=20`)
+    expect(api.get).toHaveBeenNthCalledWith(4, `${G}/g1/journal?limit=5&offset=20`)
   })
 })
