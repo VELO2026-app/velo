@@ -461,13 +461,16 @@
 
       <!-- Actions -->
       <div v-if="isPending" class="mreview__foot">
-        <!-- Q-GRANT=Б (owner-ruled): there is no separate "allow schools"
-             grant -- verification IS it. Surfaced here so the admin is not
-             left hunting for a field that deliberately does not exist. -->
-        <p class="mreview__grant-note">
-          Одобрение верифицирует мастера — он сразу сможет сам создавать школы (кураторские группы).
-          Отдельной выдачи прав не предусмотрено.
-        </p>
+        <!-- BE-18: verification and the school-founding right are TWO
+             decisions in one dialog -- the checkbox defaults to no, and an
+             absent/false tick writes nothing at all. The right can be granted
+             or taken back later on the verified screen, without a second
+             verification. -->
+        <VCheckbox
+          v-model="grantSchools"
+          class="mreview__grant-check"
+          label="Разрешить создавать школы (кураторские группы)"
+        />
         <VButton variant="ghost" :disabled="anyLoading" @click="openReject">Отклонить</VButton>
         <VButton variant="primary" :loading="verifying" :disabled="anyLoading" @click="onVerify">
           Одобрить
@@ -479,6 +482,28 @@
         </VCard>
         <!-- A1: revoke a verified master (soft-freeze, data preserved) -->
         <div v-if="isVerified" class="mreview__foot">
+          <!-- BE-18: the right toggle for an ALREADY-verified master --
+               verify only admits pending applications, so this is the only
+               lever for the master verified yesterday. Idempotent both ways;
+               revoking closes NEW schools only, everything already owned
+               keeps living (that lever is «Отозвать мастера» below). -->
+          <div class="mreview__right">
+            <div>
+              <div class="mreview__k">Право создавать школы</div>
+              <div class="mreview__v">
+                {{ master.can_create_groups ? 'Выдано' : 'Не выдано' }}
+              </div>
+            </div>
+            <VButton
+              variant="outline"
+              size="sm"
+              :loading="togglingRight"
+              :disabled="anyLoading"
+              @click="onToggleRight"
+            >
+              {{ master.can_create_groups ? 'Отозвать право' : 'Выдать право' }}
+            </VButton>
+          </div>
           <p class="mreview__grant-note">
             Отзыв верификации замораживает все школы этого куратора — участники перестанут их
             видеть; данные сохранятся и оживут при повторной верификации.
@@ -547,6 +572,7 @@ import {
   VBackButton,
   VCard,
   VChip,
+  VCheckbox,
   VInput,
   VTextarea,
   VButton,
@@ -566,6 +592,7 @@ import {
   editMasterProfile,
   getRevokePreview,
   revokeMaster,
+  setMasterGroupRight,
 } from '@/api/admin'
 import type {
   AdminMasterListItem,
@@ -933,6 +960,32 @@ function closeReject(): void {
 const showPromote = ref(false)
 const promoteLabel = ref('')
 
+/** BE-18: the verify-dialog tick for the school-founding right.
+ *  Defaults to NO -- absent/false writes nothing on the backend, and the
+ *  right stays grantable later on the verified screen. */
+const grantSchools = ref(false)
+/** The verified screen's right toggle (PATCH can-create-groups). */
+const togglingRight = ref(false)
+
+/** BE-18: flip the right and merge the answer into the local master row --
+ *  the response carries the flag as written, so an idempotent second call
+ *  reads exactly like the first. */
+async function onToggleRight(): Promise<void> {
+  if (!master.value || togglingRight.value) return
+  togglingRight.value = true
+  try {
+    const res = await setMasterGroupRight(masterId, !master.value.can_create_groups)
+    master.value = { ...master.value, can_create_groups: res.can_create_groups }
+    toast.success(
+      res.can_create_groups ? 'Право создавать школы выдано' : 'Право создавать школы отозвано',
+    )
+  } catch (e) {
+    toast.error(extractApiError(e, 'Не удалось изменить право'))
+  } finally {
+    togglingRight.value = false
+  }
+}
+
 function onVerify(): void {
   if (anyLoading.value) return
   const parsed = parseMethods(methods.value)
@@ -947,7 +1000,7 @@ function onVerify(): void {
 async function doVerify(promote?: string[], masterOnly?: string[]): Promise<void> {
   verifying.value = true
   try {
-    await verifyMaster(masterId, promote, masterOnly)
+    await verifyMaster(masterId, promote, masterOnly, grantSchools.value)
     toast.success('Мастер верифицирован')
     // S-1/S-2: push to the list (fresh mount) instead of back().
     router.push({ name: 'admin-masters' })
@@ -1338,6 +1391,21 @@ onMounted(loadMaster)
   font-size: var(--text-xs);
   line-height: 1.5;
   color: var(--velo-text-muted);
+}
+
+/* BE-18: the verify-dialog checkbox -- full width, above the
+   Отклонить/Одобрить row, same slot the old grant note occupied. */
+.mreview__grant-check {
+  flex-basis: 100%;
+}
+
+/* BE-18: the verified screen's right row -- label left, toggle right. */
+.mreview__right {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
 }
 
 /* -- Processed (non-pending) note -- */

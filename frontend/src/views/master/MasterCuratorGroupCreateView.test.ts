@@ -154,4 +154,28 @@ describe('MasterCuratorGroupCreateView', () => {
     expect(toastError).toHaveBeenCalled()
     expect(replace).not.toHaveBeenCalled()
   })
+
+  it('403 group_creation_not_allowed (BE-18): the form is REPLACED by the refusal, no retry loop', async () => {
+    vi.mocked(cgApi.createCuratorGroup).mockRejectedValue(
+      new ApiResponseError(403, 'forbidden', 'group_creation_not_allowed'),
+    )
+    mount()
+    await flush()
+
+    await type(['Школа', ''])
+    buttonWith('Создать группу')?.click()
+    await flush()
+
+    // The honest refusal: not a field error, not a retryable failure -- the
+    // RIGHT is missing, and the screen says who issues it.
+    expect(text()).toContain('Создание школ недоступно')
+    expect(text()).toContain('администратор выдал это право')
+    expect(toastError).toHaveBeenCalled()
+    expect(replace).not.toHaveBeenCalled()
+
+    // Back to the list is the only honest action left.
+    buttonWith('К моим школам')?.click()
+    await flush()
+    expect(replace).toHaveBeenCalledWith({ name: 'master-curator-groups' })
+  })
 })

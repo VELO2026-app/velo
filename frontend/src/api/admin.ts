@@ -55,6 +55,7 @@ import type {
   PaginatedParticipantsResponse,
   AdminMasterDetail,
   AdminMasterProfileUpdate,
+  MasterGroupRightResponse,
   RevokeMasterAdvisory,
   PromoResponse,
 } from '@/api/types'
@@ -221,16 +222,40 @@ export function editMasterProfile(
  * approveMethodChange below): optional custom method labels to add to the
  * taxonomy catalog -- absent/empty posts the same bare `{}` every existing
  * caller already sends, so nothing else changes.
+ *
+ * canCreateGroups (BE-18): may the freshly-verified master FOUND
+ * schools? Sent only when true -- absent/false writes nothing at all on the
+ * backend, and the right can be granted or taken back later through
+ * setMasterGroupRight without a second verification.
  */
 export function verifyMaster(
   userId: string,
   promote?: string[],
   masterOnly?: string[],
+  canCreateGroups?: boolean,
 ): Promise<AdminMasterActionResponse> {
-  const body: { promote?: string[]; master_only?: string[] } = {}
+  const body: { promote?: string[]; master_only?: string[]; can_create_groups?: boolean } = {}
   if (promote && promote.length) body.promote = promote
   if (masterOnly && masterOnly.length) body.master_only = masterOnly
+  if (canCreateGroups) body.can_create_groups = true
   return api.post<AdminMasterActionResponse>(`/api/v1/admin/masters/${userId}/verify`, body)
+}
+
+/**
+ * PATCH /admin/masters/{user_id}/can-create-groups -- grant or take back a
+ * verified master's right to found schools (BE-18). ONE toggle, not a
+ * grant/revoke pair: the thing is a single boolean and both directions are
+ * the same idempotent write. Separate from verify because a master verified
+ * yesterday is exactly who this is for. Revoking closes NEW schools only --
+ * what this master already owns keeps living (that lever is revokeMaster).
+ */
+export function setMasterGroupRight(
+  userId: string,
+  canCreateGroups: boolean,
+): Promise<MasterGroupRightResponse> {
+  return api.patch<MasterGroupRightResponse>(`/api/v1/admin/masters/${userId}/can-create-groups`, {
+    can_create_groups: canCreateGroups,
+  })
 }
 
 export function rejectMaster(userId: string, reason: string): Promise<AdminMasterActionResponse> {

@@ -10,10 +10,13 @@
   MY relation: «Я куратор» first, «Я участник» second (backend order:
   curated first, then join time -- the split only groups it).
 
-  The «+» in the header is ALWAYS visible: any verified master can create a
-  school -- that is the whole grant mechanism (creating the row IS becoming
-  a curator; no admin issues the right). The route's masterStatusGuard has
-  already verified the viewer by the time this mounts.
+  BE-18: the «+» is visible ONLY with the admin-issued right to
+  found a school. The flag rides on GET /masters/me/curator-groups
+  (can_create_groups) -- fetched in parallel with /mine, which still feeds
+  the rows (it alone knows transfer_offered and the member sections).
+  Without the right the «+» disappears and the empty state explains who
+  issues it; the create ROUTE stays honest too -- a direct visit answers
+  403 group_creation_not_allowed, which that screen renders as a refusal.
 -->
 
 <template>
@@ -21,6 +24,7 @@
     <VHeader title="Группы мастеров" show-back @back="router.push({ name: 'master-dashboard' })">
       <template #action>
         <button
+          v-if="canCreate"
           type="button"
           class="mcg__add-btn"
           aria-label="Новая школа"
@@ -48,7 +52,7 @@
       </VEmptyState>
 
       <VEmptyState
-        v-else-if="!groups.length"
+        v-else-if="!groups.length && canCreate"
         icon="group"
         title="Пока нет групп"
         description="Создайте группу или вступите по ссылке от куратора."
@@ -59,6 +63,16 @@
           </VButton>
         </template>
       </VEmptyState>
+
+      <!-- BE-18: no schools and no right to found one -- the only way in is
+           an invite link, and the screen says who issues the right instead
+           of offering a button that would only ever answer 403. -->
+      <VEmptyState
+        v-else-if="!groups.length"
+        icon="group"
+        title="Пока нет групп"
+        description="Вступите по ссылке от куратора. Создавать школы может мастер, которому администратор выдал это право."
+      />
 
       <template v-else>
         <template v-if="curated.length">
@@ -81,6 +95,12 @@
           />
         </template>
       </template>
+
+      <!-- Membership is untouched by the right -- rows render either way;
+           only the founding offer is gated (BE-18). -->
+      <p v-if="!loading && !error && groups.length && !canCreate" class="mcg__hint">
+        Создавать школы может мастер, которому администратор выдал это право.
+      </p>
     </div>
   </div>
 </template>
@@ -88,7 +108,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { getMyCuratorGroups } from '@/api/curatorGroups'
+import { getCuratorGroups, getMyCuratorGroups } from '@/api/curatorGroups'
 import type { CuratorGroupMineItem } from '@/api/types'
 import CuratorGroupRow from '@/components/shared/CuratorGroupRow.vue'
 import IconPlusFilled from '@/components/icons/IconPlusFilled.vue'
@@ -102,6 +122,10 @@ const router = useRouter()
 const loading = ref(true)
 const error = ref(false)
 const groups = ref<CuratorGroupMineItem[]>([])
+/** BE-18: the admin-issued right to found a school. False is the honest
+ *  default on a failed flag fetch -- an offered «+» that only ever answers
+ *  403 is worse than a missing one. */
+const canCreate = ref(false)
 
 const curated = computed(() => groups.value.filter((g) => g.relation === 'curator'))
 const memberOnly = computed(() => groups.value.filter((g) => g.relation !== 'curator'))
@@ -110,8 +134,18 @@ async function load(): Promise<void> {
   loading.value = true
   error.value = false
   try {
-    const res = await getMyCuratorGroups()
-    groups.value = res.items
+    // Two parallel calls, one payload split: /mine feeds the rows (it alone
+    // carries relation + transfer_offered), the curator list carries only
+    // the create right -- a property of the master, not of any one school.
+    // allSettled, because the two calls are NOT equal: /mine failing means
+    // there is no screen, while the flag call failing only means no «+» --
+    // rows plus the honest no-right hint is strictly better than an error
+    // state over data we already hold.
+    const [mineRes, listRes] = await Promise.allSettled([getMyCuratorGroups(), getCuratorGroups()])
+    if (mineRes.status === 'rejected') throw mineRes.reason
+    groups.value = mineRes.value.items
+    canCreate.value =
+      listRes.status === 'fulfilled' ? (listRes.value.can_create_groups ?? false) : false
   } catch {
     error.value = true
   } finally {
@@ -145,6 +179,13 @@ onMounted(load)
 
 .mcg__section {
   margin-top: var(--space-2);
+}
+
+.mcg__hint {
+  font-size: var(--text-xs);
+  color: var(--velo-text-secondary);
+  margin: 0;
+  padding: 0 var(--space-1);
 }
 
 /* Same top-right add control MasterGroupsView uses (G3, PROMPT №609): a 40px

@@ -12,6 +12,8 @@
 //
 // CURATOR (verified master, prefix /api/v1/masters/me/curator-groups):
 //   GET    /                                     -- my schools + counts + transfer
+//          (+ can_create_groups, BE-18: the admin-issued right to FOUND a
+//          school rides on this list -- it is where the "create" button lives)
 //   POST   /                                     -- create {name, description?}
 //   PATCH  /{id}                                 -- rename/redescribe
 //   DELETE /{id}                                 -- delete (never blocked, I-11)
@@ -80,14 +82,20 @@ export type CuratorGroupMemberKind = 'master' | 'student'
 
 /** GET /masters/me/curator-groups -- schools I curate, newest first. Empty
  *  list when I curate none. */
+/** GET /masters/me/curator-groups -- my schools as their curator. The
+ *  response ALSO carries can_create_groups (BE-18): the admin-issued right to
+ *  found a school rides on this list because this is the screen the "create"
+ *  button lives on -- no second request, no endpoint invented for one bool. */
 export function getCuratorGroups(): Promise<CuratorGroupListResponse> {
   return api.get<CuratorGroupListResponse>(CURATOR_BASE)
 }
 
-/** POST /masters/me/curator-groups -- create a school; this is also HOW a
- *  verified master becomes a curator (no grant, no flag -- owning the row IS
- *  the role). 409 curator_group_name_taken on a name this curator already
- *  uses; the same name under a different curator is fine (I-7).
+/** POST /masters/me/curator-groups -- create a school. BE-18: founding is a
+ *  RIGHT an admin grants (can_create_groups, set at verify or through
+ *  PATCH /admin/masters/{id}/can-create-groups) -- without it the call is a
+ *  403 group_creation_not_allowed. 409 curator_group_name_taken on a name
+ *  this curator already uses; the same name under a different curator is
+ *  fine (I-7).
  *
  *  `description` is omitted from the body when undefined/blank -- the caller
  *  trims; the backend normalizes '' to NULL on its own. */

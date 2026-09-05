@@ -178,6 +178,7 @@ function master(overrides: Partial<AdminMasterDetail> = {}): AdminMasterDetail {
     phone: '+79991234567',
     languages: ['Русский'],
     certifications: ['Сертификат йоги'],
+    can_create_groups: false,
     ...overrides,
   }
 }
@@ -346,6 +347,7 @@ beforeEach(() => {
   vi.mocked(adminApi.editMasterProfile).mockReset()
   vi.mocked(adminApi.getRevokePreview).mockReset().mockResolvedValue(advisory())
   vi.mocked(adminApi.revokeMaster).mockReset()
+  vi.mocked(adminApi.setMasterGroupRight).mockReset()
   // Rejected -- both this screen's parseMethods AND the picker's own fetch
   // fall back to the SAME hardcoded taxonomy on failure (see banner).
   vi.mocked(taxonomyApi.getActiveTaxonomy)
@@ -576,6 +578,80 @@ describe('AdminMasterReviewView', () => {
   })
 
   // ===========================================================================
+  describe('SCHOOL RIGHT toggle, verified screen (BE-18)', () => {
+    it('VERIFIED: the right row shows "Не выдано" and offers «Выдать право»', async () => {
+      vi.mocked(adminApi.getMasterById).mockResolvedValue(MASTER_VERIFIED())
+      mount('m_verified')
+      await flush()
+
+      expect(text()).toContain('Право создавать школы')
+      expect(text()).toContain('Не выдано')
+      expect(footBtn('Выдать право')).toBeDefined()
+    })
+
+    it('grant: PATCHes true, merges the answer, the row flips to «Выдано» + «Отозвать право»', async () => {
+      vi.mocked(adminApi.getMasterById).mockResolvedValue(MASTER_VERIFIED())
+      vi.mocked(adminApi.setMasterGroupRight).mockResolvedValue({
+        user_id: 'm_verified',
+        can_create_groups: true,
+      })
+      mount('m_verified')
+      await flush()
+
+      footBtn('Выдать право')?.click()
+      await flush()
+
+      expect(adminApi.setMasterGroupRight).toHaveBeenCalledWith('m_verified', true)
+      expect(toastSuccess).toHaveBeenCalledWith('Право создавать школы выдано')
+      expect(text()).toContain('Выдано')
+      expect(footBtn('Отозвать право')).toBeDefined()
+    })
+
+    it('revoke direction: a master WITH the right offers «Отозвать право» and PATCHes false', async () => {
+      vi.mocked(adminApi.getMasterById).mockResolvedValue(
+        master({ id: 'm_verified', master_status: 'verified', can_create_groups: true }),
+      )
+      vi.mocked(adminApi.setMasterGroupRight).mockResolvedValue({
+        user_id: 'm_verified',
+        can_create_groups: false,
+      })
+      mount('m_verified')
+      await flush()
+
+      expect(text()).toContain('Выдано')
+      footBtn('Отозвать право')?.click()
+      await flush()
+
+      expect(adminApi.setMasterGroupRight).toHaveBeenCalledWith('m_verified', false)
+      expect(toastSuccess).toHaveBeenCalledWith('Право создавать школы отозвано')
+      expect(text()).toContain('Не выдано')
+    })
+
+    it('failure: toasts, the local right does NOT flip', async () => {
+      vi.mocked(adminApi.getMasterById).mockResolvedValue(MASTER_VERIFIED())
+      vi.mocked(adminApi.setMasterGroupRight).mockRejectedValue(
+        new ApiResponseError(409, 'conflict', 'conflict'),
+      )
+      mount('m_verified')
+      await flush()
+
+      footBtn('Выдать право')?.click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalled()
+      expect(text()).toContain('Не выдано')
+    })
+
+    it('PENDING: no right row on the pending footer (the checkbox is the pending lever)', async () => {
+      mount('m_pending')
+      await flush()
+
+      expect(text()).not.toContain('Право создавать школы')
+      expect(text()).toContain('Разрешить создавать школы')
+    })
+  })
+
+  // ===========================================================================
   describe('VERIFY (.vue:768-782)', () => {
     it('success: verifyMaster called with the id, toasts, navigates to admin-masters', async () => {
       vi.mocked(adminApi.verifyMaster).mockResolvedValue({ user_id: 'm_pending', status: 'ok' })
@@ -585,9 +661,30 @@ describe('AdminMasterReviewView', () => {
       footBtn('Одобрить')?.click()
       await flush()
 
-      expect(adminApi.verifyMaster).toHaveBeenCalledWith('m_pending', undefined, undefined)
+      // BE-18: the checkbox defaults to NO, and a no is sent as the explicit
+      // fourth arg (the wrapper itself omits the wire key for false).
+      expect(adminApi.verifyMaster).toHaveBeenCalledWith('m_pending', undefined, undefined, false)
       expect(toastSuccess).toHaveBeenCalledWith('Мастер верифицирован')
       expect(push).toHaveBeenCalledWith({ name: 'admin-masters' })
+    })
+
+    it('BE-18: a ticked school-right checkbox rides the verify call as true', async () => {
+      vi.mocked(adminApi.verifyMaster).mockResolvedValue({ user_id: 'm_pending', status: 'ok' })
+      mount('m_pending')
+      await flush()
+
+      // VCheckbox: the label row is the toggle.
+      const check = Array.from(host?.querySelectorAll<HTMLElement>('.v-checkbox') ?? []).find((c) =>
+        c.textContent?.includes('Разрешить создавать школы'),
+      )
+      expect(check).toBeDefined()
+      check?.click()
+      await flush()
+
+      footBtn('Одобрить')?.click()
+      await flush()
+
+      expect(adminApi.verifyMaster).toHaveBeenCalledWith('m_pending', undefined, undefined, true)
     })
 
     it('failure: toasts the generic fallback (unmapped code), does NOT navigate, actions stay visible', async () => {
@@ -636,7 +733,7 @@ describe('AdminMasterReviewView', () => {
       await flush()
 
       expect(modalIsOpen()).toBe(false)
-      expect(adminApi.verifyMaster).toHaveBeenCalledWith('m_pending', undefined, undefined)
+      expect(adminApi.verifyMaster).toHaveBeenCalledWith('m_pending', undefined, undefined, false)
     })
 
     it('custom/unmatched text: pauses on the confirm dialog INSTEAD of calling verifyMaster', async () => {
@@ -673,6 +770,7 @@ describe('AdminMasterReviewView', () => {
         'm_pending',
         ['Нестандартный метод'],
         undefined,
+        false,
       )
       expect(toastSuccess).toHaveBeenCalledWith('Мастер верифицирован')
       expect(push).toHaveBeenCalledWith({ name: 'admin-masters' })
@@ -704,9 +802,12 @@ describe('AdminMasterReviewView', () => {
       // Was "exactly one arg, promote never sent": that used to mean the
       // label vanished entirely (T22-6). Now it takes the master_only
       // branch, so the direction gets a real (master-scoped) row.
-      expect(adminApi.verifyMaster).toHaveBeenCalledWith('m_pending', undefined, [
-        'Нестандартный метод',
-      ])
+      expect(adminApi.verifyMaster).toHaveBeenCalledWith(
+        'm_pending',
+        undefined,
+        ['Нестандартный метод'],
+        false,
+      )
       expect(toastSuccess).toHaveBeenCalledWith('Мастер верифицирован')
       expect(push).toHaveBeenCalledWith({ name: 'admin-masters' })
     })
@@ -729,9 +830,12 @@ describe('AdminMasterReviewView', () => {
       modalOverlay()?.click()
       await flush()
 
-      expect(adminApi.verifyMaster).toHaveBeenCalledWith('m_pending', undefined, [
-        'Нестандартный метод',
-      ])
+      expect(adminApi.verifyMaster).toHaveBeenCalledWith(
+        'm_pending',
+        undefined,
+        ['Нестандартный метод'],
+        false,
+      )
       expect(toastSuccess).toHaveBeenCalledWith('Мастер верифицирован')
     })
 
@@ -755,6 +859,7 @@ describe('AdminMasterReviewView', () => {
         'm_pending',
         ['Нестандартный метод'],
         undefined,
+        false,
       )
       expect(toastError).toHaveBeenCalledWith('Ошибка верификации')
       expect(push).not.toHaveBeenCalled()

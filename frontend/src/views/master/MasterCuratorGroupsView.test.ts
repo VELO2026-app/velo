@@ -4,8 +4,8 @@
 //
 // Same idiom as UserCuratorGroupsView.test.ts, plus the master list's own
 // distinctions: the «Я куратор» / «Я участник» sectioning over one /mine
-// payload, and the ALWAYS-visible «+» (creating the row is how one becomes a
-// curator -- no other grant exists).
+// payload, and -- since BE-18 -- the «+» gated on the admin-issued
+// can_create_groups flag that rides on GET /masters/me/curator-groups.
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -67,6 +67,11 @@ const row = (id: string, relation: 'curator' | 'master' | 'student') => ({
 
 beforeEach(() => {
   vi.mocked(cgApi.getMyCuratorGroups).mockReset()
+  // BE-18: the flag rides on the CURATOR list call. Default true keeps the
+  // pre-BE-18 behaviour for the row/section tests; the gate has its own.
+  vi.mocked(cgApi.getCuratorGroups)
+    .mockReset()
+    .mockResolvedValue({ items: [], can_create_groups: true })
   push.mockReset()
   replace.mockReset()
 })
@@ -109,7 +114,7 @@ describe('MasterCuratorGroupsView', () => {
     expect(push).toHaveBeenCalledWith({ name: 'master-curator-group', params: { id: 'g1' } })
   })
 
-  it('the «+» is always present (creation is the curator grant) and opens the create form', async () => {
+  it('the «+» is present with the right (BE-18) and opens the create form', async () => {
     vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
       items: [],
     } satisfies CuratorGroupMineResponse)
@@ -121,6 +126,54 @@ describe('MasterCuratorGroupsView', () => {
     add?.click()
     await flush()
     expect(push).toHaveBeenCalledWith({ name: 'master-curator-group-create' })
+  })
+
+  it('BE-18: NO right -> no «+», no create button, and the hint says who issues it', async () => {
+    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+      items: [row('g1', 'curator')],
+    } satisfies CuratorGroupMineResponse)
+    vi.mocked(cgApi.getCuratorGroups).mockResolvedValue({
+      items: [],
+      can_create_groups: false,
+    })
+    mount()
+    await flush()
+
+    expect(buttonWith('Новая школа')).toBeFalsy()
+    expect(buttonWith('Создать группу')).toBeFalsy()
+    // Rows still render; the right is about FOUNDING, not about membership.
+    expect(text()).toContain('Школа g1')
+    expect(text()).toContain('Создавать школы может мастер, которому администратор выдал это право')
+  })
+
+  it('BE-18: no right and no schools -> the empty state offers only the invite-link way in', async () => {
+    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+      items: [],
+    } satisfies CuratorGroupMineResponse)
+    vi.mocked(cgApi.getCuratorGroups).mockResolvedValue({
+      items: [],
+      can_create_groups: false,
+    })
+    mount()
+    await flush()
+
+    expect(text()).toContain('Вступите по ссылке от куратора')
+    expect(buttonWith('Создать группу')).toBeFalsy()
+  })
+
+  it('BE-18: a FAILED flag call degrades to "no «+»" -- rows still render, no error screen', async () => {
+    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+      items: [row('g1', 'curator')],
+    } satisfies CuratorGroupMineResponse)
+    vi.mocked(cgApi.getCuratorGroups).mockRejectedValue(new Error('blip'))
+    mount()
+    await flush()
+
+    // The two calls are not equal: /mine is the screen, the flag is a bonus.
+    expect(text()).toContain('Школа g1')
+    expect(text()).not.toContain('Не удалось загрузить группы')
+    expect(buttonWith('Новая школа')).toBeFalsy()
+    expect(text()).toContain('администратор выдал это право')
   })
 
   it('empty list: the hint covers BOTH ways in (create or join by link)', async () => {

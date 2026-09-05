@@ -8,8 +8,10 @@
   handling (inline field error + toast -- curator_group_name_taken means
   "you already have a school by this name", a per-curator uniqueness, I-7).
 
-  Creating the row IS becoming a curator -- no other grant exists, so this
-  form is reachable to every verified master (route masterStatusGuard).
+  BE-18: founding is a right an admin grants, so the route is only
+  offered with it (the list's «+»). A direct visit without the right is
+  answered 403 group_creation_not_allowed -- rendered here as an honest
+  refusal state, never as a retryable error (retrying a right cannot work).
 -->
 
 <template>
@@ -17,35 +19,53 @@
     <VHeader title="Новая группа" show-back @back="router.back()" />
 
     <div class="ncg__content">
-      <div class="ncg__legend">
-        <IconRequired class="ncg__legend-seal" :size="22" />
-        <span>— поля, обязательные для заполнения</span>
-      </div>
+      <!-- BE-18: 403 group_creation_not_allowed -- the right itself is
+           missing, and no amount of retrying the POST changes that. The form
+           is replaced by the refusal; only the back button remains. -->
+      <VEmptyState
+        v-if="refused"
+        icon="warning"
+        title="Создание школ недоступно"
+        description="Заводить школы может мастер, которому администратор выдал это право."
+      >
+        <template #action>
+          <VButton variant="outline" @click="router.replace({ name: 'master-curator-groups' })">
+            К моим школам
+          </VButton>
+        </template>
+      </VEmptyState>
 
-      <h2 class="velo-section-title">Основное</h2>
+      <template v-else>
+        <div class="ncg__legend">
+          <IconRequired class="ncg__legend-seal" :size="22" />
+          <span>— поля, обязательные для заполнения</span>
+        </div>
 
-      <VInput
-        v-model="name"
-        label="Название"
-        placeholder="Название"
-        hide-label
-        :error="fieldError"
-        required
-        @focus="onFieldFocus"
-      />
+        <h2 class="velo-section-title">Основное</h2>
 
-      <VTextarea
-        v-model="description"
-        label="Описание"
-        placeholder="Описание"
-        hide-label
-        :rows="3"
-        autogrow
-      />
+        <VInput
+          v-model="name"
+          label="Название"
+          placeholder="Название"
+          hide-label
+          :error="fieldError"
+          required
+          @focus="onFieldFocus"
+        />
 
-      <VButton class="ncg__submit" variant="primary" block :loading="creating" @click="onCreate">
-        Создать группу
-      </VButton>
+        <VTextarea
+          v-model="description"
+          label="Описание"
+          placeholder="Описание"
+          hide-label
+          :rows="3"
+          autogrow
+        />
+
+        <VButton class="ncg__submit" variant="primary" block :loading="creating" @click="onCreate">
+          Создать группу
+        </VButton>
+      </template>
     </div>
   </div>
 </template>
@@ -60,6 +80,7 @@ import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import { useToast } from '@/composables/useToast'
 import IconRequired from '@/components/icons/IconRequired.vue'
 import VButton from '@/components/ui/VButton.vue'
+import VEmptyState from '@/components/ui/VEmptyState.vue'
 import VHeader from '@/components/layout/VHeader.vue'
 import VInput from '@/components/ui/VInput.vue'
 import VTextarea from '@/components/ui/VTextarea.vue'
@@ -72,6 +93,10 @@ const name = ref('')
 const description = ref('')
 const fieldError = ref('')
 const creating = ref(false)
+/** BE-18: set by 403 group_creation_not_allowed -- swaps the form for the
+ *  refusal state. Sticky: a right cannot appear mid-screen, so nothing
+ *  resets it short of leaving the route. */
+const refused = ref(false)
 
 async function onCreate(): Promise<void> {
   const trimmed = name.value.trim()
@@ -93,6 +118,12 @@ async function onCreate(): Promise<void> {
   } catch (e) {
     if (e instanceof ApiResponseError && e.code === 'curator_group_name_taken') {
       fieldError.value = 'У вас уже есть группа с таким названием'
+    }
+    if (e instanceof ApiResponseError && e.code === 'group_creation_not_allowed') {
+      // Not a field error and not a retryable failure -- the RIGHT is
+      // missing. The refusal state replaces the form; the toast adds the
+      // phrase errorMessages.ts already carries.
+      refused.value = true
     }
     toast.error(extractApiError(e, 'Не удалось создать группу'))
   } finally {

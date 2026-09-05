@@ -86,6 +86,7 @@ export type {
   MasterApplyProfile,
   MasterApplyRequest,
   MasterApplyResponse,
+  MasterGroupRightResponse,
   MasterProfileResponse,
   MasterPublicResponse,
   MasterReviewItem,
