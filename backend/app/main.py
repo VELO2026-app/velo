@@ -95,10 +95,11 @@ from app.modules.diary.models import (  # noqa: F401  # Phase 8.1-8.4 + redesign
     DiaryEntry,
     DiaryEvent,
 )
-from app.modules.zoom.models import (  # noqa: F401  # E21
+from app.modules.zoom.models import (  # noqa: F401  # E21 + GT-21
     ZoomMeeting,
     ZoomRegistrant,
     ZoomAttendanceSegment,
+    ZoomGuestName,
 )
 # Library module has no active models yet (Phase 9.2 stub).
 

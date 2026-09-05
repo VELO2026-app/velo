@@ -54,6 +54,12 @@ from app.modules.curator_groups.models import (  # noqa: F401  # Curator GROUPS 
     CuratorGroupMember,
     CuratorGroupTransfer,
 )
+from app.modules.zoom.models import (  # noqa: F401  # E21 + GT-21
+    ZoomAttendanceSegment,
+    ZoomGuestName,
+    ZoomMeeting,
+    ZoomRegistrant,
+)
 
 # ---------------------------------------------------------------------------
 # Alembic Config object — provides access to alembic.ini values.

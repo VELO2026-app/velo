@@ -2,12 +2,10 @@
 # VELO Backend -- Zoom Integration Models (E21 step A)
 # =============================================================================
 #
-# Four tables. Three of them turn "booked" into "actually present, for how
-# long" via Zoom, without trusting Zoom to tell us who the host is. The
-# fourth (ZoomGuestName, GT-21) is deliberately OUTSIDE that purpose: it
-# exists so a guest is not FACELESS in the participant list, and it is
-# wired so that it can never feed the attendance decision -- see its own
-# docstring.
+# Four tables. Three turn "booked" into "actually present, for how long"
+# via Zoom, without trusting Zoom to tell us who the host is. The fourth
+# (ZoomGuestName, GT-21 step A) is deliberately outside that purpose and
+# has no writer yet -- see its own docstring.
 #
 # ZoomMeeting      -- 1:1 with Practice. Zoom's own meeting identity + our
 #                     view of whether creation/sync last succeeded.
@@ -17,11 +15,10 @@
 #                     students specifically so host-exclusion is OUR OWN
 #                     explicit fact, not something we infer from any
 #                     Zoom-provided field (there isn't one -- E21 research).
-# ZoomGuestName    -- GT-21. 1 row per display name ISSUED to a guest on a
-#                     practice. Not a person, not a booking, not a
-#                     registrant we will ever judge -- just the record of
-#                     which names are already taken on this practice, so
-#                     the generator can avoid them.
+# ZoomGuestName    -- GT-21 step A: SCHEMA ONLY, no writer. 1 row per display
+#                     name issued to a guest on a practice. Nothing writes
+#                     to it yet -- /z/{code}/guest still hands out the shared
+#                     link. The generator and the claim path are step B.
 # ZoomAttendanceSegment -- append-only, RAW report rows. Zoom returns
 #                     MULTIPLE rows per person on rejoin and does not sum
 #                     them; we do, in the attendance-decision step that
@@ -35,6 +32,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import (
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
@@ -262,39 +260,22 @@ class ZoomRegistrant(UUIDMixin, TimestampMixin, Base):
 
 
 class ZoomGuestName(UUIDMixin, TimestampMixin, Base):
-    """One display name ISSUED to one guest on one practice (GT-21).
+    """One display name issued to one guest on one practice (GT-21 step A).
 
-    A guest entering through the public /z/{code} link used to join Zoom as
-    ONE shared registrant per meeting ("VELO / Guest Link",
-    ensure_shared_registrant) -- so a master with ten guests saw ten
-    identical rows in his participant list and could not tell them apart.
-    A row here is the record that a given name is TAKEN on a given
-    practice, which is the one fact the name generator needs and the one
-    thing a counter column could not have given it ("there are already 11
-    Пылающих Шив" is a question about names, not about a count).
+    STEP A IS SCHEMA ONLY: nothing writes here yet. /z/{code}/guest still
+    hands out the shared "VELO / Guest Link" registrant, so the table stays
+    empty until the generator and claim path land in step B. Everything
+    below describes the contract that step B will have to meet, not
+    behaviour that exists today.
 
-    SCOPED TO THE PRACTICE, NOT GLOBALLY (owner ruling): the only place a
-    name has to be distinguishable is the participant list of one meeting.
-    The same name on two different practices is fine and is asserted as
-    such -- a global registry would need cross-practice counters and race
-    handling to buy nothing.
+    A row will mean "this name is taken here" -- what the generator needs
+    and what a counter column cannot answer. Scoped to the practice, not
+    globally (owner ruling).
 
-    DELIBERATELY NOT A ZoomRegistrant ROW, for the same structural reason
-    ZoomMeeting.shared_registrant_id is not one (see that column's
-    docstring): attendance_service.ingest_report_for_meeting selects EVERY
-    ZoomRegistrant of the meeting unconditionally and matches report rows
-    against all of them. A guest living in that table would start matching
-    by registrant_id, and the matcher would then decide bookings that do
-    not exist. Living in a table the matcher never reads makes "a guest is
-    never judged" structurally true rather than a rule someone must
-    remember. zoom_registrant_id and join_url therefore live HERE, next to
-    the name they were minted for, and nowhere else.
-
-    NOT ATTENDANCE, AND NOT A PERSON: there is no user_id and there will be
-    none. The guest is anonymous by construction (resolve_zoom_entry is
-    called with user=None on both public routes), so there is nobody to
-    point at; and a column that could point at somebody would be the first
-    step back toward judging them.
+    NOT a ZoomRegistrant row, and zoom_registrant_id/join_url live here for
+    that reason: ingest_report_for_meeting selects EVERY registrant of the
+    meeting unconditionally, so a guest there would match by registrant_id.
+    No user_id -- the guest is anonymous by construction.
     """
 
     __tablename__ = "zoom_guest_names"
@@ -302,68 +283,39 @@ class ZoomGuestName(UUIDMixin, TimestampMixin, Base):
     practice_id: Mapped[UUID] = mapped_column(
         ForeignKey("practices.id", ondelete="CASCADE"),
     )
-
-    # Exactly the string that went to Zoom, after strip and truncation --
-    # not a normalised or lowercased form. It is a display value; the point
-    # of the whole feature is that the master sees what the guest chose.
-    # String(64), not Text, because the length is a VALIDATED bound (1..64
-    # after strip, owner ruling) and the truncation happens before the
-    # insert, so an overflow here would mean a bug upstream rather than a
-    # long name.
+    # Whatever the claim path sends to Zoom. String(64) is the upper bound;
+    # the lower one is the CheckConstraint below, because when the writer
+    # arrives an empty name must be IMPOSSIBLE, not merely un-issued.
     display_name: Mapped[str] = mapped_column(String(64))
-
-    # Zoom's own ids for the personal registrant minted under this name.
-    # Nullable, and both stay NULL in a real, expected state: the name was
-    # claimed (the row is what claims it) and Zoom then refused, or
-    # returned a registrant_id with no join_url -- the shape
-    # ZoomRegistrant.join_url's docstring already documents as real. Such a
-    # row keeps the name reserved on purpose: reusing a name Zoom may or
-    # may not have registered would be the one way to put two identical
-    # guests back in the list.
+    # NULL is an expected end state, not an unfinished one: the row will
+    # claim the name, and Zoom can still refuse. Such a row keeps its name
+    # reserved on purpose.
     zoom_registrant_id: Mapped[str | None] = mapped_column(
         String(64), default=None,
     )
     join_url: Mapped[str | None] = mapped_column(Text, default=None)
 
     __table_args__ = (
-        # No separate index on practice_id: this unique index LEADS with it
-        # and every lookup here filters on practice_id first, so a second
-        # one would be a duplicate -- same rule practice_audience_curator_
-        # group was built with.
+        # Blank and whitespace-only names rejected by the DATABASE, not by a
+        # caller that does not exist yet (GT-21b item 4). First expression
+        # CHECK in this tree -- the others are IN (...) and BETWEEN.
+        CheckConstraint(
+            "length(btrim(display_name)) > 0",
+            name="ck_zoom_guest_names_display_name_not_blank",
+        ),
+        # Leads with practice_id, so no separate index on it -- same rule as
+        # practice_audience_curator_group (2026-08-26).
         #
         # KNOWN CEILING -- byte-exact uniqueness admits case-variant twins.
-        # 1. MECHANICS: this index compares display_name byte for byte, so
-        #    "Аня" and "аня" are two accepted rows on one practice, and the
-        #    participant list then shows two names a human reads as one --
-        #    the exact confusion this table exists to remove.
-        # 2. STATUS: acknowledged by design.
-        # 3. TASK: none, and deliberately none. The only input that can
-        #    produce a case-variant twin is a human-typed name, and in
-        #    GT-21 no surface can supply one: the /z/{code} page is
-        #    server-rendered HTML with CSP `form-action 'none'` and no
-        #    scripts, the frontend has no /z/ route at all, and drawing the
-        #    field was ruled out of scope. Generated names are canonically
-        #    cased by construction, so the generator itself can never
-        #    collide case-only. Writing a task for a state no caller can
-        #    reach would be documenting the impossible.
-        # 4. THAW TRIGGER (observable): the first commit that lets a human
-        #    supply a name -- a name field added to _public_page (which
-        #    also has to relax form-action), or any client that calls
-        #    /z/{code}/guest with user-typed text.
-        # 5. AGREED FIX: replace this with a functional unique index on
-        #    (practice_id, lower(display_name)) and lowercase the
-        #    comparison in the claim path. One migration, no data to
-        #    convert -- the database is disposable.
-        # 6. ALREADY REJECTED, and why it must not be "fixed" these ways:
-        #    (a) a case-insensitive collation on the column -- that changes
-        #        comparison semantics for every future query against this
-        #        table, not just for uniqueness; (b) lowercasing on write
-        #        -- it destroys the guest's own capitalisation, which is
-        #        the single value this feature exists to display; (c) the
-        #        check in application code only -- two concurrent claims
-        #        would both pass, and the guarantee would stop being
-        #        structural, which is the whole reason this is a table and
-        #        not a counter.
+        # Mechanics: "Аня" and "аня" are two rows a human reads as one name.
+        # Status: acknowledged by design.
+        # Task: none -- nothing passes a human-typed name today, and
+        #   generated names will be canonically cased.
+        # Thaw trigger: the first commit that lets a human supply a name.
+        # Fix: unique index on (practice_id, lower(display_name)) plus a
+        #   lowercased claim path; this tree's first expression index.
+        # Rejected: CI collation (changes every comparison here), lower() on
+        #   write (destroys the guest's case), app-side check (races).
         Index(
             "uq_zoom_guest_names_practice_name",
             "practice_id",
