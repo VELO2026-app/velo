@@ -29,6 +29,13 @@ from app.core.database import Base
 
 # Import all models so Alembic can detect them via Base.metadata.
 # Add new model imports here as modules are created.
+#
+# Classes are listed by name rather than imported bare, and that is a choice
+# with a reason: the names change nothing for Alembic -- importing the module
+# executes it and every table registers regardless -- but people read this
+# block as the registry of what tables exist. A named list supports that
+# reading; a bare import silently does not. Which means a list that is kept
+# has to be kept COMPLETE, or it misleads worse than no list at all.
 from app.modules.reports.models import Report  # noqa: F401
 from app.modules.users.models import User  # noqa: F401
 from app.modules.masters.models import MasterProfile  # noqa: F401
@@ -59,6 +66,19 @@ from app.modules.zoom.models import (  # noqa: F401  # E21 + GT-21
     ZoomGuestName,
     ZoomMeeting,
     ZoomRegistrant,
+)
+from app.modules.diary.models import (  # noqa: F401  # Phase 8.1-8.4 + redesign
+    Checkin,
+    DiaryEntry,
+    DiaryEvent,
+    Feedback,
+)
+from app.modules.support.models import SupportThread  # noqa: F401  # B34 / T-38
+from app.modules.masters.groups_models import (  # noqa: F401  # P1
+    GroupInvite,
+    MasterGroup,
+    MasterGroupMembership,
+    MasterStudent,
 )
 
 # ---------------------------------------------------------------------------
