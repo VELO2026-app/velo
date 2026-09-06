@@ -13,8 +13,11 @@
       date/time (`when`) centered UNDER it on the bottom meta line — no leading
       calendar icon. Short date via formatShortDate ("9 июня" / "12 сент.").
     - Content column (icon col + space-3): title (ellipsis) + master row.
-    - Bottom meta line (one row): `when` (under the icon) · duration with clock
-      icon (under the title) · #badge slot (status, right edge, symmetric padding).
+    - Bottom meta line: `when` (under the icon) · duration with clock icon
+      (under the title) · #badge slot (status, right edge). Every cell is atomic
+      (nowrap, no shrink); when the badge cannot share the row it wraps whole
+      onto its own right-aligned line (FE-54) instead of the meta text breaking
+      mid-phrase ("мин" orphan).
 
   Props:
     practice     -- icon/title/master source.
@@ -58,17 +61,14 @@
 
     <div class="practice-list-card__meta">
       <span class="practice-list-card__when">{{ when }}</span>
-      <span class="practice-list-card__rest">
-        <span v-if="whenTime || duration" class="practice-list-card__dur">
-          <span v-if="whenTime">{{ whenTime }}</span>
-          <span v-if="whenTime && duration" class="practice-list-card__dur-sep">·</span>
-          <IconClock v-if="duration" :size="14" />
-          <span v-if="duration">{{ duration }}</span>
-        </span>
-        <span v-else class="practice-list-card__dur-empty" />
-        <span class="practice-list-card__badge">
-          <slot name="badge" />
-        </span>
+      <span v-if="whenTime || duration" class="practice-list-card__dur">
+        <span v-if="whenTime">{{ whenTime }}</span>
+        <span v-if="whenTime && duration" class="practice-list-card__dur-sep">·</span>
+        <IconClock v-if="duration" :size="14" />
+        <span v-if="duration">{{ duration }}</span>
+      </span>
+      <span class="practice-list-card__badge">
+        <slot name="badge" />
       </span>
     </div>
 
@@ -238,10 +238,15 @@ const masterInitial = computed(() => {
   flex-shrink: 0;
 }
 
-/* Bottom meta line: when (under icon) · duration (under title) · badge (right) */
+/* Bottom meta line: when (under icon) · duration (under title) · badge (right).
+   FE-54: every cell is atomic (nowrap, no shrink); when the badge cannot share
+   the row it wraps whole onto its own line — kept at the right edge by
+   margin-left: auto — so the time·duration text never breaks mid-phrase. */
 .practice-list-card__meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  gap: var(--space-2) var(--space-3);
   margin-top: auto;
 }
 
@@ -260,28 +265,23 @@ const masterInitial = computed(() => {
   color: var(--velo-text-muted);
 }
 
-.practice-list-card__rest {
-  flex: 1;
-  min-width: 0;
-  margin-left: var(--space-3);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-
 .practice-list-card__dur {
   display: inline-flex;
   align-items: center;
+  flex-shrink: 0;
   gap: var(--space-1);
   font-size: var(--text-xs);
   color: var(--velo-text-secondary);
+  white-space: nowrap;
 }
 
 .practice-list-card__badge {
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
+  /* Right edge both on the shared row (replaces the former space-between) and
+     once wrapped onto its own line. */
+  margin-left: auto;
 }
 
 /* Optional action row (master "Явка" etc.) */

@@ -219,7 +219,7 @@ function badgeFor(b: BookingWithPracticeResponse): BookingBadge | null {
   // this from silence so it never reads as indistinguishable from a no-show
   // at a glance -- an honest "still being decided" badge instead.
   if (b.status === 'confirmed' && hasEnded(b)) {
-    return { label: 'Подсчитывается', variant: 'calculating' }
+    return { label: 'Подсчет', variant: 'calculating' }
   }
   // Pending but the practice is already over (awaiting backend finalize):
   // it sits in "Прошедшие" with NO upcoming badge — no misleading
@@ -246,7 +246,7 @@ function openDetail(b: BookingWithPracticeResponse): void {
 
 onMounted(() => {
   // B30: refreshMyBookings() (not fetchMyBookings()) -- badgeFor() below reads
-  // a "Подсчитывается" (attendance-pending) state off a cached list that may
+  // a "Подсчет" (attendance-pending) state off a cached list that may
   // have been fetched before the practice ended; fetchMyBookings() would
   // no-op and the badge would never advance to its real verdict.
   // refreshMyBookings() always re-fetches, without flashing the list empty.

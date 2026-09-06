@@ -808,7 +808,7 @@ describe('PracticeDetailView', () => {
 
     it('a CONFIRMED booking past its practice (attendance still pending) still qualifies', async () => {
       // Owner ruling: entitlement is the booking, not the attendance
-      // verdict -- confirmed-and-ended (the "Подсчитывается" state) must not
+      // verdict -- confirmed-and-ended (the "Подсчет" state) must not
       // be treated as ineligible just because attended/no_show isn't decided.
       getBookingRecording.mockResolvedValue({ status: 'available', url: 'https://zoom.us/rec/x' })
       practicesState.selected = practice({ scheduled_at: ended, duration_minutes: 60 })

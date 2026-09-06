@@ -91,7 +91,7 @@ const vbadgeVariant = computed<'success' | 'warning' | 'error' | 'muted'>(() => 
     case 'no_show':
       return 'muted' // «Не состоялась» — low-key blue-grey, no drama
     case 'calculating':
-      return 'muted' // AT-2: «Подсчитывается» — same low-key tone, not a verdict yet
+      return 'muted' // AT-2: «Подсчет» — same low-key tone, not a verdict yet
     default:
       return 'success'
   }
