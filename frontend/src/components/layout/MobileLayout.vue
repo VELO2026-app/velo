@@ -281,29 +281,28 @@ defineEmits<{
   display: none; /* WebKit / Blink (Telegram webview) */
 }
 
-/* Edge-to-edge fog: top/bottom fade mask for long scrolling lists ONLY. Opt-in
-   via the `fog` prop. The fade zones (--fog-*) are set by mainStyle and aligned
-   to the clearance padding, so content dissolves exactly at the padded edges.
-   Detail screens, forms and the profile do NOT get this class -- their footers
-   and actions stay fully opaque. */
+/* Edge-to-edge fog: TOP-ONLY fade mask for long scrolling lists. Opt-in via
+   the `fog` prop. The top fade zone (--fog-top-*) is set by mainStyle and
+   aligned to the clearance padding, so content dissolves exactly at the
+   padded edge under the floating header island.
+   [LOOK-TEST, owner pass 2026-09-06] The BOTTOM fade is REMOVED for the
+   liquid-glass dock pill experiment: content runs crisp to the bottom edge
+   and scrolls under the hanging pill, which frosts it. The --fog-bot-* vars
+   mainStyle still publishes are temporarily unused. Detail screens, forms
+   and the profile do NOT get this class -- their footers and actions stay
+   fully opaque. */
 .mobile-layout__main--fog {
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0,
     transparent var(--fog-top-hard),
-    #000 calc(var(--fog-top-hard) + var(--fog-top-fade)),
-    #000 calc(100% - var(--fog-bot-fade) - var(--fog-bot-hard)),
-    transparent calc(100% - var(--fog-bot-hard)),
-    transparent 100%
+    #000 calc(var(--fog-top-hard) + var(--fog-top-fade))
   );
   mask-image: linear-gradient(
     to bottom,
     transparent 0,
     transparent var(--fog-top-hard),
-    #000 calc(var(--fog-top-hard) + var(--fog-top-fade)),
-    #000 calc(100% - var(--fog-bot-fade) - var(--fog-bot-hard)),
-    transparent calc(100% - var(--fog-bot-hard)),
-    transparent 100%
+    #000 calc(var(--fog-top-hard) + var(--fog-top-fade))
   );
 }
 

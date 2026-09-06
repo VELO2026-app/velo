@@ -68,32 +68,88 @@ defineEmits<{
 </script>
 
 <style scoped>
+/* ==========================================================================
+ * [LOOK-TEST v2, owner pass 2026-09-06] Compact liquid-glass dock pill.
+ * Approved direction ("нравится"), still a git-revertible experiment vs
+ * the per-button Figma bubbles described in the file banner above.
+ *
+ * ONE floating glass pill, built from the diary composer's Apple Liquid
+ * Glass recipe (Composer.vue .composer__field): a frost layer on ::before
+ * (white 12% over blur(18) saturate(180), own z:-1 child layer), a
+ * soft-light sheen on ::after, white rim, inset edge highlights + a
+ * floating shadow. The pill is CONTENT-HUGGED and centered (owner v2: the
+ * rail-to-rail stretch read too big), holding 56px bare-icon buttons
+ * (above the 44px touch standard, FE-26); the active tab is a clean
+ * blue-grey disc + white icon, no hairline (owner v2).
+ * ========================================================================== */
 .v-tabbar {
-  /* Floats over the edge-to-edge feed (MobileLayout is the positioned anchor),
-     so content scrolls UNDER it and dissolves into the bottom fog. */
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  /* Content-hugged and centered: only `left` is set, so the absolutely
+     positioned nav shrink-wraps its buttons; translateX re-centres it. The
+     translate also forms the stacking context that contains the frost's
+     z:-1 layer (the composer's translateZ(0) trick, same purpose). */
+  left: 50%;
+  transform: translateX(-50%);
+  /* Lift the PILL itself (not inner padding) away from the screen edge:
+     33px + safe-area of clear space below the glass, buttons tucked 8px
+     inside it. Keeps the home-indicator clearance of Figma 2212:292. */
+  bottom: calc(var(--space-8) + env(safe-area-inset-bottom, 0px));
   display: flex;
   align-items: center;
-  /* Spread the buttons across the 24px content rail (space-between), so the
-     outer buttons sit exactly on the same left/right lines as the content and
-     headers on every screen width. */
-  justify-content: space-between;
-  padding: var(--space-2) var(--velo-rail-pad-x);
-  /* Lift the bar away from the screen edge (Figma 2212:292) -- 33px keeps it
-     comfortably above the home indicator on iOS and visually detached from
-     the very bottom on Android. */
-  padding-bottom: calc(var(--space-8) + env(safe-area-inset-bottom, 0px));
+  gap: var(--space-2);
+  padding: var(--space-2);
+  /* [Apple Liquid Glass, owner spec -- same recipe as Composer.vue] the
+     pill's own background stays transparent; the frost lives on ::before
+     at z:-1 so icon repaints never race the backdrop sampling (the
+     iOS-stable shape for glass over moving content). */
   background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.15),
+    0 8px 24px rgba(0, 0, 0, 0.08);
   z-index: var(--z-sticky);
 }
 
+/* The frost layer: white 12% surface over blur(18) saturate(180), on its own
+   child layer (z -1). The nav's absolute position + z-index already form the
+   stacking context that keeps it contained -- the composer's translateZ(0)
+   anchor trick is not needed here. */
+.v-tabbar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  z-index: -1;
+}
+
+/* The refraction sheen: a diagonal light gradient blended soft-light over
+   the surface -- the highlight that reads as bent glass. */
+.v-tabbar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.35),
+    rgba(255, 255, 255, 0.05) 45%,
+    rgba(255, 255, 255, 0.18)
+  );
+  mix-blend-mode: soft-light;
+}
+
 .v-tabbar__item {
-  /* Figma node 2212:413 (inactive) / 2212:390 (active) -- 63x63 circle */
-  width: 63px;
-  height: 63px;
+  /* Bare icon slot inside the pill: the glass comes from the dock, so an
+     inactive button paints nothing of its own. 56px keeps every target
+     above the 44px touch standard (FE-26). */
+  width: 56px;
+  height: 56px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -101,23 +157,33 @@ defineEmits<{
   border-radius: var(--radius-full);
   cursor: pointer;
   color: var(--velo-text-primary);
-  /* Inactive (default): glass bubble. Component-specific border-width and
-     blur radius come straight from Figma spec -- not reusable elsewhere. */
-  background: var(--velo-nav-inactive-bg);
-  border: 1.26px solid var(--velo-glass-border);
-  backdrop-filter: blur(2.52px);
-  -webkit-backdrop-filter: blur(2.52px);
+  background: transparent;
+  border: none;
+  /* Lifts the icons (and the active disc) ABOVE the ::after sheen -- the
+     same fix as the composer's send button: soft-light was washing solid
+     fills out to "lost". */
+  position: relative;
+  z-index: 1;
   transition:
     background var(--transition-fast),
     color var(--transition-fast);
 }
 
-/*
- * Active state (Figma 2212:390): same circle, same border + blur as inactive,
- * a darker semi-transparent fill, white icon. Only the fill and icon color
- * change. The fill is primary with 60% alpha (-> soft blue-grey on the light
- * page bg), NOT the fully opaque --velo-nav-active-bg.
- */
+/* [FE-26 pattern, VBackButton precedent] Touch skirt: the pill's compact
+   56px visuals shrink every tap target below the old 63px bubbles and move
+   them off the muscle-memory spots -- an invisible -8px ring grows each
+   TAPPABLE circle back to 72px and covers the 8px gaps between neighbours,
+   without painting anything (the pill's own geometry is untouched). */
+.v-tabbar__item::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: var(--radius-full);
+}
+
+/* Active (Figma 2212:390 palette; owner v2 -- NO hairline): a clean
+   blue-grey disc with a white icon, the only button that paints a
+   background. The frost behind it comes from the pill, not the button. */
 .v-tabbar__item--active {
   background: var(--velo-nav-active-bg-glass);
   color: var(--velo-white);
