@@ -550,9 +550,18 @@ onMounted(async () => {
   void loadUnreadCount().catch(() => {
     /* leave the badge at 0 if the fetch fails */
   })
-  // Both calls are lazy -- skip if already populated by guard / prior navigation.
+  // Profile stays lazy -- skip if already populated by guard / prior navigation.
   await masterStore.fetchMyProfile()
-  await masterStore.fetchMyPractices()
+  // FE-53: the practice cards are the one section whose numbers move by
+  // ANOTHER actor's hand (a student's booking bumps current_participants,
+  // their PRE check-in bumps checkin_count) and no push exists, so the lazy
+  // fetchMyPractices() froze the cards at the session's first load. The
+  // upcoming bucket is force-refreshed on every mount -- the same per-mount
+  // contract loadStats() / loadUnreadCount() above already follow, and with
+  // the same failure disposition: refreshInPlace keeps the previous cards
+  // when the check fails. Past stays lazy: only the zero-state reads its
+  // total.
+  await Promise.all([masterStore.fetchPastPractices(), masterStore.refreshUpcomingPractices()])
   // E12 swap (PROMPT №419): the check-in meta now reads checkin_count straight
   // off the practice (already on masterStore.practices) -- the insights
   // eager-load that used to feed it is gone, one fewer network round-trip.

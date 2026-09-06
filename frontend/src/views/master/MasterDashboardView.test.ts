@@ -619,6 +619,60 @@ describe('MasterDashboardView', () => {
       expect(metaOf(blocks()[0]!)).toEqual(['5/20', '3/20'])
     })
 
+    it('FE-53: a remount re-reads the upcoming bucket, so student-side numbers are not frozen', async () => {
+      // The repro: a student books and checks in while the master's app is
+      // open. A tab switch remounts this screen over the SAME warm Pinia, and
+      // the old mount path (lazy fetchMyPractices) skipped the network on
+      // every load after the first -- the card kept rendering the session's
+      // first snapshot forever. Asserted on the VALUES (SC-02): only a real
+      // refetch can change what the card shows.
+      mount()
+      await flush()
+      expect(metaOf(blocks()[0]!)).toEqual(['5/20', '3/20'])
+
+      app?.unmount()
+      host?.remove()
+      app = null
+      host = null
+
+      // The student acted: one more booking, one more PRE check-in.
+      mockBucketedPractices([
+        { ...P_SOON, current_participants: 6, checkin_count: 4 },
+        P_LATER,
+        P_THIRD,
+      ])
+      mount()
+      await flush()
+
+      expect(titles()).toEqual(['Утренняя практика', 'Вечерняя практика'])
+      expect(metaOf(blocks()[0]!)).toEqual(['6/20', '4/20'])
+    })
+
+    it('FE-53: a FAILED remount refresh keeps the previous cards (no zero-state wipe)', async () => {
+      // The other half of the fix: refreshInPlace, not refresh. refresh()
+      // reset()s the bucket, so a transient failure while RE-entering the
+      // dashboard would have wiped cards already on screen into «Нет
+      // предстоящих практик» + the create CTA -- worse than the stale figures
+      // it replaced. The freshness check is passive: on failure the old page
+      // stays, exactly like loadStats keeps its previous values.
+      mount()
+      await flush()
+      expect(metaOf(blocks()[0]!)).toEqual(['5/20', '3/20'])
+
+      app?.unmount()
+      host?.remove()
+      app = null
+      host = null
+
+      vi.mocked(mastersApi.getMyPractices).mockRejectedValue(new TypeError('network down'))
+      mount()
+      await flush()
+
+      expect(titles()).toEqual(['Утренняя практика', 'Вечерняя практика'])
+      expect(metaOf(blocks()[0]!)).toEqual(['5/20', '3/20'])
+      expect(createCta()).toBeUndefined()
+    })
+
     it('content: omits the check-in badge entirely when the count is null', async () => {
       // checkin_count is null for a non-owner read. «0/12» there would fabricate
       // a count for a viewer not entitled to one, so the v-if drops the badge

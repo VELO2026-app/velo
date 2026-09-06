@@ -6,7 +6,8 @@
 // error code, not on profile===null, per the store's own №257 comment), the
 // two INDEPENDENT upcoming/past pagination cursors (T22-3/T22-5) including
 // their `*Loaded` re-fetch guards, the combined fetchMyPractices/practices
-// view, the force-reload refreshMyPractices, and $reset (profile + both
+// view, the force-reloads refreshMyPractices/refreshUpcomingPractices, and
+// $reset (profile + both
 // cursors + the sessionStorage applicant marker).
 //
 // Mocked at the @/api/masters wrapper boundary -- the store's only network
@@ -193,6 +194,28 @@ describe('useMasterStore', () => {
       expect(mastersApi.getMyPractices).toHaveBeenCalledTimes(4)
       expect(store.practicesUpcomingLoading).toBe(false)
       expect(store.practicesPastLoading).toBe(false)
+    })
+
+    it('refreshUpcomingPractices force-reloads ONLY the upcoming bucket (FE-53)', async () => {
+      const items = [fakePractice('fresh')]
+      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(fakePracticesPage([]))
+      const store = useMasterStore()
+      await store.fetchMyPractices()
+      expect(mastersApi.getMyPractices).toHaveBeenCalledTimes(2) // upcoming + past
+
+      // The dashboard mounts again after a student booked / checked in: the
+      // upcoming bucket must hit the network even though its lazy guard is
+      // already satisfied, and the past bucket must not pay for it.
+      vi.mocked(mastersApi.getMyPractices).mockImplementation((bucket) =>
+        Promise.resolve(fakePracticesPage(bucket === 'upcoming' ? items : [])),
+      )
+      await store.refreshUpcomingPractices()
+
+      expect(mastersApi.getMyPractices).toHaveBeenCalledTimes(3)
+      expect(mastersApi.getMyPractices).toHaveBeenLastCalledWith('upcoming', 20, 0)
+      expect(store.practicesUpcoming.map((p) => p.id)).toEqual(['fresh'])
+      expect(store.practicesPast).toEqual([])
+      expect(store.practicesUpcomingLoading).toBe(false)
     })
   })
 
