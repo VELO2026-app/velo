@@ -38,16 +38,16 @@
 //    would drive NOTHING and pass vacuously. Stubbed below with a capturing
 //    class so the callback can be fired by hand. That is TEST setup; no product
 //    code is touched, and the stub is installed/removed per test.
-//  - SC-13: DiaryFilterModal + DiarySearchModal both wrap VModal, which teleports
-//    `.v-modal__overlay` to document.body (VModal.vue:20-22). Purged in afterEach.
-//    Queried off document.body, never off host (SC-07).
+//  - SC-13: DiaryFilterModal wraps VModal, which teleports `.v-modal__overlay`
+//    to document.body (VModal.vue:20-22). Purged in afterEach. Queried off
+//    document.body, never off host (SC-07). (The search went INLINE 2026-09-07
+//    -- DiarySearchBar renders in the host, no overlay to reap.)
 //  - SC-13c: overlay queries are scoped `:not(.v-modal-leave-active)` -- applying
 //    a filter closes the modal mid-test and parks a corpse on document.body.
-//  - SC-14 (the STRIP variant): the header title is ALWAYS mounted and its idle
-//    text is literally «Дневник» -- which is ALSO a note card's title AND a
-//    prefix of the empty state «Дневник пуст». `text()).toContain('Дневник')` can
-//    therefore never fail. Every ladder assertion is scoped to `.diary-feed__body`
-//    and the title is read off `.diary-feed__title` alone.
+//  - SC-14 (2026-09-07): the header title is REMOVED (owner: floating glass
+//    buttons only) -- there is no `.diary-feed__title` whose text could
+//    collide with a note card's title or the empty state any more; every
+//    ladder assertion is scoped to `.diary-feed__body` as before.
 //  - SC-15: the ordering / filter tests pin the POSITIVE set with toEqual first,
 //    so an exclusion cannot pass on a feed that rendered nothing.
 //  - Wall clock: dayLabelOf (format.ts:174) calls `new Date()` for the
@@ -55,7 +55,7 @@
 //    against it. Timezone is forced to UTC through the mocked auth store, so
 //    the runner's local zone cannot drift the day keys.
 //  - localStorage: DiaryComposer mirrors its draft to `velo:diary:draft:*` on
-//    every keystroke and reads it back in onMounted; DiarySearchModal persists
+//    every keystroke and reads it back in onMounted; DiarySearchBar persists
 //    recents. Both LEAK across tests -- cleared in beforeEach.
 //
 // TRAPS ABSENT (proved, so nobody cargo-cults the setup onto this file):
@@ -65,7 +65,7 @@
 //    U+00A0. So no norm() helper: dead defensive code carrying a false
 //    justification is worse than none.
 //  - NO v-show on this screen (grepped) -- the ladder rungs are v-if/v-else-if,
-//    genuinely mutually exclusive, so only the SC-14 strip variant above bites.
+//    genuinely mutually exclusive.
 //  - NO VBottomSheet -> no `.v-sheet__overlay` to reap, only `.v-modal__overlay`.
 //  - NO navigator.clipboard, NO window.location assignment, NO history.state
 //    read, NO waitUntilReady in the chain.
@@ -258,7 +258,7 @@ async function flush(): Promise<void> {
   for (let i = 0; i < 8; i++) await nextTick()
 }
 
-/** The feed pane ONLY. The header title «Дневник» is always mounted (SC-14). */
+/** The feed pane ONLY. */
 function feedBody(): HTMLElement {
   const el = host?.querySelector<HTMLElement>('.diary-feed__body')
   if (!el) throw new Error('.diary-feed__body did not render')
@@ -267,10 +267,6 @@ function feedBody(): HTMLElement {
 
 function bodyText(): string {
   return feedBody().textContent ?? ''
-}
-
-function headerTitle(): string {
-  return host?.querySelector('.diary-feed__title')?.textContent?.trim() ?? ''
 }
 
 /** Standard-card titles in render order (oldest -> newest, DiaryList reverses). */
@@ -683,11 +679,10 @@ describe('DiaryFeedView', () => {
   })
 
   describe('filters', () => {
-    it('applying a category filter reloads the feed and retitles the header', async () => {
+    it('applying a category filter reloads the feed', async () => {
       vi.mocked(diaryApi.listDiaryFeed).mockResolvedValue(page([NOTE]))
       mount()
       await flush()
-      expect(headerTitle()).toBe('Дневник')
 
       openKebab()
       await flush()
@@ -706,8 +701,6 @@ describe('DiaryFeedView', () => {
       expect(vi.mocked(diaryApi.listDiaryFeed).mock.calls.at(-1)?.[0]).toMatchObject({
         categories: ['dreams'],
       })
-      // A single non-root category replaces the title (.vue:451-458).
-      expect(headerTitle()).toBe('Сонник')
     })
 
     it('a read-only filter hides the composer entirely', async () => {
@@ -723,7 +716,6 @@ describe('DiaryFeedView', () => {
       // diaryWriteTarget(['practices']) === null -> composer unmounts, so the
       // keyboard can never open on a feed you cannot write to.
       expect(host?.querySelector('.composer')).toBeNull()
-      expect(headerTitle()).toBe('Практики')
     })
 
     it('the composer switches target with the filter: Сонник writes dreams', async () => {
@@ -739,7 +731,7 @@ describe('DiaryFeedView', () => {
       expect(host?.querySelector('textarea')?.placeholder).toBe('Запишите сон...')
     })
 
-    it('search: submitting a query reloads the feed with it', async () => {
+    it('search: the inline bar unfolds from «Поиск» and submits the query', async () => {
       vi.mocked(diaryApi.listDiaryFeed).mockResolvedValue(page([NOTE]))
       mount()
       await flush()
@@ -749,19 +741,78 @@ describe('DiaryFeedView', () => {
       host?.querySelector<HTMLButtonElement>('button[aria-label="Поиск"]')?.click()
       await flush()
 
-      const modal = liveModal()
-      expect(modal).not.toBeNull()
-      const input = modal!.querySelector('input')
+      // Inline bar (owner 2026-09-07): no modal any more -- the field unfolds
+      // in place, to the right of the magnifier, over the feed.
+      const bar = host?.querySelector('.diary-feed__search')
+      expect(bar).not.toBeNull()
+      // The open mode dims + soft-blurs the screen behind.
+      expect(host?.querySelector('.diary-feed__search-scrim')).not.toBeNull()
+      const input = bar!.querySelector('input')
       expect(input).not.toBeNull()
       input!.value = 'сон'
       input!.dispatchEvent(new Event('input'))
       await flush()
-      modal!.querySelector<HTMLButtonElement>('.diary-search__go')?.click()
+      bar!.querySelector<HTMLButtonElement>('.diary-search__go')?.click()
       await flush()
 
       expect(vi.mocked(diaryApi.listDiaryFeed).mock.calls.at(-1)?.[0]).toMatchObject({
         search: 'сон',
       })
+      // A live search keeps the bar mounted -- it is the filter's only
+      // visible indicator -- but the submit ended the MODE, so the dim lifts.
+      expect(host?.querySelector('.diary-feed__search')).not.toBeNull()
+      expect(host?.querySelector('.diary-feed__search-scrim')).toBeNull()
+    })
+
+    it('search: the x erases the text without cancelling the search', async () => {
+      vi.mocked(diaryApi.listDiaryFeed).mockResolvedValue(page([NOTE]))
+      mount()
+      await flush()
+      const store = useDiaryStore()
+      await store.runFeedSearch('сон')
+      await flush()
+
+      // The active search mounts the bar on its own (no menu round-trip) and
+      // syncs the field with the live query.
+      const bar = host?.querySelector('.diary-feed__search')
+      expect(bar).not.toBeNull()
+      const input = bar!.querySelector('input')
+      expect(input?.value).toBe('сон')
+
+      // The x erases the TEXT only (owner 2026-09-07): no feed reset, no
+      // unmount -- cancelling the search is the scrim tap / the back button.
+      bar!.querySelector<HTMLButtonElement>('.diary-search__clear')?.click()
+      await flush()
+
+      expect(input?.value).toBe('')
+      expect(store.feedFilters.search).toBe('сон')
+      expect(host?.querySelector('.diary-feed__search')).not.toBeNull()
+    })
+
+    it('search: tapping the scrim cancels the mode and the active query', async () => {
+      vi.mocked(diaryApi.listDiaryFeed).mockResolvedValue(page([NOTE]))
+      mount()
+      await flush()
+      const store = useDiaryStore()
+      await store.runFeedSearch('сон')
+      await flush()
+
+      openKebab()
+      await flush()
+      host?.querySelector<HTMLButtonElement>('button[aria-label="Поиск"]')?.click()
+      await flush()
+
+      const scrim = host?.querySelector<HTMLButtonElement>('.diary-feed__search-scrim')
+      expect(scrim).not.toBeNull()
+      scrim?.click()
+      await flush()
+
+      // Cancel = the mode closed AND the active query reset (the bar goes
+      // with it -- no query, no mode).
+      expect(host?.querySelector('.diary-feed__search-scrim')).toBeNull()
+      expect(host?.querySelector('.diary-feed__search')).toBeNull()
+      expect(store.feedFilters.search).toBeUndefined()
+      expect(vi.mocked(diaryApi.listDiaryFeed).mock.calls.at(-1)?.[0]?.search).toBeUndefined()
     })
   })
 
@@ -796,7 +847,6 @@ describe('DiaryFeedView', () => {
       // contextual back.
       expect(push).not.toHaveBeenCalled()
       expect(store.feedFilters.categories).toEqual([])
-      expect(headerTitle()).toBe('Дневник')
       expect(vi.mocked(diaryApi.listDiaryFeed).mock.calls.at(-1)?.[0]).toMatchObject({
         categories: [],
       })

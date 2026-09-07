@@ -256,6 +256,17 @@
    */
   --velo-tg-header: #334d6e;
   --velo-tg-bg: #ffffff;
+  /* [TG-SURFACE 2026-09-07] The KEYBOARD variant of the native backdrop:
+   * with the dark search scrim up, the keyboard's rounded top corners expose
+   * Telegram's native surface (outside the WebView) -- the seam must
+   * CONTINUE the dimmed backdrop, not contrast it. Value = the actual
+   * background photo's bottom strip (sampled 2026-09-07: /bg/background.png
+   * 804x1748, bottom 8% avg #e5ecf1, near-uniform; the phone cover-crop
+   * shows that strip almost uncut) multiplied by the scrim's 50% black
+   * (rgba(0,0,0,0.5)): #e5ecf1 * 0.5 = #727678. Set mid-session by
+   * platform.setKeyboardSurface(); init() never uses it. The fallback
+   * literal in telegram.ts must mirror this value. */
+  --velo-tg-bg-kbd: #727678;
 
   /* === VELΘ: Glow shadow === */
   --velo-shadow-glow: 0px 0px 20.9px 7px #ffffff;

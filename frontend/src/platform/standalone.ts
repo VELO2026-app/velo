@@ -39,6 +39,15 @@ export const standalonePlatform: Platform = {
     return 'light'
   },
 
+  /**
+   * [TG-SURFACE 2026-09-07] No-op: a browser tab owns its whole surface --
+   * there is no native backdrop under a resized viewport (the soft keyboard
+   * overlays the page, and the page paints everything visible).
+   */
+  setKeyboardSurface(_dark: boolean): void {
+    // Intentional no-op.
+  },
+
   hapticFeedback(): void {
     // Browser has no haptic API.
   },

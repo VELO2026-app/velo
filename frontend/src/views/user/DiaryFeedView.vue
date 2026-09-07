@@ -2,8 +2,9 @@
   VELO Frontend -- DiaryFeedView (Diary redesign, screen 40)
 
   The diary screen. Renders the unified feed as the alternating thread
-  (DiaryTimeline), with a frosted composer pinned at the bottom and a header
-  ("Дневник" + "..." menu stub). Replaces the old tab-based DiaryView.
+  (DiaryTimeline), with a frosted composer pinned at the bottom and floating
+  glass back/"..." buttons over the feed (no title -- owner 2026-09-07).
+  Replaces the old tab-based DiaryView.
 
   Pagination: cursor-based infinite scroll. An IntersectionObserver sentinel
   at the bottom calls loadMoreFeed() when it scrolls into view (the project's
@@ -16,25 +17,31 @@
 -->
 
 <template>
-  <div class="diary-feed" :class="{ 'diary-feed--composing': composing }">
-    <!-- Header -->
+  <div
+    class="diary-feed"
+    :class="{
+      'diary-feed--composing': composing,
+      'diary-feed--searching': searchOpen || searchActive,
+    }"
+  >
+    <!-- Header: floating glass buttons OVER the feed (owner 2026-09-07): the
+         штора/top fade is gone and there is no title -- entries really pass
+         beneath the buttons, the same overlay model the composer uses at the
+         bottom. -->
     <header class="diary-feed__header">
-      <!-- Left: exit back-pill (immersive diary has no tab bar; this returns
-           to the tab-bar screens) + plain category title (no backing, per the
-           approved design). The reset-filter cross appears only while a filter
-           is active. -->
-      <div class="diary-feed__left">
-        <!-- Back контекстный (operator 2026-06-04): если активен фильтр/поиск —
-              стрелка СБРАСЫВАЕТ фильтр (возврат в полную ленту), иначе выходит из
-              дневника. Отдельный «x» убран. [FE-42] кнопка «Назад» круглая
-              ВЕЗДЕ (поправка владельца) — это просто базовый вид VBackButton. -->
-        <VBackButton
-          class="diary-feed__back"
-          :aria-label="filterActive ? 'Сбросить фильтр' : 'Выйти из дневника'"
-          @click="onBack"
-        />
-        <h1 class="diary-feed__title">{{ feedTitle }}</h1>
-      </div>
+      <!-- Back контекстный (operator 2026-06-04): если активен фильтр/поиск —
+           стрелка СБРАСЫВАЕТ фильтр (возврат в полную ленту), иначе выходит из
+           дневника. Отдельный «x» убран. [FE-42] кнопка «Назад» круглая ВЕЗДЕ
+           (поправка владельца) — базовый вид VBackButton; здесь белым стеклом. -->
+      <VBackButton
+        class="diary-feed__back"
+        variant="glass"
+        :aria-label="filterActive ? 'Сбросить фильтр' : 'Выйти из дневника'"
+        @click="onBack"
+      />
+      <!-- «...» под ней: обычный DS-вид (owner 2026-09-07, раунд 2: синее
+           стекло убрано); раскрывается как раньше (вниз, в Фильтр и Поиск),
+           поверх контента. -->
       <VMenu>
         <!-- Trigger glyph: vertical dots that rotate to horizontal while the
              menu is open (a state cue, approved animation). The shared default
@@ -83,7 +90,7 @@
             ariaLabel="Поиск"
             @click="
               () => {
-                openSearch()
+                toggleSearch()
                 close()
               }
             "
@@ -161,9 +168,10 @@
       </VMenu>
     </header>
 
-    <!-- Feed row: takes its own space between the header and composer rows
-         (ruling 4/PROMPT №663 -- no longer an absolutely-positioned full-bleed
-         layer), and the ONLY scrolling area. PROMPT №668 (ruling 6): the
+    <!-- Feed row: runs the FULL height -- the header buttons and the composer
+         are absolute overlays it passes beneath (owner 2026-09-07 for the
+         header; the composer already was one), and the ONLY scrolling area.
+         PROMPT №668 (ruling 6): the
          ruling-5 freeze (`:style` pinning this row's height while composing,
          `№667`) is GONE -- ruling 6 wants exactly the opposite of what ruling
          5 required: the feed must visibly ride up as the composer grows, like
@@ -261,13 +269,32 @@
       @close="showFilter = false"
     />
 
-    <!-- Text search (screen 44), opened from the "..." menu -->
-    <DiarySearchModal
-      :open="showSearch"
-      :initial="feedFilters.search ?? ''"
-      @search="onApplySearch"
-      @close="showSearch = false"
-    />
+    <!-- Search scrim (owner 2026-09-07): while the search MODE is open the
+         screen dims and soft-blurs -- FIXED to the viewport, so it also
+         paints dark the strips the keyboard's rounded corners expose (they
+         used to flash the white body bg). Any tap on it cancels: the mode
+         closes and an active query is reset (owner ruling). -->
+    <button
+      v-if="searchOpen"
+      type="button"
+      class="diary-feed__search-scrim"
+      aria-label="Отменить поиск"
+      @click="onSearchScrimTap"
+    ></button>
+
+    <!-- Inline search (screen 44, owner 2026-09-07 round 3): no modal -- the
+         "..." menu's «Поиск» unfolds a glass field to the right of the
+         magnifier, full width, floating over the feed. Stays mounted while a
+         search is active: with the header title gone, this bar is the only
+         visible indicator of that filter. -->
+    <div v-if="searchOpen || searchActive" class="diary-feed__search">
+      <DiarySearchBar
+        ref="searchBarEl"
+        :initial="feedFilters.search ?? ''"
+        @search="onApplySearch"
+        @close="closeSearch"
+      />
+    </div>
   </div>
 </template>
 
@@ -281,10 +308,11 @@ import DiaryTimeline from '@/components/shared/DiaryTimeline.vue'
 import DiaryList from '@/components/shared/DiaryList.vue'
 import DiaryComposer from '@/components/shared/DiaryComposer.vue'
 import DiaryFilterModal from '@/components/shared/DiaryFilterModal.vue'
-import DiarySearchModal from '@/components/shared/DiarySearchModal.vue'
+import DiarySearchBar from '@/components/shared/DiarySearchBar.vue'
 import { useDiaryStore } from '@/stores/diary'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
+import { platform } from '@/platform'
 import { diaryWriteTarget } from '@/utils/diaryComposeTarget'
 import type { DiaryFeedItem, DiaryFeedCategory } from '@/api/types'
 
@@ -354,10 +382,15 @@ function onTap(payload: { item: DiaryFeedItem; editable: boolean }): void {
   // Banner kinds (booking_confirmed/cancelled/rescheduled) are not tappable.
 }
 
-// -- "..." menu + filter / search modals (screens 42 / 43 / 44) --------------
+// -- "..." menu + filter modal / inline search (screens 42 / 43 / 44) ------
 
 const showFilter = ref(false)
-const showSearch = ref(false)
+const searchOpen = ref(false)
+const searchBarEl = ref<InstanceType<typeof DiarySearchBar> | null>(null)
+
+// A live search keeps the bar mounted even when its "mode" is closed -- it is
+// the only visible indicator of the filter (no header title any more).
+const searchActive = computed(() => (feedFilters.value.search ?? '') !== '')
 
 // View mode: flat column ('list') vs thread/map ('map'), toggled from the
 // "..." menu. Default 'list' — the redesign's primary, more readable view;
@@ -421,13 +454,13 @@ watch(writeTarget, (target) => {
 // gesture, so intercepting here cannot break scrolling. Document-level
 // CAPTURE listener (template-bound capture on the root proved brittle in the
 // test harness); scoped by the event's own path: only clicks that originate
-// INSIDE .diary-feed and outside the header/composer rows. Teleported modals
-// (filter/search, in body) are outside .diary-feed and stay untouched.
+// INSIDE .diary-feed and outside the header/composer/search rows. Teleported
+// modals (filter, in body) are outside .diary-feed and stay untouched.
 function onDocClickCapture(e: MouseEvent): void {
   if (!composing.value) return
   const target = e.target as HTMLElement | null
   if (!target?.closest('.diary-feed')) return
-  if (target.closest('.diary-feed__header, .diary-feed__composer')) return
+  if (target.closest('.diary-feed__header, .diary-feed__composer, .diary-feed__search')) return
   ;(document.activeElement as HTMLElement | null)?.blur?.()
   e.stopPropagation()
   e.preventDefault()
@@ -438,6 +471,9 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocClickCapture, true)
+  // [TG-SURFACE] never strand a dark native Telegram backdrop after leaving
+  // the screen mid-search.
+  platform.setKeyboardSurface(false)
   // [owner pass] keep-bottom teardown, same lifecycle as the rest.
   feedResizeObserver?.disconnect()
   feedResizeObserver = null
@@ -447,9 +483,32 @@ function openFilter(): void {
   showFilter.value = true
 }
 
-function openSearch(): void {
-  showSearch.value = true
+// «Поиск» toggles the inline bar (owner 2026-09-07): unfold in place + focus.
+function toggleSearch(): void {
+  searchOpen.value = !searchOpen.value
+  if (searchOpen.value) nextTick(() => searchBarEl.value?.focus())
 }
+
+function closeSearch(): void {
+  searchOpen.value = false
+}
+
+// A tap on the scrim = cancel (owner 2026-09-07): close the mode AND reset
+// an active search. With the query gone the bar unmounts, so the focused
+// input goes with it and the keyboard closes by itself.
+async function onSearchScrimTap(): Promise<void> {
+  searchOpen.value = false
+  if (searchActive.value) await diaryStore.runFeedSearch('')
+}
+
+// [TG-SURFACE] While the dark search scrim is up, Telegram's NATIVE
+// under-webview surface goes dark too: the keyboard's rounded top corners
+// expose it, and it lies OUTSIDE the WebView -- no in-page layer can paint
+// there (device-confirmed 2026-09-07). Restored on close and on unmount
+// (a route change mid-search must not strand a dark native backdrop).
+watch(searchOpen, (open) => {
+  platform.setKeyboardSurface(open)
+})
 
 async function onApplyFilter(payload: {
   categories: DiaryFeedCategory[]
@@ -475,23 +534,17 @@ async function onApplySearch(query: string): Promise<void> {
   await nextTick()
   if (filterActive.value) scrollToTop()
   else scrollToBottom()
+  // A submit ends the search MODE -- the dim lifts and the results read
+  // crisp. The bar itself stays while the query is live (searchActive keeps
+  // it mounted -- the filter's only visible indicator).
+  searchOpen.value = false
 }
 
-// -- Active-filter header + reset (minimal indicator) ------------------------
+// -- Active-filter state ------------------------------------------------------
 //
-// When a filter is active the header shows it and offers a one-tap reset
-// (the cross), so the user is never confused about whether the feed is
-// filtered. The title is swapped to the category name ONLY when exactly one
-// category is selected (screens "Check-ins" / "Feedbacks" / "Сонник" ...);
-// otherwise it stays "Дневник" but the cross still appears.
-
-const CATEGORY_TITLE: Record<DiaryFeedCategory, string> = {
-  entries: 'Дневник',
-  dreams: 'Сонник',
-  feedbacks: 'Feedbacks',
-  checkins: 'Check-ins',
-  practices: 'Практики',
-}
+// No header title any more (owner 2026-09-07: only the floating buttons).
+// The filtered state is carried by the feed content plus the back button's
+// contextual aria-label/behaviour below.
 
 // Any filter axis active = categories and/or date range and/or search.
 const filterActive = computed(
@@ -501,20 +554,6 @@ const filterActive = computed(
     feedFilters.value.date_to !== undefined ||
     (feedFilters.value.search ?? '') !== '',
 )
-
-// Title text (approved design): the active category name alone replaces the
-// title (e.g. "Check-ins" / "Сонник"). Only when exactly ONE category is
-// selected; "entries" IS the root, so it stays "Дневник"; zero / multiple
-// categories also stay plain "Дневник" (the reset cross still shows that a
-// filter is active).
-const feedTitle = computed(() => {
-  const cats = activeCategories.value
-  const only = cats.length === 1 ? cats[0] : undefined
-  if (only !== undefined && only !== 'entries') {
-    return CATEGORY_TITLE[only]
-  }
-  return 'Дневник'
-})
 
 async function clearFilter(): Promise<void> {
   // Full reset: categories + date range + search (clearFeedFilters reloads
@@ -718,17 +757,12 @@ onBeforeUnmount(() => {
 
 <style scoped>
 /* Chat-style layout. The parent (MobileLayout main in `fill` mode) is a flex
-   column that hands us its full height with no scroll of its own. We fill that
-   height and split it into three rows: header, scrolling feed, composer. Only
-   the feed (.diary-feed__body) scrolls -- header and composer stay put. The
-   background stays continuous across all three rows (nothing opaque cuts the
-   runes backdrop in the header/composer rows' own transparent gaps).
-   PROMPT №663 (ruling 4 rebuild) CORRECTS this block and the one below it,
-   which described the PRE-rebuild model as current fact: the three rows no
-   longer overlap ("the feed flows under them" is no longer true -- see the
-   `.diary-feed` comment right below for what replaced it), and the islands
-   are glass ONLY on the individual pill elements, not a claim about the feed
-   sliding under them any more. The scrollbar is hidden app-wide. */
+   column that hands us its full height with no scroll of its own. Only the
+   feed (.diary-feed__body) scrolls; the header buttons and the composer are
+   absolute overlays the feed really passes beneath (owner 2026-09-07, which
+   supersedes ruling 4's no-overlap-at-rest for the header; the composer was
+   already an overlay). The background stays continuous behind all of it
+   (nothing opaque cuts the runes backdrop). The scrollbar is hidden app-wide. */
 /* PROMPT №663 (ruling 4 rebuild): a flex COLUMN, not an absolute-positioning
    host any more -- header / feed / composer are its three rows, in DOM
    order, none of them overlapping. While the keyboard is OPEN it is sized
@@ -795,58 +829,29 @@ onBeforeUnmount(() => {
   transition: height 250ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
-/* -- Header: its own row, top of the column (ruling 4) --
-   Transparent container; only the back-pill / title / "..." trigger are
-   opaque ("keeping the glass" -- ruling 4 is about POSITION, not about
-   filling this row). Aligned to the same 33px side rail as the composer row,
-   so the title pill sits over the composer field's left edge and "..." over
-   the send button. PROMPT №665: `position:relative` + `z-index: var(--z-sticky)`
-   RESTORED, and STILL NEEDED after `№668` removed the fog: without its own
-   stacking order this row has no z-index of its own, and the tap-catcher
-   (`.diary-feed__tap-catcher` below -- no longer visual, but still a
-   positioned, z-indexed sibling while composing) would intercept taps meant
-   for the header. `--z-sticky` (200) sits above the tap-catcher's
-   `--z-content` (1). */
+/* -- Header: floating glass overlay over the feed (owner 2026-09-07) --
+   Supersedes ruling 4 for the header: NOT a normal-flow row any more. The
+   column hangs at the left rail -- «Назад» (white glass, VBackButton's glass
+   variant) above the "..." trigger in its usual solid DS look (blue glass
+   was tried and rolled back by the owner the same day), which expands
+   downward into Фильтр/Поиск exactly as before -- and the feed
+   scrolls beneath both; the buttons frost what passes under them (the same
+   overlay model the composer uses at the bottom). No title. The
+   `z-index: var(--z-sticky)` survives for the PROMPT №665 reason: the
+   tap-catcher is gone, but positioned/z-indexed overlays must not intercept
+   taps meant for the buttons; `--z-sticky` (200) keeps them on top. */
 .diary-feed__header {
-  position: relative;
+  position: absolute;
+  top: var(--velo-fog-headerless-top);
+  left: var(--velo-rail-pad-x);
   z-index: var(--z-sticky);
-  flex: 0 0 auto;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  /* Top pad from the SHARED token (same value the hand-rolled calc produced:
-     14 + 20 = 34px -- swept to the token so every screen's top clearance has
-     ONE source; tuning --velo-fog-headerless-top moves all of them at once). */
-  padding: var(--velo-fog-headerless-top) var(--velo-rail-pad-x) var(--space-3);
-}
-
-/* PROMPT №663: the compensating `top: var(--velo-vv-offset)` rule that used
-   to live here (added PROMPT №658) is REMOVED, not merely inert -- once the
-   header is a normal-flow row instead of `position:absolute;top:0`, `top`
-   does not apply to it at all, so there is no property left for a formula to
-   get wrong. This is ruling 2 (the header never moves) delivered by removing
-   the only rule that could ever move it, not by a smarter version of that
-   rule. See the file-level `.diary-feed` comment above for the live-height
-   reasoning this depends on. */
-
-.diary-feed__title {
-  font-family: var(--font-heading);
-  font-size: var(--text-base);
-  letter-spacing: 0.36px;
-  color: var(--velo-text-primary);
-}
-
-/* Left group: exit back-pill + plain category title (no backing). PROMPT
-   №663: the click-through trick (`pointer-events:none` container +
-   `pointer-events:auto` on the pill) is GONE -- it existed so the feed could
-   be tapped/scrolled through the header's empty gaps while the header
-   floated over it. Under ruling 4 the feed no longer extends into this row
-   at all, so there is nothing behind those gaps to reach any more. */
-.diary-feed__left {
-  display: flex;
+  flex-direction: column;
+  /* One vertical axis through both CENTRES (the buttons differ in width,
+     44 vs 40): flex-start would sit the narrower "..." flush left, its
+     centre 2px off the back button's. */
   align-items: center;
   gap: var(--space-3);
-  min-width: 0;
 }
 
 /* "..." trigger glyph: vertical dots that rotate to horizontal while the menu
@@ -874,19 +879,18 @@ onBeforeUnmount(() => {
   transform: rotate(30deg);
 }
 
-/* -- Feed row: takes its own space between the header and composer rows
-   (ruling 4/PROMPT №663), and the ONLY scrolling area. PROMPT №668 (ruling
-   6): NOT dimmed any more, in any state -- the owner's whole point is that
-   the feed stays fully readable while writing, which is the opposite of
-   what the fog/dim pair (`№665`) existed to do; see `.diary-feed__tap-catcher`
-   for what replaced the fog as a purely non-visual click-blocker. No
-   `position`/`z-index` needed on this element itself -- a plain flex row,
-   nothing paints inside it that needs to escape it. The old 4-zone mask
-   (hard-transparent bands sized to hide cards passing UNDER the floating
-   header/composer islands) stays RETIRED -- ruling 4 means nothing passes
-   under them -- replaced by the ruling-4 amendment's plain, symmetric edge
-   fade: appearance only, no overlap, no keyboard-derived value. Kept as the
-   class name `.diary-feed__body` throughout every rebuild this cycle --
+/* -- Feed row: the ONLY scrolling area, running the FULL height -- the header
+   buttons (owner 2026-09-07) and the composer are absolute overlays the
+   entries really pass beneath. PROMPT №668 (ruling 6): NOT dimmed in any
+   state; the blur-on-outside-click (onRootClickCapture) is the non-visual
+   click-blocker that replaced the fog. No `position`/`z-index` on this
+   element itself -- a plain flex row. NO edge fade any more: the штора (the
+   ruling-4 amendment's top fade, last survivor of the old 4-zone mask) is
+   removed by the same owner ruling -- with the header floating OVER the feed
+   the fade had nothing to transition into; content ends CRISP top and bottom
+   alike (the bottom fade was already gone; the keyboard-time strip below the
+   app is handled separately, global.css #app-bg cap). Kept as
+   `.diary-feed__body` throughout every rebuild this cycle --
    DiaryFeedView.test.ts scopes nearly every assertion through it. */
 .diary-feed__body {
   flex: 1 1 auto;
@@ -896,21 +900,19 @@ onBeforeUnmount(() => {
   /* [FE-7] never chain this scroller's overscroll to the root -- the iOS
      gesture-pan the whole FE-7 fix exists to undo. */
   overscroll-behavior-y: contain;
-  /* [owner spec] The feed runs the FULL height under the absolute composer
-     overlay; entries really pass beneath the glass. The 100px bottom padding
-     is the clearance: the last entry can always be scrolled clear ABOVE the
-     floating pill. */
-  padding: var(--space-5) var(--velo-rail-pad-x) 100px;
+  /* Clearance for the floating overlays, all from tokens. --diary-top-pad
+     (20 + 44 + 12 + 40 + 20 = fog-top + back 44 + gap + menu 40 + breathing)
+     lets the first entry scroll clear BELOW the header buttons while still
+     passing under them; the searching state grows it past the inline search
+     row (see .diary-feed--searching below); the 100px bottom pad does the
+     same for the composer pill. */
+  --diary-top-pad: calc(
+    var(--velo-fog-headerless-top) + var(--velo-size-44) + var(--space-3) + var(--velo-size-40) +
+      var(--space-5)
+  );
+  padding: var(--diary-top-pad) var(--velo-rail-pad-x) 100px;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--space-5), #000 100%);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--space-5), #000 100%);
-  /* [FE-7 follow-up, HUD round] The BOTTOM fade is GONE (owner: "под инпутом
-     в дневнике сейчас там туман"): the feed's bottom dissolve sat right above
-     the composer and let the background picture ghost through entries' last
-     pixels -- under the input the content must end CRISP. Only the TOP fade
-     remains (the header transition). The keyboard-time strip below the app is
-     handled separately (global.css #app-bg cap). */
   /* Chat-mode: a flex column so the thread wrapper can pin a short feed to the
      bottom (next to the composer). When the feed overflows, this has no effect
      and the area scrolls normally. */
@@ -921,6 +923,54 @@ onBeforeUnmount(() => {
   width: 0;
   height: 0;
   display: none;
+}
+
+/* While the inline search row is up (open mode or a live query), the results
+   must start BELOW the row, not hide behind it. */
+.diary-feed--searching .diary-feed__body {
+  padding-top: calc(var(--diary-top-pad) + var(--velo-size-50) + var(--space-5));
+}
+
+/* -- Search scrim: the modal-scrim token + a SOFT blur (owner 2026-09-07:
+   "экран затемняется и чуть блюрится"). FIXED to the viewport (the #app-bg
+   trick) and sized inset:0, so it paints dark EVERYTHING the web can see --
+   including the strips the keyboard's rounded corners expose during the
+   open/close animation, which used to flash body's white (FE-43/B29 defect
+   class, glaring once the feed behind went dark). z-index --z-sticky (200):
+   ABOVE the feed, composer and the header buttons -- while the search mode
+   is up, any tap outside the bar cancels (onSearchScrimTap); the bar itself
+   sits one step higher (.diary-feed__search below). Renders only in the
+   search MODE; a submitted query keeps the feed crisp. */
+.diary-feed__search-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-sticky);
+  border: none;
+  padding: 0;
+  background: var(--velo-scrim);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  cursor: default;
+}
+
+/* -- Inline search bar (owner 2026-09-07, round 3): the "..." menu's «Поиск»
+   unfolds, in place, into [magnifier][glass field -> right rail] floating
+   over the feed -- the field replaces the retired modal. Same overlay
+   contract as the composer: absolute, static glass, the feed scrolls
+   beneath. The left edge continues the header column's rail; vertically it
+   sits where the expanded menu's search item was (below back 44 + gap +
+   "..." 40 + the panel's own gap). One step ABOVE the scrim: the bar (field,
+   go, x, recents) is the only tappable surface while the search mode is
+   up. */
+.diary-feed__search {
+  position: absolute;
+  left: var(--velo-rail-pad-x);
+  right: var(--velo-rail-pad-x);
+  top: calc(
+    var(--velo-fog-headerless-top) + var(--velo-size-44) + var(--space-3) + var(--velo-size-40) +
+      var(--space-2)
+  );
+  z-index: calc(var(--z-sticky) + 1);
 }
 
 /* Pins a short feed to the bottom; a long one scrolls normally (margin-top

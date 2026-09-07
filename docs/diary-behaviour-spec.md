@@ -12,6 +12,27 @@ here is either the owner's ruling or is explicitly marked OPEN.
 **Code state this spec is written against:** `origin/main` = `2d4fb6ce`, worktree clean. All
 `file:line` references verified against that state at authoring time.
 
+**ADDENDUM 2026-09-07 (owner, live session; supersedes parts of §1/§2 below).** The top edge fade
+(«штора») over the feed is REMOVED, and the header row is gone with its title. What remains are two
+floating buttons over the feed at the left rail, on one vertical axis — back («Назад», white glass,
+slightly denser than the composer's) above the «...» trigger in its usual solid look (blue glass was
+tried and rolled back the same day), expanding downward into Фильтр/Поиск exactly as before — with
+the feed scrolling beneath them. This supersedes ruling 4's no-overlap-at-rest **for the header**
+(the composer was already an overlay) and removes the ruling-4 amendment's edge fade. Ruling 2 (the
+header never moves) is unchanged: the buttons are static glass, only the content moves.
+
+**Same session — search.** The search modal is retired: «Поиск» in the «...» menu unfolds an INLINE
+glass field in place — the magnifier with a full-width field to its right, floating over the feed.
+The bar stays mounted while a search is active (with no header title, it is the filter's only
+visible indicator); Esc closes the mode. Recents survive (localStorage, unchanged) and show under
+the empty field. While the search MODE is open the screen behind dims and soft-blurs (the
+modal-scrim token + blur(2px), purely visual); a submit ends the mode, so the results read crisp,
+and any tap on the scrim cancels — the mode closes and an active query is reset. The keyboard's
+rounded-corner notches lie OUTSIDE the WebView — Telegram's native backdrop is repainted dark for
+the mode (platform.setKeyboardSurface, the dimmed photo color #727678). The field pill is
+a LIGHT surface (white 90%, FIXED 50px height — it must not grow when the clear `x` appears). The
+`x` erases the text only — it never cancels the search or closes the mode.
+
 ---
 
 ## §1. The four rulings

@@ -437,7 +437,11 @@ function goBack(): void {
   background: transparent;
   resize: none;
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  /* [VV-PAN 2026-09-07] 16px, not the 15px --text-sm: iOS auto-zooms into
+     any focused field below 16px, and that zoom reads as a viewport shrink
+     (the keyboard detector now guards on scale, but the zoom itself is
+     still disorienting). The title field above is already --text-16. */
+  font-size: var(--text-16);
   line-height: 1.5;
   color: var(--velo-text-primary);
   outline: none;

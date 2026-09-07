@@ -70,6 +70,25 @@ export const telegramPlatform: Platform = {
     return getWebApp().colorScheme || 'light'
   },
 
+  /**
+   * [TG-SURFACE 2026-09-07] The keyboard's rounded corners expose Telegram's
+   * NATIVE backdrop (outside the shrunk WebView -- device-confirmed; no
+   * in-page layer paints there). This repaints it via the same by-name token
+   * idiom as init(): dark = --velo-tg-bg-kbd (the dimmed backdrop color,
+   * sampled from the actual background photo), light = --velo-tg-bg.
+   * Guarded like hapticFeedback -- a repaint failure on an older client must
+   * never break the flow that called it.
+   */
+  setKeyboardSurface(dark: boolean): void {
+    try {
+      const token = dark ? '--velo-tg-bg-kbd' : '--velo-tg-bg'
+      const fallback = dark ? '#727678' : '#ffffff'
+      getWebApp().setBackgroundColor(tokenColor(token, fallback))
+    } catch {
+      // Silently ignore -- older clients or missing SDK.
+    }
+  },
+
   hapticFeedback(style: 'light' | 'medium' | 'heavy'): void {
     try {
       getWebApp().HapticFeedback.impactOccurred(style)

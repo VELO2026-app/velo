@@ -38,6 +38,17 @@ import { resetKeyboardViewportState } from '@/utils/keyboardViewportState'
  * composer/header rules that used to consume it were removed (ruling 4's
  * normal-flow rebuild made them unnecessary; see DiaryFeedView.vue).
  *
+ * [VV-PAN 2026-09-07] `--velo-vv-offset` is a LAYOUT input again: global.css
+ * translates #app, #app-bg and the teleported modal/sheet/toast layers by it
+ * while the keyboard is open -- compensating the iOS visual-viewport pan that
+ * scrollTo(0,0) no longer undoes on current WKWebView (WebKit 311821: the pan
+ * leaves scrollY === 0, so keepRootUnpanned is a no-op exactly where it was
+ * needed). A scale guard (isKeyboardOpenFrom) keeps pinch/auto-zoom out of
+ * the keyboard decision, and a double-rAF re-read heals WebKit 237851's
+ * "offsetTop arrives as 0 first". Every VV-PAN addition is marked -- the
+ * unit reverts by deleting the marked blocks here plus the [VV-PAN] block in
+ * global.css; nothing else reads --velo-vv-offset.
+ *
  * PROMPT №663: `keyboardOpen`'s decision input changed from
  * `nativeKeyboardDelta()` (Telegram's stableHeight vs height) to
  * `restBaselineDelta()`, a self-captured rest-height baseline -- a DEVICE
@@ -116,14 +127,24 @@ export function restBaselineDelta(restHeight: number, currentHeight: number): nu
 
 /**
  * True if the on-screen keyboard should be treated as open. Pure, exported
- * for unit tests -- unchanged logic from the retired utils/keyboardDetection.ts.
+ * for unit tests -- the delta logic itself is unchanged from the retired
+ * utils/keyboardDetection.ts.
+ *
+ * [VV-PAN 2026-09-07] `scale` (optional, default 1): a zoomed visual viewport
+ * shrinks vv.height exactly like a keyboard does (iOS auto-zoom on focus of
+ * a <16px input, or a plain pinch), so a height-only detector asserts
+ * "keyboard" over a zoom -- and a zoomed pan/resize then drives the
+ * keyboard-cap CSS. While the scale is off 1 by more than 1%, no keyboard
+ * assertion is made at all.
  */
 export function isKeyboardOpenFrom(
   nativeDelta: number | null,
   layoutHeight: number,
   visualHeight: number,
   threshold: number,
+  scale = 1,
 ): boolean {
+  if (Math.abs(scale - 1) > 0.01) return false
   const delta = nativeDelta ?? layoutHeight - visualHeight
   return delta > threshold
 }
@@ -173,6 +194,9 @@ function updateRestHeight(h: number): void {
 function publish(vv: VisualViewport): void {
   _visibleHeight.value = vv.height
   _offsetTop.value = vv.offsetTop
+  // [VV-PAN] Defensive: the unit-test mocks (and any engine exposing a vv
+  // object without scale) must read as 1, never NaN the guard below.
+  const scale = typeof vv.scale === 'number' ? vv.scale : 1
 
   // PROMPT №663: restBaselineDelta first -- computed against the baseline AS
   // OF BEFORE this call updates it, so the very first-ever reading (baseline
@@ -191,20 +215,62 @@ function publish(vv: VisualViewport): void {
     window.innerHeight,
     vv.height,
     KEYBOARD_VIEWPORT_THRESHOLD,
+    scale,
   )
+
+  // [VV-PAN] Clamp the pan to the physically-possible range while the
+  // keyboard is open: the visual viewport can slide at most by the height
+  // the keyboard covers (rest - visible). A STALE pan surviving from a
+  // previous keyboard session (device-observed: the pan can outlive the
+  // close) would otherwise translate #app down further than the view is
+  // really offset -- and the page's white canvas would show as a band above
+  // the compensated app (the narrow top stripe under the Telegram header,
+  // device report 2026-09-07). Skipped when the bound collapses to 0 (the
+  // very first reading already being keyboard-open -- no rest baseline to
+  // reason with) and while closed (no consumer then).
+  const rawOffset = vv.offsetTop
+  const panBound = Math.max(0, _restHeight.value - vv.height)
+  const offset = _keyboardOpen.value && panBound > 0 ? Math.min(rawOffset, panBound) : rawOffset
+  _offsetTop.value = offset
 
   const root = document.documentElement
   root.style.setProperty('--velo-vvh', `${vv.height}px`)
-  root.style.setProperty('--velo-vv-offset', `${vv.offsetTop}px`)
+  root.style.setProperty('--velo-vv-offset', `${offset}px`)
+  // [VV-PAN] Published for the debug panel / diagnostics; the compensation
+  // itself only consumes --velo-vv-offset.
+  root.style.setProperty('--velo-vv-scale', String(scale))
   root.classList.toggle('is-keyboard-open', _keyboardOpen.value)
   // [FE-7] root pan is undone by the scroll/touchend listeners inside
   // useViewportGeometry() (the pan always fires a window scroll event);
   // publish() itself stays pure geometry.
+  // [VV-PAN] ...except one bounded heal: WebKit 237851 can report the pan as
+  // 0 on the open transition and update it a frame or two later.
+  if (_keyboardOpen.value && vv.offsetTop === 0) schedulePanRecheck(vv)
+}
+
+// [VV-PAN] The WebKit 237851 shield: while the keyboard is open and the pan
+// still reads 0, re-read after two rAFs and re-publish if the true pan has
+// landed. Bounded by the value itself -- a non-zero offset stops the chain
+// (the re-publish no longer schedules), and a genuine 0 pan costs one
+// harmless extra pass per open.
+let panRecheckRaf1 = 0
+let panRecheckRaf2 = 0
+function schedulePanRecheck(vv: VisualViewport): void {
+  if (panRecheckRaf1 || panRecheckRaf2) return
+  panRecheckRaf1 = window.requestAnimationFrame(() => {
+    panRecheckRaf1 = 0
+    panRecheckRaf2 = window.requestAnimationFrame(() => {
+      panRecheckRaf2 = 0
+      if (!_keyboardOpen.value || vv.offsetTop === 0) return
+      publish(vv)
+    })
+  })
 }
 
 function resetState(): void {
   resetKeyboardViewportState()
   document.documentElement.style.setProperty('--velo-vv-offset', '')
+  document.documentElement.style.setProperty('--velo-vv-scale', '')
   _keyboardOpen.value = false
   _offsetTop.value = 0
 }
@@ -375,7 +441,13 @@ export function useViewportGeometry(): void {
   let touching = false
 
   function keepRootUnpanned(): void {
-    if (window.scrollY !== 0) window.scrollTo(0, 0)
+    if (window.scrollY !== 0) {
+      window.scrollTo(0, 0)
+      // [VV-PAN] When the undo DOES work (pre-311821 iOS), the visual
+      // viewport returns to 0 -- re-publish so --velo-vv-offset cannot keep
+      // the pre-unpan value and over-translate #app (the top white band).
+      schedule()
+    }
   }
 
   function onRootScroll(): void {
@@ -439,6 +511,15 @@ export function useViewportGeometry(): void {
     if (closePinRaf) {
       window.cancelAnimationFrame(closePinRaf)
       closePinRaf = 0
+    }
+    // [VV-PAN] cancel any pending WebKit-237851 pan re-read.
+    if (panRecheckRaf1) {
+      window.cancelAnimationFrame(panRecheckRaf1)
+      panRecheckRaf1 = 0
+    }
+    if (panRecheckRaf2) {
+      window.cancelAnimationFrame(panRecheckRaf2)
+      panRecheckRaf2 = 0
     }
     window.clearTimeout(closeSettleTimer)
     document.documentElement.classList.remove('is-keyboard-closing')
