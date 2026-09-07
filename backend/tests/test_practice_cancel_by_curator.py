@@ -59,11 +59,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import AuditLog
 from app.core.events.models import OutboxEvent
-from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.curator_groups.models import (
     CuratorGroup,
     CuratorGroupEvent,
     CuratorGroupEventKind,
+    CuratorGroupMember,
+    CuratorMemberKind,
 )
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import (
@@ -82,6 +83,7 @@ from tests.helpers import (
 )
 
 CANCEL_URL = "/api/v1/practices/{practice_id}/cancel"
+BOOKINGS_URL = "/api/v1/bookings"
 
 _TID_MIN = 67200
 _TID_MAX = 67399
@@ -197,18 +199,36 @@ async def _create_practice(
     return practice
 
 
-async def _book(
-    db_session: AsyncSession, practice: Practice, user_id: str,
-) -> Booking:
-    booking = Booking(
-        practice_id=practice.id,
-        user_id=UUID(user_id),
-        status=BookingStatus.CONFIRMED.value,
+async def _join_school(
+    db_session: AsyncSession, group_id, user_id: str,
+    kind: CuratorMemberKind = CuratorMemberKind.STUDENT,
+) -> CuratorGroupMember:
+    row = CuratorGroupMember(
+        group_id=group_id, user_id=UUID(user_id), kind=kind.value,
     )
-    db_session.add(booking)
+    db_session.add(row)
     await db_session.flush()
     await db_session.commit()
-    return booking
+    return row
+
+
+async def _book(client: AsyncClient, auth: dict, practice: Practice) -> str:
+    """Book through the REAL endpoint, not by inserting a Booking row.
+
+    A hand-inserted Booking has no Purchase, and refund_booking refuses one
+    (ERR-04, payments/refund.py) -- so the cancellation this file is about
+    would 404 on a booking the test itself created. POST /bookings is what
+    creates the pair, and it also puts the school-audience predicate in the
+    path, which a raw INSERT would skip. The booker therefore has to be a
+    member of the school first; see _join_school.
+    """
+    resp = await client.post(
+        BOOKINGS_URL,
+        json={"practice_id": str(practice.id)},
+        headers=auth_headers(auth["session_token"]),
+    )
+    assert resp.status_code == 201, resp.text
+    return resp.json()["id"]
 
 
 async def _missing_practice_code(client: AsyncClient, token: str) -> str:
@@ -682,7 +702,8 @@ async def test_participants_are_still_told_and_the_count_did_not_move(
     practice = await _create_practice(
         db_session, master["user"]["id"], schools=[school],
     )
-    await _book(db_session, practice, booked["user"]["id"])
+    await _join_school(db_session, school.id, booked["user"]["id"])
+    await _book(client, booked, practice)
 
     resp = await client.post(
         CANCEL_URL.format(practice_id=practice.id),
