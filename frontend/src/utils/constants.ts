@@ -47,8 +47,11 @@ export const WITHDRAWAL_FEE_EUROS = 2
  * the right, Telegram-style). EMPTY FIELD ONLY: the first real character
  * unmounts the disc and the input springs back to full width -- as if it
  * never existed. Flip to false and the disc never renders at all.
+ *
+ * FALSE by owner ruling (2026-09-07): the stub disc hid until real voice
+ * messages land. Flip back (or replace with the real recorder) then.
  */
-export const COMPOSER_VOICE_STUB = true
+export const COMPOSER_VOICE_STUB = false
 
 // ---------------------------------------------------------------------------
 // Master onboarding (WS-1, item 2)
