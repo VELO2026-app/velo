@@ -393,16 +393,34 @@ async def project_practice_cancelled(
     master_name: str | None,
     user_ids: list[UUID],
     occurred_at: datetime,
+    cancelled_by: str = "master",
 ) -> int:
-    """Fan out "master cancelled the practice" to the given booked users.
+    """Fan out "the practice was cancelled" to the given booked users.
 
     The caller (cancel_practice) collects the affected user ids BEFORE the
     refund flow mutates booking statuses, then passes them here. Returns the
     number of events written.
+
+    cancelled_by (BE-21) is "master" or "curator" and goes into the snapshot.
+    The EVENT KIND stays practice_cancelled_by_master for both, and that is a
+    weighed decision rather than laziness: diary_events.kind is fenced by the
+    ck_diary_event_kind CHECK constraint, so a new kind costs a migration,
+    plus both lists in config.py (diary_feed_allowed_kinds and
+    diary_feed_categories), plus five frontend files -- and the frontend is
+    out of BE-21's scope. Nothing the student sees is wrong without it: the
+    card renders "Практика отменена" with the practice title, and
+    master_name is not rendered for this kind at all. The lie was in the
+    notification text, which BE-21 fixes at the source.
+
+    NOTE FOR WHOEVER READS THIS NEXT: cancelled_by has NO READER TODAY. It is
+    written and stored and nothing consumes it -- deliberately, as a record,
+    so that the day the card wants to say who cancelled, the history is
+    already there instead of starting from the day someone adds the field.
     """
     snapshot = await _practice_snapshot(
         session, practice, master_name=master_name,
     )
+    snapshot["cancelled_by"] = cancelled_by
     for user_id in user_ids:
         await _add_event(
             session,

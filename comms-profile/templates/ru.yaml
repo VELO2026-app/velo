@@ -43,7 +43,7 @@ booking.cancelled_by_user:
 practice.cancelled:
   telegram:
     title: "Практика отменена"
-    body: "❌ Практика <b>{practice_title}</b> {scheduled_at} была отменена мастером.\n\n💰 Оплата возвращена на ваш баланс."
+    body: "❌ Практика <b>{practice_title}</b> {scheduled_at} отменена.\n\n💰 Оплата возвращена на ваш баланс."
 
 practice.rescheduled:
   telegram:
@@ -53,7 +53,13 @@ practice.rescheduled:
 practice.cancelled_waitlist:
   telegram:
     title: "Практика отменена"
-    body: "❌ Практика <b>{practice_title}</b> {scheduled_at}, на которую вы стояли в листе ожидания, была отменена мастером."
+    body: "❌ Практика <b>{practice_title}</b> {scheduled_at}, на которую вы стояли в листе ожидания, отменена."
+
+# BE-21: to the practice's OWN master, when a school curator cancelled it.
+practice.cancelled_by_curator:
+  telegram:
+    title: "Вашу практику отменили"
+    body: "❌ Практику <b>{practice_title}</b> {scheduled_at} отменил куратор школы <b>{group_name}</b>.\n\n💰 Участникам возвращена оплата."
 
 # -- Waitlist --
 

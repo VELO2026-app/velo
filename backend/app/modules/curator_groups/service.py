@@ -922,6 +922,51 @@ def _active_group_clause() -> ColumnElement[bool]:
     return _verified_profile_exists(CuratorGroup.curator_user_id)
 
 
+async def curated_group_ids_for_practice(
+    practice_id: UUID,
+    user_id: UUID,
+    session: AsyncSession,
+) -> list[UUID]:
+    """Schools of THIS practice that THIS user curates, right now (BE-21).
+
+    The entitlement behind "a curator may cancel a practice of their own
+    school": returns the ids of the practice's target schools whose curator
+    is this user and whose curator is verified NOW. Empty list means no
+    entitlement, and the caller turns that into the same 404 a stranger
+    gets -- never a distinct code (P-08: the answer must not reveal that
+    the practice exists, that it is a school practice, or that the school
+    is somebody else's).
+
+    A LIST, NOT A BOOLEAN, and not one id. A practice can be addressed to
+    several schools, and one person can curate more than one of them; the
+    journal (GT-25 item 6) has to write to each school the actor curates,
+    because each of them lost the practice and the actor is the one who
+    did it. Returning a single id would have forced an arbitrary pick.
+
+    Verification is _active_group_clause, not a hand-written check: the
+    JSONB path to the account status stays spelled out once (I-6). A
+    curator whose verification was revoked has no school and therefore no
+    lever -- although in practice they are stopped earlier, by
+    get_current_master on the endpoint.
+
+    Reads only. No commit, no flush (P-01).
+    """
+    stmt = (
+        select(CuratorGroup.id)
+        .join(
+            PracticeAudienceCuratorGroup,
+            PracticeAudienceCuratorGroup.group_id == CuratorGroup.id,
+        )
+        .where(
+            PracticeAudienceCuratorGroup.practice_id == practice_id,
+            CuratorGroup.curator_user_id == user_id,
+            _active_group_clause(),
+        )
+        .order_by(CuratorGroup.id)
+    )
+    return list((await session.execute(stmt)).scalars().all())
+
+
 # The relation value for someone who OWNS the group. A literal, because it
 # is not a curator_group_member.kind: the curator has no row (I-2), so this
 # string exists only in the CASE below and in the response schema's Literal.

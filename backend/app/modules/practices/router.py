@@ -729,14 +729,20 @@ async def cancel_practice_endpoint(
     ),
     session: AsyncSession = Depends(get_db_session),
 ) -> PracticeResponse:
-    """Cancel a practice and refund all participants (owner master only).
+    """Cancel a practice and refund all participants.
 
     100% refund to every active booking. Waitlist entries cleared. Only works
     on scheduled/live practices. This is the only way to reach cancelled status.
 
+    Two actors (BE-21): the practice's MASTER, and the CURATOR of a school the
+    practice is published to. Everyone else -- including a master who is
+    neither -- gets 404 with the code `not_found`, the same answer a
+    nonexistent practice gives (P-08).
+
     Optional body {scope}: "this" (the default, or no body) cancels only this
     occurrence; "this_and_future" also cancels every later occurrence of the
-    same series (a non-series practice behaves like "this").
+    same series (a non-series practice behaves like "this"). MASTER ONLY --
+    a curator asking for the cascade gets 400 `curator_cannot_cancel_series`.
     """
     user, _profile = master_tuple
     scope = (body or CancelPracticeRequest()).scope
@@ -745,27 +751,45 @@ async def cancel_practice_endpoint(
     )
     await session.flush()
     await session.refresh(practice)
-    # F1 (№263): this endpoint is owner-only (master guard + ownership check),
-    # so the response carries the caller's OWN owner-only Zoom fields —
-    # consistent with the owner-always-sees rule on the detail and the
-    # master list (Z-6).
-    # T21-1: cancel_practice deletes the Zoom meeting (zoom/service.py
-    # delete_meeting_for_practice) -- get_host_join_url returns None once that
-    # row's status flips, which is correct (nothing to join anymore).
+    # BE-21: this endpoint STOPPED being owner-only, and the owner-only Zoom
+    # fields below have to stop being unconditional with it. Before BE-21 the
+    # master guard plus the ownership check made "the caller" and "the owner"
+    # the same person, so F1 (№263) could hand the response the caller's OWN
+    # fields. A curator is now a legitimate caller who is NOT the owner, and
+    # both of those fields are the master's private property:
+    #   zoom_host_join_url is the master's personal HOST link (role='host',
+    #     zoom/service.py) -- handing it over would give a curator host
+    #     control of another master's meeting. It is usually None here
+    #     because cancel deletes the meeting, but only USUALLY:
+    #     delete_meeting_for_practice flips the row to deleted ONLY on a
+    #     successful Zoom call, and skips the delete outright when the
+    #     meeting already has attendance segments. On either path the row
+    #     stays active and the link resolves.
+    #   master_name is the practice's OWNER's name. Passing the caller's
+    #     first_name was correct while they were the same person; for a
+    #     curator it would name the wrong human as the practice's master.
+    is_owner = practice.master_id == user.id
     from app.modules.zoom.service import (
         get_host_join_url,
         get_zoom_meeting_status,
     )
-    host_join_url = await get_host_join_url(practice.id, session)
+    host_join_url = (
+        await get_host_join_url(practice.id, session) if is_owner else None
+    )
     # T24-38 (PROMPT №642): cancel_practice deletes the Zoom meeting too --
     # None once that row's status flips, same as host_join_url.
     # A4 V2 (PROMPT №572): will read 'deleted' after the cancel above --
     # correctly distinct from create_failed/pending_creation.
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
+    if is_owner:
+        master_first_name = user.first_name
+    else:
+        master_user = await session.get(User, practice.master_id)
+        master_first_name = master_user.first_name if master_user else None
     return practice_to_response(
-        practice, user.first_name,
+        practice, master_first_name,
         zoom_host_join_url=host_join_url,
-        zoom_public_link_visible=True,
+        zoom_public_link_visible=is_owner,
         zoom_meeting_status=zoom_meeting_status,
     )
 

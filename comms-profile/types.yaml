@@ -132,8 +132,22 @@ system.announcement:
 
 support.thread_created:
 
-# -- Chat baseline (comms-native msg.* types; velo never emits these,
-#    the messaging engine does; mapping fixed by dispatch plan §6b) --
+# -- BE-21: the practice's own master learns his practice was cancelled by
+#    somebody else -- the curator of a school it was published to. NO
+#    category on purpose, and the reason is the same shape as
+#    support.thread_created above rather than decision A's.
+#
+#    `bookings` was the obvious home -- practice.cancelled lives there -- and
+#    it is exactly wrong here. `bookings` is the family a busy master mutes
+#    FIRST: booking.confirmed at eighteen thousand participants is noise.
+#    Muted, it would also swallow the one message he cannot afford to miss:
+#    that his session is gone, that it was not his doing, and that the money
+#    went back. This is the single type in the practice family that must not
+#    be silenceable, so it carries no category and bypasses the mute gate by
+#    mechanism (§2.5), the way support.thread_created does for an operator. --
+
+practice.cancelled_by_curator:
+
 
 msg.participant_message:
   category: msg_participants

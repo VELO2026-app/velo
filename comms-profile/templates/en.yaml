@@ -29,7 +29,7 @@ booking.cancelled_by_user:
 practice.cancelled:
   telegram:
     title: "Practice cancelled"
-    body: "❌ Practice <b>{practice_title}</b> on {scheduled_at} has been cancelled by the master.\n\n💰 Your payment has been refunded."
+    body: "❌ Practice <b>{practice_title}</b> on {scheduled_at} has been cancelled.\n\n💰 Your payment has been refunded."
 
 practice.rescheduled:
   telegram:
@@ -39,7 +39,13 @@ practice.rescheduled:
 practice.cancelled_waitlist:
   telegram:
     title: "Practice cancelled"
-    body: "❌ Practice <b>{practice_title}</b> {scheduled_at}, which you were waitlisted for, was cancelled by the master."
+    body: "❌ Practice <b>{practice_title}</b> {scheduled_at}, which you were waitlisted for, was cancelled."
+
+# BE-21: to the practice's OWN master, when a school curator cancelled it.
+practice.cancelled_by_curator:
+  telegram:
+    title: "Your practice was cancelled"
+    body: "❌ Practice <b>{practice_title}</b> {scheduled_at} was cancelled by the curator of <b>{group_name}</b>.\n\n💰 Participants have been refunded."
 
 # -- Waitlist --
 

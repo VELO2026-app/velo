@@ -246,6 +246,13 @@ class CuratorGroupEventKind(enum.StrEnum):
     EXPECTED to grow (notifications land on it next, practice publication
     after that), and a varchar gains a value without a migration.
 
+    PRACTICE_CANCELLED (BE-21) is the first arrival on that promise, and it
+    is deliberately NOT "practice_cancelled_by_curator": _record_group_event
+    stamps actor_name into every row, so naming the actor in the value too
+    would say it twice and would read wrong the day a second kind of actor
+    can cancel. It also sits in the pair the paragraph above predicts, next
+    to a future practice_published.
+
     A DELETED SCHOOL HAS NO "school deleted" EVENT and never will. The
     journal cascades with the group, so the row would be written and
     dropped inside one transaction -- a value here for it would be a
@@ -266,6 +273,7 @@ class CuratorGroupEventKind(enum.StrEnum):
     TRANSFER_ACCEPTED = "transfer_accepted"
     TRANSFER_DECLINED = "transfer_declined"
     TRANSFER_CANCELLED = "transfer_cancelled"
+    PRACTICE_CANCELLED = "practice_cancelled"
 
 
 # The keys of CuratorGroupEvent.data, spelled ONCE. JSONB has no model

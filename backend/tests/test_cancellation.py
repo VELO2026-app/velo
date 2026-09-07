@@ -730,7 +730,17 @@ async def test_cancel_practice_not_owner_404(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """Non-owner master cancelling practice: 404 (P-08)."""
+    """Non-owner master with NO curator tie to the practice: 404 (P-08).
+
+    The assertion is unchanged and it was right: before BE-21 "not the
+    owner" was the whole of "not entitled", so the two masters here were a
+    complete test of it. BE-21 added a second way in -- the curator of a
+    school the practice is published to -- so "non-owner" alone no longer
+    implies 404. What still holds, and is what this test now pins, is that a
+    master with no tie at all gets the same 404 a nonexistent practice
+    gives. master2 owns no school and this practice is not a school
+    practice, so neither half of the new entitlement applies.
+    """
     master1 = await _make_verified_master(
         client, db_session, telegram_id=76011,
     )
@@ -900,7 +910,16 @@ async def test_audit_log_master_cancel(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """Master cancel creates audit entry with event=practice_cancelled_by_master."""
+    """Master cancel audits event=practice_cancelled_by_master.
+
+    Still exactly right, and now load-bearing in a way it was not: BE-21
+    made the event VALUE the thing that says who cancelled, so this test is
+    one half of a pair. Its twin (a curator cancelling audits
+    practice_cancelled_by_curator) lives in
+    tests/test_practice_cancel_by_curator.py; if either drifts, the audit
+    stops distinguishing the two actors and nothing else would notice --
+    no non-test code reads AuditLog.
+    """
     master_data = await _make_verified_master(
         client, db_session, telegram_id=76017,
     )
