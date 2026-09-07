@@ -34,6 +34,15 @@
 # the existence of another master's practice and another curator's school --
 # neither is disclosed by "you are not a verified master".
 #
+# NO db_session.expire_all() ANYWHERE IN THIS FILE, ON PURPOSE. Post-request
+# reads go through fresh_execute, which opens its OWN session and therefore
+# needs no help from the test's one. Calling expire_all() first is worse than
+# redundant: the test session runs with expire_on_commit=False, so expiring it
+# also expires the local Practice/CuratorGroup objects these tests hold, and
+# the next `practice.id` becomes a lazy reload -- sync IO inside an async test,
+# i.e. sqlalchemy MissingGreenlet. That is exactly how the first version of
+# this file failed, in nine tests at once, all of them pointing at a `.id`.
+#
 # ⚠ BACKEND-ONLY, NOT RUN LOCALLY -- no docker/postgres in this environment
 # (same standing caveat as test_curator_audience.py and test_cancellation.py).
 # Written for the deploy battery; collection success is not passing.
@@ -195,7 +204,6 @@ async def _book(
         practice_id=practice.id,
         user_id=UUID(user_id),
         status=BookingStatus.CONFIRMED.value,
-        price_cents=0,
     )
     db_session.add(booking)
     await db_session.flush()
@@ -257,7 +265,6 @@ async def test_curator_cancels_a_practice_run_by_another_master(
     )
     assert resp.status_code == 200
 
-    db_session.expire_all()
     fresh = (await fresh_execute(
         select(Practice).where(Practice.id == practice.id),
     )).scalar_one()
@@ -347,7 +354,6 @@ async def test_curator_of_a_different_school_gets_the_missing_practice_answer(
     assert resp.status_code == 404
     assert resp.json()["error"] == baseline
 
-    db_session.expire_all()
     fresh = (await fresh_execute(
         select(Practice).where(Practice.id == practice.id),
     )).scalar_one()
@@ -480,7 +486,6 @@ async def test_curator_who_lost_verification_loses_the_lever(
     )
     assert resp.status_code == 403
 
-    db_session.expire_all()
     fresh = (await fresh_execute(
         select(Practice).where(Practice.id == practice.id),
     )).scalar_one()
@@ -523,7 +528,6 @@ async def test_curator_is_refused_the_series_cascade(
     assert resp.status_code == 400
     assert resp.json()["error"] == "curator_cannot_cancel_series"
 
-    db_session.expire_all()
     for pid in (root.id, later.id):
         fresh = (await fresh_execute(
             select(Practice).where(Practice.id == pid),
@@ -537,12 +541,20 @@ async def test_curator_cannot_reach_another_masters_series_at_all(
 ) -> None:
     """The C2 hole, from the curator's side.
 
-    An attacker points their own practice at somebody else's series root
-    (parent_practice_id is client-writable) and hopes a curator's cancel
-    walks the tree. The refusal above stops it before the sibling query
-    runs, so both the forged child and the real root survive -- asserted,
-    not assumed, because "the cascade is refused" and "the cascade ran but
-    found nothing" would look identical from the status code alone.
+    The setup that matters: the series root belongs to ANOTHER MASTER and is
+    published to the curator's school, so the curator is genuinely entitled
+    to cancel that one occurrence. An attacker then points their own,
+    unrelated practice at that root -- parent_practice_id is client-writable
+    -- and hopes a curator's cascade walks the tree and refunds it.
+
+    The refusal fires before the sibling query runs, so both the root and
+    the forged child survive. Both are asserted: "the cascade was refused"
+    and "the cascade ran and found nothing" are indistinguishable from the
+    status code alone, and only the second would be a hole.
+
+    The first version of this test made the ROOT the curator's own practice,
+    which made him the owner -- the cascade was allowed, the endpoint
+    answered 200, and the test caught its own setup rather than the code.
     """
     victim = await _make_verified_master(client, db_session, _TID_MASTER)
     attacker = await _make_verified_master(
@@ -550,30 +562,27 @@ async def test_curator_cannot_reach_another_masters_series_at_all(
     )
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     school = await _school(db_session, curator["user"]["id"])
-    school_practice = await _create_practice(
-        db_session, curator["user"]["id"], schools=[school],
-        hours_from_now=24, title="Корень школы",
+    root = await _create_practice(
+        db_session, victim["user"]["id"], schools=[school],
+        hours_from_now=24, title="Практика школы",
     )
-    victims = await _create_practice(
-        db_session, victim["user"]["id"], schools=[],
-        audience_kind=AudienceKind.PUBLIC.value, hours_from_now=48,
-        parent_practice_id=school_practice.id, title="Чужая",
-    )
+    root_id = root.id
     forged = await _create_practice(
         db_session, attacker["user"]["id"], schools=[],
         audience_kind=AudienceKind.PUBLIC.value, hours_from_now=72,
-        parent_practice_id=school_practice.id, title="Подкладка",
+        parent_practice_id=root_id, title="Подкладка",
     )
+    forged_id = forged.id
 
     resp = await client.post(
-        CANCEL_URL.format(practice_id=school_practice.id),
+        CANCEL_URL.format(practice_id=root_id),
         headers=auth_headers(curator["session_token"]),
         json={"scope": "this_and_future"},
     )
     assert resp.status_code == 400
+    assert resp.json()["error"] == "curator_cannot_cancel_series"
 
-    db_session.expire_all()
-    for pid in (victims.id, forged.id):
+    for pid in (root_id, forged_id):
         fresh = (await fresh_execute(
             select(Practice).where(Practice.id == pid),
         )).scalar_one()
@@ -607,7 +616,6 @@ async def test_audit_says_curator_not_master(
     )
     assert resp.status_code == 200
 
-    db_session.expire_all()
     rows = (await fresh_execute(
         select(AuditLog).where(AuditLog.target_id == practice.id),
     )).scalars().all()
@@ -646,7 +654,6 @@ async def test_the_master_is_told_and_never_tells_himself(
         CANCEL_URL.format(practice_id=by_curator.id),
         headers=auth_headers(curator["session_token"]),
     )
-    db_session.expire_all()
     after_curator = await _outbox_types(db_session)
     assert "practice.cancelled_by_curator" in after_curator
 
@@ -654,7 +661,6 @@ async def test_the_master_is_told_and_never_tells_himself(
         CANCEL_URL.format(practice_id=by_master.id),
         headers=auth_headers(master["session_token"]),
     )
-    db_session.expire_all()
     after_master = await _outbox_types(db_session)
     assert after_master.count("practice.cancelled_by_curator") == 1
 
@@ -684,7 +690,6 @@ async def test_participants_are_still_told_and_the_count_did_not_move(
     )
     assert resp.status_code == 200
 
-    db_session.expire_all()
     types = await _outbox_types(db_session)
     assert types.count("practice.cancelled") == 1
 
@@ -714,7 +719,6 @@ async def test_the_school_journal_records_it_in_the_same_transaction(
     )
     assert resp.status_code == 200
 
-    db_session.expire_all()
     rows = (await fresh_execute(
         select(CuratorGroupEvent).where(
             CuratorGroupEvent.group_id == school.id,
@@ -751,7 +755,6 @@ async def test_a_refused_cancellation_leaves_no_journal_row(
     )
     assert resp.status_code == 400
 
-    db_session.expire_all()
     rows = (await fresh_execute(
         select(CuratorGroupEvent).where(
             CuratorGroupEvent.group_id == school.id,
@@ -788,7 +791,6 @@ async def test_only_the_actors_school_gets_a_journal_row(
         headers=auth_headers(curator["session_token"]),
     )
 
-    db_session.expire_all()
     mine_rows = (await fresh_execute(
         select(CuratorGroupEvent).where(CuratorGroupEvent.group_id == mine.id),
     )).scalars().all()
