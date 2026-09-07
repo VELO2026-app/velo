@@ -269,21 +269,15 @@ function bodyText(): string {
   return feedBody().textContent ?? ''
 }
 
-/** Standard-card titles in render order (oldest -> newest, DiaryList reverses). */
-function cardTitles(): string[] {
-  return Array.from(feedBody().querySelectorAll('.feed-card__title')).map(
-    (e) => e.textContent?.trim() ?? '',
-  )
-}
-
+/** Split-entry previews in render order (oldest -> newest, DiaryTimeline reverses). */
 function cardPreviews(): string[] {
-  return Array.from(feedBody().querySelectorAll('.feed-card__preview')).map(
+  return Array.from(feedBody().querySelectorAll('.tcard__entry-preview')).map(
     (e) => e.textContent?.trim() ?? '',
   )
 }
 
 function dayDividers(): string[] {
-  return Array.from(feedBody().querySelectorAll('.diary-list__divider span')).map(
+  return Array.from(feedBody().querySelectorAll('.timeline__date-label')).map(
     (e) => e.textContent?.trim() ?? '',
   )
 }
@@ -396,7 +390,7 @@ describe('DiaryFeedView', () => {
       await flush()
 
       expect(bodyText()).toContain('Дневник пуст')
-      expect(feedBody().querySelector('.feed-card')).toBeNull()
+      expect(feedBody().querySelector('.tcard')).toBeNull()
     })
 
     it('content: renders what the store actually returned', async () => {
@@ -410,68 +404,22 @@ describe('DiaryFeedView', () => {
   })
 
   describe('feed item kinds', () => {
-    it('maps each kind onto its own card form, title and label', async () => {
-      // Given newest-first (the backend contract); DiaryList renders the reverse.
-      vi.mocked(diaryApi.listDiaryFeed).mockResolvedValue(
-        page([
-          feedItem('f1', 'feedback', '2026-07-16T11:00:00Z', { rating: 9 }),
-          feedItem('c1', 'checkin', '2026-07-16T10:30:00Z', { mood: 9 }),
-          feedItem('d1', 'dream', '2026-07-16T10:00:00Z', { content_preview: 'Летал во сне' }),
-          feedItem('n1', 'note', '2026-07-16T09:00:00Z', { content_preview: 'Спокойно' }),
-          feedItem('p1', 'practice_outcome', '2026-07-16T08:00:00Z', {
-            practice_title: 'Утренняя йога',
-            outcome_status: 'attended',
-            scheduled_at: '2026-07-16T08:00:00Z',
-            duration_minutes: 60,
-          }),
-          feedItem('b1', 'booking_confirmed', '2026-07-16T07:00:00Z', {
-            practice_title: 'Вечерняя медитация',
-          }),
-        ]),
-      )
+    it('renders the thread (DiaryTimeline) by default -- the flat list is dormant', async () => {
+      // The thread-events redesign made DiaryTimeline + DiaryThreadCard the
+      // primary renderer (viewMode defaults to 'map', the toggle stays hidden);
+      // the flat DiaryList remains wired behind SHOW_VIEW_TOGGLE.
+      vi.mocked(diaryApi.listDiaryFeed).mockResolvedValue(page([NOTE]))
       mount()
       await flush()
 
-      // Standard cards: mood/rating SCORES resolve to labels through the
-      // score->zone->label chain (9 -> high -> «Хорошо», 9 -> fire -> «Огонь!»).
-      // toEqual pins order too: oldest first, newest last (chat-mode).
-      expect(cardTitles()).toEqual(['Дневник', 'Сонник', 'Check-in: Хорошо', 'Feedback: Огонь!'])
-
-      // Practice outcome takes the dedicated practice form, titled from the snapshot.
-      expect(feedBody().querySelector('.feed-card__practice-title')?.textContent?.trim()).toBe(
-        'Утренняя йога',
-      )
-      // Banner form: its own title + the practice as subtitle, teal for confirmed.
-      expect(feedBody().querySelector('.feed-card__banner-title')?.textContent?.trim()).toBe(
-        'Вы записались',
-      )
-      expect(feedBody().querySelector('.feed-card__banner-subtitle')?.textContent?.trim()).toBe(
-        'Вечерняя медитация',
-      )
-      expect(feedBody().querySelector('.feed-card--banner-teal')).not.toBeNull()
+      expect(feedBody().querySelector('.timeline')).not.toBeNull()
+      expect(feedBody().querySelector('.diary-list')).toBeNull()
     })
 
-    it('thread_started renders a real standard card -- title + master name, not the blank pen card it was before the kind existed frontend-side', async () => {
-      // The backend writes this on every chat create-or-get
-      // (diary/projections.py). The hand-written DiaryEventKind union listed
-      // nine kinds and missed it, so FEED_KIND_TITLE[kind] was undefined ->
-      // empty title, and the preview lookup read fields this snapshot does not
-      // carry -> null: a card with nothing on it but a date.
-      vi.mocked(diaryApi.listDiaryFeed).mockResolvedValue(
-        page([
-          feedItem('t1', 'thread_started', '2026-07-16T10:00:00Z', {
-            thread_id: 'thread-7',
-            master_id: 'master-3',
-            master_name: 'Анна Соколова',
-          }),
-        ]),
-      )
-      mount()
-      await flush()
-
-      expect(cardTitles()).toEqual(['Вы начали диалог'])
-      expect(cardPreviews()).toEqual(['Анна Соколова'])
-    })
+    // Kind -> markup coverage (bubbles, practice card, split entries, banner
+    // copy, unknown-kind fallback, tap payloads) lives in
+    // DiaryThreadCard.test.ts -- this screen test stays on renderer selection,
+    // data flow and routing.
 
     it('groups the thread by day, relative to the pinned clock', async () => {
       vi.mocked(diaryApi.listDiaryFeed).mockResolvedValue(
@@ -534,7 +482,7 @@ describe('DiaryFeedView', () => {
       // dropped cursor would silently re-serve page 1 forever.
       expect(vi.mocked(diaryApi.listDiaryFeed).mock.calls.at(-1)?.[0]).toMatchObject({
         cursor: 'c1',
-        limit: 20,
+        limit: 40,
       })
       // Appended, not replaced, and re-grouped: older page sorts above.
       expect(cardPreviews()).toEqual(['старая', 'новая'])
@@ -861,7 +809,7 @@ describe('DiaryFeedView', () => {
       mount()
       await flush()
 
-      feedBody().querySelector<HTMLButtonElement>('.feed-card--standard')?.click()
+      feedBody().querySelector<HTMLButtonElement>('.tcard--entry')?.click()
       await flush()
 
       expect(push).toHaveBeenCalledWith({ name: 'user-diary-entry', params: { id: 'src_n1' } })
@@ -874,7 +822,7 @@ describe('DiaryFeedView', () => {
       mount()
       await flush()
 
-      feedBody().querySelector<HTMLButtonElement>('.feed-card--standard')?.click()
+      feedBody().querySelector<HTMLButtonElement>('.tcard--checkin')?.click()
       await flush()
 
       expect(push).toHaveBeenCalledWith({
@@ -890,39 +838,13 @@ describe('DiaryFeedView', () => {
       mount()
       await flush()
 
-      feedBody().querySelector<HTMLButtonElement>('.feed-card--standard')?.click()
+      feedBody().querySelector<HTMLButtonElement>('.tcard--feedback')?.click()
       await flush()
 
       expect(push).toHaveBeenCalledWith({
         name: 'user-diary-detail',
         params: { type: 'feedback', id: 'src_f1' },
       })
-    })
-
-    it('tapping a thread_started card opens the chat thread by source_id -- the comms thread id, which is what the route wants', async () => {
-      // Unlike practice_outcome (pinned below as unreachable), this kind takes
-      // the `standard` form, which IS a <button>, so the branch really runs.
-      // The snapshot's thread_id is deliberately set to a DIFFERENT value than
-      // source_id here (the real backend writes the same id into both) so the
-      // assertion discriminates which field the handler actually reads.
-      vi.mocked(diaryApi.listDiaryFeed).mockResolvedValue(
-        page([
-          feedItem('t1', 'thread_started', '2026-07-16T10:00:00Z', {
-            thread_id: 'snapshot-copy-not-read',
-            master_id: 'master-3',
-            master_name: 'Анна Соколова',
-          }),
-        ]),
-      )
-      mount()
-      await flush()
-
-      const card = feedBody().querySelector<HTMLButtonElement>('.feed-card--standard')
-      expect(card).not.toBeNull()
-      card?.click()
-      await flush()
-
-      expect(push).toHaveBeenCalledWith({ name: 'user-chat', params: { id: 'src_t1' } })
     })
 
     it('a banner card is inert -- no card button, no navigation', async () => {
@@ -937,20 +859,14 @@ describe('DiaryFeedView', () => {
       await flush()
 
       // Positive pin first: the banner DID render (SC-15).
-      expect(feedBody().querySelector('.feed-card--banner-teal')).not.toBeNull()
-      expect(feedBody().querySelector('.feed-card--standard')).toBeNull()
+      expect(feedBody().querySelector('.tcard--banner-teal')).not.toBeNull()
+      expect(feedBody().querySelector('button.tcard')).toBeNull()
       expect(push).not.toHaveBeenCalled()
     })
 
-    it('a practice_outcome card is NOT tappable today -- .vue:319-325 is unreachable', async () => {
-      // FINDING, pinned as-is. DiaryFeedView.onTap has a practice_outcome branch
-      // routing to 'practice-detail' (.vue:319-325), but DiaryFeedCard renders the
-      // practice form as a plain <div> with no @click and no tap emit
-      // (DiaryFeedCard.vue:42-72) -- only the `standard` form is a <button>. The
-      // other renderer (DiaryTimeline) is gated behind viewMode 'map', which
-      // SHOW_VIEW_TOGGLE = false (.vue:345) makes unreachable. So in the shipped
-      // screen that branch can never run. Not a crash, not fixed here: pinning
-      // today's behaviour so the intent (tap -> practice) is not assumed to work.
+    it('tapping a practice_outcome card routes to the practice detail by source_id', async () => {
+      // The thread practice card is a real button (unlike the dormant flat
+      // DiaryFeedCard form), so the onTap practice branch (.vue) finally runs.
       vi.mocked(diaryApi.listDiaryFeed).mockResolvedValue(
         page([
           feedItem('p1', 'practice_outcome', '2026-07-16T10:00:00Z', {
@@ -962,13 +878,12 @@ describe('DiaryFeedView', () => {
       mount()
       await flush()
 
-      const card = feedBody().querySelector<HTMLElement>('.feed-card--practice')
+      const card = feedBody().querySelector<HTMLButtonElement>('.tcard--practice')
       expect(card).not.toBeNull()
-      expect(card?.tagName).toBe('DIV')
       card?.click()
       await flush()
 
-      expect(push).not.toHaveBeenCalled()
+      expect(push).toHaveBeenCalledWith({ name: 'practice-detail', params: { id: 'src_p1' } })
     })
   })
 

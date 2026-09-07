@@ -5,8 +5,9 @@
   strung along it as compact beads (DiaryThreadCard), split into day groups by
   date-nodes. Aligned to the Figma map screens (2026-05-29):
     - cards are CENTERED on the axis (no left/right alternation);
-    - date-nodes are a centered label with small ornament dots on the axis;
-    - the axis is a light vertical stroke behind the beads.
+    - date-nodes are a centered label flanked by ornament flourishes;
+    - the thread is carried by DISCRETE decor connectors -- no continuous
+      background line (operator decision 2026-06-08).
 
   ORDER (chat-mode): oldest at the TOP, newest at the BOTTOM. The feed arrives
   newest-first; we render a chronological copy so the newest entry sits at the
@@ -19,9 +20,11 @@
 
 <template>
   <div class="timeline">
-    <template v-for="group in dayGroups" :key="group.dayKey">
-      <!-- Day separator: big decor link above the date node (Декор 2 / big). -->
-      <div class="timeline__link">
+    <template v-for="(group, gi) in dayGroups" :key="group.dayKey">
+      <!-- Day separator: big decor link above the date node (Декор 2 / big).
+           The FIRST group carries none: a connector hanging from nothing read
+           as a dead gap above the thread's very first entry (owner request). -->
+      <div v-if="gi > 0" class="timeline__link">
         <IconDecor2 part="big" :size="30" />
       </div>
 
@@ -106,7 +109,11 @@ const dayGroups = computed<DayGroup[]>(() => {
   align-items: center;
   gap: 0;
   width: 100%;
-  padding: var(--space-3) 0;
+  /* No top padding: the body's own top padding (the shared headerless token)
+     is already the clearance under the floating header, and anything extra
+     above the first date node read as a big gap before the thread's first
+     entry (owner request). */
+  padding: 0 0 var(--space-3);
 }
 
 /* Date node: decor flourish + label + decor flourish. No axis line — the
@@ -120,9 +127,11 @@ const dayGroups = computed<DayGroup[]>(() => {
 }
 
 .timeline__date-label {
+  /* Strong date node (thread-events reference): big bold label, one line. */
   font-family: var(--font-body);
-  font-size: var(--text-base);
-  letter-spacing: 0.36px;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
   color: var(--velo-text-primary);
   white-space: nowrap;
 }

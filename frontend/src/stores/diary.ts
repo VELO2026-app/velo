@@ -166,15 +166,22 @@ export const useDiaryStore = defineStore('diary', () => {
     search: undefined,
   })
 
-  const feed = useCursorPagination<DiaryFeedItem>((cursor, limit) =>
-    listDiaryFeed({
-      categories: feedFilters.categories,
-      date_from: feedFilters.date_from,
-      date_to: feedFilters.date_to,
-      search: feedFilters.search,
-      cursor: cursor ?? undefined,
-      limit,
-    }),
+  // Page size 40 (was the composable's default 20): a 20-event page is only
+  // ~2-3 screens of thread, so the first scroll up hit the seam before any
+  // prefetch could land. 40 gives ~4-5 screens per request (the backend caps
+  // at 100, diary_feed_max_page_size) and fewer seams overall -- the initial
+  // load alone covers a whole typical diary (owner: seamless scroll).
+  const feed = useCursorPagination<DiaryFeedItem>(
+    (cursor, limit) =>
+      listDiaryFeed({
+        categories: feedFilters.categories,
+        date_from: feedFilters.date_from,
+        date_to: feedFilters.date_to,
+        search: feedFilters.search,
+        cursor: cursor ?? undefined,
+        limit,
+      }),
+    40,
   )
 
   // Saved feed scroll offset, so returning from an entry/detail restores the

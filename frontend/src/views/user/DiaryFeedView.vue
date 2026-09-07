@@ -18,11 +18,13 @@
 
 <template>
   <div
+    ref="screenEl"
     class="diary-feed"
     :class="{
       'diary-feed--composing': composing,
       'diary-feed--searching': searchOpen || searchActive,
     }"
+    :style="composerStyle"
   >
     <!-- Header: floating glass buttons OVER the feed (owner 2026-09-07): the
          штора/top fade is gone and there is no title -- entries really pass
@@ -208,10 +210,17 @@
       <!-- Thread (chat-mode: oldest at top, newest at bottom) -->
       <template v-else>
         <!-- Infinite-scroll sentinel + "loading older" indicator sit ABOVE the
-             thread: history is loaded by scrolling UP. -->
-        <div ref="sentinelEl" class="diary-feed__sentinel" />
-        <div v-if="loadingMore" class="diary-feed__state diary-feed__state--more">
-          <VLoader />
+             thread: history is loaded by scrolling UP. Both hang on a
+             ZERO-HEIGHT rail (.diary-feed__topzone): the loader is an
+             out-of-flow overlay, so it can never push the feed down while it
+             appears/disappears mid-scroll (that bounce read as jumping
+             content once the 800px prefetch lead landed loads during the
+             fling). -->
+        <div class="diary-feed__topzone">
+          <div ref="sentinelEl" class="diary-feed__sentinel" />
+          <div v-if="loadingMore" class="diary-feed__state diary-feed__state--more">
+            <VLoader />
+          </div>
         </div>
 
         <!-- Wrapper pins a short feed to the bottom (margin-top:auto) so few
@@ -230,7 +239,7 @@
          entries pass beneath the pill and are blurred by the pill's
          backdrop-filter -- never faked with opacity. The overlay itself is
          pinned to the screen root and NOTHING about it animates on scroll. -->
-    <div class="diary-feed__composer">
+    <div ref="composerEl" class="diary-feed__composer">
       <DiaryComposer
         v-if="writeTarget"
         :entry-type="writeTarget"
@@ -392,16 +401,17 @@ const searchBarEl = ref<InstanceType<typeof DiarySearchBar> | null>(null)
 // the only visible indicator of the filter (no header title any more).
 const searchActive = computed(() => (feedFilters.value.search ?? '') !== '')
 
-// View mode: flat column ('list') vs thread/map ('map'), toggled from the
-// "..." menu. Default 'list' — the redesign's primary, more readable view;
-// 'map' is the alternating thread (DiaryTimeline). Resets per mount (no
-// persistence yet — add to the store later if cross-navigation memory is wanted).
-const viewMode = ref<'list' | 'map'>('list')
+// View mode: thread/map ('map') vs flat column ('list'), toggled from the
+// "..." menu. Default 'map' -- the thread (DiaryTimeline + DiaryThreadCard)
+// is the diary's primary renderer (thread-events redesign, 2026-09-08); the
+// flat DiaryList stays wired for the day the product restores it. Resets per
+// mount (no persistence yet — add to the store later if cross-navigation
+// memory is wanted).
+const viewMode = ref<'list' | 'map'>('map')
 
-// ВРЕМЕННО СКРЫТО (operator 2026-06-04): компактный thread-вид ('map' /
-// DiaryTimeline) выглядит сыро. Прячем переключатель в «···»-меню — без кнопки
-// режим недоступен пользователю, viewMode остаётся 'list'. КОД НЕ УДАЛЁН —
-// вернёмся к доработке thread-вида позже (см. .handoff дорожную карту).
+// Переключатель list/map остаётся СКРЫТЫМ: дневник живёт в thread-виде, и
+// пока продукт явно не вернёт плоский список, кнопки входа в него нет.
+// КОД НЕ УДАЛЁН — DiaryList/toggleView целы за этим флагом.
 const SHOW_VIEW_TOGGLE = false
 
 async function toggleView(): Promise<void> {
@@ -477,6 +487,8 @@ onBeforeUnmount(() => {
   // [owner pass] keep-bottom teardown, same lifecycle as the rest.
   feedResizeObserver?.disconnect()
   feedResizeObserver = null
+  composerResizeObserver?.disconnect()
+  composerResizeObserver = null
 })
 
 function openFilter(): void {
@@ -648,6 +660,10 @@ onMounted(async () => {
   // (its own first fire re-pins -- a no-op right after scrollToBottom, and a
   // correct re-pin when a restored offset happens to be near the bottom).
   attachKeepBottom()
+  // [owner pass] live composer clearance: measure the pill's idle geometry
+  // once, then keep it live through every growth/keyboard shift.
+  attachComposerResize()
+  refreshComposerClearance()
 })
 
 // -- Scroll helpers (chat-mode) ----------------------------------------------
@@ -685,9 +701,60 @@ let feedResizeObserver: ResizeObserver | null = null
 function attachKeepBottom(): void {
   if (feedResizeObserver || !scrollEl.value) return
   feedResizeObserver = new ResizeObserver(() => {
+    // Geometry shifted (keyboard rides the root's height): re-measure the
+    // composer clearance -- the pill is anchored to the root's bottom edge,
+    // so its top moves with every height change of the screen itself -- and
+    // re-pin a pinned reader.
+    refreshComposerClearance()
     if (pinnedToBottom) scrollToBottom()
   })
   feedResizeObserver.observe(scrollEl.value)
+}
+
+// -- Composer clearance (owner fix, 2026-09-08) --------------------------------
+// The pill is an ABSOLUTE overlay: its autogrow used to just expand upward
+// OVER the feed and bury the newest entries under the glass -- the content
+// above never moved. The feed's bottom padding is therefore LIVE: it is the
+// measured distance from the screen's bottom edge to the pill's TOP (+8px
+// breathing), recomputed whenever the pill resizes (autogrow, draft prefill,
+// the composing offset) or the screen geometry shifts (keyboard). A reader
+// pinned to the bottom is re-pinned on growth, so the newest entry rides up
+// above the pill like an ordinary chat; an unpinned reader keeps their place
+// (the padding grows BELOW the content, nothing they see moves).
+const composerEl = ref<HTMLElement | null>(null)
+const composerClearance = ref<number | null>(null)
+
+const composerStyle = computed<{ '--diary-composer-clearance'?: string }>(() =>
+  composerClearance.value !== null
+    ? { '--diary-composer-clearance': `${composerClearance.value}px` }
+    : {},
+)
+
+function refreshComposerClearance(): void {
+  const rootRect = screenEl.value?.getBoundingClientRect()
+  const pillRect = composerEl.value?.getBoundingClientRect()
+  if (!rootRect || !pillRect) return
+  const needed = rootRect.bottom - pillRect.top + 8
+  if (needed > 0) composerClearance.value = needed
+}
+
+let composerResizeObserver: ResizeObserver | null = null
+
+function attachComposerResize(): void {
+  if (composerResizeObserver || !composerEl.value) return
+  composerResizeObserver = new ResizeObserver(() => {
+    const before = composerClearance.value
+    refreshComposerClearance()
+    if (
+      before !== null &&
+      composerClearance.value !== null &&
+      composerClearance.value > before &&
+      pinnedToBottom
+    ) {
+      void nextTick().then(scrollToBottom)
+    }
+  })
+  composerResizeObserver.observe(composerEl.value)
 }
 
 // Top-align: результаты фильтра/поиска показываем СВЕРХУ (с top-align враппера),
@@ -709,6 +776,9 @@ async function onComposerCreated(): Promise<void> {
 
 const scrollEl = ref<HTMLElement | null>(null)
 const sentinelEl = ref<HTMLElement | null>(null)
+// The screen root -- the coordinate frame the composer clearance is measured
+// against (see refreshComposerClearance).
+const screenEl = ref<HTMLElement | null>(null)
 let observer: IntersectionObserver | null = null
 
 function setupObserver(): void {
@@ -720,7 +790,17 @@ function setupObserver(): void {
         void onLoadMore()
       }
     },
-    { root: scrollEl.value, rootMargin: '120px' },
+    {
+      root: scrollEl.value,
+      // Prefetch lead (owner: the scroll must be seamless). The sentinel is
+      // the FIRST element, reached while scrolling UP, so only the TOP margin
+      // matters: ~two screens (1500px) of lead means the older page is in
+      // flight long before the reader reaches the seam -- combined with the
+      // 40-event pages (stores/diary.ts) the thread effectively never runs
+      // out mid-scroll. hasMore/loading below guard the lead to one page
+      // ahead.
+      rootMargin: '1500px 0px 0px 0px',
+    },
   )
   observer.observe(sentinelEl.value)
 }
@@ -799,6 +879,11 @@ onBeforeUnmount(() => {
    AppFrame's own reduced content box instead of overshooting it. */
 .diary-feed {
   position: relative;
+  /* The floating overlays' shared rail: the composer input's visible left
+     edge (16px, owner's Apple Liquid Glass spec) -- and since 2026-09-08 the
+     header button column's too: the owner aligns back/"..." to the INPUT's
+     left edge, not the feed's 24px content rail. One source for both. */
+  --diary-overlay-rail: 16px;
   height: 100%;
   /* Same value as the 100% above (AppFrame's content box = frozen-vh minus
      its safe-area padding), but as an INTERPOLABLE px calc: the FE-44 close
@@ -831,19 +916,22 @@ onBeforeUnmount(() => {
 
 /* -- Header: floating glass overlay over the feed (owner 2026-09-07) --
    Supersedes ruling 4 for the header: NOT a normal-flow row any more. The
-   column hangs at the left rail -- «Назад» (white glass, VBackButton's glass
-   variant) above the "..." trigger in its usual solid DS look (blue glass
-   was tried and rolled back by the owner the same day), which expands
-   downward into Фильтр/Поиск exactly as before -- and the feed
+   column's left edge is aligned to the INPUT's visible left edge -- the
+   composer pill's 16px rail, shared via --diary-overlay-rail (owner,
+   2026-09-08; a flush x=0 and the feed's 24px content rail were both
+   tried and rejected the same day) -- «Назад» (white glass, VBackButton's
+   glass variant) above the "..." trigger in its usual solid DS look, which
+   expands downward into Фильтр/Поиск exactly as before -- and the feed
    scrolls beneath both; the buttons frost what passes under them (the same
    overlay model the composer uses at the bottom). No title. The
    `z-index: var(--z-sticky)` survives for the PROMPT №665 reason: the
-   tap-catcher is gone, but positioned/z-indexed overlays must not intercept
-   taps meant for the buttons; `--z-sticky` (200) keeps them on top. */
+   tap-catcher is gone, but positioned/z-indexed overlays must not
+   intercept taps meant for the buttons; `--z-sticky` (200) keeps them
+   on top. */
 .diary-feed__header {
   position: absolute;
   top: var(--velo-fog-headerless-top);
-  left: var(--velo-rail-pad-x);
+  left: var(--diary-overlay-rail);
   z-index: var(--z-sticky);
   display: flex;
   flex-direction: column;
@@ -897,20 +985,26 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  /* Only OUR compensation (onLoadMore) may move the offset on content
+     growth: on engines where native scroll anchoring is on, the browser
+     would adjust for the prepended history TOO and double the shift. */
+  overflow-anchor: none;
   /* [FE-7] never chain this scroller's overscroll to the root -- the iOS
      gesture-pan the whole FE-7 fix exists to undo. */
   overscroll-behavior-y: contain;
-  /* Clearance for the floating overlays, all from tokens. --diary-top-pad
-     (20 + 44 + 12 + 40 + 20 = fog-top + back 44 + gap + menu 40 + breathing)
-     lets the first entry scroll clear BELOW the header buttons while still
-     passing under them; the searching state grows it past the inline search
-     row (see .diary-feed--searching below); the 100px bottom pad does the
-     same for the composer pill. */
-  --diary-top-pad: calc(
-    var(--velo-fog-headerless-top) + var(--velo-size-44) + var(--space-3) + var(--velo-size-40) +
-      var(--space-5)
-  );
-  padding: var(--diary-top-pad) var(--velo-rail-pad-x) 100px;
+  /* Top: just the shared headerless token. The corner buttons (back + menu)
+     own the top-LEFT; the thread's first date node is CENTERED and ~170px
+     wide, so it clears the ~68px button column horizontally and needs no
+     full-height header clearance at rest -- the old ~150px clearance read
+     as a big empty gap above the thread's first entry (owner removed it).
+     Entries still pass UNDER the buttons while scrolling (overlay model);
+     the searching state keeps its own taller clearance below the inline
+     search row (see .diary-feed--searching below); the bottom pad is the
+     LIVE composer clearance -- --diary-composer-clearance, measured from
+     the pill's own top edge (100px fallback until first measure) -- so the
+     pill's autogrow pushes the content up instead of burying it. */
+  padding: var(--velo-fog-headerless-top) var(--velo-rail-pad-x)
+    var(--diary-composer-clearance, 100px);
   scrollbar-width: none;
   -ms-overflow-style: none;
   /* Chat-mode: a flex column so the thread wrapper can pin a short feed to the
@@ -926,9 +1020,13 @@ onBeforeUnmount(() => {
 }
 
 /* While the inline search row is up (open mode or a live query), the results
-   must start BELOW the row, not hide behind it. */
+   must start BELOW the bar -- its own top stack + height (.diary-feed__search)
+   -- not hide behind it. */
 .diary-feed--searching .diary-feed__body {
-  padding-top: calc(var(--diary-top-pad) + var(--velo-size-50) + var(--space-5));
+  padding-top: calc(
+    var(--velo-fog-headerless-top) + var(--velo-size-44) + var(--space-3) + var(--velo-size-40) +
+      var(--space-2) + var(--velo-size-50) + var(--space-5)
+  );
 }
 
 /* -- Search scrim: the modal-scrim token + a SOFT blur (owner 2026-09-07:
@@ -991,7 +1089,25 @@ onBeforeUnmount(() => {
   padding: var(--space-10) 0;
 }
 
+/* Zero-height rail the top sentinel and the loading-older overlay hang on.
+   It exists so the loader can be position:absolute WITHOUT giving the body
+   (which deliberately stays a plain flex row, PROMPT №668) a positioning
+   context of its own. */
+.diary-feed__topzone {
+  position: relative;
+  height: 0;
+}
+
 .diary-feed__state--more {
+  /* Out of the flow ON PURPOSE: an in-flow loader added/removed ~70px of
+     height above the thread at fetch start/end -- with the prefetch lead
+     (1500px) that happens mid-scroll and the feed visibly jumped down and
+     back. Absolute keeps the spinner at the content top (where the seam is)
+     with zero layout impact. */
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
   padding: var(--space-5) 0;
 }
 
@@ -1066,8 +1182,8 @@ onBeforeUnmount(() => {
      opacity) ever animates: the glass is static, only the content moves
      under it. */
   position: absolute;
-  left: 16px;
-  right: 16px;
+  left: var(--diary-overlay-rail);
+  right: var(--diary-overlay-rail);
   /* Owner pass: 12px sat TOO tight against the screen edge -- restored the
      pre-spec clearance (16 + 20 + safe-area), where the pill rode before. */
   bottom: calc(var(--space-4) + 20px + env(safe-area-inset-bottom, 0px));

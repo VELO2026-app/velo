@@ -30,6 +30,7 @@ import {
   moodLabelFromScore,
   ratingLabelFromScore,
   practiceIconFor,
+  RATING_ICON_COLOR,
 } from '@/utils/displayHelpers'
 import { MOOD_ICON, RATING_ICON } from '@/utils/ratingIcons'
 import { formatTime, formatDate, formatDuration } from '@/utils/format'
@@ -67,8 +68,12 @@ export interface DiaryCardModel {
   practiceDuration: ComputedRef<string>
   outcomeStatus: ComputedRef<string>
   outcomeLabel: ComputedRef<string>
-  /** Rating label alone (for the thread side-card tag). */
+  /** Rating label alone (score -> zone label; the thread bubble's no-comment fallback). */
   ratingLabel: ComputedRef<string>
+  /** Mood label alone (score -> zone label; the check-in bubble's no-comment fallback). */
+  moodLabel: ComputedRef<string>
+  /** Rating-zone accent colour for the rating glyph (feedback bubble icon). */
+  ratingIconColor: ComputedRef<string>
   /** note / dream are editable (open the entry screen). */
   editable: ComputedRef<boolean>
 }
@@ -190,6 +195,18 @@ export function useDiaryCardModel(
     return rating !== null ? ratingLabelFromScore(rating) : ''
   })
 
+  const moodLabel = computed(() => {
+    const mood = snapNum('mood')
+    return mood !== null ? moodLabelFromScore(mood) : ''
+  })
+
+  // The thread feedback bubble paints its rating glyph with the rating-zone
+  // accent (the same palette FeedbackView's rating buttons use), not a fixed
+  // teal: the zone owns the colour, the bubble slot owns only geometry.
+  const ratingIconColor = computed(
+    () => RATING_ICON_COLOR[ratingZoneFromScore(snapNum('rating') ?? 6)],
+  )
+
   // Time only ("23:07"): the day + weekday live in the timeline's day
   // separator, so the per-card line stays minimal (operator feedback, item 3).
   const dateLine = computed(() => formatTime(item.value.occurred_at, tz.value))
@@ -217,6 +234,8 @@ export function useDiaryCardModel(
     outcomeStatus,
     outcomeLabel,
     ratingLabel,
+    moodLabel,
+    ratingIconColor,
     editable,
   }
 }
