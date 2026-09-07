@@ -8,10 +8,10 @@
 
 <template>
   <MobileLayout
-    :tabs="USER_TABS"
+    :tabs="tabs"
     :active-tab="activeTab"
     :fill="isFillRoute"
-    :hide-tab-bar="isDiaryRoute || isFormRoute || isChatRoute || keyboardOpen"
+    :hide-tab-bar="isDiaryRoute || isFormRoute || isChatRoute || isInboxRoute || keyboardOpen"
     :fog="isFogRoute"
     v-bind="fogTuning"
     @navigate="router.push($event)"
@@ -21,14 +21,43 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { MobileLayout } from '@/components/layout'
+import type { TabItem } from '@/components/layout/VTabBar.vue'
 import { USER_TABS } from '@/router/tabs'
+import { IconBellPlain } from '@/components/icons'
+import { useNotificationsStore } from '@/stores/notifications'
 import { useKeyboardOpen } from '@/composables/useKeyboardOpen'
 
 const route = useRoute()
 const router = useRouter()
+
+// FE-11/FE-12: the notification bell rides the tab dock as a 5th button
+// (owner experiment) -- it navigates to the inbox ROUTE like any tab, but is
+// never shown active: the inbox is a detail screen that hides the dock
+// (INBOX_ROUTES below). The coral presence dot is store-driven -- refreshed
+// on shell mount; the inbox applies the server-confirmed badge after its
+// load / mark-read / mark-all calls (stores/notifications.ts).
+const notifications = useNotificationsStore()
+
+const tabs = computed<TabItem[]>(() => [
+  ...USER_TABS,
+  {
+    icon: IconBellPlain,
+    label: 'Уведомления',
+    to: '/user/notifications',
+    // Presence only (owner ruling: no number) -- any unread shows the dot.
+    badge: notifications.unread > 0 ? 1 : undefined,
+    // Owner ask: the bell glyph renders smaller than the view tabs (the
+    // 56px touch target stays uniform); the dot overlaps its corner ~7%.
+    compact: true,
+  },
+])
+
+onMounted(() => {
+  void notifications.refreshUnread()
+})
 
 // Hide the floating tab bar while the soft keyboard is open, so it does not ride
 // up over a focused input (e.g. the "запрос мастеру" field on booking-confirmed).
@@ -77,6 +106,13 @@ const isFillRoute = computed(() => DIARY_ROUTES.includes(route.name as string) |
 const FORM_ROUTES = ['user-checkin', 'user-feedback', 'user-reflection']
 const isFormRoute = computed(() => FORM_ROUTES.includes(route.name as string))
 
+// FE-11: the bell feed is a detail list screen -- no tab bar. The master
+// inbox gets the same via meta.hideTabBar (MasterShell reads meta); UserShell
+// lists route names explicitly, so 'user-inbox' joins the lists here and the
+// route meta stays as documentation parity.
+const INBOX_ROUTES = ['user-inbox']
+const isInboxRoute = computed(() => INBOX_ROUTES.includes(route.name as string))
+
 // Edge-to-edge fog mask: the long scrolling lists/feeds + the practice-detail
 // screen (operator 2026-06-09: dissolve its hero under the header and its CTA
 // over the tabbar instead of a hard collision). Forms and the profile still
@@ -89,6 +125,9 @@ const FOG_ROUTES = [
   'user-dashboard',
   'user-calendar',
   'user-bookings',
+  // FE-11: the bell feed -- a scrolling list like bookings, dissolves under
+  // the floating header; «Прочитать всё» sits in the header, not in-flow.
+  'user-inbox',
   'user-master-public',
   'practice-detail',
   // Edit-profile (operator PE-2a, 2026-07-01): parity with the fogged master

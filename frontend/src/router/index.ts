@@ -167,6 +167,16 @@ const router = createRouter({
           component: () => import('@/views/user/MyBookingsView.vue'),
         },
         {
+          // FE-11: the bell feed (user-zone mirror of the master's T-26
+          // inbox). Top-level, NOT under `profile/` -- deliberately named
+          // 'user-inbox', not 'user-notifications': that name is already the
+          // preference screen at profile/notifications (NotificationsView).
+          path: 'notifications',
+          name: 'user-inbox',
+          meta: { hideTabBar: true },
+          component: () => import('@/views/user/UserInboxView.vue'),
+        },
+        {
           // FE-19 (GT P3): "Мои группы" in the user zone means SCHOOLS
           // (curator groups) -- the master's student groups are a master-zone
           // concept a plain user never sees. Entry row: UserProfileView,

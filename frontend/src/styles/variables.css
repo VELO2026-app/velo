@@ -512,6 +512,7 @@
   --velo-letter-spacing-064: 0.64px; /* dashboard section-label tracking */
   /* Component-size ramp (value-named; extends --velo-size-40/44/46/50 above).
      Admin count-badges, avatars, id circles, week-nav button, review photo. */
+  --velo-size-10: 10px;   /* tab-dock bell presence chip diameter (VTabBar badge) */
   --velo-size-16: 16px;   /* practice-detail id circle */
   --velo-size-18: 18px;   /* dashboard bell unread-badge diameter (min-width + height) --
                              its OWN role, distinct from the count-badge family below

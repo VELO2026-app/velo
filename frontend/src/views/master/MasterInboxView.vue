@@ -14,10 +14,10 @@
 
   SCOPE BOUNDARY, DELIBERATE: a tap marks the item read and stops. Every
   item carries `action_data` (comms' navigational intent -- "open this
-  booking / this thread"), but NOTHING in this app reads that field yet
-  (checked: zero consumers anywhere in frontend/src). Building per-type
-  deep-link routing is a distinct, larger task this screen does not attempt
-  -- the boundary is the point, not a gap to fill in quietly later.
+  booking / this thread"), and the USER inbox now routes by it
+  (UserInboxView.vue, FE-11 owner ruling); THIS master screen keeps the
+  T-26 boundary -- master-side deep links are their own decision, not a
+  gap quietly filled by proximity.
 
   PAGINATION: also deliberately absent. `next_cursor` arrives on every
   response and is not used -- one page (comms default limit 20) is what the

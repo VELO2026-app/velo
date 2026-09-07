@@ -29,11 +29,19 @@
   built yet). Until it exists, feedback stays reachable from PracticeDetailView's
   own in-window button (F9.1), and reflection is temporarily unreachable from
   the UI -- a deliberate, owner-accepted gap, not an oversight.
+
+  [FE-11/FE-12] The notification bell no longer lives here -- it moved into
+  the tab dock as the user zone's 5th button (UserShell's `tabs` computed,
+  owner experiment). The unread presence dot is store-driven
+  (stores/notifications.ts): UserShell refreshes on mount, the inbox applies
+  the server-confirmed badge after its mark-read calls. This screen has no
+  notifications code of its own any more.
 -->
 
 <template>
   <div class="dashboard">
-    <!-- Greeting removed (static, low-value, took space — operator 2026-06-04). -->
+    <!-- Greeting removed (static, low-value, took space — operator 2026-06-04).
+         FE-11 bell: moved to the tab dock (UserShell), not rendered here. -->
 
     <!-- Check-in alert banner (shared Banner) -->
     <Banner
