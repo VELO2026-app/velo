@@ -194,6 +194,40 @@ async def _create_practice(
                 practice_id=practice.id, group_id=school.id,
             )
         )
+        # THE MASTER JOINS THE SCHOOL, and this is not decoration.
+        #
+        # POST /practices refuses to publish into a school the master does
+        # not belong to -- _member_curator_group_ids_or_400,
+        # practices/service.py: "curator_group_ids must be active schools
+        # you belong to". So a school practice whose master is an outsider
+        # is a state the API cannot produce, and building one here by hand
+        # would be testing a shape that does not exist.
+        #
+        # It also has a consequence that is invisible until something
+        # books: _is_curator_group_audience_clause requires FOUR things at
+        # once -- an audience row, a verified curator, the VIEWER in the
+        # school, and _master_in_curator_group_clause, i.e. the master
+        # being the curator or a kind='master' member with a verified
+        # profile. Miss the last one and the practice has no audience at
+        # all: nobody can book it, and the 403 says not_in_audience while
+        # pointing at the booker.
+        if school.curator_user_id != practice.master_id:
+            existing = (
+                await db_session.execute(
+                    select(CuratorGroupMember.id).where(
+                        CuratorGroupMember.group_id == school.id,
+                        CuratorGroupMember.user_id == practice.master_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if existing is None:
+                db_session.add(
+                    CuratorGroupMember(
+                        group_id=school.id,
+                        user_id=practice.master_id,
+                        kind=CuratorMemberKind.MASTER.value,
+                    )
+                )
     await db_session.flush()
     await db_session.commit()
     return practice
