@@ -281,14 +281,30 @@ async def _missing_practice_code(client: AsyncClient, token: str) -> str:
     return resp.json()["error"]
 
 
-async def _outbox_types(db_session: AsyncSession) -> list[str]:
+async def _outbox_types_for(user_id: str) -> list[str]:
+    """Notification types queued FOR ONE USER, not for the whole database.
+
+    The outbox is append-only and shared by the entire suite: an unfiltered
+    select returns every notification any test ever queued. The first
+    version of this helper did exactly that and asserted "exactly one
+    practice.cancelled" against 65 of them, most belonging to other files.
+
+    Filtering by data->>'target_value' is the same access path
+    full_cleanup_range uses to delete this band's rows (tests/helpers.py) --
+    the notification_request payload carries its target there and nowhere
+    else. Which also explains why the sibling assertion on
+    practice.cancelled_by_curator passed while this one did not: that type
+    is emitted only by this file, so the band cleanup happened to leave
+    exactly one. It was right by accident, and is now right on purpose.
+    """
     rows = (
-        await fresh_execute(select(OutboxEvent))
+        await fresh_execute(
+            select(OutboxEvent).where(
+                OutboxEvent.payload["target_value"].astext == str(user_id),
+            )
+        )
     ).scalars().all()
-    return [
-        (row.payload or {}).get("type", "")
-        for row in rows
-    ]
+    return [(row.payload or {}).get("type", "") for row in rows]
 
 
 # ===========================================================================
@@ -690,9 +706,11 @@ async def test_the_master_is_told_and_never_tells_himself(
 
     A curator cancelling produces practice.cancelled_by_curator aimed at the
     practice's master; the same master cancelling his own practice produces
-    none. Asserting only the first would pass against an implementation that
-    notifies on every cancellation, which is the mistake the rule exists to
-    prevent -- a master emailing himself about his own click.
+    none. Both halves are counted against the MASTER's own queue: one after
+    the curator's cancel, and still one -- not two -- after his own. Asserting
+    only the first would pass against an implementation that notifies on
+    every cancellation, which is the mistake the rule exists to prevent: a
+    master emailing himself about his own click.
     """
     master = await _make_verified_master(client, db_session, _TID_MASTER)
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
@@ -708,14 +726,14 @@ async def test_the_master_is_told_and_never_tells_himself(
         CANCEL_URL.format(practice_id=by_curator.id),
         headers=auth_headers(curator["session_token"]),
     )
-    after_curator = await _outbox_types(db_session)
-    assert "practice.cancelled_by_curator" in after_curator
+    after_curator = await _outbox_types_for(master["user"]["id"])
+    assert after_curator.count("practice.cancelled_by_curator") == 1
 
     await client.post(
         CANCEL_URL.format(practice_id=by_master.id),
         headers=auth_headers(master["session_token"]),
     )
-    after_master = await _outbox_types(db_session)
+    after_master = await _outbox_types_for(master["user"]["id"])
     assert after_master.count("practice.cancelled_by_curator") == 1
 
 
@@ -745,7 +763,7 @@ async def test_participants_are_still_told_and_the_count_did_not_move(
     )
     assert resp.status_code == 200
 
-    types = await _outbox_types(db_session)
+    types = await _outbox_types_for(booked["user"]["id"])
     assert types.count("practice.cancelled") == 1
 
 
