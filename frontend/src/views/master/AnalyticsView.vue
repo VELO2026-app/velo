@@ -99,7 +99,7 @@
           <button
             class="analytics__attention-msg"
             aria-label="Написать сообщение"
-            @click.stop="openMessage(item.reviewer_name)"
+            @click.stop="openMessage(item.user_id, item.reviewer_name)"
           >
             <IconMessages :size="22" />
           </button>
@@ -229,8 +229,13 @@
       </template>
     </div>
 
-    <!-- «Требуют внимания» tap → message the student (stub modal, E4). -->
-    <SendMessageModal :open="msgOpen" :name="msgName" @close="msgOpen = false" />
+    <!-- «Требуют внимания» tap → message the student (posts into the DM). -->
+    <SendMessageModal
+      :open="msgOpen"
+      :student-id="msgId"
+      :name="msgName"
+      @close="msgOpen = false"
+    />
   </div>
 </template>
 
@@ -423,11 +428,13 @@ function goStudent(item: MasterReviewItem): void {
   })
 }
 
-// The message button (@click.stop) → open the (stub, E4) send-message modal by
-// name, as a distinct action that does not trigger the card's profile-nav.
+// The message button (@click.stop) → open the send-message modal (which posts
+// into the DM), as a distinct action that does not trigger the card's profile-nav.
 const msgOpen = ref(false)
+const msgId = ref('')
 const msgName = ref('')
-function openMessage(name: string): void {
+function openMessage(id: string, name: string): void {
+  msgId.value = id
   msgName.value = name
   msgOpen.value = true
 }

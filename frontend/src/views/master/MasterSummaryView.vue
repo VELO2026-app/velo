@@ -109,7 +109,7 @@
           <button
             class="summary__msg"
             aria-label="Написать сообщение"
-            @click.stop="openMessage(student.name)"
+            @click.stop="openMessage(student.id, student.name)"
           >
             <IconMessages :size="22" />
           </button>
@@ -123,7 +123,12 @@
       </template>
     </div>
 
-    <SendMessageModal :open="msgOpen" :name="msgName" @close="msgOpen = false" />
+    <SendMessageModal
+      :open="msgOpen"
+      :student-id="msgId"
+      :name="msgName"
+      @close="msgOpen = false"
+    />
   </div>
 </template>
 
@@ -216,8 +221,10 @@ function openProfile(student: StudentListItem): void {
 }
 
 const msgOpen = ref(false)
+const msgId = ref('')
 const msgName = ref('')
-function openMessage(name: string): void {
+function openMessage(id: string, name: string): void {
+  msgId.value = id
   msgName.value = name
   msgOpen.value = true
 }

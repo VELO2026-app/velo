@@ -12,6 +12,10 @@
 //   POST /api/v1/chats                        -- open-or-get the eternal DM
 //        with one VERIFIED master (comms dedups on the pair; safe to call
 //        on every entry). 404 when the target isn't a verified master.
+//   POST /api/v1/chats/students               -- the SAME thread, master-side:
+//        open-or-get the DM with one student (T3). 403 unless the caller is
+//        a verified master; the pair is directed server-side (student =
+//        client, master = operator) no matter who tapped first.
 //   GET  /api/v1/chats                        -- my conversations. A student
 //        gets local pointers, a master the comms operator list; BOTH carry
 //        the P-1 `peer` display block, so no per-row name lookups here.
@@ -106,6 +110,15 @@ export interface ChatUnreadSummary {
 
 export function openChat(masterId: string): Promise<ChatThread> {
   return api.post<ChatThread>('/api/v1/chats', { master_id: masterId })
+}
+
+/** Master-side twin of openChat (POST /chats/students, T3): open-or-get the
+ *  SAME eternal DM with one student. The pair is directed server-side
+ *  (student=client, master=operator), so this lands in the thread the
+ *  student's own openChat would return -- one conversation per pair, never
+ *  two. */
+export function openStudentChat(studentId: string): Promise<ChatThread> {
+  return api.post<ChatThread>('/api/v1/chats/students', { student_id: studentId })
 }
 
 export function listChats(limit = 100): Promise<ChatThreadList> {

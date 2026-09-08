@@ -9,8 +9,9 @@
   LIVE (E5): getStudent(id) → GET /api/v1/masters/me/students/{id} →
   StudentDetailResponse { name, avatar_url, practices_count, hours,
   satisfaction_pct, recent_checkins[], feedbacks[], blocked }. Reuses the real
-  MoodAvatar (diary mood faces) for check-ins. The "Написать сообщение" action
-  is still a STUB (E4 messaging pending backend).
+  MoodAvatar (diary mood faces) for check-ins. The "Написать сообщение"
+  action posts into the eternal DM with THIS student (SendMessageModal --
+  REAL since the T3 chat backend: POST /chats/students).
 
   P3 additions:
     - Group chips (VTag): GET /masters/me/students/{id}/groups (this
@@ -151,7 +152,7 @@
           @click="fbExpanded = true"
         />
 
-        <!-- Action (stub — E4 messaging not delivered) -->
+        <!-- Action: posts into the eternal DM with THIS student (T3). -->
         <VButton variant="primary" block class="profile__cta" @click="msgOpen = true">
           Написать сообщение
         </VButton>
@@ -165,7 +166,12 @@
       </template>
     </div>
 
-    <SendMessageModal :open="msgOpen" :name="name" @close="msgOpen = false" />
+    <SendMessageModal
+      :open="msgOpen"
+      :student-id="String(route.params.id)"
+      :name="name"
+      @close="msgOpen = false"
+    />
 
     <!-- Block confirm (destructive). TargetUserCard (owner Q9, PROMPT №610)
          via the default slot + warning-panel for the consequences text
@@ -439,7 +445,7 @@ const visibleFeedbacks = computed(() =>
 const hiddenCheckins = computed((): number => Math.max(0, checkinRows.value.length - PREVIEW_CAP))
 const hiddenFeedbacks = computed((): number => Math.max(0, feedbackRows.value.length - PREVIEW_CAP))
 
-// "Написать сообщение" — stub (E4 messaging not delivered).
+// "Написать сообщение" — posts into the eternal DM with THIS student (T3).
 const msgOpen = ref(false)
 
 // -- Block -> report-offer -> report form (P3, PROMPT №592) --

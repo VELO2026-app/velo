@@ -322,8 +322,8 @@ function modalDismissed(): boolean {
 }
 
 function modalButton(label: string): HTMLButtonElement | undefined {
-  return Array.from(liveModal()?.querySelectorAll<HTMLButtonElement>('button') ?? []).find((b) =>
-    b.textContent?.trim() === label,
+  return Array.from(liveModal()?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(
+    (b) => b.textContent?.trim() === label,
   )
 }
 
@@ -416,9 +416,9 @@ describe('MasterSummaryView', () => {
       mount()
       await flush()
 
-      expect(
-        sectionQuery<HTMLElement>(FEEDBACKS, '.v-empty-note')[0]?.textContent?.trim(),
-      ).toBe('Отзывы появятся здесь, когда будут собраны')
+      expect(sectionQuery<HTMLElement>(FEEDBACKS, '.v-empty-note')[0]?.textContent?.trim()).toBe(
+        'Отзывы появятся здесь, когда будут собраны',
+      )
       expect(errored(FEEDBACKS)).toBe(false)
       expect(feedbackCards()).toHaveLength(0)
     })
@@ -914,11 +914,11 @@ describe('MasterSummaryView', () => {
   // ===========================================================================
   // NOT COVERED, deliberately
   //
-  // - «Отправить» inside SendMessageModal. It is that COMPONENT's stub (it fires
-  //   `toast.info('Сообщения пока недоступны')`, SendMessageModal.vue:45-48) and
-  //   is shared with MasterStudentsView / MasterStudentProfileView. This screen
-  //   only opens the sheet and names the recipient; asserting the toast here
-  //   would test the child's roadmap placeholder from three different files.
+  // - «Отправить» inside SendMessageModal. It is that COMPONENT's own behaviour
+  //   (open-or-get the DM, post, toast -- SendMessageModal.test.ts) and is
+  //   shared with MasterStudentsView / MasterStudentProfileView. This screen
+  //   only opens the sheet and names the recipient; asserting the send here
+  //   would test the child from three different files.
   //   What THIS screen owns -- which name reaches the sheet -- is asserted above.
   // - Keyboard activation (`@keydown.enter.space.prevent`, .vue:58,101). Both
   //   handlers are the same goStudentFromReview / openProfile already driven

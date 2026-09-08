@@ -1,10 +1,15 @@
 <!--
-  VELO Frontend -- SendMessageModal (Master DS, 2026-06-11)
+  VELO Frontend -- SendMessageModal (Master DS, 2026-06-11; REAL send -- T3)
 
   "Написать сообщение" sheet, reused on the student screens (list / profile /
-  summary). STUB: master↔participant messaging has no backend yet — "Отправить"
-  shows a toast and closes (roadmap for Zod). Visual contract: recipient chip +
-  message textarea + Отмена / Отправить.
+  summary / analytics). REAL since the T3 chat backend landed: «Отправить»
+  open-or-gets the eternal DM with the student (POST /chats/students -- the
+  same thread the student's own «Задать вопрос» opens) and posts the text.
+  Same open-then-send split as BookingConfirmedView.onSendRequest: one
+  in-flight flag, success toasts and closes, a failure toasts and leaves the
+  sheet standing with the draft (the retry is safe -- comms dedups on the
+  pair). Visual contract: recipient chip + message textarea + Отмена /
+  Отправить.
 -->
 
 <template>
@@ -14,10 +19,12 @@
         <VAvatar :name="name" size="md" />
         <span class="send-msg__name">{{ name }}</span>
       </div>
-      <VTextarea v-model="text" placeholder="Сообщение…" :rows="5" />
+      <!-- maxlength is a native attr VTextarea forwards to the field, the same
+           4000 cap the chat thread's own Composer enforces. -->
+      <VTextarea v-model="text" placeholder="Сообщение…" :rows="5" maxlength="4000" />
       <div class="send-msg__actions">
-        <VButton variant="danger" block @click="$emit('close')">Отмена</VButton>
-        <VButton variant="primary" block @click="onSend">Отправить</VButton>
+        <VButton variant="danger" block :disabled="sending" @click="$emit('close')">Отмена</VButton>
+        <VButton variant="primary" block :loading="sending" @click="onSend">Отправить</VButton>
       </div>
     </div>
   </VModal>
@@ -27,12 +34,15 @@
 import { ref, watch } from 'vue'
 import { VModal, VAvatar, VTextarea, VButton } from '@/components/ui'
 import { useToast } from '@/composables/useToast'
+import { extractApiError } from '@/composables/useApiError'
+import { openStudentChat, sendChatMessage } from '@/api/chats'
 
-const props = defineProps<{ open: boolean; name: string }>()
-defineEmits<{ close: [] }>()
+const props = defineProps<{ open: boolean; studentId: string; name: string }>()
+const emit = defineEmits<{ close: [] }>()
 
 const toast = useToast()
 const text = ref('')
+const sending = ref(false)
 
 // Reset the field each time the sheet opens.
 watch(
@@ -42,9 +52,24 @@ watch(
   },
 )
 
-function onSend(): void {
-  // Messaging backend not built yet (roadmap for Zod).
-  toast.info('Сообщения пока недоступны')
+async function onSend(): Promise<void> {
+  // Two calls, in order: open-or-get the DM, then post the text. ONE flag
+  // guards both (VButton's own :loading already blocks the button; this is
+  // the logic-level twin). A failure leaves the draft in place and toasts --
+  // the retry re-uses the same thread, so nothing double-sends.
+  const body = text.value.trim()
+  if (!body || sending.value) return
+  sending.value = true
+  try {
+    const thread = await openStudentChat(props.studentId)
+    await sendChatMessage(thread.id, body)
+    toast.success('Сообщение отправлено')
+    emit('close')
+  } catch (e) {
+    toast.error(extractApiError(e, 'Не удалось отправить сообщение'))
+  } finally {
+    sending.value = false
+  }
 }
 </script>
 

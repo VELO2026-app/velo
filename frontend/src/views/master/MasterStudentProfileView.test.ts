@@ -71,12 +71,14 @@ import MasterStudentProfileView from '@/views/master/MasterStudentProfileView.vu
 import * as mastersApi from '@/api/masters'
 import * as groupsApi from '@/api/groups'
 import * as reportsApi from '@/api/reports'
+import * as chatsApi from '@/api/chats'
 import type { StudentDetailResponseWithBlocked } from '@/api/masters'
 import type { StudentCheckinItem, StudentFeedbackItem } from '@/api/types'
 
 vi.mock('@/api/masters')
 vi.mock('@/api/groups')
 vi.mock('@/api/reports')
+vi.mock('@/api/chats')
 
 const push = vi.fn()
 const back = vi.fn()
@@ -94,11 +96,10 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push, back }),
 }))
 
-const info = vi.fn()
 const success = vi.fn()
 const error = vi.fn()
 vi.mock('@/composables/useToast', () => ({
-  useToast: () => ({ info, success, error, dismiss: vi.fn() }),
+  useToast: () => ({ info: vi.fn(), success, error, dismiss: vi.fn() }),
 }))
 
 // -- fixtures ---------------------------------------------------------------
@@ -206,9 +207,18 @@ beforeEach(() => {
   vi.mocked(groupsApi.getStudentGroups).mockReset().mockResolvedValue({ groups: [] })
   vi.mocked(groupsApi.blockStudent).mockReset()
   vi.mocked(reportsApi.createReport).mockReset()
+  vi.mocked(chatsApi.openStudentChat)
+    .mockReset()
+    .mockResolvedValue({ id: 'thread-1', created_at: '2026-08-07T09:00:00+00:00' })
+  vi.mocked(chatsApi.sendChatMessage).mockReset().mockResolvedValue({
+    id: 'm-1',
+    thread_id: 'thread-1',
+    sender: 's1',
+    body: '',
+    created_at: '2026-08-07T09:00:01+00:00',
+  })
   push.mockReset()
   back.mockReset()
-  info.mockReset()
   success.mockReset()
   error.mockReset()
 })
@@ -714,7 +724,7 @@ describe('MasterStudentProfileView', () => {
     })
   })
 
-  describe('the «Написать сообщение» CTA (E4 stub)', () => {
+  describe('the «Написать сообщение» CTA (REAL DM)', () => {
     it('opens the message sheet on document.body, addressed to THIS student', async () => {
       vi.mocked(mastersApi.getStudent).mockResolvedValue(detail({ name: 'Анна Кузнецова' }))
       mount()
@@ -754,12 +764,18 @@ describe('MasterStudentProfileView', () => {
       expect(modalDismissed()).toBe(true)
     })
 
-    it('the CTA can never reach an API — messaging has no backend, so «Отправить» only toasts', async () => {
+    it("«Отправить» opens THIS student's DM -- the sheet receives the route's own id", async () => {
       mount()
       await flush()
       const callsAfterLoad = vi.mocked(mastersApi.getStudent).mock.calls.length
 
       buttonWith('Написать сообщение')?.click()
+      await flush()
+      const field = liveModal()?.querySelector<HTMLTextAreaElement>('textarea')
+      if (field) {
+        field.value = 'Проверьте домашку'
+        field.dispatchEvent(new Event('input'))
+      }
       await flush()
       const send = Array.from(liveModal()?.querySelectorAll<HTMLElement>('button') ?? []).find(
         (b) => b.textContent?.includes('Отправить'),
@@ -767,8 +783,12 @@ describe('MasterStudentProfileView', () => {
       send?.click()
       await flush()
 
-      // Verified at the source, not from the button's copy: SendMessageModal.vue:45-48.
-      expect(info).toHaveBeenCalledWith('Сообщения пока недоступны')
+      // THIS screen's one job in the send flow: hand the modal the ROUTE's
+      // student id, so the master's message opens the DM with the student on
+      // screen (the send mechanics are SendMessageModal.test.ts's ground).
+      expect(chatsApi.openStudentChat).toHaveBeenCalledWith('s1')
+      expect(chatsApi.sendChatMessage).toHaveBeenCalledTimes(1)
+      expect(success).toHaveBeenCalledWith('Сообщение отправлено')
       expect(vi.mocked(mastersApi.getStudent).mock.calls).toHaveLength(callsAfterLoad)
       expect(push).not.toHaveBeenCalled()
     })

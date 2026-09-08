@@ -1195,9 +1195,9 @@ describe('AnalyticsView', () => {
   //   the values this screen feeds them.
   // - The insights LRU eviction and the "skip if already cached" guard
   //   (stores/diary.ts:363-380): store behaviour, and probekit-unit-test's ground.
-  // - «Отправить» in the send-message modal: a documented stub that toasts
-  //   (SendMessageModal.vue:45-48). It belongs to that component's own test, not
-  //   to a screen test that would be asserting a placeholder (SC-09).
+  // - «Отправить» in the send-message modal: that component's own open-then-send
+  //   behaviour (SendMessageModal.test.ts). It belongs to that component's own
+  //   test, not to a screen test that would be re-asserting a child (SC-09).
   // - The income «—» placeholder (.vue:457-459): unreachable honestly. The
   //   backend always returns an IncomeResponse, so incomeData is null only on the
   //   pre-onMounted first paint -- which app.mount() flushes past synchronously,
