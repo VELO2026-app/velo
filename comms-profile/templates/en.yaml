@@ -146,3 +146,30 @@ msg.thread_closed:
   telegram:
     title: "{title}"
     body: "{body}"
+
+# BE-25: school notifications. Every one is addressed to a single person who
+# is a party to the event itself -- nobody learns a school exists from these.
+curator_group.transfer_offered:
+  telegram:
+    title: "You have been offered a school"
+    body: "🏛 <b>{actor_name}</b> offers you the curatorship of <b>{group_name}</b>.\n\nOpen the app to accept or decline."
+
+curator_group.transfer_accepted:
+  telegram:
+    title: "School handed over"
+    body: "🏛 <b>{actor_name}</b> accepted the school <b>{group_name}</b>. You are no longer its curator."
+
+curator_group.transfer_declined:
+  telegram:
+    title: "Transfer declined"
+    body: "🏛 <b>{actor_name}</b> declined the transfer of <b>{group_name}</b>. The school stays with you."
+
+curator_group.member_removed:
+  telegram:
+    title: "You are no longer in the school"
+    body: "🏛 You have been removed from <b>{group_name}</b>. Its practices are no longer shown to you."
+
+curator_group.member_joined:
+  telegram:
+    title: "New school member"
+    body: "🏛 <b>{actor_name}</b> joined the school <b>{group_name}</b>."

@@ -148,6 +148,46 @@ support.thread_created:
 
 practice.cancelled_by_curator:
 
+# ===========================================================================
+# CURATOR GROUPS -- school notifications (BE-25). Four of the five carry NO
+# category, and the fifth is why the `curator_groups` category exists.
+#
+# The four without one -- transfer_offered / transfer_accepted /
+# transfer_declined / member_removed -- share a shape: each tells ONE person
+# that THEIR OWN standing changed, each happens a handful of times in a
+# school's life, and each is irreversible by silence. Being offered a school
+# you did not know was coming, losing one you owned, or losing access to the
+# practices of a school you were in are not a feed; missing them means
+# finding out from a stranger, or not at all. Same reading as master.verified
+# above: an event about your status, not a stream. The accepted/declined pair
+# deliberately shares one bucket -- splitting it would mean hearing about one
+# outcome of your own offer and not the other.
+#
+# member_joined is the one that SCALES with the size of a school, so the
+# curator of a large one must be able to silence it. `reminders` was the
+# obvious existing home and is exactly wrong: it holds booking.reminder_10m,
+# _1h, _24h and the two feedback prompts, so a curator muting the arrivals
+# feed would also switch off the reminders for his own sessions and find out
+# by missing a class. A new category is cheaper than that coupling, and this
+# family is growing -- practice_published lands here next, master appointment
+# after it (owner ruling; the standing "no new categories" ban lifted for
+# this case, because putting the first of a family in a borrowed bucket only
+# to move it out later costs more).
+# ===========================================================================
+
+curator_group.transfer_offered:
+
+curator_group.transfer_accepted:
+
+curator_group.transfer_declined:
+
+curator_group.member_removed:
+
+curator_group.member_joined:
+  category: curator_groups
+
+# -- Chat baseline (comms-native msg.* types; velo never emits these,
+#    the messaging engine does; mapping fixed by dispatch plan §6b) --
 
 msg.participant_message:
   category: msg_participants

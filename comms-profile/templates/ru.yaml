@@ -160,3 +160,30 @@ msg.thread_closed:
   telegram:
     title: "{title}"
     body: "{body}"
+
+# BE-25: school notifications. Every one is addressed to a single person who
+# is a party to the event itself -- nobody learns a school exists from these.
+curator_group.transfer_offered:
+  telegram:
+    title: "Вам предлагают школу"
+    body: "🏛 <b>{actor_name}</b> предлагает вам стать куратором школы <b>{group_name}</b>.\n\nОткройте приложение, чтобы принять или отклонить."
+
+curator_group.transfer_accepted:
+  telegram:
+    title: "Школа передана"
+    body: "🏛 <b>{actor_name}</b> принял школу <b>{group_name}</b>. Вы больше не её куратор."
+
+curator_group.transfer_declined:
+  telegram:
+    title: "Передача отклонена"
+    body: "🏛 <b>{actor_name}</b> отклонил передачу школы <b>{group_name}</b>. Школа осталась за вами."
+
+curator_group.member_removed:
+  telegram:
+    title: "Вы больше не в школе"
+    body: "🏛 Вас удалили из школы <b>{group_name}</b>. Её практики больше не отображаются."
+
+curator_group.member_joined:
+  telegram:
+    title: "Новый участник школы"
+    body: "🏛 <b>{actor_name}</b> вступил в школу <b>{group_name}</b>."
