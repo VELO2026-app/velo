@@ -114,8 +114,9 @@ import {
 
 const router = useRouter()
 const toast = useToast()
-// The dock bell's presence dot (UserShell) reads this store; every
-// server-confirmed badge below keeps it in step with this screen's actions.
+// The dashboard bell's presence dot (UserDashboardView) reads this store;
+// every server-confirmed badge below keeps it in step with this screen's
+// actions.
 const notifications = useNotificationsStore()
 
 const loading = ref(true)

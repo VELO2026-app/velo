@@ -32,11 +32,6 @@ import { createApp, nextTick, ref, type App, type Ref } from 'vue'
 import { createPinia } from 'pinia'
 import { createRouter, createMemoryHistory, type Router } from 'vue-router'
 import UserShell from '@/views/shells/UserShell.vue'
-import * as notificationsApi from '@/api/notifications'
-
-// FE-11/FE-12: the shell reads the notifications store (the dock bell's
-// presence dot) and refreshes it on mount -- seam the API, as everywhere.
-vi.mock('@/api/notifications')
 
 const keyboardOpenRef: Ref<boolean> = ref(false)
 vi.mock('@/composables/useKeyboardOpen', () => ({
@@ -48,13 +43,14 @@ function buildRouter(): Router {
   return createRouter({
     history: createMemoryHistory(),
     routes: [
-      // Same meta as router/index.ts: headerless is declared on the ROUTE
-      // ([FE-3] follow-up -- the greeting removal left the dashboard without
-      // any floating header, so it joins the headerless contract).
+      // Mirrors router/index.ts: user-dashboard's headerless meta is RETIRED
+      // (the VHeader «Главная» + bell floats again, 2026-09-08), so the route
+      // carries no meta -- and StubChild teleports nothing into the island,
+      // which is exactly the pre-measurement frame the headered contract
+      // below pins (HEADER_FALLBACK + gap).
       {
         path: '/user/dashboard',
         name: 'user-dashboard',
-        meta: { headerless: true },
         component: StubChild,
       },
       // [FE-3] profile hub: same contract (retires its margin-top hack);
@@ -81,7 +77,8 @@ function buildRouter(): Router {
         component: StubChild,
       },
       { path: '/user/profile/messages/:id', name: 'user-chat', component: StubChild },
-      // FE-11: the dock bell's 5th button navigates here (UserShell.tabs).
+      // FE-11: the bell feed -- reached from the dashboard header's bell
+      // (UserDashboardView.onBell); hides the dock (INBOX_ROUTES).
       { path: '/user/notifications', name: 'user-inbox', component: StubChild },
       { path: '/user/checkin/:practiceId', name: 'user-checkin', component: StubChild },
       { path: '/user/practice/:id', name: 'practice-detail', component: StubChild },
@@ -132,11 +129,6 @@ function activeTabLabel(): string | undefined {
 
 beforeEach(() => {
   keyboardOpenRef.value = false
-  // Default: everything read, so the bell's dot stays out of the unrelated
-  // route tests below; the bell block overrides per case.
-  vi.mocked(notificationsApi.listNotifications)
-    .mockReset()
-    .mockResolvedValue({ items: [], next_cursor: null, unread: 0 })
 })
 
 afterEach(() => {
@@ -220,6 +212,15 @@ describe('UserShell', () => {
 
       expect(host?.querySelector('.v-tabbar')).toBeNull()
     })
+
+    it('the dock carries exactly the four USER_TABS -- no notification bell', async () => {
+      await mount('user-dashboard')
+      await flush()
+
+      const items = Array.from(host?.querySelectorAll('.v-tabbar__item') ?? [])
+      expect(items).toHaveLength(4)
+      expect(items.some((b) => b.getAttribute('aria-label') === 'Уведомления')).toBe(false)
+    })
   })
 
   describe('isFogRoute', () => {
@@ -265,15 +266,17 @@ describe('UserShell', () => {
       expect(mainEl().style.paddingTop).toBe('34px')
     })
 
-    // [FE-3] follow-up: the dashboard's greeting was removed 2026-06-04 and
-    // nothing has teleported into the island since -- the 104px it kept
-    // reserving was a phantom band above «Ближайшие практики» (operator
-    // 2026-08-24). Now pinned to the headerless contract.
-    it('user-dashboard (greeting long gone) pads by the token too', async () => {
+    // [2026-09-08] The dashboard's floating header is BACK (VHeader «Главная»
+    // + the bell in its action slot), so its headerless meta is dropped per
+    // the [FE-3] contract. With StubChild teleporting nothing, this frame is
+    // the pre-measurement one: the HEADER_FALLBACK (88) + z1 gap (16)
+    // reservation -- same contract as any headered route; the real screen's
+    // VHeader then measures in and MobileLayout re-pads to its exact height.
+    it('user-dashboard (header back, meta dropped) pads by the unmeasured-island contract', async () => {
       await mount('user-dashboard')
       await flush()
 
-      expect(mainEl().style.paddingTop).toBe('34px')
+      expect(mainEl().style.paddingTop).toBe('104px')
     })
 
     // [FE-3] the profile hub's own margin-top compensation is retired; the
@@ -290,50 +293,6 @@ describe('UserShell', () => {
       await flush()
 
       expect(mainEl().style.paddingTop).toBe('104px')
-    })
-  })
-
-  describe('notification bell tab (FE-11/FE-12)', () => {
-    function bellButton(): HTMLButtonElement | undefined {
-      return Array.from(host?.querySelectorAll<HTMLButtonElement>('.v-tabbar__item') ?? []).find(
-        (b) => b.getAttribute('aria-label') === 'Уведомления',
-      )
-    }
-
-    it('rides the dock as a 5th button; no dot when nothing is unread', async () => {
-      await mount('user-dashboard')
-      await flush()
-
-      const items = host?.querySelectorAll('.v-tabbar__item')
-      expect(items?.length).toBe(5)
-      expect(bellButton()).toBeDefined()
-      expect(bellButton()?.querySelector('.v-tabbar__badge')).toBeNull()
-    })
-
-    it('shows the presence dot while the feed reports unread > 0', async () => {
-      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
-        items: [],
-        next_cursor: null,
-        unread: 2,
-      })
-      await mount('user-dashboard')
-      await flush()
-
-      expect(notificationsApi.listNotifications).toHaveBeenCalledTimes(1)
-      expect(bellButton()?.querySelector('.v-tabbar__badge')).not.toBeNull()
-    })
-
-    it('tap navigates to the inbox route', async () => {
-      await mount('user-dashboard')
-      await flush()
-
-      // The shell's contract is the navigation TARGET: spy on the live
-      // router's push (route resolution itself is vue-router's business).
-      const push = vi.spyOn(router, 'push')
-      bellButton()?.click()
-      await flush()
-
-      expect(push).toHaveBeenCalledWith('/user/notifications')
     })
   })
 })

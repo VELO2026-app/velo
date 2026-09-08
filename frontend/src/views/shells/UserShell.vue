@@ -8,7 +8,7 @@
 
 <template>
   <MobileLayout
-    :tabs="tabs"
+    :tabs="USER_TABS"
     :active-tab="activeTab"
     :fill="isFillRoute"
     :hide-tab-bar="isDiaryRoute || isFormRoute || isChatRoute || isInboxRoute || keyboardOpen"
@@ -21,43 +21,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { MobileLayout } from '@/components/layout'
-import type { TabItem } from '@/components/layout/VTabBar.vue'
 import { USER_TABS } from '@/router/tabs'
-import { IconBellPlain } from '@/components/icons'
-import { useNotificationsStore } from '@/stores/notifications'
 import { useKeyboardOpen } from '@/composables/useKeyboardOpen'
 
 const route = useRoute()
 const router = useRouter()
-
-// FE-11/FE-12: the notification bell rides the tab dock as a 5th button
-// (owner experiment) -- it navigates to the inbox ROUTE like any tab, but is
-// never shown active: the inbox is a detail screen that hides the dock
-// (INBOX_ROUTES below). The coral presence dot is store-driven -- refreshed
-// on shell mount; the inbox applies the server-confirmed badge after its
-// load / mark-read / mark-all calls (stores/notifications.ts).
-const notifications = useNotificationsStore()
-
-const tabs = computed<TabItem[]>(() => [
-  ...USER_TABS,
-  {
-    icon: IconBellPlain,
-    label: 'Уведомления',
-    to: '/user/notifications',
-    // Presence only (owner ruling: no number) -- any unread shows the dot.
-    badge: notifications.unread > 0 ? 1 : undefined,
-    // Owner ask: the bell glyph renders smaller than the view tabs (the
-    // 56px touch target stays uniform); the dot overlaps its corner ~7%.
-    compact: true,
-  },
-])
-
-onMounted(() => {
-  void notifications.refreshUnread()
-})
 
 // Hide the floating tab bar while the soft keyboard is open, so it does not ride
 // up over a focused input (e.g. the "запрос мастеру" field on booking-confirmed).

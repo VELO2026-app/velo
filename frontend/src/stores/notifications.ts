@@ -3,9 +3,11 @@
 // =============================================================================
 //
 // One number: the user-zone bell's unread presence. The bell lives in the
-// tab dock (UserShell's 5th button), which persists across screens -- so the
-// state must live above any single view, here. Writers:
-//   - UserShell on mount (refreshUnread -- the comms `unread` rides the bell
+// user dashboard's floating header, while the inbox -- a different
+// screen -- confirms badges after its own actions, so the state must live
+// above any single view, here. Writers:
+//   - UserDashboardView on mount + its foreground-only 60s poll while the
+//     screen is visible (refreshUnread -- the comms `unread` rides the bell
 //     feed response; no separate unread endpoint exists, T-26 recon №703)
 //   - UserInboxView after load / mark-read / mark-all (applyUnread with the
 //     server-confirmed badge from those responses)

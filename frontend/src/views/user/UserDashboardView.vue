@@ -30,18 +30,35 @@
   own in-window button (F9.1), and reflection is temporarily unreachable from
   the UI -- a deliberate, owner-accepted gap, not an oversight.
 
-  [FE-11/FE-12] The notification bell no longer lives here -- it moved into
-  the tab dock as the user zone's 5th button (UserShell's `tabs` computed,
-  owner experiment). The unread presence dot is store-driven
-  (stores/notifications.ts): UserShell refreshes on mount, the inbox applies
-  the server-confirmed badge after its mark-read calls. This screen has no
-  notifications code of its own any more.
+  [FE-11, owner 2026-09-08] The notification bell lives in this screen's
+  FLOATING HEADER: VHeader «Главная» carries it in its action slot (right
+  side). The header teleports into MobileLayout's island and the fog
+  (user-dashboard is a FOG route) dissolves scrolling content under it.
+  The unread presence dot is store-driven (stores/notifications.ts): this
+  screen refreshes on mount and keeps the dot fresh with a foreground-only
+  60s poll (paused while the tab is hidden; still pure pull -- no
+  websocket, per the owner's ruling), the inbox applies the
+  server-confirmed badge after its mark-read calls.
 -->
 
 <template>
   <div class="dashboard">
-    <!-- Greeting removed (static, low-value, took space — operator 2026-06-04).
-         FE-11 bell: moved to the tab dock (UserShell), not rendered here. -->
+    <!-- Floating header (owner, 2026-09-08): «Главная» left, the bell right.
+         VHeader teleports into MobileLayout's island; the fog dissolves
+         scrolling content under it. Presence-only dot (FE-11 ruling: never
+         a number). -->
+    <VHeader title="Главная">
+      <template #action>
+        <button class="dashboard__bell" type="button" aria-label="Уведомления" @click="onBell">
+          <span class="dashboard__bell-icon">
+            <IconBellPlain :size="17" />
+            <span v-if="notifications.unread > 0" class="dashboard__bell-dot" aria-hidden="true" />
+          </span>
+        </button>
+      </template>
+    </VHeader>
+
+    <!-- Greeting removed (static, low-value, took space — operator 2026-06-04). -->
 
     <!-- Check-in alert banner (shared Banner) -->
     <Banner
@@ -160,10 +177,12 @@
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useBookingsStore } from '@/stores/bookings'
+import { useNotificationsStore } from '@/stores/notifications'
 import { getMyStats } from '@/api/bookings'
 import { useToast } from '@/composables/useToast'
+import { VHeader } from '@/components/layout'
 import { VLoader, VButton, VBadge, VStatCard } from '@/components/ui'
-import { IconClock, IconCheck } from '@/components/icons'
+import { IconClock, IconCheck, IconBellPlain } from '@/components/icons'
 import PracticeListCard from '@/components/shared/PracticeListCard.vue'
 import Banner from '@/components/shared/Banner.vue'
 import { formatDateShort, formatTime, formatDuration } from '@/utils/format'
@@ -184,6 +203,9 @@ const router = useRouter()
 
 const bookingsStore = useBookingsStore()
 const toast = useToast()
+// Header bell's unread presence -- store-shared with the inbox screen,
+// which writes server-confirmed badges after its mark-read calls.
+const notifications = useNotificationsStore()
 
 // -- Reactive clock: updated every 60s so alert computeds re-evaluate --
 const now = ref(Date.now())
@@ -384,14 +406,65 @@ function goToCheckin(practiceId: string): void {
   router.push({ name: 'user-checkin', params: { practiceId } })
 }
 
+/** Open the notification center (the bell feed, FE-11). */
+function onBell(): void {
+  router.push({ name: 'user-inbox' })
+}
+
 // [FE-13] goToFeedback/goToReflection removed with their banners (FE-12
 // owns those navigations now); the check-in banner's handler stays.
+
+// =========================================================================
+// Notification bell freshness (foreground poll)
+// =========================================================================
+
+/** Poll cadence for the header bell's unread dot. Coarse on purpose: the
+ *  endpoint returns a full feed page (no light unread-count call exists,
+ *  T-26 recon) and the dot is a courtesy, not a ticker -- revisit only if
+ *  it proves stale in practice. Same judgment-call convention as
+ *  useRoleFreshness's FOREGROUND_POLL_INTERVAL_MS. */
+const BELL_POLL_MS = 60_000
+
+let bellPollHandle: ReturnType<typeof setInterval> | null = null
+
+function stopBellPoll(): void {
+  if (bellPollHandle !== null) {
+    clearInterval(bellPollHandle)
+    bellPollHandle = null
+  }
+}
+
+function startBellPoll(): void {
+  // Never ticks while backgrounded: mounting into a hidden tab leaves the
+  // poll off, and the visibility handler below starts it on return.
+  if (bellPollHandle !== null) return
+  if (document.visibilityState === 'hidden') return
+  bellPollHandle = setInterval(() => void notifications.refreshUnread(), BELL_POLL_MS)
+}
+
+// Foreground-only, the useRoleFreshness pattern: hidden -> interval off
+// (zero background requests; browser timer throttling becomes moot), back
+// to visible -> an immediate refresh -- the moment of return is exactly
+// when staleness is visible -- then the interval resumes.
+function onBellVisibility(): void {
+  if (document.visibilityState === 'hidden') {
+    stopBellPoll()
+  } else {
+    void notifications.refreshUnread()
+    startBellPoll()
+  }
+}
 
 // =========================================================================
 // Lifecycle
 // =========================================================================
 
 onMounted(() => {
+  // Bell presence dot -- silent refresh (a failure keeps the last known
+  // value, stores/notifications.ts).
+  void notifications.refreshUnread()
+  startBellPoll()
+  document.addEventListener('visibilitychange', onBellVisibility)
   bookingsStore.fetchMyBookings()
   // W15 fix (PROMPT №409): fetchUpcoming used to swallow its error entirely
   // (an empty result looked identical to "genuinely nothing upcoming") --
@@ -406,6 +479,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  document.removeEventListener('visibilitychange', onBellVisibility)
+  stopBellPoll()
   if (clockInterval) clearInterval(clockInterval)
 })
 </script>
@@ -430,6 +505,69 @@ onUnmounted(() => {
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
   margin: 0 0 var(--space-4);
+}
+
+/* Filled circle in the FLOATING HEADER's action slot (right of «Главная») --
+   the master dashboard bell's recipe, scaled down for the title line
+   (owner, 2026-09-08): a 36px primary disc with a white glyph (17px, the
+   same 48% proportion as the master's 21/44), opacity press feedback.
+   VHeader's .v-header__right re-enables pointer events around it (the
+   island is click-through). */
+.dashboard__bell {
+  position: relative;
+  width: var(--velo-size-36);
+  height: var(--velo-size-36);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--velo-primary);
+  color: var(--velo-white);
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+
+/* FE-26 touch skirt (VTabBar's .v-tabbar__item::after precedent): the 36px
+   disc sits below the 44px touch standard -- an invisible -4px ring grows
+   the TAPPABLE circle back to 44px without painting anything. */
+.dashboard__bell::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: var(--radius-full);
+}
+
+.dashboard__bell:active {
+  opacity: 0.85;
+}
+
+.dashboard__bell:focus-visible {
+  outline: 2px solid var(--velo-primary);
+  outline-offset: 2px;
+}
+
+/* The dot anchors to the GLYPH box (not the 44px target), so it hugs the
+   icon corner. */
+.dashboard__bell-icon {
+  position: relative;
+  display: inline-flex;
+  line-height: 0;
+}
+
+/* Presence-only unread dot: coral 10px with a 1px white ring, anchored
+   -0.7px into the glyph's top-right corner (a ~7% corner overlap) -- the
+   same recipe the dock badge used before the bell moved here. No number. */
+.dashboard__bell-dot {
+  position: absolute;
+  top: -0.7px;
+  right: -0.7px;
+  width: var(--velo-size-10);
+  height: var(--velo-size-10);
+  border: 1px solid var(--velo-white);
+  border-radius: var(--radius-full);
+  background: var(--velo-pink-300);
 }
 
 /* ===== Nearest practice card =====

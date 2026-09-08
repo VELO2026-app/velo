@@ -67,14 +67,13 @@ const router = createRouter({
         {
           path: 'dashboard',
           name: 'user-dashboard',
-          // [FE-3] Headerless top clearance, follow-up: the dashboard's only
-          // floating header was the GREETING, removed 2026-06-04 -- since then
-          // nothing teleports into the island, but MobileLayout cannot tell
-          // "not yet" from "never" and reserved HEADER_FALLBACK+gap = 104px of
-          // phantom band above «Ближайшие практики» forever. Declaring the
-          // route headerless pads by the token exactly (34px). If this screen
-          // ever gains a floating header again, drop this meta.
-          meta: { headerless: true },
+          // [FE-3] Headerless top clearance RETIRED (owner, 2026-09-08): the
+          // screen has a floating header again -- VHeader «Главная» with the
+          // notification bell in its action slot teleports into the island,
+          // so the route must NOT declare headerless (per the [FE-3] contract
+          // in MobileLayout's mainStyle) or the feed would underlap the
+          // header. The fog (user-dashboard sits in UserShell's FOG_ROUTES)
+          // dissolves scrolling content under the island.
           component: () => import('@/views/user/UserDashboardView.vue'),
         },
         {

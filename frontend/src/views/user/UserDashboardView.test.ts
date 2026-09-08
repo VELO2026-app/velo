@@ -105,6 +105,7 @@ import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import UserDashboardView from '@/views/user/UserDashboardView.vue'
 import * as bookingsApi from '@/api/bookings'
+import * as notificationsApi from '@/api/notifications'
 import { useAuthStore } from '@/stores/auth'
 import { useBookingsStore } from '@/stores/bookings'
 import { ApiResponseError } from '@/api/client'
@@ -120,6 +121,10 @@ import type {
 // is set per-test. No non-function export needs preserving here (ApiResponseError
 // lives in @/api/client, untouched -- imported directly below, real class).
 vi.mock('@/api/bookings')
+
+// The floating-header bell reads the notifications store, which calls
+// listNotifications on this screen's mount -- seam it like every API boundary.
+vi.mock('@/api/notifications')
 
 const push = vi.fn()
 const back = vi.fn()
@@ -394,6 +399,9 @@ beforeEach(() => {
   vi.mocked(bookingsApi.getMyBookings).mockReset().mockResolvedValue(page([]))
   vi.mocked(bookingsApi.getUpcomingBookings).mockReset().mockResolvedValue([])
   vi.mocked(bookingsApi.getMyStats).mockReset().mockResolvedValue(stats())
+  vi.mocked(notificationsApi.listNotifications)
+    .mockReset()
+    .mockResolvedValue({ items: [], next_cursor: null, unread: 0 })
 
   useAuthStore().user = user()
 
@@ -876,6 +884,148 @@ describe('UserDashboardView', () => {
 
       expect(durOf(nearestBlocks()[0]!)).toContain('14:50')
       expect(durOf(nearestBlocks()[0]!)).not.toContain('11:50')
+    })
+  })
+
+  // ===========================================================================
+  describe('notification bell (floating header)', () => {
+    // No MobileLayout hosts this mount, so VHeader renders INLINE (its
+    // teleport is disabled without the island) -- the header, its title and
+    // the action-slot bell are all in the host DOM. Queried INSIDE
+    // .v-header__right -- pins the bell to the header's action side, not
+    // merely somewhere on the screen.
+    function bellButton(): HTMLButtonElement | undefined {
+      return (
+        host?.querySelector<HTMLButtonElement>('.v-header__right .dashboard__bell') ?? undefined
+      )
+    }
+
+    it('rides the header: «Главная» left, bell right; mount refreshes unread once', async () => {
+      mount()
+      await flush()
+
+      const header = host?.querySelector('.v-header')
+      expect(header?.querySelector('.v-header__title')?.textContent).toContain('Главная')
+      expect(bellButton()?.getAttribute('aria-label')).toBe('Уведомления')
+      expect(notificationsApi.listNotifications).toHaveBeenCalledTimes(1)
+    })
+
+    it('no dot while nothing is unread', async () => {
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.dashboard__bell-dot')).toBeNull()
+    })
+
+    it('presence dot when the feed reports unread > 0 -- decorative, no number', async () => {
+      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+        items: [],
+        next_cursor: null,
+        unread: 2,
+      })
+      mount()
+      await flush()
+
+      const dot = host?.querySelector('.dashboard__bell-dot')
+      expect(dot).not.toBeNull()
+      expect(dot?.getAttribute('aria-hidden')).toBe('true')
+      expect(dot?.textContent).toBe('') // presence only -- never a count
+    })
+
+    it('tap opens the inbox route', async () => {
+      mount()
+      await flush()
+
+      bellButton()?.click()
+      await flush()
+
+      expect(push).toHaveBeenCalledWith({ name: 'user-inbox' })
+    })
+  })
+
+  // ===========================================================================
+  describe('bell freshness (foreground poll)', () => {
+    // happy-dom ships visibilityState as an overridable property -- the
+    // established useRoleFreshness.test.ts seam: redefine + dispatch.
+    function setVisibility(state: 'visible' | 'hidden'): void {
+      Object.defineProperty(document, 'visibilityState', {
+        value: state,
+        configurable: true,
+      })
+      document.dispatchEvent(new Event('visibilitychange'))
+    }
+
+    afterEach(() => {
+      // Restore SILENTLY (no dispatch): this hook runs before the file-level
+      // afterEach unmounts the app, so a dispatched event would still find
+      // live listeners.
+      Object.defineProperty(document, 'visibilityState', {
+        value: 'visible',
+        configurable: true,
+      })
+    })
+
+    it('a 60s foreground tick refetches -- the dot appears when unread arrives late', async () => {
+      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+        items: [],
+        next_cursor: null,
+        unread: 0,
+      })
+      mount()
+      await flush()
+      expect(host?.querySelector('.dashboard__bell-dot')).toBeNull()
+
+      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+        items: [],
+        next_cursor: null,
+        unread: 3,
+      })
+      await vi.advanceTimersByTimeAsync(60_000)
+      await flush()
+
+      expect(notificationsApi.listNotifications).toHaveBeenCalledTimes(2)
+      expect(host?.querySelector('.dashboard__bell-dot')).not.toBeNull()
+    })
+
+    it('hidden pauses the poll (zero background requests); visible refetches immediately, then resumes ticking', async () => {
+      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+        items: [],
+        next_cursor: null,
+        unread: 0,
+      })
+      mount()
+      await flush()
+      expect(notificationsApi.listNotifications).toHaveBeenCalledTimes(1)
+
+      setVisibility('hidden')
+      await vi.advanceTimersByTimeAsync(180_000)
+      // Well past several would-be intervals -- the count must stay flat.
+      expect(notificationsApi.listNotifications).toHaveBeenCalledTimes(1)
+
+      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+        items: [],
+        next_cursor: null,
+        unread: 1,
+      })
+      setVisibility('visible')
+      await flush()
+      expect(notificationsApi.listNotifications).toHaveBeenCalledTimes(2) // the resume-check itself
+      expect(host?.querySelector('.dashboard__bell-dot')).not.toBeNull()
+
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(notificationsApi.listNotifications).toHaveBeenCalledTimes(3) // the interval resumed
+    })
+
+    it('unmount tears the poll down -- no leaked ticks', async () => {
+      mount()
+      await flush()
+      expect(notificationsApi.listNotifications).toHaveBeenCalledTimes(1)
+
+      app?.unmount()
+      await vi.advanceTimersByTimeAsync(180_000)
+      await flush()
+
+      expect(notificationsApi.listNotifications).toHaveBeenCalledTimes(1)
     })
   })
 })

@@ -1,17 +1,13 @@
 // =============================================================================
-// VELO Frontend -- VTabBar Component Tests (FE-11/FE-12)
+// VELO Frontend -- VTabBar Component Tests
 // =============================================================================
 //
-// The dock gained a presence-dot slot: a tab item with a truthy `badge`
-// renders the coral dot (the user zone's bell tab). This file guards exactly
-// that change and the bar's existing public contract:
+// The bar's public contract:
 //   1. One button per item, labelled for screen readers, active state by `active`.
-//   2. A truthy badge renders the decorative dot (aria-hidden, NO number --
-//      presence-only by owner ruling); no badge / 0 renders nothing.
-//   3. A tap emits `navigate` with the item's path.
+//   2. A tap emits `navigate` with the item's path.
 //
-// Layout claims (pill geometry, dot placement over the 56px target) are
-// happy-dom-unprovable -- browser verification, per house rules.
+// Layout claims (pill geometry) are happy-dom-unprovable -- browser
+// verification, per house rules.
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -64,31 +60,6 @@ describe('VTabBar', () => {
     expect(buttons()[0]?.getAttribute('aria-label')).toBe('Дашборд')
     expect(buttons()[0]?.getAttribute('aria-current')).toBe('page')
     expect(buttons()[1]?.getAttribute('aria-current')).toBeNull()
-  })
-
-  it('a truthy badge renders the presence dot -- decorative, no number', async () => {
-    mount([...ITEMS, { icon: IconHome, label: 'Уведомления', to: '/user/notifications', badge: 1 }])
-    await flush()
-
-    const bell = buttons()[2]
-    expect(bell).toBeDefined()
-    const dot = bell?.querySelector<HTMLElement>('.v-tabbar__badge')
-    expect(dot).not.toBeNull()
-    expect(dot?.getAttribute('aria-hidden')).toBe('true')
-    expect(dot?.textContent).toBe('') // presence only -- never a count
-  })
-
-  it('no badge (or 0) renders no dot', async () => {
-    mount([...ITEMS, { icon: IconHome, label: 'Уведомления', to: '/user/notifications' }])
-    await flush()
-
-    expect(buttons()[2]?.querySelector('.v-tabbar__badge')).toBeNull()
-
-    app?.unmount()
-    mount([...ITEMS, { icon: IconHome, label: 'Уведомления', to: '/user/notifications', badge: 0 }])
-    await flush()
-
-    expect(buttons()[2]?.querySelector('.v-tabbar__badge')).toBeNull()
   })
 
   it('a tap emits navigate with the item path', async () => {
