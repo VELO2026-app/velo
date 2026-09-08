@@ -234,6 +234,8 @@ export function getTransactions(limit = 20, offset = 0): Promise<PaginatedTransa
 // =============================================================================
 // E7: Period-scoped dashboard stats
 //   GET /api/v1/masters/me/stats?period=week|month
+//   (a `quarter` value is a designed follow-up, blocked on the backend --
+//   the endpoint's Literal rejects it today)
 // =============================================================================
 
 /**

@@ -13,8 +13,9 @@
 //     server-confirmed badge from those responses)
 // A failed refresh keeps the previous value silently: the dot is a courtesy,
 // never a reason to break a screen (same disposition as the master dashboard
-// bell). The MASTER inbox/bell deliberately does not use this store -- its
-// own fetch lives in MasterDashboardView (T-26 boundary).
+// bell). The MASTER inbox/bell does not use this store either: the master
+// dashboard fetches its own badge on mount and remounts (refetches) on
+// return from the master inbox, so it needs no shared state.
 
 import { defineStore } from 'pinia'
 import { ref } from 'vue'

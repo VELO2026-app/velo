@@ -8,8 +8,10 @@
   emit('open')) for the same reason -- a single tappable row in a list,
   degrading rather than breaking on missing data.
 
-  `icon` is optional: 'message' (IconMessages) / 'event' (IconCalendar).
-  Absent = dot only, no icon block -- the master inbox's approved T-26 look.
+  `icon` is optional: 'message' (IconMessages) / 'event' (IconCalendar) /
+  'finance' (IconFinance -- the master inbox's «Финансы» bucket; same glyph
+  as the master profile's «Вывод средств»). Absent = dot only, no icon
+  block.
 
   formatRelative is @/utils/adminHelpers -- the name is legacy (ModerationFilterModal.vue
   already reuses it outside admin), not an admin-only utility.
@@ -25,6 +27,7 @@
     <span class="notif-row__side">
       <span v-if="icon" class="notif-row__ibox">
         <IconMessages v-if="icon === 'message'" :size="20" />
+        <IconFinance v-else-if="icon === 'finance'" :size="20" />
         <IconCalendar v-else :size="20" />
       </span>
       <span v-if="unread" class="notif-row__dot" />
@@ -40,7 +43,7 @@
 </template>
 
 <script setup lang="ts">
-import { IconCalendar, IconMessages } from '@/components/icons'
+import { IconCalendar, IconFinance, IconMessages } from '@/components/icons'
 import { formatRelative } from '@/utils/adminHelpers'
 
 defineProps<{
@@ -48,8 +51,8 @@ defineProps<{
   body: string
   sentAt: string
   unread: boolean
-  /** Optional type marker: 'message' | 'event'. Absent = no icon. */
-  icon?: 'message' | 'event'
+  /** Optional type marker: 'message' | 'event' | 'finance'. Absent = no icon. */
+  icon?: 'message' | 'event' | 'finance'
 }>()
 
 const emit = defineEmits<{ open: [] }>()

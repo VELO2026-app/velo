@@ -5,11 +5,17 @@
   month / scroll). Rendered inside MasterShell (fog + tab bar from the shell).
 
   Structure (DS-first — every value is a --velo-* token / DS component):
-    - Greeting + notification bell: badge = the real unread count (T-26,
-      PROMPT №704), fetched alongside the stats row; tap -> 'master-inbox'
-      (MasterInboxView.vue). No feed on the dashboard itself.
-    - Stats: label + period toggle (Неделя / Месяц) + 3 VStatCard with optional
-      delta trend. Period toggle = the user-dashboard pattern (NOT VSegment).
+    - Top row (owner ask 2026-09-08): period slider (Неделя/Месяц) left +
+      notification bell right, ONE line -- the «Статистика» heading is gone.
+      The bell is the USER dashboard's recipe reused verbatim -- 36px disc +
+      presence-only dot (FE-11 ruling: never a number; supersedes the T-26
+      count badge). Unread fetched alongside the stats row; tap ->
+      'master-inbox' (MasterInboxView.vue). No feed on the dashboard itself.
+    - Stats: period toggle (Неделя / Месяц) in the top row + 2 VStatCard
+      with optional delta trend (E7: the toggle refetches
+      GET /masters/me/stats?period=...). A third «Квартал» segment is
+      designed but blocked on a backend task (the endpoint rejects
+      period=quarter today).
     - "Мои группы" row (VMenuRow) -> master-groups (P2, PROMPT №591; was
       "Мои ученики" -> master-students).
     - Zero state only: "Создать первую практику" (VButton) -> create.
@@ -17,8 +23,8 @@
       "Изменить" -> edit and "Check-ins" -> attendance.
 
   STUBS (no backend yet -> roadmap for Zod; non-working taps show a toast):
-    - Stats: only the practices total is real; participants/income + all deltas
-      and the Неделя/Месяц period scoping have no API -> "—", toggle visual-only.
+    (The stats grid left this list with E7 -- GET /masters/me/stats is real,
+    week|month, and the toggle refetches it.)
     - AI summary "Подробнее" (no master-AI), practice checkin-count +
       recurrence meta (no fields) -> rendered only when the data exists
       (v-if), absent for now. The bell is NOT in this list any more (T-26).
@@ -41,31 +47,37 @@
 
     <template v-else>
       <!-- ================================================================
-           NOTIFICATION BELL (greeting removed — operator tester-fix
-           2026-06-17, mirroring the user dashboard). Bell stays top-right.
+           TOP ROW (owner ask 2026-09-08): the period slider (Неделя/Месяц)
+           on the left, the notification bell on the right -- ONE line. The
+           «Статистика» heading is gone with it. The bell is the USER
+           dashboard's recipe, reused verbatim: 36px primary disc, 17px glyph
+           in a wrapper box, and the PRESENCE-ONLY coral dot -- the FE-11
+           "never a number" ruling now governs the master bell too,
+           replacing the T-26 count badge.
            ================================================================ -->
-      <div class="master-dashboard__bell-row">
-        <button class="master-dashboard__bell" aria-label="Уведомления" @click="onBell">
-          <IconBellPlain :size="21" />
-          <span v-if="unreadCount > 0" class="master-dashboard__bell-badge">{{ unreadCount }}</span>
-        </button>
-      </div>
-
-      <!-- ================================================================
-           STATS (period toggle + 3 cards)
-           ================================================================ -->
-      <div class="master-dashboard__section-header">
-        <span class="master-dashboard__stats-title">
-          {{ isNewMaster ? 'Моя статистика' : 'Статистика' }}
-        </span>
+      <div class="master-dashboard__top-row">
         <VSegmentTrack
           v-model="period"
           :options="PERIOD_OPTIONS"
           variant="toggle"
           aria-label="Период статистики"
         />
+        <button
+          class="master-dashboard__bell"
+          type="button"
+          aria-label="Уведомления"
+          @click="onBell"
+        >
+          <span class="master-dashboard__bell-icon">
+            <IconBellPlain :size="17" />
+            <span v-if="unreadCount > 0" class="master-dashboard__bell-dot" aria-hidden="true" />
+          </span>
+        </button>
       </div>
 
+      <!-- ================================================================
+           STATS (2 cards; the period toggle lives in the top row above)
+           ================================================================ -->
       <!-- Income card removed from the dashboard (operator tester-fix 2026-06-17). -->
       <div class="master-dashboard__stats-grid">
         <VStatCard
@@ -300,7 +312,10 @@ const authStore = useAuthStore()
 const { contentSafeTop } = useSafeArea()
 const toast = useToast()
 
-// -- Period toggle. Drives the period-scoped stats row (E7). --
+// -- Period toggle. Drives the period-scoped stats row (E7). `quarter` is a
+//    designed third segment deliberately NOT offered yet: the backend's
+//    Literal["week","month"] would 422 it, and a failed refetch silently
+//    keeps the WEEK figures under a «Квартал» label -- a lying control. --
 const period = ref<'week' | 'month'>('week')
 const PERIOD_OPTIONS: ReadonlyArray<{ value: 'week' | 'month'; label: string }> = [
   { value: 'week', label: 'Неделя' },
@@ -623,69 +638,75 @@ onUnmounted(() => {
   padding: var(--space-10) 0;
 }
 
-/* -- Bell row (greeting removed — bell stays top-right) -- */
-.master-dashboard__bell-row {
+/* -- Top row: period slider left, bell right (owner ask 2026-09-08; the
+      «Статистика» heading is gone). min-height keeps the operator-tuned 44px
+      top band the lone bell row used to reserve. -- */
+.master-dashboard__top-row {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
   min-height: var(--velo-size-44);
 }
 
+/* The USER dashboard's bell recipe, reused verbatim (owner ask 2026-09-08):
+   a 36px primary disc with a white 17px glyph, presence dot instead of the
+   old T-26 number badge. */
 .master-dashboard__bell {
   position: relative;
-  width: var(--velo-size-44);
-  height: var(--velo-size-44);
+  width: var(--velo-size-36);
+  height: var(--velo-size-36);
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   border-radius: var(--radius-full);
   background: var(--velo-primary);
   color: var(--velo-white);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   cursor: pointer;
   transition: opacity var(--transition-fast);
+}
+
+/* FE-26 touch skirt (same as the user bell): the 36px disc sits below the
+   44px touch standard -- an invisible -4px ring grows the TAPPABLE circle
+   back to 44px without painting anything. */
+.master-dashboard__bell::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: var(--radius-full);
 }
 
 .master-dashboard__bell:active {
   opacity: 0.85;
 }
 
-.master-dashboard__bell-badge {
+.master-dashboard__bell:focus-visible {
+  outline: 2px solid var(--velo-primary);
+  outline-offset: 2px;
+}
+
+/* The dot anchors to the GLYPH box (not the 44px target), so it hugs the
+   icon corner. */
+.master-dashboard__bell-icon {
+  position: relative;
+  display: inline-flex;
+  line-height: 0;
+}
+
+/* Presence-only unread dot (the user bell's recipe, FE-11 ruling): coral
+   10px with a 1px white ring, anchored -0.7px into the glyph's top-right
+   corner. No number, ever. */
+.master-dashboard__bell-dot {
   position: absolute;
-  /* top/right stay LITERAL, not tokenized (PROMPT №704 judgement, argued not
-     assumed): this is a positional nudge tying the badge's corner to the
-     EXACT geometry of THIS 44px circle + 21px icon, not a reusable design
-     magnitude -- there is no other corner-overlay badge anywhere in this
-     codebase (checked: `top: -`/`right: -` on a badge occurs nowhere else),
-     so there is no role to name it after and no second site that would ever
-     read var(--velo-something-minus-1) and know what it means. */
-  top: -1px;
-  right: -1px;
-  min-width: var(--velo-size-18);
-  height: var(--velo-size-18);
-  padding: 0 var(--velo-inset-5);
-  border-radius: var(--radius-xl);
+  top: -0.7px;
+  right: -0.7px;
+  width: var(--velo-size-10);
+  height: var(--velo-size-10);
+  border: 1px solid var(--velo-white);
+  border-radius: var(--radius-full);
   background: var(--velo-pink-300);
-  color: var(--velo-white);
-  font-size: var(--text-10);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* -- Stats header + period toggle (user-dashboard pattern) -- */
-.master-dashboard__section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.master-dashboard__stats-title {
-  font-family: var(--font-body);
-  font-size: var(--text-base);
-  color: var(--velo-text-primary);
-  letter-spacing: 0.02em;
 }
 
 /* -- Stats grid (2 cards — income removed) -- */

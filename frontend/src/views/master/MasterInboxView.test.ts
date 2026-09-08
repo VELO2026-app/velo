@@ -16,8 +16,16 @@
 //      to mark, nothing to revert.
 //   4. "ПРОЧИТАТЬ ВСЁ" only renders when unread > 0, marks every row read,
 //      and reverts EVERY row (not just the failing one) on failure.
-//   5. THE SCOPE BOUNDARY the header documents: opening a row never
-//      navigates -- action_data is read by nothing here, deliberately.
+//   5. DEEP LINKS (master parity 2026-09-08 -- the T-26 tap=read boundary
+//      is lifted): a tap navigates by action_data.action, same vocabulary
+//      as the user map but into MASTER-zone routes -- open_practice ->
+//      master-practice-detail, open_wallet -> master-finance, open_thread
+//      -> that dialog (master-chat), msg.* (no velo action) -> the master
+//      messages list. Unmapped action / malformed id -> mark-read only,
+//      never a broken route. A READ row still navigates.
+//   6. TYPE SLIDER (Сообщения / Практики / Финансы / Другое): prefix
+//      buckets over the emit vocabulary, «Сообщения» first/default, the
+//      per-filter empty note, and no slider over an empty feed.
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -46,10 +54,14 @@ vi.mock('@/composables/useToast', () => ({
 function item(overrides: Partial<NotificationItem> = {}): NotificationItem {
   return {
     id: 'n1',
-    type: 'booking.confirmed',
-    title: 'Новая запись',
-    body: 'Аня записалась на «Утренняя практика»',
-    action_data: { action: 'open_booking', params: { booking_id: 'b1' } },
+    // The default tab is «Сообщения», so the DEFAULT fixture is a msg row --
+    // the base states (loading/error/empty/mark-read/mark-all) all see
+    // their rows without touching the slider. Non-msg cases switch the tab
+    // or override the type.
+    type: 'msg.support_message',
+    title: 'Сообщение от Ани',
+    body: 'Доброе утро! Можно вопрос по практике?',
+    action_data: null,
     priority: 5,
     sent_at: '2026-08-14T10:00:00Z',
     read_at: null,
@@ -94,6 +106,12 @@ function isUnread(el: HTMLElement): boolean {
 function readAllButton(): HTMLElement | undefined {
   return Array.from(host?.querySelectorAll('button') ?? []).find(
     (b) => b.textContent?.trim() === 'Прочитать всё',
+  )
+}
+
+function segment(label: string): HTMLButtonElement | undefined {
+  return Array.from(host?.querySelectorAll<HTMLButtonElement>('.v-segment-track__btn') ?? []).find(
+    (b) => b.textContent?.trim() === label,
   )
 }
 
@@ -212,9 +230,40 @@ describe('MasterInboxView', () => {
     expect(notificationsApi.markNotificationRead).not.toHaveBeenCalled()
   })
 
-  it('a row never navigates on tap -- action_data is read by nothing here', async () => {
+  it('a tap navigates by action_data AND marks read: open_practice -> master-practice-detail', async () => {
     vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
-      items: [item({ id: 'a', read_at: null })],
+      items: [
+        item({
+          id: 'a',
+          type: 'booking.cancelled_by_user',
+          action_data: { action: 'open_practice', params: { practice_id: 'pr_1' } },
+        }),
+      ],
+      next_cursor: null,
+      unread: 1,
+    })
+    vi.mocked(notificationsApi.markNotificationRead).mockResolvedValue({ unread: 0 })
+    mount()
+    await flush()
+
+    segment('Практики')?.click()
+    await flush()
+
+    row(0).click()
+    await flush()
+
+    expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith('a')
+    expect(push).toHaveBeenCalledWith({ name: 'master-practice-detail', params: { id: 'pr_1' } })
+  })
+
+  it('a msg.* row with open_thread goes straight INTO that dialog', async () => {
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+      items: [
+        item({
+          id: 'g',
+          action_data: { action: 'open_thread', params: { thread_id: 'th_9' } },
+        }),
+      ],
       next_cursor: null,
       unread: 1,
     })
@@ -225,7 +274,109 @@ describe('MasterInboxView', () => {
     row(0).click()
     await flush()
 
+    expect(push).toHaveBeenCalledWith({ name: 'master-chat', params: { id: 'th_9' } })
+  })
+
+  it('a msg.* row (no velo action) goes to the master messages list', async () => {
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+      items: [item({ id: 'b', action_data: null })],
+      next_cursor: null,
+      unread: 1,
+    })
+    vi.mocked(notificationsApi.markNotificationRead).mockResolvedValue({ unread: 0 })
+    mount()
+    await flush()
+
+    row(0).click()
+    await flush()
+
+    expect(push).toHaveBeenCalledWith({ name: 'master-messages' })
+  })
+
+  it('open_wallet -> the master finance screen', async () => {
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+      items: [
+        item({
+          id: 'c',
+          type: 'wallet.withdrawal_approved',
+          action_data: { action: 'open_wallet', params: {} },
+        }),
+      ],
+      next_cursor: null,
+      unread: 1,
+    })
+    vi.mocked(notificationsApi.markNotificationRead).mockResolvedValue({ unread: 0 })
+    mount()
+    await flush()
+
+    segment('Финансы')?.click()
+    await flush()
+
+    row(0).click()
+    await flush()
+
+    expect(push).toHaveBeenCalledWith({ name: 'master-finance' })
+  })
+
+  it('unmapped action and not msg.* -> mark-read only, NO navigation', async () => {
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+      items: [item({ id: 'd', type: 'practice.cancelled_by_curator', action_data: null })],
+      next_cursor: null,
+      unread: 1,
+    })
+    vi.mocked(notificationsApi.markNotificationRead).mockResolvedValue({ unread: 0 })
+    mount()
+    await flush()
+
+    segment('Практики')?.click()
+    await flush()
+
+    row(0).click()
+    await flush()
+
+    expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith('d')
     expect(push).not.toHaveBeenCalled()
+  })
+
+  it('a malformed practice_id never becomes an undefined route param', async () => {
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+      items: [
+        item({
+          id: 'e',
+          type: 'booking.cancelled_by_user',
+          action_data: { action: 'open_practice', params: { practice_id: 42 } },
+        }),
+      ],
+      next_cursor: null,
+      unread: 1,
+    })
+    vi.mocked(notificationsApi.markNotificationRead).mockResolvedValue({ unread: 0 })
+    mount()
+    await flush()
+
+    segment('Практики')?.click()
+    await flush()
+
+    row(0).click()
+    await flush()
+
+    expect(push).not.toHaveBeenCalled() // mark-read only -- honest fallback
+  })
+
+  it('tapping an ALREADY-READ row still navigates, without a redundant read call', async () => {
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+      items: [item({ id: 'f', read_at: '2026-08-14T09:00:00Z' })],
+      next_cursor: null,
+      unread: 0,
+    })
+    mount()
+    await flush()
+
+    row(0).click()
+    await flush()
+
+    expect(notificationsApi.markNotificationRead).not.toHaveBeenCalled()
+    expect(push).toHaveBeenCalledWith({ name: 'master-messages' })
   })
 
   it('«Прочитать всё» is absent when unread is 0', async () => {
@@ -290,5 +441,115 @@ describe('MasterInboxView', () => {
     await flush()
 
     expect(back).toHaveBeenCalled()
+  })
+
+  // ===========================================================================
+  describe('type slider (Сообщения / Практики / Финансы / Другое)', () => {
+    // One row per bucket + the "other" case: the buckets are PREFIX rules
+    // over velo's emit vocabulary (msg.* / booking.* / practice.* /
+    // waitlist.* / wallet.*), and «Другое» owns every kind with no bucket
+    // of its own (announcements and future kinds).
+    function mixed(): NotificationItem[] {
+      return [
+        item({ id: 'a', type: 'msg.support_message' }),
+        item({ id: 'b', type: 'booking.cancelled_by_user' }),
+        item({ id: 'c', type: 'practice.cancelled_by_curator' }),
+        item({ id: 'd', type: 'waitlist.expired' }),
+        item({ id: 'e', type: 'wallet.withdrawal_approved' }),
+        item({ id: 'f', type: 'system.announcement' }),
+      ]
+    }
+
+    it('«Сообщения» is the default and shows only msg.* rows, slider rendered', async () => {
+      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+        items: mixed(),
+        next_cursor: null,
+        unread: 6,
+      })
+      mount()
+      await flush()
+
+      expect(rows()).toHaveLength(1)
+      expect(rows()[0]?.textContent).toContain('Сообщение от Ани')
+      expect(segment('Сообщения')).toBeDefined()
+      expect(segment('Практики')).toBeDefined()
+      expect(segment('Финансы')).toBeDefined()
+      expect(segment('Другое')).toBeDefined()
+    })
+
+    it('«Практики» keeps practice-life rows in, msg and wallet out', async () => {
+      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+        items: mixed(),
+        next_cursor: null,
+        unread: 6,
+      })
+      mount()
+      await flush()
+
+      segment('Практики')?.click()
+      await flush()
+
+      expect(rows()).toHaveLength(3) // booking.* + practice.* + waitlist.*
+    })
+
+    it('«Финансы» shows the wallet rows only', async () => {
+      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+        items: mixed(),
+        next_cursor: null,
+        unread: 6,
+      })
+      mount()
+      await flush()
+
+      segment('Финансы')?.click()
+      await flush()
+
+      expect(rows()).toHaveLength(1)
+    })
+
+    it('«Другое» shows the complement: the announcement in, every bucket out', async () => {
+      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+        items: mixed(),
+        next_cursor: null,
+        unread: 6,
+      })
+      mount()
+      await flush()
+
+      segment('Другое')?.click()
+      await flush()
+
+      expect(rows()).toHaveLength(1)
+    })
+
+    it('a filter with no matches shows the per-filter note, NOT the global empty state', async () => {
+      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+        items: [item({ id: 'a', type: 'wallet.withdrawal_approved' })],
+        next_cursor: null,
+        unread: 1,
+      })
+      mount()
+      await flush()
+
+      // default tab «Сообщения» has nothing to show
+      expect(rows()).toHaveLength(0)
+      expect(host?.textContent).toContain('В этой категории пока нет уведомлений')
+      expect(host?.textContent).not.toContain('Здесь появятся уведомления')
+    })
+
+    it('the slider is absent while the whole feed is empty', async () => {
+      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+        items: [],
+        next_cursor: null,
+        unread: 0,
+      })
+      mount()
+      await flush()
+
+      expect(segment('Сообщения')).toBeUndefined()
+      expect(host?.textContent).toContain(
+        'Здесь появятся уведомления о записях, сообщениях и операциях',
+      )
+    })
   })
 })

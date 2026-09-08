@@ -15,7 +15,9 @@
   -> THAT message dialog (msg.* emitted by comms' messaging engine; without
   a thread reference it falls back to the messages list). An unmapped action
   or a missing/malformed id falls back to mark-read-only -- honest, never a
-  broken route. The MASTER inbox keeps its tap=read boundary (T-26).
+  broken route. The MASTER inbox routes by the same vocabulary into
+  master-zone routes (2026-09-08; the old T-26 tap=read boundary is
+  lifted -- see MasterInboxView.vue).
   PAGINATION: deliberately absent -- one page (comms default limit 20);
   "load more" is future scope.
 

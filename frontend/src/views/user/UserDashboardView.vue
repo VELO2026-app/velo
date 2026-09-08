@@ -508,9 +508,10 @@ onUnmounted(() => {
 }
 
 /* Filled circle in the FLOATING HEADER's action slot (right of «Главная») --
-   the master dashboard bell's recipe, scaled down for the title line
-   (owner, 2026-09-08): a 36px primary disc with a white glyph (17px, the
-   same 48% proportion as the master's 21/44), opacity press feedback.
+   the origin of the 36px recipe (owner, 2026-09-08): a 36px primary disc
+   with a white 17px glyph, opacity press feedback. The MASTER dashboard's
+   bell reuses this recipe verbatim (owner ask 2026-09-08) -- the presence
+   dot, never a number, in both zones.
    VHeader's .v-header__right re-enables pointer events around it (the
    island is click-through). */
 .dashboard__bell {

@@ -175,8 +175,9 @@ const EMPTY_NEW = `Данных пока нет ${DASH} создайте пер�
 // carries an explicit timezone (see the banner).
 // -----------------------------------------------------------------------------
 
-// T-26 (PROMPT №704): the bell badge's only input. Items are irrelevant to
-// this screen (it only reads `.unread`) -- MasterInboxView.test.ts covers items.
+// T-26 (PROMPT №704) -> FE-11 recipe (owner ask 2026-09-08): the bell dot's
+// only input. Items are irrelevant to this screen (it only reads `.unread`)
+// -- MasterInboxView.test.ts covers items.
 function notificationPage(overrides: Partial<NotificationList> = {}): NotificationList {
   return { items: [], next_cursor: null, unread: 0, ...overrides }
 }
@@ -837,15 +838,17 @@ describe('MasterDashboardView', () => {
 
   // ===========================================================================
   describe('isNewMaster -- the zero state is about PRACTICES EVER, not upcoming', () => {
-    it('a master with only past practices is NOT new: real headings, real empty card', async () => {
+    it('a master with only past practices is NOT new: the plain empty card, not the new-master one', async () => {
       // practicesTotal is 3 even though nothing is upcoming (.vue:247-249).
+      // The «Статистика»/«Моя статистика» heading is GONE from the screen
+      // (owner ask 2026-09-08) -- asserted absent for everyone below.
       vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
         page([P_COMPLETED, P_JUST_ENDED, P_CANCELLED]),
       )
       mount()
       await flush()
 
-      expect(text()).toContain('Статистика')
+      expect(text()).not.toContain('Статистика')
       expect(text()).not.toContain('Моя статистика')
       // ...and the empty card says «нет предстоящих», not «нет данных».
       expect(norm(nearestEmptyCard()?.textContent).trim()).toBe('Нет предстоящих практик')
@@ -862,12 +865,12 @@ describe('MasterDashboardView', () => {
       expect(text()).not.toContain('Создать первую практику')
     })
 
-    it('a brand-new master gets «Моя статистика» and the new-master empty card', async () => {
+    it('a brand-new master gets the new-master empty card (the heading is gone for everyone)', async () => {
       mockBucketedPractices([])
       mount()
       await flush()
 
-      expect(text()).toContain('Моя статистика')
+      expect(text()).not.toContain('Моя статистика')
       expect(norm(nearestEmptyCard()?.textContent).trim()).toBe(EMPTY_NEW)
     })
 
@@ -1051,33 +1054,35 @@ describe('MasterDashboardView', () => {
   // The 'stub actions (SC-09)' describe used to live here with exactly one
   // test (the bell). T-26 (PROMPT №704) retired the stub; the block had no
   // other occupant, so it is gone rather than left holding nothing.
-  describe('the bell (T-26, PROMPT №704)', () => {
-    it('the badge shows the real unread count from the list response', async () => {
+  describe('the bell (presence dot, the user dashboard recipe -- owner ask 2026-09-08)', () => {
+    it('unread > 0 shows the DOT and never a number (FE-11 ruling, both zones)', async () => {
       vi.mocked(notificationsApi.listNotifications).mockResolvedValue(
         notificationPage({ unread: 3 }),
       )
       mount()
       await flush()
 
-      expect(host?.querySelector('.master-dashboard__bell-badge')?.textContent?.trim()).toBe('3')
+      expect(host?.querySelector('.master-dashboard__bell-dot')).not.toBeNull()
+      // never a number: the button's own text stays empty (the dot is aria-hidden)
+      expect(host?.querySelector('.master-dashboard__bell')?.textContent?.trim()).toBe('')
     })
 
-    it('unread=0 renders no badge at all (v-if, not a hidden zero)', async () => {
+    it('unread=0 renders no dot at all (v-if, not a hidden zero)', async () => {
       vi.mocked(notificationsApi.listNotifications).mockResolvedValue(
         notificationPage({ unread: 0 }),
       )
       mount()
       await flush()
 
-      expect(host?.querySelector('.master-dashboard__bell-badge')).toBeNull()
+      expect(host?.querySelector('.master-dashboard__bell-dot')).toBeNull()
     })
 
-    it('a failed fetch leaves the badge at 0 -- a courtesy, not a break', async () => {
+    it('a failed fetch leaves the dot off -- a courtesy, not a break', async () => {
       vi.mocked(notificationsApi.listNotifications).mockRejectedValue(new Error('down'))
       mount()
       await flush()
 
-      expect(host?.querySelector('.master-dashboard__bell-badge')).toBeNull()
+      expect(host?.querySelector('.master-dashboard__bell-dot')).toBeNull()
       expect(host?.querySelector('.master-dashboard__bell')).not.toBeNull() // the dashboard itself lives
     })
 
