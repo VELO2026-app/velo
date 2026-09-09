@@ -659,26 +659,34 @@ async def test_removal_from_the_school_kills_the_offer(
 ) -> None:
     """Unlike the two temporary refusals, this one is not coming back.
 
-    The offer was going to change a membership row that no longer exists, so
-    accepting deletes it rather than keeping it warm. Contrast asserted
-    against the dark-school test above: same 404, different fate for the row.
+    THE FIRST VERSION OF THIS TEST DELETED THE MEMBERSHIP ROW BY HAND and
+    expected the accept call to notice and clean up. It never got that far:
+    consent goes through _relation_or_404, which answers 404 to anyone with
+    no relation to the school, so the branch it was testing was unreachable.
+    Rather than keep an unbuildable case, the offer is now deleted where the
+    removal happens -- and this goes through the real endpoint, which is
+    also the only way the deletion can be observed at all.
+
+    Contrast with the dark-school and lapsed-verification tests above: same
+    404 for the appointee, opposite fate for the row. Those two conditions
+    are temporary and keep the offer; this one is permanent and takes it.
     """
     curator = await _master(client, db_session, _TID_CURATOR)
     cand = await _master(client, db_session, _TID_CANDIDATE)
     group = await _school(client, curator)
     await _seed_member(db_session, group, cand)
     await _offer(client, curator, group, cand)
+    assert await _offers(group) == [UUID(cand["user"]["id"])]
 
-    await db_session.execute(
-        CuratorGroupMember.__table__.delete().where(
-            CuratorGroupMember.group_id == UUID(group),
-            CuratorGroupMember.user_id == UUID(cand["user"]["id"]),
-        )
+    removed = await client.delete(
+        f"/api/v1/masters/me/curator-groups/{group}/members/"
+        f"{cand['user']['id']}",
+        headers=auth_headers(curator["session_token"]),
     )
-    await db_session.commit()
+    assert removed.status_code == 204, removed.text
 
-    assert (await _accept(client, cand, group)).status_code == 404
     assert await _offers(group) == []
+    assert (await _accept(client, cand, group)).status_code == 404
 
 
 # ===========================================================================
@@ -851,4 +859,29 @@ async def test_a_plain_user_who_is_not_a_master_cannot_appoint_at_all(
         headers=auth_headers(plain["session_token"]),
     )
     assert resp.status_code == 403
+    assert await _offers(group) == []
+
+
+@pytest.mark.asyncio
+async def test_walking_out_takes_the_offer_too(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """State 18, the pair of the removal above.
+
+    Two ways out of a school, two places the offer has to die. Testing only
+    one would leave the other free to keep an orphan that springs back to
+    life if the person ever re-joins.
+    """
+    curator = await _master(client, db_session, _TID_CURATOR)
+    cand = await _master(client, db_session, _TID_CANDIDATE)
+    group = await _school(client, curator)
+    await _seed_member(db_session, group, cand)
+    await _offer(client, curator, group, cand)
+
+    left = await client.delete(
+        f"/api/v1/curator-groups/{group}/membership",
+        headers=auth_headers(cand["session_token"]),
+    )
+    assert left.status_code == 204, left.text
+
     assert await _offers(group) == []

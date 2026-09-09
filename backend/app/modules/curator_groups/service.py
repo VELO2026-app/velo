@@ -933,6 +933,18 @@ async def remove_curator_group_member(
     }
     if transfer_cancelled:
         data["transfer_cancelled"] = True
+    # GT-27: a pending appointment dies with the membership it was going to
+    # change. Left behind it would be an orphan the appointee cannot act on
+    # (consent goes through _relation_or_404 and they have no relation any
+    # more) and which would spring back to life if they ever re-joined --
+    # an appointment from before they were removed, granted by a decision
+    # nobody made twice.
+    await session.execute(
+        delete(CuratorGroupMasterOffer).where(
+            CuratorGroupMasterOffer.group_id == group.id,
+            CuratorGroupMasterOffer.to_user_id == user_id,
+        )
+    )
     _record_group_event(
         group.id, actor, CuratorGroupEventKind.MEMBER_REMOVED, session,
         data=data,
@@ -1452,6 +1464,15 @@ async def leave_curator_group(
     if left is None:
         return
 
+    # GT-27: same as removal -- walking out takes your pending appointment
+    # with you. See remove_curator_group_member for why it is deleted at the
+    # source rather than found dangling at consent.
+    await session.execute(
+        delete(CuratorGroupMasterOffer).where(
+            CuratorGroupMasterOffer.group_id == group.id,
+            CuratorGroupMasterOffer.to_user_id == user_id,
+        )
+    )
     data: dict[str, Any] = {EVENT_DATA_KIND: left.kind}
     if transfer_cancelled:
         data["transfer_cancelled"] = True
@@ -2693,15 +2714,14 @@ async def accept_curator_group_master_offer(
             code="master_required",
         )
 
+    # NO "removed while the offer was pending" BRANCH, and its absence is
+    # the point: _relation_or_404 above answers 404 to anyone with no
+    # relation to the school, so a removed person never reaches this line.
+    # The offer itself is deleted where the removal happens -- in
+    # remove_curator_group_member and leave_curator_group -- rather than
+    # discovered dangling here. A branch under an unreachable state would
+    # document the impossible; this comment is what a reader needs instead.
     member = await _membership_row(group.id, user_id, session)
-    if member is None:
-        # Removed from the school while the offer was pending. The offer is
-        # meaningless without the membership it was going to change, so it
-        # goes -- unlike the two temporary refusals above, this one is not
-        # coming back on its own.
-        await session.delete(offer)
-        raise NotFoundError("Offer not found", code="master_offer_not_found")
-
     member.kind = CuratorMemberKind.MASTER.value
     await session.delete(offer)
     await session.flush()

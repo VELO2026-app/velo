@@ -626,15 +626,16 @@ async def test_the_curator_gets_own_group_on_the_link(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     group = await _create_group(client, curator)
 
-    for kind in ("master", "student"):
-        token = await _invite(client, curator, group["id"], kind)
-        preview = (await _preview(client, curator, token)).json()
-        assert preview["can_join"] is False
-        assert preview["reason"] == "own_group"
+    # The loop over ("master", "student") went with the second link: one
+    # link, one answer.
+    token = await _invite(client, curator, group["id"])
+    preview = (await _preview(client, curator, token)).json()
+    assert preview["can_join"] is False
+    assert preview["reason"] == "own_group"
 
-        joined = await _join(client, curator, token)
-        assert joined.status_code == 409
-        assert joined.json()["error"] == "own_group"
+    joined = await _join(client, curator, token)
+    assert joined.status_code == 409
+    assert joined.json()["error"] == "own_group"
 
 
 @pytest.mark.asyncio
@@ -654,15 +655,15 @@ async def test_a_blocked_person_is_refused_by_the_link(
     group = await _create_group(client, curator)
     await _block(db_session, curator["user"]["id"], blocked["user"]["id"])
 
-    for kind in ("master", "student"):
-        token = await _invite(client, curator, group["id"], kind)
-        preview = (await _preview(client, blocked, token)).json()
-        assert preview["can_join"] is False
-        assert preview["reason"] == "blocked_by_curator"
+    # One link, so the loop over the two kinds is gone with it.
+    token = await _invite(client, curator, group["id"])
+    preview = (await _preview(client, blocked, token)).json()
+    assert preview["can_join"] is False
+    assert preview["reason"] == "blocked_by_curator"
 
-        refused = await _join(client, blocked, token)
-        assert refused.status_code == 403
-        assert refused.json()["error"] == "blocked_by_curator"
+    refused = await _join(client, blocked, token)
+    assert refused.status_code == 403
+    assert refused.json()["error"] == "blocked_by_curator"
 
     student_token = await _invite(client, curator, group["id"])
     assert (await _join(client, welcome, student_token)).status_code == 200

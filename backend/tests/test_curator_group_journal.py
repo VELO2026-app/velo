@@ -774,7 +774,11 @@ async def test_pressing_invite_twice_mints_one_link_and_records_one_event(
         if e["event"] == CuratorGroupEventKind.INVITE_CREATED.value
     ]
     assert len(created) == 1
-    assert created[0]["data"]["kind"] == CuratorMemberKind.STUDENT.value
+    # GT-27: the row used to carry data.kind, and this asserted it was the
+    # student link. One link per school, so the key was dropped rather than
+    # frozen at a word that could only ever say one thing. What the old
+    # assertion was right about -- that pressing twice records ONCE -- is
+    # the len() above, and it is untouched.
     assert first not in str(created[0])
 
 

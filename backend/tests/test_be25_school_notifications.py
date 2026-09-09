@@ -61,6 +61,7 @@ from app.modules.curator_groups.models import (
     CuratorGroup,
     CuratorGroupEvent,
     CuratorGroupEventKind,
+    CuratorGroupMember,
     CuratorMemberKind,
 )
 from app.modules.masters.models import MasterProfile
@@ -218,7 +219,31 @@ async def _join(client: AsyncClient, auth: dict, token: str):
 async def _join_as(
     client: AsyncClient, curator: dict, group_id: str, joiner: dict,
     kind: CuratorMemberKind = CuratorMemberKind.STUDENT,
+    *,
+    db_session: AsyncSession | None = None,
 ) -> None:
+    """Put somebody in the school with the given relation.
+
+    GT-27: a MASTER relation can no longer be reached through a link -- the
+    master link is gone and everyone who opens the one that remains joins as
+    a student. School masters are appointed with confirmation, which is a
+    different feature and not what these tests are about, so a master member
+    is seeded directly here, the way test_curator_transfer.py already does.
+    The STUDENT path still goes through the real endpoint, because that is
+    the path under test in the join notifications below.
+    """
+    if kind is CuratorMemberKind.MASTER:
+        assert db_session is not None, "seeding a master needs the session"
+        db_session.add(
+            CuratorGroupMember(
+                group_id=UUID(group_id),
+                user_id=UUID(joiner["user"]["id"]),
+                kind=CuratorMemberKind.MASTER.value,
+            )
+        )
+        await db_session.flush()
+        await db_session.commit()
+        return
     token = await _invite_token(client, curator, group_id)
     resp = await _join(client, joiner, token)
     assert resp.status_code == 200, resp.text
@@ -313,7 +338,10 @@ async def test_transfer_offer_reaches_the_addressee(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
     group = await _create_group(client, curator)
-    await _join_as(client, curator, group["id"], heir, CuratorMemberKind.MASTER)
+    await _join_as(
+        client, curator, group["id"], heir, CuratorMemberKind.MASTER,
+        db_session=db_session,
+    )
 
     assert (await _offer(client, curator, group["id"], heir)).status_code == 200
 
@@ -338,7 +366,10 @@ async def test_the_offer_names_the_school_and_points_at_it(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
     group = await _create_group(client, curator, name="Тихое утро")
-    await _join_as(client, curator, group["id"], heir, CuratorMemberKind.MASTER)
+    await _join_as(
+        client, curator, group["id"], heir, CuratorMemberKind.MASTER,
+        db_session=db_session,
+    )
     await _offer(client, curator, group["id"], heir)
 
     note = next(
@@ -367,7 +398,10 @@ async def test_a_cancelled_offer_does_not_notify_again(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
     group = await _create_group(client, curator)
-    await _join_as(client, curator, group["id"], heir, CuratorMemberKind.MASTER)
+    await _join_as(
+        client, curator, group["id"], heir, CuratorMemberKind.MASTER,
+        db_session=db_session,
+    )
     await _offer(client, curator, group["id"], heir)
 
     cancelled = await client.delete(
@@ -404,7 +438,10 @@ async def test_accept_tells_the_previous_curator_and_not_the_acceptor(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
     group = await _create_group(client, curator)
-    await _join_as(client, curator, group["id"], heir, CuratorMemberKind.MASTER)
+    await _join_as(
+        client, curator, group["id"], heir, CuratorMemberKind.MASTER,
+        db_session=db_session,
+    )
     await _offer(client, curator, group["id"], heir)
 
     assert (await _accept(client, heir, group["id"])).status_code == 200
@@ -427,7 +464,10 @@ async def test_decline_tells_the_curator_and_not_the_decliner(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
     group = await _create_group(client, curator)
-    await _join_as(client, curator, group["id"], heir, CuratorMemberKind.MASTER)
+    await _join_as(
+        client, curator, group["id"], heir, CuratorMemberKind.MASTER,
+        db_session=db_session,
+    )
     await _offer(client, curator, group["id"], heir)
 
     assert (await _decline(client, heir, group["id"])).status_code == 204
@@ -453,7 +493,10 @@ async def test_accept_notification_survives_the_ownership_change(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
     group = await _create_group(client, curator, name="Северный ветер")
-    await _join_as(client, curator, group["id"], heir, CuratorMemberKind.MASTER)
+    await _join_as(
+        client, curator, group["id"], heir, CuratorMemberKind.MASTER,
+        db_session=db_session,
+    )
     await _offer(client, curator, group["id"], heir)
     await _accept(client, heir, group["id"])
 
@@ -565,7 +608,10 @@ async def test_every_recipient_was_already_a_party_to_the_school(
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
     student = await _make_student(client, _TID_STUDENT)
     group = await _create_group(client, curator)
-    await _join_as(client, curator, group["id"], heir, CuratorMemberKind.MASTER)
+    await _join_as(
+        client, curator, group["id"], heir, CuratorMemberKind.MASTER,
+        db_session=db_session,
+    )
     await _join_as(client, curator, group["id"], student)
 
     insiders = {
@@ -605,7 +651,10 @@ async def test_every_notifying_action_also_wrote_a_journal_line(
     student = await _make_student(client, _TID_STUDENT)
     group = await _create_group(client, curator)
 
-    await _join_as(client, curator, group["id"], heir, CuratorMemberKind.MASTER)
+    await _join_as(
+        client, curator, group["id"], heir, CuratorMemberKind.MASTER,
+        db_session=db_session,
+    )
     await _join_as(client, curator, group["id"], student)
     await _remove(client, curator, group["id"], student)
     await _offer(client, curator, group["id"], heir)
@@ -644,9 +693,13 @@ async def test_a_refused_action_writes_neither(
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
     other = await _make_verified_master(client, db_session, _TID_MASTER_B)
     group = await _create_group(client, curator)
-    await _join_as(client, curator, group["id"], heir, CuratorMemberKind.MASTER)
+    await _join_as(
+        client, curator, group["id"], heir, CuratorMemberKind.MASTER,
+        db_session=db_session,
+    )
     await _join_as(
         client, curator, group["id"], other, CuratorMemberKind.MASTER,
+        db_session=db_session,
     )
     await _offer(client, curator, group["id"], heir)
 
@@ -677,9 +730,7 @@ async def test_repeated_join_notifies_once(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     student = await _make_student(client, _TID_STUDENT)
     group = await _create_group(client, curator)
-    token = await _invite_token(
-        client, curator, group["id"], CuratorMemberKind.STUDENT.value,
-    )
+    token = await _invite_token(client, curator, group["id"])
 
     first = await _join(client, student, token)
     assert first.status_code == 200, first.text
