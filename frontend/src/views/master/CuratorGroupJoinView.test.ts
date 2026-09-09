@@ -67,7 +67,7 @@ function buttonWith(label: string): HTMLElement | undefined {
   )
 }
 
-/** A green preview: a school, kind=student, viewer not yet a member. */
+/** A green preview: a school, viewer not yet a member. */
 function previewResponse(
   overrides: Partial<CuratorGroupInvitePreviewResponse> = {},
 ): CuratorGroupInvitePreviewResponse {
@@ -80,7 +80,6 @@ function previewResponse(
       masters_count: 3,
       students_count: 12,
     },
-    kind: 'student',
     can_join: true,
     reason: null,
     relation: null,
@@ -116,7 +115,7 @@ describe('CuratorGroupJoinView -- preview states', () => {
     expect(text()).toContain('Проверяем приглашение…')
   })
 
-  it('renders the school card for a green preview: name, curator, counts, kind label', async () => {
+  it('renders the school card for a green preview: name, curator, counts', async () => {
     vi.mocked(cgApi.getCuratorGroupInvitePreview).mockResolvedValue(previewResponse())
     mount()
     await flush()
@@ -125,11 +124,9 @@ describe('CuratorGroupJoinView -- preview states', () => {
     expect(text()).toContain('Куратор: Мария Иванова')
     expect(text()).toContain('Практики тишины')
     expect(text()).toContain('Мастеров: 3')
-    expect(text()).toContain('как ученик')
+    expect(text()).toContain('Приглашение в школу')
     expect(buttonWith('Вступить')).toBeTruthy()
     expect(buttonWith('Отказаться')).toBeTruthy()
-    // No upgrade hint for a plain stranger.
-    expect(text()).not.toContain('повысит вас до мастера')
   })
 
   it('hides the optional curator line when the preview has none (honest empties)', async () => {
@@ -152,15 +149,24 @@ describe('CuratorGroupJoinView -- preview states', () => {
     expect(buttonWith('Вступить')).toBeTruthy()
   })
 
-  it('the upgrade nuance: student opening a master link keeps the Join button and explains it', async () => {
+  it('a member opening the link is told nothing would happen', async () => {
+    // NEW TEST, NOT A REWRITE OF THE ONE THAT STOOD HERE. Until GT-27 a
+    // school had a second, master-flavoured invite link that promoted an
+    // existing student to master of the school on join; the removed test
+    // pinned that nuance -- a student opening it got can_join=true and a
+    // hint, because joining still did something. The path was cancelled by
+    // owner ruling: masters are appointed by the curator and the
+    // appointment takes effect on the appointee's confirmation. The old
+    // scenario cannot be built any more, so it was deleted rather than
+    // reformulated; this asserts the new truth about the same screen.
     vi.mocked(cgApi.getCuratorGroupInvitePreview).mockResolvedValue(
-      previewResponse({ kind: 'master', relation: 'student' }),
+      previewResponse({ can_join: false, reason: 'already_member', relation: 'student' }),
     )
     mount()
     await flush()
 
-    expect(buttonWith('Вступить')).toBeTruthy()
-    expect(text()).toContain('повысит вас до мастера школы')
+    expect(text()).toContain('Вы уже в школе')
+    expect(buttonWith('Вступить')).toBeFalsy()
   })
 
   it('on 404: the one honest answer for unknown/revoked/frozen/deleted links', async () => {
@@ -174,10 +180,10 @@ describe('CuratorGroupJoinView -- preview states', () => {
     expect(text()).not.toContain('Вступить')
   })
 
-  it.each([
-    ['master_required', 'Ссылка для верифицированных мастеров'],
-    ['blocked_by_curator', 'Вступление недоступно'],
-  ] as const)(
+  // GT-27: master_required left this table. It was the master link refusing
+  // an unverified account; there is no master link, and the code now comes
+  // from the appointment path, which is a different screen.
+  it.each([['blocked_by_curator', 'Вступление недоступно']] as const)(
     'described refusal %s renders its own copy and no Join button',
     async (reason, title) => {
       vi.mocked(cgApi.getCuratorGroupInvitePreview).mockResolvedValue(

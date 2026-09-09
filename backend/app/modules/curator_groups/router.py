@@ -43,7 +43,6 @@ from app.modules.auth.dependencies import (
     get_current_user_write,
 )
 from app.modules.curator_groups.schemas import (
-    CreateCuratorGroupInviteRequest,
     CreateCuratorGroupRequest,
     CuratorGroupDeletePreviewResponse,
     CuratorGroupEventActor,
@@ -53,6 +52,7 @@ from app.modules.curator_groups.schemas import (
     CuratorGroupLeavePreviewResponse,
     CuratorGroupListResponse,
     CuratorGroupMasterItem,
+    CuratorGroupMasterOfferRequest,
     CuratorGroupMemberItem,
     CuratorGroupMineItem,
     CuratorGroupMineResponse,
@@ -60,7 +60,6 @@ from app.modules.curator_groups.schemas import (
     CuratorGroupRemovePreviewResponse,
     CuratorGroupResponse,
     CuratorGroupTransferRef,
-    CuratorMemberKindLiteral,
     JoinCuratorGroupRequest,
     JoinCuratorGroupResponse,
     OfferCuratorGroupTransferRequest,
@@ -70,9 +69,11 @@ from app.modules.curator_groups.schemas import (
     UpdateCuratorGroupRequest,
 )
 from app.modules.curator_groups.service import (
+    accept_curator_group_master_offer,
     accept_curator_group_transfer,
     cancel_curator_group_transfer,
     create_curator_group,
+    decline_curator_group_master_offer,
     decline_curator_group_transfer,
     delete_curator_group,
     delete_group_preview,
@@ -90,6 +91,7 @@ from app.modules.curator_groups.service import (
     list_group_practice_master_ids,
     list_my_curator_groups,
     master_can_create_groups,
+    offer_curator_group_master,
     offer_curator_group_transfer,
     preview_curator_group_invite,
     remove_curator_group_member,
@@ -405,11 +407,15 @@ async def remove_curator_group_member_endpoint(
 )
 async def create_curator_group_invite_endpoint(
     group_id: UUID,
-    body: CreateCuratorGroupInviteRequest,
     master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
     session: AsyncSession = Depends(get_db_session),
 ) -> CuratorGroupInviteResponse:
-    """Get (or mint) this group's reusable link for one kind.
+    """Get (or mint) this group's reusable link. Everyone joins as a student.
+
+    IT USED TO TAKE A BODY, {kind}, and a school had two links -- the master
+    one promoting a student on join. GT-27 cancelled that path, so the body
+    is gone rather than accepted and ignored: an endpoint that swallows a
+    field it no longer honours is the second way in, still open.
 
     Repeat calls return the SAME url -- the curator expects the link they
     already shared to keep working. Rotation is revoke + create, on purpose.
@@ -419,45 +425,83 @@ async def create_curator_group_invite_endpoint(
     """
     user, _profile = master_tuple
     invite = await get_or_create_curator_group_invite(
-        user.id, group_id, body.kind, session, actor=user,
+        user.id, group_id, session, actor=user,
     )
     await session.flush()
     logger.info(
         "curator_group_invite_issued",
         group_id=str(group_id),
-        kind=body.kind,
         curator_id=str(user.id),
     )
     return CuratorGroupInviteResponse(**invite)
 
 
 @router.delete(
-    "/me/curator-groups/{group_id}/invites/{kind}",
+    "/me/curator-groups/{group_id}/invites",
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def revoke_curator_group_invite_endpoint(
     group_id: UUID,
-    kind: CuratorMemberKindLiteral,
     master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
     session: AsyncSession = Depends(get_db_session),
 ) -> None:
-    """Revoke one kind of link. The other kind keeps working.
+    """Revoke the group's link.
+
+    THE PATH USED TO END IN /{kind} and revoked one of two links, leaving
+    the other working. GT-27 left one link, so there is nothing to choose
+    between and no path parameter to choose it with. The P-11 note that
+    used to live here -- `kind` as a Literal so an unknown value is a 422
+    rather than a 500 -- went with the parameter.
 
     Idempotent. Afterwards the old token resolves nowhere -- preview and
     join both read the same row, so there is no revocation list to keep.
-
-    P-11: `kind` is a Literal in the path, so an unknown value is a 422 from
-    FastAPI rather than a hand-rolled Enum() lookup raising into a 500.
     """
     user, _profile = master_tuple
     await revoke_curator_group_invite(
-        user.id, group_id, kind, session, actor=user,
+        user.id, group_id, session, actor=user,
     )
     await session.flush()
     logger.info(
         "curator_group_invite_revoked",
         group_id=str(group_id),
-        kind=kind,
+        curator_id=str(user.id),
+    )
+
+
+@router.post(
+    "/me/curator-groups/{group_id}/master-offers",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def offer_curator_group_master_endpoint(
+    group_id: UUID,
+    body: CuratorGroupMasterOfferRequest,
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Offer a member of this school the role of its master (GT-27).
+
+    THE APPOINTMENT DOES NOT TAKE EFFECT HERE. It creates an offer; the
+    roster changes only when the appointee accepts. Appointing somebody who
+    never answers leaves the school exactly as it was.
+
+    Idempotent per candidate: pressing the button twice on one person is
+    the curator re-sending, not a conflict, and produces neither a second
+    journal line nor a second notification. Several appointments may be
+    outstanding at once -- unlike a transfer, which is one per school.
+
+    Error codes: 404 not_found (not your school, or the candidate is not in
+    it -- one answer, P-08); 409 already_master; 403 master_required (the
+    candidate holds no verified master profile right now).
+    """
+    user, _profile = master_tuple
+    await offer_curator_group_master(
+        user.id, group_id, body.to_user_id, session, actor=user,
+    )
+    await session.flush()
+    logger.info(
+        "curator_group_master_offered",
+        group_id=str(group_id),
+        to_user_id=str(body.to_user_id),
         curator_id=str(user.id),
     )
 
@@ -698,6 +742,52 @@ async def decline_curator_group_transfer_endpoint(
     whether an offer existed.
     """
     await decline_curator_group_transfer(
+        group_id, user.id, session, actor=user,
+    )
+    await session.flush()
+
+
+@member_router.post(
+    "/{group_id}/master-offer/accept",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def accept_curator_group_master_offer_endpoint(
+    group_id: UUID,
+    user: User = Depends(get_current_user_write),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Consent to becoming a master of this school (GT-27).
+
+    This is where the appointment takes effect: member.kind becomes master
+    and member_promoted goes into the journal, by the fact of consent.
+
+    Error codes: 404 master_offer_not_found (no offer for you here, the
+    school is dark, or it is gone -- one answer); 403 master_required, when
+    your master verification lapsed since the offer. The offer SURVIVES
+    that refusal: re-verify and it is still there to accept.
+    """
+    await accept_curator_group_master_offer(
+        group_id, user.id, session, actor=user,
+    )
+    await session.flush()
+
+
+@member_router.post(
+    "/{group_id}/master-offer/decline",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def decline_curator_group_master_offer_endpoint(
+    group_id: UUID,
+    user: User = Depends(get_current_user_write),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Refuse the appointment. Idempotent, and 204 even if it was not yours.
+
+    Same asymmetry as the transfer pair: accept answers 404 to a
+    non-addressee because it changes the roster, decline answers 204
+    because it changes nothing and so reveals nothing.
+    """
+    await decline_curator_group_master_offer(
         group_id, user.id, session, actor=user,
     )
     await session.flush()

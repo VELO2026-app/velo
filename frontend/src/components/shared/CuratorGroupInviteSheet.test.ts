@@ -28,12 +28,13 @@ const writeText = vi.fn()
 let app: App | null = null
 let host: HTMLElement | null = null
 
-function mount(props: { kind?: 'master' | 'student' }): HTMLElement {
+// GT-27: the sheet used to take a `kind` prop and this helper passed it.
+// One link per school now, so there is nothing to mount it with.
+function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(CuratorGroupInviteSheet, {
     open: true,
-    kind: props.kind ?? 'master',
     groupId: 'g1',
   })
   app.mount(host)
@@ -78,25 +79,25 @@ afterEach(() => {
 })
 
 describe('CuratorGroupInviteSheet', () => {
-  it('mints on open, with the right group and kind', async () => {
+  it('mints on open, for the right group', async () => {
+    // It used to also assert the kind, both in the call and in the title
+    // («Ссылка для мастеров»). One link, one title.
     vi.mocked(cgApi.createCuratorGroupInvite).mockResolvedValue({
-      kind: 'master',
       invite_url: 'https://t.me/bot?startapp=curator_group_invite__tok',
     })
-    mount({ kind: 'master' })
+    mount()
     await flush()
 
-    expect(cgApi.createCuratorGroupInvite).toHaveBeenCalledWith('g1', 'master')
+    expect(cgApi.createCuratorGroupInvite).toHaveBeenCalledWith('g1')
     expect(bodyText()).toContain('https://t.me/bot?startapp=curator_group_invite__tok')
-    expect(bodyText()).toContain('Ссылка для мастеров')
+    expect(bodyText()).toContain('Ссылка для вступления')
   })
 
   it('copy: B2 clipboard + toast', async () => {
     vi.mocked(cgApi.createCuratorGroupInvite).mockResolvedValue({
-      kind: 'student',
       invite_url: 'https://t.me/bot?startapp=curator_group_invite__tok2',
     })
-    mount({ kind: 'student' })
+    mount()
     await flush()
 
     buttonWith('Скопировать')?.click()
@@ -110,7 +111,7 @@ describe('CuratorGroupInviteSheet', () => {
     vi.mocked(cgApi.createCuratorGroupInvite).mockRejectedValue(
       new ApiResponseError(503, 'no url', 'bot_url_not_configured'),
     )
-    mount({ kind: 'master' })
+    mount()
     await flush()
 
     expect(toastError).toHaveBeenCalledWith(
@@ -120,13 +121,12 @@ describe('CuratorGroupInviteSheet', () => {
     expect(bodyText()).toContain('Не удалось получить ссылку')
   })
 
-  it('revoke: confirm first, then DELETE the right kind and close', async () => {
+  it('revoke: confirm first, then DELETE the link and close', async () => {
     vi.mocked(cgApi.createCuratorGroupInvite).mockResolvedValue({
-      kind: 'master',
       invite_url: 'https://t.me/bot?startapp=curator_group_invite__tok',
     })
     vi.mocked(cgApi.revokeCuratorGroupInvite).mockResolvedValue(undefined)
-    mount({ kind: 'master' })
+    mount()
     await flush()
 
     // The revoke confirm itself (danger, must not fire on the first tap).
@@ -137,7 +137,7 @@ describe('CuratorGroupInviteSheet', () => {
 
     buttonWith('Отозвать')?.click()
     await flush()
-    expect(cgApi.revokeCuratorGroupInvite).toHaveBeenCalledWith('g1', 'master')
+    expect(cgApi.revokeCuratorGroupInvite).toHaveBeenCalledWith('g1')
     expect(toastSuccess).toHaveBeenCalledWith('Ссылка отозвана')
   })
 })

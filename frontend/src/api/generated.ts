@@ -511,11 +511,6 @@ export interface CreateCompanyPromoRequest {
   first_purchase_only?: boolean
 }
 
-/** POST /masters/me/curator-groups/{id}/invites. */
-export interface CreateCuratorGroupInviteRequest {
-  kind: 'master' | 'student'
-}
-
 /** POST /masters/me/curator-groups. */
 export interface CreateCuratorGroupRequest {
   name: string
@@ -639,18 +634,16 @@ export interface CuratorGroupInvitePreviewGroup {
   students_count: number
 }
 
-/** GET /curator-groups/invites/{token}. This endpoint DESCRIBES a refusal instead of raising it: can_join=False plus a reason, so the screen can say why. The one exception is 404 -- an unknown token, a revoked one, an inactive group and a deleted group are one answer (P-08), here as everywhere else. can_join answers "would joining CHANGE anything", not "are you allowed in the door". A student member opening a master link gets can_join=true with relation="student": they are already inside, and the link still has an effect (the upgrade). A master member opening either link gets can_join=false, reason=already_member -- nothing would happen. relation is the viewer's tie RIGHT NOW, before anything is done: null for someone who is not in the group yet. */
+/** GET /curator-groups/invites/{token}. This endpoint DESCRIBES a refusal instead of raising it: can_join=False plus a reason, so the screen can say why. The one exception is 404 -- an unknown token, a revoked one, an inactive group and a deleted group are one answer (P-08), here as everywhere else. can_join answers "would joining CHANGE anything", not "are you allowed in the door". Any member gets can_join=false, reason=already_member -- nothing would happen. Until GT-27 a STUDENT opening a MASTER link was the exception, getting can_join=true because the link would still promote them; with one link there is nothing left for it to do, and the `kind` field this model used to carry went with the second link. relation is the viewer's tie RIGHT NOW, before anything is done: null for someone who is not in the group yet. */
 export interface CuratorGroupInvitePreviewResponse {
   group: CuratorGroupInvitePreviewGroup
-  kind: 'master' | 'student'
   can_join: boolean
-  reason: 'already_member' | 'own_group' | 'master_required' | 'blocked_by_curator' | null
+  reason: 'already_member' | 'own_group' | 'blocked_by_curator' | null
   relation: 'master' | 'student' | null
 }
 
-/** The group's reusable link for ONE kind. The kind is NOT encoded in the url: the deep link carries a single kind (`curator_group_invite__<token>`) for both flavours and the server resolves which one it is from the token (TZ 6.1). Putting it in the url too would be a second copy of the same fact, and the copy a sender could edit by hand. */
+/** The group's ONE reusable link. THERE USED TO BE A REQUEST BODY, CreateCuratorGroupInviteRequest, whose only field was the link's kind, and this response echoed it back. GT-27 left schools with a single link, so both the field and the request model are gone rather than kept and ignored. The url carries the token and nothing else (`curator_group_invite__<token>`): a second copy of any fact in the url is a copy the sender can edit by hand. */
 export interface CuratorGroupInviteResponse {
-  kind: 'master' | 'student'
   invite_url: string
 }
 
@@ -674,6 +667,11 @@ export interface CuratorGroupMasterItem {
   experience_years: number | null
   practices_count: number
   is_curator: boolean
+}
+
+/** POST /masters/me/curator-groups/{id}/master-offers (GT-27). The candidate, by id. Nothing else: a school master is appointed from the roster the curator is already looking at, so there is no name, no kind and no message to carry. */
+export interface CuratorGroupMasterOfferRequest {
+  to_user_id: string
 }
 
 /** One row of a curator group's roster. is_visible is ALWAYS true for a student and reflects the live MasterProfile status for a master (I-4). The curator sees a suspended master as a row with is_visible=false -- "in the shadow" -- rather than watching them vanish, because the row is real and comes back by itself when the admin re-verifies. */
@@ -896,7 +894,7 @@ export interface JoinCuratorGroupRequest {
   token: string
 }
 
-/** The outcome of joining. already_member answers exactly one question -- WAS THERE A ROW when this request looked -- and nothing else. It is not "nothing happened": a student who gets upgraded to master reports already_member=true with relation="master", because they were in the school before and still are, with a new kind. Reading it as "no-op" would make the field lie about someone who has been a member for months, which is why the definition lives here rather than in a caller's head. The nuance between "you were already a master" and "you were a student and just became a master" belongs to the preview, which distinguishes them; join reports facts. relation is the tie AFTER the call. */
+/** The outcome of joining. already_member answers exactly one question -- WAS THERE A ROW when this request looked -- and nothing else. Reading it as "nothing happened" would make the field lie about someone who has been a member for months, which is why the definition lives here rather than in a caller's head. THE PARAGRAPH THAT USED TO FOLLOW described the one case where already_member=true and something DID change: a student opening the master link reported already_member=true with relation="master", having just been promoted by the join. GT-27 cancelled that link -- school masters are appointed with the appointee's confirmation -- so a member joining now changes nothing at all, and the field's two readings have stopped being distinguishable on this endpoint. relation is the tie AFTER the call. */
 export interface JoinCuratorGroupResponse {
   group_id: string
   relation: 'master' | 'student'

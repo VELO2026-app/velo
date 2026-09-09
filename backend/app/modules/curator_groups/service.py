@@ -22,6 +22,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.events.notify import emit_notification  # BE-25
 from app.core.exceptions import (
     ConflictError,
     ForbiddenError,
@@ -37,6 +38,7 @@ from app.modules.curator_groups.models import (
     CuratorGroupEvent,
     CuratorGroupEventKind,
     CuratorGroupInvite,
+    CuratorGroupMasterOffer,
     CuratorGroupMember,
     CuratorGroupTransfer,
     CuratorMemberKind,
@@ -327,6 +329,61 @@ def _record_group_event(
             event=event.value,
             data=payload,
         )
+    )
+
+
+async def _notify_group_event(
+    session: AsyncSession,
+    *,
+    type: str,
+    recipient_id: UUID,
+    title: str,
+    body: str,
+    group_id: UUID,
+    group_name: str,
+    actor_name: str,
+) -> None:
+    """Queue one school notification, in the caller's transaction (BE-25).
+
+    THE COMPANION OF _record_group_event, and deliberately shaped like it:
+    same transaction, same call sites, no background task. A notification
+    that outlived a rollback would tell somebody their school changed hands
+    when it did not -- the same failure the journal avoids, with a worse
+    audience, because a journal line is read on purpose and a notification
+    arrives uninvited.
+
+    ADDRESSED TO ONE PERSON, always: target_type="user" with a real user id,
+    never a group key. Every BE-25 recipient is a party to the event itself
+    -- the addressee of an offer, the curator who lost the school, the
+    curator whose school gained a member, the member who was removed -- so
+    nobody learns that a school exists from one of these. That is what makes
+    it safe not to gate these on the school being ACTIVE (I-6): the fact has
+    already happened to a person who already knew the school.
+
+    NO ACTIVITY CHECK, per the above, and no branch for one. A school whose
+    curator lost verification goes dark for reads, but an accept that landed
+    before that must still reach the previous owner: silence there is not
+    privacy, it is losing the only signal that your school is gone.
+
+    open_curator_group is a NEW action verb, and the inbox does not know it
+    yet. That is safe by the inbox's own contract: "an unmapped action or a
+    missing/malformed id falls back to mark-read-only -- honest, never a
+    broken route" (UserInboxView.vue). Naming the intent now is what lets
+    the frontend card map it later without touching velo again.
+    """
+    await emit_notification(
+        session,
+        type=type,
+        target_type="user",
+        target_value=str(recipient_id),
+        title=title,
+        body=body,
+        action_data={
+            "action": "open_curator_group",
+            "params": {"group_id": str(group_id)},
+            "group_name": group_name,
+            "actor_name": actor_name,
+        },
     )
 
 
@@ -876,9 +933,39 @@ async def remove_curator_group_member(
     }
     if transfer_cancelled:
         data["transfer_cancelled"] = True
+    # GT-27: a pending appointment dies with the membership it was going to
+    # change. Left behind it would be an orphan the appointee cannot act on
+    # (consent goes through _relation_or_404 and they have no relation any
+    # more) and which would spring back to life if they ever re-joined --
+    # an appointment from before they were removed, granted by a decision
+    # nobody made twice.
+    await session.execute(
+        delete(CuratorGroupMasterOffer).where(
+            CuratorGroupMasterOffer.group_id == group.id,
+            CuratorGroupMasterOffer.to_user_id == user_id,
+        )
+    )
     _record_group_event(
         group.id, actor, CuratorGroupEventKind.MEMBER_REMOVED, session,
         data=data,
+    )
+    # BE-25: to the person removed. Only this branch notifies -- leaving on
+    # your own (member_left) does not, because you were the one who did it.
+    # The recipient was a member until a moment ago, so the school is not
+    # news to him; what is news is that its practices have stopped being
+    # visible, and nothing else would tell him.
+    await _notify_group_event(
+        session,
+        type="curator_group.member_removed",
+        recipient_id=user_id,
+        title="Вы больше не в школе",
+        body=(
+            f"Вас удалили из школы «{group.name}». Её практики больше не "
+            f"отображаются."
+        ),
+        group_id=group.id,
+        group_name=group.name,
+        actor_name=display_name(actor.first_name, actor.last_name),
     )
 
 
@@ -1377,6 +1464,15 @@ async def leave_curator_group(
     if left is None:
         return
 
+    # GT-27: same as removal -- walking out takes your pending appointment
+    # with you. See remove_curator_group_member for why it is deleted at the
+    # source rather than found dangling at consent.
+    await session.execute(
+        delete(CuratorGroupMasterOffer).where(
+            CuratorGroupMasterOffer.group_id == group.id,
+            CuratorGroupMasterOffer.to_user_id == user_id,
+        )
+    )
     data: dict[str, Any] = {EVENT_DATA_KIND: left.kind}
     if transfer_cancelled:
         data["transfer_cancelled"] = True
@@ -1459,12 +1555,16 @@ async def _membership_row(
 async def get_or_create_curator_group_invite(
     curator_user_id: UUID,
     group_id: UUID,
-    kind: str,
     session: AsyncSession,
     *,
     actor: User,
 ) -> dict:
-    """Create-or-return the group's link for ONE kind.
+    """Create-or-return the group's ONE link. Everyone joins as a student.
+
+    IT USED TO TAKE A `kind` and there used to be two links per school, the
+    master one promoting a student on join. Cancelled by owner ruling
+    (GT-27): school masters are appointed with confirmation, so the second
+    link and the parameter naming it are gone rather than defaulted.
 
     Idempotent by design, not by accident: the curator taps «Пригласить»
     again expecting the link they already pasted into a channel to keep
@@ -1493,14 +1593,13 @@ async def get_or_create_curator_group_invite(
         await session.execute(
             select(CuratorGroupInvite).where(
                 CuratorGroupInvite.group_id == group.id,
-                CuratorGroupInvite.kind == kind,
             )
         )
     ).scalar_one_or_none()
 
     if existing is None:
         token = secrets.token_urlsafe(32)
-        invite = CuratorGroupInvite(group_id=group.id, kind=kind, token=token)
+        invite = CuratorGroupInvite(group_id=group.id, token=token)
         try:
             async with session.begin_nested():
                 session.add(invite)
@@ -1510,25 +1609,25 @@ async def get_or_create_curator_group_invite(
             # returns the same token and must not add a line to the feed.
             #
             # THE TOKEN IS NOT RECORDED, HERE OR ANYWHERE. It is a raw
-            # secret and the journal is a readable, paginated list; only the
-            # link's KIND goes in. Do not add the token for debugging -- see
-            # the model docstring.
+            # secret and the journal is a readable, paginated list. GT-27:
+            # the link's kind used to be the one thing that DID go in --
+            # with one link there is nothing left to record but the fact,
+            # so the event carries no data at all. Do not add the token for
+            # debugging -- see the model docstring.
             _record_group_event(
                 group.id,
                 actor,
                 CuratorGroupEventKind.INVITE_CREATED,
                 session,
-                data={EVENT_DATA_KIND: kind},
             )
         except IntegrityError:
-            # Lost a concurrent create race for this (group, kind). The
-            # winner's row is the answer -- returning a second token would
-            # mean two live links where the constraint allows one.
+            # Lost a concurrent create race for this group. The winner's row
+            # is the answer -- returning a second token would mean two live
+            # links where the constraint allows one.
             existing = (
                 await session.execute(
                     select(CuratorGroupInvite).where(
                         CuratorGroupInvite.group_id == group.id,
-                        CuratorGroupInvite.kind == kind,
                     )
                 )
             ).scalar_one()
@@ -1537,7 +1636,6 @@ async def get_or_create_curator_group_invite(
         token = existing.token
 
     return {
-        "kind": kind,
         "invite_url": (
             f"{settings.telegram_bot_url}"
             f"?startapp={_INVITE_DEEPLINK_KIND}{token}"
@@ -1548,12 +1646,16 @@ async def get_or_create_curator_group_invite(
 async def revoke_curator_group_invite(
     curator_user_id: UUID,
     group_id: UUID,
-    kind: str,
     session: AsyncSession,
     *,
     actor: User,
 ) -> None:
-    """Drop the link of ONE kind. Idempotent; the other kind is untouched.
+    """Drop the group's link. Idempotent.
+
+    IT USED TO TAKE A `kind` and drop one of two links, leaving the other
+    working -- the endpoint was DELETE /invites/{kind}. GT-27 removed the
+    second link, so there is one thing to revoke and no path parameter to
+    choose it with.
 
     After this the next create mints a NEW token, and the old link stops
     resolving everywhere -- preview and join alike, since both go through
@@ -1569,11 +1671,8 @@ async def revoke_curator_group_invite(
     revoked = (
         await session.execute(
             delete(CuratorGroupInvite)
-            .where(
-                CuratorGroupInvite.group_id == group.id,
-                CuratorGroupInvite.kind == kind,
-            )
-            .returning(CuratorGroupInvite.kind)
+            .where(CuratorGroupInvite.group_id == group.id)
+            .returning(CuratorGroupInvite.id)
         )
     ).first()
     if revoked is not None:
@@ -1582,7 +1681,6 @@ async def revoke_curator_group_invite(
             actor,
             CuratorGroupEventKind.INVITE_REVOKED,
             session,
-            data={EVENT_DATA_KIND: revoked.kind},
         )
 
 
@@ -1628,7 +1726,7 @@ async def preview_curator_group_invite(
     for why it is that order); the only difference is that this function
     returns the reason and that one raises it.
     """
-    invite, group = await _resolve_invite_or_404(token, session)
+    _invite, group = await _resolve_invite_or_404(token, session)
     masters_count, students_count = await get_group_counts(group.id, session)
     refs = await _curator_refs([group.curator_user_id], session)
 
@@ -1640,14 +1738,11 @@ async def preview_curator_group_invite(
         reason = "own_group"
     elif await _blocked_by_curator(group.curator_user_id, user_id, session):
         reason = "blocked_by_curator"
-    elif invite.kind == CuratorMemberKind.MASTER.value and not (
-        await _has_master_capability(user_id, session)
-    ):
-        reason = "master_required"
-    elif member is not None and not _is_upgrade(invite.kind, member.kind):
-        # Already inside and this link would change nothing. The upgrade
-        # case deliberately falls through with reason=None: the link still
-        # does something for a student holding a master invite.
+    elif member is not None:
+        # Already inside, and with one link there is nothing left for it to
+        # do. Until GT-27 a student holding a MASTER link fell through with
+        # reason=None, because opening it would still promote them; that
+        # link is gone, so being a member is now the whole answer.
         reason = "already_member"
 
     return {
@@ -1668,24 +1763,10 @@ async def preview_curator_group_invite(
             "masters_count": masters_count,
             "students_count": students_count,
         },
-        "kind": invite.kind,
         "can_join": reason is None,
         "reason": reason,
         "relation": relation,
     }
-
-
-def _is_upgrade(invite_kind: str, member_kind: str) -> bool:
-    """Would this link promote an existing member?
-
-    Only one direction exists: student -> master. There is no demotion --
-    a master member opening a student link keeps their kind (TZ 3.4), so
-    holding a master relation is never something a link can take away.
-    """
-    return (
-        invite_kind == CuratorMemberKind.MASTER.value
-        and member_kind == CuratorMemberKind.STUDENT.value
-    )
 
 
 async def join_curator_group_by_token(
@@ -1705,12 +1786,15 @@ async def join_curator_group_by_token(
       2. own_group (409)  -- BEFORE the block check, so a curator's answer
          cannot depend on whether a stale master_student row happens to
          exist for them
-      3. blocked (403)    -- BEFORE capability, because a block is about
-         THIS school while master_required is a property of the account:
-         a blocked person must not be told "you merely need verification",
-         which reads as an invitation to go get verified and come back
-      4. capability (403) -- only for a master link
-      5. membership       -- last: it decides what to write, not whether to
+      3. blocked (403)    -- a block is about THIS school
+      4. membership       -- last: it decides what to write, not whether to
+
+    THERE USED TO BE A CAPABILITY STEP between 3 and 4, refusing a master
+    link to an unverified account with master_required, and the ordering
+    note above used to explain why a block had to be answered before it.
+    Both went with the master link (GT-27). Master capability is still
+    checked -- twice -- but on the appointment path, not here: a link makes
+    students, and a student needs no verification.
 
     Idempotent. Joining twice returns the same row, and the second call
     reports already_member=true without touching joined_at.
@@ -1723,25 +1807,25 @@ async def join_curator_group_by_token(
     its docstring in the schema says it means, and no caller does anything
     destructive with it.
 
-    GT-16: TWO of the thirteen event kinds are written here, and WHICH ONE
-    follows the same branch that decides `relation`, never the link's kind:
+    GT-16 / GT-27: ONE event kind is written here now -- member_joined, on a
+    first join, carrying kind='student' because that is the only thing a
+    link can make anybody.
 
-      - a first join writes member_joined ONCE, carrying the kind the row
-        was created with. A master link used by a newcomer is one
-        member_joined with kind='master', NOT a member_joined followed by
-        a member_promoted -- nobody was promoted, they arrived as a
-        master.
-      - a master link used by an existing student writes member_promoted
-        and nothing else. They did not join; they were already here.
-      - a master link used by an existing MASTER writes nothing at all.
-        Idempotent above means idempotent in the journal too, or pressing
-        the same link twice would fill the feed.
-      - the lost-race branch writes member_promoted only if the upgrade
-        actually applied. The row the winner created is the winner's news
-        and the winner recorded it; this request writes only what IT
-        changed, which is the promotion or nothing.
+    THIS FUNCTION USED TO PROMOTE. A second, master-flavoured link existed,
+    and opening it either created a master row outright or upgraded an
+    existing student, writing member_promoted. Cancelled by owner ruling
+    (GT-27): a school master is appointed by the curator and the appointment
+    takes effect only on the appointee's consent, so member_promoted is now
+    written by accept_curator_group_master_offer and by nothing else. The
+    upgrade branches, the master_required refusal and the _is_upgrade
+    predicate went with the link rather than staying as unreachable code.
+
+    THE LOST-RACE BRANCH STAYS -- the race did not go anywhere. What left it
+    is the promotion it used to apply: the loser of a race now has nothing
+    to add, because the winner's row already says everything true about this
+    person's membership.
     """
-    invite, group = await _resolve_invite_or_404(token, session)
+    _invite, group = await _resolve_invite_or_404(token, session)
 
     if group.curator_user_id == user_id:
         raise ConflictError(
@@ -1754,68 +1838,63 @@ async def join_curator_group_by_token(
             code="blocked_by_curator",
         )
 
-    if invite.kind == CuratorMemberKind.MASTER.value and not (
-        await _has_master_capability(user_id, session)
-    ):
-        raise ForbiddenError(
-            "This link is for verified masters",
-            code="master_required",
-        )
-
     member = await _membership_row(group.id, user_id, session)
 
     if member is None:
         row = CuratorGroupMember(
-            group_id=group.id, user_id=user_id, kind=invite.kind,
+            group_id=group.id,
+            user_id=user_id,
+            kind=CuratorMemberKind.STUDENT.value,
         )
         try:
             async with session.begin_nested():
                 session.add(row)
                 await session.flush()
-            relation = invite.kind
+            relation = CuratorMemberKind.STUDENT.value
             _record_group_event(
                 group.id,
                 actor,
                 CuratorGroupEventKind.MEMBER_JOINED,
                 session,
-                data={EVENT_DATA_KIND: invite.kind},
+                data={EVENT_DATA_KIND: CuratorMemberKind.STUDENT.value},
+            )
+            # BE-25: to the curator. This is the ONE school notification
+            # that scales with the size of a school, which is why its type
+            # carries the curator_groups category and the other four carry
+            # none -- see comms-profile/types.yaml.
+            #
+            # No "did the curator join his own school" guard, because he
+            # cannot: own_group above (and in the invite preview, and in
+            # leave) keeps a curator out of his own roster, so actor and
+            # recipient are never the same person here. A branch for it
+            # would document a state no caller can reach.
+            await _notify_group_event(
+                session,
+                type="curator_group.member_joined",
+                recipient_id=group.curator_user_id,
+                title="Новый участник школы",
+                body=(
+                    f"{display_name(actor.first_name, actor.last_name)} "
+                    f"вступил в школу «{group.name}»."
+                ),
+                group_id=group.id,
+                group_name=group.name,
+                actor_name=display_name(actor.first_name, actor.last_name),
             )
         except IntegrityError:
-            # Lost a concurrent join. The winner's row is the answer; if it
-            # is a student row and this was a master link, the upgrade still
-            # applies -- otherwise the loser of the race would silently be
-            # denied the promotion the link grants.
+            # Lost a concurrent join. The winner's row is the answer and
+            # this request writes nothing: it changed nothing. Before GT-27
+            # this branch also re-applied the promotion a master link
+            # granted, so that the loser of a race was not silently denied
+            # it; with one link there is no promotion for a link to grant.
             winner = await _membership_row(group.id, user_id, session)
-            promoted = winner is not None and _is_upgrade(
-                invite.kind, winner.kind,
+            relation = (
+                winner.kind if winner is not None
+                else CuratorMemberKind.STUDENT.value
             )
-            if promoted:
-                winner.kind = CuratorMemberKind.MASTER.value
-                await session.flush()
-            relation = winner.kind if winner is not None else invite.kind
-            if promoted:
-                _record_group_event(
-                    group.id,
-                    actor,
-                    CuratorGroupEventKind.MEMBER_PROMOTED,
-                    session,
-                )
         already_member = False
     else:
         already_member = True
-        if _is_upgrade(invite.kind, member.kind):
-            # The ONLY mutation of an existing membership row in this
-            # module. joined_at is deliberately NOT refreshed: the person
-            # has been in this school since the day they walked in, and
-            # kind describes their role, not their arrival.
-            member.kind = CuratorMemberKind.MASTER.value
-            await session.flush()
-            _record_group_event(
-                group.id,
-                actor,
-                CuratorGroupEventKind.MEMBER_PROMOTED,
-                session,
-            )
         relation = member.kind
 
     return {
@@ -2013,6 +2092,25 @@ async def offer_curator_group_transfer(
         session,
         data=_target_data(to_user_id, refs[group.id]["to_display_name"]),
     )
+    # BE-25: the addressee could previously sit on an offer for weeks
+    # without knowing it existed -- the banner only appears if you open the
+    # app. The recipient is the offer's target, who is a master OF THIS
+    # SCHOOL by _visible_master_ids above, so this tells nobody about a
+    # school they did not already belong to.
+    await _notify_group_event(
+        session,
+        type="curator_group.transfer_offered",
+        recipient_id=to_user_id,
+        title="Вам предлагают школу",
+        body=(
+            f"{display_name(actor.first_name, actor.last_name)} предлагает "
+            f"вам стать куратором школы «{group.name}». Откройте приложение, "
+            f"чтобы принять или отклонить."
+        ),
+        group_id=group.id,
+        group_name=group.name,
+        actor_name=display_name(actor.first_name, actor.last_name),
+    )
     return refs[group.id]
 
 
@@ -2185,6 +2283,25 @@ async def accept_curator_group_transfer(
             await _frozen_name(previous_curator_id, session),
         ),
     )
+    # BE-25: to the PREVIOUS curator, from previous_curator_id captured
+    # before the assignment above -- the same local the journal target uses,
+    # and for the same reason: after `group.curator_user_id = user_id` the
+    # former owner is unreachable from the group row, and reading "the
+    # group's curator" here would notify the acceptor about his own click.
+    # The acceptor gets nothing: he is the actor.
+    await _notify_group_event(
+        session,
+        type="curator_group.transfer_accepted",
+        recipient_id=previous_curator_id,
+        title="Школа передана",
+        body=(
+            f"{display_name(actor.first_name, actor.last_name)} принял школу "
+            f"«{group.name}». Вы больше не её куратор."
+        ),
+        group_id=group.id,
+        group_name=group.name,
+        actor_name=display_name(actor.first_name, actor.last_name),
+    )
 
     await session.flush()
 
@@ -2237,13 +2354,18 @@ async def decline_curator_group_transfer(
     if declined is None:
         return
 
-    offered_by = (
+    # BE-25: the school's name comes back in the SAME row as the curator
+    # id -- the notification body needs it and a second SELECT for a string
+    # already on the way would be pure waste.
+    offer_row = (
         await session.execute(
-            select(CuratorGroup.curator_user_id).where(
+            select(CuratorGroup.curator_user_id, CuratorGroup.name).where(
                 CuratorGroup.id == declined.group_id
             )
         )
-    ).scalar_one_or_none()
+    ).first()
+    offered_by = offer_row[0] if offer_row is not None else None
+    declined_group_name = offer_row[1] if offer_row is not None else ""
     if offered_by is None:
         # The group vanished under us -- the FK would refuse the event
         # anyway, and there is no school left to hold a journal.
@@ -2257,6 +2379,23 @@ async def decline_curator_group_transfer(
         data=_target_data(
             offered_by, await _frozen_name(offered_by, session),
         ),
+    )
+    # BE-25: to the curator who made the offer. Unlike accept, decline does
+    # not change ownership, so `offered_by` -- already read above for the
+    # journal -- is still the current curator and needs no second query.
+    # The decliner gets nothing: he is the actor.
+    await _notify_group_event(
+        session,
+        type="curator_group.transfer_declined",
+        recipient_id=offered_by,
+        title="Передача отклонена",
+        body=(
+            f"{display_name(actor.first_name, actor.last_name)} отклонил "
+            f"передачу школы «{declined_group_name}». Школа осталась за вами."
+        ),
+        group_id=declined.group_id,
+        group_name=declined_group_name,
+        actor_name=display_name(actor.first_name, actor.last_name),
     )
 
 
@@ -2397,3 +2536,279 @@ async def delete_group_preview(
         "students_count": students_count,
         "upcoming_practices_targeting_group": count,
     }
+
+
+# ===========================================================================
+# Appointing a school master (GT-27, items 3-4)
+#
+# THE PATH THE SECOND INVITE LINK USED TO BE. A link could make somebody a
+# school master by itself; now a curator offers and the appointee confirms.
+# Two consequences worth stating once here rather than three times below:
+#
+#   * member.kind changes on CONSENT, never on the offer. An appointment
+#     nobody answered leaves the roster exactly as it was, which is why
+#     member_promoted is written by accept and by nothing else.
+#   * master capability is checked TWICE, at offer and at consent, because
+#     verification can be revoked in between. Checking only at the offer
+#     would make the gate bypassable by waiting.
+# ===========================================================================
+
+
+async def _master_offer_row(
+    group_id: UUID, user_id: UUID, session: AsyncSession,
+) -> CuratorGroupMasterOffer | None:
+    """The pending appointment for (group, user), or None."""
+    return (
+        await session.execute(
+            select(CuratorGroupMasterOffer).where(
+                CuratorGroupMasterOffer.group_id == group_id,
+                CuratorGroupMasterOffer.to_user_id == user_id,
+            )
+        )
+    ).scalar_one_or_none()
+
+
+async def offer_curator_group_master(
+    curator_user_id: UUID,
+    group_id: UUID,
+    to_user_id: UUID,
+    session: AsyncSession,
+    *,
+    actor: User,
+) -> None:
+    """Offer a member of this school the role of its master.
+
+    THE CANDIDATE MUST BE BOTH: a member of THIS school, and a verified
+    master of the PLATFORM. The two are separate facts and neither implies
+    the other -- a verified master who never joined is a stranger to this
+    school, and a devoted student who is not a master cannot teach in it.
+    can_create_groups is NOT consulted: that right is about founding
+    schools, not about teaching in someone else's.
+
+    A NON-CURATOR GETS 404, not 403, and so does a request naming a
+    stranger: "no such school", "not your school", "school is dark" and
+    "that person is not in it" are one answer (P-08). The two refusals that
+    DO speak -- already a master, not a verified master -- are only reached
+    by the curator of the school, who already knows both facts about their
+    own roster.
+
+    REPEATING THE OFFER TO THE SAME PERSON IS A NO-OP, not a 409. The
+    constraint is (group_id, to_user_id), so several appointments may be
+    outstanding at once; pressing the button twice on one person is the
+    curator re-sending, not a conflict to report. This is the one place
+    this differs from transfer, which is UNIQUE (group_id) and answers 409.
+
+    Raises:
+        NotFoundError: not this curator's school, or the candidate is not
+            a member of it.
+        ConflictError already_master: the candidate is already a master
+            here -- there is nothing to appoint.
+        ForbiddenError master_required: the candidate holds no verified
+            master profile right now.
+    """
+    group = await _get_group_or_404(curator_user_id, group_id, session)
+
+    member = await _membership_row(group.id, to_user_id, session)
+    if member is None:
+        raise NotFoundError(
+            "Curator group not found",
+        )
+    if member.kind == CuratorMemberKind.MASTER.value:
+        raise ConflictError(
+            "This member is already a master of the school",
+            code="already_master",
+        )
+    if not await _has_master_capability(to_user_id, session):
+        raise ForbiddenError(
+            "Only a verified master can be appointed",
+            code="master_required",
+        )
+
+    if await _master_offer_row(group.id, to_user_id, session) is not None:
+        # Already offered. Nothing to write and nothing to send: a second
+        # notification about the same pending offer is noise, and a second
+        # journal line would say the curator acted twice when they decided
+        # once.
+        return
+
+    offer = CuratorGroupMasterOffer(group_id=group.id, to_user_id=to_user_id)
+    try:
+        async with session.begin_nested():
+            session.add(offer)
+            await session.flush()
+    except IntegrityError:
+        # Lost a race with the curator's own double tap. The winner's row is
+        # the offer; this request has nothing to add.
+        return
+
+    target_name = await _frozen_name(to_user_id, session)
+    _record_group_event(
+        group.id,
+        actor,
+        CuratorGroupEventKind.MASTER_OFFERED,
+        session,
+        data=_target_data(to_user_id, target_name),
+    )
+    await _notify_group_event(
+        session,
+        type="curator_group.master_offered",
+        recipient_id=to_user_id,
+        title="Вас приглашают вести школу",
+        body=(
+            f"{display_name(actor.first_name, actor.last_name)} предлагает "
+            f"вам стать мастером школы «{group.name}». Откройте приложение, "
+            f"чтобы принять или отклонить."
+        ),
+        group_id=group.id,
+        group_name=group.name,
+        actor_name=display_name(actor.first_name, actor.last_name),
+    )
+
+
+async def accept_curator_group_master_offer(
+    group_id: UUID,
+    user_id: UUID,
+    session: AsyncSession,
+    *,
+    actor: User,
+) -> None:
+    """Consent to becoming a master of this school.
+
+    THE INVARIANT "NOTHING IS WRITTEN INTO A DARK SCHOOL" HOLDS HERE NOT
+    BECAUSE THE GATE IS EVERYWHERE, BUT BECAUSE THIS PATH GOES THROUGH
+    _relation_or_404, WHICH CARRIES IT. The curator-side write helpers do
+    not: _get_group_or_404 filters on id and owner only. Move consent onto a
+    curator-side path and the invariant disappears silently -- the code will
+    keep working and will start writing into schools that are dark.
+
+    A dark school therefore refuses with the same 404 as everything else
+    about it, AND THE OFFER IS NOT DELETED. The condition is temporary: the
+    curator's verification can come back, and with it the ability to accept
+    something that was genuinely offered. Deleting it would punish the
+    appointee for somebody else's status.
+
+    THE CAPABILITY CHECK RUNS AGAIN HERE, and for the same shape of reason:
+    an appointee whose verification lapsed between the offer and this call
+    is refused, the offer survives, and re-verifying restores the ability to
+    accept. Checking only at the offer would let the gate be walked around
+    by waiting a week.
+
+    member_promoted IS WRITTEN HERE, by the fact of consent. Until GT-27 it
+    was written by the join path, when a master link upgraded a student.
+
+    Raises:
+        NotFoundError: no offer for you in this school, or the school is
+            not visible to you (dark, deleted, or never yours).
+        ForbiddenError master_required: your master verification is not
+            current.
+    """
+    group, _relation = await _relation_or_404(group_id, user_id, session)
+
+    offer = await _master_offer_row(group.id, user_id, session)
+    if offer is None:
+        raise NotFoundError("Offer not found", code="master_offer_not_found")
+
+    if not await _has_master_capability(user_id, session):
+        raise ForbiddenError(
+            "Only a verified master can accept",
+            code="master_required",
+        )
+
+    # NO "removed while the offer was pending" BRANCH, and its absence is
+    # the point: _relation_or_404 above answers 404 to anyone with no
+    # relation to the school, so a removed person never reaches this line.
+    # The offer itself is deleted where the removal happens -- in
+    # remove_curator_group_member and leave_curator_group -- rather than
+    # discovered dangling here. A branch under an unreachable state would
+    # document the impossible; this comment is what a reader needs instead.
+    member = await _membership_row(group.id, user_id, session)
+    member.kind = CuratorMemberKind.MASTER.value
+    await session.delete(offer)
+    await session.flush()
+
+    _record_group_event(
+        group.id,
+        actor,
+        CuratorGroupEventKind.MEMBER_PROMOTED,
+        session,
+    )
+    await _notify_group_event(
+        session,
+        type="curator_group.master_offer_accepted",
+        recipient_id=group.curator_user_id,
+        title="Назначение принято",
+        body=(
+            f"{display_name(actor.first_name, actor.last_name)} принял "
+            f"назначение мастером школы «{group.name}»."
+        ),
+        group_id=group.id,
+        group_name=group.name,
+        actor_name=display_name(actor.first_name, actor.last_name),
+    )
+
+
+async def decline_curator_group_master_offer(
+    group_id: UUID,
+    user_id: UUID,
+    session: AsyncSession,
+    *,
+    actor: User,
+) -> None:
+    """Refuse the appointment. Idempotent, and silent about offers not yours.
+
+    204 WHERE ACCEPT ANSWERS 404, the same asymmetry transfer already uses:
+    accept changes the roster and so must not tell "no offer" apart from
+    "not your offer"; declining something never offered leaves the world in
+    the state you asked for, so success is honest and reveals nothing.
+
+    Not gated on the school being active, for the same reason leaving is
+    not: an answer the appointee is entitled to give must not depend on
+    somebody else's verification status. Note the asymmetry with accept --
+    that one IS gated, because it WRITES into the school.
+    """
+    declined = (
+        await session.execute(
+            delete(CuratorGroupMasterOffer)
+            .where(
+                CuratorGroupMasterOffer.group_id == group_id,
+                CuratorGroupMasterOffer.to_user_id == user_id,
+            )
+            .returning(CuratorGroupMasterOffer.group_id)
+        )
+    ).first()
+    if declined is None:
+        return
+
+    row = (
+        await session.execute(
+            select(CuratorGroup.curator_user_id, CuratorGroup.name).where(
+                CuratorGroup.id == group_id
+            )
+        )
+    ).first()
+    if row is None:
+        # The school vanished under us; the FK would have taken the offer
+        # with it and there is no journal left to write into.
+        return
+    curator_id, group_name = row
+
+    _record_group_event(
+        group_id,
+        actor,
+        CuratorGroupEventKind.MASTER_OFFER_DECLINED,
+        session,
+        data=_target_data(curator_id, await _frozen_name(curator_id, session)),
+    )
+    await _notify_group_event(
+        session,
+        type="curator_group.master_offer_declined",
+        recipient_id=curator_id,
+        title="Назначение отклонено",
+        body=(
+            f"{display_name(actor.first_name, actor.last_name)} отклонил "
+            f"назначение мастером школы «{group_name}»."
+        ),
+        group_id=group_id,
+        group_name=group_name,
+        actor_name=display_name(actor.first_name, actor.last_name),
+    )

@@ -281,10 +281,11 @@ describe('CuratorGroupPageView -- relation matrix', () => {
     expect(buttonWith('Меню группы')).toBeTruthy()
     openMenu()
     await flush()
+    // GT-27: «Пригласить мастера» and «Пригласить ученика» collapsed into
+    // one «Пригласить» -- one link per school, masters appointed instead.
     for (const item of [
       'Редактировать',
-      'Пригласить мастера',
-      'Пригласить ученика',
+      'Пригласить',
       'Передать школу',
       'Удалить школу',
     ]) {
@@ -592,7 +593,11 @@ describe('CuratorGroupPageView -- curator management', () => {
     expect(document.body.querySelector('.cgp__school-avatar')).toBeNull()
   })
 
-  it('invite sheets: the menu items mint the right kind', async () => {
+  it('invite sheet: the menu item mints the link', async () => {
+    // GT-27: the menu used to carry «Пригласить мастера» beside «Пригласить
+    // ученика», and this test proved each opened the sheet for ITS kind.
+    // One link per school now -- masters are appointed from the roster --
+    // so there is one item and one call to check.
     mockHappyLoad('curator')
     mount()
     await flush()
@@ -600,19 +605,12 @@ describe('CuratorGroupPageView -- curator management', () => {
     openMenu()
     await flush()
     vi.mocked(cgApi.createCuratorGroupInvite).mockResolvedValue({
-      kind: 'master',
       invite_url: 'https://t.me/bot?startapp=curator_group_invite__tok',
     })
-    buttonWith('Пригласить мастера')?.click()
+    buttonWith('Пригласить')?.click()
     await flush()
 
-    expect(cgApi.createCuratorGroupInvite).toHaveBeenCalledWith('g1', 'master')
-
-    openMenu()
-    await flush()
-    buttonWith('Пригласить ученика')?.click()
-    await flush()
-    expect(cgApi.createCuratorGroupInvite).toHaveBeenCalledWith('g1', 'student')
+    expect(cgApi.createCuratorGroupInvite).toHaveBeenCalledWith('g1')
   })
 
   it('pagination (review P2): rows past the first 20-item page are loaded too', async () => {
@@ -745,7 +743,7 @@ describe('CuratorGroupPageView -- transfer', () => {
     await flush()
     expect(buttonWith('Передать школу')).toBeFalsy()
     // The rest of the menu is untouched.
-    for (const item of ['Редактировать', 'Пригласить мастера', 'Удалить школу']) {
+    for (const item of ['Редактировать', 'Пригласить', 'Удалить школу']) {
       expect(buttonWith(item)).toBeTruthy()
     }
   })
@@ -978,12 +976,11 @@ describe('CuratorGroupPageView -- journal (BE-19)', () => {
     openMenu()
     await flush()
     vi.mocked(cgApi.createCuratorGroupInvite).mockResolvedValue({
-      kind: 'master',
       invite_url: 'https://t.me/bot?startapp=curator_group_invite__tok',
     })
-    buttonWith('Пригласить мастера')?.click()
+    buttonWith('Пригласить')?.click()
     await flush()
-    expect(cgApi.createCuratorGroupInvite).toHaveBeenCalledWith('g1', 'master')
+    expect(cgApi.createCuratorGroupInvite).toHaveBeenCalledWith('g1')
 
     // Dismiss the sheet via its overlay (VModal's @click.self) -- the page's
     // close handler must catch the journal up with the mint it just caused.

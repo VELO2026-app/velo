@@ -208,12 +208,12 @@ async def _kinds(
 
 
 async def _invite(
-    client: AsyncClient, curator: dict, group_id: str, kind: str,
+    client: AsyncClient, curator: dict, group_id: str,
 ) -> str:
     with patch.object(settings, "telegram_bot_url", _BOT_URL):
         resp = await client.post(
             INVITES_URL.format(group_id=group_id),
-            json={"kind": kind},
+            json={},
             headers=auth_headers(curator["session_token"]),
         )
     assert resp.status_code == 200, resp.text
@@ -790,12 +790,8 @@ async def test_the_invite_preview_carries_the_avatar(
         await _set_avatar(client, curator, with_pic, _URL, name="С картинкой")
     ).status_code == 200
 
-    token_a = await _invite(
-        client, curator, with_pic, CuratorMemberKind.STUDENT.value,
-    )
-    token_b = await _invite(
-        client, curator, without, CuratorMemberKind.STUDENT.value,
-    )
+    token_a = await _invite(client, curator, with_pic)
+    token_b = await _invite(client, curator, without)
     headers = auth_headers(stranger["session_token"])
 
     a = await client.get(PREVIEW_URL.format(token=token_a), headers=headers)
@@ -830,9 +826,7 @@ async def test_an_outsider_gets_no_school_and_therefore_no_avatar(
     page = await client.get(PAGE_URL.format(group_id=group_id), headers=headers)
     assert page.status_code == 404, page.text
 
-    token = await _invite(
-        client, curator, group_id, CuratorMemberKind.STUDENT.value,
-    )
+    token = await _invite(client, curator, group_id)
     preview = await client.get(
         PREVIEW_URL.format(token=token), headers=headers,
     )
@@ -882,9 +876,7 @@ async def test_a_school_with_no_avatar_reports_null_in_every_response(
     await _seed_member(
         db_session, group_id, student, CuratorMemberKind.STUDENT.value,
     )
-    token = await _invite(
-        client, curator, group_id, CuratorMemberKind.MASTER.value,
-    )
+    token = await _invite(client, curator, group_id)
     curator_headers = auth_headers(curator["session_token"])
     student_headers = auth_headers(student["session_token"])
 

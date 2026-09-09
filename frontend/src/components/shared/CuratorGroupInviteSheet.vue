@@ -1,8 +1,11 @@
 <!--
   VELO Frontend -- CuratorGroupInviteSheet (schools FE-20 / GT P3)
 
-  The curator's invite-link dialog, ONE component for BOTH link kinds (prop
-  `kind`): POST /masters/me/curator-groups/{id}/invites mints (or returns)
+  The curator's invite-link dialog. The school has ONE link and everyone who
+  opens it joins as a student; the prop `kind` and the second sheet went with
+  the master link (GT-27 -- school masters are appointed, with the
+  appointee's confirmation).
+  POST /masters/me/curator-groups/{id}/invites mints (or returns)
   the reusable link; «Скопировать» uses the B2 clipboard pattern;
   «Отзыв ссылки» asks first -- revocation kills the token for everyone it
   was sent to, and that is not a tap to take by accident.
@@ -58,7 +61,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { createCuratorGroupInvite, revokeCuratorGroupInvite } from '@/api/curatorGroups'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
@@ -69,8 +72,6 @@ import VModal from '@/components/ui/VModal.vue'
 
 const props = defineProps<{
   open: boolean
-  /** Which of the school's two reusable links this sheet mints. */
-  kind: 'master' | 'student'
   groupId: string
 }>()
 
@@ -86,9 +87,7 @@ const copying = ref(false)
 const revoking = ref(false)
 const revokeConfirmOpen = ref(false)
 
-const title = computed(() =>
-  props.kind === 'master' ? 'Ссылка для мастеров' : 'Ссылка для учеников',
-)
+const title = 'Ссылка для вступления'
 
 // Mint on every open: repeat calls return the SAME url (idempotent by
 // contract), so this doubles as the refresh after a revoke elsewhere.
@@ -106,7 +105,7 @@ async function load(): Promise<void> {
   loading.value = true
   inviteUrl.value = null
   try {
-    const res = await createCuratorGroupInvite(props.groupId, props.kind)
+    const res = await createCuratorGroupInvite(props.groupId)
     inviteUrl.value = res.invite_url
   } catch (e) {
     // bot_url_not_configured and friends arrive here with their table
@@ -133,7 +132,7 @@ async function onCopy(): Promise<void> {
 async function onRevokeConfirm(): Promise<void> {
   revoking.value = true
   try {
-    await revokeCuratorGroupInvite(props.groupId, props.kind)
+    await revokeCuratorGroupInvite(props.groupId)
     revokeConfirmOpen.value = false
     toast.success('Ссылка отозвана')
     emit('close')

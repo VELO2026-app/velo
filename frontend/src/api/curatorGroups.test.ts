@@ -77,16 +77,12 @@ describe.each([
     `${G}/g1/members/u2`,
   ],
   [
-    'revokeCuratorGroupInvite (master kind)',
-    () => revokeCuratorGroupInvite('g1', 'master'),
+    // GT-27: two rows here used to prove the two link kinds hit two
+    // different paths. One link, one path, one row.
+    'revokeCuratorGroupInvite',
+    () => revokeCuratorGroupInvite('g1'),
     'delete',
-    `${G}/g1/invites/master`,
-  ],
-  [
-    'revokeCuratorGroupInvite (student kind)',
-    () => revokeCuratorGroupInvite('g1', 'student'),
-    'delete',
-    `${G}/g1/invites/student`,
+    `${G}/g1/invites`,
   ],
   [
     'cancelCuratorGroupTransfer',
@@ -222,10 +218,14 @@ describe('updateCuratorGroup -- avatar_url three-state (BE-20)', () => {
 })
 
 describe('invite + transfer + join bodies', () => {
-  it('createCuratorGroupInvite posts {kind} under the group path', async () => {
-    await createCuratorGroupInvite('g1', 'master')
+  it('createCuratorGroupInvite posts an empty body under the group path', async () => {
+    // It used to post { kind } and the assertion named the kind. GT-27 left
+    // one link per school, so the body carries nothing -- asserted as {},
+    // not skipped: a body that quietly regrew a field would pass a looser
+    // check.
+    await createCuratorGroupInvite('g1')
 
-    expect(api.post).toHaveBeenCalledWith(`${G}/g1/invites`, { kind: 'master' })
+    expect(api.post).toHaveBeenCalledWith(`${G}/g1/invites`, {})
   })
 
   it('offerCuratorGroupTransfer posts snake_case to_user_id', async () => {
