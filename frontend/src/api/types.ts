@@ -46,7 +46,6 @@ export type {
   ClaimMasterInviteResponse,
   CreateBookingRequest,
   CreateCompanyPromoRequest,
-  CreateCuratorGroupInviteRequest,
   CreateCuratorGroupRequest,
   CreateDiaryEntryRequest,
   CreateMasterPromoRequest,
