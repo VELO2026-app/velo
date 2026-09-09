@@ -58,6 +58,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.events.models import OutboxEvent
 from app.modules.curator_groups.models import (
+    CuratorGroup,
     CuratorGroupEvent,
     CuratorGroupEventKind,
     CuratorMemberKind,
@@ -103,12 +104,34 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
 
     It also sweeps this band's outbox rows by data->>'target_value', which
     is what keeps the per-recipient counts below honest between tests.
+
+    THE LEFTOVER CHECK AFTER THE SWEEP IS NOT DECORATION. Schools and their
+    journals are reached only through a cascade -- curator_group cascades
+    from users, curator_group_event cascades from curator_group -- and the
+    helper never names either table. A school that ended up owned by
+    somebody outside this band would survive the sweep silently, and the
+    first symptom would be a FAILURE IN ANOTHER FILE: test_curator_group_
+    journal.py counts journal rows and this file runs before it. That is
+    exactly how BE-25 was found. Asserting here turns "somebody else's test
+    is red" into "this file leaked", which is the difference between an
+    hour and a minute.
     """
     await full_cleanup_range(db_session, _TID_MIN, _TID_MAX, delete_users=True)
     await db_session.commit()
     yield
     await full_cleanup_range(db_session, _TID_MIN, _TID_MAX, delete_users=True)
     await db_session.commit()
+    leftovers = (
+        await fresh_execute(
+            select(CuratorGroup.id)
+            .join(User, User.id == CuratorGroup.curator_user_id)
+            .where(User.telegram_id.between(_TID_MIN, _TID_MAX))
+        )
+    ).scalars().all()
+    assert leftovers == [], (
+        f"{len(leftovers)} school(s) of this band survived the sweep -- "
+        f"their journal rows will surface as a failure in another file"
+    )
 
 
 # ===========================================================================

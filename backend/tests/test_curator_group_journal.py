@@ -622,9 +622,24 @@ async def test_an_action_that_fails_leaves_no_event_behind(
     ).scalar_one()
     assert groups == 1
 
+    # BE-25: scoped to THIS curator's schools. The assertion was right and
+    # stays right -- a failed create writes no event -- but it used to be
+    # spelled as a count over the WHOLE curator_group_event table, which
+    # additionally claimed that no other test file had left a row behind.
+    # That second claim is not about the code under test, it held only
+    # while every school in the suite belonged to a band this file's
+    # cleanup reached, and the very next line already asserts the precise
+    # version for the group in hand. What retired it: a new file
+    # (test_be25_school_notifications.py) runs earlier in the session, so
+    # the global number stopped being this test's business.
     events = (
         await fresh_execute(
-            select(func.count()).select_from(CuratorGroupEvent)
+            select(func.count())
+            .select_from(CuratorGroupEvent)
+            .join(CuratorGroup, CuratorGroup.id == CuratorGroupEvent.group_id)
+            .where(
+                CuratorGroup.curator_user_id == UUID(curator["user"]["id"])
+            )
         )
     ).scalar_one()
     assert events == 1
