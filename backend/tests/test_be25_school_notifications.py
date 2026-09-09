@@ -643,8 +643,11 @@ async def test_every_notifying_action_also_wrote_a_journal_line(
     Four notifying actions produce four journal lines of the matching kinds,
     and the count of school notifications across every participant equals
     four -- no notification without an event, no notifying event without a
-    notification. Either assertion alone passes in a world where one of the
-    two writers was never called at all.
+    notification. (The heir's arrival is seeded rather than joined, so it is
+    not one of the four; see the count at the bottom.)
+
+    Either assertion alone passes in a world where one of the two writers
+    was never called at all.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     heir = await _make_verified_master(client, db_session, _TID_HEIR)
@@ -675,8 +678,17 @@ async def test_every_notifying_action_also_wrote_a_journal_line(
             1 for t in await _types_for(person)
             if t.startswith("curator_group.")
         )
-    # two joins -> two arrivals, one removal, one offer, one accept.
-    assert school_notes == 5
+    # ONE arrival, one removal, one offer, one accept. It used to be two
+    # arrivals: the heir became a school master by opening the master invite
+    # link, and that join produced its own member_joined notification. GT-27
+    # removed the link, so the heir is seeded straight into the roster --
+    # seeding writes no journal line and sends nothing, which is exactly why
+    # the number dropped by one and not by two.
+    #
+    # The claim is unchanged and is still the point: every notifying action
+    # here produced a notification, and no notification appeared without an
+    # action. Only the count of actions moved.
+    assert school_notes == 4
 
 
 @pytest.mark.asyncio
