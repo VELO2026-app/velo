@@ -45,11 +45,11 @@ from app.core.mixins import TimestampMixin, UUIDMixin
 class CuratorMemberKind(enum.StrEnum):
     """What kind of relation one membership row describes.
 
-    ONE enum serves both curator_group_member.kind and
-    curator_group_invite.kind (GT-3): the value sets are identical
-    ('master' | 'student') and a second enum spelling the same two strings
-    would be a copy -- the first edit to one of them would leave the other
-    lying.
+    Types curator_group_member.kind and nothing else. Until GT-27 this enum
+    also served curator_group_invite.kind -- one enum for two columns, since
+    the value sets were identical and a second spelling would have been a
+    copy. That column is gone with the second invite link: everyone joins as
+    a student and a curator appoints masters by offer.
 
     Stored as String(10), never a PG ENUM -- same choice as
     Practice.audience_kind (practices/models.py): a PG ENUM needs a migration
