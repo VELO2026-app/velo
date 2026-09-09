@@ -19,8 +19,8 @@
 //   DELETE /{id}                                 -- delete (never blocked, I-11)
 //   GET    /{id}/members                         -- roster (?kind&search&limit&offset)
 //   DELETE /{id}/members/{user_id}               -- remove member (idempotent)
-//   POST   /{id}/invites                         -- get-or-mint link {kind}
-//   DELETE /{id}/invites/{kind}                  -- revoke that kind's link
+//   POST   /{id}/invites                         -- get-or-mint the link
+//   DELETE /{id}/invites                         -- revoke it
 //   POST   /{id}/transfer                        -- offer hand-over {to_user_id}
 //   DELETE /{id}/transfer                        -- cancel offer
 //   GET    /{id}/delete-preview                  -- advisory before deleting
@@ -186,18 +186,21 @@ export function removeCuratorGroupMember(id: string, userId: string): Promise<vo
  *  expects a shared link to keep working); rotation is revoke + create, on
  *  purpose. 503 bot_url_not_configured when the bot url is unset -- the
  *  caller must show the errorMessages phrase, never a made-up link. */
-export function createCuratorGroupInvite(
-  id: string,
-  kind: CuratorGroupMemberKind,
-): Promise<CuratorGroupInviteResponse> {
-  return api.post<CuratorGroupInviteResponse>(`${CURATOR_BASE}/${id}/invites`, { kind })
+export function createCuratorGroupInvite(id: string): Promise<CuratorGroupInviteResponse> {
+  return api.post<CuratorGroupInviteResponse>(`${CURATOR_BASE}/${id}/invites`, {})
 }
 
-/** DELETE /masters/me/curator-groups/{id}/invites/{kind} -- revoke ONE kind of
- *  link; the other kind keeps working. Idempotent. Afterwards the old token
- *  resolves nowhere: preview and join read the same row. */
-export function revokeCuratorGroupInvite(id: string, kind: CuratorGroupMemberKind): Promise<void> {
-  return api.delete(`${CURATOR_BASE}/${id}/invites/${kind}`)
+/** DELETE /masters/me/curator-groups/{id}/invites -- revoke the school's link.
+ *  Idempotent. Afterwards the old token resolves nowhere: preview and join
+ *  read the same row.
+ *
+ *  BOTH FUNCTIONS USED TO TAKE A `kind`. A school had two links and the
+ *  master one promoted a student to master on join; GT-27 cancelled that
+ *  path -- school masters are appointed by the curator with the appointee's
+ *  confirmation. Do not confuse this with the `kind` in
+ *  CuratorGroupMembersQuery above: that one filters the ROSTER and stays. */
+export function revokeCuratorGroupInvite(id: string): Promise<void> {
+  return api.delete(`${CURATOR_BASE}/${id}/invites`)
 }
 
 /** POST /masters/me/curator-groups/{id}/transfer -- offer the school to one of

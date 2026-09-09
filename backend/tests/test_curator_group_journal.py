@@ -32,6 +32,13 @@
 #     the target records the actor twice. A test asserting only "an event
 #     was written" passes that bug happily.
 #
+# GT-27: 2 tests removed here, not weakened. They asserted which
+# journal line a MASTER INVITE LINK wrote -- one member_joined for a newcomer,
+# a member_promoted for an existing student. There is no master link any
+# more: school masters are appointed with confirmation, and member_promoted
+# is written by the acceptance (tests/test_curator_master_offer.py). The
+# scenarios became impossible to build rather than changing shape.
+#
 # ⚠ BACKEND-ONLY, UNPROVEN LOCALLY -- no Postgres in the authoring
 # environment. Written to be read and to run on the server; never executed
 # via pytest this session. See the delivery report for what WAS checked.
@@ -81,9 +88,8 @@ JOURNAL_URL = "/api/v1/masters/me/curator-groups/{group_id}/journal"
 PAGE_URL = "/api/v1/curator-groups/{group_id}"
 MEMBER_URL = "/api/v1/masters/me/curator-groups/{group_id}/members/{user_id}"
 INVITES_URL = "/api/v1/masters/me/curator-groups/{group_id}/invites"
-INVITE_KIND_URL = (
-    "/api/v1/masters/me/curator-groups/{group_id}/invites/{kind}"
-)
+# GT-27: the revoke path lost its /{kind} segment with the second link.
+INVITE_REVOKE_URL = "/api/v1/masters/me/curator-groups/{group_id}/invites"
 JOIN_URL = "/api/v1/curator-groups/join"
 LEAVE_URL = "/api/v1/curator-groups/{group_id}/membership"
 OFFER_URL = "/api/v1/masters/me/curator-groups/{group_id}/transfer"
@@ -167,13 +173,13 @@ async def _make_group(
 
 
 async def _invite(
-    client: AsyncClient, curator: dict, group_id: str, kind: str,
+    client: AsyncClient, curator: dict, group_id: str,
 ) -> str:
     """Mint a link under a patched bot url and return the raw token."""
     with patch.object(settings, "telegram_bot_url", _BOT_URL):
         resp = await client.post(
             INVITES_URL.format(group_id=group_id),
-            json={"kind": kind},
+            json={},
             headers=auth_headers(curator["session_token"]),
         )
     assert resp.status_code == 200, resp.text
@@ -758,12 +764,8 @@ async def test_pressing_invite_twice_mints_one_link_and_records_one_event(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     group_id = await _make_group(client, curator)
 
-    first = await _invite(
-        client, curator, group_id, CuratorMemberKind.STUDENT.value,
-    )
-    second = await _invite(
-        client, curator, group_id, CuratorMemberKind.STUDENT.value,
-    )
+    first = await _invite(client, curator, group_id)
+    second = await _invite(client, curator, group_id)
     assert first == second
 
     created = [
@@ -776,39 +778,6 @@ async def test_pressing_invite_twice_mints_one_link_and_records_one_event(
     assert first not in str(created[0])
 
 
-@pytest.mark.asyncio
-async def test_revoking_a_link_is_recorded_and_revoking_nothing_is_not(
-    client: AsyncClient, db_session: AsyncSession,
-) -> None:
-    """The link that existed is news; the one that never did is not.
-
-    Two kinds in one test on purpose: student links are minted here and
-    master links are not, so revoking the master kind exercises the
-    never-existed path against the same school, in the same feed, with the
-    same curator. A test that only revoked the live link would leave the
-    no-op branch uncovered.
-    """
-    curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    group_id = await _make_group(client, curator)
-    await _invite(client, curator, group_id, CuratorMemberKind.STUDENT.value)
-
-    for kind in (
-        CuratorMemberKind.MASTER.value,
-        CuratorMemberKind.STUDENT.value,
-    ):
-        resp = await client.delete(
-            INVITE_KIND_URL.format(group_id=group_id, kind=kind),
-            headers=auth_headers(curator["session_token"]),
-        )
-        assert resp.status_code == 204, resp.text
-
-    revoked = [
-        e
-        for e in await _events(client, curator, group_id)
-        if e["event"] == CuratorGroupEventKind.INVITE_REVOKED.value
-    ]
-    assert len(revoked) == 1
-    assert revoked[0]["data"]["kind"] == CuratorMemberKind.STUDENT.value
 
 
 @pytest.mark.asyncio
@@ -888,70 +857,8 @@ async def test_a_rename_and_a_description_edit_are_two_separate_events(
 # ===========================================================================
 
 
-@pytest.mark.asyncio
-async def test_joining_by_a_master_link_is_one_arrival_not_a_promotion(
-    client: AsyncClient, db_session: AsyncSession,
-) -> None:
-    """A newcomer using a master link writes member_joined ONCE.
-
-    Not member_joined followed by member_promoted: nobody was promoted,
-    they arrived as a master. The kind is asserted on the entry, so the
-    "once" cannot be satisfied by writing the wrong single event.
-    """
-    curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    joiner = await _make_verified_master(client, db_session, _TID_MASTER_B)
-    group_id = await _make_group(client, curator)
-
-    token = await _invite(
-        client, curator, group_id, CuratorMemberKind.MASTER.value,
-    )
-    resp = await _join(client, joiner, token)
-    assert resp.status_code == 200, resp.text
-
-    kinds = await _kinds(client, curator, group_id)
-    assert kinds.count(CuratorGroupEventKind.MEMBER_JOINED.value) == 1
-    assert CuratorGroupEventKind.MEMBER_PROMOTED.value not in kinds
-
-    joined = next(
-        e
-        for e in await _events(client, curator, group_id)
-        if e["event"] == CuratorGroupEventKind.MEMBER_JOINED.value
-    )
-    assert joined["data"]["kind"] == CuratorMemberKind.MASTER.value
-    assert joined["actor"]["user_id"] == joiner["user"]["id"]
 
 
-@pytest.mark.asyncio
-async def test_a_student_upgraded_by_a_master_link_is_promoted_not_joined(
-    client: AsyncClient, db_session: AsyncSession,
-) -> None:
-    """Student first, then a master link: exactly one promotion, no arrival.
-
-    And pressing the master link a THIRD time writes nothing at all -- the
-    upgrade already happened, so idempotence in the endpoint has to mean
-    idempotence in the feed or the same link would fill it.
-    """
-    curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    joiner = await _make_verified_master(client, db_session, _TID_MASTER_B)
-    group_id = await _make_group(client, curator)
-
-    student_token = await _invite(
-        client, curator, group_id, CuratorMemberKind.STUDENT.value,
-    )
-    assert (await _join(client, joiner, student_token)).status_code == 200
-
-    master_token = await _invite(
-        client, curator, group_id, CuratorMemberKind.MASTER.value,
-    )
-    assert (await _join(client, joiner, master_token)).status_code == 200
-
-    kinds = await _kinds(client, curator, group_id)
-    assert kinds.count(CuratorGroupEventKind.MEMBER_JOINED.value) == 1
-    assert kinds.count(CuratorGroupEventKind.MEMBER_PROMOTED.value) == 1
-
-    before = await _row_count(group_id)
-    assert (await _join(client, joiner, master_token)).status_code == 200
-    assert await _row_count(group_id) == before
 
 
 @pytest.mark.asyncio
@@ -971,9 +878,7 @@ async def test_a_member_joining_and_leaving_leaves_both_records_intact(
     )
     group_id = await _make_group(client, curator)
 
-    token = await _invite(
-        client, curator, group_id, CuratorMemberKind.STUDENT.value,
-    )
+    token = await _invite(client, curator, group_id)
     assert (await _join(client, student, token)).status_code == 200
 
     left = await client.delete(
@@ -1323,9 +1228,7 @@ async def test_an_entry_outlives_the_person_who_made_it(
     )
     group_id = await _make_group(client, curator)
 
-    token = await _invite(
-        client, curator, group_id, CuratorMemberKind.STUDENT.value,
-    )
+    token = await _invite(client, curator, group_id)
     assert (await _join(client, student, token)).status_code == 200
     student_id = student["user"]["id"]
 
@@ -1361,7 +1264,7 @@ async def test_deleting_the_school_takes_its_journal_with_it(
     doomed = await _make_group(client, curator, name="Уходит")
     kept = await _make_group(client, curator, name="Остаётся")
 
-    await _invite(client, curator, doomed, CuratorMemberKind.STUDENT.value)
+    await _invite(client, curator, doomed)
     assert await _row_count(doomed) == 2
     assert await _row_count(kept) == 1
 
@@ -1403,3 +1306,36 @@ async def test_a_suspended_curator_cannot_read_but_their_entries_survive(
     assert blocked.status_code == 403
 
     assert await _row_count(group_id) == before
+
+
+@pytest.mark.asyncio
+async def test_revoking_a_link_is_recorded_and_revoking_nothing_is_not(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """The link that existed is news; the one that never did is not.
+
+    RESTORED AND REFORMULATED, not deleted: the no-op branch is still real,
+    only the way to reach it changed. It used to be reached by revoking the
+    MASTER kind on a school that had only minted a student link -- two kinds,
+    one school, one feed. With one link per school the same branch is reached
+    by revoking twice: the second call finds no row. What the old form was
+    right about -- that a revoke of nothing must write nothing -- is exactly
+    what this still pins.
+    """
+    curator = await _make_verified_master(client, db_session, _TID_CURATOR)
+    group_id = await _make_group(client, curator)
+    await _invite(client, curator, group_id)
+
+    for _ in range(2):
+        resp = await client.delete(
+            INVITE_REVOKE_URL.format(group_id=group_id),
+            headers=auth_headers(curator["session_token"]),
+        )
+        assert resp.status_code == 204, resp.text
+
+    revoked = [
+        e
+        for e in await _events(client, curator, group_id)
+        if e["event"] == CuratorGroupEventKind.INVITE_REVOKED.value
+    ]
+    assert len(revoked) == 1

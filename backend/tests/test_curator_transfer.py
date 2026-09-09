@@ -525,14 +525,16 @@ async def test_accept_moves_the_group_in_one_transaction(
         db_session, group["id"], student["user"]["id"],
         CuratorMemberKind.STUDENT,
     )
+    # GT-27: one link per school. This used to mint both kinds, because the
+    # point below is that a transfer leaves the school's links untouched --
+    # with one link the same claim needs one token, not two.
     with patch.object(settings, "telegram_bot_url", _BOT_URL):
-        for kind in ("master", "student"):
-            resp = await client.post(
-                INVITES_URL.format(group_id=group["id"]),
-                json={"kind": kind},
-                headers=auth_headers(curator["session_token"]),
-            )
-            assert resp.status_code == 200
+        resp = await client.post(
+            INVITES_URL.format(group_id=group["id"]),
+            json={},
+            headers=auth_headers(curator["session_token"]),
+        )
+        assert resp.status_code == 200
     tokens_before = sorted(
         (
             await fresh_execute(

@@ -186,6 +186,30 @@ curator_group.member_removed:
 curator_group.member_joined:
   category: curator_groups
 
+# -- GT-27, appointing a school master. The split follows the ADDRESSEE, not
+#    the event: the same appointment produces one message the candidate must
+#    not be able to silence and one the curator may.
+#
+#    master_offered goes to the CANDIDATE: somebody is handing them a
+#    teaching role in a school, and the offer sits there until they answer.
+#    Missing it means the curator waits on a person who never knew. Same
+#    shape as the four BE-25 types above -- an event about your own standing,
+#    rare, irreversible by silence -- so no category.
+#
+#    The two outcomes go to the CURATOR, and they belong in curator_groups
+#    with member_joined for the same reason member_joined is there: a curator
+#    of a large school appoints repeatedly, so this is the only one of the
+#    three that scales with the school. A curator who mutes it loses a
+#    convenience; a candidate who mutes an offer loses the role. --
+
+curator_group.master_offered:
+
+curator_group.master_offer_accepted:
+  category: curator_groups
+
+curator_group.master_offer_declined:
+  category: curator_groups
+
 # -- Chat baseline (comms-native msg.* types; velo never emits these,
 #    the messaging engine does; mapping fixed by dispatch plan §6b) --
 

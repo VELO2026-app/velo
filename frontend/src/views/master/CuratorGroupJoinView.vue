@@ -21,11 +21,13 @@ State machine (each renders honestly, none fakes data):
                         «Открыть» button into the school page
   can_join=true      -> school card + «Вступить» / «Отказаться»
 
-The upgrade nuance (brif §7): a STUDENT member opening a MASTER link gets
-can_join=true with relation="student" — they are already inside and the link
-still does something (kind upgrade). The button stays active and a hint
-explains what will happen. «Отказаться» is a pure router.replace — no server
-state, the link keeps working.
+GT-27: there used to be an upgrade nuance here — a STUDENT opening a MASTER
+link got can_join=true with relation="student", because joining would promote
+them, so the button stayed active and a hint explained it. One link now, and
+it only ever makes students: a member always gets can_join=false,
+reason=already_member. School masters are appointed by the curator with the
+appointee's confirmation, on a screen of its own. «Отказаться» is a pure
+router.replace — no server state, the link keeps working.
 -->
 
 <template>
@@ -67,13 +69,7 @@ state, the link keeps working.
       <!-- The school card behind the link. -->
       <template v-else-if="preview">
         <VCard class="cg-join__card">
-          <p class="cg-join__kind">
-            {{
-              preview.kind === 'master'
-                ? 'Приглашение в школу как мастер'
-                : 'Приглашение в школу как ученик'
-            }}
-          </p>
+          <p class="cg-join__kind">Приглашение в школу</p>
           <h1 class="cg-join__name">{{ preview.group.name }}</h1>
           <p v-if="curatorName" class="cg-join__curator">Куратор: {{ curatorName }}</p>
           <p v-if="preview.group.description" class="cg-join__description">
@@ -83,7 +79,6 @@ state, the link keeps working.
             Мастеров: {{ preview.group.masters_count }} · Учеников:
             {{ preview.group.students_count }}
           </p>
-          <p v-if="upgradeHint" class="cg-join__hint">{{ upgradeHint }}</p>
         </VCard>
         <div class="cg-join__actions">
           <VButton variant="primary" block :loading="joining" @click="join">Вступить</VButton>
@@ -122,17 +117,6 @@ const joining = ref(false)
 
 const curatorName = computed(() => preview.value?.group.curator_name?.trim() || null)
 
-/** The student-opens-master-link upgrade (can_join=true + relation="student"):
- *  meaningful action, not "already a member" — explain it, keep the button. */
-const upgradeHint = computed(() => {
-  const p = preview.value
-  if (!p || !p.can_join) return ''
-  if (p.kind === 'master' && p.relation === 'student') {
-    return 'Вы уже ученик этой школы — вступление повысит вас до мастера школы.'
-  }
-  return ''
-})
-
 interface RefusalView {
   title: string
   description: string
@@ -156,12 +140,6 @@ const blocked = computed<RefusalView | null>(() => {
       return { title: 'Это ваша школа', description: 'Вы куратор этой школы.', open: true }
     case 'already_member':
       return { title: 'Вы уже в школе', description: 'Вы уже состоите в этой школе.', open: true }
-    case 'master_required':
-      return {
-        title: 'Ссылка для верифицированных мастеров',
-        description: 'Вступить по этой ссылке могут только мастера с подтверждённым профилем.',
-        open: false,
-      }
     case 'blocked_by_curator':
       return {
         title: 'Вступление недоступно',
@@ -217,7 +195,7 @@ async function join(): Promise<void> {
         return
       }
       if (e.status === 403 || e.status === 409) {
-        // Refused at the gate (master_required / blocked / own_group):
+        // Refused at the gate (blocked / own_group):
         // re-read the preview, which DESCRIBES the reason instead of us
         // guessing from the status code.
         await loadPreview()

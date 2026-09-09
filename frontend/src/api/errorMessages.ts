@@ -66,6 +66,7 @@ export const ERROR_MESSAGES: Record<string, string> = {
 
   // New -- written from each raise site's own English message.
   already_master: 'Вы уже мастер',
+  master_offer_not_found: 'Назначение недействительно или уже отменено',
   blocked_by_master: 'Мастер этой практики закрыл вам доступ',
   master_profile_not_found: 'Профиль мастера не найден',
   master_profile_not_verified: 'Профиль мастера ещё не подтверждён',
@@ -94,7 +95,11 @@ export const ERROR_MESSAGES: Record<string, string> = {
   curator_cannot_leave:
     'Куратор не может покинуть свою школу. Передайте её другому мастеру или удалите.',
   own_group: 'Это ваша школа',
-  master_required: 'Ссылка предназначена для верифицированных мастеров',
+  // GT-27: it used to say «Ссылка предназначена для верифицированных
+  // мастеров» -- the master invite link refusing an unverified account.
+  // That link is gone; the code now comes from appointing a school
+  // master, so the phrase had to stop talking about a link.
+  master_required: 'Назначить мастером школы можно только верифицированного мастера',
   blocked_by_curator: 'Вступление в эту школу недоступно',
   transfer_pending:
     'Предложение уже отправлено. Сначала отмените его, затем предложите другому мастеру.',

@@ -12,6 +12,23 @@
 # curator CRUD) and 66200-66399 (test_curator_groups_page.py, the member
 # page). Three files, three disjoint bands.
 #
+# GT-27: ELEVEN TESTS WERE REMOVED FROM THIS FILE, NOT WEAKENED. A school used
+# to have TWO reusable links, and the master one promoted an existing student
+# to kind='master' on join. That path was cancelled by owner ruling -- school
+# masters are appointed by the curator and the appointment takes effect only
+# on the appointee's confirmation (tests/test_curator_master_offer.py).
+#
+# The removed eleven all asserted things about the second link: that the two
+# kinds were different links, that revoking one left the other working, that
+# an unverified account was refused by the master one, that a student was
+# upgraded by it. Their scenarios did not CHANGE, they became impossible to
+# build -- there is no master link to open. Reformulating them would have
+# meant writing tests for a shape that no longer exists, which is the one
+# thing worse than deleting them. What survived was rewritten for one link.
+#
+# The trace lives here rather than in eleven docstrings that went with their
+# tests: without it the next reader sees a gap in coverage and restores it.
+#
 # ⚠ BACKEND-ONLY, UNPROVEN LOCALLY -- no Postgres in the authoring
 # environment. Written to be read and to run on the server.
 #
@@ -58,7 +75,8 @@ from tests.helpers import (
 
 CURATOR_GROUPS_URL = "/api/v1/masters/me/curator-groups"
 INVITES_URL = "/api/v1/masters/me/curator-groups/{group_id}/invites"
-INVITE_KIND_URL = "/api/v1/masters/me/curator-groups/{group_id}/invites/{kind}"
+# GT-27: the revoke path lost its /{kind} segment with the second link.
+INVITE_REVOKE_URL = "/api/v1/masters/me/curator-groups/{group_id}/invites"
 PREVIEW_URL = "/api/v1/curator-groups/invites/{token}"
 JOIN_URL = "/api/v1/curator-groups/join"
 PAGE_URL = "/api/v1/curator-groups/{group_id}"
@@ -160,14 +178,16 @@ async def _create_group(
     return resp.json()
 
 
-async def _invite(
-    client: AsyncClient, curator: dict, group_id: str, kind: str,
-) -> str:
-    """POST the invite under a patched bot url and return the raw token."""
+async def _invite(client: AsyncClient, curator: dict, group_id: str) -> str:
+    """POST the invite under a patched bot url and return the raw token.
+
+    IT USED TO TAKE A `kind`. A school had two links and this helper minted
+    either; GT-27 left one, so the parameter went with the second link.
+    """
     with patch.object(settings, "telegram_bot_url", _BOT_URL):
         resp = await client.post(
             INVITES_URL.format(group_id=group_id),
-            json={"kind": kind},
+            json={},
             headers=auth_headers(curator["session_token"]),
         )
     assert resp.status_code == 200, resp.text
@@ -282,8 +302,8 @@ async def test_repeat_create_returns_the_same_link(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     group = await _create_group(client, curator)
 
-    first = await _invite(client, curator, group["id"], "master")
-    second = await _invite(client, curator, group["id"], "master")
+    first = await _invite(client, curator, group["id"])
+    second = await _invite(client, curator, group["id"])
     assert first == second
 
     rows = (
@@ -296,58 +316,32 @@ async def test_repeat_create_returns_the_same_link(
     assert len(rows) == 1
 
 
-@pytest.mark.asyncio
-async def test_the_two_kinds_are_two_different_links(
-    client: AsyncClient, db_session: AsyncSession,
-) -> None:
-    """UNIQUE (group_id, kind): one live link per kind, two rows in all."""
-    curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    group = await _create_group(client, curator)
-
-    master_token = await _invite(client, curator, group["id"], "master")
-    student_token = await _invite(client, curator, group["id"], "student")
-    assert master_token != student_token
-
-    kinds = (
-        await fresh_execute(
-            select(CuratorGroupInvite.kind).where(
-                CuratorGroupInvite.group_id == UUID(group["id"])
-            )
-        )
-    ).scalars().all()
-    assert sorted(kinds) == ["master", "student"]
 
 
 @pytest.mark.asyncio
-async def test_invite_url_carries_the_deeplink_and_not_the_kind(
+async def test_invite_url_carries_the_deeplink(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """One deep-link kind for both flavours (TZ 6.1): the url differs only
-    by token, and the server tells master from student by the row."""
+    """The url is prefix + token and carries nothing else.
+
+    It used to also prove that the two kinds produced two different urls
+    differing only by token. One link now, so what is left to pin is that
+    the deep link still says nothing but the token -- a second copy of any
+    fact in a url is a copy the sender can edit by hand.
+    """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     group = await _create_group(client, curator)
 
     with patch.object(settings, "telegram_bot_url", _BOT_URL):
-        master = await client.post(
+        resp = await client.post(
             INVITES_URL.format(group_id=group["id"]),
-            json={"kind": "master"},
+            json={},
             headers=auth_headers(curator["session_token"]),
         )
-        student = await client.post(
-            INVITES_URL.format(group_id=group["id"]),
-            json={"kind": "student"},
-            headers=auth_headers(curator["session_token"]),
-        )
-    assert master.json()["kind"] == "master"
-    assert student.json()["kind"] == "student"
-    for resp in (master, student):
-        url = resp.json()["invite_url"]
+    assert resp.status_code == 200, resp.text
+    assert "kind" not in resp.json()
+    for url in (resp.json()["invite_url"],):
         assert url.startswith(f"{_BOT_URL}{_DEEPLINK}")
-    # The two urls differ ONLY by token: no kind anywhere in the link.
-    master_url = master.json()["invite_url"]
-    student_url = student.json()["invite_url"]
-    assert master_url != student_url
-    for url in (master_url, student_url):
         prefix, token = url.split(_DEEPLINK, 1)
         assert prefix == _BOT_URL
         assert "master" not in token and "student" not in token
@@ -367,7 +361,7 @@ async def test_missing_bot_url_is_503_and_writes_nothing(
     with patch.object(settings, "telegram_bot_url", ""):
         resp = await client.post(
             INVITES_URL.format(group_id=group["id"]),
-            json={"kind": "master"},
+            json={},
             headers=auth_headers(curator["session_token"]),
         )
     assert resp.status_code == 503
@@ -382,7 +376,7 @@ async def test_missing_bot_url_is_503_and_writes_nothing(
     ).scalars().all()
     assert rows == []
 
-    assert await _invite(client, curator, group["id"], "master")
+    assert await _invite(client, curator, group["id"])
 
 
 @pytest.mark.asyncio
@@ -399,40 +393,18 @@ async def test_invites_on_someone_elses_group_are_404(
     with patch.object(settings, "telegram_bot_url", _BOT_URL):
         created = await client.post(
             INVITES_URL.format(group_id=group["id"]),
-            json={"kind": "master"},
+            json={},
             headers=auth_headers(stranger["session_token"]),
         )
     assert created.status_code == 404
 
     revoked = await client.delete(
-        INVITE_KIND_URL.format(group_id=group["id"], kind="master"),
+        INVITE_REVOKE_URL.format(group_id=group["id"]),
         headers=auth_headers(stranger["session_token"]),
     )
     assert revoked.status_code == 404
 
 
-@pytest.mark.asyncio
-async def test_unknown_kind_is_422_in_body_and_in_path(
-    client: AsyncClient, db_session: AsyncSession,
-) -> None:
-    """P-11: the Literal rejects it at the FastAPI layer, so no hand-rolled
-    Enum() lookup can raise ValueError into a 500."""
-    curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    group = await _create_group(client, curator)
-    headers = auth_headers(curator["session_token"])
-
-    body = await client.post(
-        INVITES_URL.format(group_id=group["id"]),
-        json={"kind": "foo"},
-        headers=headers,
-    )
-    assert body.status_code == 422
-
-    path = await client.delete(
-        INVITE_KIND_URL.format(group_id=group["id"], kind="foo"),
-        headers=headers,
-    )
-    assert path.status_code == 422
 
 
 # ===========================================================================
@@ -440,26 +412,6 @@ async def test_unknown_kind_is_422_in_body_and_in_path(
 # ===========================================================================
 
 
-@pytest.mark.asyncio
-async def test_revoking_one_kind_leaves_the_other_working(
-    client: AsyncClient, db_session: AsyncSession,
-) -> None:
-    """The two links are independent. The pair is the point: without the
-    second assertion "revoke works" could mean "revoke wiped both"."""
-    curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    joiner = await login_user(client, telegram_id=_TID_STUDENT_A)
-    group = await _create_group(client, curator)
-    master_token = await _invite(client, curator, group["id"], "master")
-    student_token = await _invite(client, curator, group["id"], "student")
-
-    revoked = await client.delete(
-        INVITE_KIND_URL.format(group_id=group["id"], kind="master"),
-        headers=auth_headers(curator["session_token"]),
-    )
-    assert revoked.status_code == 204
-
-    assert (await _preview(client, joiner, master_token)).status_code == 404
-    assert (await _preview(client, joiner, student_token)).status_code == 200
 
 
 @pytest.mark.asyncio
@@ -471,13 +423,13 @@ async def test_rotation_mints_a_new_token_and_kills_the_old_one(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     joiner = await login_user(client, telegram_id=_TID_STUDENT_A)
     group = await _create_group(client, curator)
-    old = await _invite(client, curator, group["id"], "student")
+    old = await _invite(client, curator, group["id"])
 
     await client.delete(
-        INVITE_KIND_URL.format(group_id=group["id"], kind="student"),
+        INVITE_REVOKE_URL.format(group_id=group["id"]),
         headers=auth_headers(curator["session_token"]),
     )
-    new = await _invite(client, curator, group["id"], "student")
+    new = await _invite(client, curator, group["id"])
     assert new != old
 
     assert (await _preview(client, joiner, old)).status_code == 404
@@ -493,10 +445,10 @@ async def test_revoking_a_link_that_does_not_exist_is_204(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     group = await _create_group(client, curator)
     headers = auth_headers(curator["session_token"])
-    url = INVITE_KIND_URL.format(group_id=group["id"], kind="master")
+    url = INVITE_REVOKE_URL.format(group_id=group["id"])
 
     assert (await client.delete(url, headers=headers)).status_code == 204
-    await _invite(client, curator, group["id"], "master")
+    await _invite(client, curator, group["id"])
     assert (await client.delete(url, headers=headers)).status_code == 204
     assert (await client.delete(url, headers=headers)).status_code == 204
 
@@ -532,7 +484,7 @@ async def test_token_of_an_inactive_group_is_404_and_comes_back(
     joiner = await login_user(client, telegram_id=_TID_STUDENT_A)
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
     group = await _create_group(client, curator)
-    token = await _invite(client, curator, group["id"], "student")
+    token = await _invite(client, curator, group["id"])
 
     assert (await _preview(client, joiner, token)).status_code == 200
 
@@ -562,7 +514,7 @@ async def test_token_of_a_deleted_group_is_404(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     joiner = await login_user(client, telegram_id=_TID_STUDENT_A)
     group = await _create_group(client, curator)
-    token = await _invite(client, curator, group["id"], "student")
+    token = await _invite(client, curator, group["id"])
 
     await client.delete(
         f"{CURATOR_GROUPS_URL}/{group['id']}",
@@ -595,7 +547,7 @@ async def test_preview_says_yes_then_the_world_moves_and_join_says_404(
     other = await login_user(client, telegram_id=_TID_STUDENT_B)
     admin_token = await _make_admin(client, db_session, _TID_ADMIN)
     group = await _create_group(client, curator)
-    token = await _invite(client, curator, group["id"], "student")
+    token = await _invite(client, curator, group["id"])
 
     seen = await _preview(client, joiner, token)
     assert seen.json()["can_join"] is True
@@ -606,7 +558,7 @@ async def test_preview_says_yes_then_the_world_moves_and_join_says_404(
     seen_again = await _preview(client, other, token)
     assert seen_again.json()["can_join"] is True
     await client.delete(
-        INVITE_KIND_URL.format(group_id=group["id"], kind="student"),
+        INVITE_REVOKE_URL.format(group_id=group["id"]),
         headers=auth_headers(curator["session_token"]),
     )
     assert (await _join(client, other, token)).status_code == 404
@@ -617,119 +569,22 @@ async def test_preview_says_yes_then_the_world_moves_and_join_says_404(
 # ===========================================================================
 
 
-@pytest.mark.asyncio
-async def test_verified_master_joins_the_master_link_as_master(
-    client: AsyncClient, db_session: AsyncSession,
-) -> None:
-    curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    teacher = await _make_verified_master(
-        client, db_session, _TID_MASTER_A, first_name="Teacher",
-    )
-    group = await _create_group(client, curator)
-    token = await _invite(client, curator, group["id"], "master")
 
-    preview = await _preview(client, teacher, token)
-    assert preview.status_code == 200
-    body = preview.json()
-    assert body["kind"] == "master"
-    assert body["can_join"] is True
-    assert body["reason"] is None
-    assert body["relation"] is None
-    assert body["group"]["id"] == group["id"]
 
-    joined = await _join(client, teacher, token)
-    assert joined.status_code == 200, joined.text
-    assert joined.json() == {
-        "group_id": group["id"], "relation": "master", "already_member": False,
-    }
+
+
+
+
 
 
 @pytest.mark.asyncio
-async def test_capability_not_role_admits_a_master_browsing_as_a_user(
-    client: AsyncClient, db_session: AsyncSession,
-) -> None:
-    """A verified master who never took the role switch still joins the
-    master link as a master.
-
-    Paired with the plain user below getting master_required on the same
-    link: what separates them is the profile, not User.role.
-    """
-    curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    in_user_mode = await _make_verified_master(
-        client, db_session, _TID_MASTER_A, first_name="UserMode",
-        role_master=False,
-    )
-    group = await _create_group(client, curator)
-    token = await _invite(client, curator, group["id"], "master")
-
-    row = (
-        await fresh_execute(
-            select(User.role).where(
-                User.id == UUID(in_user_mode["user"]["id"])
-            )
-        )
-    ).scalar_one()
-    assert str(row) in (UserRole.USER.value, str(UserRole.USER))
-
-    joined = await _join(client, in_user_mode, token)
-    assert joined.status_code == 200, joined.text
-    assert joined.json()["relation"] == "master"
-
-
-@pytest.mark.asyncio
-async def test_plain_user_is_refused_by_the_master_link(
-    client: AsyncClient, db_session: AsyncSession,
-) -> None:
-    """403 on join, described rather than raised on preview."""
-    curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    plain = await login_user(client, telegram_id=_TID_STUDENT_A)
-    group = await _create_group(client, curator)
-    token = await _invite(client, curator, group["id"], "master")
-
-    preview = (await _preview(client, plain, token)).json()
-    assert preview["can_join"] is False
-    assert preview["reason"] == "master_required"
-    assert preview["relation"] is None
-
-    joined = await _join(client, plain, token)
-    assert joined.status_code == 403
-    assert joined.json()["error"] == "master_required"
-
-
-@pytest.mark.asyncio
-async def test_a_suspended_master_is_refused_by_the_master_link_but_not_the_student_one(
-    client: AsyncClient, db_session: AsyncSession,
-) -> None:
-    """TZ 3.4 row 8, both halves in one test: capability is checked NOW, and
-    the student link never asks for it."""
-    curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    fallen = await _make_verified_master(
-        client, db_session, _TID_SUSPENDED, first_name="Fallen",
-    )
-    admin_token = await _make_admin(client, db_session, _TID_ADMIN)
-    group = await _create_group(client, curator)
-    master_token = await _invite(client, curator, group["id"], "master")
-    student_token = await _invite(client, curator, group["id"], "student")
-
-    await _revoke(client, admin_token, fallen["user"]["id"])
-
-    refused = await _join(client, fallen, master_token)
-    assert refused.status_code == 403
-    assert refused.json()["error"] == "master_required"
-
-    admitted = await _join(client, fallen, student_token)
-    assert admitted.status_code == 200
-    assert admitted.json()["relation"] == "student"
-
-
-@pytest.mark.asyncio
-async def test_a_plain_user_joins_the_student_link(
+async def test_a_plain_user_joins_as_a_student(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     plain = await login_user(client, telegram_id=_TID_STUDENT_A)
     group = await _create_group(client, curator)
-    token = await _invite(client, curator, group["id"], "student")
+    token = await _invite(client, curator, group["id"])
 
     joined = await _join(client, plain, token)
     assert joined.status_code == 200
@@ -744,7 +599,7 @@ async def test_a_plain_user_joins_the_student_link(
 
 
 @pytest.mark.asyncio
-async def test_a_verified_master_joins_the_student_link_as_a_student(
+async def test_a_verified_master_joins_as_a_student(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     """TZ 3.4 row 7, right column: the LINK decides the kind, not the person.
@@ -757,7 +612,7 @@ async def test_a_verified_master_joins_the_student_link_as_a_student(
         client, db_session, _TID_MASTER_A, first_name="Teacher",
     )
     group = await _create_group(client, curator)
-    token = await _invite(client, curator, group["id"], "student")
+    token = await _invite(client, curator, group["id"])
 
     joined = await _join(client, teacher, token)
     assert joined.status_code == 200
@@ -765,7 +620,7 @@ async def test_a_verified_master_joins_the_student_link_as_a_student(
 
 
 @pytest.mark.asyncio
-async def test_the_curator_gets_own_group_on_both_links(
+async def test_the_curator_gets_own_group_on_the_link(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
@@ -783,7 +638,7 @@ async def test_the_curator_gets_own_group_on_both_links(
 
 
 @pytest.mark.asyncio
-async def test_a_blocked_person_is_refused_on_both_links(
+async def test_a_blocked_person_is_refused_by_the_link(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     """I-9: a block must not be walked around with an old link.
@@ -809,31 +664,10 @@ async def test_a_blocked_person_is_refused_on_both_links(
         assert refused.status_code == 403
         assert refused.json()["error"] == "blocked_by_curator"
 
-    student_token = await _invite(client, curator, group["id"], "student")
+    student_token = await _invite(client, curator, group["id"])
     assert (await _join(client, welcome, student_token)).status_code == 200
 
 
-@pytest.mark.asyncio
-async def test_a_blocked_member_is_refused_before_capability_is_considered(
-    client: AsyncClient, db_session: AsyncSession,
-) -> None:
-    """Order of checks, asserted rather than assumed.
-
-    A blocked plain user opening a MASTER link trips two rules at once. The
-    answer is blocked_by_curator, not master_required: a block is about this
-    school, while master_required is a property of the account, and telling
-    a blocked person "you merely need verification" reads as an invitation
-    to go get it and come back.
-    """
-    curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    blocked = await login_user(client, telegram_id=_TID_STUDENT_A)
-    group = await _create_group(client, curator)
-    await _block(db_session, curator["user"]["id"], blocked["user"]["id"])
-    token = await _invite(client, curator, group["id"], "master")
-
-    refused = await _join(client, blocked, token)
-    assert refused.status_code == 403
-    assert refused.json()["error"] == "blocked_by_curator"
 
 
 # ===========================================================================
@@ -841,100 +675,12 @@ async def test_a_blocked_member_is_refused_before_capability_is_considered(
 # ===========================================================================
 
 
-@pytest.mark.asyncio
-async def test_a_student_member_is_upgraded_by_the_master_link(
-    client: AsyncClient, db_session: AsyncSession,
-) -> None:
-    """The one mutation of an existing row in this delivery.
 
-    joined_at is NOT refreshed: the person has been in this school since the
-    day they walked in, and kind describes their role, not their arrival.
-    Both counters move, and the row id stays the same -- it is the same
-    membership, not a new one.
-    """
-    curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    teacher = await _make_verified_master(
-        client, db_session, _TID_MASTER_A, first_name="Teacher",
-    )
-    group = await _create_group(client, curator)
-    joined_long_ago = datetime(2026, 1, 1, tzinfo=UTC)
-    await _seed_member(
-        db_session, group["id"], teacher["user"]["id"],
-        CuratorMemberKind.STUDENT, joined_at=joined_long_ago,
-    )
-    before = await _member_row(db_session, group["id"], teacher["user"]["id"])
-    assert before.kind == "student"
 
-    token = await _invite(client, curator, group["id"], "master")
-
-    preview = (await _preview(client, teacher, token)).json()
-    assert preview["can_join"] is True
-    assert preview["reason"] is None
-    assert preview["relation"] == "student"
-
-    joined = await _join(client, teacher, token)
-    assert joined.status_code == 200
-    assert joined.json() == {
-        "group_id": group["id"], "relation": "master", "already_member": True,
-    }
-
-    after = await _member_row(db_session, group["id"], teacher["user"]["id"])
-    assert after.kind == "master"
-    assert after.id == before.id
-    assert after.joined_at == before.joined_at
-
-    page = (
-        await client.get(
-            PAGE_URL.format(group_id=group["id"]),
-            headers=auth_headers(curator["session_token"]),
-        )
-    ).json()
-    assert page["masters_count"] == 1
-    assert page["students_count"] == 0
 
 
 @pytest.mark.asyncio
-async def test_an_existing_master_reopening_the_master_link_changes_nothing(
-    client: AsyncClient, db_session: AsyncSession,
-) -> None:
-    """The other half of the pair above: SAME join response, DIFFERENT event.
-
-    already_member=true and relation=master both times -- because the flag
-    answers "was there a row", not "did anything happen". What tells the two
-    apart is the PREVIEW: here it says already_member / can_join=false,
-    where the upgrade case said can_join=true. That asymmetry is deliberate,
-    and this test exists to make it visible.
-    """
-    curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    teacher = await _make_verified_master(
-        client, db_session, _TID_MASTER_A, first_name="Teacher",
-    )
-    group = await _create_group(client, curator)
-    token = await _invite(client, curator, group["id"], "master")
-
-    first = await _join(client, teacher, token)
-    assert first.json()["already_member"] is False
-    before = await _member_row(db_session, group["id"], teacher["user"]["id"])
-
-    preview = (await _preview(client, teacher, token)).json()
-    assert preview["can_join"] is False
-    assert preview["reason"] == "already_member"
-    assert preview["relation"] == "master"
-
-    second = await _join(client, teacher, token)
-    assert second.status_code == 200
-    assert second.json() == {
-        "group_id": group["id"], "relation": "master", "already_member": True,
-    }
-
-    after = await _member_row(db_session, group["id"], teacher["user"]["id"])
-    assert (after.id, after.kind, after.joined_at) == (
-        before.id, before.kind, before.joined_at,
-    )
-
-
-@pytest.mark.asyncio
-async def test_a_master_member_is_never_demoted_by_the_student_link(
+async def test_a_master_member_reopening_the_link_keeps_the_role(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     """TZ 3.4 row 4, right column. There is no demotion in either direction
@@ -949,7 +695,7 @@ async def test_a_master_member_is_never_demoted_by_the_student_link(
         db_session, group["id"], teacher["user"]["id"],
         CuratorMemberKind.MASTER,
     )
-    student_token = await _invite(client, curator, group["id"], "student")
+    student_token = await _invite(client, curator, group["id"])
 
     preview = (await _preview(client, teacher, student_token)).json()
     assert preview["can_join"] is False
@@ -965,13 +711,13 @@ async def test_a_master_member_is_never_demoted_by_the_student_link(
 
 
 @pytest.mark.asyncio
-async def test_a_student_member_reopening_the_student_link_is_already_member(
+async def test_a_student_member_reopening_the_link_is_already_member(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     student = await login_user(client, telegram_id=_TID_STUDENT_A)
     group = await _create_group(client, curator)
-    token = await _invite(client, curator, group["id"], "student")
+    token = await _invite(client, curator, group["id"])
 
     await _join(client, student, token)
     preview = (await _preview(client, student, token)).json()
@@ -984,32 +730,6 @@ async def test_a_student_member_reopening_the_student_link_is_already_member(
     assert again.json()["relation"] == "student"
 
 
-@pytest.mark.asyncio
-async def test_a_suspended_master_member_cannot_use_the_master_link(
-    client: AsyncClient, db_session: AsyncSession,
-) -> None:
-    """Capability is checked NOW, even for someone already inside: a master
-    member who has been revoked gets master_required rather than a quiet
-    confirmation of a kind they can no longer exercise."""
-    curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    fallen = await _make_verified_master(
-        client, db_session, _TID_SUSPENDED, first_name="Fallen",
-    )
-    admin_token = await _make_admin(client, db_session, _TID_ADMIN)
-    group = await _create_group(client, curator)
-    await _seed_member(
-        db_session, group["id"], fallen["user"]["id"], CuratorMemberKind.MASTER,
-    )
-    token = await _invite(client, curator, group["id"], "master")
-
-    await _revoke(client, admin_token, fallen["user"]["id"])
-
-    refused = await _join(client, fallen, token)
-    assert refused.status_code == 403
-    assert refused.json()["error"] == "master_required"
-
-    row = await _member_row(db_session, group["id"], fallen["user"]["id"])
-    assert row.kind == "master"
 
 
 # ===========================================================================
@@ -1036,7 +756,7 @@ async def test_preview_carries_the_group_card_with_live_counters(
         db_session, group["id"], student["user"]["id"],
         CuratorMemberKind.STUDENT,
     )
-    token = await _invite(client, curator, group["id"], "student")
+    token = await _invite(client, curator, group["id"])
 
     card = (await _preview(client, stranger, token)).json()["group"]
     assert card["name"] == "Школа дыхания"
@@ -1054,7 +774,7 @@ async def test_an_empty_group_still_previews_as_joinable(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     joiner = await login_user(client, telegram_id=_TID_STUDENT_A)
     group = await _create_group(client, curator)
-    token = await _invite(client, curator, group["id"], "student")
+    token = await _invite(client, curator, group["id"])
 
     body = (await _preview(client, joiner, token)).json()
     assert body["can_join"] is True
@@ -1077,7 +797,7 @@ async def test_one_relation_per_pair_is_enforced_by_the_database(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     student = await login_user(client, telegram_id=_TID_STUDENT_A)
     group = await _create_group(client, curator)
-    token = await _invite(client, curator, group["id"], "student")
+    token = await _invite(client, curator, group["id"])
     assert (await _join(client, student, token)).status_code == 200
 
     db_session.add(
@@ -1102,7 +822,7 @@ async def test_join_needs_no_bot_url(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     joiner = await login_user(client, telegram_id=_TID_STUDENT_A)
     group = await _create_group(client, curator)
-    token = await _invite(client, curator, group["id"], "student")
+    token = await _invite(client, curator, group["id"])
 
     with patch.object(settings, "telegram_bot_url", ""):
         preview = await _preview(client, joiner, token)
@@ -1121,7 +841,7 @@ async def test_the_invites_route_is_not_swallowed_by_the_group_id_route(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     joiner = await login_user(client, telegram_id=_TID_STUDENT_A)
     group = await _create_group(client, curator)
-    token = await _invite(client, curator, group["id"], "student")
+    token = await _invite(client, curator, group["id"])
 
     resp = await _preview(client, joiner, token)
     assert resp.status_code == 200, resp.text

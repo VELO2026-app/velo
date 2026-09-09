@@ -187,3 +187,20 @@ curator_group.member_joined:
   telegram:
     title: "Новый участник школы"
     body: "🏛 <b>{actor_name}</b> вступил в школу <b>{group_name}</b>."
+
+# GT-27: appointing a school master. The offer goes to the candidate, both
+# outcomes go back to the curator who made it.
+curator_group.master_offered:
+  telegram:
+    title: "Вас приглашают вести школу"
+    body: "🏛 <b>{actor_name}</b> предлагает вам стать мастером школы <b>{group_name}</b>.\n\nОткройте приложение, чтобы принять или отклонить."
+
+curator_group.master_offer_accepted:
+  telegram:
+    title: "Назначение принято"
+    body: "🏛 <b>{actor_name}</b> принял назначение мастером школы <b>{group_name}</b>."
+
+curator_group.master_offer_declined:
+  telegram:
+    title: "Назначение отклонено"
+    body: "🏛 <b>{actor_name}</b> отклонил назначение мастером школы <b>{group_name}</b>."

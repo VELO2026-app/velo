@@ -163,26 +163,30 @@ class CuratorGroupMember(UUIDMixin, Base):
 
 
 class CuratorGroupInvite(UUIDMixin, Base):
-    """A group's reusable join link, one per kind (GT-3 writes it).
+    """A group's ONE reusable join link. Everyone who opens it joins as a
+    student.
 
-    UNIQUE (group_id, kind) -- one live link per kind, so create-or-return is
-    a plain select-then-insert against the constraint (the shape
-    get_or_create_group_invite already proved for master_group).
+    UNIQUE (group_id) -- one live link per school, so create-or-return is a
+    plain select-then-insert against the constraint.
     UNIQUE (token) -- the join-time lookup key.
+
+    THERE USED TO BE TWO LINKS, one per kind, and the constraint used to be
+    UNIQUE (group_id, kind): a master link promoted an existing student to
+    kind='master' on join. That path was cancelled by owner ruling (GT-27) --
+    a school master is now APPOINTED by the curator and the appointment only
+    takes effect once the appointee confirms it (CuratorGroupMasterOffer
+    below). Removed rather than left as a second way in: two ways to become a
+    school master is exactly the shape "no legacy" forbids. Migration
+    gt27a1b2c3d4 dropped the column and the master rows with it.
 
     Raw token, not a hash: mirrors group_invite's own reasoning -- the link
     only grants "join this group", is revocable by the curator at any time,
     and must keep resolving for whoever opens it days later.
-
-    NO WRITER IN THIS DELIVERY. The table is created now so that GT-3 ships
-    code only; the writer is named, not hypothetical.
     """
 
     __tablename__ = "curator_group_invite"
     __table_args__ = (
-        UniqueConstraint(
-            "group_id", "kind", name="uq_curator_group_invite_group_kind",
-        ),
+        UniqueConstraint("group_id", name="uq_curator_group_invite_group"),
         UniqueConstraint("token", name="uq_curator_group_invite_token"),
     )
 
@@ -190,7 +194,6 @@ class CuratorGroupInvite(UUIDMixin, Base):
         ForeignKey("curator_group.id", ondelete="CASCADE"),
         nullable=False,
     )
-    kind: Mapped[str] = mapped_column(String(10), nullable=False)
     token: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -198,9 +201,7 @@ class CuratorGroupInvite(UUIDMixin, Base):
     )
 
     def __repr__(self) -> str:
-        return (
-            f"<CuratorGroupInvite group_id={self.group_id} kind={self.kind!r}>"
-        )
+        return f"<CuratorGroupInvite group_id={self.group_id}>"
 
 
 class CuratorGroupTransfer(UUIDMixin, Base):
@@ -238,6 +239,63 @@ class CuratorGroupTransfer(UUIDMixin, Base):
         )
 
 
+class CuratorGroupMasterOffer(UUIDMixin, Base):
+    """A pending offer to make a school member a MASTER of that school (GT-27).
+
+    A ROW IS THE OFFER, same shape as CuratorGroupTransfer above: accepting
+    and declining both DELETE it, so there is no status column to interpret
+    and no half-NULL pair on the membership row. It is a separate table and
+    not a `pending_master` flag on curator_group_member for the reason that
+    flag would blur: the candidate ALREADY has a membership row, and putting
+    the offer on it would mix "what this person is now" with "what they were
+    offered".
+
+    UNIQUE (group_id, to_user_id), NOT UNIQUE (group_id) -- and that is the
+    one place this differs from the transfer it mirrors. A school hands
+    itself over once, so a transfer is one per school; appointments are
+    normal and several can be outstanding at the same time. Repeating an
+    offer to the SAME person is therefore idempotent rather than a 409.
+
+    NOTHING HERE CHANGES member.kind. The promotion happens on confirmation,
+    in accept_curator_group_master_offer, and the member_promoted journal
+    line is written by the FACT OF CONSENT rather than by the appointment --
+    which is why appointing somebody who never answers leaves no trace in
+    the roster.
+
+    The candidate's master capability is checked twice, at offer and at
+    consent, because verification can be revoked in between; see the accept
+    path for why a lapsed candidate is refused WITHOUT the offer being
+    deleted.
+    """
+
+    __tablename__ = "curator_group_master_offer"
+    __table_args__ = (
+        UniqueConstraint(
+            "group_id", "to_user_id",
+            name="uq_curator_group_master_offer_group_user",
+        ),
+    )
+
+    group_id: Mapped[UUID] = mapped_column(
+        ForeignKey("curator_group.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    to_user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    offered_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<CuratorGroupMasterOffer group_id={self.group_id} "
+            f"to_user_id={self.to_user_id}>"
+        )
+
+
 class CuratorGroupEventKind(enum.StrEnum):
     """What happened in a school. The vocabulary of its journal (GT-16).
 
@@ -245,6 +303,13 @@ class CuratorGroupEventKind(enum.StrEnum):
     CuratorMemberKind above and Practice.audience_kind: this set is
     EXPECTED to grow (notifications land on it next, practice publication
     after that), and a varchar gains a value without a migration.
+
+    GT-27 adds master_offered and master_offer_declined -- and deliberately
+    NOT master_offer_accepted. A taken appointment already has a line:
+    member_promoted, which until GT-27 was written by the join path when a
+    master link upgraded a student and is now written by the fact of
+    consent. Two lines for one outcome would make the roster's history
+    depend on which one a reader trusted.
 
     PRACTICE_CANCELLED (BE-21) is the first arrival on that promise, and it
     is deliberately NOT "practice_cancelled_by_curator": _record_group_event
@@ -274,6 +339,8 @@ class CuratorGroupEventKind(enum.StrEnum):
     TRANSFER_DECLINED = "transfer_declined"
     TRANSFER_CANCELLED = "transfer_cancelled"
     PRACTICE_CANCELLED = "practice_cancelled"
+    MASTER_OFFERED = "master_offered"
+    MASTER_OFFER_DECLINED = "master_offer_declined"
 
 
 # The keys of CuratorGroupEvent.data, spelled ONCE. JSONB has no model
@@ -281,6 +348,9 @@ class CuratorGroupEventKind(enum.StrEnum):
 # reads and the journal quietly loses the half of the sentence it was
 # supposed to carry. Only the keys written from MORE THAN ONE place are
 # named here; a key with a single writer cannot drift from itself.
+# GT-27: invite_created / invite_revoked used to carry it too, back when
+# a link had a kind. One link now, so the key would always say the same
+# word and was dropped from both rather than frozen at "student".
 EVENT_DATA_KIND = "kind"                  # join, promote, remove, leave
 EVENT_DATA_ACTOR_NAME = "actor_name"      # all twelve
 EVENT_DATA_TARGET_USER_ID = "target_user_id"   # remove, offer, accept, decline

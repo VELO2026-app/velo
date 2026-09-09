@@ -33,13 +33,8 @@
             <VMenuItem :icon="IconPen" ariaLabel="Редактировать" @click="onEditClick(close)" />
             <VMenuItem
               :icon="IconShare"
-              ariaLabel="Пригласить мастера"
-              @click="openInvite('master', close)"
-            />
-            <VMenuItem
-              :icon="IconShare"
-              ariaLabel="Пригласить ученика"
-              @click="openInvite('student', close)"
+              ariaLabel="Пригласить"
+              @click="openInvite(close)"
             />
             <VMenuItem
               v-if="!hasPendingTransfer"
@@ -313,18 +308,13 @@
       </p>
     </VBottomSheet>
 
-    <!-- Invite links: one sheet per kind, minted on open. Closing either
-         sheet also refreshes the journal -- minting on open and revoking
-         inside both write journal events the curator should see appear. -->
+    <!-- The school's invite link, minted on open. Closing the sheet also
+         refreshes the journal -- minting on open and revoking inside both
+         write journal events the curator should see appear.
+         GT-27: there used to be TWO sheets, one per link kind; the master
+         link is gone and school masters are appointed instead. -->
     <CuratorGroupInviteSheet
-      :open="inviteKind === 'master'"
-      kind="master"
-      :group-id="groupId"
-      @close="onInviteSheetClosed"
-    />
-    <CuratorGroupInviteSheet
-      :open="inviteKind === 'student'"
-      kind="student"
+      :open="inviteOpen"
       :group-id="groupId"
       @close="onInviteSheetClosed"
     />
@@ -910,15 +900,18 @@ async function onEditSave(): Promise<void> {
 
 // -- Invites (curator) --
 
-const inviteKind = ref<'master' | 'student' | null>(null)
+// GT-27: one link, so this is a boolean rather than which-of-two. The menu
+// used to carry «Пригласить мастера» beside «Пригласить ученика»; masters are
+// appointed from the roster now, not invited by a separate link.
+const inviteOpen = ref(false)
 
-function openInvite(kind: 'master' | 'student', close: () => void): void {
+function openInvite(close: () => void): void {
   close()
-  inviteKind.value = kind
+  inviteOpen.value = true
 }
 
 function onInviteSheetClosed(): void {
-  inviteKind.value = null
+  inviteOpen.value = false
   // Minting on open and revoking inside both write journal events -- the
   // curator closing the sheet should see the feed catch up, not reload.
   if (isCurator.value) void loadJournal(true)

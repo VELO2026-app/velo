@@ -193,12 +193,12 @@ async def _create_group(
 
 
 async def _invite_token(
-    client: AsyncClient, curator: dict, group_id: str, kind: str,
+    client: AsyncClient, curator: dict, group_id: str,
 ) -> str:
     with patch.object(settings, "telegram_bot_url", _BOT_URL):
         resp = await client.post(
             INVITES_URL.format(group_id=group_id),
-            json={"kind": kind},
+            json={},
             headers=auth_headers(curator["session_token"]),
         )
     assert resp.status_code == 200, resp.text
@@ -219,7 +219,7 @@ async def _join_as(
     client: AsyncClient, curator: dict, group_id: str, joiner: dict,
     kind: CuratorMemberKind = CuratorMemberKind.STUDENT,
 ) -> None:
-    token = await _invite_token(client, curator, group_id, kind.value)
+    token = await _invite_token(client, curator, group_id)
     resp = await _join(client, joiner, token)
     assert resp.status_code == 200, resp.text
 
