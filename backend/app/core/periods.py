@@ -6,13 +6,15 @@
 # (master stats, admin overview, and -- pending the E7 follow-up refactor --
 # finance / metrics / revenue, which still carry their own copies).
 #
-# calendar_period_bounds(period, now) -> (cur_start, cur_end, prev_start):
-#   week  -> Monday 00:00 .. next Monday;  prev_start = previous Monday.
-#   month -> 1st 00:00 .. next 1st;        prev_start = previous month's 1st.
+# calendar_period_bounds(period, now) -> (cur_start, cur_end, prev_start).
+# The supported periods and their exact bounds are listed ONCE, in that
+# function's docstring. Deliberately not restated here: this header and the
+# docstring carried the same list until a third period was added, and the next
+# one should only have to be written in a single place.
 #
 # All boundaries are timezone-aware UTC. cur_end doubles as prev_end (periods
 # are contiguous), so the previous period is [prev_start, cur_start). A master
-# or admin in another timezone sees the UTC calendar week/month -- an accepted
+# or admin in another timezone sees the UTC calendar period -- an accepted
 # MVP simplification (the TZ revisit flagged in finance is centralised here).
 #
 # period_delta_pct / rate_delta_pp encode the two delta conventions used by the
@@ -32,13 +34,17 @@ def calendar_period_bounds(
 ) -> tuple[datetime, datetime, datetime]:
     """Return (cur_start, cur_end, prev_start) for a calendar period (UTC).
 
-    week  -> Monday 00:00 .. next Monday; prev_start = previous Monday.
-    month -> 1st 00:00 .. next 1st;       prev_start = previous month's 1st.
+    week    -> Monday 00:00 .. next Monday; prev_start = previous Monday.
+    quarter -> 1st of Jan/Apr/Jul/Oct 00:00 .. 1st of the next quarter;
+               prev_start = 1st of the previous quarter.
+    month   -> 1st 00:00 .. next 1st;      prev_start = previous month's 1st.
 
     cur_end doubles as prev_end (periods are contiguous): the previous period
     is [prev_start, cur_start). `now` is expected to be timezone-aware UTC.
-    Any value other than "week" is treated as "month" (routers constrain the
-    query param via Literal["week", "month"], so the service layer trusts it).
+    Any value other than "week" and "quarter" is treated as "month" (routers
+    constrain the query param via Literal, so the service layer trusts it).
+    Not every router offers every period: the fallback exists for callers that
+    only ever pass week or month, not as a way to accept free-form input.
     """
     if period == "week":
         cur_start = (now - timedelta(days=now.weekday())).replace(
@@ -46,6 +52,28 @@ def calendar_period_bounds(
         )
         cur_end = cur_start + timedelta(weeks=1)
         prev_start = cur_start - timedelta(weeks=1)
+        return cur_start, cur_end, prev_start
+
+    if period == "quarter":
+        # First month of the quarter now falls in: 1, 4, 7, 10.
+        first_month = ((now.month - 1) // 3) * 3 + 1
+        cur_start = now.replace(
+            month=first_month, day=1,
+            hour=0, minute=0, second=0, microsecond=0,
+        )
+        # The two year edges are NOT symmetric: only Q4 rolls forward (Oct ->
+        # Jan of the next year) and only Q1 rolls back (Jan -> Oct of the
+        # previous one). Same shape as the month branch below, step 3.
+        if cur_start.month == 10:
+            cur_end = cur_start.replace(year=cur_start.year + 1, month=1)
+        else:
+            cur_end = cur_start.replace(month=cur_start.month + 3)
+        if cur_start.month == 1:
+            prev_start = cur_start.replace(year=cur_start.year - 1, month=10)
+        else:
+            prev_start = cur_start.replace(month=cur_start.month - 3)
+        # shift_anchor() below has no quarter branch on purpose -- the full
+        # reasoning is the KNOWN CEILING marker there, not repeated here.
         return cur_start, cur_end, prev_start
 
     # month
@@ -63,6 +91,29 @@ def calendar_period_bounds(
     return cur_start, cur_end, prev_start
 
 
+# KNOWN CEILING -- shift_anchor has no "quarter" branch.
+#
+# MECHANICS: the branch below is week-or-else-month. A "quarter" reaching it
+#   falls into the month arithmetic, so the stepper would move the anchor by
+#   one month while the grid renders three -- offset -1 would return a window
+#   overlapping the current one. Wrong numbers under a correct-looking label,
+#   which is the failure mode the quarter segment was withheld from the
+#   dashboard to avoid in the first place.
+# STATUS: acknowledged by design.
+# TASK: none, deliberately. The state is unreachable today (see TRIGGER), and
+#   a backlog card for an unreachable state is one nobody can close or verify.
+# TRIGGER: any router whose period value reaches shift_anchor starts accepting
+#   "quarter". Today all four callers are admin services (revenue, overview,
+#   metrics, participants) fed by routers pinned to Literal["week", "month"],
+#   and GET /masters/me/stats -- the one endpoint that does take "quarter" --
+#   has no offset parameter and never calls this function.
+# FIX: mirror the month arithmetic on quarters -- index the quarter as
+#   year * 4 + (month - 1) // 3, add the offset, divmod back, and pin day=1 to
+#   the resulting quarter's first month (calendar_period_bounds re-pins it
+#   anyway).
+# REJECTED: adding that branch now, together with GT-31. It would be code no
+#   caller can reach, and the only test able to cover it would have to build a
+#   request the routers reject -- a state the product cannot produce.
 def shift_anchor(period: str, now: datetime, offset: int) -> datetime:
     """Shift `now` by `offset` whole periods (weeks or months).
 

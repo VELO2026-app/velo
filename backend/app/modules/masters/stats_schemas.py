@@ -3,9 +3,10 @@
 # =============================================================================
 #
 # Period-scoped stat grid for the master dashboard. All counts are for the
-# current calendar period (week|month, UTC); each *_delta_pct is the signed
-# percent change vs the previous period, or null when there is no meaningful
-# base (S-1: previous period was non-positive) -- the client renders "--".
+# current calendar period (week|month|quarter, UTC); each *_delta_pct is the
+# signed percent change vs the previous period, or null when there is no
+# meaningful base (S-1: previous period was non-positive) -- the client
+# renders "--".
 #
 # Class name is Master-prefixed to avoid OpenAPI component-name collisions.
 # =============================================================================
@@ -14,7 +15,7 @@ from pydantic import BaseModel
 
 
 class MasterStatsResponse(BaseModel):
-    """GET /api/v1/masters/me/stats?period=week|month.
+    """GET /api/v1/masters/me/stats?period=week|month|quarter.
 
     practices_count    -- master's COMPLETED practices scheduled in the
                           period. Completed only (GT-20): a practice that is

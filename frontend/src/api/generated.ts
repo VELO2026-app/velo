@@ -15,6 +15,9 @@ export type AudienceKind = 'public' | 'students' | 'groups' | 'curator_groups'
 /** Booking lifecycle statuses. */
 export type BookingStatus = 'pending' | 'confirmed' | 'attended' | 'no_show' | 'cancelled'
 
+/** What the person did outside velo. A CLOSED ENUM AND NOT A CONFIG LIST, unlike DiaryEntryType and PracticePhase next door (config.py:476 -- "Validated via @field_validator -- no Literal in schemas"). The divergence is deliberate and buys something those two do not need. A config list exists so a value can change without touching code. Here that is a false promise: a type the frontend cannot draw is useless, so a new activity always ships with a frontend change anyway. Adding one through env would produce a feed card with no icon and no caption -- not flexibility, a quiet break. Typed as an enum, the closed set crosses into generated.ts as a union, and adding a value without the frontend breaks the build instead of the card. */
+export type ExternalActivityType = 'vocal' | 'nail_standing' | 'meditation' | 'massage' | 'yoga' | 'dance' | 'custom'
+
 /** Practice lifecycle statuses. */
 export type PracticeStatus = 'draft' | 'scheduled' | 'live' | 'completed' | 'cancelled' | 'deleted'
 
@@ -534,6 +537,15 @@ export interface CreateDirectionRequest {
   display_order?: number
 }
 
+/** POST /api/v1/diary/external-activities body. `activity_type` is typed as the ENUM, not as a str validated against a config list the way entry_type is: the closed set then reaches the frontend as a union in generated.ts, and a value added without a card to draw it breaks the build instead of the feed. See ExternalActivityType's own docstring. `occurred_at` must be timezone-aware and must not be in the future -- a diary of what happened cannot hold what has not. Both are checked here so the answer is a field-attributed 422 rather than a 500 from a naive/aware comparison further down. */
+export interface CreateExternalActivityRequest {
+  occurred_at: string
+  activity_type: ExternalActivityType
+  custom_activity_name?: string | null
+  mood: number
+  thoughts?: string | null
+}
+
 /** POST /masters/me/groups. */
 export interface CreateGroupRequest {
   name: string
@@ -592,6 +604,18 @@ export interface CreateStyleRequest {
 /** POST /api/v1/masters/me/withdraw -- request body. amount_cents is the total withdrawal amount (fee deducted from it). Minimum enforced in service against settings.min_withdrawal_cents. */
 export interface CreateWithdrawalRequest {
   amount_cents: number
+}
+
+/** One PRE check-in left on a practice of this school. `mood` is the stored 1..10 score mapped to the three distribution buckets (1-3 low / 4-7 mid / 8-10 high) -- the same vocabulary the anonymous per-practice insights already use, so the frontend reuses the mood icons it renders there. POST check-ins never appear here, and neither do check-ins whose booking was later cancelled: both are absent from the master's own roster for this practice, and the school widens a curator's reach without deepening it. user_id identifies the participant so that two students of the same name stay distinct; it opens no screen a curator would otherwise be refused. */
+export interface CuratorGroupCheckinItem {
+  user_id: string
+  student_name: string
+  avatar_url: string | null
+  mood: 'high' | 'mid' | 'low'
+  comment: string | null
+  practice_id: string
+  practice_title: string
+  created_at: string
 }
 
 /** The group's owner, as anyone in the group may see them. A strict subset of MasterPublicResponse -- the declared isolation boundary in masters/schemas.py. Nothing financial, nothing contact-like, and no status: a group is only ever visible while its curator is verified (I-6), so exposing the status would only ever print one value. */
@@ -733,6 +757,18 @@ export interface CuratorGroupResponse {
   created_at: string
 }
 
+/** One named review left on a practice of this school. `rating` is the stored 1..10 score mapped to the three feedback buckets (1-3 confused / 4-7 good / 8-10 fire), identical to what the practice's master reads in their own per-practice and cross-practice review feeds. user_id identifies the reviewer, as it does in the master's own review items; the screens behind it enforce their own access. */
+export interface CuratorGroupReviewItem {
+  user_id: string
+  student_name: string
+  avatar_url: string | null
+  rating: 'fire' | 'good' | 'confused'
+  comment: string | null
+  practice_id: string
+  practice_title: string
+  created_at: string
+}
+
 /** A pending offer to hand the group over. ONE schema for all three places that report an offer (the curator's own row, that row after a PATCH, and the group page). Three flat triples of the same fields would drift the first time one of them gained a fourth. to_display_name uses display_name(first_name, last_name) from users/helpers.py, NOT the master-profile lookup _curator_display_name uses. The tree holds two different naming rules and this is a deliberate pick between them: the addressee here is a PERSON being offered something, not a public master card, and the profile-based rule may return None -- which would leave the confirm dialog reading "offer sent to —". display_name always yields something, falling back to the neutral «Участник». */
 export interface CuratorGroupTransferRef {
   to_user_id: string
@@ -796,6 +832,17 @@ export interface EditMasterMethodsRequest {
 export interface ExistingReportResponse {
   message?: string
   report: ReportResponse
+}
+
+/** POST /api/v1/diary/external-activities -- the created activity. `occurred_at` comes back normalized to UTC, which is the value the diary orders by; `created_at` is the write time and the two differ whenever somebody enters yesterday's massage today. */
+export interface ExternalActivityResponse {
+  id: string
+  occurred_at: string
+  activity_type: ExternalActivityType
+  custom_activity_name: string | null
+  mood: number
+  thoughts: string | null
+  created_at: string
 }
 
 /** GET /api/v1/admin/metrics/feedback. */
@@ -876,7 +923,7 @@ export interface GroupSearchMemberItem {
   group_name: string
 }
 
-/** GET /api/v1/masters/me/income?period=week|month. income_cents -- gross booked turnover for the current calendar period: signed sum of title-tagged sale (+) / commission (-) / refund (-) movements, frozen sales included. Matches the transaction feed, not realized/available earnings. prev_income_cents -- same sum for the previous calendar period. delta_pct -- signed percent change vs the previous period, or null when the previous period had no net-positive turnover. */
+/** GET /api/v1/masters/me/income?period=week|month|quarter. income_cents -- gross booked turnover for the current calendar period: signed sum of title-tagged sale (+) / commission (-) / refund (-) movements, frozen sales included. Matches the transaction feed, not realized/available earnings. prev_income_cents -- same sum for the previous calendar period. delta_pct -- signed percent change vs the previous period, or null when the previous period had no net-positive turnover. */
 export interface IncomeResponse {
   income_cents: number
   prev_income_cents: number
@@ -1012,7 +1059,7 @@ export interface MasterReviewItem {
   created_at: string
 }
 
-/** GET /api/v1/masters/me/stats?period=week|month. practices_count -- master's COMPLETED practices scheduled in the period. Completed only (GT-20): a practice that is still ahead, running, cancelled, draft or deleted does not count, so a period with nothing finished yet reads 0. The grid answers "what happened", not "what is scheduled". participants_count -- distinct users with an ATTENDED booking across those practices. An ATTENDED booking only ever exists on a completed practice, so this count and practices_count are always about the same sessions. income_cents -- gross booked turnover for the period, reused verbatim from the E2 finance projection. The dashboard renders practices/participants; the finance screen renders income. Each *_delta_pct is the signed percent change vs the previous period, or null when the previous period was non-positive (S-1). */
+/** GET /api/v1/masters/me/stats?period=week|month|quarter. practices_count -- master's COMPLETED practices scheduled in the period. Completed only (GT-20): a practice that is still ahead, running, cancelled, draft or deleted does not count, so a period with nothing finished yet reads 0. The grid answers "what happened", not "what is scheduled". participants_count -- distinct users with an ATTENDED booking across those practices. An ATTENDED booking only ever exists on a completed practice, so this count and practices_count are always about the same sessions. income_cents -- gross booked turnover for the period, reused verbatim from the E2 finance projection. The dashboard renders practices/participants; the finance screen renders income. Each *_delta_pct is the signed percent change vs the previous period, or null when the previous period was non-positive (S-1). */
 export interface MasterStatsResponse {
   practices_count: number
   practices_delta_pct: number | null
@@ -1112,6 +1159,14 @@ export interface PaginatedCheckinsResponse {
   offset: number
 }
 
+/** GET /masters/me/curator-groups/{id}/checkins. */
+export interface PaginatedCuratorGroupCheckinsResponse {
+  items: CuratorGroupCheckinItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
 /** GET /masters/me/curator-groups/{id}/journal. */
 export interface PaginatedCuratorGroupEventsResponse {
   items: CuratorGroupEventItem[]
@@ -1131,6 +1186,14 @@ export interface PaginatedCuratorGroupMastersResponse {
 /** GET /masters/me/curator-groups/{id}/members. */
 export interface PaginatedCuratorGroupMembersResponse {
   items: CuratorGroupMemberItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** GET /masters/me/curator-groups/{id}/reviews. */
+export interface PaginatedCuratorGroupReviewsResponse {
+  items: CuratorGroupReviewItem[]
   total: number
   limit: number
   offset: number

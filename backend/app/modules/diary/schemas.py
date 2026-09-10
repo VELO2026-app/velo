@@ -31,13 +31,20 @@
 #   fields and frontend code doesn't need `?.` guards.
 # =============================================================================
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    field_validator,
+)
 
 from app.core.config import settings
+from app.modules.diary.models import ExternalActivityType
 
 
 # ===================================================================
@@ -419,3 +426,145 @@ class DiaryFeedResponse(BaseModel):
 
     items: list[DiaryFeedItem]
     next_cursor: str | None
+
+
+# ===================================================================
+# External activity schemas (BE-27)
+# ===================================================================
+
+
+class CreateExternalActivityRequest(BaseModel):
+    """POST /api/v1/diary/external-activities body.
+
+    `activity_type` is typed as the ENUM, not as a str validated against a
+    config list the way entry_type is: the closed set then reaches the
+    frontend as a union in generated.ts, and a value added without a card
+    to draw it breaks the build instead of the feed. See
+    ExternalActivityType's own docstring.
+
+    `occurred_at` must be timezone-aware and must not be in the future --
+    a diary of what happened cannot hold what has not. Both are checked
+    here so the answer is a field-attributed 422 rather than a 500 from a
+    naive/aware comparison further down.
+    """
+
+    occurred_at: datetime
+    activity_type: ExternalActivityType
+    custom_activity_name: str | None = Field(
+        default=None,
+        max_length=settings.external_activity_name_max_length,
+        # validate_default IS THE WHOLE FIX, not a flag beside it. A
+        # field_validator does NOT run when the key is absent from the
+        # body, so without this the commonest mistake of the two -- type
+        # 'custom' and no name at all -- would stop being refused and
+        # return 201. Measured, not assumed: the prototype without it
+        # turned that case from a 422 into a created row.
+        validate_default=True,
+    )
+    mood: int
+    thoughts: str | None = Field(
+        default=None,
+        max_length=settings.diary_entry_content_max_length,
+    )
+
+    @field_validator("occurred_at")
+    @classmethod
+    def occurred_at_must_be_aware_and_past(cls, v: datetime) -> datetime:
+        """Reject a naive timestamp and a future one; normalize to UTC.
+
+        Normalizing HERE and not in the service is what makes "same instant,
+        different offset" one stored value: +03:00 and Z arrive as the same
+        UTC point, and the feed's ordering never sees an offset.
+        """
+        if v.tzinfo is None or v.tzinfo.utcoffset(v) is None:
+            raise ValueError(
+                "occurred_at must include a timezone offset"
+            )
+        v = v.astimezone(UTC)
+        if v > datetime.now(UTC):
+            raise ValueError("occurred_at cannot be in the future")
+        return v
+
+    @field_validator("mood")
+    @classmethod
+    def mood_must_be_valid(cls, v: int) -> int:
+        """Validate mood is a 1..10 score (required here, unlike a note)."""
+        if not 1 <= v <= 10:
+            raise ValueError(f"mood must be between 1 and 10, got {v}")
+        return v
+
+    @field_validator("thoughts")
+    @classmethod
+    def blank_thoughts_is_none(cls, v: str | None) -> str | None:
+        """Whitespace-only text is absence, and is stored as absence.
+
+        Without this a body of spaces would land in text_search and in the
+        snapshot preview as a blank line the feed cannot render and the
+        search cannot match.
+        """
+        if v is None:
+            return None
+        stripped = v.strip()
+        return stripped or None
+
+    @field_validator("custom_activity_name")
+    @classmethod
+    def custom_name_matches_type(
+        cls, v: str | None, info: ValidationInfo,
+    ) -> str | None:
+        """The name is required exactly when the type is custom.
+
+        A FIELD validator on the SECOND of the two fields, not a model
+        validator, and the difference is the error's address: pydantic
+        gives a model validator no `loc`, so both refusals used to arrive
+        at body level and the frontend could not put them under the input
+        they belong to. Contract 4.1 asks for 422 precisely so it can.
+
+        Reading a sibling works because `activity_type` is DECLARED ABOVE
+        this field: info.data holds the fields already validated, in
+        declaration order. It holds only the ones that PASSED -- an
+        unknown activity_type is absent from it entirely, hence .get()
+        and the early return: that request already has its 422 on
+        activity_type, and a second refusal about the name would only
+        send the person looking in the wrong place.
+
+        Both directions stay here together. Split across two checks in
+        two places they would be two rules that can be relaxed one at a
+        time, and the DB constraint they mirror
+        (ck_external_activity_custom) is deliberately one expression for
+        the same reason.
+        """
+        name = (v or "").strip()
+        activity_type = info.data.get("activity_type")
+        if activity_type is None:
+            return name or None
+        if activity_type is ExternalActivityType.CUSTOM and not name:
+            raise ValueError(
+                "custom_activity_name is required when "
+                "activity_type is 'custom'"
+            )
+        if activity_type is not ExternalActivityType.CUSTOM and v is not None:
+            raise ValueError(
+                "custom_activity_name is only allowed when "
+                "activity_type is 'custom'"
+            )
+        return name or None
+
+
+class ExternalActivityResponse(BaseModel):
+    """POST /api/v1/diary/external-activities -- the created activity.
+
+    `occurred_at` comes back normalized to UTC, which is the value the
+    diary orders by; `created_at` is the write time and the two differ
+    whenever somebody enters yesterday's massage today.
+    """
+
+    id: UUID
+    occurred_at: datetime
+    activity_type: ExternalActivityType
+    custom_activity_name: str | None
+    mood: int
+    thoughts: str | None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

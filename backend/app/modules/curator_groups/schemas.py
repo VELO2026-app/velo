@@ -648,3 +648,87 @@ class CuratorGroupMasterOfferRequest(BaseModel):
     """
 
     to_user_id: UUID
+
+
+# ===========================================================================
+# School feedback -- check-ins and reviews across the school's practices
+# (BE-24 / GT-28)
+# ===========================================================================
+#
+# THE SCORES ARE BUCKETS IN BOTH ITEMS BELOW, and that is the contract, not
+# a rendering convenience: the stored 1..10 mood and rating are read by the
+# practice's own master and by nobody else.
+#
+# user_id IS CARRIED, and it is not the thing that keeps a curator out of a
+# student's dossier -- GET /masters/me/students/{id} does that itself, with
+# is_master_audience_member and a 404 (masters/students_service.py). Leaving
+# the id out would have bought no protection and cost the curator the
+# ability to tell two students of the same name apart, which is most of the
+# reason names are shown at all.
+
+
+class CuratorGroupCheckinItem(BaseModel):
+    """One PRE check-in left on a practice of this school.
+
+    `mood` is the stored 1..10 score mapped to the three distribution
+    buckets (1-3 low / 4-7 mid / 8-10 high) -- the same vocabulary the
+    anonymous per-practice insights already use, so the frontend reuses the
+    mood icons it renders there.
+
+    POST check-ins never appear here, and neither do check-ins whose
+    booking was later cancelled: both are absent from the master's own
+    roster for this practice, and the school widens a curator's reach
+    without deepening it.
+
+    user_id identifies the participant so that two students of the same
+    name stay distinct; it opens no screen a curator would otherwise be
+    refused.
+    """
+
+    user_id: UUID
+    student_name: str
+    avatar_url: str | None
+    mood: Literal["high", "mid", "low"]
+    comment: str | None
+    practice_id: UUID
+    practice_title: str
+    created_at: datetime
+
+
+class PaginatedCuratorGroupCheckinsResponse(BaseModel):
+    """GET /masters/me/curator-groups/{id}/checkins."""
+
+    items: list[CuratorGroupCheckinItem]
+    total: int
+    limit: int
+    offset: int
+
+
+class CuratorGroupReviewItem(BaseModel):
+    """One named review left on a practice of this school.
+
+    `rating` is the stored 1..10 score mapped to the three feedback buckets
+    (1-3 confused / 4-7 good / 8-10 fire), identical to what the practice's
+    master reads in their own per-practice and cross-practice review feeds.
+
+    user_id identifies the reviewer, as it does in the master's own review
+    items; the screens behind it enforce their own access.
+    """
+
+    user_id: UUID
+    student_name: str
+    avatar_url: str | None
+    rating: Literal["fire", "good", "confused"]
+    comment: str | None
+    practice_id: UUID
+    practice_title: str
+    created_at: datetime
+
+
+class PaginatedCuratorGroupReviewsResponse(BaseModel):
+    """GET /masters/me/curator-groups/{id}/reviews."""
+
+    items: list[CuratorGroupReviewItem]
+    total: int
+    limit: int
+    offset: int

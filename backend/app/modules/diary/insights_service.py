@@ -5,9 +5,11 @@
 #
 # Master-facing analytics: anonymous aggregated insights (get_practice_insights)
 # and named/de-anonymised reviews (list_practice_reviews) for a completed
-# practice. ATTENTION_RATING_MAX and rating_bucket are consumed by TWO masters
-# modules (masters/reviews_service.py, masters/students_service.py) -- the
-# reason this area is public API, not just internal to diary.
+# practice. ATTENTION_RATING_MAX, rating_bucket and mood_bucket are consumed
+# by two masters modules (masters/reviews_service.py,
+# masters/students_service.py) and, since BE-24, by
+# curator_groups/feedback_service.py -- the reason this area is public API,
+# not just internal to diary.
 # =============================================================================
 
 from uuid import UUID
@@ -165,6 +167,21 @@ def rating_bucket(score: int) -> str:
     return {"low": "confused", "mid": "good", "high": "fire"}[
         _score_bucket(score)
     ]
+
+
+def mood_bucket(score: int) -> str:
+    """Map a 1..10 check-in mood to its UI bucket name (low / mid / high).
+
+    rating_bucket's twin for the OTHER score, and public for the same
+    reason: curator_groups/feedback_service.py must publish a check-in
+    without publishing the number behind it, and writing the 1-3 / 4-7 /
+    8-10 boundaries into a third module would put one fact in three places.
+
+    The vocabulary is the anonymous distribution's (MoodDistribution:
+    high / mid / low), not the feedback one -- moods have never been called
+    confused/good/fire anywhere the frontend can see.
+    """
+    return _score_bucket(score)
 
 
 async def list_practice_reviews(

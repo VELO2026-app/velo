@@ -190,3 +190,23 @@ curator_group.master_offer_declined:
   telegram:
     title: "Appointment declined"
     body: "🏛 <b>{actor_name}</b> declined the master role in <b>{group_name}</b>."
+
+# -- Master-facing (BE-33) --
+#
+# {mood} and {rating} arrive as an EMOJI, never as the stored 1..10 score
+# (diary/notify_master.py) -- see the ru sheet for why.
+
+practice.master_reminder_1h:
+  telegram:
+    title: "Your practice in 1 hour"
+    body: "⏰ You are teaching <b>{practice_title}</b> in 1 hour.\n\n📅 {scheduled_at}"
+
+practice.checkin_received:
+  telegram:
+    title: "New check-in"
+    body: "{mood} {participant_name} checked in before <b>{practice_title}</b>.\n\n{comment}"
+
+practice.feedback_received:
+  telegram:
+    title: "New review"
+    body: "{rating} {participant_name} left a review of <b>{practice_title}</b>.\n\n{comment}"

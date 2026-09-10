@@ -42,8 +42,13 @@ from app.modules.auth.dependencies import (
     get_current_user,
     get_current_user_write,
 )
+from app.modules.curator_groups.feedback_service import (
+    list_curator_group_checkins,
+    list_curator_group_reviews,
+)
 from app.modules.curator_groups.schemas import (
     CreateCuratorGroupRequest,
+    CuratorGroupCheckinItem,
     CuratorGroupDeletePreviewResponse,
     CuratorGroupEventActor,
     CuratorGroupEventItem,
@@ -59,13 +64,16 @@ from app.modules.curator_groups.schemas import (
     CuratorGroupPageResponse,
     CuratorGroupRemovePreviewResponse,
     CuratorGroupResponse,
+    CuratorGroupReviewItem,
     CuratorGroupTransferRef,
     JoinCuratorGroupRequest,
     JoinCuratorGroupResponse,
     OfferCuratorGroupTransferRequest,
+    PaginatedCuratorGroupCheckinsResponse,
     PaginatedCuratorGroupEventsResponse,
     PaginatedCuratorGroupMastersResponse,
     PaginatedCuratorGroupMembersResponse,
+    PaginatedCuratorGroupReviewsResponse,
     UpdateCuratorGroupRequest,
 )
 from app.modules.curator_groups.service import (
@@ -373,6 +381,93 @@ async def list_curator_group_events_endpoint(
             )
             for item in items
         ],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+# ===========================================================================
+# School feedback (BE-24 / GT-28)
+#
+# Two feeds over the school's practices -- the ones its masters ran,
+# including the ones this curator did not. THE CURATOR ONLY: both resolve
+# ownership in the service and answer 404 to everybody else, the journal's
+# rule and for the journal's reason.
+#
+# The killswitch is not mentioned in either handler because it is already
+# on the router (_require_curator_groups_enabled) -- with the flag off both
+# paths are 404 before authentication is even attempted.
+# ===========================================================================
+
+
+@router.get(
+    "/me/curator-groups/{group_id}/checkins",
+    response_model=PaginatedCuratorGroupCheckinsResponse,
+)
+async def list_curator_group_checkins_endpoint(
+    group_id: UUID,
+    practice_id: UUID | None = Query(default=None),
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_reader),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> PaginatedCuratorGroupCheckinsResponse:
+    """PRE check-ins across my school's practices, newest first.
+
+    The page size is bounded like every other list in this router, and the
+    query is bounded by it: a school with tens of practices and thousands
+    of participants costs the same two statements as an empty one.
+
+    `practice_id` narrows to one practice and grants nothing -- a practice
+    outside the school simply matches no rows.
+    """
+    user, _profile = master_tuple
+    items, total = await list_curator_group_checkins(
+        user.id,
+        group_id,
+        session,
+        practice_id=practice_id,
+        limit=limit,
+        offset=offset,
+    )
+    return PaginatedCuratorGroupCheckinsResponse(
+        items=[CuratorGroupCheckinItem(**item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
+    "/me/curator-groups/{group_id}/reviews",
+    response_model=PaginatedCuratorGroupReviewsResponse,
+)
+async def list_curator_group_reviews_endpoint(
+    group_id: UUID,
+    practice_id: UUID | None = Query(default=None),
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_reader),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> PaginatedCuratorGroupReviewsResponse:
+    """Named reviews across my school's practices, newest first.
+
+    Separate from /checkins rather than one feed with a kind field: the two
+    rows share no score, and a union type is a cost the frontend would pay
+    on every read to save one route here.
+    """
+    user, _profile = master_tuple
+    items, total = await list_curator_group_reviews(
+        user.id,
+        group_id,
+        session,
+        practice_id=practice_id,
+        limit=limit,
+        offset=offset,
+    )
+    return PaginatedCuratorGroupReviewsResponse(
+        items=[CuratorGroupReviewItem(**item) for item in items],
         total=total,
         limit=limit,
         offset=offset,

@@ -22,6 +22,7 @@ from app.core.config import settings
 from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
 from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.diary.models import Checkin, CheckType
+from app.modules.diary.notify_master import notify_master_of_checkin
 from app.modules.diary.projections import upsert_checkin_event
 from app.modules.masters.service import get_master_full_name
 from app.modules.practices.audience_service import assert_viewer_not_blocked
@@ -190,6 +191,13 @@ async def upsert_checkin(
         checkin=checkin,
         practice=practice,
         master_name=master_name,
+    )
+
+    # BE-33 item 5: tell the practice's master, one message per check-in.
+    # Same transaction as the row (transactional outbox), so a rolled-back
+    # check-in leaves no notification behind.
+    await notify_master_of_checkin(
+        session, checkin=checkin, practice=practice, author=user,
     )
     return checkin, True
 
