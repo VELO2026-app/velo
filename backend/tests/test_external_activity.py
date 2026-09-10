@@ -114,6 +114,22 @@ async def _feed(
     return resp.json()
 
 
+async def _locs(client: AsyncClient, auth: dict, **overrides: object):
+    """The `loc` of every validation error, as the frontend receives them.
+
+    Reads the wire body rather than calling the pydantic model directly:
+    what matters is what reaches the client through FastAPI's 422, and a
+    model-level check would prove the validator raised without proving the
+    address survived the trip. It does not survive unchanged, either:
+    FastAPI prefixes every loc with "body", so the wire form is
+    ["body", "<field>"] and the model-validator form was ["body"] alone --
+    measured here rather than quoted from pydantic.
+    """
+    resp = await _post(client, auth, **overrides)
+    assert resp.status_code == 422, resp.text
+    return sorted(tuple(e["loc"]) for e in resp.json()["detail"])
+
+
 async def _count_activities(session: AsyncSession, auth: dict) -> int:
     return (
         await session.execute(
@@ -718,3 +734,140 @@ def test_the_new_kind_is_wired_into_both_config_lists() -> None:
     kind = DiaryEventKind.EXTERNAL_ACTIVITY.value
     assert kind in settings.diary_feed_categories["practices"]
     assert kind in settings.diary_feed_allowed_kinds
+
+
+# ===========================================================================
+# GT-32a -- where a validation error is addressed
+#
+# Contract 4.1 justifies 422 with "so the frontend can bind them to
+# fields". Two refusals used to arrive with an empty loc, because pydantic
+# gives a model validator no field to point at; the rule now lives in a
+# field_validator on custom_activity_name.
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("label", "overrides"),
+    [
+        ("ключа нет вовсе", {"activity_type": "custom"}),
+        (
+            "ключ есть, значение null",
+            {"activity_type": "custom", "custom_activity_name": None},
+        ),
+        (
+            "значение из пробелов",
+            {"activity_type": "custom", "custom_activity_name": "   "},
+        ),
+        (
+            "имя у преднастроенного",
+            {"activity_type": "yoga", "custom_activity_name": "Йога"},
+        ),
+    ],
+)
+async def test_the_custom_name_refusal_names_its_field(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    label: str,
+    overrides: dict,
+) -> None:
+    """All four shapes of the cross-field refusal point at the input.
+
+    THE FIRST CASE IS THE ONE THAT NEARLY BROKE. A field_validator does not
+    run when the key is absent from the body, so moving the rule off the
+    model validator without validate_default=True would have turned "custom
+    with no name" -- the commonest of the two mistakes -- into a 201. The
+    other three would still have carried a proper loc and the fix would
+    have looked done.
+    """
+    owner = await login_user(client, telegram_id=_TID_OWNER)
+
+    assert await _locs(client, owner, **overrides) == [
+        ("body", "custom_activity_name")
+    ], label
+    assert await _count_activities(db_session, owner) == 0
+
+
+@pytest.mark.asyncio
+async def test_the_other_five_refusals_keep_the_field_they_had(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """Moving one validator must not move the addresses of the rest.
+
+    Pinned rather than assumed: a field_validator changes execution order
+    relative to the model validator that used to run last, and occurred_at
+    and mood are the two that could have been dragged along. An empty body
+    is included because it is the case where every required field reports
+    at once.
+    """
+    owner = await login_user(client, telegram_id=_TID_OWNER)
+    ahead = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
+    naive = (datetime.now(UTC) - timedelta(days=1)).replace(
+        tzinfo=None,
+    ).isoformat()
+    long_name = "и" * (settings.external_activity_name_max_length + 1)
+
+    assert await _locs(
+        client, owner, occurred_at=ahead,
+    ) == [("body", "occurred_at")]
+    assert await _locs(
+        client, owner, occurred_at=naive,
+    ) == [("body", "occurred_at")]
+    assert await _locs(client, owner, activity_type="breathwork") == [
+        ("body", "activity_type")
+    ]
+    assert await _locs(client, owner, mood=11) == [("body", "mood")]
+    assert await _locs(
+        client, owner, activity_type="custom", custom_activity_name=long_name,
+    ) == [("body", "custom_activity_name")]
+
+    empty = await client.post(
+        ACTIVITIES_URL, json={}, headers=auth_headers(owner["session_token"]),
+    )
+    assert empty.status_code == 422, empty.text
+    assert sorted(tuple(e["loc"]) for e in empty.json()["detail"]) == [
+        ("body", "activity_type"),
+        ("body", "mood"),
+        ("body", "occurred_at"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_an_unknown_type_with_a_name_refuses_once_by_the_type(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """One refusal, and it points at the field that is actually wrong.
+
+    info.data holds only the fields that PASSED, so an unknown
+    activity_type is simply absent from it and the name rule steps aside.
+    Reading it with an index instead of .get() would raise a KeyError here
+    -- a 500 in place of a 422; returning a second refusal about the name
+    would send the person to correct an input that is fine.
+    """
+    owner = await login_user(client, telegram_id=_TID_OWNER)
+
+    assert await _locs(
+        client, owner, activity_type="breathwork", custom_activity_name="x",
+    ) == [("body", "activity_type")]
+    assert await _count_activities(db_session, owner) == 0
+
+
+@pytest.mark.asyncio
+async def test_a_bad_mood_and_a_missing_name_now_both_report(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """TWO refusals where there used to be one -- a named change, not a bug.
+
+    A field-level failure cancels a model validator, so before GT-32a this
+    body answered with `mood` alone and the person learned about the
+    missing name only after fixing the score. Field validators do not
+    cancel each other, so both now report, each against its own input.
+    Anybody who finds two errors here and expects one should read this
+    docstring rather than "fix" it back.
+    """
+    owner = await login_user(client, telegram_id=_TID_OWNER)
+
+    assert await _locs(
+        client, owner, activity_type="custom", mood=11,
+    ) == [("body", "custom_activity_name"), ("body", "mood")]
+    assert await _count_activities(db_session, owner) == 0

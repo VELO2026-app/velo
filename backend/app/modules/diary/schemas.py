@@ -39,8 +39,8 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    ValidationInfo,
     field_validator,
-    model_validator,
 )
 
 from app.core.config import settings
@@ -453,6 +453,13 @@ class CreateExternalActivityRequest(BaseModel):
     custom_activity_name: str | None = Field(
         default=None,
         max_length=settings.external_activity_name_max_length,
+        # validate_default IS THE WHOLE FIX, not a flag beside it. A
+        # field_validator does NOT run when the key is absent from the
+        # body, so without this the commonest mistake of the two -- type
+        # 'custom' and no name at all -- would stop being refused and
+        # return 201. Measured, not assumed: the prototype without it
+        # turned that case from a 422 into a created row.
+        validate_default=True,
     )
     mood: int
     thoughts: str | None = Field(
@@ -500,30 +507,48 @@ class CreateExternalActivityRequest(BaseModel):
         stripped = v.strip()
         return stripped or None
 
-    @model_validator(mode="after")
-    def custom_name_matches_type(self) -> "CreateExternalActivityRequest":
+    @field_validator("custom_activity_name")
+    @classmethod
+    def custom_name_matches_type(
+        cls, v: str | None, info: ValidationInfo,
+    ) -> str | None:
         """The name is required exactly when the type is custom.
 
-        A MODEL validator, not a field one: the rule spans two fields, and
-        field_validator cannot see its sibling. Both directions are
-        refused -- a custom with no name, and a name pinned on one of the
-        six preset types -- so the request cannot describe a row the DB
-        constraint would reject anyway.
+        A FIELD validator on the SECOND of the two fields, not a model
+        validator, and the difference is the error's address: pydantic
+        gives a model validator no `loc`, so both refusals used to arrive
+        at body level and the frontend could not put them under the input
+        they belong to. Contract 4.1 asks for 422 precisely so it can.
+
+        Reading a sibling works because `activity_type` is DECLARED ABOVE
+        this field: info.data holds the fields already validated, in
+        declaration order. It holds only the ones that PASSED -- an
+        unknown activity_type is absent from it entirely, hence .get()
+        and the early return: that request already has its 422 on
+        activity_type, and a second refusal about the name would only
+        send the person looking in the wrong place.
+
+        Both directions stay here together. Split across two checks in
+        two places they would be two rules that can be relaxed one at a
+        time, and the DB constraint they mirror
+        (ck_external_activity_custom) is deliberately one expression for
+        the same reason.
         """
-        name = (self.custom_activity_name or "").strip()
-        is_custom = self.activity_type is ExternalActivityType.CUSTOM
-        if is_custom and not name:
+        name = (v or "").strip()
+        activity_type = info.data.get("activity_type")
+        if activity_type is None:
+            return name or None
+        if activity_type is ExternalActivityType.CUSTOM and not name:
             raise ValueError(
                 "custom_activity_name is required when "
                 "activity_type is 'custom'"
             )
-        if not is_custom and self.custom_activity_name is not None:
+        if activity_type is not ExternalActivityType.CUSTOM and v is not None:
             raise ValueError(
                 "custom_activity_name is only allowed when "
                 "activity_type is 'custom'"
             )
-        self.custom_activity_name = name or None
-        return self
+        return name or None
 
 
 class ExternalActivityResponse(BaseModel):
