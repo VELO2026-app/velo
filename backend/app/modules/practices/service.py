@@ -1883,6 +1883,7 @@ async def update_practice(
             cancel_practice_reminders,
             format_event_time,
             schedule_booking_reminders,
+            schedule_master_practice_reminder,
         )
         from app.modules.bookings.models import Booking, BookingStatus
         booked_stmt = (
@@ -1928,6 +1929,18 @@ async def update_practice(
                 master_name=master_name,
                 scheduled_at=new_scheduled_at,
             )
+        # BE-33: the master's own reminder rides the same cancel above
+        # (practice_id correlation, MASTER_REMINDER_TYPES) and has to be
+        # re-anchored here for the same reason the series is -- it is not
+        # per-booking, so it sits outside the loop and happens even for a
+        # practice nobody has booked.
+        await schedule_master_practice_reminder(
+            session,
+            practice_id=str(practice.id),
+            master_user_id=str(practice.master_id),
+            practice_title=practice.title,
+            scheduled_at=new_scheduled_at,
+        )
 
         # E21: keep the Zoom meeting's start time in sync, then re-fetch and
         # overwrite stored registrant join links -- self-healing regardless
@@ -1964,6 +1977,29 @@ async def update_practice(
     ):
         from app.modules.zoom.service import create_meeting_for_practice
         await create_meeting_for_practice(practice, session)
+
+    # BE-33: the master's own one-hour reminder, scheduled at publication.
+    # Gated on the SAME transition as the Zoom block above and it inherits
+    # that block's KNOWN GAP by construction -- series children never reach
+    # here -- so generate_series_occurrences schedules its own, per child.
+    # A practice published less than an hour before it starts gets none:
+    # schedule_master_practice_reminder returns False rather than emitting
+    # into the past.
+    if (
+        old_status == PracticeStatus.DRAFT.value
+        and practice.status == PracticeStatus.SCHEDULED.value
+        and practice.scheduled_at is not None
+    ):
+        from app.core.events.reminders import (
+            schedule_master_practice_reminder as _schedule_master_reminder,
+        )
+        await _schedule_master_reminder(
+            session,
+            practice_id=str(practice.id),
+            master_user_id=str(practice.master_id),
+            practice_title=practice.title,
+            scheduled_at=practice.scheduled_at,
+        )
 
     # H-R2 (3.3): a capacity RELAXATION frees seats -- hand them to the
     # waitlist NOW instead of leaving the queue to wait for someone

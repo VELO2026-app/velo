@@ -18,6 +18,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.events.reminders import schedule_master_practice_reminder
 from app.core.exceptions import BadRequestError
 from app.modules.practices.models import (
     AudienceKind,
@@ -318,6 +319,19 @@ async def generate_series_occurrences(
                 practice_id=child.id,
                 status=ZoomMeetingStatus.PENDING_CREATION.value,
             )
+        )
+        # BE-33: the master's own one-hour reminder, per OCCURRENCE. It is
+        # scheduled here for the same reason the ZoomMeeting row above is:
+        # children are born SCHEDULED and never pass update_practice()'s
+        # draft->scheduled branch, where the root's is wired. Hooking only
+        # that branch would remind the master about the first session of a
+        # course and about none of the rest.
+        await schedule_master_practice_reminder(
+            session,
+            practice_id=str(child.id),
+            master_user_id=str(child.master_id),
+            practice_title=child.title,
+            scheduled_at=start_utc,
         )
 
     logger.info(

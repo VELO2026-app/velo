@@ -42,6 +42,7 @@ from app.core.config import settings
 from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
 from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.diary.models import DiaryEntry, DiaryEntryType, Feedback
+from app.modules.diary.notify_master import notify_master_of_feedback
 from app.modules.diary.projections import (
     hide_entry_event,
     upsert_entry_event,
@@ -188,6 +189,12 @@ async def upsert_feedback(
         feedback=feedback,
         practice=practice,
         master_name=master_name,
+    )
+
+    # BE-33 item 6: tell the practice's master, one message per review, in
+    # the same transaction as the row.
+    await notify_master_of_feedback(
+        session, feedback=feedback, practice=practice, author=user,
     )
     return feedback, True
 

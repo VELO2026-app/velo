@@ -23,8 +23,10 @@
 # dictionary (booking.reminder_24h / _1h / _10m), minimum lead from
 # settings (donor default 5 min): a reminder already (almost) due is
 # skipped, not scheduled into the past. The donor's master_reminder_*
-# series is NOT rebuilt -- absent from the locked dictionary §2
-# (deferred with a dictionary-amendment trigger).
+# series was deferred here with a dictionary-amendment trigger; BE-33
+# fired that trigger and rebuilt the 1h leg as
+# practice.master_reminder_1h -- per PRACTICE, not per booking, so it
+# is a sibling of the series rather than a fourth member of it.
 #
 # PROMPTS (ID-6): practice_outcome schedules prompt.leave_feedback at
 # outcome + delay (settings), expiring after the settings window. v1
@@ -91,6 +93,14 @@ BOOKING_REMINDER_SPECS: tuple[ReminderSpec, ...] = (
 )
 
 BOOKING_REMINDER_TYPES = [spec.type for spec in BOOKING_REMINDER_SPECS]
+
+# BE-33: the master's own session, one hour out. A SEPARATE constant rather
+# than a fourth entry in the series above -- the series is per BOOKING and
+# fans out to participants; this one is per PRACTICE and goes to the person
+# teaching it. They share an anchor and nothing else.
+MASTER_REMINDER_TYPE = "practice.master_reminder_1h"
+MASTER_REMINDER_LEAD = timedelta(hours=1)
+MASTER_REMINDER_TYPES = [MASTER_REMINDER_TYPE]
 
 PROMPT_FEEDBACK_TYPE = "prompt.leave_feedback"
 
@@ -189,15 +199,86 @@ async def cancel_practice_reminders(
     *,
     practice_id: str,
 ) -> None:
-    """Cancel EVERY pending reminder of a practice (practice cancelled
-    or rescheduled): correlated by practice_id, no target filter
-    (donor semantics of the per-practice cancel)."""
+    """Cancel a practice's pending reminders (cancelled or rescheduled):
+    correlated by practice_id, no target filter (donor semantics of the
+    per-practice cancel) -- so it reaches every participant's series and
+    the master's own reminder in one event.
+
+    THE TYPE LIST IS THE OTHER HALF OF THE FILTER, and it is easy to read
+    past: comms expires `Notification.type.in_(types)` AND the correlation,
+    so a reminder type missing from this list survives the cancellation of
+    its own practice. BE-33 added MASTER_REMINDER_TYPES here for exactly
+    that reason. prompt.leave_feedback also carries practice_id and is
+    deliberately NOT here -- it is scheduled after the practice has already
+    happened, so there is no cancellation of that practice left to apply.
+    """
     await emit_reminder_cancel(
         session,
-        types=BOOKING_REMINDER_TYPES,
+        types=BOOKING_REMINDER_TYPES + MASTER_REMINDER_TYPES,
         correlation_key="practice_id",
         correlation_value=practice_id,
     )
+
+
+async def schedule_master_practice_reminder(
+    session: AsyncSession,
+    *,
+    practice_id: str,
+    master_user_id: str,
+    practice_title: str,
+    scheduled_at: datetime,
+) -> bool:
+    """Schedule the master's own one-hour reminder for one practice.
+
+    PER PRACTICE, NOT PER BOOKING, and that is the whole difference from
+    schedule_booking_reminders: a master teaches the session whether or not
+    anybody booked it, so an empty practice still gets its reminder. There
+    is no booking_id correlation for the same reason -- only practice_id,
+    which is what cancel_practice_reminders matches on.
+
+    Returns True when a reminder was emitted, False when the practice
+    starts inside the min-lead cutoff (published an hour before it begins:
+    the reminder would be due already, and scheduling into the past is what
+    the cutoff exists to prevent).
+    """
+    now = datetime.now(UTC)
+    send_at = scheduled_at - MASTER_REMINDER_LEAD
+    cutoff = now + timedelta(
+        seconds=settings.booking_reminder_min_lead_seconds,
+    )
+    if send_at < cutoff:
+        return False
+
+    when_text = format_event_time(scheduled_at)
+    await emit_notification(
+        session,
+        type=MASTER_REMINDER_TYPE,
+        target_type="user",
+        target_value=master_user_id,
+        title="Ваша практика через 1 час",
+        body=(
+            f"Вы ведёте практику «{practice_title}» через 1 час. "
+            f"Начало: {when_text}."
+        ),
+        action_data={
+            "action": "open_practice",
+            "params": {"practice_id": practice_id},
+            # Correlation key for reminder_cancel. booking_id is absent on
+            # purpose: this reminder belongs to the practice.
+            "practice_id": practice_id,
+            "practice_title": practice_title,
+            "scheduled_at": when_text,
+        },
+        priority=REMINDER_PRIORITY,
+        scheduled_at=send_at,
+        expiry_at=scheduled_at,
+    )
+    logger.info(
+        "master_practice_reminder_scheduled",
+        practice_id=practice_id,
+        master_user_id=master_user_id,
+    )
+    return True
 
 
 async def schedule_feedback_prompt(

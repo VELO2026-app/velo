@@ -70,9 +70,10 @@ waitlist.expired:
 #    to the dot dictionary. Scheduled by velo as notification_request
 #    with a future scheduled_at (anchor = practice.scheduled_at),
 #    cancelled via the reminder_cancel event by booking_id /
-#    practice_id correlation. The donor's master_reminder_* series is
-#    deliberately NOT carried over -- absent from the locked
-#    dictionary §2 (deferred; trigger = dictionary amendment). --
+#    practice_id correlation. The donor's master_reminder_* series was
+#    deferred here with "trigger = dictionary amendment"; BE-33 is that
+#    amendment -- see practice.master_reminder_1h at the end of this
+#    file, which carries its own category rather than joining this one. --
 
 booking.reminder_24h:
   category: reminders
@@ -221,3 +222,53 @@ msg.support_message:
 
 msg.thread_closed:
   category: msg_participants
+
+# ===========================================================================
+# MASTER-FACING NOTIFICATIONS (BE-33). Three types, three NEW categories,
+# and the count is not a preference: the settings facade builds one toggle
+# per category the profile declares (comms app/api/prefs.py), so two rows on
+# the master's screen that must move independently ARE two categories. One
+# category would be one switch under two labels.
+#
+# Every one of the three SCALES -- with the master's calendar, with the size
+# of a practice (eighteen thousand participants is a real number here) -- so
+# all three must be silenceable, and none may be parked in a family whose
+# other members are not.
+# ===========================================================================
+
+# -- The master's own session, one hour out. NOT `reminders`: that family
+#    holds booking.reminder_24h/_1h/_10m and the two prompts, which a master
+#    receives AS A PARTICIPANT of somebody else's practice. Sharing the
+#    bucket would mean one switch for "remind me about my classes" and
+#    "remind me about the classes I teach" -- the coupling GT-26 already
+#    refused once for the curator's arrivals feed.
+#
+#    The `practice.` prefix names the subject, not the toggle: this family
+#    already spans categories (practice.cancelled sits in `bookings`,
+#    practice.cancelled_by_curator carries none). The `master.` prefix was
+#    the other candidate and is taken -- it means decision-A status types
+#    that carry NO category, and a categorized master.* would break that
+#    reading at a glance.
+#
+#    Scheduled at publication, one per practice (series children included),
+#    cancelled and re-anchored with the practice by the practice_id
+#    correlation -- see core/events/reminders.py MASTER_REMINDER_TYPES. --
+
+practice.master_reminder_1h:
+  category: master_reminders
+
+# -- A participant checked in before the master's practice. POSTED ONE BY
+#    ONE, not as a digest (owner ruling): the check-in carries a comment
+#    ("болит спина") and it is worth reading BEFORE the session -- a digest
+#    afterwards keeps the count and loses the reason anyone reads these. --
+
+practice.checkin_received:
+  category: practice_checkins
+
+# -- A participant left a review on the master's practice. Separate category
+#    from check-ins because they are separate rows on the screen: a master
+#    mid-course wants the check-ins and not yet the reviews, and after the
+#    course exactly the other way round. --
+
+practice.feedback_received:
+  category: practice_reviews

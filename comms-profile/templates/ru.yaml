@@ -204,3 +204,25 @@ curator_group.master_offer_declined:
   telegram:
     title: "Назначение отклонено"
     body: "🏛 <b>{actor_name}</b> отклонил назначение мастером школы <b>{group_name}</b>."
+
+# -- Master-facing (BE-33) --
+#
+# {mood} and {rating} arrive as an EMOJI, never as the stored 1..10 score
+# (diary/notify_master.py). A bucket token would read as an English
+# word inside a Russian sheet; the emoji is the same in both locales and is
+# the vocabulary these sheets already speak.
+
+practice.master_reminder_1h:
+  telegram:
+    title: "Ваша практика через 1 час"
+    body: "⏰ Вы ведёте <b>{practice_title}</b> через 1 час.\n\n📅 {scheduled_at}"
+
+practice.checkin_received:
+  telegram:
+    title: "Новый чек-ин"
+    body: "{mood} {participant_name} отметился перед практикой <b>{practice_title}</b>.\n\n{comment}"
+
+practice.feedback_received:
+  telegram:
+    title: "Новый отзыв"
+    body: "{rating} {participant_name} оставил отзыв о практике <b>{practice_title}</b>.\n\n{comment}"
