@@ -1,19 +1,18 @@
 <!--
-  VELO Frontend -- DiarySearchBar (Diary redesign, screen 44; inline round,
-  owner 2026-09-07)
+  VELO Frontend -- DiarySearchBar (Diary redesign, screen 44; header-slot
+  round, owner 2026-09-09)
 
-  The diary's inline search row, unfolded from the "..." menu's «Поиск» item
-  by the parent (DiaryFeedView): [magnifier][glass field] stretching to the
-  right rail, floating over the feed. Replaces the retired DiarySearchModal
-  -- no sheet, no teleport; the VIEW owns the positioning via its
-  .diary-feed__search wrapper (same overlay contract as the composer).
+  The diary's search input, living in the HEADER ROW'S SLOT while any search
+  state is up (the parent swaps the back/"..." row out for it): a light pill
+  field with a SMALL clear-x inside, and a larger plain x to the right that
+  closes the search as a whole.
 
-  Submit (Enter, the magnifier, or a recent) emits `search` with the trimmed
-  query and records it in recents; an empty submit clears the search. The bar
-  STAYS after submit -- the parent keeps it mounted while a search is active
-  (it is the only visible indicator of that filter). `x` erases the TEXT only
-  (cancelling the search itself is the scrim tap / the contextual back); Esc
-  emits `close`. The parent focuses the field through the exposed focus().
+  Live search (2026-09-09): every debounced keystroke emits `live` with the
+  trimmed query ('' = the field is empty = drop the filter). Enter just
+  remembers the query and drops the keyboard (flushing any pending live
+  pass); a recent tap applies its query immediately. The small inner x
+  behaves like backspacing to empty; the OUTER x emits `cancel` -- the parent
+  resets everything and returns the header row. Esc emits `close`.
 
   Recent queries persist in localStorage, capped at MAX_RECENTS,
   most-recent-first, de-duplicated case-insensitively (carried over from the
@@ -22,20 +21,19 @@
   Usage:
     <DiarySearchBar
       :initial="feedFilters.search ?? ''"
-      @search="onApplySearch"
+      @live="onLiveSearch"
+      @cancel="onSearchCancel"
       @close="closeSearch"
     />
 -->
 
 <template>
   <div class="diary-search">
-    <button type="button" class="diary-search__go" aria-label="Искать" @click="submit(query)">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-        <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" />
-        <path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-      </svg>
-    </button>
-
+    <!-- [field (small clear-x inside)] [close X] -- owner 2026-09-09. The
+         field is the composer's pill look ("аккуратный инпут, который был
+         внизу"); submit is Enter / a recent (live search refetches as you
+         type, so there is no go disc any more -- the magnifier ruling of
+         2026-09-07 is superseded by this layout). -->
     <div class="diary-search__field">
       <input
         ref="inputEl"
@@ -45,8 +43,13 @@
         placeholder="Искать..."
         enterkeyhint="search"
         aria-label="Поиск по дневнику"
-        @keydown.enter.prevent="submit(query)"
+        @input="onUserInput"
+        @keydown.enter.prevent="commit"
       />
+      <!-- The SMALL x lives INSIDE the field and clears the TEXT (and, like
+           backspacing to empty, debounces a live('') that drops the filter)
+           -- it never CLOSES the search: the bar and the focused field
+           stay; closing is the outer x (owner 2026-09-09). -->
       <button
         v-if="query"
         type="button"
@@ -73,7 +76,7 @@
           :key="term"
           type="button"
           class="diary-search__recent-item"
-          @click="submit(term)"
+          @click="applyRecent(term)"
         >
           <span class="diary-search__recent-text">{{ term }}</span>
           <svg
@@ -94,6 +97,28 @@
         </button>
       </section>
     </div>
+
+    <!-- The OUTER x (owner 2026-09-09): a PLAIN ICON to the right of the
+         field -- bigger than the field's own small clear x, but no chrome
+         of its own (no disc, no border, no frost): the input is the
+         surface, the x is just a glyph. It closes the search AS A WHOLE --
+         the parent ends the mode, resets any active query / jump window
+         and returns everything to its original state. -->
+    <button
+      type="button"
+      class="diary-search__close"
+      aria-label="Закрыть поиск"
+      @click="emit('cancel')"
+    >
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <path
+          d="M6 6l12 12M18 6L6 18"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+        />
+      </svg>
+    </button>
   </div>
 </template>
 
@@ -106,12 +131,22 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  search: [query: string]
+  /**
+   * Debounced as-you-type query (2026-09-09, Telegram-style live search).
+   * '' means "the field is empty" and CLEARS the search -- an empty field
+   * is no filter (owner 2026-09-09; supersedes the submit-only-era rule
+   * that an erased field kept the committed query). Enter and a recent
+   * tap emit it IMMEDIATELY (discrete actions, not typing).
+   */
+  live: [query: string]
+  /** The outer x: close the search entirely (the parent resets everything). */
+  cancel: []
   close: []
 }>()
 
 const RECENTS_KEY = 'velo:diary:recent-searches'
 const MAX_RECENTS = 6
+const LIVE_DEBOUNCE_MS = 300
 
 const query = ref('')
 const recents = ref<string[]>([])
@@ -169,24 +204,75 @@ function onKeydown(e: KeyboardEvent): void {
   }
 }
 onMounted(() => document.addEventListener('keydown', onKeydown))
-onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', onKeydown)
+  if (liveTimer) {
+    clearTimeout(liveTimer)
+    liveTimer = null
+  }
+})
 
-function submit(term: string): void {
-  const trimmed = term.trim()
-  query.value = trimmed
+// -- Live search (2026-09-09) -------------------------------------------------
+//
+// USER input only: the @input handler fires for real keystrokes, never for
+// the programmatic `initial` sync -- merely REOPENING the bar with an active
+// query is not typing and must not refetch anything.
+let liveTimer: ReturnType<typeof setTimeout> | null = null
+
+function onUserInput(): void {
+  if (liveTimer) clearTimeout(liveTimer)
+  liveTimer = setTimeout(() => {
+    liveTimer = null
+    emit('live', query.value.trim())
+  }, LIVE_DEBOUNCE_MS)
+}
+
+/**
+ * Enter: remember the query and drop the keyboard -- nothing else. The
+ * results are already live; the old "commit the search" ritual (a `search`
+ * event the parent used to end a mode with) died with the scrim: the bar
+ * is up while any search state is, so there is nothing to commit TO. A
+ * pending live pass is flushed NOW -- dropping it would leave a just-typed
+ * query unfetched.
+ */
+function commit(): void {
+  const trimmed = query.value.trim()
+  if (liveTimer) {
+    clearTimeout(liveTimer)
+    liveTimer = null
+    emit('live', trimmed)
+  }
   if (trimmed) recordRecent(trimmed)
-  // Empty submit clears the search (the parent maps it to runFeedSearch('')).
-  emit('search', trimmed)
-  // Drop the keyboard so the results are visible; tap the field to refine.
   inputEl.value?.blur()
 }
 
+/**
+ * A recent tap: set the query and apply it IMMEDIATELY (a discrete action,
+ * not typing -- no debounce owed) and re-record it as most recent.
+ */
+function applyRecent(term: string): void {
+  if (liveTimer) {
+    clearTimeout(liveTimer)
+    liveTimer = null
+  }
+  query.value = term
+  recordRecent(term)
+  inputEl.value?.focus()
+  emit('live', term)
+}
+
 function clear(): void {
-  // The x erases the TEXT only (owner 2026-09-07): the mode stays open and
-  // the field stays focused, ready for a new query. Cancelling the SEARCH
-  // itself is the scrim tap / the contextual back -- not the x.
+  // The small inner x behaves EXACTLY like backspacing the text away: the
+  // field empties and stays focused, and the debounced live('') drops the
+  // filter (owner 2026-09-09 -- an empty field is no filter). It never
+  // CLOSES the search: that is the outer x's job.
+  if (liveTimer) {
+    clearTimeout(liveTimer)
+    liveTimer = null
+  }
   query.value = ''
   inputEl.value?.focus()
+  onUserInput()
 }
 
 function focus(): void {
@@ -200,32 +286,37 @@ defineExpose({ focus })
 .diary-search {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  /* Tight: the outer x is a bare glyph, it hugs the pill like a suffix
+     rather than sitting as a separate column. */
+  gap: var(--space-1);
 }
 
-/* The magnifier doubles as the submit button: a 44px primary disc, the same
-   geometry as the composer's send disc (and the retired modal's go button). */
-.diary-search__go {
+/* The OUTER close x (owner 2026-09-09, round 2: "иконка крестика" -- a PLAIN
+   glyph, deliberately NOT a button disc): the pill is the surface; the x is
+   just an icon with a generous touch target (the pill's own 50px height, so
+   vertical centring is free). Visibly larger than the field's inner clear
+   x (14px) so the two never read as the same control. */
+.diary-search__close {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: var(--velo-size-44);
-  height: var(--velo-size-44);
+  width: 28px;
+  height: var(--velo-size-50);
   border: none;
-  border-radius: var(--radius-full);
-  background: var(--velo-primary);
-  color: var(--velo-white);
+  padding: 0;
+  background: transparent;
+  color: var(--velo-text-secondary);
   cursor: pointer;
   transition: opacity var(--transition-fast);
 }
 
-.diary-search__go:hover {
-  opacity: 0.9;
+.diary-search__close:hover {
+  opacity: 0.7;
 }
 
 /* The field: a LIGHT pill (owner 2026-09-07 -- the earlier 20% white glass
-   read as a dark slot over the scrim). Same white 90% surface as the
+   read as a dark slot over the feed). Same white 90% surface as the
    recents panel below, frost blur + a white rim kept from the glass
    language; iOS-stable like the composer's: the frost lives on a ::before
    layer of its own, the input itself never carries backdrop-filter (WebKit

@@ -22,15 +22,20 @@
     class="diary-feed"
     :class="{
       'diary-feed--composing': composing,
-      'diary-feed--searching': searchOpen || searchActive,
+      'diary-feed--searching': searchMode,
     }"
     :style="composerStyle"
   >
     <!-- Header: floating glass buttons OVER the feed (owner 2026-09-07): the
          штора/top fade is gone and there is no title -- entries really pass
          beneath the buttons, the same overlay model the composer uses at the
-         bottom. -->
-    <header class="diary-feed__header">
+         bottom. 2026-09-09 ruling: while ANY search state is up (open mode /
+         committed query / the jump window over one) this row is REPLACED by
+         the inline search bar in this very slot -- back + «...» fade out,
+         the bar fades in; deactivating the search returns the row exactly
+         as it was. The row stays MOUNTED (hidden via the class below) so
+         the swap is a crossfade, not a mount/unmount blink. -->
+    <header class="diary-feed__header" :class="{ 'diary-feed__header--replaced': searchMode }">
       <!-- Back контекстный (operator 2026-06-04): если активен фильтр/поиск —
            стрелка СБРАСЫВАЕТ фильтр (возврат в полную ленту), иначе выходит из
            дневника. Отдельный «x» убран. [FE-42] кнопка «Назад» круглая ВЕЗДЕ
@@ -41,9 +46,10 @@
         :aria-label="filterActive ? 'Сбросить фильтр' : 'Выйти из дневника'"
         @click="onBack"
       />
-      <!-- «...» под ней: обычный DS-вид (owner 2026-09-07, раунд 2: синее
-           стекло убрано); раскрывается как раньше (вниз, в Фильтр и Поиск),
-           поверх контента. -->
+      <!-- «...» на одной строке со стрелкой, у правого рельса (owner
+           2026-09-08: колонка «под стрелкой» отменена): обычный DS-вид
+           (owner 2026-09-07, раунд 2: синее стекло убрано); раскрывается
+           вниз (в Фильтр и Поиск) поверх контента. -->
       <VMenu>
         <!-- Trigger glyph: vertical dots that rotate to horizontal while the
              menu is open (a state cue, approved animation). The shared default
@@ -198,6 +204,60 @@
         </template>
       </VEmptyState>
 
+      <!-- Jump window load (Telegram-style scroll-to-entry): two GETs, one
+           full-screen loader; the results list is left only on success. -->
+      <div v-else-if="jumpActive && jumpLoading" class="diary-feed__state">
+        <VLoader size="lg" />
+      </div>
+
+      <!-- Search: honest no-results rung -- distinct from «Дневник пуст»
+           (the diary is NOT empty, the query matched nothing). Skipped while
+           a jump window is open (the thread rung owns the screen then). -->
+      <VEmptyState
+        v-else-if="searchActive && !jumpActive && items.length === 0"
+        title="Ничего не найдено"
+        :description="`По запросу «${feedFilters.search}» записей нет`"
+      >
+        <template #icon>
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.4" />
+            <path
+              d="M20 20l-3.5-3.5"
+              stroke="currentColor"
+              stroke-width="1.4"
+              stroke-linecap="round"
+            />
+          </svg>
+        </template>
+        <template #action>
+          <VButton variant="primary" @click="onResetSearch">Сбросить поиск</VButton>
+        </template>
+      </VEmptyState>
+
+      <!-- Search results (Telegram reference): a compact jump list, NOT the
+           filtered timeline -- more results per screen and an obvious
+           tap-to-jump affordance. Newest-first; the parent's sentinel below
+           extends it. A jump window replaces the list while one is open. -->
+      <div v-else-if="searchActive && !jumpActive" class="diary-feed__results">
+        <DiarySearchResults
+          :items="items"
+          :timezone="timezone"
+          :query="feedFilters.search ?? ''"
+          :has-more="feedHasMore"
+          @jump="onJumpToEntry"
+        />
+        <!-- Results are newest-first, so older pages extend the BOTTOM: the
+             sentinel sits after the list (mirror of the thread's top one).
+             Appends below the viewport -- no scroll compensation owed. -->
+        <div ref="resultsSentinelEl" class="diary-feed__results-sentinel" />
+        <!-- In-flow on purpose (unlike the thread's out-of-flow --more rail):
+             this one sits at the list's very BOTTOM, so appearing mid-fetch
+             cannot push anything the reader is looking at. -->
+        <div v-if="loadingMore" class="diary-feed__state diary-feed__state--results">
+          <VLoader />
+        </div>
+      </div>
+
       <!-- Empty -->
       <VEmptyState
         v-else-if="items.length === 0"
@@ -218,7 +278,7 @@
              fling). -->
         <div class="diary-feed__topzone">
           <div ref="sentinelEl" class="diary-feed__sentinel" />
-          <div v-if="loadingMore" class="diary-feed__state diary-feed__state--more">
+          <div v-if="loadingOlderPage" class="diary-feed__state diary-feed__state--more">
             <VLoader />
           </div>
         </div>
@@ -228,8 +288,13 @@
              фильтре/поиске прижатие отключается (--top) — результаты идут
              СВЕРХУ, а не уезжают в середину/низ (operator 2026-06-04). -->
         <div class="diary-feed__thread" :class="{ 'diary-feed__thread--top': filterActive }">
-          <DiaryList v-if="viewMode === 'list'" :items="items" :timezone="timezone" @tap="onTap" />
-          <DiaryTimeline v-else :items="items" :timezone="timezone" @tap="onTap" />
+          <DiaryList
+            v-if="viewMode === 'list'"
+            :items="timelineItems"
+            :timezone="timezone"
+            @tap="onTap"
+          />
+          <DiaryTimeline v-else :items="timelineItems" :timezone="timezone" @tap="onTap" />
         </div>
       </template>
     </div>
@@ -238,8 +303,10 @@
          Apple Liquid Glass). The feed REALLY scrolls under the glass: its
          entries pass beneath the pill and are blurred by the pill's
          backdrop-filter -- never faked with opacity. The overlay itself is
-         pinned to the screen root and NOTHING about it animates on scroll. -->
-    <div ref="composerEl" class="diary-feed__composer">
+         pinned to the screen root and NOTHING about it animates on scroll.
+         2026-09-09: temporarily REMOVED while a search is up (owner) -- the
+         field's slot at the top belongs to the search input for that time. -->
+    <div v-if="!searchMode" ref="composerEl" class="diary-feed__composer">
       <DiaryComposer
         v-if="writeTarget"
         :entry-type="writeTarget"
@@ -278,29 +345,19 @@
       @close="showFilter = false"
     />
 
-    <!-- Search scrim (owner 2026-09-07): while the search MODE is open the
-         screen dims and soft-blurs -- FIXED to the viewport, so it also
-         paints dark the strips the keyboard's rounded corners expose (they
-         used to flash the white body bg). Any tap on it cancels: the mode
-         closes and an active query is reset (owner ruling). -->
-    <button
-      v-if="searchOpen"
-      type="button"
-      class="diary-feed__search-scrim"
-      aria-label="Отменить поиск"
-      @click="onSearchScrimTap"
-    ></button>
-
-    <!-- Inline search (screen 44, owner 2026-09-07 round 3): no modal -- the
-         "..." menu's «Поиск» unfolds a glass field to the right of the
-         magnifier, full width, floating over the feed. Stays mounted while a
-         search is active: with the header title gone, this bar is the only
-         visible indicator of that filter. -->
-    <div v-if="searchOpen || searchActive" class="diary-feed__search">
+    <!-- Inline search (screen 44, owner 2026-09-07 round 3; 2026-09-09:
+         lives in the HEADER ROW'S SLOT -- it replaces back + «...» while
+         any search state is up, and yields the slot back on deactivation;
+         NO scrim/dim any more -- owner 2026-09-09, the screen behind stays
+         fully visible and crisp). Always mounted, crossfaded via the --up
+         class; while a query is live it is the search's only visible
+         indicator (no header title). -->
+    <div class="diary-feed__search" :class="{ 'diary-feed__search--up': searchMode }">
       <DiarySearchBar
         ref="searchBarEl"
         :initial="feedFilters.search ?? ''"
-        @search="onApplySearch"
+        @live="onLiveSearch"
+        @cancel="onSearchCancel"
         @close="closeSearch"
       />
     </div>
@@ -318,10 +375,10 @@ import DiaryList from '@/components/shared/DiaryList.vue'
 import DiaryComposer from '@/components/shared/DiaryComposer.vue'
 import DiaryFilterModal from '@/components/shared/DiaryFilterModal.vue'
 import DiarySearchBar from '@/components/shared/DiarySearchBar.vue'
+import DiarySearchResults from '@/components/shared/DiarySearchResults.vue'
 import { useDiaryStore } from '@/stores/diary'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
-import { platform } from '@/platform'
 import { diaryWriteTarget } from '@/utils/diaryComposeTarget'
 import type { DiaryFeedItem, DiaryFeedCategory } from '@/api/types'
 
@@ -331,7 +388,17 @@ const diaryStore = useDiaryStore()
 const authStore = useAuthStore()
 const toast = useToast()
 
-const { feedItems, feedLoading, feedError, feedHasMore, feedFilters } = storeToRefs(diaryStore)
+const {
+  feedItems,
+  feedLoading,
+  feedError,
+  feedHasMore,
+  feedFilters,
+  jumpItems,
+  jumpTargetId,
+  jumpLoading,
+  jumpMoreLoading,
+} = storeToRefs(diaryStore)
 
 const items = computed<DiaryFeedItem[]>(() => feedItems.value)
 const timezone = computed(() => authStore.user?.timezone ?? 'UTC')
@@ -339,6 +406,26 @@ const timezone = computed(() => authStore.user?.timezone ?? 'UTC')
 // Loading split: first page (full-screen loader) vs subsequent pages (inline).
 const initialLoading = computed(() => feedLoading.value && items.value.length === 0)
 const loadingMore = computed(() => feedLoading.value && items.value.length > 0)
+
+// -- Jump window (Telegram-style scroll to the found entry) -------------------
+
+const jumpActive = computed(() => jumpTargetId.value !== null)
+
+// The thread renders the jump window while one is open (the search results
+// stay loaded in the feed behind it -- exiting the jump returns to them).
+const timelineItems = computed<DiaryFeedItem[]>(() =>
+  jumpActive.value ? jumpItems.value : items.value,
+)
+
+// The "loading older" indicator + sentinel guard follow whichever history is
+// on screen: the feed's pagination, or the jump window's own cursor.
+const loadingOlderPage = computed(() =>
+  jumpActive.value ? jumpMoreLoading.value : loadingMore.value,
+)
+const historyCanLoadMore = computed(() =>
+  jumpActive.value ? diaryStore.jumpCursor !== null : feedHasMore.value,
+)
+const historyBusy = computed(() => feedLoading.value || jumpLoading.value || jumpMoreLoading.value)
 
 // -- Tap handling ------------------------------------------------------------
 
@@ -401,6 +488,12 @@ const searchBarEl = ref<InstanceType<typeof DiarySearchBar> | null>(null)
 // the only visible indicator of the filter (no header title any more).
 const searchActive = computed(() => (feedFilters.value.search ?? '') !== '')
 
+// The header row's slot is owned by the bar while ANY search state is up
+// (owner 2026-09-09): the open mode, a committed query, or the jump window
+// over one. Deactivation (the bar's outer x) flips it back and the header
+// row returns exactly as it was.
+const searchMode = computed(() => searchOpen.value || searchActive.value)
+
 // View mode: thread/map ('map') vs flat column ('list'), toggled from the
 // "..." menu. Default 'map' -- the thread (DiaryTimeline + DiaryThreadCard)
 // is the diary's primary renderer (thread-events redesign, 2026-09-08); the
@@ -428,8 +521,11 @@ function exitDiary(): void {
   void router.push('/user/dashboard')
 }
 
-// Back контекстный (operator 2026-06-04): активен фильтр/поиск -> сбрасываем
-// (возврат в полную ленту), иначе выходим из дневника на дашборд.
+// Back контекстный (operator 2026-06-04): активен фильтр -> сбрасываем
+// (возврат в полную ленту), иначе выходим из дневника на дашборд. (A search
+// state never reaches here: the header row is replaced by the search bar
+// while one is up, so this button is off-screen -- the bar's outer x owns
+// that exit.)
 function onBack(): void {
   if (filterActive.value) {
     void clearFilter()
@@ -481,9 +577,6 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocClickCapture, true)
-  // [TG-SURFACE] never strand a dark native Telegram backdrop after leaving
-  // the screen mid-search.
-  platform.setKeyboardSurface(false)
   // [owner pass] keep-bottom teardown, same lifecycle as the rest.
   feedResizeObserver?.disconnect()
   feedResizeObserver = null
@@ -505,22 +598,23 @@ function closeSearch(): void {
   searchOpen.value = false
 }
 
-// A tap on the scrim = cancel (owner 2026-09-07): close the mode AND reset
-// an active search. With the query gone the bar unmounts, so the focused
-// input goes with it and the keyboard closes by itself.
-async function onSearchScrimTap(): Promise<void> {
-  searchOpen.value = false
-  if (searchActive.value) await diaryStore.runFeedSearch('')
+// Debounced as-you-type search. An EMPTY field means NO filter (owner
+// 2026-09-09: erasing the last letter must reset the results too -- this
+// supersedes the 2026-09-07 "the erased field never cancels the search"
+// letter, which belonged to the submit-only era) -- and the editing session
+// CONTINUES: the mode (re)opens so the bar and the focused field stay put
+// while the feed behind returns to its full state. Same-value non-empty
+// emits (the bar's initial sync, an edit that lands back on the active
+// query) owe nothing.
+async function onLiveSearch(query: string): Promise<void> {
+  if (query === '') {
+    searchOpen.value = true
+    if (diaryStore.feedFilters.search !== undefined) await diaryStore.runFeedSearch('')
+    return
+  }
+  if (query === (diaryStore.feedFilters.search ?? '')) return
+  await diaryStore.runFeedSearch(query)
 }
-
-// [TG-SURFACE] While the dark search scrim is up, Telegram's NATIVE
-// under-webview surface goes dark too: the keyboard's rounded top corners
-// expose it, and it lies OUTSIDE the WebView -- no in-page layer can paint
-// there (device-confirmed 2026-09-07). Restored on close and on unmount
-// (a route change mid-search must not strand a dark native backdrop).
-watch(searchOpen, (open) => {
-  platform.setKeyboardSurface(open)
-})
 
 async function onApplyFilter(payload: {
   categories: DiaryFeedCategory[]
@@ -539,17 +633,66 @@ async function onApplyFilter(payload: {
   else scrollToBottom()
 }
 
-async function onApplySearch(query: string): Promise<void> {
-  // runFeedSearch trims; an empty string clears the search. Both reload the
-  // feed from the first page.
-  await diaryStore.runFeedSearch(query)
+// The no-results rung's way out: reset the SEARCH only (categories/dates may
+// still be intentionally active) and return to the chat-bottom feed.
+async function onResetSearch(): Promise<void> {
+  await diaryStore.runFeedSearch('')
   await nextTick()
-  if (filterActive.value) scrollToTop()
-  else scrollToBottom()
-  // A submit ends the search MODE -- the dim lifts and the results read
-  // crisp. The bar itself stays while the query is live (searchActive keeps
-  // it mounted -- the filter's only visible indicator).
+  scrollToBottom()
+}
+
+// The OUTER x (owner 2026-09-09): closes the search AS A WHOLE and returns
+// everything to its original state -- the mode ends, any jump window is
+// left and the query resets (runFeedSearch('') exits the jump internally),
+// the header row comes back, the full feed re-reads at the chat bottom.
+async function onSearchCancel(): Promise<void> {
   searchOpen.value = false
+  if (searchActive.value || jumpActive.value) {
+    await diaryStore.runFeedSearch('')
+    await nextTick()
+    scrollToBottom()
+  }
+}
+
+// -- Jump to a found entry (Telegram reference) --------------------------------
+
+async function onJumpToEntry(item: DiaryFeedItem): Promise<void> {
+  const ok = await diaryStore.jumpToEntry(item)
+  if (!ok) {
+    // The store reset jumpTargetId -- the results list is still on screen;
+    // surface the failure at the boundary that owns the action.
+    if (diaryStore.jumpError) toast.error(diaryStore.jumpError)
+    return
+  }
+  await nextTick()
+  revealJumpTarget(item.id)
+}
+
+const JUMP_FLASH_MS = 1400
+let flashTimer: ReturnType<typeof setTimeout> | null = null
+
+/**
+ * Scroll the jumped-to entry into the upper third and flash it. The class is
+ * a TRANSIENT animation trigger, not display state (removed on a timer and
+ * before re-adding, so a re-jump to the same entry replays the flash).
+ * Layout/a11y caveat: happy-dom cannot prove the scroll geometry -- the
+ * upper-third offset needs a real device pass.
+ */
+function revealJumpTarget(id: string): void {
+  const el = scrollEl.value
+  if (!el) return
+  const card = el.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(id)}"]`)
+  if (!card) return
+  // The jump is a fresh anchor: any saved bottom-restore offset no longer
+  // applies (the same slot the filter reset clears).
+  diaryStore.feedScrollTop = 0
+  const top = card.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop
+  el.scrollTop = Math.max(0, top - el.clientHeight / 3)
+  card.classList.remove('diary-feed__flash')
+  void card.offsetWidth // reflow: restart the one-shot animation
+  card.classList.add('diary-feed__flash')
+  if (flashTimer) clearTimeout(flashTimer)
+  flashTimer = setTimeout(() => card.classList.remove('diary-feed__flash'), JUMP_FLASH_MS)
 }
 
 // -- Active-filter state ------------------------------------------------------
@@ -786,7 +929,7 @@ function setupObserver(): void {
   observer = new IntersectionObserver(
     (entries) => {
       const entry = entries[0]
-      if (entry?.isIntersecting && feedHasMore.value && !feedLoading.value) {
+      if (entry?.isIntersecting && historyCanLoadMore.value && !historyBusy.value) {
         void onLoadMore()
       }
     },
@@ -808,29 +951,76 @@ function setupObserver(): void {
 // Load an older page (triggered by scrolling UP to the top sentinel) and
 // preserve the viewport: older cards are prepended at the top, so without
 // compensation the content would jump. Measure height around the load and
-// shift scrollTop by the delta.
+// shift scrollTop by the delta. In a jump window the same mechanics serve
+// the window's own cursor.
 async function onLoadMore(): Promise<void> {
   const el = scrollEl.value
   const prevHeight = el?.scrollHeight ?? 0
   const prevTop = el?.scrollTop ?? 0
-  await diaryStore.loadMoreFeed()
-  // The feed survives a failed page (the rung is initial-load-only, :172), but
-  // this fires from a scroll sentinel -- there is no button left sitting there
-  // to look broken, so without a toast the user just scrolls into nothing and
-  // is told nothing at all.
-  if (diaryStore.feedLoadMoreError) toast.error(diaryStore.feedLoadMoreError)
+  if (jumpActive.value) {
+    await diaryStore.loadMoreJump()
+    if (diaryStore.jumpError) toast.error(diaryStore.jumpError)
+  } else {
+    await diaryStore.loadMoreFeed()
+    // The feed survives a failed page (the rung is initial-load-only), but
+    // this fires from a scroll sentinel -- there is no button left sitting
+    // there to look broken, so without a toast the user just scrolls into
+    // nothing and is told nothing at all.
+    if (diaryStore.feedLoadMoreError) toast.error(diaryStore.feedLoadMoreError)
+  }
   await nextTick()
   if (el) el.scrollTop = prevTop + (el.scrollHeight - prevHeight)
 }
 
-// The sentinel only exists once items render; re-attach when it appears.
+// The sentinel only exists once items render. The results list UNMOUNTS the
+// topzone while a search is active, so the watcher must also tear the
+// observer down -- otherwise it stays bound to a dead node and the re-mounted
+// sentinel is never observed (the thread's history would silently stop
+// loading after leaving search).
 watch(sentinelEl, (el) => {
-  if (el && !observer) setupObserver()
+  observer?.disconnect()
+  observer = null
+  if (el) setupObserver()
+})
+
+// -- Results-list pagination ---------------------------------------------------
+//
+// Mirror of the thread's top sentinel, but at the BOTTOM: results are
+// newest-first, so older result pages extend the list downward. Appends land
+// below the viewport -- no scroll compensation is owed.
+
+const resultsSentinelEl = ref<HTMLElement | null>(null)
+let resultsObserver: IntersectionObserver | null = null
+
+function setupResultsObserver(): void {
+  if (resultsObserver || !resultsSentinelEl.value || !scrollEl.value) return
+  resultsObserver = new IntersectionObserver(
+    (entries) => {
+      const entry = entries[0]
+      if (entry?.isIntersecting && feedHasMore.value && !feedLoading.value) {
+        void diaryStore.loadMoreFeed()
+      }
+    },
+    { root: scrollEl.value, rootMargin: '0px 0px 800px 0px' },
+  )
+  resultsObserver.observe(resultsSentinelEl.value)
+}
+
+watch(resultsSentinelEl, (el) => {
+  resultsObserver?.disconnect()
+  resultsObserver = null
+  if (el) setupResultsObserver()
 })
 
 onBeforeUnmount(() => {
   observer?.disconnect()
   observer = null
+  resultsObserver?.disconnect()
+  resultsObserver = null
+  if (flashTimer) {
+    clearTimeout(flashTimer)
+    flashTimer = null
+  }
   clearUndoTimer()
 })
 </script>
@@ -881,8 +1071,9 @@ onBeforeUnmount(() => {
   position: relative;
   /* The floating overlays' shared rail: the composer input's visible left
      edge (16px, owner's Apple Liquid Glass spec) -- and since 2026-09-08 the
-     header button column's too: the owner aligns back/"..." to the INPUT's
-     left edge, not the feed's 24px content rail. One source for both. */
+     header's too: the owner aligns the back button to the INPUT's left
+     edge, not the feed's 24px content rail (the right-corner "..." mirrors
+     the same rail at the right edge). One source for both. */
   --diary-overlay-rail: 16px;
   height: 100%;
   /* Same value as the 100% above (AppFrame's content box = frozen-vh minus
@@ -916,12 +1107,14 @@ onBeforeUnmount(() => {
 
 /* -- Header: floating glass overlay over the feed (owner 2026-09-07) --
    Supersedes ruling 4 for the header: NOT a normal-flow row any more. The
-   column's left edge is aligned to the INPUT's visible left edge -- the
+   overlay's left edge is aligned to the INPUT's visible left edge -- the
    composer pill's 16px rail, shared via --diary-overlay-rail (owner,
    2026-09-08; a flush x=0 and the feed's 24px content rail were both
-   tried and rejected the same day) -- «Назад» (white glass, VBackButton's
-   glass variant) above the "..." trigger in its usual solid DS look, which
-   expands downward into Фильтр/Поиск exactly as before -- and the feed
+   tried and rejected the same day) -- with «Назад» (white glass,
+   VBackButton's glass variant) at that LEFT rail and the "..." trigger
+   (its usual solid DS look) at the RIGHT rail, on ONE line (owner
+   2026-09-08: the column that sat "..." under «Назад» is retired),
+   expanding downward into Фильтр/Поиск exactly as before -- and the feed
    scrolls beneath both; the buttons frost what passes under them (the same
    overlay model the composer uses at the bottom). No title. The
    `z-index: var(--z-sticky)` survives for the PROMPT №665 reason: the
@@ -932,14 +1125,47 @@ onBeforeUnmount(() => {
   position: absolute;
   top: var(--velo-fog-headerless-top);
   left: var(--diary-overlay-rail);
+  right: var(--diary-overlay-rail);
   z-index: var(--z-sticky);
   display: flex;
-  flex-direction: column;
-  /* One vertical axis through both CENTRES (the buttons differ in width,
-     44 vs 40): flex-start would sit the narrower "..." flush left, its
-     centre 2px off the back button's. */
+  /* One HORIZONTAL axis through both CENTRES (the buttons differ in size,
+     44 vs 40): flex-start would sit the narrower "..." 2px off the back
+     button's centre line. */
   align-items: center;
-  gap: var(--space-3);
+  justify-content: space-between;
+  /* The row spans the full width now, but only the two buttons are surface:
+     without this, the empty middle of the 44px band would eat taps meant
+     for the entries passing beneath it (the same overlay pass-through
+     VHeader's floating row uses). */
+  pointer-events: none;
+  /* [2026-09-09] The swap with the search bar is a crossfade: opacity and a
+     4px lift leave while visibility follows on the same delay -- hidden
+     only AFTER the fade, so nothing pops. */
+  transition:
+    opacity var(--transition-base),
+    transform var(--transition-base),
+    visibility 0s var(--transition-base);
+}
+
+/* Pass-through exemption: the buttons -- and the VMenu panel while it is
+   open -- become real surface again. */
+.diary-feed__header > * {
+  pointer-events: auto;
+}
+
+/* [owner 2026-09-09] REPLACED by the search bar: while any search state is
+   up the row yields its slot to the bar. visibility:hidden takes the row
+   out of the a11y tree and out of hit-testing once the fade ends; during
+   the fade the explicit child pointer-events:none keeps the vanishing
+   buttons inert. */
+.diary-feed__header--replaced {
+  opacity: 0;
+  transform: translateY(-4px);
+  visibility: hidden;
+}
+
+.diary-feed__header--replaced > * {
+  pointer-events: none;
 }
 
 /* "..." trigger glyph: vertical dots that rotate to horizontal while the menu
@@ -993,10 +1219,11 @@ onBeforeUnmount(() => {
      gesture-pan the whole FE-7 fix exists to undo. */
   overscroll-behavior-y: contain;
   /* Top: just the shared headerless token. The corner buttons (back + menu)
-     own the top-LEFT; the thread's first date node is CENTERED and ~170px
-     wide, so it clears the ~68px button column horizontally and needs no
-     full-height header clearance at rest -- the old ~150px clearance read
-     as a big empty gap above the thread's first entry (owner removed it).
+     own BOTH top corners of a single 44px band; the thread's first date
+     node is CENTERED and ~170px wide, so it clears the corner buttons
+     horizontally and needs no full-height header clearance at rest -- the
+     old ~150px clearance read as a big empty gap above the thread's first
+     entry (owner removed it).
      Entries still pass UNDER the buttons while scrolling (overlay model);
      the searching state keeps its own taller clearance below the inline
      search row (see .diary-feed--searching below); the bottom pad is the
@@ -1020,61 +1247,97 @@ onBeforeUnmount(() => {
 }
 
 /* While the inline search row is up (open mode or a live query), the results
-   must start BELOW the bar -- its own top stack + height (.diary-feed__search)
-   -- not hide behind it. */
+   must start BELOW the bar, not hide behind it. The bar lives in the HEADER
+   ROW'S slot (2026-09-09), so the clearance is the fog top + the field's
+   own 50px + breathing room -- no header stack beneath it any more. */
 .diary-feed--searching .diary-feed__body {
-  padding-top: calc(
-    var(--velo-fog-headerless-top) + var(--velo-size-44) + var(--space-3) + var(--velo-size-40) +
-      var(--space-2) + var(--velo-size-50) + var(--space-5)
-  );
+  padding-top: calc(var(--velo-fog-headerless-top) + var(--velo-size-50) + var(--space-4));
+  /* The COMPOSER is temporarily gone with the search (owner 2026-09-09), so
+     the pill's measured bottom clearance is replaced by a plain pad. */
+  padding-bottom: var(--space-6);
 }
 
-/* -- Search scrim: the modal-scrim token + a SOFT blur (owner 2026-09-07:
-   "экран затемняется и чуть блюрится"). FIXED to the viewport (the #app-bg
-   trick) and sized inset:0, so it paints dark EVERYTHING the web can see --
-   including the strips the keyboard's rounded corners expose during the
-   open/close animation, which used to flash body's white (FE-43/B29 defect
-   class, glaring once the feed behind went dark). z-index --z-sticky (200):
-   ABOVE the feed, composer and the header buttons -- while the search mode
-   is up, any tap outside the bar cancels (onSearchScrimTap); the bar itself
-   sits one step higher (.diary-feed__search below). Renders only in the
-   search MODE; a submitted query keeps the feed crisp. */
-.diary-feed__search-scrim {
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-sticky);
-  border: none;
-  padding: 0;
-  background: var(--velo-scrim);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
-  cursor: default;
-}
+/* -- Search scrim: RETIRED (owner 2026-09-09: "блюр и затемнение убираем")
+   -- no dim, no soft blur; the screen behind the search stays fully visible
+   and crisp. Closing the search is the bar's OUTER x. */
 
-/* -- Inline search bar (owner 2026-09-07, round 3): the "..." menu's «Поиск»
-   unfolds, in place, into [magnifier][glass field -> right rail] floating
-   over the feed -- the field replaces the retired modal. Same overlay
-   contract as the composer: absolute, static glass, the feed scrolls
-   beneath. The left edge continues the header column's rail; vertically it
-   sits where the expanded menu's search item was (below back 44 + gap +
-   "..." 40 + the panel's own gap). One step ABOVE the scrim: the bar (field,
-   go, x, recents) is the only tappable surface while the search mode is
-   up. */
+/* -- Inline search bar (owner 2026-09-07, round 3; 2026-09-09: THE HEADER
+   ROW'S SLOT). The bar replaces back + "..." while any search state is up:
+   same top edge, same 16px rails -- the 50px field runs 6px deeper than the
+   44px band did, the only geometry the swap is allowed to change. The
+   wrapper is ALWAYS MOUNTED and crossfades via --up (the mirror of the
+   header's --replaced), so the swap reads as one continuous surface change,
+   never a mount/unmount blink; the recents panel still hangs under the
+   field. No scrim any more (owner 2026-09-09) -- the bar is simply the top
+   control while it is up. */
 .diary-feed__search {
   position: absolute;
-  left: var(--velo-rail-pad-x);
-  right: var(--velo-rail-pad-x);
-  top: calc(
-    var(--velo-fog-headerless-top) + var(--velo-size-44) + var(--space-3) + var(--velo-size-40) +
-      var(--space-2)
-  );
+  left: var(--diary-overlay-rail);
+  right: var(--diary-overlay-rail);
+  top: var(--velo-fog-headerless-top);
   z-index: calc(var(--z-sticky) + 1);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition:
+    opacity var(--transition-base),
+    transform var(--transition-base),
+    visibility 0s var(--transition-base);
+}
+
+.diary-feed__search--up {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+  transition:
+    opacity var(--transition-base),
+    transform var(--transition-base),
+    visibility 0s 0s;
 }
 
 /* Pins a short feed to the bottom; a long one scrolls normally (margin-top
    collapses once content fills the column). */
 .diary-feed__thread {
   margin-top: auto;
+}
+
+/* -- Search results list (2026-09-09, Telegram reference): compact jump rows
+   in the same scroll container as the thread; the searching state's body
+   padding-top already clears the inline bar above it. */
+.diary-feed__results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-bottom: var(--space-6);
+}
+
+/* Older result pages extend the list downward; 1px keeps it observable. */
+.diary-feed__results-sentinel {
+  height: 1px;
+}
+
+.diary-feed__state--results {
+  padding: var(--space-4) 0 var(--space-2);
+}
+
+/* -- Jump flash: the found entry's row washes with the blue glass tint and
+   fades out (Telegram's jump-to-message highlight). :deep because the row
+   lives inside DiaryTimeline's scope; the class itself is added/removed as a
+   transient animation trigger by revealJumpTarget. */
+@keyframes diary-jump-flash {
+  from {
+    background-color: var(--velo-glass-blue-30);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+:deep(.diary-feed__flash) {
+  animation: diary-jump-flash 1400ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  border-radius: var(--radius-md);
 }
 
 /* При активном фильтре/поиске отключаем прижатие к низу — результаты идут

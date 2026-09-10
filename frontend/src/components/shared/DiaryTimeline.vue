@@ -46,7 +46,9 @@
         <div v-if="i > 0" class="timeline__link">
           <IconDecor2 part="small" :size="18" />
         </div>
-        <div class="timeline__row">
+        <!-- data-entry-id: the search-jump scroll target (DiaryFeedView's
+             revealJumpTarget). -->
+        <div class="timeline__row" :data-entry-id="item.id">
           <DiaryThreadCard :item="item" :timezone="timezone" @tap="(p) => emit('tap', p)" />
         </div>
       </template>

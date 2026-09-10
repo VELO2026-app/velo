@@ -36,6 +36,15 @@ export function useCursorPagination<T>(fetchFn: CursorFetchFn<T>, pageSize = 20)
   const cursor = ref<string | null>(null)
   const loading = ref(false)
 
+  // Race guard for overlapping requests. Every fetch captures the epoch it
+  // started in; a response that lands after a NEWER fetch has started is
+  // stale and must not apply -- not its items, not its error, not even its
+  // `loading = false` (the newer fetch owns the flag now). The diary's live
+  // search fires a refresh per debounced keystroke: without this, a slow
+  // response for "см" landing after the "смс" one paints the wrong results
+  // as final. Monotonic, never reset.
+  let fetchEpoch = 0
+
   // TWO errors, mirroring usePagination (№442). One shared `error` cannot say
   // WHICH page failed, and a consumer that cannot tell them apart cannot render
   // either correctly -- here it produced the diary's silence: DiaryFeedView binds
@@ -65,6 +74,8 @@ export function useCursorPagination<T>(fetchFn: CursorFetchFn<T>, pageSize = 20)
     if (loading.value) return false
     if (!hasMore.value) return false
 
+    const epoch = ++fetchEpoch
+
     // Captured BEFORE the await: items can change while the request is in
     // flight, and which error this failure belongs to is decided by the state
     // the request STARTED from, not the state it happens to land in.
@@ -76,17 +87,20 @@ export function useCursorPagination<T>(fetchFn: CursorFetchFn<T>, pageSize = 20)
 
     try {
       const result = await fetchFn(cursor.value, pageSize)
+      if (epoch !== fetchEpoch) return false
       items.value = [...items.value, ...result.items]
       cursor.value = result.next_cursor
       hasMore.value = result.next_cursor !== null
       return true
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Unknown error'
-      if (isFirstPage) error.value = message
-      else loadMoreError.value = message
+      if (epoch === fetchEpoch) {
+        const message = e instanceof Error ? e.message : 'Unknown error'
+        if (isFirstPage) error.value = message
+        else loadMoreError.value = message
+      }
       return false
     } finally {
-      loading.value = false
+      if (epoch === fetchEpoch) loading.value = false
     }
   }
 
@@ -95,6 +109,9 @@ export function useCursorPagination<T>(fetchFn: CursorFetchFn<T>, pageSize = 20)
    * reset to true so the next loadMore() / refresh() starts a fresh feed.
    */
   function reset(): void {
+    // Invalidate any fetch still in flight so it cannot append onto the
+    // cleared state after it resolves.
+    fetchEpoch++
     items.value = []
     cursor.value = null
     error.value = null
@@ -103,11 +120,33 @@ export function useCursorPagination<T>(fetchFn: CursorFetchFn<T>, pageSize = 20)
   }
 
   /**
-   * Reset and immediately load the first page.
+   * Load a fresh FIRST page and swap it in atomically -- fetch-then-swap,
+   * NOT reset()-then-load. The already-loaded page stays on screen until the
+   * new one lands: a live-search refetch must not flash a full-screen loader
+   * under the user's keystrokes. A stale response (a newer fetch started
+   * while this one was in flight) never swaps in. On failure the items are
+   * cleared: the error rung is bound to `items.length === 0`, and showing
+   * the PREVIOUS filter's results behind a failed re-filter would lie.
    */
   async function refresh(): Promise<void> {
-    reset()
-    await loadMore()
+    const epoch = ++fetchEpoch
+    loading.value = true
+    error.value = null
+    try {
+      const result = await fetchFn(null, pageSize)
+      if (epoch !== fetchEpoch) return
+      items.value = result.items
+      cursor.value = result.next_cursor
+      hasMore.value = result.next_cursor !== null
+    } catch (e) {
+      if (epoch !== fetchEpoch) return
+      items.value = []
+      cursor.value = null
+      hasMore.value = true
+      error.value = e instanceof Error ? e.message : 'Unknown error'
+    } finally {
+      if (epoch === fetchEpoch) loading.value = false
+    }
   }
 
   return {

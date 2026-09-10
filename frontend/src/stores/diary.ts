@@ -29,6 +29,7 @@ import { ref, reactive } from 'vue'
 import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
 import { useCursorPagination } from '@/composables/useCursorPagination'
+import { mergeJumpWindow } from '@/utils/diaryJumpWindow'
 import {
   upsertCheckin,
   upsertFeedback,
@@ -201,6 +202,7 @@ export const useDiaryStore = defineStore('diary', () => {
    * Pass a fresh categories array / dates / search; omitted keys are kept.
    */
   async function setFeedFilters(patch: Partial<DiaryFeedFilters>): Promise<void> {
+    exitJump()
     Object.assign(feedFilters, patch)
     await feed.refresh()
   }
@@ -209,6 +211,7 @@ export const useDiaryStore = defineStore('diary', () => {
    * Clear all filters (back to "Все", no date range, no search) and reload.
    */
   async function clearFeedFilters(): Promise<void> {
+    exitJump()
     feedFilters.categories = []
     feedFilters.date_from = undefined
     feedFilters.date_to = undefined
@@ -220,9 +223,100 @@ export const useDiaryStore = defineStore('diary', () => {
    * Run a text search (empty string clears it) and reload from the first page.
    */
   async function runFeedSearch(query: string): Promise<void> {
+    // Typing again is a new search: any open jump window is left behind (the
+    // view swaps back to the results list).
+    exitJump()
     const trimmed = query.trim()
     feedFilters.search = trimmed.length > 0 ? trimmed : undefined
     await feed.refresh()
+  }
+
+  // ===========================================================================
+  // Search jump (Telegram-style "scroll to the found entry")
+  //
+  // A tap on a search result loads a WINDOW around the target event, not a
+  // filtered feed: two parallel GETs bounded by the target's occurred_at (the
+  // API's date bounds are inclusive, so the target is inside BOTH responses --
+  // mergeJumpWindow dedupes). The window renders in the same DiaryTimeline;
+  // scrolling UP keeps loading older through jumpCursor. The newer side is
+  // capped at what the window fetched -- the feed cursor paginates into the
+  // past only; the search bar's outer x is the way back to the live feed.
+  // ===========================================================================
+
+  const JUMP_CONTEXT_LIMIT = 20
+
+  const jumpTargetId = ref<string | null>(null)
+  const jumpItems = ref<DiaryFeedItem[]>([])
+  const jumpCursor = ref<string | null>(null)
+  /** Initial two-window fetch (full-screen loader rung). */
+  const jumpLoading = ref(false)
+  /** Older-page fetches inside an open window (inline loader). */
+  const jumpMoreLoading = ref(false)
+  const jumpError = ref<string | null>(null)
+
+  /**
+   * Leave the jump window. Called by every search/filter reset (the query
+   * change owns it -- the view swaps back to whatever the new filter shows)
+   * and by $reset on logout.
+   */
+  function exitJump(): void {
+    jumpTargetId.value = null
+    jumpItems.value = []
+    jumpCursor.value = null
+    jumpLoading.value = false
+    jumpMoreLoading.value = false
+    jumpError.value = null
+  }
+
+  /**
+   * Load the context window around one search result and make it the active
+   * timeline view. Returns false on failure (jumpTargetId stays unset, so the
+   * results list remains on screen; jumpError carries the message).
+   */
+  async function jumpToEntry(item: DiaryFeedItem): Promise<boolean> {
+    if (jumpLoading.value) return false
+    jumpTargetId.value = item.id
+    jumpItems.value = []
+    jumpCursor.value = null
+    jumpError.value = null
+    jumpLoading.value = true
+    try {
+      const at = item.occurred_at
+      const [older, newer] = await Promise.all([
+        listDiaryFeed({ date_to: at, limit: JUMP_CONTEXT_LIMIT }),
+        listDiaryFeed({ date_from: at, limit: JUMP_CONTEXT_LIMIT }),
+      ])
+      jumpItems.value = mergeJumpWindow(older.items, newer.items)
+      jumpCursor.value = older.next_cursor
+      return true
+    } catch (e) {
+      jumpTargetId.value = null
+      jumpError.value = extractApiError(e, 'Не удалось открыть запись')
+      return false
+    } finally {
+      jumpLoading.value = false
+    }
+  }
+
+  /**
+   * Load one more OLDER page into an open jump window (top sentinel).
+   * The cursor is strictly older than everything loaded, so it appends.
+   */
+  async function loadMoreJump(): Promise<void> {
+    if (jumpMoreLoading.value || jumpCursor.value === null) return
+    jumpMoreLoading.value = true
+    try {
+      const result = await listDiaryFeed({
+        cursor: jumpCursor.value,
+        limit: JUMP_CONTEXT_LIMIT,
+      })
+      jumpItems.value = [...jumpItems.value, ...result.items]
+      jumpCursor.value = result.next_cursor
+    } catch (e) {
+      jumpError.value = extractApiError(e, 'Не удалось загрузить записи')
+    } finally {
+      jumpMoreLoading.value = false
+    }
   }
 
   /**
@@ -401,6 +495,7 @@ export const useDiaryStore = defineStore('diary', () => {
     checkinSubmitting.value = false
     feedbackSubmitting.value = false
     reflectionSubmitting.value = false
+    exitJump()
     feed.reset()
     feedFilters.categories = []
     feedFilters.date_from = undefined
@@ -437,6 +532,17 @@ export const useDiaryStore = defineStore('diary', () => {
     setFeedFilters,
     clearFeedFilters,
     runFeedSearch,
+
+    // Search jump
+    jumpItems,
+    jumpTargetId,
+    jumpCursor,
+    jumpLoading,
+    jumpMoreLoading,
+    jumpError,
+    jumpToEntry,
+    loadMoreJump,
+    exitJump,
 
     // Single entry
     selectedEntry,
