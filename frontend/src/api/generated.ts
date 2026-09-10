@@ -15,6 +15,9 @@ export type AudienceKind = 'public' | 'students' | 'groups' | 'curator_groups'
 /** Booking lifecycle statuses. */
 export type BookingStatus = 'pending' | 'confirmed' | 'attended' | 'no_show' | 'cancelled'
 
+/** What the person did outside velo. A CLOSED ENUM AND NOT A CONFIG LIST, unlike DiaryEntryType and PracticePhase next door (config.py:476 -- "Validated via @field_validator -- no Literal in schemas"). The divergence is deliberate and buys something those two do not need. A config list exists so a value can change without touching code. Here that is a false promise: a type the frontend cannot draw is useless, so a new activity always ships with a frontend change anyway. Adding one through env would produce a feed card with no icon and no caption -- not flexibility, a quiet break. Typed as an enum, the closed set crosses into generated.ts as a union, and adding a value without the frontend breaks the build instead of the card. */
+export type ExternalActivityType = 'vocal' | 'nail_standing' | 'meditation' | 'massage' | 'yoga' | 'dance' | 'custom'
+
 /** Practice lifecycle statuses. */
 export type PracticeStatus = 'draft' | 'scheduled' | 'live' | 'completed' | 'cancelled' | 'deleted'
 
@@ -534,6 +537,15 @@ export interface CreateDirectionRequest {
   display_order?: number
 }
 
+/** POST /api/v1/diary/external-activities body. `activity_type` is typed as the ENUM, not as a str validated against a config list the way entry_type is: the closed set then reaches the frontend as a union in generated.ts, and a value added without a card to draw it breaks the build instead of the feed. See ExternalActivityType's own docstring. `occurred_at` must be timezone-aware and must not be in the future -- a diary of what happened cannot hold what has not. Both are checked here so the answer is a field-attributed 422 rather than a 500 from a naive/aware comparison further down. */
+export interface CreateExternalActivityRequest {
+  occurred_at: string
+  activity_type: ExternalActivityType
+  custom_activity_name?: string | null
+  mood: number
+  thoughts?: string | null
+}
+
 /** POST /masters/me/groups. */
 export interface CreateGroupRequest {
   name: string
@@ -820,6 +832,17 @@ export interface EditMasterMethodsRequest {
 export interface ExistingReportResponse {
   message?: string
   report: ReportResponse
+}
+
+/** POST /api/v1/diary/external-activities -- the created activity. `occurred_at` comes back normalized to UTC, which is the value the diary orders by; `created_at` is the write time and the two differ whenever somebody enters yesterday's massage today. */
+export interface ExternalActivityResponse {
+  id: string
+  occurred_at: string
+  activity_type: ExternalActivityType
+  custom_activity_name: string | null
+  mood: number
+  thoughts: string | null
+  created_at: string
 }
 
 /** GET /api/v1/admin/metrics/feedback. */
