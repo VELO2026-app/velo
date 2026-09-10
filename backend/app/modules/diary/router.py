@@ -37,6 +37,9 @@ from app.modules.diary.checkins_service import (
     list_user_checkins,
     upsert_checkin,
 )
+from app.modules.diary.external_activity_service import (
+    create_external_activity,
+)
 from app.modules.diary.feed_service import list_diary_feed
 from app.modules.diary.insights_service import (
     get_practice_insights,
@@ -46,9 +49,11 @@ from app.modules.diary.schemas import (
     CheckinRequest,
     CheckinResponse,
     CreateDiaryEntryRequest,
+    CreateExternalActivityRequest,
     DiaryEntryResponse,
     DiaryFeedItem,
     DiaryFeedResponse,
+    ExternalActivityResponse,
     FeedbackRequest,
     FeedbackResponse,
     PaginatedCheckinsResponse,
@@ -294,6 +299,40 @@ async def create_diary_entry_endpoint(
     )
 
     return DiaryEntryResponse.model_validate(entry)
+
+
+@diary_router.post(
+    "/external-activities",
+    response_model=ExternalActivityResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_external_activity_endpoint(
+    body: CreateExternalActivityRequest,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> ExternalActivityResponse:
+    """Record something the person did outside velo.
+
+    DECLARED BEFORE /{entry_id} in this module's diary_router: FastAPI
+    matches in declaration order, and a static path losing to a dynamic
+    sibling is how "external-activities" would be parsed as an entry id and
+    answered with a 422. The GET/PATCH/DELETE on /{entry_id} are further
+    down for that reason.
+
+    The activity and its diary event are written in one transaction, so the
+    row exists exactly when the timeline entry does; the next
+    GET /api/v1/diary/feed already returns it.
+    """
+    activity = await create_external_activity(
+        user,
+        session,
+        occurred_at=body.occurred_at,
+        activity_type=body.activity_type.value,
+        mood=body.mood,
+        custom_activity_name=body.custom_activity_name,
+        thoughts=body.thoughts,
+    )
+    return ExternalActivityResponse.model_validate(activity)
 
 
 @diary_router.get(

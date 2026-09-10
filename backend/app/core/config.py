@@ -469,6 +469,10 @@ class Settings(BaseSettings):
 
     # Diary entry field limits.
     diary_entry_content_max_length: int = 10000
+    # BE-27: the free-text name a person gives a 'custom' external
+    # activity. Its own limit rather than a reuse of the title limit --
+    # this is a label on a chip-sized card, not a heading over a body.
+    external_activity_name_max_length: int = 120
     diary_entry_title_max_length: int = 200
 
     # Allowed diary entry types (Дневник / Сонник). dream is wired on the
@@ -493,6 +497,13 @@ class Settings(BaseSettings):
     diary_feed_preview_length: int = 140
     # Event kinds that exist in the journal (mirrors DiaryEventKind). Used to
     # validate the feed `kind` filter -- no Literal in the router.
+    # NOTE FOR WHOEVER READS THIS NEXT (BE-27): THIS LIST GATES NOTHING.
+    # Two occurrences in the whole tree -- this definition and a comment in
+    # diary/projections.py naming it as something to keep updated. The feed
+    # filters on is_hidden, the unconditional thread_started exclusion and
+    # diary_feed_categories, never on this. It is kept in step with
+    # DiaryEventKind anyway, because a list that has drifted from the enum
+    # lies to the next reader; it is not a visibility switch.
     diary_feed_allowed_kinds: list[str] = [
         "booking_confirmed",
         "booking_cancelled_by_user",
@@ -503,16 +514,27 @@ class Settings(BaseSettings):
         "feedback",
         "note",
         "dream",
+        "external_activity",
     ]
-    # Filter chips on the feed map onto groups of kinds (Все / Дневник /
-    # Сонник / Feedbacks / Check-ins). "all" is represented by passing no
+    # Filter chips on the feed map onto groups of kinds (Дневник / Сонник /
+    # Feedbacks / Check-ins / Практики). "all" is represented by passing no
     # category. Each category resolves to the kinds it includes.
+    #
+    # The chip list above used to omit "практики" while the mapping below
+    # carried it -- corrected here rather than left, because BE-27 adds a
+    # kind to exactly that chip and a stale enumeration next to the thing
+    # it enumerates is the comment most likely to be believed.
     diary_feed_categories: dict[str, list[str]] = {
         "entries": ["note"],
         "dreams": ["dream"],
         "feedbacks": ["feedback"],
         "checkins": ["checkin"],
+        # BE-27: external_activity joins this chip by contract. Worth
+        # knowing when reading the feed: "Практики" now also answers with
+        # things that happened OUTSIDE velo (a massage, a dance). Raised
+        # with the owner separately; the mapping here follows the contract.
         "practices": [
+            "external_activity",
             "booking_confirmed",
             "booking_cancelled_by_user",
             "practice_rescheduled",
