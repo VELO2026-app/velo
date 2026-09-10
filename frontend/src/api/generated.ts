@@ -900,7 +900,7 @@ export interface GroupSearchMemberItem {
   group_name: string
 }
 
-/** GET /api/v1/masters/me/income?period=week|month. income_cents -- gross booked turnover for the current calendar period: signed sum of title-tagged sale (+) / commission (-) / refund (-) movements, frozen sales included. Matches the transaction feed, not realized/available earnings. prev_income_cents -- same sum for the previous calendar period. delta_pct -- signed percent change vs the previous period, or null when the previous period had no net-positive turnover. */
+/** GET /api/v1/masters/me/income?period=week|month|quarter. income_cents -- gross booked turnover for the current calendar period: signed sum of title-tagged sale (+) / commission (-) / refund (-) movements, frozen sales included. Matches the transaction feed, not realized/available earnings. prev_income_cents -- same sum for the previous calendar period. delta_pct -- signed percent change vs the previous period, or null when the previous period had no net-positive turnover. */
 export interface IncomeResponse {
   income_cents: number
   prev_income_cents: number
@@ -1036,7 +1036,7 @@ export interface MasterReviewItem {
   created_at: string
 }
 
-/** GET /api/v1/masters/me/stats?period=week|month. practices_count -- master's COMPLETED practices scheduled in the period. Completed only (GT-20): a practice that is still ahead, running, cancelled, draft or deleted does not count, so a period with nothing finished yet reads 0. The grid answers "what happened", not "what is scheduled". participants_count -- distinct users with an ATTENDED booking across those practices. An ATTENDED booking only ever exists on a completed practice, so this count and practices_count are always about the same sessions. income_cents -- gross booked turnover for the period, reused verbatim from the E2 finance projection. The dashboard renders practices/participants; the finance screen renders income. Each *_delta_pct is the signed percent change vs the previous period, or null when the previous period was non-positive (S-1). */
+/** GET /api/v1/masters/me/stats?period=week|month|quarter. practices_count -- master's COMPLETED practices scheduled in the period. Completed only (GT-20): a practice that is still ahead, running, cancelled, draft or deleted does not count, so a period with nothing finished yet reads 0. The grid answers "what happened", not "what is scheduled". participants_count -- distinct users with an ATTENDED booking across those practices. An ATTENDED booking only ever exists on a completed practice, so this count and practices_count are always about the same sessions. income_cents -- gross booked turnover for the period, reused verbatim from the E2 finance projection. The dashboard renders practices/participants; the finance screen renders income. Each *_delta_pct is the signed percent change vs the previous period, or null when the previous period was non-positive (S-1). */
 export interface MasterStatsResponse {
   practices_count: number
   practices_delta_pct: number | null
