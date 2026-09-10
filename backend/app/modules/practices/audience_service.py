@@ -213,6 +213,9 @@ def _master_in_curator_group_clause(
 
     Correlated to CuratorGroup: the calling query must have curator_group in
     its FROM.
+
+    Its history-side twin is practice_in_curator_group_clause below, which
+    deliberately does NOT ask this question; the reasoning lives there.
     """
     return or_(
         CuratorGroup.curator_user_id == master_id_col,
@@ -303,6 +306,37 @@ def _is_curator_group_audience_clause(user_id: UUID) -> ColumnElement[bool]:
             _curator_profile_verified(CuratorGroup.curator_user_id),
             _viewer_in_curator_group_clause(user_id),
             _master_in_curator_group_clause(Practice.master_id),
+        )
+        .exists()
+    )
+
+
+def practice_in_curator_group_clause(group_id: UUID) -> ColumnElement[bool]:
+    """True iff the (correlated) Practice was ever addressed to this school.
+
+    THIS ONE ANSWERS "WHAT HAPPENED"; _master_in_curator_group_clause above
+    answers "what to show now", and the two are meant to disagree. Owner
+    ruling, 2026-09-10: masters can be invited into a school for a season
+    and collaboration between schools is normal, so the feedback a school
+    collected stays its history after the teacher walks out.
+
+    One row in practice_audience_curator_group and nothing else -- no
+    membership, no verification, no status of the practice. EXISTS rather
+    than a join, so a practice addressed to this school once yields one row
+    and not one per audience row.
+
+    Correlated to the module-level Practice table: the calling query must
+    select FROM Practice, the same contract the clauses above state. NO
+    KILLSWITCH CHECK HERE, unlike _is_curator_group_audience_clause: this
+    predicate's only caller sits behind the curator router's router-level
+    _require_curator_groups_enabled, and a flag answered in two places is a
+    flag with a hole in it.
+    """
+    return (
+        select(PracticeAudienceCuratorGroup.id)
+        .where(
+            PracticeAudienceCuratorGroup.practice_id == Practice.id,
+            PracticeAudienceCuratorGroup.group_id == group_id,
         )
         .exists()
     )
