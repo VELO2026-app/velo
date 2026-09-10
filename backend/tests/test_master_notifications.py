@@ -76,7 +76,31 @@ _TID_MASTER_B = 65902
 _TID_PARTICIPANT = 65910
 _TID_PARTICIPANT_B = 65911
 
-_PROFILE_DIR = Path(__file__).resolve().parents[2] / "comms-profile"
+# The profile lives in the repository ROOT, which is two levels up from
+# backend/tests/ in a checkout and is bind-mounted at /comms-profile inside
+# velo-app (docker-compose.yml) -- the image's build context is ./backend,
+# so the files cannot be COPYed in and the mount is how they arrive. Both
+# layouts answer to the same expression; the candidate list exists so that a
+# third one fails HERE, by name, instead of surfacing as FileNotFoundError
+# inside seven assertions.
+_PROFILE_CANDIDATES = (
+    Path(__file__).resolve().parents[2] / "comms-profile",
+    Path("/comms-profile"),
+)
+
+
+def _profile_dir() -> Path:
+    for candidate in _PROFILE_CANDIDATES:
+        if (candidate / "types.yaml").is_file():
+            return candidate
+    raise AssertionError(
+        "comms-profile/types.yaml found in none of: "
+        + ", ".join(str(c) for c in _PROFILE_CANDIDATES)
+        + " -- in a container this means the read-only mount declared for "
+          "the app service in docker-compose.yml is missing. NOT skipped on "
+          "purpose: a profile check that goes quiet where the suite actually "
+          "runs is a green test that verifies nothing."
+    )
 
 _CHECKIN_TYPE = "practice.checkin_received"
 _FEEDBACK_TYPE = "practice.feedback_received"
@@ -241,7 +265,7 @@ async def _pull_practice_into_checkin_window(
 
 
 def _load_profile() -> dict:
-    return yaml.safe_load((_PROFILE_DIR / "types.yaml").read_text())
+    return yaml.safe_load((_profile_dir() / "types.yaml").read_text())
 
 
 def _category_of(type_key: str) -> str | None:
@@ -302,14 +326,14 @@ class TestProfile:
         for locale in ("ru", "en"):
             sheets = set(
                 yaml.safe_load(
-                    (_PROFILE_DIR / "templates" / f"{locale}.yaml").read_text()
+                    (_profile_dir() / "templates" / f"{locale}.yaml").read_text()
                 )
             )
             assert sheets <= types, f"{locale}: {sorted(sheets - types)}"
 
         ru = set(
             yaml.safe_load(
-                (_PROFILE_DIR / "templates" / "ru.yaml").read_text()
+                (_profile_dir() / "templates" / "ru.yaml").read_text()
             )
         )
         assert types - ru == {"support.thread_created"}
@@ -318,10 +342,10 @@ class TestProfile:
         """A type translated into one locale and not the other is how a
         Russian user gets an English notification -- or none."""
         ru = yaml.safe_load(
-            (_PROFILE_DIR / "templates" / "ru.yaml").read_text()
+            (_profile_dir() / "templates" / "ru.yaml").read_text()
         )
         en = yaml.safe_load(
-            (_PROFILE_DIR / "templates" / "en.yaml").read_text()
+            (_profile_dir() / "templates" / "en.yaml").read_text()
         )
         assert set(ru) == set(en)
         for key in ru:

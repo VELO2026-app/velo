@@ -58,6 +58,24 @@ services:
       start_period: 15s
     restart: unless-stopped
     logging: *default-logging
+    # BE-33: the comms product profile, READ-ONLY, so the suite that runs
+    # inside this container can machine-check it.
+    #
+    # It cannot be COPYed in instead: the image's build context is
+    # ./backend and comms-profile/ sits in the repository ROOT, outside
+    # it. Widening the context to the root to reach three YAML files would
+    # drag the whole frontend tree through every backend build.
+    #
+    # The mount point is /comms-profile and not /app/comms-profile on
+    # purpose: it makes the path <repo>/comms-profile relative to
+    # backend/tests/ resolve identically in a developer checkout and in
+    # here, so the test has one expression rather than two and a branch.
+    #
+    # ro because this container is a reader. The profile's writer is the
+    # repository; its consumer is the comms stack, which mounts the same
+    # directory separately.
+    volumes:
+      - ./comms-profile:/comms-profile:ro
     # The backend is the ONLY velo service that talks to comms (the comms
     # API is internal, reachable by service name on aivis-shared only).
     # `default` is listed explicitly: once a service carries a `networks:`
