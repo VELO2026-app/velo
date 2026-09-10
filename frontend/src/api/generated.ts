@@ -594,6 +594,18 @@ export interface CreateWithdrawalRequest {
   amount_cents: number
 }
 
+/** One PRE check-in left on a practice of this school. `mood` is the stored 1..10 score mapped to the three distribution buckets (1-3 low / 4-7 mid / 8-10 high) -- the same vocabulary the anonymous per-practice insights already use, so the frontend reuses the mood icons it renders there. POST check-ins never appear here, and neither do check-ins whose booking was later cancelled: both are absent from the master's own roster for this practice, and the school widens a curator's reach without deepening it. user_id identifies the participant so that two students of the same name stay distinct; it opens no screen a curator would otherwise be refused. */
+export interface CuratorGroupCheckinItem {
+  user_id: string
+  student_name: string
+  avatar_url: string | null
+  mood: 'high' | 'mid' | 'low'
+  comment: string | null
+  practice_id: string
+  practice_title: string
+  created_at: string
+}
+
 /** The group's owner, as anyone in the group may see them. A strict subset of MasterPublicResponse -- the declared isolation boundary in masters/schemas.py. Nothing financial, nothing contact-like, and no status: a group is only ever visible while its curator is verified (I-6), so exposing the status would only ever print one value. */
 export interface CuratorGroupCuratorRef {
   user_id: string
@@ -730,6 +742,18 @@ export interface CuratorGroupResponse {
   masters_count: number
   students_count: number
   transfer?: CuratorGroupTransferRef | null
+  created_at: string
+}
+
+/** One named review left on a practice of this school. `rating` is the stored 1..10 score mapped to the three feedback buckets (1-3 confused / 4-7 good / 8-10 fire), identical to what the practice's master reads in their own per-practice and cross-practice review feeds. user_id identifies the reviewer, as it does in the master's own review items; the screens behind it enforce their own access. */
+export interface CuratorGroupReviewItem {
+  user_id: string
+  student_name: string
+  avatar_url: string | null
+  rating: 'fire' | 'good' | 'confused'
+  comment: string | null
+  practice_id: string
+  practice_title: string
   created_at: string
 }
 
@@ -1112,6 +1136,14 @@ export interface PaginatedCheckinsResponse {
   offset: number
 }
 
+/** GET /masters/me/curator-groups/{id}/checkins. */
+export interface PaginatedCuratorGroupCheckinsResponse {
+  items: CuratorGroupCheckinItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
 /** GET /masters/me/curator-groups/{id}/journal. */
 export interface PaginatedCuratorGroupEventsResponse {
   items: CuratorGroupEventItem[]
@@ -1131,6 +1163,14 @@ export interface PaginatedCuratorGroupMastersResponse {
 /** GET /masters/me/curator-groups/{id}/members. */
 export interface PaginatedCuratorGroupMembersResponse {
   items: CuratorGroupMemberItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** GET /masters/me/curator-groups/{id}/reviews. */
+export interface PaginatedCuratorGroupReviewsResponse {
+  items: CuratorGroupReviewItem[]
   total: number
   limit: number
   offset: number
