@@ -39,14 +39,16 @@ router = APIRouter(prefix="/api/v1/masters", tags=["master-finance"])
 
 @router.get("/me/income", response_model=IncomeResponse)
 async def get_my_income_endpoint(
-    period: Literal["week", "month"] = Query(default="week"),
+    period: Literal["week", "month", "quarter"] = Query(default="week"),
     master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
     session: AsyncSession = Depends(get_db_reader),
 ) -> IncomeResponse:
     """Income for the current calendar period + delta against the previous one.
 
     Net of title-tagged movements (sale - commission - refund). The period is
-    a calendar week (Mon..Sun) or month; delta_pct is null on the first period.
+    a calendar week (Mon..Sun), month or quarter -- bounds come from
+    core.periods, same as the dashboard grid; delta_pct is null on the first
+    period.
     """
     user, _profile = master_tuple
     data = await get_master_income(user.id, period, session)

@@ -47,12 +47,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.periods import calendar_period_bounds
 from app.modules.bookings.models import Booking, BookingStatus
+from app.modules.masters.finance_service import get_master_income
 from app.modules.masters.models import MasterProfile
+from app.modules.payments.models import LedgerStatus, MasterLedger
 from app.modules.practices.models import Practice, PracticeStatus, PracticeType
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 
 STATS_URL = "/api/v1/masters/me/stats"
+INCOME_URL = "/api/v1/masters/me/income"
 
 _TID_MIN = 66800
 _TID_MAX = 66999
@@ -165,6 +168,37 @@ async def _book(
         status=status,
     )
     db_session.add(booking)
+    await db_session.commit()
+
+
+async def _add_titled_income(
+    db_session: AsyncSession,
+    user_id: str,
+    *,
+    amount_cents: int,
+    created_at: datetime,
+) -> None:
+    """Insert one title-tagged DONE ledger row at an exact created_at.
+
+    Only title-tagged DONE rows are summed by the income projection
+    (finance_service._sum_titled_income), and the direct insert is what lets a
+    row be placed on a chosen side of a period boundary. Cleaned up by the
+    band sweep: full_cleanup_range deletes master_ledger by user_id.
+    """
+    entry = MasterLedger(
+        user_id=user_id,
+        amount_cents=amount_cents,
+        is_frozen=False,
+        status=LedgerStatus.DONE.value,
+        reason="quarter-window-test",
+        title="Semantics Income",
+    )
+    # Assigned after construction, mirroring test_master_finance._add_ledger:
+    # created_at carries a default, and this is the form already proven to
+    # override it.
+    entry.created_at = created_at
+    db_session.add(entry)
+    await db_session.flush()
     await db_session.commit()
 
 
@@ -748,3 +782,149 @@ async def test_period_start_is_exclusive_for_the_previous_window(
     body = await _stats(client, master)
     assert body["practices_count"] == 0
     assert body["practices_delta_pct"] == -100
+
+
+# ===================================================================
+# Quarter (BE-28) -- the third period
+# ===================================================================
+#
+# The three bound tests below take `now` as an argument and assert fixed
+# dates, so they are calendar-independent: they pin the two year edges that
+# are NOT symmetric. Only Q4 rolls the end forward into the next year, and
+# only Q1 rolls the previous start back into the year before -- putting the
+# rollovers on the same side is the mistake these tests exist to catch.
+
+
+async def test_quarter_bounds_roll_the_end_forward_only_from_q4() -> None:
+    """December: current quarter ends on 1 Jan NEXT year, previous is same-year.
+
+    Q4 is the only quarter whose cur_end crosses the year. prev_start stays in
+    the same year (1 July), so a fix that rolled both sides together would
+    show up here as a previous quarter one year off.
+    """
+    cur_start, cur_end, prev_start = calendar_period_bounds(
+        "quarter", datetime(2026, 12, 15, 13, 44, tzinfo=UTC),
+    )
+
+    assert cur_start == datetime(2026, 10, 1, tzinfo=UTC)
+    assert cur_end == datetime(2027, 1, 1, tzinfo=UTC)
+    assert prev_start == datetime(2026, 7, 1, tzinfo=UTC)
+
+
+async def test_quarter_bounds_roll_the_previous_start_back_only_from_q1() -> None:
+    """February: previous quarter starts 1 Oct LAST year, current end is same-year.
+
+    The mirror of the test above and the other half of the trap: here it is
+    prev_start that crosses the year while cur_end (1 April) does not.
+    """
+    cur_start, cur_end, prev_start = calendar_period_bounds(
+        "quarter", datetime(2026, 2, 10, tzinfo=UTC),
+    )
+
+    assert cur_start == datetime(2026, 1, 1, tzinfo=UTC)
+    assert cur_end == datetime(2026, 4, 1, tzinfo=UTC)
+    assert prev_start == datetime(2025, 10, 1, tzinfo=UTC)
+
+
+async def test_quarter_bounds_stay_inside_the_year_mid_year() -> None:
+    """May: every bound is in the same year -- the no-rollover control.
+
+    Paired with the two above on purpose: without a case that must NOT cross
+    the year, an implementation that rolled unconditionally would still pass
+    one of them.
+    """
+    cur_start, cur_end, prev_start = calendar_period_bounds(
+        "quarter", datetime(2026, 5, 20, 23, 59, 59, tzinfo=UTC),
+    )
+
+    assert cur_start == datetime(2026, 4, 1, tzinfo=UTC)
+    assert cur_end == datetime(2026, 7, 1, tzinfo=UTC)
+    assert prev_start == datetime(2026, 1, 1, tzinfo=UTC)
+
+
+async def test_quarter_counts_its_own_window_and_deltas_against_the_previous(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """period=quarter answers 200, counts 1 this quarter, and deltas 0 vs one.
+
+    Three assertions on one dataset, and each fails differently. 200 proves
+    the query param is no longer rejected (it was a 422 before BE-28). The
+    count proves the current window is the QUARTER and not some other period
+    that happens to contain today. The delta of 0 proves the previous
+    quarter's practice fed the base instead of the count: were the previous
+    window wrong or empty, one against nothing would be a null delta, and one
+    against two would be -50.
+
+    Positions are derived from calendar_period_bounds rather than written as
+    dates, so the test does not change meaning on 1 October.
+    """
+    master = await _make_verified_master(client, db_session)
+    master_id = master["user"]["id"]
+    cur_start, _cur_end, prev_start = calendar_period_bounds(
+        "quarter", datetime.now(UTC),
+    )
+
+    await _create_practice(
+        db_session, master_id,
+        scheduled_at=cur_start,
+        status=PracticeStatus.COMPLETED.value,
+    )
+    await _create_practice(
+        db_session, master_id,
+        scheduled_at=prev_start,
+        status=PracticeStatus.COMPLETED.value,
+    )
+
+    body = await _stats(client, master, period="quarter")
+    assert body["practices_count"] == 1
+    assert body["practices_delta_pct"] == 0
+
+
+async def test_income_quarter_window_is_the_quarter(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """get_master_income("quarter") sums the quarter and no earlier movement.
+
+    The income projection computes its own bounds through core.periods, so
+    "quarter works there too" was an inference until this test. Both rows sit
+    one second apart across cur_start: the later one must land in
+    income_cents, the earlier one in prev_income_cents. A window that silently
+    stayed monthly would put the second row outside both.
+    """
+    master = await _make_verified_master(client, db_session)
+    master_id = master["user"]["id"]
+    cur_start, _cur_end, _prev_start = calendar_period_bounds(
+        "quarter", datetime.now(UTC),
+    )
+
+    await _add_titled_income(
+        db_session, master_id, amount_cents=1000, created_at=cur_start,
+    )
+    await _add_titled_income(
+        db_session, master_id, amount_cents=700,
+        created_at=cur_start - timedelta(seconds=1),
+    )
+
+    income = await get_master_income(UUID(master_id), "quarter", db_session)
+    assert income["income_cents"] == 1000
+    assert income["prev_income_cents"] == 700
+
+
+async def test_income_endpoint_accepts_quarter(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """GET /me/income?period=quarter answers 200, not 422.
+
+    The door, not the arithmetic. The 422 came from the Literal on the route,
+    which the test above cannot reach: it calls get_master_income directly and
+    would stay green with the route still closed. What the sums are is that
+    test's job.
+    """
+    master = await _make_verified_master(client, db_session)
+
+    resp = await client.get(
+        f"{INCOME_URL}?period=quarter",
+        headers=auth_headers(master["session_token"]),
+    )
+
+    assert resp.status_code == 200

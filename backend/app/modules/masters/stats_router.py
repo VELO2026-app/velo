@@ -5,7 +5,7 @@
 # Master-facing period-scoped stat grid for the dashboard.
 #
 # ENDPOINT:
-#   GET /api/v1/masters/me/stats?period=week|month
+#   GET /api/v1/masters/me/stats?period=week|month|quarter
 #       -- practices + participants + income for the period, each with a
 #          period-over-period delta.
 #
@@ -33,7 +33,7 @@ router = APIRouter(prefix="/api/v1/masters", tags=["master-stats"])
 
 @router.get("/me/stats", response_model=MasterStatsResponse)
 async def get_my_stats_endpoint(
-    period: Literal["week", "month"] = Query(default="week"),
+    period: Literal["week", "month", "quarter"] = Query(default="week"),
     master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
     session: AsyncSession = Depends(get_db_reader),
 ) -> MasterStatsResponse:
