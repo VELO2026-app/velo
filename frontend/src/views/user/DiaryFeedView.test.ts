@@ -107,7 +107,8 @@ const back = vi.fn()
 
 // The `deleted` query drives the undo bar through a watcher with immediate:true
 // (.vue:500-511), so it must be REACTIVE and seeded BEFORE mount for that rung.
-const routeQuery = reactive<{ deleted?: string | string[] }>({})
+// FE-70: `compose` drives the one-shot note-intent in onMounted the same way.
+const routeQuery = reactive<{ deleted?: string | string[]; compose?: string | string[] }>({})
 
 // PROMPT №657: real() kept via importOriginal -- DiaryFeedView now transitively
 // imports the real @/router singleton (DiaryComposer -> useViewportGeometry ->
@@ -1207,6 +1208,50 @@ describe('DiaryFeedView', () => {
       await flush()
 
       expect(diaryApi.restoreDiaryEntry).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  // ===========================================================================
+  // FE-70: the dashboard's «Добавить запись» arrives as ?compose=note -- a
+  // ONE-SHOT intent. The screen focuses the existing note composer once and
+  // strips the param via router.replace, keeping every other query param.
+  // ===========================================================================
+  describe('compose intent (?compose=note, FE-70)', () => {
+    it('focuses the composer textarea once and strips ONLY compose (other params survive)', async () => {
+      routeQuery.compose = 'note'
+      // An unrelated param the screen has no behaviour for: it must ride the
+      // replace through untouched (seeding `deleted` here would also fire the
+      // undo bar's own query-strip -- a second, unrelated replace). Not in
+      // routeQuery's declared type on purpose -- the point is a param the
+      // screen does NOT know about.
+      ;(routeQuery as Record<string, string | string[]>).foo = 'bar'
+      mount()
+      await flush()
+
+      // One focus: the caret sits in the composer's textarea without a
+      // second tap (the collapsed-preview un-hide is Composer.focusField's).
+      expect(document.activeElement).toBe(host?.querySelector('textarea'))
+      expect(replace).toHaveBeenCalledTimes(1)
+      expect(replace).toHaveBeenCalledWith({ query: { foo: 'bar' } })
+    })
+
+    it('a plain entry (no compose param) never focuses the field and never replaces', async () => {
+      mount()
+      await flush()
+
+      expect(host?.querySelector('textarea')).not.toBeNull()
+      expect(document.activeElement).not.toBe(host?.querySelector('textarea'))
+      expect(replace).not.toHaveBeenCalled()
+    })
+
+    it('a read-only filter (composer hidden) is safe: no crash, the param still strips', async () => {
+      routeQuery.compose = 'note'
+      useDiaryStore().feedFilters.categories = ['feedbacks']
+      mount()
+      await flush()
+
+      expect(host?.querySelector('textarea')).toBeNull()
+      expect(replace).toHaveBeenCalledWith({ query: {} })
     })
   })
 })

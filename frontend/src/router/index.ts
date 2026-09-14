@@ -97,6 +97,16 @@ const router = createRouter({
           component: () => import('@/views/user/DetailView.vue'),
         },
         {
+          // FE-70: hand-entered activity that happened outside velo. A diary
+          // route by shell contract (no tab bar, fill layout) but NOT a feed
+          // citizen -- it owns its header/scroll/footer like the other diary
+          // screens. Static segment sits above the dynamic :type sibling in
+          // matching rank, so no declaration-order hazard.
+          path: 'diary/activity/new',
+          name: 'user-diary-activity-new',
+          component: () => import('@/views/user/ExternalActivityCreateView.vue'),
+        },
+        {
           path: 'profile',
           name: 'user-profile',
           // [FE-3] Headerless hub, same contract as the dashboard ([FE-3]

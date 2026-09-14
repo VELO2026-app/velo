@@ -12,6 +12,7 @@
 
 export { default as IconHome } from './IconHome.vue'
 export { default as IconCalendar } from './IconCalendar.vue'
+export { default as IconCalendarStar } from './IconCalendarStar.vue'
 export { default as IconDiary } from './IconDiary.vue'
 export { default as IconDiaryBook } from './IconDiaryBook.vue'
 export { default as IconProfile } from './IconProfile.vue'

@@ -28,7 +28,7 @@ import { setActivePinia, createPinia } from 'pinia'
 import { useDiaryStore } from '@/stores/diary'
 import * as diaryApi from '@/api/diary'
 import { ApiResponseError } from '@/api/client'
-import type { CheckinRequest, FeedbackRequest } from '@/api/types'
+import type { CheckinRequest, FeedbackRequest, CreateExternalActivityRequest } from '@/api/types'
 
 vi.mock('@/api/diary')
 
@@ -53,6 +53,9 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue({} as never)
   vi.mocked(diaryApi.upsertFeedback)
+    .mockReset()
+    .mockResolvedValue({} as never)
+  vi.mocked(diaryApi.createExternalActivity)
     .mockReset()
     .mockResolvedValue({} as never)
   vi.mocked(diaryApi.listDiaryFeed).mockReset().mockResolvedValue(feedPage())
@@ -141,6 +144,108 @@ describe('diary store', () => {
 
       expect(result.ok).toBe(false)
       expect(result.error).toBe('Не удалось отправить feedback')
+    })
+  })
+
+  describe('submitExternalActivity (FE-70)', () => {
+    const ACTIVITY: CreateExternalActivityRequest = {
+      occurred_at: '2026-09-07T15:30:00.000+03:00',
+      activity_type: 'meditation',
+      custom_activity_name: null,
+      mood: 6,
+      thoughts: null,
+    }
+
+    it('on success: posts the activity and refreshes the feed (no optimistic insert)', async () => {
+      const store = useDiaryStore()
+
+      const result = await store.submitExternalActivity(ACTIVITY)
+
+      expect(diaryApi.createExternalActivity).toHaveBeenCalledWith(ACTIVITY)
+      expect(result).toEqual({ ok: true, error: '' })
+      // The event is written in the same transaction as the activity, so a
+      // feed re-read is the ONLY way the new card appears.
+      expect(diaryApi.listDiaryFeed).toHaveBeenCalled()
+    })
+
+    it('is re-entrant-guarded: a second submit while one is in flight is dropped', async () => {
+      let resolve!: (v: unknown) => void
+      vi.mocked(diaryApi.createExternalActivity).mockReturnValue(
+        new Promise((r) => {
+          resolve = r
+        }) as never,
+      )
+      const store = useDiaryStore()
+
+      const first = store.submitExternalActivity(ACTIVITY)
+      const second = await store.submitExternalActivity(ACTIVITY)
+
+      expect(second).toEqual({ ok: false, error: '' })
+      expect(diaryApi.createExternalActivity).toHaveBeenCalledTimes(1)
+
+      resolve({})
+      await first
+    })
+
+    it('maps a multi-field 422 to fieldErrors (body-prefixed locs) and does NOT refresh', async () => {
+      // FE-70's deliberate backend shape: mood AND custom name arrive broken
+      // in ONE answer -- the form must be able to highlight both at once.
+      vi.mocked(diaryApi.createExternalActivity).mockRejectedValue(
+        new ApiResponseError(
+          422,
+          "Value error, mood must be between 1 and 10, got 11; Value error, custom_activity_name is required when activity_type is 'custom'",
+          'validation_error',
+          [
+            {
+              loc: ['body', 'mood'],
+              msg: 'Value error, mood must be between 1 and 10, got 11',
+              type: 'value_error',
+            },
+            {
+              loc: ['body', 'custom_activity_name'],
+              msg: "Value error, custom_activity_name is required when activity_type is 'custom'",
+              type: 'value_error',
+            },
+          ],
+        ),
+      )
+      const store = useDiaryStore()
+
+      const result = await store.submitExternalActivity(ACTIVITY)
+
+      expect(result.ok).toBe(false)
+      // The toast line is the mapped RU phrase; the RAW per-field messages
+      // live only in fieldErrors (they are control-level, not toast-level).
+      expect(result.error).toBe('Проверьте введённые данные')
+      expect(result.fieldErrors).toEqual({
+        mood: 'Value error, mood must be between 1 and 10, got 11',
+        custom_activity_name:
+          "Value error, custom_activity_name is required when activity_type is 'custom'",
+      })
+      expect(diaryApi.listDiaryFeed).not.toHaveBeenCalled()
+    })
+
+    it('a non-422 failure carries no fieldErrors and does NOT refresh', async () => {
+      vi.mocked(diaryApi.createExternalActivity).mockRejectedValue(
+        new ApiResponseError(500, 'boom', 'internal_error'),
+      )
+      const store = useDiaryStore()
+
+      const result = await store.submitExternalActivity(ACTIVITY)
+
+      expect(result.ok).toBe(false)
+      // Known code phrase wins over the fallback (useApiError contract).
+      expect(result.error).toBe('Внутренняя ошибка сервера. Попробуйте ещё раз')
+      expect(result.fieldErrors).toBeUndefined()
+      expect(diaryApi.listDiaryFeed).not.toHaveBeenCalled()
+    })
+
+    it('does not reach into the bookings store', async () => {
+      const store = useDiaryStore()
+
+      await store.submitExternalActivity(ACTIVITY)
+
+      expect(refreshBookings).not.toHaveBeenCalled()
     })
   })
 

@@ -48,6 +48,7 @@ export type {
   CreateCompanyPromoRequest,
   CreateCuratorGroupRequest,
   CreateDiaryEntryRequest,
+  CreateExternalActivityRequest,
   CreateMasterPromoRequest,
   CreateReportRequest,
   CreateWithdrawalRequest,
@@ -74,6 +75,8 @@ export type {
   DiaryFeedResponse,
   DismissReportRequest,
   ExistingReportResponse,
+  ExternalActivityResponse,
+  ExternalActivityType,
   FeedbackMetricResponse,
   FeedbackRatingDistribution,
   FeedbackRequest,
@@ -440,6 +443,11 @@ export type DiaryEventKind =
   // A conversation with a master began (one row per thread, written by the
   // chat proxy on create-or-get). Snapshot: {thread_id, master_id, master_name}.
   | 'thread_started'
+  // BE-27 (FE-70): an activity the person did OUTSIDE velo, entered by hand.
+  // Snapshot: {activity_type, custom_activity_name, mood, thoughts_preview}
+  // -- the caption/icon come from activity_type (custom -> the raw name);
+  // occurred_at is the activity's OWN time, not the write time.
+  | 'external_activity'
 
 // Filter chips on the feed. Map 1:1 onto backend \`category\` query values
 // (settings.diary_feed_categories). Omitting category = "Все". Query-param

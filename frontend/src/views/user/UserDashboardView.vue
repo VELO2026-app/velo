@@ -161,6 +161,42 @@
     </section>
 
     <!-- ================================================================
+         QUICK ACCESS (FE-70)
+         Two one-tap entries into writing: the external-activity form and the
+         diary's note composer. Present regardless of the nearest-practice
+         state above -- it is its own section, never part of a practice card.
+         ================================================================ -->
+    <section class="dashboard__section">
+      <h3 class="dashboard__section-title">Быстрый доступ</h3>
+      <div class="dashboard__quick">
+        <button
+          type="button"
+          class="dashboard__quick-btn dashboard__quick-btn--activity"
+          @click="router.push({ name: 'user-diary-activity-new' })"
+        >
+          <IconMeditation class="dashboard__quick-lead" :size="22" />
+          <span class="dashboard__quick-label">Внести активность</span>
+          <!-- Short chevron of the layout reference (no shaft) -- the long
+               IconArrowRight glyph is a different silhouette. -->
+          <svg class="dashboard__quick-chevron" viewBox="0 0 9 14" aria-hidden="true">
+            <path d="M2 2L7 7L2 12" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="dashboard__quick-btn dashboard__quick-btn--note"
+          @click="router.push({ name: 'user-diary', query: { compose: 'note' } })"
+        >
+          <IconPen class="dashboard__quick-lead" :size="22" />
+          <span class="dashboard__quick-label">Добавить запись</span>
+          <svg class="dashboard__quick-chevron" viewBox="0 0 9 14" aria-hidden="true">
+            <path d="M2 2L7 7L2 12" />
+          </svg>
+        </button>
+      </div>
+    </section>
+
+    <!-- ================================================================
          PROGRESS
          ================================================================ -->
     <section class="dashboard__section">
@@ -182,7 +218,7 @@ import { getMyStats } from '@/api/bookings'
 import { useToast } from '@/composables/useToast'
 import { VHeader } from '@/components/layout'
 import { VLoader, VButton, VBadge, VStatCard } from '@/components/ui'
-import { IconClock, IconCheck, IconBellPlain } from '@/components/icons'
+import { IconClock, IconCheck, IconBellPlain, IconMeditation, IconPen } from '@/components/icons'
 import PracticeListCard from '@/components/shared/PracticeListCard.vue'
 import Banner from '@/components/shared/Banner.vue'
 import { formatDateShort, formatTime, formatDuration } from '@/utils/format'
@@ -640,6 +676,83 @@ onUnmounted(() => {
   font-size: var(--text-sm);
   color: var(--velo-text-secondary);
   margin: 0;
+}
+
+/* ===== Quick access (FE-70) =====
+ * Full-rail capsule rows, LOCAL markup by design: VButton centres its
+ * content and cannot express "leading icon / growing label / trailing
+ * chevron". A shared row component is warranted only once a second screen
+ * needs the same anatomy. Geometry: 50px capsule (the composer pill height
+ * token), horizontal padding --space-4, icon->label --space-3, one --space-2
+ * step between the two capsules -- they never merge into one card. */
+.dashboard__quick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.dashboard__quick-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--velo-size-50);
+  padding: 0 var(--space-4);
+  box-sizing: border-box;
+  border-radius: var(--radius-full);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  cursor: pointer;
+  /* :active shrinks in place only -- no layout shift of the neighbours. */
+  transition:
+    opacity var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.dashboard__quick-btn:active {
+  opacity: 0.85;
+  transform: scale(0.99);
+}
+
+.dashboard__quick-btn:focus-visible {
+  outline: 2px solid var(--velo-primary);
+  outline-offset: 2px;
+}
+
+/* Tone pair: peach for the activity entry, teal for the diary note. Icon,
+ * label and chevron all inherit the row's colour (currentColor). */
+.dashboard__quick-btn--activity {
+  background: var(--velo-glass-peach-40);
+  border: 1.5px solid var(--velo-peach-500);
+  color: var(--velo-peach-500);
+}
+
+.dashboard__quick-btn--note {
+  background: var(--velo-glass-teal-40);
+  border: 1.5px solid var(--velo-teal-600);
+  color: var(--velo-teal-700);
+}
+
+.dashboard__quick-lead {
+  flex: 0 0 auto;
+}
+
+/* The label grows and reads left-aligned inside the leftover space. */
+.dashboard__quick-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+}
+
+.dashboard__quick-chevron {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* ===== Progress stats =====

@@ -68,6 +68,9 @@ let host: HTMLElement | null = null
 let pinia: Pinia
 let createdCount = 0
 let composingEvents: boolean[] = []
+// The mounted root instance -- DiaryComposer's public surface (defineExpose
+// { focus }, FE-70). app.mount() returns it.
+let root: InstanceType<typeof DiaryComposer> | null = null
 
 function mount(props: { entryType?: 'note' | 'dream' } = {}): HTMLElement {
   host = document.createElement('div')
@@ -82,7 +85,7 @@ function mount(props: { entryType?: 'note' | 'dream' } = {}): HTMLElement {
     },
   })
   app.use(pinia)
-  app.mount(host)
+  root = app.mount(host) as unknown as InstanceType<typeof DiaryComposer>
   return host
 }
 
@@ -481,5 +484,35 @@ describe('DiaryComposer -- autogrow (PROMPT №741: viewport-aware growCap resto
     expect(ta.style.maxHeight).toBe('111px')
     app2.unmount()
     host2.remove()
+  })
+})
+
+describe('DiaryComposer -- public focus() (FE-70: the dashboard «Добавить запись» one-tap entry)', () => {
+  it('focus() focuses the REAL textarea and enters composing (one call, no re-tap)', async () => {
+    mount()
+
+    root?.focus()
+    await flush()
+
+    expect(document.activeElement).toBe(textarea())
+    expect(composingEvents).toContain(true)
+  })
+
+  it('focus() with an existing draft: un-hides the collapsed preview, keeps the draft, sends nothing', async () => {
+    mount()
+    typeText('черновик записи')
+    // Blur first: the unsent text collapses behind the preview span (a
+    // display:none textarea is where a naive .focus() silently dies -- the
+    // exact bug focusField's optimistic composing order prevents).
+    textarea().blur()
+    await flush()
+    expect(host!.querySelector('.composer__preview')).not.toBeNull()
+
+    root?.focus()
+    await flush()
+
+    expect(document.activeElement).toBe(textarea())
+    expect(textarea().value).toBe('черновик записи')
+    expect(diaryApi.createDiaryEntry).not.toHaveBeenCalled()
   })
 })

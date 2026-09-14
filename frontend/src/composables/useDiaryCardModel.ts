@@ -25,6 +25,8 @@ import {
 import {
   FEED_KIND_TITLE,
   OUTCOME_LABEL,
+  EXTERNAL_ACTIVITY_LABEL,
+  EXTERNAL_ACTIVITY_ICON,
   moodZoneFromScore,
   ratingZoneFromScore,
   moodLabelFromScore,
@@ -32,9 +34,10 @@ import {
   practiceIconFor,
   RATING_ICON_COLOR,
 } from '@/utils/displayHelpers'
+import { EXTERNAL_ACTIVITY_MOOD_HIDDEN } from '@/utils/constants'
 import { MOOD_ICON, RATING_ICON } from '@/utils/ratingIcons'
 import { formatTime, formatDate, formatDuration } from '@/utils/format'
-import type { DiaryFeedItem, DiaryEventKind } from '@/api/types'
+import type { DiaryFeedItem, DiaryEventKind, ExternalActivityType } from '@/api/types'
 
 const BANNER_KINDS: DiaryEventKind[] = [
   'booking_confirmed',
@@ -103,7 +106,27 @@ export function useDiaryCardModel(
     return typeof v === 'number' ? v : null
   }
 
-  const baseTitle = computed(() => FEED_KIND_TITLE[kind.value] ?? '')
+  // external_activity: the snapshot's activity_type narrowed to the closed
+  // union (an unknown value degrades to null -> empty caption + fallback
+  // glyph, never a raw key on the card).
+  const activityType = computed<ExternalActivityType | null>(() => {
+    if (kind.value !== 'external_activity') return null
+    const raw = snapStr('activity_type')
+    return raw !== null && raw in EXTERNAL_ACTIVITY_LABEL ? (raw as ExternalActivityType) : null
+  })
+
+  const baseTitle = computed(() => {
+    if (kind.value === 'external_activity') {
+      // The caption IS the activity: dictionary label by type, the user's own
+      // name for custom (verbatim, no dictionary), like practice_outcome
+      // reads its title from the snapshot.
+      if (activityType.value === 'custom') {
+        return snapStr('custom_activity_name') ?? 'Свой вариант'
+      }
+      return activityType.value !== null ? EXTERNAL_ACTIVITY_LABEL[activityType.value] : ''
+    }
+    return FEED_KIND_TITLE[kind.value] ?? ''
+  })
 
   const title = computed(() => {
     const base = baseTitle.value
@@ -115,6 +138,17 @@ export function useDiaryCardModel(
       const rating = snapNum('rating')
       return rating !== null ? `${base}: ${ratingLabelFromScore(rating)}`.trim() : base
     }
+    if (kind.value === 'external_activity') {
+      // The mood is the NUMBER 1..10 (FE-70 ruling: in the app, unlike the
+      // Telegram notifications' basket) -- a zone label would blur three
+      // different scores into one caption. WHILE the create form's mood block
+      // is hidden (EXTERNAL_ACTIVITY_MOOD_HIDDEN) every event carries the
+      // neutral centre (6) -- a fabricated score must not read as the
+      // person's answer, so the suffix stays off until the flag flips.
+      const mood = snapNum('mood')
+      if (mood === null || EXTERNAL_ACTIVITY_MOOD_HIDDEN) return base
+      return `${base} · ${mood}/10`
+    }
     return base
   })
 
@@ -125,6 +159,7 @@ export function useDiaryCardModel(
     // line here is WHO the conversation is with -- the only consumer of
     // master_name for this kind.
     if (kind.value === 'thread_started') return snapStr('master_name')
+    if (kind.value === 'external_activity') return snapStr('thoughts_preview')
     return snapStr('content_preview') ?? snapStr('comment_preview') ?? snapStr('comment')
   })
 
@@ -182,6 +217,10 @@ export function useDiaryCardModel(
         return IconDreamBook
       case 'thread_started':
         return IconMessages
+      case 'external_activity':
+        // One owner artwork for every activity type -- the label carries the
+        // type (dictionary label or the custom name).
+        return EXTERNAL_ACTIVITY_ICON
       default:
         return IconPen
     }

@@ -38,6 +38,7 @@ import {
   updateDiaryEntry,
   deleteDiaryEntry,
   restoreDiaryEntry,
+  createExternalActivity,
   listDiaryFeed,
   getPracticeInsights,
 } from '@/api/diary'
@@ -45,6 +46,7 @@ import type {
   CheckinRequest,
   FeedbackRequest,
   CreateDiaryEntryRequest,
+  CreateExternalActivityRequest,
   UpdateDiaryEntryRequest,
   DiaryEntryResponse,
   DiaryFeedItem,
@@ -61,6 +63,23 @@ export interface SubmitResult {
    *  non-ApiResponseError failure. */
   code?: string
 }
+
+/** The request fields POST /diary/external-activities can attach a 422 to. */
+const EXTERNAL_ACTIVITY_FIELDS = [
+  'occurred_at',
+  'activity_type',
+  'custom_activity_name',
+  'mood',
+  'thoughts',
+] as const
+
+/** Field-attributed 422 errors: the backend's `loc` (minus the "body" prefix)
+ *  -> that entry's msg. FE-70: the endpoint deliberately answers with SEVERAL
+ *  field errors at once, so the form must be able to highlight two controls
+ *  simultaneously instead of walking them one at a time. */
+export type ExternalActivityFieldErrors = Partial<
+  Record<(typeof EXTERNAL_ACTIVITY_FIELDS)[number], string>
+>
 
 export const useDiaryStore = defineStore('diary', () => {
   // ===========================================================================
@@ -149,6 +168,59 @@ export const useDiaryStore = defineStore('diary', () => {
       return { ok: true, error: '' }
     } finally {
       reflectionSubmitting.value = false
+    }
+  }
+
+  // ===========================================================================
+  // External activity submit (ExternalActivityCreateView, FE-70 / BE-27)
+  // ===========================================================================
+
+  const externalActivitySubmitting = ref(false)
+
+  /**
+   * Record a hand-entered activity that happened outside velo, then refresh
+   * the feed (the backend writes the activity AND its diary event in one
+   * transaction, so the refresh already sees it -- nothing is inserted
+   * optimistically).
+   *
+   * On a 422, `fieldErrors` carries the backend's per-loc messages so the form
+   * can highlight several controls at once (see ExternalActivityFieldErrors).
+   * The view owns URL/transport-free toasts and navigation.
+   */
+  async function submitExternalActivity(
+    body: CreateExternalActivityRequest,
+  ): Promise<SubmitResult & { fieldErrors?: ExternalActivityFieldErrors }> {
+    if (externalActivitySubmitting.value) return { ok: false, error: '' }
+    externalActivitySubmitting.value = true
+    try {
+      await createExternalActivity(body)
+      await refreshAfterDiaryMutation()
+      return { ok: true, error: '' }
+    } catch (e) {
+      const message = extractApiError(e, 'Не удалось сохранить событие')
+      const code = e instanceof ApiResponseError ? e.code : undefined
+      const fieldErrors: ExternalActivityFieldErrors = {}
+      if (e instanceof ApiResponseError && e.validation) {
+        for (const entry of e.validation) {
+          // FastAPI locs arrive prefixed: ["body", "<field>"].
+          const raw = entry.loc[entry.loc[0] === 'body' ? 1 : 0]
+          if (
+            typeof raw === 'string' &&
+            (EXTERNAL_ACTIVITY_FIELDS as readonly string[]).includes(raw)
+          ) {
+            const field = raw as (typeof EXTERNAL_ACTIVITY_FIELDS)[number]
+            if (!fieldErrors[field]) fieldErrors[field] = entry.msg
+          }
+        }
+      }
+      return {
+        ok: false,
+        error: message,
+        code,
+        fieldErrors: Object.keys(fieldErrors).length > 0 ? fieldErrors : undefined,
+      }
+    } finally {
+      externalActivitySubmitting.value = false
     }
   }
 
@@ -495,6 +567,7 @@ export const useDiaryStore = defineStore('diary', () => {
     checkinSubmitting.value = false
     feedbackSubmitting.value = false
     reflectionSubmitting.value = false
+    externalActivitySubmitting.value = false
     exitJump()
     feed.reset()
     feedFilters.categories = []
@@ -517,6 +590,8 @@ export const useDiaryStore = defineStore('diary', () => {
     submitFeedback,
     reflectionSubmitting,
     submitReflection,
+    externalActivitySubmitting,
+    submitExternalActivity,
 
     // Unified feed
     feedItems: feed.items,

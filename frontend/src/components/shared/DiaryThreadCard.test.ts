@@ -297,3 +297,52 @@ describe('DiaryThreadCard -- unknown kinds', () => {
     expect(host?.textContent).toContain('Вы начали диалог')
   })
 })
+
+describe('DiaryThreadCard -- external activity (FE-70)', () => {
+  const activitySnapshot = (overrides: Record<string, unknown> = {}) => ({
+    activity_type: 'meditation',
+    custom_activity_name: null,
+    mood: 6,
+    thoughts_preview: 'Спокойно, дома',
+    ...overrides,
+  })
+
+  it('reuses the split-entry geometry as an INERT div: label · mood/10 + thoughts preview', () => {
+    mountCard(
+      feedItem('external_activity', activitySnapshot(), { source_type: 'external_activity' }),
+    )
+
+    const card = q('.tcard--activity')
+    expect(card).not.toBeNull()
+    // The entry base provides the split icon/text boxes.
+    expect(card?.classList.contains('tcard--entry')).toBe(true)
+    expect(q('.tcard__entry-title')?.textContent).toBe('Медитация')
+    expect(q('.tcard__entry-preview')?.textContent).toBe('Спокойно, дома')
+  })
+
+  it('custom: the caption is the user own name, verbatim', () => {
+    mountCard(
+      feedItem(
+        'external_activity',
+        activitySnapshot({
+          activity_type: 'custom',
+          custom_activity_name: 'Бальные танцы',
+          mood: 9,
+        }),
+        { source_type: 'external_activity' },
+      ),
+    )
+
+    expect(q('.tcard__entry-title')?.textContent).toBe('Бальные танцы')
+  })
+
+  it('is NOT a button and never emits tap -- no detail/edit/delete endpoint exists to open', () => {
+    mountCard(
+      feedItem('external_activity', activitySnapshot(), { source_type: 'external_activity' }),
+    )
+
+    expect(q('.tcard--activity button')).toBeNull()
+    q('.tcard--activity')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    expect(taps).toHaveLength(0)
+  })
+})

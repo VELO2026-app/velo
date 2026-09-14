@@ -114,3 +114,19 @@ export function masterRejectionSeenKey(userId: string): string {
  * shrink the visual viewport well past this.
  */
 export const KEYBOARD_VIEWPORT_THRESHOLD = 150
+
+// ---------------------------------------------------------------------------
+// External activity (FE-70)
+// ---------------------------------------------------------------------------
+
+/**
+ * The «Мое состояние» mood picker on the external-activity form is HIDDEN
+ * for now (owner 2026-09-10) until its Figma pressed states land. The
+ * backend still requires mood 1..10, so while this is true the form submits
+ * the neutral zone centre (6) without asking, AND the feed card suppresses
+ * the «· N/10» suffix -- a fabricated score must not read as the person's
+ * answer. Flip to false when the block returns: the picker comes back and
+ * the suffix reappears on every card. ONE flag drives both surfaces so the
+ * form and the card can never disagree.
+ */
+export const EXTERNAL_ACTIVITY_MOOD_HIDDEN: boolean = true

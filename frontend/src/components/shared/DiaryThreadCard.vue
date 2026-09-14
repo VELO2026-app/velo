@@ -2,7 +2,7 @@
   VELO Frontend -- DiaryThreadCard (Diary redesign, screen 40 "map")
 
   One diary event as a compact "bead" on the thread (DiaryTimeline). The
-  visual form is resolved EXPLICITLY from kind -- five known forms plus a
+  visual form is resolved EXPLICITLY from kind -- six known forms plus a
   fallback; there is no generic v-else that could dress an arbitrary kind in
   a known card:
 
@@ -17,6 +17,9 @@
                 title, master row, time/duration meta, Done / "Вы не пришли")
     entry    -- note / dream: two separate white surfaces (icon box + text
                 box) with a transparent gap between them
+    activity -- external_activity (FE-70): the entry geometry again, but
+                inert (no detail/edit/delete exists) with the mood NUMBER
+                in the title line
     fallback -- anything else (incl. thread_started, which the backend feed
                 excludes): inert neutral chip, never a known card shape
 
@@ -136,6 +139,22 @@
     </span>
   </button>
 
+  <!-- ===================== EXTERNAL ACTIVITY (inert entry) =====================
+       FE-70: the hand-entered activity reuses the split-entry geometry (icon
+       box + text box), but is NOT a button -- the backend ships no detail,
+       edit or delete for it, so there is nothing to tap through to. The title
+       line carries the mood as a NUMBER (see useDiaryCardModel.title); the
+       time is the thread's own occurred_at, like every other bead. -->
+  <div v-else-if="form === 'activity'" class="tcard tcard--entry tcard--activity">
+    <span class="tcard__entry-icon" aria-hidden="true">
+      <component :is="standardIcon" :size="28" />
+    </span>
+    <span class="tcard__entry-body">
+      <span class="tcard__entry-title">{{ title }}</span>
+      <span class="tcard__entry-preview">{{ preview ?? '' }}</span>
+    </span>
+  </div>
+
   <!-- ===================== UNKNOWN KIND (explicit fallback) ===================== -->
   <div v-else class="tcard tcard--fallback">
     <p v-if="baseTitle" class="tcard__fallback-title">{{ baseTitle }}</p>
@@ -163,6 +182,7 @@ const emit = defineEmits<{
 const {
   kind,
   baseTitle,
+  title,
   preview,
   standardIcon,
   directionIcon,
@@ -189,7 +209,7 @@ const {
 // Explicit kind -> visual form. Anything unrecognized (incl. thread_started,
 // which the backend feed excludes server-side) lands on the inert fallback
 // instead of masquerading as a known card.
-type ThreadForm = 'banner' | 'checkin' | 'feedback' | 'practice' | 'entry' | 'fallback'
+type ThreadForm = 'banner' | 'checkin' | 'feedback' | 'practice' | 'entry' | 'activity' | 'fallback'
 
 const form = computed<ThreadForm>(() => {
   switch (kind.value) {
@@ -207,6 +227,8 @@ const form = computed<ThreadForm>(() => {
     case 'note':
     case 'dream':
       return 'entry'
+    case 'external_activity':
+      return 'activity'
     default:
       return 'fallback'
   }
@@ -526,6 +548,13 @@ function onTap(): void {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ---- external activity: the split-entry geometry, minus the button ----
+   Inert by contract (no detail/edit/delete endpoint exists); cursor stays
+   default so the bead never promises a tap target it cannot honour. */
+.tcard--activity {
+  cursor: default;
 }
 
 /* ---- unknown kind fallback (incl. backend-excluded thread_started) ---- */

@@ -1028,4 +1028,83 @@ describe('UserDashboardView', () => {
       expect(notificationsApi.listNotifications).toHaveBeenCalledTimes(1)
     })
   })
+
+  // ===========================================================================
+  // FE-70: «Быстрый доступ» -- two one-tap entries into writing, placed
+  // between the nearest practices and the progress stats.
+  // ===========================================================================
+  describe('quick access (FE-70)', () => {
+    function sectionTitles(): string[] {
+      return Array.from(host?.querySelectorAll('.dashboard__section-title') ?? []).map((t) =>
+        norm(t.textContent).trim(),
+      )
+    }
+    function quickBtn(label: string): HTMLButtonElement {
+      const btn = Array.from(
+        host?.querySelectorAll<HTMLButtonElement>('.dashboard__quick-btn') ?? [],
+      ).find((b) => norm(b.textContent).trim() === label)
+      if (!btn) throw new Error(`quick-action «${label}» did not render`)
+      return btn
+    }
+
+    it('sits between «Ближайшие практики» and «Ваш прогресс», both buttons present', async () => {
+      mount()
+      await flush()
+
+      expect(sectionTitles()).toEqual(['Ближайшие практики', 'Быстрый доступ', 'Ваш прогресс'])
+      expect(quickBtn('Внести активность')).toBeTruthy()
+      expect(quickBtn('Добавить запись')).toBeTruthy()
+    })
+
+    it('stays while nearest practices are loading', async () => {
+      vi.mocked(bookingsApi.getUpcomingBookings).mockReturnValue(new Promise(() => {}))
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.dashboard__loader')).not.toBeNull()
+      expect(quickBtn('Внести активность')).toBeTruthy()
+      expect(quickBtn('Добавить запись')).toBeTruthy()
+    })
+
+    it('stays when the nearest list is empty', async () => {
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([])
+      mount()
+      await flush()
+
+      expect(emptyState()).not.toBeNull()
+      expect(sectionTitles()).toContain('Быстрый доступ')
+    })
+
+    it('«Внести активность» routes to the external-activity form', async () => {
+      mount()
+      await flush()
+
+      quickBtn('Внести активность').click()
+      await flush()
+
+      expect(push).toHaveBeenCalledWith({ name: 'user-diary-activity-new' })
+    })
+
+    it('«Добавить запись» routes to the diary with the one-shot compose=note intent', async () => {
+      mount()
+      await flush()
+
+      quickBtn('Добавить запись').click()
+      await flush()
+
+      expect(push).toHaveBeenCalledWith({ name: 'user-diary', query: { compose: 'note' } })
+    })
+
+    it('a quick-action tap does not open the practice card beneath it', async () => {
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([UP_SOON])
+      mount()
+      await flush()
+
+      quickBtn('Внести активность').click()
+      await flush()
+
+      expect(push).toHaveBeenCalledTimes(1)
+      expect(push).toHaveBeenCalledWith({ name: 'user-diary-activity-new' })
+    })
+  })
 })

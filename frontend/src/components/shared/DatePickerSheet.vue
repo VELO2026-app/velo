@@ -8,8 +8,9 @@
     - wheel: month + year VWheel columns; pick → back to the grid.
 
   v-model is an ISO date string 'YYYY-MM-DD' (what the form stores). `min`
-  (optional 'YYYY-MM-DD') disables earlier days. Emits update:modelValue + close
-  on save.
+  (optional 'YYYY-MM-DD') disables earlier days; `max` (optional, same format)
+  disables later ones -- FE-70 passes max=today because an external activity
+  cannot have happened in the future. Emits update:modelValue + close on save.
 -->
 
 <template>
@@ -40,6 +41,7 @@
             type="button"
             class="dps__navbtn"
             aria-label="Следующий месяц"
+            :disabled="nextMonthDisabled"
             @click="shiftMonth(1)"
           >
             <svg class="dps__chev" viewBox="0 0 14 22"><path d="M3 2L11 11L3 20" /></svg>
@@ -99,10 +101,14 @@ const props = withDefaults(
     modelValue?: string
     /** Optional ISO 'YYYY-MM-DD' lower bound; earlier days are disabled. */
     min?: string
+    /** Optional ISO 'YYYY-MM-DD' upper bound; later days are disabled.
+     *  FE-70: the external-activity form passes max=today (nothing that has
+     *  not happened yet can be recorded). */
+    max?: string
     /** Sheet title (default «Дата практики»; reused as «Дата заявки» in admin). */
     title?: string
   }>(),
-  { modelValue: '', min: '', title: 'Дата практики' },
+  { modelValue: '', min: '', max: '', title: 'Дата практики' },
 )
 
 const emit = defineEmits<{
@@ -158,6 +164,8 @@ watch(
 const monthOptions = computed(() => {
   // No past months: when the viewed year is the `min` year, drop months before
   // the min month (operator 2026-06-17 — couldn't pick a past practice month).
+  // `max` mirrors it at the upper edge (FE-70): drop months after the max
+  // month when viewing the max year.
   let startMonth = 0
   if (props.min) {
     const parts = props.min.split('-')
@@ -165,15 +173,39 @@ const monthOptions = computed(() => {
     const minM = Number(parts[1])
     if (viewYear.value === minY) startMonth = minM - 1
   }
-  return MONTHS.map((label, i) => ({ value: String(i), label })).filter((_, i) => i >= startMonth)
+  let endMonth = 11
+  if (props.max) {
+    const parts = props.max.split('-')
+    const maxY = Number(parts[0])
+    const maxM = Number(parts[1])
+    if (viewYear.value === maxY) endMonth = maxM - 1
+  }
+  return MONTHS.map((label, i) => ({ value: String(i), label })).filter(
+    (_, i) => i >= startMonth && i <= endMonth,
+  )
 })
 
 const yearOptions = computed(() => {
   const now = new Date().getFullYear()
   const start = Math.min(now, viewYear.value || now)
+  // `max` caps the wheel's upper edge too (FE-70): a diary of what HAPPENED
+  // cannot reach for a year beyond the bound. Without `max` the previous
+  // now+5 horizon is byte-identical.
+  const maxY = props.max ? Number(props.max.split('-')[0]) : null
+  const end = maxY !== null ? Math.min(now + 5, maxY) : now + 5
   const years: { value: string; label: string }[] = []
-  for (let y = start; y <= now + 5; y++) years.push({ value: String(y), label: String(y) })
+  for (let y = start; y <= end; y++) years.push({ value: String(y), label: String(y) })
   return years
+})
+
+// The › month-nav stops at `max`: past the bound every cell would be disabled
+// anyway -- an unreachable view the user can only leave the same way they came.
+const nextMonthDisabled = computed(() => {
+  if (!props.max) return false
+  const parts = props.max.split('-')
+  const maxY = Number(parts[0])
+  const maxM = Number(parts[1])
+  return viewYear.value > maxY || (viewYear.value === maxY && viewMonth.value >= maxM - 1)
 })
 
 interface Cell {
@@ -200,7 +232,7 @@ const cells = computed((): Cell[] => {
         day: dayNum,
         current: true,
         selected: selDay.value === dayNum,
-        disabled: !!props.min && ymd < props.min,
+        disabled: (!!props.min && ymd < props.min) || (!!props.max && ymd > props.max),
       })
     } else {
       out.push({ day: dayNum - daysInMonth, current: false, selected: false, disabled: true })
@@ -275,6 +307,11 @@ function save(): void {
   padding: 0;
   cursor: pointer;
   display: flex;
+}
+
+.dps__navbtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 .dps__chev {

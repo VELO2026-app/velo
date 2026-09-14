@@ -321,6 +321,12 @@ async function onSend(): Promise<void> {
     submitting.value = false
   }
 }
+
+// FE-70: one-tap "Добавить запись" from the dashboard needs the diary's
+// composer to ENTER write mode on arrival. Exposing the existing focusField()
+// (optimistic composing + focus, draft-preview un-hide) rather than a new
+// focus path keeps the collapse/autogrow/preview behaviour singular.
+defineExpose({ focus: focusField })
 </script>
 
 <style scoped>

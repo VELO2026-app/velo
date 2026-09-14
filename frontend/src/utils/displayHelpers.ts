@@ -14,6 +14,7 @@ import type {
   PracticeDifficulty,
   DurationBucket,
   TimeOfDay,
+  ExternalActivityType,
 } from '@/api/types'
 import type { Component } from 'vue'
 import {
@@ -28,6 +29,7 @@ import {
   IconNarrative,
   IconMovement,
   IconDots,
+  IconCalendarStar,
 } from '@/components/icons'
 
 // ---------------------------------------------------------------------------
@@ -244,7 +246,34 @@ export const FEED_KIND_TITLE: Record<DiaryEventKind, string> = {
   // about the conversation starting, not about writing. The master's name is
   // the card's preview line (useDiaryCardModel.preview).
   thread_started: 'Вы начали диалог',
+  // FE-70: the caption is NOT kind-level -- it comes from the snapshot's
+  // activity_type (custom -> the user's own custom_activity_name). Derived in
+  // useDiaryCardModel.baseTitle, like practice_outcome reads practice_title.
+  external_activity: '',
 }
+
+// -- External activity (FE-70 / BE-27) ----------------------------------------
+//
+// The backend snapshot deliberately carries NO localized names: the caption is
+// drawn by the frontend from this key table. `custom` has no dictionary label
+// -- its caption is the user's own custom_activity_name, verbatim.
+
+export const EXTERNAL_ACTIVITY_LABEL: Record<ExternalActivityType, string> = {
+  vocal: 'Вокал',
+  nail_standing: 'Гвоздестояние',
+  meditation: 'Медитация',
+  massage: 'Массаж',
+  yoga: 'Йога',
+  dance: 'Танцы',
+  custom: '',
+}
+
+// Icon for external activity events (FE-70): the owner's own artwork -- a
+// calendar with a star in the circle badge (IconCalendarStar). One glyph for
+// every activity_type: the event is "something that happened outside velo",
+// and the LABEL carries the type (dictionary label or the custom name), so
+// per-type artwork would repeat what the caption already says.
+export const EXTERNAL_ACTIVITY_ICON: Component = IconCalendarStar
 
 /**
  * Outcome badge label for a practice_outcome card.

@@ -309,6 +309,7 @@
     <div v-if="!searchMode" ref="composerEl" class="diary-feed__composer">
       <DiaryComposer
         v-if="writeTarget"
+        ref="diaryComposerRef"
         :entry-type="writeTarget"
         @created="onComposerCreated"
         @composing-change="composing = $event"
@@ -541,6 +542,22 @@ const activeCategories = computed<DiaryFeedCategory[]>(() => feedFilters.value.c
 // the tap-catcher and the composer's own compose-time styling. No longer
 // dims or fogs anything (ruling 6, PROMPT №668).
 const composing = ref(false)
+
+// FE-70: the dashboard's «Добавить запись» arrives with a one-shot intent
+// (?compose=note). One focus() call enters write mode (Composer.focusField:
+// optimistic composing + caret on the real textarea); with a read-only filter
+// active the composer is unmounted and the call is a safe no-op. The param is
+// then stripped via router.replace -- otherwise a remount/back would re-open
+// the keyboard -- while every OTHER query param survives untouched.
+const diaryComposerRef = ref<InstanceType<typeof DiaryComposer> | null>(null)
+
+function consumeComposeIntent(): void {
+  if (route.query.compose !== 'note') return
+  diaryComposerRef.value?.focus()
+  const restQuery = { ...route.query }
+  delete restQuery.compose
+  void router.replace({ query: restQuery })
+}
 
 // T5 -- where a new entry goes, from the active filter (pure fn, unit tested in
 // utils/diaryComposeTarget.test.ts). null = a read-only filter is active, so the
@@ -807,6 +824,9 @@ onMounted(async () => {
   // once, then keep it live through every growth/keyboard shift.
   attachComposerResize()
   refreshComposerClearance()
+  // FE-70: consume the dashboard's compose intent once the idle geometry has
+  // settled, so the focus-driven shift is the only thing that happens next.
+  consumeComposeIntent()
 })
 
 // -- Scroll helpers (chat-mode) ----------------------------------------------

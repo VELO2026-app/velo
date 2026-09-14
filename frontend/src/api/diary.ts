@@ -38,6 +38,8 @@ import type {
   PaginatedDiaryEntriesResponse,
   DiaryFeedResponse,
   DiaryFeedFilters,
+  CreateExternalActivityRequest,
+  ExternalActivityResponse,
   PracticeInsightsResponse,
   Mood,
   FeedbackRating,
@@ -248,6 +250,27 @@ export function deleteDiaryEntry(id: string): Promise<void> {
  */
 export function restoreDiaryEntry(id: string): Promise<DiaryEntryResponse> {
   return api.post<DiaryEntryResponse>(`/api/v1/diary/${id}/restore`)
+}
+
+// ============================================================================
+// External activity (FE-70 / BE-27)
+// ============================================================================
+
+/**
+ * Record an activity that happened OUTSIDE velo (a home meditation, a massage).
+ *
+ * 201 with the created activity. The backend writes the activity AND its diary
+ * event in one transaction, so a successful response means the NEXT
+ * GET /api/v1/diary/feed already includes it -- callers refresh the feed
+ * afterwards instead of inserting anything by hand.
+ *
+ * Field-level 422s (future occurred_at, custom-name rules, length caps) arrive
+ * as FastAPI loc arrays; api/client.ts keeps them on ApiResponseError.validation.
+ */
+export function createExternalActivity(
+  body: CreateExternalActivityRequest,
+): Promise<ExternalActivityResponse> {
+  return api.post<ExternalActivityResponse>('/api/v1/diary/external-activities', body)
 }
 
 // ============================================================================
