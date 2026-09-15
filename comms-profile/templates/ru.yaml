@@ -226,3 +226,10 @@ practice.feedback_received:
   telegram:
     title: "Новый отзыв"
     body: "{rating} {participant_name} оставил отзыв о практике <b>{practice_title}</b>.\n\n{comment}"
+
+# -- The school hears about a new practice (BE-30) --
+
+curator_group.practice_published:
+  telegram:
+    title: "Новая практика в школе"
+    body: "📣 {actor_name} опубликовал практику <b>{practice_title}</b> в школе «{group_name}»."

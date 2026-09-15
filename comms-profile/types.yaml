@@ -211,6 +211,22 @@ curator_group.master_offer_accepted:
 curator_group.master_offer_declined:
   category: curator_groups
 
+# -- BE-30, the school hears that its teacher opened something. The arrival
+#    the comment above predicted, and it lands in curator_groups for the
+#    reason that made the category: it SCALES. member_joined scales with the
+#    school's intake; this one scales with its teaching -- every published
+#    practice, from every master of the school, to every member. A curator
+#    of a busy school who cannot turn it off would be the first complaint.
+#
+#    It is also the first type here addressed to people who are not a party
+#    to the event: the four uncategorised ones tell one person their own
+#    standing changed, and silencing those loses the role. Silencing this
+#    one loses announcements a member can still find on the school's page,
+#    which is exactly the line between an event and a feed. --
+
+curator_group.practice_published:
+  category: curator_groups
+
 # -- Chat baseline (comms-native msg.* types; velo never emits these,
 #    the messaging engine does; mapping fixed by dispatch plan §6b) --
 

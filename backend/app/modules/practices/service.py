@@ -2001,6 +2001,30 @@ async def update_practice(
             scheduled_at=practice.scheduled_at,
         )
 
+    # BE-30: tell the target schools their teacher opened something.
+    #
+    # HOOKED HERE AND NOWHERE ELSE, and that is the opposite of the block
+    # above on purpose. The master reminder is also scheduled inside
+    # generate_series_occurrences, because forty occurrences are forty
+    # sessions to be reminded of; this is one decision to open a course,
+    # and a second hook there would turn two hundred members times forty
+    # occurrences into eight thousand messages from one press of publish.
+    # Series children never pass this branch (born scheduled), so the
+    # single hook gives exactly one announcement per publication.
+    #
+    # Lazy import: curator_groups/service.py imports practices/models.py,
+    # so a module-level import here closes a cycle -- the same reason
+    # cancel_service.py imports _record_group_event lazily.
+    if (
+        old_status == PracticeStatus.DRAFT.value
+        and practice.status == PracticeStatus.SCHEDULED.value
+        and practice.audience_kind == AudienceKind.CURATOR_GROUPS.value
+    ):
+        from app.modules.curator_groups.service import (
+            announce_published_practice,
+        )
+        await announce_published_practice(practice, user, session)
+
     # H-R2 (3.3): a capacity RELAXATION frees seats -- hand them to the
     # waitlist NOW instead of leaving the queue to wait for someone
     # else's cancellation. Relaxation = max_participants was updated AND
