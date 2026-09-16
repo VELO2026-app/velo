@@ -47,6 +47,7 @@
 </template>
 
 <script setup lang="ts">
+import { rootComputedStyle } from '@/platform/dom'
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import VTabBar from '@/components/layout/VTabBar.vue'
@@ -152,7 +153,7 @@ let fogDefaultsCache: {
 } | null = null
 function fogDefaults() {
   if (fogDefaultsCache) return fogDefaultsCache
-  const cs = getComputedStyle(document.documentElement)
+  const cs = rootComputedStyle()
   const tok = (name: string, fallback: number): number => {
     const v = parseInt(cs.getPropertyValue(name), 10)
     return Number.isFinite(v) ? v : fallback

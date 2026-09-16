@@ -366,6 +366,7 @@
 </template>
 
 <script setup lang="ts">
+import { onDocumentEvent, offDocumentEvent, activeHTMLElement } from '@/platform/dom'
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
@@ -584,16 +585,16 @@ function onDocClickCapture(e: MouseEvent): void {
   const target = e.target as HTMLElement | null
   if (!target?.closest('.diary-feed')) return
   if (target.closest('.diary-feed__header, .diary-feed__composer, .diary-feed__search')) return
-  ;(document.activeElement as HTMLElement | null)?.blur?.()
+  activeHTMLElement()?.blur?.()
   e.stopPropagation()
   e.preventDefault()
 }
 
 onMounted(() => {
-  document.addEventListener('click', onDocClickCapture, true)
+  onDocumentEvent('click', onDocClickCapture, true)
 })
 onBeforeUnmount(() => {
-  document.removeEventListener('click', onDocClickCapture, true)
+  offDocumentEvent('click', onDocClickCapture, true)
   // [owner pass] keep-bottom teardown, same lifecycle as the rest.
   feedResizeObserver?.disconnect()
   feedResizeObserver = null

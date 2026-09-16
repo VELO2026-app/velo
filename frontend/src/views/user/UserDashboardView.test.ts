@@ -952,6 +952,10 @@ describe('UserDashboardView', () => {
         value: state,
         configurable: true,
       })
+      Object.defineProperty(document, 'hidden', {
+        value: state === 'hidden',
+        configurable: true,
+      })
       document.dispatchEvent(new Event('visibilitychange'))
     }
 
@@ -961,6 +965,10 @@ describe('UserDashboardView', () => {
       // live listeners.
       Object.defineProperty(document, 'visibilityState', {
         value: 'visible',
+        configurable: true,
+      })
+      Object.defineProperty(document, 'hidden', {
+        value: false,
         configurable: true,
       })
     })

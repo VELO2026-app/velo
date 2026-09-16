@@ -123,6 +123,7 @@
 </template>
 
 <script setup lang="ts">
+import { onDocumentEvent, offDocumentEvent } from '@/platform/dom'
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 
 const props = defineProps<{
@@ -203,9 +204,9 @@ function onKeydown(e: KeyboardEvent): void {
     emit('close')
   }
 }
-onMounted(() => document.addEventListener('keydown', onKeydown))
+onMounted(() => onDocumentEvent('keydown', onKeydown))
 onBeforeUnmount(() => {
-  document.removeEventListener('keydown', onKeydown)
+  offDocumentEvent('keydown', onKeydown)
   if (liveTimer) {
     clearTimeout(liveTimer)
     liveTimer = null

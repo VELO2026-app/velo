@@ -566,6 +566,7 @@
 </template>
 
 <script setup lang="ts">
+import { host } from '@/platform/host'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -729,7 +730,7 @@ async function loadMaster(): Promise<void> {
   // instant paint (our `history` ref shadows the global History, so reach it
   // through window.history.state). Always fetch the detail afterwards to fill
   // the real methods / experience / bio (T3).
-  const handed = (window.history.state as { master?: AdminMasterListItem }).master
+  const handed = (host.history.state as { master?: AdminMasterListItem }).master
   if (handed && handed.id === masterId) master.value = handed
   if (!master.value) loading.value = true
   error.value = null

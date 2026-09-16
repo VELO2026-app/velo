@@ -21,6 +21,7 @@
 </template>
 
 <script setup lang="ts">
+import { rootComputedStyle } from '@/platform/dom'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { MobileLayout } from '@/components/layout'
@@ -138,7 +139,7 @@ let pdFogCache: {
 } | null = null
 function practiceDetailFog() {
   if (pdFogCache) return pdFogCache
-  const cs = getComputedStyle(document.documentElement)
+  const cs = rootComputedStyle()
   const tok = (name: string, fallback: number): number => {
     const n = parseInt(cs.getPropertyValue(`--velo-fog-pd-${name}`), 10)
     return Number.isFinite(n) ? n : fallback

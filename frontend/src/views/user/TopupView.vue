@@ -88,6 +88,7 @@
 </template>
 
 <script setup lang="ts">
+import { host } from '@/platform/host'
 import { ref, computed, nextTick, onMounted } from 'vue'
 import { VButton, VInput } from '@/components/ui'
 import { useBalanceStore } from '@/stores/balance'
@@ -198,7 +199,7 @@ async function onTopup(): Promise<void> {
     }
 
     // Redirect to Stripe checkout (or success URL in stub mode).
-    window.location.href = response.checkout_url
+    host.location.href = response.checkout_url
   } catch (e) {
     toast.error(extractApiError(e, 'Не удалось создать платёж'))
   } finally {

@@ -20,6 +20,7 @@
 </template>
 
 <script setup lang="ts">
+import { rootComputedStyle } from '@/platform/dom'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { MobileLayout } from '@/components/layout'
@@ -142,7 +143,7 @@ let pdFogCache: {
 } | null = null
 function ctaSafeFog() {
   if (pdFogCache) return pdFogCache
-  const cs = getComputedStyle(document.documentElement)
+  const cs = rootComputedStyle()
   pdFogCache = {
     topGap: fogPx(cs, '--velo-fog-pd-top-gap', 25),
     fogTopHard: fogPx(cs, '--velo-fog-pd-top-hard', 60),
@@ -169,7 +170,7 @@ let compactBottomFogCache: {
 } | null = null
 function compactBottomFog() {
   if (compactBottomFogCache) return compactBottomFogCache
-  const cs = getComputedStyle(document.documentElement)
+  const cs = rootComputedStyle()
   compactBottomFogCache = {
     topGap: fogPx(cs, '--velo-fog-pd-top-gap', 25),
     fogTopHard: fogPx(cs, '--velo-fog-pd-top-hard', 60),
@@ -216,7 +217,7 @@ let formFogCache: {
 } | null = null
 function formFog() {
   if (formFogCache) return formFogCache
-  const cs = getComputedStyle(document.documentElement)
+  const cs = rootComputedStyle()
   formFogCache = {
     topGap: fogPx(cs, '--velo-fog-pd-top-gap', 25),
     fogTopHard: fogPx(cs, '--velo-fog-pd-top-hard-form', 88),

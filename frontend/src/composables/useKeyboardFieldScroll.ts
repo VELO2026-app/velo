@@ -31,6 +31,7 @@
 // Desktop / no visualViewport → a single deferred scroll (unchanged fallback).
 // =============================================================================
 
+import { host } from '@/platform/host'
 import { onUnmounted } from 'vue'
 
 /** Time (ms) with no visualViewport resize before we treat the keyboard as
@@ -72,10 +73,10 @@ export function useKeyboardFieldScroll() {
       el.scrollIntoView({ block: 'nearest' })
     }
 
-    const vv = window.visualViewport
+    const vv = host.visualViewport
     if (!vv) {
       // No visualViewport (older webview): settle after a fixed keyboard delay.
-      window.setTimeout(bring, 300)
+      host.setTimeout(bring, 300)
       return
     }
 
@@ -84,14 +85,14 @@ export function useKeyboardFieldScroll() {
     // after the animation instead of racing it.
     let settle = 0
     const onResize = (): void => {
-      window.clearTimeout(settle)
-      settle = window.setTimeout(bring, SETTLE_MS)
+      host.clearTimeout(settle)
+      settle = host.setTimeout(bring, SETTLE_MS)
     }
     vv.addEventListener('resize', onResize)
 
     const cleanup = (): void => {
       vv.removeEventListener('resize', onResize)
-      window.clearTimeout(settle)
+      host.clearTimeout(settle)
       activeCleanup = null
     }
     activeCleanup = cleanup

@@ -39,6 +39,7 @@
 </template>
 
 <script setup lang="ts">
+import { onDocumentEvent, offDocumentEvent } from '@/platform/dom'
 import { onMounted, onUnmounted, watch } from 'vue'
 import { IconClose } from '@/components/icons'
 import { lockBodyScroll, unlockBodyScroll } from '@/composables/useBodyScrollLock'
@@ -91,11 +92,11 @@ watch(
 )
 
 onMounted(() => {
-  document.addEventListener('keydown', onKeydown)
+  onDocumentEvent('keydown', onKeydown)
 })
 
 onUnmounted(() => {
-  document.removeEventListener('keydown', onKeydown)
+  offDocumentEvent('keydown', onKeydown)
   // Ensure the lock is released if the component unmounts while open.
   if (locked) {
     locked = false

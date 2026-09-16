@@ -1,3 +1,12 @@
+import { host } from '@/platform/host'
+import {
+  activeHTMLElement,
+  addRootClass,
+  elementFromPoint,
+  removeRootClass,
+  setRootStyleProperty,
+  toggleRootClass,
+} from '@/platform/dom'
 import { onMounted, onBeforeUnmount, ref, readonly } from 'vue'
 import { viewport } from '@tma.js/sdk-vue'
 import router from '@/router'
@@ -212,7 +221,7 @@ function publish(vv: VisualViewport): void {
   _signal.value = baselineDelta !== null ? 'baseline' : nativeDelta !== null ? 'native' : 'browser'
   _keyboardOpen.value = isKeyboardOpenFrom(
     decidingDelta,
-    window.innerHeight,
+    host.innerHeight,
     vv.height,
     KEYBOARD_VIEWPORT_THRESHOLD,
     scale,
@@ -233,13 +242,12 @@ function publish(vv: VisualViewport): void {
   const offset = _keyboardOpen.value && panBound > 0 ? Math.min(rawOffset, panBound) : rawOffset
   _offsetTop.value = offset
 
-  const root = document.documentElement
-  root.style.setProperty('--velo-vvh', `${vv.height}px`)
-  root.style.setProperty('--velo-vv-offset', `${offset}px`)
+  setRootStyleProperty('--velo-vvh', `${vv.height}px`)
+  setRootStyleProperty('--velo-vv-offset', `${offset}px`)
   // [VV-PAN] Published for the debug panel / diagnostics; the compensation
   // itself only consumes --velo-vv-offset.
-  root.style.setProperty('--velo-vv-scale', String(scale))
-  root.classList.toggle('is-keyboard-open', _keyboardOpen.value)
+  setRootStyleProperty('--velo-vv-scale', String(scale))
+  toggleRootClass('is-keyboard-open', _keyboardOpen.value)
   // [FE-7] root pan is undone by the scroll/touchend listeners inside
   // useViewportGeometry() (the pan always fires a window scroll event);
   // publish() itself stays pure geometry.
@@ -257,9 +265,9 @@ let panRecheckRaf1 = 0
 let panRecheckRaf2 = 0
 function schedulePanRecheck(vv: VisualViewport): void {
   if (panRecheckRaf1 || panRecheckRaf2) return
-  panRecheckRaf1 = window.requestAnimationFrame(() => {
+  panRecheckRaf1 = host.requestAnimationFrame(() => {
     panRecheckRaf1 = 0
-    panRecheckRaf2 = window.requestAnimationFrame(() => {
+    panRecheckRaf2 = host.requestAnimationFrame(() => {
       panRecheckRaf2 = 0
       if (!_keyboardOpen.value || vv.offsetTop === 0) return
       publish(vv)
@@ -269,8 +277,8 @@ function schedulePanRecheck(vv: VisualViewport): void {
 
 function resetState(): void {
   resetKeyboardViewportState()
-  document.documentElement.style.setProperty('--velo-vv-offset', '')
-  document.documentElement.style.setProperty('--velo-vv-scale', '')
+  setRootStyleProperty('--velo-vv-offset', '')
+  setRootStyleProperty('--velo-vv-scale', '')
   _keyboardOpen.value = false
   _offsetTop.value = 0
 }
@@ -281,7 +289,7 @@ function resetState(): void {
  * header for what this replaces.
  */
 export function useViewportGeometry(): void {
-  const vv = typeof window !== 'undefined' ? window.visualViewport : null
+  const vv = typeof host !== 'undefined' ? host.visualViewport : null
   let rafId = 0
   let stopAfterEach: (() => void) | null = null
   let suppressUntil = 0
@@ -313,7 +321,7 @@ export function useViewportGeometry(): void {
 
   function schedule(): void {
     if (rafId) return
-    rafId = window.requestAnimationFrame(setShift)
+    rafId = host.requestAnimationFrame(setShift)
   }
 
   // PROMPT №663: a genuine rotation can make the true rest height SMALLER
@@ -324,8 +332,8 @@ export function useViewportGeometry(): void {
   // orientationchange handling in shape only, not by importing it (see
   // restBaselineDelta's docstring).
   function onOrientationChange(): void {
-    window.clearTimeout(orientationResetId)
-    orientationResetId = window.setTimeout(() => {
+    host.clearTimeout(orientationResetId)
+    orientationResetId = host.setTimeout(() => {
       _restHeight.value = 0
       schedule()
     }, ORIENTATION_SETTLE_MS)
@@ -352,7 +360,7 @@ export function useViewportGeometry(): void {
   //    rAF-deferred exactly like onTouchEnd (never synchronously inside the
   //    event pipeline).
   function unpanRootSoon(): void {
-    window.requestAnimationFrame(() => keepRootUnpanned())
+    host.requestAnimationFrame(() => keepRootUnpanned())
   }
 
   // [FE-44] The close-time end-jump ("моргание"): the app returns to FULL
@@ -368,13 +376,13 @@ export function useViewportGeometry(): void {
   let closeSettleTimer = 0
 
   function pinRootDuringClose(): void {
-    if (closePinRaf) window.cancelAnimationFrame(closePinRaf)
+    if (closePinRaf) host.cancelAnimationFrame(closePinRaf)
     const until = Date.now() + NAV_SUPPRESS_MS + 100 // past the animation
     const pin = (): void => {
       if (!touching) keepRootUnpanned()
-      closePinRaf = Date.now() < until ? window.requestAnimationFrame(pin) : 0
+      closePinRaf = Date.now() < until ? host.requestAnimationFrame(pin) : 0
     }
-    closePinRaf = window.requestAnimationFrame(pin)
+    closePinRaf = host.requestAnimationFrame(pin)
   }
 
   /** [FE-44] The ONE close path (focusout with no editable target, or the
@@ -386,10 +394,10 @@ export function useViewportGeometry(): void {
     suppressUntil = Date.now() + NAV_SUPPRESS_MS
     resetState()
     pinRootDuringClose()
-    document.documentElement.classList.add('is-keyboard-closing')
-    window.clearTimeout(closeSettleTimer)
-    closeSettleTimer = window.setTimeout(() => {
-      document.documentElement.classList.remove('is-keyboard-closing')
+    addRootClass('is-keyboard-closing')
+    host.clearTimeout(closeSettleTimer)
+    closeSettleTimer = host.setTimeout(() => {
+      removeRootClass('is-keyboard-closing')
       unpanRootSoon()
       schedule()
     }, KEYBOARD_CLOSE_SETTLE_MS)
@@ -402,8 +410,8 @@ export function useViewportGeometry(): void {
     const t = e.target
     if (t instanceof HTMLElement && t.closest('input, textarea, select, [contenteditable]')) {
       suppressUntil = 0
-      document.documentElement.classList.remove('is-keyboard-closing')
-      window.clearTimeout(closeSettleTimer)
+      removeRootClass('is-keyboard-closing')
+      host.clearTimeout(closeSettleTimer)
     }
   }
 
@@ -441,8 +449,8 @@ export function useViewportGeometry(): void {
   let touching = false
 
   function keepRootUnpanned(): void {
-    if (window.scrollY !== 0) {
-      window.scrollTo(0, 0)
+    if (host.scrollY !== 0) {
+      host.scrollTo(0, 0)
       // [VV-PAN] When the undo DOES work (pre-311821 iOS), the visual
       // viewport returns to 0 -- re-publish so --velo-vv-offset cannot keep
       // the pre-unpan value and over-translate #app (the top white band).
@@ -468,70 +476,70 @@ export function useViewportGeometry(): void {
     // input/textarea alone misses it (the exact device bug: keyboard stopped
     // opening on the second tap once text existed).
     const t = e.changedTouches[0]
-    const el = t ? document.elementFromPoint(t.clientX, t.clientY) : null
+    const el = t ? elementFromPoint(t.clientX, t.clientY) : null
     if (el?.closest('input, textarea, select, [contenteditable], .composer__field')) return
     // Non-focus tap / scroll release: snap AFTER the gesture pipeline settles
     // (rAF), never synchronously inside the event.
-    window.requestAnimationFrame(() => keepRootUnpanned())
+    host.requestAnimationFrame(() => keepRootUnpanned())
   }
 
   onMounted(() => {
     if (!vv) return
     vv.addEventListener('resize', schedule)
     vv.addEventListener('scroll', schedule)
-    window.addEventListener('orientationchange', onOrientationChange)
+    host.addEventListener('orientationchange', onOrientationChange)
     // [FE-7] the pan itself fires a root scroll (NOT a visualViewport event on
     // iOS), so the undo needs its own listener to catch it the moment it starts.
-    window.addEventListener('scroll', onRootScroll, { passive: true })
+    host.addEventListener('scroll', onRootScroll, { passive: true })
     // [FE-7] touch gating -- see keepRootUnpanned: no programmatic scroll
     // mid-gesture (it cancels the native inner scroll), snap back on release.
-    window.addEventListener('touchstart', onTouchStart, { passive: true })
-    window.addEventListener('touchend', onTouchEnd, { passive: true })
+    host.addEventListener('touchstart', onTouchStart, { passive: true })
+    host.addEventListener('touchend', onTouchEnd, { passive: true })
     // [FE-44] keyboard-close safety net -- see onFocusOut/onFocusIn.
-    window.addEventListener('focusout', onFocusOut)
-    window.addEventListener('focusin', onFocusIn)
+    host.addEventListener('focusout', onFocusOut)
+    host.addEventListener('focusin', onFocusIn)
     setShift()
     // K3f (moved verbatim from useBackgroundStabilizer.ts): clear stale
     // keyboard state the instant the route changes, dismiss the keyboard,
     // then suppress re-assertion while it animates shut so the next screen
     // never inherits keyboard-open geometry.
     stopAfterEach = router.afterEach(() => {
-      ;(document.activeElement as HTMLElement | null)?.blur?.()
+      activeHTMLElement()?.blur?.()
       resetState()
       suppressUntil = Date.now() + NAV_SUPPRESS_MS
-      window.setTimeout(schedule, NAV_SUPPRESS_MS)
+      host.setTimeout(schedule, NAV_SUPPRESS_MS)
     })
   })
 
   onBeforeUnmount(() => {
     if (rafId) {
-      window.cancelAnimationFrame(rafId)
+      host.cancelAnimationFrame(rafId)
       rafId = 0
     }
     if (closePinRaf) {
-      window.cancelAnimationFrame(closePinRaf)
+      host.cancelAnimationFrame(closePinRaf)
       closePinRaf = 0
     }
     // [VV-PAN] cancel any pending WebKit-237851 pan re-read.
     if (panRecheckRaf1) {
-      window.cancelAnimationFrame(panRecheckRaf1)
+      host.cancelAnimationFrame(panRecheckRaf1)
       panRecheckRaf1 = 0
     }
     if (panRecheckRaf2) {
-      window.cancelAnimationFrame(panRecheckRaf2)
+      host.cancelAnimationFrame(panRecheckRaf2)
       panRecheckRaf2 = 0
     }
-    window.clearTimeout(closeSettleTimer)
-    document.documentElement.classList.remove('is-keyboard-closing')
-    window.clearTimeout(orientationResetId)
+    host.clearTimeout(closeSettleTimer)
+    removeRootClass('is-keyboard-closing')
+    host.clearTimeout(orientationResetId)
     vv?.removeEventListener('resize', schedule)
     vv?.removeEventListener('scroll', schedule)
-    window.removeEventListener('orientationchange', onOrientationChange)
-    window.removeEventListener('scroll', onRootScroll)
-    window.removeEventListener('touchstart', onTouchStart)
-    window.removeEventListener('touchend', onTouchEnd)
-    window.removeEventListener('focusout', onFocusOut)
-    window.removeEventListener('focusin', onFocusIn)
+    host.removeEventListener('orientationchange', onOrientationChange)
+    host.removeEventListener('scroll', onRootScroll)
+    host.removeEventListener('touchstart', onTouchStart)
+    host.removeEventListener('touchend', onTouchEnd)
+    host.removeEventListener('focusout', onFocusOut)
+    host.removeEventListener('focusin', onFocusIn)
     stopAfterEach?.()
     stopAfterEach = null
     resetState()

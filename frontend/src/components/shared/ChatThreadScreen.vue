@@ -110,6 +110,13 @@
 </template>
 
 <script setup lang="ts">
+import {
+  onDocumentEvent,
+  offDocumentEvent,
+  isDocumentHidden,
+  queryDocument,
+  rootStyleValue,
+} from '@/platform/dom'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { VHeader } from '@/components/layout'
 import { VEmptyState, VLoader, VButton } from '@/components/ui'
@@ -168,12 +175,12 @@ let islandObserver: ResizeObserver | null = null
 const wrapEl = ref<HTMLElement | null>(null)
 
 function cssTok(name: string, fallback: number): number {
-  const v = parseInt(getComputedStyle(document.documentElement).getPropertyValue(name), 10)
+  const v = parseInt(rootStyleValue(name), 10)
   return Number.isFinite(v) ? v : fallback
 }
 
 function measureIsland(): void {
-  const island = document.querySelector('.mobile-layout__island')
+  const island = queryDocument('.mobile-layout__island')
   if (!island) return
   const h = Math.round(island.getBoundingClientRect().height)
   if (h > 0) fogTop.value = h + 8
@@ -189,7 +196,7 @@ function measureIsland(): void {
 onMounted(() => {
   measureIsland()
   islandObserver = new ResizeObserver(measureIsland)
-  const island = document.querySelector('.mobile-layout__island')
+  const island = queryDocument('.mobile-layout__island')
   if (island) islandObserver.observe(island)
 })
 
@@ -312,7 +319,7 @@ async function reload(): Promise<void> {
  *  additionally marks read and -- only when the reader is already at the
  *  bottom (CH-3) -- follows the conversation down. */
 async function poll(): Promise<void> {
-  if (document.hidden || loading.value || sendInFlight.value) return
+  if (isDocumentHidden() || loading.value || sendInFlight.value) return
   try {
     const fresh = await fetchMessages()
     const freshNewest = newestId(fresh)
@@ -331,7 +338,7 @@ async function poll(): Promise<void> {
 }
 
 function onVisibility(): void {
-  if (!document.hidden) void poll()
+  if (!isDocumentHidden()) void poll()
 }
 
 // (a): the shared Composer owns the draft and its own submit-button in-flight
@@ -368,12 +375,12 @@ async function handleSend(body: string): Promise<ComposerSendResult> {
 onMounted(() => {
   void reload()
   pollTimer = setInterval(() => void poll(), POLL_MS)
-  document.addEventListener('visibilitychange', onVisibility)
+  onDocumentEvent('visibilitychange', onVisibility)
 })
 
 onBeforeUnmount(() => {
   if (pollTimer !== null) clearInterval(pollTimer)
-  document.removeEventListener('visibilitychange', onVisibility)
+  offDocumentEvent('visibilitychange', onVisibility)
 })
 </script>
 

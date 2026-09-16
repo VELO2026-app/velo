@@ -99,6 +99,7 @@
 </template>
 
 <script setup lang="ts">
+import { host } from '@/platform/host'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { VBackButton, VCard, VButton, VTextarea, VBottomSheet } from '@/components/ui'
@@ -115,7 +116,7 @@ const toast = useToast()
 
 // Handed via router state by the originating list (no GET-by-id endpoint).
 const w = ref<AdminWithdrawalResponse | null>(
-  (window.history.state as { withdrawal?: AdminWithdrawalResponse }).withdrawal ?? null,
+  (host.history.state as { withdrawal?: AdminWithdrawalResponse }).withdrawal ?? null,
 )
 
 // W-5: the withdrawal arrives ONLY via router state, so a deep-link or a page

@@ -210,6 +210,7 @@
 </template>
 
 <script setup lang="ts">
+import { onDocumentEvent, offDocumentEvent, isDocumentHidden } from '@/platform/dom'
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useBookingsStore } from '@/stores/bookings'
@@ -474,7 +475,7 @@ function startBellPoll(): void {
   // Never ticks while backgrounded: mounting into a hidden tab leaves the
   // poll off, and the visibility handler below starts it on return.
   if (bellPollHandle !== null) return
-  if (document.visibilityState === 'hidden') return
+  if (isDocumentHidden()) return
   bellPollHandle = setInterval(() => void notifications.refreshUnread(), BELL_POLL_MS)
 }
 
@@ -483,7 +484,7 @@ function startBellPoll(): void {
 // to visible -> an immediate refresh -- the moment of return is exactly
 // when staleness is visible -- then the interval resumes.
 function onBellVisibility(): void {
-  if (document.visibilityState === 'hidden') {
+  if (isDocumentHidden()) {
     stopBellPoll()
   } else {
     void notifications.refreshUnread()
@@ -500,7 +501,7 @@ onMounted(() => {
   // value, stores/notifications.ts).
   void notifications.refreshUnread()
   startBellPoll()
-  document.addEventListener('visibilitychange', onBellVisibility)
+  onDocumentEvent('visibilitychange', onBellVisibility)
   void bookingsStore.fetchMyBookings()
   // W15 fix (PROMPT №409): fetchUpcoming used to swallow its error entirely
   // (an empty result looked identical to "genuinely nothing upcoming") --
@@ -515,7 +516,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  document.removeEventListener('visibilitychange', onBellVisibility)
+  offDocumentEvent('visibilitychange', onBellVisibility)
   stopBellPoll()
   if (clockInterval) clearInterval(clockInterval)
 })

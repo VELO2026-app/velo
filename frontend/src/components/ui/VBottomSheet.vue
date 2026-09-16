@@ -108,6 +108,7 @@
 </template>
 
 <script setup lang="ts">
+import { onDocumentEvent, offDocumentEvent } from '@/platform/dom'
 import { watch, onMounted, onUnmounted } from 'vue'
 import { lockBodyScroll, unlockBodyScroll } from '@/composables/useBodyScrollLock'
 
@@ -183,9 +184,9 @@ watch(
   },
 )
 
-onMounted(() => document.addEventListener('keydown', onKeydown))
+onMounted(() => onDocumentEvent('keydown', onKeydown))
 onUnmounted(() => {
-  document.removeEventListener('keydown', onKeydown)
+  offDocumentEvent('keydown', onKeydown)
   if (locked) {
     locked = false
     unlockBodyScroll()

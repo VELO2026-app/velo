@@ -1,4 +1,4 @@
 {
-  "maxWarnings": 111,
-  "policy": "Храповик (FE-73): число может только уменьшаться. Остаток — 111 no-restricted-globals (window/document вне @/platform, legacy viewport/keyboard-композаблы и шеллы). Остальные type-aware правила уже на error с нулём находок. Починил сайт — уменьши число в том же коммите; рост — блокер ревью. Когда доля упадёт до 0 — no-restricted-globals на error."
+  "maxWarnings": 0,
+  "policy": "Нулевая терпимость (FE-73): type-aware линт полностью на error, варнингов нет. Файл остаётся страховкой: любой новый варнинг валит pnpm lint. 2026-09-16: 366 -> 0 (unsafe/floating/misused/redundant/unbound устранены и правила переведены на error; 111 no-restricted-globals закрыты seam'ом @/platform и правило на error)."
 }

@@ -66,13 +66,13 @@ export default [
       ],
 
       // --- Platform seam: window/document live only inside platform/. -----
-      // This is a Telegram Mini App; host access goes through @/platform.
-      // Rollout reality: 115 legacy sites (viewport/keyboard composables,
-      // shells) ride the warning budget -- ratchet them down; error-level
-      // once the budget for this rule reaches zero. Exempted below:
-      // platform/**, main.ts, tests (happy-dom fixtures).
+      // This is a Telegram Mini App; host access goes through @/platform
+      // (platform/host.ts for window globals, platform/dom.ts for document).
+      // Rollout done: zero findings outside the seam since the migration, so
+      // the rule is error-level. Exempted below: platform/**, main.ts, tests
+      // (happy-dom fixtures).
       'no-restricted-globals': [
-        'warn',
+        'error',
         { name: 'window', message: 'Go through @/platform (the Telegram WebApp seam).' },
         { name: 'document', message: 'Go through @/platform (the Telegram WebApp seam).' },
       ],
