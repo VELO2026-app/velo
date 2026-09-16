@@ -162,9 +162,9 @@ export const roleRedirect: NavigationGuardWithThis<undefined> = async () => {
  * (router/index.ts), which passes just `to`. That type's call signature
  * requires (to, from, next), which a direct 1-arg call does not satisfy.
  */
-export async function roleFreshnessGuard(
+export function roleFreshnessGuard(
   to: Pick<RouteLocationNormalized, 'name'>,
-): Promise<true | { path: string }> {
+): true | { path: string } {
   void refreshRoleIfStale()
 
   const auth = useAuthStore()

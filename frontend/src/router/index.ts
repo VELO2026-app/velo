@@ -742,7 +742,7 @@ router.beforeEach(async (to) => {
   // '/', which is all roleRedirect's own rejection branch ever covered.
   // See guards.ts for the full reasoning; kept as a separate exported guard
   // (like every other guard here) so it's directly testable.
-  const freshnessResult = await roleFreshnessGuard(to)
+  const freshnessResult = roleFreshnessGuard(to)
   if (freshnessResult !== true) return freshnessResult
 
   const auth = useAuthStore()

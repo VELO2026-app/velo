@@ -46,7 +46,7 @@ function tokenColor(name: string, fallback: string): string {
 export const telegramPlatform: Platform = {
   name: 'telegram',
 
-  async init(): Promise<void> {
+  init(): Promise<void> {
     const webApp = getWebApp()
     webApp.ready()
     webApp.expand()
@@ -54,6 +54,7 @@ export const telegramPlatform: Platform = {
     // fails if these two drift from it -- do not edit one without the other.
     webApp.setHeaderColor(tokenColor('--velo-tg-header', '#334d6e'))
     webApp.setBackgroundColor(tokenColor('--velo-tg-bg', '#ffffff'))
+    return Promise.resolve()
   },
 
   getInitData(): string | null {

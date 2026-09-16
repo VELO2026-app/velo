@@ -154,21 +154,18 @@ export const useDiaryStore = defineStore('diary', () => {
    * `upsertReflection(practiceId, body)` call + refreshAfterDiaryMutation(),
    * exactly like submitFeedback.
    */
-  async function submitReflection(
+  function submitReflection(
     practiceId: string,
     body: { comment: string | null },
   ): Promise<SubmitResult> {
-    if (reflectionSubmitting.value) return { ok: false, error: '' }
+    if (reflectionSubmitting.value) return Promise.resolve({ ok: false, error: '' })
     reflectionSubmitting.value = true
-    try {
-      // No API yet — intentionally a no-op. `practiceId` / `body` are the shape
-      // the real persist call will take (TD-REFLECTION).
-      void practiceId
-      void body
-      return { ok: true, error: '' }
-    } finally {
-      reflectionSubmitting.value = false
-    }
+    // No API yet — intentionally a no-op. `practiceId` / `body` are the shape
+    // the real persist call will take (TD-REFLECTION).
+    void practiceId
+    void body
+    reflectionSubmitting.value = false
+    return Promise.resolve({ ok: true, error: '' })
   }
 
   // ===========================================================================

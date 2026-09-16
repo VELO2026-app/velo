@@ -371,14 +371,14 @@ describe('router/guards', () => {
     it('always calls refreshRoleIfStale before checking anything', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'user' })
-      await roleFreshnessGuard({ name: 'user-dashboard' })
+      roleFreshnessGuard({ name: 'user-dashboard' })
       expect(refreshRoleIfStale).toHaveBeenCalledTimes(1)
     })
 
     it('rejected applicant, not yet seen, navigating anywhere else -> routed to /master/pending', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'user', master_application: { status: 'rejected' } })
-      expect(await roleFreshnessGuard({ name: 'user-calendar' })).toEqual({
+      expect(roleFreshnessGuard({ name: 'user-calendar' })).toEqual({
         path: '/master/pending',
       })
     })
@@ -386,26 +386,26 @@ describe('router/guards', () => {
     it('does not redirect a navigation already headed to master-pending (avoids a loop)', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'user', master_application: { status: 'rejected' } })
-      expect(await roleFreshnessGuard({ name: 'master-pending' })).toBe(true)
+      expect(roleFreshnessGuard({ name: 'master-pending' })).toBe(true)
     })
 
     it("rejected applicant, already seen -> allowed through (matches roleRedirect's own rule)", async () => {
       __setReadyForTest(true)
       setAuthUser({ id: 'user_1', role: 'user', master_application: { status: 'rejected' } })
       localStorage.setItem(masterRejectionSeenKey('user_1'), '1')
-      expect(await roleFreshnessGuard({ name: 'user-profile' })).toBe(true)
+      expect(roleFreshnessGuard({ name: 'user-profile' })).toBe(true)
     })
 
     it('non-rejected user navigating around -> allowed through', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'user' })
-      expect(await roleFreshnessGuard({ name: 'user-dashboard' })).toBe(true)
+      expect(roleFreshnessGuard({ name: 'user-dashboard' })).toBe(true)
     })
 
     it('master/admin roles -> allowed through (the rejection condition requires role=user)', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'master' })
-      expect(await roleFreshnessGuard({ name: 'master-dashboard' })).toBe(true)
+      expect(roleFreshnessGuard({ name: 'master-dashboard' })).toBe(true)
     })
 
     // -- PROMPT №550: guard cost fix -- refreshRoleIfStale is fire-and-forget,
@@ -413,7 +413,7 @@ describe('router/guards', () => {
     it('still refreshes for a master role, not only role=user -- a revoked master must keep learning about it', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'master' })
-      await roleFreshnessGuard({ name: 'master-dashboard' })
+      roleFreshnessGuard({ name: 'master-dashboard' })
       expect(refreshRoleIfStale).toHaveBeenCalledTimes(1)
     })
 
@@ -437,7 +437,7 @@ describe('router/guards', () => {
           }),
       )
 
-      const result = await roleFreshnessGuard({ name: 'user-dashboard' })
+      const result = roleFreshnessGuard({ name: 'user-dashboard' })
 
       expect(result).toBe(true)
       expect(refreshSettled).toBe(false)

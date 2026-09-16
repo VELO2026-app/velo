@@ -162,7 +162,8 @@ export const useBookingsStore = defineStore('bookings', () => {
 
   // Auto-refresh when status filter changes.
   watch(statusFilter, () => {
-    pagination.refresh()
+    // Fire-and-forget: refresh manages its own loading/error state.
+    void pagination.refresh()
   })
 
   /**
