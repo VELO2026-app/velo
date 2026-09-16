@@ -1053,7 +1053,7 @@ async def curated_group_ids_for_practice(
             CuratorGroup.curator_user_id == user_id,
             _active_group_clause(),
         )
-        .order_by(CuratorGroup.id)
+        .order_by(CuratorGroup.name)
     )
     return list((await session.execute(stmt)).scalars().all())
 
