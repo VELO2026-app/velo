@@ -10,13 +10,13 @@
 
 <template>
   <FormShell
+    v-model:comment="comment"
     back-label="Feedback"
     :practice="practice"
     :practice-loading="practiceLoading"
     :load-error="practiceLoadError"
     question-title="Как прошла практика?"
     question-subtitle="Оцените своё состояние после"
-    v-model:comment="comment"
     :submitting="diaryStore.feedbackSubmitting"
     :submit-disabled="false"
     submit-label="Отправить feedback"

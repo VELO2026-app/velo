@@ -10,7 +10,7 @@
 -->
 
 <template>
-  <VModal :open="open" @close="$emit('close')" :show-close="false">
+  <VModal :open="open" :show-close="false" @close="$emit('close')">
     <div class="tfa">
       <span class="tfa__shield"><IconShield2FA :size="28" /></span>
       <h2 class="tfa__title">Подтверждение 2FA</h2>

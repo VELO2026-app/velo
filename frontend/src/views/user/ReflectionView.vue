@@ -20,13 +20,13 @@
 
 <template>
   <FormShell
+    v-model:comment="comment"
     back-label="Практика"
     :practice="practice"
     :practice-loading="practiceLoading"
     :load-error="practiceLoadError"
     :question-title="variant.screenTitle"
     :question-subtitle="variant.screenSubtitle"
-    v-model:comment="comment"
     :submitting="diaryStore.reflectionSubmitting"
     :submit-disabled="false"
     submit-label="Отправить"

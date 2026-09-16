@@ -24,13 +24,13 @@
     >
     <div class="v-textarea__row">
       <textarea
+        :id="fieldId"
         ref="fieldEl"
         class="v-textarea__field"
         :class="{
           'v-textarea__field--autogrow': autogrow,
           'v-textarea__field--bordered-rest': borderedAtRest,
         }"
-        :id="fieldId"
         :value="modelValue"
         :placeholder="placeholder"
         :rows="rows"

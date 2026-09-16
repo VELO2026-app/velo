@@ -15,8 +15,8 @@
     <label v-if="label" class="v-select__label" :for="fieldId">{{ label }}</label>
     <div class="v-select__row">
       <select
-        class="v-select__field"
         :id="fieldId"
+        class="v-select__field"
         :value="modelValue"
         :disabled="disabled"
         @change="$emit('update:modelValue', ($event.target as HTMLSelectElement).value)"

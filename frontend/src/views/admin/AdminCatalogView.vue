@@ -66,8 +66,8 @@
     </VEmptyState>
 
     <VCard
-      v-else
       v-for="dir in directions"
+      v-else
       :key="dir.id"
       class="admin-catalog__dir"
       :class="{ 'admin-catalog__dir--inactive': !dir.is_active }"

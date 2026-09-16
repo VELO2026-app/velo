@@ -10,13 +10,13 @@
 
 <template>
   <FormShell
+    v-model:comment="comment"
     back-label="Check-in"
     :practice="practice"
     :practice-loading="practiceLoading"
     :load-error="practiceLoadError"
     question-title="Как вы себя чувствуете?"
     question-subtitle="Оцените своё состояние перед практикой"
-    v-model:comment="comment"
     :submitting="diaryStore.checkinSubmitting"
     :submit-disabled="windowClosed"
     :disabled-hint="practice && windowClosed ? 'Check-in закрыт — практика уже началась' : ''"

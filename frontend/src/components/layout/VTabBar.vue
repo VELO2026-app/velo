@@ -34,7 +34,7 @@
       @click="$emit('navigate', item.to)"
     >
       <span class="v-tabbar__icon">
-        <component v-if="typeof item.icon !== 'string'" :is="item.icon" :size="27" />
+        <component :is="item.icon" v-if="typeof item.icon !== 'string'" :size="27" />
         <template v-else>{{ item.icon }}</template>
       </span>
     </button>
