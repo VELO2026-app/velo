@@ -100,9 +100,7 @@ import type { CuratorGroupInvitePreviewResponse } from '@/api/types'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
-import VButton from '@/components/ui/VButton.vue'
-import VCard from '@/components/ui/VCard.vue'
-import VLoader from '@/components/ui/VLoader.vue'
+import { VButton, VCard, VLoader } from '@/components/ui'
 
 const route = useRoute()
 const router = useRouter()

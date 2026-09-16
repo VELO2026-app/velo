@@ -61,8 +61,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { joinGroup } from '@/api/groups'
 import { ApiResponseError } from '@/api/client'
 import { useToast } from '@/composables/useToast'
-import VButton from '@/components/ui/VButton.vue'
-import VLoader from '@/components/ui/VLoader.vue'
+import { VButton, VLoader } from '@/components/ui'
 
 const route = useRoute()
 const router = useRouter()

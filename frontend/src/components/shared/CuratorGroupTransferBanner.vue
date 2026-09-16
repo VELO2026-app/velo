@@ -41,7 +41,7 @@ import {
 import type { CuratorGroupPageResponse, CuratorGroupTransferRef } from '@/api/types'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
-import VButton from '@/components/ui/VButton.vue'
+import { VButton } from '@/components/ui'
 
 const props = defineProps<{
   /** The server-filled offer (curator's own view or the addressee's). */

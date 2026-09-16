@@ -34,9 +34,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { CuratorGroupMineItem } from '@/api/types'
-import VAvatar from '@/components/ui/VAvatar.vue'
-import VChip from '@/components/ui/VChip.vue'
-import VListRow from '@/components/ui/VListRow.vue'
+import { VAvatar, VChip, VListRow } from '@/components/ui'
 
 const props = defineProps<{
   group: CuratorGroupMineItem

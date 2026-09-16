@@ -67,7 +67,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { VBackButton, VSegment, VCard, VLoader, VEmptyState, VButton } from '@/components/ui'
-import type { SegmentOption } from '@/components/ui/VSegment.vue'
+import type { SegmentOption } from '@/components/ui'
 import PracticeListCard from '@/components/shared/PracticeListCard.vue'
 import { IconGroup } from '@/components/icons'
 import { useAdminStore } from '@/stores/admin'

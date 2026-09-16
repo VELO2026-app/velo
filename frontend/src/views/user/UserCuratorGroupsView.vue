@@ -56,10 +56,8 @@ import { useRouter } from 'vue-router'
 import { getMyCuratorGroups } from '@/api/curatorGroups'
 import type { CuratorGroupMineItem } from '@/api/types'
 import CuratorGroupRow from '@/components/shared/CuratorGroupRow.vue'
-import VButton from '@/components/ui/VButton.vue'
-import VEmptyState from '@/components/ui/VEmptyState.vue'
+import { VButton, VEmptyState, VLoader } from '@/components/ui'
 import VHeader from '@/components/layout/VHeader.vue'
-import VLoader from '@/components/ui/VLoader.vue'
 
 const router = useRouter()
 

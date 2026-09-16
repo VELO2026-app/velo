@@ -310,7 +310,7 @@ import RemoveFromGroupSheet from '@/components/shared/RemoveFromGroupSheet.vue'
 import { IconTag, IconPen } from '@/components/icons'
 // IconTrash is not re-exported from the icons barrel (same pattern as
 // EntryView.vue's delete action / MasterGroupDetailView.vue's header menu).
-import IconTrash from '@/components/icons/IconTrash.vue'
+import { IconTrash } from '@/components/icons'
 import {
   moodLabelFromScore,
   ratingLabelFromScore,

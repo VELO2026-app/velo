@@ -233,7 +233,7 @@ import {
   VMoreLink,
   VSegment,
 } from '@/components/ui'
-import type { SegmentOption } from '@/components/ui/VSegment.vue'
+import type { SegmentOption } from '@/components/ui'
 import Banner from '@/components/shared/Banner.vue'
 import { IconProfile, IconPending, IconWarning, IconArrowRight } from '@/components/icons'
 import { useAdminStore } from '@/stores/admin'

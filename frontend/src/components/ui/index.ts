@@ -42,3 +42,6 @@ export { default as VPaginationDots } from './VPaginationDots.vue'
 export { default as VAccordion } from './VAccordion.vue'
 export { default as VMenu } from './VMenu.vue'
 export { default as VMenuItem } from './VMenuItem.vue'
+
+// Types re-exported for barrel consumers (verbatimModuleSyntax-aware).
+export type { SegmentOption } from './VSegment.vue'

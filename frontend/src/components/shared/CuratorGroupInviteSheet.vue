@@ -65,10 +65,7 @@ import { ref, watch } from 'vue'
 import { createCuratorGroupInvite, revokeCuratorGroupInvite } from '@/api/curatorGroups'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
-import VButton from '@/components/ui/VButton.vue'
-import VConfirmDialog from '@/components/ui/VConfirmDialog.vue'
-import VLoader from '@/components/ui/VLoader.vue'
-import VModal from '@/components/ui/VModal.vue'
+import { VButton, VConfirmDialog, VLoader, VModal } from '@/components/ui'
 
 const props = defineProps<{
   open: boolean

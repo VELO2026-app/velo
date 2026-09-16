@@ -78,8 +78,7 @@ import { computed } from 'vue'
 import type { GroupListItem } from '@/api/groups'
 import type { PracticeAudienceKind } from '@/api/types'
 import { audienceOptions } from '@/utils/practiceOptions'
-import VChip from '@/components/ui/VChip.vue'
-import VRadioGroup from '@/components/ui/VRadioGroup.vue'
+import { VChip, VRadioGroup } from '@/components/ui'
 
 /** A school the master may target: id + display name only (from
  *  GET /curator-groups/mine filtered to relation curator|master upstream). */

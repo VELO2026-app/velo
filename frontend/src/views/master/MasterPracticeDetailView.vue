@@ -365,7 +365,7 @@ import { IconEdit } from '@/components/icons'
 import { RATING_ICON } from '@/utils/ratingIcons'
 // IconTrash is not re-exported from the icons barrel; import the component
 // directly (same as EntryView).
-import IconTrash from '@/components/icons/IconTrash.vue'
+import { IconTrash } from '@/components/icons'
 import {
   RATING_ICON_COLOR,
   DIFFICULTY_DOTS,

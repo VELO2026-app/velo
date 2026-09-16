@@ -22,7 +22,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { VInput, VButton } from '@/components/ui'
-import VeloLogo from '@/components/ui/VeloLogo.vue'
+import { VeloLogo } from '@/components/ui'
 import { useToast } from '@/composables/useToast'
 
 const toast = useToast()

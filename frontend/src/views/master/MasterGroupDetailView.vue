@@ -190,7 +190,7 @@ import {
 import { IconShare, IconPen } from '@/components/icons'
 // IconTrash is not re-exported from the icons barrel (same pattern as
 // EntryView.vue's delete action) -- import the component file directly.
-import IconTrash from '@/components/icons/IconTrash.vue'
+import { IconTrash } from '@/components/icons'
 import {
   getGroupMembers,
   getGroups,

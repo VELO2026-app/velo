@@ -31,11 +31,7 @@
         <VMenu v-if="isCurator && page" ariaLabel="Меню группы">
           <template #default="{ close }">
             <VMenuItem :icon="IconPen" ariaLabel="Редактировать" @click="onEditClick(close)" />
-            <VMenuItem
-              :icon="IconShare"
-              ariaLabel="Пригласить"
-              @click="openInvite(close)"
-            />
+            <VMenuItem :icon="IconShare" ariaLabel="Пригласить" @click="openInvite(close)" />
             <VMenuItem
               v-if="!hasPendingTransfer"
               :icon="IconBroadcast"
@@ -313,11 +309,7 @@
          write journal events the curator should see appear.
          GT-27: there used to be TWO sheets, one per link kind; the master
          link is gone and school masters are appointed instead. -->
-    <CuratorGroupInviteSheet
-      :open="inviteOpen"
-      :group-id="groupId"
-      @close="onInviteSheetClosed"
-    />
+    <CuratorGroupInviteSheet :open="inviteOpen" :group-id="groupId" @close="onInviteSheetClosed" />
 
     <!-- Transfer picker (FE-21): the eligible set is exactly the VISIBLE
          master members -- the same roster rendered above, minus the curator
@@ -437,24 +429,21 @@ import CalendarPracticeCard from '@/components/shared/CalendarPracticeCard.vue'
 import CuratorGroupInviteSheet from '@/components/shared/CuratorGroupInviteSheet.vue'
 import CuratorGroupTransferBanner from '@/components/shared/CuratorGroupTransferBanner.vue'
 import MasterCard from '@/components/shared/MasterCard.vue'
-import IconBroadcast from '@/components/icons/IconBroadcast.vue'
-import IconCheck from '@/components/icons/IconCheck.vue'
-import IconPen from '@/components/icons/IconPen.vue'
-import IconShare from '@/components/icons/IconShare.vue'
-import IconTrash from '@/components/icons/IconTrash.vue'
-import VAvatar from '@/components/ui/VAvatar.vue'
-import VBadge from '@/components/ui/VBadge.vue'
-import VBottomSheet from '@/components/ui/VBottomSheet.vue'
-import VButton from '@/components/ui/VButton.vue'
-import VConfirmDialog from '@/components/ui/VConfirmDialog.vue'
-import VEmptyState from '@/components/ui/VEmptyState.vue'
+import { IconBroadcast } from '@/components/icons'
+import { IconCheck } from '@/components/icons'
+import { IconPen } from '@/components/icons'
+import { IconShare } from '@/components/icons'
+import { IconTrash } from '@/components/icons'
+import {
+  VAvatar,
+  VBadge,
+  VBottomSheet,
+  VButton,
+  VConfirmDialog,
+  VEmptyState,
+} from '@/components/ui'
 import VHeader from '@/components/layout/VHeader.vue'
-import VInput from '@/components/ui/VInput.vue'
-import VListRow from '@/components/ui/VListRow.vue'
-import VLoader from '@/components/ui/VLoader.vue'
-import VMenu from '@/components/ui/VMenu.vue'
-import VMenuItem from '@/components/ui/VMenuItem.vue'
-import VTextarea from '@/components/ui/VTextarea.vue'
+import { VInput, VListRow, VLoader, VMenu, VMenuItem, VTextarea } from '@/components/ui'
 
 const route = useRoute()
 const router = useRouter()

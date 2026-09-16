@@ -134,7 +134,7 @@ import {
   VEmptyState,
   VButton,
 } from '@/components/ui'
-import type { SegmentOption } from '@/components/ui/VSegment.vue'
+import type { SegmentOption } from '@/components/ui'
 import { IconCheck, IconPending, IconClose } from '@/components/icons'
 import { getMastersList } from '@/api/admin'
 import type { AdminMasterListItem } from '@/api/admin'

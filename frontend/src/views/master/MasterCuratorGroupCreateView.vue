@@ -78,12 +78,10 @@ import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import { useToast } from '@/composables/useToast'
-import IconRequired from '@/components/icons/IconRequired.vue'
-import VButton from '@/components/ui/VButton.vue'
-import VEmptyState from '@/components/ui/VEmptyState.vue'
+import { IconRequired } from '@/components/icons'
+import { VButton, VEmptyState } from '@/components/ui'
 import VHeader from '@/components/layout/VHeader.vue'
-import VInput from '@/components/ui/VInput.vue'
-import VTextarea from '@/components/ui/VTextarea.vue'
+import { VInput, VTextarea } from '@/components/ui'
 
 const router = useRouter()
 const toast = useToast()
