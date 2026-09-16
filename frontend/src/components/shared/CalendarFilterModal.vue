@@ -342,7 +342,7 @@ function toggleSingle(key: SingleKey, value: DurationBucket | TimeOfDay): void {
 }
 
 function clearSingle(key: SingleKey): void {
-  draft[key] = undefined as never
+  draft[key] = undefined
   applyNow()
 }
 

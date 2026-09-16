@@ -450,6 +450,9 @@ const form = reactive({
   // `vue-tsc` failed the whole build on a file nobody had touched. Widening
   // it by hand would only move the same break to the fifth value; taking the
   // type from the generated contract removes the copy that can drift.
+  // Load-bearing assertion: widens the literal for the typed consumers
+  // below (payload/guards); without it reactive infers plain string.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
   audience_kind: 'public' as PracticeAudienceKind,
   audience_group_ids: [] as string[],
   // FE-24 (GT P5): the schools multi-select's ids -- the mirror of

@@ -586,8 +586,12 @@ const form = reactive({
   // period/days/end-condition/count are sent as a RecurrenceSpec (E3 series
   // engine). recurrence_days holds VDayPicker codes ('mon'..'sun').
   is_recurring: false,
+  // Load-bearing assertions: without them reactive widens the literals to
+  // string and the typed consumers below (payload/guards) stop compiling.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
   recurrence: 'weekly' as RecurrenceSpec['period'],
   recurrence_days: [],
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
   recurrence_end: 'never' as RecurrenceSpec['end'],
   // Empty until the master types a count (NP-11) — no auto-filled 40.
   recurrence_count: null as number | null,
@@ -609,6 +613,8 @@ const form = reactive({
   // build the day the backend added the fourth value ('curator_groups') --
   // AUDIENCE_OPTIONS (practiceOptions.ts) still lists three until FE-24
   // ports the selector, but the TYPE no longer lies about what can come back.
+  // Load-bearing assertion (see recurrence above).
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
   audience_kind: 'public' as PracticeAudienceKind,
   audience_group_ids: [],
   // FE-24 (GT P5): the schools multi-select's ids -- sent ONLY when
