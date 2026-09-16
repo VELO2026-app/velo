@@ -12,7 +12,7 @@
 
   Usage:
     <VShowMore :count="hiddenCount" noun="практик" @click="expand" />
-    <VShowMore label="посмотреть еще" @click="expand" />   <!-- verbatim override -->
+    <VShowMore label="посмотреть еще" @click="expand" />   (verbatim override)
 -->
 
 <template>

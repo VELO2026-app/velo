@@ -325,7 +325,7 @@ async function flush(): Promise<void> {
 // Intl can emit U+00A0/U+202F/U+2009 depending on ICU build (velo-idiom §11) --
 // flattened defensively even though no money is formatted on this screen.
 function norm(s: string | null | undefined): string {
-  return (s ?? '').replace(/[   ]/g, ' ')
+  return (s ?? '').replace(/[\u00A0\u202F\u2009]/g, ' ')
 }
 function text(): string {
   return norm(host?.textContent)

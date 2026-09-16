@@ -273,11 +273,10 @@ export interface PracticeResponse extends GeneratedPracticeResponse {
   audience_group_names?: string[]
 }
 
-export interface PracticeSummary extends GeneratedPracticeSummary {
-  /* T-35: zoom_meeting_status is native in generated.ts now; this alias is
-   * kept so the many existing imports of PracticeSummary from '@/api/types'
-   * keep resolving to one name. */
-}
+/* T-35: zoom_meeting_status is native in generated.ts now; this alias is
+ * kept so the many existing imports of PracticeSummary from '@/api/types'
+ * keep resolving to one name. */
+export type PracticeSummary = GeneratedPracticeSummary
 
 export interface BookingWithPracticeResponse extends GeneratedBookingWithPracticeResponse {
   /** This booking's own Zoom registrant link (the personal ?tk= URL), or

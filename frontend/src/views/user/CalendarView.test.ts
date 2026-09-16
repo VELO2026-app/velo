@@ -212,7 +212,7 @@ async function flush(): Promise<void> {
 }
 
 function norm(s: string | null | undefined): string {
-  return (s ?? '').replace(/[   ]/g, ' ')
+  return (s ?? '').replace(/[\u00A0\u202F\u2009]/g, ' ')
 }
 function text(): string {
   return norm(host?.textContent)
