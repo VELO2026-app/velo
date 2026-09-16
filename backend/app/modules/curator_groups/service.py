@@ -55,7 +55,11 @@ from app.modules.masters.models import MasterProfile
 # master. Reading from masters/service.py does not modify it -- six other
 # modules already import from there, and there is no cycle.
 from app.modules.masters.service import _NON_COUNTABLE_PRACTICE_STATUSES
+from app.modules.practices.audience_service import (
+    master_broadcasts_to_group_clause,
+)
 from app.modules.practices.models import (
+    AudienceKind,
     Practice,
     PracticeAudienceCuratorGroup,
     PracticeStatus,
@@ -2812,3 +2816,150 @@ async def decline_curator_group_master_offer(
         group_name=group_name,
         actor_name=display_name(actor.first_name, actor.last_name),
     )
+
+
+# ===========================================================================
+# BE-30 -- the school learns about a new practice
+# ===========================================================================
+
+
+async def announce_published_practice(
+    practice: Practice,
+    actor: User,
+    session: AsyncSession,
+) -> tuple[int, int]:
+    """Journal + notify every school this practice was just published to.
+
+    THE PAIR IS COUNTED BY SCHOOL, NOT BY PERSON, and that is the only
+    formulation the two halves can both satisfy: a school with no members
+    gets its journal line and nobody gets a notification, while a person
+    who belongs to two target schools gets ONE notification against TWO
+    lines. Either half happens for a school or neither does, and a
+    rollback of the publication takes both -- everything here rides the
+    caller's transaction, the journal synchronously and the notifications
+    through the outbox.
+
+    ONE ANNOUNCEMENT PER PUBLICATION, NOT PER OCCURRENCE. The caller hooks
+    the draft -> scheduled branch, which a series ROOT passes once and its
+    generated children never pass at all (they are born scheduled inside
+    generate_series_occurrences). GT-30's master reminder deliberately
+    hooks both, because forty sessions are forty things to be reminded of;
+    this is one decision to open a course, and hooking both here would
+    turn two hundred members and forty occurrences into eight thousand
+    messages from one button.
+
+    SCHOOLS ARE FILTERED BY master_broadcasts_to_group_clause -- the same
+    predicate the audience itself uses. A master who left a target school
+    since the draft was written still has its audience row (nothing
+    rewrites those on the way out), but the school can no longer see his
+    practices, so announcing one would be an arrival nobody can open. This
+    is NOT the BE-24 history/state split reappearing: that one preserves
+    what already happened, and this is a "look, it is here" message, which
+    is a present-tense claim.
+
+    NO ACTIVITY CHECK ON THE SCHOOL, and none is missing: a school whose
+    curator lost verification goes dark for reads, but publishing into one
+    still succeeds (the gate that would refuse it sits on the audience
+    path, not on this one), and verification coming back makes both the
+    school and the practice visible again. The notification is early, not
+    wrong. A member of a dark school can receive it and find a 404 behind
+    it today -- named, not fixed here.
+
+    THE AUDIENCE IS EVERY MEMBERSHIP ROW plus the curator, minus the
+    person who pressed the button. Membership, NOT the roster: a suspended
+    master is hidden from the roster (I-4) but still sees the school's
+    practices (_viewer_in_curator_group_clause says so in as many words),
+    so hiding this from him would contradict the screen he can open. The
+    curator holds no membership row at all (I-2) and is added explicitly.
+
+    Args:
+        practice: The freshly published practice.
+        actor: The master who published it -- excluded from the fan-out.
+        session: The caller's write session; no commit here (P-01).
+
+    Returns:
+        (schools_announced, people_notified). Returned rather than logged
+        alone so the caller and the tests can assert the counts that the
+        pair invariant is stated in.
+    """
+    if practice.audience_kind != AudienceKind.CURATOR_GROUPS.value:
+        return (0, 0)
+
+    groups = list(
+        (
+            await session.execute(
+                select(CuratorGroup)
+                .join(
+                    PracticeAudienceCuratorGroup,
+                    PracticeAudienceCuratorGroup.group_id == CuratorGroup.id,
+                )
+                .where(
+                    PracticeAudienceCuratorGroup.practice_id == practice.id,
+                    master_broadcasts_to_group_clause(actor.id),
+                )
+                .order_by(CuratorGroup.id)
+            )
+        ).scalars().all()
+    )
+    if not groups:
+        return (0, 0)
+
+    group_ids = [group.id for group in groups]
+    # Joined, not picked: one person can belong to two of the target
+    # schools, and naming one of them would tell them the practice came
+    # from somewhere it also did not. The template's {group_name} is a
+    # scalar, so the join happens here rather than as branching in two
+    # files -- same call the cancellation notice makes (BE-21,
+    # practices/cancel_service.py).
+    group_names = ", ".join(group.name for group in groups)
+
+    for group in groups:
+        _record_group_event(
+            group.id,
+            actor,
+            CuratorGroupEventKind.PRACTICE_PUBLISHED,
+            session,
+            data={
+                "practice_id": str(practice.id),
+                "practice_title": practice.title,
+            },
+        )
+
+    member_ids = set(
+        (
+            await session.execute(
+                select(CuratorGroupMember.user_id).where(
+                    CuratorGroupMember.group_id.in_(group_ids),
+                )
+            )
+        ).scalars().all()
+    )
+    recipients = member_ids | {group.curator_user_id for group in groups}
+    recipients.discard(actor.id)
+
+    actor_name = display_name(actor.first_name, actor.last_name)
+    for recipient_id in sorted(recipients, key=str):
+        await emit_notification(
+            session,
+            type="curator_group.practice_published",
+            target_type="user",
+            target_value=str(recipient_id),
+            title="Новая практика в школе",
+            body=(
+                f"{actor_name} опубликовал практику «{practice.title}» "
+                f"в школе «{group_names}»."
+            ),
+            action_data={
+                # open_practice, not open_curator_group: the message is
+                # about a practice, and a link to the school page would
+                # leave the person hunting for it. Same choice, same
+                # reason, as practice.cancelled_by_curator (BE-21).
+                "action": "open_practice",
+                "params": {"practice_id": str(practice.id)},
+                "practice_title": practice.title,
+                "group_name": group_names,
+                "actor_name": actor_name,
+            },
+        )
+
+    return (len(groups), len(recipients))

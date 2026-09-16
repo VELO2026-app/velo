@@ -119,12 +119,21 @@ def _require_curator_groups_enabled() -> None:
     """The schools killswitch, checked ONCE PER ROUTER (GT-19).
 
     Mounted as a router-level dependency on both routers in this module,
-    which is 23 of the feature's 24 operations in two lines. The
-    alternative -- the same `if` copied into 23 endpoints -- is 23 places
-    to forget one, and a forgotten one does not fail any test that only
-    checks the endpoints somebody remembered. The 24th operation, the
-    admin list of schools, stays available deliberately; see the flag's
-    own comment in core/config.py.
+    which is EVERY operation of the feature except one, in two lines. The
+    alternative -- the same `if` copied into each endpoint -- is one place
+    per endpoint to forget, and a forgotten one does not fail any test that
+    only checks the endpoints somebody remembered. The exception, the admin
+    list of schools, stays available deliberately; see the flag's own
+    comment in core/config.py.
+
+    NO COUNT HERE ON PURPOSE (BE-35). This paragraph used to say "23 of 24"
+    and "23 places to forget". It was true when written; five endpoints
+    arrived over two deliveries, the dependency picked up all five -- the
+    mechanism worked exactly as argued -- and only the illustration went
+    stale. A number maintained by hand beside a list maintained by the
+    framework is the part that rots, so there is no longer one to maintain.
+    The tests count instead, by deriving the list:
+    tests/test_curator_groups_killswitch.py.
 
     404, NOT 503, AND NO MACHINE CODE. A 503 announces that the feature
     exists and is broken, which invites retries during the incident the

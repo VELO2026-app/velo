@@ -318,6 +318,14 @@ class CuratorGroupEventKind(enum.StrEnum):
     can cancel. It also sits in the pair the paragraph above predicts, next
     to a future practice_published.
 
+    PRACTICE_PUBLISHED (BE-30) is the second half of the pair predicted
+    above, and it is written ONLY where the practice's audience still
+    accepts its master: a teacher who left the school stops broadcasting
+    into it (_master_in_curator_group_clause), so a line here about a
+    practice the school can no longer see would be a journal entry with
+    nothing behind it. A SERIES leaves ONE line, on the root -- forty
+    occurrences are one decision to open a course, not forty arrivals.
+
     A DELETED SCHOOL HAS NO "school deleted" EVENT and never will. The
     journal cascades with the group, so the row would be written and
     dropped inside one transaction -- a value here for it would be a
@@ -339,6 +347,7 @@ class CuratorGroupEventKind(enum.StrEnum):
     TRANSFER_DECLINED = "transfer_declined"
     TRANSFER_CANCELLED = "transfer_cancelled"
     PRACTICE_CANCELLED = "practice_cancelled"
+    PRACTICE_PUBLISHED = "practice_published"
     MASTER_OFFERED = "master_offered"
     MASTER_OFFER_DECLINED = "master_offer_declined"
 

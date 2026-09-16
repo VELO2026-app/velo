@@ -311,6 +311,20 @@ def _is_curator_group_audience_clause(user_id: UUID) -> ColumnElement[bool]:
     )
 
 
+def master_broadcasts_to_group_clause(master_id: UUID) -> ColumnElement[bool]:
+    """_master_in_curator_group_clause for a literal master id (BE-30).
+
+    The same body and the same question -- "does this school still accept
+    this teacher's practices" -- reachable from outside this module. The
+    private form takes a COLUMN because the audience query correlates it
+    against Practice.master_id; a caller holding one id in hand would
+    otherwise have to write the or_() again, and a second copy of the heart
+    of this audience is exactly what the private one's docstring warns
+    about.
+    """
+    return _master_in_curator_group_clause(master_id)
+
+
 def practice_in_curator_group_clause(group_id: UUID) -> ColumnElement[bool]:
     """True iff the (correlated) Practice was ever addressed to this school.
 

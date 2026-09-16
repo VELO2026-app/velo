@@ -210,3 +210,10 @@ practice.feedback_received:
   telegram:
     title: "New review"
     body: "{rating} {participant_name} left a review of <b>{practice_title}</b>.\n\n{comment}"
+
+# -- The school hears about a new practice (BE-30) --
+
+curator_group.practice_published:
+  telegram:
+    title: "New practice in your school"
+    body: "📣 {actor_name} published <b>{practice_title}</b> in «{group_name}»."

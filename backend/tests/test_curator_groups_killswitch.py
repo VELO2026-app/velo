@@ -54,22 +54,27 @@
 # into whatever ran next.
 # =============================================================================
 
+import re
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 from uuid import UUID, uuid4
 
 import pytest
-from httpx import AsyncClient
+from fastapi import APIRouter, FastAPI
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import app.modules.curator_groups.router as curator_groups_router_module
 from app.core.config import settings
+from app.main import app
 from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.curator_groups.models import (
     CuratorGroup,
     CuratorGroupMember,
     CuratorMemberKind,
 )
+from app.modules.curator_groups.router import member_router, router
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import (
     AudienceKind,
@@ -303,21 +308,247 @@ async def test_the_flag_defaults_to_on_and_the_feature_works_under_it(
 
 
 # ===========================================================================
-# Entry point 1-2 -- the 23 endpoints on the two school routers
+# Entry points 1-2 -- EVERY operation on the two school routers
+#
+# THE LIST IS DERIVED, NOT WRITTEN. Until BE-35 these two tests named five
+# calls between them while the routers carried twenty-eight operations, and
+# the names said "every". Five endpoints were added over two deliveries,
+# none reached the lists, and the tests stayed green the whole time -- a
+# killswitch is the one mechanism where "the test passes" and "the feature
+# is contained" must not be allowed to drift apart.
+#
+# There is no count in this comment on purpose. The previous one said 23,
+# was right when it was written, and rotted silently; a number kept by hand
+# next to a list kept by the framework is the thing that rots.
+#
+# app.routes IS THE WRONG SOURCE AND WAS MEASURED TO BE. This application
+# mounts its routers rather than flattening them, so app.routes holds
+# _IncludedRouter objects and contains no curator-group path at all -- a
+# test built on it would derive an EMPTY list and pass, which is this very
+# defect rebuilt inside its own fix. The routers themselves carry the full
+# path (their prefix is set on the APIRouter), and the derived list is
+# cross-checked against the OpenAPI document below.
 # ===========================================================================
+
+_PATH_PARAM = re.compile(r"\{[^}]+\}")
+_NOBODYS_UUID = "00000000-0000-0000-0000-000000000000"
+
+
+def _operations(source: APIRouter) -> list[tuple[str, str]]:
+    """Every (method, full path) one router exposes, deduped and ordered."""
+    return sorted(
+        {
+            (method, route.path)
+            for route in source.routes
+            for method in route.methods - {"HEAD", "OPTIONS"}
+        }
+    )
+
+
+def _url(path: str) -> str:
+    """A concrete URL for a route template, pointing at nothing.
+
+    Every path parameter becomes a uuid that belongs to no row. Nothing is
+    ever found behind these URLs and nothing needs to be: the killswitch
+    answers before the handler, before the body is validated and before the
+    caller is authenticated -- which is what makes this whole file need no
+    fixtures.
+    """
+    return _PATH_PARAM.sub(_NOBODYS_UUID, path)
+
+
+async def _assert_the_switch_covers(
+    client: AsyncClient, method: str, path: str,
+) -> None:
+    """The pair, on one operation: 404 with the flag off, 401 with it on.
+
+    A LONE 404 WOULD PROVE NOTHING. It is also what a URL that does not
+    exist returns, so a typo in a derived path would read as success. The
+    401 under the flag is the other half: it can only come from a route
+    that is really mounted and really reached, which makes the 404 above
+    attributable to the switch.
+
+    No token and no body are sent, and that is not laziness -- it is the
+    measurement this form rests on. The router-level dependency runs ahead
+    of the authentication dependencies (test_an_unauthenticated_caller_...
+    below pins that on one endpoint) and ahead of body validation, so the
+    five operations that take a body answer 404 without one.
+    """
+    url = _url(path)
+    with _off():
+        blocked = await client.request(method, url)
+        assert blocked.status_code == 404, (
+            f"{method} {url} with the flag OFF: {blocked.status_code} "
+            f"{blocked.text}"
+        )
+    with _on():
+        alive = await client.request(method, url)
+        assert alive.status_code == 401, (
+            f"{method} {url} with the flag ON: expected 401 from the auth "
+            f"layer, got {alive.status_code} {alive.text}"
+        )
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("method", "path"),
+    _operations(router),
+    ids=lambda v: v if isinstance(v, str) else str(v),
+)
 async def test_every_curator_endpoint_is_404_when_the_flag_is_off(
+    client: AsyncClient, method: str, path: str,
+) -> None:
+    """The curator's own router, one case per operation.
+
+    The old form was right about the five endpoints it named and wrong
+    about the word "every"; what replaced it is the same assertion over a
+    list the framework keeps. Parametrised rather than looped so that a
+    failure names the operation instead of the first one that broke.
+
+    The "and back on live data" half of the old test did not disappear --
+    it moved to test_the_feature_answers_again_when_the_flag_returns below,
+    where it can say honestly that it samples.
+    """
+    await _assert_the_switch_covers(client, method, path)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("method", "path"),
+    _operations(member_router),
+    ids=lambda v: v if isinstance(v, str) else str(v),
+)
+async def test_every_member_endpoint_is_404_when_the_flag_is_off(
+    client: AsyncClient, method: str, path: str,
+) -> None:
+    """The member-facing router, one case per operation.
+
+    Kept separate from the curator one for the reason the old test gave and
+    which still holds: these are two APIRouter objects with two dependency
+    lists, and gating one while forgetting the other is precisely the
+    failure this file exists to catch.
+    """
+    await _assert_the_switch_covers(client, method, path)
+
+
+def test_the_derived_list_is_not_empty_and_matches_the_served_api() -> None:
+    """The guard that keeps the two tests above from testing nothing.
+
+    A derived list is only better than a written one while it is populated:
+    parametrising over an empty sequence produces zero cases and a green
+    run, which is indistinguishable from full coverage in a summary line.
+
+    Cross-checked against app.openapi() rather than app.routes -- see the
+    section header for why the latter is empty here. The comparison is
+    containment, not equality: the served API holds every other module too.
+    """
+    derived = set(_operations(router)) | set(_operations(member_router))
+    assert derived, "no operations derived from the two school routers"
+
+    served = {
+        (method.upper(), path)
+        for path, operations in app.openapi()["paths"].items()
+        for method in operations
+    }
+    missing = derived - served
+    assert not missing, f"derived but not served: {sorted(missing)}"
+
+
+def test_the_module_still_exposes_exactly_two_routers() -> None:
+    """A third router would make the derived list a sample again, silently.
+
+    The two tests above walk `router` and `member_router` by name. Nothing
+    stops a future delivery from adding a third APIRouter to the module
+    with its own endpoints and its own -- or forgotten -- dependency, and
+    the derived list would not notice. This assertion is what turns that
+    into a failing test instead of a quiet gap, and it is stated as an
+    identity rather than a count so that renaming one is also caught.
+    """
+    routers = {
+        name
+        for name, value in vars(curator_groups_router_module).items()
+        if isinstance(value, APIRouter)
+    }
+    assert routers == {"router", "member_router"}, sorted(routers)
+
+
+@pytest.mark.asyncio
+async def test_a_route_added_to_a_school_router_joins_the_check() -> None:
+    """The first twin: a new endpoint is picked up without anyone editing.
+
+    This is the property the whole delivery is for, and it has to be shown
+    rather than asserted about itself -- on a live tree the derived list is
+    green both when it covers everything and when it covers nothing.
+
+    The probe route is added to the APIRouter only. include_router copied
+    its routes into the application at startup, so nothing here reaches the
+    served API or the OpenAPI document, and the removal in `finally` leaves
+    the object as it was either way.
+    """
+    async def _probe() -> None:  # pragma: no cover - never called
+        return None
+
+    before = _operations(router)
+    router.add_api_route("/me/curator-groups/__probe__", _probe,
+                         methods=["GET"], include_in_schema=False)
+    try:
+        after = _operations(router)
+        assert len(after) == len(before) + 1
+        assert (
+            "GET",
+            "/api/v1/masters/me/curator-groups/__probe__",
+        ) in after
+    finally:
+        router.routes.pop()
+    assert _operations(router) == before
+
+
+@pytest.mark.asyncio
+async def test_an_endpoint_without_the_dependency_fails_the_check() -> None:
+    """The second twin: the assertion refuses a route the switch misses.
+
+    Without this, a green run proves only that nothing was checked
+    incorrectly -- not that an uncovered endpoint would be caught. A
+    throwaway application carries one route with no killswitch dependency,
+    and the same helper the two tests above use is pointed at it.
+
+    A SEPARATE APPLICATION, NOT A ROUTE BOLTED ONTO THE REAL ONE: this app
+    caches its OpenAPI document after the first call, so mounting and
+    unmounting on the shared instance would leave later tests reading a
+    stale schema -- including the cross-check above. Measured, not
+    supposed.
+    """
+    naked = FastAPI()
+
+    @naked.get("/unprotected")
+    async def _unprotected() -> dict:
+        return {"ok": True}
+
+    transport = ASGITransport(app=naked)
+    async with AsyncClient(
+        transport=transport, base_url="http://test",
+    ) as loose_client:
+        with pytest.raises(AssertionError, match="with the flag OFF"):
+            await _assert_the_switch_covers(
+                loose_client, "GET", "/unprotected",
+            )
+
+
+@pytest.mark.asyncio
+async def test_the_feature_answers_again_when_the_flag_returns(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """The curator's own router: gone, and back when the flag returns.
+    """The other half of the two old tests, with a name that admits it.
 
-    The school and its member exist in the database throughout -- the point
-    is not that there is nothing to find, it is that what exists is
-    unreachable. The "and back" half is in the same test because a
-    dependency that refused unconditionally would satisfy the first half
-    perfectly.
+    SAMPLED, AND IT CANNOT BE OTHERWISE. Proving that every operation works
+    under the flag needs a valid body for the five that take one and real
+    state for the rest -- that is a test of the feature, which the rest of
+    this suite already is. What belongs here is the narrower claim: the
+    switch is a switch and not a wall, so the same school and the same
+    member are reachable again the moment it goes back on.
+
+    The school and the member exist in the database throughout the file;
+    the point was never that there is nothing to find.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     student = await login_user(client, telegram_id=_TID_STUDENT)
@@ -325,69 +556,22 @@ async def test_every_curator_endpoint_is_404_when_the_flag_is_off(
     await _add_member(
         db_session, school, student, CuratorMemberKind.STUDENT.value,
     )
-    headers = auth_headers(curator["session_token"])
     gid = str(school.id)
 
-    calls = [
-        ("GET", GROUPS_URL),
-        ("PATCH", GROUP_URL.format(group_id=gid)),
-        ("GET", JOURNAL_URL.format(group_id=gid)),
-        ("GET", MEMBERS_URL.format(group_id=gid)),
-        ("POST", INVITES_URL.format(group_id=gid)),
-    ]
-
-    with _off():
-        for verb, url in calls:
-            resp = await client.request(
-                verb, url, headers=headers, json={"name": "Тихое утро"},
-            )
-            assert resp.status_code == 404, f"{verb} {url}: {resp.text}"
-
     with _on():
+        curator_headers = auth_headers(curator["session_token"])
         assert (
-            await client.get(GROUPS_URL, headers=headers)
+            await client.get(GROUPS_URL, headers=curator_headers)
         ).status_code == 200
         assert (
             await client.get(
-                MEMBERS_URL.format(group_id=gid), headers=headers,
+                MEMBERS_URL.format(group_id=gid), headers=curator_headers,
             )
         ).status_code == 200
 
-
-@pytest.mark.asyncio
-async def test_every_member_endpoint_is_404_when_the_flag_is_off(
-    client: AsyncClient, db_session: AsyncSession,
-) -> None:
-    """The member-facing router: same, for a real member of a real school.
-
-    A separate test from the curator one because they are two different
-    APIRouter objects, each with its own dependency list. Gating one and
-    forgetting the other is exactly the "the switch did not switch"
-    failure this delivery is about, and no single-router test would show it.
-    """
-    curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    student = await login_user(client, telegram_id=_TID_STUDENT)
-    school = await _make_school(db_session, curator)
-    await _add_member(
-        db_session, school, student, CuratorMemberKind.STUDENT.value,
-    )
-    headers = auth_headers(student["session_token"])
-    gid = str(school.id)
-
-    with _off():
-        for verb, url in (
-            ("GET", MINE_URL),
-            ("GET", PAGE_URL.format(group_id=gid)),
-            ("DELETE", LEAVE_URL.format(group_id=gid)),
-            ("POST", JOIN_URL),
-        ):
-            resp = await client.request(
-                verb, url, headers=headers, json={"token": "x" * 32},
-            )
-            assert resp.status_code == 404, f"{verb} {url}: {resp.text}"
-
-    with _on():
-        mine = await client.get(MINE_URL, headers=headers)
+        mine = await client.get(
+            MINE_URL, headers=auth_headers(student["session_token"]),
+        )
         assert mine.status_code == 200, mine.text
         assert gid in [g["id"] for g in mine.json()["items"]]
 
