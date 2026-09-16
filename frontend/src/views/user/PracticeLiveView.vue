@@ -253,12 +253,12 @@ async function onEnter(): Promise<void> {
 
 function onCheckin(): void {
   if (alreadyCheckedIn.value) return
-  router.push({ name: 'user-checkin', params: { practiceId } })
+  void router.push({ name: 'user-checkin', params: { practiceId } })
 }
 
 /** Back arrow -> dashboard (breaks the check-in <-> live loop). */
 function goBack(): void {
-  router.push({ name: 'user-dashboard' })
+  void router.push({ name: 'user-dashboard' })
 }
 
 /**
@@ -278,16 +278,16 @@ async function onLeave(): Promise<void> {
     }
   } finally {
     leaving.value = false
-    router.push({ name: 'user-dashboard' })
+    void router.push({ name: 'user-dashboard' })
   }
 }
 
 onMounted(async () => {
   if (practicesStore.selected?.id !== practiceId) {
-    practicesStore.fetchPractice(practiceId)
+    void practicesStore.fetchPractice(practiceId)
   }
   // Needed to resolve the user's booking id for join/leave.
-  bookingsStore.fetchMyBookings()
+  void bookingsStore.fetchMyBookings()
   // T-35: how THIS user enters. Failure here is not a toast -- this screen's
   // whole purpose is entering the practice, so it becomes the screen's state.
   try {

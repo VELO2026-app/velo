@@ -64,6 +64,7 @@
 </template>
 
 <script setup lang="ts">
+import { historyHasBack } from '@/platform/history'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'
@@ -121,16 +122,16 @@ async function onSubmit(): Promise<void> {
 function onBack(): void {
   // Return to wherever the user came from (dashboard, bookings, ...). Fallback
   // to the dashboard on a direct link / reload with no history.
-  const hasHistory = window.history.state?.back != null
+  const hasHistory = historyHasBack()
   if (hasHistory) {
     router.back()
   } else {
-    router.push({ name: 'user-dashboard' })
+    void router.push({ name: 'user-dashboard' })
   }
 }
 
 function goToDashboard(): void {
-  router.push({ name: 'user-dashboard' })
+  void router.push({ name: 'user-dashboard' })
 }
 
 // Named so the error rung's «Повторить» can re-run exactly what onMounted ran.

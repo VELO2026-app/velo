@@ -538,7 +538,7 @@ const visibleReviews = computed((): ReviewItem[] =>
 const hiddenReviewsCount = computed((): number => Math.max(0, reviewsTotal.value - REVIEWS_PREVIEW))
 function expandReviews(): void {
   reviewsExpanded.value = true
-  if (hasMoreReviews.value) loadMoreReviews()
+  if (hasMoreReviews.value) void loadMoreReviews()
 }
 
 async function loadReviews(): Promise<void> {
@@ -570,13 +570,13 @@ async function loadMoreReviews(): Promise<void> {
 
 // -- Navigation --
 function goCheckins(): void {
-  router.push({ name: 'master-attendance', params: { id: practiceId } })
+  void router.push({ name: 'master-attendance', params: { id: practiceId } })
 }
 function goRoster(): void {
-  router.push({ name: 'master-attendance-roster', params: { id: practiceId } })
+  void router.push({ name: 'master-attendance-roster', params: { id: practiceId } })
 }
 function goEdit(): void {
-  router.push({ name: 'master-practice-edit', params: { id: practiceId } })
+  void router.push({ name: 'master-practice-edit', params: { id: practiceId } })
 }
 
 // -- «…» destructive: cancel (scheduled/live) or delete (draft) --

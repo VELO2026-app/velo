@@ -148,6 +148,13 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import {
+  dayKeyOf,
+  daysInMonth,
+  firstOfMonth,
+  firstWeekdayMonFirst,
+  shiftMonthDate,
+} from '@/utils/calendarMath'
 import { VModal, VButton, VChip } from '@/components/ui'
 import { IconArrowRight } from '@/components/icons'
 import type { DiaryFeedCategory } from '@/api/types'
@@ -195,19 +202,11 @@ const draftFrom = ref<string | null>(null) // YYYY-MM-DD
 const draftTo = ref<string | null>(null) // YYYY-MM-DD
 
 // The month currently shown in the grid (1st of month, local).
-const viewMonth = ref<Date>(startOfMonth(new Date()))
+const viewMonth = ref<Date>(firstOfMonth(new Date()))
 
+/** 1-е число месяца, в котором лежит `d`. */
 function startOfMonth(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), 1)
-}
-
-/** YYYY-MM-DD in local time (en-CA gives ISO order). */
-function dayKey(d: Date): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(d)
+  return firstOfMonth(d)
 }
 
 /** Extract the YYYY-MM-DD date part from a YYYY-MM-DD or full ISO string. */
@@ -292,16 +291,14 @@ interface Cell {
 
 const monthCells = computed<Cell[]>(() => {
   const year = viewMonth.value.getFullYear()
-  const month = viewMonth.value.getMonth()
-  const first = new Date(year, month, 1)
-  // JS getDay: 0=Sun..6=Sat -> Monday-first offset.
-  const lead = (first.getDay() + 6) % 7
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const month = viewMonth.value.getMonth() + 1 // 1..12
+  const lead = firstWeekdayMonFirst(year, month)
+  const dim = daysInMonth(year, month)
 
   const cells: Cell[] = []
   for (let i = 0; i < lead; i++) cells.push({ key: null, num: null })
-  for (let day = 1; day <= daysInMonth; day++) {
-    cells.push({ key: dayKey(new Date(year, month, day)), num: day })
+  for (let day = 1; day <= dim; day++) {
+    cells.push({ key: dayKeyOf(year, month, day), num: day })
   }
   // Pad the tail to a full week so the grid keeps 7 columns.
   while (cells.length % 7 !== 0) cells.push({ key: null, num: null })
@@ -309,10 +306,10 @@ const monthCells = computed<Cell[]>(() => {
 })
 
 function prevMonth(): void {
-  viewMonth.value = new Date(viewMonth.value.getFullYear(), viewMonth.value.getMonth() - 1, 1)
+  viewMonth.value = shiftMonthDate(viewMonth.value, -1)
 }
 function nextMonth(): void {
-  viewMonth.value = new Date(viewMonth.value.getFullYear(), viewMonth.value.getMonth() + 1, 1)
+  viewMonth.value = shiftMonthDate(viewMonth.value, 1)
 }
 
 function onDayTap(key: string): void {

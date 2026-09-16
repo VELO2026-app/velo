@@ -65,6 +65,7 @@
 </template>
 
 <script setup lang="ts">
+import { historyHasBack } from '@/platform/history'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'
@@ -156,20 +157,20 @@ function onBack(): void {
   // Возврат на тот экран, с которого пришёл пользователь (дашборд, детали
   // практики, ...). Fallback на дашборд, если истории нет — например, после
   // релоада или прямой ссылки в Telegram.
-  const hasHistory = window.history.state?.back != null
+  const hasHistory = historyHasBack()
   if (hasHistory) {
     router.back()
   } else {
-    router.push({ name: 'user-dashboard' })
+    void router.push({ name: 'user-dashboard' })
   }
 }
 
 function goToDiary(): void {
-  router.push({ name: 'user-diary' })
+  void router.push({ name: 'user-diary' })
 }
 
 function goToDashboard(): void {
-  router.push({ name: 'user-dashboard' })
+  void router.push({ name: 'user-dashboard' })
 }
 
 // Named so the error rung's «Повторить» can re-run exactly what onMounted ran.

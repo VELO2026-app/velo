@@ -414,7 +414,7 @@ async function submit(skipDocuments = false): Promise<void> {
       // instead of the stale profileMissing from the earlier 403.
       await masterStore.fetchMyProfile(true)
       toast.success('Профиль создан')
-      router.push({ name: 'master-dashboard' })
+      void router.push({ name: 'master-dashboard' })
     } else {
       // Normal application (role='user') -> pending verdict flow. Mark this
       // session as an actual applicant so the master-pending guard lets a
@@ -432,7 +432,7 @@ async function submit(skipDocuments = false): Promise<void> {
         localStorage.removeItem(masterRejectionSeenKey(authStore.user.id))
       }
       toast.success('Заявка отправлена!')
-      router.push({ name: 'master-pending' })
+      void router.push({ name: 'master-pending' })
     }
   } catch (e) {
     toast.error(extractApiError(e, 'Не удалось отправить заявку'))

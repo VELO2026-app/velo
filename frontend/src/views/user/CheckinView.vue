@@ -218,23 +218,23 @@ function onSkip(): void {
     void bookingsStore.skipCheckin(booking.id)
   }
   toast.info('Check-in пропущен')
-  router.push({ name: 'user-dashboard' })
+  void router.push({ name: 'user-dashboard' })
 }
 
 function onBack(): void {
   // Always return to the dashboard. Using router.back() here sent the user
   // back into the practice detail card (which itself uses router.back()),
   // creating a check-in <-> detail loop.
-  router.push({ name: 'user-dashboard' })
+  void router.push({ name: 'user-dashboard' })
 }
 
 function goToDashboard(): void {
-  router.push({ name: 'user-dashboard' })
+  void router.push({ name: 'user-dashboard' })
 }
 
 // Navigate to the live practice screen (route exists, see router/index.ts).
 function goToPracticeLive(): void {
-  router.push({ name: 'practice-live', params: { practiceId } })
+  void router.push({ name: 'practice-live', params: { practiceId } })
 }
 
 // If the user has already checked in for this booking, show the success

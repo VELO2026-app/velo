@@ -40,7 +40,8 @@ import type { UserResponse } from '@/api/types'
 // primeMethodTaxonomyCatalog mock.
 const refreshRoleIfStale = vi.fn().mockResolvedValue(undefined)
 vi.mock('@/composables/useRoleFreshness', () => ({
-  refreshRoleIfStale: (...args: unknown[]) => refreshRoleIfStale(...args),
+  refreshRoleIfStale: (...args: Parameters<typeof refreshRoleIfStale>) =>
+    refreshRoleIfStale(...args),
 }))
 
 // Guards ignore (to, from, next) entirely at runtime -- call bare, matching

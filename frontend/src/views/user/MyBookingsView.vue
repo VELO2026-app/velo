@@ -90,7 +90,8 @@ import { VLoader, VEmptyState, VButton } from '@/components/ui'
 import { VHeader } from '@/components/layout'
 import { useBookingsStore } from '@/stores/bookings'
 import { useToast } from '@/composables/useToast'
-import BookingCard, { type BookingBadge } from '@/components/shared/BookingCard.vue'
+import BookingCard from '@/components/shared/BookingCard.vue'
+import type { BookingBadge } from '@/components/shared/bookingBadge'
 import { isLiveNow, hasEnded as endedByClock } from '@/utils/bookingStatus'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import type { BookingWithPracticeResponse } from '@/api/types'
@@ -241,7 +242,7 @@ function badgeFor(b: BookingWithPracticeResponse): BookingBadge | null {
 // booking-detail screen is gone; the practice detail now carries the status
 // row + ZOOM and handles past/cancelled bookings. Navigate by practice_id. --
 function openDetail(b: BookingWithPracticeResponse): void {
-  router.push({ name: 'practice-detail', params: { id: b.practice_id } })
+  void router.push({ name: 'practice-detail', params: { id: b.practice_id } })
 }
 
 onMounted(() => {
@@ -250,7 +251,7 @@ onMounted(() => {
   // have been fetched before the practice ended; fetchMyBookings() would
   // no-op and the badge would never advance to its real verdict.
   // refreshMyBookings() always re-fetches, without flashing the list empty.
-  store.refreshMyBookings()
+  void store.refreshMyBookings()
 })
 </script>
 

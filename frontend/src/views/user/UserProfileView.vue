@@ -178,25 +178,25 @@ const hoursLabel = computed(() => {
 // -- Menu actions --
 
 function onEditProfile(): void {
-  router.push({ name: 'user-edit-profile' })
+  void router.push({ name: 'user-edit-profile' })
 }
 
 function onMessages(): void {
-  router.push({ name: 'user-messages' })
+  void router.push({ name: 'user-messages' })
 }
 
 function onNotifications(): void {
-  router.push({ name: 'user-notifications' })
+  void router.push({ name: 'user-notifications' })
 }
 
 function onLanguageTimezone(): void {
-  router.push({ name: 'user-language-timezone' })
+  void router.push({ name: 'user-language-timezone' })
 }
 
 function onSupport(): void {
   // User support screen (batch I): topic picker + message + honest stub submit
   // (no support backend yet — see SupportView / VELO-Backend-Tasks.md).
-  router.push({ name: 'user-support' })
+  void router.push({ name: 'user-support' })
 }
 
 function onShare(): void {
@@ -205,16 +205,16 @@ function onShare(): void {
 
 async function onLogout(): Promise<void> {
   await authStore.logout()
-  router.replace({ path: '/' })
+  void router.replace({ path: '/' })
 }
 
 /** Return to native role dashboard and reset uiMode (TD-FE-ROLE-SWITCH). */
 function returnToNativeMode(): void {
   uiStore.setUiMode('default')
   if (authStore.role === 'admin') {
-    router.push({ name: 'admin-dashboard' })
+    void router.push({ name: 'admin-dashboard' })
   } else {
-    router.push({ name: 'master-dashboard' })
+    void router.push({ name: 'master-dashboard' })
   }
 }
 

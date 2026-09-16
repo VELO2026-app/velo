@@ -403,6 +403,7 @@
 </template>
 
 <script setup lang="ts">
+import { historyHasBack } from '@/platform/history'
 import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { DateTime } from 'luxon'
 import { useRouter } from 'vue-router'
@@ -426,7 +427,7 @@ import { getGroups } from '@/api/groups'
 import { getMyCuratorGroups } from '@/api/curatorGroups'
 import type { GroupListItem } from '@/api/groups'
 import PracticeAudiencePicker from '@/components/shared/PracticeAudiencePicker.vue'
-import type { AudienceSchoolOption } from '@/components/shared/PracticeAudiencePicker.vue'
+import type { AudienceSchoolOption } from '@/components/shared/practiceAudience'
 import { formatShortDate, todayLocalISO } from '@/utils/format'
 import DatePickerSheet from '@/components/shared/DatePickerSheet.vue'
 import TimePickerSheet from '@/components/shared/TimePickerSheet.vue'
@@ -467,8 +468,8 @@ const { onFieldFocus } = useKeyboardFieldScroll()
 // Deep-link / no history → fall back to the practices list. Submit-success
 // navigation (→ master-practices) is unchanged; only this Back button differs.
 function onBack(): void {
-  if (window.history.state?.back) router.back()
-  else router.push({ name: 'master-practices' })
+  if (historyHasBack()) router.back()
+  else void router.push({ name: 'master-practices' })
 }
 
 const authStore = useAuthStore()
@@ -1066,7 +1067,7 @@ async function submit(): Promise<void> {
       suppressSave = true
       clearDraft()
       toast.info('Вы уже создавали эту практику — открываем существующую')
-      router.replace({ name: 'master-practice-detail', params: { id: created.id } })
+      void router.replace({ name: 'master-practice-detail', params: { id: created.id } })
       void masterStore.refreshMyPractices().catch(() => {})
       return
     }
@@ -1094,7 +1095,7 @@ async function submit(): Promise<void> {
     // (practices / dashboard), not back onto this filled form (#1). Navigate
     // BEFORE the refresh so a failing refresh can never divert to catch and strand
     // the user on the form still showing «Практика создана!» (G1).
-    router.replace({ name: 'master-practices' })
+    void router.replace({ name: 'master-practices' })
     // Invalidate the cached list so it reloads with the new practice. Fire-and-
     // forget + swallow: master-practices loads its own list on mount, so a missed
     // refresh is harmless and must not turn a successful create into an error path.

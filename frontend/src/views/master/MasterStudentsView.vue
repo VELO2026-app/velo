@@ -163,7 +163,7 @@ const hiddenCount = computed((): number => Math.max(0, filtered.value.length - S
 
 // The detail endpoint carries no name → pass it forward from the list row.
 function openProfile(student: StudentListItem): void {
-  router.push({
+  void router.push({
     name: 'master-student-profile',
     params: { id: student.id },
     query: { name: student.name },

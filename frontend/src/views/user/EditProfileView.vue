@@ -482,7 +482,7 @@ function closeDeleteModal(): void {
 
 function onWithdrawFirst(): void {
   closeDeleteModal()
-  router.push({ name: 'master-finance' })
+  void router.push({ name: 'master-finance' })
 }
 
 function onConfirmDelete(): void {

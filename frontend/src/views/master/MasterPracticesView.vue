@@ -326,15 +326,15 @@ async function loadTabData(): Promise<void> {
 // -- Navigation -------------------------------------------------------------
 
 function goNew(): void {
-  router.push({ name: 'master-practice-new' })
+  void router.push({ name: 'master-practice-new' })
 }
 function goDetail(id: string): void {
-  router.push({ name: 'master-practice-detail', params: { id } })
+  void router.push({ name: 'master-practice-detail', params: { id } })
 }
 
 /** Review P2: straight from the list's audience warning into the editor. */
 function goEdit(id: string): void {
-  router.push({ name: 'master-practice-edit', params: { id } })
+  void router.push({ name: 'master-practice-edit', params: { id } })
 }
 
 /** Lazily fetch the bucket a tab needs -- each tab paginates independently
@@ -367,7 +367,7 @@ async function onLoadMore(): Promise<void> {
 watch(activeTab, async (tab) => {
   // Persist the tab in the URL so a back-navigation from detail restores it.
   if (route.query.tab !== tab) {
-    router.replace({ query: { ...route.query, tab } })
+    void router.replace({ query: { ...route.query, tab } })
   }
   await ensureBucketLoaded(tab)
   await loadTabData()

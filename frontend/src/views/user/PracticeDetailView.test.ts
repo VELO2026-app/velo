@@ -111,7 +111,8 @@ vi.mock('@/stores/auth', () => ({
 // -- REC-1 (PROMPT №620): recording link fetch + external-open, both mocked --
 const getBookingRecording = vi.fn()
 vi.mock('@/api/bookings', () => ({
-  getBookingRecording: (...args: unknown[]) => getBookingRecording(...args),
+  getBookingRecording: (...args: Parameters<typeof getBookingRecording>) =>
+    getBookingRecording(...args),
 }))
 
 const openLink = vi.fn()

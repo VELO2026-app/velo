@@ -314,6 +314,7 @@
 </template>
 
 <script setup lang="ts">
+import { historyHasBack } from '@/platform/history'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { DateTime } from 'luxon'
 import { useRoute, useRouter } from 'vue-router'
@@ -358,7 +359,7 @@ import type { TaxonomyListResponse } from '@/api/taxonomy'
 import type { PracticeAudienceKind, PracticeResponse } from '@/api/types'
 import type { GroupListItem } from '@/api/groups'
 import PracticeAudiencePicker from '@/components/shared/PracticeAudiencePicker.vue'
-import type { AudienceSchoolOption } from '@/components/shared/PracticeAudiencePicker.vue'
+import type { AudienceSchoolOption } from '@/components/shared/practiceAudience'
 
 const route = useRoute()
 const router = useRouter()
@@ -371,8 +372,8 @@ const practiceId = route.params.id as string
 // detail entry that pushed us here (avoids the edit<->detail back-loop); else
 // (cold deep-link) push the detail route. Mirror of CreatePracticeView.onBack.
 function onBack(): void {
-  if (window.history.state?.back) router.back()
-  else router.push({ name: 'master-practice-detail', params: { id: practiceId } })
+  if (historyHasBack()) router.back()
+  else void router.push({ name: 'master-practice-detail', params: { id: practiceId } })
 }
 
 // -- Practice data --
@@ -784,7 +785,9 @@ async function save(): Promise<void> {
             'Их запись останется, но войти они не смогут. Сохранить?'
       confirmDialog.confirmLabel = 'Сохранить всё равно'
       confirmDialog.danger = false
-      confirmDialog.onConfirm = commitSave
+      confirmDialog.onConfirm = () => {
+        void commitSave()
+      }
       confirmDialog.visible = true
       return
     }
@@ -867,7 +870,7 @@ async function publish(): Promise<void> {
     practice.value = updated
     toast.success('Практика опубликована!')
     await masterStore.refreshMyPractices()
-    router.push({ name: 'master-practices' })
+    void router.push({ name: 'master-practices' })
   } catch (e) {
     toast.error(extractApiError(e, 'Не удалось опубликовать'))
   } finally {
@@ -891,7 +894,7 @@ async function cancel(scope: 'this' | 'this_and_future'): Promise<void> {
     cancelModalOpen.value = false
     toast.success('Практика отменена, возвраты выполнены')
     await masterStore.refreshMyPractices()
-    router.push({ name: 'master-practices' })
+    void router.push({ name: 'master-practices' })
   } catch (e) {
     toast.error(extractApiError(e, 'Не удалось отменить'))
   } finally {
@@ -905,7 +908,9 @@ function confirmDelete(): void {
   confirmDialog.confirmLabel = 'Удалить'
   confirmDialog.danger = true
   confirmDialog.visible = true
-  confirmDialog.onConfirm = remove
+  confirmDialog.onConfirm = () => {
+    void remove()
+  }
 }
 
 // -- Delete: draft -> deleted (soft) --
@@ -917,7 +922,7 @@ async function remove(): Promise<void> {
     confirmDialog.visible = false
     toast.success('Черновик удалён')
     await masterStore.refreshMyPractices()
-    router.push({ name: 'master-practices' })
+    void router.push({ name: 'master-practices' })
   } catch (e) {
     toast.error(extractApiError(e, 'Не удалось удалить'))
   } finally {

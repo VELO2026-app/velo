@@ -138,7 +138,7 @@ onMounted(() => load(true))
 watch(filter, () => load(true))
 
 function loadMore(): void {
-  load(false)
+  void load(false)
 }
 
 // "Дек 2025" — registration month, from created_at (UTC).

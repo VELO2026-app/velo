@@ -73,7 +73,7 @@ function onMore(): void {
     toast.info('Профиль мастера недоступен')
     return
   }
-  router.push({ name: 'user-master-public', params: { id: props.masterId } })
+  void router.push({ name: 'user-master-public', params: { id: props.masterId } })
 }
 </script>
 

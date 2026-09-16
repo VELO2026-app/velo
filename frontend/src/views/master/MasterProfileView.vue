@@ -175,31 +175,31 @@ async function loadMessagesCount(): Promise<void> {
 
 // -- Menu actions --
 function onEditProfile(): void {
-  router.push({ name: 'master-edit-profile' })
+  void router.push({ name: 'master-edit-profile' })
 }
 function onMessages(): void {
-  router.push({ name: 'master-messages' })
+  void router.push({ name: 'master-messages' })
 }
 function onPromocodes(): void {
-  router.push({ name: 'master-promocodes' })
+  void router.push({ name: 'master-promocodes' })
 }
 function onWithdraw(): void {
-  router.push({ name: 'master-finance' })
+  void router.push({ name: 'master-finance' })
 }
 function onNotifications(): void {
-  router.push({ name: 'master-notifications' })
+  void router.push({ name: 'master-notifications' })
 }
 function onLanguageTimezone(): void {
-  router.push({ name: 'master-language-timezone' })
+  void router.push({ name: 'master-language-timezone' })
 }
 function onSupport(): void {
-  router.push({ name: 'master-support' })
+  void router.push({ name: 'master-support' })
 }
 const showLogoutModal = ref(false)
 
 async function onLogout(): Promise<void> {
   await authStore.logout()
-  router.replace({ path: '/' })
+  void router.replace({ path: '/' })
 }
 
 // -- Lifecycle: load the master profile (display_name) for verified masters. --

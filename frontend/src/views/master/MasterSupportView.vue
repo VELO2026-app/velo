@@ -236,7 +236,7 @@ async function onSubmit(): Promise<void> {
 }
 
 function onGoHome(): void {
-  router.push({ name: 'master-dashboard' })
+  void router.push({ name: 'master-dashboard' })
 }
 </script>
 

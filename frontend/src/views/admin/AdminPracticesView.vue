@@ -133,7 +133,7 @@ async function load(): Promise<void> {
 
 // Tap a card -> admin practice detail; it re-fetches by id (GET /admin/practices/:id).
 function openDetail(p: AdminPracticeListItem): void {
-  router.push({ name: 'admin-practice-detail', params: { id: p.id } })
+  void router.push({ name: 'admin-practice-detail', params: { id: p.id } })
 }
 
 watch(filter, load)

@@ -201,7 +201,7 @@ onMounted(async () => {
   // sends a never-applied user to. Covers a stale/second tab that lands on
   // this route after the withdraw button (below) already navigated away.
   if (profileStatus.value === 'withdrawn') {
-    router.replace({ name: 'user-dashboard' })
+    void router.replace({ name: 'user-dashboard' })
   }
 })
 
@@ -217,7 +217,7 @@ async function enterMasterMode(): Promise<void> {
     if (authStore.user?.id) {
       localStorage.setItem(masterApprovedSeenKey(authStore.user.id), '1')
     }
-    router.push({ name: 'master-dashboard' })
+    void router.push({ name: 'master-dashboard' })
   } catch {
     toast.error('Не удалось переключиться в режим мастера')
   } finally {
@@ -239,7 +239,7 @@ async function onWithdraw(): Promise<void> {
     // guard) doesn't mistake a stale session for a still-pending applicant.
     sessionStorage.removeItem(MASTER_APPLIED_KEY)
     toast.success('Заявка отозвана')
-    router.replace({ name: 'user-dashboard' })
+    void router.replace({ name: 'user-dashboard' })
   } catch (e) {
     // 409 means someone else (e.g. an admin) already acted on it between
     // opening this dialog and confirming -- a generic message covers both

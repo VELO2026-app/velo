@@ -66,7 +66,7 @@ function socialUnavailable(): void {
   toast.info('Вход через соцсети появится в веб-версии')
 }
 function goRecover(): void {
-  router.push({ name: 'auth-recover' })
+  void router.push({ name: 'auth-recover' })
 }
 function goBack(): void {
   router.back()

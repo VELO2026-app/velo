@@ -43,7 +43,7 @@
 
 <script setup lang="ts">
 import VAdminTabBar from '@/components/layout/VAdminTabBar.vue'
-import type { TabItem } from '@/components/layout/VTabBar.vue'
+import type { TabItem } from '@/router/tabs'
 
 defineProps<{
   tabs: TabItem[]

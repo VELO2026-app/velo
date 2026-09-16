@@ -68,7 +68,7 @@ function apply(): void {
   toast.info('Подача заявки появится в веб-версии')
 }
 function goLogin(): void {
-  router.push({ name: 'auth-login' })
+  void router.push({ name: 'auth-login' })
 }
 </script>
 

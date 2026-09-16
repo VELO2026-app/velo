@@ -187,13 +187,13 @@ async function onSendRequest(): Promise<void> {
 }
 
 function goToDashboard(): void {
-  router.push({ name: 'user-dashboard' })
+  void router.push({ name: 'user-dashboard' })
 }
 
 onMounted(() => {
   // Load the practice so the title can be shown. Self-contained: works on
   // direct navigation / reload, not only via the booking redirect.
-  store.fetchPractice(practiceId)
+  void store.fetchPractice(practiceId)
 })
 </script>
 

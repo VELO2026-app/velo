@@ -171,7 +171,7 @@ async function onSubmit(): Promise<void> {
 }
 
 function goHome(): void {
-  router.push({ name: 'user-dashboard' })
+  void router.push({ name: 'user-dashboard' })
 }
 </script>
 

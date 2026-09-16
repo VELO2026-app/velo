@@ -1,4 +1,4 @@
 {
-  "maxWarnings": 366,
-  "policy": "Храповик (FE-73): число может только уменьшаться. Состав (type-aware, реальные типы): 128 no-floating-promises, 115 no-restricted-globals (window/document вне @/platform), 103 no-unsafe-* (any-цепочки, 27 файлов), 12 опасных конструкторов Date, 4 no-misused-promises, 3 no-redundant-type-constituents, 1 unbound-method. Починил сайт — уменьши это число в том же коммите. Вернуть число вверх — change, блокируемый на ревью. Когда доля правила падает до 0 — переключай правило на error в eslint.config.js."
+  "maxWarnings": 111,
+  "policy": "Храповик (FE-73): число может только уменьшаться. Остаток — 111 no-restricted-globals (window/document вне @/platform, legacy viewport/keyboard-композаблы и шеллы). Остальные type-aware правила уже на error с нулём находок. Починил сайт — уменьши число в том же коммите; рост — блокер ревью. Когда доля упадёт до 0 — no-restricted-globals на error."
 }

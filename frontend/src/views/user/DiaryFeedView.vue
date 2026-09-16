@@ -483,7 +483,7 @@ function onTap(payload: { item: DiaryFeedItem; editable: boolean }): void {
 
 const showFilter = ref(false)
 const searchOpen = ref(false)
-const searchBarEl = ref<InstanceType<typeof DiarySearchBar> | null>(null)
+const searchBarEl = ref<{ focus: () => void } | null>(null)
 
 // A live search keeps the bar mounted even when its "mode" is closed -- it is
 // the only visible indicator of the filter (no header title any more).
@@ -608,7 +608,7 @@ function openFilter(): void {
 // «Поиск» toggles the inline bar (owner 2026-09-07): unfold in place + focus.
 function toggleSearch(): void {
   searchOpen.value = !searchOpen.value
-  if (searchOpen.value) nextTick(() => searchBarEl.value?.focus())
+  if (searchOpen.value) void nextTick(() => searchBarEl.value?.focus())
 }
 
 function closeSearch(): void {

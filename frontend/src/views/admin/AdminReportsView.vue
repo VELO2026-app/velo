@@ -108,7 +108,8 @@ import { useRouter } from 'vue-router'
 import { VBackButton, VButton, VLoader, VEmptyState, VCard } from '@/components/ui'
 import { IconFilter, IconWarning } from '@/components/icons'
 import ModerationFilterModal from '@/components/shared/ModerationFilterModal.vue'
-import type { ModerationFilter } from '@/components/shared/ModerationFilterModal.vue'
+import type { ModerationFilter } from '@/components/shared/moderationFilter'
+import { toHistoryState } from '@/utils/historySnapshot'
 import { useToast } from '@/composables/useToast'
 import { getReports } from '@/api/admin'
 import type { ReportResponse, ReportStatusFilter } from '@/api/admin'
@@ -212,14 +213,14 @@ async function loadMore(): Promise<void> {
 
 function onApply(next: ModerationFilter): void {
   filter.value = next
-  loadInitial()
+  void loadInitial()
 }
 
 function openDetail(item: ReportResponse): void {
-  router.push({
+  void router.push({
     name: 'admin-report-detail',
     params: { id: item.id },
-    state: { report: JSON.parse(JSON.stringify(item)) },
+    state: { report: toHistoryState(item) },
   })
 }
 

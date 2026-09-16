@@ -194,7 +194,7 @@ defineExpose({ focus: () => inputEl.value?.focus() })
  */
 function onInput(e: Event): void {
   emit('update:modelValue', (e.target as HTMLInputElement).value)
-  nextTick(() => {
+  void nextTick(() => {
     const el = inputEl.value
     if (el && el.value !== props.modelValue) el.value = props.modelValue
   })

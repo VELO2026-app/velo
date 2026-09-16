@@ -152,7 +152,7 @@ async function onCreate(): Promise<void> {
       max_uses: form.limit ? Number(form.limit) : null,
     })
     toast.success('Промокод создан')
-    router.push({ name: 'master-promocodes' })
+    void router.push({ name: 'master-promocodes' })
   } catch (e) {
     toast.error(extractApiError(e, 'Не удалось создать промокод'))
   } finally {

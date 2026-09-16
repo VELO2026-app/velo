@@ -123,7 +123,7 @@ async function onCreate(): Promise<void> {
   try {
     await createGroup(name.value.trim(), description.value.trim())
     toast.success('Группа создана')
-    router.push({ name: 'master-groups' })
+    void router.push({ name: 'master-groups' })
   } catch (e) {
     const message = extractApiError(e, 'Не удалось создать группу')
     fieldError.value = message

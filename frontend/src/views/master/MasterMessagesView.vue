@@ -14,37 +14,19 @@
 
 <template>
   <div class="messages">
-    <VHeader
-      title="Сообщения"
-      show-back
-      @back="router.back()"
-    />
+    <VHeader title="Сообщения" show-back @back="router.back()" />
 
-    <div
-      v-if="loading"
-      class="messages__center"
-    >
+    <div v-if="loading" class="messages__center">
       <VLoader size="lg" />
     </div>
 
-    <div
-      v-else-if="error"
-      class="messages__center"
-    >
-      <VEmptyState
-        title="Не удалось загрузить"
-        :description="error"
-      >
+    <div v-else-if="error" class="messages__center">
+      <VEmptyState title="Не удалось загрузить" :description="error">
         <template #icon>
           <IconMessages :size="48" />
         </template>
       </VEmptyState>
-      <VButton
-        size="sm"
-        @click="load"
-      >
-        Повторить
-      </VButton>
+      <VButton size="sm" @click="load"> Повторить </VButton>
     </div>
 
     <VEmptyState
@@ -57,10 +39,7 @@
       </template>
     </VEmptyState>
 
-    <div
-      v-else
-      class="messages__list"
-    >
+    <div v-else class="messages__list">
       <ChatListRow
         v-for="t in threads"
         :key="t.id"
@@ -106,7 +85,7 @@ async function load(): Promise<void> {
 }
 
 function openThread(id: string): void {
-  router.push({ name: 'master-chat', params: { id } })
+  void router.push({ name: 'master-chat', params: { id } })
 }
 
 onMounted(load)

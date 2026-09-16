@@ -40,7 +40,7 @@ import { IconBrain } from '@/components/icons'
 const router = useRouter()
 
 function goToDashboard(): void {
-  router.push({ name: 'user-dashboard' })
+  void router.push({ name: 'user-dashboard' })
 }
 </script>
 

@@ -41,10 +41,7 @@ import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import type { BookingWithPracticeResponse } from '@/api/types'
 
 /** Badge descriptor passed by the parent (null = no badge). */
-export interface BookingBadge {
-  label: string
-  variant: 'live' | 'today' | 'tomorrow' | 'done' | 'cancelled' | 'no_show' | 'calculating'
-}
+import type { BookingBadge } from './bookingBadge'
 
 const props = withDefaults(
   defineProps<{

@@ -42,16 +42,7 @@
 </template>
 
 <script setup lang="ts">
-import type { Component } from 'vue'
-
-export interface TabItem {
-  icon: string | Component
-  label: string
-  to: string
-  /** Count badge -- rendered by VAdminTabBar only (admin counts); the
-   *  user/master VTabBar itself paints no badges. */
-  badge?: number | string
-}
+import type { TabItem } from '@/router/tabs'
 
 defineProps<{
   items: TabItem[]

@@ -1003,7 +1003,7 @@ async function doVerify(promote?: string[], masterOnly?: string[]): Promise<void
     await verifyMaster(masterId, promote, masterOnly, grantSchools.value)
     toast.success('Мастер верифицирован')
     // S-1/S-2: push to the list (fresh mount) instead of back().
-    router.push({ name: 'admin-masters' })
+    void router.push({ name: 'admin-masters' })
   } catch (e) {
     toast.error(extractApiError(e, 'Ошибка верификации'))
   } finally {
@@ -1037,7 +1037,7 @@ async function onReject(): Promise<void> {
     toast.success('Заявка отклонена')
     showReject.value = false
     // S-1/S-2: push to the list (fresh mount) instead of back().
-    router.push({ name: 'admin-masters' })
+    void router.push({ name: 'admin-masters' })
   } catch (e) {
     toast.error(extractApiError(e, 'Ошибка при отклонении'))
   } finally {

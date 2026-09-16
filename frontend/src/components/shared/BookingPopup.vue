@@ -144,7 +144,7 @@ watch(
   () => props.open,
   (isOpen) => {
     if (isOpen) {
-      balanceStore.refresh()
+      void balanceStore.refresh()
     }
   },
 )
@@ -223,7 +223,7 @@ async function onPurchase(): Promise<void> {
   if (insufficientBalance.value) {
     resetState()
     emit('close')
-    router.push({ name: 'user-topup' })
+    void router.push({ name: 'user-topup' })
     return
   }
 

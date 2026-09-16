@@ -208,7 +208,7 @@ async function onTopup(): Promise<void> {
 
 // -- Lifecycle --
 onMounted(() => {
-  balanceStore.refresh()
+  void balanceStore.refresh()
 })
 </script>
 

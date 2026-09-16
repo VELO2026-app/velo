@@ -518,7 +518,7 @@ async function refreshRecording(): Promise<void> {
 watch(
   myAnyBooking,
   () => {
-    refreshRecording()
+    void refreshRecording()
   },
   { immediate: true },
 )
@@ -603,9 +603,9 @@ function onPurchased(): void {
   // and this detail view reloads via its own onMounted when the user returns
   // (routes are not kept alive). Refreshing bookings keeps the global store
   // in sync so the booked state is correct on return.
-  bookingsStore.refreshBookings()
+  void bookingsStore.refreshBookings()
   // Frame 5: go to the dedicated booking-confirmed screen.
-  router.push({ name: 'user-booking-confirmed', params: { practiceId: id } })
+  void router.push({ name: 'user-booking-confirmed', params: { practiceId: id } })
 }
 
 /**
@@ -615,24 +615,24 @@ function onPurchased(): void {
  */
 function onSoldOut(): void {
   soldOut.value = true
-  store.fetchPractice(route.params.id as string)
-  bookingsStore.refreshBookings()
+  void store.fetchPractice(route.params.id as string)
+  void bookingsStore.refreshBookings()
 }
 
 /** «Найти другую практику» -> в Календарь (витрина записи). */
 function onFindOther(): void {
   soldOut.value = false
-  router.push({ name: 'user-calendar' })
+  void router.push({ name: 'user-calendar' })
 }
 
 function onCheckin(): void {
   if (!practice.value) return
-  router.push({ name: 'user-checkin', params: { practiceId: practice.value.id } })
+  void router.push({ name: 'user-checkin', params: { practiceId: practice.value.id } })
 }
 
 function onFeedback(): void {
   if (!practice.value) return
-  router.push({ name: 'user-feedback', params: { practiceId: practice.value.id } })
+  void router.push({ name: 'user-feedback', params: { practiceId: practice.value.id } })
 }
 
 async function onCancelBooking(): Promise<void> {
@@ -659,13 +659,13 @@ let clockInterval: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
   const id = route.params.id as string
-  store.fetchPractice(id)
+  void store.fetchPractice(id)
   // B30: refreshMyBookings() (not fetchMyBookings()) -- the list may already
   // be cached from a screen visited earlier in the session, taken BEFORE this
   // practice ended; fetchMyBookings() would then no-op and the attendance
   // badge below (attendancePending) would never clear. refreshMyBookings()
   // always re-fetches, without flashing the status row/Zoom card empty.
-  bookingsStore.refreshMyBookings()
+  void bookingsStore.refreshMyBookings()
   // Refresh window checks every 60s.
   clockInterval = setInterval(() => {
     now.value = Date.now()
@@ -680,7 +680,7 @@ watch(
   (newId, oldId) => {
     if (newId && newId !== oldId) {
       store.clearSelected()
-      store.fetchPractice(newId)
+      void store.fetchPractice(newId)
       justPurchased.value = false
       // REC-1: drop the previous practice's recording link immediately --
       // myAnyBooking's watch will refetch for the new one, but that resolves

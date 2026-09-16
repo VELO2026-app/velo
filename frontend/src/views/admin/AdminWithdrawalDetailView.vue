@@ -123,7 +123,9 @@ const w = ref<AdminWithdrawalResponse | null>(
 // that runs router.back() out of the app (dead-end). Bounce to the list instead
 // of stranding the admin on a blank screen.
 onMounted((): void => {
-  if (!w.value) router.replace('/admin/withdrawals')
+  if (!w.value) {
+    void router.replace('/admin/withdrawals')
+  }
 })
 
 const showReject = ref(false)

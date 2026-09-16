@@ -376,12 +376,12 @@ function onZoomClick(b: BookingWithPracticeResponse): void {
  */
 function openBooking(b: BookingWithPracticeResponse): void {
   if (b.practice.status === 'live') {
-    router.push({
+    void router.push({
       name: 'practice-live',
       params: { practiceId: b.practice_id },
     })
   } else {
-    router.push({
+    void router.push({
       name: 'practice-detail',
       params: { id: b.practice_id },
     })
@@ -439,12 +439,12 @@ async function loadStats(): Promise<void> {
 // =========================================================================
 
 function goToCheckin(practiceId: string): void {
-  router.push({ name: 'user-checkin', params: { practiceId } })
+  void router.push({ name: 'user-checkin', params: { practiceId } })
 }
 
 /** Open the notification center (the bell feed, FE-11). */
 function onBell(): void {
-  router.push({ name: 'user-inbox' })
+  void router.push({ name: 'user-inbox' })
 }
 
 // [FE-13] goToFeedback/goToReflection removed with their banners (FE-12
@@ -501,7 +501,7 @@ onMounted(() => {
   void notifications.refreshUnread()
   startBellPoll()
   document.addEventListener('visibilitychange', onBellVisibility)
-  bookingsStore.fetchMyBookings()
+  void bookingsStore.fetchMyBookings()
   // W15 fix (PROMPT №409): fetchUpcoming used to swallow its error entirely
   // (an empty result looked identical to "genuinely nothing upcoming") --
   // surface it via toast instead of leaving the widget silently blank.

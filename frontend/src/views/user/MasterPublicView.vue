@@ -196,7 +196,7 @@ function pluralReviews(n: number): string {
 }
 
 function goToPractice(id: string): void {
-  router.push({ name: 'practice-detail', params: { id } })
+  void router.push({ name: 'practice-detail', params: { id } })
 }
 
 const openingChat = ref(false)

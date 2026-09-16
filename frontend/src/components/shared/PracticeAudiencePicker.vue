@@ -79,13 +79,7 @@ import type { GroupListItem } from '@/api/groups'
 import type { PracticeAudienceKind } from '@/api/types'
 import { audienceOptions } from '@/utils/practiceOptions'
 import { VChip, VRadioGroup } from '@/components/ui'
-
-/** A school the master may target: id + display name only (from
- *  GET /curator-groups/mine filtered to relation curator|master upstream). */
-export interface AudienceSchoolOption {
-  id: string
-  name: string
-}
+import type { AudienceSchoolOption } from './practiceAudience'
 
 const props = defineProps<{
   /** The master's own custom student groups (kind === 'groups' targets). */

@@ -263,7 +263,7 @@ function routeFor(
 function onRow(item: NotificationItem): void {
   void markOne(item)
   const target = routeFor(item)
-  if (target) router.push(target)
+  if (target) void router.push(target)
 }
 </script>
 

@@ -42,7 +42,7 @@
 </template>
 
 <script setup lang="ts">
-import type { TabItem } from '@/components/layout/VTabBar.vue'
+import type { TabItem } from '@/router/tabs'
 
 defineProps<{
   items: TabItem[]

@@ -25,7 +25,6 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { PracticeDirection } from '@/api/types'
 import meditation from '@/assets/practice-cards/meditation.svg'
 import yoga from '@/assets/practice-cards/yoga.svg'
 import breathwork from '@/assets/practice-cards/breathwork.svg'
@@ -39,7 +38,7 @@ import movement from '@/assets/practice-cards/movement.svg'
 
 const props = withDefaults(
   defineProps<{
-    direction?: PracticeDirection | string | null
+    direction?: string | null
     title?: string | null
   }>(),
   { direction: null, title: null },

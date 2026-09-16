@@ -416,19 +416,19 @@ function practiceWhen(p: PracticeResponse): string {
 
 // T-26 (PROMPT №704): the bell is no longer a stub -- it opens the real feed.
 function onBell(): void {
-  router.push({ name: 'master-inbox' })
+  void router.push({ name: 'master-inbox' })
 }
 // -- Stub actions (no backend) --
 function onGroups(): void {
-  router.push({ name: 'master-groups' })
+  void router.push({ name: 'master-groups' })
 }
 // FE-20 (GT P3): schools list (curator groups), under the student-groups row.
 function onCuratorGroups(): void {
-  router.push({ name: 'master-curator-groups' })
+  void router.push({ name: 'master-curator-groups' })
 }
 // Tap the card → the practice screen (edit/cancel/delete live there via «…»).
 function openPractice(p: PracticeResponse): void {
-  router.push({ name: 'master-practice-detail', params: { id: p.id } })
+  void router.push({ name: 'master-practice-detail', params: { id: p.id } })
 }
 // Zoom state for one card. T-35: the manual rung is gone (Practice.zoom_link
 // no longer exists), so this no longer CHOOSES between links -- it names the

@@ -121,6 +121,7 @@
 </template>
 
 <script setup lang="ts">
+import { toHistoryState } from '@/utils/historySnapshot'
 import { ref, computed, onMounted, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -275,10 +276,10 @@ async function load(): Promise<void> {
 }
 
 function openReview(m: AdminMasterListItem): void {
-  router.push({
+  void router.push({
     name: 'admin-master-review',
     params: { id: m.id },
-    state: { master: JSON.parse(JSON.stringify(m)) },
+    state: { master: toHistoryState(m) },
   })
 }
 

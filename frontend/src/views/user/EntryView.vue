@@ -304,7 +304,7 @@ async function onDelete(): Promise<void> {
   }
   // Hand the undo affordance to the feed: it shows the "Запись удалена /
   // Отменить" bar and calls diaryStore.restoreEntry on tap.
-  router.replace({ name: 'user-diary', query: { deleted: id } })
+  void router.replace({ name: 'user-diary', query: { deleted: id } })
 }
 
 // -- navigation --------------------------------------------------------------
@@ -314,7 +314,7 @@ function goBack(): void {
     mode.value = 'view'
     return
   }
-  router.push({ name: 'user-diary' })
+  void router.push({ name: 'user-diary' })
 }
 </script>
 

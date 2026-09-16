@@ -77,19 +77,10 @@ export default [
         { name: 'document', message: 'Go through @/platform (the Telegram WebApp seam).' },
       ],
       // --- Legacy debt rides the warning budget (see lint-budget.json). ---
-      // Every rule below is error-worthy; the codebase still carries counted
-      // legacy findings (no silent bypass: any GROWTH fails the lint via the
-      // budget). Promote each to 'error' when its budget slice hits zero.
-      '@typescript-eslint/no-floating-promises': 'warn',
-      '@typescript-eslint/no-misused-promises': 'warn',
-      '@typescript-eslint/no-unsafe-argument': 'warn',
-      '@typescript-eslint/no-unsafe-assignment': 'warn',
-      '@typescript-eslint/no-unsafe-call': 'warn',
-      '@typescript-eslint/no-unsafe-member-access': 'warn',
-      '@typescript-eslint/no-unsafe-return': 'warn',
-      '@typescript-eslint/no-redundant-type-constituents': 'warn',
-      '@typescript-eslint/unbound-method': 'warn',
-
+      // Every rule in the legacy-debt block below is error-worthy; the
+      // codebase still carries counted findings (no silent bypass: any
+      // GROWTH fails the lint via the budget). Promote each to 'error' when
+      // its budget slice hits zero.
       // --- Timezone hygiene: only the DANGEROUS Date constructors. --------
       // Bare new Date() (current instant) and Date.now() are tz-safe and
       // stay allowed. String/field constructors interpret in the runtime
@@ -170,6 +161,14 @@ export default [
       '@typescript-eslint/unbound-method': 'off',
       '@typescript-eslint/require-await': 'off',
       '@typescript-eslint/no-unnecessary-type-assertion': 'off',
+      // vi.fn()/vi.spyOn()/vi.mock-factory plumbing is inherently loosely
+      // typed; the unsafe family stays ON for production code (see the
+      // legacy-debt block above).
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
     },
   },
 

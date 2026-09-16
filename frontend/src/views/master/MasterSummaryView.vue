@@ -177,7 +177,7 @@ async function loadFeedbacks(): Promise<void> {
 // user_id is real on MasterReviewItem (E1 remainder, already shipped) --
 // mirrors AnalyticsView.goStudent.
 function goStudentFromReview(item: MasterReviewItem): void {
-  router.push({
+  void router.push({
     name: 'master-student-profile',
     params: { id: item.user_id },
     query: { name: item.reviewer_name },
@@ -213,7 +213,7 @@ const needsAttention = computed((): StudentListItem[] =>
 
 // The detail endpoint carries no name → pass it forward (mirror MasterStudentsView).
 function openProfile(student: StudentListItem): void {
-  router.push({
+  void router.push({
     name: 'master-student-profile',
     params: { id: student.id },
     query: { name: student.name },

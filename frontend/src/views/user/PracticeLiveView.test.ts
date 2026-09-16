@@ -90,7 +90,7 @@ vi.mock('@/composables/useToast', () => ({
 // resolve_zoom_entry and is proved by its own doubles).
 const resolveZoomEntry = vi.fn()
 vi.mock('@/api/practices', () => ({
-  resolveZoomEntry: (...args: unknown[]) => resolveZoomEntry(...args),
+  resolveZoomEntry: (...args: Parameters<typeof resolveZoomEntry>) => resolveZoomEntry(...args),
 }))
 
 const openLink = vi.fn()
@@ -319,7 +319,10 @@ describe('PracticeLiveView', () => {
     it('personal: Войти is enabled and opens the personal link -- the outcome the whole feature exists for', async () => {
       practicesState.selected = practice()
       bookingsState.bookings = [booking({ joined_at: '2026-07-20T10:00:00Z' })]
-      resolveZoomEntry.mockResolvedValue({ kind: 'personal', url: 'https://zoom.us/j/personal?tk=x' })
+      resolveZoomEntry.mockResolvedValue({
+        kind: 'personal',
+        url: 'https://zoom.us/j/personal?tk=x',
+      })
       mount()
       await flush()
 
@@ -426,7 +429,6 @@ describe('PracticeLiveView', () => {
       expect(resolveZoomEntry).toHaveBeenCalledWith('p1')
     })
   })
-
 
   // ===========================================================================
   describe('join flow', () => {

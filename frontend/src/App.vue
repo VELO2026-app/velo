@@ -106,7 +106,7 @@ function onCreateAccount(): void {
 }
 
 onMounted(() => {
-  initAuth()
+  void initAuth()
   // T21-4/T21-5 (PROMPT №546): foreground-only poll so a role/master-
   // application change is picked up even if the session never navigates
   // again while parked on one screen. Safe to start before auth resolves --

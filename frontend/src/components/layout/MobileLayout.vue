@@ -49,7 +49,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import VTabBar, { type TabItem } from '@/components/layout/VTabBar.vue'
+import VTabBar from '@/components/layout/VTabBar.vue'
+import type { TabItem } from '@/router/tabs'
 import { provideFloatingHeader } from '@/components/layout/useFloatingHeader'
 
 // Host the floating-header island; headers teleport into it (see useFloatingHeader).

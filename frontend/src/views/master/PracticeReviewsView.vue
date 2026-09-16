@@ -111,7 +111,7 @@ const practiceId = computed(() => route.params.id as string)
 
 // E1: tap a review → the reviewer's student profile (user_id now on ReviewItem).
 function goStudent(r: ReviewItem): void {
-  router.push({
+  void router.push({
     name: 'master-student-profile',
     params: { id: r.user_id },
     query: { name: r.reviewer_name },
@@ -175,8 +175,9 @@ const feedbacksLabel = computed((): string | number =>
 // just feed it this practice's raw feedback counts.
 // =========================================================================
 
-const feedbackCounts = computed((): { fire: number; good: number; confused: number } =>
-  insights.value?.feedbacks ?? { fire: 0, good: 0, confused: 0 },
+const feedbackCounts = computed(
+  (): { fire: number; good: number; confused: number } =>
+    insights.value?.feedbacks ?? { fire: 0, good: 0, confused: 0 },
 )
 
 // =========================================================================
@@ -304,5 +305,4 @@ onMounted(async () => {
   justify-content: center;
   padding-top: var(--space-2);
 }
-
 </style>

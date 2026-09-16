@@ -294,7 +294,9 @@ async function load(): Promise<void> {
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 watch(search, () => {
   clearTimeout(searchTimer)
-  searchTimer = setTimeout(load, 300)
+  searchTimer = setTimeout(() => {
+    void load()
+  }, 300)
 })
 
 // Sequenced (not parallel with load() below): a genuinely deleted/invalid
@@ -319,7 +321,7 @@ onMounted(retry)
 // is no competing row menu to route around anymore (the tag/add-to-group/
 // remove-from-group/unblock actions all moved to that profile, T24-9/10/20).
 function openProfile(member: GroupMemberItem): void {
-  router.push({
+  void router.push({
     name: 'master-student-profile',
     params: { id: member.id },
     query: { name: member.name },
@@ -400,7 +402,7 @@ async function onDeleteConfirm(): Promise<void> {
     // The group we were viewing no longer exists -- unlike
     // MasterGroupsView's own delete (which stays on the list and
     // reloads), this screen has nothing left to reload.
-    router.push({ name: 'master-groups' })
+    void router.push({ name: 'master-groups' })
   } catch (e) {
     // Same group_in_use translation as MasterGroupsView's own delete
     // handler -- the backend's message names the blocking practice(s) in

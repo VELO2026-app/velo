@@ -117,7 +117,7 @@ function untilLabel(p: PromoResponse): string {
 }
 
 function onNew(): void {
-  router.push({ name: 'master-promocode-new' })
+  void router.push({ name: 'master-promocode-new' })
 }
 // Copy needs no backend — write the code straight to the clipboard (B2).
 async function onCopy(code: string): Promise<void> {

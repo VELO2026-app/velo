@@ -308,15 +308,15 @@ function removeChip(chip: ActiveChip): void {
       break
   }
 
-  store.applyFilters(next)
+  void store.applyFilters(next)
 }
 
 function goToDetail(id: string): void {
-  router.push({ name: 'practice-detail', params: { id } })
+  void router.push({ name: 'practice-detail', params: { id } })
 }
 
 onMounted(() => {
-  store.init()
+  void store.init()
 })
 </script>
 

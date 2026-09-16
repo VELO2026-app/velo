@@ -12,7 +12,7 @@
 // AdminShell (masters awaiting verification + reports awaiting moderation).
 // =============================================================================
 
-import type { TabItem } from '@/components/layout/VTabBar.vue'
+import type { Component } from 'vue'
 import {
   IconHome,
   IconCalendar,
@@ -22,6 +22,18 @@ import {
   IconGroup,
   IconWarning,
 } from '@/components/icons'
+
+/** One tab of the role tab bar. Lives HERE, not in VTabBar.vue: types exported
+ * from .vue SFCs are invisible to tooling without the vue language plugin
+ * (type-aware eslint resolves them as any). */
+export interface TabItem {
+  icon: string | Component
+  label: string
+  to: string
+  /** Count badge -- rendered by VAdminTabBar only (admin counts); the
+   *  user/master VTabBar itself paints no badges. */
+  badge?: number | string
+}
 
 export const USER_TABS: TabItem[] = [
   { icon: IconHome, label: 'Дашборд', to: '/user/dashboard' },

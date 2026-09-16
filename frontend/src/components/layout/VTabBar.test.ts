@@ -12,7 +12,8 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
-import VTabBar, { type TabItem } from '@/components/layout/VTabBar.vue'
+import VTabBar from '@/components/layout/VTabBar.vue'
+import type { TabItem } from '@/router/tabs'
 import { IconHome, IconCalendar } from '@/components/icons'
 
 const ITEMS: TabItem[] = [

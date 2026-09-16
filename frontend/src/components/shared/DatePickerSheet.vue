@@ -93,6 +93,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { daysInMonth, firstWeekdayMonFirst, shiftMonthParts } from '@/utils/calendarMath'
 import { VBottomSheet, VWheel } from '@/components/ui'
 
 const props = withDefaults(
@@ -216,17 +217,19 @@ interface Cell {
 }
 
 const cells = computed((): Cell[] => {
-  const first = new Date(viewYear.value, viewMonth.value, 1)
-  const leading = (first.getDay() + 6) % 7 // Mon-first offset
-  const daysInMonth = new Date(viewYear.value, viewMonth.value + 1, 0).getDate()
-  const prevDays = new Date(viewYear.value, viewMonth.value, 0).getDate()
-  const total = Math.ceil((leading + daysInMonth) / 7) * 7
+  const leading = firstWeekdayMonFirst(viewYear.value, viewMonth.value + 1)
+  const dim = daysInMonth(viewYear.value, viewMonth.value + 1)
+  const prevDays = daysInMonth(
+    viewMonth.value === 0 ? viewYear.value - 1 : viewYear.value,
+    viewMonth.value === 0 ? 12 : viewMonth.value,
+  )
+  const total = Math.ceil((leading + dim) / 7) * 7
   const out: Cell[] = []
   for (let i = 0; i < total; i++) {
     const dayNum = i - leading + 1
     if (i < leading) {
       out.push({ day: prevDays - leading + 1 + i, current: false, selected: false, disabled: true })
-    } else if (dayNum <= daysInMonth) {
+    } else if (dayNum <= dim) {
       const ymd = `${viewYear.value}-${pad2(viewMonth.value + 1)}-${pad2(dayNum)}`
       out.push({
         day: dayNum,
@@ -235,21 +238,18 @@ const cells = computed((): Cell[] => {
         disabled: (!!props.min && ymd < props.min) || (!!props.max && ymd > props.max),
       })
     } else {
-      out.push({ day: dayNum - daysInMonth, current: false, selected: false, disabled: true })
+      out.push({ day: dayNum - dim, current: false, selected: false, disabled: true })
     }
   }
   return out
 })
 
 function shiftMonth(delta: number): void {
-  const d = new Date(viewYear.value, viewMonth.value + delta, 1)
-  viewYear.value = d.getFullYear()
-  viewMonth.value = d.getMonth()
+  const shifted = shiftMonthParts(viewYear.value, viewMonth.value + 1, delta)
+  viewYear.value = shifted.year
+  viewMonth.value = shifted.month - 1
   // Keep the selected day only if it still belongs to the new month view.
-  if (
-    selDay.value !== null &&
-    selDay.value > new Date(viewYear.value, viewMonth.value + 1, 0).getDate()
-  ) {
+  if (selDay.value !== null && selDay.value > daysInMonth(viewYear.value, viewMonth.value + 1)) {
     selDay.value = null
   }
 }

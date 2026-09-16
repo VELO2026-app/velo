@@ -421,7 +421,7 @@ const attentionItems = computed((): MasterReviewItem[] => {
 // E1 (PROMPT №229): tap an attention card → the reviewer's student profile
 // (user_id now on MasterReviewItem). Mirrors PracticeReviewsView.goStudent.
 function goStudent(item: MasterReviewItem): void {
-  router.push({
+  void router.push({
     name: 'master-student-profile',
     params: { id: item.user_id },
     query: { name: item.reviewer_name },
@@ -531,7 +531,7 @@ async function onLoadMore(): Promise<void> {
 
 /** Open the per-practice reviews detail (Г2: closes the card-tap from Г4). */
 function openReviews(practiceId: string): void {
-  router.push({ name: 'master-practice-reviews', params: { id: practiceId } })
+  void router.push({ name: 'master-practice-reviews', params: { id: practiceId } })
 }
 
 // =========================================================================

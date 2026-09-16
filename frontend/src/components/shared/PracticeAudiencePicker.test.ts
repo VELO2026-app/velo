@@ -12,7 +12,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { createApp, defineComponent, h, nextTick, ref, type App } from 'vue'
 import PracticeAudiencePicker from '@/components/shared/PracticeAudiencePicker.vue'
-import type { AudienceSchoolOption } from '@/components/shared/PracticeAudiencePicker.vue'
+import type { AudienceSchoolOption } from '@/components/shared/practiceAudience'
 import type { PracticeAudienceKind } from '@/api/types'
 import type { GroupListItem } from '@/api/groups'
 

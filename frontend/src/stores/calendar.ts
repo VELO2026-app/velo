@@ -35,6 +35,7 @@
 // =============================================================================
 
 import { defineStore } from 'pinia'
+import { DateTime } from 'luxon'
 import { ref, reactive, computed } from 'vue'
 import { getPractices } from '@/api/practices'
 import { extractApiError } from '@/composables/useApiError'
@@ -90,14 +91,12 @@ function weekDays(anchor: Date): Date[] {
 /** Parse a YYYY-MM-DD local-day key back to a Date at local midnight. */
 function parseLocalDateKey(key: string): Date {
   const [y, m, d] = key.split('-').map(Number)
-  return new Date(y!, (m ?? 1) - 1, d ?? 1)
+  return DateTime.fromObject({ year: y!, month: m ?? 1, day: d ?? 1 }).toJSDate()
 }
 
 /** Today at local midnight. */
 function todayMidnight(): Date {
-  const t = new Date()
-  t.setHours(0, 0, 0, 0)
-  return t
+  return DateTime.now().startOf('day').toJSDate()
 }
 
 export const useCalendarStore = defineStore('calendar', () => {
