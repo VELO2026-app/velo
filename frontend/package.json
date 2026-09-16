@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@12.4.2",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
@@ -46,5 +47,8 @@
     "vite-plugin-pwa": "^0.21.0",
     "vitest": "^4.1.11",
     "vue-tsc": "^2.2.0"
+  },
+  "engines": {
+    "node": ">=24"
   }
 }

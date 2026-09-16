@@ -220,10 +220,10 @@ regenerate `generated.ts` (`:1363`) → **velo-bot commits and pushes it** (`:13
 the frontend image build.
 
 `scripts/velo-manage.sh` invokes `vue-tsc` **zero** times — and that zero is a FALSE ALL-CLEAR if
-read alone (control: `npm run` appears 3 times in the same file). **The typecheck lives in
-`frontend/Dockerfile:40`: `RUN npm run build`, and `npm run build` = `vue-tsc --noEmit && vite
-build`** (`frontend/package.json`). The Dockerfile says so itself at `:10-11` — *"if tests fail,
-image is not built. This is the gate for `velo update`."* `npm run test` is `vitest run` alone and
+read alone (control: `pnpm run` appears 3 times in the same file). **The typecheck lives in
+`frontend/Dockerfile`: `RUN pnpm run build`, and `pnpm run build` = `vue-tsc --noEmit && vite
+build`** (`frontend/package.json`). The Dockerfile says so itself — *"if tests fail,
+image is not built. This is the gate for `velo update`."* `pnpm run test` is `vitest run` alone and
 strips types, so **only the build step catches a type error.**
 
 **Consequence: a commit that leaves the fixtures stale does not merely go red on origin — it

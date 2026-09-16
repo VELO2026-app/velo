@@ -330,7 +330,7 @@ frontend/
 ├── eslint.config.js
 ├── .prettierrc
 ├── package.json
-├── package-lock.json          ← Для детерминированных билдов (npm ci)
+├── pnpm-lock.yaml             ← Для детерминированных билдов (pnpm install --frozen-lockfile)
 ├── env.d.ts                   ← TypeScript декларации для .vue и Vite env
 ├── .env.example
 ├── .gitignore
@@ -339,13 +339,13 @@ frontend/
 
 **Решения, принятые при реализации:**
 
-- `package-lock.json` коммитится в репо — без него `npm ci` в Docker не работает
+- `pnpm-lock.yaml` коммитится в репо — без него `pnpm install --frozen-lockfile` в Docker не работает
 - `env.d.ts` — декларации для TypeScript: `.vue` файлы как модули, `ImportMetaEnv` для `VITE_*`
 - `.gitkeep` в пустых папках — Git не трекает пустые директории
 - Telegram SDK через CDN `<script>` в index.html (рекомендация Telegram для актуальной версии)
 - `vue-tsc --noEmit` перед `vite build` в скрипте build — type-check как gate
 
-**Критерий готовности:** `npm run build` проходит, `npm run lint` без ошибок. ✅
+**Критерий готовности:** `pnpm run build` проходит, `pnpm lint` без ошибок. ✅
 
 ---
 
