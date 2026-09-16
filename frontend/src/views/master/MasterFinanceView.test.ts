@@ -146,7 +146,7 @@ function pick(selector: string): string {
 function button(label: string): HTMLButtonElement | undefined {
   return Array.from(host?.querySelectorAll('button') ?? []).find((b) =>
     b.textContent?.includes(label),
-  ) as HTMLButtonElement | undefined
+  )
 }
 
 function amountField(): HTMLInputElement | null {
@@ -623,9 +623,7 @@ describe('MasterFinanceView', () => {
 
   describe('history', () => {
     it('shows the loader while the first page is in flight', async () => {
-      vi.mocked(mastersApi.getMyWithdrawals).mockReturnValue(
-        new Promise(() => {}) as Promise<ReturnType<typeof page>>,
-      )
+      vi.mocked(mastersApi.getMyWithdrawals).mockReturnValue(new Promise(() => {}))
       mount()
       await flush()
 

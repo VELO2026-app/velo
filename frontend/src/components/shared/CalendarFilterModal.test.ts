@@ -48,7 +48,7 @@ function mount(onApply: (filters: CalendarFacetFilters) => void): void {
 // VModal teleports its content to <body> (Teleport to="body"), so chips live
 // outside the `host` div entirely -- query document.body, not the mount root.
 function chipButtons(): HTMLButtonElement[] {
-  return Array.from(document.body.querySelectorAll('button')) as HTMLButtonElement[]
+  return Array.from(document.body.querySelectorAll('button'))
 }
 
 function findChip(label: string): HTMLButtonElement | undefined {

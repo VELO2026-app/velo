@@ -161,7 +161,7 @@ function liveDialog(): HTMLElement | null {
 function dialogButton(label: string): HTMLButtonElement | undefined {
   return Array.from(liveDialog()?.querySelectorAll('button') ?? []).find(
     (b) => b.textContent?.trim() === label,
-  ) as HTMLButtonElement | undefined
+  )
 }
 
 /** SC-13b: the overlay is never REMOVED in happy-dom -- it parks mid-leave. */

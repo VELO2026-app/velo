@@ -209,7 +209,7 @@ const DIRECTION_CHIPS = computed<{ value: PracticeDirection; label: string }[]>(
 )
 
 const DIFFICULTY_CHIPS: { value: PracticeDifficulty; label: string }[] = (
-  ['beginner', 'medium', 'high'] as PracticeDifficulty[]
+  ['beginner', 'medium', 'high'] satisfies PracticeDifficulty[]
 ).map((v) => ({ value: v, label: DIFFICULTY_LABEL[v] }))
 
 // Duration labels are LOCAL here (per the filter mock: "30 - 45 мин" /
@@ -221,7 +221,7 @@ const DURATION_CHIPS: { value: DurationBucket; label: string }[] = [
 ]
 
 const TIME_CHIPS: { value: TimeOfDay; label: string }[] = (
-  ['morning', 'day', 'evening', 'night'] as TimeOfDay[]
+  ['morning', 'day', 'evening', 'night'] satisfies TimeOfDay[]
 ).map((v) => ({ value: v, label: TIME_OF_DAY_LABEL[v] }))
 
 // -- Local draft state (single direction; array kept for type compat) --
@@ -247,7 +247,9 @@ const selectedDirection = computed<PracticeDirection | undefined>(() => draft.di
 
 /** Style options for the currently selected direction (empty when "Все"
  *  or when the direction has no styles). Catalog-first (T2 stage 2). */
-const styleOptions = computed(() => catalogStylesForDirection(catalog.value, selectedDirection.value))
+const styleOptions = computed(() =>
+  catalogStylesForDirection(catalog.value, selectedDirection.value),
+)
 
 /** Sync the draft from incoming filters whenever the modal opens. */
 function syncFromProps(): void {

@@ -284,7 +284,7 @@ describe('ChatThreadScreen', () => {
     await type('   ')
     expect(host?.querySelector('[data-testid="chat-send"]')).not.toBeNull()
 
-    sendBtn()!.click()
+    sendBtn().click()
     await flush()
     expect(chatsApi.sendChatMessage).not.toHaveBeenCalled()
 

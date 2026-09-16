@@ -96,7 +96,7 @@ function rows(): HTMLElement[] {
 function button(label: string): HTMLButtonElement | undefined {
   return Array.from(host?.querySelectorAll('button') ?? []).find((b) =>
     b.textContent?.includes(label),
-  ) as HTMLButtonElement | undefined
+  )
 }
 
 /** The route location the screen pushed. Throws rather than returning undefined. */
@@ -130,9 +130,7 @@ afterEach(() => {
 describe('AdminWithdrawalsView', () => {
   describe('state ladder', () => {
     it('shows the loader while the first page is in flight', async () => {
-      vi.mocked(adminApi.getAdminWithdrawals).mockReturnValue(
-        new Promise(() => {}) as Promise<ReturnType<typeof page>>,
-      )
+      vi.mocked(adminApi.getAdminWithdrawals).mockReturnValue(new Promise(() => {}))
       mount()
       await flush()
 

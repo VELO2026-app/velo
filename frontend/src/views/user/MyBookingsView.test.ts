@@ -182,9 +182,7 @@ describe('MyBookingsView', () => {
     it('initial load: shows the loader while the first page is in flight', async () => {
       // Never resolves -> store.loading stays true with an empty list, which is
       // exactly the v-if guard at MyBookingsView.vue:22.
-      vi.mocked(bookingsApi.getMyBookings).mockReturnValue(
-        new Promise(() => {}) as Promise<ReturnType<typeof page>>,
-      )
+      vi.mocked(bookingsApi.getMyBookings).mockReturnValue(new Promise(() => {}))
       mount()
       await flush()
 

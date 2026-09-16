@@ -242,9 +242,7 @@ afterEach(() => {
 describe('MasterStudentProfileView', () => {
   describe('state ladder', () => {
     it('shows the loader — and NOT the hero — while the fetch is in flight', async () => {
-      vi.mocked(mastersApi.getStudent).mockReturnValue(
-        new Promise(() => {}) as Promise<StudentDetailResponseWithBlocked>,
-      )
+      vi.mocked(mastersApi.getStudent).mockReturnValue(new Promise(() => {}))
       routeState.query = { name: 'Анна из списка' }
       mount()
       await flush()

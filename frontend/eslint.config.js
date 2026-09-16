@@ -10,7 +10,11 @@ import globals from 'globals'
 export default [
   js.configs.recommended,
 
-  ...tseslint.configs.recommended,
+  // Type-aware linting: rules read the type graph and catch the async bug
+  // class plain lint cannot see (forgotten await, promise in a sync slot,
+  // dead conditions). Costs lint speed -- accepted: the gate runs in the
+  // night protocol, not on every save.
+  ...tseslint.configs.recommendedTypeChecked,
 
   ...pluginVue.configs['flat/recommended'],
 
@@ -22,6 +26,12 @@ export default [
       },
       parserOptions: {
         parser: tseslint.parser,
+        // `project` (not projectService): the service cannot resolve imports
+        // inside .vue SFC script blocks -- every import came back "error
+        // typed" and produced ~13k false no-unsafe-* findings. The plain
+        // program matches what vue-tsc sees (verified on IconArt.vue).
+        project: ['./tsconfig.json'],
+        extraFileExtensions: ['.vue'],
       },
     },
     rules: {
@@ -32,8 +42,93 @@ export default [
       ],
       // Allow single-word component names (VButton, VCard, etc.).
       'vue/multi-word-component-names': 'off',
-      // No console.log in production code.
-      'no-console': ['warn', { allow: ['warn', 'error'] }],
+      // console.warn/error allowed; console.log is a hard lint failure.
+      'no-console': ['error', { allow: ['warn', 'error'] }],
+
+      // --- Architecture: components are imported through barrels only. ----
+      // Deep paths bypass the barrel's contract; the ban is mechanical so it
+      // holds for any amount of hand-written or generated code. Intra-folder
+      // deep imports and *.test.ts are exempted below.
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@/components/ui/*', '@/components/ui/*/*'],
+              message: 'Import from the barrel: import { VButton } from "@/components/ui".',
+            },
+            {
+              group: ['@/components/icons/*', '@/components/icons/*/*'],
+              message: 'Import from the barrel: import { IconHome } from "@/components/icons".',
+            },
+          ],
+        },
+      ],
+
+      // --- Platform seam: window/document live only inside platform/. -----
+      // This is a Telegram Mini App; host access goes through @/platform.
+      // Rollout reality: 115 legacy sites (viewport/keyboard composables,
+      // shells) ride the warning budget -- ratchet them down; error-level
+      // once the budget for this rule reaches zero. Exempted below:
+      // platform/**, main.ts, tests (happy-dom fixtures).
+      'no-restricted-globals': [
+        'warn',
+        { name: 'window', message: 'Go through @/platform (the Telegram WebApp seam).' },
+        { name: 'document', message: 'Go through @/platform (the Telegram WebApp seam).' },
+      ],
+      // --- Legacy debt rides the warning budget (see lint-budget.json). ---
+      // Every rule below is error-worthy; the codebase still carries counted
+      // legacy findings (no silent bypass: any GROWTH fails the lint via the
+      // budget). Promote each to 'error' when its budget slice hits zero.
+      '@typescript-eslint/no-floating-promises': 'warn',
+      '@typescript-eslint/no-misused-promises': 'warn',
+      '@typescript-eslint/no-unsafe-argument': 'warn',
+      '@typescript-eslint/no-unsafe-assignment': 'warn',
+      '@typescript-eslint/no-unsafe-call': 'warn',
+      '@typescript-eslint/no-unsafe-member-access': 'warn',
+      '@typescript-eslint/no-unsafe-return': 'warn',
+      '@typescript-eslint/no-redundant-type-constituents': 'warn',
+      '@typescript-eslint/unbound-method': 'warn',
+
+      // --- Timezone hygiene: only the DANGEROUS Date constructors. --------
+      // Bare new Date() (current instant) and Date.now() are tz-safe and
+      // stay allowed. String/field constructors interpret in the runtime
+      // timezone -- a real bug class in a timezone product; use luxon
+      // DateTime with useViewerTimezone. Legacy sites ride the warning
+      // budget (lint-budget.json) until paid off.
+      'no-restricted-syntax': [
+        'warn',
+        {
+          selector:
+            "NewExpression[callee.name='Date'][arguments.length=1][arguments.0.type='Literal']",
+          message:
+            'Date(string) interprets unpredictably -- use luxon DateTime + useViewerTimezone.',
+        },
+        ...[2, 3, 4, 5, 6, 7].map((n) => ({
+          selector: `NewExpression[callee.name='Date'][arguments.length=${n}]`,
+          message:
+            'new Date(y, m, ...) builds in the runtime tz -- use luxon DateTime + useViewerTimezone.',
+        })),
+        {
+          selector: "CallExpression[callee.name='Date']",
+          message: 'Date() without new -- use new Date() or luxon DateTime.',
+        },
+      ],
+
+      // --- TMA storage seam. ------------------------------------------------
+      'no-restricted-properties': [
+        'warn',
+        {
+          object: 'localStorage',
+          property: '*',
+          message: 'Route storage through @/platform, not localStorage directly.',
+        },
+        {
+          object: 'window.localStorage',
+          property: '*',
+          message: 'Route storage through @/platform, not localStorage directly.',
+        },
+      ],
       // Template FORMATTING belongs to prettier (lint-staged runs it on every
       // commit and would immediately revert these rules' fixes -- verified on
       // App.vue: eslint --fix -> 0 warnings, prettier -> warning returns).
@@ -66,6 +161,32 @@ export default [
     rules: {
       'vue/one-component-per-file': 'off',
       'vue/component-definition-name-casing': 'off',
+      // happy-dom fixtures use window/document; date fixtures build Dates.
+      'no-restricted-globals': 'off',
+      'no-restricted-syntax': 'off',
+      // wrapper.vm is typed any and its methods read as unbound; async test
+      // fixtures await nothing on purpose; querySelectorAll assertions are
+      // real narrowings the rule misreads through projectService.
+      '@typescript-eslint/unbound-method': 'off',
+      '@typescript-eslint/require-await': 'off',
+      '@typescript-eslint/no-unnecessary-type-assertion': 'off',
+    },
+  },
+
+  {
+    // The barrels and the components themselves may use deep paths internally
+    // (a barrel importing its own export through itself would be circular).
+    files: ['src/components/ui/**', 'src/components/icons/**'],
+    rules: {
+      'no-restricted-imports': 'off',
+    },
+  },
+
+  {
+    // The platform seam and the bootstrap own the host objects.
+    files: ['src/platform/**', 'src/main.ts'],
+    rules: {
+      'no-restricted-globals': 'off',
     },
   },
 

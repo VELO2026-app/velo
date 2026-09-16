@@ -57,7 +57,7 @@ function buttonWith(label: string): HTMLElement | undefined {
 
 /** The component's two VInput/VTextarea fields, in template order. */
 function inputs(): HTMLInputElement[] {
-  return Array.from(host?.querySelectorAll('input, textarea') ?? []) as HTMLInputElement[]
+  return Array.from(host?.querySelectorAll('input, textarea') ?? [])
 }
 
 async function type(values: [string, string]): Promise<void> {

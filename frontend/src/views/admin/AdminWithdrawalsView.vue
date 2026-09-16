@@ -147,7 +147,7 @@ function str(v: unknown): string {
   return typeof v === 'string' ? v : ''
 }
 function methodLabel(p: PayoutDetails): string {
-  const d = (p.details ?? {}) as Record<string, unknown>
+  const d = p.details ?? {}
   if (p.method === 'bank_transfer') {
     const bank = str(d.bank_name) || 'Банк'
     const acc = (str(d.iban) || str(d.account)).replace(/\s+/g, '')

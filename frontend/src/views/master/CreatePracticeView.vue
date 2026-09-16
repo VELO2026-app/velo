@@ -586,7 +586,7 @@ const form = reactive({
   // engine). recurrence_days holds VDayPicker codes ('mon'..'sun').
   is_recurring: false,
   recurrence: 'weekly' as RecurrenceSpec['period'],
-  recurrence_days: [] as string[],
+  recurrence_days: [],
   recurrence_end: 'never' as RecurrenceSpec['end'],
   // Empty until the master types a count (NP-11) — no auto-filled 40.
   recurrence_count: null as number | null,
@@ -609,11 +609,11 @@ const form = reactive({
   // AUDIENCE_OPTIONS (practiceOptions.ts) still lists three until FE-24
   // ports the selector, but the TYPE no longer lies about what can come back.
   audience_kind: 'public' as PracticeAudienceKind,
-  audience_group_ids: [] as string[],
+  audience_group_ids: [],
   // FE-24 (GT P5): the schools multi-select's ids -- sent ONLY when
   // audience_kind === 'curator_groups' (group_ids and curator_group_ids are
   // mutually exclusive on the wire, a 422 otherwise).
-  audience_curator_group_ids: [] as string[],
+  audience_curator_group_ids: [],
   description: '',
   what_to_prepare: '',
   contraindications: '',
@@ -720,7 +720,7 @@ const styleOptionsForForm = computed(() => {
   const confirmed = confirmedMethods.value
   if (!confirmed) return []
   const all = catalogStylesForDirection(catalog.value, form.direction)
-  const confirmedStyleValues = confirmed.styles[form.direction as string] ?? []
+  const confirmedStyleValues = confirmed.styles[form.direction] ?? []
   return all.filter((opt) => confirmedStyleValues.includes(opt.value))
 })
 

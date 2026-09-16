@@ -211,7 +211,7 @@ function text(): string {
 function button(label: string): HTMLButtonElement | undefined {
   return Array.from(host?.querySelectorAll('button') ?? []).find((b) =>
     b.textContent?.includes(label),
-  ) as HTMLButtonElement | undefined
+  )
 }
 
 function titleField(): HTMLInputElement | null {
@@ -257,7 +257,7 @@ function cancelModalConfirm(): HTMLButtonElement | undefined {
   const actions = document.body.querySelector('.cpd__actions')
   return Array.from(actions?.querySelectorAll('button') ?? []).find(
     (b) => b.textContent?.trim() === 'Отменить',
-  ) as HTMLButtonElement | undefined
+  )
 }
 
 /** The branded cancel modal's «Не отменять». */
@@ -265,7 +265,7 @@ function cancelModalDismiss(): HTMLButtonElement | undefined {
   const actions = document.body.querySelector('.cpd__actions')
   return Array.from(actions?.querySelectorAll('button') ?? []).find(
     (b) => b.textContent?.trim() === 'Не отменять',
-  ) as HTMLButtonElement | undefined
+  )
 }
 
 /** The generic VConfirmDialog's confirm button (VConfirmDialog.vue:27-33). */
@@ -273,7 +273,7 @@ function confirmDialogConfirm(label: string): HTMLButtonElement | undefined {
   const actions = document.body.querySelector('.v-confirm__actions')
   return Array.from(actions?.querySelectorAll('button') ?? []).find(
     (b) => b.textContent?.trim() === label,
-  ) as HTMLButtonElement | undefined
+  )
 }
 
 /** Drive the REAL teleported DatePickerSheet: open it, tap `day`, save. */
@@ -362,9 +362,7 @@ afterEach(() => {
 describe('EditPracticeView', () => {
   describe('the state ladder', () => {
     it('shows the loader while the practice is in flight', async () => {
-      vi.mocked(practicesApi.getPractice).mockReturnValue(
-        new Promise(() => {}) as Promise<PracticeResponse>,
-      )
+      vi.mocked(practicesApi.getPractice).mockReturnValue(new Promise(() => {}))
       mount()
       await flush()
 
@@ -455,9 +453,7 @@ describe('EditPracticeView', () => {
       mountCached(practice())
       await flush()
 
-      const pickers = Array.from(
-        host?.querySelectorAll('.edit-practice__picker') ?? [],
-      ) as HTMLElement[]
+      const pickers = Array.from(host?.querySelectorAll('.edit-practice__picker') ?? [])
       expect(pickers[0]?.textContent?.trim()).toBe('22 июля 2026')
       expect(pickers[1]?.textContent?.trim()).toBe('13:00')
     })
@@ -476,7 +472,7 @@ describe('EditPracticeView', () => {
       await flush()
 
       const areas = Array.from(host?.querySelectorAll('textarea') ?? [])
-      expect(areas.map((a) => (a as HTMLTextAreaElement).value)).toContain('Травмы спины')
+      expect(areas.map((a) => a.value)).toContain('Травмы спины')
       // T-35: the Zoom URL input is gone from this form with its column. Its
       // absence is asserted, not merely un-asserted -- a re-added field would
       // fail here rather than pass silently.

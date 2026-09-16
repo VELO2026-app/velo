@@ -113,7 +113,7 @@ function presets(): HTMLButtonElement[] {
 function submitBtn(): HTMLButtonElement | undefined {
   return Array.from(host?.querySelectorAll('button') ?? []).find((b) =>
     b.textContent?.includes('Пополнить'),
-  ) as HTMLButtonElement | undefined
+  )
 }
 
 function toggleCustom(): void {

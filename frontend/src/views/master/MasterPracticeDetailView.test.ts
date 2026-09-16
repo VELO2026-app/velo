@@ -1103,7 +1103,7 @@ describe('MasterPracticeDetailView', () => {
         .mockReturnValueOnce(
           new Promise((r) => {
             resolveSecond = r as (v: unknown) => void
-          }) as ReturnType<typeof practicesApi.getPracticeReviews>,
+          }),
         )
       mount()
       await flush()

@@ -206,7 +206,7 @@ describe('DiaryComposer -- idle state (1: no chevron, one slot; T24-3: no mic pl
     })
     app2.mount(host2)
 
-    const mic = host2.querySelector('.composer__btn--side') as HTMLButtonElement | null
+    const mic = host2.querySelector('.composer__btn--side')
     expect(mic).not.toBeNull()
     expect(mic!.getAttribute('aria-label')).toBe('Голосовое сообщение')
     // OUTSIDE the field -- a sibling of .composer__field in the root row,

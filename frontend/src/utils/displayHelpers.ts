@@ -186,7 +186,7 @@ export function practiceIconFor(p: {
 }): Component {
   const dir = p.direction as PracticeDirection | undefined
   if (dir && DIRECTION_ICON[dir]) {
-    return DIRECTION_ICON[dir]!
+    return DIRECTION_ICON[dir]
   }
   return DIRECTION_ICON_FALLBACK
 }

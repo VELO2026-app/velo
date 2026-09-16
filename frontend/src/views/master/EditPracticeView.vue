@@ -523,7 +523,7 @@ const styleOptionsForForm = computed(() => {
   const confirmed = confirmedMethods.value
   if (!confirmed) return []
   const all = catalogStylesForDirection(catalog.value, form.direction)
-  const confirmedStyleValues = confirmed.styles[form.direction as string] ?? []
+  const confirmedStyleValues = confirmed.styles[form.direction] ?? []
   return all.filter((opt) => confirmedStyleValues.includes(opt.value))
 })
 

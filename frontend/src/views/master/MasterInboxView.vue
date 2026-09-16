@@ -236,7 +236,7 @@ function routeFor(
   item: NotificationItem,
 ): { name: string; params?: Record<string, string> } | null {
   const action = item.action_data?.action
-  const params = (item.action_data?.params ?? {}) as Record<string, unknown>
+  const params = item.action_data?.params ?? {}
   const practiceId = typeof params.practice_id === 'string' ? params.practice_id : null
 
   switch (action) {

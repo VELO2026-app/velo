@@ -101,14 +101,14 @@ function text(): string {
 function button(label: string): HTMLButtonElement | undefined {
   return Array.from(host?.querySelectorAll('button') ?? []).find((b) =>
     b.textContent?.includes(label),
-  ) as HTMLButtonElement | undefined
+  )
 }
 
 /** Teleported to body (VModal.vue:20 / VBottomSheet.vue:18) -- NOT under host. */
 function bodyButton(label: string): HTMLButtonElement | undefined {
   return Array.from(document.body.querySelectorAll('button')).find((b) =>
     b.textContent?.includes(label),
-  ) as HTMLButtonElement | undefined
+  )
 }
 
 // SCOPED to the 2FA modal on purpose. A bare search for «Подтвердить» across
@@ -119,7 +119,7 @@ function tfaSubmit(): HTMLButtonElement | undefined {
   const tfa = document.body.querySelector('.tfa')
   return Array.from(tfa?.querySelectorAll('button') ?? []).find(
     (b) => b.textContent?.trim() === 'Подтвердить',
-  ) as HTMLButtonElement | undefined
+  )
 }
 
 function rowValue(key: string): string {

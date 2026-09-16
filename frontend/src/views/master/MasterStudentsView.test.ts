@@ -93,9 +93,7 @@ afterEach(() => {
 describe('MasterStudentsView', () => {
   describe('state ladder', () => {
     it('shows the loader while the fetch is in flight', async () => {
-      vi.mocked(mastersApi.getStudents).mockReturnValue(
-        new Promise(() => {}) as Promise<ReturnType<typeof page>>,
-      )
+      vi.mocked(mastersApi.getStudents).mockReturnValue(new Promise(() => {}))
       mount()
       await flush()
 

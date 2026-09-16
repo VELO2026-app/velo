@@ -230,7 +230,7 @@ function withdrawLink(): HTMLButtonElement | null {
 function button(label: string): HTMLButtonElement | undefined {
   return Array.from(host?.querySelectorAll('button') ?? []).find((b) =>
     b.textContent?.includes(label),
-  ) as HTMLButtonElement | undefined
+  )
 }
 
 // -- The confirm dialog is TELEPORTED to document.body (VModal.vue:20), so it is
@@ -248,7 +248,7 @@ function dialogButton(label: string): HTMLButtonElement | undefined {
   const actions = liveDialog()?.querySelector('.v-confirm__actions')
   return Array.from(actions?.querySelectorAll('button') ?? []).find(
     (b) => b.textContent?.trim() === label,
-  ) as HTMLButtonElement | undefined
+  )
 }
 
 /** SC-13b: the overlay is never REMOVED in happy-dom -- it parks mid-leave. */

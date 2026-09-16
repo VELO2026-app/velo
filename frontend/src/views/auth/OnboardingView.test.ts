@@ -98,9 +98,7 @@ function mockDetectedTimezone(zone: string): void {
     if (args.length === 0) {
       return { resolvedOptions: () => ({ timeZone: zone }) } as unknown as Intl.DateTimeFormat
     }
-    return new RealDTF(
-      ...(args as ConstructorParameters<typeof Intl.DateTimeFormat>),
-    ) as Intl.DateTimeFormat
+    return new RealDTF(...(args as ConstructorParameters<typeof Intl.DateTimeFormat>))
   }) as unknown as typeof Intl.DateTimeFormat)
 }
 

@@ -140,9 +140,7 @@ const isPending = computed<boolean>(() => w.value?.status === 'pending')
 function str(v: unknown): string {
   return typeof v === 'string' ? v : ''
 }
-const payoutDetails = computed<Record<string, unknown>>(
-  () => (w.value?.payout_details.details ?? {}) as Record<string, unknown>,
-)
+const payoutDetails = computed<Record<string, unknown>>(() => w.value?.payout_details.details ?? {})
 
 // No master name on the payload → fall back to the bank account holder, else «—».
 const masterName = computed<string>(() => str(payoutDetails.value.account_holder) || '—')
