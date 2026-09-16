@@ -253,7 +253,13 @@ async def _cancel_one(
                 await session.execute(
                     select(CuratorGroup)
                     .where(CuratorGroup.id.in_(curated_group_ids or []))
-                    .order_by(CuratorGroup.id)
+                    # Ordered by name, tie-broken by id -- the same defect
+                    # and the same fix as the publication announcement in
+                    # curator_groups/service.py, which carries the full
+                    # reasoning. In short: the names below are joined into
+                    # one string a person reads, and a UUID orders nothing
+                    # between runs.
+                    .order_by(CuratorGroup.name, CuratorGroup.id)
                 )
             ).scalars().all()
         )

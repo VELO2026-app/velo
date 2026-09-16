@@ -2897,7 +2897,24 @@ async def announce_published_practice(
                     PracticeAudienceCuratorGroup.practice_id == practice.id,
                     master_broadcasts_to_group_clause(actor.id),
                 )
-                .order_by(CuratorGroup.id)
+                # BY NAME, AND NOT BY id. A UUID is random, so ordering
+                # by it is stable within one run and arbitrary between
+                # them -- the names below are joined into one string a
+                # person reads, and the order used to change from one
+                # publication to the next. It looked like an ordering and
+                # was not one; it turned the suite red a week after it
+                # shipped green.
+                #
+                # id STAYS, SECOND, as the tie-break: school names are
+                # unique per curator (UNIQUE (curator_user_id, name)), and
+                # a practice is addressed to schools of DIFFERENT curators,
+                # so two of them can share a name and the name alone would
+                # leave the same randomness -- rarer, and therefore more
+                # expensive to find.
+                #
+                # The same pair, for the same reason, in
+                # practices/cancel_service.py.
+                .order_by(CuratorGroup.name, CuratorGroup.id)
             )
         ).scalars().all()
     )

@@ -987,3 +987,58 @@ async def test_a_completed_school_practice_is_refused_by_status(
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 400
+
+
+# ===========================================================================
+# GT-35 -- the joined school names have a fixed order
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_two_schools_of_one_curator_are_named_in_a_fixed_order(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """The master reads one string, and it must not depend on the run.
+
+    THE SAME DEFECT AS BE-30's ANNOUNCEMENT, in this file: the query that
+    fetches the curator's schools ordered by CuratorGroup.id, a UUID. That
+    is stable inside one run and random between them, so the master could
+    be told "Утро, Вечер" for one cancellation and "Вечер, Утро" for the
+    next. The publication side turned the suite red a week after shipping
+    green; this one had no test at all and would have waited for a person
+    to notice.
+
+    The names are now ordered alphabetically, with the id kept as the
+    tie-break: school names are unique only WITHIN one curator (UNIQUE
+    (curator_user_id, name)), and a practice reaches schools of different
+    curators, so the name alone still leaves ties.
+
+    Asserted as the exact string rather than as a set: a set would pass
+    under the old ordering, which is the whole thing being fixed.
+    """
+    master = await _make_verified_master(client, db_session, _TID_MASTER)
+    curator = await _make_verified_master(client, db_session, _TID_CURATOR)
+    morning = await _school(db_session, curator["user"]["id"], name="Утро")
+    evening = await _school(db_session, curator["user"]["id"], name="Вечер")
+    practice = await _create_practice(
+        db_session, master["user"]["id"], schools=[morning, evening],
+    )
+
+    resp = await client.post(
+        CANCEL_URL.format(practice_id=practice.id),
+        headers=auth_headers(curator["session_token"]),
+    )
+    assert resp.status_code == 200, resp.text
+
+    rows = (
+        await fresh_execute(
+            select(OutboxEvent).where(
+                OutboxEvent.payload["target_value"].astext
+                == master["user"]["id"],
+                OutboxEvent.payload["type"].astext
+                == "practice.cancelled_by_curator",
+            )
+        )
+    ).scalars().all()
+    assert len(rows) == 1
+    assert rows[0].payload["action_data"]["group_name"] == "Вечер, Утро"

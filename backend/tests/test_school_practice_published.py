@@ -455,7 +455,13 @@ async def test_one_person_in_two_target_schools_is_told_once(
     assert len(messages) == 1
     assert len(await _lines(db_session, morning)) == 1
     assert len(await _lines(db_session, evening)) == 1
-    assert messages[0]["action_data"]["group_name"] == "Утро, Вечер"
+    # ALPHABETICAL, and the order is the assertion. This line used to
+    # read "Утро, Вечер" and passed for a week: the query ordered by
+    # CuratorGroup.id, a UUID, which is stable inside one run and random
+    # between them. The suite went red on a commit that touched nothing
+    # here. Ordering by name makes the joined string a property of the
+    # schools rather than of the run.
+    assert messages[0]["action_data"]["group_name"] == "Вечер, Утро"
 
 
 @pytest.mark.asyncio
