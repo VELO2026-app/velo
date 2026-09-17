@@ -36,6 +36,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
+        with:
+          # Explicit: the action reads `packageManager` from a root package.json,
+          # and ours lives in frontend/ — see the failed first run.
+          version: 12.4.2
 
       - uses: actions/setup-node@v4
         with:
@@ -97,6 +101,9 @@ jobs:
       POSTGRES_PASSWORD: velo
       REDIS_URL: redis://localhost:6379/0
       PUBLIC_LINK_BASE: http://localhost:8000
+      # The project is never pip-installed (Dockerfile: "without pip install -e .");
+      # `app` resolves like it does in the image.
+      PYTHONPATH: ${{ github.workspace }}/backend
     steps:
       - uses: actions/checkout@v4
 
@@ -106,8 +113,12 @@ jobs:
           cache: pip
           cache-dependency-path: backend/pyproject.toml
 
-      - name: Install (with dev extra)
-        run: pip install -e '.[dev]'
+      - name: Install deps (Dockerfile pattern: pyproject alone → empty wheel, deps only)
+        working-directory: backend
+        run: |
+          tmp=$(mktemp -d)
+          cp pyproject.toml "$tmp/"
+          pip install --no-cache-dir "$tmp/.[dev]"
 
       - name: Ruff
         run: ruff check .
@@ -127,15 +138,19 @@ jobs:
           cache: pip
           cache-dependency-path: backend/pyproject.toml
 
-      - name: Install backend (schema import needs the app)
+      - name: Install deps (same Dockerfile pattern; base deps only)
         working-directory: backend
-        run: pip install -e .
+        run: |
+          tmp=$(mktemp -d)
+          cp pyproject.toml "$tmp/"
+          pip install --no-cache-dir "$tmp"
 
       - name: Regenerate generated.ts from the app's OpenAPI schema
         working-directory: backend
         env:
           APP_ENV: development
           PUBLIC_LINK_BASE: http://localhost:8000
+          PYTHONPATH: ${{ github.workspace }}/backend
         run: |
           python -c "import json; from app.main import app; json.dump(app.openapi(), open('openapi.json', 'w'))"
           python scripts/generate_ts_types.py openapi.json ../frontend/src/api/generated.ts
