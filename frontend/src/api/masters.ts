@@ -245,7 +245,9 @@ export function getTransactions(limit = 20, offset = 0): Promise<PaginatedTransa
  * non-positive). income_cents is also returned but rendered on Finance /
  * Analytics, not the dashboard.
  */
-export function getMasterStats(period: 'week' | 'month' = 'week'): Promise<MasterStatsResponse> {
+export function getMasterStats(
+  period: 'week' | 'month' | 'quarter' = 'week',
+): Promise<MasterStatsResponse> {
   const query = buildQuery({ period })
   return api.get<MasterStatsResponse>(`/api/v1/masters/me/stats${query}`)
 }

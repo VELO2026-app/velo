@@ -11,11 +11,10 @@
       presence-only dot (FE-11 ruling: never a number; supersedes the T-26
       count badge). Unread fetched alongside the stats row; tap ->
       'master-inbox' (MasterInboxView.vue). No feed on the dashboard itself.
-    - Stats: period toggle (Неделя / Месяц) in the top row + 2 VStatCard
-      with optional delta trend (E7: the toggle refetches
-      GET /masters/me/stats?period=...). A third «Квартал» segment is
-      designed but blocked on a backend task (the endpoint rejects
-      period=quarter today).
+    - Stats: period toggle (Неделя / Месяц / Квартал) in the top row +
+      2 VStatCard with optional delta trend (E7: the toggle refetches
+      GET /masters/me/stats?period=...). «Квартал» went live with the
+      backend's third calendar period (BE-28; FE-66).
     - "Мои группы" row (VMenuRow) -> master-groups (P2, PROMPT №591; was
       "Мои ученики" -> master-students).
     - Zero state only: "Создать первую практику" (VButton) -> create.
@@ -24,7 +23,7 @@
 
   STUBS (no backend yet -> roadmap for Zod; non-working taps show a toast):
     (The stats grid left this list with E7 -- GET /masters/me/stats is real,
-    week|month, and the toggle refetches it.)
+    week|month|quarter, and the toggle refetches it.)
     - AI summary "Подробнее" (no master-AI), practice checkin-count +
       recurrence meta (no fields) -> rendered only when the data exists
       (v-if), absent for now. The bell is NOT in this list any more (T-26).
@@ -47,7 +46,7 @@
 
     <template v-else>
       <!-- ================================================================
-           TOP ROW (owner ask 2026-09-08): the period slider (Неделя/Месяц)
+           TOP ROW (owner ask 2026-09-08): the period slider (Неделя/Месяц/Квартал)
            on the left, the notification bell on the right -- ONE line. The
            «Статистика» heading is gone with it. The bell is the USER
            dashboard's recipe, reused verbatim: 36px primary disc, 17px glyph
@@ -312,14 +311,15 @@ const authStore = useAuthStore()
 const { contentSafeTop } = useSafeArea()
 const toast = useToast()
 
-// -- Period toggle. Drives the period-scoped stats row (E7). `quarter` is a
-//    designed third segment deliberately NOT offered yet: the backend's
-//    Literal["week","month"] would 422 it, and a failed refetch silently
-//    keeps the WEEK figures under a «Квартал» label -- a lying control. --
-const period = ref<'week' | 'month'>('week')
-const PERIOD_OPTIONS: ReadonlyArray<{ value: 'week' | 'month'; label: string }> = [
+// -- Period toggle. Drives the period-scoped stats row (E7). `quarter` went
+//    live with the backend's third calendar period (BE-28; FE-66 unblocked the
+//    segment -- before that the endpoint would 422 it, and a failed refetch
+//    would silently keep the WEEK figures under a «Квартал» label). --
+const period = ref<'week' | 'month' | 'quarter'>('week')
+const PERIOD_OPTIONS: ReadonlyArray<{ value: 'week' | 'month' | 'quarter'; label: string }> = [
   { value: 'week', label: 'Неделя' },
   { value: 'month', label: 'Месяц' },
+  { value: 'quarter', label: 'Квартал' },
 ]
 
 // True for a brand-new master with no practices at all (zero state).
