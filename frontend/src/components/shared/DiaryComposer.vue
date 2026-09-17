@@ -10,13 +10,10 @@
   localStorage key holds the draft (`draftKey`), and the collapsed-preview
   opt-in (`showDraftPreview`, diary-only, pre-dates this extraction).
 
-  [FE-42] The mic is TEMPORARILY HIDDEN in the diary: this wrapper no longer
-  passes `voice-stub`, and the shared Composer's mic disc is a v-if on that
-  prop -- off means fully unmounted, zero reserved space (the field spans the
-  whole line; nothing changes with text). Text input, drafts and text send
-  are untouched -- every other behaviour below is as before. ChatThreadScreen
-  still passes COMPOSER_VOICE_STUB (constants keep it); when the real voice
-  recorder lands, re-add `:voice-stub="COMPOSER_VOICE_STUB"` here.
+  [FE-42 resolved] The REAL voice recorder has landed (voice input MVP): this
+  wrapper now passes `:voice-input="COMPOSER_VOICE_INPUT"` like the chat
+  screen, so the diary composer carries the functional mic too. The flag is
+  the kill-switch -- false hides the mic everywhere with no call-site edits.
 
   Visual/behavioural changes from before this extraction (owner-approved via
   .tmp/composer-unification.html): the send button now sits INSIDE the
@@ -38,6 +35,7 @@
     :send="handleSend"
     :draft-key="draftKey"
     :grow-cap="growCap"
+    :voice-input="COMPOSER_VOICE_INPUT"
     show-draft-preview
     @sent="emit('created')"
     @composing-change="onComposingChange"
@@ -49,6 +47,7 @@ import { computed, ref } from 'vue'
 import Composer, { type ComposerSendResult } from './Composer.vue'
 import { useDiaryStore } from '@/stores/diary'
 import { useComposerGrowCap } from '@/composables/useComposerGrowCap'
+import { COMPOSER_VOICE_INPUT } from '@/utils/constants'
 
 const MAX_LEN = 10000
 

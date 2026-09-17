@@ -98,6 +98,14 @@ export const telegramPlatform: Platform = {
     }
   },
 
+  hapticNotification(type: 'error' | 'success' | 'warning'): void {
+    try {
+      getWebApp().HapticFeedback.notificationOccurred(type)
+    } catch {
+      // Silently ignore -- older clients or missing SDK.
+    }
+  },
+
   openLink(url: string): void {
     // Telegram opens external links in the system browser.
     getWebApp().openLink(url)

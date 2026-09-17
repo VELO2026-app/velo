@@ -67,6 +67,14 @@ export interface Platform {
   hapticFeedback(style: 'light' | 'medium' | 'heavy'): void
 
   /**
+   * Trigger a result haptic (voice input uses success/error on transcription
+   * outcomes).
+   * Telegram: WebApp.HapticFeedback.notificationOccurred(type).
+   * Standalone: no-op (browser has no haptics).
+   */
+  hapticNotification(type: 'error' | 'success' | 'warning'): void
+
+  /**
    * Open an external URL (e.g. a Zoom meeting link).
    * Telegram: WebApp.openLink(url) -- opens in the external browser.
    * Standalone: window.open(url) in a new tab.

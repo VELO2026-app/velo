@@ -56,6 +56,7 @@ export { default as IconDreamBook } from './IconDreamBook.vue'
 export { default as IconDots } from './IconDots.vue'
 export { default as IconMic } from './IconMic.vue'
 export { default as IconSend } from './IconSend.vue'
+export { default as IconStop } from './IconStop.vue'
 // IconDateOrnament / IconAxisConnector / IconAxisDot removed 2026-06-08:
 // superseded by IconDecor (part) / IconDecor2 (part) in DiaryTimeline.
 

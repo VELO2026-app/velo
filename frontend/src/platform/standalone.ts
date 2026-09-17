@@ -52,6 +52,10 @@ export const standalonePlatform: Platform = {
     // Browser has no haptic API.
   },
 
+  hapticNotification(): void {
+    // Browser has no haptic API.
+  },
+
   openLink(url: string): void {
     // Open in a new tab. noopener prevents the opened page from
     // accessing window.opener.

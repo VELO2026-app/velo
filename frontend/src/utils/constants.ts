@@ -37,21 +37,18 @@ export const MIN_WITHDRAWAL_EUROS = 50
 export const WITHDRAWAL_FEE_EUROS = 2
 
 // ---------------------------------------------------------------------------
-// Composer voice-message stub (owner pass, 2026-08-27)
+// Composer voice input (MVP, transcription via OpenRouter) -- kill-switch
 // Used by: DiaryComposer, ChatThreadScreen (both pass it to the shared Composer)
 // ---------------------------------------------------------------------------
 
 /**
- * VISUAL STUB ONLY -- no voice-message functionality exists yet. Shows the
- * mic disc in the composer row, OUTSIDE the field (narrowing the input from
- * the right, Telegram-style). EMPTY FIELD ONLY: the first real character
- * unmounts the disc and the input springs back to full width -- as if it
- * never existed. Flip to false and the disc never renders at all.
- *
- * FALSE by owner ruling (2026-09-07): the stub disc hid until real voice
- * messages land. Flip back (or replace with the real recorder) then.
+ * Real composer voice recording (tap mic -> record -> transcribe -> text in
+ * the field). FALSE is the kill-switch: the mic disc never renders and both
+ * composers behave exactly as before the feature -- no call-site changes
+ * needed. See docs/voice-input-frontend-task.md for the MVP's explicit
+ * no-backend scope (the browser talks to OpenRouter directly).
  */
-export const COMPOSER_VOICE_STUB = false
+export const COMPOSER_VOICE_INPUT = true
 
 // ---------------------------------------------------------------------------
 // Master onboarding (WS-1, item 2)

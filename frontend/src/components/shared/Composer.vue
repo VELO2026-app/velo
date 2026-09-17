@@ -52,8 +52,21 @@
     :class="{ 'composer--composing': composing, 'composer--single': singleLine }"
   >
     <div class="composer__field" @click="focusField">
+      <!-- [voice input MVP] While a take owns the field, the panel stands in
+           for the textarea (recording) and freezes the row (processing).
+           Its stop disc sits where the send disc normally lives -- hence the
+           send slot below is unmounted for the duration. Taps on the field
+           never raise the keyboard here (focusField is guarded). -->
+      <VoiceRecordingPanel
+        v-if="voicePanelVisible"
+        :state="voicePhase"
+        :elapsed-sec="voiceElapsed"
+        :compact="singleLine"
+        @cancel="onVoiceCancel"
+        @stop="onVoiceStop"
+      />
       <textarea
-        v-show="!showingPreview"
+        v-show="!showingPreview && !voiceActive"
         ref="inputEl"
         v-model="text"
         class="composer__input"
@@ -67,13 +80,15 @@
         @focus="onTextareaFocus"
         @blur="onBlur"
       />
-      <span v-if="showingPreview" class="composer__preview">{{ previewText }}</span>
+      <span v-if="showingPreview && !voiceActive" class="composer__preview">{{ previewText }}</span>
 
       <!-- [owner pass] The send control is ALWAYS rendered -- supersedes B48's
            v-if-while-empty: Telegram-style permanence. An empty tap is a
            no-op (onSend's canSend guard), never a send. B48's other half
-           stands: no disabled mic/kb placeholder ever (T24-3). -->
-      <div class="composer__slot">
+           stands: no disabled mic/kb placeholder ever (T24-3).
+           Voice takes are the one exception: the slot yields its position to
+           the recording panel's stop disc for the duration. -->
+      <div v-if="!voiceActive" class="composer__slot">
         <button
           type="button"
           class="composer__btn"
@@ -88,23 +103,22 @@
       </div>
     </div>
 
-    <!-- [owner pass] Voice-message STUB, flag-gated: a Telegram-style mic
-         disc OUTSIDE the field -- a sibling on the same line, to the field's
-         right, VISUALLY IDENTICAL to the send disc (same solid fill, same
-         geometry, its own icon). It is what narrows the input from the
-         right. EMPTY FIELD ONLY (Telegram's own rule): the first real
-         character unmounts it and the field springs back to full width --
-         as if the disc never existed; clearing the text brings it back.
-         NOT functional -- no click handler at all (pointerdown.prevent only,
-         so a stray tap never steals the field's focus/keyboard); wire the
-         real recorder or delete this when voice messages land.
-         v-if, not visibility: off (flag or text) = zero reserved space. -->
+    <!-- [voice input MVP] The REAL mic (flag-gated via `voiceInput` --
+         COMPOSER_VOICE_INPUT at the call sites): same Telegram-style disc,
+         same empty-field-only rule as the old stub, now FUNCTIONAL.
+         Tap-to-toggle: the tap starts a recording and the panel that replaces
+         the field carries stop/cancel -- no hold, no slide, no second tap on
+         this disc (it unmounts for the whole take). text.length === 0, not
+         !canSend, on purpose: even a lone space unmounts it, per spec.
+         v-if, not visibility: off (flag / text / active take) = zero
+         reserved space. -->
     <button
-      v-if="voiceStub && !canSend"
+      v-if="voiceInput && text.length === 0 && !voiceActive"
       type="button"
       class="composer__btn composer__btn--side"
-      aria-label="Голосовое сообщение"
-      @pointerdown.prevent
+      aria-label="Голосовой ввод"
+      data-testid="voice-mic"
+      @click="onMicTap"
     >
       <IconMic :size="20" />
     </button>
@@ -116,6 +130,11 @@ import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { IconSend, IconMic } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
+import { useVoiceRecorder, type VoiceTake } from '@/composables/useVoiceRecorder'
+import { transcribeAudio } from '@/api/openrouter'
+import { SILENCE_PEAK_THRESHOLD } from '@/utils/audio'
+import { platform } from '@/platform'
+import VoiceRecordingPanel from './VoiceRecordingPanel.vue'
 
 export interface ComposerSendResult {
   ok: boolean
@@ -142,12 +161,12 @@ const props = withDefaults(
     /** Preserves the `chat-send` test hook without a caller needing to know
      *  this component's internal class names. */
     sendTestId?: string
-    /** [owner pass] Voice-message VISUAL STUB (see COMPOSER_VOICE_STUB in
-     *  constants): a mic disc OUTSIDE the field, on its line to the right,
-     *  narrowing the input. Empty field only -- any real text unmounts it.
-     *  No functionality -- the tap is deliberately inert. v-if: unset/false
-     *  never reserves space (width as before the stub existed). */
-    voiceStub?: boolean
+    /** [voice input MVP, kill-switched by COMPOSER_VOICE_INPUT at the call
+     *  sites] The REAL mic disc, outside the field where the old visual stub
+     *  sat. Empty field only -- text.length === 0, so even a lone space
+     *  unmounts it. False keeps the disc unmounted and every piece of voice
+     *  machinery unreachable; consumers need no other change. */
+    voiceInput?: boolean
   }>(),
   {
     maxLength: 4000,
@@ -155,7 +174,7 @@ const props = withDefaults(
     growCap: undefined,
     showDraftPreview: false,
     sendTestId: undefined,
-    voiceStub: false,
+    voiceInput: false,
   },
 )
 
@@ -216,8 +235,17 @@ onMounted(() => {
 })
 
 // Diary-only: collapsed single-line preview when blurred with unsent text.
+// [voice input] A fresh transcript must stay VISIBLE and expanded: the take
+// ends unfocused, which is exactly the preview's trigger -- without the
+// suppression the dictated text would instantly hide behind a one-line
+// ellipsized readout. The suppression lifts on the user's next real blur.
+const suppressDraftPreview = ref(false)
 const showingPreview = computed(
-  () => props.showDraftPreview && !composing.value && text.value.trim().length > 0,
+  () =>
+    props.showDraftPreview &&
+    !suppressDraftPreview.value &&
+    !composing.value &&
+    text.value.trim().length > 0,
 )
 const previewText = computed(() => text.value.replace(/\s*\n\s*/g, ' ').trim())
 
@@ -266,10 +294,14 @@ function onTextareaFocus(e: FocusEvent): void {
 }
 
 function onBlur(): void {
+  suppressDraftPreview.value = false
   setComposing(false)
 }
 
 function focusField(): void {
+  // A voice take owns the field: the keyboard must never rise over the
+  // recording/busy panel (and a busy row must not look focusable).
+  if (voiceActive.value) return
   if (composing.value) return
   // [FE-7] Optimistic composing: with unsent text the textarea is hidden
   // behind the collapsed preview span (v-show), and .focus() on a
@@ -301,6 +333,158 @@ function autogrow(): void {
   singleLine.value = el.scrollHeight < 45
   if (el.selectionStart === el.value.length) {
     el.scrollTop = el.scrollHeight
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Voice input (MVP, transcription via OpenRouter): the recorder composable
+// owns capture + WAV encoding; THIS component owns the UX consequences --
+// toasts (exact §2 texts), haptics, which surface shows what, and the one-way
+// insertion of the transcript into its own (empty) field. With `voiceInput`
+// false none of this is reachable: no mic disc, no panel, no fetch.
+// ---------------------------------------------------------------------------
+
+const {
+  state: recorderState,
+  elapsedSec: recorderElapsed,
+  errorReason: recorderError,
+  start: startRecorder,
+  stop: stopRecorder,
+  cancel: cancelRecorder,
+} = useVoiceRecorder({ onAutoStop: (take) => void onVoiceTakeReady(take) })
+
+/** The OpenRouter round-trip: still part of "the take owns the field", so the
+ * row stays frozen until the transcript lands or the error toast shows. */
+const transcribing = ref(false)
+
+/** True while a take owns the field: requesting/recording/encoding (recorder
+ * state machine) plus the transcription request. Drives the panel, the
+ * hidden textarea, the hidden send slot and the focusField guard. */
+const voiceActive = computed(() => recorderState.value !== 'idle' || transcribing.value)
+
+/** What the panel renders: live recording vs any processing-flavoured phase
+ * (WAV encode and the transcription request both freeze the row). */
+const voicePhase = computed<'recording' | 'processing'>(() =>
+  recorderState.value === 'recording' ? 'recording' : 'processing',
+)
+
+/** The panel itself waits for an actual take: the transient `requesting`
+ * phase (permission prompt) freezes the row WITHOUT showing a premature
+ * «Транскрибация…». */
+const voicePanelVisible = computed(
+  () =>
+    recorderState.value === 'recording' ||
+    recorderState.value === 'processing' ||
+    transcribing.value,
+)
+
+const voiceElapsed = computed(() => recorderElapsed.value)
+
+// [FE-9, voice] Same session-state contract as the preview collapse above,
+// for the voice panel: while it replaces the textarea the inline height is
+// meaningless (and would leak into the next compose), so reset; on return --
+// usually WITH the fresh transcript already in `text` -- recompute from the
+// live layout and park the scroll on the caret's end.
+watch(voiceActive, (active) => {
+  const el = inputEl.value
+  if (!el) return
+  if (active) {
+    el.style.height = ''
+    el.scrollTop = 0
+    singleLine.value = true
+  } else {
+    void nextTick(() => {
+      autogrow()
+      el.scrollTop = el.selectionStart === el.value.length ? el.scrollHeight : 0
+    })
+  }
+})
+
+async function onMicTap(): Promise<void> {
+  if (voiceActive.value) return
+  // The keyboard must not hang over the recording panel: drop focus first.
+  if (composing.value) {
+    setComposing(false)
+    inputEl.value?.blur()
+  }
+  await startRecorder()
+  if (recorderState.value === 'recording') {
+    platform.hapticFeedback('light')
+    return
+  }
+  // Honest failure, exact texts from the error table.
+  if (recorderError.value === 'permission') {
+    toast.error('Доступ к микрофону запрещён')
+  } else {
+    toast.error('Микрофон недоступен на этом устройстве')
+  }
+}
+
+function onVoiceCancel(): void {
+  if (recorderState.value !== 'recording') return
+  cancelRecorder()
+  // Silent by design: an aborted take is not an error and needs no toast.
+}
+
+async function onVoiceStop(): Promise<void> {
+  if (recorderState.value !== 'recording') return
+  if (recorderElapsed.value < 1) {
+    cancelRecorder()
+    toast.info('Запись слишком короткая')
+    return
+  }
+  // Freeze the row BEFORE the recorder unwinds: its state passes through
+  // 'idle' for one tick on the way down, and without this the field would
+  // flicker back to an empty one-line capsule mid-stop.
+  transcribing.value = true
+  try {
+    await onVoiceTakeReady(await stopRecorder())
+  } finally {
+    transcribing.value = false
+    // The textarea is back in layout WITH the transcript in it -- the first
+    // honest moment to measure. Every autogrow during the take ran on a
+    // display:none element (scrollHeight 0 -> garbage height). Expand to the
+    // text's height here; the grow cap (inline max-height) bounds it with
+    // internal scroll beyond.
+    await nextTick()
+    autogrow()
+  }
+}
+
+/** A finished take: transcribe and land the text in THIS field. A silent
+ * take (tap stop without speaking) or a null one (decode failure) never
+ * reaches the network -- the field stays untouched and the failure is an
+ * honest toast. Every other failure is likewise an honest toast; success
+ * inserts as normal text so the draft watcher, canSend and the send disc all
+ * react as if the user had typed it (no autofocus -- the keyboard must not
+ * rise on its own). Sets/clears the transcribing freeze itself, so the
+ * auto-stop path gets the same frozen row without a dip through idle. */
+async function onVoiceTakeReady(take: VoiceTake | null): Promise<void> {
+  transcribing.value = true
+  try {
+    if (!take || take.peak < SILENCE_PEAK_THRESHOLD) {
+      // Nothing audible: the model would answer with an apologetic sentence
+      // that used to land in the field as a fake transcript -- reject locally.
+      platform.hapticNotification('error')
+      toast.error('Не удалось распознать речь')
+      return
+    }
+    const result = await transcribeAudio(take.wav)
+    if (result.ok && result.text) {
+      text.value = result.text
+      // Keep the transcript expanded and visible (see suppressDraftPreview).
+      suppressDraftPreview.value = true
+      platform.hapticNotification('success')
+      // Height is deliberately NOT measured here: the textarea is still
+      // hidden behind the panel until transcribing clears -- the caller's
+      // finally measures the visible element instead.
+    } else {
+      // An ok response with no usable text is still a recognition failure.
+      platform.hapticNotification('error')
+      toast.error(result.error ?? 'Не удалось распознать речь')
+    }
+  } finally {
+    transcribing.value = false
   }
 }
 
