@@ -1,0 +1,144 @@
+# =============================================================================
+# VELO CI — the deterministic gate (factory Phase 1, docs/ai-dev-factory-tz.md §8.4)
+#
+# Three jobs, no agents, no judgment:
+#   frontend    — the FE-73 zero-warning budget + vitest + vue-tsc build,
+#                 mirroring the pre-push hook (closes the --no-verify bypass).
+#   backend     — ruff + pytest against real postgres/redis services
+#                 (tests/conftest.py owns migrations itself).
+#   drift-check — regenerate frontend/src/api/generated.ts from the app's own
+#                 OpenAPI schema and fail on any diff. The generator is
+#                 deterministic by contract (backend/scripts/generate_ts_types.py).
+#
+# Toolchain pins: pnpm comes from frontend/package.json `packageManager`
+# (12.4.2); python 3.12 in both backend jobs keeps generated.ts stable.
+# =============================================================================
+name: CI
+
+on:
+  push:
+    branches: [test, ai-dev-factory]
+  pull_request:
+    branches: [test, ai-dev-factory]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: frontend — lint / test / build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint (zero-warning budget)
+        run: pnpm lint
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Tests
+        run: pnpm test
+
+      - name: Build (vue-tsc + vite)
+        run: pnpm build
+
+  backend:
+    name: backend — ruff / pytest
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: velo
+          POSTGRES_PASSWORD: velo
+          POSTGRES_DB: velo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U velo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      # Development mode: secret/URL dev defaults are legitimate here (TD-001,
+      # TD-006); the T-14 placeholder gate fires only outside development.
+      APP_ENV: development
+      DATABASE_URL: postgresql+asyncpg://velo:velo@localhost:5432/velo
+      POSTGRES_DB: velo
+      POSTGRES_USER: velo
+      POSTGRES_PASSWORD: velo
+      REDIS_URL: redis://localhost:6379/0
+      PUBLIC_LINK_BASE: http://localhost:8000
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install (with dev extra)
+        run: pip install -e '.[dev]'
+
+      - name: Ruff
+        run: ruff check .
+
+      - name: Pytest
+        run: pytest -q
+
+  drift-check:
+    name: generated.ts drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install backend (schema import needs the app)
+        working-directory: backend
+        run: pip install -e .
+
+      - name: Regenerate generated.ts from the app's OpenAPI schema
+        working-directory: backend
+        env:
+          APP_ENV: development
+          PUBLIC_LINK_BASE: http://localhost:8000
+        run: |
+          python -c "import json; from app.main import app; json.dump(app.openapi(), open('openapi.json', 'w'))"
+          python scripts/generate_ts_types.py openapi.json ../frontend/src/api/generated.ts
+
+      - name: Fail on drift
+        run: git diff --exit-code -- frontend/src/api/generated.ts
