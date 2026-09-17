@@ -58,7 +58,7 @@
           <VMenuRow label="Уведомления" @click="onNotifications">
             <template #icon><IconBell :size="20" /></template>
           </VMenuRow>
-          <VMenuRow label="Язык/Часовой пояс" @click="onLanguageTimezone">
+          <VMenuRow label="Часовой пояс" @click="onTimezoneSettings">
             <template #icon><IconGlobe :size="20" /></template>
           </VMenuRow>
         </div>
@@ -189,8 +189,8 @@ function onWithdraw(): void {
 function onNotifications(): void {
   void router.push({ name: 'master-notifications' })
 }
-function onLanguageTimezone(): void {
-  void router.push({ name: 'master-language-timezone' })
+function onTimezoneSettings(): void {
+  void router.push({ name: 'master-timezone' })
 }
 function onSupport(): void {
   void router.push({ name: 'master-support' })

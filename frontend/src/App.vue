@@ -1,19 +1,24 @@
 <!--
-  VELO Frontend -- Root Component (updated: welcome + onboarding gate)
+  VELO Frontend -- Root Component (updated: welcome + onboarding gate, FE-39 auto-entry)
 
   Auth + entry flow on mount:
-    1. Show LoadingView while auth initializes, or while a Telegram logout is
-       in progress (isLoggingOut) -- the latter keeps the stub from flashing
-       between session clear and the Mini App closing.
+    1. Show LoadingView while auth initializes, while the entry stage is still
+       undecided (stage === null), or while a Telegram logout is in progress
+       (isLoggingOut) -- the latter keeps the stub from flashing between
+       session clear and the Mini App closing.
     2. If standalone (no Telegram) / not authenticated -> StandaloneStubView
-    3. Authenticated -> a small entry state machine (stage):
-         'welcome'    -> WelcomeView (shown on every app open, for everyone)
-         'onboarding' -> OnboardingView (new users only: onboarding_completed=false)
-         'app'        -> RouterView (the actual app)
+    3. Authenticated -> a small entry state machine (stage). FE-39: the INITIAL
+       stage is decided once initAuth() resolves, not hardcoded:
+         onboarding_completed === true  -> 'app'   (returning user: the splash
+                                         goes straight to RouterView, where
+                                         roleRedirect picks the role dashboard)
+         onboarding_completed === false -> 'welcome' (new user: Welcome ->
+                                         onboarding carousel -> app)
 
   Flow transitions:
+    - Initial: after initAuth() resolves (decideInitialStage).
     - WelcomeView @enter:
-        onboarding_completed === true  -> stage 'app'      (returning user)
+        onboarding_completed === true  -> stage 'app'      (defensive fallback)
         onboarding_completed === false -> stage 'onboarding' (new user)
     - OnboardingView @done (completed or skipped; flag already persisted)
         -> stage 'app'
@@ -22,8 +27,9 @@
 
   The stage lives in component state (not the router), matching how
   LoadingView/StandaloneStubView already gate access outside the router.
-  A page reload re-runs auth and starts again at 'welcome' -- intended:
-  per product, Welcome shows on every open.
+  A page reload re-runs auth and re-decides the stage -- a returning user
+  lands directly in the app again. FE-39 supersedes the old "Welcome on
+  every open" decision: Welcome is now the new-user entry screen only.
 
   VToast is mounted once here -- renders all toast notifications
   triggered via useToast() composable from any component.
@@ -32,7 +38,7 @@
 <template>
   <!-- Single safe-area frame around every gated screen (see AppFrame). -->
   <AppFrame>
-    <LoadingView v-if="!isReady || isLoggingOut" />
+    <LoadingView v-if="!isReady || isLoggingOut || stage === null" />
     <StandaloneStubView v-else-if="isStandalone || !isAuthenticated" />
     <template v-else>
       <WelcomeView
@@ -83,14 +89,31 @@ useViewportGeometry()
 // the per-view dismissKeyboardOnBlank copies. Installed once here.
 useKeyboardDismiss()
 
-/** Entry stage after a successful auth. Starts at the welcome screen. */
+/**
+ * Entry stage after a successful auth. Null until initAuth() resolves and
+ * picks the initial stage; while null the gate keeps showing the splash
+ * (LoadingView), so no frame renders an empty app or the wrong screen.
+ */
 type EntryStage = 'welcome' | 'onboarding' | 'app'
-const stage = ref<EntryStage>('welcome')
+const stage = ref<EntryStage | null>(null)
+
+/**
+ * FE-39: pick the entry stage once auth is ready. A returning user
+ * (onboarding already completed) skips Welcome entirely -- the splash
+ * transitions straight into the app, where the router's roleRedirect sends
+ * them to their role dashboard (or consumes a pending deep link). New users
+ * still land on Welcome first; a missing flag falls back to 'welcome',
+ * never to the dashboard.
+ */
+function decideInitialStage(): EntryStage {
+  return authStore.user?.onboarding_completed ? 'app' : 'welcome'
+}
 
 /**
  * "Войти" on the welcome screen. New users go through the onboarding
  * carousel; returning users (onboarding already completed) go straight
- * to the app.
+ * to the app. Since FE-39 Welcome is the NEW-user entry only, so the
+ * completed branch here is a defensive fallback, not a reachable path.
  */
 function onWelcomeEnter(): void {
   const completed = authStore.user?.onboarding_completed ?? false
@@ -106,7 +129,11 @@ function onCreateAccount(): void {
 }
 
 onMounted(() => {
-  void initAuth()
+  // FE-39: once initAuth() resolves, decide whether the splash hands off to
+  // the app directly (returning user) or to the Welcome screen (new user).
+  void initAuth().then(() => {
+    stage.value = decideInitialStage()
+  })
   // T21-4/T21-5 (PROMPT №546): foreground-only poll so a role/master-
   // application change is picked up even if the session never navigates
   // again while parked on one screen. Safe to start before auth resolves --

@@ -30,7 +30,7 @@
 //     (scheduled on Vue's own microtask queue) are NOT the same instant --
 //     firing a second `.click()` in the SAME synchronous burst, with no
 //     `await` between the two calls (the identical no-tick idiom already
-//     used for NotificationsView's per-key guard and LanguageTimezoneView's
+//     used for NotificationsView's per-key guard and TimezoneSettingsView's
 //     saving guard), reaches the handler a second time before the disabled
 //     attribute has been painted. The internal guard is what stops THAT.
 //   - closeConfirm's guard (`if (confirm.loading) return`, .vue:195): same

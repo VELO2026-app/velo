@@ -1,13 +1,15 @@
 <!--
   VELO Frontend -- Welcome View (onboarding 01_Welcome)
 
-  First screen shown to every authenticated user on each app open
-  (per product decision: Welcome always, for everyone).
+  Entry screen for NEW users only (onboarding_completed === false). Since
+  FE-39 a returning user never sees this screen: App.vue picks the entry
+  stage once auth resolves and sends anyone with the flag set straight to
+  the app, so the LoadingView splash transitions directly into the dashboard.
 
   In Telegram the user is already authenticated via initData, so:
-    - "Войти" is effectively a "continue" button -> emits `enter`.
-      App.vue then routes new users into the onboarding carousel and
-      returning users straight to the dashboard.
+    - "Войти" is effectively a "begin onboarding" button -> emits `enter`.
+      App.vue routes new users into the onboarding carousel (the completed-
+      flag branch to the dashboard remains as a defensive fallback).
     - "Создать аккаунт" is meaningless inside Telegram (the account already
       exists) -- it is only relevant for the standalone/browser build (F10),
       so it is hidden unless isStandalone is true.

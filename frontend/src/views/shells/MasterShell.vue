@@ -110,7 +110,7 @@ const FOG_ROUTES = [
   // screens — keyboard-safe via the e95e05a viewport mask (ships in this batch),
   // so this follows the same de-solid → fog, keyboard-safe rationale as the forms.
   'master-edit-profile',
-  'master-language-timezone',
+  'master-timezone',
   // Support (SP-2, 2026-07-01): RE-FOGGED after being un-fogged in #8/#9 (5d74c8c,
   // where the pre-keyboard-aware fog clipped the form into a band). Safe now: the
   // «убрать туман при вводе» rule (global.css) drops the mask while typing, and the

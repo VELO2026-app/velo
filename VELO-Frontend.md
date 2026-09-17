@@ -163,7 +163,7 @@ frontend/
 /user/diary/entry/:id       → EntryView                 (name: user-diary-entry)
 /user/diary/:type(checkin|feedback)/:id → DetailView    (name: user-diary-detail)
 /user/profile               → UserProfileView
-/user/profile/language-timezone → LanguageTimezoneView  (name: user-language-timezone -- Профиль, экран F)
+/user/profile/timezone → TimezoneSettingsView  (name: user-timezone -- Профиль, экран F)
 /user/profile/edit          → EditProfileView            (name: user-edit-profile -- Профиль, экраны C+D)
 /user/profile/notifications → NotificationsView          (name: user-notifications -- Профиль, экран E)
 /user/notifications         → UserInboxView               (name: user-inbox -- FE-11, фид колокольчика дашборда; имя сознательно ≠ user-notifications)
@@ -192,7 +192,7 @@ frontend/
 /master/profile             → MasterProfileView
 /master/profile/edit        → EditProfileView (reuse)      [hideTabBar]
 /master/profile/notifications → MasterNotificationsView    [hideTabBar]
-/master/profile/language-timezone → LanguageTimezoneView   [hideTabBar]
+/master/profile/timezone → TimezoneSettingsView   [hideTabBar]
 /master/support             → MasterSupportView            [hideTabBar]
 /master/messages[/:id]      → MasterMessagesView / MasterChatView   [hideTabBar; чат (master-chat) в fill-режиме — MC-2, как /user/diary]
 /master/promocodes[/new]    → MasterPromocodesView / MasterNewPromocodeView  [hideTabBar]
@@ -257,37 +257,47 @@ frontend/
 
 `waitUntilReady()` в `composables/useAuth.ts` — `Promise`, который резолвится когда `restoreSession()` завершён (или по таймауту 10s). Используется в `roleRedirect` и `beforeEach` чтобы не читать `auth.role` до готовности сессии.
 
-**Шлюз входа в `App.vue` (welcome + onboarding).** После успешной авторизации
+**Шлюз входа в `App.vue` (splash -> welcome/onboarding/app).** После успешной авторизации
 `App.vue` не сразу рендерит `RouterView`, а проходит через локальную машину
-состояний `stage: 'welcome' | 'onboarding' | 'app'` (обычный `ref`, вне роутера —
-консистентно с тем, как LoadingView/StandaloneStubView гейтят доступ):
+состояний `stage: 'welcome' | 'onboarding' | 'app' | null` (обычный `ref`, вне роутера —
+консистентно с тем, как LoadingView/StandaloneStubView гейтят доступ). `null` — стартовое
+«ещё решаем»: пока `initAuth()` не завершился, показывается LoadingView (splash).
 
 ```
-!isReady                       -> LoadingView
-isStandalone || !isAuthenticated -> StandaloneStubView
+!isReady || isLoggingOut || stage === null -> LoadingView (splash)
+isStandalone || !isAuthenticated           -> StandaloneStubView
 иначе по stage:
-  'welcome'    -> WelcomeView      (показывается всем, при каждом открытии)
-  'onboarding' -> OnboardingView   (только новым: onboarding_completed === false)
+  'welcome'    -> WelcomeView      (только новым: onboarding_completed === false)
+  'onboarding' -> OnboardingView   (новым, после «Войти»)
   'app'        -> RouterView
 ```
 
 Переходы:
 
-- WelcomeView `@enter` ("Войти"): `onboarding_completed === true` -> `stage='app'`;
-  иначе -> `stage='onboarding'`.
+- Стартовый stage выбирается один раз, когда разрешился `initAuth()` (FE-39):
+  `onboarding_completed === true` -> `stage='app'` — вернувшийся юзер/мастер минует
+  Welcome, splash сразу сменяется приложением, и `roleRedirect` роутит на дашборд роли
+  (или deep link из startapp); `onboarding_completed === false` -> `stage='welcome'`.
+- WelcomeView `@enter` ("Войти"): `onboarding_completed === true` -> `stage='app'`
+  (защитный фолбэк, обычным путём недостижим); иначе -> `stage='onboarding'`.
 - OnboardingView `@done` (завершил или пропустил; флаг уже сохранён в нём самом
   через `authStore.updateProfile({ timezone, onboarding_completed: true })`) -> `stage='app'`.
+- Таймзона онбординга берётся с устройства (`Intl`-автодетект, валидный IANA,
+  фолбэк `UTC`) — ручного шага в карусели больше нет; сменить пояс —
+  Профиль → Часовой пояс (`TimezoneSettingsView`).
 - WelcomeView `@create-account`: только standalone/браузерная сборка (F10); в Telegram
   кнопка скрыта (`v-if="isStandalone"`).
 
-**Продуктовое решение:** Welcome показывается при каждом открытии приложения, для всех
-(перезагрузка = новый запуск = снова Welcome). `stage` живёт в памяти компонента, не в
-роутере и не персистится. Онбординг-карусель новый юзер видит один раз — после успешного
-финиша флаг `onboarding_completed` остаётся `true` (переживает релогин, см. Бэковый
-Кодекс 3.7), и при следующем "Войти" он идёт сразу в `app`.
+**Продуктовое решение (FE-39, отмена прежнего):** раньше Welcome показывался при
+каждом открытии, для всех. Теперь повторный запуск зарегистрированным юзером
+(`onboarding_completed === true`) после splash сразу открывает дашборд; Welcome —
+экран входа только для новых юзеров. `stage` живёт в памяти компонента, не в роутере
+и не персистится; перезагрузка страницы пересобирает его по тому же правилу.
+Онбординг-карусель новый юзер видит один раз — после успешного финиша флаг
+`onboarding_completed` остаётся `true` (переживает релогин, см. Бэковый Кодекс 3.7).
 
 Файлы: `views/auth/WelcomeView.vue` (экран 01), `views/auth/OnboardingView.vue`
-(экраны 05-08: 3 интро + шаг таймзоны), `App.vue` (машина состояний).
+(3 интро-слайда; таймзона — автоматически с устройства), `App.vue` (машина состояний).
 
 **Повтор онбординга на свитч — УДАЛЁН (№260 Batch-STRIP).** Сигнал `ui.forceOnboarding`,
 `App.vue`-watcher и `forced`-параметр гейта вынуты из кода. Онбординги живут только на
@@ -487,7 +497,7 @@ hero — `VAvatar xl`. Единый паттерн вызова `:url="avatarUrl
 | Экран                      | View / роут                                           | Примечания                                                                                                                                                                                                                                                                                                                                                                                                  |
 | -------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | A — главный (70/71)        | `UserProfileView.vue` (`user-profile`)                | две стат-карточки из `GET /bookings/me/stats` (`getMyStats` в `api/bookings.ts`); векторные иконки (IconEdit/Bookings/Messages/Bell/Globe/Share/Logout); пункты-переходы. Балансовая карта и email УБРАНЫ с главного. **«Сообщения» (v1.9):** строка в «Аккаунт» после «Мои бронирования» → `UserMessagesView` (роут `user-messages`, honest empty-state, бэк-гэп E4) — без бейджа непрочитанных (нет источника). «Изменить фото» / share / прочие заглушки — toast                                                                                                             |
-| F — Язык/Часовой пояс (75) | `LanguageTimezoneView.vue` (`user-language-timezone`) | таймзона = переиспользуемый `VSelect` + `TIMEZONE_OPTIONS` (`practiceOptions.ts`), автосейв `updateProfile({timezone})` + revert-on-error. Язык — заглушка из ОДНОГО пункта «Русский» (i18n НЕТ), рендер через `v-for` по `LANGUAGE_OPTIONS` (расширяемо), неинтерактивна пока язык один (`isLanguageStatic`), НЕ сохраняется. «Изменить город»/radio-список из макета НЕ делаем — выбор пояса через select |
+| F — Часовой пояс (75) | `TimezoneSettingsView.vue` (`user-timezone` + `master-timezone`) | таймзона = переиспользуемый `TimezoneCityPicker` (поиск ~100 городов с офсетами), автосейв `updateProfile({timezone})` + revert-on-error. Языковой раздел УДАЛЁН (2026-09-17 — i18n нет и не планируется, вернётся с vue-i18n). «Формат даты» — captured-only, не применяется (задача Zod). «Изменить город»/radio-список из макета НЕ делаем — выбор пояса через picker |
 | C — Редактирование (72)    | `EditProfileView.vue` (`user-edit-profile`)           | Имя=`first_name`; E-mail=disabled-заглушка «появится позже» (не сохраняется); Телефон=`phone`, О себе=`bio` (оба в credentials JSONB, см. Бэк §3.11); «Изменить фото»=toast. Сохранение шлёт только изменённые поля; очистка phone/bio = пустая строка. `VInput` БЕЗ пропа `error` — ошибка телефона рисуется отдельным `<p>`. `bio` сравнивается/шлётся через `.trimEnd()` (S-1)                           |
 | D — Удаление (73)          | модалка в `EditProfileView` (`VModal`)                | «Удалить аккаунт» -> подтверждение -> `deleteMe()` (`DELETE /users/me`) -> `authStore.logout()`. MVP = сброс онбординга (Бэк §3.11), данные сохраняются. Текст модала ЧЕСТНЫЙ: «вернётся к начальному состоянию… данные сохранятся» (W-2), кнопка осталась «Удалить»                                                                                                                                        |
 | E — Уведомления (74)       | `NotificationsView.vue` (`user-notifications`)        | 4 свича (push / practice_reminders / master_messages / support_messages), все ON по умолчанию; хранение — вложенный `credentials.notifications` (Бэк §3.11); автосейв при флипе ТИХО (без тоста), revert-on-error; шлётся только флипнутый ключ                                                                                                                                                             |
@@ -966,7 +976,7 @@ if (role === 'master' || role === 'admin') && to === /user/dashboard:
 | **TD-CAL-DIRECTIONS-EXPAND** | 🧪    | `utils/displayHelpers.ts` (`DIRECTION_ICON`)                                               | Бэк добавит направления (somatic/womens_circle/mens_circle/tantra/kundalini)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Иконки уже Partial+fallback — добавить новые иконки в `DIRECTION_ICON` по мере появления (рост списка код не ломает)                                                                                           |
 | **TD-ZOOM-TEXT**             | 🧪    | `views/user/BookingConfirmedView.vue`                                                      | Текст «Ссылка на Zoom придёт за 10 минут» статичен независимо от типа практики (аудит S-2, осознанно отложено — все практики сейчас через Zoom)                                                                                                                                                                                                                                                                                                                                                                                                                                            | Сделать нейтральным («Детали подключения…») или условным по `practice.zoom_link`, когда появятся не-Zoom практики                                                                                              |
 | **TD-PROFILE-SUPPORT**       | 🧪    | раздел Профиль, экран G (node 76)                                                          | Экран «Поддержка» не реализован (отложен заказчиком). Пункт «Поддержка» на экране A — toast-заглушка. Единственный незакрытый экран раздела                                                                                                                                                                                                                                                                                                                                                                                                                                                | Сверстать форму (Тема+Сообщение+Отправить) + тост; бэка нет (витрина)                                                                                                                                          |
-| **TD-PROFILE-LANG-I18N**     | 🧪    | `LanguageTimezoneView.vue`                                                                 | Переключатель языка — заглушка из одного пункта: i18n в проекте нет, выбор не сохраняется и интерфейс не меняется                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Реализовать локализацию (vue-i18n), снять `isLanguageStatic`, добавить языки в `LANGUAGE_OPTIONS`, сохранять `user.language`                                                                                   |
+| **TD-PROFILE-LANG-I18N**     | 🧪    | `TimezoneSettingsView.vue`                                                                 | Языковой раздел удалён с экрана настроек (2026-09-17): i18n в проекте нет, заглушка «Русский» только рекламировала нереальную смену                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Когда появится локализация (vue-i18n): вернуть раздел «Язык интерфейса» и сохранять `user.language`                                                                                                             |
 | **TD-PROFILE-AVATAR-UPLOAD** | 🧪    | `EditProfileView.vue`                                                                      | «Изменить фото» — toast-заглушка: инфраструктуры загрузки аватара нет (аватар приходит из Telegram `photo_url`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Реализовать загрузку при появлении файлового бэка/хранилища                                                                                                                                                    |
 
 > **Аудит итерации «Профиль» (2026-05-29):** закрыты W-2 (честный текст модала

@@ -2,51 +2,38 @@
 // VELO Frontend -- OnboardingView Screen Tests
 // =============================================================================
 //
-// WHY THIS FILE EXISTS (probekit-screen-test audit, rank 6): a 4-step state
-// machine (3 intro slides + a timezone form) with two re-entry guards the
-// screen's own comments (.vue:100-112) call out by name -- `advancing` and
-// `finishArmed` -- and a real persistence call (authStore.updateProfile) on
-// finish. One store import (useAuthStore, real Pinia), zero API-seam import
-// of its own -- the seam is @/api/users (updateMe), one level down through
-// the REAL auth store action (same idiom as MasterProfileView's logout test:
-// mock the API boundary, keep the store real).
+// WHY THIS FILE EXISTS: a 3-step intro carousel whose LAST slide is also the
+// finish step, with two re-entry guards (`advancing`, `finishArmed`) and a
+// real persistence call (authStore.updateProfile) that must carry the DEVICE
+// timezone. There is no manual timezone step anymore: the zone is auto-
+// detected via Intl, IANA-validated, with a UTC fallback, and stays editable
+// later in TimezoneSettingsView.
 //
-// PATTERN: real Pinia + real authStore. TimezoneCityPicker (child) is REAL,
-// not stubbed (SC-12) -- driven by clicking its actual rendered rows.
-// `done` is a root-level emit with no router involved (App.vue owns what
-// happens after) -- captured via `onDone` passed as a root prop to
+// PATTERN: real Pinia + real authStore. The API seam is @/api/users
+// (updateMe), mocked one level down through the REAL auth store action (same
+// idiom as MasterProfileView's logout test: mock the API boundary, keep the
+// store real). `done` is a root-level emit with no router involved (App.vue
+// owns what happens after) -- captured via `onDone` passed as a root prop to
 // createApp(OnboardingView, { onDone }), which Vue treats identically to a
-// parent's `@done` listener (emit() reads `vnode.props.onDone`). No existing
-// screen test in this repo emits from the root, so this is spelled out
-// rather than copied from a precedent.
+// parent's `@done` listener (emit() reads `vnode.props.onDone`).
 //
-// THE RACE THE COMMENT DESCRIBES, PROVEN, NOT JUST READ: onPrimaryAction's
-// intro-step branch is fully synchronous UNLESS the step it's entering is the
-// timezone step, in which case it awaits enterTimezoneStep(), which itself
-// awaits a bare `Promise.resolve()` between `step.value = TIMEZONE_STEP_INDEX`
-// and `finishArmed.value = true` (.vue:201-206). Two clicks with NO await
-// between them (SC-17 idiom) land IN that window: click 1 flips step
-// synchronously then yields at the microtask; click 2 (still same synchronous
-// script) now reads isTimezoneStep===true but finishArmed===false, and
-// returns a no-op (.vue:216). Proven by asserting the outcome is "landed on
-// the timezone step, nothing submitted" -- not by reading the refs (they are
-// not exposed).
+// The device timezone is proven through the SUBMITTED PAYLOAD -- the only
+// observable surface left now that the picker is gone. `Intl.DateTimeFormat`
+// is spied only for its ZERO-ARG call (the OS-detected-zone read);
+// isValidIana's validity checks (called WITH args) fall through to the real
+// implementation so validity is asserted for real, not re-implemented in the
+// mock.
 //
-// detectDefaultTimezone()'s three branches (.vue:163-181) are proven through
-// the PRE-SELECTED row TimezoneCityPicker renders (`.tz-picker__row--active`),
-// not by reaching into the ref -- `Intl.DateTimeFormat` is spied only for its
-// ZERO-ARG call (the OS-detected-zone read); `isValidIana`'s validity checks
-// (called WITH args) fall through to the real implementation so validity is
-// asserted for real, not re-implemented in the mock.
-//
-// TRAPS PRESENT:
-//  - Explicit-selection gate: «Готово» stays disabled until a city is TAPPED,
-//    even though a default is pre-selected (.vue:185-188) -- so the
-//    auto-detect branches are provable only through the pre-selection, never
-//    through a submitted payload (the button is unreachable without a tap).
-//
-// TRAPS ABSENT:
-//  - NO VModal/VBottomSheet, no wall clock (system time), no money, no list.
+// THE RACE THE GUARD DESCRIBES, PROVEN, NOT JUST READ: onPrimaryAction's
+// intro-step branch is fully synchronous UNLESS the slide it's entering is
+// the final one, in which case it awaits enterFinalStep(), which itself
+// awaits a bare `Promise.resolve()` between `step.value = FINAL_STEP_INDEX`
+// and `finishArmed.value = true`. Two clicks with NO await between them
+// (SC-17 idiom) land IN that window: click 1 flips the step synchronously
+// then yields at the microtask; click 2 (still the same synchronous script)
+// now reads isFinalStep===true but finishArmed===false and returns a no-op.
+// Proven by asserting the outcome is "landed on the last slide, nothing
+// submitted" -- not by reading the refs (they are not exposed).
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -90,7 +77,7 @@ function user(overrides: Partial<UserResponse> & Record<string, unknown> = {}): 
 }
 
 /** Spies the ZERO-ARG `Intl.DateTimeFormat()` call only (the OS-zone read in
- *  detectDefaultTimezone) -- calls WITH args (isValidIana's validity checks)
+ *  detectDeviceTimezone) -- calls WITH args (isValidIana's validity checks)
  *  fall through to the real constructor, so validity is proven for real. */
 function mockDetectedTimezone(zone: string): void {
   const RealDTF = Intl.DateTimeFormat
@@ -138,16 +125,12 @@ function activeDotIndex(): number {
   return dots.findIndex((d) => d.classList.contains('v-pagination-dots__dot--active'))
 }
 
-function tzRow(zoneOrCity: string): HTMLButtonElement | undefined {
-  return Array.from(host?.querySelectorAll<HTMLButtonElement>('.tz-picker__row') ?? []).find((r) =>
-    r.textContent?.includes(zoneOrCity),
-  )
-}
-
-function activeTzZone(): string | null {
-  return (
-    host?.querySelector('.tz-picker__row--active .tz-picker__zone')?.textContent?.trim() ?? null
-  )
+/** Advances to the last (finish) slide: two awaited «Далее» clicks. */
+async function gotoFinalSlide(): Promise<void> {
+  primaryButton().click()
+  await flush()
+  primaryButton().click()
+  await flush()
 }
 
 beforeEach(() => {
@@ -177,6 +160,22 @@ afterEach(() => {
 })
 
 describe('OnboardingView', () => {
+  describe('the timezone step is gone', () => {
+    it('renders no «Часовой пояс» screen and no city picker on any slide', async () => {
+      mount()
+      await flush()
+
+      expect(text()).not.toContain('Часовой пояс')
+      expect(host?.querySelector('.tz-picker')).toBeNull()
+
+      // Walk to the last slide: still no picker, and the slide count is 3.
+      await gotoFinalSlide()
+      expect(text()).not.toContain('Часовой пояс')
+      expect(host?.querySelector('.tz-picker')).toBeNull()
+      expect(activeDotIndex()).toBe(2)
+    })
+  })
+
   describe('the intro carousel (steps 0-2)', () => {
     it('starts on slide 0 with «Далее», dot 0 active, Skip visible', async () => {
       mount()
@@ -204,119 +203,54 @@ describe('OnboardingView', () => {
       expect(activeDotIndex()).toBe(2)
     })
 
-    it('«Пропустить» jumps straight to the timezone step, skipping slides 1-2', async () => {
+    it('the 2nd «Далее» (from slide 1) reaches the last slide, relabels «Готово», hides Skip, and stays enabled', async () => {
       mount()
       await flush()
 
-      skipButton()?.click()
-      await flush()
-
-      expect(text()).toContain('Часовой пояс')
-      expect(activeDotIndex()).toBe(3)
-      expect(skipButton()).toBeNull() // hidden on the timezone step
-    })
-  })
-
-  describe('entering the timezone step (the guarded transition)', () => {
-    it('the 3rd «Далее» (from the last intro slide) enters the timezone form and relabels the button', async () => {
-      mount()
-      await flush()
       primaryButton().click()
       await flush()
-      primaryButton().click()
-      await flush()
-      expect(text()).toContain('Карта себя') // sanity: really on slide 2
+      expect(text()).toContain('Ведите дневник') // sanity: really on slide 1
 
       primaryButton().click()
       await flush()
 
-      expect(text()).toContain('Часовой пояс')
-      expect(primaryButton().textContent?.trim()).toBe('Готово')
-      expect(primaryButton().disabled).toBe(true) // gated: no city tapped yet
-    })
-
-    it('a same-tick second click that races the transition is swallowed by finishArmed, not treated as Готово', async () => {
-      // On slide 2 (last intro). Two clicks with NO await between: click 1's
-      // enterTimezoneStep() sets step=3 synchronously then yields at
-      // `await Promise.resolve()`; click 2 runs in that same synchronous
-      // script, sees isTimezoneStep=true / finishArmed=false, and no-ops
-      // (.vue:216) instead of calling finish().
-      mount()
-      await flush()
-      primaryButton().click()
-      await flush()
-      primaryButton().click()
-      await flush()
       expect(text()).toContain('Карта себя')
+      expect(primaryButton().textContent?.trim()).toBe('Готово')
+      // No manual-pick gate anymore: the device zone is always available.
+      expect(primaryButton().disabled).toBe(false)
+      expect(skipButton()).toBeNull() // hidden on the final slide
+    })
+
+    it('a same-tick second click that races the transition onto the last slide is swallowed by finishArmed, not treated as Готово', async () => {
+      mount()
+      await flush()
+
+      primaryButton().click()
+      await flush()
+      expect(text()).toContain('Ведите дневник') // sanity: really on slide 1
 
       primaryButton().click()
       primaryButton().click() // no await between -- lands inside the race window
       await flush()
 
-      // Landed on the timezone step exactly once -- not bounced past it, and
-      // finish() was never reached (no persistence attempt, no navigation).
-      expect(text()).toContain('Часовой пояс')
-      expect(activeDotIndex()).toBe(3)
+      // Landed on the last slide exactly once -- not bounced past it, and
+      // finish() was never reached (no persistence attempt).
+      expect(text()).toContain('Карта себя')
+      expect(activeDotIndex()).toBe(2)
       expect(usersApi.updateMe).not.toHaveBeenCalled()
     })
   })
+})
 
-  describe('detectDefaultTimezone (pre-selected row, not a submitted payload)', () => {
-    it('a valid profile timezone wins and is pre-selected', async () => {
-      const authStore = useAuthStore()
-      authStore.user = user({ timezone: 'Europe/Moscow' })
-      mount()
-      await flush()
-      skipButton()?.click()
-      await flush()
-
-      expect(activeTzZone()).toBe('Europe/Moscow')
-    })
-
-    it('an invalid/missing profile zone falls back to the OS-detected zone', async () => {
+describe('OnboardingView', () => {
+  describe('the device timezone payload', () => {
+    it('«Готово» persists the OS-detected zone + onboarding_completed, then emits done', async () => {
       mockDetectedTimezone('Europe/London')
-      const authStore = useAuthStore()
-      authStore.user = user({ timezone: 'not-a-real-zone' })
-      mount()
-      await flush()
-      skipButton()?.click()
-      await flush()
-
-      expect(activeTzZone()).toBe('Europe/London')
-    })
-
-    it('no profile zone AND an unusable OS zone falls back to UTC (no city pre-selected)', async () => {
-      // UTC has no entry in the curated city list, so the picker shows no
-      // active row -- the honest signature of the UTC fallback, checked
-      // against the positive case above so this is not vacuous (SC-15).
-      mockDetectedTimezone('')
-      const authStore = useAuthStore()
-      // UserResponse.timezone is a non-null string (a real account always has
-      // SOME value) -- an empty string is the honest "nothing usable" fixture,
-      // not null; isValidIana('') is false via its own `if (!zone)` guard.
-      authStore.user = user({ timezone: '' })
-      mount()
-      await flush()
-      skipButton()?.click()
-      await flush()
-
-      expect(host?.querySelector('.tz-picker__row--active')).toBeNull()
-    })
-  })
-
-  describe('picking a city and finishing', () => {
-    it('tapping a city arms «Готово» and finishing persists timezone + onboarding_completed, then emits done', async () => {
       const onDone = vi.fn()
       mount(onDone)
       await flush()
-      skipButton()?.click()
-      await flush()
-      expect(primaryButton().disabled).toBe(true)
 
-      tzRow('Лондон')?.click()
-      await flush()
-      expect(primaryButton().disabled).toBe(false)
-
+      await gotoFinalSlide()
       primaryButton().click()
       await flush()
 
@@ -327,28 +261,62 @@ describe('OnboardingView', () => {
       expect(onDone).toHaveBeenCalledTimes(1)
     })
 
+    it('an unusable OS zone falls back to UTC in the payload', async () => {
+      // An empty string is the honest "nothing usable" fixture;
+      // isValidIana('') is false via its own `if (!zone)` guard.
+      mockDetectedTimezone('')
+      const onDone = vi.fn()
+      mount(onDone)
+      await flush()
+
+      await gotoFinalSlide()
+      primaryButton().click()
+      await flush()
+
+      expect(usersApi.updateMe).toHaveBeenCalledWith({
+        timezone: 'UTC',
+        onboarding_completed: true,
+      })
+      expect(onDone).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('«Пропустить» finishes onboarding outright', () => {
+    it('persists the device timezone + flag from slide 0 and emits done once', async () => {
+      mockDetectedTimezone('Europe/London')
+      const onDone = vi.fn()
+      mount(onDone)
+      await flush()
+
+      skipButton()?.click()
+      await flush()
+
+      expect(usersApi.updateMe).toHaveBeenCalledWith({
+        timezone: 'Europe/London',
+        onboarding_completed: true,
+      })
+      expect(onDone).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('failure and double-submit', () => {
     it('a failed save toasts the generic fallback (unmapped code) and does NOT emit done', async () => {
       // B8 (PROMPT №747): 'server_error' is not a real backend code --
-      // unmapped, lands on the call site's own fallback (.vue:251).
+      // unmapped, lands on the call site's own fallback.
       vi.mocked(usersApi.updateMe).mockRejectedValue(
         new ApiResponseError(500, 'Сервис недоступен', 'server_error'),
       )
       const onDone = vi.fn()
       mount(onDone)
       await flush()
-      skipButton()?.click()
-      await flush()
-      tzRow('Лондон')?.click()
-      await flush()
 
-      primaryButton().click()
+      skipButton()?.click()
       await flush()
 
       expect(toastError).toHaveBeenCalledWith('Не удалось сохранить. Попробуйте ещё раз.')
       expect(onDone).not.toHaveBeenCalled()
-      // Stays on the timezone step so the user can retry, not bounced back
-      // to slide 0.
-      expect(text()).toContain('Часовой пояс')
+      // Stays on the screen so the user can retry (Skip / «Готово»).
+      expect(text()).toContain('Найдите свою практику')
     })
 
     it('does not finish twice on a same-tick double tap of «Готово» (the `submitting` guard)', async () => {
@@ -361,11 +329,8 @@ describe('OnboardingView', () => {
       const onDone = vi.fn()
       mount(onDone)
       await flush()
-      skipButton()?.click()
-      await flush()
-      tzRow('Лондон')?.click()
-      await flush()
 
+      await gotoFinalSlide()
       const btn = primaryButton()
       btn.click()
       btn.click() // no await between -- :disabled has not re-rendered yet
@@ -383,9 +348,11 @@ describe('OnboardingView', () => {
 // =============================================================================
 // NOT COVERED, deliberately
 // =============================================================================
-// - TimezoneCityPicker's own search filtering / offset display: the picker's
-//   own logic, not this screen's; only its selection contract (v-model) is
-//   exercised here.
+// - The Intl fallback chain beyond the two payload cases above (e.g. a
+//   throwing resolvedOptions): detectDeviceTimezone's try/catch collapses to
+//   the same empty-string path already covered.
 // - App.vue's gate that decides WHEN this screen mounts (onboarding_completed
 //   === false): that is App.vue's own branching, out of this screen's surface.
+// - TimezoneSettingsView: the post-onboarding manual timezone editor keeps its
+//   own test file; onboarding no longer competes with it.
 // =============================================================================

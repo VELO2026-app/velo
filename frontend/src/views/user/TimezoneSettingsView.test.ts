@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- LanguageTimezoneView Screen Tests (probekit-screen-test)
+// VELO Frontend -- TimezoneSettingsView Screen Tests (probekit-screen-test)
 // =============================================================================
 //
 // 255 lines, shared user/master settings screen (mounted on BOTH roles' routes,
@@ -77,18 +77,11 @@
 // from Node's supportedValuesOf('timeZone') list) -- "no row is active" is the
 // honest, network-free way to observe a fallback to a value nothing renders.
 //
-// LANGUAGE BRANCH -- A REAL, DOCUMENTED GAP, not silently skipped (recon
-// flagged this; verified true by reading the file, not assumed): LANGUAGE_OPTIONS
-// (.vue:96-98) currently renders ONLY 'ru' (English hidden 2026-06-19, available
-// stub kept for later). onSelectLanguage's `!opt.available` toast branch
-// (.vue:106-110) is therefore DEAD from the template's own perspective -- there
-// is no second button to click, and the file has no defineExpose, so the
-// handler cannot be invoked directly without changing production source, which
-// is out of this task's scope (minimal-scope rule). The first test below in
-// that describe block PROVES the branch is unreachable (asserts exactly one
-// `.lang-tz__lang` button renders) rather than asserting nothing about it; the
-// gap is reported as logic-covered-not-template-reachable, not swept under a
-// green suite.
+// LANGUAGE SECTION -- REMOVED (operator 2026-09-17): the one-option «Русский»
+// stub advertised a switch that cannot happen (no i18n, none planned yet), so
+// the section, its handler and its tests are gone from this screen. A switcher
+// returns together with real i18n; until then `user.language` is never written
+// from here. TIMEZONE + DATE FORMAT behaviour is unchanged.
 //
 // MONEY: none on this screen. Nothing to NBSP-guard.
 //
@@ -101,7 +94,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
-import LanguageTimezoneView from '@/views/user/LanguageTimezoneView.vue'
+import TimezoneSettingsView from '@/views/user/TimezoneSettingsView.vue'
 import * as usersApi from '@/api/users'
 import { useAuthStore } from '@/stores/auth'
 import { ApiResponseError } from '@/api/client'
@@ -159,7 +152,7 @@ let pinia: Pinia
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(LanguageTimezoneView)
+  app = createApp(TimezoneSettingsView)
   app.use(pinia)
   app.mount(host)
   return host
@@ -184,10 +177,6 @@ function activeCityRows(): HTMLButtonElement[] {
     host?.querySelectorAll<HTMLButtonElement>('.tz-picker__row.tz-picker__row--active') ?? [],
   )
 }
-function languageButtons(): HTMLButtonElement[] {
-  return Array.from(host?.querySelectorAll<HTMLButtonElement>('.lang-tz__lang') ?? [])
-}
-
 // -----------------------------------------------------------------------------
 
 beforeEach(() => {
@@ -213,7 +202,7 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('LanguageTimezoneView', () => {
+describe('TimezoneSettingsView', () => {
   // ===========================================================================
   describe('timezone: optimistic update with revert on failure', () => {
     it('success: selecting a city calls updateProfile with the new zone and toasts success', async () => {
@@ -347,41 +336,6 @@ describe('LanguageTimezoneView', () => {
       // this Node's Intl.supportedValuesOf('timeZone')) -- no row can be
       // active for it. This is the honest observation of the fallback.
       expect(activeCityRows()).toHaveLength(0)
-    })
-  })
-
-  // ===========================================================================
-  describe('language', () => {
-    it('only Русский renders -- the unavailable/English branch is unreachable via the template (documented gap, see banner)', async () => {
-      mount()
-      await flush()
-
-      expect(languageButtons()).toHaveLength(1)
-      expect(languageButtons()[0]?.textContent).toContain('Русский')
-    })
-
-    it('Русский initialises active from the stored (available) language and stays active on click', async () => {
-      useAuthStore().user = user({ language: 'ru' })
-      mount()
-      await flush()
-
-      const ruBtn = languageButtons()[0]
-      expect(ruBtn?.classList.contains('lang-tz__lang--active')).toBe(true)
-
-      ruBtn?.click()
-      await flush()
-
-      expect(ruBtn?.classList.contains('lang-tz__lang--active')).toBe(true)
-      // Only one real language today -- selecting it persists nothing.
-      expect(usersApi.updateMe).not.toHaveBeenCalled()
-    })
-
-    it('a stored language with no matching available option still initialises to ru, not a crash', async () => {
-      useAuthStore().user = user({ language: 'en' })
-      mount()
-      await flush()
-
-      expect(languageButtons()[0]?.classList.contains('lang-tz__lang--active')).toBe(true)
     })
   })
 })

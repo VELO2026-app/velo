@@ -120,9 +120,9 @@ const router = createRouter({
           component: () => import('@/views/user/UserProfileView.vue'),
         },
         {
-          path: 'profile/language-timezone',
-          name: 'user-language-timezone',
-          component: () => import('@/views/user/LanguageTimezoneView.vue'),
+          path: 'profile/timezone',
+          name: 'user-timezone',
+          component: () => import('@/views/user/TimezoneSettingsView.vue'),
         },
         {
           path: 'profile/edit',
@@ -352,7 +352,7 @@ const router = createRouter({
           component: () => import('@/views/master/MasterProfileView.vue'),
         },
         // Master profile sub-screens reached from the master profile hub; back-nav
-        // uses router.back() so it returns here. Edit + language-timezone reuse the
+        // uses router.back() so it returns here. Edit + timezone reuse the
         // role-agnostic user settings views; notifications has its own master view
         // (richer master-only design, operator В1=Б 2026-06-13).
         {
@@ -368,10 +368,10 @@ const router = createRouter({
           component: () => import('@/views/master/MasterNotificationsView.vue'),
         },
         {
-          path: 'profile/language-timezone',
-          name: 'master-language-timezone',
+          path: 'profile/timezone',
+          name: 'master-timezone',
           meta: { hideTabBar: true },
-          component: () => import('@/views/user/LanguageTimezoneView.vue'),
+          component: () => import('@/views/user/TimezoneSettingsView.vue'),
         },
         {
           path: 'support',
