@@ -113,7 +113,7 @@ jobs:
           cache: pip
           cache-dependency-path: backend/pyproject.toml
 
-      - name: Install deps (Dockerfile pattern: pyproject alone → empty wheel, deps only)
+      - name: "Install deps (Dockerfile pattern: pyproject alone -> empty wheel, deps only)"
         working-directory: backend
         run: |
           tmp=$(mktemp -d)
