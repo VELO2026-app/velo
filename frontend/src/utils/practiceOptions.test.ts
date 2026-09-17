@@ -30,7 +30,15 @@ const CATALOG_WITH_CUSTOM_DIRECTION: TaxonomyListResponse = {
       is_active: true,
       source: 'seed',
       styles: [
-        { id: 's1', direction_id: 'd1', value: 'hatha', label: 'Хатха-йога', display_order: 0, is_active: true, source: 'seed' },
+        {
+          id: 's1',
+          direction_id: 'd1',
+          value: 'hatha',
+          label: 'Хатха-йога',
+          display_order: 0,
+          is_active: true,
+          source: 'seed',
+        },
       ],
     },
     {
@@ -41,7 +49,15 @@ const CATALOG_WITH_CUSTOM_DIRECTION: TaxonomyListResponse = {
       is_active: true,
       source: 'custom',
       styles: [
-        { id: 's2', direction_id: 'd2', value: 'grounding', label: 'Заземление', display_order: 0, is_active: true, source: 'custom' },
+        {
+          id: 's2',
+          direction_id: 'd2',
+          value: 'grounding',
+          label: 'Заземление',
+          display_order: 0,
+          is_active: true,
+          source: 'custom',
+        },
       ],
     },
   ],

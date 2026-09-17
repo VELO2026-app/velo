@@ -8,23 +8,10 @@
 -->
 
 <template>
-  <button
-    type="button"
-    class="chat-row"
-    @click="emit('open')"
-  >
-    <VAvatar
-      :name="displayName"
-      :url="avatarUrl || ''"
-      size="md"
-    />
+  <button type="button" class="chat-row" @click="emit('open')">
+    <VAvatar :name="displayName" :url="avatarUrl || ''" size="md" />
     <span class="chat-row__name">{{ displayName }}</span>
-    <VBadge
-      v-if="unread > 0"
-      variant="info"
-      class="chat-row__badge"
-      data-testid="chat-unread"
-    >
+    <VBadge v-if="unread > 0" variant="info" class="chat-row__badge" data-testid="chat-unread">
       {{ unread }}
     </VBadge>
   </button>

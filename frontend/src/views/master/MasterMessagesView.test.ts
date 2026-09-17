@@ -141,9 +141,7 @@ describe('MasterMessagesView', () => {
     mount()
     await flush()
 
-    expect(
-      row(0).querySelector('[data-testid="chat-unread"]')?.textContent?.trim(),
-    ).toBe('2')
+    expect(row(0).querySelector('[data-testid="chat-unread"]')?.textContent?.trim()).toBe('2')
     expect(chatsApi.listChats).toHaveBeenCalledTimes(1)
   })
 
@@ -162,9 +160,7 @@ describe('MasterMessagesView', () => {
     await flush()
 
     expect(row(0).querySelector('[data-testid="chat-unread"]')).toBeNull()
-    expect(
-      row(1).querySelector('[data-testid="chat-unread"]')?.textContent?.trim(),
-    ).toBe('4')
+    expect(row(1).querySelector('[data-testid="chat-unread"]')?.textContent?.trim()).toBe('4')
   })
 
   it("clicking a row navigates to 'master-chat' with that thread's id", async () => {

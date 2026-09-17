@@ -150,10 +150,7 @@ describe('UserMessagesView', () => {
     // into a 0 -- the row simply carries no badge, and the rest of the page
     // is unaffected.
     vi.mocked(chatsApi.listChats).mockResolvedValue({
-      threads: [
-        thread(),
-        thread({ id: 'thread-2', operator_value: 'master-2', unread: 5 }),
-      ],
+      threads: [thread(), thread({ id: 'thread-2', operator_value: 'master-2', unread: 5 })],
       next_cursor: null,
     })
     mount()
@@ -161,9 +158,7 @@ describe('UserMessagesView', () => {
 
     expect(rows()).toHaveLength(2) // the list itself never died
     expect(row(0).querySelector('[data-testid="chat-unread"]')).toBeNull()
-    expect(
-      row(1).querySelector('[data-testid="chat-unread"]')?.textContent?.trim(),
-    ).toBe('5')
+    expect(row(1).querySelector('[data-testid="chat-unread"]')?.textContent?.trim()).toBe('5')
   })
 
   it('ONE api call for the whole screen -- the per-thread fan-out is gone', async () => {

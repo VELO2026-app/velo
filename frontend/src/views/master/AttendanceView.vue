@@ -228,7 +228,8 @@ onMounted(load)
 
 .checkins__practice-title {
   font-family: var(--font-body);
-  font-size: var(--text-base);  color: var(--velo-text-primary);
+  font-size: var(--text-base);
+  color: var(--velo-text-primary);
 }
 
 .checkins__practice-sub {

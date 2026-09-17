@@ -90,8 +90,7 @@ export const ERROR_MESSAGES: Record<string, string> = {
   // telling them their profile is unconfirmed would send them to the wrong
   // screen to fix a thing that is not broken. Founding a school is a right
   // an admin grants, and only an admin can grant it.
-  group_creation_not_allowed:
-    'Заводить школы может мастер, которому администратор выдал это право',
+  group_creation_not_allowed: 'Заводить школы может мастер, которому администратор выдал это право',
   curator_cannot_leave:
     'Куратор не может покинуть свою школу. Передайте её другому мастеру или удалите.',
   own_group: 'Это ваша школа',

@@ -208,9 +208,7 @@ export function retryZoomMeeting(practiceId: string): Promise<PracticeResponse> 
  * render an honest error rather than an empty screen.
  */
 export function resolveZoomEntry(practiceId: string): Promise<ZoomEntryResolveResponse> {
-  return api.get<ZoomEntryResolveResponse>(
-    `/api/v1/practices/${practiceId}/zoom/resolve`,
-  )
+  return api.get<ZoomEntryResolveResponse>(`/api/v1/practices/${practiceId}/zoom/resolve`)
 }
 
 /**

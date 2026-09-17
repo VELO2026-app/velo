@@ -208,12 +208,7 @@ const dayLabel = computed<string>(() => {
 
 // -- Active filter chips (display + removal) --
 type ChipKind =
-  | 'direction'
-  | 'difficulty'
-  | 'practice_type'
-  | 'duration_bucket'
-  | 'time_of_day'
-  | 'style'
+  'direction' | 'difficulty' | 'practice_type' | 'duration_bucket' | 'time_of_day' | 'style'
 interface ActiveChip {
   key: string
   kind: ChipKind

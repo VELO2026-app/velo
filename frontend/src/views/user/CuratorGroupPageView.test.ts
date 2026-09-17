@@ -283,12 +283,7 @@ describe('CuratorGroupPageView -- relation matrix', () => {
     await flush()
     // GT-27: «Пригласить мастера» and «Пригласить ученика» collapsed into
     // one «Пригласить» -- one link per school, masters appointed instead.
-    for (const item of [
-      'Редактировать',
-      'Пригласить',
-      'Передать школу',
-      'Удалить школу',
-    ]) {
+    for (const item of ['Редактировать', 'Пригласить', 'Передать школу', 'Удалить школу']) {
       expect(buttonWith(item)).toBeTruthy()
     }
     expect(text()).toContain('Ученики')
