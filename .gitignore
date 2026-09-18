@@ -7,6 +7,14 @@ desc/
 # that also excludes .env, but this catches misplaced files.
 .env
 .env.*
+# .env.example is documentation, not a secret, and it is LOAD-BEARING: the
+# backend Dockerfile COPYs it into the image and test_config.py opens it there
+# to check config.py's literals against it. Without this line the file is
+# protected only by being tracked -- and the moment anything untracks it (a
+# delete-and-recreate in an IDE is enough) `git add -A` silently drops it,
+# `git status` stays clean, and the next build fails on a missing COPY. That
+# is exactly how both copies were deleted in 73ac09e5.
+!.env.example
 
 # Dependencies. frontend/.gitignore:2 covers frontend/node_modules/, and the ROOT
 # one was covered by nothing at all until 2026-08-14 — a bare `git add .` here
