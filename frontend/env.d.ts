@@ -11,15 +11,6 @@ declare module '*.vue' {
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL: string
   readonly VITE_TELEGRAM_BOT_URL?: string
-  /**
-   * Voice input MVP: OpenRouter API key, read directly in the browser
-   * (src/api/openrouter.ts). Optional/empty -> the mic renders but every tap
-   * answers with an honest «Голосовой ввод недоступен» toast. Public by
-   * construction -- it ships inside the client bundle.
-   */
-  readonly VITE_OPENROUTER_API_KEY?: string
-  /** Transcription model on OpenRouter. Empty -> module default. */
-  readonly VITE_OPENROUTER_TRANSCRIBE_MODEL?: string
 }
 
 interface ImportMeta {

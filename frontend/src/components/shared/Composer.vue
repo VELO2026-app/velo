@@ -131,7 +131,7 @@ import { IconSend, IconMic } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import { useVoiceRecorder, type VoiceTake } from '@/composables/useVoiceRecorder'
-import { transcribeAudio } from '@/api/openrouter'
+import { transcribeAudio } from '@/api/transcription'
 import { SILENCE_PEAK_THRESHOLD } from '@/utils/audio'
 import { platform } from '@/platform'
 import VoiceRecordingPanel from './VoiceRecordingPanel.vue'
@@ -337,7 +337,7 @@ function autogrow(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Voice input (MVP, transcription via OpenRouter): the recorder composable
+// Voice input (transcription via our own backend, GT-41): the recorder composable
 // owns capture + WAV encoding; THIS component owns the UX consequences --
 // toasts (exact §2 texts), haptics, which surface shows what, and the one-way
 // insertion of the transcript into its own (empty) field. With `voiceInput`
@@ -353,7 +353,7 @@ const {
   cancel: cancelRecorder,
 } = useVoiceRecorder({ onAutoStop: (take) => void onVoiceTakeReady(take) })
 
-/** The OpenRouter round-trip: still part of "the take owns the field", so the
+/** The transcription round-trip: still part of "the take owns the field", so the
  * row stays frozen until the transcript lands or the error toast shows. */
 const transcribing = ref(false)
 

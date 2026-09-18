@@ -37,7 +37,7 @@ export const MIN_WITHDRAWAL_EUROS = 50
 export const WITHDRAWAL_FEE_EUROS = 2
 
 // ---------------------------------------------------------------------------
-// Composer voice input (MVP, transcription via OpenRouter) -- kill-switch
+// Composer voice input (transcription via our own backend) -- kill-switch
 // Used by: DiaryComposer, ChatThreadScreen (both pass it to the shared Composer)
 // ---------------------------------------------------------------------------
 
@@ -45,8 +45,8 @@ export const WITHDRAWAL_FEE_EUROS = 2
  * Real composer voice recording (tap mic -> record -> transcribe -> text in
  * the field). FALSE is the kill-switch: the mic disc never renders and both
  * composers behave exactly as before the feature -- no call-site changes
- * needed. See docs/voice-input-frontend-task.md for the MVP's explicit
- * no-backend scope (the browser talks to OpenRouter directly).
+ * needed. Transcription goes through POST /api/v1/ai/transcribe (GT-41); the
+ * browser holds no provider key and talks to no third party.
  */
 export const COMPOSER_VOICE_INPUT = true
 

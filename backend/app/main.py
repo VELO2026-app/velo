@@ -83,6 +83,9 @@ from app.modules.diary.router import (                             # Phase 8.1-8
     practices_insights_router,
 )
 from app.modules.ai.router import router as ai_router              # Phase 9.1
+from app.modules.ai.transcription_router import (                  # GT-41
+    router as transcription_router,
+)
 from app.modules.chats.router import router as chats_router  # Phase 6 / T2
 from app.modules.comms_proxy.router import router as notifications_router  # Phase 6 / T1
 from app.modules.support.router import router as support_router  # B34 / T-38
@@ -347,6 +350,7 @@ app.include_router(diary_feed_router)             # Diary redesign
 app.include_router(diary_router)                  # Phase 8.3
 app.include_router(practices_insights_router)     # Phase 8.4
 app.include_router(ai_router)                     # Phase 9.1
+app.include_router(transcription_router)          # GT-41
 app.include_router(notifications_router)          # Phase 6 / T1 (comms proxy)
 app.include_router(chats_router)                   # Phase 6 / T2 (chat proxy)
 app.include_router(support_router)                 # B34 / T-38 (support proxy)

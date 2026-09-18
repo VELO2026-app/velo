@@ -1,7 +1,7 @@
 // =============================================================================
 // VELO Frontend -- Composer voice input tests (voice input MVP, step 1)
 //
-// The recorder composable and the OpenRouter wrapper are mocked at their
+// The recorder composable and the transcription client are mocked at their
 // module seams: Composer is the unit under test (state ownership, guards,
 // toast texts, haptics, what replaces what in the row). The recorder mock is
 // a plain mutable object so each test can place the state machine exactly
@@ -58,7 +58,7 @@ vi.mock('@/composables/useVoiceRecorder', () => ({
     return voice as Recorder
   },
 }))
-vi.mock('@/api/openrouter', () => ({ transcribeAudio }))
+vi.mock('@/api/transcription', () => ({ transcribeAudio }))
 vi.mock('@/platform', () => ({
   platform: {
     hapticFeedback: haptics.impact,
@@ -439,20 +439,27 @@ describe('Composer -- honest failures', () => {
   })
 
   it('a transcription failure keeps the field empty and toasts the mapped message', async () => {
+    // The message used to be «Закончился баланс OpenRouter», and that
+    // assertion was right about the property that still holds: whatever the
+    // failure, a SPECIFIC sentence reaches the person -- not a silent empty
+    // field and not a raw code. What it can no longer be is that particular
+    // sentence: the key moved to the server (GT-41), so the browser knows
+    // neither the vendor nor our balance, and telling a stranger about
+    // either was never useful to them anyway.
     voice.stop.mockImplementation(async () => {
       voice.state.value = 'idle'
       return { wav: new Blob(['wav-bytes']), peak: 0.5 }
     })
     transcribeAudio.mockResolvedValue({
       ok: false,
-      error: 'Закончился баланс OpenRouter',
+      error: 'Сервис транскрибации недоступен',
     })
     beginRecording(5)
     await mount()
     panelBtn('voice-stop').click()
     await flush()
 
-    expect(toast.error).toHaveBeenCalledWith('Закончился баланс OpenRouter')
+    expect(toast.error).toHaveBeenCalledWith('Сервис транскрибации недоступен')
     expect(haptics.notification).toHaveBeenCalledWith('error')
     expect(textareaEl().value).toBe('')
     expect(panel()).toBeNull()
