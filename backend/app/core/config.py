@@ -473,6 +473,11 @@ class Settings(BaseSettings):
     # activity. Its own limit rather than a reuse of the title limit --
     # this is a label on a chip-sized card, not a heading over a body.
     external_activity_name_max_length: int = 120
+    # BE-37: how many of the person's own custom activity names the
+    # composer offers back. Owner decision, 16 September. NO-LITERALS:
+    # tunable here, not inline -- eight is a screenful of chips, and the
+    # number is the kind that gets argued about later.
+    external_activity_name_suggestions: int = 8
     diary_entry_title_max_length: int = 200
 
     # Allowed diary entry types (Дневник / Сонник). dream is wired on the

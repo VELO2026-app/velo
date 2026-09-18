@@ -568,3 +568,16 @@ class ExternalActivityResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CustomActivityNamesResponse(BaseModel):
+    """GET /api/v1/diary/external-activities/custom-names.
+
+    The person's own custom activity names, most recently used first, at
+    most settings.external_activity_name_suggestions of them. Spellings
+    that differ only in case are one name here, shown as it was typed the
+    last time; an empty list means they have never used a custom type, not
+    that something went wrong.
+    """
+
+    items: list[str]

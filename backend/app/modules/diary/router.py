@@ -39,6 +39,7 @@ from app.modules.diary.checkins_service import (
 )
 from app.modules.diary.external_activity_service import (
     create_external_activity,
+    list_custom_activity_names,
 )
 from app.modules.diary.feed_service import list_diary_feed
 from app.modules.diary.insights_service import (
@@ -50,6 +51,7 @@ from app.modules.diary.schemas import (
     CheckinResponse,
     CreateDiaryEntryRequest,
     CreateExternalActivityRequest,
+    CustomActivityNamesResponse,
     DiaryEntryResponse,
     DiaryFeedItem,
     DiaryFeedResponse,
@@ -333,6 +335,29 @@ async def create_external_activity_endpoint(
         thoughts=body.thoughts,
     )
     return ExternalActivityResponse.model_validate(activity)
+
+
+@diary_router.get(
+    "/external-activities/custom-names",
+    response_model=CustomActivityNamesResponse,
+)
+async def list_custom_activity_names_endpoint(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_reader),
+) -> CustomActivityNamesResponse:
+    """The person's own custom activity names, for the composer to offer.
+
+    Declared beside its sibling POST rather than at the end of the module:
+    two segments, so it cannot be swallowed by /{entry_id} at any position,
+    but a reader looking for the external-activity routes should find them
+    together.
+
+    No parameters at all -- not even a limit. The scope is the caller and
+    the count is a product decision (owner, 16 September), and neither is
+    something a query string should be able to move.
+    """
+    items = await list_custom_activity_names(user, session)
+    return CustomActivityNamesResponse(items=items)
 
 
 @diary_router.get(
