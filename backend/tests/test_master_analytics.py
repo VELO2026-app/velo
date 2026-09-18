@@ -322,23 +322,41 @@ async def test_month_bounds_follow_the_master_zone_across_the_year_edge() -> Non
     assert prev_start == datetime(2026, 11, 30, 11, tzinfo=UTC)
 
 
-async def test_dst_week_is_not_168_hours_and_stays_contiguous() -> None:
+async def test_dst_weeks_are_167_and_169_hours_and_stay_contiguous() -> None:
     """A DST week is 167 or 169 hours, and still joins its neighbours exactly.
 
     America/Santiago shifts at midnight, so the local day the clocks move is
     the hostile case: the week's own length changes. What must NOT change is
     that the previous window ends exactly where this one starts -- a gap would
     lose a practice and an overlap would count it twice.
+
+    Both directions, because a week short by an hour and a week long by one
+    fail differently, and the southern hemisphere runs them backwards from the
+    European intuition: September springs FORWARD (167) and April falls BACK
+    (169). The two instants are inside the transition weeks themselves --
+    2026-09-06 and 2026-04-05 -- not merely near them.
+
+    The first version of this test asserted 169 for the September week and was
+    wrong twice over: the week it picked was the one AFTER the transition, and
+    the direction was the northern one. Both numbers below are read off the
+    zone database, not recalled.
     """
-    now = datetime(2026, 9, 9, 12, tzinfo=UTC)
+    spring = datetime(2026, 9, 2, 12, tzinfo=UTC)
+    autumn = datetime(2026, 4, 2, 12, tzinfo=UTC)
 
-    cur_start, cur_end, prev_start = calendar_period_bounds_in_tz(
-        "week", now, "America/Santiago",
+    short_start, short_end, short_prev = calendar_period_bounds_in_tz(
+        "week", spring, "America/Santiago",
     )
+    assert short_end - short_start == timedelta(hours=167)
+    assert short_start - short_prev == timedelta(hours=168)
+    assert short_start <= spring < short_end
 
-    assert cur_end - cur_start != timedelta(weeks=1)
-    assert cur_start - prev_start == timedelta(hours=169)
-    assert cur_start <= now < cur_end
+    long_start, long_end, long_prev = calendar_period_bounds_in_tz(
+        "week", autumn, "America/Santiago",
+    )
+    assert long_end - long_start == timedelta(hours=169)
+    assert long_start - long_prev == timedelta(hours=168)
+    assert long_start <= autumn < long_end
 
 
 # ===================================================================
