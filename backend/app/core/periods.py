@@ -26,69 +26,115 @@
 #     percent change of a percent would mislead.
 # =============================================================================
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 def calendar_period_bounds(
     period: str, now: datetime,
 ) -> tuple[datetime, datetime, datetime]:
-    """Return (cur_start, cur_end, prev_start) for a calendar period (UTC).
+    """Return (cur_start, cur_end, prev_start) for a calendar period, in UTC.
+
+    The UTC entry point, and the one every dashboard used before BE-34. It is
+    a thin call into calendar_period_bounds_in_tz with "UTC", NOT a second
+    implementation: the week / month / quarter rules live in exactly one body,
+    so they cannot drift apart the way two copies would within a release.
+
+    Behaviour is unchanged by that delegation, and the reason is a property of
+    UTC rather than a hope: UTC has no DST transition, so local midnight there
+    is always the instant the old `now.replace(hour=0, ...)` produced. The
+    existing UTC bound tests are what holds this true -- if any of them needs
+    editing, the delegation changed behaviour and the change is the defect.
+    """
+    return calendar_period_bounds_in_tz(period, now, "UTC")
+
+
+def calendar_period_bounds_in_tz(
+    period: str, now: datetime, tz: str,
+) -> tuple[datetime, datetime, datetime]:
+    """(cur_start, cur_end, prev_start) for a calendar period in `tz` (BE-34).
 
     week    -> Monday 00:00 .. next Monday; prev_start = previous Monday.
     quarter -> 1st of Jan/Apr/Jul/Oct 00:00 .. 1st of the next quarter;
                prev_start = 1st of the previous quarter.
     month   -> 1st 00:00 .. next 1st;      prev_start = previous month's 1st.
 
+    Boundaries are the local midnights of `tz`, RETURNED IN UTC so callers
+    compare them against stored timestamps without converting anything. A
+    master in Europe/Moscow gets a week that starts at 21:00 UTC Sunday, which
+    is 00:00 Monday where he lives and where his practices happen.
+
     cur_end doubles as prev_end (periods are contiguous): the previous period
-    is [prev_start, cur_start). `now` is expected to be timezone-aware UTC.
+    is [prev_start, cur_start). `now` must be timezone-aware; it is read as an
+    instant, so the caller's own zone does not matter.
+
+    `tz` is REQUIRED and has no default, deliberately. A default would be UTC
+    forever and every future caller would inherit it without deciding, which
+    is the state BE-34 exists to end. An unknown or malformed name falls back
+    to UTC rather than raising: User.timezone is validated against the IANA
+    database on write, so a bad one can only reach here from a row older than
+    that validator, and answering a dashboard in UTC beats answering 500.
+
     Any value other than "week" and "quarter" is treated as "month" (routers
     constrain the query param via Literal, so the service layer trusts it).
     Not every router offers every period: the fallback exists for callers that
     only ever pass week or month, not as a way to accept free-form input.
     """
+    try:
+        zone = ZoneInfo(tz)
+    except (ZoneInfoNotFoundError, ValueError, KeyError):
+        zone = ZoneInfo("UTC")
+
+    local = now.astimezone(zone)
+
+    def at_local_midnight(year: int, month: int, day: int) -> datetime:
+        """Local midnight of that date, as a UTC instant.
+
+        Built from the date alone rather than by replacing fields on `local`,
+        because a DST transition can make the local day shorter or longer than
+        24 hours: arithmetic in local wall-clock terms and a single conversion
+        at the end is the only order that keeps the boundaries contiguous.
+        """
+        return datetime(year, month, day, tzinfo=zone).astimezone(UTC)
+
     if period == "week":
-        cur_start = (now - timedelta(days=now.weekday())).replace(
-            hour=0, minute=0, second=0, microsecond=0,
+        monday = (local - timedelta(days=local.weekday())).date()
+        cur_start = at_local_midnight(monday.year, monday.month, monday.day)
+        next_monday = monday + timedelta(weeks=1)
+        prev_monday = monday - timedelta(weeks=1)
+        return (
+            cur_start,
+            at_local_midnight(
+                next_monday.year, next_monday.month, next_monday.day,
+            ),
+            at_local_midnight(
+                prev_monday.year, prev_monday.month, prev_monday.day,
+            ),
         )
-        cur_end = cur_start + timedelta(weeks=1)
-        prev_start = cur_start - timedelta(weeks=1)
-        return cur_start, cur_end, prev_start
 
     if period == "quarter":
-        # First month of the quarter now falls in: 1, 4, 7, 10.
-        first_month = ((now.month - 1) // 3) * 3 + 1
-        cur_start = now.replace(
-            month=first_month, day=1,
-            hour=0, minute=0, second=0, microsecond=0,
-        )
-        # The two year edges are NOT symmetric: only Q4 rolls forward (Oct ->
-        # Jan of the next year) and only Q1 rolls back (Jan -> Oct of the
-        # previous one). Same shape as the month branch below, step 3.
-        if cur_start.month == 10:
-            cur_end = cur_start.replace(year=cur_start.year + 1, month=1)
-        else:
-            cur_end = cur_start.replace(month=cur_start.month + 3)
-        if cur_start.month == 1:
-            prev_start = cur_start.replace(year=cur_start.year - 1, month=10)
-        else:
-            prev_start = cur_start.replace(month=cur_start.month - 3)
+        # First month of the quarter `local` falls in: 1, 4, 7, 10.
+        first_month = ((local.month - 1) // 3) * 3 + 1
+        step = 3
         # shift_anchor() below has no quarter branch on purpose -- the full
         # reasoning is the KNOWN CEILING marker there, not repeated here.
-        return cur_start, cur_end, prev_start
+    else:
+        first_month = local.month
+        step = 1
 
-    # month
-    cur_start = now.replace(
-        day=1, hour=0, minute=0, second=0, microsecond=0,
+    # The two year edges are NOT symmetric: only the last month/quarter of the
+    # year rolls forward, only the first rolls back. Counting months from year
+    # zero and dividing back is what makes both edges one rule instead of two
+    # conditionals that can be swapped.
+    index = local.year * 12 + (first_month - 1)
+    cur_year, cur_month = divmod(index, 12)
+    next_year, next_month = divmod(index + step, 12)
+    prev_year, prev_month = divmod(index - step, 12)
+    return (
+        at_local_midnight(cur_year, cur_month + 1, 1),
+        at_local_midnight(next_year, next_month + 1, 1),
+        at_local_midnight(prev_year, prev_month + 1, 1),
     )
-    if cur_start.month == 12:
-        cur_end = cur_start.replace(year=cur_start.year + 1, month=1)
-    else:
-        cur_end = cur_start.replace(month=cur_start.month + 1)
-    if cur_start.month == 1:
-        prev_start = cur_start.replace(year=cur_start.year - 1, month=12)
-    else:
-        prev_start = cur_start.replace(month=cur_start.month - 1)
-    return cur_start, cur_end, prev_start
 
 
 # KNOWN CEILING -- shift_anchor has no "quarter" branch.
