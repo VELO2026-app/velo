@@ -22,9 +22,11 @@
 from datetime import datetime
 
 import structlog
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import record_audit
+from app.core.config import settings
 from app.modules.diary.models import ExternalActivity
 from app.modules.diary.projections import add_external_activity_event
 from app.modules.users.models import User
@@ -100,3 +102,115 @@ async def create_external_activity(
         activity_type=activity_type,
     )
     return activity
+
+
+async def list_custom_activity_names(
+    user: User,
+    session: AsyncSession,
+) -> list[str]:
+    """The person's own custom activity names, freshest first (BE-37).
+
+    Somebody who typed "Бальные танцы" a week ago should not have to type
+    it again. Only their own names, by construction: the filter is on
+    user_id and there is no parameter that could widen it.
+
+    THE FILTER IS `custom_activity_name IS NOT NULL`, NOT
+    `activity_type == 'custom'`. Today the two are equivalent -- the DB
+    constraint ck_external_activity_custom makes the name present exactly
+    when the type is custom -- but they are not the same promise. What we
+    are afraid of here is a null in a list of names, and the null check is
+    what forbids it; if that constraint were ever relaxed, the type filter
+    would let nulls through and this one still would not. Both together
+    would be worse than either: the next reader would assume each catches
+    something and leave both untouched.
+
+    CASE-INSENSITIVE, SPELLING OF THE FRESHEST. "Йога" and "йога" are one
+    activity typed twice by one person, and showing both would spend two
+    of eight slots on one thing. Inner spacing is NOT normalised: "Йога
+    нидра" and "Йога  нидра" stay two names, because guessing at what a
+    person meant inside a name is a different decision from folding case.
+
+    THE ORDERING KEY IS occurred_at, AND EVERYTHING ELSE HERE IS A
+    TIE-BREAK. The distinction is the whole lesson of three deliveries:
+    a sort key has to be the thing that orders the rows by MEANING, and
+    whatever is added after it only keeps equal rows from swapping places.
+    The result of a tie-break is not a promise to anybody.
+
+    NEITHER TIE-BREAK IS BY id. A UUID is random, so ordering by it is
+    stable inside one run and arbitrary between them -- shipped in BE-30,
+    repaired in GT-35, and not repeated here.
+
+      - inner: two spellings of one name sharing occurred_at -- one of
+        them is shown;
+      - outer: two different names sharing their freshest occurred_at --
+        both keep their places from call to call.
+
+    WHICH one wins either tie is DELIBERATELY NOT PINNED, and no test
+    asserts it. Both comparisons are between strings, and string order in
+    postgres comes from the database's collation: "ЙОГА" sorts before
+    "Йога" under C.UTF-8 and after it under a linguistic collation --
+    measured on one machine, both ways. Nobody ever decided which spelling
+    of a person's own name should win, so there is nothing to defend; what
+    the tie-breaks buy is that the answer does not move between runs on a
+    given server, and that is what they are for. Forcing byte order
+    (COLLATE "C") was tried and rolled back: it changes a visible list to
+    make an invisible property portable, and it puts every capital letter
+    ahead of every small one.
+
+    THE CASE FOLDING, unlike the tie-breaks, DOES depend on the database's
+    locale and must. lower() takes its case-mapping rules from there, and
+    pinning a collation onto its argument stops it folding Cyrillic at all
+    -- lower('ЙОГА' COLLATE "C") returns 'ЙОГА'. The locale is not set in
+    docker-compose.yml, so this rests on the postgres image's default;
+    test_three_spellings_are_one_name_in_its_freshest_form is the detector
+    and will fail loudly rather than quietly if that default ever changes.
+
+    QUERY SHAPE, and where it stops being cheap: DISTINCT ON folds the
+    names, so the database must sort by lower(name), which
+    ix_external_activities_user_occurred does not provide -- that index
+    covers the WHERE and not the ORDER BY. The sort therefore runs over
+    one person's rows and nobody else's, which is tens today. The cost
+    grows with ONE PERSON'S history, not with the number of people; past
+    a few hundred custom entries for a single person the fix is an
+    expression index on (user_id, lower(custom_activity_name)). Not built
+    now: an index for a load that does not exist is machinery under a
+    state nothing can reach.
+
+    Args:
+        user: The authenticated owner; the only scope there is.
+        session: Read session.
+
+    Returns:
+        Up to settings.external_activity_name_suggestions names, newest
+        use first. Empty when the person has never used a custom type.
+    """
+    folded = func.lower(ExternalActivity.custom_activity_name)
+    freshest = (
+        select(
+            ExternalActivity.custom_activity_name.label("name"),
+            ExternalActivity.occurred_at.label("occurred_at"),
+            folded.label("folded"),
+        )
+        .where(
+            ExternalActivity.user_id == user.id,
+            ExternalActivity.custom_activity_name.is_not(None),
+        )
+        .distinct(folded)
+        .order_by(
+            folded,
+            ExternalActivity.occurred_at.desc(),
+            ExternalActivity.custom_activity_name.asc(),
+        )
+        .subquery()
+    )
+    rows = (
+        await session.execute(
+            select(freshest.c.name)
+            .order_by(
+                freshest.c.occurred_at.desc(),
+                freshest.c.folded.asc(),
+            )
+            .limit(settings.external_activity_name_suggestions)
+        )
+    ).scalars().all()
+    return list(rows)

@@ -3,7 +3,7 @@
  *
  * The recording half of composer voice input: MediaRecorder lifecycle wrapped
  * in a small state machine, plus the WAV handoff. Transcription does NOT live
- * here -- the caller (Composer) owns the OpenRouter round-trip and the toasts
+ * here -- the caller (Composer) owns the transcription round-trip and the toasts
  * (see docs/voice-input-frontend-task.md §4/§5).
  *
  * STATE MACHINE: idle -> requesting -> recording -> processing -> idle.

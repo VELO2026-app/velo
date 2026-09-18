@@ -295,10 +295,17 @@ class TestReminderOrchestration:
 
 _PROXY_SEAM = "app.modules.comms_proxy.router.comms_request"
 
-_QUIET_PREFS = {
+# comms 2.0.0 speaks a LIST OF ALLOWED PERIODS, each owned by its day and
+# never crossing midnight. It used to speak one QUIET window, and this
+# fixture used to hold {"from": "22:00", "to": "09:00", "days": [...]} --
+# the same minutes read from the opposite end, which is why the proxy
+# inverted them. There is nothing left to invert.
+_PERIOD_PREFS = {
     "categories": {"bookings": True, "reminders": False},
-    # comms speaks the QUIET window: silence 22:00 -> 09:00.
-    "schedule": {"from": "22:00", "to": "09:00", "days": ["mon", "fri"]},
+    "schedule": [
+        {"day": "mon", "from": "09:00", "to": "22:00"},
+        {"day": "fri", "from": "09:00", "to": "22:00"},
+    ],
     "timezone": "Europe/Berlin",
 }
 
@@ -327,6 +334,19 @@ class TestNotificationsProxy:
     async def test_client_supplied_recipient_id_rejected(
         self, client,
     ) -> None:
+        """A recipient_id in the query is refused here, with its own code.
+
+        One door of six. `_reject_recipient_override` guards every proxied
+        endpoint in this router and raises from a single place, so all six
+        answer the same code on purpose -- this test picks the inbox
+        because it is the one a wrong client reaches first.
+
+        The status assertion was right that the refusal is never forwarded
+        and stays. It could not tell this 400 from the schedule's 400 while
+        both carried the default bad_request; the code assertion can, and
+        it is also what the frontend needs to keep this apart from an error
+        a person could have caused.
+        """
         login = await login_user(client, telegram_id=TID_PROXY)
         seam = AsyncMock()
         with patch(_PROXY_SEAM, seam):
@@ -335,13 +355,28 @@ class TestNotificationsProxy:
                 headers=auth_headers(login["session_token"]),
             )
         assert response.status_code == 400
+        assert response.json()["error"] == "recipient_override_not_allowed"
         seam.assert_not_awaited()
 
-    async def test_prefs_get_converts_quiet_to_delivery(
+    async def test_prefs_get_collapses_periods_into_the_screen_window(
         self, client,
     ) -> None:
+        """Their list of periods -> the screen's one window plus days.
+
+        The old form of this test asserted an INVERSION -- quiet
+        22:00->09:00 came back as deliver 09:00->22:00 -- and it was right
+        about the model it was written for: comms stored silence, the
+        screen states delivery, and the same minutes read from either end
+        are each other's complement. comms 2.0.0 stores the delivery
+        periods themselves, so there is nothing to turn over, and an
+        inversion left in place would now return the exact opposite
+        schedule without any error at all.
+
+        The hours are asserted by VALUE, not by presence, for the same
+        reason: an inverted answer is still a well-formed answer.
+        """
         login = await login_user(client, telegram_id=TID_PREFS)
-        seam = AsyncMock(return_value=dict(_QUIET_PREFS))
+        seam = AsyncMock(return_value=dict(_PERIOD_PREFS))
         with patch(_PROXY_SEAM, seam):
             response = await client.get(
                 "/api/v1/notifications/prefs",
@@ -349,19 +384,31 @@ class TestNotificationsProxy:
             )
         assert response.status_code == 200
         body = response.json()
-        # Quiet 22:00->09:00 == deliver 09:00->22:00; days pass through.
         assert body["schedule"] == {
             "from": "09:00", "to": "22:00", "days": ["mon", "fri"],
         }
         # Categories and timezone are NOT re-assembled.
-        assert body["categories"] == _QUIET_PREFS["categories"]
+        assert body["categories"] == _PERIOD_PREFS["categories"]
         assert body["timezone"] == "Europe/Berlin"
 
-    async def test_prefs_put_converts_delivery_to_quiet(
+    async def test_prefs_put_expands_the_screen_window_into_periods(
         self, client,
     ) -> None:
+        """The screen's window plus days -> one period per marked day.
+
+        WHAT IS ASSERTED IS WHICH HOURS WENT, not that a schedule went.
+        The old assertion checked for the inverted pair and was correct
+        for the quiet-window model; under the period model the inverse is
+        still syntactically valid, comms would accept it with a 200, the
+        build would be green, and the person would be notified exactly
+        when they asked for silence. This is the one place in the feature
+        where a mistake makes no noise, so the test names the values.
+
+        Days come back in mon..sun order regardless of the order the
+        screen sent them in.
+        """
         login = await login_user(client, telegram_id=TID_PREFS)
-        seam = AsyncMock(return_value=dict(_QUIET_PREFS))
+        seam = AsyncMock(return_value=dict(_PERIOD_PREFS))
         with patch(_PROXY_SEAM, seam):
             response = await client.put(
                 "/api/v1/notifications/prefs",
@@ -370,16 +417,213 @@ class TestNotificationsProxy:
                     "categories": {"reminders": False},
                     "schedule": {
                         "from": "09:00", "to": "22:00",
-                        "days": ["mon", "fri"],
+                        "days": ["fri", "mon"],
                     },
                 },
             )
         assert response.status_code == 200
         sent = seam.await_args.kwargs["json"]
         assert sent["categories"] == {"reminders": False}
-        assert sent["schedule"] == {
-            "from": "22:00", "to": "09:00", "days": ["mon", "fri"],
-        }
+        assert sent["schedule"] == [
+            {"day": "mon", "from": "09:00", "to": "22:00"},
+            {"day": "fri", "from": "09:00", "to": "22:00"},
+        ]
+
+    async def test_midnight_is_normalised_before_the_overnight_branch(
+        self, client,
+    ) -> None:
+        """"Deliver 09:00 to midnight" is ONE period, not two broken ones.
+
+        THE ORDER OF TWO RULES IS THE SUBJECT OF THIS TEST, which is why
+        it is an assertion and not a comment. The picker offers hours
+        00..23, so "until midnight" arrives as to="00:00"; comms spells
+        the end of a day "24:00". And numerically "09:00" > "00:00", so
+        without the rename happening FIRST this input falls into the
+        overnight branch and is split into a zero-length period plus a
+        second one -- the first refused, the second wrong, for the most
+        ordinary choice on the screen.
+        """
+        login = await login_user(client, telegram_id=TID_PREFS)
+        seam = AsyncMock(return_value=dict(_PERIOD_PREFS))
+        with patch(_PROXY_SEAM, seam):
+            response = await client.put(
+                "/api/v1/notifications/prefs",
+                headers=auth_headers(login["session_token"]),
+                json={"schedule": {
+                    "from": "09:00", "to": "00:00", "days": ["mon"],
+                }},
+            )
+        assert response.status_code == 200
+        assert seam.await_args.kwargs["json"]["schedule"] == [
+            {"day": "mon", "from": "09:00", "to": "24:00"},
+        ]
+
+    async def test_an_overnight_window_stays_inside_the_marked_day(
+        self, client,
+    ) -> None:
+        """"Deliver 21:00 to 09:00 on Monday" is two periods, both Monday.
+
+        NOT Monday evening plus Tuesday morning: an unmarked day is
+        silent for its whole length (owner ruling, 16 September), so
+        spilling into Tuesday would deliver on a day nobody ticked. Read
+        forward, the setting means "on Monday, notify outside 09:00-21:00"
+        -- do not disturb during working hours.
+
+        The two periods cannot touch or overlap, which is why the proxy
+        carries no branch for it: they are [00:00, 09:00) and
+        [21:00, 24:00), and touching would require the two times to be
+        equal, which is refused before this point.
+        """
+        login = await login_user(client, telegram_id=TID_PREFS)
+        seam = AsyncMock(return_value=dict(_PERIOD_PREFS))
+        with patch(_PROXY_SEAM, seam):
+            response = await client.put(
+                "/api/v1/notifications/prefs",
+                headers=auth_headers(login["session_token"]),
+                json={"schedule": {
+                    "from": "21:00", "to": "09:00", "days": ["mon"],
+                }},
+            )
+        assert response.status_code == 200
+        assert seam.await_args.kwargs["json"]["schedule"] == [
+            {"day": "mon", "from": "00:00", "to": "09:00"},
+            {"day": "mon", "from": "21:00", "to": "24:00"},
+        ]
+
+    async def test_equal_times_are_refused_here_and_never_forwarded(
+        self, client,
+    ) -> None:
+        """The proxy answers with its own code, comms is never asked.
+
+        Their refusal speaks of minutes and an ISO weekday number; this is
+        the last place that still knows the request came from a screen
+        with two time fields. The seam is asserted un-awaited so that
+        "refused" cannot quietly mean "forwarded and refused there".
+
+        The status assertion was right about WHERE the refusal happens and
+        stays. What it could not do is tell this refusal apart from the
+        other 400 this router raises: both used to carry the default
+        bad_request, so a swap of the two branches would have kept this
+        test green. The code assertion is what closes that.
+        """
+        login = await login_user(client, telegram_id=TID_PREFS)
+        seam = AsyncMock()
+        with patch(_PROXY_SEAM, seam):
+            response = await client.put(
+                "/api/v1/notifications/prefs",
+                headers=auth_headers(login["session_token"]),
+                json={"schedule": {
+                    "from": "09:00", "to": "09:00", "days": ["mon"],
+                }},
+            )
+        assert response.status_code == 400
+        assert response.json()["error"] == "delivery_window_empty"
+        seam.assert_not_awaited()
+
+    async def test_no_day_ticked_is_null_and_not_an_empty_list(
+        self, client,
+    ) -> None:
+        """comms refuses [] with a 422: "never" is not a schedule.
+
+        null is their spelling for "no restriction", and it is what the
+        screen's own empty state has to become -- otherwise the most
+        obvious way to clear the days answers with somebody else's
+        validation error.
+        """
+        login = await login_user(client, telegram_id=TID_PREFS)
+        seam = AsyncMock(return_value={
+            "categories": {}, "schedule": None, "timezone": None,
+        })
+        with patch(_PROXY_SEAM, seam):
+            response = await client.put(
+                "/api/v1/notifications/prefs",
+                headers=auth_headers(login["session_token"]),
+                json={"schedule": {
+                    "from": "09:00", "to": "21:00", "days": [],
+                }},
+            )
+        assert response.status_code == 200
+        assert seam.await_args.kwargs["json"] == {"schedule": None}
+
+    async def test_saving_then_reading_gives_back_the_same_window(
+        self, client,
+    ) -> None:
+        """Reversibility, measured end to end rather than argued.
+
+        Each case is PUT, and the periods the proxy sent are then fed back
+        as if they were the GET response -- which is exactly what comms
+        does, since a PATCH answers with the full form. What the person
+        saved is what the screen shows next time, including the two
+        shapes that are not plain: midnight as an end, and an overnight
+        window.
+        """
+        login = await login_user(client, telegram_id=TID_PREFS)
+        for window in (
+            {"from": "09:00", "to": "21:00", "days": ["mon", "fri"]},
+            {"from": "09:00", "to": "00:00", "days": ["mon"]},
+            {"from": "21:00", "to": "09:00", "days": ["mon", "tue"]},
+            {"from": "00:00", "to": "09:00", "days": ["sun"]},
+        ):
+            seam = AsyncMock(return_value=dict(_PERIOD_PREFS))
+            with patch(_PROXY_SEAM, seam):
+                await client.put(
+                    "/api/v1/notifications/prefs",
+                    headers=auth_headers(login["session_token"]),
+                    json={"schedule": window},
+                )
+            periods = seam.await_args.kwargs["json"]["schedule"]
+
+            echo = AsyncMock(return_value={
+                "categories": {}, "schedule": periods, "timezone": None,
+            })
+            with patch(_PROXY_SEAM, echo):
+                read = await client.get(
+                    "/api/v1/notifications/prefs",
+                    headers=auth_headers(login["session_token"]),
+                )
+            assert read.json()["schedule"] == window, window
+
+    async def test_a_schedule_the_screen_cannot_show_reads_as_null(
+        self, client,
+    ) -> None:
+        """KNOWN CEILING, asserted rather than described.
+
+        Their contract allows different hours on different days; this
+        screen has one pair for every ticked day. Collapsing is defined
+        only while every day carries the same hours, which holds because
+        the only writer is this proxy -- an invariant of our code, not a
+        promise of theirs.
+
+        null here means "not representable by this screen", not "not
+        configured": the two look the same to the screen and are told
+        apart only in the log. The whole-day period is in the same
+        bucket for a subtler reason -- it would collapse to from == to,
+        which the write path refuses, so showing it would leave the
+        screen in a state it cannot save.
+        """
+        login = await login_user(client, telegram_id=TID_PREFS)
+        for schedule in (
+            [
+                {"day": "mon", "from": "09:00", "to": "21:00"},
+                {"day": "tue", "from": "10:00", "to": "20:00"},
+            ],
+            [
+                {"day": "mon", "from": "01:00", "to": "02:00"},
+                {"day": "mon", "from": "03:00", "to": "04:00"},
+                {"day": "mon", "from": "05:00", "to": "06:00"},
+            ],
+            [{"day": "mon", "from": "00:00", "to": "24:00"}],
+        ):
+            seam = AsyncMock(return_value={
+                "categories": {}, "schedule": schedule, "timezone": None,
+            })
+            with patch(_PROXY_SEAM, seam):
+                response = await client.get(
+                    "/api/v1/notifications/prefs",
+                    headers=auth_headers(login["session_token"]),
+                )
+            assert response.status_code == 200
+            assert response.json()["schedule"] is None, schedule
 
     async def test_prefs_put_null_schedule_clears(self, client) -> None:
         login = await login_user(client, telegram_id=TID_PREFS)
@@ -415,7 +659,7 @@ class TestNotificationsProxy:
            is the same defect as one that silences nothing.
         """
         login = await login_user(client, telegram_id=TID_PREFS)
-        seam = AsyncMock(return_value=dict(_QUIET_PREFS))
+        seam = AsyncMock(return_value=dict(_PERIOD_PREFS))
         shown = {
             "reminders": False,
             "msg_participants": False,

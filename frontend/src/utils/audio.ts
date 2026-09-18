@@ -2,11 +2,11 @@
  * VELO Frontend -- Audio helpers (voice input MVP, step 1)
  *
  * Pure, browser-surface-only helpers shared by the voice recorder
- * (useVoiceRecorder) and the OpenRouter transcription wrapper. No Vue here:
+ * (useVoiceRecorder) and the transcription client. No Vue here:
  * everything is either a pure function over data (testable without a
  * microphone) or a thin FileReader bridge.
  *
- * WHY WAV: the OpenAI transcription models behind OpenRouter accept only
+ * WHY WAV: the audio models our backend transcribes with accept only
  * wav/mp3 as input_audio, while MediaRecorder on iOS Safari produces mp4/aac
  * and on Android/Chrome webm/opus. We standardise on PCM WAV: decode with the
  * WebAudio API and re-encode 16 kHz mono PCM16 below -- small, universally

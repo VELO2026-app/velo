@@ -315,6 +315,20 @@ export interface AdminZoomUnmatchedRow {
   duration_seconds: number | null
 }
 
+/** Check-in counts by mood bucket (low 1-3 / mid 4-7 / high 8-10). Named apart from diary.schemas.MoodDistribution on purpose, following admin.metrics.schemas.FeedbackRatingDistribution: two components with one name would be emitted module-qualified in the OpenAPI document and break the frontend's flat re-export. Same shape, same thresholds, one owner -- diary.insights_service.mood_bucket, which computes both. */
+export interface AnalyticsMoodDistribution {
+  high: number
+  mid: number
+  low: number
+}
+
+/** Feedback counts by rating bucket (confused 1-3 / good 4-7 / fire 8-10). AnalyticsMoodDistribution's twin, named apart for the same reason. */
+export interface AnalyticsRatingDistribution {
+  fire: number
+  good: number
+  confused: number
+}
+
 /** Admin announcement: pre-rendered title/body + audience pick. */
 export interface AnnouncementRequest {
   title: string
@@ -781,6 +795,11 @@ export interface CuratorGroupViewer {
   relation: 'curator' | 'master' | 'student'
 }
 
+/** GET /api/v1/diary/external-activities/custom-names. The person's own custom activity names, most recently used first, at most settings.external_activity_name_suggestions of them. Spellings that differ only in case are one name here, shown as it was typed the last time; an empty list means they have never used a custom type, not that something went wrong. */
+export interface CustomActivityNamesResponse {
+  items: string[]
+}
+
 /** Single diary entry in API responses. */
 export interface DiaryEntryResponse {
   id: string
@@ -966,6 +985,24 @@ export interface LowCheckinPractice {
   title: string
   checkin_rate_pct: number
   total: number
+}
+
+/** GET /api/v1/masters/me/analytics?period=week|month|quarter. Everything the master's analytics screen shows, for one calendar period in the MASTER'S OWN timezone -- unlike the dashboard grid above, whose bounds are UTC. bookings_count is the rate denominator: bookings on the period's completed practices that were not cancelled. Counted in bookings rather than distinct people because a check-in is unique per booking. Deltas carry the two conventions from core/periods.py: counts use a signed percent change (null when the previous period had no base), rates use a spread in percentage POINTS (null when the previous period had no denominator). The client renders "--" for either null. rate fields are 0 when the period has no bookings -- an honest empty, the same answer the admin dashboards give. */
+export interface MasterAnalyticsResponse {
+  practices_count: number
+  practices_delta_pct: number | null
+  bookings_count: number
+  bookings_delta_pct: number | null
+  checkins_count: number
+  checkins_delta_pct: number | null
+  feedbacks_count: number
+  feedbacks_delta_pct: number | null
+  checkin_rate_pct: number
+  checkin_rate_delta_pp: number | null
+  feedback_rate_pct: number
+  feedback_rate_delta_pp: number | null
+  checkins: AnalyticsMoodDistribution
+  feedbacks: AnalyticsRatingDistribution
 }
 
 /** The user's master-application state, read from MasterProfile.data.account. Surfaced on UserResponse (T5) so a role='user' applicant can see the verdict of their application (pending / verified / rejected + the rejection reason) without the master-only GET /masters/me endpoint. Set by the GET /users/me router from the same MasterProfile load used for master capability. */
@@ -1747,6 +1784,16 @@ export interface TopupResponse {
   checkout_url: string
   amount_cents: number
   currency: string
+}
+
+/** POST /api/v1/ai/transcribe -- request body. audio_base64: one WAV recording, base64-encoded. Base64 rather than multipart because the frontend's shared client serialises every body as JSON, and a second transport would have to be built and kept in step for one endpoint. The size ceiling is enforced on the DECODED bytes (transcription.MAX_AUDIO_BYTES), not on this string: base64 is a third larger than what the recorder produced and a third larger than what the provider receives. */
+export interface TranscribeRequest {
+  audio_base64: string
+}
+
+/** POST /api/v1/ai/transcribe -- response body. Success only: every failure leaves through a VeloError with a machine code, so this model never has to carry an "ok" flag or an error field. text is never empty -- an empty transcript is speech_not_recognized. */
+export interface TranscribeResponse {
+  text: string
 }
 
 /** PATCH /masters/me/curator-groups/{id}. `name` is always required -- a group always has one. `description` is a PARTIAL update. The router computes `"description" in body.model_dump(exclude_unset=True)` and passes it as description_provided, which is the only way to tell "the key was absent" (leave the column alone) from "the key was sent as null/empty" (write NULL). A bare `str | None = None` cannot distinguish the two and would wipe an existing description on every plain rename -- the exact bug RenameGroupRequest was rewritten to prevent. avatar_url (GT-17) is a PARTIAL update by the same mechanism and for the same reason -- the router computes avatar_url_provided the same way. Absent key: the column is untouched. Present and null (or blank): the avatar is removed. Present and a url: it is replaced. CREATION DOES NOT TAKE AN AVATAR, only this update does. A school is founded with a name and a description; the picture is attached afterwards. Not an omission -- widening CreateCuratorGroupRequest would touch a schema five test files exercise, for a field the create screen has no input for. */

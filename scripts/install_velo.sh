@@ -913,6 +913,39 @@ generate_env() {
     success "Bot: @${TELEGRAM_BOT_USERNAME}"
     echo ""
 
+    # Ask for the transcription key -- server-side, never in the bundle.
+    echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}  Voice transcription (optional)${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "${YELLOW}OpenRouter key for the composer's voice input.${NC}"
+    echo -e "${YELLOW}It stays on THIS server and never reaches a browser.${NC}"
+    echo -e "${YELLOW}Nothing limits how much one person may transcribe, so${NC}"
+    echo -e "${YELLOW}use a key with a spend cap.${NC}"
+    echo ""
+    local OPENROUTER_API_KEY
+    read -p "OPENROUTER_API_KEY (empty = voice input off): " OPENROUTER_API_KEY
+
+    # NO LIVENESS CHECK, unlike TELEGRAM_BOT_TOKEN above, and the asymmetry is
+    # deliberate rather than an omission. That token is load-bearing: without
+    # it nobody can log in, so an install proceeding on a bad one produces a
+    # dead product. Voice input is one optional feature behind a kill-switch;
+    # a verdict of "the key worked during the install" expires the moment the
+    # balance does; the runtime already answers transcription_not_configured
+    # for a missing key and transcription_failed for a rejected one; and
+    # calling a paid vendor here would make INSTALLING velo depend on a third
+    # party being reachable.
+    if [ -z "$OPENROUTER_API_KEY" ]; then
+        warn "No OpenRouter key -- voice input is OFF on this server."
+        warn "The mic still records; every take comes back with"
+        warn "«Голосовой ввод недоступен» until OPENROUTER_API_KEY is set in"
+        warn "backend/.env and the backend is restarted. This is a stated"
+        warn "state, not a silent one."
+    else
+        success "OpenRouter key stored server-side"
+    fi
+    echo ""
+
     # Ask for Zoom -- added T-35 follow-up. Until now the installer asked for
     # NOTHING about Zoom, so ZOOM_ACCOUNT_ID / ZOOM_CLIENT_ID /
     # ZOOM_CLIENT_SECRET were absent from every generated .env and
@@ -1079,6 +1112,17 @@ ZOOM_CLIENT_SECRET=${ZOOM_CLIENT_SECRET}
 # in production -- deliberately: a server whose meetings are fabricated must
 # not look identical to a working one.
 ALLOW_ZOOM_STUB=${ALLOW_ZOOM_STUB}
+
+# --- Voice transcription (GT-41) ---
+# Read by the SERVER. It is never a VITE_ variable and never reaches the
+# bundle -- that is the whole reason the transcription endpoint exists.
+# Empty: the mic records and every take answers a machine code instead of a
+# transcript. Nothing here caps per-person usage, so the key itself should
+# carry a spend cap.
+OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+# Optional. Empty falls back to openai/gpt-audio-mini (config.py). Kept
+# overridable because the provider renamed its audio models once already.
+OPENROUTER_TRANSCRIBE_MODEL=
 
 # --- Stripe ---
 STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}

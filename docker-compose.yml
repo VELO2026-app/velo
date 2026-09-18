@@ -105,6 +105,16 @@ services:
     logging: *default-logging
 
   postgres:
+    # Locale is NOT pinned here on purpose, and that is worth knowing before
+    # anyone pins it. The cluster inherits the image default (en_US.utf8 on the
+    # stand, measured -- not assumed). Case folding for Cyrillic depends on it:
+    # the custom-activity-name suggestions group 'Йога' and 'йога' into one row
+    # via lower(), and under a C locale lower() leaves Cyrillic untouched, so
+    # that grouping would silently split. POSTGRES_INITDB_ARGS only applies when
+    # the cluster is first created -- setting it on an existing volume changes
+    # nothing and makes this file promise what the database does not do.
+    # If the cluster is ever recreated, re-check: the guard that catches a
+    # locale change is test_three_spellings_are_one_name_in_its_freshest_form.
     image: postgres:16
     container_name: velo-postgres
     # NARROW env (T-32 item 9): the four keys this container actually
