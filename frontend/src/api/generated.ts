@@ -1786,6 +1786,16 @@ export interface TopupResponse {
   currency: string
 }
 
+/** POST /api/v1/ai/transcribe -- request body. audio_base64: one WAV recording, base64-encoded. Base64 rather than multipart because the frontend's shared client serialises every body as JSON, and a second transport would have to be built and kept in step for one endpoint. The size ceiling is enforced on the DECODED bytes (transcription.MAX_AUDIO_BYTES), not on this string: base64 is a third larger than what the recorder produced and a third larger than what the provider receives. */
+export interface TranscribeRequest {
+  audio_base64: string
+}
+
+/** POST /api/v1/ai/transcribe -- response body. Success only: every failure leaves through a VeloError with a machine code, so this model never has to carry an "ok" flag or an error field. text is never empty -- an empty transcript is speech_not_recognized. */
+export interface TranscribeResponse {
+  text: string
+}
+
 /** PATCH /masters/me/curator-groups/{id}. `name` is always required -- a group always has one. `description` is a PARTIAL update. The router computes `"description" in body.model_dump(exclude_unset=True)` and passes it as description_provided, which is the only way to tell "the key was absent" (leave the column alone) from "the key was sent as null/empty" (write NULL). A bare `str | None = None` cannot distinguish the two and would wipe an existing description on every plain rename -- the exact bug RenameGroupRequest was rewritten to prevent. avatar_url (GT-17) is a PARTIAL update by the same mechanism and for the same reason -- the router computes avatar_url_provided the same way. Absent key: the column is untouched. Present and null (or blank): the avatar is removed. Present and a url: it is replaced. CREATION DOES NOT TAKE AN AVATAR, only this update does. A school is founded with a name and a description; the picture is attached afterwards. Not an omission -- widening CreateCuratorGroupRequest would touch a schema five test files exercise, for a field the create screen has no input for. */
 export interface UpdateCuratorGroupRequest {
   name: string
