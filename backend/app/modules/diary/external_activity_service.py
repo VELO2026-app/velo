@@ -20,12 +20,10 @@
 # =============================================================================
 
 from datetime import datetime
-from uuid import UUID
 
 import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql import Select
 
 from app.core.audit import record_audit
 from app.core.config import settings
@@ -132,14 +130,40 @@ async def list_custom_activity_names(
     нидра" and "Йога  нидра" stay two names, because guessing at what a
     person meant inside a name is a different decision from folding case.
 
-    TWO TIE-BREAKS, AND NEITHER IS BY id. The id is a UUID: ordering by it
-    is stable within one run and random between them, which is exactly the
-    defect this line shipped in BE-30 and repaired in GT-35.
-      - inner: two spellings of one name sharing occurred_at -- the
-        alphabetically first spelling wins;
+    THE ORDERING KEY IS occurred_at, AND EVERYTHING ELSE HERE IS A
+    TIE-BREAK. The distinction is the whole lesson of three deliveries:
+    a sort key has to be the thing that orders the rows by MEANING, and
+    whatever is added after it only keeps equal rows from swapping places.
+    The result of a tie-break is not a promise to anybody.
+
+    NEITHER TIE-BREAK IS BY id. A UUID is random, so ordering by it is
+    stable inside one run and arbitrary between them -- shipped in BE-30,
+    repaired in GT-35, and not repeated here.
+
+      - inner: two spellings of one name sharing occurred_at -- one of
+        them is shown;
       - outer: two different names sharing their freshest occurred_at --
-        ordered by the folded name, so the eight that survive the limit
-        are always the same eight.
+        both keep their places from call to call.
+
+    WHICH one wins either tie is DELIBERATELY NOT PINNED, and no test
+    asserts it. Both comparisons are between strings, and string order in
+    postgres comes from the database's collation: "ЙОГА" sorts before
+    "Йога" under C.UTF-8 and after it under a linguistic collation --
+    measured on one machine, both ways. Nobody ever decided which spelling
+    of a person's own name should win, so there is nothing to defend; what
+    the tie-breaks buy is that the answer does not move between runs on a
+    given server, and that is what they are for. Forcing byte order
+    (COLLATE "C") was tried and rolled back: it changes a visible list to
+    make an invisible property portable, and it puts every capital letter
+    ahead of every small one.
+
+    THE CASE FOLDING, unlike the tie-breaks, DOES depend on the database's
+    locale and must. lower() takes its case-mapping rules from there, and
+    pinning a collation onto its argument stops it folding Cyrillic at all
+    -- lower('ЙОГА' COLLATE "C") returns 'ЙОГА'. The locale is not set in
+    docker-compose.yml, so this rests on the postgres image's default;
+    test_three_spellings_are_one_name_in_its_freshest_form is the detector
+    and will fail loudly rather than quietly if that default ever changes.
 
     QUERY SHAPE, and where it stops being cheap: DISTINCT ON folds the
     names, so the database must sort by lower(name), which
@@ -160,26 +184,6 @@ async def list_custom_activity_names(
         Up to settings.external_activity_name_suggestions names, newest
         use first. Empty when the person has never used a custom type.
     """
-    rows = (
-        await session.execute(custom_activity_names_statement(user.id))
-    ).scalars().all()
-    return list(rows)
-
-
-def custom_activity_names_statement(user_id: UUID) -> Select:
-    """The statement behind list_custom_activity_names, built separately.
-
-    SPLIT OUT SO THE ORDERING CAN BE ASSERTED AT ALL. The outer tie-break
-    is unobservable from the endpoint: the inner DISTINCT ON already
-    leaves the subquery sorted by the folded name, and postgres happens to
-    preserve that through the outer sort -- so removing the tie-break
-    changes no answer today and every behavioural test keeps passing.
-    Measured, not assumed: dropping it left the whole file green.
-
-    It stays anyway, because "happens to preserve" is not a promise -- a
-    sort is not documented as stable, and a plan change would reorder ties
-    silently. A claim about the query is asserted against the query.
-    """
     folded = func.lower(ExternalActivity.custom_activity_name)
     freshest = (
         select(
@@ -188,7 +192,7 @@ def custom_activity_names_statement(user_id: UUID) -> Select:
             folded.label("folded"),
         )
         .where(
-            ExternalActivity.user_id == user_id,
+            ExternalActivity.user_id == user.id,
             ExternalActivity.custom_activity_name.is_not(None),
         )
         .distinct(folded)
@@ -199,11 +203,14 @@ def custom_activity_names_statement(user_id: UUID) -> Select:
         )
         .subquery()
     )
-    return (
-        select(freshest.c.name)
-        .order_by(
-            freshest.c.occurred_at.desc(),
-            freshest.c.folded.asc(),
+    rows = (
+        await session.execute(
+            select(freshest.c.name)
+            .order_by(
+                freshest.c.occurred_at.desc(),
+                freshest.c.folded.asc(),
+            )
+            .limit(settings.external_activity_name_suggestions)
         )
-        .limit(settings.external_activity_name_suggestions)
-    )
+    ).scalars().all()
+    return list(rows)

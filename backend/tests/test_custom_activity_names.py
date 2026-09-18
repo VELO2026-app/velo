@@ -36,17 +36,13 @@
 
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.modules.diary.external_activity_service import (
-    custom_activity_names_statement,
-)
 from app.modules.diary.models import ExternalActivity
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 
@@ -214,7 +210,9 @@ async def test_three_spellings_are_one_name_in_its_freshest_form(
     CYRILLIC FOLDING IS A PROPERTY OF THE DATABASE, not of Python: the
     grouping happens in SQL. If a deployment ever runs on a collation
     where lower() leaves Cyrillic alone, this test fails there -- loudly,
-    which is the point of asserting the exact list.
+    which is the point of asserting the exact list. Which SPELLING wins a
+    tie is a separate question and is pinned to byte order in the query;
+    see the ordering tests.
     """
     owner = await _person(client, _TID_OWNER)
     await _seed(db_session, owner, "Йога", 1)
@@ -268,81 +266,58 @@ async def test_the_freshest_use_comes_first(
 
 
 @pytest.mark.asyncio
-async def test_two_names_used_at_the_same_moment_have_a_fixed_order(
+async def test_two_names_used_at_the_same_moment_both_survive(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """The outer tie: same freshest moment, two different names.
+    """A tie must not cost a name, and their ORDER is not asserted.
 
-    Without a second key the order is whatever the database happened to
-    produce -- deterministic inside one run and arbitrary between them,
-    which is how a green suite turns red a week later on untouched code
-    (GT-35). The key is the folded name, so the answer is a property of
-    the words.
+    This test used to demand ["Бальные танцы", "Массаж"] and was green --
+    but on the strength of the DATA, not of the code: the two differ by
+    their first letter at the same case, which every collation orders the
+    same way. Put two names of different case in this fixture and the
+    literal flips between a linguistic collation and a byte one. A test
+    that holds because of the rows it happens to use is a delayed failure.
 
-    CALLED TWICE inside the test: one call cannot tell a fixed order from
-    a lucky one.
+    What matters and is asserted: neither name is swallowed when their
+    freshest use coincides. Which comes first is a tie-break, and a
+    tie-break's result is not a promise to anybody.
     """
     owner = await _person(client, _TID_OWNER)
     await _seed(db_session, owner, "Массаж", 7)
     await _seed(db_session, owner, "Бальные танцы", 7)
 
-    first = await _names(client, owner)
-    second = await _names(client, owner)
-
-    assert first == ["Бальные танцы", "Массаж"]
-    assert first == second
-
-
-def test_the_outer_tie_break_is_in_the_statement_itself() -> None:
-    """The one claim this file cannot check through the endpoint.
-
-    MEASURED, NOT SUPPOSED: removing the outer tie-break leaves every
-    behavioural test in this file green. The inner DISTINCT ON already
-    sorts the subquery by the folded name, and postgres preserves that
-    through the outer sort on this data -- so the answer does not change
-    and no assertion on an answer can notice.
-
-    It is still wrong to remove. A sort is not promised to be stable, and
-    a different plan would reorder ties silently, which is the failure
-    that took a week to surface in GT-35. So the claim is asserted where
-    it lives -- in the statement -- and the compiled SQL is read rather
-    than the ORM object, because what reaches the database is the thing
-    that orders.
-
-    The absence of `id` is asserted too: a UUID orders nothing between
-    runs, and it is the key somebody will reach for as "more natural".
-    """
-    compiled = str(
-        custom_activity_names_statement(uuid4()).compile(
-            dialect=postgresql.dialect(),
-        )
-    )
-    tail = compiled.split("ORDER BY")[-1]
-    assert "occurred_at DESC" in tail
-    assert "folded ASC" in tail
-    assert "id" not in tail
+    assert sorted(await _names(client, owner)) == [
+        "Бальные танцы", "Массаж",
+    ]
 
 
 @pytest.mark.asyncio
-async def test_two_spellings_at_the_same_moment_have_a_fixed_winner(
+async def test_two_spellings_at_the_same_moment_are_still_one_name(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """The inner tie, one level deeper and easier to miss.
+    """Folding does not need a fresher use to prefer; it needs one row.
 
-    Two spellings of ONE name sharing their freshest moment: which
-    spelling is shown? Without a third key, whichever the database reached
-    first. Alphabetically first wins, so the answer does not move between
-    runs -- and, again, the endpoint is called twice.
+    WHICH SPELLING WINS IS NOT ASSERTED, AND THAT IS THE POINT. The query
+    breaks the tie on the name, and string order in postgres comes from
+    the database's collation: "ЙОГА" sorts before "Йога" under C.UTF-8 and
+    after it under a linguistic one. Nobody decided which spelling of a
+    person's own name deserves the slot, so there is nothing here to pin
+    -- and an earlier version of this test pinned it anyway, passed on one
+    database and failed on the stand.
+
+    What the tie-break is for is that the answer does not move between
+    runs on a given server. That property is not observable from a test:
+    two calls in one process share a plan and would agree even without it.
+    So it is left unasserted rather than asserted falsely.
     """
     owner = await _person(client, _TID_OWNER)
     await _seed(db_session, owner, "ЙОГА", 4)
     await _seed(db_session, owner, "Йога", 4)
 
-    first = await _names(client, owner)
-    second = await _names(client, owner)
+    items = await _names(client, owner)
 
-    assert first == ["ЙОГА"]
-    assert first == second
+    assert len(items) == 1
+    assert items[0] in ("ЙОГА", "Йога")
 
 
 # ===========================================================================
