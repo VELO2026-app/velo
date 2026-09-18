@@ -334,6 +334,19 @@ class TestNotificationsProxy:
     async def test_client_supplied_recipient_id_rejected(
         self, client,
     ) -> None:
+        """A recipient_id in the query is refused here, with its own code.
+
+        One door of six. `_reject_recipient_override` guards every proxied
+        endpoint in this router and raises from a single place, so all six
+        answer the same code on purpose -- this test picks the inbox
+        because it is the one a wrong client reaches first.
+
+        The status assertion was right that the refusal is never forwarded
+        and stays. It could not tell this 400 from the schedule's 400 while
+        both carried the default bad_request; the code assertion can, and
+        it is also what the frontend needs to keep this apart from an error
+        a person could have caused.
+        """
         login = await login_user(client, telegram_id=TID_PROXY)
         seam = AsyncMock()
         with patch(_PROXY_SEAM, seam):
@@ -342,6 +355,7 @@ class TestNotificationsProxy:
                 headers=auth_headers(login["session_token"]),
             )
         assert response.status_code == 400
+        assert response.json()["error"] == "recipient_override_not_allowed"
         seam.assert_not_awaited()
 
     async def test_prefs_get_collapses_periods_into_the_screen_window(
@@ -479,12 +493,18 @@ class TestNotificationsProxy:
     async def test_equal_times_are_refused_here_and_never_forwarded(
         self, client,
     ) -> None:
-        """The proxy answers, comms is never asked.
+        """The proxy answers with its own code, comms is never asked.
 
         Their refusal speaks of minutes and an ISO weekday number; this is
         the last place that still knows the request came from a screen
         with two time fields. The seam is asserted un-awaited so that
         "refused" cannot quietly mean "forwarded and refused there".
+
+        The status assertion was right about WHERE the refusal happens and
+        stays. What it could not do is tell this refusal apart from the
+        other 400 this router raises: both used to carry the default
+        bad_request, so a swap of the two branches would have kept this
+        test green. The code assertion is what closes that.
         """
         login = await login_user(client, telegram_id=TID_PREFS)
         seam = AsyncMock()
@@ -497,6 +517,7 @@ class TestNotificationsProxy:
                 }},
             )
         assert response.status_code == 400
+        assert response.json()["error"] == "delivery_window_empty"
         seam.assert_not_awaited()
 
     async def test_no_day_ticked_is_null_and_not_an_empty_list(

@@ -63,11 +63,27 @@ router = APIRouter(
 
 
 def _reject_recipient_override(request: Request) -> None:
-    """400 on any attempt to name a recipient from the client side."""
+    """400 on any attempt to name a recipient from the client side.
+
+    The QUERY STRING is the path guarded here, and it is the only one: a
+    recipient_id in the BODY is a different mechanism with a different
+    answer -- the prefs models carry extra="forbid", so pydantic refuses it
+    with 422 before this function is reached.
+
+    NO PHRASE IN errorMessages.ts FOR THIS CODE, AND THAT IS THE DESIGN.
+    A person cannot produce this request: the screen never sends
+    recipient_id, only a wrongly written client does. The code exists for
+    the log line and for frontend diagnostics; the user, who did nothing
+    and can fix nothing, gets the generic fallback. A Russian phrase here
+    would put a sentence on screen that its reader can neither cause nor
+    act on -- so the absence is deliberate, not an oversight to be
+    "fixed" by the next reader.
+    """
     if "recipient_id" in request.query_params:
         raise BadRequestError(
             "recipient_id is derived from the session and cannot be "
-            "supplied by the client"
+            "supplied by the client",
+            code="recipient_override_not_allowed",
         )
 
 
@@ -238,7 +254,8 @@ def _delivery_to_periods(schedule: ScheduleIn) -> list[dict[str, str]]:
     end = _normalized_end(schedule.to)
     if schedule.from_ == end or schedule.from_ == schedule.to:
         raise BadRequestError(
-            "Время начала и окончания доставки не могут совпадать",
+            "Delivery window start and end must differ",
+            code="delivery_window_empty",
         )
 
     days = [day for day in _DAY_ORDER if day in set(schedule.days)]
