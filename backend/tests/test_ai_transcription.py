@@ -22,9 +22,21 @@
 # not a nicety: the whole delivery exists because the key used to be readable
 # by anyone who opened the page.
 #
-# NO PROVIDER IS EVER CALLED. httpx is stubbed at the client seam in every
-# test; a test that reached openrouter.ai would be billing us to run the
-# suite.
+# NO PROVIDER IS EVER CALLED, and it is stubbed at TWO different seams on
+# purpose:
+#
+#   - service-level tests patch httpx.AsyncClient.post, because they call the
+#     service object directly and no HTTP client of ours is in play;
+#   - endpoint tests patch OUR OWN service method (_TRANSCRIBE_SEAM), because
+#     the test client IS an httpx.AsyncClient. Patching httpx there hijacks
+#     the request the test itself makes into the app -- the endpoint answers
+#     the stubbed provider payload, or an AsyncMock attribute where a status
+#     code should be. That is not a hypothetical: it is how the first version
+#     of this file failed.
+#
+# The repo's own convention says the same thing in the other direction --
+# test_comms_t1.py and the chats tests all patch an app-level function
+# (comms_request), never the transport underneath it.
 # =============================================================================
 
 import base64
@@ -53,6 +65,11 @@ _TID_MIN = 69200
 _TID_MAX = 69299
 
 _KEY = "sk-or-secret-value-do-not-leak"
+
+# The endpoint tests' seam: our service's own method, not the transport.
+_TRANSCRIBE_SEAM = (
+    "app.modules.ai.transcription.OpenRouterTranscriptionService.transcribe"
+)
 
 
 @pytest.fixture(autouse=True)
@@ -349,9 +366,9 @@ async def test_endpoint_returns_the_transcript(
     """The whole path, from base64 in to text out."""
     login = await login_user(client, telegram_id=69201, first_name="Caller")
     audio = base64.b64encode(b"wav-bytes").decode()
+    transcribe = AsyncMock(return_value="привет")
 
-    with patch.object(settings, "openrouter_api_key", _KEY), \
-         _patch_provider(_chat_response("привет")):
+    with patch(_TRANSCRIBE_SEAM, transcribe):
         response = await client.post(
             TRANSCRIBE_URL,
             headers=auth_headers(login["session_token"]),
@@ -360,6 +377,9 @@ async def test_endpoint_returns_the_transcript(
 
     assert response.status_code == 200
     assert response.json() == {"text": "привет"}
+    # The route decoded the payload and handed the SERVICE bytes, not base64:
+    # without this the test would pass on a route that forwarded the string.
+    assert transcribe.await_args.args[0] == b"wav-bytes"
 
 
 async def test_endpoint_refuses_an_anonymous_caller_before_any_provider_call(
@@ -370,16 +390,15 @@ async def test_endpoint_refuses_an_anonymous_caller_before_any_provider_call(
     The un-awaited stub is the load-bearing half: a 401 that still made the
     outbound call would be exactly the hole this delivery closes.
     """
-    post = AsyncMock()
-    with patch.object(settings, "openrouter_api_key", _KEY), \
-         patch("httpx.AsyncClient.post", post):
+    transcribe = AsyncMock(return_value="никогда")
+    with patch(_TRANSCRIBE_SEAM, transcribe):
         response = await client.post(
             TRANSCRIBE_URL,
             json={"audio_base64": base64.b64encode(b"wav").decode()},
         )
 
     assert response.status_code == 401
-    post.assert_not_awaited()
+    transcribe.assert_not_awaited()
 
 
 async def test_endpoint_answers_a_machine_code_when_the_key_is_missing(
@@ -417,9 +436,9 @@ async def test_endpoint_refuses_oversized_audio_before_the_key_is_consulted(
     login = await login_user(client, telegram_id=69201, first_name="Caller")
     oversized = base64.b64encode(b"\x00" * (MAX_AUDIO_BYTES + 1)).decode()
 
-    post = AsyncMock()
+    transcribe = AsyncMock(return_value="никогда")
     with patch.object(settings, "openrouter_api_key", ""), \
-         patch("httpx.AsyncClient.post", post):
+         patch(_TRANSCRIBE_SEAM, transcribe):
         response = await client.post(
             TRANSCRIBE_URL,
             headers=auth_headers(login["session_token"]),
@@ -428,4 +447,4 @@ async def test_endpoint_refuses_oversized_audio_before_the_key_is_consulted(
 
     assert response.status_code == 400
     assert response.json()["error"] == "audio_too_large"
-    post.assert_not_awaited()
+    transcribe.assert_not_awaited()
