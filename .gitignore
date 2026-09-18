@@ -31,3 +31,10 @@ node_modules/
 # `git status`, which is how 8.7MB of one-shot previews eventually gets committed
 # by accident.
 /.tmp/
+
+# Redis dump. redis-server writes dump.rdb into its working directory, and a
+# developer who starts one from inside backend/ gets a ~600KB binary sitting in
+# `git status` as an untracked candidate. It surfaced twice in computed delivery
+# manifests (GT-34, GT-40) and both times had to be spotted by hand before the
+# archive was built. Ignored, not deleted: the file is legitimate where it lands.
+dump.rdb
