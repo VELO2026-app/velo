@@ -588,12 +588,35 @@ _METHOD_LABEL_SEP = " — "
 async def _label_for_direction_value(
     direction: str,
     session: AsyncSession,
+    master_id: UUID,
 ) -> str | None:
-    """Current active-catalog label for a direction value, or None if it
-    isn't (or is no longer) an active catalog row."""
+    """Active-catalog label for a direction value AS THIS MASTER SEES IT,
+    or None if there is no such row in their own view of the catalog.
+
+    SCOPED SINCE BE-38, and it used to be deliberately master-agnostic.
+    The old reasoning -- written on TaxonomyDirection and corrected there --
+    was that the per-master boundary is held twice elsewhere: by the
+    catalog READ, and by this gate only ever matching against the
+    REQUESTING master's own methods. The second half does not hold,
+    because the match is BY LABEL and labels are not unique across
+    masters: _scope_custom_methods_to_master deduplicates a new private
+    row against global rows and this master's own, and deliberately NOT
+    against other masters' private rows, "which are none of this master's
+    business". Two masters who both write "Сказкотерапия" therefore own
+    two different rows with one label -- and the label match let each of
+    them name the other's value.
+
+    master_id is REQUIRED rather than defaulted to None. There is one
+    caller, and a default would leave a version of this function that
+    silently answers for the wrong person.
+    """
     stmt = select(TaxonomyDirection.label).where(
         TaxonomyDirection.value == direction,
         TaxonomyDirection.is_active.is_(True),
+        or_(
+            TaxonomyDirection.master_id.is_(None),
+            TaxonomyDirection.master_id == master_id,
+        ),
     )
     return (await session.execute(stmt)).scalar_one_or_none()
 
@@ -700,9 +723,28 @@ async def _assert_master_confirmed_taxonomy(
     if not methods:
         return
 
-    dir_label = await _label_for_direction_value(direction, session)
+    dir_label = await _label_for_direction_value(
+        direction, session, master_id=master_id,
+    )
     if dir_label is None:
-        # Not an active catalog row at all -- _validate_taxonomy already
+        # BE-38: "no row THIS MASTER can see" now has TWO causes, and only
+        # one of them is the one the branch below was written for.
+        #
+        # Cause A -- the row exists, is active, and belongs to somebody
+        # else. _validate_taxonomy let the value through because it asks
+        # the catalog globally and must keep doing so (T21-6 above). Before
+        # the scoping above, this case resolved a label and was refused by
+        # the comparison below; scoped, it would fall into the fail-open
+        # and be ALLOWED, which is the hole this delivery closes. Refused
+        # here, under the same code as any other unconfirmed direction:
+        # from the master's side it IS simply not one of their methods.
+        if await _direction_in_catalog(direction, session):
+            raise BadRequestError(
+                f"direction '{direction}' is not in your catalog",
+                code="direction_not_confirmed",
+            )
+        # Cause B, the original one, and its reasoning is untouched:
+        # not an active catalog row at all -- _validate_taxonomy already
         # accepted it via the config-only allow-list (a seed direction with
         # no catalog row). Every direction in today's config is in fact
         # mirrored into the catalog as an active row (R5 seed migration), so
