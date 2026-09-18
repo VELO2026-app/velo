@@ -315,6 +315,20 @@ export interface AdminZoomUnmatchedRow {
   duration_seconds: number | null
 }
 
+/** Check-in counts by mood bucket (low 1-3 / mid 4-7 / high 8-10). Named apart from diary.schemas.MoodDistribution on purpose, following admin.metrics.schemas.FeedbackRatingDistribution: two components with one name would be emitted module-qualified in the OpenAPI document and break the frontend's flat re-export. Same shape, same thresholds, one owner -- diary.insights_service.mood_bucket, which computes both. */
+export interface AnalyticsMoodDistribution {
+  high: number
+  mid: number
+  low: number
+}
+
+/** Feedback counts by rating bucket (confused 1-3 / good 4-7 / fire 8-10). AnalyticsMoodDistribution's twin, named apart for the same reason. */
+export interface AnalyticsRatingDistribution {
+  fire: number
+  good: number
+  confused: number
+}
+
 /** Admin announcement: pre-rendered title/body + audience pick. */
 export interface AnnouncementRequest {
   title: string
@@ -971,6 +985,24 @@ export interface LowCheckinPractice {
   title: string
   checkin_rate_pct: number
   total: number
+}
+
+/** GET /api/v1/masters/me/analytics?period=week|month|quarter. Everything the master's analytics screen shows, for one calendar period in the MASTER'S OWN timezone -- unlike the dashboard grid above, whose bounds are UTC. bookings_count is the rate denominator: bookings on the period's completed practices that were not cancelled. Counted in bookings rather than distinct people because a check-in is unique per booking. Deltas carry the two conventions from core/periods.py: counts use a signed percent change (null when the previous period had no base), rates use a spread in percentage POINTS (null when the previous period had no denominator). The client renders "--" for either null. rate fields are 0 when the period has no bookings -- an honest empty, the same answer the admin dashboards give. */
+export interface MasterAnalyticsResponse {
+  practices_count: number
+  practices_delta_pct: number | null
+  bookings_count: number
+  bookings_delta_pct: number | null
+  checkins_count: number
+  checkins_delta_pct: number | null
+  feedbacks_count: number
+  feedbacks_delta_pct: number | null
+  checkin_rate_pct: number
+  checkin_rate_delta_pp: number | null
+  feedback_rate_pct: number
+  feedback_rate_delta_pp: number | null
+  checkins: AnalyticsMoodDistribution
+  feedbacks: AnalyticsRatingDistribution
 }
 
 /** The user's master-application state, read from MasterProfile.data.account. Surfaced on UserResponse (T5) so a role='user' applicant can see the verdict of their application (pending / verified / rejected + the rejection reason) without the master-only GET /masters/me endpoint. Set by the GET /users/me router from the same MasterProfile load used for master capability. */
