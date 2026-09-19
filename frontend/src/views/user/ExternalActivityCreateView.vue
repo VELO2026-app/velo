@@ -11,8 +11,10 @@
     - «Сохранить» is a FLOATING GLASS PILL -- the diary composer's Liquid
       Glass recipe hovering over the scrolling body (the body reserves the
       bottom clearance), not an in-flow footer bar;
-    - required seals float in the LAYOUT's right padding: every field spans
-      the full rail, the 22px marker centres in the 24px gutter;
+    - required seals hug their field's right edge (FE-80 product correction,
+      supersedes the 2026-09-10 screen-edge hang): 22px marker + --space-1
+      gap into the 33px layout padding, clear of the screen edge; fields
+      keep the full rail;
     - the header carries no right-hand "..." placeholder;
     - the «Мое состояние» block is HIDDEN for now (EXTERNAL_ACTIVITY_MOOD_HIDDEN
       in utils/constants.ts): the backend's required mood submits as the
@@ -58,9 +60,7 @@
           >
             {{ date ? dateDisplay : 'Дата' }}
           </button>
-          <!-- Seals float in the LAYOUT's right padding (owner 2026-09-10):
-               the field spans the full rail, the marker lives in the gutter. -->
-          <span class="ea__seal ea__seal--gutter" :class="{ 'ea__seal--done': !!date }">
+          <span class="ea__seal" :class="{ 'ea__seal--done': !!date }">
             <IconRequired v-if="!date" :size="22" />
             <IconRequiredDone v-else :size="22" />
           </span>
@@ -79,7 +79,7 @@
           >
             {{ time || 'Время' }}
           </button>
-          <span class="ea__seal ea__seal--gutter" :class="{ 'ea__seal--done': !!time }">
+          <span class="ea__seal" :class="{ 'ea__seal--done': !!time }">
             <IconRequired v-if="!time" :size="22" />
             <IconRequiredDone v-else :size="22" />
           </span>
@@ -94,7 +94,7 @@
         <h2 class="velo-section-title">Выбор активности</h2>
 
         <div class="ea__activity" data-field="activity">
-          <span class="ea__seal ea__seal--gutter" :class="{ 'ea__seal--done': activityFilled }">
+          <span class="ea__seal" :class="{ 'ea__seal--done': activityFilled }">
             <IconRequired v-if="!activityFilled" :size="22" />
             <IconRequiredDone v-else :size="22" />
           </span>
@@ -174,10 +174,7 @@
         <h2 class="velo-section-title">Мое состояние</h2>
 
         <div class="ea__state-block" data-field="state">
-          <span
-            class="ea__seal ea__seal--gutter"
-            :class="{ 'ea__seal--done': stateScore !== null }"
-          >
+          <span class="ea__seal" :class="{ 'ea__seal--done': stateScore !== null }">
             <IconRequired v-if="stateScore === null" :size="22" />
             <IconRequiredDone v-else :size="22" />
           </span>
@@ -656,10 +653,10 @@ async function onSubmit(): Promise<void> {
   gap: var(--space-3);
 }
 
-/* -- Date/time trigger fields: CreatePracticeView's picker recipe.
-     Fields span the FULL rail; the required seal floats in the LAYOUT's
-     right padding (owner 2026-09-10) -- 22px marker centred in the 24px
-     gutter outside the field's edge. -- */
+/* -- Date/time trigger fields: CreatePracticeView's picker recipe. Fields
+     keep the FULL rail; the required seal hangs off the field's right edge
+     into the layout padding (FE-80) -- pressed to the component, not the
+     screen edge. -- */
 .ea__field {
   position: relative;
   display: flex;
@@ -689,20 +686,21 @@ async function onSubmit(): Promise<void> {
   border-color: var(--velo-error);
 }
 
+/* The required seal hangs just off its field's right edge (FE-80 product
+   correction): 22px marker + --space-1 gap hugs the component, and the rest
+   of the 33px layout padding becomes screen-edge clearance. Out of flow --
+   the field keeps the full rail; top:50% centres it on the field block. */
 .ea__seal {
+  position: absolute;
+  right: calc(-1 * (22px + var(--space-1)));
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   color: var(--velo-error);
 }
 
 .ea__seal--done {
   color: var(--velo-required-done);
-}
-
-.ea__seal--gutter {
-  position: absolute;
-  right: calc(-1 * var(--space-8) + 1px);
-  top: 50%;
-  transform: translateY(-50%);
 }
 
 .ea__field-error {
@@ -712,9 +710,10 @@ async function onSubmit(): Promise<void> {
   margin-top: var(--space-1);
 }
 
-/* -- Activity card: solid white plate, chips wrap naturally (no grid) -- */
+/* -- Activity card: solid white plate, chips wrap naturally (no grid).
+     position:relative anchors its seal, which hugs the card's right edge. -- */
 .ea__activity {
-  position: relative; /* anchors its gutter seal */
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
@@ -887,7 +886,7 @@ async function onSubmit(): Promise<void> {
 }
 
 /* -- «Мое состояние» (currently hidden behind EXTERNAL_ACTIVITY_MOOD_HIDDEN):
-       full-rail icon row, gutter seal anchored to the block. -- */
+       full-rail icon row; its seal hugs the block's right edge. -- */
 .ea__state-block {
   position: relative;
 }
