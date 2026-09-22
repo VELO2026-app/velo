@@ -81,8 +81,7 @@
       <template v-else-if="page">
         <!-- §1.6/§1.10: the hero is ONE composite (banner strip, square logo
              on the seam, centred name + counters, description as the interim
-             copy). No page-level «Пригласить», no avatar stack (§1.8 + owner
-             2026-09-19: the invite has no entry point on this page). -->
+             copy). No avatar stack (§1.8). -->
         <SchoolHeroCard
           :name="page.name"
           :avatar-url="page.avatar_url"
@@ -91,6 +90,14 @@
           :description="page.description"
           :hash="brandingHash"
         />
+
+        <!-- §1.6 (owner 2026-09-22): the school's reusable invite link lives
+             INLINE under the hero -- minted on mount (idempotent get-or-get),
+             copied to the clipboard, rotated behind a confirm. Curator only:
+             the invite is the curator's handle. This reverses the 2026-09-19
+             "the invite has no entry point on this page" note -- the orphaned
+             CuratorGroupInviteSheet is removed, this field IS the entry. -->
+        <SchoolInviteField v-if="isCurator" :group-id="groupId" />
 
         <!-- FE-21: transfer offer banner (curator sees "sent", addressee
              sees accept/decline). Renders nothing for everyone else. -->
@@ -106,13 +113,11 @@
         />
 
         <!-- §1.6: «Редактировать школу» (curator only) keeps its pencil and
-             no chevron; the four nav rows that follow carry NO left icons --
-             only the label and the enlarged dark chevron (§1.9). The first
-             three scroll to their sections on this page (the rosters and the
-             feed live below the fold; no separate screens exist). «Список
-             учеников» is the curator's privilege (others see the counter in
-             the hero), and «Аналитика» stays fully hidden behind its flag
-             until §6, never shown disabled. -->
+             no chevron; the nav rows that follow carry NO left icons --
+             only the label and the enlarged dark chevron (§1.9). «Участники»
+             opens the merged roster screen (§1.11, curator only); the
+             rosters no longer live on this page, and «Аналитика» stays
+             fully hidden behind its flag until §6, never shown disabled. -->
         <div class="cgp__actions">
           <VMenuRow
             v-if="isCurator"
@@ -123,14 +128,15 @@
             <template #icon><IconPen :size="20" /></template>
           </VMenuRow>
 
-          <!-- §1.9: these four carry NO left icons -- only the label and the
-               enlarged dark chevron. «Список мастеров»/«Список учеников» get
-               their dedicated screens later (the rosters no longer live on
-               this page), so they are display-only for now; «Предстоящие
-               практики» scrolls to the feed below; «Аналитика» is the honest
-               stub until §6 ships a page. -->
-          <VMenuRow class="cgp__nav-row" label="Список мастеров" />
-          <VMenuRow v-if="isCurator" class="cgp__nav-row" label="Список учеников" />
+          <!-- §1.9: these carry NO left icons -- only the label and the
+               enlarged dark chevron. «Участники» opens the merged roster
+               screen with the Мастера/Ученики switcher (§1.11, owner
+               2026-09-22) and is the curator's privilege -- the rosters are
+               the curator handle on the server, everyone else reads the
+               counters in the hero. «Предстоящие практики» scrolls to the
+               feed below; «Аналитика» is the honest stub until §6 ships a
+               page. -->
+          <VMenuRow v-if="isCurator" class="cgp__nav-row" label="Участники" @click="openRoster" />
           <VMenuRow class="cgp__nav-row" label="Предстоящие практики" @click="scrollToPractices" />
           <VMenuRow
             v-if="isCurator"
@@ -237,6 +243,7 @@ import { useToast } from '@/composables/useToast'
 import CalendarPracticeCard from '@/components/shared/CalendarPracticeCard.vue'
 import CuratorGroupTransferBanner from '@/components/shared/CuratorGroupTransferBanner.vue'
 import SchoolHeroCard from '@/components/shared/SchoolHeroCard.vue'
+import SchoolInviteField from '@/components/shared/SchoolInviteField.vue'
 import { schoolHashFromName } from '@/utils/schoolBranding'
 import { IconPen } from '@/components/icons'
 import { VBottomSheet, VButton, VConfirmDialog, VEmptyState, VMenuRow } from '@/components/ui'
@@ -309,6 +316,15 @@ const upcomingPractices = computed(() => practices.value.slice(0, 5))
 // pretending (a dead link or a fake page would both be worse).
 function onAnalyticsClick(): void {
   toast.info('Аналитика школы появится позже')
+}
+
+// §1.11 (owner 2026-09-22): the merged participants screen; the zone picks
+// the route family exactly like the back target above.
+function openRoster(): void {
+  void router.push({
+    name: inMasterZone.value ? 'master-curator-group-members' : 'user-curator-group-members',
+    params: { id: groupId.value },
+  })
 }
 
 // Review P2: the school endpoints are paginated (limit 20). A single first

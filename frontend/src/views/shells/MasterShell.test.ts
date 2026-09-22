@@ -41,7 +41,10 @@ import { useAuthStore } from '@/stores/auth'
 
 // The schools tab probe (tz-curator.md §1.2) is the one network seam the
 // shell touches; both branches drive it through this mock.
-const curatorGroupsMock = vi.hoisted(() => ({ getCuratorGroups: vi.fn() }))
+const curatorGroupsMock = vi.hoisted(() => ({
+  getCuratorGroups: vi.fn(),
+  getMyCuratorGroups: vi.fn(),
+}))
 vi.mock('@/api/curatorGroups', () => curatorGroupsMock)
 
 const keyboardOpenRef: Ref<boolean> = ref(false)
@@ -56,6 +59,13 @@ function buildRouter(): Router {
     routes: [
       { path: '/master/dashboard', name: 'master-dashboard', component: StubChild },
       { path: '/master/practices', name: 'master-practices', component: StubChild },
+      // §1.11 (owner 2026-09-22): the participants screen -- a FOG_ROUTES
+      // member (mirrors router/index.ts).
+      {
+        path: '/master/curator-groups/g1/members',
+        name: 'master-curator-group-members',
+        component: StubChild,
+      },
       {
         path: '/master/messages/:id',
         name: 'master-chat',
@@ -131,6 +141,9 @@ function activeTabLabel(): string | undefined {
 
 beforeEach(() => {
   keyboardOpenRef.value = false
+  // FE-88: the hub probes /curator-groups/mine for EVERY account on shell
+  // mount; the default fixture has no school memberships.
+  curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({ items: [] })
 })
 
 afterEach(() => {
@@ -198,6 +211,23 @@ describe('MasterShell', () => {
       expect(labels).toEqual(['Дашборд', 'Практики', 'Аналитика', 'Я'])
       expect(curatorGroupsMock.getCuratorGroups).toHaveBeenCalledTimes(1)
     })
+
+    it("a master of somebody else's school without the right sees the tab (FE-88)", async () => {
+      // Membership alone now satisfies the master zone's condition too -- a
+      // master teaching in somebody's school is exactly whom the old
+      // isCurator probe silently dropped.
+      curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({
+        items: [{ id: 'g9', name: 'Чужая школа', relation: 'master' }],
+      })
+      await mount('master-dashboard', {}, seedMaster)
+      await flush()
+      await flush()
+
+      const labels = Array.from(host?.querySelectorAll('.v-tabbar__item') ?? []).map((b) =>
+        b.getAttribute('aria-label'),
+      )
+      expect(labels).toEqual(['Дашборд', 'Практики', 'Аналитика', 'Школы', 'Я'])
+    })
   })
 
   describe('isFillRoute -- master-chat only', () => {
@@ -242,6 +272,13 @@ describe('MasterShell', () => {
 
     it('[FE-45] master-group-create gets the fog mask (keyboard-safe header-overlap fix; pixel tuning via FORM_FOG_ROUTES)', async () => {
       await mount('master-group-create')
+      await flush()
+
+      expect(mainEl().classList.contains('mobile-layout__main--fog')).toBe(true)
+    })
+
+    it('the participants screen (§1.11) is a fog screen like the school page', async () => {
+      await mount('master-curator-group-members')
       await flush()
 
       expect(mainEl().classList.contains('mobile-layout__main--fog')).toBe(true)

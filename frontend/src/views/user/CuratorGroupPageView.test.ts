@@ -162,6 +162,11 @@ beforeEach(() => {
   routeState.name = 'user-curator-group'
   routeState.id = 'g1'
   Object.values(cgApi).forEach((fn) => vi.mocked(fn).mockReset())
+  // §1.6 (owner 2026-09-22): the curator mounts SchoolInviteField under the
+  // hero; give it an honest resolved link (the endpoint is get-or-mint).
+  vi.mocked(cgApi.createCuratorGroupInvite).mockResolvedValue({
+    invite_url: 'https://t.me/velopractice_bot?start=curator_group_invite__tok1',
+  })
   push.mockReset()
   replace.mockReset()
   toastSuccess.mockReset()
@@ -192,8 +197,11 @@ describe('CuratorGroupPageView -- relation matrix', () => {
 
     expect(buttonWith('Покинуть школу')).toBeTruthy()
     expect(rowWith('Редактировать школу')).toBeUndefined()
-    expect(rowWith('Список учеников')).toBeUndefined()
+    // §1.11 (owner 2026-09-22): the merged «Участники» row is curator-only.
+    expect(rowWith('Участники')).toBeUndefined()
     expect(rowWith('Аналитика')).toBeUndefined()
+    // §1.6 (owner 2026-09-22): the invite field is curator-only too.
+    expect(text()).not.toContain('Копировать ссылку-приглашение')
     expect(text()).not.toContain('Ученики')
     // The feed is for everyone.
     expect(text()).toContain('Практика p1')
@@ -207,6 +215,9 @@ describe('CuratorGroupPageView -- relation matrix', () => {
     expect(buttonWith('Покинуть школу')).toBeTruthy()
     expect(rowWith('Удалить школу')).toBeUndefined()
     expect(rowWith('Создать практику')).toBeUndefined()
+    // §1.11 (owner 2026-09-22): a master of the school is not the curator --
+    // no participants row (the server masks the roster handle anyway).
+    expect(rowWith('Участники')).toBeUndefined()
     expect(text()).not.toContain('Ученики')
   })
 
@@ -216,18 +227,16 @@ describe('CuratorGroupPageView -- relation matrix', () => {
     await flush()
 
     expect(buttonWith('Покинуть школу')).toBeFalsy()
-    // Owner 2026-09-19: the page is hero + these rows + CTA + feed. The four
-    // nav rows carry no icons; «Список учеников» is the curator's privilege.
-    for (const row of [
-      'Редактировать школу',
-      'Список мастеров',
-      'Список учеников',
-      'Предстоящие практики',
-      'Аналитика',
-    ]) {
+    // Owner 2026-09-19: the page is hero + these rows + CTA + feed. The nav
+    // rows carry no icons; «Участники» (§1.11, merged rosters) is the
+    // curator's privilege.
+    for (const row of ['Редактировать школу', 'Участники', 'Предстоящие практики', 'Аналитика']) {
       expect(rowWith(row)).toBeTruthy()
     }
     expect(buttonWith('Создать практику')).toBeTruthy()
+    // §1.6 (owner 2026-09-22): the invite CTA rides the hero for the
+    // curator.
+    expect(text()).toContain('Копировать ссылку-приглашение')
   })
 
   it('a frozen/absent school is the honest 404', async () => {
@@ -533,8 +542,11 @@ describe('CuratorGroupPageView -- §1.6 page body', () => {
 
     // VMenuRow renders a div, so these are text-level assertions.
     expect(text()).toContain('Редактировать школу')
-    expect(text()).toContain('Список мастеров')
-    expect(text()).toContain('Список учеников')
+    // §1.11 (owner 2026-09-22): one merged «Участники» row replaces the two
+    // roster rows.
+    expect(text()).toContain('Участники')
+    expect(text()).not.toContain('Список мастеров')
+    expect(text()).not.toContain('Список учеников')
     expect(text()).toContain('Предстоящие практики')
     // The analytics row is always surfaced now (owner 2026-09-19).
     expect(text()).toContain('Аналитика')
@@ -544,18 +556,46 @@ describe('CuratorGroupPageView -- §1.6 page body', () => {
     expect(push).toHaveBeenCalledWith({ name: 'master-practice-new' })
   })
 
-  it('a non-curator gets no edit row, no students row and no create CTA', async () => {
+  it('a non-curator gets no edit row, no participants row and no create CTA', async () => {
     mockHappyLoad('master')
     mount()
     await flush()
 
     expect(text()).not.toContain('Редактировать школу')
+    // §1.11 (owner 2026-09-22): the merged «Участники» row is the curator's
+    // privilege -- the rosters are the curator handle on the server, which
+    // already answered non-curators with the masked 404.
+    expect(text()).not.toContain('Участники')
+    expect(text()).not.toContain('Список мастеров')
     expect(text()).not.toContain('Список учеников')
     expect(rowWith('Аналитика')).toBeUndefined()
     expect(buttonWith('Создать практику')).toBeUndefined()
     // The rows every member shares still render.
-    expect(text()).toContain('Список мастеров')
     expect(text()).toContain('Предстоящие практики')
+  })
+
+  it('§1.11: the participants row opens the merged roster screen (user zone)', async () => {
+    mockHappyLoad('curator')
+    mount()
+    await flush()
+
+    rowWith('Участники')?.click()
+    await flush()
+    expect(push).toHaveBeenCalledWith({ name: 'user-curator-group-members', params: { id: 'g1' } })
+  })
+
+  it('§1.11: the zone picks the participants route family (master zone)', async () => {
+    routeState.name = 'master-curator-group'
+    mockHappyLoad('curator')
+    mount()
+    await flush()
+
+    rowWith('Участники')?.click()
+    await flush()
+    expect(push).toHaveBeenCalledWith({
+      name: 'master-curator-group-members',
+      params: { id: 'g1' },
+    })
   })
 
   it('the analytics row is an honest stub while §6 has no page', async () => {

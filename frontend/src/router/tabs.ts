@@ -36,8 +36,9 @@ export interface TabItem {
   badge?: number | string
   /** Conditional tab (tz-curator.md §1.2): the SHELL drops the tab unless
    *  the named server-side condition holds; VTabBar stays dumb. Omit for the
-   *  unconditional default. 'schools' = the account is a curator
-   *  (stores/schoolsHub: can_create_groups or curates >= 1 school). */
+   *  unconditional default. 'schools' = the account belongs to >= 1 school
+   *  (stores/schoolsHub, any relation); the MASTER zone's shell keeps the
+   *  tab also for the admin-issued founding right (can_create_groups). */
   requires?: 'schools'
 }
 
@@ -45,10 +46,10 @@ export const USER_TABS: TabItem[] = [
   { icon: IconHome, label: 'Дашборд', to: '/user/dashboard' },
   { icon: IconCalendar, label: 'Календарь', to: '/user/calendar' },
   { icon: IconDiary, label: 'Дневник', to: '/user/diary' },
-  // tz-curator.md §1.2 (owner, mockup 2026-09-19): «Школы» sits between
-  // «Дневник» and «Я». Visible only to curators (the shell filters by the
-  // schoolsHub store); the plain-user branch (member of a school) comes with
-  // the user flow later.
+  // tz-curator.md §1.2 (owner 2026-09-22): «Школы» sits between «Дневник»
+  // and «Я», shown to anyone who BELONGS to at least one school (the shell
+  // filters by the schoolsHub store) -- curators, masters of, and plain
+  // students in somebody's school alike.
   { icon: IconSchool, label: 'Школы', to: '/user/schools', requires: 'schools' },
   { icon: IconProfile, label: 'Я', to: '/user/profile' },
 ]
@@ -57,10 +58,12 @@ export const MASTER_TABS: TabItem[] = [
   { icon: IconHome, label: 'Дашборд', to: '/master/dashboard' },
   { icon: IconCalendar, label: 'Практики', to: '/master/practices' },
   { icon: IconAnalytics, label: 'Аналитика', to: '/master/analytics' },
-  // tz-curator.md §1.2 (owner: «у куратора — всегда»), порядок владельца
-  // 2026-09-19: четвёртым, перед «Я» — зеркально юзер-зоне. Same schoolsHub
-  // condition as the user zone's; target is the master zone's own sectioned
-  // schools list.
+  // tz-curator.md §1.2 (owner 2026-09-22: «только при наличии хотя бы одной
+  // школы», право основания сохраняет вход): четвёртым, перед «Я» —
+  // зеркально юзер-зоне. Same membership condition as the user zone's, PLUS
+  // the founding right: a can_create_groups holder with zero schools keeps
+  // the tab -- the empty hub's «Создать школу» is their only entrance.
+  // Target is the master zone's own sectioned schools list.
   { icon: IconSchool, label: 'Школы', to: '/master/curator-groups', requires: 'schools' },
   { icon: IconProfile, label: 'Я', to: '/master/profile' },
 ]

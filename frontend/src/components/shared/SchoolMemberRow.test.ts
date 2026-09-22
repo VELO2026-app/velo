@@ -1,0 +1,74 @@
+// =============================================================================
+// VELO Frontend -- SchoolMemberRow Component Tests (tz-curator.md §1.11)
+// =============================================================================
+//
+// The roster row is pure presentation over CuratorGroupMemberItem: the name
+// shows, a suspended master (is_visible=false, I-4) degrades to a
+// «Временно недоступен» subtitle instead of vanishing, and the whole row is
+// one touch target that hands the member up to the parent (which decides
+// where the profile lives -- a row navigates, it does not act).
+// =============================================================================
+
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { createApp, h, nextTick, type App } from 'vue'
+import SchoolMemberRow from '@/components/shared/SchoolMemberRow.vue'
+import type { CuratorGroupMemberItem } from '@/api/types'
+
+function member(overrides: Partial<CuratorGroupMemberItem> = {}): CuratorGroupMemberItem {
+  return {
+    user_id: 'u1',
+    name: 'Анна Петрова',
+    avatar_url: null,
+    kind: 'student',
+    joined_at: '2026-09-01T00:00:00Z',
+    is_visible: true,
+    ...overrides,
+  }
+}
+
+let app: App | null = null
+let host: HTMLElement | null = null
+
+function mountRow(m: CuratorGroupMemberItem, onOpen: (m: CuratorGroupMemberItem) => void): void {
+  host = document.createElement('div')
+  document.body.appendChild(host)
+  app = createApp({ render: () => h(SchoolMemberRow, { member: m, onOpen }) })
+  app.mount(host)
+}
+
+function row(): HTMLButtonElement | null {
+  return host?.querySelector<HTMLButtonElement>('.v-list-row') ?? null
+}
+
+afterEach(() => {
+  app?.unmount()
+  host?.remove()
+  app = null
+  host = null
+})
+
+describe('SchoolMemberRow', () => {
+  it('renders the name and emits open with the member on click', async () => {
+    const m = member()
+    const onOpen = vi.fn()
+    mountRow(m, onOpen)
+    await nextTick()
+
+    expect(host?.textContent).toContain('Анна Петрова')
+    expect(host?.textContent).not.toContain('Временно недоступен')
+
+    row()?.click()
+    await nextTick()
+    expect(onOpen).toHaveBeenCalledWith(m)
+  })
+
+  it('a suspended master (is_visible=false) stays a row with an honest subtitle (I-4)', async () => {
+    mountRow(member({ kind: 'master', is_visible: false }), vi.fn())
+    await nextTick()
+
+    expect(host?.textContent).toContain('Анна Петрова')
+    expect(host?.textContent).toContain('Временно недоступен')
+    // Still a touch target: the membership is real and manageable.
+    expect(row()?.hasAttribute('disabled')).toBe(false)
+  })
+})

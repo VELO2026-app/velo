@@ -31,17 +31,19 @@ import { useSchoolsHubStore } from '@/stores/schoolsHub'
 const route = useRoute()
 const router = useRouter()
 
-// tz-curator.md §1.2 (owner: «у куратора — всегда»): the SAME conditional
-// tab contract as UserShell — the shell drops `requires: 'schools'` tabs
-// unless the schoolsHub store says the account is a curator. Fail-closed:
-// the tab is absent until the probe settles.
+// tz-curator.md §1.2 (owner 2026-09-22): the SAME conditional tab contract
+// as UserShell -- membership in at least one school (any relation) -- widened
+// for this zone by the admin-issued founding right: a can_create_groups
+// holder with zero schools keeps their entrance (the empty hub's «Создать
+// школу» is their only path to a first school). Fail-closed: the tab is
+// absent until a probe settles.
 const schoolsHub = useSchoolsHubStore()
 onMounted(() => {
   void schoolsHub.ensureCurator()
 })
 
 const visibleTabs = computed<TabItem[]>(() =>
-  MASTER_TABS.filter((tab) => !tab.requires || schoolsHub.isCurator),
+  MASTER_TABS.filter((tab) => !tab.requires || schoolsHub.hasSchools || schoolsHub.canCreate),
 )
 
 // Hide the floating tab bar while the soft keyboard is open, so it does not ride
@@ -125,6 +127,9 @@ const FOG_ROUTES = [
   // master-group-create's FE-45 rationale).
   'master-curator-groups',
   'master-curator-group',
+  // tz-curator.md §1.11 (owner 2026-09-22): the participants screen is the
+  // school's roster feed, same treatment as the school PAGE above.
+  'master-curator-group-members',
   'master-curator-group-create',
   'master-profile',
   // Edit-profile + language/timezone: fog so content doesn't smudge under the

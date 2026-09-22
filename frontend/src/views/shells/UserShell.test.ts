@@ -36,7 +36,10 @@ import { useAuthStore } from '@/stores/auth'
 
 // The schools tab probe (tz-curator.md §1.2) is the one network seam the
 // shell touches; both branches below drive it through this mock.
-const curatorGroupsMock = vi.hoisted(() => ({ getCuratorGroups: vi.fn() }))
+const curatorGroupsMock = vi.hoisted(() => ({
+  getCuratorGroups: vi.fn(),
+  getMyCuratorGroups: vi.fn(),
+}))
 vi.mock('@/api/curatorGroups', () => curatorGroupsMock)
 
 const keyboardOpenRef: Ref<boolean> = ref(false)
@@ -88,6 +91,14 @@ function buildRouter(): Router {
       { path: '/user/notifications', name: 'user-inbox', component: StubChild },
       { path: '/user/checkin/:practiceId', name: 'user-checkin', component: StubChild },
       { path: '/user/practice/:id', name: 'practice-detail', component: StubChild },
+      // §1.11 (owner 2026-09-22): the participants screen -- a FOG_ROUTES
+      // member and a hideTabBar route (mirrors router/index.ts).
+      {
+        path: '/user/groups/g1/members',
+        name: 'user-curator-group-members',
+        meta: { hideTabBar: true },
+        component: StubChild,
+      },
       // Absent from every FOG_ROUTES / DIARY_ROUTES / FORM_ROUTES list --
       // the default-branch baseline.
       { path: '/user/somewhere-unlisted', name: 'user-unlisted', component: StubChild },
@@ -142,6 +153,9 @@ function activeTabLabel(): string | undefined {
 
 beforeEach(() => {
   keyboardOpenRef.value = false
+  // FE-88: the hub probes /curator-groups/mine for EVERY account; a plain
+  // visitor with no schools is the default fixture.
+  curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({ items: [] })
 })
 
 afterEach(() => {
@@ -228,8 +242,8 @@ describe('UserShell', () => {
 
     it('the dock carries exactly the four unconditional tabs for a plain visitor', async () => {
       // tz-curator.md §1.2: USER_TABS now holds five items, but the
-      // conditional «Школы» tab is filtered out unless the account is a
-      // curator. No auth in this fixture -> not a curator -> four.
+      // conditional «Школы» tab is filtered out unless the account belongs
+      // to at least one school. No schools in this fixture -> four.
       await mount('user-dashboard')
       await flush()
 
@@ -239,85 +253,89 @@ describe('UserShell', () => {
     })
   })
 
-  describe('the conditional «Школы» tab (tz-curator.md §1.2)', () => {
-    it('a curator (can_create_groups) sees five tabs in the mockup order', async () => {
+  describe('the conditional «Школы» tab (tz-curator.md §1.2, owner 2026-09-22)', () => {
+    function seedAccount(roles: string[]): (pinia: Pinia) => void {
+      return (pinia) => {
+        const auth = useAuthStore(pinia)
+        auth.user = {
+          id: 'u1',
+          role: roles.includes('master') ? 'master' : 'user',
+          role_switch: { allowed_roles: roles },
+        } as never
+      }
+    }
+
+    function tabLabels(): Array<string | null> {
+      return Array.from(host?.querySelectorAll('.v-tabbar__item') ?? []).map((b) =>
+        b.getAttribute('aria-label'),
+      )
+    }
+
+    it('a member of at least one school (any relation) sees five tabs in the mockup order', async () => {
+      curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({
+        items: [{ id: 'g1', name: 'Тихая школа', relation: 'student' }],
+      })
+      await mount('user-dashboard', {}, seedAccount(['user']))
+      await flush()
+      await flush()
+
+      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Дневник', 'Школы', 'Я'])
+    })
+
+    it('the founding right alone no longer lights the USER-zone tab', async () => {
+      // can_create_groups keeps its entrance in the MASTER zone; the user
+      // zone's condition is membership only (owner 2026-09-22).
+      curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({ items: [] })
       curatorGroupsMock.getCuratorGroups.mockResolvedValue({
         items: [],
         can_create_groups: true,
       })
-      await mount('user-dashboard', {}, (pinia) => {
-        const auth = useAuthStore(pinia)
-        auth.user = {
-          id: 'u1',
-          role: 'master',
-          role_switch: { allowed_roles: ['user', 'master'] },
-        } as never
-      })
+      await mount('user-dashboard', {}, seedAccount(['user', 'master']))
       await flush()
       await flush()
 
-      const labels = Array.from(host?.querySelectorAll('.v-tabbar__item') ?? []).map((b) =>
-        b.getAttribute('aria-label'),
-      )
-      expect(labels).toEqual(['Дашборд', 'Календарь', 'Дневник', 'Школы', 'Я'])
+      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Дневник', 'Я'])
     })
 
-    it('a master with no right but >= 1 curated school is still a curator', async () => {
-      curatorGroupsMock.getCuratorGroups.mockResolvedValue({
-        items: [{ id: 'g1', name: 'Школа' }],
-        can_create_groups: false,
+    it("a master of somebody else's school (no right) sees the tab too", async () => {
+      curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({
+        items: [{ id: 'g2', name: 'Чужая школа', relation: 'master' }],
       })
-      await mount('user-dashboard', {}, (pinia) => {
-        const auth = useAuthStore(pinia)
-        auth.user = {
-          id: 'u1',
-          role: 'master',
-          role_switch: { allowed_roles: ['user', 'master'] },
-        } as never
-      })
-      await flush()
-      await flush()
-
-      const labels = Array.from(host?.querySelectorAll('.v-tabbar__item') ?? []).map((b) =>
-        b.getAttribute('aria-label'),
-      )
-      expect(labels).toContain('Школы')
-    })
-
-    it('a master-capable account without the right and without schools does not see it', async () => {
       curatorGroupsMock.getCuratorGroups.mockResolvedValue({
         items: [],
         can_create_groups: false,
       })
-      await mount('user-dashboard', {}, (pinia) => {
-        const auth = useAuthStore(pinia)
-        auth.user = {
-          id: 'u1',
-          role: 'master',
-          role_switch: { allowed_roles: ['user', 'master'] },
-        } as never
-      })
+      await mount('user-dashboard', {}, seedAccount(['user', 'master']))
       await flush()
       await flush()
 
-      const labels = Array.from(host?.querySelectorAll('.v-tabbar__item') ?? []).map((b) =>
-        b.getAttribute('aria-label'),
-      )
-      expect(labels).not.toContain('Школы')
+      expect(tabLabels()).toContain('Школы')
     })
 
-    it('a plain user never triggers the master-surface probe', async () => {
-      await mount('user-dashboard', {}, (pinia) => {
-        const auth = useAuthStore(pinia)
-        auth.user = { id: 'u1', role: 'user' } as never
+    it('an account with no schools anywhere does not see it', async () => {
+      curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({ items: [] })
+      curatorGroupsMock.getCuratorGroups.mockResolvedValue({
+        items: [],
+        can_create_groups: false,
       })
+      await mount('user-dashboard', {}, seedAccount(['user', 'master']))
+      await flush()
+      await flush()
+
+      expect(tabLabels()).not.toContain('Школы')
+    })
+
+    it('a plain user is probed through /mine but never touches the master surface', async () => {
+      curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({
+        items: [{ id: 'g1', name: 'Тихая школа', relation: 'student' }],
+      })
+      await mount('user-dashboard', {}, seedAccount(['user']))
+      await flush()
       await flush()
 
       expect(curatorGroupsMock.getCuratorGroups).not.toHaveBeenCalled()
-      const labels = Array.from(host?.querySelectorAll('.v-tabbar__item') ?? []).map((b) =>
-        b.getAttribute('aria-label'),
-      )
-      expect(labels).not.toContain('Школы')
+      expect(curatorGroupsMock.getMyCuratorGroups).toHaveBeenCalledTimes(1)
+      expect(tabLabels()).toContain('Школы')
     })
   })
 
@@ -338,6 +356,13 @@ describe('UserShell', () => {
 
     it('practice-detail is fogged too (its own tuned entry, .vue:95 + :139)', async () => {
       await mount('practice-detail', { id: 'p1' })
+      await flush()
+
+      expect(mainEl().classList.contains('mobile-layout__main--fog')).toBe(true)
+    })
+
+    it('the participants screen (§1.11) is a fog screen like the school page', async () => {
+      await mount('user-curator-group-members')
       await flush()
 
       expect(mainEl().classList.contains('mobile-layout__main--fog')).toBe(true)

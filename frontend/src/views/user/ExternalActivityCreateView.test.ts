@@ -37,6 +37,15 @@ import { ApiResponseError } from '@/api/client'
 
 vi.mock('@/api/diary')
 
+// UserShell's «Школы» tab probe (FE-88) reads /curator-groups/mine for every
+// account that mounts the shell; this fixture's visitor belongs to no school
+// and must settle without touching the network.
+const curatorGroupsMock = vi.hoisted(() => ({
+  getMyCuratorGroups: vi.fn(),
+  getCuratorGroups: vi.fn(),
+}))
+vi.mock('@/api/curatorGroups', () => curatorGroupsMock)
+
 const push = vi.fn()
 const replace = vi.fn()
 vi.mock('vue-router', async (importOriginal) => {
@@ -697,6 +706,13 @@ describe('ExternalActivityCreateView', () => {
       const shellHost = document.createElement('div')
       document.body.appendChild(shellHost)
       const shellApp = createApp(UserShell)
+      // Settle the dock's «Школы» probe as "no schools" (FE-88) so the shell
+      // mount stays network-free.
+      curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({ items: [] })
+      curatorGroupsMock.getCuratorGroups.mockResolvedValue({
+        items: [],
+        can_create_groups: false,
+      })
       shellApp.use(pinia)
       shellApp.use(router)
       shellApp.mount(shellHost)

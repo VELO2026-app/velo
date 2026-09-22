@@ -62,6 +62,7 @@ export type {
   CuratorGroupLeavePreviewResponse,
   CuratorGroupListResponse,
   CuratorGroupMasterItem,
+  CuratorGroupMasterOfferRequest,
   CuratorGroupMemberItem,
   CuratorGroupMineItem,
   CuratorGroupMineResponse,

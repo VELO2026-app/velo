@@ -32,17 +32,18 @@ import { useSchoolsHubStore } from '@/stores/schoolsHub'
 const route = useRoute()
 const router = useRouter()
 
-// tz-curator.md §1.2: the «Школы» tab is CONDITIONAL -- the shell (not
-// VTabBar) drops `requires: 'schools'` tabs unless the schoolsHub store says
-// the account is a curator. The probe starts on mount; until it settles the
-// tab is simply absent (fail-closed), then appears without a reload.
+// tz-curator.md §1.2 (owner 2026-09-22): the «Школы» tab follows SCHOOL
+// MEMBERSHIP -- the shell (not VTabBar) drops `requires: 'schools'` tabs
+// unless the schoolsHub store sees the account in at least one school (any
+// relation). The probe starts on mount; until it settles the tab is simply
+// absent (fail-closed), then appears without a reload.
 const schoolsHub = useSchoolsHubStore()
 onMounted(() => {
   void schoolsHub.ensureCurator()
 })
 
 const visibleTabs = computed<TabItem[]>(() =>
-  USER_TABS.filter((tab) => !tab.requires || schoolsHub.isCurator),
+  USER_TABS.filter((tab) => !tab.requires || schoolsHub.hasSchools),
 )
 
 // Hide the floating tab bar while the soft keyboard is open, so it does not ride
@@ -124,6 +125,10 @@ const FOG_ROUTES = [
   // tz-curator.md §1.6 (owner 2026-09-19): the school PAGE is a fog screen
   // like every other detail feed -- content dissolves under the header.
   'user-curator-group',
+  // tz-curator.md §1.11 (owner 2026-09-22): the participants screen is the
+  // school's roster feed -- rows dissolve under the floating header like on
+  // the school PAGE above; the glass switcher stays above the fade.
+  'user-curator-group-members',
   // FE-11: the bell feed -- a scrolling list like bookings, dissolves under
   // the floating header; «Прочитать всё» sits in the header, not in-flow.
   'user-inbox',

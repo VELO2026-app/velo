@@ -214,6 +214,28 @@ const router = createRouter({
           component: () => import('@/views/user/CuratorGroupPageView.vue'),
         },
         {
+          // tz-curator.md §1.11 (owner 2026-09-22): the school's participants
+          // on ONE screen -- the Мастера/Ученики glass switcher (VSegmentTrack)
+          // lives on it, and the active roster rides ?kind= (default master)
+          // so a refresh or a deep link reopens the same list. Curator-only
+          // surface: the server answers everyone else with the same P-08 404
+          // it always did, and the page's nav row is the curator's too.
+          path: 'groups/:id/members',
+          name: 'user-curator-group-members',
+          meta: { hideTabBar: true },
+          component: () => import('@/views/user/SchoolMembersView.vue'),
+        },
+        {
+          // tz-curator.md §1.11.4 (owner 2026-09-22): the school-context
+          // student profile -- there is no public student page, and the CRM
+          // profile 404s for school-only students, so the curator actions
+          // (offer the master role / remove) live here.
+          path: 'groups/:groupId/students/:userId',
+          name: 'user-curator-group-student',
+          meta: { hideTabBar: true },
+          component: () => import('@/views/user/SchoolStudentProfileView.vue'),
+        },
+        {
           path: 'checkin/:practiceId',
           name: 'user-checkin',
           component: () => import('@/views/user/CheckinView.vue'),
@@ -481,6 +503,25 @@ const router = createRouter({
           // server's viewer.relation drives the action set; this route's
           // name prefix is all the view reads to pick its back target.
           component: () => import('@/views/user/CuratorGroupPageView.vue'),
+        },
+        {
+          // tz-curator.md §1.11 (owner 2026-09-22): the same participants
+          // screen the user zone mounts; the zone only picks navigation
+          // targets.
+          path: 'curator-groups/:id/members',
+          name: 'master-curator-group-members',
+          beforeEnter: masterStatusGuard,
+          meta: { hideTabBar: true },
+          component: () => import('@/views/user/SchoolMembersView.vue'),
+        },
+        {
+          // tz-curator.md §1.11.4 (owner 2026-09-22): same student profile
+          // component as the user zone; the zone picks the back target.
+          path: 'curator-groups/:groupId/students/:userId',
+          name: 'master-curator-group-student',
+          beforeEnter: masterStatusGuard,
+          meta: { hideTabBar: true },
+          component: () => import('@/views/user/SchoolStudentProfileView.vue'),
         },
         {
           path: 'summary',
