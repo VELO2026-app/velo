@@ -86,7 +86,7 @@ describe('UserCuratorGroupsView', () => {
     expect(host?.querySelector('.ucg__state')).toBeTruthy()
   })
 
-  it('renders every school row with curator + counts, and navigates on tap', async () => {
+  it('renders every school row with its counts line, and navigates on tap', async () => {
     vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue(
       mineResponse([row('g1', 'student'), row('g2', 'curator')]),
     )
@@ -95,12 +95,14 @@ describe('UserCuratorGroupsView', () => {
 
     expect(text()).toContain('Школа g1')
     expect(text()).toContain('Школа g2')
-    expect(text()).toContain('Куратор: Мария Иванова')
-    expect(text()).toContain('Мастеров: 2')
-    expect(text()).toContain('Учеников: 7')
+    // §1.4 stats line: two icon+number pairs, students first, no words.
+    const firstRow = host?.querySelector('.cg-row') as HTMLElement
+    const stats = Array.from(firstRow.querySelectorAll('.cg-row__stat')).map((s) =>
+      s.textContent?.replace(/\s+/g, ' ').trim(),
+    )
+    expect(stats).toEqual(['7', '2'])
 
-    const first = Array.from(host?.querySelectorAll('.v-list-row') ?? [])[0] as HTMLElement
-    first.click()
+    firstRow.click()
     await flush()
     expect(push).toHaveBeenCalledWith({ name: 'user-curator-group', params: { id: 'g1' } })
   })
@@ -110,8 +112,8 @@ describe('UserCuratorGroupsView', () => {
     mount()
     await flush()
 
-    expect(text()).toContain('Пока нет групп')
-    expect(text()).toContain('Вступить в группу можно по ссылке от куратора')
+    expect(text()).toContain('Пока нет школ')
+    expect(text()).toContain('Вступить в школу можно по ссылке от куратора')
   })
 
   it('load failure: error state with a retry that works', async () => {
@@ -119,7 +121,7 @@ describe('UserCuratorGroupsView', () => {
     mount()
     await flush()
 
-    expect(text()).toContain('Не удалось загрузить группы')
+    expect(text()).toContain('Не удалось загрузить школы')
 
     vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValueOnce(mineResponse([row('g1', 'student')]))
     const retry = Array.from(host?.querySelectorAll('button') ?? []).find((b) =>

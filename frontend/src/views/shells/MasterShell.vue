@@ -7,7 +7,7 @@
 
 <template>
   <MobileLayout
-    :tabs="MASTER_TABS"
+    :tabs="visibleTabs"
     :active-tab="activeTab"
     :fill="isFillRoute"
     :fog="isFogRoute"
@@ -21,14 +21,28 @@
 
 <script setup lang="ts">
 import { rootComputedStyle } from '@/platform/dom'
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { MobileLayout } from '@/components/layout'
-import { MASTER_TABS } from '@/router/tabs'
+import { MASTER_TABS, type TabItem } from '@/router/tabs'
 import { useKeyboardOpen } from '@/composables/useKeyboardOpen'
+import { useSchoolsHubStore } from '@/stores/schoolsHub'
 
 const route = useRoute()
 const router = useRouter()
+
+// tz-curator.md §1.2 (owner: «у куратора — всегда»): the SAME conditional
+// tab contract as UserShell — the shell drops `requires: 'schools'` tabs
+// unless the schoolsHub store says the account is a curator. Fail-closed:
+// the tab is absent until the probe settles.
+const schoolsHub = useSchoolsHubStore()
+onMounted(() => {
+  void schoolsHub.ensureCurator()
+})
+
+const visibleTabs = computed<TabItem[]>(() =>
+  MASTER_TABS.filter((tab) => !tab.requires || schoolsHub.isCurator),
+)
 
 // Hide the floating tab bar while the soft keyboard is open, so it does not ride
 // up over a focused input (parity with UserShell — e.g. the «Мои ученики» search).
@@ -104,6 +118,14 @@ const FOG_ROUTES = [
   // legend/first fields. Fog brings the keyboard-safe mask; the pixel tuning
   // comes from FORM_FOG_ROUTES below (the taller form top-hard).
   'master-group-create',
+  // tz-curator.md §1.2-1.6 (owner 2026-09-19): the schools surfaces are fog
+  // screens like their user-zone twins -- the sectioned list and the school
+  // PAGE are scrolling feeds under the floating header, and the create form
+  // is a keyboard form (FORM_FOG_ROUTES tuning below, same as
+  // master-group-create's FE-45 rationale).
+  'master-curator-groups',
+  'master-curator-group',
+  'master-curator-group-create',
   'master-profile',
   // Edit-profile + language/timezone: fog so content doesn't smudge under the
   // floating header on scroll (operator FOG-1, 2026-06-30). Both are keyboard
@@ -207,7 +229,10 @@ const FORM_FOG_ROUTES = [
   // (`<VHeader title="Новая группа" show-back />`) -- without the form-grade
   // top-hard its legend/fields ghosted under the header's lower half on
   // scroll. Same treatment, no view-side margin hacks.
+  // tz-curator.md §1.5: the school-create form is the same shape (floating
+  // «Новая школа» header over a required-fields legend), so it joins here too.
   'master-group-create',
+  'master-curator-group-create',
 ]
 let formFogCache: {
   topGap: number

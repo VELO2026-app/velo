@@ -1,7 +1,7 @@
 <!--
   VELO Frontend -- UserCuratorGroupsView (schools FE-19 / GT P3)
 
-  "Мои группы" for the user zone (route /user/groups, entry row in
+  «Мои школы» for the user zone (route /user/groups, entry row in
   UserProfileView's «Аккаунт» section). A FLAT list of GET /curator-groups/mine
   -- curated first, then by join time, exactly as the backend orders it; no
   sectioning here (that is the master list's own distinction). Rows are the
@@ -13,7 +13,7 @@
 
 <template>
   <div class="ucg">
-    <VHeader title="Мои группы" show-back @back="router.push({ name: 'user-profile' })" />
+    <VHeader title="Мои школы" show-back @back="router.push({ name: 'user-profile' })" />
 
     <div class="ucg__content">
       <div v-if="loading" class="ucg__state">
@@ -23,7 +23,7 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        title="Не удалось загрузить группы"
+        title="Не удалось загрузить школы"
         description="Проверьте соединение и попробуйте ещё раз."
       >
         <template #action>
@@ -34,8 +34,8 @@
       <VEmptyState
         v-else-if="!groups.length"
         icon="group"
-        title="Пока нет групп"
-        description="Вступить в группу можно по ссылке от куратора."
+        title="Пока нет школ"
+        description="Вступить в школу можно по ссылке от куратора."
       />
 
       <template v-else>

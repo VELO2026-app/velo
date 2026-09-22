@@ -29,9 +29,15 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, ref, type App, type Ref } from 'vue'
-import { createPinia } from 'pinia'
+import { createPinia, type Pinia } from 'pinia'
 import { createRouter, createMemoryHistory, type Router } from 'vue-router'
 import UserShell from '@/views/shells/UserShell.vue'
+import { useAuthStore } from '@/stores/auth'
+
+// The schools tab probe (tz-curator.md §1.2) is the one network seam the
+// shell touches; both branches below drive it through this mock.
+const curatorGroupsMock = vi.hoisted(() => ({ getCuratorGroups: vi.fn() }))
+vi.mock('@/api/curatorGroups', () => curatorGroupsMock)
 
 const keyboardOpenRef: Ref<boolean> = ref(false)
 vi.mock('@/composables/useKeyboardOpen', () => ({
@@ -93,13 +99,20 @@ let app: App | null = null
 let host: HTMLElement | null = null
 let router: Router
 
-async function mount(routeName: string, params: Record<string, string> = {}): Promise<HTMLElement> {
+async function mount(
+  routeName: string,
+  params: Record<string, string> = {},
+  seed?: (pinia: Pinia) => void,
+): Promise<HTMLElement> {
   router = buildRouter()
   await router.push({ name: routeName, params })
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(UserShell)
-  app.use(createPinia())
+  const pinia = createPinia()
+  app.use(pinia)
+  // Seed BEFORE mount so onMounted's probe sees the seeded account.
+  seed?.(pinia)
   app.use(router)
   app.mount(host)
   return host
@@ -213,13 +226,98 @@ describe('UserShell', () => {
       expect(host?.querySelector('.v-tabbar')).toBeNull()
     })
 
-    it('the dock carries exactly the four USER_TABS -- no notification bell', async () => {
+    it('the dock carries exactly the four unconditional tabs for a plain visitor', async () => {
+      // tz-curator.md §1.2: USER_TABS now holds five items, but the
+      // conditional «Школы» tab is filtered out unless the account is a
+      // curator. No auth in this fixture -> not a curator -> four.
       await mount('user-dashboard')
       await flush()
 
       const items = Array.from(host?.querySelectorAll('.v-tabbar__item') ?? [])
       expect(items).toHaveLength(4)
       expect(items.some((b) => b.getAttribute('aria-label') === 'Уведомления')).toBe(false)
+    })
+  })
+
+  describe('the conditional «Школы» tab (tz-curator.md §1.2)', () => {
+    it('a curator (can_create_groups) sees five tabs in the mockup order', async () => {
+      curatorGroupsMock.getCuratorGroups.mockResolvedValue({
+        items: [],
+        can_create_groups: true,
+      })
+      await mount('user-dashboard', {}, (pinia) => {
+        const auth = useAuthStore(pinia)
+        auth.user = {
+          id: 'u1',
+          role: 'master',
+          role_switch: { allowed_roles: ['user', 'master'] },
+        } as never
+      })
+      await flush()
+      await flush()
+
+      const labels = Array.from(host?.querySelectorAll('.v-tabbar__item') ?? []).map((b) =>
+        b.getAttribute('aria-label'),
+      )
+      expect(labels).toEqual(['Дашборд', 'Календарь', 'Дневник', 'Школы', 'Я'])
+    })
+
+    it('a master with no right but >= 1 curated school is still a curator', async () => {
+      curatorGroupsMock.getCuratorGroups.mockResolvedValue({
+        items: [{ id: 'g1', name: 'Школа' }],
+        can_create_groups: false,
+      })
+      await mount('user-dashboard', {}, (pinia) => {
+        const auth = useAuthStore(pinia)
+        auth.user = {
+          id: 'u1',
+          role: 'master',
+          role_switch: { allowed_roles: ['user', 'master'] },
+        } as never
+      })
+      await flush()
+      await flush()
+
+      const labels = Array.from(host?.querySelectorAll('.v-tabbar__item') ?? []).map((b) =>
+        b.getAttribute('aria-label'),
+      )
+      expect(labels).toContain('Школы')
+    })
+
+    it('a master-capable account without the right and without schools does not see it', async () => {
+      curatorGroupsMock.getCuratorGroups.mockResolvedValue({
+        items: [],
+        can_create_groups: false,
+      })
+      await mount('user-dashboard', {}, (pinia) => {
+        const auth = useAuthStore(pinia)
+        auth.user = {
+          id: 'u1',
+          role: 'master',
+          role_switch: { allowed_roles: ['user', 'master'] },
+        } as never
+      })
+      await flush()
+      await flush()
+
+      const labels = Array.from(host?.querySelectorAll('.v-tabbar__item') ?? []).map((b) =>
+        b.getAttribute('aria-label'),
+      )
+      expect(labels).not.toContain('Школы')
+    })
+
+    it('a plain user never triggers the master-surface probe', async () => {
+      await mount('user-dashboard', {}, (pinia) => {
+        const auth = useAuthStore(pinia)
+        auth.user = { id: 'u1', role: 'user' } as never
+      })
+      await flush()
+
+      expect(curatorGroupsMock.getCuratorGroups).not.toHaveBeenCalled()
+      const labels = Array.from(host?.querySelectorAll('.v-tabbar__item') ?? []).map((b) =>
+        b.getAttribute('aria-label'),
+      )
+      expect(labels).not.toContain('Школы')
     })
   })
 

@@ -8,7 +8,7 @@
 
 <template>
   <MobileLayout
-    :tabs="USER_TABS"
+    :tabs="visibleTabs"
     :active-tab="activeTab"
     :fill="isFillRoute"
     :hide-tab-bar="isDiaryRoute || isFormRoute || isChatRoute || isInboxRoute || keyboardOpen"
@@ -22,14 +22,28 @@
 
 <script setup lang="ts">
 import { rootComputedStyle } from '@/platform/dom'
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { MobileLayout } from '@/components/layout'
-import { USER_TABS } from '@/router/tabs'
+import { USER_TABS, type TabItem } from '@/router/tabs'
 import { useKeyboardOpen } from '@/composables/useKeyboardOpen'
+import { useSchoolsHubStore } from '@/stores/schoolsHub'
 
 const route = useRoute()
 const router = useRouter()
+
+// tz-curator.md §1.2: the «Школы» tab is CONDITIONAL -- the shell (not
+// VTabBar) drops `requires: 'schools'` tabs unless the schoolsHub store says
+// the account is a curator. The probe starts on mount; until it settles the
+// tab is simply absent (fail-closed), then appears without a reload.
+const schoolsHub = useSchoolsHubStore()
+onMounted(() => {
+  void schoolsHub.ensureCurator()
+})
+
+const visibleTabs = computed<TabItem[]>(() =>
+  USER_TABS.filter((tab) => !tab.requires || schoolsHub.isCurator),
+)
 
 // Hide the floating tab bar while the soft keyboard is open, so it does not ride
 // up over a focused input (e.g. the "запрос мастеру" field on booking-confirmed).
@@ -104,6 +118,12 @@ const FOG_ROUTES = [
   'user-dashboard',
   'user-calendar',
   'user-bookings',
+  // tz-curator.md §1.4: the schools hub is a scrolling list feed like
+  // bookings -- dissolves under the floating header, CTA stays above the fade.
+  'user-schools',
+  // tz-curator.md §1.6 (owner 2026-09-19): the school PAGE is a fog screen
+  // like every other detail feed -- content dissolves under the header.
+  'user-curator-group',
   // FE-11: the bell feed -- a scrolling list like bookings, dissolves under
   // the floating header; «Прочитать всё» sits in the header, not in-flow.
   'user-inbox',

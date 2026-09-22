@@ -127,3 +127,33 @@ export const KEYBOARD_VIEWPORT_THRESHOLD = 150
  * form and the card can never disagree.
  */
 export const EXTERNAL_ACTIVITY_MOOD_HIDDEN: boolean = true
+
+// ---------------------------------------------------------------------------
+// School media upload (tz-curator.md §1.5, захоронка §7.1 №4) -- kill-switch
+// ---------------------------------------------------------------------------
+
+/**
+ * The school's own media: avatar circle + banner on the create form
+ * (SchoolAvatarPicker / SchoolBannerPicker). FALSE is the kill-switch: there
+ * is NO upload backend yet (no endpoint, no storage, no limits -- the BE task
+ * sits in tz-curator.md §7.1 №4), so the blocks do not render at all and
+ * the create form is exactly the name+description flow of phase 1. The
+ * pickers only hold a LOCAL object-URL preview -- flipping this to true alone
+ * would show a picker that cannot persist anything; flip it together with the
+ * BE contract landing.
+ */
+export const SCHOOL_MEDIA_UPLOAD_ENABLED: boolean = false
+
+// ---------------------------------------------------------------------------
+// School analytics card (tz-curator.md §1.6, step 3 of the TZ) -- kill-switch
+// ---------------------------------------------------------------------------
+
+/**
+ * The school page's «Аналитика» card. FALSE is the kill-switch: the metrics
+ * specification is PM-blocked (tz-curator.md §6, blocker PM-2) and no
+ * BE contract exists, so the card does not render at all -- a disabled card
+ * on every school page would only teach people to ignore it. Flip together
+ * with the §6 slice landing (BE + screen); until then the page simply ends
+ * after the journal.
+ */
+export const SCHOOL_ANALYTICS_ENABLED: boolean = false

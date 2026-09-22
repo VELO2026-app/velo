@@ -8,7 +8,7 @@
 // generated.ts -- this file wraps URLs and request bodies only; all types
 // come from @/api/types, per that file's own header rule.
 //
-// Three surfaces, one feature (tz-curator-groups.md 5.2-5.3):
+// Three surfaces, one feature (tz-curator.md §3.4):
 //
 // CURATOR (verified master, prefix /api/v1/masters/me/curator-groups):
 //   GET    /                                     -- my schools + counts + transfer

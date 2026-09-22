@@ -108,7 +108,7 @@ describe('MasterCuratorGroupsView', () => {
     mount()
     await flush()
 
-    const first = Array.from(host?.querySelectorAll('.v-list-row') ?? [])[0] as HTMLElement
+    const first = host?.querySelector('.cg-row') as HTMLElement
     first.click()
     await flush()
     expect(push).toHaveBeenCalledWith({ name: 'master-curator-group', params: { id: 'g1' } })
@@ -140,7 +140,7 @@ describe('MasterCuratorGroupsView', () => {
     await flush()
 
     expect(buttonWith('Новая школа')).toBeFalsy()
-    expect(buttonWith('Создать группу')).toBeFalsy()
+    expect(buttonWith('Создать школу')).toBeFalsy()
     // Rows still render; the right is about FOUNDING, not about membership.
     expect(text()).toContain('Школа g1')
     expect(text()).toContain('Создавать школы может мастер, которому администратор выдал это право')
@@ -158,7 +158,7 @@ describe('MasterCuratorGroupsView', () => {
     await flush()
 
     expect(text()).toContain('Вступите по ссылке от куратора')
-    expect(buttonWith('Создать группу')).toBeFalsy()
+    expect(buttonWith('Создать школу')).toBeFalsy()
   })
 
   it('BE-18: a FAILED flag call degrades to "no «+»" -- rows still render, no error screen', async () => {
@@ -171,7 +171,7 @@ describe('MasterCuratorGroupsView', () => {
 
     // The two calls are not equal: /mine is the screen, the flag is a bonus.
     expect(text()).toContain('Школа g1')
-    expect(text()).not.toContain('Не удалось загрузить группы')
+    expect(text()).not.toContain('Не удалось загрузить школы')
     expect(buttonWith('Новая школа')).toBeFalsy()
     expect(text()).toContain('администратор выдал это право')
   })
@@ -183,8 +183,8 @@ describe('MasterCuratorGroupsView', () => {
     mount()
     await flush()
 
-    expect(text()).toContain('Создайте группу или вступите по ссылке от куратора')
-    const create = buttonWith('Создать группу')
+    expect(text()).toContain('Создайте школу или вступите по ссылке от куратора')
+    const create = buttonWith('Создать школу')
     expect(create).toBeTruthy()
   })
 
@@ -193,7 +193,7 @@ describe('MasterCuratorGroupsView', () => {
     mount()
     await flush()
 
-    expect(text()).toContain('Не удалось загрузить группы')
+    expect(text()).toContain('Не удалось загрузить школы')
 
     vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValueOnce({
       items: [row('g1', 'curator')],

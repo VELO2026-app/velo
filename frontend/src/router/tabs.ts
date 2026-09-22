@@ -20,6 +20,7 @@ import {
   IconProfile,
   IconAnalytics,
   IconGroup,
+  IconSchool,
   IconWarning,
 } from '@/components/icons'
 
@@ -33,12 +34,22 @@ export interface TabItem {
   /** Count badge -- rendered by VAdminTabBar only (admin counts); the
    *  user/master VTabBar itself paints no badges. */
   badge?: number | string
+  /** Conditional tab (tz-curator.md §1.2): the SHELL drops the tab unless
+   *  the named server-side condition holds; VTabBar stays dumb. Omit for the
+   *  unconditional default. 'schools' = the account is a curator
+   *  (stores/schoolsHub: can_create_groups or curates >= 1 school). */
+  requires?: 'schools'
 }
 
 export const USER_TABS: TabItem[] = [
   { icon: IconHome, label: 'Дашборд', to: '/user/dashboard' },
   { icon: IconCalendar, label: 'Календарь', to: '/user/calendar' },
   { icon: IconDiary, label: 'Дневник', to: '/user/diary' },
+  // tz-curator.md §1.2 (owner, mockup 2026-09-19): «Школы» sits between
+  // «Дневник» and «Я». Visible only to curators (the shell filters by the
+  // schoolsHub store); the plain-user branch (member of a school) comes with
+  // the user flow later.
+  { icon: IconSchool, label: 'Школы', to: '/user/schools', requires: 'schools' },
   { icon: IconProfile, label: 'Я', to: '/user/profile' },
 ]
 
@@ -46,6 +57,11 @@ export const MASTER_TABS: TabItem[] = [
   { icon: IconHome, label: 'Дашборд', to: '/master/dashboard' },
   { icon: IconCalendar, label: 'Практики', to: '/master/practices' },
   { icon: IconAnalytics, label: 'Аналитика', to: '/master/analytics' },
+  // tz-curator.md §1.2 (owner: «у куратора — всегда»), порядок владельца
+  // 2026-09-19: четвёртым, перед «Я» — зеркально юзер-зоне. Same schoolsHub
+  // condition as the user zone's; target is the master zone's own sectioned
+  // schools list.
+  { icon: IconSchool, label: 'Школы', to: '/master/curator-groups', requires: 'schools' },
   { icon: IconProfile, label: 'Я', to: '/master/profile' },
 ]
 

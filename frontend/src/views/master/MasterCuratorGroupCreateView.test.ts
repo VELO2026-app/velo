@@ -3,8 +3,11 @@
 // =============================================================================
 //
 // Mirrors MasterGroupCreateView's own test concerns: client-side required
-// check (no POST on a blank name), trimmed payloads, success navigation, and
-// the 409 curator_group_name_taken path surfacing as an inline field error.
+// check (no POST on a blank name), trimmed payloads, success navigation
+// (tz-curator.md §1.6: to the SCHOOL PAGE, not the list), and the 409
+// curator_group_name_taken path surfacing as an inline field error. The §1.5
+// media block is tested through the SCHOOL_MEDIA_UPLOAD_ENABLED kill-switch:
+// OFF (the shipped default) renders no pickers, ON renders both.
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -26,6 +29,16 @@ const toastSuccess = vi.fn()
 const toastError = vi.fn()
 vi.mock('@/composables/useToast', () => ({
   useToast: () => ({ success: toastSuccess, error: toastError, info: vi.fn() }),
+}))
+
+// §1.5 kill-switch, mutable per test through the getter (the module namespace
+// property is read at render time, so flipping the flag mid-file works).
+const mediaFlag = vi.hoisted(() => ({ enabled: false }))
+vi.mock('@/utils/constants', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/utils/constants')>()),
+  get SCHOOL_MEDIA_UPLOAD_ENABLED() {
+    return mediaFlag.enabled
+  },
 }))
 
 let app: App | null = null
@@ -75,6 +88,7 @@ beforeEach(() => {
   replace.mockReset()
   toastSuccess.mockReset()
   toastError.mockReset()
+  mediaFlag.enabled = false
 })
 
 afterEach(() => {
@@ -90,14 +104,14 @@ describe('MasterCuratorGroupCreateView', () => {
     mount()
     await flush()
 
-    buttonWith('Создать группу')?.click()
+    buttonWith('Создать школу')?.click()
     await flush()
 
-    expect(text()).toContain('Введите название группы')
+    expect(text()).toContain('Введите название школы')
     expect(cgApi.createCuratorGroup).not.toHaveBeenCalled()
   })
 
-  it('success: posts the TRIMMED name, omits a blank description, replaces to the list', async () => {
+  it('success: posts the TRIMMED name, omits a blank description, lands on the SCHOOL PAGE (§1.6)', async () => {
     vi.mocked(cgApi.createCuratorGroup).mockResolvedValue({
       id: 'g1',
       name: 'Тихая школа',
@@ -111,12 +125,40 @@ describe('MasterCuratorGroupCreateView', () => {
     await flush()
 
     await type(['  Тихая школа  ', '   '])
-    buttonWith('Создать группу')?.click()
+    buttonWith('Создать школу')?.click()
     await flush()
 
     expect(cgApi.createCuratorGroup).toHaveBeenCalledWith('Тихая школа', undefined)
-    expect(toastSuccess).toHaveBeenCalledWith('Группа «Тихая школа» создана')
-    expect(replace).toHaveBeenCalledWith({ name: 'master-curator-groups' })
+    expect(toastSuccess).toHaveBeenCalledWith('Школа «Тихая школа» создана')
+    // §1.6 (owner): creation lands on the school page with the NEW id.
+    expect(replace).toHaveBeenCalledWith({ name: 'master-curator-group', params: { id: 'g1' } })
+  })
+
+  it('media kill-switch OFF (shipped default): no pickers render', async () => {
+    mount()
+    await flush()
+
+    expect(host?.querySelector('label.sap')).toBeNull()
+    expect(host?.querySelector('label.sbp')).toBeNull()
+    // §1.5: the media sections disappear from the flow entirely -- no
+    // «Аватар школы»/«Фон школы» titles without the flag.
+    expect(text()).not.toContain('Аватар школы')
+    expect(text()).not.toContain('Фон школы')
+  })
+
+  it('media kill-switch ON: two sequential sections AFTER «Основное» (§1.5)', async () => {
+    mediaFlag.enabled = true
+    mount()
+    await flush()
+
+    expect(host?.querySelector('label.sap')).toBeTruthy()
+    expect(host?.querySelector('label.sbp')).toBeTruthy()
+    const body = text()
+    expect(body).toContain('Аватар школы')
+    expect(body).toContain('Фон школы')
+    // The mockup order: «Основное» first, then avatar, then banner.
+    expect(body.indexOf('Основное')).toBeLessThan(body.indexOf('Аватар школы'))
+    expect(body.indexOf('Аватар школы')).toBeLessThan(body.indexOf('Фон школы'))
   })
 
   it('a real description is forwarded trimmed', async () => {
@@ -133,7 +175,7 @@ describe('MasterCuratorGroupCreateView', () => {
     await flush()
 
     await type(['Ш', '  Практики тишины  '])
-    buttonWith('Создать группу')?.click()
+    buttonWith('Создать школу')?.click()
     await flush()
 
     expect(cgApi.createCuratorGroup).toHaveBeenCalledWith('Ш', 'Практики тишины')
@@ -147,10 +189,10 @@ describe('MasterCuratorGroupCreateView', () => {
     await flush()
 
     await type(['Дубль', ''])
-    buttonWith('Создать группу')?.click()
+    buttonWith('Создать школу')?.click()
     await flush()
 
-    expect(text()).toContain('У вас уже есть группа с таким названием')
+    expect(text()).toContain('У вас уже есть школа с таким названием')
     expect(toastError).toHaveBeenCalled()
     expect(replace).not.toHaveBeenCalled()
   })
@@ -163,7 +205,7 @@ describe('MasterCuratorGroupCreateView', () => {
     await flush()
 
     await type(['Школа', ''])
-    buttonWith('Создать группу')?.click()
+    buttonWith('Создать школу')?.click()
     await flush()
 
     // The honest refusal: not a field error, not a retryable failure -- the

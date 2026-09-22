@@ -196,6 +196,15 @@ const router = createRouter({
           component: () => import('@/views/user/UserCuratorGroupsView.vue'),
         },
         {
+          // tz-curator.md §1.2-1.4: the «Школы» TAB HUB (curator flow) --
+          // the tab bar's own screen: empty state with «Создать школу» or the
+          // flat schools list. Reached from the dock tab and nowhere else;
+          // tab visibility itself is the schoolsHub store's decision.
+          path: 'schools',
+          name: 'user-schools',
+          component: () => import('@/views/user/SchoolsView.vue'),
+        },
+        {
           path: 'groups/:id',
           name: 'user-curator-group',
           meta: { hideTabBar: true },
