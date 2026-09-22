@@ -3,8 +3,8 @@
  *
  * SVG icons from Design_prototype/assets/icons/ as Vue components.
  * Most icons use currentColor fill and accept a `size` prop (default 24).
- * Exception: the mood faces (IconMoodLow/Mid/High) are illustrative assets
- * that keep their own pastel gradients (default size 40), like VeloLogo.
+ * Exception: the mood-scale faces (IconMoodScale*) are illustrative assets
+ * that keep their own pastel fills (default size 40), like VeloLogo.
  *
  * Usage:
  *   import { IconHome, IconCalendar } from '@/components/icons'
@@ -45,10 +45,15 @@ export { default as IconCheck } from './IconCheck.vue'
 export { default as IconArrowRight } from './IconArrowRight.vue'
 export { default as IconClose } from './IconClose.vue'
 
-// -- Mood faces: colored illustrative assets (own gradients, default size 40) --
-export { default as IconMoodLow } from './IconMoodLow.vue'
-export { default as IconMoodMid } from './IconMoodMid.vue'
-export { default as IconMoodHigh } from './IconMoodHigh.vue'
+// -- Mood scale (FE-85, tz-mood-scale.md §6): five approved illustrative
+//    faces for the unified Check-in/Feedback scale, generated 1:1 from
+//    frontend/src/assets/mood-scale/*.svg (default size 40, own gradients --
+//    unique ids per instance via useId) --
+export { default as IconMoodScaleBad } from './IconMoodScaleBad.vue'
+export { default as IconMoodScaleLow } from './IconMoodScaleLow.vue'
+export { default as IconMoodScaleNeutral } from './IconMoodScaleNeutral.vue'
+export { default as IconMoodScaleGood } from './IconMoodScaleGood.vue'
+export { default as IconMoodScaleFire } from './IconMoodScaleFire.vue'
 
 // -- Diary feed (Diary redesign): monochrome glyphs (currentColor) --
 export { default as IconPen } from './IconPen.vue'

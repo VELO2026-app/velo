@@ -38,62 +38,19 @@ import {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// Mood (check-in)
-// ---------------------------------------------------------------------------
-
-/** Mood label by zone. Mood buttons render via vector IconMood* (CheckinView). */
-export const MOOD_LABEL: Record<string, string> = {
-  low: 'Не очень',
-  mid: 'Нормально',
-  high: 'Хорошо',
-}
-
-// ---------------------------------------------------------------------------
-// Feedback rating
-// ---------------------------------------------------------------------------
-
-/** Rating label by zone. Rating buttons render via vector IconRating* (FeedbackView). */
-export const RATING_LABEL: Record<string, string> = {
-  fire: 'Огонь!',
-  good: 'Хорошо',
-  confused: 'Есть вопросы',
-}
-
-// ---------------------------------------------------------------------------
-// Score (1..10) -> zone / label
+// Mood / rating (check-in & feedback)
 // ---------------------------------------------------------------------------
 //
-// mood and rating are stored as a 1..10 score now. The UI derives the icon
-// and label from the range: 1-3 / 4-7 / 8-10. The diary feed cards (and any
-// other read surface) use these helpers so the bucketing lives in one place.
-
-/** mood score (1..10) -> mood key. 1-3 low / 4-7 mid / 8-10 high. */
-export function moodZoneFromScore(score: number): 'low' | 'mid' | 'high' {
-  if (score <= 3) return 'low'
-  if (score <= 7) return 'mid'
-  return 'high'
-}
-
-/** rating score (1..10) -> rating key. 1-3 confused / 4-7 good / 8-10 fire. */
-export function ratingZoneFromScore(score: number): 'confused' | 'good' | 'fire' {
-  if (score <= 3) return 'confused'
-  if (score <= 7) return 'good'
-  return 'fire'
-}
-
-/** mood score -> Russian label ("Не очень" / "Нормально" / "Хорошо"). */
-export function moodLabelFromScore(score: number): string {
-  return MOOD_LABEL[moodZoneFromScore(score)] ?? ''
-}
-
-/** rating score -> Russian label ("Есть вопросы" / "Хорошо" / "Огонь!"). */
-export function ratingLabelFromScore(score: number): string {
-  return RATING_LABEL[ratingZoneFromScore(score)] ?? ''
-}
+// mood and rating are stored as a RAW 1..10 score. Since FE-85 the shared
+// five-emotion scale (keys + labels + index math) lives in utils/moodScale.ts,
+// and raw-score read surfaces import it from there -- one module so a saved
+// score is never named a different emotion on some other screen (tz §1, §4).
+// The color maps below stay here: they key on the backend's PRE-BUCKETED
+// analytics triad ('confused'/'good'/'fire'), not on scores (tz §5).
 
 /**
  * Rating progress-bar FILL colours (analytics / per-practice reviews).
- * Canon from the operator SVGs (2026-06-11): fire = peach, good = pink/rose,
+ * Canon from the operator SVGs (2026-06-11): fire = peach, good = rose,
  * confused = blue. A DIFFERENT palette from RATING_ICON_COLOR (the icon accents)
  * on purpose -- bars are the lighter fills, icons are the saturated accents.
  */

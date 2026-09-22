@@ -14,28 +14,21 @@
 // Inputs are getters so callers pass `() => props.item` and stay reactive.
 
 import { computed, type ComputedRef, type Component } from 'vue'
-import {
-  IconPen,
-  IconDreamBook,
-  IconDiaryBook,
-  IconMessages,
-  IconMoodMid,
-  IconRatingGood,
-} from '@/components/icons'
+import { IconPen, IconDreamBook, IconDiaryBook, IconMessages } from '@/components/icons'
 import {
   FEED_KIND_TITLE,
   OUTCOME_LABEL,
   EXTERNAL_ACTIVITY_LABEL,
   EXTERNAL_ACTIVITY_ICON,
-  moodZoneFromScore,
-  ratingZoneFromScore,
-  moodLabelFromScore,
-  ratingLabelFromScore,
   practiceIconFor,
-  RATING_ICON_COLOR,
 } from '@/utils/displayHelpers'
 import { EXTERNAL_ACTIVITY_MOOD_HIDDEN } from '@/utils/constants'
-import { MOOD_ICON, RATING_ICON } from '@/utils/ratingIcons'
+import {
+  MOOD_SCALE_DEFAULT_SCORE,
+  moodKeyFromScore,
+  moodLabelFromScore,
+} from '@/utils/moodScale'
+import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
 import { formatTime, formatDate, formatDuration } from '@/utils/format'
 import type { DiaryFeedItem, DiaryEventKind, ExternalActivityType } from '@/api/types'
 
@@ -75,8 +68,6 @@ export interface DiaryCardModel {
   ratingLabel: ComputedRef<string>
   /** Mood label alone (score -> zone label; the check-in bubble's no-comment fallback). */
   moodLabel: ComputedRef<string>
-  /** Rating-zone accent colour for the rating glyph (feedback bubble icon). */
-  ratingIconColor: ComputedRef<string>
   /** note / dream are editable (open the entry screen). */
   editable: ComputedRef<boolean>
 }
@@ -136,7 +127,9 @@ export function useDiaryCardModel(
     }
     if (kind.value === 'feedback') {
       const rating = snapNum('rating')
-      return rating !== null ? `${base}: ${ratingLabelFromScore(rating)}`.trim() : base
+      // The unified scale names BOTH kinds with the same five labels --
+      // a saved rating is never re-labelled a different emotion (tz §1).
+      return rating !== null ? `${base}: ${moodLabelFromScore(rating)}`.trim() : base
     }
     if (kind.value === 'external_activity') {
       // The mood is the NUMBER 1..10 (FE-70 ruling: in the app, unlike the
@@ -208,9 +201,10 @@ export function useDiaryCardModel(
   const standardIcon = computed<Component>(() => {
     switch (kind.value) {
       case 'checkin':
-        return MOOD_ICON[moodZoneFromScore(snapNum('mood') ?? 6)] ?? IconMoodMid
+        return MOOD_SCALE_ICON[moodKeyFromScore(snapNum('mood') ?? MOOD_SCALE_DEFAULT_SCORE)]
       case 'feedback':
-        return RATING_ICON[ratingZoneFromScore(snapNum('rating') ?? 6)] ?? IconRatingGood
+        // The same five faces as the check-in -- one scale everywhere (tz §1).
+        return MOOD_SCALE_ICON[moodKeyFromScore(snapNum('rating') ?? MOOD_SCALE_DEFAULT_SCORE)]
       case 'note':
         return IconDiaryBook
       case 'dream':
@@ -231,20 +225,13 @@ export function useDiaryCardModel(
 
   const ratingLabel = computed(() => {
     const rating = snapNum('rating')
-    return rating !== null ? ratingLabelFromScore(rating) : ''
+    return rating !== null ? moodLabelFromScore(rating) : ''
   })
 
   const moodLabel = computed(() => {
     const mood = snapNum('mood')
     return mood !== null ? moodLabelFromScore(mood) : ''
   })
-
-  // The thread feedback bubble paints its rating glyph with the rating-zone
-  // accent (the same palette FeedbackView's rating buttons use), not a fixed
-  // teal: the zone owns the colour, the bubble slot owns only geometry.
-  const ratingIconColor = computed(
-    () => RATING_ICON_COLOR[ratingZoneFromScore(snapNum('rating') ?? 6)],
-  )
 
   // Time only ("23:07"): the day + weekday live in the timeline's day
   // separator, so the per-card line stays minimal (operator feedback, item 3).
@@ -274,7 +261,6 @@ export function useDiaryCardModel(
     outcomeLabel,
     ratingLabel,
     moodLabel,
-    ratingIconColor,
     editable,
   }
 }

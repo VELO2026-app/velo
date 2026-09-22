@@ -135,7 +135,7 @@
         <h2 class="velo-section-title">Feedbacks</h2>
         <div v-if="feedbackRows.length === 0" class="profile__empty">Пока нет отзывов</div>
         <div v-for="(fb, i) in visibleFeedbacks" :key="`fb-${i}`" class="profile__fb">
-          <span class="profile__fb-ic" :style="{ color: fb.color }">
+          <span class="profile__fb-ic">
             <component :is="fb.icon" :size="30" />
           </span>
           <div class="profile__fb-body">
@@ -311,13 +311,8 @@ import { IconTag, IconPen } from '@/components/icons'
 // IconTrash is not re-exported from the icons barrel (same pattern as
 // EntryView.vue's delete action / MasterGroupDetailView.vue's header menu).
 import { IconTrash } from '@/components/icons'
-import {
-  moodLabelFromScore,
-  ratingLabelFromScore,
-  ratingZoneFromScore,
-  RATING_ICON_COLOR,
-} from '@/utils/displayHelpers'
-import { RATING_ICON } from '@/utils/ratingIcons'
+import { moodKeyFromScore, moodLabelFromScore } from '@/utils/moodScale'
+import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
 import { formatShortDate } from '@/utils/format'
 import { getStudent, type StudentDetailResponseWithBlocked } from '@/api/masters'
 import { getStudentGroups, getGroups, blockStudent, unblockStudent } from '@/api/groups'
@@ -418,16 +413,14 @@ const checkinRows = computed(() =>
 )
 
 const feedbackRows = computed(() =>
-  (detail.value?.feedbacks ?? []).map((fb) => {
-    const zone = ratingZoneFromScore(fb.rating)
-    return {
-      label: ratingLabelFromScore(fb.rating),
-      icon: RATING_ICON[zone],
-      color: RATING_ICON_COLOR[zone],
-      comment: fb.comment ?? '',
-      date: formatShortDate(fb.created_at),
-    }
-  }),
+  (detail.value?.feedbacks ?? []).map((fb) => ({
+    // The unified scale: a saved rating reads as the emotion it was picked as
+    // (tz-mood-scale §1) -- the same labels/faces the student saw on submit.
+    label: moodLabelFromScore(fb.rating),
+    icon: MOOD_SCALE_ICON[moodKeyFromScore(fb.rating)],
+    comment: fb.comment ?? '',
+    date: formatShortDate(fb.created_at),
+  })),
 )
 
 // Show the 3 most recent of each; the rest hide behind a «посмотреть еще» pill

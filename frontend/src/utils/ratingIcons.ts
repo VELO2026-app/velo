@@ -2,15 +2,17 @@
 // VELO Frontend -- Mood / Rating Icon Maps
 // =============================================================================
 //
-// B6 (Батч 3, PROMPT №580): single source of truth for the mood/rating zone ->
-// icon COMPONENT maps, previously duplicated byte-for-byte across 9 files:
-//   RATING_ICON -- useDiaryCardModel.ts, DetailView.vue, AnalyticsView.vue,
-//     MasterPracticeDetailView.vue, MasterSummaryView.vue, PracticeReviewsView.vue,
-//     and MasterStudentProfileView.vue under the alias ICON_BY_ZONE.
-//   MOOD_ICON -- useDiaryCardModel.ts, DetailView.vue.
-// Verified byte-identical (same key->icon pairs) before consolidating here; a
-// diverging copy would have been left in place and reported, not silently
-// picked.
+// Single source of truth for the emotion -> icon COMPONENT maps, so raw-score
+// surfaces cannot drift apart:
+//
+//   MOOD_SCALE_ICON -- the five approved FE-85 faces, keyed by the shared
+//     moodScale.ts keys. Used by MoodSlider, MoodAvatar, the diary card model
+//     and DetailView -- every surface that reads a RAW 1..10 score.
+//
+//   RATING_ICON -- the analytics bucket glyphs keyed 'fire'|'good'|'confused'.
+//     Those buckets arrive PRE-BUCKETED from the backend (FeedbackRating), so
+//     they are NOT raw scores -- widening them to five is the separate
+//     analytics backend task and must not leak into this map (tz-mood-scale §5).
 //
 // Kept separate from displayHelpers.ts (labels/colors, kind->string maps) on
 // purpose -- these two carry actual Vue Component values, a different kind of
@@ -19,23 +21,28 @@
 
 import type { Component } from 'vue'
 import type { FeedbackRating } from '@/api/types'
+import type { MoodScaleKey } from '@/utils/moodScale'
 import {
-  IconMoodLow,
-  IconMoodMid,
-  IconMoodHigh,
+  IconMoodScaleBad,
+  IconMoodScaleLow,
+  IconMoodScaleNeutral,
+  IconMoodScaleGood,
+  IconMoodScaleFire,
   IconRatingFire,
   IconRatingGood,
   IconRatingConfused,
 } from '@/components/icons'
 
-/** Mood zone ('low'/'mid'/'high', see displayHelpers.moodZoneFromScore) -> icon. */
-export const MOOD_ICON: Record<'low' | 'mid' | 'high', Component> = {
-  low: IconMoodLow,
-  mid: IconMoodMid,
-  high: IconMoodHigh,
+/** Mood-scale key ('bad'..'fire', see utils/moodScale.ts) -> its approved face. */
+export const MOOD_SCALE_ICON: Record<MoodScaleKey, Component> = {
+  bad: IconMoodScaleBad,
+  low: IconMoodScaleLow,
+  neutral: IconMoodScaleNeutral,
+  good: IconMoodScaleGood,
+  fire: IconMoodScaleFire,
 }
 
-/** Rating zone (FeedbackRating, see displayHelpers.ratingZoneFromScore) -> icon. */
+/** Analytics bucket (pre-bucketed FeedbackRating, NOT a raw score) -> icon. */
 export const RATING_ICON: Record<FeedbackRating, Component> = {
   fire: IconRatingFire,
   good: IconRatingGood,

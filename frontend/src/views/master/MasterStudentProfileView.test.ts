@@ -183,21 +183,19 @@ function sheetOverlay(): HTMLElement | null {
 }
 
 /**
- * Which IconRating* component ICON_BY_ZONE picked. The three glyphs are
- * otherwise identical <svg fill="currentColor"> nodes with no class or id; their
- * viewBox is the only marker in the rendered DOM that tells them apart
- * (IconRatingFire.vue:6, IconRatingGood.vue:6, IconRatingConfused.vue:6).
+ * Which of the five mood-scale faces the row rendered. They share one viewBox,
+ * so artwork tells them apart: low/good carry a <linearGradient> (the first
+ * gradient stop separates them), the rest a flat circle fill
+ * (bad #BDECF1 / neutral #F9CBD1 / fire #FDDFC4).
  */
-const RATING_ICON_VIEWBOX = {
-  fire: '-26.76 -26.76 468.52 499.52',
-  good: '-26.84 -26.84 501.01 494.91',
-  confused: '13.18 -26.82 500.64 500.69',
-} as const
-
-function fbIconZone(row: HTMLElement): string {
-  const vb = row.querySelector('svg')?.getAttribute('viewBox') ?? ''
-  const hit = Object.entries(RATING_ICON_VIEWBOX).find(([, v]) => v === vb)
-  return hit ? hit[0] : `unknown(${vb})`
+function fbFace(row: HTMLElement): string {
+  const art = (row.querySelector('svg')?.innerHTML ?? '').toLowerCase()
+  if (art.includes('lineargradient')) {
+    return art.includes('#bdecf1') ? 'low' : 'good'
+  }
+  if (art.includes('#f9cbd1')) return 'neutral'
+  if (art.includes('#fddfc4')) return 'fire'
+  return 'bad'
 }
 
 beforeEach(() => {
@@ -465,13 +463,14 @@ describe('MasterStudentProfileView', () => {
       mount()
       await flush()
 
-      // moodZoneFromScore: 1-3 low / 4-7 mid / 8-10 high (displayHelpers.ts:69-73).
-      // Scoped to .profile__ci-text: «Хорошо» is ALSO the `good` rating label, so
-      // a host-wide toContain here would not prove which row said it.
+      // moodKeyFromScore: 1-2 bad / 3-4 low / 5-6 neutral / 7-8 good / 9-10
+      // fire (moodScale.ts). Scoped to .profile__ci-text: «Хорошо» is ALSO the
+      // good rating label, so a host-wide toContain here would not prove which
+      // row said it.
       expect(ciRows().map((r) => r.querySelector('.profile__ci-text')?.textContent)).toEqual([
-        'Не очень',
+        'Плохо',
         'Нормально',
-        'Хорошо',
+        'Огонь',
       ])
     })
 
@@ -482,7 +481,7 @@ describe('MasterStudentProfileView', () => {
       mount()
       await flush()
 
-      expect(ciRows()[0]?.querySelector('.profile__ci-text')?.textContent).toBe('Хорошо')
+      expect(ciRows()[0]?.querySelector('.profile__ci-text')?.textContent).toBe('Огонь')
     })
 
     it('each row gets its OWN mood face — the score is forwarded per row, not once', async () => {
@@ -498,17 +497,20 @@ describe('MasterStudentProfileView', () => {
       mount()
       await flush()
 
-      // MoodAvatar picks IconMoodLow/Mid/High off moodZoneFromScore. The three
-      // assets are told apart in the DOM by: low's offset viewBox
-      // (IconMoodLow.vue:10), and mid's <circle> eyes vs high's all-<path> face
-      // (IconMoodMid.vue:12-13 / IconMoodHigh.vue) — they share "0 0 40 40".
+      // MoodAvatar picks the face off moodKeyFromScore. The five FE-85 faces
+      // share one viewBox, so artwork tells them apart: low/good carry a
+      // <linearGradient> (the first gradient stop separates them), the rest a
+      // flat circle fill (bad #BDECF1 / neutral #F9CBD1 / fire #FDDFC4).
       const faces = ciRows().map((r) => {
-        const svg = r.querySelector('svg')!
-        const vb = svg.getAttribute('viewBox') ?? ''
-        if (vb.startsWith('4.85156')) return 'low'
-        return svg.querySelector('circle') ? 'mid' : 'high'
+        const art = (r.querySelector('svg')?.innerHTML ?? '').toLowerCase()
+        if (art.includes('lineargradient')) {
+          return art.includes('#bdecf1') ? 'low' : 'good'
+        }
+        if (art.includes('#f9cbd1')) return 'neutral'
+        if (art.includes('#fddfc4')) return 'fire'
+        return 'bad'
       })
-      expect(faces).toEqual(['low', 'mid', 'high'])
+      expect(faces).toEqual(['bad', 'neutral', 'fire'])
       // ...and the comments still line up with their own rows.
       expect(ciRows().map((r) => r.querySelector('.profile__ci-text')?.textContent)).toEqual([
         'a',
@@ -534,23 +536,24 @@ describe('MasterStudentProfileView', () => {
       await flush()
 
       // Four boundary cases exceed PREVIEW_CAP=3, so the fourth is behind the
-      // pill -- expand before asserting, or `8 -> Огонь!` is never rendered and
+      // pill -- expand before asserting, or `8 -> Хорошо` is never rendered and
       // the case that matters most silently goes untested.
       showMorePills()[0]?.click()
       await flush()
       expect(fbRows()).toHaveLength(4)
 
-      // ratingZoneFromScore: 1-3 confused / 4-7 good / 8-10 fire (displayHelpers.ts:76-80).
+      // moodKeyFromScore: 3-4 low / 7-8 good (moodScale.ts) -- both scores of a
+      // pair share one emotion, so only the pair borders can drift silently.
       expect(fbRows().map((r) => r.querySelector('.profile__fb-title')?.textContent)).toEqual([
-        'Есть вопросы',
+        'Не очень',
+        'Не очень',
         'Хорошо',
         'Хорошо',
-        'Огонь!',
       ])
-      expect(fbRows().map(fbIconZone)).toEqual(['confused', 'good', 'good', 'fire'])
+      expect(fbRows().map(fbFace)).toEqual(['low', 'low', 'good', 'good'])
     })
 
-    it('paints each icon with its zone colour token (RATING_ICON_COLOR, not RATING_COLOR)', async () => {
+    it('renders each row with its OWN face off its own score (2 / 5 / 9)', async () => {
       vi.mocked(mastersApi.getStudent).mockResolvedValue(
         detail({
           feedbacks: [feedback({ rating: 2 }), feedback({ rating: 5 }), feedback({ rating: 9 })],
@@ -559,17 +562,10 @@ describe('MasterStudentProfileView', () => {
       mount()
       await flush()
 
-      // displayHelpers.ts:110-114. The OTHER map (RATING_COLOR, :98-102) is the
-      // analytics BAR palette -- peach/pink/blue -- and picking it here would be
-      // a real regression that a label-only assertion would not catch.
-      const colors = fbRows().map((r) =>
-        r.querySelector<HTMLElement>('.profile__fb-ic')?.getAttribute('style'),
-      )
-      expect(colors).toEqual([
-        'color: var(--velo-rating-confused);',
-        'color: var(--velo-rating-good);',
-        'color: var(--velo-rating-fire);',
-      ])
+      // FE-85: the faces are full-colour artwork (tz §3), so the old per-zone
+      // tint is gone -- what must hold instead is that every row renders the
+      // emotion its own score maps to, not a shared default glyph.
+      expect(fbRows().map(fbFace)).toEqual(['bad', 'neutral', 'fire'])
     })
 
     it('renders the comment when there is one and omits the text node entirely when there is not', async () => {

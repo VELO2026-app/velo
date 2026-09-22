@@ -62,16 +62,11 @@
     @click="onTap"
   >
     <DiaryBubbleShape side="right" />
-    <!-- 36, not 40: the rating glyphs carry ~5% baked-in viewBox padding
-         (their artwork reaches only ~89% of the box), so at 40 the outlined
-         glyph crowded the lobe. The slot below stays pinned to the lobe
-         center -- the icon centers through it. -->
-    <span
-      class="tcard__slot tcard__slot--rating"
-      :style="{ color: ratingIconColor }"
-      aria-hidden="true"
-    >
-      <component :is="standardIcon" :size="36" />
+    <!-- Same face family as the check-in lobe, same 40px: the FE-85 faces are
+         full-bleed artwork that carries its own colour, so no zone tint is
+         applied (tz-mood-scale §3) -- the slot owns only geometry. -->
+    <span class="tcard__slot tcard__slot--rating" aria-hidden="true">
+      <component :is="standardIcon" :size="40" />
     </span>
     <span class="tcard__bubble-body">
       <span class="tcard__bubble-title">{{ baseTitle }}</span>
@@ -197,7 +192,6 @@ const {
   outcomeStatus,
   outcomeLabel,
   ratingLabel,
-  ratingIconColor,
   moodLabel,
   editable,
 } = useDiaryCardModel(
