@@ -1,9 +1,9 @@
 <!--
   VELO Frontend -- IconMoodScaleLow (mood-scale "Не очень")
 
-  Approved mood-scale face (FE-85, tz-mood-scale.md §6): the raw asset
-  frontend/src/assets/mood-scale/mood-low.svg with geometry, colors and
-  gradients kept exactly as delivered. Full-color illustrative asset, not
+  Approved mood-scale face (FE-85, tz-mood-scale.md §6): kept 1:1 from the approved source art: geometry, colors and gradients
+  exactly as delivered. This component is the in-repo source of truth (raw
+  svg sources are not kept). Full-color illustrative asset, not
   a currentColor glyph. Gradient id is unique per instance.
 -->
 <template>

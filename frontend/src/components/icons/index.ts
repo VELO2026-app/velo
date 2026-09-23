@@ -46,9 +46,10 @@ export { default as IconArrowRight } from './IconArrowRight.vue'
 export { default as IconClose } from './IconClose.vue'
 
 // -- Mood scale (FE-85, tz-mood-scale.md §6): five approved illustrative
-//    faces for the unified Check-in/Feedback scale, generated 1:1 from
-//    frontend/src/assets/mood-scale/*.svg (default size 40, own gradients --
-//    unique ids per instance via useId) --
+//    faces for the unified Check-in/Feedback scale, embedded 1:1 from the
+//    approved source art -- these components are the in-repo source of truth
+//    (raw svg sources are not kept; default size 40, own gradients -- unique
+//    ids per instance via useId) --
 export { default as IconMoodScaleBad } from './IconMoodScaleBad.vue'
 export { default as IconMoodScaleLow } from './IconMoodScaleLow.vue'
 export { default as IconMoodScaleNeutral } from './IconMoodScaleNeutral.vue'
