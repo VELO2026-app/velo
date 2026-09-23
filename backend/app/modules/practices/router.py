@@ -60,7 +60,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import structlog
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, Form, Query, Response, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import AfterValidator
 from sqlalchemy import select
@@ -103,7 +103,7 @@ from app.modules.practices.service import (
     update_practice,
 )
 from app.modules.users.models import User
-from app.modules.zoom.models import ZoomMeeting, ZoomMeetingStatus
+from app.modules.zoom.models import ZoomGuestName, ZoomMeeting, ZoomMeetingStatus
 
 logger = structlog.get_logger()
 
@@ -902,8 +902,19 @@ def _public_page(
     primary: tuple[str, str] | None = None,
     secondary: tuple[str, str] | None = None,
     hint: str | None = None,
+    form_html: str = "",
+    form_action: str = "'none'",
+    no_store: bool = False,
 ) -> HTMLResponse:
     """The ONE page this router serves, in every state it has.
+
+    form_html is markup the caller has ALREADY escaped (_guest_name_form is
+    the only caller); it lands between the message and the buttons.
+    form_action is the CSP source list for form submissions: 'none' for
+    every page but the guest name page, which is the only one with forms.
+    no_store marks a page that is not safe to serve twice -- the guest name
+    page claims a name per view, and a cache replaying one view to two
+    people would hand both of them the same name.
 
     og tags are emitted only when a caller passes them: a code naming nothing
     has nothing to describe, and inventing a description there would be a
@@ -971,21 +982,32 @@ def _public_page(
             "border:1px solid rgba(76,101,137,.25);box-shadow:none}"
             ".hint{font-size:15px;color:rgba(76,101,137,.5);margin:16px 0 0;"
             "max-width:280px;line-height:1.4}"
+            "form{width:100%;max-width:336px;margin:0 0 12px}"
+            "button.btn{font-family:inherit;cursor:pointer}"
+            ".guest-name{font-size:22px;margin:0 0 16px}"
+            ".field{display:block;width:100%;height:50px;padding:0 20px;"
+            "margin:0 0 8px;font-family:inherit;font-size:18px;color:#4c6589;"
+            "border:1px solid rgba(76,101,137,.25);border-radius:9999px}"
+            ".field-note{font-size:14px;color:rgba(76,101,137,.5);"
+            "margin:0 0 16px;line-height:1.4}"
             "</style></head><body>"
             "<svg class='mark' viewBox='134 232 130 42' fill='#4c6589' "
             "xmlns='http://www.w3.org/2000/svg' aria-hidden='true'>"
             f"<path d='{_VELO_WORDMARK_PATH}'/></svg>"
             "<h1 class='title'>VEL\u0398</h1>"
             f"<p class='msg'>{html.escape(message)}</p>"
-            f"{buttons}{hint_html}"
+            f"{form_html}{buttons}{hint_html}"
             "</body></html>"
         ),
         # A narrow CSP for the ONLY HTML this backend serves. Everything the
         # page needs is enumerated, and nothing else is allowed: no scripts
         # at all (there are none), styles inline plus Google Fonts, fonts
-        # from gstatic. `form-action 'none'` and `base-uri 'none'` cost
-        # nothing here and remove two classes of injection outright, should
-        # a future edit ever put unescaped text into this markup.
+        # from gstatic. `base-uri 'none'` costs nothing and removes a class
+        # of injection outright. `form-action` is 'none' on every page but
+        # the guest name page (GT-21 step B), which opens it to itself and to
+        # Zoom: its "Войти" form is answered with a 303 to zoom.us, and
+        # form-action may be enforced on that redirect too. script-src stays
+        # closed there as well -- the page works on plain forms.
         #
         # Scoped to this response rather than set in nginx on purpose: the
         # SPA needs a different policy, and one policy loose enough for both
@@ -996,9 +1018,10 @@ def _public_page(
                 "style-src 'unsafe-inline' https://fonts.googleapis.com; "
                 "font-src https://fonts.gstatic.com; "
                 "img-src 'self' data:; "
-                "form-action 'none'; base-uri 'none'"
+                f"form-action {form_action}; base-uri 'none'"
             ),
             "X-Content-Type-Options": "nosniff",
+            **({"Cache-Control": "no-store"} if no_store else {}),
         },
     )
 
@@ -1117,58 +1140,220 @@ async def public_practice_landing_endpoint(
     )
 
 
+# GT-21 step B: the guest name page may submit to itself and to Zoom. Both
+# zoom.us and *.zoom.us: the wildcard does not cover the bare host, and a
+# guest join_url lives on a subdomain (us06web.zoom.us observed).
+_GUEST_FORM_ACTION = "'self' https://zoom.us https://*.zoom.us"
+
+_GUEST_ENTRY_HINT = (
+    "Если вы записаны на практику, откройте её в приложении — "
+    "так посещение будет засчитано."
+)
+
+
+def _guest_unavailable_page(practice: Practice, code: str) -> HTMLResponse:
+    """The honest answer when no guest entry exists in this state. The
+    landing would not have shown its guest button here; a hand-typed or
+    stale URL can still arrive."""
+    return _public_page(
+        title=practice.title,
+        message="Гостевой вход сейчас недоступен.",
+        status_code=status.HTTP_200_OK,
+        og_title=practice.title,
+        og_description=f"{_format_practice_when(practice)}.",
+        primary=(
+            f"{settings.telegram_bot_url}?startapp=zoom__{code}",
+            "Открыть VELO",
+        ),
+    )
+
+
+def _to_zoom(url: str, status_code: int) -> RedirectResponse:
+    """The one hop into Zoom. Referrer-Policy mirrors
+    zoom_start_redirect_endpoint so zoom.us is not handed our route."""
+    return RedirectResponse(
+        url=url,
+        status_code=status_code,
+        headers={"Referrer-Policy": "no-referrer"},
+    )
+
+
+def _guest_name_form(code: str, guest_name: ZoomGuestName | None) -> str:
+    """Markup for the guest name page, every value escaped here.
+
+    Two forms, no script. "Другое" is a plain GET of this same page: every
+    view claims a fresh name, so asking for another IS reloading. "Войти"
+    POSTs the shown name's row id in a hidden field -- carried by the form,
+    not a cookie (cookies are ruled out) -- and a typed name, which wins.
+    """
+    from app.modules.zoom.service import (
+        GUEST_LAST_NAME_STUB,
+        GUEST_NAME_MAX_LENGTH,
+    )
+
+    action = html.escape(f"/z/{code}/guest")
+    if guest_name is not None:
+        shown = (
+            "<p class='guest-name'>Вы войдёте как "
+            f"<b>{html.escape(guest_name.display_name)}</b></p>"
+        )
+        hidden = (
+            "<input type='hidden' name='guest_name_id' "
+            f"value='{html.escape(str(guest_name.id))}'>"
+        )
+        placeholder = "Или введите своё имя"
+    else:
+        shown = (
+            "<p class='guest-name'>Не получилось предложить имя — "
+            "введите своё.</p>"
+        )
+        hidden = ""
+        placeholder = "Ваше имя"
+    return (
+        f"{shown}"
+        f"<form method='post' action='{action}'>{hidden}"
+        "<input class='field' type='text' name='name' "
+        f"maxlength='{GUEST_NAME_MAX_LENGTH}' autocomplete='name' "
+        f"placeholder='{html.escape(placeholder)}'>"
+        "<p class='field-note'>Если введёте одно слово, в Zoom к нему "
+        f"добавится «{html.escape(GUEST_LAST_NAME_STUB)}».</p>"
+        "<button class='btn btn--primary' type='submit'>Войти</button>"
+        "</form>"
+        f"<form method='get' action='{action}'>"
+        "<button class='btn btn--secondary' type='submit'>Другое</button>"
+        "</form>"
+    )
+
+
+async def _guest_meeting(
+    practice: Practice, code: str, session: AsyncSession,
+) -> tuple[ZoomMeeting | None, HTMLResponse | None, str | None]:
+    """(meeting, page, shared_url) -- exactly one of the three is set.
+
+    resolve_zoom_entry with user=None stays the gate -- anonymity is
+    structural there, not here. meeting: naming applies. page: no guest
+    entry in this state. shared_url: a practice no longer handing out names
+    (not scheduled/live), which keeps the pre-step-B behaviour -- the shared
+    registrant, nothing written.
+    """
+    from app.modules.zoom.service import (
+        ZoomEntryKind,
+        guest_naming_open,
+        resolve_zoom_entry,
+    )
+
+    resolution = await resolve_zoom_entry(practice, None, session)
+    if resolution.kind != ZoomEntryKind.GUEST:
+        return None, _guest_unavailable_page(practice, code), None
+    if not guest_naming_open(practice):
+        shared = resolution.url
+        if isinstance(shared, str) and shared.startswith("https://"):
+            return None, None, shared
+        return None, _guest_unavailable_page(practice, code), None
+    # GUEST implies an ACTIVE meeting row (resolve_zoom_entry step 3).
+    meeting = (
+        await session.execute(
+            select(ZoomMeeting).where(ZoomMeeting.practice_id == practice.id)
+        )
+    ).scalar_one()
+    return meeting, None, None
+
+
 @public_router.get("/z/{code}/guest")
 async def public_practice_guest_endpoint(
     code: str,
-    session: AsyncSession = Depends(get_db_reader),
+    session: AsyncSession = Depends(get_db_session),
 ) -> Response:
-    """The guest button's target: 307 straight into Zoom.
+    """The guest button's target: the page that names the guest (GT-21 B).
 
-    The raw Zoom URL exists here ONLY as the Location header of one response
-    -- it is in no page body and in no JSON anywhere in this system. The hop
-    itself is unavoidable; the browser has to reach zoom.us somehow. Same
-    shape as zoom_start_redirect_endpoint above, Referrer-Policy included so
-    zoom.us is not handed the shape of our route.
+    Every view claims a generated name (a ZoomGuestName row) and shows it
+    with a field for the guest's own name, "Войти" and "Другое". The name is
+    claimed on DISPLAY so the one shown is the one he gets; the Zoom
+    registrant is minted only on "Войти" -- see the POST twin below.
+
+    get_db_session, not get_db_reader: the reader always rolls back, and the
+    claimed row would vanish with it.
+
+    A practice past the naming window (not scheduled/live) keeps the
+    pre-step-B behaviour: 307 to the shared registrant, nothing written.
 
     Anonymous, like the landing: resolve_zoom_entry is called with user=None,
     so this endpoint cannot return a personal link even by mistake.
     """
-    from app.modules.zoom.service import ZoomEntryKind, resolve_zoom_entry
-
     practice = await _load_public_practice(code, session)
     if practice is None:
         return _not_a_link_page()
 
-    resolution = await resolve_zoom_entry(practice, None, session)
-    # The https:// guard matches the two siblings in zoom/service.py that
-    # hand out Zoom URLs (get_host_start_url, get_meeting_recording_link):
-    # a stored value that is not an https URL is treated as absent rather
-    # than redirected to. The value comes from Zoom, so this is
-    # defence-in-depth -- but an inconsistency inside one feature is worse
-    # than no guard at all, because the next reader has to work out which
-    # of the three places is right.
-    usable = (
-        resolution.kind == ZoomEntryKind.GUEST
-        and isinstance(resolution.url, str)
-        and resolution.url.startswith("https://")
-    )
-    if not usable:
-        # The landing would not have shown this button in these states; a
-        # hand-typed or stale URL can still arrive here.
-        return _public_page(
-            title=practice.title,
-            message="Гостевой вход сейчас недоступен.",
-            status_code=status.HTTP_200_OK,
-            og_title=practice.title,
-            og_description=f"{_format_practice_when(practice)}.",
-            primary=(
-                f"{settings.telegram_bot_url}?startapp=zoom__{code}",
-                "Открыть VELO",
-            ),
-        )
+    meeting, page, shared_url = await _guest_meeting(practice, code, session)
+    if page is not None:
+        return page
+    if shared_url is not None:
+        return _to_zoom(shared_url, status.HTTP_307_TEMPORARY_REDIRECT)
 
-    return RedirectResponse(
-        url=resolution.url,
-        status_code=status.HTTP_307_TEMPORARY_REDIRECT,
-        headers={"Referrer-Policy": "no-referrer"},
+    from app.modules.zoom.service import claim_guest_name
+
+    guest_name = await claim_guest_name(practice, meeting, session)
+    return _public_page(
+        title=practice.title,
+        message=f"{practice.title}\n{_format_practice_when(practice)}",
+        status_code=status.HTTP_200_OK,
+        og_title=practice.title,
+        og_description=f"{_format_practice_when(practice)}.",
+        primary=(
+            f"{settings.telegram_bot_url}?startapp=zoom__{code}",
+            "Открыть в VELO",
+        ),
+        hint=_GUEST_ENTRY_HINT,
+        form_html=_guest_name_form(code, guest_name),
+        form_action=_GUEST_FORM_ACTION,
+        no_store=True,
     )
+
+
+@public_router.post("/z/{code}/guest")
+async def public_practice_guest_enter_endpoint(
+    code: str,
+    name: Annotated[str | None, Form()] = None,
+    guest_name_id: Annotated[str | None, Form()] = None,
+    session: AsyncSession = Depends(get_db_session),
+) -> Response:
+    """"Войти": mint the guest's registrant, 303 into Zoom.
+
+    303, not 307: a 307 keeps the method and body, and the browser would
+    POST this form to the join_url.
+
+    The raw Zoom URL still exists ONLY as the Location header of one
+    response -- in no page body and in no JSON anywhere in this system. The
+    page's CSP now lets a form submit towards zoom.us, but that permits the
+    browser to follow this redirect; it puts no Zoom URL into any markup.
+
+    Precedence and fallbacks are enter_as_guest's (zoom/service.py): a
+    typed name wins and is written nowhere; otherwise the shown name's row;
+    a refusal from Zoom hands out the shared registrant.
+    """
+    practice = await _load_public_practice(code, session)
+    if practice is None:
+        return _not_a_link_page()
+
+    meeting, page, shared_url = await _guest_meeting(practice, code, session)
+    if page is not None:
+        return page
+    if shared_url is not None:
+        return _to_zoom(shared_url, status.HTTP_303_SEE_OTHER)
+
+    from app.modules.zoom.service import enter_as_guest, normalize_typed_guest_name
+
+    try:
+        shown_id = UUID(guest_name_id) if guest_name_id else None
+    except ValueError:
+        shown_id = None
+    url = await enter_as_guest(
+        practice,
+        meeting,
+        session,
+        typed_name=normalize_typed_guest_name(name),
+        guest_name_id=shown_id,
+    )
+    if url is None:
+        return _guest_unavailable_page(practice, code)
+    return _to_zoom(url, status.HTTP_303_SEE_OTHER)

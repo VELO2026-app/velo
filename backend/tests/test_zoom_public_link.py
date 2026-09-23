@@ -507,9 +507,9 @@ async def test_landing_never_contains_a_raw_zoom_url(
 ) -> None:
     """THE POINT OF THE WHOLE FEATURE, asserted on the anonymous surface: no
     zoom.us anywhere in the page body. The guest button points at our own
-    /guest route, which redirects -- the raw URL exists only as one
-    Location header, never as something a person can copy out of the page
-    and repost."""
+    /guest route, whose "Войти" answers with a redirect -- the raw URL
+    exists only as one Location header, never as something a person can
+    copy out of the page and repost."""
     master = await _make_verified_master(client, db_session, telegram_id=89842)
     practice_id = await _create_and_publish_practice(client, master)
 
@@ -576,21 +576,54 @@ async def test_guest_route_redirects_307_with_no_referrer(
 ) -> None:
     """The one place a raw Zoom URL is allowed to exist: a Location header.
     Referrer-Policy mirrors zoom_start_redirect_endpoint so zoom.us is not
-    handed the shape of our route."""
+    handed the shape of our route.
+
+    WHAT CHANGED IN GT-21 STEP B, AND WHY THIS IS NOT A WEAKER TEST. The old
+    version asserted that GET /guest on a published practice is a 307 to
+    the shared link. That was right while the route was a plain redirect;
+    step B turned GET into the page that names the guest, so for a
+    scheduled practice the claim is now false. The property itself did not
+    move, only its place, and both places are asserted here:
+      - a practice past the naming window (completed) keeps the old answer
+        exactly -- GET is a 307 to the shared link, with no-referrer;
+      - a scheduled practice answers GET with the page, whose body carries
+        no Zoom URL, and "Войти" answers with a 303 whose Location is the
+        only Zoom URL anywhere, again with no-referrer.
+    """
     master = await _make_verified_master(client, db_session, telegram_id=89845)
     practice_id = await _create_and_publish_practice(client, master)
     meeting = await _meeting(db_session, practice_id)
     meeting.shared_join_url = "https://zoom.us/w/shared?tk=guest"
     await db_session.commit()
+    code = encode_practice_code(UUID(practice_id))
 
-    resp = await client.get(
-        f"/z/{encode_practice_code(UUID(practice_id))}/guest",
-        follow_redirects=False,
+    page = await client.get(f"/z/{code}/guest", follow_redirects=False)
+    enter = await client.post(
+        f"/z/{code}/guest", data={"name": "Марина"}, follow_redirects=False,
     )
 
-    assert resp.status_code == 307
-    assert resp.headers["location"] == "https://zoom.us/w/shared?tk=guest"
-    assert resp.headers["Referrer-Policy"] == "no-referrer"
+    assert page.status_code == 200
+    assert "location" not in {k.lower() for k in page.headers}
+    assert "zoom.us/w/" not in page.text
+    assert "zoom.us/j/" not in page.text
+    assert enter.status_code == 303
+    assert enter.headers["location"].startswith("https://zoom.us/")
+    assert enter.headers["location"] not in page.text
+    assert enter.headers["Referrer-Policy"] == "no-referrer"
+
+    practice = (
+        await db_session.execute(
+            select(Practice).where(Practice.id == UUID(practice_id))
+        )
+    ).scalar_one()
+    practice.status = PracticeStatus.COMPLETED.value
+    await db_session.commit()
+
+    past = await client.get(f"/z/{code}/guest", follow_redirects=False)
+
+    assert past.status_code == 307
+    assert past.headers["location"] == "https://zoom.us/w/shared?tk=guest"
+    assert past.headers["Referrer-Policy"] == "no-referrer"
 
 
 @pytest.mark.asyncio
@@ -670,10 +703,18 @@ async def test_anonymous_page_never_leaks_a_booked_students_personal_link(
 
     page = await client.get(f"/z/{code}", follow_redirects=False)
     guest = await client.get(f"/z/{code}/guest", follow_redirects=False)
+    # GT-21 step B: GET /guest is now a page and "Войти" is its POST, so the
+    # old `guest.headers["location"] != personal` moved to the POST -- and
+    # the page body itself joins the landing in the no-leak assertion.
+    enter = await client.post(f"/z/{code}/guest", follow_redirects=False)
 
     assert "SECRET" not in page.text
     assert personal not in page.text
-    assert guest.headers["location"] != personal
+    assert guest.status_code == 200
+    assert "SECRET" not in guest.text
+    assert enter.status_code == 303
+    assert enter.headers["location"] != personal
+    assert "SECRET" not in enter.headers["location"]
 
 
 # ===========================================================================

@@ -4,8 +4,8 @@
 #
 # Four tables. Three turn "booked" into "actually present, for how long"
 # via Zoom, without trusting Zoom to tell us who the host is. The fourth
-# (ZoomGuestName, GT-21 step A) is deliberately outside that purpose and
-# has no writer yet -- see its own docstring.
+# (ZoomGuestName, GT-21) is deliberately outside that purpose -- see its
+# own docstring.
 #
 # ZoomMeeting      -- 1:1 with Practice. Zoom's own meeting identity + our
 #                     view of whether creation/sync last succeeded.
@@ -15,10 +15,10 @@
 #                     students specifically so host-exclusion is OUR OWN
 #                     explicit fact, not something we infer from any
 #                     Zoom-provided field (there isn't one -- E21 research).
-# ZoomGuestName    -- GT-21 step A: SCHEMA ONLY, no writer. 1 row per display
-#                     name issued to a guest on a practice. Nothing writes
-#                     to it yet -- /z/{code}/guest still hands out the shared
-#                     link. The generator and the claim path are step B.
+# ZoomGuestName    -- GT-21. 1 row per GENERATED display name issued to a
+#                     guest on a practice. Written by the claim path in
+#                     zoom/service.py (step B) when /z/{code}/guest shows a
+#                     name; names a guest types are not written here.
 # ZoomAttendanceSegment -- append-only, RAW report rows. Zoom returns
 #                     MULTIPLE rows per person on rejoin and does not sum
 #                     them; we do, in the attendance-decision step that
@@ -260,16 +260,17 @@ class ZoomRegistrant(UUIDMixin, TimestampMixin, Base):
 
 
 class ZoomGuestName(UUIDMixin, TimestampMixin, Base):
-    """One display name issued to one guest on one practice (GT-21 step A).
+    """One generated display name issued to one guest on one practice (GT-21).
 
-    STEP A IS SCHEMA ONLY: nothing writes here yet. /z/{code}/guest still
-    hands out the shared "VELO / Guest Link" registrant, so the table stays
-    empty until the generator and claim path land in step B. Everything
-    below describes the contract that step B will have to meet, not
-    behaviour that exists today.
+    Written by claim_guest_name (zoom/service.py, step B) when the public
+    guest page shows a name -- claimed on DISPLAY, so the name shown is the
+    one the guest gets; zoom_registrant_id/join_url are filled in when he
+    presses "Войти". A name the guest TYPES is never written here:
+    uniqueness exists for generated names only, and namesakes are allowed
+    (owner ruling, 2026-09-23).
 
-    A row will mean "this name is taken here" -- what the generator needs
-    and what a counter column cannot answer. Scoped to the practice, not
+    A row means "this name is taken here" -- what the generator needs and
+    what a counter column cannot answer. Scoped to the practice, not
     globally (owner ruling).
 
     NOT a ZoomRegistrant row, and zoom_registrant_id/join_url live here for
@@ -287,17 +288,18 @@ class ZoomGuestName(UUIDMixin, TimestampMixin, Base):
     # the lower one is the CheckConstraint below, because when the writer
     # arrives an empty name must be IMPOSSIBLE, not merely un-issued.
     display_name: Mapped[str] = mapped_column(String(64))
-    # NULL is an expected end state, not an unfinished one: the row will
-    # claim the name, and Zoom can still refuse. Such a row keeps its name
-    # reserved on purpose.
+    # NULL is an expected end state, not an unfinished one: the row claims
+    # the name, and the guest may never press "Войти" (he asked for another
+    # name, or left), or Zoom may refuse. Such a row keeps its name reserved
+    # on purpose -- there is no release path (owner ruling).
     zoom_registrant_id: Mapped[str | None] = mapped_column(
         String(64), default=None,
     )
     join_url: Mapped[str | None] = mapped_column(Text, default=None)
 
     __table_args__ = (
-        # Blank and whitespace-only names rejected by the DATABASE, not by a
-        # caller that does not exist yet (GT-21b item 4). The expression is a
+        # Blank and whitespace-only names rejected by the DATABASE, not left
+        # to the caller (GT-21b item 4). The expression is a
         # regex, not length(btrim(...)): btrim's default trim set is the SPACE
         # character alone, so a name of tabs or newlines passed it (found by
         # the suite, fixed in gt21cd3e4f5a). First regex CHECK in this tree.
@@ -318,6 +320,9 @@ class ZoomGuestName(UUIDMixin, TimestampMixin, Base):
         #   lowercased claim path; this tree's first expression index.
         # Rejected: CI collation (changes every comparison here), lower() on
         #   write (destroys the guest's case), app-side check (races).
+        # Step B (2026-09-23) added a surface where a human types a name, but
+        #   that name is never written to this table, so the trigger has not
+        #   fired: the state above is still unreachable.
         Index(
             "uq_zoom_guest_names_practice_name",
             "practice_id",

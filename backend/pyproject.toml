@@ -29,6 +29,10 @@ dependencies = [
     # (E21) -- it belongs here, not in dev-only, or a prod install without
     # --extra dev throws ImportError on startup (A4 V9).
     "httpx>=0.27.0,<1.0",
+    # FastAPI's Form() needs this at import time of practices/router.py --
+    # the guest name page's POST (GT-21 step B). Without it the router
+    # raises RuntimeError at startup, so it belongs here, not in dev-only.
+    "python-multipart>=0.0.32,<1.0",
 ]
 
 [project.optional-dependencies]
