@@ -65,9 +65,7 @@ describe('transcribeAudio', () => {
     expect(url).toContain('/api/v1/ai/transcribe')
     expect(init.method).toBe('POST')
     expect(parseBody(init).audio_base64).toBe('AQID')
-    expect((init.headers as Record<string, string>).Authorization).toBe(
-      'Bearer session-token',
-    )
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer session-token')
   })
 
   it('sends no key of its own -- the provider credential is not in the browser', async () => {
@@ -114,9 +112,7 @@ describe('error mapping', () => {
     // backend collapses every provider-side failure into one code precisely
     // so that sentence cannot come back: the person can act on neither our
     // vendor nor our credit.
-    fetchMock.mockResolvedValue(
-      jsonResponse({ error: 'transcription_failed', message: 'x' }, 502),
-    )
+    fetchMock.mockResolvedValue(jsonResponse({ error: 'transcription_failed', message: 'x' }, 502))
 
     const result = await transcribeAudio(AUDIO_BLOB)
 
@@ -126,9 +122,7 @@ describe('error mapping', () => {
   it('falls back to the generic sentence on a code it does not know', async () => {
     // A raw identifier on screen is the failure mode this table exists to
     // prevent, and new backend codes are added without this file.
-    fetchMock.mockResolvedValue(
-      jsonResponse({ error: 'some_future_code', message: 'x' }, 500),
-    )
+    fetchMock.mockResolvedValue(jsonResponse({ error: 'some_future_code', message: 'x' }, 500))
 
     const result = await transcribeAudio(AUDIO_BLOB)
 

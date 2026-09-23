@@ -28,7 +28,12 @@ import type {
 
 export type TaxonomyStyleItem = TaxonomyStyleResponse
 export type TaxonomyDirectionItem = TaxonomyDirectionResponse
-export type { TaxonomyListResponse, CreateDirectionRequest, CreateStyleRequest, UpdateTaxonomyItemRequest }
+export type {
+  TaxonomyListResponse,
+  CreateDirectionRequest,
+  CreateStyleRequest,
+  UpdateTaxonomyItemRequest,
+}
 
 /** Active-only catalog (is_active=true). Throws (ApiResponseError) on
  *  failure -- callers that need an offline fallback must catch. */
@@ -55,10 +60,7 @@ export function updateTaxonomyDirection(
   directionId: string,
   body: UpdateTaxonomyItemRequest,
 ): Promise<TaxonomyDirectionItem> {
-  return api.patch<TaxonomyDirectionItem>(
-    `/api/v1/admin/taxonomy/directions/${directionId}`,
-    body,
-  )
+  return api.patch<TaxonomyDirectionItem>(`/api/v1/admin/taxonomy/directions/${directionId}`, body)
 }
 
 export function createTaxonomyStyle(

@@ -1,10 +1,10 @@
 <!--
-  VELO Frontend -- MoodAvatar (Master DS, 2026-06-11)
+  VELO Frontend -- MoodAvatar (Master DS, 2026-06-11; FE-85 rescale)
 
   Mood face used as a participant avatar on the master's check-ins / student
-  screens. Reuses the diary's mood-face assets (IconMoodLow/Mid/High — pastel
-  gradient circles with a face) and the shared 1..10 -> low/mid/high mapping
-  (moodZoneFromScore), so the mood face matches the diary everywhere.
+  screens. Renders one of the five approved FE-85 faces off the RAW 1..10
+  score via the shared moodScale mapping, so a saved check-in reads as the
+  same emotion in the diary, the profile and the attendance roster.
 
   Usage: <MoodAvatar :mood="checkin.mood" :size="46" />
 -->
@@ -15,8 +15,8 @@
 
 <script setup lang="ts">
 import { computed, type Component } from 'vue'
-import { IconMoodLow, IconMoodMid, IconMoodHigh } from '@/components/icons'
-import { moodZoneFromScore } from '@/utils/displayHelpers'
+import { moodKeyFromScore } from '@/utils/moodScale'
+import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
 
 const props = withDefaults(
   defineProps<{
@@ -27,10 +27,5 @@ const props = withDefaults(
   { size: 46 },
 )
 
-const moodIcon = computed<Component>(() => {
-  const zone = moodZoneFromScore(props.mood)
-  if (zone === 'low') return IconMoodLow
-  if (zone === 'high') return IconMoodHigh
-  return IconMoodMid
-})
+const moodIcon = computed<Component>(() => MOOD_SCALE_ICON[moodKeyFromScore(props.mood)])
 </script>

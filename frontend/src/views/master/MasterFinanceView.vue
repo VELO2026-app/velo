@@ -248,7 +248,12 @@ import { IconCheck, IconClose, IconPending, IconRequired } from '@/components/ic
 import { useToast } from '@/composables/useToast'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import { useMasterStore } from '@/stores/master'
-import { getMyWithdrawals, createWithdrawal, updatePayoutDetails, deletePayout } from '@/api/masters'
+import {
+  getMyWithdrawals,
+  createWithdrawal,
+  updatePayoutDetails,
+  deletePayout,
+} from '@/api/masters'
 import { extractApiError } from '@/composables/useApiError'
 import { formatMoney, formatDateShort } from '@/utils/format'
 import { eurStringToCents, centsToEurString } from '@/utils/currency'

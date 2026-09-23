@@ -20,6 +20,7 @@ import {
   deleteCuratorGroup,
   getCuratorGroupMembers,
   removeCuratorGroupMember,
+  offerCuratorGroupMaster,
   createCuratorGroupInvite,
   revokeCuratorGroupInvite,
   offerCuratorGroupTransfer,
@@ -232,6 +233,12 @@ describe('invite + transfer + join bodies', () => {
     await offerCuratorGroupTransfer('g1', 'u2')
 
     expect(api.post).toHaveBeenCalledWith(`${G}/g1/transfer`, { to_user_id: 'u2' })
+  })
+
+  it('offerCuratorGroupMaster posts snake_case to_user_id (GT-27, 204)', async () => {
+    await offerCuratorGroupMaster('g1', 'u3')
+
+    expect(api.post).toHaveBeenCalledWith(`${G}/g1/master-offers`, { to_user_id: 'u3' })
   })
 
   it('joinCuratorGroup posts {token} to the shared join path', async () => {

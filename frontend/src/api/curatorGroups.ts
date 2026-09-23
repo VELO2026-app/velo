@@ -8,7 +8,7 @@
 // generated.ts -- this file wraps URLs and request bodies only; all types
 // come from @/api/types, per that file's own header rule.
 //
-// Three surfaces, one feature (tz-curator-groups.md 5.2-5.3):
+// Three surfaces, one feature (tz-curator.md §3.4):
 //
 // CURATOR (verified master, prefix /api/v1/masters/me/curator-groups):
 //   GET    /                                     -- my schools + counts + transfer
@@ -19,6 +19,8 @@
 //   DELETE /{id}                                 -- delete (never blocked, I-11)
 //   GET    /{id}/members                         -- roster (?kind&search&limit&offset)
 //   DELETE /{id}/members/{user_id}               -- remove member (idempotent)
+//   POST   /{id}/master-offers                   -- offer a member the master
+//                                                  role {to_user_id} (GT-27)
 //   POST   /{id}/invites                         -- get-or-mint the link
 //   DELETE /{id}/invites                         -- revoke it
 //   POST   /{id}/transfer                        -- offer hand-over {to_user_id}
@@ -56,6 +58,7 @@ import type {
   CuratorGroupInviteResponse,
   CuratorGroupLeavePreviewResponse,
   CuratorGroupListResponse,
+  CuratorGroupMasterOfferRequest,
   CuratorGroupMineResponse,
   CuratorGroupPageResponse,
   CuratorGroupRemovePreviewResponse,
@@ -179,6 +182,18 @@ export function getCuratorGroupMembers(
  *  the GROUP not being mine, never about the user. */
 export function removeCuratorGroupMember(id: string, userId: string): Promise<void> {
   return api.delete(`${CURATOR_BASE}/${id}/members/${userId}`)
+}
+
+/** POST /masters/me/curator-groups/{id}/master-offers (GT-27) -- offer a
+ *  member of this school its master role. THE APPOINTMENT DOES NOT TAKE
+ *  EFFECT HERE: the roster changes only when the appointee accepts, so this
+ *  answering 204 never justifies mutating the row locally. Idempotent per
+ *  candidate (re-sending is not a conflict). Errors: 404 not_found (not your
+ *  school, or the candidate is not in it -- one answer, P-08);
+ *  409 already_master; 403 master_required (no verified master profile). */
+export function offerCuratorGroupMaster(id: string, toUserId: string): Promise<void> {
+  const body: CuratorGroupMasterOfferRequest = { to_user_id: toUserId }
+  return api.post<void>(`${CURATOR_BASE}/${id}/master-offers`, body)
 }
 
 /** POST /masters/me/curator-groups/{id}/invites -- get-or-mint the school's

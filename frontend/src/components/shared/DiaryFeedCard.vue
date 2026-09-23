@@ -367,12 +367,6 @@ function onTap(): void {
   color: var(--velo-text-primary);
 }
 
-/* Feedback rating glyph is the "fire" icon, painted the brand fire/peach color
-   (Figma 5 Feedbacks list: #d4863c), NOT teal. */
-.feed-card__icon--feedback {
-  color: var(--velo-rating-fire);
-}
-
 .feed-card__text {
   display: flex;
   flex-direction: column;

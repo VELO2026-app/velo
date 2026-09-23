@@ -316,6 +316,17 @@ const STATS_MONTH: MasterStatsResponse = {
   income_cents: 900000,
   income_delta_pct: null,
 }
+// FE-66: quarter joins the toggle (BE-28). Same rule as the pair above: every
+// figure differs from both week and month, so a toggle that refetches nothing
+// cannot pass. All deltas positive this time -- a growing quarter reads upward.
+const STATS_QUARTER: MasterStatsResponse = {
+  practices_count: 131,
+  practices_delta_pct: 12.5,
+  participants_count: 1421,
+  participants_delta_pct: 5.4,
+  income_cents: 3456000,
+  income_delta_pct: 7.7,
+}
 
 function user(overrides: Partial<UserResponse> = {}): UserResponse {
   return {
@@ -519,7 +530,9 @@ beforeEach(() => {
   mockBucketedPractices([P_LATER, P_SOON, P_THIRD])
   vi.mocked(mastersApi.getMasterStats)
     .mockReset()
-    .mockImplementation(async (period) => (period === 'month' ? STATS_MONTH : STATS_WEEK))
+    .mockImplementation(async (period) =>
+      period === 'quarter' ? STATS_QUARTER : period === 'month' ? STATS_MONTH : STATS_WEEK,
+    )
   vi.mocked(usersApi.updateMe)
     .mockReset()
     .mockImplementation(async () => user({ master_onboarding_completed: true }))
@@ -921,6 +934,25 @@ describe('MasterDashboardView', () => {
       expect(statValue('Практик')).toBe('40')
       expect(statValue('Участников')).toBe('500')
       expect(periodButton('Месяц')?.getAttribute('aria-selected')).toBe('true')
+      expect(periodButton('Неделя')?.getAttribute('aria-selected')).toBe('false')
+    })
+
+    it('«Квартал» refetches and every figure moves', async () => {
+      // FE-66: the third segment went live with the backend's quarter period
+      // (BE-28). toHaveBeenLastCalledWith is the second call-shape assertion in
+      // this file: the payload swap is invisible in the segment labels alone.
+      mount()
+      await flush()
+      expect(statValue('Практик')).toBe('12')
+
+      periodButton('Квартал')?.click()
+      await flush()
+
+      expect(mastersApi.getMasterStats).toHaveBeenLastCalledWith('quarter')
+      expect(statValue('Практик')).toBe('131')
+      expect(statValue('Участников')).toBe('1421')
+      expect(periodButton('Квартал')?.getAttribute('aria-selected')).toBe('true')
+      expect(periodButton('Месяц')?.getAttribute('aria-selected')).toBe('false')
       expect(periodButton('Неделя')?.getAttribute('aria-selected')).toBe('false')
     })
 

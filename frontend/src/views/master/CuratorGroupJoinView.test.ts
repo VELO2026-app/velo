@@ -40,6 +40,14 @@ vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({ role: mockRole }),
 }))
 
+// FE-88: a successful join must refresh the dock's «Школы» tab probe (the
+// account may have just gained its first school). Mocked wholesale: this
+// app mounts without pinia, and the refresh is the only hub seam used here.
+const hubRefresh = vi.fn()
+vi.mock('@/stores/schoolsHub', () => ({
+  useSchoolsHubStore: () => ({ refreshCurator: hubRefresh }),
+}))
+
 let app: App | null = null
 let host: HTMLElement | null = null
 
@@ -96,6 +104,7 @@ beforeEach(() => {
   replace.mockReset()
   toastSuccess.mockReset()
   toastError.mockReset()
+  hubRefresh.mockReset()
 })
 
 afterEach(() => {
@@ -250,6 +259,9 @@ describe('CuratorGroupJoinView -- the join gate', () => {
 
     expect(cgApi.joinCuratorGroup).toHaveBeenCalledWith('a'.repeat(43))
     expect(toastSuccess).toHaveBeenCalledWith('Вы вступили в школу «Тихая школа»')
+    // FE-88: the join may have created the account's FIRST school -- the
+    // dock's tab probe must be refreshed before landing in the shell.
+    expect(hubRefresh).toHaveBeenCalledTimes(1)
     expect(replace).toHaveBeenCalledWith({ name: 'user-curator-group', params: { id: 'g1' } })
   })
 
@@ -283,6 +295,7 @@ describe('CuratorGroupJoinView -- the join gate', () => {
 
     expect(text()).toContain('Приглашение недействительно')
     expect(toastSuccess).not.toHaveBeenCalled()
+    expect(hubRefresh).not.toHaveBeenCalled()
   })
 
   it('join 403/409 after a green preview: re-read the preview and render ITS described reason', async () => {
@@ -325,5 +338,6 @@ describe('CuratorGroupJoinView -- the join gate', () => {
 
     expect(cgApi.joinCuratorGroup).not.toHaveBeenCalled()
     expect(replace).toHaveBeenCalledWith({ name: 'root' })
+    expect(hubRefresh).not.toHaveBeenCalled()
   })
 })

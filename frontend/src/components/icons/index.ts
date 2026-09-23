@@ -3,8 +3,8 @@
  *
  * SVG icons from Design_prototype/assets/icons/ as Vue components.
  * Most icons use currentColor fill and accept a `size` prop (default 24).
- * Exception: the mood faces (IconMoodLow/Mid/High) are illustrative assets
- * that keep their own pastel gradients (default size 40), like VeloLogo.
+ * Exception: the mood-scale faces (IconMoodScale*) are illustrative assets
+ * that keep their own pastel fills (default size 40), like VeloLogo.
  *
  * Usage:
  *   import { IconHome, IconCalendar } from '@/components/icons'
@@ -45,10 +45,16 @@ export { default as IconCheck } from './IconCheck.vue'
 export { default as IconArrowRight } from './IconArrowRight.vue'
 export { default as IconClose } from './IconClose.vue'
 
-// -- Mood faces: colored illustrative assets (own gradients, default size 40) --
-export { default as IconMoodLow } from './IconMoodLow.vue'
-export { default as IconMoodMid } from './IconMoodMid.vue'
-export { default as IconMoodHigh } from './IconMoodHigh.vue'
+// -- Mood scale (FE-85, tz-mood-scale.md §6): five approved illustrative
+//    faces for the unified Check-in/Feedback scale, embedded 1:1 from the
+//    approved source art -- these components are the in-repo source of truth
+//    (raw svg sources are not kept; default size 40, own gradients -- unique
+//    ids per instance via useId) --
+export { default as IconMoodScaleBad } from './IconMoodScaleBad.vue'
+export { default as IconMoodScaleLow } from './IconMoodScaleLow.vue'
+export { default as IconMoodScaleNeutral } from './IconMoodScaleNeutral.vue'
+export { default as IconMoodScaleGood } from './IconMoodScaleGood.vue'
+export { default as IconMoodScaleFire } from './IconMoodScaleFire.vue'
 
 // -- Diary feed (Diary redesign): monochrome glyphs (currentColor) --
 export { default as IconPen } from './IconPen.vue'
@@ -95,10 +101,16 @@ export { default as IconRepeat } from './IconRepeat.vue'
 export { default as IconRequired } from './IconRequired.vue'
 export { default as IconRequiredDone } from './IconRequiredDone.vue'
 export { default as IconSearch } from './IconSearch.vue'
+export { default as IconSchool } from './IconSchool.vue'
+export { default as IconCamera } from './IconCamera.vue'
 export { default as IconShield2FA } from './IconShield2FA.vue'
 export { default as IconSupportChat } from './IconSupportChat.vue'
 export { default as IconTag } from './IconTag.vue'
 export { default as IconTrash } from './IconTrash.vue'
 export { default as IconThanks } from './IconThanks.vue'
+export { default as IconUser } from './IconUser.vue'
 export { default as IconUserMode } from './IconUserMode.vue'
+export { default as IconUsers } from './IconUsers.vue'
 export { default as IconView } from './IconView.vue'
+export { default as IconCopy } from './IconCopy.vue'
+export { default as IconRefresh } from './IconRefresh.vue'

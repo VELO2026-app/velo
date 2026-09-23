@@ -177,7 +177,9 @@ beforeEach(() => {
   pinia = createPinia()
   setActivePinia(pinia)
 
-  vi.mocked(adminApi.getParticipants).mockReset().mockResolvedValue(paginated([participant()], 1))
+  vi.mocked(adminApi.getParticipants)
+    .mockReset()
+    .mockResolvedValue(paginated([participant()], 1))
 
   back.mockReset()
   toastError.mockReset()
@@ -197,12 +199,14 @@ describe('AdminParticipantsView', () => {
   describe('ladder (NO loading-spinner element -- see banner)', () => {
     it('mid-flight (participants=[], error=false, loading=true): NONE of the three branches render', async () => {
       let resolveGet!: (v: ReturnType<typeof paginated>) => void
-      vi.mocked(adminApi.getParticipants).mockReset().mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolveGet = resolve
-          }),
-      )
+      vi.mocked(adminApi.getParticipants)
+        .mockReset()
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveGet = resolve
+            }),
+        )
       mount()
       await nextTick()
 
@@ -218,7 +222,10 @@ describe('AdminParticipantsView', () => {
 
     it('success: renders one row per participant', async () => {
       vi.mocked(adminApi.getParticipants).mockResolvedValue(
-        paginated([participant({ id: 'u_1', name: 'Анна' }), participant({ id: 'u_2', name: 'Борис' })], 2),
+        paginated(
+          [participant({ id: 'u_1', name: 'Анна' }), participant({ id: 'u_2', name: 'Борис' })],
+          2,
+        ),
       )
       mount()
       await flush()

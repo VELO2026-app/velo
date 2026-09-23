@@ -27,6 +27,29 @@ export function offDocumentEvent<K extends keyof DocumentEventMap>(
   document.removeEventListener(type, listener as EventListener, options)
 }
 
+/**
+ * window.addEventListener с типизацией по карте событий окна. Окно нужно
+ * жестам, которые не должны обрываться, когда указатель уходит за пределы
+ * компонента (drag вне strip): document сюда не подходит — pointerup над
+ * элементом вне документа-цели всплывает именно до window.
+ */
+export function onWindowEvent<K extends keyof WindowEventMap>(
+  type: K,
+  listener: (this: Window, ev: WindowEventMap[K]) => unknown,
+  options?: AddEventListenerOptions | boolean,
+): void {
+  window.addEventListener(type, listener as EventListener, options)
+}
+
+/** window.removeEventListener, пара к onWindowEvent. */
+export function offWindowEvent<K extends keyof WindowEventMap>(
+  type: K,
+  listener: (this: Window, ev: WindowEventMap[K]) => unknown,
+  options?: EventListenerOptions | boolean,
+): void {
+  window.removeEventListener(type, listener as EventListener, options)
+}
+
 /** document.hidden. */
 export function isDocumentHidden(): boolean {
   return document.hidden

@@ -637,9 +637,9 @@ describe('FeedbackView', () => {
 
   describe('submitting the feedback', () => {
     it('sends the DEFAULT rating and a null comment, and shows the success screen', async () => {
-      // ratingScore defaults to 6 -- the middle «Хорошо» zone (.vue:106) -- so a
-      // user who taps Отправить without touching the slider sends a neutral score,
-      // not a 1 or an empty body the backend would reject.
+      // ratingScore defaults to the EXACT 5 «Нормально» (tz-mood-scale §2.4):
+      // a user who taps Отправить without touching the scale sends 5 -- not a
+      // card's click value (6) or an empty body the backend would reject.
       mount()
       await flush()
 
@@ -647,19 +647,20 @@ describe('FeedbackView', () => {
       await flush()
 
       expect(upsertFeedbackMock).toHaveBeenCalledTimes(1)
-      expect(upsertFeedbackMock).toHaveBeenCalledWith('p1', { rating: 6, comment: null })
+      expect(upsertFeedbackMock).toHaveBeenCalledWith('p1', { rating: 5, comment: null })
       expect(successTitle()).toBe('Спасибо за feedback!')
       expect(text()).toContain('Ваш отзыв поможет нам улучшить практики')
     })
 
     it('sends the rating the SLIDER chose and the comment the user typed, trimmed', async () => {
       // The Pattern-C form half, driven through real DOM rather than by poking
-      // refs. Tapping the third card -> ZONE_CENTRE[2] = 9 (MoodSlider.vue:100-103).
+      // refs. Tapping the third card («Нормально») -> its click value 6 (the
+      // MoodSlider radios select the pair's TOP score, not a zone centre).
       mount()
       await flush()
 
       const cards = host?.querySelectorAll('.mood-slider__card')
-      expect(cards?.length).toBe(3)
+      expect(cards?.length).toBe(5)
       ;(cards?.[2] as HTMLElement).click()
       typeComment('   Было отлично   ')
       await flush()
@@ -667,12 +668,13 @@ describe('FeedbackView', () => {
       submitBtn()?.click()
       await flush()
 
-      expect(upsertFeedbackMock).toHaveBeenCalledWith('p1', { rating: 9, comment: 'Было отлично' })
+      expect(upsertFeedbackMock).toHaveBeenCalledWith('p1', { rating: 6, comment: 'Было отлично' })
     })
 
-    it('sends the LOW rating from the first slider zone', async () => {
-      // ZONE_CENTRE[0] = 2. The other end of the scale: a 1..10 field where only
-      // the middle was ever exercised would hide an off-by-one in the zone map.
+    it('sends the LOW rating from the first slider card', async () => {
+      // The first card («Плохо») -> click value 2. The other end of the scale:
+      // a 1..10 field where only the middle was ever exercised would hide an
+      // off-by-one at the pair boundary.
       mount()
       await flush()
 
@@ -715,7 +717,7 @@ describe('FeedbackView', () => {
       submitBtn()?.click()
       await flush()
 
-      expect(upsertFeedbackMock).toHaveBeenCalledWith('p1', { rating: 6, comment: null })
+      expect(upsertFeedbackMock).toHaveBeenCalledWith('p1', { rating: 5, comment: null })
     })
 
     it('sends the feedback for the practice in the ROUTE, not the one in the store', async () => {
@@ -730,7 +732,7 @@ describe('FeedbackView', () => {
       submitBtn()?.click()
       await flush()
 
-      expect(upsertFeedbackMock).toHaveBeenCalledWith('p42', { rating: 6, comment: null })
+      expect(upsertFeedbackMock).toHaveBeenCalledWith('p42', { rating: 5, comment: null })
     })
 
     it('refreshes the bookings after a successful submit -- at the NETWORK, not just a spy', async () => {
@@ -879,7 +881,7 @@ describe('FeedbackView', () => {
       await flush()
 
       expect(upsertFeedbackMock).toHaveBeenLastCalledWith('p1', {
-        rating: 6,
+        rating: 5,
         comment: 'Длинный отзыв',
       })
     })
@@ -1074,13 +1076,10 @@ describe('FeedbackView', () => {
   //    assert the mock (SC-02) -- there is no product behaviour behind the call to
   //    assert instead.
   //
-  // 2. RATING_ZONES' per-zone icon COLOURS (.vue:88-92, RATING_ICON_COLOR ->
-  //    --velo-rating-* tokens). MoodSlider binds them as an inline `color` style
-  //    (MoodSlider.vue:32); asserting the literal `var(--velo-rating-fire)` string
-  //    would pin the token NAME, not the rendered colour -- happy-dom has no
-  //    cascade and getComputedStyle returns empty strings, so the value behind the
-  //    var is unreachable. That belongs to the design-token audit
-  //    (probekit-design-audit), not to a screen test.
+  // 2. The zone-tint COLOURS are gone with FE-85: the unified faces are
+  //    full-colour artwork (tz-mood-scale §3), so no --velo-rating-* binding
+  //    is left to assert. The key -> face mapping is pinned by component
+  //    identity in ratingIcons.test.ts, not on this screen.
   //
   // 3. The slider's live GROW/DIM behaviour (the active card scaling 0.92 -> 1.08).
   //    It is pure CSS on a class MoodSlider toggles; happy-dom has no layout, so

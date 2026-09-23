@@ -42,7 +42,15 @@ describe('ensureTaxonomyCatalog (still cold -- previous failure did not leave a 
     vi.mocked(getActiveTaxonomy).mockClear()
     vi.mocked(getActiveTaxonomy).mockResolvedValueOnce({
       directions: [
-        { id: 'd1', value: 'therapy', label: 'Терапия', display_order: 0, is_active: true, source: 'custom', styles: [] },
+        {
+          id: 'd1',
+          value: 'therapy',
+          label: 'Терапия',
+          display_order: 0,
+          is_active: true,
+          source: 'custom',
+          styles: [],
+        },
       ],
     })
 

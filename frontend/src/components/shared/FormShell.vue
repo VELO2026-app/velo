@@ -74,66 +74,68 @@
       </VEmptyState>
 
       <template v-else>
-      <!-- Practice info — общий PracticeHeroCard в form-варианте (F-3). -->
-      <PracticeHeroCard
-        v-if="practice"
-        variant="form"
-        :title="cleanTitle"
-        :direction="practice.direction"
-      >
-        <template #meta>
-          <slot name="practice-meta">
-            <span class="form-shell__practice-meta-cell">
-              с {{ practice.master_name ?? 'Мастером' }}
-            </span>
-          </slot>
-        </template>
-      </PracticeHeroCard>
-      <div v-else-if="practiceLoading" class="form-shell__loader">
-        <VLoader />
-      </div>
+        <!-- Practice info — общий PracticeHeroCard в form-варианте (F-3). -->
+        <PracticeHeroCard
+          v-if="practice"
+          variant="form"
+          :title="cleanTitle"
+          :direction="practice.direction"
+        >
+          <template #meta>
+            <slot name="practice-meta">
+              <span class="form-shell__practice-meta-cell">
+                с {{ practice.master_name ?? 'Мастером' }}
+              </span>
+            </slot>
+          </template>
+        </PracticeHeroCard>
+        <div v-else-if="practiceLoading" class="form-shell__loader">
+          <VLoader />
+        </div>
 
-      <!-- Question -->
-      <div class="form-shell__question">
-        <h3>{{ questionTitle }}</h3>
-        <p>{{ questionSubtitle }}</p>
-      </div>
+        <!-- Question -->
+        <div class="form-shell__question">
+          <h3>{{ questionTitle }}</h3>
+          <p>{{ questionSubtitle }}</p>
+        </div>
 
-      <!-- Selection slot (mood buttons / rating buttons). Omitted entirely when
+        <!-- Selection slot (mood buttons / rating buttons). Omitted entirely when
            no slot content is passed (ReflectionView) so there's no phantom gap;
            CheckinView/FeedbackView always pass it, so they render unchanged. -->
-      <div v-if="$slots.selection" class="form-shell__selection">
-        <slot name="selection" />
-      </div>
+        <div v-if="$slots.selection" class="form-shell__selection">
+          <slot name="selection" />
+        </div>
 
-      <!-- Comment textarea. @focus scrolls it above the soft keyboard once the
+        <!-- Comment textarea. @focus scrolls it above the soft keyboard once the
            keyboard settles (batch I — shared useKeyboardFieldScroll). -->
-      <VTextarea
-        :model-value="comment"
-        placeholder="Добавьте комментарий..."
-        :rows="3"
-        maxlength="1000"
-        @focus="onFieldFocus"
-        @update:model-value="emit('update:comment', $event)"
-      />
+        <VTextarea
+          :model-value="comment"
+          placeholder="Добавьте комментарий..."
+          :rows="3"
+          maxlength="1000"
+          @focus="onFieldFocus"
+          @update:model-value="emit('update:comment', $event)"
+        />
 
-      <!-- Actions -->
-      <div class="form-shell__actions">
-        <VButton
-          variant="primary"
-          size="lg"
-          block
-          :disabled="submitDisabled"
-          :loading="submitting"
-          @click="emit('submit')"
-        >
-          {{ submitLabel }}
-        </VButton>
-        <p v-if="submitDisabled && disabledHint" class="form-shell__disabled-hint">
-          {{ disabledHint }}
-        </p>
-        <VButton v-if="showSkip" variant="ghost" block @click="emit('skip')"> Пропустить </VButton>
-      </div>
+        <!-- Actions -->
+        <div class="form-shell__actions">
+          <VButton
+            variant="primary"
+            size="lg"
+            block
+            :disabled="submitDisabled"
+            :loading="submitting"
+            @click="emit('submit')"
+          >
+            {{ submitLabel }}
+          </VButton>
+          <p v-if="submitDisabled && disabledHint" class="form-shell__disabled-hint">
+            {{ disabledHint }}
+          </p>
+          <VButton v-if="showSkip" variant="ghost" block @click="emit('skip')">
+            Пропустить
+          </VButton>
+        </div>
       </template>
     </div>
   </div>

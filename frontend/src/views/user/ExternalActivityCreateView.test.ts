@@ -37,6 +37,15 @@ import { ApiResponseError } from '@/api/client'
 
 vi.mock('@/api/diary')
 
+// UserShell's «Школы» tab probe (FE-88) reads /curator-groups/mine for every
+// account that mounts the shell; this fixture's visitor belongs to no school
+// and must settle without touching the network.
+const curatorGroupsMock = vi.hoisted(() => ({
+  getMyCuratorGroups: vi.fn(),
+  getCuratorGroups: vi.fn(),
+}))
+vi.mock('@/api/curatorGroups', () => curatorGroupsMock)
+
 const push = vi.fn()
 const replace = vi.fn()
 vi.mock('vue-router', async (importOriginal) => {
@@ -70,6 +79,9 @@ vi.mock('@/stores/auth', () => ({
     get user() {
       return authState.user
     },
+    // schoolsHub (the shell's «Школы» tab probe) reads the store's
+    // role_switch-derived surface; an empty list = never master-capable here.
+    allowedRoles: [],
   }),
 }))
 
@@ -313,14 +325,45 @@ describe('ExternalActivityCreateView', () => {
       expect(screenText()).not.toContain('Мое состояние')
     })
 
-    it('required seals float in the layout gutter, outside the full-width fields', () => {
+    it('required seals hug their full-width fields: seal is a child of the field wrapper (FE-80)', () => {
       mount()
 
-      const seal = host?.querySelector<HTMLElement>('.ea__field .ea__seal--gutter')
-      expect(seal).not.toBeNull()
-      // No in-field seal rows left behind: the field row wrapper is gone.
+      // No flex shrink-wrappers: every field keeps the full rail.
+      expect(host?.querySelector('.ea__row')).toBeNull()
+      for (const selector of [
+        '[data-field="date"]',
+        '[data-field="time"]',
+        '[data-field="activity"]',
+      ]) {
+        const field = host?.querySelector<HTMLElement>(selector)
+        expect(field).not.toBeNull()
+        const seal = field?.querySelector('.ea__seal') ?? null
+        expect(seal).not.toBeNull()
+        // The seal is anchored to the field block itself, not a row wrapper.
+        expect(seal?.parentElement).toBe(field)
+        expect(seal?.querySelector('svg')).toBeTruthy()
+      }
+      // The 2026-09-10 screen-edge gutter classes stay gone.
+      expect(host?.querySelector('.ea__seal--gutter')).toBeNull()
       expect(host?.querySelector('.ea__field-row')).toBeNull()
       expect(host?.querySelector('.ea__seal-row')).toBeNull()
+    })
+
+    it('a filled field swaps its seal to the done state on the SAME node beside the card', async () => {
+      mount()
+
+      const card = host?.querySelector('[data-field="activity"]')
+      const sealBefore = card?.querySelector('.ea__seal') ?? null
+      expect(sealBefore).not.toBeNull()
+      expect(sealBefore?.classList.contains('ea__seal--done')).toBe(false)
+
+      chip('Медитация').click()
+      await nextTick()
+
+      const sealAfter = card?.querySelector('.ea__seal') ?? null
+      // Same node beside the card: only the icon and colour swapped.
+      expect(sealAfter).toBe(sealBefore)
+      expect(sealAfter?.classList.contains('ea__seal--done')).toBe(true)
     })
   })
 
@@ -663,6 +706,13 @@ describe('ExternalActivityCreateView', () => {
       const shellHost = document.createElement('div')
       document.body.appendChild(shellHost)
       const shellApp = createApp(UserShell)
+      // Settle the dock's «Школы» probe as "no schools" (FE-88) so the shell
+      // mount stays network-free.
+      curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({ items: [] })
+      curatorGroupsMock.getCuratorGroups.mockResolvedValue({
+        items: [],
+        can_create_groups: false,
+      })
       shellApp.use(pinia)
       shellApp.use(router)
       shellApp.mount(shellHost)

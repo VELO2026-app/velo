@@ -18,36 +18,18 @@
 
 <template>
   <div class="user-chat">
-    <div
-      v-if="resolving"
-      class="user-chat__center"
-    >
+    <div v-if="resolving" class="user-chat__center">
       <VLoader size="lg" />
     </div>
 
-    <div
-      v-else-if="notFound"
-      class="user-chat__center"
-    >
-      <VHeader
-        title="Сообщения"
-        show-back
-        @back="router.back()"
-      />
-      <VEmptyState
-        title="Переписка не найдена"
-        description="Возможно, ссылка устарела"
-      >
+    <div v-else-if="notFound" class="user-chat__center">
+      <VHeader title="Сообщения" show-back @back="router.back()" />
+      <VEmptyState title="Переписка не найдена" description="Возможно, ссылка устарела">
         <template #icon>
           <IconMessages :size="48" />
         </template>
       </VEmptyState>
-      <VButton
-        size="sm"
-        @click="router.back()"
-      >
-        Назад
-      </VButton>
+      <VButton size="sm" @click="router.back()"> Назад </VButton>
     </div>
 
     <ChatThreadScreen

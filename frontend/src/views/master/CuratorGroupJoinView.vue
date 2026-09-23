@@ -100,12 +100,14 @@ import type { CuratorGroupInvitePreviewResponse } from '@/api/types'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
+import { useSchoolsHubStore } from '@/stores/schoolsHub'
 import { VButton, VCard, VLoader } from '@/components/ui'
 
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const authStore = useAuthStore()
+const schoolsHub = useSchoolsHubStore()
 
 const loading = ref(true)
 const transientError = ref(false)
@@ -183,6 +185,11 @@ async function join(): Promise<void> {
   try {
     const res = await joinCuratorGroup(String(route.params.token ?? ''))
     toast.success(`Вы вступили в школу «${preview.value.group.name}»`)
+    // The hub probe may have settled BEFORE this join (the account's first
+    // school): without a fresh read the dock tab stays hidden until a full
+    // reload (FE-88). ensureCurator swallows its own probe failures -- the
+    // navigation never waits on, nor fails with, the retry.
+    await schoolsHub.refreshCurator()
     void router.replace(schoolRoute(res.group_id))
   } catch (e) {
     if (e instanceof ApiResponseError) {

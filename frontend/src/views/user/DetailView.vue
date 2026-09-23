@@ -85,19 +85,17 @@ import { ref, computed, onMounted, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VLoader, VEmptyState, VButton, VBackButton, VCard } from '@/components/ui'
 import PracticeListCard from '@/components/shared/PracticeListCard.vue'
-import { IconMoodMid, IconRatingGood } from '@/components/icons'
 import { useAuthStore } from '@/stores/auth'
 import { extractApiError } from '@/composables/useApiError'
 import { getCheckin, getFeedback } from '@/api/diary'
 import { getPractice } from '@/api/practices'
 import { formatFeedDateTime, formatDuration, formatTime } from '@/utils/format'
 import {
-  moodZoneFromScore,
-  ratingZoneFromScore,
+  MOOD_SCALE_DEFAULT_SCORE,
+  moodKeyFromScore,
   moodLabelFromScore,
-  ratingLabelFromScore,
-} from '@/utils/displayHelpers'
-import { MOOD_ICON, RATING_ICON } from '@/utils/ratingIcons'
+} from '@/utils/moodScale'
+import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
 import type { CheckinResponse, FeedbackResponse, PracticeResponse } from '@/api/types'
 
 const route = useRoute()
@@ -120,14 +118,14 @@ const loading = ref(false)
 const loadError = ref<string | null>(null)
 const loaded = computed(() => checkin.value !== null || feedback.value !== null)
 
-// -- icon / label maps (kind|mood|rating -> component; .vue can't live in
-//    displayHelpers, mirrors DiaryFeedCard) ----------------------------------
+// -- pill icon / title: the unified scale names a saved score the emotion it
+//    was picked as -- check-in and feedback share the same five faces/labels
+//    (tz-mood-scale §1); the key -> face binding lives in ratingIcons.
 
 const leadIcon = computed<Component>(() => {
-  if (detailType.value === 'checkin') {
-    return MOOD_ICON[moodZoneFromScore(checkin.value?.mood ?? 6)] ?? IconMoodMid
-  }
-  return RATING_ICON[ratingZoneFromScore(feedback.value?.rating ?? 6)] ?? IconRatingGood
+  const score =
+    detailType.value === 'checkin' ? checkin.value?.mood : feedback.value?.rating
+  return MOOD_SCALE_ICON[moodKeyFromScore(score ?? MOOD_SCALE_DEFAULT_SCORE)]
 })
 
 const pillTitle = computed(() => {
@@ -137,7 +135,7 @@ const pillTitle = computed(() => {
     return label ? `Check-in: ${label}` : 'Check-in'
   }
   const rating = feedback.value?.rating
-  const label = rating !== undefined ? ratingLabelFromScore(rating) : ''
+  const label = rating !== undefined ? moodLabelFromScore(rating) : ''
   return label ? `Feedback: ${label}` : 'Feedback'
 })
 

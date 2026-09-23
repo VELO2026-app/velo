@@ -147,7 +147,9 @@ describe('DiaryThreadCard -- check-in bubble', () => {
   })
 
   it('no comment -> the mood label becomes line 2 (still not a title suffix)', () => {
-    mountCard(feedItem('checkin', { mood: 9 }))
+    // mood 7 -> «Хорошо» (the good pair's top score is 8, the label is what
+    // the thread shows when the student left no comment).
+    mountCard(feedItem('checkin', { mood: 7 }))
 
     expect(q('.tcard__bubble-title')?.textContent?.trim()).toBe('Check-in')
     expect(q('.tcard__bubble-preview')?.textContent?.trim()).toBe('Хорошо')
@@ -187,9 +189,10 @@ describe('DiaryThreadCard -- feedback bubble', () => {
   })
 
   it('no comment -> the rating label becomes line 2', () => {
+    // rating 9 -> «Огонь» (the unified scale, no exclamation mark).
     mountCard(feedItem('feedback', { rating: 9 }))
 
-    expect(q('.tcard__bubble-preview')?.textContent?.trim()).toBe('Огонь!')
+    expect(q('.tcard__bubble-preview')?.textContent?.trim()).toBe('Огонь')
   })
 })
 

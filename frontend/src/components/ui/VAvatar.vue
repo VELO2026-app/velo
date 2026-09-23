@@ -14,7 +14,7 @@
 -->
 
 <template>
-  <div class="v-avatar" :class="`v-avatar--${size}`">
+  <div class="v-avatar" :class="[`v-avatar--${size}`, { 'v-avatar--square': square }]">
     <img
       v-if="url && !loadFailed"
       :src="url"
@@ -34,10 +34,14 @@ const props = withDefaults(
     name: string
     url?: string
     size?: 'sm' | 'md' | 'lg' | 'xl'
+    /** Squared corners for school/brand marks (tz-curator.md §1.4/§1.6) --
+     *  the same image+initials contract, a rounded-square plate. */
+    square?: boolean
   }>(),
   {
     url: '',
     size: 'md',
+    square: false,
   },
 )
 
@@ -79,6 +83,12 @@ const initials = computed(() => {
   color: var(--velo-primary);
   flex-shrink: 0;
   overflow: hidden;
+}
+
+/* tz-curator.md §1.4/§1.6: a school's mark is a ROUNDED SQUARE, not a circle
+   (list lead + the page hero's seam logo). Same plate, squared corners. */
+.v-avatar--square {
+  border-radius: var(--radius-md);
 }
 
 .v-avatar--sm {

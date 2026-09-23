@@ -1,22 +1,27 @@
 <!--
-  VELO Frontend -- MasterCuratorGroupCreateView (schools FE-20 / GT P3)
+  VELO Frontend -- MasterCuratorGroupCreateView (schools FE-20 / GT P3; §1.5)
 
-  "Новая группа" for SCHOOLS -- «Название» + optional «Описание», POST
-  /masters/me/curator-groups, back to the master list on success. A close
+  «Новая школа» -- banner+avatar (behind the kill-switch), «Название школы» +
+  optional «Описание школы», POST /masters/me/curator-groups, ON SUCCESS the
+  TZ's §1.6 rule: creation lands on the SCHOOL PAGE, not the list. A close
   structural clone of MasterGroupCreateView (the custom student group's own
   create form): same required-fields legend, same pinned submit, same 409
   handling (inline field error + toast -- curator_group_name_taken means
   "you already have a school by this name", a per-curator uniqueness, I-7).
 
   BE-18: founding is a right an admin grants, so the route is only
-  offered with it (the list's «+»). A direct visit without the right is
+  offered with it (the lists' «+»). A direct visit without the right is
   answered 403 group_creation_not_allowed -- rendered here as an honest
   refusal state, never as a retryable error (retrying a right cannot work).
+
+  MEDIA (§1.5): the avatar/banner pickers render only behind
+  SCHOOL_MEDIA_UPLOAD_ENABLED -- there is no upload backend yet (§7.1 №4),
+  the pickers hold a LOCAL preview and nothing is sent to the server.
 -->
 
 <template>
   <div class="ncg">
-    <VHeader title="Новая группа" show-back @back="router.back()" />
+    <VHeader title="Новая школа" show-back @back="router.back()" />
 
     <div class="ncg__content">
       <!-- BE-18: 403 group_creation_not_allowed -- the right itself is
@@ -62,8 +67,28 @@
           autogrow
         />
 
+        <!-- §1.5 media, kill-switched until the upload backend exists: TWO
+             sequential sections AFTER «Основное» (avatar first, then banner
+             -- the mockup order), each a full-width upload card with its own
+             hint. No overlay, no reserve when the flag is off; the modelValues
+             ride NOTHING to the server (createCuratorGroup takes
+             name/description only). -->
+        <template v-if="SCHOOL_MEDIA_UPLOAD_ENABLED">
+          <h2 class="velo-section-title">Аватар школы</h2>
+          <p class="ncg__media-hint">
+            Фото будет использовано на платформе в открытом доступе для участников
+          </p>
+          <SchoolAvatarPicker v-model="avatarUrl" aria-label="Аватар школы" />
+
+          <h2 class="velo-section-title">Фон школы</h2>
+          <p class="ncg__media-hint">
+            Фото будет использовано на платформе в открытом доступе для участников
+          </p>
+          <SchoolBannerPicker v-model="bannerUrl" aria-label="Фон школы" />
+        </template>
+
         <VButton class="ncg__submit" variant="primary" block :loading="creating" @click="onCreate">
-          Создать группу
+          Создать школу
         </VButton>
       </template>
     </div>
@@ -78,10 +103,13 @@ import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import { useToast } from '@/composables/useToast'
+import { SCHOOL_MEDIA_UPLOAD_ENABLED } from '@/utils/constants'
 import { IconRequired } from '@/components/icons'
 import { VButton, VEmptyState } from '@/components/ui'
 import VHeader from '@/components/layout/VHeader.vue'
 import { VInput, VTextarea } from '@/components/ui'
+import SchoolAvatarPicker from '@/components/shared/SchoolAvatarPicker.vue'
+import SchoolBannerPicker from '@/components/shared/SchoolBannerPicker.vue'
 
 const router = useRouter()
 const toast = useToast()
@@ -91,6 +119,9 @@ const name = ref('')
 const description = ref('')
 const fieldError = ref('')
 const creating = ref(false)
+// §1.5 media previews -- LOCAL object URLs only (see SCHOOL_MEDIA_UPLOAD_ENABLED).
+const avatarUrl = ref<string | null>(null)
+const bannerUrl = ref<string | null>(null)
 /** BE-18: set by 403 group_creation_not_allowed -- swaps the form for the
  *  refusal state. Sticky: a right cannot appear mid-screen, so nothing
  *  resets it short of leaving the route. */
@@ -101,7 +132,7 @@ async function onCreate(): Promise<void> {
   fieldError.value = ''
 
   if (!trimmed) {
-    fieldError.value = 'Введите название группы'
+    fieldError.value = 'Введите название школы'
     return
   }
 
@@ -110,12 +141,15 @@ async function onCreate(): Promise<void> {
     // Blank description is normalized to undefined here; the backend's own
     // "never store ''" rule is the belt to this suspend (same as groups).
     const desc = description.value.trim()
-    await createCuratorGroup(trimmed, desc || undefined)
-    toast.success(`Группа «${trimmed}» создана`)
-    void router.replace({ name: 'master-curator-groups' })
+    const created = await createCuratorGroup(trimmed, desc || undefined)
+    toast.success(`Школа «${trimmed}» создана`)
+    // §1.6 (owner): after creating, the school PAGE is the destination -- one
+    // page component for both zones; this master-zone route keeps the guard
+    // chain the creator just passed.
+    void router.replace({ name: 'master-curator-group', params: { id: created.id } })
   } catch (e) {
     if (e instanceof ApiResponseError && e.code === 'curator_group_name_taken') {
-      fieldError.value = 'У вас уже есть группа с таким названием'
+      fieldError.value = 'У вас уже есть школа с таким названием'
     }
     if (e instanceof ApiResponseError && e.code === 'group_creation_not_allowed') {
       // Not a field error and not a retryable failure -- the RIGHT is
@@ -123,7 +157,7 @@ async function onCreate(): Promise<void> {
       // phrase errorMessages.ts already carries.
       refused.value = true
     }
-    toast.error(extractApiError(e, 'Не удалось создать группу'))
+    toast.error(extractApiError(e, 'Не удалось создать школу'))
   } finally {
     creating.value = false
   }
@@ -178,6 +212,16 @@ html.is-keyboard-open .ncg {
 /* T24-8 equivalent: equalize the two visible plates (required seal reserve). */
 .ncg__content :deep(.v-textarea__field) {
   margin-right: 30px;
+}
+
+/* §1.5 media sections (kill-switched OFF today): the mockup's two-line hint
+   under each section title. */
+.ncg__media-hint {
+  margin: calc(-1 * var(--space-2)) 0 0;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--velo-text-secondary);
+  line-height: 1.5;
 }
 
 /* Pinned to the screen's bottom edge -- mirrors MasterApplyView's recipe. */

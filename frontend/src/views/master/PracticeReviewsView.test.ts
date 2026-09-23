@@ -561,7 +561,7 @@ describe('PracticeReviewsView', () => {
       expect(host!.querySelector('.practice-reviews__rloader')).toBeNull()
     })
 
-    it('error: the message is the SCREEN\'s constant -- the backend detail is swallowed', async () => {
+    it("error: the message is the SCREEN's constant -- the backend detail is swallowed", async () => {
       // SC-05. loadReviews catches bare (.vue:207-209): `catch { reviewsError =
       // true }` keeps no message, and the template hardcodes its title
       // (.vue:60). So this test proves the screen's own string, and explicitly
@@ -623,7 +623,7 @@ describe('PracticeReviewsView', () => {
       ).toBe('«Было сложно успевать»')
     })
 
-    it('content: each review carries ITS rating\'s icon and accent colour', async () => {
+    it("content: each review carries ITS rating's icon and accent colour", async () => {
       // RATING_ICON (.vue:194-198) picks the component; RATING_ICON_COLOR
       // (displayHelpers.ts:110-114) the accent. Both are Record<FeedbackRating,…>
       // literals -- a transposed key here paints a confused review as fire, which
@@ -764,7 +764,7 @@ describe('PracticeReviewsView', () => {
 
   // ===========================================================================
   describe('navigation', () => {
-    it('tapping a review opens THAT reviewer\'s student profile', async () => {
+    it("tapping a review opens THAT reviewer's student profile", async () => {
       // goStudent (.vue:113-119). The id must be the review's user_id, not the
       // practice id in the route -- both are in scope and both are strings.
       mount()

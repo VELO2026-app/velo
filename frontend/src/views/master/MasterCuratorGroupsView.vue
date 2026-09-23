@@ -1,10 +1,8 @@
 <!--
   VELO Frontend -- MasterCuratorGroupsView (schools FE-20 / GT P3)
 
-  "Группы мастеров" -- the master zone's entry into SCHOOLS (route
-  /master/curator-groups, dashboard row under «Мои группы»). Deliberately a
-  different name from that row: «Мои группы» there means the master's CUSTOM
-  STUDENT groups (master_group), a different entity entirely.
+  «Школы» -- the master zone's entry into SCHOOLS (route
+  /master/curator-groups, dashboard row under «Мои группы»).
 
   Same GET /curator-groups/mine payload as the user list, but sectioned by
   MY relation: «Я куратор» first, «Я участник» second (backend order:
@@ -21,7 +19,7 @@
 
 <template>
   <div class="mcg">
-    <VHeader title="Группы мастеров" show-back @back="router.push({ name: 'master-dashboard' })">
+    <VHeader title="Школы" show-back @back="router.push({ name: 'master-dashboard' })">
       <template #action>
         <button
           v-if="canCreate"
@@ -43,7 +41,7 @@
       <VEmptyState
         v-else-if="error"
         icon="warning"
-        title="Не удалось загрузить группы"
+        title="Не удалось загрузить школы"
         description="Проверьте соединение и попробуйте ещё раз."
       >
         <template #action>
@@ -54,12 +52,12 @@
       <VEmptyState
         v-else-if="!groups.length && canCreate"
         icon="group"
-        title="Пока нет групп"
-        description="Создайте группу или вступите по ссылке от куратора."
+        title="Пока нет школ"
+        description="Создайте школу или вступите по ссылке от куратора."
       >
         <template #action>
           <VButton variant="primary" @click="router.push({ name: 'master-curator-group-create' })">
-            Создать группу
+            Создать школу
           </VButton>
         </template>
       </VEmptyState>
@@ -70,7 +68,7 @@
       <VEmptyState
         v-else-if="!groups.length"
         icon="group"
-        title="Пока нет групп"
+        title="Пока нет школ"
         description="Вступите по ссылке от куратора. Создавать школы может мастер, которому администратор выдал это право."
       />
 
