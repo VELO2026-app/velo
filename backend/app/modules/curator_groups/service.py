@@ -1040,8 +1040,22 @@ async def curated_group_ids_for_practice(
     lever -- although in practice they are stopped earlier, by
     get_current_master on the endpoint.
 
+    THE KILLSWITCH IS READ HERE, NOT ONLY ON THE ROUTER (BE-43). This is
+    the entitlement itself, and cancel_service.py asks it directly -- so
+    with schools switched off a curator kept the right to cancel another
+    master's practice, because the flag was only ever checked by the
+    dependency on the two school routers. A killswitch on the routers
+    guards the surface, not the mechanism.
+
+    An early return rather than a branch around the body: "schools are
+    off" means "this person curates none of this practice's schools", and
+    an empty list already says exactly that to every caller.
+
     Reads only. No commit, no flush (P-01).
     """
+    if not settings.curator_groups_enabled:
+        return []
+
     stmt = (
         select(CuratorGroup.id)
         .join(
@@ -2924,6 +2938,18 @@ async def announce_published_practice(
         alone so the caller and the tests can assert the counts that the
         pair invariant is stated in.
     """
+    # BE-43: schools off means there is nobody to tell. Without this the
+    # fan-out ran on a path no router guards: a journal line in every
+    # target school and a notification to every member, about a practice
+    # the audience predicate then hides from all of them -- the message
+    # arrives and the link behind it is a 404.
+    #
+    # Early return, same shape and same reason as the audience_kind test
+    # below it: zero schools announced, zero people notified is the honest
+    # answer, not an error.
+    if not settings.curator_groups_enabled:
+        return (0, 0)
+
     if practice.audience_kind != AudienceKind.CURATOR_GROUPS.value:
         return (0, 0)
 
