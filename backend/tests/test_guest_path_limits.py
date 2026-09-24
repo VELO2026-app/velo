@@ -64,22 +64,49 @@ _TID_MAX = 60099
 _SHARED = "https://zoom.us/w/shared?tk=guest"
 
 
-@pytest.fixture(autouse=True)
-async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
-    await _clear_rate_keys()
+# Every address and probe key this file can make the limiter write. Cleanup
+# DELETEs exactly these -- it used to SCAN the whole keyspace, three
+# patterns, before and after every test: 1.3 s a call at 70 000 keys
+# locally, linear in the key count, and the most likely cause of the stand's
+# suite going from ~8 to ~24 minutes after BE-66.
+_ADDRESSES = ("93.184.216.34", "1.1.1.1")
+_RATE_KEYS = (
+    *(f"{bucket}:{address}"
+      for bucket in ("guest_view_src", "guest_enter_src")
+      for address in _ADDRESSES),
+    "be66_probe:ttl",
+    "be66_probe:93.184.216.34",
+)
+
+
+@pytest.fixture
+async def rate_keys() -> AsyncGenerator[None, None]:
+    """This file's limiter keys, removed by name before and after."""
+    await get_redis().delete(*_RATE_KEYS)
+    yield
+    await get_redis().delete(*_RATE_KEYS)
+
+
+@pytest.fixture
+async def cleanup(
+    db_session: AsyncSession, rate_keys: None,
+) -> AsyncGenerator[None, None]:
+    """The band's rows plus the limiter keys. NOT autouse: the pure tests
+    below (address classification, the guest_entry grid) touch neither the
+    database nor Redis and should not pay for either. Every test that
+    publishes a practice gets it through the `zoom` fixture."""
     await full_cleanup_range(db_session, _TID_MIN, _TID_MAX, delete_users=True)
     await db_session.commit()
     yield
-    await _clear_rate_keys()
     await full_cleanup_range(db_session, _TID_MIN, _TID_MAX, delete_users=True)
     await db_session.commit()
 
 
-async def _clear_rate_keys() -> None:
-    redis = get_redis()
-    for pattern in ("guest_view_src:*", "guest_enter_src:*", "be66_probe:*"):
-        async for key in redis.scan_iter(match=pattern):
-            await redis.delete(key)
+async def _keys_under(prefix: str) -> list[str]:
+    """Every key under `prefix` -- a SCAN, kept for the two assertions that
+    must see keys of ANY name (a limiter keying on the wrong thing would not
+    use one of _RATE_KEYS). A large COUNT keeps it to a few round trips."""
+    return [k async for k in get_redis().scan_iter(match=f"{prefix}*", count=10000)]
 
 
 class _Zoom:
@@ -98,7 +125,7 @@ class _Zoom:
 
 
 @pytest.fixture
-def zoom(monkeypatch: pytest.MonkeyPatch) -> _Zoom:
+def zoom(monkeypatch: pytest.MonkeyPatch, cleanup: None) -> _Zoom:
     recorder = _Zoom()
     monkeypatch.setattr(zoom_service, "create_registrant", recorder)
     return recorder
@@ -184,6 +211,7 @@ def test_public_sources_are_limitable(source: str) -> None:
     assert limitable_source(source) is True
 
 
+@pytest.mark.usefixtures("rate_keys")
 @pytest.mark.asyncio
 async def test_ttl_is_set_on_the_first_increment_only() -> None:
     """Lesson 1: a later hit must not slide the window forward. The TTL is
@@ -198,6 +226,7 @@ async def test_ttl_is_set_on_the_first_increment_only() -> None:
     assert await redis.ttl(key) <= 50
 
 
+@pytest.mark.usefixtures("rate_keys")
 @pytest.mark.asyncio
 async def test_unlimitable_source_writes_no_key_and_a_public_one_does() -> None:
     redis = get_redis()
@@ -205,7 +234,7 @@ async def test_unlimitable_source_writes_no_key_and_a_public_one_does() -> None:
     assert await over_source_limit(
         "be66_probe", "127.0.0.1", limit=0, window_seconds=60,
     ) == (False, 0)
-    assert [k async for k in redis.scan_iter(match="be66_probe:*")] == []
+    assert await _keys_under("be66_probe:") == []
 
     assert await over_source_limit(
         "be66_probe", "93.184.216.34", limit=0, window_seconds=60,
@@ -273,8 +302,7 @@ async def test_loopback_source_is_never_limited_and_never_keyed(
         assert "guest_name_id" in (await client.get(f"/z/{code}/guest")).text
 
     assert await _row_count(db_session, practice_id) == 3
-    redis = get_redis()
-    assert [k async for k in redis.scan_iter(match="guest_view_src:*")] == []
+    assert await _keys_under("guest_view_src:") == []
 
 
 @pytest.mark.asyncio

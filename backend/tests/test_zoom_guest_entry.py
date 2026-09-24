@@ -270,17 +270,36 @@ def test_generate_suffix_starts_at_2_and_steps_past_taken_numbers() -> None:
 
 
 def test_generate_never_fails_at_eighteen_thousand_taken() -> None:
-    """The owner's ceiling-free case: about 18 000 guests on one practice.
-    Every call returns a name outside the set."""
+    """The owner's ceiling-free case: about 18 000 names taken on one
+    practice. Every call returns a name outside the set.
+
+    WHAT CHANGED, AND WHY THIS IS NOT A WEAKER TEST. The first version grew
+    the set by 18 000 sequential generate() calls. Each call casefolds the
+    whole set, so the test was quadratic -- 33 s locally, the slowest test in
+    the suite. Its one assertion was "the answer is outside the set". That
+    assertion is kept at the same size, on the set built directly:
+      - DENSE: every base holds every number up to 24 (18 432 names) -- the
+        answer must be outside it, i.e. number 25;
+      - WITH HOLES: 18 000 of those, sampled -- a shape the sequential build
+        never produced, where a free base or a lower free number must be
+        found instead.
+    """
+    bases = [b.display for b in _all_bases()]
+    dense = bases + [f"{b} {n}" for b in bases for n in range(2, 25)]
+    assert len(dense) == 768 * 24
     rng = random.Random(7)
-    taken: list[str] = []
-    seen: set[str] = set()
-    for _ in range(18000):
-        name = generate(taken, rng).display
-        assert name.casefold() not in seen
-        seen.add(name.casefold())
-        taken.append(name)
-    assert len(taken) == 18000
+
+    dense_cf = {name.casefold() for name in dense}
+    for _ in range(100):
+        name = generate(dense, rng).display
+        assert name.casefold() not in dense_cf
+        assert name.endswith(" 25")
+
+    holed = rng.sample(dense, 18000)
+    holed_cf = {name.casefold() for name in holed}
+    for _ in range(100):
+        name = generate(holed, rng).display
+        assert name.casefold() not in holed_cf
 
 
 # ===========================================================================
