@@ -36,7 +36,6 @@
 
 import hashlib
 import hmac
-import ipaddress
 import json
 import secrets
 from datetime import UTC, datetime
@@ -51,6 +50,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.events import emit_user_upserted  # Phase 6 / T0
 from app.core.exceptions import TooManyRequestsError
+from app.core.ratelimit import count_in_window, limitable_source
 from app.core.redis import get_redis
 from app.core.telegram_links import normalize_telegram_url
 from app.core.i18n import normalize_language
@@ -253,30 +253,16 @@ async def check_source_rate_limit(source: str | None) -> None:
     HMAC, and the counter they would eventually trip was one they never
     reached. This runs first, on something known at connection time.
 
-    A missing source (no client in scope) is not rate limited here: there is
-    nothing to key on, and inventing a shared key would put every such
-    request into one bucket -- turning a limiter into an outage.
+    A missing source, a non-address, and every address that is not a
+    routable public one are passed, not limited -- core/ratelimit.py's
+    limitable_source(), whose module docstring carries the full reasoning
+    (the 644-logins-from-127.0.0.1 lesson and the degradation-to-OFF it
+    leaves). The per-telegram_id limiter below is unaffected either way,
+    and it is the one that names a specific account.
 
-    THE SAME RULE, for the same reason, applies to any address that is not a
-    routable public one. This is not a softening -- it is the original rule
-    applied where it actually bites, and it was found the hard way: keyed on
-    every address, the first version put the entire backend test suite (644
-    logins from 127.0.0.1, far above the ceiling below) into ONE bucket and
-    turned the whole suite red. A loopback or private address is never a
-    remote attacker; it is our own infrastructure showing through -- the test
-    client, a health check, or the nginx peer used as fallback when no
-    X-Forwarded-For was present. Limiting on it does not bound an attacker,
-    it only shares one counter between everybody it cannot tell apart.
-
-    Named honestly, the failure mode this leaves: if nginx ever stopped
-    setting X-Forwarded-For, every request would resolve to the proxy's own
-    private address and this limiter would silently stop applying. That is a
-    degradation to OFF. The alternative -- keying on the shared fallback --
-    is a degradation to OUTAGE for every client at once, which is what the
-    suite just demonstrated. Between a control that stops helping and a
-    control that takes the service down, this one may only do the former.
-    The per-telegram_id limiter below is unaffected either way, and it is
-    the one that names a specific account.
+    Redis failures propagate: this limiter fails CLOSED (the login answers
+    500), unchanged by BE-66 -- the guest path chose differently and says
+    why at its own call site.
 
     Args:
         source: Client address, already validated by the middleware.
@@ -284,26 +270,14 @@ async def check_source_rate_limit(source: str | None) -> None:
     Raises:
         TooManyRequestsError: If the per-source limit is exceeded.
     """
-    if not source:
+    if not limitable_source(source):
         return
 
-    try:
-        if not ipaddress.ip_address(source).is_global:
-            return
-    except ValueError:
-        # Not an address at all -- the middleware should never produce this,
-        # and guessing at a key for it is exactly what the paragraph above
-        # forbids.
-        return
-
-    redis = get_redis()
-    rate_key = f"auth_rate_src:{source}"
-    count = await redis.incr(rate_key)
-    if count == 1:
-        # TTL on first increment only -- otherwise every request slides the
-        # window forward and the limit never triggers (same pattern as the
-        # per-telegram_id limiter below).
-        await redis.expire(rate_key, settings.auth_rate_limit_window_seconds)
+    count = await count_in_window(
+        get_redis(),
+        f"auth_rate_src:{source}",
+        settings.auth_rate_limit_window_seconds,
+    )
 
     limit = settings.auth_rate_limit_max_requests * _SOURCE_RATE_LIMIT_MULTIPLIER
     if count > limit:
@@ -328,12 +302,11 @@ async def check_auth_rate_limit(telegram_id: int) -> None:
     Raises:
         TelegramValidationError: If rate limit is exceeded.
     """
-    redis = get_redis()
-    rate_key = f"auth_rate:{telegram_id}"
-    count = await redis.incr(rate_key)
-    if count == 1:
-        # Set TTL only on first increment to avoid resetting the window.
-        await redis.expire(rate_key, settings.auth_rate_limit_window_seconds)
+    count = await count_in_window(
+        get_redis(),
+        f"auth_rate:{telegram_id}",
+        settings.auth_rate_limit_window_seconds,
+    )
     if count > settings.auth_rate_limit_max_requests:
         raise TelegramValidationError(
             "Too many auth attempts. Please try again later."

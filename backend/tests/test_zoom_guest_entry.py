@@ -45,6 +45,7 @@ from httpx import AsyncClient
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_session_factory
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import Practice, PracticeStatus
@@ -361,19 +362,35 @@ async def test_other_pages_keep_form_action_none(
 
 
 @pytest.mark.asyncio
-async def test_each_view_claims_a_new_name(
-    client: AsyncClient, db_session: AsyncSession,
+async def test_each_view_claims_a_new_name_up_to_the_ceiling(
+    client: AsyncClient, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """THE REPEAT AXIS, owner ruling: opening the page again ("Другое" is
-    exactly that) gives a new name, and the earlier one stays taken."""
+    exactly that) gives a new name, and the earlier one stays taken --
+    UNTIL zoom_guest_names_max_per_practice.
+
+    WHAT CHANGED (BE-66), AND WHY THIS IS NOT A WEAKER TEST. This was
+    test_each_view_claims_a_new_name, asserting that every view claims a new
+    row. That was true and is still true below the ceiling; without a
+    ceiling it also blessed unbounded growth -- a loop of GETs grew the
+    table, and the cost of each next claim, forever. BE-66 added the
+    ceiling, so the unconditional claim became false. Now: every view below
+    the ceiling claims a distinct name, and the view past it writes nothing
+    and shows the page without a proposed name, still with the field.
+    """
+    monkeypatch.setattr(settings, "zoom_guest_names_max_per_practice", 3)
     practice_id, code = await _published_practice(client, db_session, 67902)
 
     for _ in range(3):
         assert (await client.get(f"/z/{code}/guest")).status_code == 200
+    past = await client.get(f"/z/{code}/guest")
 
     rows = await _rows(db_session, practice_id)
     assert len(rows) == 3
     assert len({r.display_name for r in rows}) == 3
+    assert past.status_code == 200
+    assert "guest_name_id" not in past.text
+    assert "name='name'" in past.text
 
 
 # ===========================================================================

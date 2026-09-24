@@ -627,6 +627,30 @@ class Settings(BaseSettings):
     # may be off, hence a setting rather than a constant.
     zoom_report_max_pages: int = 200
 
+    # -- Anonymous guest path, /z/{code}/guest (BE-66) --
+    # Ceiling on generated guest names per practice. Regenerating keeps the
+    # earlier names taken (owner ruling, no release path), so without a
+    # ceiling a loop of GETs grows zoom_guest_names -- and the cost of every
+    # next claim -- without bound. A few hundred people with regenerations
+    # stay under 1000; a curl loop stops there as it would at 300. Reaching
+    # it shows the page without a proposed name. Soft: count and insert are
+    # not atomic, so concurrent guests may overshoot by their number. An
+    # estimate, hence a setting.
+    zoom_guest_names_max_per_practice: int = 1000
+    # Per-source limits on the two guest endpoints, fixed window. Over the
+    # limit the path DEGRADES instead of refusing -- a public address may be
+    # a whole NAT (office, cafe, mobile carrier): GET shows the page without
+    # a proposed name and writes nothing, POST sends the guest to the shared
+    # registrant without calling Zoom. GET is generous: row growth is
+    # bounded by the ceiling above, so this limit is about load, not
+    # correctness. POST guards the Zoom registrant quota -- against ONE
+    # abusive source only; a legitimate crowd from many addresses can still
+    # exhaust the account-wide quota, and only the shared-registrant
+    # fallback covers that.
+    guest_view_rate_limit: int = 300
+    guest_enter_rate_limit: int = 20
+    guest_rate_limit_window_seconds: int = 600
+
     # -- Curator groups / schools killswitch (GT-19) --
     # AN EMERGENCY BRAKE, NOT A ROLLOUT TOGGLE. Default True: the feature
     # ships on, and this exists so it can be taken off the air without a

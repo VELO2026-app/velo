@@ -55,7 +55,7 @@
 
 import html
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -104,6 +104,10 @@ from app.modules.practices.service import (
 )
 from app.modules.users.models import User
 from app.modules.zoom.models import ZoomGuestName, ZoomMeeting, ZoomMeetingStatus
+
+if TYPE_CHECKING:
+    # Annotation only: the zoom service is imported lazily in this router.
+    from app.modules.zoom.service import GuestEntry
 
 logger = structlog.get_logger()
 
@@ -1081,8 +1085,9 @@ async def public_practice_landing_endpoint(
     which is why an honest state page still returns 200.
     """
     from app.modules.zoom.service import (
+        GuestEntryKind,
         ZoomEntryKind,
-        guest_naming_open,
+        guest_entry,
         resolve_zoom_entry,
     )
 
@@ -1112,17 +1117,15 @@ async def public_practice_landing_endpoint(
     og_description = f"{when}. Мастер: {master_name}."
 
     # The guest button is shown exactly when /z/{code}/guest has an entry to
-    # give -- the rule _guest_meeting applies, so the landing holds no opinion
-    # of its own (_guest_meeting also requires the shared URL to start with
-    # https://; this check only asks that it exist). Inside the naming window
-    # the guest page mints a PERSONAL registrant and needs no shared one
-    # (GT-21 step B). Outside it the page falls back to the shared
-    # registrant, and there a missing one is still the minting miss
-    # (ensure_shared_registrant is best-effort, the retry poller does not
-    # cover it): no seat, so no button -- the honest sentence below, and the
-    # app button still works.
-    guest_available = resolution.kind == ZoomEntryKind.GUEST and (
-        guest_naming_open(practice) or resolution.url is not None
+    # give: both ask zoom/service.py's guest_entry(), the ONE copy of that
+    # rule (BE-66). Inside the naming window the guest page mints a PERSONAL
+    # registrant and needs no shared one (GT-21 step B). Outside it the page
+    # falls back to the shared registrant, and there a missing one is still
+    # the minting miss (ensure_shared_registrant is best-effort): no seat,
+    # so no button -- the honest sentence below, and the app button still
+    # works.
+    guest_available = (
+        guest_entry(practice, resolution).kind != GuestEntryKind.NONE
     )
     if guest_available:
         return _public_page(
@@ -1236,36 +1239,93 @@ def _guest_name_form(code: str, guest_name: ZoomGuestName | None) -> str:
 
 async def _guest_meeting(
     practice: Practice, code: str, session: AsyncSession,
-) -> tuple[ZoomMeeting | None, HTMLResponse | None, str | None]:
-    """(meeting, page, shared_url) -- exactly one of the three is set.
+) -> tuple["GuestEntry", ZoomMeeting | None, HTMLResponse | None]:
+    """(entry, meeting, page) for the two guest endpoints.
 
-    resolve_zoom_entry with user=None stays the gate -- anonymity is
-    structural there, not here. meeting: naming applies. page: no guest
-    entry in this state. shared_url: a practice no longer handing out names
-    (not scheduled/live), which keeps the pre-step-B behaviour -- the shared
-    registrant, nothing written.
+    entry is zoom/service.py's guest_entry() -- the same answer the landing
+    uses for its button, so the two cannot disagree. page is set exactly
+    when entry is NONE; meeting exactly when entry is NAMED. resolve_zoom_entry
+    with user=None stays the gate -- anonymity is structural there.
     """
     from app.modules.zoom.service import (
-        ZoomEntryKind,
-        guest_naming_open,
+        GuestEntryKind,
+        guest_entry,
         resolve_zoom_entry,
     )
 
     resolution = await resolve_zoom_entry(practice, None, session)
-    if resolution.kind != ZoomEntryKind.GUEST:
-        return None, _guest_unavailable_page(practice, code), None
-    if not guest_naming_open(practice):
-        shared = resolution.url
-        if isinstance(shared, str) and shared.startswith("https://"):
-            return None, None, shared
-        return None, _guest_unavailable_page(practice, code), None
-    # GUEST implies an ACTIVE meeting row (resolve_zoom_entry step 3).
+    entry = guest_entry(practice, resolution)
+    if entry.kind == GuestEntryKind.NONE:
+        return entry, None, _guest_unavailable_page(practice, code)
+    if entry.kind == GuestEntryKind.SHARED:
+        return entry, None, None
+    # NAMED implies GUEST, and GUEST an ACTIVE meeting row
+    # (resolve_zoom_entry step 3).
     meeting = (
         await session.execute(
             select(ZoomMeeting).where(ZoomMeeting.practice_id == practice.id)
         )
     ).scalar_one()
-    return meeting, None, None
+    return entry, meeting, None
+
+
+async def _guest_over_limit(which: str, practice: Practice) -> bool:
+    """Per-source limit on one of the two guest endpoints (BE-66).
+
+    which is "view" (GET) or "enter" (POST). Over the limit the caller
+    DEGRADES rather than refuses -- a public address may be a whole NAT --
+    and this logs every such event, so a limit biting real people shows up
+    in the logs before anyone complains.
+
+    FAILS OPEN when Redis is unreachable: the request is served unlimited
+    and a warning is logged. Safe here and only here: the growth this
+    limiter slows is also bounded by zoom_guest_names_max_per_practice, a
+    ceiling in the database that does not depend on Redis, and a burned
+    Zoom quota degrades to the shared registrant, which is the normal path.
+    Failing closed would make every guest nameless, or entry-less, for the
+    length of a Redis outage. Auth decides the other way (see
+    check_source_rate_limit). RuntimeError from get_redis() -- the client
+    was never initialized -- is a programming error, not an outage, and is
+    not caught.
+
+    The source is the one core/middleware.py resolved; until BE-40 its
+    X-Forwarded-For first hop is client-written, so a caller varying the
+    header escapes this limit. See core/ratelimit.py.
+    """
+    from redis.exceptions import RedisError
+
+    from app.core.ratelimit import over_source_limit
+
+    source = structlog.contextvars.get_contextvars().get("ip_address")
+    limit = (
+        settings.guest_view_rate_limit
+        if which == "view"
+        else settings.guest_enter_rate_limit
+    )
+    try:
+        over, count = await over_source_limit(
+            f"guest_{which}_src",
+            source,
+            limit=limit,
+            window_seconds=settings.guest_rate_limit_window_seconds,
+        )
+    except (RedisError, OSError) as exc:
+        logger.warning(
+            "guest_rate_limit_unavailable",
+            limit=which,
+            practice_id=str(practice.id),
+            error=type(exc).__name__,
+        )
+        return False
+    if over:
+        logger.warning(
+            "guest_rate_limited",
+            limit=which,
+            source=source,
+            practice_id=str(practice.id),
+            count=count,
+        )
+    return over
 
 
 @public_router.get("/z/{code}/guest")
@@ -1293,15 +1353,22 @@ async def public_practice_guest_endpoint(
     if practice is None:
         return _not_a_link_page()
 
-    meeting, page, shared_url = await _guest_meeting(practice, code, session)
+    entry, meeting, page = await _guest_meeting(practice, code, session)
     if page is not None:
         return page
-    if shared_url is not None:
-        return _to_zoom(shared_url, status.HTTP_307_TEMPORARY_REDIRECT)
+    if meeting is None:
+        return _to_zoom(entry.shared_url, status.HTTP_307_TEMPORARY_REDIRECT)
 
     from app.modules.zoom.service import claim_guest_name
 
-    guest_name = await claim_guest_name(practice, meeting, session)
+    guest_name = None
+    if not await _guest_over_limit("view", practice):
+        guest_name = await claim_guest_name(practice, meeting, session)
+    # Commit BEFORE the page is drawn (BE-66): get_db_session commits only
+    # after the response has been SENT (FastAPI runs a request-scoped yield
+    # dependency's exit after `await response(...)`), so without this the
+    # page would show a name that a failed commit never reserved.
+    await session.commit()
     return _public_page(
         title=practice.title,
         message=f"{practice.title}\n{_format_practice_when(practice)}",
@@ -1344,11 +1411,17 @@ async def public_practice_guest_enter_endpoint(
     if practice is None:
         return _not_a_link_page()
 
-    meeting, page, shared_url = await _guest_meeting(practice, code, session)
+    entry, meeting, page = await _guest_meeting(practice, code, session)
     if page is not None:
         return page
-    if shared_url is not None:
-        return _to_zoom(shared_url, status.HTTP_303_SEE_OTHER)
+    if meeting is None:
+        return _to_zoom(entry.shared_url, status.HTTP_303_SEE_OTHER)
+    if await _guest_over_limit("enter", practice):
+        # Degrade, do not refuse: the shared registrant, no Zoom call -- a
+        # typed name is lost on this path, the entry is not.
+        if entry.shared_url is None:
+            return _guest_unavailable_page(practice, code)
+        return _to_zoom(entry.shared_url, status.HTTP_303_SEE_OTHER)
 
     from app.modules.zoom.service import enter_as_guest, normalize_typed_guest_name
 
