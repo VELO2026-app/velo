@@ -617,6 +617,15 @@ class Settings(BaseSettings):
     # clear -- generous enough that a normal delay never trips it, bounded
     # enough that feedback eligibility and hours can never hang indefinitely.
     zoom_attendance_decision_deadline_minutes: int = 120
+    # Page cap for the participants report (BE-41). Zoom returns at most 300
+    # rows per page and a next_page_token for the rest; the client follows
+    # it up to this many pages. Reaching the cap with a token still pending
+    # is a FAILURE (no ingest, the poller retries, the deadline fallback
+    # bounds it) -- never a truncated report, which would record everyone
+    # past the cap as a no-show. 200 pages = 60 000 rows, about twice the
+    # ~27 000 estimated for 18 000 participants with rejoins; the estimate
+    # may be off, hence a setting rather than a constant.
+    zoom_report_max_pages: int = 200
 
     # -- Curator groups / schools killswitch (GT-19) --
     # AN EMERGENCY BRAKE, NOT A ROLLOUT TOGGLE. Default True: the feature
