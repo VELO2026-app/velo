@@ -2184,21 +2184,37 @@ async def accept_curator_group_transfer(
 ) -> dict:
     """Become the curator of this group. One transaction, seven steps.
 
-    THE ORDER IS THE CONTRACT (TZ 3.5), and every check happens BEFORE the
-    first mutation:
+    THE ORDER IS THE CONTRACT (TZ 3.5), and it changed once, in BE-42:
 
-      1. the offer exists and is addressed to the caller; the group is
-         active; the caller is a verified master right now; the caller has
-         no group of their own by this name
-      2. curator_user_id := caller
-      3. the caller's own member row is deleted (I-2: a curator is not a
+      1. the group is active and the caller has a relation to it
+      2. THE OFFER IS CLAIMED -- deleted and returned in one statement,
+         which is both the check and the first mutation (see below)
+      3. the caller is a verified master right now; the caller has no group
+         of their own by this name
+      4. curator_user_id := caller
+      5. the caller's own member row is deleted (I-2: a curator is not a
          member of their own group)
-      4. the previous curator gets a member row, kind='master', joined_at
+      6. the previous curator gets a member row, kind='master', joined_at
          = now()
-      5. the offer row is deleted
-      6. invite links and every other membership are left alone -- the
+      7. invite links and every other membership are left alone -- the
          tokens already in people's chats keep working
-      7. the reply is the group page as the NEW curator sees it
+      8. the reply is the group page as the NEW curator sees it
+
+    UNTIL BE-42 THIS DOCSTRING SAID "every check happens BEFORE the first
+    mutation", and it was right about what it was protecting: nothing was
+    written until the request had been judged. It stopped being true here
+    because ONE of those checks cannot be done by reading -- "is this offer
+    still mine to take" is only answered by taking it. The other two checks
+    still run before anything else is written, and the reason they do is
+    unchanged: see the name-collision paragraph below, which is the one
+    that paid for the rule.
+
+    THE NAME COLLISION IS CHECKED, NOT CAUGHT. UNIQUE (curator_user_id,
+    name) would raise on the rename-by-ownership at step 4 -- after which
+    more mutations would already be queued behind a broken transaction.
+    Asking first turns a rollback into a clean 409. The claim above does
+    not weaken this: on a clash the claim rolls back with everything else,
+    and the offer is still there afterwards.
 
     THE NAME COLLISION IS CHECKED IN STEP 1, NOT CAUGHT IN STEP 2. UNIQUE
     (curator_user_id, name) would raise on the rename-by-ownership at step
@@ -2228,8 +2244,40 @@ async def accept_curator_group_transfer(
     """
     group, _relation = await _relation_or_404(group_id, user_id, session)
 
-    transfer = await _pending_transfer(group.id, session)
-    if transfer is None or transfer.to_user_id != user_id:
+    # BE-42: CLAIMING THE OFFER IS THE FIRST MUTATION, and it is also the
+    # check. A plain SELECT here left a window between reading the offer
+    # and deleting it at the end: cancel_curator_group_transfer,
+    # remove_curator_group_member and leave_curator_group all drop the same
+    # row, and any of them landing inside that window used to leave accept
+    # finishing anyway -- the school changed hands after its offer had been
+    # withdrawn. Two simultaneous accepts by one heir were worse: both read
+    # the offer, both inserted the previous curator's member row, and the
+    # second died on uq_curator_group_member_group_user -- a 500 where a
+    # 404 belongs.
+    #
+    # DELETE ... RETURNING is "took it and confirmed it was mine to take"
+    # in one statement: the second caller blocks on the row lock, re-reads
+    # after the first commits, finds nothing and gets the honest 404. The
+    # idiom is already this module's own -- remove_curator_group_member and
+    # cancel_curator_group_transfer both delete-and-return, for the journal
+    # rather than for a race.
+    #
+    # THE READ IT REPLACED CHECKED TWO THINGS and so does this WHERE: an
+    # offer for this group, addressed to this caller. Both used to answer
+    # the same 404 with the same code, and both still do. Keeping the
+    # SELECT beside the DELETE would be two checks of one fact, and the
+    # next reader would assume each catches something the other misses.
+    claimed = (
+        await session.execute(
+            delete(CuratorGroupTransfer)
+            .where(
+                CuratorGroupTransfer.group_id == group.id,
+                CuratorGroupTransfer.to_user_id == user_id,
+            )
+            .returning(CuratorGroupTransfer.id)
+        )
+    ).first()
+    if claimed is None:
         raise NotFoundError("Transfer not found", code="transfer_not_found")
 
     if not await _has_master_capability(user_id, session):
@@ -2268,12 +2316,6 @@ async def accept_curator_group_transfer(
             group_id=group.id,
             user_id=previous_curator_id,
             kind=CuratorMemberKind.MASTER.value,
-        )
-    )
-
-    await session.execute(
-        delete(CuratorGroupTransfer).where(
-            CuratorGroupTransfer.group_id == group.id
         )
     )
 
