@@ -1080,7 +1080,11 @@ async def public_practice_landing_endpoint(
     real, here is its state". Telegram only renders a preview card for 200,
     which is why an honest state page still returns 200.
     """
-    from app.modules.zoom.service import ZoomEntryKind, resolve_zoom_entry
+    from app.modules.zoom.service import (
+        ZoomEntryKind,
+        guest_naming_open,
+        resolve_zoom_entry,
+    )
 
     practice = await _load_public_practice(code, session)
     if practice is None:
@@ -1107,13 +1111,18 @@ async def public_practice_landing_endpoint(
 
     og_description = f"{when}. Мастер: {master_name}."
 
-    # GUEST with no url is the minting miss (ensure_shared_registrant is
-    # best-effort and the retry poller does not cover it -- fixing that is
-    # explicitly out of scope). It is NOT 'failed': the meeting exists, only
-    # the guest seat in it does not. Either way the honest answer is the same
-    # sentence, and the app button still works.
-    guest_available = (
-        resolution.kind == ZoomEntryKind.GUEST and resolution.url is not None
+    # The guest button is shown exactly when /z/{code}/guest has an entry to
+    # give -- the rule _guest_meeting applies, so the landing holds no opinion
+    # of its own (_guest_meeting also requires the shared URL to start with
+    # https://; this check only asks that it exist). Inside the naming window
+    # the guest page mints a PERSONAL registrant and needs no shared one
+    # (GT-21 step B). Outside it the page falls back to the shared
+    # registrant, and there a missing one is still the minting miss
+    # (ensure_shared_registrant is best-effort, the retry poller does not
+    # cover it): no seat, so no button -- the honest sentence below, and the
+    # app button still works.
+    guest_available = resolution.kind == ZoomEntryKind.GUEST and (
+        guest_naming_open(practice) or resolution.url is not None
     )
     if guest_available:
         return _public_page(

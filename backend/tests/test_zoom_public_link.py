@@ -546,27 +546,55 @@ async def test_cancelled_practice_page_is_200_and_its_og_says_cancelled(
     assert "отменена" in resp.text
 
 
+@pytest.mark.parametrize(
+    ("naming_open", "shared", "button"),
+    [
+        (True, True, True),
+        (True, False, True),
+        (False, True, True),
+        (False, False, False),
+    ],
+    ids=["open+shared", "open+no-shared", "closed+shared", "closed+no-shared"],
+)
 @pytest.mark.asyncio
-async def test_landing_says_so_honestly_when_the_guest_seat_was_never_minted(
+async def test_landing_guest_button_follows_the_guest_pages_decision(
     client: AsyncClient, db_session: AsyncSession,
+    naming_open: bool, shared: bool, button: bool,
 ) -> None:
-    """ensure_shared_registrant is best-effort and the retry poller does not
-    cover it (a known gap this feature deliberately does not fix). The
-    wrapper turns what used to be an invisible nothing into an honest line:
-    no guest button, but the app button still works."""
+    """The guest button is shown exactly when /z/{code}/guest has an entry
+    to give -- the grid of _guest_meeting, cell by cell.
+
+    WHAT CHANGED (BE-60), AND WHY THIS IS NOT A WEAKER TEST. This used to be
+    test_landing_says_so_honestly_when_the_guest_seat_was_never_minted, and
+    it asserted: no shared registrant -> no guest button, the honest line
+    instead. That was right before GT-21 step B -- without the shared
+    registrant a guest had nowhere to go. Step B made the guest page mint a
+    PERSONAL registrant inside the naming window, so for a scheduled
+    practice the old assertion became false (the button hid a working
+    entry). The honest line is still right, but only in the one cell where
+    the page itself has nothing to give: outside the naming window, with no
+    shared registrant. Each cell is asserted both ways -- the button and the
+    sentence -- so a landing that always or never shows the button fails.
+    """
     master = await _make_verified_master(client, db_session, telegram_id=89844)
     practice_id = await _create_and_publish_practice(client, master)
     meeting = await _meeting(db_session, practice_id)
-    meeting.shared_join_url = None
-    meeting.shared_registrant_id = None
+    if not shared:
+        # ensure_shared_registrant is best-effort and the retry poller does
+        # not cover it: this state is the minting miss, observed live.
+        meeting.shared_join_url = None
+        meeting.shared_registrant_id = None
+    if not naming_open:
+        practice = await db_session.get(Practice, UUID(practice_id))
+        practice.status = PracticeStatus.COMPLETED.value
     await db_session.commit()
     code = encode_practice_code(UUID(practice_id))
 
     resp = await client.get(f"/z/{code}", follow_redirects=False)
 
     assert resp.status_code == 200
-    assert f"/z/{code}/guest" not in resp.text
-    assert "Гостевой вход сейчас недоступен" in resp.text
+    assert (f"/z/{code}/guest" in resp.text) is button
+    assert ("Гостевой вход сейчас недоступен" in resp.text) is (not button)
     assert f"startapp=zoom__{code}" in resp.text
 
 
