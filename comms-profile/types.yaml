@@ -7,9 +7,21 @@
 # the 3 comms-native msg.* chat-baseline types, each mapped to a
 # preference category of grid §3.
 #
-# Format (comms app/profile/loader.py): {type_key: {category: str}}.
-# Unknown spec keys are tolerated (additive contract); a type key is
-# <= 50 chars, a category <= 50 chars (comms core/constants.py).
+# Format (comms app/profile/loader.py, schema version 2):
+# {version: 2, types: {type_key: {field: value}}}.
+# The type record is closed: an unknown key refuses comms startup; only `x-...` keys are tolerated.
+# A type key is <= 50 chars, a category <= 50 chars (comms
+# core/constants.py).
+#
+# CHANNELS ARE THE PROFILE'S (comms protocol 3.0.0): a request never
+# names a channel, the profile routes each type. Every velo-emitted
+# type is routed to [in_app, telegram] -- the bell always gets the row,
+# telegram delivers where the deploy configured the bot. comms refuses
+# to start when a type routes into a channel whose keys are all empty
+# on that deploy (comms app/profile/loader.py _check_routes), so
+# `telegram` here REQUIRES TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_URL in
+# the comms environment. The msg.* types declare no channels: comms
+# emits them itself and they take its default, in_app.
 #
 # CATEGORY GRID (§3, locked as v1 + decision A of 2026-07-28;
 # customer edits = this file):
@@ -39,252 +51,289 @@
 # comms startup fence over profile data rejects them (decision 13).
 # =============================================================================
 
-# -- Bookings / practices / waitlist (category: bookings) --
+version: 2
 
-booking.confirmed:
-  category: bookings
+types:
+  # -- Bookings / practices / waitlist (category: bookings) --
 
-booking.cancelled_by_user:
-  category: bookings
+  booking.confirmed:
+    category: bookings
+    channels: [in_app, telegram]
 
-practice.cancelled:
-  category: bookings
+  booking.cancelled_by_user:
+    category: bookings
+    channels: [in_app, telegram]
 
-practice.rescheduled:
-  category: bookings
+  practice.cancelled:
+    category: bookings
+    channels: [in_app, telegram]
 
-# T1: the dictionary §2 gives the waitlist branch of a practice
-# cancellation "its own sheet" -- in comms a type IS its sheet, so the
-# branch is a sibling type (dictionary type #16, Master-chat
-# 2026-07-28).
-practice.cancelled_waitlist:
-  category: bookings
+  practice.rescheduled:
+    category: bookings
+    channels: [in_app, telegram]
 
-waitlist.spot_available:
-  category: bookings
+  # T1: the dictionary §2 gives the waitlist branch of a practice
+  # cancellation "its own sheet" -- in comms a type IS its sheet, so the
+  # branch is a sibling type (dictionary type #16, Master-chat
+  # 2026-07-28).
+  practice.cancelled_waitlist:
+    category: bookings
+    channels: [in_app, telegram]
 
-waitlist.expired:
-  category: bookings
+  waitlist.spot_available:
+    category: bookings
+    channels: [in_app, telegram]
 
-# -- Booking reminders (T1, ID-6): the donor reminder series re-keyed
-#    to the dot dictionary. Scheduled by velo as notification_request
-#    with a future scheduled_at (anchor = practice.scheduled_at),
-#    cancelled via the reminder_cancel event by booking_id /
-#    practice_id correlation. The donor's master_reminder_* series was
-#    deferred here with "trigger = dictionary amendment"; BE-33 is that
-#    amendment -- see practice.master_reminder_1h at the end of this
-#    file, which carries its own category rather than joining this one. --
+  waitlist.expired:
+    category: bookings
+    channels: [in_app, telegram]
 
-booking.reminder_24h:
-  category: reminders
+  # -- Booking reminders (T1, ID-6): the donor reminder series re-keyed
+  #    to the dot dictionary. Scheduled by velo as notification_request
+  #    with a future scheduled_at (anchor = practice.scheduled_at),
+  #    cancelled via the reminder_cancel event by the envelope
+  #    correlation "booking:<booking_id>". The donor's master_reminder_*
+  #    series was deferred here with "trigger = dictionary amendment"; BE-33 is that
+  #    amendment -- see practice.master_reminder_1h at the end of this
+  #    file, which carries its own category rather than joining this one. --
 
-booking.reminder_1h:
-  category: reminders
+  booking.reminder_24h:
+    category: reminders
+    channels: [in_app, telegram]
 
-booking.reminder_10m:
-  category: reminders
+  booking.reminder_1h:
+    category: reminders
+    channels: [in_app, telegram]
 
-# -- Post-practice prompts (category: reminders; scheduled via the
-#    reminder mechanic from practice_outcome, ID-6). v1 schedules
-#    ONLY prompt.leave_feedback (the single live donor emit);
-#    prompt.leave_review stays registered but unscheduled -- enabling
-#    it is a one-liner at the outcome site (Master-chat 2026-07-28). --
+  booking.reminder_10m:
+    category: reminders
+    channels: [in_app, telegram]
 
-prompt.leave_review:
-  category: reminders
+  # -- Post-practice prompts (category: reminders; scheduled via the
+  #    reminder mechanic from practice_outcome, ID-6). v1 schedules
+  #    ONLY prompt.leave_feedback (the single live donor emit);
+  #    prompt.leave_review stays registered but unscheduled -- enabling
+  #    it is a one-liner at the outcome site (Master-chat 2026-07-28). --
 
-prompt.leave_feedback:
-  category: reminders
+  prompt.leave_review:
+    category: reminders
+    channels: [in_app, telegram]
 
-# -- Wallet (category: finance) --
+  prompt.leave_feedback:
+    category: reminders
+    channels: [in_app, telegram]
 
-wallet.topup_confirmed:
-  category: finance
+  # -- Wallet (category: finance) --
 
-wallet.withdrawal_approved:
-  category: finance
+  wallet.topup_confirmed:
+    category: finance
+    channels: [in_app, telegram]
 
-wallet.withdrawal_rejected:
-  category: finance
+  wallet.withdrawal_approved:
+    category: finance
+    channels: [in_app, telegram]
 
-# -- Master account status: NO category on purpose (decision A) --
-#    a category-less type bypasses the mute gate (§2.5) and the prefs
-#    facade never lists it -- non-mutable by mechanism. --
+  wallet.withdrawal_rejected:
+    category: finance
+    channels: [in_app, telegram]
 
-master.verified:
+  # -- Master account status: NO category on purpose (decision A) --
+  #    a category-less type bypasses the mute gate (§2.5) and the prefs
+  #    facade never lists it -- non-mutable by mechanism. --
 
-master.rejected:
+  master.verified:
+    channels: [in_app, telegram]
 
-master.application_received:
+  master.rejected:
+    channels: [in_app, telegram]
 
-# -- System announcements: NO category on purpose (decision A, same
-#    mechanism as master.* above) --
+  master.application_received:
+    channels: [in_app, telegram]
 
-system.announcement:
+  # -- System announcements: NO category on purpose (decision A, same
+  #    mechanism as master.* above) --
 
-# -- Support: NO category on purpose (owner ruling 2026-08-14, T-38 support
-#    build, PROMPT №710). Emitted once, at support-thread creation, to
-#    group:admins (the same GROUP_ADMINS broadcast master.application_received
-#    already uses in production) -- an unclaimed thread's only signal that
-#    support has traffic. A category would let it be muted like any other
-#    admin-facing type, and this ONE type is the one an operator must not be
-#    able to silence -- the mechanism decision A already uses for
-#    non-mutable-by-mechanism types, applied here for a different reason. --
+  system.announcement:
+    channels: [in_app, telegram]
 
-support.thread_created:
+  # -- Support: NO category on purpose (owner ruling 2026-08-14, T-38 support
+  #    build, PROMPT №710). Emitted once, at support-thread creation, to
+  #    group:admins (the same GROUP_ADMINS broadcast master.application_received
+  #    already uses in production) -- an unclaimed thread's only signal that
+  #    support has traffic. A category would let it be muted like any other
+  #    admin-facing type, and this ONE type is the one an operator must not be
+  #    able to silence -- the mechanism decision A already uses for
+  #    non-mutable-by-mechanism types, applied here for a different reason. --
 
-# -- BE-21: the practice's own master learns his practice was cancelled by
-#    somebody else -- the curator of a school it was published to. NO
-#    category on purpose, and the reason is the same shape as
-#    support.thread_created above rather than decision A's.
-#
-#    `bookings` was the obvious home -- practice.cancelled lives there -- and
-#    it is exactly wrong here. `bookings` is the family a busy master mutes
-#    FIRST: booking.confirmed at eighteen thousand participants is noise.
-#    Muted, it would also swallow the one message he cannot afford to miss:
-#    that his session is gone, that it was not his doing, and that the money
-#    went back. This is the single type in the practice family that must not
-#    be silenceable, so it carries no category and bypasses the mute gate by
-#    mechanism (§2.5), the way support.thread_created does for an operator. --
+  support.thread_created:
+    channels: [in_app, telegram]
 
-practice.cancelled_by_curator:
+  # -- BE-21: the practice's own master learns his practice was cancelled by
+  #    somebody else -- the curator of a school it was published to. NO
+  #    category on purpose, and the reason is the same shape as
+  #    support.thread_created above rather than decision A's.
+  #
+  #    `bookings` was the obvious home -- practice.cancelled lives there -- and
+  #    it is exactly wrong here. `bookings` is the family a busy master mutes
+  #    FIRST: booking.confirmed at eighteen thousand participants is noise.
+  #    Muted, it would also swallow the one message he cannot afford to miss:
+  #    that his session is gone, that it was not his doing, and that the money
+  #    went back. This is the single type in the practice family that must not
+  #    be silenceable, so it carries no category and bypasses the mute gate by
+  #    mechanism (§2.5), the way support.thread_created does for an operator. --
 
-# ===========================================================================
-# CURATOR GROUPS -- school notifications (BE-25). Four of the five carry NO
-# category, and the fifth is why the `curator_groups` category exists.
-#
-# The four without one -- transfer_offered / transfer_accepted /
-# transfer_declined / member_removed -- share a shape: each tells ONE person
-# that THEIR OWN standing changed, each happens a handful of times in a
-# school's life, and each is irreversible by silence. Being offered a school
-# you did not know was coming, losing one you owned, or losing access to the
-# practices of a school you were in are not a feed; missing them means
-# finding out from a stranger, or not at all. Same reading as master.verified
-# above: an event about your status, not a stream. The accepted/declined pair
-# deliberately shares one bucket -- splitting it would mean hearing about one
-# outcome of your own offer and not the other.
-#
-# member_joined is the one that SCALES with the size of a school, so the
-# curator of a large one must be able to silence it. `reminders` was the
-# obvious existing home and is exactly wrong: it holds booking.reminder_10m,
-# _1h, _24h and the two feedback prompts, so a curator muting the arrivals
-# feed would also switch off the reminders for his own sessions and find out
-# by missing a class. A new category is cheaper than that coupling, and this
-# family is growing -- practice_published lands here next, master appointment
-# after it (owner ruling; the standing "no new categories" ban lifted for
-# this case, because putting the first of a family in a borrowed bucket only
-# to move it out later costs more).
-# ===========================================================================
+  practice.cancelled_by_curator:
+    channels: [in_app, telegram]
 
-curator_group.transfer_offered:
+  # ===========================================================================
+  # CURATOR GROUPS -- school notifications (BE-25). Four of the five carry NO
+  # category, and the fifth is why the `curator_groups` category exists.
+  #
+  # The four without one -- transfer_offered / transfer_accepted /
+  # transfer_declined / member_removed -- share a shape: each tells ONE person
+  # that THEIR OWN standing changed, each happens a handful of times in a
+  # school's life, and each is irreversible by silence. Being offered a school
+  # you did not know was coming, losing one you owned, or losing access to the
+  # practices of a school you were in are not a feed; missing them means
+  # finding out from a stranger, or not at all. Same reading as master.verified
+  # above: an event about your status, not a stream. The accepted/declined pair
+  # deliberately shares one bucket -- splitting it would mean hearing about one
+  # outcome of your own offer and not the other.
+  #
+  # member_joined is the one that SCALES with the size of a school, so the
+  # curator of a large one must be able to silence it. `reminders` was the
+  # obvious existing home and is exactly wrong: it holds booking.reminder_10m,
+  # _1h, _24h and the two feedback prompts, so a curator muting the arrivals
+  # feed would also switch off the reminders for his own sessions and find out
+  # by missing a class. A new category is cheaper than that coupling, and this
+  # family is growing -- practice_published lands here next, master appointment
+  # after it (owner ruling; the standing "no new categories" ban lifted for
+  # this case, because putting the first of a family in a borrowed bucket only
+  # to move it out later costs more).
+  # ===========================================================================
 
-curator_group.transfer_accepted:
+  curator_group.transfer_offered:
+    channels: [in_app, telegram]
 
-curator_group.transfer_declined:
+  curator_group.transfer_accepted:
+    channels: [in_app, telegram]
 
-curator_group.member_removed:
+  curator_group.transfer_declined:
+    channels: [in_app, telegram]
 
-curator_group.member_joined:
-  category: curator_groups
+  curator_group.member_removed:
+    channels: [in_app, telegram]
 
-# -- GT-27, appointing a school master. The split follows the ADDRESSEE, not
-#    the event: the same appointment produces one message the candidate must
-#    not be able to silence and one the curator may.
-#
-#    master_offered goes to the CANDIDATE: somebody is handing them a
-#    teaching role in a school, and the offer sits there until they answer.
-#    Missing it means the curator waits on a person who never knew. Same
-#    shape as the four BE-25 types above -- an event about your own standing,
-#    rare, irreversible by silence -- so no category.
-#
-#    The two outcomes go to the CURATOR, and they belong in curator_groups
-#    with member_joined for the same reason member_joined is there: a curator
-#    of a large school appoints repeatedly, so this is the only one of the
-#    three that scales with the school. A curator who mutes it loses a
-#    convenience; a candidate who mutes an offer loses the role. --
+  curator_group.member_joined:
+    category: curator_groups
+    channels: [in_app, telegram]
 
-curator_group.master_offered:
+  # -- GT-27, appointing a school master. The split follows the ADDRESSEE, not
+  #    the event: the same appointment produces one message the candidate must
+  #    not be able to silence and one the curator may.
+  #
+  #    master_offered goes to the CANDIDATE: somebody is handing them a
+  #    teaching role in a school, and the offer sits there until they answer.
+  #    Missing it means the curator waits on a person who never knew. Same
+  #    shape as the four BE-25 types above -- an event about your own standing,
+  #    rare, irreversible by silence -- so no category.
+  #
+  #    The two outcomes go to the CURATOR, and they belong in curator_groups
+  #    with member_joined for the same reason member_joined is there: a curator
+  #    of a large school appoints repeatedly, so this is the only one of the
+  #    three that scales with the school. A curator who mutes it loses a
+  #    convenience; a candidate who mutes an offer loses the role. --
 
-curator_group.master_offer_accepted:
-  category: curator_groups
+  curator_group.master_offered:
+    channels: [in_app, telegram]
 
-curator_group.master_offer_declined:
-  category: curator_groups
+  curator_group.master_offer_accepted:
+    category: curator_groups
+    channels: [in_app, telegram]
 
-# -- BE-30, the school hears that its teacher opened something. The arrival
-#    the comment above predicted, and it lands in curator_groups for the
-#    reason that made the category: it SCALES. member_joined scales with the
-#    school's intake; this one scales with its teaching -- every published
-#    practice, from every master of the school, to every member. A curator
-#    of a busy school who cannot turn it off would be the first complaint.
-#
-#    It is also the first type here addressed to people who are not a party
-#    to the event: the four uncategorised ones tell one person their own
-#    standing changed, and silencing those loses the role. Silencing this
-#    one loses announcements a member can still find on the school's page,
-#    which is exactly the line between an event and a feed. --
+  curator_group.master_offer_declined:
+    category: curator_groups
+    channels: [in_app, telegram]
 
-curator_group.practice_published:
-  category: curator_groups
+  # -- BE-30, the school hears that its teacher opened something. The arrival
+  #    the comment above predicted, and it lands in curator_groups for the
+  #    reason that made the category: it SCALES. member_joined scales with the
+  #    school's intake; this one scales with its teaching -- every published
+  #    practice, from every master of the school, to every member. A curator
+  #    of a busy school who cannot turn it off would be the first complaint.
+  #
+  #    It is also the first type here addressed to people who are not a party
+  #    to the event: the four uncategorised ones tell one person their own
+  #    standing changed, and silencing those loses the role. Silencing this
+  #    one loses announcements a member can still find on the school's page,
+  #    which is exactly the line between an event and a feed. --
 
-# -- Chat baseline (comms-native msg.* types; velo never emits these,
-#    the messaging engine does; mapping fixed by dispatch plan §6b) --
+  curator_group.practice_published:
+    category: curator_groups
+    channels: [in_app, telegram]
 
-msg.participant_message:
-  category: msg_participants
+  # -- Chat baseline (comms-native msg.* types; velo never emits these,
+  #    the messaging engine does; mapping fixed by dispatch plan §6b) --
 
-msg.support_message:
-  category: msg_support
+  msg.participant_message:
+    category: msg_participants
 
-msg.thread_closed:
-  category: msg_participants
+  msg.support_message:
+    category: msg_support
 
-# ===========================================================================
-# MASTER-FACING NOTIFICATIONS (BE-33). Three types, three NEW categories,
-# and the count is not a preference: the settings facade builds one toggle
-# per category the profile declares (comms app/api/prefs.py), so two rows on
-# the master's screen that must move independently ARE two categories. One
-# category would be one switch under two labels.
-#
-# Every one of the three SCALES -- with the master's calendar, with the size
-# of a practice (eighteen thousand participants is a real number here) -- so
-# all three must be silenceable, and none may be parked in a family whose
-# other members are not.
-# ===========================================================================
+  msg.thread_closed:
+    category: msg_participants
 
-# -- The master's own session, one hour out. NOT `reminders`: that family
-#    holds booking.reminder_24h/_1h/_10m and the two prompts, which a master
-#    receives AS A PARTICIPANT of somebody else's practice. Sharing the
-#    bucket would mean one switch for "remind me about my classes" and
-#    "remind me about the classes I teach" -- the coupling GT-26 already
-#    refused once for the curator's arrivals feed.
-#
-#    The `practice.` prefix names the subject, not the toggle: this family
-#    already spans categories (practice.cancelled sits in `bookings`,
-#    practice.cancelled_by_curator carries none). The `master.` prefix was
-#    the other candidate and is taken -- it means decision-A status types
-#    that carry NO category, and a categorized master.* would break that
-#    reading at a glance.
-#
-#    Scheduled at publication, one per practice (series children included),
-#    cancelled and re-anchored with the practice by the practice_id
-#    correlation -- see core/events/reminders.py MASTER_REMINDER_TYPES. --
+  # ===========================================================================
+  # MASTER-FACING NOTIFICATIONS (BE-33). Three types, three NEW categories,
+  # and the count is not a preference: the settings facade builds one toggle
+  # per category the profile declares (comms app/api/prefs.py), so two rows on
+  # the master's screen that must move independently ARE two categories. One
+  # category would be one switch under two labels.
+  #
+  # Every one of the three SCALES -- with the master's calendar, with the size
+  # of a practice (eighteen thousand participants is a real number here) -- so
+  # all three must be silenceable, and none may be parked in a family whose
+  # other members are not.
+  # ===========================================================================
 
-practice.master_reminder_1h:
-  category: master_reminders
+  # -- The master's own session, one hour out. NOT `reminders`: that family
+  #    holds booking.reminder_24h/_1h/_10m and the two prompts, which a master
+  #    receives AS A PARTICIPANT of somebody else's practice. Sharing the
+  #    bucket would mean one switch for "remind me about my classes" and
+  #    "remind me about the classes I teach" -- the coupling GT-26 already
+  #    refused once for the curator's arrivals feed.
+  #
+  #    The `practice.` prefix names the subject, not the toggle: this family
+  #    already spans categories (practice.cancelled sits in `bookings`,
+  #    practice.cancelled_by_curator carries none). The `master.` prefix was
+  #    the other candidate and is taken -- it means decision-A status types
+  #    that carry NO category, and a categorized master.* would break that
+  #    reading at a glance.
+  #
+  #    Scheduled at publication, one per practice (series children included),
+  #    cancelled and re-anchored with the practice by the envelope
+  #    correlation "practice:<practice_id>" -- see core/events/reminders.py
+  #    MASTER_REMINDER_TYPES. --
 
-# -- A participant checked in before the master's practice. POSTED ONE BY
-#    ONE, not as a digest (owner ruling): the check-in carries a comment
-#    ("болит спина") and it is worth reading BEFORE the session -- a digest
-#    afterwards keeps the count and loses the reason anyone reads these. --
+  practice.master_reminder_1h:
+    category: master_reminders
+    channels: [in_app, telegram]
 
-practice.checkin_received:
-  category: practice_checkins
+  # -- A participant checked in before the master's practice. POSTED ONE BY
+  #    ONE, not as a digest (owner ruling): the check-in carries a comment
+  #    ("болит спина") and it is worth reading BEFORE the session -- a digest
+  #    afterwards keeps the count and loses the reason anyone reads these. --
 
-# -- A participant left a review on the master's practice. Separate category
-#    from check-ins because they are separate rows on the screen: a master
-#    mid-course wants the check-ins and not yet the reviews, and after the
-#    course exactly the other way round. --
+  practice.checkin_received:
+    category: practice_checkins
+    channels: [in_app, telegram]
 
-practice.feedback_received:
-  category: practice_reviews
+  # -- A participant left a review on the master's practice. Separate category
+  #    from check-ins because they are separate rows on the screen: a master
+  #    mid-course wants the check-ins and not yet the reviews, and after the
+  #    course exactly the other way round. --
+
+  practice.feedback_received:
+    category: practice_reviews
+    channels: [in_app, telegram]

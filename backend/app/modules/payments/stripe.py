@@ -34,7 +34,6 @@ import asyncio
 from datetime import UTC, datetime
 from uuid import UUID
 
-import stripe
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -439,6 +438,7 @@ async def handle_checkout_completed(
     amount_text = f"{payment.amount_cents / 100:.2f}"
     await emit_notification(
         session,
+        idempotency_key=f"topup-confirmed:{payment.id}",
         type="wallet.topup_confirmed",
         target_type="user",
         target_value=str(payment.user_id),

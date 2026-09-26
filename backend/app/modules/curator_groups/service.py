@@ -15,7 +15,7 @@
 import secrets
 from datetime import UTC, datetime
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import ColumnElement, Select, and_, case, delete, func, select
 from sqlalchemy.exc import IntegrityError
@@ -277,7 +277,7 @@ def _record_group_event(
     session: AsyncSession,
     *,
     data: dict[str, Any] | None = None,
-) -> None:
+) -> CuratorGroupEvent:
     """Append one event to a school's journal, in the caller's transaction.
 
     SYNCHRONOUS AND IN THE SAME TRANSACTION as the action it records, not
@@ -326,20 +326,26 @@ def _record_group_event(
     if data:
         payload.update(data)
 
-    session.add(
-        CuratorGroupEvent(
-            group_id=group_id,
-            actor_id=actor.id,
-            event=event.value,
-            data=payload,
-        )
+    # The id is minted HERE, not left to the column default: the default
+    # only fires at flush, and a caller that notifies about this event
+    # names the notification by the journal row (see _notify_group_event)
+    # before anything is flushed. Returned so it can.
+    row = CuratorGroupEvent(
+        id=uuid4(),
+        group_id=group_id,
+        actor_id=actor.id,
+        event=event.value,
+        data=payload,
     )
+    session.add(row)
+    return row
 
 
 async def _notify_group_event(
     session: AsyncSession,
     *,
     type: str,
+    journal_event_id: UUID,
     recipient_id: UUID,
     title: str,
     body: str,
@@ -348,6 +354,11 @@ async def _notify_group_event(
     actor_name: str,
 ) -> None:
     """Queue one school notification, in the caller's transaction (BE-25).
+
+    journal_event_id: the _record_group_event row of the same action. It
+    is the fact's identity and so the notification's idempotency key --
+    every one of these events has exactly one addressee, so the event is
+    the whole key.
 
     THE COMPANION OF _record_group_event, and deliberately shaped like it:
     same transaction, same call sites, no background task. A notification
@@ -377,6 +388,7 @@ async def _notify_group_event(
     """
     await emit_notification(
         session,
+        idempotency_key=f"curator-group-event:{journal_event_id}",
         type=type,
         target_type="user",
         target_value=str(recipient_id),
@@ -949,7 +961,7 @@ async def remove_curator_group_member(
             CuratorGroupMasterOffer.to_user_id == user_id,
         )
     )
-    _record_group_event(
+    journal = _record_group_event(
         group.id, actor, CuratorGroupEventKind.MEMBER_REMOVED, session,
         data=data,
     )
@@ -960,6 +972,7 @@ async def remove_curator_group_member(
     # visible, and nothing else would tell him.
     await _notify_group_event(
         session,
+        journal_event_id=journal.id,
         type="curator_group.member_removed",
         recipient_id=user_id,
         title="Вы больше не в школе",
@@ -1869,7 +1882,7 @@ async def join_curator_group_by_token(
                 session.add(row)
                 await session.flush()
             relation = CuratorMemberKind.STUDENT.value
-            _record_group_event(
+            journal = _record_group_event(
                 group.id,
                 actor,
                 CuratorGroupEventKind.MEMBER_JOINED,
@@ -1888,6 +1901,7 @@ async def join_curator_group_by_token(
             # would document a state no caller can reach.
             await _notify_group_event(
                 session,
+                journal_event_id=journal.id,
                 type="curator_group.member_joined",
                 recipient_id=group.curator_user_id,
                 title="Новый участник школы",
@@ -2103,7 +2117,7 @@ async def offer_curator_group_transfer(
     # above already computed it for the reply, by the same
     # display_name(first, last) rule the journal uses. This is the one
     # target of four that costs no extra query.
-    _record_group_event(
+    journal = _record_group_event(
         group.id,
         actor,
         CuratorGroupEventKind.TRANSFER_OFFERED,
@@ -2117,6 +2131,7 @@ async def offer_curator_group_transfer(
     # school they did not already belong to.
     await _notify_group_event(
         session,
+        journal_event_id=journal.id,
         type="curator_group.transfer_offered",
         recipient_id=to_user_id,
         title="Вам предлагают школу",
@@ -2333,7 +2348,7 @@ async def accept_curator_group_transfer(
         )
     )
 
-    _record_group_event(
+    journal = _record_group_event(
         group.id,
         actor,
         CuratorGroupEventKind.TRANSFER_ACCEPTED,
@@ -2351,6 +2366,7 @@ async def accept_curator_group_transfer(
     # The acceptor gets nothing: he is the actor.
     await _notify_group_event(
         session,
+        journal_event_id=journal.id,
         type="curator_group.transfer_accepted",
         recipient_id=previous_curator_id,
         title="Школа передана",
@@ -2431,7 +2447,7 @@ async def decline_curator_group_transfer(
         # anyway, and there is no school left to hold a journal.
         return
 
-    _record_group_event(
+    journal = _record_group_event(
         declined.group_id,
         actor,
         CuratorGroupEventKind.TRANSFER_DECLINED,
@@ -2446,6 +2462,7 @@ async def decline_curator_group_transfer(
     # The decliner gets nothing: he is the actor.
     await _notify_group_event(
         session,
+        journal_event_id=journal.id,
         type="curator_group.transfer_declined",
         recipient_id=offered_by,
         title="Передача отклонена",
@@ -2702,7 +2719,7 @@ async def offer_curator_group_master(
         return
 
     target_name = await _frozen_name(to_user_id, session)
-    _record_group_event(
+    journal = _record_group_event(
         group.id,
         actor,
         CuratorGroupEventKind.MASTER_OFFERED,
@@ -2711,6 +2728,7 @@ async def offer_curator_group_master(
     )
     await _notify_group_event(
         session,
+        journal_event_id=journal.id,
         type="curator_group.master_offered",
         recipient_id=to_user_id,
         title="Вас приглашают вести школу",
@@ -2786,7 +2804,7 @@ async def accept_curator_group_master_offer(
     await session.delete(offer)
     await session.flush()
 
-    _record_group_event(
+    journal = _record_group_event(
         group.id,
         actor,
         CuratorGroupEventKind.MEMBER_PROMOTED,
@@ -2794,6 +2812,7 @@ async def accept_curator_group_master_offer(
     )
     await _notify_group_event(
         session,
+        journal_event_id=journal.id,
         type="curator_group.master_offer_accepted",
         recipient_id=group.curator_user_id,
         title="Назначение принято",
@@ -2852,7 +2871,7 @@ async def decline_curator_group_master_offer(
         return
     curator_id, group_name = row
 
-    _record_group_event(
+    journal = _record_group_event(
         group_id,
         actor,
         CuratorGroupEventKind.MASTER_OFFER_DECLINED,
@@ -2861,6 +2880,7 @@ async def decline_curator_group_master_offer(
     )
     await _notify_group_event(
         session,
+        journal_event_id=journal.id,
         type="curator_group.master_offer_declined",
         recipient_id=curator_id,
         title="Назначение отклонено",
@@ -3026,6 +3046,7 @@ async def announce_published_practice(
     for recipient_id in sorted(recipients, key=str):
         await emit_notification(
             session,
+            idempotency_key=f"curator-practice-published:{practice.id}:{recipient_id}",
             type="curator_group.practice_published",
             target_type="user",
             target_value=str(recipient_id),

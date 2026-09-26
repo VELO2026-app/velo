@@ -172,7 +172,9 @@ async def open_support_thread(
     # creation, not per message" -- a plain re-open of an existing thread
     # never re-notifies.
     if created:
-        await _emit_support_thread_created(session, user, topic=topic)
+        await _emit_support_thread_created(
+            session, user, thread_id=comms_thread_id, topic=topic,
+        )
 
     return {k: v for k, v in payload.items() if k != "created"}
 
@@ -369,7 +371,11 @@ async def claim_admin_support_thread(
 
 
 async def _emit_support_thread_created(
-    session: AsyncSession, user: User, *, topic: str | None = None,
+    session: AsyncSession,
+    user: User,
+    *,
+    thread_id: UUID,
+    topic: str | None = None,
 ) -> None:
     """Comms (T-38 support build): support.thread_created to group:admins.
 
@@ -383,6 +389,9 @@ async def _emit_support_thread_created(
     `topic`, when given, is the immediate half of "the topic survives into
     something an operator can see" (PROMPT №712) -- the notification text
     itself, before anyone has even opened the thread.
+
+    `thread_id` is the comms thread whose creation this reports -- the
+    fact the idempotency key names (one thread, one signal).
     """
     from app.core.events.notify import (
         TARGET_GROUP_ADMINS,
@@ -396,6 +405,7 @@ async def _emit_support_thread_created(
     target_type, target_value = TARGET_GROUP_ADMINS
     await emit_notification(
         session,
+        idempotency_key=f"support-thread-created:{thread_id}",
         type="support.thread_created",
         target_type=target_type,
         target_value=target_value,

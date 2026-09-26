@@ -101,6 +101,7 @@ async def notify_master_of_checkin(
     comment = checkin.comment or ""
     await emit_notification(
         session,
+        idempotency_key=f"checkin-received:{checkin.id}",
         type=CHECKIN_RECEIVED_TYPE,
         target_type="user",
         target_value=str(practice.master_id),
@@ -145,6 +146,7 @@ async def notify_master_of_feedback(
     comment = feedback.comment or ""
     await emit_notification(
         session,
+        idempotency_key=f"feedback-received:{feedback.id}",
         type=FEEDBACK_RECEIVED_TYPE,
         target_type="user",
         target_value=str(practice.master_id),

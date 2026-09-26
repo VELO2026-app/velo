@@ -83,6 +83,25 @@ async def _cancel_one(
         (await session.execute(affected_ids_stmt)).scalars().all()
     )
 
+    # Comms (3.0.0): the bookings whose reminder series this cancellation
+    # must cancel -- collected BEFORE the refund for the same reason as the
+    # users above, and it matters more here: a booking's series is
+    # cancelled by its own "booking:<id>" correlation, so a list read
+    # after the refund would be empty and every participant's reminders
+    # would survive the practice. The set is exactly the refund's
+    # (refund_all_bookings_for_practice: PENDING + CONFIRMED) -- every
+    # booking this cancellation cancels, the per-booking rule of
+    # cancel_booking applied to each. A booking cancelled earlier had its
+    # series cancelled then.
+    reminder_refs_stmt = select(Booking.id, Booking.user_id).where(
+        Booking.practice_id == practice.id,
+        Booking.status.in_({
+            BookingStatus.PENDING.value,
+            BookingStatus.CONFIRMED.value,
+        }),
+    )
+    reminder_rows = (await session.execute(reminder_refs_stmt)).all()
+
     # Comms (T1, dictionary §2): the waitlist branch of the
     # cancellation gets its own type (practice.cancelled_waitlist) --
     # collect the queue BEFORE refund_all_bookings_for_practice flips
@@ -176,11 +195,13 @@ async def _cancel_one(
     # Comms (T1, dictionary §2): practice.cancelled to every booked
     # user + practice.cancelled_waitlist (its own sheet, type #16) to
     # the queue -- both audiences are DOMAIN relations, expanded by
-    # velo into per-user emits (C-boundary ID-4). The practice's whole
-    # pending reminder series is expired by practice_id correlation.
+    # velo into per-user emits (C-boundary ID-4). Every pending reminder
+    # of the practice is cancelled as a fan-out: one cancel per booking
+    # collected above, plus the master's (cancel_practice_reminders).
     # All in the cancellation's transaction (ID-2).
     from app.core.events.notify import emit_notification
     from app.core.events.reminders import (
+        BookingRef,
         cancel_practice_reminders,
         format_event_time,
     )
@@ -188,6 +209,7 @@ async def _cancel_one(
     for uid in affected_user_ids:
         await emit_notification(
             session,
+            idempotency_key=f"practice-cancelled:{practice.id}:{uid}",
             type="practice.cancelled",
             target_type="user",
             target_value=str(uid),
@@ -206,6 +228,7 @@ async def _cancel_one(
     for uid in waitlisted_user_ids:
         await emit_notification(
             session,
+            idempotency_key=f"practice-cancelled-waitlist:{practice.id}:{uid}",
             type="practice.cancelled_waitlist",
             target_type="user",
             target_value=str(uid),
@@ -222,7 +245,12 @@ async def _cancel_one(
             },
         )
     await cancel_practice_reminders(
-        session, practice_id=str(practice.id),
+        session,
+        practice_id=str(practice.id),
+        bookings=[
+            BookingRef(booking_id=str(bid), user_id=str(uid))
+            for bid, uid in reminder_rows
+        ],
     )
 
     # BE-21: two things only a CURATOR cancellation produces.
@@ -271,6 +299,7 @@ async def _cancel_one(
         group_names = ", ".join(g.name for g in groups)
         await emit_notification(
             session,
+            idempotency_key=f"practice-cancelled-by-curator:{practice.id}",
             type="practice.cancelled_by_curator",
             target_type="user",
             target_value=str(practice.master_id),

@@ -231,7 +231,10 @@ async def apply_for_master(
         # Status is "rejected" -- allow reapplication.
         # Uses set_jsonb() to ensure SQLAlchemy detects the JSONB change.
         existing.set_jsonb("data", _build_reapply_data(existing.data, body))
-        await _emit_application_received(session, user)
+        await _emit_application_received(
+            session, user,
+            applied_at=existing.data["account"]["applied_at"],
+        )
         logger.info(
             "master_reapplication_submitted",
             user_id=str(user.id),
@@ -254,7 +257,9 @@ async def apply_for_master(
     except IntegrityError:
         raise ConflictError("Application already pending")
 
-    await _emit_application_received(session, user)
+    await _emit_application_received(
+        session, user, applied_at=profile.data["account"]["applied_at"],
+    )
 
     logger.info(
         "master_application_submitted",
@@ -265,13 +270,18 @@ async def apply_for_master(
 
 
 async def _emit_application_received(
-    session: AsyncSession, user: User,
+    session: AsyncSession, user: User, *, applied_at: str,
 ) -> None:
     """Comms (T1, dictionary §2): master.application_received to
     group:admins -- a COMMUNICATION audience, so it goes as ONE emit
     and comms expands it over its synced contact book (C-boundary
     ID-4; the admins group is maintained by the T0 sync). Category-
-    less (decision A): admins always hear about new applications."""
+    less (decision A): admins always hear about new applications.
+
+    `applied_at` identifies the APPLICATION (account.applied_at, stamped
+    fresh by _build_data): one profile row carries every reapplication
+    after a rejection, so the user id alone would name only the first.
+    """
     from app.core.events.notify import (
         TARGET_GROUP_ADMINS,
         emit_notification,
@@ -282,6 +292,7 @@ async def _emit_application_received(
     target_type, target_value = TARGET_GROUP_ADMINS
     await emit_notification(
         session,
+        idempotency_key=f"master-application:{user.id}:{applied_at}",
         type="master.application_received",
         target_type=target_type,
         target_value=target_value,
