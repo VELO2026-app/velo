@@ -548,7 +548,7 @@ class TestListing:
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch
     ) -> None:
         master = await _make_master(client, db_session, BAND_MIN + 20)
-        fake = AsyncMock(return_value={"threads": [], "next_cursor": None})
+        fake = AsyncMock(return_value={"items": [], "next_cursor": None})
         monkeypatch.setattr(_SEAM, fake)
 
         resp = await client.get(
@@ -589,7 +589,7 @@ class TestListing:
             client, telegram_id=BAND_MIN + 21, first_name="Admin",
         )
 
-        fake = AsyncMock(return_value={"threads": ["EVERY THREAD ON THE BOX"]})
+        fake = AsyncMock(return_value={"items": ["EVERY THREAD ON THE BOX"]})
         monkeypatch.setattr(_SEAM, fake)
         resp = await client.get(
             CHATS_URL, headers=auth_headers(admin["session_token"]),
@@ -626,7 +626,7 @@ class TestListing:
         fake = AsyncMock(
             return_value={
                 "counts": {THREAD_ID: 4},
-                "threads": ["SHOULD NOT BE USED"],
+                "items": ["SHOULD NOT BE USED"],
             }
         )
         monkeypatch.setattr(_SEAM, fake)
@@ -783,7 +783,7 @@ class TestPeerEnrichment:
         )
         stray["client"] = str(uuid4())  # no such velo user
         fake = AsyncMock(
-            return_value={"threads": [known, stray], "next_cursor": None}
+            return_value={"items": [known, stray], "next_cursor": None}
         )
         monkeypatch.setattr(_SEAM, fake)
 

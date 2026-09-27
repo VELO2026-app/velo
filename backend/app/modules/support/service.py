@@ -39,7 +39,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.comms import comms_request
+from app.core.comms import comms_request, read_comms_page
 from app.core.exceptions import NotFoundError
 from app.modules.support.models import SupportThread
 from app.modules.users.models import User
@@ -250,9 +250,13 @@ async def list_admin_support_threads(
         params["cursor"] = cursor
 
     payload = await comms_request("GET", "/api/v1/threads", params=params)
-    threads = payload.get("threads") if isinstance(payload, dict) else None
-    if not isinstance(threads, list):
-        return payload
+    # is_supervisor=True above means this page is EVERY thread on the
+    # installation -- private DMs included -- so an unknown shape must not
+    # be forwarded: it used to be (`return payload` when a `threads` key
+    # was missing, and comms 3.0.0 names it `items`), and the admin list
+    # carried every conversation of every master. read_comms_page refuses
+    # instead (502), logging the shape and never the rows.
+    threads, next_cursor = read_comms_page(payload, path="/api/v1/threads")
 
     # SECTION-only scoping (unchanged from №711): comms' list has no
     # operator_kind filter, so the DM/section split happens on the page
@@ -283,7 +287,9 @@ async def list_admin_support_threads(
     for thread in section_threads:
         thread["opener"] = _peer_payload(users.get(_client_uuid(thread)))
 
-    return {**payload, "threads": section_threads}
+    # Built, not spread: `{**payload, ...}` would carry comms' own `items`
+    # -- the unfiltered page -- out next to the filtered one.
+    return {"threads": section_threads, "next_cursor": next_cursor}
 
 
 async def _require_support_thread(

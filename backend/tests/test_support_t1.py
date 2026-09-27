@@ -547,7 +547,7 @@ class TestAdminListing:
         headers = auth_headers(admin["session_token"])
 
         mixed_page = {
-            "threads": [
+            "items": [
                 _thread_payload(
                     thread_id=str(uuid4()),
                     operator_kind="user",
@@ -589,7 +589,7 @@ class TestAdminListing:
         headers = auth_headers(admin["session_token"])
 
         all_dm_page = {
-            "threads": [
+            "items": [
                 _thread_payload(
                     thread_id=str(uuid4()), operator_kind="user",
                     operator_value=str(uuid4()),
@@ -620,7 +620,7 @@ class TestAdminListing:
         headers = auth_headers(admin["session_token"])
 
         page = {
-            "threads": [
+            "items": [
                 _thread_payload(
                     thread_id=THREAD_ID,
                     client=student["user"]["id"],
@@ -648,7 +648,7 @@ class TestAdminListing:
         headers = auth_headers(admin["session_token"])
 
         page = {
-            "threads": [
+            "items": [
                 _thread_payload(thread_id=THREAD_ID, client=str(uuid4())),
             ],
             "next_cursor": None,

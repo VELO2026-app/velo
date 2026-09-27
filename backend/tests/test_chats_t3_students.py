@@ -285,7 +285,7 @@ class TestAdminList:
 
         fake = AsyncMock(
             return_value={
-                "threads": ["EVERY THREAD ON THE BOX"],
+                "items": ["EVERY THREAD ON THE BOX"],
                 "counts": {THIRD_THREAD_ID: 2, OTHER_THREAD_ID: 99},
             }
         )
@@ -332,7 +332,7 @@ class TestAdminList:
         """The master branch must not have moved: same call, same params,
         is_supervisor still hard False."""
         master = await _make_master(client, db_session, BAND_MIN + 37)
-        fake = AsyncMock(return_value={"threads": [], "next_cursor": None})
+        fake = AsyncMock(return_value={"items": [], "next_cursor": None})
         monkeypatch.setattr(_SEAM, fake)
 
         resp = await client.get(

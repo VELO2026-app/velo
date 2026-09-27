@@ -181,3 +181,55 @@ async def comms_request(
     except ValueError as exc:
         logger.warning("comms_response_not_json", path=path)
         raise _UNAVAILABLE from exc
+
+
+def read_comms_page(payload: Any, *, path: str) -> tuple[list[Any], str | None]:
+    """The rows and the cursor of a comms list response -- or a refusal.
+
+    comms 3.0.0 has ONE listing shape (its app/api/paging.py):
+    `{"items": [...], "next_cursor": "<opaque>" | null}`. A caller that
+    filters a list for privacy reads it through here and nowhere else.
+
+    AN UNKNOWN SHAPE CLOSES THE DOOR. Both privacy filters over comms lists
+    used to look for a key, find nothing and `return` -- and the whole
+    unfiltered page went out: the unclaimed support queue to every master,
+    every thread on the installation to the admin support list. The shape
+    had changed twice by then (`threads` -> `items`). So anything but the
+    exact shape -- not a mapping, `items` absent or not a list,
+    `next_cursor` absent or neither a string nor null -- is treated as the
+    list being unavailable: 502, the same answer as comms being down. No
+    fallback list: an empty list would hide the next change of shape.
+
+    THE LOG CARRIES THE SHAPE, NEVER THE CONTENT: the payload type and its
+    sorted top-level keys. The rows hold client uuids and the text of
+    support requests; logging them would move the leak from the response
+    into the logs.
+
+    Args:
+        payload: The parsed body comms_request returned.
+        path: The comms path it came from, for the log.
+
+    Returns:
+        (items, next_cursor) exactly as comms sent them. The rows are NOT
+        inspected here -- deciding which rows a caller may return is the
+        caller's filter.
+
+    Raises:
+        HTTPException: 502 on any other shape.
+    """
+    if isinstance(payload, dict) and "next_cursor" in payload:
+        items = payload.get("items")
+        cursor = payload["next_cursor"]
+        if isinstance(items, list) and (cursor is None or isinstance(cursor, str)):
+            return items, cursor
+    logger.error(
+        "comms_list_shape_unexpected",
+        path=path,
+        payload_type=type(payload).__name__,
+        keys=(
+            sorted(str(key) for key in payload)
+            if isinstance(payload, dict)
+            else None
+        ),
+    )
+    raise _UNAVAILABLE
