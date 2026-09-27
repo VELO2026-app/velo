@@ -34,6 +34,8 @@ import asyncio
 from datetime import UTC, datetime
 from uuid import UUID
 
+import stripe
+
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
