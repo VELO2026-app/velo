@@ -416,9 +416,12 @@ async def upsert_user_on_login(
 
     # Phase 6 / T0: project the identity into comms on EVERY login
     # upsert -- creation is the mandatory point (a recipient must
-    # exist before any addressing), and re-emitting the idempotent
-    # snapshot on returning users self-heals any projection drift for
-    # the cost of one outbox row per login. Same transaction (ID-2).
+    # exist before any addressing), and re-emitting the snapshot on
+    # returning users self-heals any projection drift for the cost of
+    # one outbox row per login. A returning login changes no snapshot
+    # field (the fresh credentials carry no email, `language` is not in
+    # set_), so the snapshot_version trigger leaves the version alone and
+    # comms reads the re-emit as a replay. Same transaction (ID-2).
     await emit_user_upserted(session, user)
 
     logger.info(

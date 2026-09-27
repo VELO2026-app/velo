@@ -101,6 +101,21 @@ class User(JSONBMixin, UUIDMixin, TimestampMixin, Base):
         server_default="true",
     )
 
+    # -- Comms snapshot version (comms 3.0.0) --
+    # WRITTEN BY THE DATABASE, NOT BY CODE: a BEFORE UPDATE trigger
+    # (migration cm21a1b2c3d4) raises it by one whenever a field of the
+    # comms identity snapshot changes -- telegram_id, language, timezone,
+    # is_active, credentials['email'] -- and pins it otherwise, so a value
+    # assigned here is overwritten. comms applies a snapshot only when its
+    # version is higher than the stored one. The ORM value goes stale after
+    # any UPDATE; core/events/sync.py re-reads it from the row together with
+    # the snapshot's fields before every send.
+    snapshot_version: Mapped[int] = mapped_column(
+        BigInteger,
+        default=1,
+        server_default="1",
+    )
+
     # -- Balance (Phase 6.1, TD-033) --
     # Cached value in EUR cents computed from user_ledger.
     # 1500 = €15.00. Do NOT modify directly -- use ledger transactions.
