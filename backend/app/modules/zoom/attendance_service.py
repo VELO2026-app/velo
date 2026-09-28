@@ -182,17 +182,44 @@ async def ingest_report_for_meeting(
 ) -> bool:
     """Pull both report variants, prefer the richer one, write every row to
     zoom_attendance_segments verbatim (the audit trail -- never filtered),
-    run the ladder, sum minutes, and decide every still-CONFIRMED STUDENT
-    booking on this meeting (including bookings with zero matched
-    segments -- a genuine no-show, decided via Zoom just as authoritatively
-    as an attended one).
+    run the ladder, sum minutes, and decide every still-CONFIRMED booking
+    of this practice before setting report_ingested_at.
+
+    Two kinds of decision, in this order:
+      1. Via Zoom: every CONFIRMED booking a STUDENT registrant of this
+         meeting points at -- including ones with zero matched segments, a
+         genuine no-show decided as authoritatively as an attended one.
+      2. Via the legacy proxy: every CONFIRMED booking still left, the ones
+         no registrant row points at.
+
+    WHAT THIS DOCSTRING USED TO GET WRONG (BE-41). It said step 1 alone
+    decided "every still-CONFIRMED STUDENT booking on this meeting". True
+    for zero SEGMENTS, false for zero REGISTRANTS: the loop walks
+    registrants, so a booking no registrant points at never entered it, and
+    once report_ingested_at was set the poller never looked at the practice
+    again -- the booking stayed CONFIRMED forever. The reachable way in: a
+    master blocks a student (masters/groups_service.py cancels the booking
+    without cancelling its registrant), unblocks him, he books again, and
+    create_registrant_for_booking reuses the old registrant row, still
+    pointing at the cancelled booking. Step 2 is the bound for that and for
+    any other way a booking ends up without a registrant: nothing CONFIRMED
+    outlives a successful ingest. It is not a wider matching ladder -- a
+    booking with no registrant gets the same proxy the deadline fallback
+    uses, never a Zoom no_show it cannot back.
 
     Returns True if the Zoom calls themselves succeeded (report_ingested_at
     is set), regardless of whether any/all bookings ended up attended or
-    no_show -- a real, possibly-empty answer is success. Returns False only
-    on a Zoom API failure, leaving report_ingested_at NULL for the next
-    poll cycle (or, eventually, the deadline fallback) to handle. Never
-    raises.
+    no_show -- a real, possibly-empty answer is success. Returns False on a
+    Zoom API failure, including a report whose pagination could not be
+    completed (zoom_client.get_participants_report), leaving
+    report_ingested_at NULL for the next poll cycle (or, eventually, the
+    deadline fallback) to handle. Never raises.
+
+    Zoom answers 404 / code 3001 when the meeting has no past instance
+    (nobody ever joined). That is a normal state of the product, not an
+    outage, so it is logged calmly -- but still returns False: whether 3001
+    can also mean "still running" or "report not ready yet" is unmeasured,
+    and closing the practice on it could erase a real verdict.
     """
     try:
         with_registrant_id = await get_participants_report(
@@ -202,6 +229,12 @@ async def ingest_report_for_meeting(
             zoom_meeting_id=zoom_meeting.zoom_meeting_id, include_registrant_id=False,
         )
     except ZoomAPIError as exc:
+        if _is_no_past_instance(exc):
+            logger.info(
+                "zoom_report_no_past_instance",
+                practice_id=str(practice.id),
+            )
+            return False
         logger.warning(
             "zoom_report_fetch_failed",
             practice_id=str(practice.id),
@@ -299,14 +332,43 @@ async def ingest_report_for_meeting(
             occurred_at=datetime.now(UTC),
         )
 
+    # Step 2 -- the bound. BEFORE the timestamp: once report_ingested_at is
+    # set the poller never selects this practice again.
+    unregistered = await _decide_remaining_via_proxy(practice, session)
+    if unregistered:
+        logger.info(
+            "zoom_report_unregistered_bookings_decided",
+            practice_id=str(practice.id),
+            bookings_decided=unregistered,
+        )
+
     zoom_meeting.report_ingested_at = datetime.now(UTC)
     logger.info(
         "zoom_report_ingested",
         practice_id=str(practice.id),
         segments=len(matches),
         bookings_decided=len(outcomes),
+        unregistered_bookings_decided=unregistered,
     )
     return True
+
+
+# Zoom's "Meeting does not exist" on the report endpoint: the meeting never
+# had a past instance (measured 2026-09-23: 404 / 3001 on a meeting where
+# people were registered but nobody joined).
+_ZOOM_NO_PAST_INSTANCE_CODE = 3001
+
+
+def _is_no_past_instance(exc: ZoomAPIError) -> bool:
+    """404 whose body carries code 3001. The body is parsed JSON or, when
+    Zoom's answer was not JSON, plain text (zoom_client._safe_body) -- only
+    a dict can carry the code."""
+    body = exc.body
+    return (
+        exc.status_code == 404
+        and isinstance(body, dict)
+        and body.get("code") == _ZOOM_NO_PAST_INSTANCE_CODE
+    )
 
 
 async def apply_legacy_proxy_fallback(
@@ -316,11 +378,13 @@ async def apply_legacy_proxy_fallback(
     """THE BOUND: decide every remaining CONFIRMED booking on this practice
     via the legacy join_at/checkin proxy, tagged legacy_proxy -- for a
     Zoom-tracked practice whose report never successfully ingested within
-    settings.zoom_attendance_decision_deadline_minutes. Closes the trap
-    named in the E21 plan: an empty/failed report is indistinguishable at a
-    glance from "not ready yet", so without this bound a booking could sit
-    undecided indefinitely, silently blocking feedback eligibility and
-    hours.
+    settings.zoom_attendance_decision_deadline_minutes. (The same decision,
+    through _decide_remaining_via_proxy, also closes a SUCCESSFUL ingest,
+    for bookings no registrant points at -- see ingest_report_for_meeting.)
+    Closes the trap named in the E21 plan: an empty/failed report is
+    indistinguishable at a glance from "not ready yet", so without this
+    bound a booking could sit undecided indefinitely, silently blocking
+    feedback eligibility and hours.
 
     Reuses bookings/service.py's resolve_bookings_via_legacy_proxy (the
     SAME logic _finalize_practice_core uses for non-Zoom-tracked practices)
@@ -328,6 +392,25 @@ async def apply_legacy_proxy_fallback(
     Projects the diary outcome for these bookings, since they were deferred
     at practice-finalize time and never got one. Returns the number of
     bookings decided.
+    """
+    decided = await _decide_remaining_via_proxy(practice, session)
+    if decided:
+        logger.info(
+            "zoom_attendance_deadline_fallback_applied",
+            practice_id=str(practice.id),
+            bookings_decided=decided,
+        )
+    return decided
+
+
+async def _decide_remaining_via_proxy(
+    practice: Practice,
+    session: AsyncSession,
+) -> int:
+    """Decide every CONFIRMED booking of this practice via the legacy proxy
+    and project their diary outcomes. Shared by the deadline fallback and
+    the tail of a successful ingest; each caller logs its own reason.
+    Returns the number of bookings decided.
     """
     from app.modules.bookings.service import resolve_bookings_via_legacy_proxy
 
@@ -361,9 +444,4 @@ async def apply_legacy_proxy_fallback(
             occurred_at=datetime.now(UTC),
         )
 
-    logger.info(
-        "zoom_attendance_deadline_fallback_applied",
-        practice_id=str(practice.id),
-        bookings_decided=len(outcomes),
-    )
     return len(outcomes)

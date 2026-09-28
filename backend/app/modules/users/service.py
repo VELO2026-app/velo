@@ -133,11 +133,13 @@ async def update_user(
     await session.flush()
 
     # Phase 6 / T0: re-sync the comms identity projection when a field
-    # of the user_upserted snapshot changed. `language` / `timezone`
+    # of the user_upserted snapshot was SENT. `language` / `timezone`
     # are columns, `email` lives in credentials -- all three arrive
-    # through this PATCH. The event is a full snapshot (idempotent),
-    # emitted in THIS transaction (ID-2); name/bio edits do not touch
-    # the projection and stay silent.
+    # through this PATCH. This filter only spares needless sends; whether
+    # the snapshot CHANGED is the database's answer (the snapshot_version
+    # trigger compares content): the same value sent again leaves the
+    # version and reaches comms as a replay. Emitted in THIS transaction
+    # (ID-2); name/bio edits do not touch the projection and stay silent.
     if {"language", "timezone", "email"} & updates.keys():
         await emit_user_upserted(session, user)
 

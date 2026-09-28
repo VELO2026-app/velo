@@ -318,12 +318,14 @@ async def create_booking(
     # booker is right here in the transaction context.
     from app.core.events.notify import emit_notification
     from app.core.events.reminders import (
+        BOOKED_ACT,
         format_event_time,
         schedule_booking_reminders,
     )
     when_text = format_event_time(practice.scheduled_at)
     await emit_notification(
         session,
+        idempotency_key=f"booking-confirmed:{booking.id}",
         type="booking.confirmed",
         target_type="user",
         target_value=str(user.id),
@@ -349,6 +351,7 @@ async def create_booking(
         practice_title=practice.title,
         master_name=master_name,
         scheduled_at=practice.scheduled_at,
+        act=BOOKED_ACT,
     )
 
     # E21 step E: create the Zoom registrant for this booking. Best-effort,
@@ -566,8 +569,9 @@ async def cancel_booking(
 
     # Comms (T1, dictionary §2): booking.cancelled_by_user is
     # addressed to the MASTER (velo expands the audience, ID-4), and
-    # the booker's pending reminder series is expired by booking_id
-    # correlation -- both in the cancellation's own transaction.
+    # the booker's pending reminder series is cancelled by its
+    # "booking:<id>" envelope correlation -- both in the cancellation's
+    # own transaction.
     from app.core.events.notify import emit_notification
     from app.core.events.reminders import (
         cancel_booking_reminders,
@@ -575,6 +579,7 @@ async def cancel_booking(
     )
     await emit_notification(
         session,
+        idempotency_key=f"booking-cancelled:{booking.id}",
         type="booking.cancelled_by_user",
         target_type="user",
         target_value=str(practice.master_id),

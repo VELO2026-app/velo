@@ -65,7 +65,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.comms import comms_request
+from app.core.comms import comms_request, read_comms_page
 from app.core.database import get_db_reader, get_db_session
 from app.core.exceptions import (
     BadRequestError,
@@ -204,8 +204,15 @@ def _peer_payload(user: User | None) -> dict[str, Any] | None:
     }
 
 
-def _keep_only_user_form_threads(payload: Any) -> None:
-    """Drop every thread from a comms list that is not a user-form DM.
+def _keep_only_user_form_threads(payload: dict[str, Any]) -> None:
+    """Drop every thread from a list page that is not a user-form DM.
+
+    `payload` is velo's OWN page, `{"threads": [...], "next_cursor": ...}`,
+    built by list_chats from what core/comms.py read_comms_page accepted --
+    never comms' response itself. Anything else is a programming error and
+    raises: an unexpected shape here must close the door, not open it (it
+    used to `return`, and a renamed key upstream sent the whole unfiltered
+    page out).
 
     WHY THIS EXISTS -- A PRIVACY LEAK, not tidying. comms' operator-scoped
     read returns `assignee == me` OR `(section thread AND assignee IS
@@ -292,16 +299,23 @@ def _keep_only_user_form_threads(payload: Any) -> None:
     #      visible to an operator CORRECTLY; comms does not know that this
     #      product has no support screen, and must not be taught to.
     """
-    if not isinstance(payload, dict):
-        return
-    threads = payload.get("threads")
+    threads = payload.get("threads") if isinstance(payload, dict) else None
     if not isinstance(threads, list):
-        return
+        raise TypeError(
+            "_keep_only_user_form_threads takes velo's list page "
+            "{'threads': [...]}, not a raw comms response"
+        )
     payload["threads"] = [t for t in threads if _is_user_form_row(t)]
 
 
-async def _attach_peers_from_comms(payload: Any, session: AsyncSession) -> None:
+async def _attach_peers_from_comms(
+    payload: dict[str, Any], session: AsyncSession,
+) -> None:
     """Stamp a `peer` display block onto every thread comms listed (P-1).
+
+    `payload` is velo's own page `{"threads": [...], ...}` (see
+    _keep_only_user_form_threads); any other shape raises instead of
+    silently enriching nothing.
 
     The comms list names the counterparty only as a bare `client` uuid:
     display identity is deliberately NOT comms' knowledge (ID-4 -- domain
@@ -362,11 +376,12 @@ async def _attach_peers_from_comms(payload: Any, session: AsyncSession) -> None:
     #      filter would look redundant to the next reviewer, and removing
     #      it would silently put `client` and `title` back on the wire.
     """
-    if not isinstance(payload, dict):
-        return
-    threads = payload.get("threads")
+    threads = payload.get("threads") if isinstance(payload, dict) else None
     if not isinstance(threads, list):
-        return
+        raise TypeError(
+            "_attach_peers_from_comms takes velo's list page "
+            "{'threads': [...]}, not a raw comms response"
+        )
 
     def _client_uuid(thread: Any) -> UUID | None:
         if not isinstance(thread, dict):
@@ -840,12 +855,18 @@ async def list_chats(
         if cursor is not None:
             params["cursor"] = cursor
         payload = await comms_request("GET", "/api/v1/threads", params=params)
+        # comms' page is READ, not forwarded: the response is velo's own
+        # page, built from the two things read_comms_page accepted, so no
+        # key of comms' reaches the caller unparsed -- and an unknown shape
+        # is a 502, not an unfiltered pass-through (see read_comms_page).
+        items, next_cursor = read_comms_page(payload, path="/api/v1/threads")
+        page: dict[str, Any] = {"threads": items, "next_cursor": next_cursor}
         # Privacy filter FIRST -- see _keep_only_user_form_threads. The
         # unclaimed support queue reaches every operator, and nothing about
         # it may be resolved, enriched or returned here.
-        _keep_only_user_form_threads(payload)
-        await _attach_peers_from_comms(payload, session)
-        return payload
+        _keep_only_user_form_threads(page)
+        await _attach_peers_from_comms(page, session)
+        return page
 
     if user.role == UserRole.ADMIN:
         # Mirrors _is_participant exactly -- listed and openable must be
@@ -983,9 +1004,18 @@ async def list_messages(
     params: dict[str, Any] = {"limit": limit}
     if cursor is not None:
         params["cursor"] = cursor
-    return await comms_request(
+    payload = await comms_request(
         "GET", f"/api/v1/threads/{thread_id}/messages", params=params,
     )
+    # READ, not forwarded (same form as list_chats): comms 3.0.0 pages the
+    # feed as {"items", "next_cursor"}; velo's contract with the frontend
+    # is {"messages", "next_cursor"} (frontend/src/api/chats.ts). Forwarding
+    # left the key renamed under the frontend and every open chat empty.
+    # An unknown shape is a 502 (read_comms_page), never a pass-through.
+    messages, next_cursor = read_comms_page(
+        payload, path="/api/v1/threads/{thread_id}/messages",
+    )
+    return {"messages": messages, "next_cursor": next_cursor}
 
 
 @router.post("/{thread_id}/read")

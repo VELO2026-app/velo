@@ -18,7 +18,10 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.events.reminders import schedule_master_practice_reminder
+from app.core.events.reminders import (
+    PUBLISHED_ACT,
+    schedule_master_practice_reminder,
+)
 from app.core.exceptions import BadRequestError
 from app.modules.practices.models import (
     AudienceKind,
@@ -332,6 +335,7 @@ async def generate_series_occurrences(
             master_user_id=str(child.master_id),
             practice_title=child.title,
             scheduled_at=start_utc,
+            act=PUBLISHED_ACT,
         )
 
     logger.info(

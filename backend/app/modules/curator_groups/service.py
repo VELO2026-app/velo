@@ -15,7 +15,7 @@
 import secrets
 from datetime import UTC, datetime
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import ColumnElement, Select, and_, case, delete, func, select
 from sqlalchemy.exc import IntegrityError
@@ -277,7 +277,7 @@ def _record_group_event(
     session: AsyncSession,
     *,
     data: dict[str, Any] | None = None,
-) -> None:
+) -> CuratorGroupEvent:
     """Append one event to a school's journal, in the caller's transaction.
 
     SYNCHRONOUS AND IN THE SAME TRANSACTION as the action it records, not
@@ -326,20 +326,26 @@ def _record_group_event(
     if data:
         payload.update(data)
 
-    session.add(
-        CuratorGroupEvent(
-            group_id=group_id,
-            actor_id=actor.id,
-            event=event.value,
-            data=payload,
-        )
+    # The id is minted HERE, not left to the column default: the default
+    # only fires at flush, and a caller that notifies about this event
+    # names the notification by the journal row (see _notify_group_event)
+    # before anything is flushed. Returned so it can.
+    row = CuratorGroupEvent(
+        id=uuid4(),
+        group_id=group_id,
+        actor_id=actor.id,
+        event=event.value,
+        data=payload,
     )
+    session.add(row)
+    return row
 
 
 async def _notify_group_event(
     session: AsyncSession,
     *,
     type: str,
+    journal_event_id: UUID,
     recipient_id: UUID,
     title: str,
     body: str,
@@ -348,6 +354,11 @@ async def _notify_group_event(
     actor_name: str,
 ) -> None:
     """Queue one school notification, in the caller's transaction (BE-25).
+
+    journal_event_id: the _record_group_event row of the same action. It
+    is the fact's identity and so the notification's idempotency key --
+    every one of these events has exactly one addressee, so the event is
+    the whole key.
 
     THE COMPANION OF _record_group_event, and deliberately shaped like it:
     same transaction, same call sites, no background task. A notification
@@ -377,6 +388,7 @@ async def _notify_group_event(
     """
     await emit_notification(
         session,
+        idempotency_key=f"curator-group-event:{journal_event_id}",
         type=type,
         target_type="user",
         target_value=str(recipient_id),
@@ -949,7 +961,7 @@ async def remove_curator_group_member(
             CuratorGroupMasterOffer.to_user_id == user_id,
         )
     )
-    _record_group_event(
+    journal = _record_group_event(
         group.id, actor, CuratorGroupEventKind.MEMBER_REMOVED, session,
         data=data,
     )
@@ -960,6 +972,7 @@ async def remove_curator_group_member(
     # visible, and nothing else would tell him.
     await _notify_group_event(
         session,
+        journal_event_id=journal.id,
         type="curator_group.member_removed",
         recipient_id=user_id,
         title="Вы больше не в школе",
@@ -1040,8 +1053,22 @@ async def curated_group_ids_for_practice(
     lever -- although in practice they are stopped earlier, by
     get_current_master on the endpoint.
 
+    THE KILLSWITCH IS READ HERE, NOT ONLY ON THE ROUTER (BE-43). This is
+    the entitlement itself, and cancel_service.py asks it directly -- so
+    with schools switched off a curator kept the right to cancel another
+    master's practice, because the flag was only ever checked by the
+    dependency on the two school routers. A killswitch on the routers
+    guards the surface, not the mechanism.
+
+    An early return rather than a branch around the body: "schools are
+    off" means "this person curates none of this practice's schools", and
+    an empty list already says exactly that to every caller.
+
     Reads only. No commit, no flush (P-01).
     """
+    if not settings.curator_groups_enabled:
+        return []
+
     stmt = (
         select(CuratorGroup.id)
         .join(
@@ -1855,7 +1882,7 @@ async def join_curator_group_by_token(
                 session.add(row)
                 await session.flush()
             relation = CuratorMemberKind.STUDENT.value
-            _record_group_event(
+            journal = _record_group_event(
                 group.id,
                 actor,
                 CuratorGroupEventKind.MEMBER_JOINED,
@@ -1874,6 +1901,7 @@ async def join_curator_group_by_token(
             # would document a state no caller can reach.
             await _notify_group_event(
                 session,
+                journal_event_id=journal.id,
                 type="curator_group.member_joined",
                 recipient_id=group.curator_user_id,
                 title="Новый участник школы",
@@ -2089,7 +2117,7 @@ async def offer_curator_group_transfer(
     # above already computed it for the reply, by the same
     # display_name(first, last) rule the journal uses. This is the one
     # target of four that costs no extra query.
-    _record_group_event(
+    journal = _record_group_event(
         group.id,
         actor,
         CuratorGroupEventKind.TRANSFER_OFFERED,
@@ -2103,6 +2131,7 @@ async def offer_curator_group_transfer(
     # school they did not already belong to.
     await _notify_group_event(
         session,
+        journal_event_id=journal.id,
         type="curator_group.transfer_offered",
         recipient_id=to_user_id,
         title="Вам предлагают школу",
@@ -2184,21 +2213,37 @@ async def accept_curator_group_transfer(
 ) -> dict:
     """Become the curator of this group. One transaction, seven steps.
 
-    THE ORDER IS THE CONTRACT (TZ 3.5), and every check happens BEFORE the
-    first mutation:
+    THE ORDER IS THE CONTRACT (TZ 3.5), and it changed once, in BE-42:
 
-      1. the offer exists and is addressed to the caller; the group is
-         active; the caller is a verified master right now; the caller has
-         no group of their own by this name
-      2. curator_user_id := caller
-      3. the caller's own member row is deleted (I-2: a curator is not a
+      1. the group is active and the caller has a relation to it
+      2. THE OFFER IS CLAIMED -- deleted and returned in one statement,
+         which is both the check and the first mutation (see below)
+      3. the caller is a verified master right now; the caller has no group
+         of their own by this name
+      4. curator_user_id := caller
+      5. the caller's own member row is deleted (I-2: a curator is not a
          member of their own group)
-      4. the previous curator gets a member row, kind='master', joined_at
+      6. the previous curator gets a member row, kind='master', joined_at
          = now()
-      5. the offer row is deleted
-      6. invite links and every other membership are left alone -- the
+      7. invite links and every other membership are left alone -- the
          tokens already in people's chats keep working
-      7. the reply is the group page as the NEW curator sees it
+      8. the reply is the group page as the NEW curator sees it
+
+    UNTIL BE-42 THIS DOCSTRING SAID "every check happens BEFORE the first
+    mutation", and it was right about what it was protecting: nothing was
+    written until the request had been judged. It stopped being true here
+    because ONE of those checks cannot be done by reading -- "is this offer
+    still mine to take" is only answered by taking it. The other two checks
+    still run before anything else is written, and the reason they do is
+    unchanged: see the name-collision paragraph below, which is the one
+    that paid for the rule.
+
+    THE NAME COLLISION IS CHECKED, NOT CAUGHT. UNIQUE (curator_user_id,
+    name) would raise on the rename-by-ownership at step 4 -- after which
+    more mutations would already be queued behind a broken transaction.
+    Asking first turns a rollback into a clean 409. The claim above does
+    not weaken this: on a clash the claim rolls back with everything else,
+    and the offer is still there afterwards.
 
     THE NAME COLLISION IS CHECKED IN STEP 1, NOT CAUGHT IN STEP 2. UNIQUE
     (curator_user_id, name) would raise on the rename-by-ownership at step
@@ -2228,8 +2273,40 @@ async def accept_curator_group_transfer(
     """
     group, _relation = await _relation_or_404(group_id, user_id, session)
 
-    transfer = await _pending_transfer(group.id, session)
-    if transfer is None or transfer.to_user_id != user_id:
+    # BE-42: CLAIMING THE OFFER IS THE FIRST MUTATION, and it is also the
+    # check. A plain SELECT here left a window between reading the offer
+    # and deleting it at the end: cancel_curator_group_transfer,
+    # remove_curator_group_member and leave_curator_group all drop the same
+    # row, and any of them landing inside that window used to leave accept
+    # finishing anyway -- the school changed hands after its offer had been
+    # withdrawn. Two simultaneous accepts by one heir were worse: both read
+    # the offer, both inserted the previous curator's member row, and the
+    # second died on uq_curator_group_member_group_user -- a 500 where a
+    # 404 belongs.
+    #
+    # DELETE ... RETURNING is "took it and confirmed it was mine to take"
+    # in one statement: the second caller blocks on the row lock, re-reads
+    # after the first commits, finds nothing and gets the honest 404. The
+    # idiom is already this module's own -- remove_curator_group_member and
+    # cancel_curator_group_transfer both delete-and-return, for the journal
+    # rather than for a race.
+    #
+    # THE READ IT REPLACED CHECKED TWO THINGS and so does this WHERE: an
+    # offer for this group, addressed to this caller. Both used to answer
+    # the same 404 with the same code, and both still do. Keeping the
+    # SELECT beside the DELETE would be two checks of one fact, and the
+    # next reader would assume each catches something the other misses.
+    claimed = (
+        await session.execute(
+            delete(CuratorGroupTransfer)
+            .where(
+                CuratorGroupTransfer.group_id == group.id,
+                CuratorGroupTransfer.to_user_id == user_id,
+            )
+            .returning(CuratorGroupTransfer.id)
+        )
+    ).first()
+    if claimed is None:
         raise NotFoundError("Transfer not found", code="transfer_not_found")
 
     if not await _has_master_capability(user_id, session):
@@ -2271,13 +2348,7 @@ async def accept_curator_group_transfer(
         )
     )
 
-    await session.execute(
-        delete(CuratorGroupTransfer).where(
-            CuratorGroupTransfer.group_id == group.id
-        )
-    )
-
-    _record_group_event(
+    journal = _record_group_event(
         group.id,
         actor,
         CuratorGroupEventKind.TRANSFER_ACCEPTED,
@@ -2295,6 +2366,7 @@ async def accept_curator_group_transfer(
     # The acceptor gets nothing: he is the actor.
     await _notify_group_event(
         session,
+        journal_event_id=journal.id,
         type="curator_group.transfer_accepted",
         recipient_id=previous_curator_id,
         title="Школа передана",
@@ -2375,7 +2447,7 @@ async def decline_curator_group_transfer(
         # anyway, and there is no school left to hold a journal.
         return
 
-    _record_group_event(
+    journal = _record_group_event(
         declined.group_id,
         actor,
         CuratorGroupEventKind.TRANSFER_DECLINED,
@@ -2390,6 +2462,7 @@ async def decline_curator_group_transfer(
     # The decliner gets nothing: he is the actor.
     await _notify_group_event(
         session,
+        journal_event_id=journal.id,
         type="curator_group.transfer_declined",
         recipient_id=offered_by,
         title="Передача отклонена",
@@ -2646,7 +2719,7 @@ async def offer_curator_group_master(
         return
 
     target_name = await _frozen_name(to_user_id, session)
-    _record_group_event(
+    journal = _record_group_event(
         group.id,
         actor,
         CuratorGroupEventKind.MASTER_OFFERED,
@@ -2655,6 +2728,7 @@ async def offer_curator_group_master(
     )
     await _notify_group_event(
         session,
+        journal_event_id=journal.id,
         type="curator_group.master_offered",
         recipient_id=to_user_id,
         title="Вас приглашают вести школу",
@@ -2730,7 +2804,7 @@ async def accept_curator_group_master_offer(
     await session.delete(offer)
     await session.flush()
 
-    _record_group_event(
+    journal = _record_group_event(
         group.id,
         actor,
         CuratorGroupEventKind.MEMBER_PROMOTED,
@@ -2738,6 +2812,7 @@ async def accept_curator_group_master_offer(
     )
     await _notify_group_event(
         session,
+        journal_event_id=journal.id,
         type="curator_group.master_offer_accepted",
         recipient_id=group.curator_user_id,
         title="Назначение принято",
@@ -2796,7 +2871,7 @@ async def decline_curator_group_master_offer(
         return
     curator_id, group_name = row
 
-    _record_group_event(
+    journal = _record_group_event(
         group_id,
         actor,
         CuratorGroupEventKind.MASTER_OFFER_DECLINED,
@@ -2805,6 +2880,7 @@ async def decline_curator_group_master_offer(
     )
     await _notify_group_event(
         session,
+        journal_event_id=journal.id,
         type="curator_group.master_offer_declined",
         recipient_id=curator_id,
         title="Назначение отклонено",
@@ -2882,6 +2958,18 @@ async def announce_published_practice(
         alone so the caller and the tests can assert the counts that the
         pair invariant is stated in.
     """
+    # BE-43: schools off means there is nobody to tell. Without this the
+    # fan-out ran on a path no router guards: a journal line in every
+    # target school and a notification to every member, about a practice
+    # the audience predicate then hides from all of them -- the message
+    # arrives and the link behind it is a 404.
+    #
+    # Early return, same shape and same reason as the audience_kind test
+    # below it: zero schools announced, zero people notified is the honest
+    # answer, not an error.
+    if not settings.curator_groups_enabled:
+        return (0, 0)
+
     if practice.audience_kind != AudienceKind.CURATOR_GROUPS.value:
         return (0, 0)
 
@@ -2958,6 +3046,7 @@ async def announce_published_practice(
     for recipient_id in sorted(recipients, key=str):
         await emit_notification(
             session,
+            idempotency_key=f"curator-practice-published:{practice.id}:{recipient_id}",
             type="curator_group.practice_published",
             target_type="user",
             target_value=str(recipient_id),

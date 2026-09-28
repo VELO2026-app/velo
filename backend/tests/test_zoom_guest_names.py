@@ -19,13 +19,13 @@
 # claim cannot be edited out; the only honest repair is to make it true, here.
 # The correction notice lives in migration gt21bc1d2e3f.
 #
-# WHAT IS UNDER TEST -- three DATABASE guarantees, none of which has any
-# application code behind it yet. GT-21 shipped step A: schema only, no writer,
-# /z/{code}/guest still hands out the shared registrant. That is exactly why
-# these have to be enforced by the database rather than by a caller: when the
-# generator and the claim path land in step B, "a blank name" and "two guests
-# with one name on one practice" must already be IMPOSSIBLE, not merely
-# un-issued.
+# WHAT IS UNDER TEST -- three DATABASE guarantees. They were written in step A,
+# before any writer existed, so that "a blank name" and "two guests with one
+# name on one practice" were IMPOSSIBLE, not merely un-issued, by the time the
+# writer arrived. Step B's claim path (zoom/service.py) now writes here and
+# leans on the uniqueness below for its retry; its own tests live in
+# test_zoom_guest_entry.py. These stay database-level on purpose: they hold
+# whatever the caller does.
 #
 #   1. CASCADE from practices. tests/helpers.py full_cleanup_range deletes NO
 #      zoom table by name -- zoom_meetings, zoom_registrants and

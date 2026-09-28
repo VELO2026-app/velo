@@ -401,6 +401,11 @@ export interface BlockStudentResponse {
   cancelled_bookings_count: number
 }
 
+export interface Body_public_practice_guest_enter_endpoint_z__code__guest_post {
+  name?: string | null
+  guest_name_id?: string | null
+}
+
 /** Booking with full practice details for single-booking view. Used by GET /api/v1/bookings/{id}. Returns the complete PracticeResponse so the frontend can render a full detail page (deep link from notification, master dashboard, etc.). */
 export interface BookingDetailResponse {
   id: string

@@ -973,9 +973,10 @@ async def block_student(
     touched_practice_ids: set[UUID] = set()
     # Comms (T1): blocking cancels + refunds future bookings, so their
     # pending reminder series must be expired too -- otherwise a
-    # refunded, blocked user still gets "Practice tomorrow". Correlated
-    # by booking_id (same per-booking cancel as bookings/service.py::
-    # cancel_booking); rides this transaction (ID-2). Lazy import keeps
+    # refunded, blocked user still gets "Practice tomorrow". Cancelled by
+    # the booking's "booking:<id>" envelope correlation (same per-booking
+    # cancel as bookings/service.py::cancel_booking); rides this
+    # transaction (ID-2). Lazy import keeps
     # masters -> core.events one-way at call time.
     from app.core.events.reminders import cancel_booking_reminders
 

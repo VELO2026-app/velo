@@ -3,7 +3,7 @@
 # =============================================================================
 #
 # ONE way to say "notify" from domain code: emit_notification() builds
-# a notification_request document per the frozen comms 3c contract and
+# a notification_request document per the comms protocol 3.0.0 and
 # hands it to the transactional outbox (emit_event, ID-2) -- the
 # notification exists exactly when the domain change commits.
 #
@@ -25,18 +25,27 @@
 #     template variables; dates as pre-formatted strings (arch §2.3 --
 #     datetime does not survive the wire).
 #
-# idempotency_key: minted here as a uuid4 hex -- stable inside the
-# outbox row, so at-least-once relay replays collapse in comms
-# (partial unique index), while every logical request stays unique.
+# idempotency_key: the identity of the DOMAIN FACT, passed by the emit
+# site (required) -- e.g. "booking-confirmed:<booking_id>". comms holds
+# one job per key FOREVER (unique index, whatever the job's outcome): the
+# same key with the same bytes is the same job, the same key with other
+# bytes is refused as a conflict. So a key names one fact, and a fact
+# that can legitimately happen again (a practice moved twice) carries the
+# identity of the act in its key -- see core/events/reminders.py. A fan-out
+# (one fact, N recipients) puts the recipient in the key.
 #
-# CHANNELS: ["in_app", "telegram"] for every velo type (approved plan
-# fork 7, channels) -- the bell always gets the row; telegram delivers for real once
-# CHANNELS_MODE=real.
+# CHANNELS and PRIORITY are not ours to send (comms protocol 3.0.0): the
+# profile routes each type to its channels (comms-profile/types.yaml),
+# and the request's field set is closed -- a request that still carried
+# either would be refused at intake.
+#
+# correlation: the product's own opaque reference, stored untouched by
+# comms; reminder_cancel matches it by EQUALITY. comms never reads the
+# letter (title/body/action_data) to find a job.
 # =============================================================================
 
 from datetime import datetime
 from typing import Any
-from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,8 +56,10 @@ from app.core.events.service import (
     emit_event,
 )
 
-# Every velo notification rings the bell and (in real mode) telegram.
-DEFAULT_CHANNELS = ["in_app", "telegram"]
+# comms bounds both opaque strings of the envelope to 1..200 characters.
+# Checked HERE so a bad key names its emit site, instead of surfacing as
+# an intake rejection after the outbox and the relay.
+ENVELOPE_STRING_MAX = 200
 
 # Communication-audience target values (comms resolves over its synced
 # contact book; group keys mirror core/events/service.py sync keys).
@@ -57,26 +68,40 @@ TARGET_GROUP_ADMINS = ("group", "admins")
 TARGET_GROUP_MASTERS = ("group", "masters")
 
 
+def _envelope_string(name: str, value: str) -> str:
+    """Refuse an envelope string comms would refuse (1..200 characters)."""
+    if not isinstance(value, str) or not 1 <= len(value) <= ENVELOPE_STRING_MAX:
+        raise ValueError(
+            f"{name} must be a string of 1..{ENVELOPE_STRING_MAX} "
+            f"characters, got {value!r}"
+        )
+    return value
+
+
 async def emit_notification(
     session: AsyncSession,
     *,
+    idempotency_key: str,
     type: str,
     target_type: str,
     target_value: str,
     title: str,
     body: str,
     action_data: dict[str, Any] | None = None,
-    priority: int = 5,
     scheduled_at: datetime | None = None,
     expiry_at: datetime | None = None,
-    channels: list[str] | None = None,
+    correlation: str | None = None,
 ) -> OutboxEvent:
     """Queue one notification_request in the caller's transaction.
 
     Args:
         session: The caller's read-write session (commit is the
             caller's; the event lives or dies with the domain change).
-        type: Profile dictionary type key (e.g. "booking.confirmed").
+        idempotency_key: The identity of the domain fact (1..200
+            chars). Repeating the fact must repeat the key; two facts
+            must never share one (see the module header).
+        type: Profile dictionary type key (e.g. "booking.confirmed");
+            the profile routes it to its channels.
         target_type: "user" | "group" | "all".
         target_value: Bare target: user uuid string, group key, "*".
         title: Stored fallback title (pre-rendered, shown in the
@@ -84,26 +109,27 @@ async def emit_notification(
         body: Stored fallback body (same rules).
         action_data: Deep-link intent + scalar template variables;
             datetimes must already be formatted strings.
-        priority: Queue priority (comms default 5; reminders use 2).
-        scheduled_at: Future send time -- this is how a REMINDER is
-            expressed on the frozen contract ("a reminder is just a
-            Notification with a FUTURE scheduled_at").
+        scheduled_at: "Not before" -- this is how a REMINDER is
+            expressed ("a reminder is just a Notification with a
+            FUTURE scheduled_at").
         expiry_at: TTL; for reminders defaults to the anchor at the
             call site.
-        channels: Delivery channels; defaults to DEFAULT_CHANNELS.
+        correlation: The product's reference for reminder_cancel
+            (1..200 chars), matched by equality. None = the job is never
+            cancelled; the field is then absent from the envelope.
 
     Returns:
         The pending OutboxEvent row.
     """
     data: dict[str, Any] = {
-        "idempotency_key": uuid4().hex,
+        "idempotency_key": _envelope_string(
+            "idempotency_key", idempotency_key,
+        ),
         "type": type,
         "target_type": target_type,
         "target_value": target_value,
         "title": title,
         "body": body,
-        "channels": list(channels) if channels else list(DEFAULT_CHANNELS),
-        "priority": priority,
     }
     if action_data is not None:
         data["action_data"] = action_data
@@ -111,6 +137,8 @@ async def emit_notification(
         data["scheduled_at"] = scheduled_at.isoformat()
     if expiry_at is not None:
         data["expiry_at"] = expiry_at.isoformat()
+    if correlation is not None:
+        data["correlation"] = _envelope_string("correlation", correlation)
     return await emit_event(session, EVENT_NOTIFICATION_REQUEST, data)
 
 
@@ -118,27 +146,31 @@ async def emit_reminder_cancel(
     session: AsyncSession,
     *,
     types: list[str],
-    correlation_key: str,
-    correlation_value: str,
+    correlation: str,
     target_type: str | None = None,
     target_value: str | None = None,
 ) -> OutboxEvent:
     """Queue a reminder_cancel in the caller's transaction.
 
-    Expires the PENDING reminders whose action_data[correlation_key]
-    matches -- naturally idempotent on the comms side (a no-match set
-    is a zero-row update). Target fields go together or not at all
-    (wire rule).
+    Cancels the jobs of these types that were sent with EXACTLY this
+    envelope correlation (an equality test on an opaque string; comms
+    never reads the letter). One job has one correlation, so a job is
+    cancelled along one axis only -- a reminder the product may need to
+    cancel for two reasons is cancelled by the caller once per job,
+    along its own correlation. Naturally idempotent on the comms side
+    (a no-match set is a zero-row update). Target fields go together or
+    not at all (wire rule).
     """
-    data: dict[str, Any] = {
-        "types": list(types),
-        "correlation_key": correlation_key,
-        "correlation_value": correlation_value,
-    }
+    if not types:
+        raise ValueError("reminder_cancel needs at least one type")
     if (target_type is None) != (target_value is None):
         raise ValueError(
             "reminder_cancel target fields go together or not at all"
         )
+    data: dict[str, Any] = {
+        "types": list(types),
+        "correlation": _envelope_string("correlation", correlation),
+    }
     if target_type is not None:
         data["target_type"] = target_type
         data["target_value"] = target_value
