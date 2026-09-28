@@ -1004,9 +1004,18 @@ async def list_messages(
     params: dict[str, Any] = {"limit": limit}
     if cursor is not None:
         params["cursor"] = cursor
-    return await comms_request(
+    payload = await comms_request(
         "GET", f"/api/v1/threads/{thread_id}/messages", params=params,
     )
+    # READ, not forwarded (same form as list_chats): comms 3.0.0 pages the
+    # feed as {"items", "next_cursor"}; velo's contract with the frontend
+    # is {"messages", "next_cursor"} (frontend/src/api/chats.ts). Forwarding
+    # left the key renamed under the frontend and every open chat empty.
+    # An unknown shape is a 502 (read_comms_page), never a pass-through.
+    messages, next_cursor = read_comms_page(
+        payload, path="/api/v1/threads/{thread_id}/messages",
+    )
+    return {"messages": messages, "next_cursor": next_cursor}
 
 
 @router.post("/{thread_id}/read")

@@ -318,7 +318,14 @@ class TestAdminList:
         )
 
         # LISTED == OPENABLE. This is the property the old admin list broke.
-        monkeypatch.setattr(_SEAM, AsyncMock(return_value={"messages": []}))
+        # The feed mock is comms 3.0.0's page. It used to be
+        # {"messages": []} -- comms 2.0.0's feed, right while the proxy
+        # forwarded it; 3.0.0 names the list `items` and always sends
+        # next_cursor, and the proxy now reads that exact shape (anything
+        # else is a 502), so the old mock would no longer open anything.
+        monkeypatch.setattr(
+            _SEAM, AsyncMock(return_value={"items": [], "next_cursor": None}),
+        )
         for thread_id in ids:
             opened = await client.get(
                 f"{CHATS_URL}/{thread_id}/messages",

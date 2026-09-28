@@ -710,16 +710,20 @@ class TestAdminThreadMessages:
             comms_thread_id=thread_id,
         )
 
-        feed = {
-            "messages": [
-                {
-                    "id": str(uuid4()), "thread_id": str(thread_id),
-                    "sender": student["user"]["id"], "body": "[Тема] Помогите",
-                    "created_at": THREAD_CREATED_AT,
-                },
-            ],
-            "next_cursor": None,
-        }
+        # comms 3.0.0's feed page. This used to be {"messages": [...]} and
+        # the test asserted the response EQUAL to it -- true while the
+        # proxy forwarded comms' body; 3.0.0 renamed the key to `items`, the
+        # forwarded body lost the key the frontend reads, and every support
+        # thread opened empty. The proxy now builds velo's own
+        # {"messages", "next_cursor"} from the page it read.
+        rows = [
+            {
+                "id": str(uuid4()), "thread_id": str(thread_id),
+                "sender": student["user"]["id"], "body": "[Тема] Помогите",
+                "created_at": THREAD_CREATED_AT,
+            },
+        ]
+        feed = {"items": rows, "next_cursor": None}
         fake = AsyncMock(return_value=feed)
         monkeypatch.setattr(_COMMS_SEAM, fake)
 
@@ -728,7 +732,7 @@ class TestAdminThreadMessages:
             headers=auth_headers(admin["session_token"]),
         )
         assert resp.status_code == 200
-        assert resp.json() == feed
+        assert resp.json() == {"messages": rows, "next_cursor": None}
         assert fake.await_args.args[:2] == (
             "GET", f"/api/v1/threads/{thread_id}/messages",
         )

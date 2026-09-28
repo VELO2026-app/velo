@@ -335,9 +335,16 @@ async def get_admin_support_messages(
     params: dict[str, Any] = {"limit": limit}
     if cursor is not None:
         params["cursor"] = cursor
-    return await comms_request(
+    payload = await comms_request(
         "GET", f"/api/v1/threads/{thread_id}/messages", params=params,
     )
+    # READ, not forwarded -- see chats/router.py list_messages: comms pages
+    # as {"items", ...}, the frontend reads {"messages", ...}
+    # (frontend/src/api/support.ts); an unknown shape is a 502.
+    messages, next_cursor = read_comms_page(
+        payload, path="/api/v1/threads/{thread_id}/messages",
+    )
+    return {"messages": messages, "next_cursor": next_cursor}
 
 
 async def send_admin_support_message(
