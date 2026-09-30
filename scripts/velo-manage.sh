@@ -2022,6 +2022,68 @@ case "${1:-}" in
         esac
         ;;
 
+    # A service's own diagnostic/repair verb, run on ONE named service.
+    #
+    # `velo drain <service> [--apply]` -- the protocol-window verb of a
+    # service (comms 3.0.0: count the rows a migration refuses on; with
+    # --apply, stop, dump and delete them). Modelled on `velo logs
+    # <service>`, NOT walked over the registry like start/stop: the service
+    # has to be NAMED, because --apply deletes data and a destructive
+    # command should be hard to type by accident.
+    #
+    # THE SERVICE'S EXIT CODE IS OURS, UNCHANGED. comms speaks 0 = clean,
+    # 1 = rows to delete, 2 = cannot check (and for --apply: 0 = clean now,
+    # 2 = not started). svc_run_verb would fold every non-zero into 1 and
+    # print "failed" -- right for start/stop under their aggregate, wrong
+    # here, where 1 is an answer and not a failure. So this path calls the
+    # CLI itself, and velo's OWN refusals use sysexits codes that cannot be
+    # mistaken for the service's: 64 = usage (no or unknown service),
+    # 69 = unavailable (not installed, no such verb, dispatcher unreadable).
+    #
+    # THE TERMINAL IS THE SERVICE'S: `bash` inherits our stdin, so the
+    # service's own confirmation (comms asks for `yes`) is typed by the
+    # person. velo feeds nothing and has no non-interactive bypass.
+    drain)
+        target="${2:-}"
+        svc_match=""
+        for record in "${VELO_SERVICES[@]}"; do
+            [ "$(svc_field "$record" 5)" = "internal" ] && continue
+            if [ "$(svc_field "$record" 1)" = "$target" ]; then
+                svc_match="$record"
+                break
+            fi
+        done
+        if [ -z "$svc_match" ]; then
+            echo "Usage: velo drain <service> [--apply]   (service: $(
+                for record in "${VELO_SERVICES[@]}"; do
+                    [ "$(svc_field "$record" 5)" = "internal" ] && continue
+                    printf '%s ' "$(svc_field "$record" 1)"
+                done
+            ))"
+            exit 64
+        fi
+        drain_dir=$(svc_field "$svc_match" 3)
+        drain_cli=$(svc_field "$svc_match" 5)
+        if ! svc_installed "$svc_match"; then
+            echo -e "${YELLOW}⊘ $target: not installed on this box${NC}"
+            exit 69
+        fi
+        verb_supported "$svc_match" drain; drain_rc=$?
+        if [ "$drain_rc" -eq 3 ]; then
+            echo -e "${YELLOW}⚠ $target: could not read the lifecycle verbs from${NC}"
+            echo -e "${YELLOW}  $drain_dir/$drain_cli (see svc_verbs)${NC}"
+            exit 69
+        fi
+        if [ "$drain_rc" -ne 0 ]; then
+            echo -e "${YELLOW}⊘ $target: no 'drain' verb${NC}"
+            echo "  $target implements: $(svc_verbs "$drain_dir/$drain_cli" | tr '\n' ' ')"
+            exit 69
+        fi
+        shift 2
+        bash "$drain_dir/$drain_cli" drain "$@"
+        exit $?
+        ;;
+
     # === Testing & Linting ===
 
     test)
@@ -2649,6 +2711,13 @@ case "${1:-}" in
         echo "Logs:"
         echo "  logs [app|db|redis|frontend|<service>] — View logs (default: app)"
         echo "                        Product names first; then any registry service."
+        echo "  drain <service> [--apply] — The service's protocol-window check."
+        echo "                        Without --apply it only counts; with --apply the"
+        echo "                        service asks for 'yes', dumps and deletes."
+        echo "                        Exit code is the service's own (comms: 0 clean,"
+        echo "                        1 rows to delete, 2 cannot check); velo's own:"
+        echo "                        64 = no/unknown service, 69 = not installed or"
+        echo "                        no such verb."
         echo ""
         echo "Keys:"
         echo "  rotate-key <service> — Replace a compromised GitHub deploy key."

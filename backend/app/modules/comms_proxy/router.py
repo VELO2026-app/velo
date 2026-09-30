@@ -8,9 +8,9 @@
 # forwards to the internal comms API via core/comms.py.
 #
 #   GET  /api/v1/notifications                  -> comms inbox (keyset;
-#        ?limit=&cursor=)                          mirror of the frozen
-#                                                  3b form: {items,
-#                                                  next_cursor, unread})
+#        ?limit=&cursor=)                          READ, not forwarded:
+#                                                  velo builds {items,
+#                                                  next_cursor, unread}
 #   GET  /api/v1/notifications/unread-count     -> {"unread": N}
 #   POST /api/v1/notifications/read-all         -> {"unread": 0}
 #   POST /api/v1/notifications/{delivery_id}/read -> {"unread": N}
@@ -29,15 +29,14 @@
 # another one); the prefs body rejects unknown keys with 422 (pydantic
 # extra="forbid").
 #
-# SCHEDULE CONVERSION (approved plan fork 4, Master-chat 2026-07-28):
-# comms stores a QUIET window ("do not deliver from/to"); the velo UI
-# speaks a DELIVERY window ("deliver from X to Y"). The
-# proxy owns the inversion:
-#     ui.from = quiet.to      ui.to = quiet.from      days pass through
-# (quiet [22:00 -> 09:00] <=> deliver [09:00 -> 22:00]). Categories
-# and timezone pass through untouched. KNOWN LIMIT (v1, accepted): a
-# "no delivery at all on day D" cannot be expressed by one window --
-# days keep the comms semantics of window-start days.
+# SCHEDULE CONVERSION: the screen's one pair of delivery hours plus a set
+# of days <-> comms' list of ALLOWED-delivery periods. There is NO
+# inversion of quiet hours any more -- the rules, their edge cases and
+# their one known ceiling live in the code, not here:
+# _delivery_to_periods (screen -> comms) and _periods_to_delivery
+# (comms -> screen), under "Screen <-> comms schedule translation" below.
+# Read those bodies; this line describes nothing they do. Categories and
+# timezone pass through untouched.
 #
 # FAILURE MODEL: comms down -> 502/504 from core/comms.py; velo keeps
 # running (the bell degrades, domains do not).
@@ -50,7 +49,7 @@ import structlog
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.core.comms import comms_request
+from app.core.comms import comms_request, read_comms_counter, read_comms_page
 from app.core.exceptions import BadRequestError
 from app.modules.auth.dependencies import get_current_user
 from app.modules.users.models import User
@@ -96,7 +95,9 @@ def _prefs_path(user: User) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Inbox / badge (frozen 3b forms, forwarded verbatim)
+# Inbox / badge. The inbox page is READ (below); the three badge answers,
+# {"unread": N}, are forwarded -- their shape was checked against comms
+# v3.0.0 and has not changed.
 # ---------------------------------------------------------------------------
 
 
@@ -107,12 +108,25 @@ async def list_notifications(
     cursor: str | None = Query(default=None),
     user: User = Depends(get_current_user),
 ) -> Any:
-    """The in-app bell: newest-first keyset page + badge, 3b form."""
+    """The in-app bell: newest-first keyset page + badge.
+
+    READ, not forwarded (same form as the thread lists and feeds): comms
+    3.0.0's page plus `unread`, rebuilt as velo's own {items, next_cursor,
+    unread} -- so no key of comms' reaches the frontend unparsed, and an
+    unknown shape is a 502 (read_comms_page / read_comms_counter), never a
+    pass-through. The items go as they came: the page is judged, not its
+    rows (they are the recipient's own). In 3.0.0 they carry no `priority`
+    -- the protocol dropped it.
+    """
     _reject_recipient_override(request)
     params: dict[str, Any] = {"limit": limit}
     if cursor is not None:
         params["cursor"] = cursor
-    return await comms_request("GET", _inbox_path(user), params=params)
+    payload = await comms_request("GET", _inbox_path(user), params=params)
+    path = "/api/v1/recipients/{recipient_id}/inbox"
+    items, next_cursor = read_comms_page(payload, path=path)
+    unread = read_comms_counter(payload, "unread", path=path)
+    return {"items": items, "next_cursor": next_cursor, "unread": unread}
 
 
 @router.get("/unread-count")

@@ -39,7 +39,12 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.comms import comms_request, read_comms_page
+from app.core.comms import (
+    comms_request,
+    message_key,
+    new_request_key,
+    read_comms_page,
+)
 from app.core.exceptions import NotFoundError
 from app.modules.support.models import SupportThread
 from app.modules.users.models import User
@@ -104,6 +109,19 @@ async def open_support_thread(
     """
     section_id = await get_support_section_id()
 
+    # KEY PER REQUEST, NEVER A STABLE ONE (comms 3.0.0 requires the header
+    # here). A replay of a key answers `"created": True` whatever the
+    # thread's age -- comms' create_thread, the flag belongs to the
+    # creating request -- so a key derived from the pair would make every
+    # later open of the same conversation a "conversation started" and
+    # signal a new support thread again. The pair itself is deduplicated by comms
+    # (create-or-get), which is what makes a fresh key per request safe.
+    #
+    # TWO KEY RULES IN THIS MODULE, ON PURPOSE: opening takes a key per
+    # request (above), a message takes the CLIENT's key when it sends one
+    # (send_support_message). They answer different questions -- `created`
+    # must stay truthful, and "one intent, one message" lives in the
+    # client. Making them one rule breaks one of the two.
     payload = await comms_request(
         "POST",
         "/api/v1/threads",
@@ -114,6 +132,7 @@ async def open_support_thread(
             "kind": "dm",
             "title": topic,
         },
+        idempotency_key=new_request_key("support-open"),
     )
     comms_thread_id = UUID(str(payload["id"]))
     created = bool(payload.get("created"))
@@ -180,7 +199,12 @@ async def open_support_thread(
 
 
 async def send_support_message(
-    session: AsyncSession, *, user: User, topic: str | None, body: str,
+    session: AsyncSession,
+    *,
+    user: User,
+    topic: str | None,
+    body: str,
+    idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     """Deliver one message into the caller's OWN support thread.
 
@@ -211,6 +235,7 @@ async def send_support_message(
         "POST",
         f"/api/v1/threads/{pointer.comms_thread_id}/messages",
         json={"sender": str(user.id), "body": text},
+        idempotency_key=message_key(user.id, idempotency_key),
     )
 
 
@@ -348,7 +373,12 @@ async def get_admin_support_messages(
 
 
 async def send_admin_support_message(
-    session: AsyncSession, *, admin: User, thread_id: UUID, body: str,
+    session: AsyncSession,
+    *,
+    admin: User,
+    thread_id: UUID,
+    body: str,
+    idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     """Reply as this admin. Unlike reading, WRITE-authz is not ours to
     grant: comms' can_post_message admits only the thread's client or its
@@ -364,6 +394,7 @@ async def send_admin_support_message(
         f"/api/v1/threads/{thread_id}/messages",
         json={"sender": str(admin.id), "body": body},
         forward_403=True,
+        idempotency_key=message_key(admin.id, idempotency_key),
     )
 
 
@@ -372,8 +403,14 @@ async def claim_admin_support_thread(
 ) -> dict[str, Any]:
     """Claim an unclaimed thread -- the act that grants the right to
     reply (comms' can_post_message admits the assignee; claiming is how
-    an admin becomes it). Returns comms' own {claimed, thread} verbatim:
-    `claimed=False` means someone else won the race, not an error.
+    an admin becomes it). Returns comms' own {claimed, thread} verbatim.
+
+    comms 3.0.0 claims IDEMPOTENTLY BY OUTCOME (its messaging.py claim):
+    `claimed` is always true and means "the thread is yours now" -- a
+    repeated claim of your own thread is true again, not an error. A
+    thread held by ANOTHER operator is a 409, class `conflict`, which
+    core/comms.py forwards with comms' message as the detail. There is no
+    `claimed: false` any more; nothing here branches on one.
     """
     await _require_support_thread(session, thread_id)
     return await comms_request(

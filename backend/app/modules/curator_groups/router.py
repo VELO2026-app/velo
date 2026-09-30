@@ -74,6 +74,7 @@ from app.modules.curator_groups.schemas import (
     PaginatedCuratorGroupMastersResponse,
     PaginatedCuratorGroupMembersResponse,
     PaginatedCuratorGroupReviewsResponse,
+    SchoolStudentProfileResponse,
     UpdateCuratorGroupRequest,
 )
 from app.modules.curator_groups.service import (
@@ -106,6 +107,9 @@ from app.modules.curator_groups.service import (
     remove_member_preview,
     revoke_curator_group_invite,
     update_curator_group,
+)
+from app.modules.curator_groups.student_profile_service import (
+    get_school_student_profile,
 )
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.listing_service import list_public_practices
@@ -481,6 +485,43 @@ async def list_curator_group_reviews_endpoint(
         limit=limit,
         offset=offset,
     )
+
+
+@router.get(
+    "/me/curator-groups/{group_id}/students/{user_id}",
+    response_model=SchoolStudentProfileResponse,
+)
+async def get_school_student_profile_endpoint(
+    group_id: UUID,
+    user_id: UUID,
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_reader),
+) -> SchoolStudentProfileResponse:
+    """One student of this school, as the school sees them.
+
+    Declared beside the two BE-24 feeds rather than at the end of the
+    module: they read the same practices through the same audience clause,
+    and a reader looking for what a school knows about its people should
+    find the three together. No path ambiguity either way --
+    `/students/{user_id}` shares no prefix with `/members/{user_id}`.
+
+    THE KILLSWITCH IS NOT MENTIONED HERE BECAUSE IT IS ALREADY ON THE
+    ROUTER. BE-43 added early returns inside two service functions, and
+    the reason was that both were reached from OUTSIDE the two school
+    routers; this endpoint is on one of them, so
+    _require_curator_groups_enabled answers first and a second check would
+    be a second place to keep true.
+
+    Curator and every master of the school, same content for both (owner
+    ruling, 24 September). Everyone else meets the same 404 -- except a
+    master whose own verification was revoked, who is refused by
+    get_current_master with a 403 before this runs.
+    """
+    user, _profile = master_tuple
+    profile = await get_school_student_profile(
+        user.id, group_id, user_id, session,
+    )
+    return SchoolStudentProfileResponse(**profile)
 
 
 @router.delete(

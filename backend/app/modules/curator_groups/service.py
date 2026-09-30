@@ -2782,8 +2782,54 @@ async def accept_curator_group_master_offer(
     """
     group, _relation = await _relation_or_404(group_id, user_id, session)
 
-    offer = await _master_offer_row(group.id, user_id, session)
-    if offer is None:
+    # BE-81: THE OFFER IS CLAIMED, NOT READ, and the claim is the first
+    # mutation. A plain SELECT here left a window between it and the writes
+    # below, and THREE concurrent operations reach into that window --
+    # every one of them deletes this same offer row:
+    #
+    #   remove_curator_group_member -- takes the member row with it, so the
+    #     write below met None and answered 500;
+    #   leave_curator_group -- the same, by the appointee's own hand;
+    #   decline_curator_group_master_offer -- leaves the member row alone,
+    #     so there was no error at all: the refusal committed and the
+    #     promotion went through on top of it. Measured, not deduced -- on
+    #     the old order that race answered 204 and left kind='master'.
+    #
+    # DELETE ... RETURNING is "took it and confirmed it was mine to take"
+    # in one statement. THE IDIOM IS THE SIBLING FUNCTION'S:
+    # decline_curator_group_master_offer does exactly this delete over
+    # exactly this pair of columns, one screen below.
+    #
+    # THE CLAIM IS ON THE OFFER AND THE ROW IT PROTECTS IS THE MEMBERSHIP.
+    # That works only because all three competitors touch THIS row too:
+    # each must meet the lock this statement already holds before it can
+    # commit. Should any of them ever stop dropping the offer, the window
+    # reopens here -- that is the thing to check before changing any of the
+    # four.
+    #
+    # THE DOCSTRING'S PROMISE THAT A REFUSED OFFER SURVIVES NOW DEPENDS ON
+    # THE TRANSACTION, NOT ON THIS ORDER. Before BE-81 the offer was
+    # deleted last, so a ForbiddenError below simply never reached it; now
+    # it is deleted first and survives only because get_db_session rolls
+    # the request back on an exception (P-01). This function does not hold
+    # that invariant by itself. A test pins it --
+    # test_curator_master_offer_race.py asserts that master_required leaves
+    # the offer in place -- because the day somebody commits mid-way here,
+    # nothing else would notice.
+    #
+    # A dark school is refused earlier still, by _relation_or_404, before
+    # this statement runs at all.
+    claimed = (
+        await session.execute(
+            delete(CuratorGroupMasterOffer)
+            .where(
+                CuratorGroupMasterOffer.group_id == group.id,
+                CuratorGroupMasterOffer.to_user_id == user_id,
+            )
+            .returning(CuratorGroupMasterOffer.id)
+        )
+    ).first()
+    if claimed is None:
         raise NotFoundError("Offer not found", code="master_offer_not_found")
 
     if not await _has_master_capability(user_id, session):
@@ -2799,9 +2845,21 @@ async def accept_curator_group_master_offer(
     # remove_curator_group_member and leave_curator_group -- rather than
     # discovered dangling here. A branch under an unreachable state would
     # document the impossible; this comment is what a reader needs instead.
+    #
+    # UNTIL BE-81 THAT REASONING WAS SEQUENTIAL AND ONLY SEQUENTIAL. It was
+    # true of one request at a time and said nothing about two: a removal
+    # committing between the relation check and this line left member as
+    # None and the next line answered 500. Nothing held the row -- there is
+    # no with_for_update anywhere in this module and the isolation level is
+    # READ COMMITTED.
+    #
+    # THE UNREACHABILITY NOW RESTS ON THE CLAIM ABOVE, not on the order of
+    # calls: taking the offer row first makes any concurrent removal wait
+    # for this transaction, because removal drops the same offer. The
+    # branch is still absent for the same reason as before, and now the
+    # reason survives a second request arriving mid-flight.
     member = await _membership_row(group.id, user_id, session)
     member.kind = CuratorMemberKind.MASTER.value
-    await session.delete(offer)
     await session.flush()
 
     journal = _record_group_event(

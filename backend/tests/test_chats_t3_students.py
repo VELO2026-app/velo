@@ -67,6 +67,23 @@ THIRD_THREAD_ID = "cccccccc-8976-4000-8000-000000000003"
 THREAD_CREATED_AT = "2026-08-02T09:15:00+00:00"
 
 
+def _sent_message() -> dict:
+    """POST /threads/{id}/messages as comms 3.0.0 answers it (_message_out).
+
+    BE-89: the send mocks here used to answer {"id": ...} alone -- enough
+    while every test asserted only the request, since velo forwards the
+    send's body unread; but not a shape comms has ever sent, so a test that
+    one day reads the body would pass on a message that cannot exist.
+    """
+    return {
+        "id": str(uuid4()),
+        "thread_id": str(uuid4()),
+        "sender": str(uuid4()),
+        "body": "hello",
+        "created_at": "2026-09-30T10:00:00+00:00",
+    }
+
+
 def _thread_payload(created: bool = True, thread_id: str = THREAD_ID) -> dict:
     """The frozen 3b create response, plus the additive `created` flag."""
     return {
@@ -424,7 +441,7 @@ class TestMasterInitiatedChat:
             headers=auth_headers(master["session_token"]),
         )
 
-        fake = AsyncMock(return_value={"id": str(uuid4())})
+        fake = AsyncMock(return_value=_sent_message())
         monkeypatch.setattr(_SEAM, fake)
         for actor in (master, student):
             resp = await client.post(

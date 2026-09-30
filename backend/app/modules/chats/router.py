@@ -59,13 +59,19 @@ from typing import Any
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Header, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.comms import comms_request, read_comms_page
+from app.core.comms import (
+    IDEMPOTENCY_HEADER,
+    comms_request,
+    message_key,
+    new_request_key,
+    read_comms_page,
+)
 from app.core.database import get_db_reader, get_db_session
 from app.core.exceptions import (
     BadRequestError,
@@ -559,6 +565,13 @@ async def _create_or_get_thread(
     tells a caller not to write a diary card for a thread that only
     changed its id.
     """
+    # KEY PER REQUEST, NEVER A STABLE ONE (comms 3.0.0 requires the header
+    # here). A replay of a key answers `"created": True` whatever the
+    # thread's age -- comms' create_thread, the flag belongs to the
+    # creating request -- so a key derived from the pair would make every
+    # later open of the same conversation a "conversation started" and
+    # write a second diary card. The pair itself is deduplicated by comms
+    # (create-or-get), which is what makes a fresh key per request safe.
     payload = await comms_request(
         "POST",
         "/api/v1/threads",
@@ -568,6 +581,7 @@ async def _create_or_get_thread(
             "operator_value": str(operator_id),
             "kind": "dm",
         },
+        idempotency_key=new_request_key("thread-open"),
     )
 
     comms_thread_id = UUID(str(payload["id"]))
@@ -979,14 +993,24 @@ async def post_message(
     request: Request,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_reader),
+    idempotency_key: str | None = Header(
+        default=None, alias=IDEMPOTENCY_HEADER,
+    ),
 ) -> Any:
-    """Send a message. `sender` is the session's user, always."""
+    """Send a message. `sender` is the session's user, always.
+
+    An optional `Idempotency-Key` from the client names ONE intent to send:
+    repeated with the same key, it is one message and one ping (see
+    core/comms.py message_key). Without it, each request is its own.
+    """
     _reject_actor_override(request)
+    key = message_key(user.id, idempotency_key)
     await _require_participant(session, thread_id, user)
     return await comms_request(
         "POST",
         f"/api/v1/threads/{thread_id}/messages",
         json={"sender": str(user.id), "body": body.body},
+        idempotency_key=key,
     )
 
 
