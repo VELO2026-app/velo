@@ -403,8 +403,14 @@ async def claim_admin_support_thread(
 ) -> dict[str, Any]:
     """Claim an unclaimed thread -- the act that grants the right to
     reply (comms' can_post_message admits the assignee; claiming is how
-    an admin becomes it). Returns comms' own {claimed, thread} verbatim:
-    `claimed=False` means someone else won the race, not an error.
+    an admin becomes it). Returns comms' own {claimed, thread} verbatim.
+
+    comms 3.0.0 claims IDEMPOTENTLY BY OUTCOME (its messaging.py claim):
+    `claimed` is always true and means "the thread is yours now" -- a
+    repeated claim of your own thread is true again, not an error. A
+    thread held by ANOTHER operator is a 409, class `conflict`, which
+    core/comms.py forwards with comms' message as the detail. There is no
+    `claimed: false` any more; nothing here branches on one.
     """
     await _require_support_thread(session, thread_id)
     return await comms_request(

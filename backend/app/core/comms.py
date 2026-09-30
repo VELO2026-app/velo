@@ -332,3 +332,28 @@ def read_comms_page(payload: Any, *, path: str) -> tuple[list[Any], str | None]:
         ),
     )
     raise _UNAVAILABLE
+
+
+def read_comms_counter(payload: Any, key: str, *, path: str) -> int:
+    """A non-negative integer count riding next to a comms page -- or a
+    refusal, by the same rule as read_comms_page: an unknown shape is the
+    answer being unavailable (502), logged as its shape, never its content.
+
+    `bool` is refused although it is an `int` in Python: `true` is not a
+    count, and forwarding it would put `1` on a badge that means nothing.
+    """
+    if isinstance(payload, dict):
+        value = payload.get(key)
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+            return value
+    logger.error(
+        "comms_list_shape_unexpected",
+        path=path,
+        payload_type=type(payload).__name__,
+        keys=(
+            sorted(str(k) for k in payload)
+            if isinstance(payload, dict)
+            else None
+        ),
+    )
+    raise _UNAVAILABLE

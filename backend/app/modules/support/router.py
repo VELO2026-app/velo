@@ -27,7 +27,8 @@
 #     bypass) -- an admin who has not claimed gets comms' own 403 back
 #     (forward_403=True on the comms_request call), not a swallowed 502.
 #   POST /api/v1/support/threads/{id}/claim          -- claim an
-#     unclaimed thread; the act that grants the right to reply.
+#     unclaimed thread; the act that grants the right to reply. Yours ->
+#     {claimed: true}, also on a repeat; held by another admin -> 409.
 #
 # `is_supervisor` and `operator` are NOT accepted as request parameters
 # anywhere on this router -- there is no name a client could supply that
@@ -207,8 +208,9 @@ async def claim_thread(
     admin: User = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
-    """Claim an unclaimed support thread. `{claimed: false, thread: ...}`
-    is a normal response (someone else won the race), not an error."""
+    """Claim a support thread: 200 `{claimed: true, thread}` when it is
+    yours (a repeat of your own claim included), 409 when another admin
+    holds it -- see support/service.py claim_admin_support_thread."""
     return await claim_admin_support_thread(
         session, admin=admin, thread_id=thread_id,
     )
