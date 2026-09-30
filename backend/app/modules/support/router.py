@@ -46,10 +46,11 @@
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, Query, Request
+from fastapi import APIRouter, Body, Depends, Header, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.comms import IDEMPOTENCY_HEADER
 from app.core.database import get_db_session
 from app.core.exceptions import BadRequestError
 from app.modules.auth.dependencies import get_current_admin, get_current_user
@@ -121,6 +122,9 @@ async def send_message(
     body: SendMessageIn,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
+    idempotency_key: str | None = Header(
+        default=None, alias=IDEMPOTENCY_HEADER,
+    ),
 ) -> Any:
     """Send one message into the caller's OWN support thread.
 
@@ -129,7 +133,11 @@ async def send_message(
     in practice, but there is no thread to resolve without it.
     """
     return await send_support_message(
-        session, user=user, topic=body.topic, body=body.body,
+        session,
+        user=user,
+        topic=body.topic,
+        body=body.body,
+        idempotency_key=idempotency_key,
     )
 
 
@@ -178,11 +186,18 @@ async def reply_to_thread(
     body: AdminReplyIn,
     admin: User = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
+    idempotency_key: str | None = Header(
+        default=None, alias=IDEMPOTENCY_HEADER,
+    ),
 ) -> Any:
     """Reply as this admin. 403s (comms' own, forwarded) if the caller has
     not claimed the thread -- claim it first via POST .../claim."""
     return await send_admin_support_message(
-        session, admin=admin, thread_id=thread_id, body=body.body,
+        session,
+        admin=admin,
+        thread_id=thread_id,
+        body=body.body,
+        idempotency_key=idempotency_key,
     )
 
 

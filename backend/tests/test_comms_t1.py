@@ -824,7 +824,20 @@ class TestNotificationsProxy:
         self, client, comms_status: int, expected: int,
     ) -> None:
         """core/comms.py must map comms auth/undefined statuses to 502
-        and only forward the client-meaningful 3b statuses."""
+        and only forward the client-meaningful ones.
+
+        The refusal body is comms 3.0.0's ONE form, {"error": {"class",
+        "message"}}, with the class that travels with each status. This
+        test used to send {"detail": ...} -- comms 2.0.0's body, right
+        while core/comms.py decided by status alone; 3.0.0 decides by the
+        CLASS and cross-checks the status, so a body without `error` is
+        itself a refusal we cannot read (502, pinned in
+        test_comms_refusals.py). 418 has no class and stays a 502.
+        """
+        refusal_class = {
+            401: "unauthorized", 403: "forbidden", 404: "not_found",
+            409: "conflict", 422: "validation", 500: "internal",
+        }.get(comms_status)
         login = await login_user(client, telegram_id=TID_PROXY)
 
         class _StatusClient:
@@ -838,9 +851,12 @@ class TestNotificationsProxy:
                 return None
 
             async def request(self, *args: object, **kwargs: object):
-                return httpx.Response(
-                    comms_status, json={"detail": "comms internal detail"},
+                body = (
+                    {"error": {"class": refusal_class, "message": "comms text"}}
+                    if refusal_class is not None
+                    else {"error": {"message": "no class"}}
                 )
+                return httpx.Response(comms_status, json=body)
 
         with (
             patch.object(
@@ -854,8 +870,11 @@ class TestNotificationsProxy:
             )
         assert response.status_code == expected
         if expected == 502:
-            # The internal service's auth detail never leaks out.
-            assert "comms internal detail" not in response.text
+            # The internal service's refusal text never leaks out.
+            assert "comms text" not in response.text
+        else:
+            # Forwarded: comms' message becomes the detail.
+            assert response.json()["detail"] == "comms text"
 
 
 # ===========================================================================
