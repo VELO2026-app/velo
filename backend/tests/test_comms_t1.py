@@ -410,7 +410,12 @@ class TestNotificationsProxy:
         a person could have caused.
         """
         login = await login_user(client, telegram_id=TID_PROXY)
-        seam = AsyncMock()
+        # BE-89: a guard with comms 3.0.0's shape, not a bare AsyncMock --
+        # if it ever fires, the status assertion below fails on a real
+        # answer instead of on whatever a MagicMock body turns into.
+        seam = AsyncMock(
+            return_value={"items": [], "next_cursor": None, "unread": 0},
+        )
         with patch(_PROXY_SEAM, seam):
             response = await client.get(
                 "/api/v1/notifications?recipient_id=someone-else",
@@ -569,7 +574,12 @@ class TestNotificationsProxy:
         test green. The code assertion is what closes that.
         """
         login = await login_user(client, telegram_id=TID_PREFS)
-        seam = AsyncMock()
+        # BE-89: a guard with comms 3.0.0's shape, not a bare AsyncMock --
+        # if it ever fires, the status assertion below fails on a real
+        # answer instead of on whatever a MagicMock body turns into.
+        seam = AsyncMock(return_value={
+            "categories": {}, "schedule": None, "timezone": None,
+        })
         with patch(_PROXY_SEAM, seam):
             response = await client.put(
                 "/api/v1/notifications/prefs",
@@ -744,7 +754,12 @@ class TestNotificationsProxy:
 
     async def test_prefs_unknown_key_rejected(self, client) -> None:
         login = await login_user(client, telegram_id=TID_PREFS)
-        seam = AsyncMock()
+        # BE-89: a guard with comms 3.0.0's shape, not a bare AsyncMock --
+        # if it ever fires, the status assertion below fails on a real
+        # answer instead of on whatever a MagicMock body turns into.
+        seam = AsyncMock(return_value={
+            "categories": {}, "schedule": None, "timezone": None,
+        })
         with patch(_PROXY_SEAM, seam):
             response = await client.put(
                 "/api/v1/notifications/prefs",
