@@ -76,6 +76,18 @@
               danger
               @click="onRemoveFromGroupClick(close)"
             />
+            <!-- Menu scope (owner 2026-09-30): custom groups are the MASTER
+                 zone's own CRM -- a school has none. A curator who is also a
+                 master prunes HIS groups here for his outside-school clients;
+                 school membership is handled by the school screens. -->
+            <!-- The lock is the owner's own artwork (2026-09-30): blocking
+                 earned its own menu entry instead of borrowing the trash. -->
+            <VMenuItem
+              :icon="IconLock"
+              ariaLabel="Заблокировать"
+              danger
+              @click="onBlockMenuClick(close)"
+            />
           </template>
         </VMenu>
       </template>
@@ -307,7 +319,7 @@ import VShowMore from '@/components/shared/VShowMore.vue'
 import AddTagSheet from '@/components/shared/AddTagSheet.vue'
 import AddToGroupSheet from '@/components/shared/AddToGroupSheet.vue'
 import RemoveFromGroupSheet from '@/components/shared/RemoveFromGroupSheet.vue'
-import { IconTag, IconPen } from '@/components/icons'
+import { IconLock, IconTag, IconPen } from '@/components/icons'
 // IconTrash is not re-exported from the icons barrel (same pattern as
 // EntryView.vue's delete action / MasterGroupDetailView.vue's header menu).
 import { IconTrash } from '@/components/icons'
@@ -482,6 +494,14 @@ const blockActionLabel = computed((): string =>
 function onBlockActionClick(): void {
   if (detail.value?.blocked) unblockConfirmOpen.value = true
   else blockConfirmOpen.value = true
+}
+
+// The menu's lock item opens the SAME destructive confirm the bottom CTA
+// opens -- one block flow, two entries. The menu is hidden while blocked
+// (T24-20), so this always lands on the block path.
+function onBlockMenuClick(close: () => void): void {
+  close()
+  onBlockActionClick()
 }
 
 const unblockConfirmOpen = ref(false)

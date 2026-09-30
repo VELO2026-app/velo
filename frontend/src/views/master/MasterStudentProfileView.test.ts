@@ -1214,7 +1214,7 @@ describe('MasterStudentProfileView', () => {
       return Array.from(host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? [])
     }
 
-    it('renders exactly 3 items -- tag / add-to-group / remove-from-group, trash tinted danger', async () => {
+    it('renders exactly 4 items -- tag / add-to-group / remove-from-group / block, trash + lock tinted danger', async () => {
       mount()
       await flush()
 
@@ -1222,11 +1222,15 @@ describe('MasterStudentProfileView', () => {
       await flush()
 
       const items = menuItems()
-      expect(items).toHaveLength(3)
+      expect(items).toHaveLength(4)
       expect(items[0]?.getAttribute('aria-label')).toBe('Добавить тег')
       expect(items[1]?.getAttribute('aria-label')).toBe('Добавить в группу')
       expect(items[2]?.getAttribute('aria-label')).toBe('Удалить из группы')
       expect(items[2]?.classList.contains('v-menu-item--danger')).toBe(true)
+      // The lock (owner art, 2026-09-30): blocking earned its own entry --
+      // the trash keeps meaning remove-from-group.
+      expect(items[3]?.getAttribute('aria-label')).toBe('Заблокировать')
+      expect(items[3]?.classList.contains('v-menu-item--danger')).toBe(true)
     })
 
     it('T24-9: the trigger dots are horizontal at rest and rotate open', async () => {
@@ -1288,6 +1292,39 @@ describe('MasterStudentProfileView', () => {
       await flush()
 
       expect(groupsApi.addGroupMember).toHaveBeenCalledWith('g2', 's1')
+    })
+
+    it('the lock item opens the SAME destructive block confirm; confirming calls blockStudent', async () => {
+      vi.mocked(groupsApi.blockStudent).mockResolvedValue({
+        student_user_id: 's1',
+        blocked_at: '2026-07-24T00:00:00Z',
+        cancelled_bookings_count: 0,
+      })
+      mount()
+      await flush()
+
+      menuTrigger()?.click()
+      await flush()
+      menuItems()[3]?.click()
+      await flush()
+
+      // Identical copy to the bottom CTA's confirm -- one block flow, two
+      // entries (menu lock + bottom button).
+      const containers = Array.from(
+        document.body.querySelectorAll<HTMLElement>('.v-modal__container'),
+      )
+      const modal = containers[containers.length - 1]
+      expect(modal?.textContent).toContain('Заблокировать пользователя?')
+      expect(modal?.textContent).toContain('Пользователь переместится в группу «Удаленные».')
+
+      const confirm = Array.from(modal?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(
+        (b) => b.textContent?.trim() === 'Заблокировать',
+      )
+      confirm?.click()
+      await flush()
+
+      expect(groupsApi.blockStudent).toHaveBeenCalledWith('s1')
+      expect(success).toHaveBeenCalledWith('Пользователь заблокирован')
     })
 
     it('"Удалить из группы" opens RemoveFromGroupSheet WITHOUT a "current group" option (T24-10 widened RemoveFromGroupSheet.vue for exactly this) -- only "selected" / "all"', async () => {
