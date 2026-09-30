@@ -287,7 +287,15 @@ function openMember(member: CuratorGroupMemberItem): void {
   // no guard on /user/masters/:id). A student has no public page, so their
   // school-context profile carries the curator actions instead.
   if (kind.value === 'master') {
-    void router.push({ name: 'user-master-public', params: { id: member.user_id } })
+    // Owner ruling 2026-09-30: the master's SCHOOL-context profile (the
+    // curator's actions live in its «⋯» menu) instead of the public page.
+    const zone = inMasterZone.value ? 'master' : 'user'
+    void router.push({
+      name: `${zone}-curator-group-master`,
+      params: { groupId: groupId.value, userId: member.user_id },
+      // Instant paint from the roster row while the public fetch runs.
+      query: { name: member.name, avatar: member.avatar_url ?? '' },
+    })
     return
   }
   const zone = inMasterZone.value ? 'master' : 'user'

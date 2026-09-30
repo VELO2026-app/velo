@@ -83,9 +83,10 @@ const push = vi.fn()
 // course nothing re-fires, regardless of whether the source has a watch) --
 // caught by mutation-testing a simulated fix against the first draft.
 const routeParams = reactive<{ id: string }>({ id: 'm1' })
+const routeQuery = reactive<{ groupId?: string }>({})
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push, back, replace: vi.fn() }),
-  useRoute: () => ({ params: routeParams }),
+  useRoute: () => ({ params: routeParams, query: routeQuery }),
 }))
 
 const toastInfo = vi.fn()
@@ -233,6 +234,7 @@ beforeEach(() => {
   push.mockReset()
   back.mockReset()
   routeParams.id = 'm1'
+  routeQuery.groupId = undefined
 })
 
 afterEach(() => {
@@ -244,6 +246,122 @@ afterEach(() => {
 })
 
 describe('MasterPublicView', () => {
+  describe('curator school-context actions (owner 2026-09-30)', () => {
+    function menuButton(): HTMLElement | undefined {
+      return Array.from(document.body.querySelectorAll<HTMLButtonElement>('button') ?? []).find(
+        (b) => b.getAttribute('aria-label') === 'Действия с мастером',
+      )
+    }
+    function menuItem(label: string): HTMLButtonElement | undefined {
+      return Array.from(
+        document.body.querySelectorAll<HTMLButtonElement>('.v-menu-item') ?? [],
+      ).find((b) => b.getAttribute('aria-label') === label)
+    }
+    function liveModal(): HTMLElement | undefined {
+      const containers = Array.from(
+        document.body.querySelectorAll<HTMLElement>('.v-modal__container'),
+      )
+      return containers[containers.length - 1]
+    }
+    function modalButton(label: string): HTMLButtonElement | undefined {
+      return Array.from(liveModal()?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(
+        (b) => b.textContent?.trim() === label,
+      )
+    }
+    function openMenu(): Promise<void> {
+      menuButton()?.click()
+      return flush()
+    }
+
+    it('no ?groupId in the route: the plain public profile renders NO action menu', async () => {
+      mount()
+      await flush()
+
+      expect(menuButton()).toBeUndefined()
+    })
+
+    it('with ?groupId the «⋯» menu carries the three curator actions', async () => {
+      routeQuery.groupId = 'g1'
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      mount()
+      await flush()
+      await openMenu()
+
+      expect(menuItem('Написать сообщение')).toBeTruthy()
+      expect(menuItem('Изменить роль')).toBeTruthy()
+      expect(menuItem('Заблокировать')).toBeTruthy()
+    })
+
+    it('«Написать сообщение» opens the DM and navigates into it', async () => {
+      routeQuery.groupId = 'g1'
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      vi.mocked(chatsApi.openChat).mockResolvedValue({
+        id: 'thread-9',
+        created_at: '2026-09-30T10:00:00+00:00',
+      })
+      mount()
+      await flush()
+      await openMenu()
+
+      menuItem('Написать сообщение')?.click()
+      await flush()
+
+      expect(chatsApi.openChat).toHaveBeenCalledWith('m1')
+      expect(push).toHaveBeenCalledWith({ name: 'user-chat', params: { id: 'thread-9' } })
+    })
+
+    it('«Изменить роль»: preselects «Мастер»; the demote pick enables a marked no-op confirm (BE-59)', async () => {
+      routeQuery.groupId = 'g1'
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      mount()
+      await flush()
+      await openMenu()
+
+      menuItem('Изменить роль')?.click()
+      await flush()
+
+      const modal = liveModal()
+      expect(modal?.textContent).toContain('Изменить роль')
+      expect(modal?.textContent).toContain('Выберите роль')
+      expect(modalButton('Мастер')?.getAttribute('aria-checked')).toBe('true')
+      expect(modalButton('Изменить')?.disabled).toBe(true)
+
+      modalButton('Ученик')?.click()
+      await flush()
+      expect(modalButton('Изменить')?.disabled).toBe(false)
+
+      modalButton('Изменить')?.click()
+      await flush()
+
+      expect(toastInfo).toHaveBeenCalledWith('Заявка на смену роли появится позже (BE-59)')
+    })
+
+    it('«Заблокировать»: draft confirm; confirm is a marked no-op until BE-79', async () => {
+      routeQuery.groupId = 'g1'
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      mount()
+      await flush()
+      await openMenu()
+
+      menuItem('Заблокировать')?.click()
+      await flush()
+
+      const modal = liveModal()
+      expect(modal?.textContent).toContain('Заблокировать участника школы?')
+      expect(modal?.textContent).toContain('утратит доступ к школе')
+      expect(modal?.querySelector('.v-confirm__panel svg')).not.toBeNull()
+
+      modalButton('Заблокировать')?.click()
+      await flush()
+
+      expect(toastInfo).toHaveBeenCalledWith('Блокировка участника школы появится позже (BE-79)')
+    })
+  })
+
   // ===========================================================================
   describe('methods chips (FE-61/62/64)', () => {
     it('a «Направление — Вид» pill shows the SHORT style label — the direction word never repeats inside one chip', async () => {

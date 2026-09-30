@@ -22,7 +22,32 @@
 
 <template>
   <div class="master-public">
-    <VHeader title="Мастер" show-back @back="router.back()" />
+    <VHeader title="Мастер" show-back @back="router.back()">
+      <!-- Curator's school-context actions (owner ruling 2026-09-30): the
+           roster's master rows navigate here with the school marker, and the
+           menu appears only in that context -- the plain public profile (any
+           other entry) renders no actions. INTERIM: change-role and block
+           confirms are marked no-ops until their contracts land (BE-59
+           demote extension / BE-79). -->
+      <template v-if="schoolContext" #action>
+        <VMenu aria-label="Действия с мастером">
+          <template #default="{ close }">
+            <VMenuItem
+              :icon="IconMessages"
+              ariaLabel="Написать сообщение"
+              @click="onMessageClick(close)"
+            />
+            <VMenuItem :icon="IconPen" ariaLabel="Изменить роль" @click="onRoleClick(close)" />
+            <VMenuItem
+              :icon="IconLock"
+              ariaLabel="Заблокировать"
+              danger
+              @click="onBlockClick(close)"
+            />
+          </template>
+        </VMenu>
+      </template>
+    </VHeader>
 
     <!-- Loading -->
     <div v-if="loading" class="master-public__loader">
@@ -135,6 +160,44 @@
         </VButton>
       </div>
     </div>
+
+    <!-- «Изменить роль» for a SCHOOL MASTER (owner ruling 2026-09-30). The
+         radio preselects the member's current role (master); choosing
+         «Ученик» is a DEMOTE request -- its contract does not exist yet
+         (§7.1 №6 + BE-59's extensible field), so confirm is a marked no-op
+         (info toast) and the copy stays a draft. -->
+    <VModal :open="roleOpen" :show-close="false" @close="onRoleClose">
+      <div class="master-public__role">
+        <h2 class="master-public__role-title">Изменить роль</h2>
+        <TargetUserCard :name="displayName" :avatar-url="profile?.avatar_url ?? null" />
+        <p class="master-public__role-sub">Выберите роль</p>
+        <VRadioGroup v-model="roleKind" :options="roleOptions" />
+        <div class="master-public__role-actions">
+          <VButton variant="danger" block @click="onRoleClose">Отмена</VButton>
+          <VButton variant="primary" block :disabled="roleConfirmDisabled" @click="onRoleConfirm">
+            Изменить
+          </VButton>
+        </div>
+      </div>
+    </VModal>
+
+    <!-- Block confirm (owner ruling 2026-09-30: blocking covers masters too).
+         INTERIM (stopper BE-79): the school-block contract does not exist, so
+         confirm is a marked no-op (info toast); the copy is a DRAFT for the
+         owner's review. -->
+    <VConfirmDialog
+      :open="blockConfirmOpen"
+      title="Заблокировать участника школы?"
+      :message="blockCopy"
+      confirm-label="Заблокировать"
+      danger
+      warning-panel
+      cancel-variant="primary"
+      @confirm="onBlockConfirm"
+      @cancel="blockConfirmOpen = false"
+    >
+      <TargetUserCard :name="displayName" :avatar-url="profile?.avatar_url ?? null" />
+    </VConfirmDialog>
   </div>
 </template>
 
@@ -150,10 +213,16 @@ import {
   VAvatar,
   VStatCard,
   VCard,
+  VConfirmDialog,
+  VMenu,
+  VMenuItem,
+  VModal,
+  VRadioGroup,
 } from '@/components/ui'
 import { VHeader } from '@/components/layout'
-import { IconCheck } from '@/components/icons'
+import { IconCheck, IconLock, IconMessages, IconPen } from '@/components/icons'
 import CalendarPracticeCard from '@/components/shared/CalendarPracticeCard.vue'
+import TargetUserCard from '@/components/shared/TargetUserCard.vue'
 import { getPublicMaster } from '@/api/masters'
 import { openChat } from '@/api/chats'
 import { getPractices } from '@/api/practices'
@@ -185,6 +254,64 @@ const displayName = computed(() => profile.value?.display_name ?? 'Мастер'
 
 // Method tags cycle through three tints (same as MasterCard).
 const TAG_VARIANTS = ['blue', 'pink', 'sand'] as const
+
+// -- Curator's school-context actions (owner ruling 2026-09-30) ---------------
+//
+// The roster's master rows navigate here with ?groupId= -- that marker turns
+// on the action menu for the curator of THAT school. The plain public profile
+// (any other entry) renders no menu. INTERIM: change-role (a DEMOTE request --
+// its contract does not exist yet, §7.1 №6 + BE-59's extensible field) and
+// block (BE-79) confirm as marked no-ops (info toast); the copy is a draft.
+
+const schoolContext = computed(() => String(route.query.groupId ?? '') !== '')
+
+const roleOpen = ref(false)
+type MemberKind = 'student' | 'master'
+const roleKind = ref<MemberKind>('master')
+const roleOptions: { value: MemberKind; label: string }[] = [
+  { value: 'student', label: 'Ученик' },
+  { value: 'master', label: 'Мастер' },
+]
+const roleConfirmDisabled = computed(() => roleKind.value === 'master')
+
+function onRoleClick(close: () => void): void {
+  close()
+  roleKind.value = 'master'
+  roleOpen.value = true
+}
+
+function onRoleClose(): void {
+  roleOpen.value = false
+}
+
+function onRoleConfirm(): void {
+  toast.info('Заявка на смену роли появится позже (BE-59)')
+  roleOpen.value = false
+}
+
+const blockConfirmOpen = ref(false)
+
+const blockCopy =
+  'Участник утратит доступ к школе и её практикам. Вы сможете разблокировать его в любой момент.'
+
+function onBlockClick(close: () => void): void {
+  close()
+  blockConfirmOpen.value = true
+}
+
+function onBlockConfirm(): void {
+  // INTERIM (stopper BE-79): no school-block contract to call -- the no-op
+  // states itself rather than reading as success.
+  toast.info('Блокировка участника школы появится позже (BE-79)')
+  blockConfirmOpen.value = false
+}
+
+// «Написать сообщение» reuses onAsk: open-or-get the DM with this master,
+// then navigate into it (the same thread the «Задать вопрос» pill opens).
+function onMessageClick(close: () => void): void {
+  close()
+  void onAsk()
+}
 
 // FE-61/62: one chip = direction icon + SHORT skill label. The direction word
 // embedded in a style label («Медитация молчания») is stripped so a pill
@@ -359,6 +486,33 @@ watch(masterId, (id) => {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1);
+}
+
+/* «Изменить роль» popup (owner ruling 2026-09-30): title / who / role picker
+   / pills -- the same skeleton the school student profile uses. */
+.master-public__role {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.master-public__role-title {
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: var(--text-lg);
+  color: var(--velo-text-primary);
+}
+
+.master-public__role-sub {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--velo-text-secondary);
+}
+
+.master-public__role-actions {
+  display: flex;
+  gap: var(--space-2);
 }
 
 /* «Ближайшие практики» — свёрнутый аккордеон. Контейнер прозрачный (чтобы тело
