@@ -71,6 +71,13 @@ function buttonWith(label: string): HTMLElement | undefined {
   )
 }
 
+/** Exact-label finder -- «Изменить» (the pill) must not match «Изменить роль» (the menu item). */
+function exactButton(label: string): HTMLButtonElement | undefined {
+  return Array.from(document.body.querySelectorAll<HTMLButtonElement>('button') ?? []).find(
+    (b) => b.textContent?.trim() === label || b.getAttribute('aria-label') === label,
+  )
+}
+
 function pageFixture(relation: 'curator' | 'master' | 'student'): CuratorGroupPageResponse {
   return {
     id: 'g1',
@@ -92,11 +99,15 @@ beforeEach(() => {
   routeState.nameQuery = 'Пётр Сидоров'
   Object.values(cgApi).forEach((fn) => vi.mocked(fn).mockReset())
   vi.mocked(cgApi.getCuratorGroupPage).mockResolvedValue(pageFixture('curator'))
-  vi.mocked(cgApi.getCuratorGroupRemovePreview).mockResolvedValue({
-    upcoming_practices_targeting_group: 0,
-  })
   vi.mocked(cgApi.offerCuratorGroupMaster).mockResolvedValue(undefined)
-  vi.mocked(cgApi.removeCuratorGroupMember).mockResolvedValue(undefined)
+  // Default roster lookup: the student is NOT among the masters (the only
+  // kind this screen is reached for); master-present tests override below.
+  vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue({
+    items: [],
+    total: 0,
+    limit: 100,
+    offset: 0,
+  })
   push.mockReset()
   replace.mockReset()
   toastError.mockReset()
@@ -132,20 +143,167 @@ describe('SchoolStudentProfileView', () => {
     expect(buttonWith('Действия с учеником')).toBeUndefined()
   })
 
-  it('«Предложить стать мастером»: success toasts, nothing mutates locally', async () => {
+  it('the menu is «Написать сообщение» / «Изменить роль» / «Заблокировать» (owner 2026-09-30: no exclusion)', async () => {
     mount()
     await flush()
 
     buttonWith('Действия с учеником')?.click()
     await flush()
-    buttonWith('Предложить стать мастером')?.click()
+
+    expect(buttonWith('Написать сообщение')).toBeTruthy()
+    expect(buttonWith('Изменить роль')).toBeTruthy()
+    // The lock replaces the trash: an exclusion no longer exists. It is LIVE
+    // (owner 2026-09-30) and opens the block confirm.
+    const lock = buttonWith('Заблокировать')
+    expect(lock).toBeTruthy()
+    expect((lock as HTMLButtonElement).disabled).toBe(false)
+    expect(buttonWith('Исключить из школы')).toBeUndefined()
+    expect(buttonWith('Предложить стать мастером')).toBeUndefined()
+  })
+
+  it('«Заблокировать» opens the block confirm (draft copy); «Отмена» closes it without any call', async () => {
+    mount()
     await flush()
 
+    buttonWith('Действия с учеником')?.click()
+    await flush()
+    buttonWith('Заблокировать')?.click()
+    await flush()
+
+    // Title + who-card + the DRAFT warning copy (BE-79 owns the final wording).
+    expect(text()).toContain('Заблокировать участника школы?')
+    expect(text()).toContain('Пётр Сидоров')
+    expect(text()).toContain('перестанет получать её уведомления')
+
+    exactButton('Отмена')?.click()
+    // The leave transition (--transition-slow, 0.3s) must finish before the
+    // teleported modal unmounts -- a bare nextTick flush is too early.
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    await flush()
+
+    expect(text()).not.toContain('Заблокировать участника школы?')
+    expect(toastInfo).not.toHaveBeenCalled()
+    expect(cgApi.offerCuratorGroupMaster).not.toHaveBeenCalled()
+  })
+
+  it('block confirm: «Заблокировать» steps into the success chain (draft -- nothing mutates until BE-79)', async () => {
+    mount()
+    await flush()
+
+    buttonWith('Действия с учеником')?.click()
+    await flush()
+    buttonWith('Заблокировать')?.click()
+    await flush()
+
+    exactButton('Заблокировать')?.click()
+    await flush()
+
+    // The post-block step rides the same dialog canon: title, who-card, the
+    // warning panel WITHOUT the icon, compact «Не сейчас» / «В поддержку».
+    expect(text()).toContain('Пользователь заблокирован')
+    expect(text()).toContain('Пользователь перемещен в «Удаленные».')
+    expect(exactButton('Не сейчас')).toBeTruthy()
+    expect(exactButton('В поддержку')).toBeTruthy()
+    // INTERIM honesty: no school-block contract, so no other API may fire.
+    expect(cgApi.offerCuratorGroupMaster).not.toHaveBeenCalled()
+  })
+
+  it('«В поддержку» opens the report form; «Не сейчас» just dismisses the chain', async () => {
+    mount()
+    await flush()
+
+    buttonWith('Действия с учеником')?.click()
+    await flush()
+    buttonWith('Заблокировать')?.click()
+    await flush()
+    exactButton('Заблокировать')?.click()
+    await flush()
+
+    exactButton('В поддержку')?.click()
+    await flush()
+
+    expect(text()).toContain('Сообщить о пользователе')
+    expect(exactButton('Отправить')).toBeTruthy()
+  })
+
+  it('«Изменить роль»: preselects the CURRENT role; a change sends the interim offer', async () => {
+    mount()
+    await flush()
+
+    buttonWith('Действия с учеником')?.click()
+    await flush()
+    buttonWith('Изменить роль')?.click()
+    await flush()
+
+    // The who-card and the picker ride the popup.
+    expect(text()).toContain('Изменить роль')
+    expect(text()).toContain('Выберите роль')
+    expect(text()).toContain('Пётр Сидоров')
+    // Preselected on the CURRENT role (owner decision 2026-09-22): student.
+    expect(exactButton('Ученик')?.getAttribute('aria-checked')).toBe('true')
+
+    exactButton('Мастер')?.click()
+    await flush()
+
+    const confirm = exactButton('Изменить')
+    expect(confirm?.disabled).toBe(false)
+    confirm?.click()
+    await flush()
+
+    // INTERIM wiring (stopper BE-59): the same GT-27 offer until the
+    // role-request contract lands.
     expect(cgApi.offerCuratorGroupMaster).toHaveBeenCalledWith('g1', 'u9')
     expect(toastSuccess).toHaveBeenCalledWith('Предложение отправлено')
     // The appointment takes effect only when the appointee accepts -- no
     // navigation, no local roster rewrite.
     expect(replace).not.toHaveBeenCalled()
+  })
+
+  it('«Изменить» is disabled while the role is unchanged -- nothing is sent', async () => {
+    mount()
+    await flush()
+
+    buttonWith('Действия с учеником')?.click()
+    await flush()
+    buttonWith('Изменить роль')?.click()
+    await flush()
+
+    const confirm = exactButton('Изменить')
+    expect(confirm?.disabled).toBe(true)
+    confirm?.click()
+    await flush()
+
+    expect(cgApi.offerCuratorGroupMaster).not.toHaveBeenCalled()
+  })
+
+  it('a current master gets NO student option -- demotion has no contract (§7.1 №6)', async () => {
+    vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue({
+      items: [
+        {
+          user_id: 'u9',
+          name: 'Пётр Сидоров',
+          avatar_url: null,
+          kind: 'master',
+          joined_at: '2026-09-01T00:00:00Z',
+          is_visible: true,
+        },
+      ],
+      total: 1,
+      limit: 100,
+      offset: 0,
+    })
+    mount()
+    await flush()
+
+    buttonWith('Действия с учеником')?.click()
+    await flush()
+    buttonWith('Изменить роль')?.click()
+    await flush()
+
+    expect(exactButton('Ученик')).toBeUndefined()
+    expect(exactButton('Мастер')?.getAttribute('aria-checked')).toBe('true')
+    expect(exactButton('Изменить')?.disabled).toBe(true)
+    expect(cgApi.offerCuratorGroupMaster).not.toHaveBeenCalled()
   })
 
   it('master_required surfaces the errorMessages phrase, not a raw code', async () => {
@@ -157,7 +315,11 @@ describe('SchoolStudentProfileView', () => {
 
     buttonWith('Действия с учеником')?.click()
     await flush()
-    buttonWith('Предложить стать мастером')?.click()
+    buttonWith('Изменить роль')?.click()
+    await flush()
+    exactButton('Мастер')?.click()
+    await flush()
+    exactButton('Изменить')?.click()
     await flush()
 
     expect(toastError).toHaveBeenCalledWith(
@@ -165,33 +327,31 @@ describe('SchoolStudentProfileView', () => {
     )
   })
 
-  it('«Исключить из школы»: preview -> confirm -> DELETE -> back to the roster', async () => {
-    vi.mocked(cgApi.getCuratorGroupRemovePreview).mockResolvedValue({
-      upcoming_practices_targeting_group: 2,
-    })
+  it('«Написать сообщение» opens the SendMessageModal for THIS student', async () => {
     mount()
     await flush()
 
     buttonWith('Действия с учеником')?.click()
     await flush()
-    buttonWith('Исключить из школы')?.click()
+    buttonWith('Написать сообщение')?.click()
     await flush()
 
-    expect(cgApi.getCuratorGroupRemovePreview).toHaveBeenCalledWith('g1', 'u9')
-    // The advisory line rides the dialog message.
-    expect(text()).toContain('Исключить ученика «Пётр Сидоров» из школы «Школа г1»?')
+    // The recipient chip carries the roster name; the modal's own pills show.
+    expect(exactButton('Отправить')).toBeTruthy()
+    expect(exactButton('Отмена')).toBeTruthy()
+  })
 
-    buttonWith('Исключить')?.click()
+  it('owner 2026-09-30: an exclusion no longer exists -- no affordance, no removal API calls', async () => {
+    mount()
     await flush()
 
-    expect(cgApi.removeCuratorGroupMember).toHaveBeenCalledWith('g1', 'u9')
-    expect(toastSuccess).toHaveBeenCalledWith('Ученик исключён из школы')
-    // Back lands on the merged roster screen, on the tab the row came from.
-    expect(replace).toHaveBeenCalledWith({
-      name: 'user-curator-group-members',
-      params: { id: 'g1' },
-      query: { kind: 'student' },
-    })
+    buttonWith('Действия с учеником')?.click()
+    await flush()
+
+    expect(buttonWith('Исключить из школы')).toBeUndefined()
+    expect(exactButton('Исключить')).toBeUndefined()
+    expect(cgApi.getCuratorGroupRemovePreview).not.toHaveBeenCalled()
+    expect(cgApi.removeCuratorGroupMember).not.toHaveBeenCalled()
   })
 
   it('a school 404 is its own rung (P-08), not an error and not an empty hero', async () => {

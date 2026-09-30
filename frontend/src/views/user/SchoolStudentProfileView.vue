@@ -6,18 +6,37 @@
   roster. Students have no public profile endpoint -- the roster row IS the
   safe contract (name, avatar), so the hero renders from it directly; what
   the screen adds is the curator's action set that §1.11.4 placed on a row
-  action sheet (the owner moved it here when the rows became navigational):
+  action sheet (the owner moved it here when the rows became navigational),
+  now living in the header «⋯» menu (VMenu/VMenuItem, the §1.12.3 component
+  rule):
 
-    - «Предложить стать мастером» (POST master-offers): the appointment does
-      NOT take effect here -- the roster changes only when the appointee
-      accepts, so success mutates nothing locally. 403 master_required is
-      already phrased by errorMessages.
-    - «Исключить из школы» (remove-preview advisory + confirm + DELETE).
+    - «Написать сообщение» (SendMessageModal -- the same master->student DM
+      the master zone already uses).
+    - «Изменить роль» (FE-87, tz-curator.md §1.12.3): the role-choice popup
+      preselected on the member's CURRENT roster role (owner decision
+      2026-09-22). INTERIM (stopper BE-59): confirming still sends the
+      GT-27 master-offer; it becomes the admin role-request (and the toast
+      becomes «Отправлено на согласование администратору») the moment
+      BE-59's /role-requests contract and generated types land. Demotion
+      has no contract yet (§7.1 №6), so a current master sees no student
+      option at all. No optimistic changes either way: the roster moves
+      server-side only.
+    - «Заблокировать» (lock, owner ruling 2026-09-30): the ONLY way a
+      curator ends a school membership now -- «Исключить из школы» is
+      REMOVED (an exclusion no longer exists). The confirm popup is built
+      (same recipe as the master-zone block dialog; the copy is a DRAFT for
+      the owner's review -- BE-79 owns the final wording). INTERIM (stopper
+      BE-79): the school-block contract does not exist, so confirm is a
+      marked no-op (info toast) -- BE-79 swaps it for the real request.
 
-  Both are curator-of-THIS-school only (viewer.relation, §1.12.1's access
-  rule) and both live in the header «⋯» menu (VMenu/VMenuItem, the §1.12.3
-  component rule). Masters of the school do NOT land here -- their rows
-  open the existing public master profile.
+  All three are curator-of-THIS-school only (viewer.relation, §1.12.1's
+  access rule). Masters of the school do NOT land here -- their rows open
+  the existing public master profile.
+
+  Domain boundary (owner 2026-09-30): a school has NO groups -- custom
+  groups exist only in the master zone (the master's own CRM). None of this
+  screen's actions touch the groups API, and nothing here removes a member:
+  the only membership-ending action is the block above.
 -->
 
 <template>
@@ -27,15 +46,19 @@
         <VMenu aria-label="Действия с учеником">
           <template #default="{ close }">
             <VMenuItem
-              :icon="IconUser"
-              ariaLabel="Предложить стать мастером"
-              @click="onOfferClick(close)"
+              :icon="IconMessages"
+              ariaLabel="Написать сообщение"
+              @click="onMessageClick(close)"
             />
+            <VMenuItem :icon="IconPen" ariaLabel="Изменить роль" @click="onRoleClick(close)" />
+            <!-- The lock is live: it opens the block confirm (owner ruling
+                 2026-09-30 -- blocking replaced the removed exclusion).
+                 INTERIM (stopper BE-79): confirm is a marked no-op. -->
             <VMenuItem
-              :icon="IconTrash"
-              ariaLabel="Исключить из школы"
+              :icon="IconLock"
+              ariaLabel="Заблокировать"
               danger
-              @click="onRemoveClick(close)"
+              @click="onBlockClick(close)"
             />
           </template>
         </VMenu>
@@ -79,16 +102,91 @@
       </template>
     </div>
 
-    <!-- Исключение: advisory preview, idempotent DELETE (the leave/remove
-         contract -- a failed preview is "no advice", never a blocked button). -->
+    <!-- «Изменить роль» (FE-87, tz-curator.md §1.12.3). The radio preselects
+         the member's CURRENT roster role (owner decision 2026-09-22) and
+         stays disabled until that lookup lands; confirming without a change
+         is a disabled button, never a silent no-op request. -->
+    <VModal :open="roleOpen" :show-close="false" @close="onRoleClose">
+      <div class="ssp__role">
+        <h2 class="ssp__role-title">Изменить роль</h2>
+        <TargetUserCard :name="studentName" :avatar-url="studentAvatar || null" />
+        <p class="ssp__role-sub">Выберите роль</p>
+        <VRadioGroup v-model="roleKind" :options="roleOptions" :disabled="roleBusy" />
+        <div class="ssp__role-actions">
+          <VButton variant="danger" block :disabled="rolePending" @click="onRoleClose">
+            Отмена
+          </VButton>
+          <VButton
+            variant="primary"
+            block
+            :loading="rolePending"
+            :disabled="roleConfirmDisabled"
+            @click="onRoleConfirm"
+          >
+            Изменить
+          </VButton>
+        </div>
+      </div>
+    </VModal>
+
+    <SendMessageModal
+      :open="msgOpen"
+      :student-id="userId"
+      :name="studentName"
+      @close="msgOpen = false"
+    />
+
+    <!-- Block confirm (owner ruling 2026-09-30): the ONLY membership-ending
+         action. Same recipe as the master-zone block dialog (TargetUserCard +
+         warning panel). Confirming steps into the post-block chain -- the UX
+         draft under review (nothing mutates until BE-79). -->
     <VConfirmDialog
-      :open="removeOpen"
-      :message="removeMessage"
-      confirm-label="Исключить"
+      :open="blockConfirmOpen"
+      title="Заблокировать участника школы?"
+      :message="blockCopy"
+      confirm-label="Заблокировать"
       danger
-      :loading="removing"
-      @confirm="onRemoveConfirm"
-      @cancel="removeOpen = false"
+      warning-panel
+      cancel-variant="primary"
+      @confirm="onBlockConfirm"
+      @cancel="blockConfirmOpen = false"
+    >
+      <!-- Owner 2026-09-30: the who-card needs air before the warning panel --
+           VConfirmDialog spaces its own elements, slot content is on us. -->
+      <div class="ssp__block-card">
+        <TargetUserCard :name="studentName" :avatar-url="studentAvatar || null" />
+      </div>
+    </VConfirmDialog>
+
+    <!-- Post-block report-offer -- mirrors the master-zone dialog verbatim:
+         warning panel WITHOUT the icon (the kept difference from the confirm)
+         + compact pills. INTERIM (stopper BE-79): nothing mutated -- this
+         step is the UX draft under review. -->
+    <VConfirmDialog
+      :open="blockedDialogOpen"
+      title="Пользователь заблокирован"
+      message="Пользователь перемещен в «Удаленные». Если он нарушал правила — например, сорвал практику или вел себя неподобающе, — вы можете сообщить об этом в поддержку."
+      confirm-label="В поддержку"
+      cancel-label="Не сейчас"
+      compact-actions
+      warning-panel
+      :warning-panel-icon="false"
+      danger
+      cancel-variant="primary"
+      @confirm="onReportOfferAccept"
+      @cancel="blockedDialogOpen = false"
+    >
+      <div class="ssp__block-card">
+        <TargetUserCard :name="studentName" :avatar-url="studentAvatar || null" />
+      </div>
+    </VConfirmDialog>
+
+    <ReportUserSheet
+      :open="reportOpen"
+      :student-id="userId"
+      :student-name="studentName"
+      :student-avatar-url="studentAvatar || null"
+      @close="reportOpen = false"
     />
   </div>
 </template>
@@ -97,14 +195,13 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
+  getCuratorGroupMembers,
   getCuratorGroupPage,
-  getCuratorGroupRemovePreview,
   offerCuratorGroupMaster,
-  removeCuratorGroupMember,
 } from '@/api/curatorGroups'
 import { ApiResponseError } from '@/api/client'
 import type { CuratorGroupPageResponse } from '@/api/types'
-import { IconTrash, IconUser } from '@/components/icons'
+import { IconLock, IconMessages, IconPen } from '@/components/icons'
 import {
   VAvatar,
   VButton,
@@ -114,7 +211,12 @@ import {
   VLoader,
   VMenu,
   VMenuItem,
+  VModal,
+  VRadioGroup,
 } from '@/components/ui'
+import SendMessageModal from '@/components/shared/SendMessageModal.vue'
+import ReportUserSheet from '@/components/shared/ReportUserSheet.vue'
+import TargetUserCard from '@/components/shared/TargetUserCard.vue'
 import VHeader from '@/components/layout/VHeader.vue'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
@@ -177,64 +279,141 @@ watch([groupId, userId], () => {
   if (groupId.value && userId.value) void load()
 })
 
-// -- «Предложить стать мастером» ----------------------------------------------
+// -- «Написать сообщение» ------------------------------------------------------
 
-const offering = ref(false)
+const msgOpen = ref(false)
 
-function onOfferClick(close: () => void): void {
+function onMessageClick(close: () => void): void {
   close()
-  if (offering.value) return
-  offering.value = true
-  // Idempotent per candidate; 204 does NOT change the roster -- the member
-  // must accept first, so nothing mutates locally (the wrapper's contract).
-  void offerCuratorGroupMaster(groupId.value, userId.value)
-    .then(() => toast.success('Предложение отправлено'))
-    .catch((e: unknown) => toast.error(extractApiError(e, 'Не удалось отправить предложение')))
-    .finally(() => {
-      offering.value = false
-    })
+  msgOpen.value = true
 }
 
-// -- «Исключить из школы» -------------------------------------------------------
+// -- «Изменить роль» (FE-87, tz-curator.md §1.12.3) ----------------------------
+//
+// INTERIM (stopper BE-59): confirming still sends the GT-27 master-offer --
+// it becomes the admin role-request the moment BE-59's /role-requests
+// contract and generated types land, and only then does the toast become
+// «Отправлено на согласование администратору». Either way there are NO
+// optimistic changes: the roster moves server-side only.
 
-const removeOpen = ref(false)
-const removing = ref(false)
-const removeAdvisory = ref<number | null>(null)
+type MemberKind = 'student' | 'master'
 
-const removeMessage = computed(() => {
-  const base = `Исключить ученика «${studentName.value}» из школы «${school.value?.name ?? ''}»?`
-  const n = removeAdvisory.value
-  if (n === null || n === 0) return base
-  const word = n === 1 ? 'практика' : n < 5 ? 'практики' : 'практик'
-  return `${base} ${n} предстоящ${n === 1 ? 'ая' : 'их'} ${word} этой школы станут скрыты.`
-})
+const roleOpen = ref(false)
+const rolePending = ref(false)
+const kindResolving = ref(false)
+const currentKind = ref<MemberKind>('student')
+const roleKind = ref<MemberKind>('student')
 
-function onRemoveClick(close: () => void): void {
-  close()
-  removeAdvisory.value = null
-  removeOpen.value = true
-  // Lazy: only fetched when the dialog actually opens.
-  void getCuratorGroupRemovePreview(groupId.value, userId.value)
-    .then((res) => {
-      removeAdvisory.value = res.upcoming_practices_targeting_group
-    })
-    .catch(() => {
-      removeAdvisory.value = null
-    })
-}
+const roleBusy = computed(() => rolePending.value || kindResolving.value)
 
-async function onRemoveConfirm(): Promise<void> {
-  removing.value = true
+// Demotion (master -> student) has no contract yet (tz-curator.md §7.1 №6):
+// a current master sees only the master option, which preselects itself and
+// keeps «Изменить» disabled -- the popup never fabricates a demotion it
+// cannot send.
+const roleOptions = computed(() =>
+  currentKind.value === 'master'
+    ? [{ value: 'master', label: 'Мастер' }]
+    : [
+        { value: 'student', label: 'Ученик' },
+        { value: 'master', label: 'Мастер' },
+      ],
+)
+
+const roleConfirmDisabled = computed(() => roleBusy.value || roleKind.value === currentKind.value)
+
+async function resolveCurrentKind(): Promise<void> {
+  kindResolving.value = true
   try {
-    await removeCuratorGroupMember(groupId.value, userId.value)
-    removeOpen.value = false
-    toast.success('Ученик исключён из школы')
-    void router.replace(rosterRoute.value)
-  } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось исключить ученика'))
+    // The page response carries no members; the roster is the role's source
+    // of truth. The masters page is bounded (visible verified masters only),
+    // but the loop still walks its pagination rather than assuming a page.
+    let offset = 0
+    const limit = 100
+    for (;;) {
+      const page = await getCuratorGroupMembers(groupId.value, {
+        kind: 'master',
+        limit,
+        offset,
+      })
+      if (page.items.some((m) => m.user_id === userId.value)) {
+        currentKind.value = 'master'
+        return
+      }
+      offset += limit
+      if (offset >= page.total) {
+        currentKind.value = 'student'
+        return
+      }
+    }
+  } catch {
+    // A failed lookup must not preselect a lie; the default (student) is the
+    // only kind this screen is reached for anyway, and the interim action is
+    // idempotent and explains its own 403 master_required.
+    currentKind.value = 'student'
   } finally {
-    removing.value = false
+    roleKind.value = currentKind.value
+    kindResolving.value = false
   }
+}
+
+function onRoleClick(close: () => void): void {
+  close()
+  roleOpen.value = true
+  void resolveCurrentKind()
+}
+
+function onRoleClose(): void {
+  if (rolePending.value) return
+  roleOpen.value = false
+}
+
+async function onRoleConfirm(): Promise<void> {
+  if (roleConfirmDisabled.value || rolePending.value) return
+  rolePending.value = true
+  try {
+    await offerCuratorGroupMaster(groupId.value, userId.value)
+    toast.success('Предложение отправлено')
+    roleOpen.value = false
+  } catch (e) {
+    toast.error(extractApiError(e, 'Не удалось отправить предложение'))
+  } finally {
+    rolePending.value = false
+  }
+}
+
+// -- «Заблокировать» (BE-79 stopper) --------------------------------------------
+//
+// Owner ruling 2026-09-30: «Исключить из школы» больше не существует --
+// блокировка участника школы (пользователя ИЛИ мастера) заменяет её. The
+// popup chain (confirm -> «Пользователь заблокирован» -> report-offer) is
+// the UX draft for the owner's review. INTERIM: the school-block contract
+// does not exist -- NOTHING mutates server-side; the success step is part
+// of the draft under review, not a claim that anything was written.
+
+const blockConfirmOpen = ref(false)
+const blockedDialogOpen = ref(false)
+const reportOpen = ref(false)
+
+const blockCopy = computed(
+  () =>
+    `Участник больше не сможет видеть школу «${school.value?.name ?? ''}» и записываться на её практики, а также перестанет получать её уведомления. Вы сможете разблокировать его в любой момент.`,
+)
+
+function onBlockClick(close: () => void): void {
+  close()
+  blockConfirmOpen.value = true
+}
+
+function onBlockConfirm(): void {
+  // INTERIM (stopper BE-79): no school-block contract to call -- stepping
+  // into the success/report-offer chain is the draft under review.
+  blockConfirmOpen.value = false
+  blockedDialogOpen.value = true
+}
+
+function onReportOfferAccept(): void {
+  blockedDialogOpen.value = false
+  reportOpen.value = true
 }
 </script>
 
@@ -275,5 +454,37 @@ async function onRemoveConfirm(): Promise<void> {
   font-weight: 400;
   color: var(--velo-text-primary);
   margin: 0;
+}
+
+/* «Изменить роль» popup (FE-87, §1.12.3): title / who / role picker / pills. */
+.ssp__role {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.ssp__role-title {
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: var(--text-lg);
+  color: var(--velo-text-primary);
+}
+
+.ssp__role-sub {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--velo-text-secondary);
+}
+
+.ssp__role-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* Block confirm: air between the who-card (slot content) and the warning
+   panel -- VConfirmDialog spaces only its own elements. */
+.ssp__block-card {
+  margin-bottom: var(--space-3);
 }
 </style>

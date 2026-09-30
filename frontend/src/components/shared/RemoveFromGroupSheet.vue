@@ -4,6 +4,10 @@
   "Удалить из группы" -- CUSTOM groups only (removal from «Ученики» is
   Block, P3; «Удалённые» is Unblock, P3 -- neither is offered here). Three
   modes (VRadioGroup, single choice):
+
+  Domain scope (owner 2026-09-30): groups are the MASTER zone's own CRM --
+  a school has none. This sheet never appears in school screens; school
+  membership removal is «Исключить из школы» there.
     current  -- this one group only
     selected -- expands custom-group VChips, multi-select
     all      -- every custom group; note the student falls back to
