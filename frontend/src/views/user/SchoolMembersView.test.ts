@@ -307,7 +307,7 @@ describe('SchoolMembersView', () => {
     })
   })
 
-  it('master roster rows push the school-context master profile (owner 2026-09-30: the curator actions live in its menu)', async () => {
+  it('master roster rows push the public master profile WITH the school marker (owner 2026-09-30: the curator actions live in its menu)', async () => {
     vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue(page(membersOf('master', ['m9'])))
     mountWith()
     await flush()
@@ -315,12 +315,11 @@ describe('SchoolMembersView', () => {
     const rows = Array.from(host!.querySelectorAll<HTMLButtonElement>('.v-list-row'))
     rows[0]?.click()
     await flush()
-    expect(push).toHaveBeenCalledWith(
-      expect.objectContaining({
-        name: 'user-curator-group-master',
-        params: { groupId: 'g1', userId: 'm9' },
-      }),
-    )
+    expect(push).toHaveBeenCalledWith({
+      name: 'user-master-public',
+      params: { id: 'm9' },
+      query: { groupId: 'g1', name: 'Участник m9', avatar: '' },
+    })
   })
 
   it('«Показать ещё» pulls the next page and appends (§1.11.3)', async () => {
