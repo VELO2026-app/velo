@@ -3,12 +3,12 @@
   decision 2026-09-22)
 
   A school student's profile IN THE SCHOOL CONTEXT, reached from the §1.11
-  roster. Students have no public profile endpoint -- the roster row IS the
-  safe contract (name, avatar), so the hero renders from it directly; what
-  the screen adds is the curator's action set that §1.11.4 placed on a row
-  action sheet (the owner moved it here when the rows became navigational),
-  now living in the header «⋯» menu (VMenu/VMenuItem, the §1.12.3 component
-  rule):
+  roster. The roster row is the safe contract (name, avatar) the hero renders
+  from; BE-54 has since added the school-scoped profile endpoint
+  (GET /masters/me/curator-groups/{id}/students/{user_id}, types already in
+  generated.ts) -- wiring it in is FE-86's slice, this screen does not call
+  it yet. What the screen adds is the curator's action set, living in the
+  header «⋯» menu (VMenu/VMenuItem, the §1.12.3 component rule):
 
     - «Написать сообщение» (SendMessageModal -- the same master->student DM
       the master zone already uses).
