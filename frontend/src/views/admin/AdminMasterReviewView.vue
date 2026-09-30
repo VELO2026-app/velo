@@ -91,7 +91,7 @@
               aria-label="Изменить имя-визитку"
               @click="startField('display_name')"
             >
-              <IconEdit :size="22" />
+              <IconPen :size="22" />
             </button>
           </template>
         </div>
@@ -122,7 +122,7 @@
               aria-label="Изменить имя аккаунта"
               @click="startField('account_name')"
             >
-              <IconEdit :size="22" />
+              <IconPen :size="22" />
             </button>
           </template>
         </div>
@@ -152,7 +152,7 @@
               aria-label="Изменить о себе"
               @click="startField('bio')"
             >
-              <IconEdit :size="22" />
+              <IconPen :size="22" />
             </button>
           </template>
         </div>
@@ -186,7 +186,7 @@
               aria-label="Изменить email"
               @click="startField('email')"
             >
-              <IconEdit :size="22" />
+              <IconPen :size="22" />
             </button>
           </template>
         </div>
@@ -215,7 +215,7 @@
               aria-label="Изменить телефон"
               @click="startField('phone')"
             >
-              <IconEdit :size="22" />
+              <IconPen :size="22" />
             </button>
           </template>
         </div>
@@ -249,7 +249,7 @@
               aria-label="Изменить опыт"
               @click="startField('experience_years')"
             >
-              <IconEdit :size="22" />
+              <IconPen :size="22" />
             </button>
           </template>
         </div>
@@ -293,7 +293,7 @@
               aria-label="Изменить языки"
               @click="startField('languages')"
             >
-              <IconEdit :size="22" />
+              <IconPen :size="22" />
             </button>
           </template>
         </div>
@@ -336,7 +336,7 @@
               aria-label="Изменить направления"
               @click="startMethods"
             >
-              <IconEdit :size="22" />
+              <IconPen :size="22" />
             </button>
           </template>
         </div>
@@ -393,7 +393,7 @@
               aria-label="Изменить сертификаты"
               @click="startField('certifications')"
             >
-              <IconEdit :size="22" />
+              <IconPen :size="22" />
             </button>
           </template>
         </div>
@@ -583,7 +583,7 @@ import {
   VConfirmDialog,
   VAccordion,
 } from '@/components/ui'
-import { IconIdCard, IconEdit, IconView, IconClock } from '@/components/icons'
+import { IconIdCard, IconPen, IconView, IconClock } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import {
   getMasterById,

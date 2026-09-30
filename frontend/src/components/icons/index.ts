@@ -67,7 +67,8 @@ export { default as IconStop } from './IconStop.vue'
 // superseded by IconDecor (part) / IconDecor2 (part) in DiaryTimeline.
 
 // -- Profile menu (Screen A): monochrome glyphs (currentColor) --
-export { default as IconEdit } from './IconEdit.vue'
+// IconEdit removed 2026-09-30: its edit affordances were consolidated into
+// IconPen (owner-supplied stylus redraw), so there is one pen glyph.
 export { default as IconBookings } from './IconBookings.vue'
 export { default as IconBell } from './IconBell.vue'
 export { default as IconBellPlain } from './IconBellPlain.vue'
