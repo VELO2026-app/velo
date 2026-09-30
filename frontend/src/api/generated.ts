@@ -1661,6 +1661,35 @@ export interface ScheduleIn {
   days: string[]
 }
 
+/** One PRE check-in the student left on a practice of this school. POST check-ins never appear, and neither do check-ins whose booking was cancelled: both are absent from the practice's own master's roster, and the school does not see deeper than the person who taught. */
+export interface SchoolStudentCheckinItem {
+  mood: number
+  comment: string | null
+  practice_id: string
+  practice_title: string
+  created_at: string
+}
+
+/** One review the student left on a practice of this school. Unlike the check-ins above this list carries NO booking-status filter, and the asymmetry is deliberate: a review the practice's master reads is a review the school may read, and the master's own review feeds do not filter by booking either (BE-24). */
+export interface SchoolStudentFeedbackItem {
+  rating: number
+  comment: string | null
+  practice_id: string
+  practice_title: string
+  created_at: string
+}
+
+/** GET /masters/me/curator-groups/{group_id}/students/{user_id}. What the school knows about one of its students, across every practice of the school -- including practices taught by other masters, and including practices whose master has since left. Belonging is a fact about the practice, not about anybody's current membership (owner ruling, 10 September). practices_count -- practices of this school the student ATTENDED. hours -- their duration summed, in hours, one decimal, rounded on the server: the client does not compute this (TZ 1.13.3). Both are zero, and the arrays empty, for a student who has attended nothing -- a 200, never a 404. */
+export interface SchoolStudentProfileResponse {
+  user_id: string
+  display_name: string
+  avatar_url: string | null
+  practices_count: number
+  hours: number
+  recent_checkins: SchoolStudentCheckinItem[]
+  recent_feedbacks: SchoolStudentFeedbackItem[]
+}
+
 export interface SendMessageIn {
   topic?: string | null
   body: string
