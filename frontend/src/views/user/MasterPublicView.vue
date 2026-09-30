@@ -88,11 +88,12 @@
       <VAccordion v-if="profile.methods?.length" title="Методы">
         <div class="master-public__chips">
           <VTag
-            v-for="(method, i) in profile.methods || []"
-            :key="method"
+            v-for="(chip, i) in methodChips"
+            :key="`${i}:${chip.label}`"
             :variant="TAG_VARIANTS[i % TAG_VARIANTS.length]"
           >
-            {{ method }}
+            <component :is="chip.icon" :size="12" aria-hidden="true" />
+            {{ chip.label }}
           </VTag>
         </div>
       </VAccordion>
@@ -160,6 +161,7 @@ import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import { plural } from '@/utils/plural'
+import { methodChipFor } from '@/utils/methodChips'
 import type { MasterPublicResponse, PracticeResponse } from '@/api/types'
 
 const route = useRoute()
@@ -183,6 +185,11 @@ const displayName = computed(() => profile.value?.display_name ?? 'Мастер'
 
 // Method tags cycle through three tints (same as MasterCard).
 const TAG_VARIANTS = ['blue', 'pink', 'sand'] as const
+
+// FE-61/62: one chip = direction icon + SHORT skill label. The direction word
+// embedded in a style label («Медитация молчания») is stripped so a pill
+// never says the word twice (FE-64) — see utils/methodChips.ts.
+const methodChips = computed(() => (profile.value?.methods ?? []).map(methodChipFor))
 
 // -- Russian pluralization helpers (SW14: canonical impl in utils/plural.ts) --
 function pluralYears(n: number): string {

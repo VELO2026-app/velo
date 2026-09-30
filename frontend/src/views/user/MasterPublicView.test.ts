@@ -203,6 +203,23 @@ function practiceCards(): HTMLElement[] {
 function askBtn(): HTMLButtonElement | null {
   return host?.querySelector<HTMLButtonElement>('.master-public__actions .v-btn') ?? null
 }
+function methodsHeaderBtn(): HTMLButtonElement | null {
+  const headers = Array.from(
+    host?.querySelectorAll<HTMLButtonElement>('.v-accordion__header') ?? [],
+  )
+  return headers.find((b) => (b.textContent ?? '').includes('Методы')) ?? null
+}
+function methodPills(): HTMLElement[] {
+  return Array.from(host?.querySelectorAll<HTMLElement>('.master-public__chips .v-tag') ?? [])
+}
+function pillTexts(): string[] {
+  return methodPills().map((p) => (p.textContent ?? '').trim().replace(/\s+/g, ' '))
+}
+// The «Методы» accordion defaults collapsed -- expand it before reading pills.
+async function openMethods(): Promise<void> {
+  methodsHeaderBtn()?.click()
+  await flush()
+}
 
 beforeEach(() => {
   pinia = createPinia()
@@ -227,6 +244,46 @@ afterEach(() => {
 })
 
 describe('MasterPublicView', () => {
+  // ===========================================================================
+  describe('methods chips (FE-61/62/64)', () => {
+    it('a «Направление — Вид» pill shows the SHORT style label — the direction word never repeats inside one chip', async () => {
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(
+        masterProfile({
+          methods: [
+            'Медитация — Медитация молчания',
+            'Йога — Кундалини-йога',
+            'Мой уникальный метод',
+          ],
+        }),
+      )
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      mount()
+      await flush()
+      await openMethods()
+
+      expect(pillTexts()).toEqual(['Молчания', 'Кундалини', 'Мой уникальный метод'])
+      // FE-64 regression: the raw flat string must not surface in any pill.
+      for (const t of pillTexts()) {
+        expect(t.toLowerCase()).not.toContain('медитация —')
+        expect(t.toLowerCase()).not.toContain('йога —')
+      }
+    })
+
+    it('every pill carries a direction icon (svg), the neutral fallback included for unknown strings', async () => {
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(
+        masterProfile({ methods: ['Медитация — Медитация молчания', 'Йога-нидра'] }),
+      )
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      mount()
+      await flush()
+      await openMethods()
+
+      const pills = methodPills()
+      expect(pills.length).toBe(2)
+      for (const p of pills) expect(p.querySelector('svg')).not.toBeNull()
+    })
+  })
+
   // ===========================================================================
   describe('the ladder', () => {
     it('loading starts true from setup itself: the loader shows on the very first render, zero ticks after mount()', () => {

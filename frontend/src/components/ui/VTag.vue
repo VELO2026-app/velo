@@ -31,6 +31,10 @@ withDefaults(
 .v-tag {
   display: inline-flex;
   align-items: center;
+  /* Icon + label pills (method chips): the icon and the text are two flex
+     items, so the gap separates them; text-only pills have a single item and
+     are unaffected. */
+  gap: var(--space-1);
   padding: 4px 12px;
   font-size: var(--text-xs);
   /* Rect badge canon (--velo-radius-badge 5px), matching VBadge — tags and
