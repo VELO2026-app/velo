@@ -3,12 +3,13 @@
   decision 2026-09-22)
 
   A school student's profile IN THE SCHOOL CONTEXT, reached from the §1.11
-  roster. The roster row is the safe contract (name, avatar) the hero renders
-  from; BE-54 has since added the school-scoped profile endpoint
-  (GET /masters/me/curator-groups/{id}/students/{user_id}, types already in
-  generated.ts) -- wiring it in is FE-86's slice, this screen does not call
-  it yet. What the screen adds is the curator's action set, living in the
-  header «⋯» menu (VMenu/VMenuItem, the §1.12.3 component rule):
+  roster. BE-54's school-scoped endpoint
+  (GET /masters/me/curator-groups/{id}/students/{user_id}) feeds the screen:
+  display name, avatar and the attended/hours aggregates (§1.13 -- the
+  recent_* arrays ride the contract but the screen does not render them
+  yet). A successful load IS the curator proof (the endpoint 404s everyone
+  else, P-08); what the screen adds is the action set in the header «⋯»
+  menu (VMenu/VMenuItem, the §1.12.3 component rule):
 
     - «Написать сообщение» (SendMessageModal -- the same master->student DM
       the master zone already uses).
@@ -42,7 +43,7 @@
 <template>
   <div class="ssp">
     <VHeader title="Ученик" show-back @back="goBack">
-      <template v-if="isCurator && loaded" #action>
+      <template v-if="loaded" #action>
         <VMenu aria-label="Действия с учеником">
           <template #default="{ close }">
             <VMenuItem
@@ -66,12 +67,13 @@
     </VHeader>
 
     <div class="ssp__content">
-      <!-- The school context is gone or not ours (P-08 masking). -->
+      <!-- The masked 404 (P-08): not-curator, not-a-student, dead school --
+           one answer, §1.13.5's «Ученик недоступен». -->
       <VEmptyState
-        v-if="schoolNotFound"
+        v-if="profileNotFound"
         icon="notfound"
-        title="Школа недоступна"
-        description="Возможно, она была удалена или вы в ней не состоите."
+        title="Ученик недоступен"
+        description="Возможно, он вышел из школы или был удалён."
       >
         <template #action>
           <VButton variant="primary" @click="goBack">К списку учеников</VButton>
@@ -79,9 +81,9 @@
       </VEmptyState>
 
       <VEmptyState
-        v-else-if="schoolError"
+        v-else-if="profileError"
         icon="warning"
-        title="Не удалось загрузить школу"
+        title="Не удалось загрузить профиль"
         description="Проверьте соединение и попробуйте ещё раз."
       >
         <template #action>
@@ -94,11 +96,17 @@
       </div>
 
       <template v-else>
-        <!-- Hero: the roster row's own safe fields. -->
+        <!-- Hero: the school-scoped profile's own fields (BE-54). -->
         <VCard class="ssp__hero" padding="none">
           <VAvatar :name="studentName" :url="studentAvatar" size="xl" />
           <h1 class="ssp__name">{{ studentName }}</h1>
         </VCard>
+
+        <!-- §1.13.2: two equal cards in one row -- «Практик» / «Часов». -->
+        <div class="ssp__stats">
+          <VStatCard layout="row" :value="practicesLabel" label="Практик" />
+          <VStatCard layout="row" :value="hoursLabel" label="Часов" />
+        </div>
       </template>
     </div>
 
@@ -196,11 +204,11 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   getCuratorGroupMembers,
-  getCuratorGroupPage,
+  getCuratorGroupStudentProfile,
   offerCuratorGroupMaster,
 } from '@/api/curatorGroups'
 import { ApiResponseError } from '@/api/client'
-import type { CuratorGroupPageResponse } from '@/api/types'
+import type { SchoolStudentProfileResponse } from '@/api/types'
 import { IconLock, IconMessages, IconPen } from '@/components/icons'
 import {
   VAvatar,
@@ -213,6 +221,7 @@ import {
   VMenuItem,
   VModal,
   VRadioGroup,
+  VStatCard,
 } from '@/components/ui'
 import SendMessageModal from '@/components/shared/SendMessageModal.vue'
 import ReportUserSheet from '@/components/shared/ReportUserSheet.vue'
@@ -228,8 +237,21 @@ const toast = useToast()
 const groupId = computed(() => String(route.params.groupId ?? ''))
 const userId = computed(() => String(route.params.userId ?? ''))
 
-const studentName = computed(() => String(route.query.name ?? 'Ученик'))
-const studentAvatar = computed(() => String(route.query.avatar ?? ''))
+// Server truth once loaded; the roster query is only the instant-paint hint.
+const studentName = computed(
+  () => profile.value?.display_name ?? String(route.query.name ?? 'Ученик'),
+)
+const studentAvatar = computed(() => profile.value?.avatar_url ?? String(route.query.avatar ?? ''))
+
+// §1.13.3: hours is server-rounded to one decimal -- format only, never
+// recompute; an integral count prints without a fractional part (9 -> «9»,
+// 9.5 -> «9,5»).
+function formatHours(hours: number): string {
+  return Number.isInteger(hours) ? String(hours) : String(hours).replace('.', ',')
+}
+
+const practicesLabel = computed(() => String(profile.value?.practices_count ?? ''))
+const hoursLabel = computed(() => (profile.value ? formatHours(profile.value.hours) : ''))
 
 const inMasterZone = computed(() => String(route.name ?? '').startsWith('master'))
 
@@ -246,24 +268,24 @@ function goBack(): void {
 
 const loading = ref(true)
 const loaded = ref(false)
-const schoolNotFound = ref(false)
-const schoolError = ref(false)
-const school = ref<CuratorGroupPageResponse | null>(null)
-
-const isCurator = computed(() => school.value?.viewer.relation === 'curator')
+const profileNotFound = ref(false)
+const profileError = ref(false)
+const profile = ref<SchoolStudentProfileResponse | null>(null)
 
 async function load(): Promise<void> {
   loading.value = true
-  schoolNotFound.value = false
-  schoolError.value = false
+  profileNotFound.value = false
+  profileError.value = false
   try {
-    school.value = await getCuratorGroupPage(groupId.value)
+    profile.value = await getCuratorGroupStudentProfile(groupId.value, userId.value)
     loaded.value = true
   } catch (e) {
+    // The 404 is MASKED by design (P-08): not-curator, not-a-student and a
+    // dead school are one answer -- §1.13.1's «Ученик недоступен».
     if (e instanceof ApiResponseError && e.status === 404) {
-      schoolNotFound.value = true
+      profileNotFound.value = true
     } else {
-      schoolError.value = true
+      profileError.value = true
     }
   } finally {
     loading.value = false
@@ -396,7 +418,7 @@ const reportOpen = ref(false)
 
 const blockCopy = computed(
   () =>
-    `Участник больше не сможет видеть школу «${school.value?.name ?? ''}» и записываться на её практики, а также перестанет получать её уведомления. Вы сможете разблокировать его в любой момент.`,
+    `Участник больше не сможет видеть эту школу и записываться на её практики, а также перестанет получать её уведомления. Вы сможете разблокировать его в любой момент.`,
 )
 
 function onBlockClick(close: () => void): void {
@@ -454,6 +476,15 @@ function onReportOfferAccept(): void {
   font-weight: 400;
   color: var(--velo-text-primary);
   margin: 0;
+}
+
+.ssp__stats {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.ssp__stats > * {
+  flex: 1;
 }
 
 /* «Изменить роль» popup (FE-87, §1.12.3): title / who / role picker / pills. */

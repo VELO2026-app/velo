@@ -16,7 +16,7 @@ import { createApp, nextTick, type App } from 'vue'
 import SchoolStudentProfileView from '@/views/user/SchoolStudentProfileView.vue'
 import * as cgApi from '@/api/curatorGroups'
 import { ApiResponseError } from '@/api/client'
-import type { CuratorGroupPageResponse } from '@/api/types'
+import type { SchoolStudentProfileResponse } from '@/api/types'
 
 vi.mock('@/api/curatorGroups')
 
@@ -78,18 +78,26 @@ function exactButton(label: string): HTMLButtonElement | undefined {
   )
 }
 
-function pageFixture(relation: 'curator' | 'master' | 'student'): CuratorGroupPageResponse {
+/** The stat cards' values in DOM order (§1.13.2: «Практик» then «Часов»). */
+function statValues(): string[] {
+  return Array.from(document.body.querySelectorAll<HTMLElement>('.v-stat__value') ?? []).map((e) =>
+    (e.textContent ?? '').trim(),
+  )
+}
+
+function profileFixture(
+  overrides: Partial<SchoolStudentProfileResponse> = {},
+): SchoolStudentProfileResponse {
   return {
-    id: 'g1',
-    name: 'Школа г1',
-    description: null,
+    user_id: 'u9',
+    display_name: 'Пётр Сидоров',
     avatar_url: null,
-    masters_count: 1,
-    students_count: 3,
-    viewer: { relation },
-    curator: { user_id: 'cur1', display_name: 'Куратор', avatar_url: null },
-    transfer: null,
-  } as unknown as CuratorGroupPageResponse
+    practices_count: 12,
+    hours: 9.5,
+    recent_checkins: [],
+    recent_feedbacks: [],
+    ...overrides,
+  }
 }
 
 beforeEach(() => {
@@ -98,7 +106,8 @@ beforeEach(() => {
   routeState.userId = 'u9'
   routeState.nameQuery = 'Пётр Сидоров'
   Object.values(cgApi).forEach((fn) => vi.mocked(fn).mockReset())
-  vi.mocked(cgApi.getCuratorGroupPage).mockResolvedValue(pageFixture('curator'))
+  vi.mocked(cgApi.getCuratorGroupPage).mockReset()
+  vi.mocked(cgApi.getCuratorGroupStudentProfile).mockResolvedValue(profileFixture())
   vi.mocked(cgApi.offerCuratorGroupMaster).mockResolvedValue(undefined)
   // Default roster lookup: the student is NOT among the masters (the only
   // kind this screen is reached for); master-present tests override below.
@@ -123,24 +132,32 @@ afterEach(() => {
 })
 
 describe('SchoolStudentProfileView', () => {
-  it('the hero renders from the roster row query data', async () => {
+  it('the hero renders from the SERVER profile -- a deep link without query params still names the student', async () => {
+    routeState.nameQuery = ''
     mount()
     await flush()
 
     expect(text()).toContain('Пётр Сидоров')
     expect(text()).not.toContain('Школа недоступна')
+
+    // §1.13.2: the two aggregates ride the same response, formatted (9.5 ->
+    // «9,5»; the integer practice count prints bare).
+    expect(statValues()).toEqual(['12', '9,5'])
   })
 
-  it("the «⋯» menu is the curator's alone (viewer.relation, §1.12.1)", async () => {
+  it("the «⋯» menu is the curator's alone -- the masked 404 renders «Ученик недоступен» with no menu (P-08, §1.13.5)", async () => {
     mount()
     await flush()
     expect(buttonWith('Действия с учеником')).toBeTruthy()
 
     app?.unmount()
-    vi.mocked(cgApi.getCuratorGroupPage).mockResolvedValue(pageFixture('student'))
+    vi.mocked(cgApi.getCuratorGroupStudentProfile).mockRejectedValue(
+      new ApiResponseError(404, 'not found', 'not_found'),
+    )
     mount()
     await flush()
     expect(buttonWith('Действия с учеником')).toBeUndefined()
+    expect(text()).toContain('Ученик недоступен')
   })
 
   it('the menu is «Написать сообщение» / «Изменить роль» / «Заблокировать» (owner 2026-09-30: no exclusion)', async () => {
@@ -354,14 +371,74 @@ describe('SchoolStudentProfileView', () => {
     expect(cgApi.removeCuratorGroupMember).not.toHaveBeenCalled()
   })
 
-  it('a school 404 is its own rung (P-08), not an error and not an empty hero', async () => {
-    vi.mocked(cgApi.getCuratorGroupPage).mockRejectedValue(
+  it('a masked 404 is its own rung (P-08), not an error and not an empty hero', async () => {
+    vi.mocked(cgApi.getCuratorGroupStudentProfile).mockRejectedValue(
       new ApiResponseError(404, 'not found', 'not_found'),
     )
     mount()
     await flush()
 
-    expect(text()).toContain('Школа недоступна')
+    expect(text()).toContain('Ученик недоступен')
     expect(text()).not.toContain('Пётр Сидоров')
+    expect(buttonWith('К списку учеников')).toBeTruthy()
+  })
+
+  it('a non-404 failure is retryable: «Не удалось загрузить профиль» + «Повторить»', async () => {
+    vi.mocked(cgApi.getCuratorGroupStudentProfile).mockRejectedValue(
+      new ApiResponseError(500, 'boom', 'internal_error'),
+    )
+    mount()
+    await flush()
+
+    expect(text()).toContain('Не удалось загрузить профиль')
+    expect(buttonWith('Повторить')).toBeTruthy()
+
+    vi.mocked(cgApi.getCuratorGroupStudentProfile).mockResolvedValue(profileFixture())
+    buttonWith('Повторить')?.click()
+    await flush()
+
+    expect(text()).toContain('Пётр Сидоров')
+  })
+
+  it('an honest zero: hero stays, both stat cards show «0»', async () => {
+    vi.mocked(cgApi.getCuratorGroupStudentProfile).mockResolvedValue(
+      profileFixture({ practices_count: 0, hours: 0 }),
+    )
+    mount()
+    await flush()
+
+    expect(text()).toContain('Пётр Сидоров')
+    const values = statValues()
+    expect(values).toEqual(['0', '0'])
+  })
+
+  it('the recent_* contract arrays are NOT rendered (§1.13: no diagnostics on this screen yet)', async () => {
+    vi.mocked(cgApi.getCuratorGroupStudentProfile).mockResolvedValue(
+      profileFixture({
+        recent_checkins: [
+          {
+            mood: 3,
+            comment: 'Секретный чекин',
+            practice_id: 'p1',
+            practice_title: 'Практика p1',
+            created_at: '2026-09-01T00:00:00Z',
+          },
+        ],
+        recent_feedbacks: [
+          {
+            rating: 9,
+            comment: 'Секретный фидбек',
+            practice_id: 'p1',
+            practice_title: 'Практика p1',
+            created_at: '2026-09-01T00:00:00Z',
+          },
+        ],
+      }),
+    )
+    mount()
+    await flush()
+
+    expect(text()).not.toContain('Секретный чекин')
+    expect(text()).not.toContain('Секретный фидбек')
   })
 })

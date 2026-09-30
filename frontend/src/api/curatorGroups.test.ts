@@ -35,6 +35,7 @@ import {
   getCuratorGroupCheckins,
   getCuratorGroupReviews,
   getCuratorGroupPractices,
+  getCuratorGroupStudentProfile,
   getCuratorGroupLeavePreview,
   leaveCuratorGroup,
   acceptCuratorGroupTransfer,
@@ -247,6 +248,14 @@ describe('invite + transfer + join bodies', () => {
     await joinCuratorGroup('tok_abc')
 
     expect(api.post).toHaveBeenCalledWith(`${M}/join`, { token: 'tok_abc' })
+  })
+})
+
+describe('getCuratorGroupStudentProfile', () => {
+  it('GETs the school-scoped path with no query params (BE-54)', async () => {
+    await getCuratorGroupStudentProfile('g1', 'u9')
+
+    expect(api.get).toHaveBeenCalledWith(`${G}/g1/students/u9`)
   })
 })
 

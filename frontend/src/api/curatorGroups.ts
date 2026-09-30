@@ -77,6 +77,7 @@ import type {
   PaginatedCuratorGroupMembersResponse,
   PaginatedCuratorGroupReviewsResponse,
   PaginatedPracticesResponse,
+  SchoolStudentProfileResponse,
   UpdateCuratorGroupRequest,
 } from '@/api/types'
 
@@ -181,6 +182,22 @@ export function getCuratorGroupMembers(
     offset: query.offset,
   })
   return api.get<PaginatedCuratorGroupMembersResponse>(`${CURATOR_BASE}/${id}/members${qs}`)
+}
+
+/** GET /masters/me/curator-groups/{id}/students/{user_id} -- the SCHOOL-scoped
+ *  profile of one student (BE-54, tz-curator.md §1.13): attended-practice and
+ *  hours aggregates across EVERY practice of this school (BE-24's historical
+ *  belonging rule -- masters who since left stay counted), plus recent PRE
+ *  check-ins and named reviews. CURATOR ONLY: a non-curator, a non-student
+ *  and a stranger all get the same masked 404 (P-08). hours is
+ *  server-rounded to one decimal -- format it, never recompute it (§1.13.3).
+ *  The recent_* arrays are contract-carrying: the screen (owner 2026-09-22)
+ *  does not render them yet. */
+export function getCuratorGroupStudentProfile(
+  id: string,
+  userId: string,
+): Promise<SchoolStudentProfileResponse> {
+  return api.get(`${CURATOR_BASE}/${id}/students/${userId}`)
 }
 
 /** DELETE /masters/me/curator-groups/{id}/members/{user_id} -- remove a member
