@@ -703,3 +703,115 @@ async def test_an_appointment_made_while_the_school_is_renamed(
     assert result.rival.committed, result.rival.error
     assert await _offers(db_session, s) == [s.student]
     assert (await _group(db_session, s)).name == "А"
+
+
+# ===========================================================================
+# BE-59 B1 finding: the curator-side takers that wrote WITHOUT re-checking
+# ownership under the group lock (remove, revoke). Reproduced red on the
+# code before the fix; the holder is the accept that hands the school over,
+# paused after it has taken the group row.
+# ===========================================================================
+
+
+def _revoke_invite(s: School):
+    async def call(session):
+        await curator_service.revoke_curator_group_invite(
+            s.curator, s.id, session, actor=await _actor(session, s.curator),
+        )
+    return call
+
+
+async def _invites(db_session: AsyncSession, s: School) -> list[str]:
+    return list(
+        (
+            await db_session.execute(
+                select(CuratorGroupInvite.token).where(
+                    CuratorGroupInvite.group_id == s.id
+                )
+            )
+        ).scalars()
+    )
+
+
+async def _journal_events(db_session: AsyncSession, s: School) -> list[str]:
+    return list(
+        (
+            await db_session.execute(
+                select(CuratorGroupEvent.event).where(
+                    CuratorGroupEvent.group_id == s.id
+                )
+            )
+        ).scalars()
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_curator_who_handed_the_school_over_cannot_remove_from_it(
+    client, db_session, monkeypatch,
+) -> None:
+    """The old curator removes a member while the heir's accept holds the
+    group row it has just changed hands on.
+
+    ON THE OLD CODE THE REMOVAL COMMITTED. Remove read ownership once
+    (_get_group_or_404, before the accept committed) and never again. It
+    DID wait -- measured, not assumed: the accept rewrites curator_user_id,
+    a column of the UNIQUE (curator_user_id, name) index, which is a key
+    update, and the journal INSERT's FK check takes KEY SHARE on the group,
+    which conflicts with it -- but waiting re-reads nothing, so once the
+    accept committed the removal went on, and a person vanished from the
+    NEW owner's school, removed by somebody who no longer owned it.
+
+    WHAT TELLS THE FIX APART is therefore not rival_waited (true before and
+    after) but its pair: refused with the school's 404, and the member
+    exactly where they were, with no removal line.
+    """
+    s = await _school(client, db_session, transfer_to_heir=True)
+    result = await race(
+        monkeypatch,
+        holder=_accept_transfer(s),
+        pause_in=(curator_service, "_frozen_name"),
+        rival=_remove(s, s.third),
+    )
+    assert_no_deadlock(result)
+    assert result.holder.committed, result.holder.error
+    assert result.rival_waited, "the removal never met the group's lock"
+    assert isinstance(result.rival.error, NotFoundError), result.rival
+    db_session.expire_all()
+    assert (await _members(db_session, s)).get(s.third) == MASTER
+    assert CuratorGroupEventKind.MEMBER_REMOVED.value not in (
+        await _journal_events(db_session, s)
+    )
+    assert (await _group(db_session, s)).curator_user_id == s.heir
+
+
+@pytest.mark.asyncio
+async def test_a_curator_who_handed_the_school_over_cannot_revoke_its_link(
+    client, db_session, monkeypatch,
+) -> None:
+    """The same window for the invite link: the old curator revokes it while
+    the heir's accept holds the group row.
+
+    ON THE OLD CODE THE REVOCATION COMMITTED, after waiting on the group
+    for the same key-update reason as the removal above -- and then the new
+    owner's link was gone and the journal said its curator revoked it.
+
+    THE PAIR (rival_waited holds before and after the fix): refused with the
+    school's 404; the link is still there and still the same token; no
+    revocation line.
+    """
+    s = await _school(client, db_session, transfer_to_heir=True, invite=True)
+    result = await race(
+        monkeypatch,
+        holder=_accept_transfer(s),
+        pause_in=(curator_service, "_frozen_name"),
+        rival=_revoke_invite(s),
+    )
+    assert_no_deadlock(result)
+    assert result.holder.committed, result.holder.error
+    assert result.rival_waited, "the revocation never met the group's lock"
+    assert isinstance(result.rival.error, NotFoundError), result.rival
+    db_session.expire_all()
+    assert await _invites(db_session, s) == [s.token]
+    assert CuratorGroupEventKind.INVITE_REVOKED.value not in (
+        await _journal_events(db_session, s)
+    )

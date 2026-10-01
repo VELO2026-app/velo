@@ -1219,6 +1219,20 @@ async def remove_curator_group_member(
             CuratorGroupMasterOffer.to_user_id == user_id,
         )
     )
+    # OWNERSHIP RE-CHECKED UNDER THE GROUP LOCK, once, after the child rows
+    # this function took and before the journal row's INSERT (header). The
+    # school can change hands between _get_group_or_404 above and here, and
+    # until this check a former curator removed people from the NEW owner's
+    # school: the journal INSERT did wait on the group (its FK check's KEY
+    # SHARE meets the handover's key update of curator_user_id), but waiting
+    # re-reads nothing (test_curator_lock_order.py, the BE-59 B1 finding).
+    # The refusal arrives after the member, the transfer and the offer were
+    # deleted; they come back only because get_db_session rolls the request
+    # back on the exception (P-01) -- a dependency, not a property of this
+    # function. A miss above never gets here: nothing was taken, nothing is
+    # written, and the idempotent 204 needs no lock.
+    if not await _lock_group_as_owner(curator_user_id, group.id, session):
+        raise NotFoundError("Curator group not found")
     journal = _record_group_event(
         group.id, actor, CuratorGroupEventKind.MEMBER_REMOVED, session,
         data=data,
@@ -2122,6 +2136,13 @@ async def revoke_curator_group_invite(
         )
     ).first()
     if revoked is not None:
+        # OWNERSHIP RE-CHECKED UNDER THE GROUP LOCK, after the take and before
+        # the journal row (header), for the reason remove_curator_group_member
+        # gives: a former curator mid-handover would otherwise revoke the new
+        # owner's link. The link comes back on the refusal only because
+        # get_db_session rolls the request back (P-01).
+        if not await _lock_group_as_owner(curator_user_id, group.id, session):
+            raise NotFoundError("Curator group not found")
         _record_group_event(
             group.id,
             actor,
