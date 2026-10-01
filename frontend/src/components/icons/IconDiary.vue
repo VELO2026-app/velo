@@ -1,7 +1,8 @@
 <template>
   <!-- Diary tab icon («Дневник») -- notebook with text lines + a pencil.
        From the designer's SVG (2026-10-01). Monochrome via currentColor
-       (project convention); the source art's stroke is kept as-is. -->
+       (project convention); the source art's stroke is kept as-is.
+       Deploy probe 2026-10-01: forces the server image rebuild. -->
   <svg
     xmlns="http://www.w3.org/2000/svg"
     :width="size"
