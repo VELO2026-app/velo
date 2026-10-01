@@ -33,6 +33,7 @@ from app.core.config import settings
 from app.core.database import dispose_engine, get_session_factory
 from app.core.redis import close_redis, get_redis, init_redis
 from app.main import app
+from tests.redis_isolation import RedisIsolationError, isolated_redis_url
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -85,8 +86,20 @@ async def setup_infrastructure():
             f"Alembic migration failed:\n{result.stderr}\n{result.stdout}"
         )
 
+    # BE-82: the suite runs in a Redis database of its own, emptied once
+    # here -- never in the application's (tests/redis_isolation.py says
+    # why, and why the number is fixed). The URL is moved BEFORE init_redis
+    # so every client of the session -- get_redis(), the relay test's own
+    # from_url -- lands in the test database. A collision with the
+    # application's database stops the whole run, loudly, before any flush.
+    try:
+        settings.redis_url = isolated_redis_url(settings.redis_url)
+    except RedisIsolationError as refusal:
+        pytest.exit(f"BE-82 Redis isolation: {refusal}", returncode=3)
+
     # Initialize Redis client.
     await init_redis()
+    await get_redis().flushdb()
 
     yield
 
