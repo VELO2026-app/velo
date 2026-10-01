@@ -1,7 +1,7 @@
-# BE: создание практики для другого мастера (`master_id` на POST /practices)
+# BE-102: создание практики для другого мастера (`master_id` на POST /practices)
 
-**Стопер для:** FE-задачи «Включить создание практики для мастера школы»
-(фронтовая заглушка уже живёт на странице создания практики и ждёт этот контракт).
+> Linear: [BE-102](https://linear.app/velo-space/issue/BE-102) · Backend · assignee: ZodD
+> Блокирует: [FE-92](https://linear.app/velo-space/issue/FE-92)
 
 ## Контракт
 
