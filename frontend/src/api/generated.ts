@@ -604,6 +604,7 @@ export interface CreatePracticeRequest {
   audience_kind?: AudienceKind
   group_ids?: string[]
   curator_group_id?: string | null
+  master_id?: string | null
 }
 
 /** User submits a new report. */
