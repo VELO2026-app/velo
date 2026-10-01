@@ -75,7 +75,6 @@ from app.modules.zoom.zoom_client import (
     ZoomAPIError,
     create_meeting,
     create_registrant,
-    delete_meeting,
     get_meeting,
     get_meeting_recordings,
     list_registrants,
@@ -745,13 +744,29 @@ async def delete_meeting_for_practice(
     practice: Practice,
     session: AsyncSession,
 ) -> None:
-    """Best-effort deletion of a practice's Zoom meeting on cancel.
+    """Mark a cancelled practice's active Zoom meeting deleted and QUEUE
+    the Zoom-side DELETE.
 
-    Skips meetings that already have attendance segments (nothing left to
-    protect a cancelled-after-the-fact meeting from -- the report already
-    happened). No-op if there's no active meeting, or if the Zoom call
-    fails (logged, never raised -- refunds/cancellation must proceed
-    regardless, E21 plan sec 2).
+    Our row's status is the authority: from this commit on, every reader
+    that serves a link (they all check status == active) treats the
+    meeting as gone, whatever Zoom later answers. No HTTP here -- the
+    DELETE used to be made right here, inside the practice cancel's
+    transaction, with the practice and its bookings held FOR UPDATE, once
+    per occurrence of a series scope cancel; and `deleted` was set only
+    when Zoom answered, so a refused DELETE left the master's host link
+    alive on our pages. Now zoom/retry_poller.py makes the call after
+    commit, in its own transaction.
+
+    Only an ACTIVE meeting is marked. A meeting still pending_creation /
+    create_failed is left alone, as before -- and the retry poller, which
+    checks the meeting's status and not the practice's, can then still
+    create a Zoom meeting for the cancelled practice. That hole is known
+    and open: marking such a row here races the poller's create, which
+    holds the row FOR UPDATE through its HTTP call, and that race was
+    measured into 40P01; closing it is a separate delivery.
+
+    Skips meetings that already have attendance segments (the report
+    already happened -- nothing to protect by deleting). Never raises.
     """
     zoom_meeting = (
         await session.execute(
@@ -776,19 +791,9 @@ async def delete_meeting_for_practice(
         )
         return
 
-    try:
-        await delete_meeting(zoom_meeting_id=zoom_meeting.zoom_meeting_id)
-        zoom_meeting.status = ZoomMeetingStatus.DELETED.value
-        logger.info("zoom_meeting_deleted", practice_id=str(practice.id))
-    except ZoomAPIError as exc:
-        zoom_meeting.last_sync_error = (
-            f"delete_meeting failed: status={exc.status_code} body={exc.body}"
-        )
-        logger.warning(
-            "zoom_meeting_delete_failed",
-            practice_id=str(practice.id),
-            status_code=exc.status_code,
-        )
+    zoom_meeting.status = ZoomMeetingStatus.DELETED.value
+    zoom_meeting.zoom_delete_pending = True
+    logger.info("zoom_meeting_marked_deleted", practice_id=str(practice.id))
 
 
 # ---------------------------------------------------------------------------

@@ -764,10 +764,9 @@ async def cancel_practice_endpoint(
     #   zoom_host_join_url is the master's personal HOST link (role='host',
     #     zoom/service.py) -- handing it over would give a curator host
     #     control of another master's meeting. It is usually None here
-    #     because cancel deletes the meeting, but only USUALLY:
-    #     delete_meeting_for_practice flips the row to deleted ONLY on a
-    #     successful Zoom call, and skips the delete outright when the
-    #     meeting already has attendance segments. On either path the row
+    #     because cancel marks an active meeting deleted, but only
+    #     USUALLY: delete_meeting_for_practice skips the meeting outright
+    #     when it already has attendance segments. On that path the row
     #     stays active and the link resolves.
     #   master_name is the practice's OWNER's name. Passing the caller's
     #     first_name was correct while they were the same person; for a

@@ -65,8 +65,10 @@ class ZoomMeetingStatus(enum.StrEnum):
                           create_failed (retry_poller.py claims both).
     create_failed     -- creation (or a retry) failed; retry_count / last_sync_error
                           record why. The retry poller keeps trying until the cap.
-    deleted           -- we deleted the Zoom-side meeting (practice cancelled
-                          before it happened).
+    deleted           -- the practice was cancelled before it happened: our
+                          row is dead from that moment, whatever Zoom says;
+                          the Zoom-side DELETE is queued (zoom_delete_pending)
+                          and made by the retry poller after commit.
     """
 
     ACTIVE = "active"
@@ -142,6 +144,20 @@ class ZoomMeeting(UUIDMixin, TimestampMixin, Base):
         Integer, default=0, server_default="0",
     )
     last_sync_error: Mapped[str | None] = mapped_column(Text, default=None)
+
+    # Zoom-side DELETE queue. delete_meeting_for_practice sets
+    # status=deleted AND zoom_delete_pending=True on an ACTIVE meeting in
+    # the practice cancel's transaction; zoom/retry_poller.py makes the
+    # call after commit and clears the flag. zoom_delete_attempts counts
+    # failed Zoom DELETE calls, capped by
+    # settings.zoom_meeting_delete_max_retries; at the cap the row stays
+    # VISIBLY pending, last_sync_error saying so.
+    zoom_delete_pending: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(),
+    )
+    zoom_delete_attempts: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0",
+    )
 
     # E21 step F: set the moment the report poller successfully pulls this
     # meeting's report, regardless of whether any rows came back -- a

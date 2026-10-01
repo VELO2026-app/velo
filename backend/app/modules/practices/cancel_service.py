@@ -340,10 +340,13 @@ async def _cancel_one(
             except IntegrityError:
                 continue
 
-    # E21: best-effort delete the practice's Zoom meeting so a cancelled
-    # session can't still be joined via a still-live personal link. Skips
-    # meetings that already have attendance segments, and never raises --
-    # refunds/cancellation must proceed regardless of Zoom's outcome.
+    # E21: the practice's Zoom meeting goes dead with the practice, so a
+    # cancelled session can't still be joined via a still-live personal
+    # link: an active meeting's row is marked deleted here and the
+    # Zoom-side DELETE is queued for the retry poller -- no Zoom HTTP
+    # inside this transaction.
+    # Skips meetings that already have attendance segments, and never
+    # raises -- refunds/cancellation must proceed regardless of Zoom.
     from app.modules.zoom.service import delete_meeting_for_practice
     await delete_meeting_for_practice(practice, session)
 

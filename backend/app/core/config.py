@@ -589,6 +589,10 @@ class Settings(BaseSettings):
     # and leaves the row visibly pending. Its own number -- a cancel is a
     # different action from a create.
     zoom_registrant_cancel_max_retries: int = 5
+    # Same cap convention, for ZoomMeeting.zoom_delete_attempts: failed
+    # Zoom-side meeting DELETE calls the retry poller makes before it stops
+    # and leaves the row visibly pending.
+    zoom_meeting_delete_max_retries: int = 5
 
     # -- Zoom report ingestion (E21 step F, PROMPT №521) --
     # Background worker toggle, same rationale as the other three loops:

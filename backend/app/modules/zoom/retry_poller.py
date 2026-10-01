@@ -27,8 +27,12 @@
 #   BE-96: this worker ALSO makes every Zoom-side registrant CANCEL. A
 #   booking cancel (cancel_booking, block_student) only marks our row
 #   cancelled and zoom_cancel_pending inside its own transaction; the call
-#   to Zoom is made here, after that commit -- see the cancel phase at the
-#   end of this module.
+#   to Zoom is made here, after that commit -- see the cancel phase near
+#   the end of this module.
+#
+#   And it makes every Zoom-side meeting DELETE: a practice cancel only
+#   marks our meeting row deleted and zoom_delete_pending inside its own
+#   transaction -- see the delete phase at the end of this module.
 #
 # SESSION / ISOLATION:
 #   Each row is retried in its OWN session/transaction, claimed with
@@ -62,6 +66,7 @@ from app.modules.zoom.zoom_client import (
     ZoomAPIError,
     create_meeting,
     create_registrant,
+    delete_meeting,
     update_registrant_status,
 )
 
@@ -157,7 +162,21 @@ async def _poll_cycle() -> bool:
     if cancels_done > 0:
         logger.info("zoom_registrant_cancel_batch", processed=cancels_done)
 
-    return (meetings_retried + registrants_retried + cancels_done) > 0
+    # Meeting DELETEs LAST: the registrant cancels above go to a meeting
+    # that still exists on Zoom's side, which is the only case they matter
+    # in -- if the DELETE below fails for good, they are what kills the
+    # links.
+    delete_ids = await _claim_delete_pending_meeting_ids()
+    deletes_done = 0
+    for meeting_id in delete_ids:
+        if await _delete_meeting_one(meeting_id):
+            deletes_done += 1
+    if deletes_done > 0:
+        logger.info("zoom_meeting_delete_batch", processed=deletes_done)
+
+    return (
+        meetings_retried + registrants_retried + cancels_done + deletes_done
+    ) > 0
 
 
 async def _claim_retryable_ids() -> list:
@@ -684,5 +703,126 @@ async def _attempt_registrant_cancel(
         "zoom_registrant_cancel_failed",
         registrant_id=str(row.id),
         attempt=row.zoom_cancel_attempts,
+        at_cap=at_cap,
+    )
+
+
+# ===================================================================
+# Meeting delete phase
+# ===================================================================
+#
+# delete_meeting_for_practice (zoom/service.py) no longer calls Zoom: it
+# sets our meeting row deleted and zoom_delete_pending=True inside the
+# practice cancel's transaction, and this phase makes the Zoom DELETE
+# after commit, one row per transaction, locking only the meeting row. The
+# queue lives in the row: a process dying after the cancel committed loses
+# nothing.
+#
+# The window in which the meeting still exists on Zoom's side is the one
+# the owner accepted for the registrant cancel (see the cancel phase
+# above): up to zoom_retry_max_backoff_seconds. Our own pages stop serving
+# every link of a deleted meeting at once -- all readers check
+# status == active.
+
+
+async def _claim_delete_pending_meeting_ids() -> list:
+    """Ids of deleted meeting rows still waiting for their Zoom DELETE,
+    under the cap. FOR UPDATE SKIP LOCKED, same as the other claims."""
+    factory = get_session_factory()
+    cap = settings.zoom_meeting_delete_max_retries
+
+    try:
+        async with factory() as session:
+            stmt = (
+                select(ZoomMeeting.id)
+                .where(
+                    ZoomMeeting.status == ZoomMeetingStatus.DELETED.value,
+                    ZoomMeeting.zoom_delete_pending.is_(True),
+                    ZoomMeeting.zoom_delete_attempts < cap,
+                )
+                .order_by(ZoomMeeting.updated_at.asc())
+                .with_for_update(skip_locked=True)
+            )
+            ids = list((await session.execute(stmt)).scalars().all())
+            await session.rollback()
+            return ids
+    except Exception:
+        logger.exception("zoom_meeting_delete_claim_error")
+        return []
+
+
+async def _delete_meeting_one(meeting_id) -> bool:
+    """One Zoom-side DELETE, in its own transaction. Locks only the meeting
+    row -- never a Practice or a Booking.
+
+    True when the row was processed (cleared, retried later, or counted as
+    a failure), False when it was no longer eligible or an unexpected error
+    prevented even attempting it.
+    """
+    factory = get_session_factory()
+
+    try:
+        async with factory() as session:
+            row = (
+                await session.execute(
+                    select(ZoomMeeting)
+                    .where(ZoomMeeting.id == meeting_id)
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if row is None or not row.zoom_delete_pending:
+                await session.rollback()
+                return False
+
+            await _attempt_meeting_delete(row)
+            await session.commit()
+            return True
+    except Exception:
+        logger.exception("zoom_meeting_delete_one_failed", meeting_id=str(meeting_id))
+        return False
+
+
+async def _attempt_meeting_delete(row: ZoomMeeting) -> None:
+    """One Zoom DELETE attempt, updating `row` in place.
+
+    Only an active meeting -- one with a zoom_meeting_id -- is ever queued
+    (delete_meeting_for_practice). Success clears the flag. 404 means Zoom
+    has no such meeting: nothing left to delete, the flag is cleared. 429 leaves
+    the row untouched and uncounted, same exemption as the other phases.
+    Any other failure counts against the cap; at the cap the row stays
+    visibly pending with last_sync_error saying so.
+    """
+    cap = settings.zoom_meeting_delete_max_retries
+    try:
+        await delete_meeting(zoom_meeting_id=row.zoom_meeting_id)
+        row.zoom_delete_pending = False
+        logger.info("zoom_meeting_delete_sent", meeting_id=str(row.id))
+        return
+    except ZoomAPIError as exc:
+        if exc.status_code == 404:
+            row.zoom_delete_pending = False
+            logger.info("zoom_meeting_delete_gone_on_zoom", meeting_id=str(row.id))
+            return
+        if exc.status_code == 429:
+            row.last_sync_error = (
+                f"delete rate-limited (429): {exc.body} -- not counted "
+                f"against the delete cap, retried next cycle"
+            )
+            logger.warning("zoom_meeting_delete_rate_limited", meeting_id=str(row.id))
+            return
+        error = f"status={exc.status_code} body={exc.body}"
+    except Exception as exc:
+        error = f"unexpected (non-Zoom-API) error: {exc!r}"
+
+    row.zoom_delete_attempts += 1
+    at_cap = row.zoom_delete_attempts >= cap
+    suffix = " (delete cap reached, no further attempts)" if at_cap else ""
+    row.last_sync_error = (
+        f"delete attempt #{row.zoom_delete_attempts} failed: {error}{suffix}"
+    )
+    logger.warning(
+        "zoom_meeting_delete_failed",
+        meeting_id=str(row.id),
+        attempt=row.zoom_delete_attempts,
         at_cap=at_cap,
     )

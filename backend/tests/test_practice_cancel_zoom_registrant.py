@@ -21,9 +21,9 @@
 #   COST: zero registrant-cancel calls inside the practice-cancel
 #   transaction, asserted AT the call -- the fake Zoom cancel tries
 #   `FOR UPDATE NOWAIT` on the practice from an independent connection.
-#   The meeting DELETE that _cancel_one still makes inside the transaction
-#   (delete_meeting_for_practice) is NOT under test here and NOT counted:
-#   only update_registrant_status is watched.
+#   Only update_registrant_status is watched here; the meeting DELETE is
+#   asserted out of the transaction by test_meeting_delete_after_commit.py
+#   (it was still made inside it when this file was written).
 #
 # Rows of other files may sit queued in the same database: the phase is
 # driven for this file's own rows only (_cancel_registrant_one by id).
