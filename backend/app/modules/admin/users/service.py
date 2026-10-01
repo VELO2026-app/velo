@@ -50,7 +50,10 @@ from app.modules.curator_groups.models import CuratorGroup
 # absent key and an explicit false are the same state has to be stated in
 # ONE body, or the admin list will one day disagree with the gate about
 # who may found a school.
-from app.modules.curator_groups.service import master_can_create_groups
+from app.modules.curator_groups.service import (
+    announce_pending_master_offers,
+    master_can_create_groups,
+)
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.users.models import User, UserRole
@@ -479,6 +482,16 @@ async def make_master(
     await sync_membership_delta(
         session, user, group_key=GROUP_ADMINS, had=had_admin, has=False
     )
+
+    # BE-59: master capability gained HERE (not held before -- had_master)
+    # is a verification like verify_master's, so every school waiting for
+    # it asks "yes / no". An approved applicant who never self-switched
+    # arrives verified already and was announced by verify_master then.
+    # The profile write above is flushed ahead of the offers by the
+    # autoflush in front of the call -- profile before offers, the order of
+    # curator_groups/service.py's header.
+    if not had_master:
+        await announce_pending_master_offers(user_id, session)
 
     logger.info(
         "admin_make_master",

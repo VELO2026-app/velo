@@ -569,18 +569,6 @@ class Settings(BaseSettings):
     zoom_account_id: str = ""
     zoom_client_id: str = ""
     zoom_client_secret: str = ""
-    # VESTIGIAL (PROMPT №585) -- no longer decides anything. The attendance
-    # decision is now 50% of EACH PRACTICE'S OWN duration_minutes (owner
-    # decision), computed in zoom/attendance_service.py's
-    # attendance_threshold_seconds(), not read from here. This field is kept
-    # -- not deleted -- because pydantic-settings' default extra='forbid'
-    # (measured against the pinned pydantic-settings==2.14.2) means a live
-    # .env that still defines ZOOM_ATTENDANCE_THRESHOLD_MINUTES would refuse
-    # to start if the field vanished, and the deployed server's .env content
-    # is not something this change can verify (no VPS access). Safe to
-    # delete later once a measurement of the live .env confirms the key is
-    # gone from it too.
-    zoom_attendance_threshold_minutes: int = 10
     # Meeting-creation retry poller (mirrors practice_autofinalize_* above).
     # Background worker toggle -- same rationale as
     # practice_autofinalize_enabled and the other worker toggles: tests
@@ -596,6 +584,15 @@ class Settings(BaseSettings):
     zoom_meeting_create_max_retries: int = 5
     # Same cap convention, for ZoomRegistrant.retry_count (E21 step E).
     zoom_registrant_create_max_retries: int = 5
+    # Same cap convention, for ZoomRegistrant.zoom_cancel_attempts (BE-96):
+    # failed Zoom-side cancel calls the retry poller makes before it stops
+    # and leaves the row visibly pending. Its own number -- a cancel is a
+    # different action from a create.
+    zoom_registrant_cancel_max_retries: int = 5
+    # Same cap convention, for ZoomMeeting.zoom_delete_attempts: failed
+    # Zoom-side meeting DELETE calls the retry poller makes before it stops
+    # and leaves the row visibly pending.
+    zoom_meeting_delete_max_retries: int = 5
 
     # -- Zoom report ingestion (E21 step F, PROMPT №521) --
     # Background worker toggle, same rationale as the other three loops:
@@ -1021,9 +1018,7 @@ class Settings(BaseSettings):
         the app simply fails to connect to Redis -- a loud failure at
         startup, not a silent one. A redis_password field is deliberately
         NOT added to close this gap: it would be Settings surface with no
-        runtime consumer, the exact kind of dead field this file already
-        warns against elsewhere (see zoom_attendance_threshold_minutes
-        above).
+        runtime consumer, a dead field.
         """
         offenders: list[str] = []
         if self.secret_key == _PLACEHOLDER_SECRET_KEY:

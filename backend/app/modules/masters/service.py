@@ -199,6 +199,16 @@ async def apply_for_master(
         await sync_membership_delta(
             session, user, group_key=GROUP_MASTERS, had=False, has=True
         )
+        # BE-59: a verified profile out of nothing is a verification, so
+        # every school that offered this person a master role asks them
+        # now. Imported here, not at the top: curator_groups/service.py
+        # imports this module at load, and a top-level import back would
+        # be a cycle.
+        from app.modules.curator_groups.service import (
+            announce_pending_master_offers,
+        )
+
+        await announce_pending_master_offers(user.id, session)
         logger.info("master_self_provisioned", user_id=str(user.id))
         return profile
 

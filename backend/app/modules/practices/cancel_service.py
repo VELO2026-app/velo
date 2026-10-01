@@ -13,6 +13,7 @@ from uuid import UUID
 
 import structlog
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import record_audit
@@ -317,22 +318,35 @@ async def _cancel_one(
                 "group_name": group_names,
             },
         )
+        # BE-95 F8: one savepoint per school, as announce_published_practice
+        # does (curator_groups/service.py). A school deleted since the read
+        # above fails its journal row on the FK, and that used to fail the
+        # cancellation itself with a 500 -- after the refunds had been
+        # computed. Its journal went with it; the row is skipped.
         for group in groups:
-            _record_group_event(
-                group.id,
-                user,
-                CuratorGroupEventKind.PRACTICE_CANCELLED,
-                session,
-                data={
-                    "practice_id": str(practice.id),
-                    "practice_title": practice.title,
-                },
-            )
+            try:
+                async with session.begin_nested():
+                    _record_group_event(
+                        group.id,
+                        user,
+                        CuratorGroupEventKind.PRACTICE_CANCELLED,
+                        session,
+                        data={
+                            "practice_id": str(practice.id),
+                            "practice_title": practice.title,
+                        },
+                    )
+                    await session.flush()
+            except IntegrityError:
+                continue
 
-    # E21: best-effort delete the practice's Zoom meeting so a cancelled
-    # session can't still be joined via a still-live personal link. Skips
-    # meetings that already have attendance segments, and never raises --
-    # refunds/cancellation must proceed regardless of Zoom's outcome.
+    # E21: the practice's Zoom meeting goes dead with the practice, so a
+    # cancelled session can't still be joined via a still-live personal
+    # link: an active meeting's row is marked deleted here and the
+    # Zoom-side DELETE is queued for the retry poller -- no Zoom HTTP
+    # inside this transaction.
+    # Skips meetings that already have attendance segments, and never
+    # raises -- refunds/cancellation must proceed regardless of Zoom.
     from app.modules.zoom.service import delete_meeting_for_practice
     await delete_meeting_for_practice(practice, session)
 

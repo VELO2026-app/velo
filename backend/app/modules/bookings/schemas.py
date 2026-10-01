@@ -121,6 +121,14 @@ class BookingWithPracticeResponse(BaseModel):
     # is now the ONLY Zoom URL on this response -- the manual zoom_link the
     # same gate used to cover no longer exists.
     zoom_registrant_join_url: str | None = None
+    # BE-72: True when this booking's own registrant will not get a link --
+    # zoom/service.py's link_unavailable_reason, the same predicate the
+    # practice screen's resolver answers kind='unavailable' from, so the list
+    # and the screen agree. Distinct from a null link alone, which also
+    # means "still being prepared". Behind the same M-3 gate as the link;
+    # False when the meeting is not active (PracticeSummary.
+    # zoom_meeting_status already says why).
+    zoom_registrant_link_unavailable: bool = False
 
     model_config = {"from_attributes": True}
 

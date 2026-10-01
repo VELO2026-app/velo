@@ -48,6 +48,7 @@ from app.modules.curator_groups.models import (
 )
 from app.modules.curator_groups.service import (
     CURATOR_RELATION,
+    _master_offer_state_expr,
     _relation_or_404,
 )
 from app.modules.diary.models import Checkin, CheckType, Feedback
@@ -190,6 +191,19 @@ async def get_school_student_profile(
         )
     ).all()
 
+    # BE-59: the state of a pending appointment of this student, for the
+    # CURATOR ONLY -- the one who made it. A master of the school reads
+    # null, as a member outside a transfer reads null for it (TZ 5.2): an
+    # appointment under way is the curator's business, and a fellow master
+    # learns nothing of it, not even that one exists.
+    master_offer = None
+    if relation == CURATOR_RELATION:
+        master_offer = (
+            await session.execute(
+                select(_master_offer_state_expr(group.id, student_id))
+            )
+        ).scalar_one()
+
     student = await session.get(User, student_id)
 
     return {
@@ -204,6 +218,7 @@ async def get_school_student_profile(
         "avatar_url": student.avatar_url if student else None,
         "practices_count": practices_count,
         "hours": round(total_minutes / 60, 1),
+        "master_offer": master_offer,
         "recent_checkins": [
             {
                 "mood": checkin.mood,

@@ -134,7 +134,7 @@ case "$VELO_ROLE" in
     test|prod) ;;
     "")
         echo -e "${RED}FATAL: VELO_ROLE missing in $CONF_FILE.${NC}" >&2
-        echo -e "${RED}  Refusing to guess: this role gates pytest against the live DB${NC}" >&2
+        echo -e "${RED}  Refusing to guess: this role gates the backend suite on this box${NC}" >&2
         echo -e "${RED}  and TRUNCATE CASCADE in the comms DB. Set it explicitly:${NC}" >&2
         echo -e "${RED}  echo \"VELO_ROLE=test\" >> $CONF_FILE   # or prod${NC}" >&2
         exit 1
@@ -415,19 +415,21 @@ svc_report_incomplete() {
 }
 
 # -- Comms projection resync (TEST CONTOUR ONLY -- Phase 6 / T0 finding #2) ---
-# The pytest suite runs against the live DB while the server's outbox relay
-# keeps shipping: every login/verify a test performs becomes a REAL
-# user_upserted / group_changed event in comms, and the raw test cleanups
-# emit nothing back -- after each suite run the comms projection holds
-# phantom recipients/memberships (measured: 1075 and 1189 recipients vs 426
-# real users on 27.07). The cure is the projection's own design: it is
-# rebuildable from velo. Drop it, backfill it, done (~10s for 426 users).
+# The comms projection drifts from velo when velo deletes users without an
+# event -- the comms protocol has no deletion event. The one source left on
+# the test contour is `velo seed --reset` (it says so itself, and names
+# this command). The suite USED to be the main source -- it ran against the
+# live DB while the live outbox relay shipped its events (measured: 1075
+# and 1189 recipients vs 426 real users on 27.07); since BE-82/BE-86 it
+# runs in its own databases (Postgres velo_test, Redis 15) and touches
+# neither the live DB nor the projection. The cure is the projection's own
+# design: it is rebuildable from velo. Drop it, backfill it, done.
 #
-# DO NOT port this into any prod path. Prod has no phantom source (no suite
-# runs against the prod DB -- see the role gate in `update`), so prod never
-# truncates: the transactional outbox + snapshot-on-login self-healing +
-# the idempotent backfill (as a reconciliation tool, WITHOUT truncate)
-# keep the projection converged.
+# DO NOT port this into any prod path. Prod has no deletion source (no
+# seed, no suite against the prod DB), so prod never truncates: the
+# transactional outbox + snapshot-on-login self-healing + the idempotent
+# backfill (as a reconciliation tool, WITHOUT truncate) keep the projection
+# converged.
 # WARNING -- THIS DESTROYS DATA. The TRUNCATE below cascades far past the
 # two tables it names: recipients is referenced by the messaging side, so
 # threads, messages and thread_read_states go with it. On a stand with live
@@ -1502,10 +1504,11 @@ update_product() {
             echo -e "${GREEN}✓ Migrations applied${NC}"
 
             # Run backend tests (unless --skip-tests) -- TEST ROLE ONLY.
-            # The suite runs against the LIVE DB and (Phase 6 / T0) its
-            # domain writes emit real comms sync events; on prod that is
-            # forbidden by definition -- prod's deploy gate is a green
-            # TEST server, not a local suite run against prod data.
+            # The suite runs in its own databases (BE-82/BE-86) and no
+            # longer writes the live DB, but it still DROPs and CREATEs a
+            # database and runs a full load on the box's own Postgres and
+            # Redis -- not something to do on prod. Prod's deploy gate is a
+            # green TEST server.
             if [ "$VELO_ROLE" != "test" ]; then
                 echo ""
                 echo -e "${YELLOW}⊘ Backend tests skipped on role '$VELO_ROLE' (deploy gate is the test server)${NC}"
@@ -1528,21 +1531,13 @@ update_product() {
                 fi
                 echo -e "${GREEN}✓ All backend tests passed${NC}"
 
-                # The suite pollutes the comms projection with phantom
-                # events (T0 finding #2), and this used to resync it right
-                # here. It no longer does: the resync TRUNCATEs recipients
-                # CASCADE, and once chats existed that cascade started
-                # taking threads / messages / read-states with it -- every
-                # update wiped the stand's conversations. A cleanup that
-                # destroys real data is not something to run automatically
-                # behind somebody's back; the phantom recipients it fixes
-                # are harmless by comparison (they resolve to nobody).
-                # Manual now, on purpose. Backlog: a reconcile-style resync
-                # that converges without touching messaging.
-                echo ""
-                echo -e "${YELLOW}ℹ The suite left phantom rows in the comms projection.${NC}"
-                echo "  Projection resync is MANUAL now: velo resync-comms"
-                echo "  (it truncates -- it would wipe this stand's chats)"
+                # The suite runs in its own databases (BE-82: Redis 15,
+                # tests/redis_isolation.py; BE-86: Postgres velo_test,
+                # tests/pg_isolation.py) and touches neither the live DB nor
+                # the comms projection -- so there is nothing to resync
+                # after it. (It used to leave phantom rows, and this spot
+                # used to say so.)
+                echo -e "${GREEN}ℹ Suite ran in velo_test + Redis 15; the live database was not touched${NC}"
             else
                 echo ""
                 echo -e "${YELLOW}⊘ Backend tests skipped (--skip-tests)${NC}"
@@ -2087,12 +2082,13 @@ case "${1:-}" in
     # === Testing & Linting ===
 
     test)
-        # Backend pytest runs against the LIVE DB (and since T0 emits real
-        # comms sync events) -- an explicit `velo test` on prod is as
-        # forbidden as the update-time run. Frontend tests are container-
-        # local, but the command keeps one rule for simplicity.
+        # The backend suite DROPs and CREATEs its own database (velo_test,
+        # BE-86) and loads the box's Postgres and Redis -- an explicit
+        # `velo test` on prod is as forbidden as the update-time run.
+        # Frontend tests are container-local, but the command keeps one
+        # rule for simplicity.
         if [ "$VELO_ROLE" != "test" ]; then
-            echo -e "${RED}✗ 'velo test' is refused on role '$VELO_ROLE': the suite runs against the live DB.${NC}"
+            echo -e "${RED}✗ 'velo test' is refused on role '$VELO_ROLE': the suite drops and recreates a database on this box's Postgres.${NC}"
             echo "The deploy gate for prod is a green TEST server."
             exit 1
         fi
@@ -2742,8 +2738,8 @@ case "${1:-}" in
         echo "                        DESTRUCTIVE: truncates recipients CASCADE, which"
         echo "                        takes threads/messages/read-states with it. MANUAL"
         echo "                        since H-D2 -- update no longer runs it. Use after"
-        echo "                        'velo seed' (seeds bypass the emits) or after the"
-        echo "                        suite leaves phantom rows."
+        echo "                        'velo seed' (seeds bypass the emits) or after"
+        echo "                        'velo seed --reset' (it names this command)."
         echo "  comms-outbox        — Outbox dead-letter queue: list-dead |"
         echo "                        requeue <id> [...] | requeue --all"
         echo ""

@@ -80,12 +80,14 @@ from app.modules.curator_groups.schemas import (
 from app.modules.curator_groups.service import (
     accept_curator_group_master_offer,
     accept_curator_group_transfer,
+    cancel_curator_group_master_offer,
     cancel_curator_group_transfer,
     create_curator_group,
     decline_curator_group_master_offer,
     decline_curator_group_transfer,
     delete_curator_group,
     delete_group_preview,
+    demote_curator_group_master,
     get_curator_group_page,
     get_group_counts,
     get_group_transfer_ref,
@@ -547,6 +549,36 @@ async def remove_curator_group_member_endpoint(
 
 
 @router.post(
+    "/me/curator-groups/{group_id}/members/{user_id}/demote",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def demote_curator_group_master_endpoint(
+    group_id: UUID,
+    user_id: UUID,
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Make a master of this school a student of it again (BE-59 B1).
+
+    No consent asked; the person stays a member and is notified. Idempotent:
+    somebody who is not a master of this school -- already a student, or not
+    a member -- is a 204 with nothing written. 404 only for a school that is
+    not yours (P-08).
+    """
+    user, _profile = master_tuple
+    await demote_curator_group_master(
+        user.id, group_id, user_id, session, actor=user,
+    )
+    await session.flush()
+    logger.info(
+        "curator_group_master_demoted",
+        group_id=str(group_id),
+        user_id=str(user_id),
+        curator_id=str(user.id),
+    )
+
+
+@router.post(
     "/me/curator-groups/{group_id}/invites",
     response_model=CuratorGroupInviteResponse,
 )
@@ -634,9 +666,13 @@ async def offer_curator_group_master_endpoint(
     journal line nor a second notification. Several appointments may be
     outstanding at once -- unlike a transfer, which is one per school.
 
+    A candidate who is not a verified master is NOT refused (BE-59): the
+    offer is kept, awaiting their verification, and they are asked to get
+    verified; the admin's verification then asks them to answer, and a
+    rejection closes the offer and tells the curator.
+
     Error codes: 404 not_found (not your school, or the candidate is not in
-    it -- one answer, P-08); 409 already_master; 403 master_required (the
-    candidate holds no verified master profile right now).
+    it -- one answer, P-08); 409 already_master.
     """
     user, _profile = master_tuple
     await offer_curator_group_master(
@@ -647,6 +683,35 @@ async def offer_curator_group_master_endpoint(
         "curator_group_master_offered",
         group_id=str(group_id),
         to_user_id=str(body.to_user_id),
+        curator_id=str(user.id),
+    )
+
+
+@router.delete(
+    "/me/curator-groups/{group_id}/master-offers/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def cancel_curator_group_master_offer_endpoint(
+    group_id: UUID,
+    user_id: UUID,
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Withdraw an appointment (BE-59), in either state.
+
+    Idempotent: no offer to this person here is still 204. The candidate is
+    not notified; the journal records master_offer_cancelled. 404 only for
+    a school that is not yours (P-08).
+    """
+    user, _profile = master_tuple
+    await cancel_curator_group_master_offer(
+        user.id, group_id, user_id, session, actor=user,
+    )
+    await session.flush()
+    logger.info(
+        "curator_group_master_offer_cancelled",
+        group_id=str(group_id),
+        to_user_id=str(user_id),
         curator_id=str(user.id),
     )
 

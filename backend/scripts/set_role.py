@@ -67,6 +67,9 @@ from app.core.events import (  # noqa: E402  # Phase 6 / T0
     GROUP_MASTERS,
     sync_membership_delta,
 )
+from app.modules.curator_groups.service import (  # noqa: E402  # BE-59
+    announce_pending_master_offers,
+)
 from app.modules.masters.models import MasterProfile  # noqa: E402
 from app.modules.practices.models import Practice, PracticeStatus  # noqa: E402
 from app.modules.users.models import User, UserRole  # noqa: E402
@@ -400,6 +403,12 @@ async def to_master(session: AsyncSession, user: User, assume_yes: bool) -> bool
             had=had_admin,
             has=_admin_capability(user),
         )
+        # BE-59: capability gained here is a verification, as in the admin
+        # make_master this mirrors -- every school waiting for it asks
+        # "yes / no". A profile that was verified already was announced
+        # when it became so.
+        if not had_master:
+            await announce_pending_master_offers(user.id, session)
 
     if profile is not None:
         status = (profile.data or {}).get("account", {}).get("status")

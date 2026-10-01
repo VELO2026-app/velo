@@ -34,17 +34,28 @@
 // RE-MEASURED (GT-15). The paragraph above is a snapshot of the №747
 // reconciliation and has drifted twice since -- GT-14 added nine curator
 // codes and GT-15 adds a tenth, neither round updating the totals. Today,
-// re-running that same command: 34 codes raised as a literal, 30 of them
-// here, 4 deliberately absent (practice_full and zoom_meeting_not_failed
-// for the reasons above, plus invalid_cursor and too_many_requests, which
-// no screen shows a phrase for). Total table size: 34.
+// re-running that same command at GT-15: 34 codes raised as a literal, 30
+// of them here, 4 deliberately absent (practice_full and
+// zoom_meeting_not_failed for the reasons above, plus invalid_cursor and
+// too_many_requests, which no screen shows a phrase for). Total table size
+// then: 34.
+//
+// RE-MEASURED AGAIN (BE-92), same command, with BE-92's three check-in
+// codes in: 47 codes raised as a literal, 34 of them here, 13 absent -- the
+// 4 above plus 9 that arrived after GT-15 without a phrase (audio_invalid,
+// audio_too_large, curator_cannot_cancel_series, delivery_window_empty,
+// recipient_override_not_allowed, speech_not_recognized,
+// transcription_failed, transcription_not_configured,
+// transcription_unavailable -- recorded in the BE-92 report, not added
+// here). Total table size: 38 (34 + the 2 constant-raised codes below +
+// practice_not_found + validation_error).
 //
 // AND THAT COMMAND HAS A BLIND SPOT worth naming rather than repeating: it
 // matches a STRING LITERAL after `code=`, so a code raised through a
 // constant is invisible to it. Two are: curator_group_name_taken
 // (_NAME_TAKEN_CODE) and group_creation_not_allowed (_NO_CREATE_RIGHT_CODE),
 // both in curator_groups/service.py. Counting raise sites rather than
-// literals puts the real number at 36.
+// literals put the real number at 36 at GT-15, and puts it at 49 at BE-92.
 //
 // SEEDED from the 7 call sites that already carried a hand-written Russian
 // phrase for a specific code (verbatim, not re-worded -- those were written
@@ -79,6 +90,15 @@ export const ERROR_MESSAGES: Record<string, string> = {
   // without anyone needing to remember this table.
   practice_not_found: 'Практика не найдена',
   role_not_allowed: 'Эта роль недоступна для вашего аккаунта',
+
+  // Check-in (BE-92): the two 404s and the two window 400s of
+  // diary/checkins_service.py upsert_checkin used to arrive as the generic
+  // not_found / bad_request. no_active_booking is ONE code for «брони нет»,
+  // «бронь отменена», «бронь не подтверждена» and «такой практики нет» on
+  // purpose: telling them apart would make the endpoint an existence oracle.
+  no_active_booking: 'У вас нет подтверждённой брони на эту практику',
+  checkin_window_closed: 'Check-in закрыт — практика уже началась',
+  checkin_window_not_open: 'Check-in ещё не открыт — он откроется ближе к началу практики',
 
   // Curator groups (schools). Ten codes; six were already reachable before
   // this table knew about them, three were added to their raise sites so the

@@ -483,10 +483,16 @@ async def test_the_name_is_committed_before_the_page_is_drawn(
     client: AsyncClient, db_session: AsyncSession, zoom: _Zoom,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """get_db_session commits AFTER the response is sent; the page must not
-    show a name a failed commit never reserved. While the form is drawn the
-    request's connection is already back in the pool -- i.e. the claim was
-    committed. Pair: the drawn form does carry a claimed name."""
+    """The claim is committed before the form is drawn: get_db_session
+    commits only when the endpoint returns (BE-83), after the drawing, so the
+    endpoint commits itself (BE-66). While the form is drawn the request's
+    connection is already back in the pool -- i.e. the claim was committed.
+    Pair: the drawn form does carry a claimed name.
+
+    The earlier wording ("get_db_session commits AFTER the response is
+    sent") was right on FastAPI's request-scoped yield teardown; BE-83 moved
+    the commit before the response, which made the reason stale but not the
+    assertion: the form is drawn inside the endpoint, before either commit."""
     _, code = await _practice(client, db_session, 60059, zoom)
     await db_session.commit()
     baseline = get_engine().pool.checkedout()

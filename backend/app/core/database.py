@@ -13,11 +13,14 @@
 #
 # DEPENDENCY INJECTION:
 #   get_db_session()  — read-write: commits on success, rollback on error.
+#                       The commit runs when the endpoint returns, BEFORE the
+#                       response is sent (BE-83); see its docstring.
 #   get_db_reader()   — read-only: always rolls back (TD-008).
 # =============================================================================
 
 from collections.abc import AsyncGenerator
 
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -89,8 +92,14 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
     return _session_factory
 
 
-async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
-    """Transactional session for write operations (auto-commit/rollback)."""
+async def _transaction() -> AsyncGenerator[AsyncSession, None]:
+    """The request's write transaction: commit on success, rollback on error.
+
+    Consumed only through get_db_session, which declares it with
+    scope="function" -- never Depends() on this directly: a second
+    declaration with another scope is another cache key, i.e. a second
+    session and a second transaction in the same request.
+    """
     factory = get_session_factory()
     session = factory()
     try:
@@ -101,6 +110,37 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
         raise
     finally:
         await session.close()
+
+
+async def get_db_session(
+    session: AsyncSession = Depends(_transaction, scope="function"),
+) -> AsyncSession:
+    """Transactional session for write operations (auto-commit/rollback).
+
+    WHEN THE COMMIT RUNS (BE-83): when the endpoint returns -- after the
+    response object is built and serialized, BEFORE its first byte is sent.
+    A failed commit therefore reaches the client as an error response, not
+    as a 200 whose writes were rolled back. A request-scoped yield
+    dependency (FastAPI's default for yield) would commit only after the
+    response was sent, which is why the transaction sits behind the
+    scope="function" edge above and this wrapper is a plain coroutine.
+
+    One place: every Depends(get_db_session) in the tree resolves to the
+    same cache key, so a request has one session however many endpoint
+    parameters and sub-dependencies ask for it.
+
+    Rollback on exception (P-01): an exception raised by the endpoint
+    passes through _transaction, which rolls back before any exception
+    handler builds the error response.
+
+    Contract for dependencies built on top of this session: the session is
+    committed and closed when the endpoint returns. A yield dependency that
+    takes it must not use it after its own yield -- by then the session is
+    closed, and anything written there is never committed. The same holds
+    for BackgroundTasks and for a streaming response body: both run after
+    the endpoint returns.
+    """
+    return session
 
 
 async def get_db_reader() -> AsyncGenerator[AsyncSession, None]:

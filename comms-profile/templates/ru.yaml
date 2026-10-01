@@ -195,6 +195,16 @@ curator_group.master_offered:
     title: "Вас приглашают вести школу"
     body: "🏛 <b>{actor_name}</b> предлагает вам стать мастером школы <b>{group_name}</b>.\n\nОткройте приложение, чтобы принять или отклонить."
 
+curator_group.member_demoted:
+  telegram:
+    title: "Вы больше не мастер школы"
+    body: "🏛 <b>{actor_name}</b> перевёл вас в ученики школы <b>{group_name}</b>.\n\nВы остаётесь в школе, но больше не ведёте в ней практики."
+
+curator_group.master_verification_required:
+  telegram:
+    title: "Нужна верификация мастера"
+    body: "🏛 <b>{actor_name}</b> предлагает вам стать мастером школы <b>{group_name}</b>.\n\nДля этого нужна верификация мастера: подайте заявку или дождитесь решения по уже поданной. Приглашение придёт после верификации."
+
 curator_group.master_offer_accepted:
   telegram:
     title: "Назначение принято"
@@ -204,6 +214,11 @@ curator_group.master_offer_declined:
   telegram:
     title: "Назначение отклонено"
     body: "🏛 <b>{actor_name}</b> отклонил назначение мастером школы <b>{group_name}</b>."
+
+curator_group.master_offer_closed:
+  telegram:
+    title: "Назначение закрыто"
+    body: "🏛 <b>{target_name}</b> не прошёл верификацию мастера. Приглашение мастером школы <b>{group_name}</b> закрыто."
 
 # -- Master-facing (BE-33) --
 #

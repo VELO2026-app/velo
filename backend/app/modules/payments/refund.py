@@ -411,6 +411,8 @@ async def refund_all_bookings_for_practice(
     For each confirmed/pending booking:
     1. Set booking status -> cancelled
     2. Call refund_booking (double-entry reversal)
+    3. Cancel its Zoom registrant (cancel_registrant_for_booking: our row
+       cancelled, the Zoom-side cancel queued for the retry poller -- BE-100)
 
     Also clears the waitlist: all active entries -> left.
     Recalculates current_participants -> 0 (Frontend Backlog A-03).
@@ -423,6 +425,8 @@ async def refund_all_bookings_for_practice(
         Number of bookings refunded.
     """
     # Load all active bookings with FOR UPDATE (P-12).
+    from app.modules.zoom.service import cancel_registrant_for_booking
+
     stmt = (
         select(Booking)
         .where(
@@ -451,6 +455,16 @@ async def refund_all_bookings_for_practice(
             session=session,
             cancelled_by_master=True,
         )
+        # BE-100: the booking's Zoom registrant is cancelled the way
+        # cancel_booking and block_student cancel it -- our row goes
+        # cancelled here and the Zoom-side cancel is queued for the retry
+        # poller (no Zoom HTTP from this call; see
+        # cancel_registrant_for_booking and its KNOWN CEILING for the one
+        # race in which this transaction still waits on someone else's).
+        # Until BE-100 this path set CANCELLED past the registrant: the row
+        # stayed live, and our own pages kept handing its link out. The
+        # import above is lazy, the same shape as the other two callers.
+        await cancel_registrant_for_booking(booking, session)
         refunded_count += 1
 
     # Clear waitlist: all active entries -> left.

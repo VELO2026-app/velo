@@ -923,6 +923,29 @@ async def seed_profile(
     return stats
 
 
+def _warn_comms_projection_diverged(removed_users: int) -> None:
+    """Said after --reset, never acted on (BE-86).
+
+    --reset deletes seeded users and the comms protocol has no deletion
+    event, so comms' address book still holds them: the projection has
+    diverged. The fix is a full resync, and it is destructive -- so this
+    only NAMES it, and never runs it. Silent when the reset removed no user:
+    then nothing diverged, and a warning would be a false alarm.
+    """
+    if removed_users <= 0:
+        return
+    warn(
+        f"comms: the reset removed {removed_users} users that comms still "
+        "lists -- its "
+        "projection now diverges from velo."
+    )
+    warn(
+        "  To realign it: velo resync-comms -- WARNING: it truncates the "
+        "projection and DELETES EVERY CHAT on this stand. Not run "
+        "automatically."
+    )
+
+
 async def main_async(args: argparse.Namespace) -> int:
     if args.list:
         names = list_profiles()
@@ -941,8 +964,10 @@ async def main_async(args: argparse.Namespace) -> int:
     session_factory = get_session_factory()
     try:
         async with session_factory() as session:
+            removed_users = 0
             if args.reset:
                 counts = await reset_seed_data(session, profile)
+                removed_users = counts["students"]
                 warn(
                     f"reset: removed {counts['practices']} practices, "
                     f"{counts['curator_groups']} schools, "
@@ -952,6 +977,7 @@ async def main_async(args: argparse.Namespace) -> int:
                 await session.commit()
 
             if args.reset_only:
+                _warn_comms_projection_diverged(removed_users)
                 return 0
 
             async with session_factory() as session2:
@@ -966,6 +992,8 @@ async def main_async(args: argparse.Namespace) -> int:
                 "seeded: "
                 + ", ".join(f"{v} {k}" for k, v in stats.items() if v)
             )
+        if args.reset:
+            _warn_comms_projection_diverged(removed_users)
         return 0
     finally:
         await dispose_engine()

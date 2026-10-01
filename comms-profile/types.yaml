@@ -240,11 +240,30 @@ types:
   #
   #    The two outcomes go to the CURATOR, and they belong in curator_groups
   #    with member_joined for the same reason member_joined is there: a curator
-  #    of a large school appoints repeatedly, so this is the only one of the
-  #    three that scales with the school. A curator who mutes it loses a
-  #    convenience; a candidate who mutes an offer loses the role. --
+  #    of a large school appoints repeatedly, so these are the ones that
+  #    scale with the school. A curator who mutes them loses a convenience; a
+  #    candidate who mutes an offer loses the role.
+  #
+  #    BE-59 adds one of each, on the same split. master_verification_required
+  #    goes to the CANDIDATE who is not a verified master yet -- the offer
+  #    waits for their verification, and missing the prompt means it waits
+  #    forever -- so no category, like master_offered. master_offer_closed
+  #    goes to the CURATOR when the admin rejected that verification: an
+  #    outcome, so curator_groups, like the other two. --
 
   curator_group.master_offered:
+    channels: [in_app, telegram]
+
+  # -- BE-59 B1: member_demoted goes to the FORMER MASTER, and it is about
+  #    their own standing in the school -- the role taken away by the
+  #    curator, without their consent -- so no category, like master_offered
+  #    and member_removed: silencing it would lose the only signal that the
+  #    role is gone. --
+
+  curator_group.member_demoted:
+    channels: [in_app, telegram]
+
+  curator_group.master_verification_required:
     channels: [in_app, telegram]
 
   curator_group.master_offer_accepted:
@@ -252,6 +271,10 @@ types:
     channels: [in_app, telegram]
 
   curator_group.master_offer_declined:
+    category: curator_groups
+    channels: [in_app, telegram]
+
+  curator_group.master_offer_closed:
     category: curator_groups
     channels: [in_app, telegram]
 
