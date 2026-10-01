@@ -266,6 +266,16 @@ class CreatePracticeRequest(BaseModel):
     # this school is the service's question (_usable_curator_group_or_400).
     curator_group_id: UUID | None = None
 
+    # BE-102: who LEADS this practice. Absent, null, or the caller's own
+    # id -> the caller, the behaviour before this field existed. Another
+    # master's id is a school curator creating a practice for a master of
+    # that school, and is accepted only when a school is named here, the
+    # caller is its curator, and the target is a verified master of it
+    # (owner ruling, 2026-10-01). Every condition but "a school is named"
+    # needs the database and the caller's id, so all of them live in the
+    # service (_effective_master_id_or_4xx), not in a validator here.
+    master_id: UUID | None = None
+
     @field_validator("audience_kind")
     @classmethod
     def audience_kind_must_be_valid(cls, v: str) -> str:

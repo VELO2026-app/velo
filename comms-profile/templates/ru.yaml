@@ -220,6 +220,11 @@ curator_group.master_offer_closed:
     title: "Назначение закрыто"
     body: "🏛 <b>{target_name}</b> не прошёл верификацию мастера. Приглашение мастером школы <b>{group_name}</b> закрыто."
 
+curator_group.practice_created_for_master:
+  telegram:
+    title: "Куратор создал практику от вашего имени"
+    body: "🏛 <b>{actor_name}</b> создал черновик практики <b>{practice_title}</b> ({scheduled_at}) в школе <b>{group_name}</b> от вашего имени.\n\nПроверьте его и опубликуйте."
+
 # -- Master-facing (BE-33) --
 #
 # {mood} and {rating} arrive as an EMOJI, never as the stored 1..10 score

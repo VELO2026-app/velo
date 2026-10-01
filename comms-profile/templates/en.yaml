@@ -206,6 +206,11 @@ curator_group.master_offer_closed:
     title: "Appointment closed"
     body: "🏛 <b>{target_name}</b> did not pass master verification. The master invitation to <b>{group_name}</b> is closed."
 
+curator_group.practice_created_for_master:
+  telegram:
+    title: "A curator created a practice for you"
+    body: "🏛 <b>{actor_name}</b> created a draft practice <b>{practice_title}</b> ({scheduled_at}) in <b>{group_name}</b> on your behalf.\n\nReview it and publish it."
+
 # -- Master-facing (BE-33) --
 #
 # {mood} and {rating} arrive as an EMOJI, never as the stored 1..10 score

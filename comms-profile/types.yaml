@@ -278,6 +278,15 @@ types:
     category: curator_groups
     channels: [in_app, telegram]
 
+  # -- BE-102: practice_created_for_master goes to the MASTER a school's
+  #    curator created a practice for -- a draft in their name that only they
+  #    can publish. No category, like member_demoted: it is about their own
+  #    standing (something now exists under their name), and silencing it
+  #    would leave a draft nobody knows to publish. --
+
+  curator_group.practice_created_for_master:
+    channels: [in_app, telegram]
+
   # -- BE-30, the school hears that its teacher opened something. The arrival
   #    the comment above predicted, and it lands in curator_groups for the
   #    reason that made the category: it SCALES. member_joined scales with the

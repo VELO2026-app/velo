@@ -248,7 +248,11 @@ async def create_practice_endpoint(
     ),
     session: AsyncSession = Depends(get_db_session),
 ) -> PracticeResponse:
-    """Create a new practice (verified master only)."""
+    """Create a new practice (verified master only).
+
+    BE-102: a school curator may create it for a master of the school
+    (body.master_id) -- see create_practice.
+    """
     user, _profile = master_tuple
     # A4 V6 (PROMPT №572): deduplicated is True when create_practice returned
     # an EXISTING practice (the window-scoped dedup check, or the TOCTOU
@@ -257,18 +261,27 @@ async def create_practice_endpoint(
     practice, deduplicated = await create_practice(user, body, session)
     await session.flush()
     await session.refresh(practice)
-    # F1 (№263): this endpoint is owner-only (master guard + ownership check),
-    # so the response carries the caller's OWN owner-only Zoom fields —
+    # F1 (№263): the owner-only Zoom fields go to the practice's OWNER --
     # consistent with the owner-always-sees rule on the detail and the
     # master list (Z-6).
     # T21-1: same owner-only posture for the host's own join_url. A freshly
     # created practice has no ZoomMeeting yet (that happens on publish, not
     # here) -- get_host_join_url returns None until then, which is correct.
+    # BE-102: the caller is no longer always the owner -- a curator creating
+    # a practice for a master of their school is not. Same answer as the
+    # cancel endpoint gives a curator (BE-21): no host link (it is the
+    # master's host control of the meeting), no public link, and the
+    # OWNER's name as master_name. Decided by the returned practice's
+    # master_id, which also covers a dedup return of the master's existing,
+    # possibly published, practice -- the case where the host link exists.
+    is_owner = practice.master_id == user.id
     from app.modules.zoom.service import (
         get_host_join_url,
         get_zoom_meeting_status,
     )
-    host_join_url = await get_host_join_url(practice.id, session)
+    host_join_url = (
+        await get_host_join_url(practice.id, session) if is_owner else None
+    )
     # A4 V2 (PROMPT №572): None here too, same reasoning as host_join_url --
     # fetched anyway for consistency with the other three owner-only sites
     # (this is also the endpoint V6's deduplicated-practice response flows
@@ -282,10 +295,16 @@ async def create_practice_endpoint(
     audience_unavailable = await curator_group_audience_is_dark(
         practice, session,
     )
+    # The master's row exists: practices.master_id is a FK, read in the
+    # transaction that just wrote or matched the practice.
+    master_first_name = (
+        user.first_name if is_owner
+        else (await session.get(User, practice.master_id)).first_name
+    )
     return practice_to_response(
-        practice, user.first_name,
+        practice, master_first_name,
         zoom_host_join_url=host_join_url,
-        zoom_public_link_visible=True,
+        zoom_public_link_visible=is_owner,
         zoom_meeting_status=zoom_meeting_status,
         deduplicated=deduplicated,
         audience_group_names=audience_group_names,

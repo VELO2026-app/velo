@@ -30,14 +30,20 @@
 # practices) before it deletes the group, so it waits for those writers
 # instead of holding the group they are waiting for. It replaced the
 # "practice audience" table at the same place in the order, for the same
-# reason. Of the module's own rows no practice writer takes any, so the
-# position before the group closes no cycle with member .. invite.
+# reason. Of the module's own rows ONE practice writer takes one: since
+# BE-102, create_practice (practices/, _effective_master_id_or_4xx), when a
+# curator creates a practice for a master of the school, reads that
+# master's member row and then their master profile FOR SHARE, and only
+# then INSERTs the practice (KEY SHARE on the group by the FK) -- member ->
+# master profile -> practice -> group, the order above. Every other
+# practice writer takes none of member .. invite, so the position before
+# the group closes no cycle with them.
 #
 # THE MASTER PROFILE (BE-59) IS THE ONE ROW HERE THIS MODULE DOES NOT OWN,
-# and the one lock taken by a read: offer_curator_group_master reads the
-# candidate's master_profiles row FOR SHARE (_lock_master_profile). The
-# offer decides between "ask them to answer" and "ask them to get verified"
-# by that row, and the admin paths that move it -- verify_master,
+# and the one lock THIS MODULE takes by a read: offer_curator_group_master
+# reads the candidate's master_profiles row FOR SHARE (_lock_master_profile).
+# The offer decides between "ask them to answer" and "ask them to get
+# verified" by that row, and the admin paths that move it -- verify_master,
 # reject_master, make_master, self-provision, set_role -- hold it FOR UPDATE
 # (or by their UPDATE) while they read this person's offers
 # (announce_pending_master_offers, close_pending_master_offers). Without the

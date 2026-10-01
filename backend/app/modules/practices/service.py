@@ -30,6 +30,9 @@
 #   practice.data in place (SQLAlchemy would miss the change).
 #
 # OWNERSHIP:
+#   create_practice makes the caller the master, unless a school curator
+#   names a verified master of that school (BE-102,
+#   _effective_master_id_or_4xx) -- the practice is then that master's.
 #   All mutating operations (update, delete, cancel) verify master_id == user.id.
 #   Non-owners receive 404 (P-08: do not reveal resource existence).
 #   get_practice() applies visibility rules: draft/deleted only for owner.
@@ -85,6 +88,7 @@ from app.core.config import settings
 from app.core.exceptions import (
     BadRequestError,
     ConflictError,
+    ForbiddenError,
     NotFoundError,
 )
 from app.modules.bookings.models import Booking, BookingStatus
@@ -320,6 +324,190 @@ async def _usable_curator_group_or_400(
     ).scalar_one_or_none()
     if usable is None:
         raise BadRequestError(_SCHOOL_NOT_USABLE)
+
+
+_MASTER_NOT_IN_SCHOOL = "master_id must be a verified master of this school"
+
+
+async def _effective_master_id_or_4xx(
+    user: User, body: CreatePracticeRequest, session: AsyncSession,
+) -> UUID:
+    """Return who leads the practice being created (BE-102).
+
+    The caller, unless body.master_id names somebody else. Somebody else is
+    a school curator creating a practice for a master of that school, and
+    is accepted only when ALL of these hold (owner ruling, 2026-10-01):
+
+      1. the request names the school (curator_group_id, explicitly --
+         a child's school inherited from its parent does not count: the
+         rule is "created IN a school", said by the request itself);
+      2. the school is usable by the caller at all -- schools switched on,
+         the school active, the caller in it (_usable_curator_group_or_400,
+         unchanged: the caller is the "author" it was written for);
+      3. the caller is THIS school's curator. A curator of several schools
+         is checked against the school of the practice, not against "any
+         school of theirs";
+      4. the target is a kind='master' member of THIS school, and their
+         master profile is verified right now.
+
+    Refusals, in this order, and why each code is what it is:
+      - 1 -> 400 master_id_requires_school: nothing was read, nothing
+        about anybody is revealed;
+      - 2 -> the existing 400 of _usable_curator_group_or_400: an outsider
+        cannot tell "this school exists, it is not yours" from "no such
+        school", the same as on the caller's own path;
+      - 3 -> 403 curator_only: only a member of the school gets this far,
+        and a member already knows the school and its curator;
+      - 4 -> ONE 400 master_not_in_school for every cause -- no such user,
+        not a member, a student, a master of another school, not verified.
+        Split by cause, the code would tell a curator whether an arbitrary
+        user id is a verified master.
+
+    The target is checked by the master profile, NOT by users.role. role
+    is the mode a verified master is currently browsing in (they switch it
+    themselves, users/service.py), so a verified master in the student
+    zone is still a master; the profile is the capability, the same test
+    _usable_curator_group_or_400 and the school's audience apply.
+
+    THE TARGET'S ROWS ARE TAKEN, NOT READ (BE-102, owner ruling Q5): the
+    member row, then the master profile, both FOR SHARE, in the order of
+    the curator_groups module header (member -> master profile -> ... ->
+    practice -> group); the practice INSERT comes after both. A demotion
+    or removal of the target (an UPDATE / DELETE of the member row) and an
+    admin taking verification away (an UPDATE of the profile) conflict
+    with FOR SHARE, so either they commit first -- and READ COMMITTED
+    re-evaluates the predicates below against what they committed, which
+    refuses -- or they wait for this request's commit and find the
+    practice already there. Without the locks, a practice could be born
+    for somebody who had stopped being a master of the school between the
+    check and the INSERT.
+
+    Runs BEFORE the windowed dedup in create_practice: the dedup returns
+    the target's existing practice, and returning it to a caller who has
+    not passed the checks above would hand out another master's practice.
+    """
+    if body.master_id is None or body.master_id == user.id:
+        return user.id
+    target_id = body.master_id
+    school_id = body.curator_group_id
+    if school_id is None:
+        raise BadRequestError(
+            "master_id of another master requires curator_group_id",
+            code="master_id_requires_school",
+        )
+    await _usable_curator_group_or_400(user.id, school_id, session)
+    curator_id = (
+        await session.execute(
+            select(CuratorGroup.curator_user_id).where(
+                CuratorGroup.id == school_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if curator_id != user.id:
+        raise ForbiddenError(
+            "Only the school's curator may create a practice for another "
+            "master",
+            code="curator_only",
+        )
+    member = (
+        await session.execute(
+            select(CuratorGroupMember.id)
+            .where(
+                CuratorGroupMember.group_id == school_id,
+                CuratorGroupMember.user_id == target_id,
+                CuratorGroupMember.kind == CuratorMemberKind.MASTER.value,
+            )
+            .with_for_update(read=True)
+        )
+    ).scalar_one_or_none()
+    if member is None:
+        raise BadRequestError(
+            _MASTER_NOT_IN_SCHOOL, code="master_not_in_school",
+        )
+    verified = (
+        await session.execute(
+            select(MasterProfile.user_id)
+            .where(
+                MasterProfile.user_id == target_id,
+                MasterProfile.data["account"]["status"].as_string()
+                == "verified",
+            )
+            .with_for_update(read=True)
+        )
+    ).scalar_one_or_none()
+    if verified is None:
+        raise BadRequestError(
+            _MASTER_NOT_IN_SCHOOL, code="master_not_in_school",
+        )
+    return target_id
+
+
+async def _announce_practice_created_for_master(
+    curator: User, practice: Practice, session: AsyncSession,
+) -> None:
+    """Audit the curator's act and tell the master (BE-102, owner Q1/Q4).
+
+    Called only when the practice was really INSERTED for somebody other
+    than the caller -- not on either dedup return, where nothing new
+    exists. Both writes are in the request's transaction: an audit row or
+    a notification about a practice that a rollback removed would record
+    and announce something that did not happen.
+
+    The audit is a distinct EVENT, like practice_cancelled_by_curator
+    (cancel_service.py): actor_id is the curator, the practice's master_id
+    is the master, and group_id says which school the right came from.
+
+    The notification has ONE addressee, the master, who is a party to the
+    fact; idempotency key = the practice, which is born once. It opens the
+    practice: it is the master's draft, and publishing it is theirs.
+    """
+    from app.core.audit import record_audit
+    from app.core.events.notify import emit_notification
+    from app.core.events.reminders import format_event_time
+    from app.modules.users.helpers import display_name
+
+    await record_audit(
+        event="practice_created_by_curator",
+        actor_id=curator.id,
+        actor_type="user",
+        target_type="practice",
+        target_id=practice.id,
+        data={
+            "group_id": str(practice.curator_group_id),
+            "master_id": str(practice.master_id),
+        },
+        session=session,
+    )
+    group_name = (
+        await session.execute(
+            select(CuratorGroup.name).where(
+                CuratorGroup.id == practice.curator_group_id,
+            )
+        )
+    ).scalar_one()
+    actor_name = display_name(curator.first_name, curator.last_name)
+    when_text = format_event_time(practice.scheduled_at)
+    await emit_notification(
+        session,
+        idempotency_key=f"practice-created-by-curator:{practice.id}",
+        type="curator_group.practice_created_for_master",
+        target_type="user",
+        target_value=str(practice.master_id),
+        title="Куратор создал практику от вашего имени",
+        body=(
+            f"{actor_name} создал черновик практики «{practice.title}» "
+            f"({when_text}) в школе «{group_name}» от вашего имени. "
+            f"Проверьте его и опубликуйте."
+        ),
+        action_data={
+            "action": "open_practice",
+            "params": {"practice_id": str(practice.id)},
+            "practice_title": practice.title,
+            "scheduled_at": when_text,
+            "group_name": group_name,
+            "actor_name": actor_name,
+        },
+    )
 
 
 async def _set_practice_audience_groups(
@@ -619,9 +807,11 @@ async def _assert_master_confirmed_taxonomy(
     style: str | None,
     session: AsyncSession,
 ) -> None:
-    """Reject a direction/style the calling master has not been CONFIRMED
-    for (T21-6). Confirmed = MasterProfile.data.profile.methods -- the live
-    field, overwritten only on admin approval (approve_method_change).
+    """Reject a direction/style the practice's master has not been CONFIRMED
+    for (T21-6). master_id is the practice's master -- the caller, or the
+    master a school curator creates the practice for (BE-102).
+    Confirmed = MasterProfile.data.profile.methods -- the live field,
+    overwritten only on admin approval (approve_method_change).
     Deliberately does NOT read method_change_request.proposed_methods: a
     pending, unapproved request must never unlock a practice in that
     direction, or the "up to 3 working days" review the UI advertises would
@@ -1123,8 +1313,9 @@ async def create_practice(
     (T2, 2026-07-15) is validated here against the config+catalog union --
     difficulty stays schema-validated (config only, no catalog table).
 
-    T21-6 (PROMPT №546): ALSO validated against the calling master's own
-    CONFIRMED methods (_assert_master_confirmed_taxonomy) -- a master may
+    T21-6 (PROMPT №546): ALSO validated against the practice's master's own
+    CONFIRMED methods (_assert_master_confirmed_taxonomy; the master is the
+    caller unless a curator names another one, BE-102) -- a master may
     only create a practice in a direction/style their profile has been
     approved for. This is separate from the global catalog check above and
     does not apply anywhere master onboarding picks methods (a different
@@ -1148,35 +1339,56 @@ async def create_practice(
     back TO. On IntegrityError, the race was LOST: look up the winning row
     (unwindowed -- it is guaranteed to exist and match exactly) and return
     it, exactly like the window check's own duplicate-return path.
+
+    BE-102: THE PRACTICE'S MASTER IS master_id, NOT ALWAYS THE CALLER. A
+    school curator may create a practice for a master of their school
+    (body.master_id; _effective_master_id_or_4xx says exactly when). From
+    there on, every place that asks "whose practice" asks it of that
+    master: the dedup window and the race lookup (the slot is the
+    master's), the confirmed-methods check (the master teaches it), the
+    master's own groups and root parent, Practice.master_id and the logs'
+    master_id. The CALLER stays the one who acted: the logs' actor_id, the
+    school check of _usable_curator_group_or_400, and the audit row plus
+    the master's notification written when a practice was really created
+    for somebody else (_announce_practice_created_for_master).
     """
-    duplicate = await _find_recent_duplicate_practice(user.id, body, session)
+    # BE-102: before the dedup, which would otherwise hand the target's
+    # existing practice to a caller who has not passed the checks.
+    master_id = await _effective_master_id_or_4xx(user, body, session)
+    for_another_master = master_id != user.id
+    duplicate = await _find_recent_duplicate_practice(master_id, body, session)
     if duplicate is not None:
         await _same_school_or_409(duplicate, body, session)
         logger.info(
             "practice_create_deduplicated",
-            master_id=str(user.id),
+            master_id=str(master_id),
+            actor_id=str(user.id),
             existing_practice_id=str(duplicate.id),
             title=body.title,
         )
         return duplicate, True
 
     await _validate_taxonomy(body.direction, body.style, session)
-    await _assert_master_confirmed_taxonomy(user.id, body.direction, body.style, session)
+    await _assert_master_confirmed_taxonomy(
+        master_id, body.direction, body.style, session,
+    )
     price_cents = _enforce_pricing(body.is_free, body.price_cents)
     # P5 (PROMPT №594): reject a group_id that isn't one of THIS master's own
     # custom groups (another master's group, an unknown id, or a system
     # slug) before anything is inserted.
-    await _owned_group_ids_or_400(user.id, body.group_ids, session)
+    await _owned_group_ids_or_400(master_id, body.group_ids, session)
     # BE-74: same placement, same reflex -- reject a school this master
-    # cannot create a practice in before anything is inserted.
-    if body.curator_group_id is not None:
+    # cannot create a practice in before anything is inserted. BE-102: on
+    # the path for another master the same check already ran, for the
+    # caller, inside _effective_master_id_or_4xx.
+    if body.curator_group_id is not None and not for_another_master:
         await _usable_curator_group_or_400(
             user.id, body.curator_group_id, session,
         )
     # H-R2 (3.4): validate parent_practice_id BEFORE anything is inserted
     # -- same placement discipline as the group check above.
     parent = await _owned_root_parent_or_400(
-        user.id, body.parent_practice_id, session,
+        master_id, body.parent_practice_id, session,
     )
 
     # T-23 (owner-ruled 2026-08-17): a manually-attached child (this path;
@@ -1224,7 +1436,7 @@ async def create_practice(
             effective_curator_group_id = parent.curator_group_id
 
     practice = Practice(
-        master_id=user.id,
+        master_id=master_id,
         practice_type=body.practice_type,
         title=body.title,
         description=body.description,
@@ -1264,12 +1476,15 @@ async def create_practice(
             session.add(practice)
             await session.flush()
     except IntegrityError:
-        winner = await _find_duplicate_practice(user.id, body, session, since=None)
+        winner = await _find_duplicate_practice(
+            master_id, body, session, since=None,
+        )
         if winner is not None:
             await _same_school_or_409(winner, body, session)
             logger.info(
                 "practice_create_race_lost",
-                master_id=str(user.id),
+                master_id=str(master_id),
+                actor_id=str(user.id),
                 existing_practice_id=str(winner.id),
                 title=body.title,
             )
@@ -1323,9 +1538,13 @@ async def create_practice(
     elif body.group_ids:
         await _set_practice_audience_groups(practice.id, body.group_ids, session)
 
+    if for_another_master:
+        await _announce_practice_created_for_master(user, practice, session)
+
     logger.info(
         "practice_created",
-        master_id=str(user.id),
+        master_id=str(master_id),
+        actor_id=str(user.id),
         practice_type=body.practice_type,
         title=body.title,
         is_free=body.is_free,
