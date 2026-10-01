@@ -14,9 +14,27 @@
 # LOCK ORDER (BE-95). THE ONE PLACE IT IS WRITTEN; everything below that
 # depends on it points here. The isolation level is READ COMMITTED and there
 # is no SELECT ... FOR UPDATE in this module, so the only row locks are the
-# ones writes take -- and every writer takes them in ONE order:
+# ones writes take, plus the one FOR SHARE named below -- and every writer
+# takes them in ONE order:
 #
-#     member -> transfer -> master offer -> invite -> practice audience -> group
+#     member -> master profile -> transfer -> master offer -> invite
+#            -> practice audience -> group
+#
+# THE MASTER PROFILE (BE-59) IS THE ONE ROW HERE THIS MODULE DOES NOT OWN,
+# and the one lock taken by a read: offer_curator_group_master reads the
+# candidate's master_profiles row FOR SHARE (_lock_master_profile). The
+# offer decides between "ask them to answer" and "ask them to get verified"
+# by that row, and the admin paths that move it -- verify_master,
+# reject_master, make_master, self-provision, set_role -- hold it FOR UPDATE
+# (or by their UPDATE) while they read this person's offers
+# (announce_pending_master_offers, close_pending_master_offers). Without the
+# shared lock an offer and a verification landing together each read the
+# other as not-yet-there, and the "become a master of this school?" prompt
+# went to nobody. A FOR SHARE and not a no-op UPDATE: that idiom rewrites a
+# column, and this module does not write rows of masters/. The admin side
+# never takes a member row, so the position after member closes no cycle
+# it could open. ONE WINDOW REMAINS, where there is no profile row to lock
+# at all -- see the KNOWN CEILING on _lock_master_profile.
 #
 # THE GROUP ROW COMES AFTER THE CHILD ROWS A FUNCTION LOCKS OR DELETES, AND
 # EACH FUNCTION TAKES IT ONCE, AT THE STRENGTH IT ENDS UP NEEDING. Inserting
@@ -72,6 +90,7 @@ from sqlalchemy import (
     case,
     delete,
     func,
+    null,
     select,
     update,
 )
@@ -98,6 +117,7 @@ from app.modules.curator_groups.models import (
     CuratorGroupMasterOffer,
     CuratorGroupMember,
     CuratorGroupTransfer,
+    CuratorMasterOfferState,
     CuratorMemberKind,
 )
 
@@ -510,19 +530,64 @@ async def _notify_group_event(
     broken route" (UserInboxView.vue). Naming the intent now is what lets
     the frontend card map it later without touching velo again.
     """
-    await emit_notification(
+    await _notify_school(
         session,
         idempotency_key=f"curator-group-event:{journal_event_id}",
+        type=type,
+        recipient_id=recipient_id,
+        title=title,
+        body=body,
+        group_id=group_id,
+        variables={"group_name": group_name, "actor_name": actor_name},
+    )
+
+
+_OPEN_CURATOR_GROUP = "open_curator_group"
+# BE-59: a NEW action verb, on the same contract as open_curator_group was
+# when it arrived: an unmapped action falls back to mark-read-only in the
+# inbox, so naming the intent now lets the frontend map it to
+# /master/apply later without touching velo again.
+_OPEN_MASTER_APPLICATION = "open_master_application"
+
+
+async def _notify_school(
+    session: AsyncSession,
+    *,
+    idempotency_key: str,
+    type: str,
+    recipient_id: UUID,
+    title: str,
+    body: str,
+    group_id: UUID,
+    variables: dict[str, str],
+    action: str = _OPEN_CURATOR_GROUP,
+) -> None:
+    """Queue one notification about a school to one person, in-transaction.
+
+    The body of _notify_group_event, with the key and the action named by
+    the caller. BE-59 needs both: the admin side of an appointment
+    (announce_pending_master_offers, close_pending_master_offers) writes NO
+    journal row -- the actor there is an admin, and _record_group_event
+    would stamp an admin's name into a school's journal -- so it has no
+    journal id to key on and keys on the offer instead; and the prompt to
+    get verified points at the master application, not at the school.
+
+    Everything _notify_group_event's docstring says about the transaction,
+    the single addressee and the absent activity check holds here
+    unchanged: it is the same call.
+    """
+    await emit_notification(
+        session,
+        idempotency_key=idempotency_key,
         type=type,
         target_type="user",
         target_value=str(recipient_id),
         title=title,
         body=body,
         action_data={
-            "action": "open_curator_group",
+            "action": action,
             "params": {"group_id": str(group_id)},
-            "group_name": group_name,
-            "actor_name": actor_name,
+            **variables,
         },
     )
 
@@ -997,6 +1062,11 @@ def _member_base_query(group_id: UUID) -> Select:
     on it either -- read from its body, not assumed. Adding one here would
     be inventing a rule the codebase does not have, and inventing it in the
     place least likely to be noticed.
+
+    master_offer (BE-59) is the state of a pending appointment of this
+    member, computed the same way, in SQL (_master_offer_state_expr). The
+    roster is the curator's alone (_get_group_or_404), so nobody else
+    reads it here.
     """
     return (
         select(
@@ -1010,6 +1080,9 @@ def _member_base_query(group_id: UUID) -> Select:
                 ),
                 else_=_verified_profile_exists(CuratorGroupMember.user_id),
             ).label("is_visible"),
+            _master_offer_state_expr(
+                CuratorGroupMember.group_id, CuratorGroupMember.user_id,
+            ).label("master_offer"),
         )
         .join(CuratorGroupMember, CuratorGroupMember.user_id == User.id)
         .where(CuratorGroupMember.group_id == group_id)
@@ -1068,8 +1141,9 @@ async def list_curator_group_members(
             "kind": kind_value,
             "joined_at": joined_at,
             "is_visible": bool(is_visible),
+            "master_offer": master_offer,
         }
-        for user, kind_value, joined_at, is_visible in rows
+        for user, kind_value, joined_at, is_visible, master_offer in rows
     ]
     return items, total
 
@@ -1730,6 +1804,57 @@ async def _has_master_capability(user_id: UUID, session: AsyncSession) -> bool:
         (
             await session.execute(select(_verified_profile_exists(user_id)))
         ).scalar()
+    )
+
+
+async def _lock_master_profile(user_id: UUID, session: AsyncSession) -> None:
+    """Hold this person's master_profiles row FOR SHARE, if there is one.
+
+    The "master profile" position of the module's order (header). Taken by
+    offer_curator_group_master after the candidate's member row and before
+    it reads their verification, so that the read and every admin path that
+    moves the status are serialised on one row: a verification either
+    committed before this lock (the offer then sees "verified" and asks the
+    candidate to answer) or waits for this transaction (and then finds the
+    offer and announces it). A rejection is serialised the same way and
+    then closes the offer it finds.
+
+    Returns nothing on purpose. The status is then read by
+    _has_master_capability, so the JSONB path to it is still written down
+    once in this module (_verified_profile_exists), and under this lock that
+    plain read sees the last committed state of a row nobody can be
+    changing.
+
+    KNOWN CEILING -- a profile that does not exist yet cannot be locked.
+      1. Mechanics: with no master_profiles row FOR SHARE locks nothing.
+         make_master and apply_for_master's self-provision CREATE a
+         verified profile by INSERT; one that commits between this lock and
+         the offer's commit has already run announce_pending_master_offers
+         over a set that did not include this offer, and the offer itself
+         read "not verified". The candidate is then verified, the curator
+         sees "awaiting answer", and nobody was asked.
+      2. Status: acknowledged by design.
+      3. Task: none -- the window needs an admin creating a master out of a
+         profile-less member of a school at the same instant that school's
+         curator appoints them, and no product line is open on it.
+      4. Trigger to reopen: a school member whose offer reads
+         awaiting_answer with no curator_group.master_offered notification
+         keyed on that offer in the outbox.
+      5. Agreed fix shape: lock a row that always exists -- the users row,
+         FOR SHARE here and by the profile-creating writers before their
+         INSERT -- which puts "user" into this order ahead of member for
+         every writer of a role.
+      6. Rejected: announcing from offer_curator_group_master again after
+         its own commit (no such hook: P-01, the request commits after the
+         function returns), and re-reading the status after the offer's
+         INSERT -- it narrows the window and does not close it: a profile
+         committed after the re-read and before this commit is missed the
+         same way.
+    """
+    await session.execute(
+        select(MasterProfile.user_id)
+        .where(MasterProfile.user_id == user_id)
+        .with_for_update(read=True)
     )
 
 
@@ -2883,10 +3008,67 @@ async def delete_group_preview(
 #   * member.kind changes on CONSENT, never on the offer. An appointment
 #     nobody answered leaves the roster exactly as it was, which is why
 #     member_promoted is written by accept and by nothing else.
-#   * master capability is checked TWICE, at offer and at consent, because
-#     verification can be revoked in between. Checking only at the offer
-#     would make the gate bypassable by waiting.
+#   * master capability GATES ONLY CONSENT (BE-59). Until BE-59 it was
+#     checked at the offer too and an unverified candidate was refused
+#     there; the owner's model makes that offer the first step of the flow
+#     instead -- the candidate is asked to get verified, the admin's
+#     decision carries it on. Consent still re-checks, because
+#     verification can be revoked between the offer and the answer, and
+#     a revocation leaves the offer where it is (owner ruling, BE-59).
+#
+# THE STATE OF AN OFFER IS NOT STORED. A row is the offer; whether it is
+# awaiting the candidate's verification or their answer is the live
+# verification of the candidate, computed where it is shown
+# (_master_offer_state_expr). Verification and revocation therefore move
+# every offer of the person without a write in this module.
 # ===========================================================================
+
+
+_MASTER_OFFERED_TYPE = "curator_group.master_offered"
+_MASTER_OFFERED_TITLE = "Вас приглашают вести школу"
+
+
+def _master_offered_body(curator_name: str, group_name: str) -> str:
+    """The "become a master of this school? yes / no" text, written once.
+
+    Two senders: the offer to a verified candidate, and the verification
+    that turns a waiting offer into a question (announce_pending_master_
+    offers). One prompt, one wording, whichever of them sent it.
+    """
+    return (
+        f"{curator_name} предлагает вам стать мастером школы "
+        f"«{group_name}». Откройте приложение, чтобы принять или отклонить."
+    )
+
+
+def _master_offer_state_expr(
+    group_id_col: ColumnElement | UUID,
+    user_id_col: ColumnElement | UUID,
+) -> ColumnElement:
+    """SQL CASE: the state of this person's offer in this school, or NULL.
+
+    NULL when there is no offer; otherwise awaiting_answer when the
+    candidate is a verified master right now, awaiting_verification when
+    not -- through _verified_profile_exists, so the JSONB path to the
+    status is still written once. One bounded EXISTS per statement, as
+    with is_visible.
+    """
+    has_offer = (
+        select(CuratorGroupMasterOffer.id)
+        .where(
+            CuratorGroupMasterOffer.group_id == group_id_col,
+            CuratorGroupMasterOffer.to_user_id == user_id_col,
+        )
+        .exists()
+    )
+    return case(
+        (~has_offer, null()),
+        (
+            _verified_profile_exists(user_id_col),
+            CuratorMasterOfferState.AWAITING_ANSWER.value,
+        ),
+        else_=CuratorMasterOfferState.AWAITING_VERIFICATION.value,
+    )
 
 
 async def _master_offer_row(
@@ -2913,19 +3095,36 @@ async def offer_curator_group_master(
 ) -> None:
     """Offer a member of this school the role of its master.
 
-    THE CANDIDATE MUST BE BOTH: a member of THIS school, and a verified
-    master of the PLATFORM. The two are separate facts and neither implies
-    the other -- a verified master who never joined is a stranger to this
-    school, and a devoted student who is not a master cannot teach in it.
+    THE CANDIDATE MUST BE A MEMBER OF THIS SCHOOL; BEING A VERIFIED MASTER
+    OF THE PLATFORM DECIDES WHAT HAPPENS NEXT, NOT WHETHER (BE-59). The two
+    are separate facts and neither implies the other -- a verified master
+    who never joined is a stranger to this school, and a student who is not
+    a master yet is somebody the curator may still want to teach in it.
+    So the offer is kept either way, and the candidate hears one of two
+    things:
+
+      * verified -> curator_group.master_offered, "become a master of this
+        school? yes / no" -- the offer is awaiting their answer;
+      * not verified -> curator_group.master_verification_required, a
+        prompt to get verified as a master through the application -- the
+        offer is awaiting their verification. One text for every status
+        that is not "verified" (no application, pending, rejected,
+        withdrawn, suspended): each of them can reach verification from
+        where it stands, and the prompt says "apply, or wait for the
+        decision on the one you made" (owner ruling, BE-59 gate).
+
+    The second branch is carried forward by the admin, not by this school:
+    verifying the person announces every offer waiting for them
+    (announce_pending_master_offers), rejecting their application closes
+    every one and tells each curator (close_pending_master_offers).
     can_create_groups is NOT consulted: that right is about founding
     schools, not about teaching in someone else's.
 
     A NON-CURATOR GETS 404, not 403, and so does a request naming a
     stranger: "no such school", "not your school", "school is dark" and
-    "that person is not in it" are one answer (P-08). The two refusals that
-    DO speak -- already a master, not a verified master -- are only reached
-    by the curator of the school, who already knows both facts about their
-    own roster.
+    "that person is not in it" are one answer (P-08). The one refusal that
+    DOES speak -- already a master -- is only reached by the curator of the
+    school, who already knows that fact about their own roster.
 
     REPEATING THE OFFER TO THE SAME PERSON IS A NO-OP, not a 409. The
     constraint is (group_id, to_user_id), so several appointments may be
@@ -2938,8 +3137,6 @@ async def offer_curator_group_master(
             a member of it.
         ConflictError already_master: the candidate is already a master
             here -- there is nothing to appoint.
-        ForbiddenError master_required: the candidate holds no verified
-            master profile right now.
     """
     group = await _get_group_or_404(curator_user_id, group_id, session)
 
@@ -2953,12 +3150,6 @@ async def offer_curator_group_master(
             "This member is already a master of the school",
             code="already_master",
         )
-    if not await _has_master_capability(to_user_id, session):
-        raise ForbiddenError(
-            "Only a verified master can be appointed",
-            code="master_required",
-        )
-
     # BE-95: THE CANDIDATE'S MEMBER ROW IS LOCKED BEFORE THE OFFER IS
     # WRITTEN -- the first lock of the module's order (header). The reads
     # above answered from the row as it was; between them and the INSERT a
@@ -2980,6 +3171,14 @@ async def offer_curator_group_master(
             "This member is already a master of the school",
             code="already_master",
         )
+
+    # BE-59: THE CANDIDATE'S MASTER PROFILE, FOR SHARE, AND ONLY THEN THEIR
+    # VERIFICATION -- the second position of the module's order (header).
+    # Read before this lock, the status could be the one a verification was
+    # replacing at that moment, and the verification would then announce
+    # an offer set that did not include this one yet.
+    await _lock_master_profile(to_user_id, session)
+    verified = await _has_master_capability(to_user_id, session)
 
     if await _master_offer_row(group.id, to_user_id, session) is not None:
         # Already offered. Nothing to write and nothing to send: a second
@@ -3021,20 +3220,35 @@ async def offer_curator_group_master(
         session,
         data=_target_data(to_user_id, target_name),
     )
-    await _notify_group_event(
+    actor_name = display_name(actor.first_name, actor.last_name)
+    if verified:
+        await _notify_group_event(
+            session,
+            journal_event_id=journal.id,
+            type=_MASTER_OFFERED_TYPE,
+            recipient_id=to_user_id,
+            title=_MASTER_OFFERED_TITLE,
+            body=_master_offered_body(actor_name, group.name),
+            group_id=group.id,
+            group_name=group.name,
+            actor_name=actor_name,
+        )
+        return
+    await _notify_school(
         session,
-        journal_event_id=journal.id,
-        type="curator_group.master_offered",
+        idempotency_key=f"curator-group-event:{journal.id}",
+        type="curator_group.master_verification_required",
         recipient_id=to_user_id,
-        title="Вас приглашают вести школу",
+        title="Нужна верификация мастера",
         body=(
-            f"{display_name(actor.first_name, actor.last_name)} предлагает "
-            f"вам стать мастером школы «{group.name}». Откройте приложение, "
-            f"чтобы принять или отклонить."
+            f"{actor_name} предлагает вам стать мастером школы "
+            f"«{group.name}». Для этого нужна верификация мастера: подайте "
+            f"заявку или дождитесь решения по уже поданной. Приглашение "
+            f"придёт после верификации."
         ),
         group_id=group.id,
-        group_name=group.name,
-        actor_name=display_name(actor.first_name, actor.last_name),
+        variables={"group_name": group.name, "actor_name": actor_name},
+        action=_OPEN_MASTER_APPLICATION,
     )
 
 
@@ -3229,6 +3443,236 @@ async def decline_curator_group_master_offer(
         group_name=group_name,
         actor_name=display_name(actor.first_name, actor.last_name),
     )
+
+
+async def cancel_curator_group_master_offer(
+    curator_user_id: UUID,
+    group_id: UUID,
+    to_user_id: UUID,
+    session: AsyncSession,
+    *,
+    actor: User,
+) -> None:
+    """Withdraw an appointment. Idempotent: no such offer -> still 204.
+
+    THE ONLY END OF AN OFFER NOBODY ANSWERED (BE-59). An offer has no
+    expiry -- owner: it waits until the curator takes it back -- and this
+    is the taking back, in either state, awaiting verification or awaiting
+    an answer. Shaped on cancel_curator_group_transfer: the DELETE is both
+    the check and the take, and cancelling nothing writes nothing.
+
+    THE CANDIDATE IS NOT NOTIFIED, by decision: an appointment withdrawn is
+    the absence of a role nobody had yet, and the accept they might still
+    press answers the honest 404 master_offer_not_found. The journal does
+    record it, with the person as its target: the curator changed their
+    mind, which is an act in the school.
+
+    A stranger to the school gets the same 404 as everywhere else (P-08);
+    a request naming somebody with no offer here -- never offered, already
+    answered, left -- is the idempotent 204, which says nothing about them
+    that the curator's own roster does not.
+    """
+    group = await _get_group_or_404(curator_user_id, group_id, session)
+    cancelled = (
+        await session.execute(
+            delete(CuratorGroupMasterOffer)
+            .where(
+                CuratorGroupMasterOffer.group_id == group.id,
+                CuratorGroupMasterOffer.to_user_id == to_user_id,
+            )
+            .returning(CuratorGroupMasterOffer.to_user_id)
+        )
+    ).first()
+    if cancelled is None:
+        return
+    # OWNERSHIP RE-CHECKED AFTER THE TAKE, last in the module's order
+    # (header) -- as in cancel_curator_group_transfer: if the school changed
+    # hands since _get_group_or_404, this would have withdrawn the NEW
+    # owner's appointment. The rollback (P-01) puts it back.
+    if not await _lock_group_as_owner(curator_user_id, group.id, session):
+        raise NotFoundError("Curator group not found")
+    _record_group_event(
+        group.id,
+        actor,
+        CuratorGroupEventKind.MASTER_OFFER_CANCELLED,
+        session,
+        data=_target_data(
+            cancelled.to_user_id,
+            await _frozen_name(cancelled.to_user_id, session),
+        ),
+    )
+
+
+async def _offer_schools(
+    group_ids: list[UUID], session: AsyncSession,
+) -> dict[UUID, tuple[UUID, str, str]]:
+    """{group_id: (curator_user_id, school name, curator's name)} -- now.
+
+    The CURRENT curator, read at the moment of the admin's decision, not
+    the one who made the offer: the offer does not record its author, and
+    a school handed over since belongs, with its pending appointments, to
+    whoever holds it now. They are who the candidate will be teaching
+    under, and who the outcome is news to.
+    """
+    rows = (
+        await session.execute(
+            select(
+                CuratorGroup.id,
+                CuratorGroup.curator_user_id,
+                CuratorGroup.name,
+                User.first_name,
+                User.last_name,
+            )
+            .join(User, User.id == CuratorGroup.curator_user_id)
+            .where(CuratorGroup.id.in_(group_ids))
+        )
+    ).all()
+    return {
+        gid: (curator_id, name, display_name(first, last))
+        for gid, curator_id, name, first, last in rows
+    }
+
+
+async def announce_pending_master_offers(
+    user_id: UUID, session: AsyncSession,
+) -> int:
+    """This person just became a verified master: ask every waiting school.
+
+    CALLED BY EVERY PATH THAT GRANTS MASTER CAPABILITY, and only on the
+    transition -- verify_master (pending -> verified), make_master and
+    set_role to_master when the profile was not verified before, and
+    apply_for_master's self-provision (no profile -> verified). seed does
+    not call it: a seeded database has no pending appointments. Each offer
+    of the person gets curator_group.master_offered, "become a master of
+    this school? yes / no", named after the school's CURRENT curator
+    (_offer_schools). Returns how many were announced.
+
+    NOT INSIDE sync_membership_delta, though every caller makes that call
+    a line away: core/events would then import the school module, and the
+    contact book would start deciding who gets asked to teach.
+
+    THE OFFERS ARE LOCKED, NOT READ -- a no-op UPDATE ... RETURNING, the
+    module's idiom, in the "master offer" position of the order (header),
+    after the profile row the caller already holds. A decline or a
+    withdrawal landing at the same instant either commits first (the row
+    is gone, nothing is announced) or waits for this transaction (and
+    removes an offer that was, honestly, announced). The callers hold the
+    profile by a FOR UPDATE or by their own UPDATE of it; for the latter
+    that UPDATE is flushed by the autoflush in front of this statement, so
+    the profile is still taken before the offers.
+
+    THE IDEMPOTENCY KEY CARRIES A transition_id MINTED HERE, one uuid4 per
+    call, shared by every offer of the call. NOT verified_at: make_master
+    and set_role re-verify an existing profile with
+    setdefault("verification", ...), which keeps the verification block of
+    an EARLIER verification (verified, revoked, re-granted: the old
+    verified_at survives) and keeps an explicit None on a pending profile.
+    A key built from it would repeat across two verifications, and comms
+    would silently drop the second prompt -- the case the key exists to
+    tell apart. A uuid4 per call is a new key exactly per transition, and
+    it does not send twice: a request that rolls back takes its outbox rows
+    with it (same transaction), and a request repeated after a commit
+    meets the profile already verified -- 409 on every caller, before this
+    is reached.
+    """
+    taken = (
+        await session.execute(
+            update(CuratorGroupMasterOffer)
+            .where(CuratorGroupMasterOffer.to_user_id == user_id)
+            .values(offered_at=CuratorGroupMasterOffer.offered_at)
+            .returning(
+                CuratorGroupMasterOffer.id,
+                CuratorGroupMasterOffer.group_id,
+                CuratorGroupMasterOffer.offered_at,
+            )
+            .execution_options(synchronize_session=False)
+        )
+    ).all()
+    if not taken:
+        return 0
+
+    schools = await _offer_schools([row.group_id for row in taken], session)
+    transition_id = uuid4()
+    for offer_id, group_id, _offered_at in sorted(
+        taken, key=lambda row: (row.offered_at, row.id),
+    ):
+        _curator_id, group_name, curator_name = schools[group_id]
+        await _notify_school(
+            session,
+            idempotency_key=(
+                f"curator-master-offer-ready:{offer_id}:{transition_id}"
+            ),
+            type=_MASTER_OFFERED_TYPE,
+            recipient_id=user_id,
+            title=_MASTER_OFFERED_TITLE,
+            body=_master_offered_body(curator_name, group_name),
+            group_id=group_id,
+            variables={"group_name": group_name, "actor_name": curator_name},
+        )
+    return len(taken)
+
+
+async def close_pending_master_offers(
+    user_id: UUID, session: AsyncSession,
+) -> int:
+    """This person's master application was rejected: close their offers.
+
+    CALLED BY reject_master, after it has written the rejection, while it
+    holds the profile FOR UPDATE -- the "master profile" position, so the
+    DELETE below is the "master offer" one (header). Every offer waiting
+    for this person's verification is deleted, and each school's CURRENT
+    curator (_offer_schools) is told the appointment is closed and why.
+    Returns how many.
+
+    ONLY OFFERS AWAITING VERIFICATION CAN BE HERE. reject_master acts on a
+    pending profile only, so the person is not verified, and an offer of
+    theirs is by definition waiting for that -- there is no
+    awaiting_answer offer for this to close by mistake.
+
+    THE PERSON MAY APPLY AGAIN (apply_for_master accepts a rejected
+    profile), and that does not revive anything: the flow the owner
+    described closes here, and a new appointment is the curator's new
+    decision. NO JOURNAL ROW, for the reason the event vocabulary gives
+    (models.py, MASTER_OFFER_CANCELLED): the decision is an admin's, about a
+    person. The key is the offer itself -- one offer is closed once.
+    """
+    closed = (
+        await session.execute(
+            delete(CuratorGroupMasterOffer)
+            .where(CuratorGroupMasterOffer.to_user_id == user_id)
+            .returning(
+                CuratorGroupMasterOffer.id,
+                CuratorGroupMasterOffer.group_id,
+                CuratorGroupMasterOffer.offered_at,
+            )
+        )
+    ).all()
+    if not closed:
+        return 0
+
+    schools = await _offer_schools([row.group_id for row in closed], session)
+    candidate_name = await _frozen_name(user_id, session)
+    for offer_id, group_id, _offered_at in sorted(
+        closed, key=lambda row: (row.offered_at, row.id),
+    ):
+        curator_id, group_name, _curator_name = schools[group_id]
+        await _notify_school(
+            session,
+            idempotency_key=f"curator-master-offer-closed:{offer_id}",
+            type="curator_group.master_offer_closed",
+            recipient_id=curator_id,
+            title="Назначение закрыто",
+            body=(
+                f"{candidate_name} не прошёл верификацию мастера. "
+                f"Приглашение мастером школы «{group_name}» закрыто."
+            ),
+            group_id=group_id,
+            variables={
+                "group_name": group_name,
+                "target_name": candidate_name,
+            },
+        )
+    return len(closed)
 
 
 # ===========================================================================

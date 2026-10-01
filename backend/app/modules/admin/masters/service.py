@@ -61,7 +61,11 @@ from app.modules.admin.masters.schemas import (
 # model behind it, so a typo in a writer would not fail -- it would write a
 # key nobody reads, and the master would be told they had a right they do
 # not have. curator_groups owns the spelling because it owns the gate.
-from app.modules.curator_groups.service import CAN_CREATE_GROUPS_KEY
+from app.modules.curator_groups.service import (
+    CAN_CREATE_GROUPS_KEY,
+    announce_pending_master_offers,
+    close_pending_master_offers,
+)
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.practices.taxonomy_models import TaxonomyDirection
@@ -153,6 +157,9 @@ async def verify_master(
     anything. Later grants and revocations go through
     set_master_group_right, not through here -- this path is reachable
     only while the application is still pending.
+
+    BE-59: announces every school-master offer waiting for this
+    verification (curator_groups announce_pending_master_offers).
     """
     profile = await _load_pending_profile(user_id, session)
 
@@ -182,6 +189,12 @@ async def verify_master(
             had=False,
             has=True,
         )
+
+    # BE-59: every school that offered this person a master role while
+    # they were not verified now asks them "yes / no". Here, while the
+    # profile is held FOR UPDATE (_load_pending_profile) -- the order of
+    # curator_groups/service.py's header, profile before offers.
+    await announce_pending_master_offers(user_id, session)
 
     promoted = await _promote_custom_methods(promote or [], session)
     scoped = await _scope_custom_methods_to_master(master_only or [], user_id, session)
@@ -317,8 +330,11 @@ async def revoke_master(
     Capability keys on status=="verified" (users/service.user_has_master_
     capability), so suspending drops it -> the account logs in user-only. Every
     row is kept: re-grant via the existing make_master re-verify branch restores
-    status="verified" + role=master. The CLI-style guard signals are computed
-    and returned as advisory but NEVER block (operator Б).
+    status="verified" + role=master. That includes school-master offers
+    (BE-59, owner ruling): they stay, silently, and read awaiting
+    verification again until the next verification re-announces them.
+    The CLI-style guard signals are computed and returned as advisory but
+    NEVER block (operator Б).
     """
     user, profile = await _load_verified_master(
         user_id, session, for_update=True
@@ -455,6 +471,10 @@ async def reject_master(
 
     Stores rejection reason and archives it in rejection history.
     Does NOT change User.role -- user stays as USER and can reapply.
+
+    BE-59: closes every school-master offer waiting for this verification
+    and tells each curator (curator_groups close_pending_master_offers).
+    A later reapplication does not revive them.
     """
     profile = await _load_pending_profile(user_id, session)
 
@@ -465,6 +485,11 @@ async def reject_master(
     new_data["account"]["rejection_reason"] = reason
     new_data["account"]["rejected_by"] = str(admin.id)
     profile.set_jsonb("data", new_data)
+
+    # BE-59: the appointments waiting for this verification are closed, and
+    # each school's curator is told. Under the same FOR UPDATE as the
+    # status write -- profile before offers, curator_groups' order.
+    await close_pending_master_offers(user_id, session)
 
     # M-01: audit trail for master rejection.
     await record_audit(

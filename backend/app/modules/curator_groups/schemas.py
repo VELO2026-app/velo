@@ -42,6 +42,11 @@ CuratorGroupDescriptionStr = Annotated[str, StringConstraints(max_length=500)]
 
 CuratorMemberKindLiteral = Literal["master", "student"]
 
+# BE-59: models.py::CuratorMasterOfferState, as the response spells it.
+CuratorMasterOfferStateLiteral = Literal[
+    "awaiting_verification", "awaiting_answer",
+]
+
 # ===========================================================================
 # The school's avatar url (GT-17)
 #
@@ -268,6 +273,11 @@ class CuratorGroupMemberItem(BaseModel):
     master as a row with is_visible=false -- "in the shadow" -- rather than
     watching them vanish, because the row is real and comes back by itself
     when the admin re-verifies.
+
+    master_offer (BE-59) -- the curator's pending appointment of this
+    member: awaiting_verification while they are not a verified master,
+    awaiting_answer once they are; null when there is none. Live, like
+    is_visible: a verification or a revocation moves it with no write.
     """
 
     user_id: UUID
@@ -276,6 +286,7 @@ class CuratorGroupMemberItem(BaseModel):
     kind: CuratorMemberKindLiteral
     joined_at: datetime
     is_visible: bool
+    master_offer: CuratorMasterOfferStateLiteral | None = None
 
 
 class PaginatedCuratorGroupMembersResponse(BaseModel):
@@ -798,6 +809,11 @@ class SchoolStudentProfileResponse(BaseModel):
                        this (TZ 1.13.3).
     Both are zero, and the arrays empty, for a student who has attended
     nothing -- a 200, never a 404.
+
+    master_offer (BE-59) -- the state of the curator's pending appointment
+    of this student, as on the roster. Filled for the CURATOR only; a
+    master of the school reads null whatever the state, as a member
+    outside a transfer reads null for it.
     """
 
     user_id: UUID
@@ -805,5 +821,6 @@ class SchoolStudentProfileResponse(BaseModel):
     avatar_url: str | None
     practices_count: int
     hours: float
+    master_offer: CuratorMasterOfferStateLiteral | None = None
     recent_checkins: list[SchoolStudentCheckinItem]
     recent_feedbacks: list[SchoolStudentFeedbackItem]

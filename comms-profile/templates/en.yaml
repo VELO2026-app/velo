@@ -181,6 +181,11 @@ curator_group.master_offered:
     title: "You are invited to teach"
     body: "🏛 <b>{actor_name}</b> invites you to become a master of <b>{group_name}</b>.\n\nOpen the app to accept or decline."
 
+curator_group.master_verification_required:
+  telegram:
+    title: "Master verification needed"
+    body: "🏛 <b>{actor_name}</b> invites you to become a master of <b>{group_name}</b>.\n\nThis needs master verification: apply, or wait for the decision on the application you made. The invitation arrives once you are verified."
+
 curator_group.master_offer_accepted:
   telegram:
     title: "Appointment accepted"
@@ -190,6 +195,11 @@ curator_group.master_offer_declined:
   telegram:
     title: "Appointment declined"
     body: "🏛 <b>{actor_name}</b> declined the master role in <b>{group_name}</b>."
+
+curator_group.master_offer_closed:
+  telegram:
+    title: "Appointment closed"
+    body: "🏛 <b>{target_name}</b> did not pass master verification. The master invitation to <b>{group_name}</b> is closed."
 
 # -- Master-facing (BE-33) --
 #

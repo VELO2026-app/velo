@@ -22,12 +22,17 @@
 #   1. CAPABILITY, NOT ROLE -- a verified master browsing in user mode is
 #      still a master. Was test_capability_not_role_admits_a_master_browsing
 #      _as_a_user; now test_a_master_browsing_as_a_user_can_still_be_appointed.
-#   2. A NON-MASTER IS REFUSED with master_required. Was
-#      test_plain_user_is_refused_by_the_master_link; now
-#      test_a_plain_user_cannot_be_appointed.
+#   2. A NON-MASTER IS NOT MADE A MASTER BY THE OFFER. Was
+#      test_plain_user_is_refused_by_the_master_link, then
+#      test_a_plain_user_cannot_be_appointed (403 master_required); since
+#      BE-59 the offer is KEPT, awaiting verification, and the person is
+#      asked to get verified -- now
+#      test_a_plain_user_is_appointed_pending_verification.
 #   3. CAPABILITY IS CHECKED *NOW*, not once -- a revoked verification
-#      refuses. Was test_a_suspended_master_is_refused_by_the_master_link...;
-#      now test_a_candidate_who_lost_verification_cannot_be_appointed.
+#      decides what the offer is. Was
+#      test_a_suspended_master_is_refused_by_the_master_link..., then
+#      test_a_candidate_who_lost_verification_cannot_be_appointed (403);
+#      now test_a_candidate_who_lost_verification_is_asked_to_get_verified.
 #   4. joined_at IS NOT REFRESHED when kind changes -- the person has been in
 #      the school since the day they walked in, and kind describes their
 #      role, not their arrival. Was test_a_student_member_is_upgraded_by_the
@@ -425,14 +430,17 @@ async def test_a_master_browsing_as_a_user_can_still_be_appointed(
 
 
 @pytest.mark.asyncio
-async def test_a_plain_user_cannot_be_appointed(
+async def test_a_plain_user_is_appointed_pending_verification(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """Property 2: a member who is not a master of the platform is refused.
+    """Property 2: a member who is not a master of the platform stays a student.
 
-    403 master_required, and the offer is not created -- paired, because a
-    refusal that still wrote the row would surface only when somebody
-    accepted it.
+    WAS: 403 master_required and no offer -- right while the owner's model
+    refused such an appointment. BE-59 made it the first step of the flow
+    instead: the offer is kept and the person is asked to get verified.
+    What still holds, and is asserted, is that the offer makes nobody a
+    master -- the kind stays student -- and that the prompt is the
+    verification one, NOT "become a master? yes / no".
     """
     curator = await _master(client, db_session, _TID_CURATOR)
     plain = await _plain(client, _TID_PLAIN)
@@ -440,16 +448,23 @@ async def test_a_plain_user_cannot_be_appointed(
     await _seed_member(db_session, group, plain)
 
     resp = await _offer(client, curator, group, plain)
-    assert resp.status_code == 403
-    assert resp.json()["error"] == "master_required"
-    assert await _offers(group) == []
+    assert resp.status_code == 204, resp.text
+    assert await _offers(group) == [UUID(plain["user"]["id"])]
+    assert await _kind_of(group, plain) == CuratorMemberKind.STUDENT.value
+    types = await _types_for(plain)
+    assert types == ["curator_group.master_verification_required"]
 
 
 @pytest.mark.asyncio
-async def test_a_candidate_who_lost_verification_cannot_be_appointed(
+async def test_a_candidate_who_lost_verification_is_asked_to_get_verified(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """Property 3: capability is read NOW, not once and remembered."""
+    """Property 3: capability is read NOW, not once and remembered.
+
+    WAS: 403 for a suspended candidate. Since BE-59 the same live read
+    decides which prompt goes out: the verification one, because the
+    profile is suspended NOW, though it was verified when they joined.
+    """
     curator = await _master(client, db_session, _TID_CURATOR)
     cand = await _master(client, db_session, _TID_CANDIDATE)
     group = await _school(client, curator)
@@ -457,9 +472,11 @@ async def test_a_candidate_who_lost_verification_cannot_be_appointed(
     await _unverify(db_session, cand)
 
     resp = await _offer(client, curator, group, cand)
-    assert resp.status_code == 403
-    assert resp.json()["error"] == "master_required"
-    assert await _offers(group) == []
+    assert resp.status_code == 204, resp.text
+    assert await _offers(group) == [UUID(cand["user"]["id"])]
+    assert await _types_for(cand) == [
+        "curator_group.master_verification_required",
+    ]
 
 
 @pytest.mark.asyncio
@@ -748,9 +765,16 @@ async def test_no_notification_without_a_journal_line_and_the_reverse(
 ) -> None:
     """Item 7 on this delivery's own events, both directions in one pass.
 
-    Three writing actions produce three journal lines and three school
+    Four writing actions produce their journal lines and school
     notifications; a refused action produces neither. Either assertion alone
     passes in a world where one of the two writers was never called.
+
+    THE REFUSAL CHANGED IN BE-59. It was the offer to a plain user (403
+    master_required) -- right while that offer was refused. BE-59 made it
+    a writing action: a journal line and the verification prompt, counted
+    below with the others. The "refused writes nothing" half is now held by
+    the refusal that remains on this path: re-offering somebody who has
+    just become a master, 409 already_master.
     """
     curator = await _master(client, db_session, _TID_CURATOR)
     taker = await _master(client, db_session, _TID_CANDIDATE)
@@ -764,11 +788,18 @@ async def test_no_notification_without_a_journal_line_and_the_reverse(
     await _offer(client, curator, group, refuser)
     await _accept(client, taker, group)
     await _decline(client, refuser, group)
-    refused = await _offer(client, curator, group, plain)
-    assert refused.status_code == 403
+    assert (await _offer(client, curator, group, plain)).status_code == 204
+
+    journal_before = await _journal(group)
+    taker_before = await _types_for(taker)
+    refused = await _offer(client, curator, group, taker)
+    assert refused.status_code == 409
+    assert refused.json()["error"] == "already_master"
+    assert await _journal(group) == journal_before
+    assert await _types_for(taker) == taker_before
 
     journal = await _journal(group)
-    assert journal.count(CuratorGroupEventKind.MASTER_OFFERED.value) == 2
+    assert journal.count(CuratorGroupEventKind.MASTER_OFFERED.value) == 3
     assert journal.count(CuratorGroupEventKind.MEMBER_PROMOTED.value) == 1
     assert journal.count(
         CuratorGroupEventKind.MASTER_OFFER_DECLINED.value
@@ -778,11 +809,13 @@ async def test_no_notification_without_a_journal_line_and_the_reverse(
     for who in (curator, taker, refuser, plain):
         school_notes += sum(
             1 for t in await _types_for(who)
-            if t.startswith("curator_group.master_offer")
+            if t.startswith("curator_group.master_")
         )
-    # two offers + one accepted + one declined; the refusal wrote nothing.
-    assert school_notes == 4
-    assert await _types_for(plain) == []
+    # two offers + one accepted + one declined + one verification prompt.
+    assert school_notes == 5
+    assert await _types_for(plain) == [
+        "curator_group.master_verification_required",
+    ]
 
 
 # ===========================================================================

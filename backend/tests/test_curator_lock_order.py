@@ -455,12 +455,19 @@ async def test_reoffering_to_somebody_who_just_accepted(
 
     THE PAIR: the re-send is the honest 409 AND the accept's result stands
     -- a master, and no offer left behind.
+
+    THE PAUSE SITS ON _membership_row SINCE BE-59, and the window is the
+    same one. It sat on _has_master_capability, which the offer used to
+    call right after reading the membership and before locking it; BE-59
+    moved that read past the member lock (under the profile's FOR SHARE),
+    where a pause would hold the member row and test a different race.
+    _membership_row's first call is the read this window starts from.
     """
     s = await _school(client, db_session, offer_to_student=True)
     result = await race(
         monkeypatch,
         holder=_offer_master(s),
-        pause_in=(curator_service, "_has_master_capability"),
+        pause_in=(curator_service, "_membership_row"),
         pause="after",
         rival=_accept_master(s),
     )

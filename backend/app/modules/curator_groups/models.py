@@ -60,6 +60,22 @@ class CuratorMemberKind(enum.StrEnum):
     STUDENT = "student"
 
 
+class CuratorMasterOfferState(enum.StrEnum):
+    """Where a pending school-master offer stands, as its curator sees it.
+
+    NOT A COLUMN (BE-59). CuratorGroupMasterOffer stays "a row is the
+    offer", and this is computed from the candidate's live verification
+    (curator_groups/service.py::_master_offer_state_expr): a verification
+    or a revocation moves every offer of the person without a write here,
+    and a stored copy would be one more thing to keep in step with
+    master_profiles. "No offer" is the absence of a value, not a third
+    member -- there is nothing pending to describe.
+    """
+
+    AWAITING_VERIFICATION = "awaiting_verification"
+    AWAITING_ANSWER = "awaiting_answer"
+
+
 class CuratorGroup(UUIDMixin, TimestampMixin, Base):
     """A school/community owned by one Master-Curator.
 
@@ -326,6 +342,14 @@ class CuratorGroupEventKind(enum.StrEnum):
     nothing behind it. A SERIES leaves ONE line, on the root -- forty
     occurrences are one decision to open a course, not forty arrivals.
 
+    MASTER_OFFER_CANCELLED (BE-59) is the curator withdrawing an
+    appointment -- an offer has no expiry, it waits until the curator
+    takes it back. The admin's side of the same offer is NOT here: a
+    verification announcing it and a rejection closing it are decisions
+    about a person, made by somebody outside the school, and a journal row
+    would stamp an admin's name into it. Those reach the school as
+    notifications only.
+
     A DELETED SCHOOL HAS NO "school deleted" EVENT and never will. The
     journal cascades with the group, so the row would be written and
     dropped inside one transaction -- a value here for it would be a
@@ -350,6 +374,7 @@ class CuratorGroupEventKind(enum.StrEnum):
     PRACTICE_PUBLISHED = "practice_published"
     MASTER_OFFERED = "master_offered"
     MASTER_OFFER_DECLINED = "master_offer_declined"
+    MASTER_OFFER_CANCELLED = "master_offer_cancelled"
 
 
 # The keys of CuratorGroupEvent.data, spelled ONCE. JSONB has no model
@@ -362,8 +387,8 @@ class CuratorGroupEventKind(enum.StrEnum):
 # word and was dropped from both rather than frozen at "student".
 EVENT_DATA_KIND = "kind"                  # join, promote, remove, leave
 EVENT_DATA_ACTOR_NAME = "actor_name"      # all twelve
-EVENT_DATA_TARGET_USER_ID = "target_user_id"   # remove, offer, accept, decline
-EVENT_DATA_TARGET_NAME = "target_name"         # remove, offer, accept, decline
+EVENT_DATA_TARGET_USER_ID = "target_user_id"   # remove, offer, accept, decline, cancel
+EVENT_DATA_TARGET_NAME = "target_name"         # remove, offer, accept, decline, cancel
 
 
 class CuratorGroupEvent(Base):
