@@ -718,7 +718,7 @@ export interface CuratorGroupMasterOfferRequest {
   to_user_id: string
 }
 
-/** One row of a curator group's roster. is_visible is ALWAYS true for a student and reflects the live MasterProfile status for a master (I-4). The curator sees a suspended master as a row with is_visible=false -- "in the shadow" -- rather than watching them vanish, because the row is real and comes back by itself when the admin re-verifies. */
+/** One row of a curator group's roster. is_visible is ALWAYS true for a student and reflects the live MasterProfile status for a master (I-4). The curator sees a suspended master as a row with is_visible=false -- "in the shadow" -- rather than watching them vanish, because the row is real and comes back by itself when the admin re-verifies. master_offer (BE-59) -- the curator's pending appointment of this member: awaiting_verification while they are not a verified master, awaiting_answer once they are; null when there is none. Live, like is_visible: a verification or a revocation moves it with no write. */
 export interface CuratorGroupMemberItem {
   user_id: string
   name: string
@@ -726,6 +726,7 @@ export interface CuratorGroupMemberItem {
   kind: 'master' | 'student'
   joined_at: string
   is_visible: boolean
+  master_offer?: 'awaiting_verification' | 'awaiting_answer' | null
 }
 
 /** One row of GET /curator-groups/mine. `relation` is the viewer's own tie to this group and is what the frontend keys the row's chip off. `transfer_offered` is true ONLY for the person being offered the group, and it is a bool rather than the full ref on purpose: this is a list row, and everything the offer contains is already known to whoever it was made to. The curator sees false here even for their own pending offer -- the list says "somebody is waiting on YOU", and nobody is. Until GT-4 the field was absent because a field that is always false is a promise with no writer behind it. */
@@ -1680,13 +1681,14 @@ export interface SchoolStudentFeedbackItem {
   created_at: string
 }
 
-/** GET /masters/me/curator-groups/{group_id}/students/{user_id}. What the school knows about one of its students, across every practice of the school -- including practices taught by other masters, and including practices whose master has since left. Belonging is a fact about the practice, not about anybody's current membership (owner ruling, 10 September). practices_count -- practices of this school the student ATTENDED. hours -- their duration summed, in hours, one decimal, rounded on the server: the client does not compute this (TZ 1.13.3). Both are zero, and the arrays empty, for a student who has attended nothing -- a 200, never a 404. */
+/** GET /masters/me/curator-groups/{group_id}/students/{user_id}. What the school knows about one of its students, across every practice of the school -- including practices taught by other masters, and including practices whose master has since left. Belonging is a fact about the practice, not about anybody's current membership (owner ruling, 10 September). practices_count -- practices of this school the student ATTENDED. hours -- their duration summed, in hours, one decimal, rounded on the server: the client does not compute this (TZ 1.13.3). Both are zero, and the arrays empty, for a student who has attended nothing -- a 200, never a 404. master_offer (BE-59) -- the state of the curator's pending appointment of this student, as on the roster. Filled for the CURATOR only; a master of the school reads null whatever the state, as a member outside a transfer reads null for it. */
 export interface SchoolStudentProfileResponse {
   user_id: string
   display_name: string
   avatar_url: string | null
   practices_count: number
   hours: number
+  master_offer?: 'awaiting_verification' | 'awaiting_answer' | null
   recent_checkins: SchoolStudentCheckinItem[]
   recent_feedbacks: SchoolStudentFeedbackItem[]
 }
