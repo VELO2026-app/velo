@@ -113,6 +113,11 @@
         <h2 class="velo-section-title">Основное <span class="cp-req">*</span></h2>
 
         <VInput v-model="form.title" placeholder="Название" :error="errors.title" />
+        <span
+          class="create-practice__field-error"
+          :class="{ 'create-practice__field-error--show': !!errors.title }"
+          >{{ errors.title }}</span
+        >
 
         <!-- Направление = дисциплина (meditation/yoga/…). Подпись = плейсхолдер.
              Options catalog-first (T2 stage 2) -- see directionOptions. -->
@@ -123,6 +128,11 @@
           :error="errors.direction"
           @update:modelValue="onDirectionChange"
         />
+        <span
+          class="create-practice__field-error"
+          :class="{ 'create-practice__field-error--show': !!errors.direction }"
+          >{{ errors.direction }}</span
+        >
 
         <!-- Вид практики = style. Показываем только если у направления есть виды
              (Q4=А: без явного «Без вида», не выбрано = null, необязательное). -->
@@ -137,6 +147,11 @@
           :options="DIFFICULTY_OPTIONS_CREATE"
           :error="errors.difficulty"
         />
+        <span
+          class="create-practice__field-error"
+          :class="{ 'create-practice__field-error--show': !!errors.difficulty }"
+          >{{ errors.difficulty }}</span
+        >
       </div>
 
       <!-- ================================================================
@@ -160,7 +175,11 @@
               {{ form.date ? dateDisplay : 'Дата' }}
             </button>
           </div>
-          <span v-if="errors.date" class="create-practice__field-error">{{ errors.date }}</span>
+          <span
+            class="create-practice__field-error"
+            :class="{ 'create-practice__field-error--show': !!errors.date }"
+            >{{ errors.date }}</span
+          >
         </div>
 
         <!-- Время: открывает TimePickerSheet (24ч). Подпись = плейсхолдер. -->
@@ -178,7 +197,11 @@
               {{ form.time || 'Время' }}
             </button>
           </div>
-          <span v-if="errors.time" class="create-practice__field-error">{{ errors.time }}</span>
+          <span
+            class="create-practice__field-error"
+            :class="{ 'create-practice__field-error--show': !!errors.time }"
+            >{{ errors.time }}</span
+          >
         </div>
 
         <VSelect
@@ -187,6 +210,11 @@
           :options="DURATION_OPTIONS"
           :error="errors.duration_minutes"
         />
+        <span
+          class="create-practice__field-error"
+          :class="{ 'create-practice__field-error--show': !!errors.duration_minutes }"
+          >{{ errors.duration_minutes }}</span
+        >
         <!-- Часовой пояс убран: берётся из профиля мастера (form.timezone),
              расписание задаётся в его часовом поясе (operator 2026-06-18). -->
       </div>
@@ -224,9 +252,11 @@
                 <VDayPicker v-model="form.recurrence_days" aria-label="Дни недели для повтора" />
               </div>
             </div>
-            <span v-if="errors.recurrence_days" class="create-practice__field-error">{{
-              errors.recurrence_days
-            }}</span>
+            <span
+              class="create-practice__field-error"
+              :class="{ 'create-practice__field-error--show': !!errors.recurrence_days }"
+              >{{ errors.recurrence_days }}</span
+            >
           </template>
 
           <!-- Завершить -->
@@ -260,12 +290,16 @@
               />
             </VCard>
           </div>
-          <span v-if="errors.recurrence_end_date" class="create-practice__field-error">{{
-            errors.recurrence_end_date
-          }}</span>
-          <span v-if="errors.recurrence_count" class="create-practice__field-error">{{
-            errors.recurrence_count
-          }}</span>
+          <span
+            class="create-practice__field-error"
+            :class="{ 'create-practice__field-error--show': !!errors.recurrence_end_date }"
+            >{{ errors.recurrence_end_date }}</span
+          >
+          <span
+            class="create-practice__field-error"
+            :class="{ 'create-practice__field-error--show': !!errors.recurrence_count }"
+            >{{ errors.recurrence_count }}</span
+          >
         </template>
       </div>
 
@@ -282,6 +316,11 @@
             placeholder="Максимум мест"
             :error="errors.max_participants"
           />
+          <span
+            class="create-practice__field-error"
+            :class="{ 'create-practice__field-error--show': !!errors.max_participants }"
+            >{{ errors.max_participants }}</span
+          >
         </div>
       </div>
 
@@ -1070,7 +1109,7 @@ async function submit(): Promise<void> {
     // long form -- bring it into view instead of a silent dead click.
     await nextTick()
     queryDocument(
-      '.v-input--error, .v-select--error, .create-practice__picker--error, .create-practice__field-error',
+      '.v-input--error, .v-select--error, .create-practice__picker--error, .create-practice__field-error--show',
     )?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     return
   }
@@ -1334,11 +1373,28 @@ html.is-keyboard-open .create-practice {
   border-color: var(--velo-error);
 }
 
+/* Error slots are CONSTANT-height (owner 2026-10-01): the message fades in
+   without growing its block -- activating an error must never shift the
+   layout below. The DS components' own error lines are hidden (their red
+   borders still mark the field); this screen renders the message in the
+   reserved slot instead. */
 .create-practice__field-error {
   display: block;
-  font-size: var(--text-xs);
-  color: var(--velo-error);
+  min-height: 17px;
   margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  color: var(--velo-error);
+  opacity: 0;
+}
+
+.create-practice__field-error--show {
+  opacity: 1;
+}
+
+.create-practice :deep(.v-input__error),
+.create-practice :deep(.v-select__error) {
+  display: none;
 }
 
 /* -- Для кого практика (P5, PROMPT №594): group multi-select chips, same

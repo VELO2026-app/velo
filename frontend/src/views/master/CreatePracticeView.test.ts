@@ -1932,4 +1932,19 @@ describe('§1.6 delegation: the master context (stub)', () => {
     expect(scrolled?.textContent).toContain('Выберите направление')
     scrollSpy.mockRestore()
   })
+
+  it('error slots are constant-height: a failed submit inserts no new nodes', async () => {
+    // The zero-shift contract (owner 2026-10-01): every error-capable field
+    // owns a permanent reserved slot -- the failed submit only toggles
+    // --show inside existing nodes, so nothing below can jump.
+    mount()
+    await flush()
+    const slots = (): number => host?.querySelectorAll('.create-practice__field-error').length ?? 0
+    const before = slots()
+    expect(before).toBeGreaterThan(0)
+    submitForm()
+    await flush()
+    expect(slots()).toBe(before)
+    expect(host?.querySelectorAll('.create-practice__field-error--show').length).toBeGreaterThan(0)
+  })
 })
