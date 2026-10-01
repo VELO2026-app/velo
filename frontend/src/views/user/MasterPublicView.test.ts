@@ -415,6 +415,20 @@ describe('MasterPublicView', () => {
       expect(pills.length).toBe(2)
       for (const p of pills) expect(p.querySelector('svg')).not.toBeNull()
     })
+
+    it('the «Методы» accordion ALWAYS renders: empty methods -> the honest note (owner 2026-09-30)', async () => {
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile({ methods: [] }))
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      mount()
+      await flush()
+
+      const acc = Array.from(content()?.querySelectorAll('.v-accordion') ?? []).find((node) =>
+        node.querySelector('.v-accordion__title')?.textContent?.includes('Методы'),
+      )
+      expect(acc).not.toBeNull()
+      expect(acc?.textContent).toContain('Методы пока не указаны')
+      expect(methodPills()).toHaveLength(0)
+    })
   })
 
   // ===========================================================================

@@ -129,10 +129,12 @@
         />
       </div>
 
-      <!-- Methods accordion (owner 2026-09-30: defaultOpen -- the collapsed
-           default hid the chips behind a tap and read as «методов нет»). -->
-      <VAccordion v-if="profile.methods?.length" title="Методы" default-open>
-        <div class="master-public__chips">
+      <!-- Methods accordion (owner 2026-09-30: ALWAYS renders -- like
+           «Ближайшие», the section never disappears; default-open, an empty
+           profile gets the honest note, the header stays as the entry
+           point). -->
+      <VAccordion title="Методы" default-open>
+        <div v-if="profile.methods?.length" class="master-public__chips">
           <VTag
             v-for="(chip, i) in methodChips"
             :key="`${i}:${chip.label}`"
@@ -142,6 +144,7 @@
             {{ chip.label }}
           </VTag>
         </div>
+        <p v-else class="master-public__note">Методы пока не указаны.</p>
       </VAccordion>
 
       <!-- «Предстоящие практики» (owner 2026-09-30): nav row to the stacked
