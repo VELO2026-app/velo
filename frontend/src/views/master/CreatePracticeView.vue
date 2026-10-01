@@ -111,13 +111,12 @@
       <div class="create-practice__section">
         <h2 class="velo-section-title">Основное</h2>
 
-        <VInput
-          v-model="form.title"
-          placeholder="Название"
-          :error="errors.title"
-          required
-          class="cp-sealed"
-        />
+        <!-- The wrapper carries .cp-sealed: VInput forwards $attrs (incl.
+             class) onto the inner <input>, so a component-level class can
+             never reach the row this screen's seal overrides target. -->
+        <div class="cp-sealed">
+          <VInput v-model="form.title" placeholder="Название" :error="errors.title" required />
+        </div>
 
         <!-- Направление = дисциплина (meditation/yoga/…). Подпись = плейсхолдер.
              Options catalog-first (T2 stage 2) -- see directionOptions. -->

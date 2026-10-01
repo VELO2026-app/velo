@@ -1871,4 +1871,20 @@ describe('§1.6 delegation: the master context (stub)', () => {
     await flush()
     expect(vi.mocked(practicesApi.createPractice)).toHaveBeenCalled()
   })
+
+  it('the title field is sealed in-plate: wrapper > row > field + seal', async () => {
+    // DOM-wiring pin for the 2026-10-01 seal canon (fields full-width,
+    // rosette inside the plate padding). VInput forwards $attrs onto the
+    // inner <input>, so the screen wraps it in .cp-sealed -- this test fails
+    // if that wrapper or the row/seal nesting drifts. (Layout itself is
+    // eyes-verified: happy-dom has no layout engine.)
+    mount()
+    await flush()
+    const wrapper = host?.querySelector('.cp-sealed')
+    const row = wrapper?.querySelector('.v-input__row')
+    expect(wrapper).not.toBeNull()
+    expect(row).not.toBeNull()
+    expect(row?.querySelector('.v-input__field')).not.toBeNull()
+    expect(row?.querySelector('.v-input__seal')).not.toBeNull()
+  })
 })
