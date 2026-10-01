@@ -462,6 +462,7 @@ export interface BookingWithPracticeResponse {
   has_checkin: boolean
   practice: PracticeSummary
   zoom_registrant_join_url?: string | null
+  zoom_registrant_link_unavailable?: boolean
 }
 
 /** DELETE /api/v1/bookings/{id} -- optional body. */
@@ -1991,7 +1992,7 @@ export interface WithdrawalResponse {
 
 /** GET /api/v1/practices/{id}/zoom/resolve (T-35) -- the SERVER's answer to "how does this person enter this practice right now". The choice itself lives on the server (zoom/service.py's resolve_zoom_entry) and this schema only transports it: the client renders `kind` and never decides between two links. That is the point of the endpoint -- the old ladder lived in frontend/src/utils/zoomLink.ts, where it was a rule every entry point had to remember, and a rule cannot be enforced by construction. url is deliberately nullable on TWO kinds, and a caller must handle both without collapsing either into 'failed': - 'host' -- by design; the master starts his own meeting through the existing start-ticket flow, never through a stored URL. - 'guest' -- when ensure_shared_registrant never succeeded. The meeting exists; only the guest seat in it does not. */
 export interface ZoomEntryResolveResponse {
-  kind: 'personal' | 'host' | 'guest' | 'pending' | 'failed' | 'cancelled'
+  kind: 'personal' | 'host' | 'guest' | 'pending' | 'failed' | 'cancelled' | 'unavailable'
   url?: string | null
 }
 
