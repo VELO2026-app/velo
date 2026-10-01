@@ -80,7 +80,6 @@ from app.modules.zoom.zoom_client import (
     get_meeting_recordings,
     list_registrants,
     patch_meeting,
-    update_registrant_status,
 )
 
 logger = structlog.get_logger()
@@ -576,14 +575,29 @@ async def cancel_registrant_for_booking(
     booking: Booking,
     session: AsyncSession,
 ) -> None:
-    """Best-effort Zoom-side registrant cancel; mark our own row cancelled
-    REGARDLESS of whether the Zoom call succeeds.
+    """Mark our registrant row cancelled and QUEUE the Zoom-side cancel.
 
     Our row's status is the sole authority downstream (E21 research: it was
     never confirmed whether Zoom actually invalidates a cancelled
     registrant's join link -- nothing here may depend on Zoom cooperating).
     No-op if there's no registrant row for this booking. Never raises --
     booking cancellation must proceed regardless.
+
+    No HTTP here (BE-96). The Zoom call used to be made right here, inside
+    the caller's transaction: block_student held its practices and bookings
+    FOR UPDATE through N sequential calls, cancel_booking held its practice
+    through one, and a process dying between commit and a call made after
+    it would have lost the cancel silently. Now the flag commits with the
+    cancel itself and zoom/retry_poller.py makes the call after commit, in
+    its own transaction.
+
+    The flag is set ALWAYS, also when no zoom_registrant_id is visible
+    here: a retry-poller create may be holding this row FOR UPDATE through
+    its own Zoom call right now. Our UPDATE then waits for it and lands on
+    the committed row (READ COMMITTED re-reads it), writing only status and
+    the flag -- the id the poller just wrote survives, and the flag is what
+    gets that freshly created registrant cancelled in Zoom. Setting the
+    flag only for an id seen here would leave exactly that one alive.
     """
     row = (
         await session.execute(
@@ -593,25 +607,34 @@ async def cancel_registrant_for_booking(
     if row is None:
         return
 
-    if row.zoom_registrant_id:
-        zoom_meeting = await session.get(ZoomMeeting, row.zoom_meeting_id)
-        if zoom_meeting is not None and zoom_meeting.zoom_meeting_id:
-            try:
-                await update_registrant_status(
-                    zoom_meeting_id=zoom_meeting.zoom_meeting_id,
-                    zoom_registrant_id=row.zoom_registrant_id,
-                    email=row.registration_email,
-                    action="cancel",
-                )
-            except ZoomAPIError as exc:
-                logger.warning(
-                    "zoom_registrant_cancel_call_failed",
-                    booking_id=str(booking.id),
-                    status_code=exc.status_code,
-                    error=str(exc),
-                )
-
+    # KNOWN CEILING (BE-96):
+    # 1. mechanics: when a retry-poller create holds this row FOR UPDATE
+    #    through its own Zoom create call (_attempt_registrant_create:
+    #    _request 15 s, OAuth 10 s uncached), the UPDATE below waits for it
+    #    -- and the caller is holding its locks meanwhile: block_student its
+    #    practices and bookings (BE-99 order), cancel_booking its practice
+    #    (T-13). Every other create_booking / cancel_booking /
+    #    confirm_waitlist on those practices waits too. Only in that race:
+    #    a pending / create_failed row being created at the very moment its
+    #    booking is cancelled. Worst case one create call, ~25 s.
+    # 2. status: acknowledged by design.
+    # 3. task: none -- the owner accepted this residue at the BE-96 gate in
+    #    place of the wide ceiling BE-96 removed; it reopens only on the
+    #    trigger below.
+    # 4. unfreeze trigger: a cancel_booking or block_student request
+    #    observed waiting on a zoom_registrants row lock (pg_stat_activity
+    #    wait_event_type = 'Lock' on this UPDATE), or the poller's create
+    #    calls observed slower than a few seconds.
+    # 5. agreed fix shape: none agreed yet; the direction would be a create
+    #    phase that does not hold the row lock through its HTTP call.
+    # 6. rejected: NOWAIT / SKIP LOCKED on this row -- a skipped row stays
+    #    NOT cancelled under a cancelled booking, a live link our own pages
+    #    would keep serving and a registrant the rebook would reuse (the
+    #    BE-71 hole); waiting is the lesser cost. Setting the flag only for
+    #    an id seen here -- see the docstring: it leaves exactly the raced
+    #    registrant alive in Zoom.
     row.status = ZoomRegistrantStatus.CANCELLED.value
+    row.zoom_cancel_pending = True
     logger.info("zoom_registrant_cancelled", booking_id=str(booking.id))
 
 

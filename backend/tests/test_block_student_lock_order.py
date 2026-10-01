@@ -59,6 +59,7 @@ from app.modules.payments.models import MasterLedger, Purchase, PurchaseStatus
 from app.modules.practices.models import Practice, PracticeStatus, PracticeType
 from app.modules.users.models import User, UserRole
 from app.modules.zoom import service as zoom_service
+from app.modules.zoom.models import ZoomMeeting, ZoomMeetingStatus, ZoomRegistrant
 from tests.helpers import full_cleanup_range, login_user
 
 _TID_MIN = 69750
@@ -131,6 +132,7 @@ class _Outcome:
         self.pid: int | None = None
         self.result: str | None = None
         self.error: BaseException | None = None
+        self.value: object = None
 
 
 def _sqlstate(exc: BaseException) -> str | None:
@@ -153,7 +155,7 @@ async def _in_own_session(
         outcome.pid = (
             await session.execute(text("select pg_backend_pid()"))
         ).scalar_one()
-        await work(session)
+        outcome.value = await work(session)
         await session.commit()
         outcome.result = "committed"
     except Exception as exc:  # recorded and asserted by the test
@@ -350,3 +352,79 @@ async def test_two_blocks_on_a_shared_practice_do_not_deadlock(
         assert blocked_at is not None
     stored_practice = await db_session.get(Practice, practice_id)
     assert stored_practice.current_participants == 0
+
+
+@pytest.mark.asyncio
+async def test_same_student_blocked_twice_at_once(
+    client: AsyncClient, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """REPEAT axis, concurrent (promised in BE-99, written in BE-96): two
+    blocks of ONE student by one master at the same time. The first is
+    paused inside its locked window; the second is seen WAITING by
+    Postgres. Released: no 40P01, both commit; the second found nothing
+    left to cancel. Pair: the booking cancelled and refunded exactly once,
+    the count 0, and its registrant queued for Zoom once.
+
+    The MasterStudent row exists beforehand (the master tagged the student
+    through the real service). Without it both blocks insert that row and
+    the second dies on uq_master_student_master_student -- before any
+    practice lock, so not a lock-order matter; found by this test, out of
+    BE-96's fence, reported (BE-96 report, observations)."""
+    master = await _user(client, db_session, 69755, master=True)
+    student = await _user(client, db_session, 69756)
+    practice = await _practice(db_session, master)
+    db_session.add(
+        ZoomMeeting(
+            practice_id=practice.id,
+            zoom_meeting_id=f"be99-{practice.id.hex[:16]}",
+            zoom_meeting_uuid=f"uuid-be99-{practice.id}",
+            status=ZoomMeetingStatus.ACTIVE.value,
+        )
+    )
+    await db_session.flush()
+    booking = await create_booking(student, practice.id, session=db_session)
+    await groups_service.set_student_tag(master.id, student.id, "regular", db_session)
+    await db_session.commit()
+    master_id, student_id = master.id, student.id
+    booking_id, practice_id = booking.id, practice.id
+
+    reached, release = _pause_first_call(monkeypatch, groups_service, "refund_booking")
+    first, second = _Outcome(), _Outcome()
+    first_task = asyncio.create_task(_in_own_session(
+        lambda s: groups_service.block_student(master_id, student_id, s), first,
+    ))
+    await asyncio.wait_for(reached.wait(), 5)
+    second_task = asyncio.create_task(_in_own_session(
+        lambda s: groups_service.block_student(master_id, student_id, s), second,
+    ))
+
+    assert await _wait_until_waiting_on_lock(second), (
+        "the second block never waited -- the two transactions did not overlap"
+    )
+    release.set()
+    await asyncio.wait_for(asyncio.gather(first_task, second_task), 15)
+
+    for outcome in (first, second):
+        if outcome.error is not None:
+            assert _sqlstate(outcome.error) != _DEADLOCK, outcome.error
+    assert first.result == "committed", first.error
+    assert second.result == "committed", second.error
+    assert first.value["cancelled_bookings_count"] == 1
+    assert second.value["cancelled_bookings_count"] == 0
+
+    db_session.expire_all()
+    stored = await db_session.get(Booking, booking_id)
+    assert stored.status == BookingStatus.CANCELLED.value
+    refunded = PurchaseStatus.REFUNDED.value
+    assert await _purchase_status(db_session, booking_id) == refunded
+    assert await _refunds_for(db_session, practice_id, student_id) == 1
+    stored_practice = await db_session.get(Practice, practice_id)
+    assert stored_practice.current_participants == 0
+    rows = (
+        await db_session.execute(
+            select(ZoomRegistrant).where(ZoomRegistrant.booking_id == booking_id)
+        )
+    ).scalars().all()
+    assert len(rows) == 1
+    assert rows[0].zoom_cancel_pending is True
+    assert rows[0].zoom_cancel_attempts == 0

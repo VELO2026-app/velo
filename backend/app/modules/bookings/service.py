@@ -609,9 +609,11 @@ async def cancel_booking(
         user_id=str(booking.user_id),
     )
 
-    # E21 step E: best-effort Zoom-side registrant cancel. Our own row's
-    # status is the authority regardless of Zoom's outcome -- see
-    # cancel_registrant_for_booking's docstring.
+    # E21 step E: registrant cancel. Our own row's status is the authority
+    # regardless of Zoom's outcome; since BE-96 no Zoom HTTP happens here --
+    # the Zoom-side cancel is queued and made by the retry poller after
+    # commit (see cancel_registrant_for_booking, and its KNOWN CEILING for
+    # the one race in which this transaction still waits on a Zoom call).
     from app.modules.zoom.service import cancel_registrant_for_booking
     await cancel_registrant_for_booking(booking, session)
 

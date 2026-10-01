@@ -24,6 +24,12 @@
 #   attempt_zoom_meeting_create doesn't distinguish "first try" from "retry #N"; both
 #   states are claimed by the same query and processed identically.
 #
+#   BE-96: this worker ALSO makes every Zoom-side registrant CANCEL. A
+#   booking cancel (cancel_booking, block_student) only marks our row
+#   cancelled and zoom_cancel_pending inside its own transaction; the call
+#   to Zoom is made here, after that commit -- see the cancel phase at the
+#   end of this module.
+#
 # SESSION / ISOLATION:
 #   Each row is retried in its OWN session/transaction, claimed with
 #   FOR UPDATE SKIP LOCKED so a row already being retried (or edited
@@ -56,6 +62,7 @@ from app.modules.zoom.zoom_client import (
     ZoomAPIError,
     create_meeting,
     create_registrant,
+    update_registrant_status,
 )
 
 logger = structlog.get_logger()
@@ -139,7 +146,18 @@ async def _poll_cycle() -> bool:
     if registrants_retried > 0:
         logger.info("zoom_registrant_retry_batch", retried=registrants_retried)
 
-    return (meetings_retried + registrants_retried) > 0
+    # Zoom-side cancels AFTER creates: a create this cycle that raced a
+    # booking cancel has committed its id by now, so the same cycle can
+    # cancel it.
+    cancel_ids = await _claim_cancel_pending_registrant_ids()
+    cancels_done = 0
+    for registrant_id in cancel_ids:
+        if await _cancel_registrant_one(registrant_id):
+            cancels_done += 1
+    if cancels_done > 0:
+        logger.info("zoom_registrant_cancel_batch", processed=cancels_done)
+
+    return (meetings_retried + registrants_retried + cancels_done) > 0
 
 
 async def _claim_retryable_ids() -> list:
@@ -511,3 +529,160 @@ async def _attempt_registrant_create(
             attempt=row.retry_count,
             at_cap=at_cap,
         )
+
+
+# ===================================================================
+# Registrant cancel phase (BE-96)
+# ===================================================================
+#
+# cancel_registrant_for_booking (zoom/service.py) no longer calls Zoom: it
+# sets our row cancelled and zoom_cancel_pending=True inside the caller's
+# transaction, and this phase makes the Zoom-side cancel after commit, one
+# row per transaction. The queue lives in the row, so a process dying after
+# the booking cancel committed loses nothing -- the flag is still there on
+# the next cycle, after a restart included.
+#
+# THE WINDOW IS AN OWNER DECISION, not a pending gap. Between the booking
+# cancel and this phase the registrant is still live on Zoom's side: up to
+# zoom_retry_poll_interval_seconds while the poller is busy, up to
+# zoom_retry_max_backoff_seconds (600 s by default) after an idle stretch.
+# The owner accepted a window of up to 10 minutes (BE-96). What bounds it:
+# our own pages stop handing the link out at once (resolve_zoom_entry and
+# the booking lists read only non-cancelled rows), and attendance ingest
+# never credits a cancelled booking -- only someone holding the raw Zoom
+# URL can still enter in that window.
+#
+# Repeats: a process dying after Zoom answered but before this phase's
+# commit repeats the call next cycle. How Zoom answers a cancel of an
+# already-cancelled registrant is not established (E21); whatever it is,
+# the repeat is bounded by settings.zoom_registrant_cancel_max_retries.
+
+
+async def _claim_cancel_pending_registrant_ids() -> list:
+    """Ids of cancelled rows still waiting for their Zoom-side cancel,
+    under the cap. FOR UPDATE SKIP LOCKED, same as the other claims."""
+    factory = get_session_factory()
+    cap = settings.zoom_registrant_cancel_max_retries
+
+    try:
+        async with factory() as session:
+            stmt = (
+                select(ZoomRegistrant.id)
+                .where(
+                    ZoomRegistrant.status == ZoomRegistrantStatus.CANCELLED.value,
+                    ZoomRegistrant.zoom_cancel_pending.is_(True),
+                    ZoomRegistrant.zoom_cancel_attempts < cap,
+                )
+                .order_by(ZoomRegistrant.updated_at.asc())
+                .with_for_update(of=ZoomRegistrant, skip_locked=True)
+            )
+            ids = list((await session.execute(stmt)).scalars().all())
+            await session.rollback()
+            return ids
+    except Exception:
+        logger.exception("zoom_registrant_cancel_claim_error")
+        return []
+
+
+async def _cancel_registrant_one(registrant_id) -> bool:
+    """One Zoom-side cancel, in its own transaction. Locks only the
+    registrant row -- never a Practice or a Booking.
+
+    True when the row was processed (cleared, retried later, or counted as
+    a failure), False when it was no longer eligible or an unexpected error
+    prevented even attempting it.
+    """
+    factory = get_session_factory()
+
+    try:
+        async with factory() as session:
+            row = (
+                await session.execute(
+                    select(ZoomRegistrant)
+                    .where(ZoomRegistrant.id == registrant_id)
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if row is None or not row.zoom_cancel_pending:
+                await session.rollback()
+                return False
+
+            await _attempt_registrant_cancel(row, session)
+            await session.commit()
+            return True
+    except Exception:
+        logger.exception(
+            "zoom_registrant_cancel_one_failed", registrant_id=str(registrant_id),
+        )
+        return False
+
+
+async def _attempt_registrant_cancel(
+    row: ZoomRegistrant,
+    session: AsyncSession,
+) -> None:
+    """One Zoom cancel attempt, updating `row` in place.
+
+    Nothing to tell Zoom -- no zoom_registrant_id (the create never
+    succeeded), or no Zoom meeting -- clears the flag without a call.
+    Success clears it. 404 means Zoom has no such registrant or meeting:
+    there is nothing left to cancel, the flag is cleared. 429 leaves the
+    row untouched and uncounted, same exemption as the create phase. Any
+    other failure counts against the cap; at the cap the row stays visibly
+    pending with last_sync_error saying so.
+    """
+    zoom_meeting = await session.get(ZoomMeeting, row.zoom_meeting_id)
+    if (
+        not row.zoom_registrant_id
+        or zoom_meeting is None
+        or not zoom_meeting.zoom_meeting_id
+    ):
+        row.zoom_cancel_pending = False
+        logger.info(
+            "zoom_registrant_cancel_nothing_to_send", registrant_id=str(row.id),
+        )
+        return
+
+    cap = settings.zoom_registrant_cancel_max_retries
+    try:
+        await update_registrant_status(
+            zoom_meeting_id=zoom_meeting.zoom_meeting_id,
+            zoom_registrant_id=row.zoom_registrant_id,
+            email=row.registration_email,
+            action="cancel",
+        )
+        row.zoom_cancel_pending = False
+        logger.info("zoom_registrant_cancel_sent", registrant_id=str(row.id))
+        return
+    except ZoomAPIError as exc:
+        if exc.status_code == 404:
+            row.zoom_cancel_pending = False
+            logger.info(
+                "zoom_registrant_cancel_gone_on_zoom", registrant_id=str(row.id),
+            )
+            return
+        if exc.status_code == 429:
+            row.last_sync_error = (
+                f"cancel rate-limited (429): {exc.body} -- not counted "
+                f"against the cancel cap, retried next cycle"
+            )
+            logger.warning(
+                "zoom_registrant_cancel_rate_limited", registrant_id=str(row.id),
+            )
+            return
+        error = f"status={exc.status_code} body={exc.body}"
+    except Exception as exc:
+        error = f"unexpected (non-Zoom-API) error: {exc!r}"
+
+    row.zoom_cancel_attempts += 1
+    at_cap = row.zoom_cancel_attempts >= cap
+    suffix = " (cancel cap reached, no further attempts)" if at_cap else ""
+    row.last_sync_error = (
+        f"cancel attempt #{row.zoom_cancel_attempts} failed: {error}{suffix}"
+    )
+    logger.warning(
+        "zoom_registrant_cancel_failed",
+        registrant_id=str(row.id),
+        attempt=row.zoom_cancel_attempts,
+        at_cap=at_cap,
+    )

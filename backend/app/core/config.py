@@ -584,6 +584,11 @@ class Settings(BaseSettings):
     zoom_meeting_create_max_retries: int = 5
     # Same cap convention, for ZoomRegistrant.retry_count (E21 step E).
     zoom_registrant_create_max_retries: int = 5
+    # Same cap convention, for ZoomRegistrant.zoom_cancel_attempts (BE-96):
+    # failed Zoom-side cancel calls the retry poller makes before it stops
+    # and leaves the row visibly pending. Its own number -- a cancel is a
+    # different action from a create.
+    zoom_registrant_cancel_max_retries: int = 5
 
     # -- Zoom report ingestion (E21 step F, PROMPT №521) --
     # Background worker toggle, same rationale as the other three loops:

@@ -32,6 +32,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -39,6 +40,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    false,
     func,
     text,
 )
@@ -237,6 +239,24 @@ class ZoomRegistrant(UUIDMixin, TimestampMixin, Base):
         Integer, default=0, server_default="0",
     )
     last_sync_error: Mapped[str | None] = mapped_column(Text, default=None)
+
+    # Zoom-side cancel queue (BE-96). cancel_registrant_for_booking sets
+    # status=cancelled AND zoom_cancel_pending=True in the caller's
+    # transaction -- always, whether or not a zoom_registrant_id is visible
+    # to it (a retry-poller create racing the cancel may write the id under
+    # its own row lock; the flag is what makes that id get cancelled too).
+    # zoom/retry_poller.py makes the Zoom call after commit and clears the
+    # flag. A flag, not a status: the partial unique index below counts
+    # every non-'cancelled' status as active. zoom_cancel_attempts counts
+    # failed Zoom cancel calls, capped by
+    # settings.zoom_registrant_cancel_max_retries; at the cap the row stays
+    # VISIBLY pending, last_sync_error saying so.
+    zoom_cancel_pending: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(),
+    )
+    zoom_cancel_attempts: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0",
+    )
 
     __table_args__ = (
         # One ACTIVE registrant per (meeting, user) -- same partial-unique
