@@ -59,12 +59,15 @@
         </template>
       </Banner>
 
-      <!-- Required-fields legend (owner 2026-10-01: the rosette legend gave
-           way to the section-title asterisk). -->
+      <!-- Required-fields legend: HIDDEN for now (owner 2026-10-01) -- the
+           section-title asterisk reads without an explanation. Restore the
+           block below when an explanation is needed again. -->
+      <!--
       <div class="create-practice__legend">
         <span class="cp-req">*</span>
         <span>— разделы с обязательными полями</span>
       </div>
+      -->
 
       <!-- ================================================================
            Мастер (§1.6 delegation, STUB): whose practice this is. The
@@ -86,6 +89,7 @@
           </VCard>
           <Banner
             v-if="targetsForeignMaster"
+            class="cp-gap-top"
             variant="warning"
             title="Создание для другого мастера пока недоступно"
             body="Практика будет создана, когда бэкенд научится принимать мастера. Сейчас создание доступно только от вашего имени."
@@ -290,12 +294,15 @@
               />
             </VCard>
           </div>
+          <!-- Only the ACTIVE completion mode reserves an error line. -->
           <span
+            v-if="form.recurrence_end === 'until_date'"
             class="create-practice__field-error"
             :class="{ 'create-practice__field-error--show': !!errors.recurrence_end_date }"
             >{{ errors.recurrence_end_date }}</span
           >
           <span
+            v-else-if="form.recurrence_end === 'after_count'"
             class="create-practice__field-error"
             :class="{ 'create-practice__field-error--show': !!errors.recurrence_count }"
             >{{ errors.recurrence_count }}</span
@@ -1237,11 +1244,10 @@ async function submit(): Promise<void> {
   background: transparent;
   display: flex;
   flex-direction: column;
-  /* Seal canon (owner 2026-10-01): every field spans the FULL rail width and
-     the required rosette sits INSIDE the plate's right padding -- no outer
-     seal gutter. The DS components (VInput/VSelect) keep their global
-     gutter behavior; this screen overrides the sealed ones via .cp-sealed
-     + :deep below. */
+  /* Required canon (owner 2026-10-01): fields span the FULL rail width;
+     the required marker is the red * on the section headings (.cp-req).
+     VInput/VSelect keep their global margin/gutter rhythm disabled on this
+     screen via :deep below. */
 }
 
 /* [FE-43] Same recipe as MasterGroupCreateView (FE-45 follow-up): while
@@ -1264,6 +1270,16 @@ html.is-keyboard-open .create-practice {
   color: var(--velo-error);
 }
 
+/* DS components carry margin-bottom: 16px on their roots (their own form
+   rhythm). This screen spaces fields through the 2px section gap + the
+   error slot, so the hint sits right under the plate like the date/time
+   pickers. The desc section re-adds 8px for its stacked textareas below. */
+.create-practice :deep(.v-input),
+.create-practice :deep(.v-select),
+.create-practice :deep(.v-textarea) {
+  margin-bottom: 0;
+}
+
 .create-practice__content {
   flex: 1;
   /* F-5 rail sync: ride MobileLayout's 24px rail (no local h-padding). Top
@@ -1272,21 +1288,37 @@ html.is-keyboard-open .create-practice {
   padding: var(--space-2) 0 var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  /* Minimal acceptable section rhythm (owner 2026-10-01: «расстояния
+     огромные») -- 16px between sections. */
+  gap: var(--space-4);
 }
 
 /* -- Section -- */
 .create-practice__section {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  /* Minimal input-to-input distance (owner 2026-10-01): the error slot
+     (17px) + 2px IS the whole gap between consecutive inputs. Everything
+     that is not an input (headings, banners, card stacks) compensates with
+     its own margin below. */
+  gap: 2px;
+}
+
+.create-practice__section > .velo-section-title {
+  margin-bottom: 6px;
+}
+
+/* Non-input blocks after a plate need the breathing the 2px input gap
+   cannot give (master-section warning banner, ...). */
+.cp-gap-top {
+  margin-top: 6px;
 }
 
 /* «Описание» section: the textareas are spaced by the section gap alone — drop
    their own margin-bottom so Описание / Противопоказания / Что подготовить sit
    tight (one step, not the doubled gap + margin) (operator CP-A1). */
 .create-practice__section--desc :deep(.v-textarea) {
-  margin-bottom: 0;
+  margin-bottom: 8px;
 }
 
 /* T21-1 (PROMPT №541): honest caption for the now-fallback Zoom field. */
@@ -1330,7 +1362,7 @@ html.is-keyboard-open .create-practice {
   padding: var(--space-3) var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 .create-practice__repeat-title {
@@ -1341,7 +1373,7 @@ html.is-keyboard-open .create-practice {
 
 /* -- Date/time picker trigger field (mirrors the white VInput plate) -- */
 .create-practice__field {
-  margin-bottom: var(--space-4);
+  margin-bottom: 0;
 }
 
 .create-practice__field-row {
@@ -1377,13 +1409,14 @@ html.is-keyboard-open .create-practice {
    without growing its block -- activating an error must never shift the
    layout below. The DS components' own error lines are hidden (their red
    borders still mark the field); this screen renders the message in the
-   reserved slot instead. */
+   reserved slot instead. 14px x 1.2 = 16.8px fits the 17px reserve: the
+   shown state is pixel-identical to the empty one. */
 .create-practice__field-error {
   display: block;
   min-height: 17px;
-  margin-top: var(--space-1);
+  margin-top: 0;
   font-size: var(--text-xs);
-  line-height: 1.4;
+  line-height: 1.2;
   color: var(--velo-error);
   opacity: 0;
 }
@@ -1417,6 +1450,12 @@ html.is-keyboard-open .create-practice {
 .create-practice__seal-row {
   display: flex;
   align-items: flex-start;
+}
+
+/* Stacked plates (repeat card / days / end) need breathing the 2px section
+   gap cannot give them. */
+.create-practice__seal-row + .create-practice__seal-row {
+  margin-top: 6px;
 }
 
 .create-practice__grow {
