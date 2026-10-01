@@ -1872,19 +1872,38 @@ describe('§1.6 delegation: the master context (stub)', () => {
     expect(vi.mocked(practicesApi.createPractice)).toHaveBeenCalled()
   })
 
-  it('the title field is sealed in-plate: wrapper > row > field + seal', async () => {
-    // DOM-wiring pin for the 2026-10-01 seal canon (fields full-width,
-    // rosette inside the plate padding). VInput forwards $attrs onto the
-    // inner <input>, so the screen wraps it in .cp-sealed -- this test fails
-    // if that wrapper or the row/seal nesting drifts. (Layout itself is
-    // eyes-verified: happy-dom has no layout engine.)
+  it('required sections carry the red * marker; optional ones do not', async () => {
     mount()
     await flush()
-    const wrapper = host?.querySelector('.cp-sealed')
-    const row = wrapper?.querySelector('.v-input__row')
-    expect(wrapper).not.toBeNull()
-    expect(row).not.toBeNull()
-    expect(row?.querySelector('.v-input__field')).not.toBeNull()
-    expect(row?.querySelector('.v-input__seal')).not.toBeNull()
+    const starred = (title: string): boolean => {
+      const h2 = Array.from(host?.querySelectorAll('h2') ?? []).find((x) =>
+        x.textContent?.includes(title),
+      )
+      return h2?.querySelector('.cp-req') != null
+    }
+    expect(starred('Основное')).toBe(true)
+    expect(starred('Расписание')).toBe(true)
+    expect(starred('Повторение')).toBe(false)
+    expect(starred('Описание')).toBe(false)
+  })
+
+  it('a failed submit scrolls the first invalid field into view', async () => {
+    if (!('scrollIntoView' in Element.prototype)) {
+      Object.defineProperty(Element.prototype, 'scrollIntoView', {
+        value: vi.fn(),
+        configurable: true,
+        writable: true,
+      })
+    }
+    const scrollSpy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {})
+    mount()
+    await flush()
+    // Nothing filled: validate() fails on the title (the first required).
+    submitForm()
+    await flush()
+    expect(vi.mocked(practicesApi.createPractice)).not.toHaveBeenCalled()
+    expect(scrollSpy).toHaveBeenCalledTimes(1)
+    expect(text()).toContain('Введите название')
+    scrollSpy.mockRestore()
   })
 })

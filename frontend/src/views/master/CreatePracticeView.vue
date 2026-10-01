@@ -59,10 +59,11 @@
         </template>
       </Banner>
 
-      <!-- Required-fields legend (DS banner, Phase-3). -->
+      <!-- Required-fields legend (owner 2026-10-01: the rosette legend gave
+           way to the section-title asterisk). -->
       <div class="create-practice__legend">
-        <IconRequired class="create-practice__legend-seal" :size="22" />
-        <span>— поля, обязательные для заполнения</span>
+        <span class="cp-req">*</span>
+        <span>— разделы с обязательными полями</span>
       </div>
 
       <!-- ================================================================
@@ -109,14 +110,9 @@
            practice_type не показываем, выводим из «Повторения»)
            ================================================================ -->
       <div class="create-practice__section">
-        <h2 class="velo-section-title">Основное</h2>
+        <h2 class="velo-section-title">Основное <span class="cp-req">*</span></h2>
 
-        <!-- The wrapper carries .cp-sealed: VInput forwards $attrs (incl.
-             class) onto the inner <input>, so a component-level class can
-             never reach the row this screen's seal overrides target. -->
-        <div class="cp-sealed">
-          <VInput v-model="form.title" placeholder="Название" :error="errors.title" required />
-        </div>
+        <VInput v-model="form.title" placeholder="Название" :error="errors.title" />
 
         <!-- Направление = дисциплина (meditation/yoga/…). Подпись = плейсхолдер.
              Options catalog-first (T2 stage 2) -- see directionOptions. -->
@@ -125,8 +121,6 @@
           placeholder="Направление практики"
           :options="directionOptions"
           :error="errors.direction"
-          required
-          class="cp-sealed"
           @update:modelValue="onDirectionChange"
         />
 
@@ -142,8 +136,6 @@
           placeholder="Уровень сложности"
           :options="DIFFICULTY_OPTIONS_CREATE"
           :error="errors.difficulty"
-          required
-          class="cp-sealed"
         />
       </div>
 
@@ -151,7 +143,7 @@
            Расписание
            ================================================================ -->
       <div class="create-practice__section">
-        <h2 class="velo-section-title">Расписание</h2>
+        <h2 class="velo-section-title">Расписание <span class="cp-req">*</span></h2>
 
         <!-- Дата: открывает DatePickerSheet. Подпись = плейсхолдер внутри поля. -->
         <div class="create-practice__field">
@@ -167,13 +159,6 @@
             >
               {{ form.date ? dateDisplay : 'Дата' }}
             </button>
-            <span
-              class="create-practice__seal"
-              :class="{ 'create-practice__seal--done': !!form.date }"
-            >
-              <IconRequired v-if="!form.date" :size="22" />
-              <IconRequiredDone v-else :size="22" />
-            </span>
           </div>
           <span v-if="errors.date" class="create-practice__field-error">{{ errors.date }}</span>
         </div>
@@ -192,13 +177,6 @@
             >
               {{ form.time || 'Время' }}
             </button>
-            <span
-              class="create-practice__seal"
-              :class="{ 'create-practice__seal--done': !!form.time }"
-            >
-              <IconRequired v-if="!form.time" :size="22" />
-              <IconRequiredDone v-else :size="22" />
-            </span>
           </div>
           <span v-if="errors.time" class="create-practice__field-error">{{ errors.time }}</span>
         </div>
@@ -208,8 +186,6 @@
           placeholder="Длительность"
           :options="DURATION_OPTIONS"
           :error="errors.duration_minutes"
-          required
-          class="cp-sealed"
         />
         <!-- Часовой пояс убран: берётся из профиля мастера (form.timezone),
              расписание задаётся в его часовом поясе (operator 2026-06-18). -->
@@ -237,30 +213,16 @@
               <div class="create-practice__repeat-title">Повтор:</div>
               <VRadioGroup v-model="form.recurrence" :options="RECURRENCE_OPTIONS" />
             </VCard>
-            <span
-              class="create-practice__seal-card create-practice__seal-card--rail"
-              :class="{ 'create-practice__seal-card--done': !!form.recurrence }"
-            >
-              <IconRequired v-if="!form.recurrence" :size="22" />
-              <IconRequiredDone v-else :size="22" />
-            </span>
           </div>
 
           <!-- Дни недели — ТОЛЬКО для weekly/biweekly. «Каждый день» (daily) не
-               использует дни недели, поэтому пикер и его печать обязательности не
-               рендерятся вовсе (operator NP-10). Валидация уже пропускает daily. -->
+               использует дни недели, поэтому пикер не рендерится вовсе
+               (operator NP-10). Валидация уже пропускает daily. -->
           <template v-if="form.recurrence !== 'daily'">
             <div class="create-practice__seal-row">
               <div class="create-practice__days create-practice__grow">
                 <VDayPicker v-model="form.recurrence_days" aria-label="Дни недели для повтора" />
               </div>
-              <span
-                class="create-practice__seal-card"
-                :class="{ 'create-practice__seal-card--done': form.recurrence_days.length > 0 }"
-              >
-                <IconRequired v-if="!form.recurrence_days.length" :size="22" />
-                <IconRequiredDone v-else :size="22" />
-              </span>
             </div>
             <span v-if="errors.recurrence_days" class="create-practice__field-error">{{
               errors.recurrence_days
@@ -297,13 +259,6 @@
                 @focus="onFieldFocus"
               />
             </VCard>
-            <span
-              class="create-practice__seal-card"
-              :class="{ 'create-practice__seal-card--done': !!form.recurrence_end }"
-            >
-              <IconRequired v-if="!form.recurrence_end" :size="22" />
-              <IconRequiredDone v-else :size="22" />
-            </span>
           </div>
           <span v-if="errors.recurrence_end_date" class="create-practice__field-error">{{
             errors.recurrence_end_date
@@ -446,6 +401,7 @@
 
 <script setup lang="ts">
 import { historyHasBack } from '@/platform/history'
+import { queryDocument } from '@/platform/dom'
 import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { DateTime } from 'luxon'
 import { useRouter, useRoute } from 'vue-router'
@@ -460,7 +416,6 @@ import {
   VRadioGroup,
   VDayPicker,
 } from '@/components/ui'
-import { IconRequired, IconRequiredDone } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { useMasterStore } from '@/stores/master'
@@ -1110,7 +1065,15 @@ function buildRecurrence(): RecurrenceSpec {
 // parallel clicks both pass validate() before guard fires.
 async function submit(): Promise<void> {
   if (submitting.value) return
-  if (!validate()) return
+  if (!validate()) {
+    // The first invalid field may sit far above the submit button on this
+    // long form -- bring it into view instead of a silent dead click.
+    await nextTick()
+    queryDocument(
+      '.v-input--error, .v-select--error, .create-practice__picker--error, .create-practice__field-error',
+    )?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    return
+  }
   submitting.value = true
 
   try {
@@ -1255,23 +1218,11 @@ html.is-keyboard-open .create-practice {
   min-height: var(--velo-frozen-vh, 100lvh);
 }
 
-/* Sealed DS fields (owner 2026-10-01, refined): the field spans the full
-   rail width and keeps its native padding UNCHANGED; the rosette lives in
-   the page's right rail padding (24px) BETWEEN the plate and the screen
-   edge -- never on the plate, never reserving field width. */
-.create-practice :deep(.cp-sealed .v-input__row),
-.create-practice :deep(.cp-sealed .v-select__row) {
-  position: relative;
-  width: 100%;
-}
-
-.create-practice :deep(.cp-sealed .v-input__seal),
-.create-practice :deep(.cp-sealed .v-select__seal) {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  /* 22px rosette fully inside the 24px rail: 2px to the screen edge. */
-  right: calc(2px - var(--velo-rail-pad-x));
+/* Section-title required marker (owner 2026-10-01): sections holding
+   required fields carry a red * in their heading; the per-field rosettes
+   are gone from this screen (the DS components keep them elsewhere). */
+.cp-req {
+  color: var(--velo-error);
 }
 
 .create-practice__content {
@@ -1321,11 +1272,6 @@ html.is-keyboard-open .create-practice {
   color: var(--velo-pink-700);
 }
 
-.create-practice__legend-seal {
-  flex-shrink: 0;
-  color: var(--velo-rating-good);
-}
-
 /* -- Draft-restore banner (B2) -- */
 .create-practice__draft-text {
   margin: 0;
@@ -1360,7 +1306,6 @@ html.is-keyboard-open .create-practice {
 }
 
 .create-practice__field-row {
-  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -1381,27 +1326,12 @@ html.is-keyboard-open .create-practice {
   cursor: pointer;
 }
 
-/* Sealed picker (date/time): the plate keeps its symmetric padding and full
-   width; the rosette is placed by .create-practice__seal below. */
 .create-practice__picker--empty {
   color: var(--velo-text-muted);
 }
 
 .create-practice__picker--error {
   border-color: var(--velo-error);
-}
-
-.create-practice__seal {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  right: calc(2px - var(--velo-rail-pad-x));
-  display: flex;
-  color: var(--velo-error);
-}
-
-.create-practice__seal--done {
-  color: var(--velo-required-done);
 }
 
 .create-practice__field-error {
@@ -1427,10 +1357,8 @@ html.is-keyboard-open .create-practice {
   margin: var(--space-3) 0 0;
 }
 
-/* -- Повторение: печать обязательности ВНУТРИ паддинга плашки (owner
-   2026-10-01) -- карточка/дни занимают всю ширину ряда. -- */
+/* -- Повторение: ряды карточек (карточка/дни занимают всю ширину). -- */
 .create-practice__seal-row {
-  position: relative;
   display: flex;
   align-items: flex-start;
 }
@@ -1438,25 +1366,6 @@ html.is-keyboard-open .create-practice {
 .create-practice__grow {
   flex: 1;
   min-width: 0;
-}
-
-.create-practice__seal-card {
-  position: absolute;
-  right: var(--space-3);
-  top: var(--space-2);
-  display: flex;
-  color: var(--velo-error);
-}
-
-/* The repeat CARD sits at the content edge, so its seal goes to the page's
-   right rail padding like the field rosettes (owner 2026-10-01). Nested
-   seals (days / end-date) keep the inner placement. */
-.create-practice__seal-card--rail {
-  right: calc(2px - var(--velo-rail-pad-x));
-}
-
-.create-practice__seal-card--done {
-  color: var(--velo-required-done);
 }
 
 /* -- Дни недели: карточка-обёртка для DS-примитива VDayPicker. -- */
