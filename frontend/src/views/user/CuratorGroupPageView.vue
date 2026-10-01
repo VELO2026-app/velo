@@ -133,11 +133,15 @@
                screen with the Мастера/Ученики switcher (§1.11, owner
                2026-09-22) and is the curator's privilege -- the rosters are
                the curator handle on the server, everyone else reads the
-               counters in the hero. «Предстоящие практики» scrolls to the
-               feed below; «Аналитика» is the honest stub until §6 ships a
-               page. -->
+               counters in the hero. «Предстоящие практики» opens the school-
+               scoped calendar (owner 2026-10-01; was a scroll to the feed
+               below); «Аналитика» is the honest stub until §6 ships a page. -->
           <VMenuRow v-if="isCurator" class="cgp__nav-row" label="Участники" @click="openRoster" />
-          <VMenuRow class="cgp__nav-row" label="Предстоящие практики" @click="scrollToPractices" />
+          <VMenuRow
+            class="cgp__nav-row"
+            label="Предстоящие практики"
+            @click="openPracticesCalendar"
+          />
           <VMenuRow
             v-if="isCurator"
             class="cgp__nav-row"
@@ -168,7 +172,7 @@
              page's LAST element -- nothing renders below it -- and shows at
              most five upcoming school practices. The existing practice-card
              canon, no school-only variant. -->
-        <h2 ref="practicesSection" class="velo-section-title cgp__section">Ближайшие практики</h2>
+        <h2 class="velo-section-title cgp__section">Ближайшие практики</h2>
         <template v-if="upcomingPractices.length">
           <CalendarPracticeCard
             v-for="p in upcomingPractices"
@@ -302,12 +306,16 @@ watch(
   { immediate: true },
 )
 
-// «Предстоящие практики» scrolls to the feed below the fold. Optional call:
-// happy-dom and older engines may lack the API.
-const practicesSection = ref<HTMLElement | null>(null)
-
-function scrollToPractices(): void {
-  practicesSection.value?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+// Owner 2026-10-01: «Предстоящие практики» opens the school-scoped calendar
+// (user-calendar-school) -- the school's full upcoming list on the week grid,
+// not the five-card preview below. The preview stays: it is the page's last
+// element (§1.6 item 7). The route's param is :groupId -- pushing it as :id
+// rejects the navigation with "Missing required param" (silent under `void`).
+function openPracticesCalendar(): void {
+  void router.push({
+    name: 'user-calendar-school',
+    params: { groupId: groupId.value },
+  })
 }
 
 // Owner 2026-09-19: at most FIVE upcoming school practices render, and the

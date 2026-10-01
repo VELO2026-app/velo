@@ -90,6 +90,15 @@ const router = createRouter({
           component: () => import('@/views/user/CalendarView.vue'),
         },
         {
+          // Owner 2026-10-01: «Предстоящие практики» on the school page opens
+          // the calendar scoped to that school. Stacked (not the tab hub) so
+          // the floating island's back control is honest; mirrors
+          // user-calendar-master above.
+          path: 'calendar/school/:groupId',
+          name: 'user-calendar-school',
+          component: () => import('@/views/user/CalendarView.vue'),
+        },
+        {
           path: 'diary',
           name: 'user-diary',
           component: () => import('@/views/user/DiaryFeedView.vue'),

@@ -103,6 +103,7 @@ import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import CalendarView from '@/views/user/CalendarView.vue'
 import * as practicesApi from '@/api/practices'
+import * as cgApi from '@/api/curatorGroups'
 import * as taxonomyApi from '@/api/taxonomy'
 import { useAuthStore } from '@/stores/auth'
 import { useCalendarStore } from '@/stores/calendar'
@@ -114,6 +115,9 @@ vi.mock('@/api/practices')
 // screen's own directionLabel() calls fall back to the identical hardcoded
 // taxonomy on a failed fetch (see banner).
 vi.mock('@/api/taxonomy')
+// School mode (owner 2026-10-01): the stacked school calendar feeds off the
+// school's own practices endpoint, not @/api/practices.
+vi.mock('@/api/curatorGroups')
 
 const push = vi.fn()
 const back = vi.fn()
@@ -294,6 +298,9 @@ beforeEach(() => {
   vi.mocked(practicesApi.getPractices)
     .mockReset()
     .mockResolvedValue(page([practice('p1')]))
+  vi.mocked(cgApi.getCuratorGroupPractices)
+    .mockReset()
+    .mockResolvedValue({ items: [], total: 0, limit: 100, offset: 0 })
   vi.mocked(taxonomyApi.getActiveTaxonomy)
     .mockReset()
     .mockRejectedValue(new Error('offline in test'))
@@ -730,6 +737,73 @@ describe('CalendarView', () => {
       host = null
 
       expect(store.masterScope).toBeNull()
+    })
+  })
+
+  describe('school mode (user-calendar-school, owner 2026-10-01)', () => {
+    it('mounts with :groupId, feeds off the school endpoint, and sits the personal filter UI out', async () => {
+      vi.mocked(cgApi.getCuratorGroupPractices).mockResolvedValue({
+        items: [practice('sp1')],
+        total: 1,
+        limit: 100,
+        offset: 0,
+      })
+      mount({ groupId: 'g7' })
+      await flush()
+
+      // The feed comes from the school's own endpoint, never the personal
+      // week feed -- the two answer different questions.
+      expect(cgApi.getCuratorGroupPractices).toHaveBeenCalledWith('g7', 100, 0)
+      expect(practicesApi.getPractices).not.toHaveBeenCalled()
+      expect(text()).toContain('Практики школы')
+      expect(text()).not.toContain('Выбрать практики')
+      expect(practiceCards()).toHaveLength(1)
+      expect(cardTitle(practiceCards()[0]!)).toBe('Практика sp1')
+    })
+
+    it('the back control returns to the school page on a deep link', async () => {
+      mount({ groupId: 'g7' })
+      await flush()
+
+      const backBtn = host?.querySelector<HTMLButtonElement>('.calendar__back')
+      expect(backBtn).not.toBeNull()
+
+      // Arrived in-app: true back -- the school page re-enters as it was.
+      window.history.replaceState({ back: '/user/schools/g7' }, '')
+      backBtn!.click()
+      expect(back).toHaveBeenCalledTimes(1)
+      expect(push).not.toHaveBeenCalled()
+
+      // Deep link (no in-app history): deterministic landing on the school.
+      window.history.replaceState(null, '')
+      backBtn!.click()
+      expect(push).toHaveBeenCalledWith({
+        name: 'user-curator-group',
+        params: { id: 'g7' },
+      })
+    })
+
+    it('leaving the screen resets the school scope and feed -- the shared store must not poison the tab calendar', async () => {
+      vi.mocked(cgApi.getCuratorGroupPractices).mockResolvedValue({
+        items: [practice('sp1')],
+        total: 1,
+        limit: 100,
+        offset: 0,
+      })
+      mount({ groupId: 'g7' })
+      await flush()
+
+      const store = useCalendarStore()
+      expect(store.schoolScope).toBe('g7')
+      expect(store.schoolFeed).not.toBeNull()
+
+      app?.unmount()
+      host?.remove()
+      app = null
+      host = null
+
+      expect(store.schoolScope).toBeNull()
+      expect(store.schoolFeed).toBeNull()
     })
   })
 })

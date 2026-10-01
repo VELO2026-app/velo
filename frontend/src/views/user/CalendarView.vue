@@ -32,11 +32,11 @@
              way out; it returns to the master's profile deterministically. -->
         <div class="calendar__heading-row">
           <button
-            v-if="masterMode"
+            v-if="masterMode || schoolMode"
             type="button"
             class="calendar__back"
-            aria-label="Назад к профилю мастера"
-            @click="goBackToMaster"
+            :aria-label="masterMode ? 'Назад к профилю мастера' : 'Назад к школе'"
+            @click="goBack"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <path
@@ -48,7 +48,9 @@
               />
             </svg>
           </button>
-          <h1 class="calendar__heading">{{ masterMode ? 'Практики мастера' : 'Календарь' }}</h1>
+          <h1 class="calendar__heading">
+            {{ masterMode ? 'Практики мастера' : schoolMode ? 'Практики школы' : 'Календарь' }}
+          </h1>
         </div>
 
         <!-- Week selector -->
@@ -67,7 +69,7 @@
     <!-- "Выбрать практики" control: the viewer's OWN practice filters. In
          master mode the feed is the master's scheduled practices -- the
          facet modal has nothing to filter, so the control sits out. -->
-    <div v-if="!masterMode" class="calendar__selector">
+    <div v-if="!masterMode && !schoolMode" class="calendar__selector">
       <!-- Collapsed: pill + funnel -->
       <button v-if="!expanded" type="button" class="calendar__select-pill" @click="expanded = true">
         <span class="calendar__select-label">Выбрать практики</span>
@@ -151,11 +153,13 @@
     <!-- Empty: no practices on the selected day -->
     <VEmptyState
       v-else-if="dayPractices.length === 0"
-      :title="masterMode ? 'Практик нет' : 'Нет практик'"
+      :title="masterMode || schoolMode ? 'Практик нет' : 'Нет практик'"
       :description="
         masterMode
           ? 'У мастера пока нет практик на этот день. Выберите другой день.'
-          : 'На этот день практик нет. Выберите другой день или измените фильтры.'
+          : schoolMode
+            ? 'У школы пока нет практик на этот день. Выберите другой день.'
+            : 'На этот день практик нет. Выберите другой день или измените фильтры.'
       "
     >
       <template #icon><IconClock :size="48" /></template>
@@ -211,17 +215,24 @@ const route = useRoute()
 const store = useCalendarStore()
 const viewerTz = useViewerTimezone()
 
-// -- Master mode (owner 2026-09-30) ------------------------------------------
-// Stacked route user-calendar-master/:masterId: the week feed switches to the
-// master's scheduled practices (store.setMasterScope folds master_id +
-// status=scheduled into loadWeek) and the viewer's facet UI sits out. The
-// scope MUST reset on unmount -- the store is a singleton the tab calendar
-// shares; a leaked scope would poison the viewer's own week.
+// -- Stacked scopes: master mode (owner 2026-09-30) / school mode (owner
+//    2026-10-01) --------------------------------------------------------------
+// Stacked routes user-calendar-master/:masterId and user-calendar-school/
+// :groupId: the week feed switches to one master's scheduled practices
+// (store.setMasterScope folds master_id + status=scheduled into loadWeek) or
+// to one school's upcoming ones (store.setSchoolScope -- loadWeek feeds from
+// the school endpoint's full upcoming list, see the store), and the viewer's
+// facet UI sits out. The scopes MUST reset on unmount -- the store is a
+// singleton the tab calendar shares; a leaked scope would poison the
+// viewer's own week.
 const masterMode = computed(() => String(route.params.masterId ?? '') !== '')
+const schoolMode = computed(() => String(route.params.groupId ?? '') !== '')
 
 onMounted(() => {
   if (masterMode.value) {
     store.setMasterScope(String(route.params.masterId))
+  } else if (schoolMode.value) {
+    store.setSchoolScope(String(route.params.groupId))
   }
 })
 
@@ -229,21 +240,29 @@ onUnmounted(() => {
   if (masterMode.value) {
     store.setMasterScope(null)
   }
+  if (schoolMode.value) {
+    store.setSchoolScope(null)
+  }
 })
 
-function goBackToMaster(): void {
+function goBack(): void {
   // RETURN semantics, not a push (owner bug 2026-09-30): the only in-app entry
-  // to this screen is the master's profile row, so history-back restores it
-  // WITH its query -- ?groupId keeps the curator context (analytics, CTA, the
-  // curator menu) alive. A pushed clone stripped the query (the profile's own
+  // to a stacked calendar is the row that opened it, so history-back restores
+  // it WITH its query -- ?groupId keeps the curator context (analytics, CTA,
+  // the curator menu) alive. A pushed clone stripped the query (the page's own
   // router.back() then looped straight back into the calendar). A deep link
-  // has no in-app history to return to -- land on the profile instead.
+  // has no in-app history to return to -- land on the origin page.
   if (historyHasBack()) {
     router.back()
-  } else {
+  } else if (masterMode.value) {
     void router.push({
       name: 'user-master-public',
       params: { id: String(route.params.masterId) },
+    })
+  } else {
+    void router.push({
+      name: 'user-curator-group',
+      params: { id: String(route.params.groupId) },
     })
   }
 }
