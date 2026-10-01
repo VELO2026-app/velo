@@ -40,16 +40,19 @@
     </header>
 
     <div ref="bodyEl" class="ea__body">
-      <!-- Required-fields legend (the same DS plate as CreatePracticeView) --
-           a permanent legend, never a submit-time error. -->
+      <!-- Required-fields legend: HIDDEN for now (owner 2026-10-01) -- the
+           section-title asterisk reads without an explanation. Restore the
+           block below when an explanation is needed again. -->
+      <!--
       <div class="ea__legend">
         <IconRequired class="ea__legend-seal" :size="22" />
         <span>— поля, обязательные для заполнения</span>
       </div>
+      -->
 
       <!-- ================= Когда произошло событие ================= -->
       <section class="ea__section">
-        <h2 class="velo-section-title">Когда произошло событие</h2>
+        <h2 class="velo-section-title">Когда произошло событие <span class="ea__req">*</span></h2>
 
         <div class="ea__field" data-field="date">
           <button
@@ -60,11 +63,9 @@
           >
             {{ date ? dateDisplay : 'Дата' }}
           </button>
-          <span class="ea__seal" :class="{ 'ea__seal--done': !!date }">
-            <IconRequired v-if="!date" :size="22" />
-            <IconRequiredDone v-else :size="22" />
-          </span>
-          <span v-if="errors.date" class="ea__field-error">{{ errors.date }}</span>
+          <span class="ea__field-error" :class="{ 'ea__field-error--show': !!errors.date }">{{
+            errors.date
+          }}</span>
         </div>
 
         <div class="ea__field" data-field="time">
@@ -79,25 +80,19 @@
           >
             {{ time || 'Время' }}
           </button>
-          <span class="ea__seal" :class="{ 'ea__seal--done': !!time }">
-            <IconRequired v-if="!time" :size="22" />
-            <IconRequiredDone v-else :size="22" />
-          </span>
-          <span v-if="errors.time || errors.future" class="ea__field-error">
-            {{ errors.time || errors.future }}
-          </span>
+          <span
+            class="ea__field-error"
+            :class="{ 'ea__field-error--show': !!(errors.time || errors.future) }"
+            >{{ errors.time || errors.future }}</span
+          >
         </div>
       </section>
 
       <!-- ================= Выбор активности ================= -->
       <section class="ea__section">
-        <h2 class="velo-section-title">Выбор активности</h2>
+        <h2 class="velo-section-title">Выбор активности <span class="ea__req">*</span></h2>
 
         <div class="ea__activity" data-field="activity">
-          <span class="ea__seal" :class="{ 'ea__seal--done': activityFilled }">
-            <IconRequired v-if="!activityFilled" :size="22" />
-            <IconRequiredDone v-else :size="22" />
-          </span>
           <div class="ea__chips">
             <VChip
               v-for="opt in ACTIVITY_OPTIONS"
@@ -159,9 +154,13 @@
               </svg>
             </button>
           </div>
-          <span v-if="errors.custom" class="ea__field-error">{{ errors.custom }}</span>
+          <span class="ea__field-error" :class="{ 'ea__field-error--show': !!errors.custom }">{{
+            errors.custom
+          }}</span>
         </div>
-        <span v-if="errors.activity" class="ea__field-error">{{ errors.activity }}</span>
+        <span class="ea__field-error" :class="{ 'ea__field-error--show': !!errors.activity }">{{
+          errors.activity
+        }}</span>
       </section>
 
       <!-- ================= Мое состояние =================
@@ -171,13 +170,9 @@
            neutral zone centre and the feed card hides the suffix. The
            markup/logic stay in place behind the flag. -->
       <section v-if="!EXTERNAL_ACTIVITY_MOOD_HIDDEN" class="ea__section">
-        <h2 class="velo-section-title">Мое состояние</h2>
+        <h2 class="velo-section-title">Мое состояние <span class="ea__req">*</span></h2>
 
         <div class="ea__state-block" data-field="state">
-          <span class="ea__seal" :class="{ 'ea__seal--done': stateScore !== null }">
-            <IconRequired v-if="stateScore === null" :size="22" />
-            <IconRequiredDone v-else :size="22" />
-          </span>
           <div class="ea__state" role="group" aria-label="Мое состояние">
             <button
               v-for="opt in STATE_OPTIONS"
@@ -194,7 +189,9 @@
             </button>
           </div>
         </div>
-        <span v-if="errors.state" class="ea__field-error">{{ errors.state }}</span>
+        <span class="ea__field-error" :class="{ 'ea__field-error--show': !!errors.state }">{{
+          errors.state
+        }}</span>
       </section>
 
       <!-- ================= Мысли ================= -->
@@ -258,13 +255,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { DateTime } from 'luxon'
 import { VBackButton, VChip, VTextarea } from '@/components/ui'
-import {
-  IconRequired,
-  IconRequiredDone,
-  IconRatingConfused,
-  IconRatingGood,
-  IconRatingFire,
-} from '@/components/icons'
+import { IconRatingConfused, IconRatingGood, IconRatingFire } from '@/components/icons'
 import DatePickerSheet from '@/components/shared/DatePickerSheet.vue'
 import TimePickerSheet from '@/components/shared/TimePickerSheet.vue'
 import { useDiaryStore, type ExternalActivityFieldErrors } from '@/stores/diary'
@@ -356,13 +347,6 @@ const errors = ref({
 const showDate = ref(false)
 const showTime = ref(false)
 const bodyEl = ref<HTMLElement | null>(null)
-
-// The section is "filled" when any choice exists; a custom choice always
-// carries its chip (the chip IS the name), so it is filled by construction.
-const activityFilled = computed(() => {
-  if (selectedActivity.value === null) return false
-  return selectedActivity.value !== 'custom' || customChip.value !== null
-})
 
 // Every clock in this screen runs in the PROFILE timezone: a browser-local
 // "today" would hand a (+tz) user their own tomorrow as pickable.
@@ -686,28 +670,25 @@ async function onSubmit(): Promise<void> {
   border-color: var(--velo-error);
 }
 
-/* The required seal hangs just off its field's right edge (FE-80 product
-   correction): 22px marker + --space-1 gap hugs the component, and the rest
-   of the 33px layout padding becomes screen-edge clearance. Out of flow --
-   the field keeps the full rail; top:50% centres it on the field block. */
-.ea__seal {
-  position: absolute;
-  right: calc(-1 * (22px + var(--space-1)));
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
+/* Required sections (owner 2026-10-01): the rosette is gone -- the red *
+   rides the section heading (.ea__req); error slots are constant-height so
+   an appearing message never shifts the layout. */
+.ea__req {
   color: var(--velo-error);
-}
-
-.ea__seal--done {
-  color: var(--velo-required-done);
 }
 
 .ea__field-error {
   display: block;
+  min-height: 17px;
   font-size: var(--text-xs);
+  line-height: 1.2;
   color: var(--velo-error);
-  margin-top: var(--space-1);
+  margin-top: 0;
+  opacity: 0;
+}
+
+.ea__field-error--show {
+  opacity: 1;
 }
 
 /* -- Activity card: solid white plate, chips wrap naturally (no grid).

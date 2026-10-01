@@ -100,6 +100,17 @@ afterEach(() => {
 })
 
 describe('MasterCuratorGroupCreateView', () => {
+  it('owner 2026-10-01: the required canon is the section star -- legend hidden, no rosette', () => {
+    mount()
+
+    const h2 = Array.from(host?.querySelectorAll('h2') ?? []).find((x) =>
+      x.textContent?.includes('Основное'),
+    )
+    expect(h2?.querySelector('.ncg__req')).not.toBeNull()
+    expect(host?.querySelector('.ncg__legend')).toBeNull()
+    expect(host?.querySelector('.v-input__seal')).toBeNull()
+  })
+
   it('blank name: inline error, no POST', async () => {
     mount()
     await flush()

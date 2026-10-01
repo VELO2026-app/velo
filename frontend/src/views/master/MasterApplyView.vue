@@ -42,7 +42,9 @@
            STEP 1: Профиль
            ================================================================ -->
       <template v-if="step === 1">
-        <h3 class="apply-view__step-title">Шаг 1: Профиль</h3>
+        <h3 class="apply-view__step-title">
+          Шаг 1: Профиль <span class="apply-view__req">*</span>
+        </h3>
 
         <VInput
           v-model="form.display_name"
@@ -58,7 +60,12 @@
             Я принимаю Условия использования и ознакомлен(а) с Политикой конфиденциальности
           </VCheckbox>
         </VCard>
-        <p v-if="errors.privacy" class="apply-view__field-error">{{ errors.privacy }}</p>
+        <p
+          class="apply-view__field-error"
+          :class="{ 'apply-view__field-error--show': !!errors.privacy }"
+        >
+          {{ errors.privacy }}
+        </p>
 
         <VButton variant="primary" block size="lg" class="apply-view__next" @click="goToStep2">
           Далее
@@ -69,7 +76,7 @@
            STEP 2: Опыт
            ================================================================ -->
       <template v-else-if="step === 2">
-        <h3 class="apply-view__step-title">Шаг 2: Опыт</h3>
+        <h3 class="apply-view__step-title">Шаг 2: Опыт <span class="apply-view__req">*</span></h3>
 
         <!-- Направления практик — TWO-LEVEL taxonomy, extracted into the shared
              MethodTaxonomyPicker (batch L, single source of truth). The outer
@@ -79,7 +86,12 @@
         <div class="apply-view__field">
           <label class="apply-view__label">Направления практик *</label>
           <MethodTaxonomyPicker v-model="methods" />
-          <p v-if="errors.methods" class="apply-view__field-error">{{ errors.methods }}</p>
+          <p
+            class="apply-view__field-error"
+            :class="{ 'apply-view__field-error--show': !!errors.methods }"
+          >
+            {{ errors.methods }}
+          </p>
         </div>
 
         <VSelect
@@ -116,7 +128,9 @@
            STEP 3: Документы (upload = honest stub, Zod E13)
            ================================================================ -->
       <template v-else>
-        <h3 class="apply-view__step-title">Шаг 3: Документы</h3>
+        <h3 class="apply-view__step-title">
+          Шаг 3: Документы <span class="apply-view__req">*</span>
+        </h3>
         <p class="apply-view__intro">
           Сертификаты хранятся в зашифрованном виде и используются для внутренней верификации вашей
           квалификации. Удостоверение личности используется только для подтверждения личности и
@@ -181,7 +195,12 @@
             Я даю согласие на обработку загруженных документов для верификации
           </VCheckbox>
         </VCard>
-        <p v-if="errors.docs" class="apply-view__field-error">{{ errors.docs }}</p>
+        <p
+          class="apply-view__field-error"
+          :class="{ 'apply-view__field-error--show': !!errors.docs }"
+        >
+          {{ errors.docs }}
+        </p>
 
         <VButton
           variant="primary"
@@ -545,9 +564,23 @@ async function submit(skipDocuments = false): Promise<void> {
   margin: 0;
 }
 
-.apply-view__field-error {
-  font-size: var(--text-sm);
+/* Step-title required marker + constant-height error slots (owner
+   2026-10-01 canon): the message fades in without growing its block. */
+.apply-view__req {
   color: var(--velo-error);
+}
+
+.apply-view__field-error {
+  min-height: 17px;
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.2;
+  color: var(--velo-error);
+  opacity: 0;
+}
+
+.apply-view__field-error--show {
+  opacity: 1;
 }
 
 /* -- Language stub card -- */

@@ -12,36 +12,49 @@
     <VHeader title="Новый промокод" show-back @back="router.back()" />
 
     <div class="new-promo__content">
-      <!-- Required-fields legend (DS, Phase-3). -->
+      <!-- Required-fields legend: HIDDEN for now (owner 2026-10-01) -- the
+           per-label asterisk reads without an explanation. Restore the block
+           below when an explanation is needed again. -->
+      <!--
       <div class="new-promo__legend">
         <IconRequired class="new-promo__legend-seal" :size="22" />
         <span>— поля, обязательные для заполнения</span>
       </div>
+      -->
 
-      <VInput
-        v-model="form.code"
-        label="Код промокода"
-        placeholder="Латиница, цифры, дефис"
-        required
-      />
-      <VSelect v-model="form.discount" label="Скидка" :options="DISCOUNT_OPTIONS" required />
+      <!-- .cp-req-label injects the red * after the field's visible label
+           (owner 2026-10-01 canon, see the CSS below). -->
+      <div class="cp-req-label">
+        <VInput v-model="form.code" label="Код промокода" placeholder="Латиница, цифры, дефис" />
+        <span
+          class="new-promo__field-error"
+          :class="{ 'new-promo__field-error--show': !!codeError }"
+          >{{ codeError }}</span
+        >
+      </div>
+      <div class="cp-req-label">
+        <VSelect v-model="form.discount" label="Скидка" :options="DISCOUNT_OPTIONS" />
+      </div>
       <!-- «Действует до»: opens the shared DatePickerSheet (consistent in-app picker;
            future-only via :min) instead of the OS-native date input. -->
-      <div class="new-promo__field">
-        <label class="new-promo__label">Действует до</label>
-        <div class="new-promo__field-row">
-          <button
-            type="button"
-            class="new-promo__picker"
-            :class="{ 'new-promo__picker--empty': !form.until }"
-            @click="showDate = true"
+      <div class="cp-req-label">
+        <div class="new-promo__field">
+          <label class="new-promo__label">Действует до</label>
+          <div class="new-promo__field-row">
+            <button
+              type="button"
+              class="new-promo__picker"
+              :class="{ 'new-promo__picker--empty': !form.until }"
+              @click="showDate = true"
+            >
+              {{ form.until ? untilDisplay : 'Выберите дату' }}
+            </button>
+          </div>
+          <span
+            class="new-promo__field-error"
+            :class="{ 'new-promo__field-error--show': !!untilError }"
+            >{{ untilError }}</span
           >
-            {{ form.until ? untilDisplay : 'Выберите дату' }}
-          </button>
-          <span class="new-promo__seal" :class="{ 'new-promo__seal--done': !!form.until }">
-            <IconRequired v-if="!form.until" :size="22" />
-            <IconRequiredDone v-else :size="22" />
-          </span>
         </div>
       </div>
       <VInput
@@ -76,20 +89,35 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, ref, watch } from 'vue'
+import { reactive, computed, ref, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import { VInput, VSelect, VButton } from '@/components/ui'
-import { IconRequired, IconRequiredDone } from '@/components/icons'
 import DatePickerSheet from '@/components/shared/DatePickerSheet.vue'
 import { useToast } from '@/composables/useToast'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import { formatShortDate, todayLocalISO } from '@/utils/format'
 import { createPromo } from '@/api/promos'
 import { extractApiError } from '@/composables/useApiError'
+import { queryDocument } from '@/platform/dom'
 
 const router = useRouter()
 const toast = useToast()
+
+// Inline field errors through the constant slots (owner 2026-10-01 canon):
+// the message fades in without growing its block; the scroll brings the
+// failing field into view.
+const codeError = ref('')
+const untilError = ref('')
+
+async function showFieldError(setter: () => void): Promise<void> {
+  setter()
+  await nextTick()
+  queryDocument('.new-promo__field-error--show')?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'center',
+  })
+}
 
 // Lift the focused field above the soft keyboard once it settles (shared M5
 // composable — replaces the bespoke racing vv.resize→scrollIntoView listener, K3).
@@ -134,10 +162,16 @@ const creating = ref(false)
 async function onCreate(): Promise<void> {
   if (creating.value) return
   if (!form.code.trim()) {
+    await showFieldError(() => {
+      codeError.value = 'Введите код промокода'
+    })
     toast.error('Введите код промокода')
     return
   }
   if (!form.until) {
+    await showFieldError(() => {
+      untilError.value = 'Укажите дату окончания действия'
+    })
     toast.error('Укажите дату окончания действия')
     return
   }
@@ -174,34 +208,43 @@ async function onCreate(): Promise<void> {
   padding: var(--space-4) 0 var(--space-8);
 }
 
-/* Required-fields legend — mirrors CreatePracticeView. */
-.new-promo__legend {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  /* Brighter than the default --velo-error-bg (was too pale, operator 2026-06-19):
-     stronger pink fill + a defining error border. */
-  background: var(--velo-error-bg-strong);
-  border: 1.5px solid var(--velo-error-border);
-  color: var(--velo-danger-text);
-  font-size: var(--text-sm);
+/* Per-label required asterisk + constant-height error slots (owner
+   2026-10-01 canon): the rosette is gone; the message fades in without
+   growing its block. VInput's own error line is hidden -- its red border
+   still marks the field. */
+.new-promo :deep(.cp-req-label .v-input__label)::after,
+.new-promo :deep(.cp-req-label .v-select__label)::after,
+.cp-req-label .new-promo__label::after {
+  content: ' *';
+  color: var(--velo-error);
 }
 
-.new-promo__legend-seal {
-  flex-shrink: 0;
+.new-promo__field-error {
+  display: block;
+  min-height: 17px;
+  margin-top: 0;
+  font-size: var(--text-xs);
+  line-height: 1.2;
   color: var(--velo-error);
+  opacity: 0;
+}
+
+.new-promo__field-error--show {
+  opacity: 1;
+}
+
+.new-promo :deep(.v-input__error) {
+  display: none;
 }
 
 .new-promo__submit {
   margin-top: var(--space-4);
 }
 
-/* «Действует до» date trigger — same box + required seal as a VInput field
-   (tokens match .v-input__field / CreatePractice's picker), opens DatePickerSheet. */
+/* «Действует до» date trigger — same box as a VInput field (tokens match
+   .v-input__field / CreatePractice's picker), opens DatePickerSheet. */
 .new-promo__field {
-  margin-bottom: var(--space-4);
+  margin-bottom: 0;
 }
 
 .new-promo__label {
@@ -234,15 +277,5 @@ async function onCreate(): Promise<void> {
 
 .new-promo__picker--empty {
   color: var(--velo-text-muted);
-}
-
-.new-promo__seal {
-  flex-shrink: 0;
-  display: flex;
-  color: var(--velo-error);
-}
-
-.new-promo__seal--done {
-  color: var(--velo-required-done);
 }
 </style>

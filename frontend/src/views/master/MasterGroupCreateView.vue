@@ -46,12 +46,17 @@
     <VHeader title="Новая группа" show-back @back="router.back()" />
 
     <div class="new-group__content">
+      <!-- Required-fields legend: HIDDEN for now (owner 2026-10-01) -- the
+           section-title asterisk reads without an explanation. Restore the
+           block below when an explanation is needed again. -->
+      <!--
       <div class="new-group__legend">
         <IconRequired class="new-group__legend-seal" :size="22" />
         <span>— поля, обязательные для заполнения</span>
       </div>
+      -->
 
-      <h2 class="velo-section-title">Основное</h2>
+      <h2 class="velo-section-title">Основное <span class="new-group__req">*</span></h2>
 
       <!-- T24-5/6 (PROMPT №639): the placeholder alone carries the visible
            hint now -- it already matched `label` before this batch
@@ -65,9 +70,15 @@
         placeholder="Название"
         hide-label
         :error="fieldError"
-        required
         @focus="onFieldFocus"
       />
+      <!-- Constant-height slot (owner 2026-10-01): the message fades in
+           without growing its block, so an error never shifts the layout. -->
+      <span
+        class="new-group__field-error"
+        :class="{ 'new-group__field-error--show': !!fieldError }"
+        >{{ fieldError }}</span
+      >
 
       <VTextarea
         v-model="description"
@@ -93,15 +104,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import { VInput, VTextarea, VButton } from '@/components/ui'
-import { IconRequired } from '@/components/icons'
 import { createGroup } from '@/api/groups'
 import { useToast } from '@/composables/useToast'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import { extractApiError } from '@/composables/useApiError'
+import { queryDocument } from '@/platform/dom'
 
 const router = useRouter()
 const toast = useToast()
@@ -115,6 +126,14 @@ const fieldError = ref('')
 async function onCreate(): Promise<void> {
   if (creating.value) return
   if (!name.value.trim()) {
+    // Inline slot + scroll (owner 2026-10-01 canon, same as the practice
+    // create form); the toast stays for the case when the slot is off-screen.
+    fieldError.value = 'Введите название группы'
+    await nextTick()
+    queryDocument('.new-group__field-error--show')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+    })
     toast.error('Введите название группы')
     return
   }
@@ -139,6 +158,32 @@ async function onCreate(): Promise<void> {
   min-height: 100%;
   display: flex;
   flex-direction: column;
+}
+
+/* Section-title required marker + constant-height error slot (owner
+   2026-10-01 canon, same as the practice create form): the rosette is gone,
+   the message fades in without growing its block. VInput's own error line
+   is hidden -- its red border still marks the field. */
+.new-group__req {
+  color: var(--velo-error);
+}
+
+.new-group__field-error {
+  display: block;
+  min-height: 17px;
+  margin-top: 0;
+  font-size: var(--text-xs);
+  line-height: 1.2;
+  color: var(--velo-error);
+  opacity: 0;
+}
+
+.new-group__field-error--show {
+  opacity: 1;
+}
+
+.new-group :deep(.v-input__error) {
+  display: none;
 }
 
 /* [FE-45 follow-up, owner: "не так сильно двигается"] While typing, the
