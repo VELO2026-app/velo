@@ -592,7 +592,10 @@ watch(masterId, (id) => {
   justify-content: space-between;
   gap: var(--space-2);
   width: 100%;
-  padding: var(--space-4);
+  /* Same vertical rhythm as the accordion headers (--space-3): the label is
+     the same --text-sm, so the row must not optically shrink inside the
+     plate. */
+  padding: var(--space-3) var(--space-4);
   background: var(--velo-bg-card-solid);
   border: 1px solid var(--velo-border-card);
   border-radius: var(--radius-md);
@@ -600,6 +603,10 @@ watch(masterId, (id) => {
   font-family: var(--font-body);
   font-size: var(--text-sm);
   cursor: pointer;
+}
+
+.master-public__nav :deep(svg) {
+  color: var(--velo-text-muted);
 }
 
 .master-public__note {
