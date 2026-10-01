@@ -1350,9 +1350,13 @@ velo lint          # ruff check
 
 ```python
 # из backend/
-python3 -c "
-import sys; sys.path.insert(0,'.')
+python3 - c
+"
+import sys;
+
+sys.path.insert(0, 'tmp/BE-40')
 from tests.telegram_id_bands import declared_bands, find_overlaps, free_windows
+
 for b in sorted(declared_bands(), key=lambda x: x.low):
     print(f'{b.low}-{b.high}  {b.file}')
 print('overlaps:', len(find_overlaps()))
@@ -1410,7 +1414,7 @@ print('free in 65000-65999:', free_windows(space=(65000, 65999)))
 | **CAL-W1** 🔴🚀 | `core/config.py` | **Проверить, не затёрт ли startup-`model_validator` Stripe-ключей при правках config в Calendar iteration.** Если валидатор пропал — production может стартовать с пустыми Stripe-ключами и упасть только при первой оплате | Сверить текущий `config.py` с дореитерационным; восстановить `model_validator`, проверяющий наличие ключей в `APP_ENV=production`. Найдено аудитом Calendar (W-1), принято в техдолг |
 | TD-025 | Все роутеры | Нет rate limiting на masters endpoints. **(подтверждено аудитом 2026-05-20: распространить и на топап `POST /payments/topup` и покупку `POST /practices/{id}/purchase`)** | `slowapi` или Redis-based custom limiter |
 | TD-026 | `docker-compose.yml` | Redis без пароля | `requirepass` + `REDIS_PASSWORD` в .env |
-| **AUDIT-0520-03** 🟡🚀 | `core/middleware.py` | `_extract_client_ip` берёт первый элемент `X-Forwarded-For` без проверки trusted proxy -> клиент может подделать IP в audit log финансовых операций | Доверять XFF только от известного прокси (Nginx); или брать N-й справа hop; список trusted proxies в config |
+| ~~**AUDIT-0520-03**~~ 🟡🚀 | `core/middleware.py` | **Закрыто BE-40.** Было: `_extract_client_ip` брал первый элемент `X-Forwarded-For` -> клиент подделывал IP в audit log и ключ лимитеров | Сделано иначе, чем предлагалось: адрес -- `X-Real-IP` от доверенного соседа (nginx перезаписывает его `$remote_addr`), XFF не читается ни в какой форме; uvicorn `--no-proxy-headers`. Прокси перед nginx настраивается модулем `real_ip` в nginx, не в config -- см. докстринг `_extract_client_ip` |
 
 ### Открытые находки
 

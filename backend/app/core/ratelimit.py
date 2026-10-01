@@ -19,23 +19,22 @@
 #    limiter put the whole backend suite (644 logins from 127.0.0.1) into one
 #    bucket and turned it red. Loopback and private addresses are our own
 #    infrastructure showing through: the test client, a health check, the
-#    nginx peer used when X-Forwarded-For is absent. Limiting on them bounds
-#    no attacker; it shares one counter between everybody it cannot tell
-#    apart.
+#    nginx peer used when X-Real-IP is absent or unusable. Limiting on them
+#    bounds no attacker; it shares one counter between everybody it cannot
+#    tell apart.
 #
 #    Named honestly, the failure mode this leaves: if nginx stopped setting
-#    X-Forwarded-For, every request would resolve to the proxy's private
-#    address and every per-source limit would silently stop applying. That
+#    X-Real-IP, every request would resolve to the proxy's private address
+#    and every per-source limit would silently stop applying. That
 #    is a degradation to OFF, chosen deliberately over a degradation to
 #    OUTAGE (one shared bucket for every client at once). Between a control
 #    that stops helping and a control that takes the service down, these may
 #    only do the former.
 #
-# WHAT A PER-SOURCE LIMIT IS WORTH TODAY. The source is the first hop of
-# X-Forwarded-For as resolved by core/middleware.py, and that first hop is
-# written by the client until BE-40 lands. Until then a caller who varies the
-# header gets a fresh bucket per request. These primitives are correct; the
-# key they are handed is not yet trustworthy.
+# WHERE THE SOURCE COMES FROM. core/middleware.py resolves it: X-Real-IP,
+# which nginx overwrites with the connection address, and only from our own
+# proxy; X-Forwarded-For is not read (BE-40). A sender cannot pick its
+# bucket by writing a header.
 #
 # REDIS FAILURES ARE NOT SWALLOWED HERE. Whether a limiter fails open or
 # closed is the caller's decision -- auth and the guest path decide

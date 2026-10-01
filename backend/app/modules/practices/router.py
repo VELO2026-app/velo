@@ -1286,9 +1286,9 @@ async def _guest_over_limit(which: str, practice: Practice) -> bool:
     was never initialized -- is a programming error, not an outage, and is
     not caught.
 
-    The source is the one core/middleware.py resolved; until BE-40 its
-    X-Forwarded-For first hop is client-written, so a caller varying the
-    header escapes this limit. See core/ratelimit.py.
+    The source is the one core/middleware.py resolved: X-Real-IP from our
+    own proxy, never X-Forwarded-For (BE-40), so a caller cannot escape
+    this limit by varying a header. See core/ratelimit.py.
     """
     from redis.exceptions import RedisError
 

@@ -20,6 +20,15 @@
 # then it stays in the HTTP renderer, serving plain HTTP rather than
 # pointing nginx at a .pem that is not there -- which would fail
 # `nginx -t` and cost the whole config its reload.
+#
+# CLIENT ADDRESS (BE-40). The backend takes the client address from the
+# `X-Real-IP $remote_addr` line of the API blocks below and from nothing
+# else; X-Forwarded-For is set for completeness but the application does
+# not read it. A proxy in front of nginx (Cloudflare, CDN, balancer) is
+# configured HERE with the real_ip module, not in the application. The
+# full reasoning and the directives: _extract_client_ip in
+# backend/app/core/middleware.py. This comment is shell, outside every
+# heredoc, so it changes no rendered byte.
 
 render_nginx_http() {
     local domain_frontend="$1" domain_api="$2" domain_public="${3:-}"

@@ -10,13 +10,20 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from urllib.parse import urlencode
 
 import pytest
+import structlog
 from httpx import AsyncClient
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit import AuditLog
 from app.core.config import settings
 from app.core.exceptions import TooManyRequestsError
-from app.core.middleware import _extract_client_ip
+from app.core.middleware import (
+    _MAX_CLIENT_IP_LEN,
+    TraceIdMiddleware,
+    _extract_client_ip,
+)
+from app.core.redis import get_redis
 from app.modules.auth.service import (
     _SOURCE_RATE_LIMIT_MULTIPLIER,
     TelegramValidationError,
@@ -399,12 +406,18 @@ async def test_logout_all_other_user_unaffected(
 # covers both branches far more precisely than a request could.
 
 
-def _scope(peer: str | None, forwarded: str | None = None) -> dict:
-    """Minimal ASGI scope: a TCP peer and optionally an XFF header."""
+def _scope(
+    peer: str | None,
+    real_ip: str | None = None,
+    forwarded: str | None = None,
+) -> dict:
+    """Minimal ASGI scope: a TCP peer and optionally X-Real-IP / XFF."""
     scope: dict = {
         "client": (peer, 12345) if peer else None,
         "headers": [],
     }
+    if real_ip is not None:
+        scope["headers"].append((b"x-real-ip", real_ip.encode("latin-1")))
     if forwarded is not None:
         scope["headers"].append(
             (b"x-forwarded-for", forwarded.encode("latin-1"))
@@ -412,22 +425,41 @@ def _scope(peer: str | None, forwarded: str | None = None) -> dict:
     return scope
 
 
+# A valid IPv6 address that does not fit AuditLog.ip_address: ipaddress
+# accepts a scope id of any length, so "is an address" does not bound the
+# width. 8 + 100 = 108 characters.
+_LONG_SCOPED_IPV6 = "fe80::1%" + "a" * 100
+
+
 class TestClientIpExtraction:
-    """X-Forwarded-For is honoured only from our own proxy, and only when
-    it is really an address."""
+    """X-Real-IP is honoured only from our own proxy, and only when it is
+    really an address that fits the audit column. X-Forwarded-For is never
+    read (BE-40)."""
 
     @pytest.mark.parametrize("peer", ["127.0.0.1", "172.18.0.1", "10.0.0.5"])
     def test_header_honoured_from_proxy_peer(self, peer: str) -> None:
         """Trusted branch: the request came through nginx on the docker
-        network, so the forwarded client address is the real one."""
+        network, and nginx overwrites X-Real-IP with the address of the
+        connection it accepted -- so that is the real client address."""
         assert _extract_client_ip(_scope(peer, "8.8.8.8")) == "8.8.8.8"
 
-    def test_first_hop_taken_from_a_chain(self) -> None:
-        """X-Forwarded-For may be 'client, proxy1, proxy2'."""
-        scope = _scope("172.18.0.1", "8.8.8.8, 10.0.0.1")
-        assert _extract_client_ip(scope) == "8.8.8.8"
+    def test_first_hop_of_a_chain_is_ignored(self) -> None:
+        """Formerly test_first_hop_taken_from_a_chain, which asserted that
+        'client, proxy1, proxy2' in X-Forwarded-For resolved to its first
+        hop. It was right about the header's shape -- nginx does send a
+        chain there, $proxy_add_x_forwarded_for appends to what arrived --
+        and that is exactly what cancelled it (BE-40): the first hop is
+        whatever the sender wrote. Now the chain is ignored whole: with
+        X-Real-IP present the address is X-Real-IP, without it the peer."""
+        chain = "8.8.8.8, 10.0.0.1"
+        assert _extract_client_ip(
+            _scope("172.18.0.1", "9.9.9.9", forwarded=chain)
+        ) == "9.9.9.9"
+        assert _extract_client_ip(
+            _scope("172.18.0.1", forwarded=chain)
+        ) == "172.18.0.1"
 
-    def test_ipv6_forwarded_address(self) -> None:
+    def test_ipv6_real_ip_address(self) -> None:
         scope = _scope("172.18.0.1", "2001:4860:4860::8888")
         assert _extract_client_ip(scope) == "2001:4860:4860::8888"
 
@@ -438,7 +470,7 @@ class TestClientIpExtraction:
         assert _extract_client_ip(_scope("8.8.8.8", "1.1.1.1")) == "8.8.8.8"
 
     @pytest.mark.parametrize(
-        "forwarded",
+        "real_ip",
         [
             # Explicit ids: pytest derives a case name from the VALUE, and
             # these values are hostile to that. The 5000-character one alone
@@ -453,12 +485,15 @@ class TestClientIpExtraction:
             pytest.param("1.2.3.4\nX-Injected: 1", id="header-injection"),
             pytest.param("'; DROP TABLE audit_logs; --", id="sql-shaped"),
             pytest.param("A" * 5000, id="5000-chars"),
+            # X-Real-IP is ONE address; nginx never writes a list into it.
+            pytest.param("8.8.8.8, 10.0.0.1", id="a-list"),
+            pytest.param(" 8.8.8.8", id="padded"),
         ],
     )
-    def test_unusable_header_falls_back_to_peer(self, forwarded: str) -> None:
+    def test_unusable_header_falls_back_to_peer(self, real_ip: str) -> None:
         """A header that is not an address never reaches the audit column --
         the peer is used instead."""
-        scope = _scope("172.18.0.1", forwarded)
+        scope = _scope("172.18.0.1", real_ip)
         assert _extract_client_ip(scope) == "172.18.0.1"
 
     def test_over_long_header_cannot_exceed_the_column(self) -> None:
@@ -467,16 +502,136 @@ class TestClientIpExtraction:
         caller's session with the commit deferred, so an over-long value did
         not spoil one audit row -- it raised on flush and rolled back the
         whole operation, financial ones included. Whatever comes back here
-        must always fit the column."""
-        for length in (46, 100, 5000):
-            got = _extract_client_ip(_scope("172.18.0.1", "1" * length))
-            assert got is not None
+        must always fit the column -- and must be the peer, not nothing.
+
+        The last value is the case the pre-BE-40 test missed: "1" * N is not
+        an address, but a long-scoped IPv6 IS one, so it passed the address
+        check and only the old 256-character cap stood in front of the
+        column. It is rejected before parsing now, not truncated."""
+        for value in ("1" * 46, "1" * 100, "1" * 5000, _LONG_SCOPED_IPV6):
+            got = _extract_client_ip(_scope("172.18.0.1", value))
+            assert got == "172.18.0.1"
             assert len(got) <= 45
 
     def test_no_header_and_no_client(self) -> None:
         """Nothing to report is reported as nothing, not as a guess."""
         assert _extract_client_ip(_scope("172.18.0.1")) == "172.18.0.1"
         assert _extract_client_ip(_scope(None)) is None
+
+    def test_cap_is_the_audit_column_width(self) -> None:
+        """The cap is the column, not a looser bound: if one moves without
+        the other, a valid address can again be wider than what stores it.
+        Boundary pair: a valid 45-character address is taken, a valid
+        46-character one is rejected for the peer."""
+        assert AuditLog.__table__.c.ip_address.type.length == _MAX_CLIENT_IP_LEN
+        widest_v6 = "ffff:ffff:ffff:ffff:ffff:ffff:255.255.255.255"
+        assert len(widest_v6) == _MAX_CLIENT_IP_LEN
+        assert _extract_client_ip(_scope("172.18.0.1", widest_v6)) == widest_v6
+        one_over = "fe80::1%" + "a" * (_MAX_CLIENT_IP_LEN + 1 - 8)
+        assert len(one_over) == _MAX_CLIENT_IP_LEN + 1
+        assert _extract_client_ip(_scope("172.18.0.1", one_over)) == "172.18.0.1"
+
+    def test_same_request_twice_same_address(self) -> None:
+        """REPEAT axis: resolution is a pure function of the scope -- the
+        same request resolves to the same address (hence the same limiter
+        bucket) every time, and the scope is not modified on the way."""
+        scope = _scope("172.18.0.1", "9.9.9.9", forwarded="1.1.1.1")
+        before = repr(scope)
+        assert _extract_client_ip(scope) == _extract_client_ip(scope) == "9.9.9.9"
+        assert repr(scope) == before
+
+
+# The grid from the BE-40 gate: peer x X-Real-IP x X-Forwarded-For. The
+# expected value depends on the first two only; every row is run with all
+# three XFF forms, which is the whole of done-when 1 at this layer.
+_GRID_PEERS = {
+    "loopback-proxy": "127.0.0.1",
+    "docker-proxy": "172.18.0.1",
+    "public": "8.8.8.8",
+    "none": None,
+}
+_GRID_REAL_IP = {
+    "valid-public": "9.9.9.9",
+    "valid-private": "10.1.2.3",
+    "garbage": "not-an-ip",
+    "too-long": _LONG_SCOPED_IPV6,
+    "empty": "",
+    "absent": None,
+}
+_GRID_XFF = {
+    "no-xff": None,
+    "forged": "1.1.1.1",
+    "chain": "1.1.1.1, 10.0.0.1",
+}
+
+
+def _grid_expected(peer: str | None, real_ip: str | None) -> str | None:
+    trusted = peer in ("127.0.0.1", "172.18.0.1")
+    usable = real_ip in ("9.9.9.9", "10.1.2.3")
+    return real_ip if trusted and usable else peer
+
+
+@pytest.mark.parametrize("xff_case", list(_GRID_XFF))
+@pytest.mark.parametrize("real_ip_case", list(_GRID_REAL_IP))
+@pytest.mark.parametrize("peer_case", list(_GRID_PEERS))
+def test_client_ip_grid(peer_case: str, real_ip_case: str, xff_case: str) -> None:
+    """Every cell of the gate grid. X-Forwarded-For never changes the
+    answer: it is asserted against an expectation that does not take it as
+    an input."""
+    peer = _GRID_PEERS[peer_case]
+    real_ip = _GRID_REAL_IP[real_ip_case]
+    scope = _scope(peer, real_ip, forwarded=_GRID_XFF[xff_case])
+    assert _extract_client_ip(scope) == _grid_expected(peer, real_ip)
+
+
+async def test_middleware_binds_real_ip_not_forwarded_for() -> None:
+    """The layer the consumers read. record_audit (core/audit.py), the
+    pre-HMAC login limiter (auth/router.py) and the guest limiter
+    (practices/router.py) all take the address from the structlog binding
+    TraceIdMiddleware makes -- so the binding is what is asserted here, not
+    the helper. A forged X-Forwarded-For alongside a real X-Real-IP from our
+    proxy: the binding is X-Real-IP, and the forged value is nowhere."""
+    seen: dict = {}
+
+    async def inner(scope, receive, send) -> None:
+        seen.update(structlog.contextvars.get_contextvars())
+
+    async def send(message) -> None:
+        pass
+
+    scope = {
+        "type": "http",
+        **_scope("172.18.0.1", "9.9.9.9", forwarded="1.1.1.1, 10.0.0.1"),
+    }
+    await TraceIdMiddleware(inner)(scope, None, send)
+    assert seen["ip_address"] == "9.9.9.9"
+    assert "1.1.1.1" not in repr(seen)
+
+
+async def test_forged_forwarded_for_does_not_pick_the_login_bucket(
+    client: AsyncClient,
+) -> None:
+    """End to end through the app (done-when 1, limiter half): a login whose
+    X-Forwarded-For names another address is counted under X-Real-IP. The
+    test client's peer is 127.0.0.1, i.e. a trusted proxy. Pair: the
+    X-Real-IP bucket exists AND the forged one does not."""
+    redis = get_redis()
+    real, forged = "9.9.9.9", "1.0.0.1"
+    await redis.delete(f"auth_rate_src:{real}", f"auth_rate_src:{forged}")
+
+    init_data = build_init_data(
+        {"id": 77001, "first_name": "AuthTest", "username": "testuser"}
+    )
+    with patch.object(settings, "telegram_bot_token", BOT_TOKEN):
+        response = await client.post(
+            "/api/v1/auth/telegram",
+            json={"init_data": init_data},
+            headers={"X-Real-IP": real, "X-Forwarded-For": forged},
+        )
+    assert response.status_code == 200
+
+    assert int(await redis.get(f"auth_rate_src:{real}") or 0) >= 1
+    assert await redis.exists(f"auth_rate_src:{forged}") == 0
 
 
 # ---------------------------------------------------------------------------
@@ -547,7 +702,7 @@ class TestSourceRateLimit:
 
         A loopback or private address is not a remote attacker; it is our own
         infrastructure showing through (the test client, a health check, or
-        the nginx peer used as fallback when no X-Forwarded-For was present).
+        the nginx peer used as fallback when no usable X-Real-IP was present).
         Keying on it bounds nobody and shares one counter between everybody
         it cannot tell apart. Asserting on incr specifically: the address must
         be rejected BEFORE the counter, not merely forgiven after it."""

@@ -1574,7 +1574,7 @@ backend/tests/
 
 **Решения, принятые при реализации:**
 - Pure ASGI `TraceIdMiddleware` (не `BaseHTTPMiddleware` — избегаем двойное чтение body)
-- Middleware также извлекает `ip_address` (X-Forwarded-For → ASGI client) и `user_agent` → contextvars
+- Middleware также извлекает `ip_address` (`X-Real-IP` от доверенного соседа-nginx, иначе адрес ASGI-соседа; `X-Forwarded-For` не читается -- BE-40) и `user_agent` -> contextvars
 - `ip_address` и `user_agent` подхватываются `record_audit()` автоматически через `get_contextvars()`
 - **Trace_id guard:** входящий `X-Trace-ID` длиннее 36 символов отбрасывается → генерируется uuid4. Защита от `DataError` в `AuditLog.trace_id = String(36)` при финансовых транзакциях
 
@@ -2859,7 +2859,7 @@ TD-DIARY-CANCEL-COMMENT (причина отмены в snapshot), TD-ASK-MASTER
 |----|-------|------|----------|---------|--------|
 | AUDIT-0520-01 🔴 | 🚀 | `payments/stripe.py` | `if stripe_amount is not None and ...` -> при `amount_total=None` проверка суммы пропускается, баланс кредитуется без верификации | `if stripe_amount is None or stripe_amount != payment.amount_cents:` -> mark FAILED | ⬜ |
 | AUDIT-0520-02 🔴 | 🚀 | `practices/schemas.py` | `zoom_link` принимает любую строку (только max_length), вкл. `javascript:` -> XSS | `@field_validator("zoom_link")`: требовать `https://` (Create + Update) | ⬜ |
-| AUDIT-0520-03 🟡 | 🚀 | `core/middleware.py` | `_extract_client_ip` доверяет первому `X-Forwarded-For` без trusted-proxy check -> подделка IP в audit log | Доверять XFF только от Nginx; trusted proxies в config | ⬜ |
+| AUDIT-0520-03 🟡 | 🚀 | `core/middleware.py` | `_extract_client_ip` доверяет первому `X-Forwarded-For` без trusted-proxy check -> подделка IP в audit log | **Закрыто BE-40:** адрес -- `X-Real-IP` (nginx перезаписывает его `$remote_addr`) и только от доверенного соседа; XFF не читается; uvicorn `--no-proxy-headers`. Прокси перед nginx -- модулем `real_ip` в nginx, см. `_extract_client_ip` | ✅ BE-40 |
 | AUDIT-0520-04 | 🧪 | `core/database.py` | `get_db_reader` без `SET TRANSACTION READ ONLY` (TD-008 жил только в докстринге) | `SET TRANSACTION READ ONLY` в начале reader-сессии | ⬜ |
 | AUDIT-0520-05 | 🧪 | `payments/refund.py` | `_get_master_frozen_amount` и `_is_company_promo` дважды грузят один Promo (identity-map смягчает, логика дублирована) | Загрузить Promo один раз, передавать в обе | ⬜ |
 | AUDIT-0520-06 | 🧪 | `admin/withdrawals/service.py` | Устаревший count-паттерн (не subquery как B-05/B-09) | Унифицировать на subquery | ⬜ |

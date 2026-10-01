@@ -22,7 +22,8 @@
 #      longer shows a button that leads to "unavailable".
 #
 # ADDRESSES. The test client's peer is 127.0.0.1, which the middleware trusts
-# as our proxy, so X-Forwarded-For carries the address. It must be GLOBAL:
+# as our proxy, so X-Real-IP carries the address (BE-40: X-Forwarded-For is
+# no longer read, see core/middleware.py). It must be GLOBAL:
 # the documentation ranges (203.0.113.0/24, 198.51.100.0/24) are not
 # is_global and would be passed through, not limited.
 # =============================================================================
@@ -132,7 +133,7 @@ def zoom(monkeypatch: pytest.MonkeyPatch, cleanup: None) -> _Zoom:
 
 
 def _from(address: str) -> dict[str, str]:
-    return {"X-Forwarded-For": address}
+    return {"X-Real-IP": address}
 
 
 async def _practice(
