@@ -363,4 +363,53 @@ describe('SchoolMembersView', () => {
     expect(text()).toContain('Участник s1')
     expect(toastError).toHaveBeenCalled()
   })
+
+  // -- The Блок tab (owner 2026-09-30, BE-79 placeholder) ----------------------
+
+  it('the Блок tab carries the lock glyph and switching to it never calls the API', async () => {
+    mountWith()
+    await flush()
+
+    const blockTab = rosterTab('Блок')
+    expect(blockTab).not.toBeNull()
+    expect(blockTab?.querySelector('svg')).not.toBeNull()
+
+    // The master tab's mount fetch already happened; the Блок switch must
+    // not add a single call on top of it.
+    const callsBefore = vi.mocked(cgApi.getCuratorGroupMembers).mock.calls.length
+    blockTab!.click()
+    await flush()
+
+    expect(vi.mocked(cgApi.getCuratorGroupMembers).mock.calls.length).toBe(callsBefore)
+    expect(replace).toHaveBeenCalledWith(expect.objectContaining({ query: { kind: 'blocked' } }))
+    expect(text()).toContain('Пока нет заблокированных')
+    expect(inputEl()).toBeNull()
+  })
+
+  it('?kind=blocked deep link opens the placeholder without a fetch', async () => {
+    mountWith({ kind: 'blocked' })
+    await flush()
+
+    expect(vi.mocked(cgApi.getCuratorGroupMembers)).not.toHaveBeenCalled()
+    expect(rosterTab('Блок')?.getAttribute('aria-selected')).toBe('true')
+    expect(text()).toContain('Пока нет заблокированных')
+  })
+
+  it('switching back to Мастера fetches with kind=master again', async () => {
+    mountWith({ kind: 'blocked' })
+    await flush()
+    expect(vi.mocked(cgApi.getCuratorGroupMembers)).not.toHaveBeenCalled()
+
+    vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue(page(membersOf('master', ['m1'])))
+    rosterTab('Мастера')!.click()
+    await flush()
+
+    expect(vi.mocked(cgApi.getCuratorGroupMembers)).toHaveBeenCalledWith('g1', {
+      kind: 'master',
+      search: undefined,
+      limit: 20,
+      offset: 0,
+    })
+    expect(text()).toContain('Участник m1')
+  })
 })
