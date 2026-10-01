@@ -117,7 +117,10 @@ from app.modules.practices.schemas import (
     PracticeResponse,
     UpdatePracticeRequest,
 )
-from app.modules.practices.series_service import generate_series_occurrences
+from app.modules.practices.series_service import (
+    add_curator_group_audience_row,
+    generate_series_occurrences,
+)
 from app.modules.practices.taxonomy_models import TaxonomyDirection, TaxonomyStyle
 from app.modules.users.models import User
 
@@ -328,11 +331,16 @@ async def _set_practice_audience_curator_groups(
         )
     )
     for group_id in group_ids:
-        session.add(
-            PracticeAudienceCuratorGroup(
-                practice_id=practice_id, group_id=group_id,
+        # BE-95 F7: the schools were validated by _member_curator_group_ids_
+        # or_400 a moment ago; one deleted since then used to fail its FK
+        # here as a 500. It is the same fact the validation refuses -- not
+        # an active school you belong to -- so it gets the same 400.
+        if not await add_curator_group_audience_row(
+            practice_id, group_id, session,
+        ):
+            raise BadRequestError(
+                "curator_group_ids must be active schools you belong to"
             )
-        )
     await session.flush()
 
 

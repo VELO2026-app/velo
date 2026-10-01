@@ -1813,6 +1813,10 @@ async def get_or_create_curator_group_invite(
     ).scalar_one_or_none()
 
     if existing is None:
+        # BE-95: ownership re-checked under the group lock, before the
+        # INSERT (header) -- only where something is about to be written.
+        if not await _lock_group_as_owner(curator_user_id, group.id, session):
+            raise NotFoundError("Curator group not found")
         token = secrets.token_urlsafe(32)
         invite = CuratorGroupInvite(group_id=group.id, token=token)
         try:
@@ -1845,7 +1849,15 @@ async def get_or_create_curator_group_invite(
                         CuratorGroupInvite.group_id == group.id,
                     )
                 )
-            ).scalar_one()
+            ).scalar_one_or_none()
+            if existing is None:
+                # BE-95 F4: NO WINNER -- the winner's link was revoked
+                # between its commit and this read. scalar_one() answered
+                # that with NoResultFound, a 500. (The other way to get
+                # here, an FK failure because the school was deleted, no
+                # longer reaches this line: the group lock above makes a
+                # delete wait for this request instead.)
+                raise NotFoundError("Curator group not found") from None
             token = existing.token
     else:
         token = existing.token
@@ -2431,57 +2443,58 @@ async def accept_curator_group_transfer(
 ) -> dict:
     """Become the curator of this group. One transaction, seven steps.
 
-    THE ORDER IS THE CONTRACT (TZ 3.5), and it changed once, in BE-42:
+    THE STEPS. TZ 3.5 describes their RESULT -- one transaction, all or
+    nothing -- and that has not changed. Their ORDER is this module's lock
+    order (see the header), and it has changed twice: BE-42 moved the claim
+    of the offer first, BE-95 put the caller's own member row ahead of it.
 
-      1. the group is active and the caller has a relation to it
-      2. THE OFFER IS CLAIMED -- deleted and returned in one statement,
-         which is both the check and the first mutation (see below)
-      3. the caller is a verified master right now; the caller has no group
+      1. the group is active and the caller has a relation to it (a read)
+      2. THE CALLER'S OWN MEMBER ROW IS TAKEN -- deleted and returned. I-2
+         says a curator is not a member of their own group, so the row goes
+         anyway; taking it first is what lets a concurrent removal or leave
+         of the same person meet this transaction on the same row instead
+         of deadlocking against it (BE-97, see the body)
+      3. THE OFFER IS CLAIMED -- deleted and returned, the check and the
+         mutation in one statement (BE-42, see the body)
+      4. the caller is a verified master right now; the caller has no group
          of their own by this name
-      4. curator_user_id := caller
-      5. the caller's own member row is deleted (I-2: a curator is not a
-         member of their own group)
+      5. curator_user_id := caller -- the group row, taken once (header)
       6. the previous curator gets a member row, kind='master', joined_at
-         = now()
+         = now() -- a new key, after the group row
       7. invite links and every other membership are left alone -- the
          tokens already in people's chats keep working
       8. the reply is the group page as the NEW curator sees it
 
-    UNTIL BE-42 THIS DOCSTRING SAID "every check happens BEFORE the first
-    mutation", and it was right about what it was protecting: nothing was
-    written until the request had been judged. It stopped being true here
-    because ONE of those checks cannot be done by reading -- "is this offer
-    still mine to take" is only answered by taking it. The other two checks
-    still run before anything else is written, and the reason they do is
-    unchanged: see the name-collision paragraph below, which is the one
-    that paid for the rule.
+    EVERY REFUSAL FROM STEP 3 ON ARRIVES AFTER A WRITE and leaves nothing
+    behind only because get_db_session rolls the request back on an
+    exception (P-01). Until BE-42 this docstring said "every check happens
+    BEFORE the first mutation". One check -- "is this offer still mine to
+    take" -- can only be answered by taking it, and since BE-95 the member
+    row is taken before even that.
 
-    THE NAME COLLISION IS CHECKED, NOT CAUGHT. UNIQUE (curator_user_id,
-    name) would raise on the rename-by-ownership at step 4 -- after which
-    more mutations would already be queued behind a broken transaction.
-    Asking first turns a rollback into a clean 409. The claim above does
-    not weaken this: on a clash the claim rolls back with everything else,
-    and the offer is still there afterwards.
+    THE NAME COLLISION IS CHECKED, AND CAUGHT AS WELL. The check at step 4
+    turns the ordinary clash into a clean 409. It is a read, though, taken
+    before the group row is locked: a rename of the school committing in
+    between can still make step 5 collide on UNIQUE (curator_user_id,
+    name). That used to escape as a 500; step 5 now runs in a savepoint and
+    answers the same 409 (BE-95 F6). On either refusal the claim rolls back
+    with everything else, and the offer is still there afterwards.
 
-    THE NAME COLLISION IS CHECKED IN STEP 1, NOT CAUGHT IN STEP 2. UNIQUE
-    (curator_user_id, name) would raise on the rename-by-ownership at step
-    2 -- after which three more mutations would already be queued behind a
-    broken transaction. Asking first turns a rollback into a clean 409.
-
-    STEP 4 CREATES A kind='master' ROW WITHOUT A CAPABILITY GATE, unlike
+    STEP 6 CREATES A kind='master' ROW WITHOUT A CAPABILITY GATE, unlike
     join, which insists on it (I-3). That is deliberate and not an
     oversight: the previous curator's verified status was the precondition
-    for the group being ACTIVE, and an inactive group never reaches step 1 --
-    so by the time step 4 runs, their capability has just been proven by the
-    call itself. I-3 governs joining by link; a transfer is not a join.
+    for the group being ACTIVE, and an inactive group never gets past
+    step 1 -- so by the time step 6 runs, their capability has just been
+    proven by the call itself. I-3 governs joining by link; a transfer is
+    not a join.
 
     404 covers "no offer", "not addressed to you" and "group inactive"
     alike: accept changes who owns a school, so it must not confirm that an
     offer exists to somebody probing group ids.
 
     GT-16: the event's target is THE PREVIOUS CURATOR, and it is read from
-    previous_curator_id -- the local captured at step 2, BEFORE the
-    assignment. This is the one place in the module where that matters
+    previous_curator_id -- the local captured BEFORE the assignment at
+    step 5. This is the one place in the module where that matters
     enough to say out loud: after `group.curator_user_id = user_id` the
     previous owner exists nowhere in this function's reach, so taking "the
     group's curator" at record time would write the ACTOR as the target
@@ -2491,29 +2504,48 @@ async def accept_curator_group_transfer(
     """
     group, _relation = await _relation_or_404(group_id, user_id, session)
 
-    # BE-42: CLAIMING THE OFFER IS THE FIRST MUTATION, and it is also the
-    # check. A plain SELECT here left a window between reading the offer
-    # and deleting it at the end: cancel_curator_group_transfer,
-    # remove_curator_group_member and leave_curator_group all drop the same
-    # row, and any of them landing inside that window used to leave accept
-    # finishing anyway -- the school changed hands after its offer had been
-    # withdrawn. Two simultaneous accepts by one heir were worse: both read
-    # the offer, both inserted the previous curator's member row, and the
-    # second died on uq_curator_group_member_group_user -- a 500 where a
-    # 404 belongs.
+    # BE-97: THE CALLER'S OWN MEMBER ROW FIRST -- the first lock of the
+    # module's order (header). Until BE-95 the claim below came first and
+    # the member row near the end, while remove and leave take the member
+    # row first and the transfer second. A removal of the heir landing
+    # between the two held the member row and waited for the transfer; this
+    # function then asked for the member row -- a deadlock, a 500 to one of
+    # the two, measured in both start orders. The BE-42 race tests could
+    # not see it: their competitor ran to completion inside a pause of this
+    # function, so the two never waited at the same time.
     #
-    # DELETE ... RETURNING is "took it and confirmed it was mine to take"
-    # in one statement: the second caller blocks on the row lock, re-reads
-    # after the first commits, finds nothing and gets the honest 404. The
-    # idiom is already this module's own -- remove_curator_group_member and
-    # cancel_curator_group_transfer both delete-and-return, for the journal
-    # rather than for a race.
+    # Nothing to take means the caller is no member here. Past
+    # _relation_or_404 that is a removal or a leave that committed in
+    # between, and the answer is the same 404 as "no offer".
+    taken = (
+        await session.execute(
+            delete(CuratorGroupMember)
+            .where(
+                CuratorGroupMember.group_id == group.id,
+                CuratorGroupMember.user_id == user_id,
+            )
+            .returning(CuratorGroupMember.id)
+        )
+    ).first()
+    if taken is None:
+        raise NotFoundError("Transfer not found", code="transfer_not_found")
+
+    # BE-42: THE OFFER IS CLAIMED, NOT READ -- deleted and returned in one
+    # statement, which is both the check and the mutation. A plain SELECT
+    # here left a window between reading the offer and deleting it at the
+    # end: cancel_curator_group_transfer, remove_curator_group_member and
+    # leave_curator_group all drop the same row, and any of them landing
+    # inside that window used to leave accept finishing anyway -- the
+    # school changed hands after its offer had been withdrawn. Two
+    # simultaneous accepts by one heir were worse: both read the offer, both
+    # inserted the previous curator's member row, and the second died on
+    # uq_curator_group_member_group_user -- a 500 where a 404 belongs. Since
+    # BE-95 the second of those blocks already on the member row above, and
+    # finds nothing there.
     #
-    # THE READ IT REPLACED CHECKED TWO THINGS and so does this WHERE: an
-    # offer for this group, addressed to this caller. Both used to answer
-    # the same 404 with the same code, and both still do. Keeping the
-    # SELECT beside the DELETE would be two checks of one fact, and the
-    # next reader would assume each catches something the other misses.
+    # THE WHERE CHECKS TWO THINGS, as the read it replaced did: an offer
+    # for this group, addressed to this caller. Both answer the same 404
+    # with the same code.
     claimed = (
         await session.execute(
             delete(CuratorGroupTransfer)
@@ -2533,31 +2565,39 @@ async def accept_curator_group_transfer(
             code="master_required",
         )
 
+    group_name = group.name
     clash = (
         await session.execute(
             select(CuratorGroup.id).where(
                 CuratorGroup.curator_user_id == user_id,
-                CuratorGroup.name == group.name,
+                CuratorGroup.name == group_name,
             )
         )
     ).scalar_one_or_none()
     if clash is not None:
         raise ConflictError(
-            f"You already curate a group named '{group.name}'",
+            f"You already curate a group named '{group_name}'",
             code=_NAME_TAKEN_CODE,
         )
 
     previous_curator_id = group.curator_user_id
 
-    group.curator_user_id = user_id
+    # BE-95 F6: THE GROUP ROW, taken once (header). See the docstring's
+    # name-collision paragraph for why a clash can still arrive here and
+    # why it is caught.
+    try:
+        async with session.begin_nested():
+            group.curator_user_id = user_id
+            await session.flush()
+    except IntegrityError:
+        raise ConflictError(
+            f"You already curate a group named '{group_name}'",
+            code=_NAME_TAKEN_CODE,
+        ) from None
 
-    await session.execute(
-        delete(CuratorGroupMember).where(
-            CuratorGroupMember.group_id == group.id,
-            CuratorGroupMember.user_id == user_id,
-        )
-    )
-
+    # The previous curator's member row: a NEW key, written after the group
+    # row, which the header allows -- (this group, the previous curator) has
+    # no row (I-2), so the INSERT waits for nobody.
     session.add(
         CuratorGroupMember(
             group_id=group.id,
@@ -3037,43 +3077,39 @@ async def accept_curator_group_master_offer(
     """
     group, _relation = await _relation_or_404(group_id, user_id, session)
 
-    # BE-81: THE OFFER IS CLAIMED, NOT READ, and the claim is the first
-    # mutation. A plain SELECT here left a window between it and the writes
-    # below, and THREE concurrent operations reach into that window --
-    # every one of them deletes this same offer row:
+    # BE-97: THE APPOINTEE'S MEMBER ROW IS LOCKED FIRST, the offer claimed
+    # second -- the module's order (header). Until BE-95 the claim came
+    # first and the membership write last, while remove and leave take the
+    # member row first and the offer second. A removal landing between the
+    # two held the member row and waited for the offer; this function then
+    # asked for the member row -- a deadlock, a 500 to one of the two,
+    # measured in both start orders. BE-81's race tests could not see it:
+    # their competitor ran to completion inside a pause of this function,
+    # so the two transactions never waited at the same time.
     #
-    #   remove_curator_group_member -- takes the member row with it, so the
-    #     write below met None and answered 500;
-    #   leave_curator_group -- the same, by the appointee's own hand;
-    #   decline_curator_group_master_offer -- leaves the member row alone,
-    #     so there was no error at all: the refusal committed and the
-    #     promotion went through on top of it. Measured, not deduced -- on
-    #     the old order that race answered 204 and left kind='master'.
+    # The competitors BE-81 named, and what decides each now -- a statement,
+    # never a read:
+    #   remove_curator_group_member, leave_curator_group -- they take the
+    #     member row first too, so one of the two waits for the other at the
+    #     very first lock. Committed before this: no row, 404 here.
+    #   decline_curator_group_master_offer -- touches only the offer, so it
+    #     is the CLAIM below that meets it, as in BE-81: the refusal and the
+    #     promotion cannot both commit.
+    if not await _lock_member(group.id, user_id, session):
+        raise NotFoundError("Offer not found", code="master_offer_not_found")
+
+    # BE-81: THE OFFER IS CLAIMED, NOT READ -- DELETE ... RETURNING is "took
+    # it and confirmed it was mine to take" in one statement, the idiom of
+    # decline_curator_group_master_offer one screen below.
     #
-    # DELETE ... RETURNING is "took it and confirmed it was mine to take"
-    # in one statement. THE IDIOM IS THE SIBLING FUNCTION'S:
-    # decline_curator_group_master_offer does exactly this delete over
-    # exactly this pair of columns, one screen below.
-    #
-    # THE CLAIM IS ON THE OFFER AND THE ROW IT PROTECTS IS THE MEMBERSHIP.
-    # That works only because all three competitors touch THIS row too:
-    # each must meet the lock this statement already holds before it can
-    # commit. Should any of them ever stop dropping the offer, the window
-    # reopens here -- that is the thing to check before changing any of the
-    # four.
-    #
-    # THE DOCSTRING'S PROMISE THAT A REFUSED OFFER SURVIVES NOW DEPENDS ON
-    # THE TRANSACTION, NOT ON THIS ORDER. Before BE-81 the offer was
-    # deleted last, so a ForbiddenError below simply never reached it; now
-    # it is deleted first and survives only because get_db_session rolls
+    # THE DOCSTRING'S PROMISE THAT A REFUSED OFFER SURVIVES DEPENDS ON THE
+    # TRANSACTION, NOT ON THIS ORDER: the offer is deleted before the
+    # capability check and survives a 403 only because get_db_session rolls
     # the request back on an exception (P-01). This function does not hold
-    # that invariant by itself. A test pins it --
-    # test_curator_master_offer_race.py asserts that master_required leaves
-    # the offer in place -- because the day somebody commits mid-way here,
-    # nothing else would notice.
+    # that invariant by itself; test_curator_master_offer_race.py pins it.
     #
     # A dark school is refused earlier still, by _relation_or_404, before
-    # this statement runs at all.
+    # either statement runs at all.
     claimed = (
         await session.execute(
             delete(CuratorGroupMasterOffer)
@@ -3093,29 +3129,17 @@ async def accept_curator_group_master_offer(
             code="master_required",
         )
 
-    # NO "removed while the offer was pending" BRANCH, and its absence is
-    # the point: _relation_or_404 above answers 404 to anyone with no
-    # relation to the school, so a removed person never reaches this line.
-    # The offer itself is deleted where the removal happens -- in
-    # remove_curator_group_member and leave_curator_group -- rather than
-    # discovered dangling here. A branch under an unreachable state would
-    # document the impossible; this comment is what a reader needs instead.
-    #
-    # UNTIL BE-81 THAT REASONING WAS SEQUENTIAL AND ONLY SEQUENTIAL. It was
-    # true of one request at a time and said nothing about two: a removal
-    # committing between the relation check and this line left member as
-    # None and the next line answered 500. Nothing held the row -- there is
-    # no with_for_update anywhere in this module and the isolation level is
-    # READ COMMITTED.
-    #
-    # THE UNREACHABILITY NOW RESTS ON THE CLAIM ABOVE, not on the order of
-    # calls: taking the offer row first makes any concurrent removal wait
-    # for this transaction, because removal drops the same offer. The
-    # branch is still absent for the same reason as before, and now the
-    # reason survives a second request arriving mid-flight.
-    member = await _membership_row(group.id, user_id, session)
-    member.kind = CuratorMemberKind.MASTER.value
-    await session.flush()
+    # NO "removed while the offer was pending" BRANCH: the member row is
+    # held from the first statement, so it cannot vanish under this write.
+    await session.execute(
+        update(CuratorGroupMember)
+        .where(
+            CuratorGroupMember.group_id == group.id,
+            CuratorGroupMember.user_id == user_id,
+        )
+        .values(kind=CuratorMemberKind.MASTER.value)
+        .execution_options(synchronize_session=False)
+    )
 
     journal = _record_group_event(
         group.id,
@@ -3331,17 +3355,35 @@ async def announce_published_practice(
     # practices/cancel_service.py).
     group_names = ", ".join(group.name for group in groups)
 
+    # BE-95 F3: ONE SAVEPOINT PER SCHOOL. The schools were read above; one
+    # deleted since then fails its journal row on the FK, and that used to
+    # fail the whole request -- publishing a practice answered 500 because
+    # somebody deleted a school it was addressed to. A school that is gone
+    # is skipped, and it is dropped from the recipients and from the name
+    # list too: nobody is told about a school that no longer exists.
+    announced = []
     for group in groups:
-        _record_group_event(
-            group.id,
-            actor,
-            CuratorGroupEventKind.PRACTICE_PUBLISHED,
-            session,
-            data={
-                "practice_id": str(practice.id),
-                "practice_title": practice.title,
-            },
-        )
+        try:
+            async with session.begin_nested():
+                _record_group_event(
+                    group.id,
+                    actor,
+                    CuratorGroupEventKind.PRACTICE_PUBLISHED,
+                    session,
+                    data={
+                        "practice_id": str(practice.id),
+                        "practice_title": practice.title,
+                    },
+                )
+                await session.flush()
+        except IntegrityError:
+            continue
+        announced.append(group)
+    if not announced:
+        return (0, 0)
+    groups = announced
+    group_ids = [group.id for group in groups]
+    group_names = ", ".join(group.name for group in groups)
 
     member_ids = set(
         (

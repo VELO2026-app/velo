@@ -23,18 +23,21 @@
 # accept is sent first, takes the row lock first and wins every time. A test
 # built that way is green before the fix and after it.
 #
-# SO THE COMPETITOR IS SCHEDULED, NOT RACED, exactly as in
-# test_curator_transfer_race.py. _has_master_capability is called inside the
-# old window, so wrapping it -- not replacing it; the real function still
-# runs and still decides -- puts a second transaction precisely where the
-# damage used to happen. The competitor runs under lock_timeout so that
-# after the fix "blocked" reports itself as "lost" instead of hanging the
-# suite: the claim already holds the offer row, and removal cannot commit
-# without it.
+# SO THE COMPETITOR IS SCHEDULED, NOT RACED -- and since BE-95 it is
+# scheduled INTO accept rather than inside it. tests/curator_race_harness.py
+# pauses accept at _has_master_capability (wrapped, not replaced: the real
+# function still runs and still decides), lets the competitor run until
+# Postgres reports it waiting on accept's lock, and only then releases
+# accept. Both transactions are in flight at once, which is the only way a
+# deadlock can show: the earlier form of this file ran the competitor to
+# completion under lock_timeout inside the pause, could never build one,
+# and was green over the deadlock BE-97 then found.
 #
-# THE ASSERTION IS AN INVARIANT, not a winner. "The removal committed" and
-# "the person became a master of the school" cannot both be true. Both
-# legitimate outcomes satisfy it; only the defect does not.
+# THE ASSERTION IS AN INVARIANT, and now an exact one: accept holds its
+# locks when the competitor arrives, so accept commits first and the
+# competitor acts on what accept left. "Removed and promoted" can still
+# not both be true; what changed is that each test now says which of the
+# legitimate outcomes it must be, and why.
 # =============================================================================
 
 import asyncio
@@ -43,19 +46,21 @@ from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_session_factory
 from app.modules.curator_groups import service as curator_service
 from app.modules.curator_groups.models import (
     CuratorGroup,
+    CuratorGroupEvent,
+    CuratorGroupEventKind,
     CuratorGroupMasterOffer,
     CuratorGroupMember,
     CuratorMemberKind,
 )
 from app.modules.masters.models import MasterProfile
 from app.modules.users.models import User, UserRole
+from tests.curator_race_harness import race
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 
 ACCEPT_URL = "/api/v1/curator-groups/{group_id}/master-offer/accept"
@@ -69,7 +74,6 @@ _TID_STRANGER = 69603
 
 # Long enough that a free row is always taken, short enough that a locked
 # one reports defeat instead of stalling the suite.
-_LOCK_TIMEOUT = "700ms"
 
 
 # ===========================================================================
@@ -201,47 +205,46 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
 
 
 async def _accept_with_competitor(
-    client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
     appointee: dict,
     school: CuratorGroup,
     competitor,
 ):
-    """POST accept, running `competitor` in its own transaction midway.
+    """Accept in flight and paused holding its locks; `competitor` runs into it.
 
-    The wrap sits on _has_master_capability, which accept calls after it
-    has dealt with the offer and before it writes the membership -- the one
-    reachable point inside the old window. The real function is still
-    called and still decides; only the timing of a second transaction is
-    added.
-
-    The competitor runs under lock_timeout so that after the fix "blocked"
-    reports itself as "lost" rather than waiting for a transaction that is
-    itself waiting for the competitor.
+    The pause sits on _has_master_capability, which accept calls after it
+    has locked the member row and claimed the offer, and before it writes
+    the promotion. Returns (accept, competitor, the competitor waited).
     """
-    real = curator_service._has_master_capability
-    outcome: dict = {"rival": None}
+    user_id = UUID(appointee["user"]["id"])
 
-    async def _wrapped(user_id, session):
-        factory = get_session_factory()
-        async with factory() as rival:
-            try:
-                await rival.execute(
-                    text(f"SET LOCAL lock_timeout = '{_LOCK_TIMEOUT}'")
-                )
-                await competitor(rival)
-                await rival.commit()
-                outcome["rival"] = "won"
-            except Exception:
-                await rival.rollback()
-                outcome["rival"] = "lost"
-        return await real(user_id, session)
+    async def _accept_call(session: AsyncSession) -> None:
+        actor = await session.get(User, user_id)
+        await curator_service.accept_curator_group_master_offer(
+            school.id, user_id, session, actor=actor,
+        )
 
-    monkeypatch.setattr(
-        curator_service, "_has_master_capability", _wrapped,
+    result = await race(
+        monkeypatch,
+        holder=_accept_call,
+        pause_in=(curator_service, "_has_master_capability"),
+        rival=competitor,
     )
-    response = await _accept(client, appointee, school)
-    return response, outcome["rival"]
+    return result.holder, result.rival, result.rival_waited
+
+
+async def _event_written(
+    db_session: AsyncSession, school: CuratorGroup, kind,
+) -> bool:
+    """Did the competitor's action take effect -- is its journal line there."""
+    return (
+        await db_session.execute(
+            select(CuratorGroupEvent.id).where(
+                CuratorGroupEvent.group_id == school.id,
+                CuratorGroupEvent.event == kind.value,
+            )
+        )
+    ).first() is not None
 
 
 @pytest.mark.asyncio
@@ -274,24 +277,29 @@ async def test_a_removal_mid_accept_never_promotes_the_removed_person(
             actor=actor,
         )
 
-    response, rival = await _accept_with_competitor(
-        client, monkeypatch, appointee, school, _remove,
+    # BE-95: WHAT THIS USED TO ASSERT, AND WHY IT CHANGED. It asserted
+    # "no 500" and "the competitor won => no promotion", and both were true of
+    # the harness it ran in: the competitor ran to completion INSIDE a pause
+    # of accept, under lock_timeout, so the two transactions never waited on
+    # each other at once. The "no 500" was held up by that harness, not by
+    # the code -- with both in flight the old order was a deadlock (BE-97).
+    # The competitor now runs INTO accept while accept holds its locks, so
+    # the order of commits is known and each half can be asserted exactly.
+    accept, rival, waited = await _accept_with_competitor(
+        monkeypatch, appointee, school, _remove,
     )
-
-    assert response.status_code < 500, (
-        f"the race answered {response.status_code}: {response.text}"
+    assert not accept.deadlocked and not rival.deadlocked, "BE-97"
+    assert waited, "the removal never met accept's lock -- no race was run"
+    assert accept.committed, accept.error
+    assert rival.committed, rival.error
+    # THE PAIR: accept committed first, so the removal took the master the
+    # appointee had just become -- no membership row, no offer, and the
+    # removal's journal line is there to say it happened.
+    assert await _membership(db_session, school, appointee) is None
+    assert not await _offer_left(db_session, school, appointee)
+    assert await _event_written(
+        db_session, school, CuratorGroupEventKind.MEMBER_REMOVED,
     )
-    kind = await _membership(db_session, school, appointee)
-    assert not (
-        rival == "won" and kind == CuratorMemberKind.MASTER.value
-    ), "removed by the curator and promoted anyway"
-    if rival == "won":
-        assert kind is None, (
-            "the removal committed but left a membership row behind"
-        )
-    else:
-        assert kind == CuratorMemberKind.MASTER.value
-
 
 @pytest.mark.asyncio
 async def test_leaving_mid_accept_never_promotes_the_departed_person(
@@ -319,22 +327,26 @@ async def test_leaving_mid_accept_never_promotes_the_departed_person(
             actor=actor,
         )
 
-    response, rival = await _accept_with_competitor(
-        client, monkeypatch, appointee, school, _leave,
+    # BE-95: WHAT THIS USED TO ASSERT, AND WHY IT CHANGED. It asserted
+    # "no 500" and "the competitor won => no promotion", and both were true of
+    # the harness it ran in: the competitor ran to completion INSIDE a pause
+    # of accept, under lock_timeout, so the two transactions never waited on
+    # each other at once. The "no 500" was held up by that harness, not by
+    # the code -- with both in flight the old order was a deadlock (BE-97).
+    # The competitor now runs INTO accept while accept holds its locks, so
+    # the order of commits is known and each half can be asserted exactly.
+    accept, rival, waited = await _accept_with_competitor(
+        monkeypatch, appointee, school, _leave,
     )
-
-    assert response.status_code < 500, (
-        f"the race answered {response.status_code}: {response.text}"
+    assert not accept.deadlocked and not rival.deadlocked, "BE-97"
+    assert waited, "the leave never met accept's lock -- no race was run"
+    assert accept.committed, accept.error
+    assert rival.committed, rival.error
+    assert await _membership(db_session, school, appointee) is None
+    assert not await _offer_left(db_session, school, appointee)
+    assert await _event_written(
+        db_session, school, CuratorGroupEventKind.MEMBER_LEFT,
     )
-    kind = await _membership(db_session, school, appointee)
-    assert not (
-        rival == "won" and kind == CuratorMemberKind.MASTER.value
-    ), "left the school and was promoted into it anyway"
-    if rival == "won":
-        assert kind is None
-    else:
-        assert kind == CuratorMemberKind.MASTER.value
-
 
 @pytest.mark.asyncio
 async def test_declining_mid_accept_never_promotes_the_refuser(
@@ -367,24 +379,30 @@ async def test_declining_mid_accept_never_promotes_the_refuser(
             actor=actor,
         )
 
-    response, rival = await _accept_with_competitor(
-        client, monkeypatch, appointee, school, _decline,
+    # BE-95: WHAT THIS USED TO ASSERT, AND WHY IT CHANGED. It asserted
+    # "no 500" and "the competitor won => no promotion", and both were true of
+    # the harness it ran in: the competitor ran to completion INSIDE a pause
+    # of accept, under lock_timeout, so the two transactions never waited on
+    # each other at once. The "no 500" was held up by that harness, not by
+    # the code -- with both in flight the old order was a deadlock (BE-97).
+    # The competitor now runs INTO accept while accept holds its locks, so
+    # the order of commits is known and each half can be asserted exactly.
+    accept, rival, waited = await _accept_with_competitor(
+        monkeypatch, appointee, school, _decline,
     )
-
-    assert response.status_code < 500, (
-        f"the race answered {response.status_code}: {response.text}"
+    assert not accept.deadlocked and not rival.deadlocked
+    assert waited, "the decline never met accept's claim -- no race was run"
+    assert accept.committed, accept.error
+    assert rival.committed, rival.error
+    # THE PAIR: the promotion stands AND the refusal refused nothing -- it
+    # found no offer once accept had committed, so it wrote no journal
+    # line. "Declined and promoted" are not both true.
+    assert await _membership(db_session, school, appointee) == (
+        CuratorMemberKind.MASTER.value
     )
-    kind = await _membership(db_session, school, appointee)
-    assert not (
-        rival == "won" and kind == CuratorMemberKind.MASTER.value
-    ), "declined the appointment and was promoted anyway"
-    if rival == "won":
-        assert kind == CuratorMemberKind.STUDENT.value, (
-            "the refusal won, so the membership must be untouched"
-        )
-    else:
-        assert kind == CuratorMemberKind.MASTER.value
-
+    assert not await _event_written(
+        db_session, school, CuratorGroupEventKind.MASTER_OFFER_DECLINED,
+    )
 
 @pytest.mark.asyncio
 async def test_two_simultaneous_accepts_give_one_204_and_one_404(
