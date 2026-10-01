@@ -88,6 +88,11 @@ async def _nested(session: AsyncSession = Depends(get_db_session)) -> AsyncSessi
 
 def _app(events: list[str]) -> FastAPI:
     app = FastAPI()
+    # Every session /write receives, the OBJECT itself: holding it here keeps
+    # it alive for as long as the app -- i.e. the whole test -- so two of them
+    # can be told apart by identity. See
+    # test_two_requests_in_a_row_commit_independently for why id() could not.
+    app.state.sessions = []
 
     @app.post("/write")
     async def write(
@@ -96,7 +101,7 @@ def _app(events: list[str]) -> FastAPI:
         target_id = UUID(request.query_params["t"])
         session.add(_row(target_id, request.query_params.get("label", "write")))
         await session.flush()
-        events.append(f"session:{id(session)}")
+        app.state.sessions.append(session)
         if request.query_params.get("fail") == "1":
             session.info["fail_commit"] = True
         if request.query_params.get("raise") == "1":
@@ -221,16 +226,31 @@ async def test_an_exception_after_the_first_mutation_rolls_it_back(
 async def test_two_requests_in_a_row_commit_independently(
     events: list[str], target: UUID, db_session: AsyncSession
 ) -> None:
-    """REPEAT: two requests -> two sessions, two commits, two rows."""
+    """REPEAT: two requests -> two sessions, two commits, two rows.
+
+    The sessions used to be told apart by the string "session:<id()>". That
+    was right in intent -- two requests must not share one session -- and
+    it held on most runs, but id() is an address that is unique only among
+    objects alive AT THE SAME TIME, and the first request's session is
+    already gone when the second begins (checked with a weak reference). The
+    allocator may then hand the second session the same address: on the
+    stand the two ids came out equal once in two runs on the same head,
+    with no code change between them. The test's colour was the
+    allocator's, not get_db_session's.
+
+    Now both session objects are held by the app until the test ends and
+    compared by identity. While both are alive their addresses cannot
+    coincide, so `is not` says exactly "two distinct sessions" and nothing
+    about memory reuse."""
     app = _app(events)
 
     first = await _call(app, events, "POST", "/write", f"t={target}&label=a")
     second = await _call(app, events, "POST", "/write", f"t={target}&label=b")
 
     assert first == second == [200]
-    sessions = [e for e in events if e.startswith("session:")]
+    sessions = app.state.sessions
     assert len(sessions) == 2
-    assert sessions[0] != sessions[1]
+    assert sessions[0] is not sessions[1]
     assert len(_commits(events)) == 2
     assert await _labels(db_session, target) == ["a", "b"]
 
