@@ -960,19 +960,56 @@ async def block_student(
     )
 
     # Cancel + refund FUTURE CONFIRMED bookings on this master's practices.
-    future_rows = (
-        await session.execute(
-            select(Booking, Practice)
-            .join(Practice, Booking.practice_id == Practice.id)
-            .where(
-                Practice.master_id == master_id,
-                Booking.user_id == student_user_id,
-                Booking.status == BookingStatus.CONFIRMED.value,
-                Practice.scheduled_at > now,
+    #
+    # BE-99 lock order: Practice (by id) -> Booking -> master_profiles --
+    # the order cancel_booking (T-13) and the master's practice cancel
+    # already use. Locking the bookings first was a deadlock, measured into
+    # 40P01 with two independent sessions: this path reaches the practice
+    # row twice AFTER its bookings -- refund_booking's INSERT into
+    # master_ledger takes FOR KEY SHARE on it (master_ledger.practice_id is
+    # a FK), and recalculate_participants takes FOR UPDATE on it. Crossed
+    # with the student's own cancel_booking of the same booking (Practice,
+    # then Booking), and with a second block of another student on a shared
+    # practice (KEY SHARE held by both, FOR UPDATE wanted by both). Id
+    # order keeps two blocks over several shared practices from crossing.
+    #
+    # Peek-then-lock-the-parent-first, as in cancel_booking: practice ids
+    # are read unlocked, those practices locked, and the bookings selected
+    # again under the lock with the same filters, restricted to the locked
+    # practices -- one that stopped qualifying in between just drops out.
+    filters = (
+        Practice.master_id == master_id,
+        Booking.user_id == student_user_id,
+        Booking.status == BookingStatus.CONFIRMED.value,
+        Practice.scheduled_at > now,
+    )
+    practice_ids = sorted(
+        (
+            await session.execute(
+                select(Booking.practice_id)
+                .join(Practice, Booking.practice_id == Practice.id)
+                .where(*filters)
+                .distinct()
             )
-            .with_for_update(of=Booking)
+        ).scalars().all()
+    )
+    future_rows = []
+    if practice_ids:
+        await session.execute(
+            select(Practice.id)
+            .where(Practice.id.in_(practice_ids))
+            .order_by(Practice.id)
+            .with_for_update()
         )
-    ).all()
+        future_rows = (
+            await session.execute(
+                select(Booking, Practice)
+                .join(Practice, Booking.practice_id == Practice.id)
+                .where(Practice.id.in_(practice_ids), *filters)
+                .order_by(Practice.id, Booking.id)
+                .with_for_update(of=Booking)
+            )
+        ).all()
 
     cancelled_count = 0
     touched_practice_ids: set[UUID] = set()
@@ -1001,8 +1038,11 @@ async def block_student(
     # 1. mechanics: cancel_registrant_for_booking makes one Zoom HTTP call
     #    per REGISTERED registrant (_request timeout 15 s, OAuth 10 s when
     #    the token is not cached), sequentially, inside this transaction --
-    #    the pooled connection and the FOR UPDATE locks on every booking
-    #    selected above are held for all N calls. N is every future
+    #    the pooled connection and the FOR UPDATE locks on every PRACTICE
+    #    and every booking selected above (BE-99 lock order) are held for
+    #    all N calls -- every other user's create_booking, cancel_booking
+    #    and confirm_waitlist on those practices waits out the whole
+    #    block, not only this student's rows. N is every future
     #    CONFIRMED booking of this student on this master's practices and
     #    is not bounded by code (a series alone yields up to
     #    practice_series_max_occurrences). Worst case is N x ~15 s.
@@ -1017,7 +1057,9 @@ async def block_student(
     #    cancel is unconfirmed (E21), but the call is the only thing that
     #    can invalidate the link on Zoom's side; changing
     #    cancel_registrant_for_booking's "never raises / our status is the
-    #    sole authority" contract -- cancel_booking relies on it as is.
+    #    sole authority" contract -- cancel_booking relies on it as is;
+    #    shortening the practice hold by locking the bookings first again
+    #    -- that is the deadlock BE-99 removed.
     from app.modules.zoom.service import cancel_registrant_for_booking
 
     for booking, practice in future_rows:
@@ -1039,7 +1081,9 @@ async def block_student(
         touched_practice_ids.add(practice.id)
         cancelled_count += 1
 
-    for practice_id in touched_practice_ids:
+    # Id order, as the practices were locked above. The rows are already
+    # held, so this takes nothing new -- it keeps the order honest.
+    for practice_id in sorted(touched_practice_ids):
         await recalculate_participants(practice_id, session)
 
     # Remove ACTIVE waitlist entries for THIS master's practices only --
