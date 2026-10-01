@@ -20,6 +20,11 @@
 #   5. Record audit event (M-01)
 #   6. Return updated profile
 #
+# REVOKE FLOW (lock order, BE-85):
+#   users FOR NO KEY UPDATE first, then MasterProfile FOR UPDATE
+#   (_load_verified_master) -- the order is written once, in
+#   users/service.py (ROW LOCK ON users).
+#
 # JSONB SAFETY:
 #   All mutations use copy.deepcopy() + set_jsonb() (P-03).
 #   NEVER assign profile.data = ... directly.
@@ -74,6 +79,7 @@ from app.modules.users.schemas import (
     credentials_without_admin_home,
     has_admin_home,
 )
+from app.modules.users.service import lock_user_row
 from app.modules.withdrawals.models import Withdrawal, WithdrawalStatus
 
 logger = structlog.get_logger()
@@ -233,10 +239,22 @@ async def _load_verified_master(
 ) -> tuple[User, MasterProfile]:
     """Load a VERIFIED master's (User, MasterProfile) for revoke/preview (A1).
 
-    for_update takes SELECT FOR UPDATE on the mutating path (P-07). Raises
-    NotFoundError if profile/user missing, ConflictError if not verified (revoke
-    only makes sense on a live capability — status=="verified").
+    for_update is the mutating path (P-07): the users row is taken FOR NO
+    KEY UPDATE FIRST, the profile FOR UPDATE after it -- the users ->
+    master_profiles order written in users/service.py (ROW LOCK ON users,
+    BE-85). It used to be the other way round, against make_master, which
+    takes the user and then writes the profile. Raises NotFoundError if
+    profile/user missing, ConflictError if not verified (revoke only makes
+    sense on a live capability — status=="verified").
     """
+    user: User | None = None
+    if for_update:
+        user = await lock_user_row(session, user_id)
+        if user is None:
+            # The profile's FK to users is ON DELETE CASCADE: without a
+            # users row there is no profile either, and that is the answer
+            # this path has always given for it.
+            raise NotFoundError("Master profile not found")
     stmt = select(MasterProfile).where(MasterProfile.user_id == user_id)
     if for_update:
         stmt = stmt.with_for_update()
@@ -246,7 +264,8 @@ async def _load_verified_master(
     status = (profile.data or {}).get("account", {}).get("status")
     if status != "verified":
         raise ConflictError("Master is not verified")
-    user = await session.get(User, user_id)
+    if user is None:
+        user = await session.get(User, user_id)
     if not user:
         raise NotFoundError("User not found")
     return user, profile
