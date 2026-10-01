@@ -613,18 +613,22 @@ async def cancel_registrant_for_booking(
     #    _request 15 s, OAuth 10 s uncached), the UPDATE below waits for it
     #    -- and the caller is holding its locks meanwhile: block_student its
     #    practices and bookings (BE-99 order), cancel_booking its practice
-    #    (T-13). Every other create_booking / cancel_booking /
+    #    (T-13), the master's practice cancel (payments/refund.py
+    #    refund_all_bookings_for_practice, BE-100) its practice -- every
+    #    occurrence of a series scope cancel at once -- and all their
+    #    bookings. Every other create_booking / cancel_booking /
     #    confirm_waitlist on those practices waits too. Only in that race:
     #    a pending / create_failed row being created at the very moment its
-    #    booking is cancelled. Worst case one create call, ~25 s.
+    #    booking is cancelled. Worst case one create call, ~25 s, per raced
+    #    row.
     # 2. status: acknowledged by design.
     # 3. task: none -- the owner accepted this residue at the BE-96 gate in
     #    place of the wide ceiling BE-96 removed; it reopens only on the
     #    trigger below.
-    # 4. unfreeze trigger: a cancel_booking or block_student request
-    #    observed waiting on a zoom_registrants row lock (pg_stat_activity
-    #    wait_event_type = 'Lock' on this UPDATE), or the poller's create
-    #    calls observed slower than a few seconds.
+    # 4. unfreeze trigger: a cancel_booking, block_student or practice
+    #    cancel request observed waiting on a zoom_registrants row lock
+    #    (pg_stat_activity wait_event_type = 'Lock' on this UPDATE), or the
+    #    poller's create calls observed slower than a few seconds.
     # 5. agreed fix shape: none agreed yet; the direction would be a create
     #    phase that does not hold the row lock through its HTTP call.
     # 6. rejected: NOWAIT / SKIP LOCKED on this row -- a skipped row stays
