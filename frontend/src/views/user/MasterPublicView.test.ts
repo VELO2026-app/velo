@@ -444,7 +444,10 @@ describe('MasterPublicView', () => {
       expect(emptyState()).toBeNull()
       expect(content()).not.toBeNull()
       expect(content()?.textContent).toContain('Анна Соколова')
-      expect(content()?.textContent).toContain('Верифицирован')
+      // Verified check is the small MasterCard-style disc now (icon-only --
+      // the text badge is gone; owner 2026-09-30).
+      expect(content()?.querySelector('.master-public__verified svg')).not.toBeNull()
+      expect(content()?.textContent).not.toContain('Верифицирован')
     })
 
     it('FIXED (B11 item 2, PROMPT №587): a 404 ApiResponseError shows "Мастер не найден" with the mapped table phrase, and NO retry action', async () => {

@@ -3,7 +3,7 @@
 
   Public master profile shown to users who tap "Подробнее" on a practice's
   master card (frame 4). Figma node 541:2065:
-    - Hero card: avatar, name, "check Верифицирован" badge + "N лет опыта" pill, bio
+    - Hero card: avatar, name + small verified check icon, "N лет опыта" pill, bio
     - Two stat cards: practices_count "Практик" / reviews_count "Отзывов"
     - "Методы" accordion (method chips)
     - "Ближайшие практики": upcoming practices by this master (reuses
@@ -88,13 +88,17 @@
       <VCard class="master-public__hero" padding="none">
         <VAvatar :url="profile.avatar_url ?? ''" :name="displayName" size="xl" />
 
-        <h1 class="master-public__name">{{ displayName }}</h1>
-
-        <div class="master-public__pills">
-          <span class="master-public__pill master-public__pill--verified">
-            <IconCheck :size="14" /> Верифицирован
+        <!-- The verified check is the small MasterCard-style disc (owner
+             2026-09-30): icon-only, no text badge. -->
+        <div class="master-public__name-row">
+          <h1 class="master-public__name">{{ displayName }}</h1>
+          <span class="master-public__verified" role="img" aria-label="Верифицирован">
+            <IconCheck :size="14" />
           </span>
-          <span v-if="profile.experience_years != null" class="master-public__pill">
+        </div>
+
+        <div v-if="profile.experience_years != null" class="master-public__pills">
+          <span class="master-public__pill">
             {{ profile.experience_years }} {{ pluralYears(profile.experience_years) }} опыта
           </span>
         </div>
@@ -425,6 +429,28 @@ watch(masterId, (id) => {
   margin: 0;
 }
 
+/* The verified check: the small MasterCard-style disc (owner 2026-09-30) --
+   icon-only, the «Верифицирован» text pill is gone. Same tokens. */
+.master-public__name-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.master-public__verified {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-full);
+  background: var(--velo-glass-teal-30);
+  color: var(--velo-teal-600);
+}
+
 .master-public__pills {
   display: flex;
   flex-wrap: wrap;
@@ -443,11 +469,6 @@ watch(masterId, (id) => {
   font-family: var(--font-body);
   font-size: var(--text-xs);
   color: var(--velo-text-secondary);
-}
-
-.master-public__pill--verified {
-  background: var(--velo-glass-teal-30);
-  color: var(--velo-teal-600);
 }
 
 .master-public__bio {
