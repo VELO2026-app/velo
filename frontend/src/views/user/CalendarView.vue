@@ -189,6 +189,7 @@ import { useCalendarStore } from '@/stores/calendar'
 import { VLoader, VEmptyState, VButton, VCard } from '@/components/ui'
 import WeekStrip from '@/components/shared/WeekStrip.vue'
 import { useFloatingHeader } from '@/components/layout/useFloatingHeader'
+import { historyHasBack } from '@/platform'
 import CalendarPracticeCard from '@/components/shared/CalendarPracticeCard.vue'
 import CalendarFilterModal from '@/components/shared/CalendarFilterModal.vue'
 import { IconCheck, IconClock } from '@/components/icons'
@@ -231,10 +232,20 @@ onUnmounted(() => {
 })
 
 function goBackToMaster(): void {
-  void router.push({
-    name: 'user-master-public',
-    params: { id: String(route.params.masterId) },
-  })
+  // RETURN semantics, not a push (owner bug 2026-09-30): the only in-app entry
+  // to this screen is the master's profile row, so history-back restores it
+  // WITH its query -- ?groupId keeps the curator context (analytics, CTA, the
+  // curator menu) alive. A pushed clone stripped the query (the profile's own
+  // router.back() then looped straight back into the calendar). A deep link
+  // has no in-app history to return to -- land on the profile instead.
+  if (historyHasBack()) {
+    router.back()
+  } else {
+    void router.push({
+      name: 'user-master-public',
+      params: { id: String(route.params.masterId) },
+    })
+  }
 }
 
 // Title + week strip float as an island (G-1): the date nav stays in place while

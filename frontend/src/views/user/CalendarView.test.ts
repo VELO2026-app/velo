@@ -116,10 +116,11 @@ vi.mock('@/api/practices')
 vi.mock('@/api/taxonomy')
 
 const push = vi.fn()
+const back = vi.fn()
 // Master mode (owner 2026-09-30): the stacked route carries :masterId.
 const routeState = { params: {} as Record<string, string> }
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push }),
+  useRouter: () => ({ push, back }),
   useRoute: () => ({ params: routeState.params }),
 }))
 
@@ -300,7 +301,11 @@ beforeEach(() => {
   useAuthStore().user = user()
 
   routeState.params = {}
+  // The back-control tests key off window.history.state.back (Vue Router's
+  // own marker) -- clear it so tests cannot leak state into each other.
+  window.history.replaceState(null, '')
   push.mockReset()
+  back.mockReset()
 })
 
 afterEach(() => {
@@ -689,14 +694,23 @@ describe('CalendarView', () => {
       expect(text()).not.toContain('Выбрать практики')
     })
 
-    it("the back control returns to the master's public profile", async () => {
+    it('the back control is a true RETURN: history-back when the profile is behind (keeps its ?groupId), profile-push on a deep link', async () => {
       mount({ masterId: 'm9' })
       await flush()
 
-      const back = host?.querySelector<HTMLButtonElement>('.calendar__back')
-      expect(back).not.toBeNull()
-      back!.click()
+      const backBtn = host?.querySelector<HTMLButtonElement>('.calendar__back')
+      expect(backBtn).not.toBeNull()
 
+      // Arrived from the profile (Vue Router marked the in-app origin): true
+      // back -- the profile re-enters WITH its query, curator context intact.
+      window.history.replaceState({ back: '/user/masters/m9?groupId=g1' }, '')
+      backBtn!.click()
+      expect(back).toHaveBeenCalledTimes(1)
+      expect(push).not.toHaveBeenCalled()
+
+      // Deep link (no in-app history): deterministic landing on the profile.
+      window.history.replaceState(null, '')
+      backBtn!.click()
       expect(push).toHaveBeenCalledWith({
         name: 'user-master-public',
         params: { id: 'm9' },
