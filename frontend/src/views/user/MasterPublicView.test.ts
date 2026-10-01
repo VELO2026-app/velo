@@ -201,9 +201,6 @@ function upcomingHeaderBtn(): HTMLButtonElement | null {
 function practiceCards(): HTMLElement[] {
   return Array.from(host?.querySelectorAll<HTMLElement>('.practice-list-card') ?? [])
 }
-function askBtn(): HTMLButtonElement | null {
-  return host?.querySelector<HTMLButtonElement>('.master-public__actions .v-btn') ?? null
-}
 function methodsHeaderBtn(): HTMLButtonElement | null {
   const headers = Array.from(
     host?.querySelectorAll<HTMLButtonElement>('.v-accordion__header') ?? [],
@@ -273,11 +270,14 @@ describe('MasterPublicView', () => {
       return flush()
     }
 
-    it('no ?groupId in the route: the plain public profile renders NO action menu', async () => {
+    it('no ?groupId: the menu carries only «Написать сообщение» -- no curator actions', async () => {
       mount()
       await flush()
+      await openMenu()
 
-      expect(menuButton()).toBeUndefined()
+      expect(menuItem('Написать сообщение')).toBeTruthy()
+      expect(menuItem('Изменить роль')).toBeUndefined()
+      expect(menuItem('Заблокировать')).toBeUndefined()
     })
 
     it('with ?groupId the «⋯» menu carries the three curator actions', async () => {
@@ -567,14 +567,30 @@ describe('MasterPublicView', () => {
   })
 
   // ===========================================================================
-  describe('ask-master (REAL since T2 / H-T2-UI: opens the DM and navigates)', () => {
-    it("the button is fully enabled (a different shape than BookingConfirmedView's disabled textarea+button)", async () => {
+  describe('ask-master (REAL since T2 / H-T2-UI: «Написать сообщение» in the ⋯ menu)', () => {
+    function openActionsMenu(): Promise<void> {
+      const trigger = Array.from(
+        document.body.querySelectorAll<HTMLButtonElement>('button') ?? [],
+      ).find((b) => b.getAttribute('aria-label') === 'Действия с мастером')
+      trigger?.click()
+      return flush()
+    }
+    function messageItem(): HTMLButtonElement | undefined {
+      return Array.from(
+        document.body.querySelectorAll<HTMLButtonElement>('.v-menu-item') ?? [],
+      ).find((b) => b.getAttribute('aria-label') === 'Написать сообщение')
+    }
+
+    it("the menu item is fully enabled (a different shape than BookingConfirmedView's disabled textarea+button)", async () => {
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
       mount()
       await flush()
+      await openActionsMenu()
 
-      expect(askBtn()?.disabled).toBe(false)
+      const item = messageItem()
+      expect(item).toBeTruthy()
+      expect(item?.disabled).toBe(false)
     })
 
     it('clicking it opens/joins the thread via POST /chats and navigates into it', async () => {
@@ -586,8 +602,9 @@ describe('MasterPublicView', () => {
       })
       mount()
       await flush()
+      await openActionsMenu()
 
-      askBtn()?.click()
+      messageItem()?.click()
       await flush()
 
       // The actor is the session's, server-side: the view only names WHICH
@@ -604,8 +621,9 @@ describe('MasterPublicView', () => {
       )
       mount()
       await flush()
+      await openActionsMenu()
 
-      askBtn()?.click()
+      messageItem()?.click()
       await flush()
 
       expect(toastError).toHaveBeenCalled()

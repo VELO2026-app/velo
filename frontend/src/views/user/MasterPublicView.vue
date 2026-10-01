@@ -8,8 +8,9 @@
     - "Методы" accordion (method chips)
     - "Ближайшие практики": upcoming practices by this master (reuses
       getPractices with master_id -- no new endpoint, no dedicated store)
-    - "Задать вопрос" button -> ask-master flow (frame 6, not built yet:
-      toast placeholder, V2)
+    - «⋯» меню: «Написать сообщение» -> ask-master flow (T2); в школьном
+      контексте куратора — ещё «Изменить роль» и «Заблокировать» (владелец,
+      2026-09-30; интерим — ноопы до BE-59/BE-79)
 
   Backend: GET /api/v1/masters/:id (MasterPublicResponse). Only verified
   masters resolve; 404 otherwise -> "Мастер не найден" (no retry, nothing to
@@ -23,13 +24,13 @@
 <template>
   <div class="master-public">
     <VHeader title="Мастер" show-back @back="router.back()">
-      <!-- Curator's school-context actions (owner ruling 2026-09-30): the
-           roster's master rows navigate here with the school marker, and the
-           menu appears only in that context -- the plain public profile (any
-           other entry) renders no actions. INTERIM: change-role and block
-           confirms are marked no-ops until their contracts land (BE-59
-           demote extension / BE-79). -->
-      <template v-if="schoolContext" #action>
+      <!-- The ⋯ menu: «Написать сообщение» for EVERY visitor (owner
+           2026-09-30 -- replaced the «Задать вопрос» button). In the
+           curator's school context (the roster's master rows navigate here
+           with ?groupId=) it also carries the curator's actions: «Изменить
+           роль» and «Заблокировать» (INTERIM: marked no-ops until their
+           contracts land -- BE-59 demote extension / BE-79). -->
+      <template #action>
         <VMenu aria-label="Действия с мастером">
           <template #default="{ close }">
             <VMenuItem
@@ -37,8 +38,14 @@
               ariaLabel="Написать сообщение"
               @click="onMessageClick(close)"
             />
-            <VMenuItem :icon="IconPen" ariaLabel="Изменить роль" @click="onRoleClick(close)" />
             <VMenuItem
+              v-if="schoolContext"
+              :icon="IconPen"
+              ariaLabel="Изменить роль"
+              @click="onRoleClick(close)"
+            />
+            <VMenuItem
+              v-if="schoolContext"
               :icon="IconLock"
               ariaLabel="Заблокировать"
               danger
@@ -124,11 +131,12 @@
       </VAccordion>
 
       <!-- Ближайшие практики: СВЁРНУТЫЙ по умолчанию аккордеон (operator
-           2026-06-05) — чтобы кнопка «Задать вопрос» была сразу видна, без
-           скролла мимо всех практик. Заголовок = белая плашка (консистентно с
-           «Методы»); тело прозрачное -> карточки лежат отдельными прямоугольниками
-           на фоне (не сливаются бело-на-белом). show-date: практики идут в разные
-           дни — карточка показывает дату под иконкой + время в мета-линии. -->
+           2026-06-05) — чтобы меню действий в шапке (и «Написать сообщение»)
+           были сразу видны, без скролла мимо всех практик. Заголовок = белая
+           плашка (консистентно с «Методы»); тело прозрачное -> карточки лежат
+           отдельными прямоугольниками на фоне (не сливаются бело-на-белом).
+           show-date: практики идут в разные дни — карточка показывает дату
+           под иконкой + время в мета-линии. -->
       <div v-if="upcoming.length" class="master-public__upcoming">
         <VAccordion title="Ближайшие практики">
           <div class="master-public__practices">
@@ -143,22 +151,10 @@
         </VAccordion>
       </div>
 
-      <!-- Ask a question -- REAL since T2 (H-T2-UI phase «а»): opens/joins
-           the eternal DM with this master (POST /api/v1/chats is create-or-
-           get, so tapping twice lands in the same thread) and navigates in.
-           The «frame 6» placeholder is retired -- this button IS its slot. -->
-      <div class="master-public__actions">
-        <VButton
-          variant="primary"
-          size="lg"
-          block
-          :loading="openingChat"
-          :disabled="openingChat"
-          @click="onAsk"
-        >
-          Задать вопрос
-        </VButton>
-      </div>
+      <!-- «Написать сообщение» (the ⋯ menu) replaced the «Задать вопрос»
+           button: opens/joins the eternal DM with this master (POST
+           /api/v1/chats is create-or-get, so tapping twice lands in the same
+           thread) and navigates in. -->
     </div>
 
     <!-- «Изменить роль» for a SCHOOL MASTER (owner ruling 2026-09-30). The
