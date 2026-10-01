@@ -45,6 +45,7 @@ from app.modules.zoom.models import (
     ZoomMeetingStatus,
     ZoomRegistrant,
     ZoomRegistrantRole,
+    ZoomRegistrantStatus,
 )
 from tests.helpers import login_user
 
@@ -359,6 +360,13 @@ async def test_diary_is_hidden_stays_false_after_zoom_driven_no_show(
     decided NO_SHOW via zoom_report with genuinely zero segments --
     exercising the real ingest_report_for_meeting code path, not a mocked
     shortcut.
+
+    BE-72 changed the fixture, not the property. The registrant used to
+    carry a zoom_registrant_id and no join_url; that row is now exactly the
+    shape the ingest refuses to judge (no link -> nothing to enter with ->
+    the proxy decides), so it no longer reached the Zoom-driven NO_SHOW this
+    test is about. It now carries the link a registered student has, which
+    is what a "Zoom-driven" no-show presupposes.
     """
     master_id = await _make_master(client, db_session, 79304)
     practice = await _create_practice(
@@ -372,6 +380,8 @@ async def test_diary_is_hidden_stays_false_after_zoom_driven_no_show(
             booking_id=booking.id, role=ZoomRegistrantRole.STUDENT.value,
             registration_email=f"user-{booking.user_id}@users.velo.invalid",
             zoom_registrant_id="zoom-reg-1",
+            join_url="https://zoom.us/w/123456?tk=reg-1",
+            status=ZoomRegistrantStatus.REGISTERED.value,
         )
     )
     await db_session.flush()

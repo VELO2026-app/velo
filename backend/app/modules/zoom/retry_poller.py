@@ -47,7 +47,11 @@ from app.modules.zoom.models import (
     ZoomRegistrant,
     ZoomRegistrantStatus,
 )
-from app.modules.zoom.service import ensure_host_registrant, ensure_shared_registrant
+from app.modules.zoom.service import (
+    ensure_host_registrant,
+    ensure_shared_registrant,
+    log_if_link_unavailable,
+)
 from app.modules.zoom.zoom_client import (
     ZoomAPIError,
     create_meeting,
@@ -404,6 +408,13 @@ async def _retry_registrant_one(registrant_id) -> bool:
 
             await _attempt_registrant_create(row, zoom_meeting, session)
             await session.commit()
+            # BE-72: this attempt may be the one that left the row without a
+            # link for good -- the cap reached, or a success Zoom answered
+            # without a join_url. After the commit (expire_on_commit=False,
+            # core/database.py), so a commit that fails logs nothing and the
+            # retried attempt is the one counted; and after the attempt, so
+            # the 429 branch, which returns early, passes the same line.
+            log_if_link_unavailable(row)
             return True
     except Exception:
         logger.exception(

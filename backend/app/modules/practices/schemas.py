@@ -968,5 +968,6 @@ class ZoomEntryResolveResponse(BaseModel):
 
     kind: Literal[
         "personal", "host", "guest", "pending", "failed", "cancelled",
+        "unavailable",
     ]
     url: str | None = None

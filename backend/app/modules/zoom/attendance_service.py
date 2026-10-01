@@ -83,11 +83,10 @@ def _normalized_matchable_email(email: str | None) -> str | None:
 def attendance_threshold_seconds(duration_minutes: int) -> int:
     """The attendance bar for a practice: 50% of ITS OWN duration, not a
     fixed global minute count (owner decision, PROMPT №585 -- replaces the
-    old settings.zoom_attendance_threshold_minutes=10 constant, which is
-    now vestigial, see config.py). Integer floor division on minutes, THEN
-    converted to seconds -- matches the owner's mapping exactly: 30->15,
-    45->22, 60->30, 75->37, 90->45, 120->60 (test_zoom_attendance_ladder.py
-    asserts all six literally). Total over the whole validated
+    old fixed 10-minute setting, since deleted, BE-72). Integer floor
+    division on minutes, THEN converted to seconds -- matches the owner's
+    mapping exactly: 30->15, 45->22, 60->30, 75->37, 90->45, 120->60
+    (test_zoom_attendance_ladder.py asserts all six literally). Total over the whole validated
     practice_min/max_duration_minutes range (5..480, config.py) -- no floor,
     no cap, deliberately (that was explicitly deferred by the owner)."""
     return (duration_minutes // 2) * 60
@@ -187,10 +186,15 @@ async def ingest_report_for_meeting(
 
     Two kinds of decision, in this order:
       1. Via Zoom: every CONFIRMED booking a STUDENT registrant of this
-         meeting points at -- including ones with zero matched segments, a
-         genuine no-show decided as authoritatively as an attended one.
-      2. Via the legacy proxy: every CONFIRMED booking still left, the ones
-         no registrant row points at.
+         meeting points at, when that registrant has both a
+         zoom_registrant_id and a join_url -- including ones with zero
+         matched segments, a genuine no-show decided as authoritatively as
+         an attended one.
+      2. Via the legacy proxy: every CONFIRMED booking still left -- the
+         ones no registrant row points at, and (BE-72) the ones whose
+         registrant lacks either field: Zoom could not attribute a segment
+         to him, or he had no link to enter with, so his zero seconds back
+         nothing.
 
     WHAT THIS DOCSTRING USED TO GET WRONG (BE-41). It said step 1 alone
     decided "every still-CONFIRMED STUDENT booking on this meeting". True
@@ -290,6 +294,7 @@ async def ingest_report_for_meeting(
     threshold_seconds = attendance_threshold_seconds(practice.duration_minutes)
 
     outcomes: list[tuple[UUID, UUID, str]] = []
+    without_link_booking_ids: list[UUID] = []
     for r in registrants:
         if r.role != ZoomRegistrantRole.STUDENT.value or r.booking_id is None:
             continue
@@ -305,6 +310,32 @@ async def ingest_report_for_meeting(
             # cancel committing between this read and our flush would
             # otherwise be silently reverted by the unconditional status
             # write below.
+            continue
+
+        # BE-72 (owner ruling): no Zoom verdict for a registrant Zoom could
+        # not have seen. Without zoom_registrant_id the report cannot be
+        # attributed to him; without join_url he had nothing to enter with.
+        # Either way zero seconds here is not evidence of absence, and a
+        # zoom_report no_show would state something the report cannot back.
+        # The booking stays CONFIRMED -- locked above, so nothing changes it
+        # before our commit -- and step 2 decides it through the same proxy
+        # as a booking no registrant points at (BE-41), with no new outcome.
+        #
+        # KNOWN CEILING -- a person who could not enter is recorded no_show.
+        # Mechanics: such a person has no join_url, so PracticeLiveView never
+        #   calls /join and joined_at stays NULL; the proxy then rests on the
+        #   PRE check-in alone, and without one writes no_show (legacy_proxy).
+        # Status: acknowledged by design.
+        # Task: none -- the owner chose no new booking outcome for BE-72.
+        # Thaw trigger: zoom_report_registrant_without_link_proxied appears
+        #   in the stand's logs with a no_show among the bookings it names.
+        # Fix: a separate booking outcome for "could not be judged" (not
+        #   counted as attended or no_show), with every BookingStatus reader
+        #   deciding how to show it.
+        # Rejected: ATTENDED without any presence evidence -- the same
+        #   "verdict nothing backs" this branch removes, from the other side.
+        if not r.zoom_registrant_id or not r.join_url:
+            without_link_booking_ids.append(booking.id)
             continue
 
         # Raw-seconds comparison, no rounding of our own on top of Zoom's
@@ -335,8 +366,21 @@ async def ingest_report_for_meeting(
         )
 
     # Step 2 -- the bound. BEFORE the timestamp: once report_ingested_at is
-    # set the poller never selects this practice again.
-    unregistered = await _decide_remaining_via_proxy(practice, session)
+    # set the poller never selects this practice again. It decides both
+    # kinds left CONFIRMED: bookings no registrant points at, and (BE-72)
+    # bookings step 1 skipped for want of a link. Counted apart, so neither
+    # log names the other kind: the skipped ones are locked by step 1 and
+    # cannot leave CONFIRMED before this call.
+    proxied = await _decide_remaining_via_proxy(practice, session)
+    without_link = len(without_link_booking_ids)
+    unregistered = proxied - without_link
+    if without_link:
+        logger.warning(
+            "zoom_report_registrant_without_link_proxied",
+            practice_id=str(practice.id),
+            bookings_decided=without_link,
+            booking_ids=[str(b) for b in without_link_booking_ids],
+        )
     if unregistered:
         logger.info(
             "zoom_report_unregistered_bookings_decided",
@@ -351,6 +395,7 @@ async def ingest_report_for_meeting(
         segments=len(matches),
         bookings_decided=len(outcomes),
         unregistered_bookings_decided=unregistered,
+        without_link_bookings_decided=without_link,
     )
     return True
 

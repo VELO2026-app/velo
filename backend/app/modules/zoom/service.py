@@ -97,6 +97,82 @@ def _registration_email_for(user: User) -> str:
     return f"user-{user.id}@users.velo.invalid"
 
 
+# ---------------------------------------------------------------------------
+# BE-72: "this registrant will not get a link"
+# ---------------------------------------------------------------------------
+#
+# ONE predicate, read by every surface that tells a person whether a link is
+# coming: the entry resolver (resolve_zoom_entry, UNAVAILABLE), the booking
+# lists (bookings/service.py, zoom_registrant_link_unavailable) and the
+# transition log below. Three copies of the condition would drift apart on
+# the first edit; this is why there is one.
+#
+# Nothing retries a registered row: the retry poller claims only pending and
+# create_failed rows, and the only other writer of join_url is the reschedule
+# re-fetch (sync_meeting_reschedule), which a practice may never have. So a
+# registered row without a link stays that way, and so does a create_failed
+# row at the cap (owner ruling, BE-72: five attempts, no more -- a link that
+# has not arrived by then arrives too late to matter).
+#
+# "No link" is a FALSY join_url, not a NULL one: an empty string opens
+# nothing either.
+
+LINK_UNAVAILABLE_RETRY_CAP = "retry_cap"
+LINK_UNAVAILABLE_REGISTERED_WITHOUT_JOIN_URL = "registered_without_join_url"
+
+
+def link_unavailable_reason(row: ZoomRegistrant) -> str | None:
+    """Why this registrant will not get a join link, or None if it has one
+    or one may still come.
+
+    None for: a row with a link; a pending row (the meeting is not active
+    yet, or the first attempt is queued); a create_failed row still under
+    settings.zoom_registrant_create_max_retries (the poller will try again);
+    a cancelled row (nobody is waiting for its link).
+    """
+    if row.join_url:
+        return None
+    if row.status == ZoomRegistrantStatus.REGISTERED.value:
+        return LINK_UNAVAILABLE_REGISTERED_WITHOUT_JOIN_URL
+    if (
+        row.status == ZoomRegistrantStatus.CREATE_FAILED.value
+        and row.retry_count >= settings.zoom_registrant_create_max_retries
+    ):
+        return LINK_UNAVAILABLE_RETRY_CAP
+    return None
+
+
+def log_if_link_unavailable(row: ZoomRegistrant) -> None:
+    """Emit zoom_registrant_link_unavailable when `row` has just been left
+    without a link -- the countable record of every such registrant.
+
+    Called by the writers of a registrant's creation outcome, right after
+    they write it (create_registrant_for_booking, ensure_host_registrant,
+    retry_poller._retry_registrant_one), and never by a reader: the resolver
+    runs on every screen view, so an event there would count views, not
+    registrants. Each writer reaches a row's terminal state once -- a
+    registered row is never rewritten by them, and a row at the cap is no
+    longer claimed by the poller -- so the event fires once per registrant.
+
+    The two booking/publish-time writers run inside their caller's
+    transaction and log before it commits (P-01: no commit here). If that
+    transaction rolls back, the event names a row that never landed; the
+    poller logs after its own commit and has no such gap.
+    """
+    reason = link_unavailable_reason(row)
+    if reason is None:
+        return
+    logger.warning(
+        "zoom_registrant_link_unavailable",
+        registrant_id=str(row.id),
+        zoom_meeting_id=str(row.zoom_meeting_id),
+        booking_id=str(row.booking_id) if row.booking_id else None,
+        role=row.role,
+        reason=reason,
+        retry_count=row.retry_count,
+    )
+
+
 async def create_meeting_for_practice(
     practice: Practice,
     session: AsyncSession,
@@ -276,6 +352,8 @@ async def ensure_host_registrant(
             "zoom_host_registrant_unexpected_error",
             practice_id=str(practice.id),
         )
+
+    log_if_link_unavailable(row)
 
 
 def _shared_registration_email_for(zoom_meeting: ZoomMeeting) -> str:
@@ -490,6 +568,7 @@ async def create_registrant_for_booking(
             "zoom_registrant_unexpected_error", booking_id=str(booking.id),
         )
 
+    log_if_link_unavailable(row)
     return row
 
 
@@ -1089,6 +1168,12 @@ class ZoomEntryKind(enum.StrEnum):
     PENDING  -- honest "being prepared".
     FAILED   -- meeting creation is permanently failed; waiting is pointless
                 until someone acts.
+    UNAVAILABLE -- the meeting exists and the person holds a live booking,
+                but their own registrant will not get a link
+                (link_unavailable_reason). Not FAILED: there IS a meeting,
+                and "ask the master to retry" would be a lie -- nothing
+                retries a registrant past this point. Not PENDING: nothing
+                is being prepared any more (BE-72).
     CANCELLED -- the practice itself is cancelled.
     """
 
@@ -1097,6 +1182,7 @@ class ZoomEntryKind(enum.StrEnum):
     GUEST = "guest"
     PENDING = "pending"
     FAILED = "failed"
+    UNAVAILABLE = "unavailable"
     CANCELLED = "cancelled"
 
 
@@ -1178,11 +1264,13 @@ async def resolve_zoom_entry(
              retry poller claims those alongside create_failed).
       4. the owner -> HOST. Reached only with an ACTIVE meeting, so the
          "Начать" button cannot land on nothing BY CONSTRUCTION.
-      5. a live booking -> PERSONAL when the registrant link exists,
-         PENDING when it does not (Zoom does not always return a tokenized
-         join_url on create -- see ZoomRegistrant.join_url; the retry
-         poller fills it in later). PENDING bookings resolve to PENDING
-         too, see _LIVE_BOOKING_STATUSES.
+      5. a live booking -> PERSONAL when the registrant link exists;
+         UNAVAILABLE when link_unavailable_reason says none will come (Zoom
+         does not always return a tokenized join_url on create -- see
+         ZoomRegistrant.join_url -- and the retry poller never revisits a
+         registered row; or the poller gave up at its cap); PENDING
+         otherwise, while a link may still come. PENDING bookings resolve
+         to PENDING too, see _LIVE_BOOKING_STATUSES.
       6. no live booking -> GUEST.
 
     AUDIENCE IS DELIBERATELY NOT CHECKED HERE, and two code reviews have
@@ -1250,22 +1338,25 @@ async def resolve_zoom_entry(
             from app.modules.practices.service import (
                 ZOOM_VISIBLE_BOOKING_STATUSES,
             )
-            join_url = None
+            registrant = None
             if booking.status in ZOOM_VISIBLE_BOOKING_STATUSES:
-                join_url = (
+                registrant = (
                     await session.execute(
-                        select(ZoomRegistrant.join_url).where(
+                        select(ZoomRegistrant).where(
                             ZoomRegistrant.zoom_meeting_id == meeting.id,
                             ZoomRegistrant.booking_id == booking.id,
                             ZoomRegistrant.status
                             != ZoomRegistrantStatus.CANCELLED.value,
-                            ZoomRegistrant.join_url.is_not(None),
                         )
                     )
                 ).scalars().first()
-            if join_url:
+            if registrant is not None and registrant.join_url:
                 return ZoomEntryResolution(
-                    kind=ZoomEntryKind.PERSONAL, url=join_url,
+                    kind=ZoomEntryKind.PERSONAL, url=registrant.join_url,
+                )
+            if registrant is not None and link_unavailable_reason(registrant):
+                return ZoomEntryResolution(
+                    kind=ZoomEntryKind.UNAVAILABLE, url=None,
                 )
             return ZoomEntryResolution(kind=ZoomEntryKind.PENDING, url=None)
 

@@ -775,19 +775,23 @@ async def test_booked_student_gets_their_own_personal_link(
 
 
 @pytest.mark.asyncio
-async def test_confirmed_booking_without_a_join_url_is_pending_not_guest(
+async def test_confirmed_booking_without_a_join_url_is_unavailable_not_guest(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     """⭐ THE DEFECT THIS FEATURE WOULD OTHERWISE RECREATE INSIDE ITSELF.
 
     Zoom does not always return a tokenized join_url when the registrant is
-    created (documented on ZoomRegistrant.join_url; the retry poller fills it
-    in later). A naive "no personal link -> hand out the guest link" would
-    send this CONFIRMED student in as an unmatchable guest -- and
-    attendance_service writes NO_SHOW for exactly this shape: a CONFIRMED
-    booking whose registrant collected zero seconds.
+    created (documented on ZoomRegistrant.join_url). A naive "no personal
+    link -> hand out the guest link" would send this CONFIRMED student in as
+    an unmatchable guest -- the shape the attendance ingest used to write
+    NO_SHOW for (BE-72 now hands it to the proxy instead).
 
-    Honest waiting is the only correct answer here.
+    Renamed and tightened by BE-72. The old assertion, kind == "pending",
+    was right about what matters most -- NOT guest, NO url -- and wrong about
+    the reason it gave: "the retry poller fills it in later". The poller
+    claims only pending and create_failed rows and never revisits a
+    registered one, so "being prepared" promised a link nothing was going to
+    produce. The state is now named for what it is.
     """
     master = await _make_verified_master(client, db_session, telegram_id=89852)
     student = await login_user(client, telegram_id=89853, first_name="Ученик")
@@ -805,7 +809,7 @@ async def test_confirmed_booking_without_a_join_url_is_pending_not_guest(
 
     body = await _resolve(client, practice_id, student["session_token"])
 
-    assert body["kind"] == "pending"
+    assert body["kind"] == "unavailable"
     assert body["url"] is None
 
 
