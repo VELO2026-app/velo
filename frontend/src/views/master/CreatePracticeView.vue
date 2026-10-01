@@ -345,7 +345,7 @@
             <PracticeAudiencePicker
               v-model:kind="form.audience_kind"
               v-model:group-ids="form.audience_group_ids"
-              v-model:curator-group-ids="form.audience_curator_group_ids"
+              v-model:curator-group-id="form.audience_curator_group_id"
               :groups="customGroups"
               :schools="eligibleSchools"
               :error="errors.audience_group_ids"
@@ -590,7 +590,7 @@ const catalog = ref<TaxonomyListResponse | null>(null)
 // P5 (PROMPT №594): the master's own custom groups (loaded in onMounted below).
 const customGroups = ref<GroupListItem[]>([])
 // FE-24 (GT P5): schools this master may target (relation curator or master
-// -- the two the backend validates curator_group_ids against). Loaded from
+// -- the two the backend validates curator_group_id against). Loaded from
 // /curator-groups/mine; empty for a master in no school, which simply keeps
 // the fourth audience option out of the radio.
 const eligibleSchools = ref<AudienceSchoolOption[]>([])
@@ -722,10 +722,12 @@ const form = reactive({
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
   audience_kind: 'public' as PracticeAudienceKind,
   audience_group_ids: [],
-  // FE-24 (GT P5): the schools multi-select's ids -- sent ONLY when
-  // audience_kind === 'curator_groups' (group_ids and curator_group_ids are
-  // mutually exclusive on the wire, a 422 otherwise).
-  audience_curator_group_ids: [],
+  // BE-74: the ONE school the practice will belong to (a practice belongs to
+  // exactly one school, and it cannot be changed after creation) -- sent
+  // ONLY when audience_kind === 'curator_groups'; null otherwise. The
+  // backend refuses a school next to 'students'/'groups' (400), and this
+  // screen offers no "public practice of a school" (owner Q2).
+  audience_curator_group_id: null as string | null,
   description: '',
   what_to_prepare: '',
   contraindications: '',
@@ -1067,10 +1069,10 @@ function validate(): boolean {
     errors.audience_group_ids = 'Выберите хотя бы одну группу'
     ok = false
   }
-  // FE-24 (GT P5): the mirror check for schools -- curator_group_ids must be
-  // non-empty when the kind is 'curator_groups' (same backend rule).
-  if (form.audience_kind === 'curator_groups' && form.audience_curator_group_ids.length === 0) {
-    errors.audience_group_ids = 'Выберите хотя бы одну школу'
+  // FE-24 (GT P5) / BE-74: the mirror check for schools -- curator_group_id
+  // is required when the kind is 'curator_groups' (same backend rule).
+  if (form.audience_kind === 'curator_groups' && form.audience_curator_group_id === null) {
+    errors.audience_group_ids = 'Выберите школу'
     ok = false
   }
   return ok
@@ -1158,13 +1160,13 @@ async function submit(): Promise<void> {
       currency: 'eur',
       // E3: when recurring, send the series spec; non-recurring → null.
       recurrence: form.is_recurring ? buildRecurrence() : null,
-      // P5 (PROMPT №594) / FE-24 (GT P5): audience_kind + the ONE target
-      // array the chosen kind reads (mutually exclusive on the wire -- a
-      // 422 otherwise; the unused one is always sent as an empty array).
+      // P5 (PROMPT №594) / FE-24 (GT P5) / BE-74: audience_kind + the target
+      // the chosen kind reads. group_ids is sent as an empty array for any
+      // other kind; curator_group_id is null for any other kind.
       audience_kind: form.audience_kind,
       group_ids: form.audience_kind === 'groups' ? form.audience_group_ids : [],
-      curator_group_ids:
-        form.audience_kind === 'curator_groups' ? form.audience_curator_group_ids : [],
+      curator_group_id:
+        form.audience_kind === 'curator_groups' ? form.audience_curator_group_id : null,
     })
 
     // A4 V6 (PROMPT №572): `deduplicated` is the EXPLICIT backend signal that

@@ -15,7 +15,8 @@
 # ownership check answered everything. Now there are two ways in and the
 # interesting cases are the ones BETWEEN them: a master who is a curator of
 # the wrong school, a curator whose practice is not a school practice, a
-# curator of one of two target schools. Each of those is a separate test
+# curator of a school the master also teaches in that does not own the
+# practice (BE-74: a practice belongs to one school). Each is a separate test
 # rather than a parameter, because each fails for a DIFFERENT reason and a
 # parametrised failure would not say which.
 #
@@ -54,7 +55,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import AuditLog
@@ -70,7 +71,6 @@ from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import (
     AudienceKind,
     Practice,
-    PracticeAudienceCuratorGroup,
     PracticeStatus,
     PracticeType,
 )
@@ -84,6 +84,7 @@ from tests.helpers import (
 
 CANCEL_URL = "/api/v1/practices/{practice_id}/cancel"
 BOOKINGS_URL = "/api/v1/bookings"
+PRACTICES_URL = "/api/v1/practices"
 
 _TID_MIN = 67200
 _TID_MAX = 67399
@@ -163,7 +164,7 @@ async def _create_practice(
     master_id: str,
     *,
     audience_kind: str = AudienceKind.CURATOR_GROUPS.value,
-    schools: list | None = None,
+    school: CuratorGroup | None = None,
     status: str = PracticeStatus.SCHEDULED.value,
     hours_from_now: float = 48,
     parent_practice_id: UUID | None = None,
@@ -185,49 +186,43 @@ async def _create_practice(
         currency="eur",
         audience_kind=audience_kind,
         parent_practice_id=parent_practice_id,
+        curator_group_id=school.id if school is not None else None,
     )
     db_session.add(practice)
     await db_session.flush()
-    for school in schools or []:
-        db_session.add(
-            PracticeAudienceCuratorGroup(
-                practice_id=practice.id, group_id=school.id,
+    # THE MASTER JOINS THE SCHOOL, and this is not decoration.
+    #
+    # POST /practices refuses to create in a school the master does not
+    # belong to -- _usable_curator_group_or_400, practices/service.py
+    # (BE-74). So a school practice whose master is an outsider
+    # is a state the API cannot produce, and building one here by hand
+    # would be testing a shape that does not exist.
+    #
+    # It also has a consequence that is invisible until something
+    # books: _is_curator_group_audience_clause requires FOUR things at
+    # once -- the owning school, a verified curator, the VIEWER in the
+    # school, and _master_in_curator_group_clause, i.e. the master
+    # being the curator or a kind='master' member with a verified
+    # profile. Miss the last one and the practice has no audience at
+    # all: nobody can book it, and the 403 says not_in_audience while
+    # pointing at the booker.
+    if school is not None and school.curator_user_id != practice.master_id:
+        existing = (
+            await db_session.execute(
+                select(CuratorGroupMember.id).where(
+                    CuratorGroupMember.group_id == school.id,
+                    CuratorGroupMember.user_id == practice.master_id,
+                )
             )
-        )
-        # THE MASTER JOINS THE SCHOOL, and this is not decoration.
-        #
-        # POST /practices refuses to publish into a school the master does
-        # not belong to -- _member_curator_group_ids_or_400,
-        # practices/service.py: "curator_group_ids must be active schools
-        # you belong to". So a school practice whose master is an outsider
-        # is a state the API cannot produce, and building one here by hand
-        # would be testing a shape that does not exist.
-        #
-        # It also has a consequence that is invisible until something
-        # books: _is_curator_group_audience_clause requires FOUR things at
-        # once -- an audience row, a verified curator, the VIEWER in the
-        # school, and _master_in_curator_group_clause, i.e. the master
-        # being the curator or a kind='master' member with a verified
-        # profile. Miss the last one and the practice has no audience at
-        # all: nobody can book it, and the 403 says not_in_audience while
-        # pointing at the booker.
-        if school.curator_user_id != practice.master_id:
-            existing = (
-                await db_session.execute(
-                    select(CuratorGroupMember.id).where(
-                        CuratorGroupMember.group_id == school.id,
-                        CuratorGroupMember.user_id == practice.master_id,
-                    )
+        ).scalar_one_or_none()
+        if existing is None:
+            db_session.add(
+                CuratorGroupMember(
+                    group_id=school.id,
+                    user_id=practice.master_id,
+                    kind=CuratorMemberKind.MASTER.value,
                 )
-            ).scalar_one_or_none()
-            if existing is None:
-                db_session.add(
-                    CuratorGroupMember(
-                        group_id=school.id,
-                        user_id=practice.master_id,
-                        kind=CuratorMemberKind.MASTER.value,
-                    )
-                )
+            )
     await db_session.flush()
     await db_session.commit()
     return practice
@@ -244,6 +239,32 @@ async def _join_school(
     await db_session.flush()
     await db_session.commit()
     return row
+
+
+async def _create_in_two_schools(
+    client: AsyncClient, author: dict, first: CuratorGroup, second: CuratorGroup,
+):
+    """POST a practice naming TWO schools -- the shape BE-74 refuses."""
+    return await client.post(
+        PRACTICES_URL,
+        json={
+            "practice_type": "live",
+            "direction": "meditation",
+            "difficulty": "beginner",
+            "title": "Две школы",
+            "description": "x",
+            "scheduled_at": (datetime.now(UTC) + timedelta(days=8)).isoformat(),
+            "duration_minutes": 60,
+            "timezone": "UTC",
+            "max_participants": 20,
+            "is_free": True,
+            "price_cents": 0,
+            "currency": "eur",
+            "audience_kind": "curator_groups",
+            "curator_group_id": [str(first.id), str(second.id)],
+        },
+        headers=auth_headers(author["session_token"]),
+    )
 
 
 async def _book(client: AsyncClient, auth: dict, practice: Practice) -> str:
@@ -326,7 +347,7 @@ async def test_curator_cancels_a_practice_run_by_another_master(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     school = await _school(db_session, curator["user"]["id"])
     practice = await _create_practice(
-        db_session, master["user"]["id"], schools=[school],
+        db_session, master["user"]["id"], school=school,
     )
 
     resp = await client.post(
@@ -350,7 +371,7 @@ async def test_master_still_cancels_his_own_school_practice(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     school = await _school(db_session, curator["user"]["id"])
     practice = await _create_practice(
-        db_session, master["user"]["id"], schools=[school],
+        db_session, master["user"]["id"], school=school,
     )
 
     resp = await client.post(
@@ -361,13 +382,21 @@ async def test_master_still_cancels_his_own_school_practice(
 
 
 @pytest.mark.asyncio
-async def test_curator_of_one_of_two_target_schools_may_cancel(
+async def test_a_second_school_is_refused_and_the_owning_curator_may_cancel(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """A practice can be published to several schools; one curator is enough.
+    """A practice belongs to ONE school; its curator may cancel, the other
+    curator -- of a school the same master also teaches in -- may not.
 
-    The second school is not decoration -- without it the test would pass
-    against an implementation that only ever looks at a single audience row.
+    Before BE-74 this test published a practice to two schools and asserted
+    that the curator of either was enough -- right while a practice could
+    target several, and the second school kept an implementation honest
+    that only looked at one audience row. The owner ruling of 2026-10-01 (a
+    practice belongs to exactly one school) made that practice impossible
+    to build. The precise statement now: the two-school create is refused,
+    and with the master in both schools, the right follows the OWNER --
+    asserted on both sides, refusal first, so the 404 is not a practice
+    already cancelled.
     """
     master = await _make_verified_master(client, db_session, _TID_MASTER)
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
@@ -376,15 +405,30 @@ async def test_curator_of_one_of_two_target_schools_may_cancel(
     )
     mine = await _school(db_session, curator["user"]["id"], name="Моя")
     theirs = await _school(db_session, other["user"]["id"], name="Чужая")
-    practice = await _create_practice(
-        db_session, master["user"]["id"], schools=[theirs, mine],
+    await _join_school(
+        db_session, theirs.id, master["user"]["id"], CuratorMemberKind.MASTER,
     )
+
+    refused = await _create_in_two_schools(client, master, theirs, mine)
+    assert refused.status_code == 422, refused.text
+
+    practice = await _create_practice(
+        db_session, master["user"]["id"], school=mine,
+    )
+
+    baseline = await _missing_practice_code(client, other["session_token"])
+    stranger = await client.post(
+        CANCEL_URL.format(practice_id=practice.id),
+        headers=auth_headers(other["session_token"]),
+    )
+    assert stranger.status_code == 404, stranger.text
+    assert stranger.json()["error"] == baseline
 
     resp = await client.post(
         CANCEL_URL.format(practice_id=practice.id),
         headers=auth_headers(curator["session_token"]),
     )
-    assert resp.status_code == 200
+    assert resp.status_code == 200, resp.text
 
 
 # ===========================================================================
@@ -411,7 +455,7 @@ async def test_curator_of_a_different_school_gets_the_missing_practice_answer(
     school = await _school(db_session, curator["user"]["id"])
     await _school(db_session, outsider["user"]["id"], name="Другая")
     practice = await _create_practice(
-        db_session, master["user"]["id"], schools=[school],
+        db_session, master["user"]["id"], school=school,
     )
 
     baseline = await _missing_practice_code(
@@ -440,8 +484,7 @@ async def test_public_practice_of_the_same_master_is_not_the_curators(
     await _school(db_session, curator["user"]["id"])
     practice = await _create_practice(
         db_session, master["user"]["id"],
-        audience_kind=AudienceKind.PUBLIC.value, schools=[],
-    )
+        audience_kind=AudienceKind.PUBLIC.value, )
 
     baseline = await _missing_practice_code(client, curator["session_token"])
     resp = await client.post(
@@ -453,26 +496,45 @@ async def test_public_practice_of_the_same_master_is_not_the_curators(
 
 
 @pytest.mark.asyncio
-async def test_school_practice_with_no_audience_rows_is_nobodys(
+async def test_a_practice_whose_school_was_deleted_is_nobodys(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """audience_kind says school, but no school is addressed.
+    """The school is gone; its former curator holds no right over the
+    practice.
 
-    Reachable in production: deleting a school cascades its audience rows
-    away and leaves the practice's audience_kind untouched. The right must
-    come from the ROWS, not from the kind -- if it came from the kind, every
-    curator in the system would inherit this practice.
+    Before BE-74 this test built a school-audience practice with no audience
+    rows -- reachable then: deleting a school cascaded the rows away and
+    left audience_kind untouched -- and asserted that the right came from
+    the ROWS, not from the kind. BE-74 made that state unreachable: deleting
+    a school clears the owner column, the trigger turns a 'curator_groups'
+    practice public in the same statement, and the CHECK forbids
+    'curator_groups' without a school. The reachable successor is this one:
+    the practice survives the deletion as a public practice with no school
+    (asserted, so the 404 is not a practice that is simply gone), and the
+    curator of the deleted school is answered like a stranger.
     """
     master = await _make_verified_master(client, db_session, _TID_MASTER)
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
-    await _school(db_session, curator["user"]["id"])
+    school = await _school(db_session, curator["user"]["id"])
     practice = await _create_practice(
-        db_session, master["user"]["id"], schools=[],
+        db_session, master["user"]["id"], school=school,
     )
+    practice_id = practice.id
+    await db_session.execute(
+        delete(CuratorGroup).where(CuratorGroup.id == school.id),
+    )
+    await db_session.commit()
+
+    survived = (await fresh_execute(
+        select(Practice).where(Practice.id == practice_id),
+    )).scalar_one()
+    assert survived.status == PracticeStatus.SCHEDULED.value
+    assert survived.audience_kind == AudienceKind.PUBLIC.value
+    assert survived.curator_group_id is None
 
     baseline = await _missing_practice_code(client, curator["session_token"])
     resp = await client.post(
-        CANCEL_URL.format(practice_id=practice.id),
+        CANCEL_URL.format(practice_id=practice_id),
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 404
@@ -491,7 +553,7 @@ async def test_master_with_no_school_at_all_gets_the_same_answer(
     )
     school = await _school(db_session, curator["user"]["id"])
     practice = await _create_practice(
-        db_session, master["user"]["id"], schools=[school],
+        db_session, master["user"]["id"], school=school,
     )
 
     baseline = await _missing_practice_code(client, stranger["session_token"])
@@ -520,7 +582,7 @@ async def test_a_school_member_who_is_not_a_master_is_stopped_at_the_door(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     school = await _school(db_session, curator["user"]["id"])
     practice = await _create_practice(
-        db_session, master["user"]["id"], schools=[school],
+        db_session, master["user"]["id"], school=school,
     )
     student = await _make_plain_user(client, _TID_STUDENT)
 
@@ -546,7 +608,7 @@ async def test_curator_who_lost_verification_loses_the_lever(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     school = await _school(db_session, curator["user"]["id"])
     practice = await _create_practice(
-        db_session, master["user"]["id"], schools=[school],
+        db_session, master["user"]["id"], school=school,
     )
     await _unverify(db_session, curator["user"]["id"])
 
@@ -582,11 +644,11 @@ async def test_curator_is_refused_the_series_cascade(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     school = await _school(db_session, curator["user"]["id"])
     root = await _create_practice(
-        db_session, master["user"]["id"], schools=[school],
+        db_session, master["user"]["id"], school=school,
         hours_from_now=48,
     )
     later = await _create_practice(
-        db_session, master["user"]["id"], schools=[school],
+        db_session, master["user"]["id"], school=school,
         hours_from_now=72, parent_practice_id=root.id,
     )
 
@@ -612,7 +674,7 @@ async def test_curator_cannot_reach_another_masters_series_at_all(
     """The C2 hole, from the curator's side.
 
     The setup that matters: the series root belongs to ANOTHER MASTER and is
-    published to the curator's school, so the curator is genuinely entitled
+    belongs to the curator's school, so the curator is genuinely entitled
     to cancel that one occurrence. An attacker then points their own,
     unrelated practice at that root -- parent_practice_id is client-writable
     -- and hopes a curator's cascade walks the tree and refunds it.
@@ -633,12 +695,12 @@ async def test_curator_cannot_reach_another_masters_series_at_all(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     school = await _school(db_session, curator["user"]["id"])
     root = await _create_practice(
-        db_session, victim["user"]["id"], schools=[school],
+        db_session, victim["user"]["id"], school=school,
         hours_from_now=24, title="Практика школы",
     )
     root_id = root.id
     forged = await _create_practice(
-        db_session, attacker["user"]["id"], schools=[],
+        db_session, attacker["user"]["id"],
         audience_kind=AudienceKind.PUBLIC.value, hours_from_now=72,
         parent_practice_id=root_id, title="Подкладка",
     )
@@ -677,7 +739,7 @@ async def test_audit_says_curator_not_master(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     school = await _school(db_session, curator["user"]["id"])
     practice = await _create_practice(
-        db_session, master["user"]["id"], schools=[school],
+        db_session, master["user"]["id"], school=school,
     )
 
     resp = await client.post(
@@ -695,7 +757,7 @@ async def test_audit_says_curator_not_master(
 
     row = next(r for r in rows if r.event == "practice_cancelled_by_curator")
     assert row.actor_id == UUID(curator["user"]["id"])
-    assert row.data["group_ids"] == [str(school.id)]
+    assert row.data["group_id"] == str(school.id)
 
 
 @pytest.mark.asyncio
@@ -716,10 +778,10 @@ async def test_the_master_is_told_and_never_tells_himself(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     school = await _school(db_session, curator["user"]["id"])
     by_curator = await _create_practice(
-        db_session, master["user"]["id"], schools=[school], title="A",
+        db_session, master["user"]["id"], school=school, title="A",
     )
     by_master = await _create_practice(
-        db_session, master["user"]["id"], schools=[school], title="B",
+        db_session, master["user"]["id"], school=school, title="B",
     )
 
     await client.post(
@@ -752,7 +814,7 @@ async def test_participants_are_still_told_and_the_count_did_not_move(
     booked = await _make_plain_user(client, _TID_BOOKED)
     school = await _school(db_session, curator["user"]["id"])
     practice = await _create_practice(
-        db_session, master["user"]["id"], schools=[school],
+        db_session, master["user"]["id"], school=school,
     )
     await _join_school(db_session, school.id, booked["user"]["id"])
     await _book(client, booked, practice)
@@ -783,7 +845,7 @@ async def test_the_school_journal_records_it_in_the_same_transaction(
     )
     school = await _school(db_session, curator["user"]["id"])
     practice = await _create_practice(
-        db_session, master["user"]["id"], schools=[school],
+        db_session, master["user"]["id"], school=school,
     )
 
     resp = await client.post(
@@ -818,7 +880,7 @@ async def test_a_refused_cancellation_leaves_no_journal_row(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     school = await _school(db_session, curator["user"]["id"])
     root = await _create_practice(
-        db_session, master["user"]["id"], schools=[school],
+        db_session, master["user"]["id"], school=school,
     )
 
     resp = await client.post(
@@ -837,16 +899,19 @@ async def test_a_refused_cancellation_leaves_no_journal_row(
 
 
 @pytest.mark.asyncio
-async def test_only_the_actors_school_gets_a_journal_row(
+async def test_a_second_school_is_refused_and_only_the_owner_gets_a_journal_row(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """The known gap, pinned as a decision rather than left to be found.
+    """The journal row goes to the one school that owns the practice.
 
-    A practice published to two schools is cancelled by the curator of one.
-    The other school loses the practice with nothing in its journal saying
-    so -- because it did not do it, and writing somebody else's action into
-    its history would be worse than the silence. This test exists so that a
-    future change to that rule is a deliberate edit rather than a surprise.
+    Before BE-74 this test pinned a known gap: a practice published to two
+    schools and cancelled by the curator of one left nothing in the other's
+    journal -- right while a practice could target several. The owner
+    ruling of 2026-10-01 (a practice belongs to exactly one school) closed
+    the gap by construction: there is no other school that "loses" the
+    practice. The precise statement now: the two-school create is refused,
+    and the cancellation writes exactly one row into the owning school's
+    journal and none into a school the same master also teaches in.
     """
     master = await _make_verified_master(client, db_session, _TID_MASTER)
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
@@ -855,14 +920,22 @@ async def test_only_the_actors_school_gets_a_journal_row(
     )
     mine = await _school(db_session, curator["user"]["id"], name="Моя")
     theirs = await _school(db_session, other["user"]["id"], name="Чужая")
-    practice = await _create_practice(
-        db_session, master["user"]["id"], schools=[mine, theirs],
+    await _join_school(
+        db_session, theirs.id, master["user"]["id"], CuratorMemberKind.MASTER,
     )
 
-    await client.post(
+    refused = await _create_in_two_schools(client, master, mine, theirs)
+    assert refused.status_code == 422, refused.text
+
+    practice = await _create_practice(
+        db_session, master["user"]["id"], school=mine,
+    )
+
+    resp = await client.post(
         CANCEL_URL.format(practice_id=practice.id),
         headers=auth_headers(curator["session_token"]),
     )
+    assert resp.status_code == 200, resp.text
 
     mine_rows = (await fresh_execute(
         select(CuratorGroupEvent).where(CuratorGroupEvent.group_id == mine.id),
@@ -898,13 +971,13 @@ async def test_scope_axes_empty_repeat_and_short(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     school = await _school(db_session, curator["user"]["id"])
     empty = await _create_practice(
-        db_session, master["user"]["id"], schools=[school], title="empty",
+        db_session, master["user"]["id"], school=school, title="empty",
     )
     repeat = await _create_practice(
-        db_session, master["user"]["id"], schools=[school], title="repeat",
+        db_session, master["user"]["id"], school=school, title="repeat",
     )
     short = await _create_practice(
-        db_session, master["user"]["id"], schools=[school], title="short",
+        db_session, master["user"]["id"], school=school, title="short",
     )
     token = auth_headers(curator["session_token"])
 
@@ -944,7 +1017,7 @@ async def test_practice_id_axes_repeat_and_missing(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     school = await _school(db_session, curator["user"]["id"])
     practice = await _create_practice(
-        db_session, master["user"]["id"], schools=[school],
+        db_session, master["user"]["id"], school=school,
     )
     token = auth_headers(curator["session_token"])
 
@@ -978,7 +1051,7 @@ async def test_a_completed_school_practice_is_refused_by_status(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     school = await _school(db_session, curator["user"]["id"])
     practice = await _create_practice(
-        db_session, master["user"]["id"], schools=[school],
+        db_session, master["user"]["id"], school=school,
         status=PracticeStatus.COMPLETED.value, hours_from_now=-48,
     )
 
@@ -995,33 +1068,34 @@ async def test_a_completed_school_practice_is_refused_by_status(
 
 
 @pytest.mark.asyncio
-async def test_two_schools_of_one_curator_are_named_in_a_fixed_order(
+async def test_two_schools_of_one_curator_are_refused_and_the_one_is_named(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """The master reads one string, and it must not depend on the run.
+    """The master reads one string: the name of the one owning school.
 
-    THE SAME DEFECT AS BE-30's ANNOUNCEMENT, in this file: the query that
-    fetches the curator's schools ordered by CuratorGroup.id, a UUID. That
-    is stable inside one run and random between them, so the master could
-    be told "Утро, Вечер" for one cancellation and "Вечер, Утро" for the
-    next. The publication side turned the suite red a week after shipping
-    green; this one had no test at all and would have waited for a person
-    to notice.
-
-    The names are now ordered alphabetically, with the id kept as the
-    tie-break: school names are unique only WITHIN one curator (UNIQUE
-    (curator_user_id, name)), and a practice reaches schools of different
-    curators, so the name alone still leaves ties.
-
-    Asserted as the exact string rather than as a set: a set would pass
-    under the old ordering, which is the whole thing being fixed.
+    Before BE-74 this test pinned the ORDER of several school names in the
+    notification ("Вечер, Утро", alphabetical with the id as tie-break) --
+    right while a practice could reach several schools of one curator, and
+    a UUID ordering made the string change between runs. The owner ruling
+    of 2026-10-01 (a practice belongs to exactly one school) made the list
+    impossible: there is nothing left to order. The precise statement now:
+    the two-school create is refused, and the cancellation names exactly
+    the owning school -- asserted as the exact string, so a joined list or
+    the other school's name cannot pass.
     """
     master = await _make_verified_master(client, db_session, _TID_MASTER)
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     morning = await _school(db_session, curator["user"]["id"], name="Утро")
     evening = await _school(db_session, curator["user"]["id"], name="Вечер")
+    await _join_school(
+        db_session, evening.id, master["user"]["id"], CuratorMemberKind.MASTER,
+    )
+
+    refused = await _create_in_two_schools(client, master, morning, evening)
+    assert refused.status_code == 422, refused.text
+
     practice = await _create_practice(
-        db_session, master["user"]["id"], schools=[morning, evening],
+        db_session, master["user"]["id"], school=morning,
     )
 
     resp = await client.post(
@@ -1041,4 +1115,4 @@ async def test_two_schools_of_one_curator_are_named_in_a_fixed_order(
         )
     ).scalars().all()
     assert len(rows) == 1
-    assert rows[0].payload["action_data"]["group_name"] == "Вечер, Утро"
+    assert rows[0].payload["action_data"]["group_name"] == "Утро"

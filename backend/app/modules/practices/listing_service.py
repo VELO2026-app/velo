@@ -212,6 +212,7 @@ async def list_public_practices(
     offset: int = 0,
     master_id: UUID | None = None,
     master_ids: list[UUID] | None = None,
+    curator_group_id: UUID | None = None,
     practice_type: list[str] | None = None,
     direction: list[str] | None = None,
     difficulty: list[str] | None = None,
@@ -241,7 +242,9 @@ async def list_public_practices(
     master_id filters to ONE master; master_ids to a SET of them (internal
     parameter, not exposed by the public route). An empty master_ids list
     means "nobody", not "everybody" -- it yields an empty page. Passing both
-    ANDs them.
+    ANDs them. curator_group_id (internal too, BE-74) keeps only the
+    practices that BELONG TO that school; ANDed with the rest like any
+    other filter.
 
     Multi-value semantics (Calendar "Выбрать практики"):
       - Within one facet, values are OR-ed (.in_()).
@@ -299,6 +302,16 @@ async def list_public_practices(
     # behaviour is stated so nobody has to guess later.
     if master_ids is not None:
         filters.append(Practice.master_id.in_(master_ids))
+
+    # curator_group_id (BE-74): the school's page shows the practices that
+    # belong to the school, not every practice of its masters -- a public
+    # practice a master of the school made in the general section is not
+    # the school's, and neither is one of another school. The caller also
+    # passes master_ids, and the two answer different questions: this one
+    # "is it the school's", that one "is its master still in the school".
+    # Not exposed by the public route, for master_ids' reason.
+    if curator_group_id is not None:
+        filters.append(Practice.curator_group_id == curator_group_id)
 
     # practice_type: multi-select (OR within facet).
     if practice_type:

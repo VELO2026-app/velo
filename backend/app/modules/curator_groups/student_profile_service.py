@@ -21,8 +21,9 @@
 #
 # WHAT IS COUNTED, and why it cannot double-count:
 #   - a practice belongs to the school by practice_in_curator_group_clause,
-#     an EXISTS -- so a practice addressed to several schools is one row,
-#     not one row per audience entry;
+#     an equality on the practice's own owner column (BE-74) -- one practice
+#     is one row, and it belongs to one school at most, public ones
+#     included;
 #   - a person holds at most one non-cancelled booking per practice
 #     (uq_booking_practice_user_active, a partial unique index WHERE status
 #     != 'cancelled'), and 'attended' is not cancelled -- so at most one

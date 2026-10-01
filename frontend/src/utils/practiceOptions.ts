@@ -31,7 +31,7 @@ export const AUDIENCE_OPTIONS: { label: string; value: PracticeAudienceKind }[] 
 
 /** FE-24: the option list with the fourth kind added when the master
  *  belongs to at least one school (relation curator or master -- the two
- *  relations the backend validates curator_group_ids against). Zero
+ *  relations the backend validates curator_group_id against). Zero
  *  eligible schools -> the exact three options above, unchanged. */
 export function audienceOptions(
   hasSchools: boolean,

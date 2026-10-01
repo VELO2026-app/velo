@@ -696,11 +696,12 @@ describe('CreatePracticeView', () => {
         currency: 'eur',
         recurrence: null,
         // P5 (PROMPT №594): untouched «Для кого практика» -> the default.
-        // FE-24 (GT P5): curator_group_ids always ships too -- an empty
-        // array for every non-school kind, the exact mirror of group_ids.
+        // BE-74: curator_group_id always ships too -- null for every
+        // non-school kind (it was an empty curator_group_ids array until a
+        // practice came to belong to exactly one school).
         audience_kind: 'public',
         group_ids: [],
-        curator_group_ids: [],
+        curator_group_id: null,
       })
     })
 
@@ -1697,7 +1698,7 @@ describe('CreatePracticeView -- «Школы» audience (FE-24 / GT P5)', () => 
     expect(button('Школы')).toBeUndefined()
   })
 
-  it('with eligible schools: option appears, student-relation schools are filtered out, and a picked chip ships curator_group_ids', async () => {
+  it('with eligible schools: option appears, student-relation schools are filtered out, and the picked chip ships curator_group_id', async () => {
     vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
       items: [
         school('sc1', 'Тихая школа', 'curator'),
@@ -1716,15 +1717,42 @@ describe('CreatePracticeView -- «Школы» audience (FE-24 / GT P5)', () => 
     const chips = Array.from(host?.querySelectorAll<HTMLElement>('.v-chip') ?? [])
     expect(chips.map((c) => c.textContent?.trim())).toEqual(['Тихая школа', 'Утренняя школа'])
 
+    // BE-74: two taps on two schools leave ONE school -- the second
+    // replaces the first (it used to ship both, ['sc1', 'sc2'] was a valid
+    // body while a practice could target several schools).
     chips[0]?.click()
+    await flush()
+    chips[1]?.click()
     await flush()
     submitForm()
     await flush()
 
     expect(sentBody().audience_kind).toBe('curator_groups')
-    expect(sentBody().curator_group_ids).toEqual(['sc1'])
-    // Mutually exclusive on the wire: the unused array ships empty.
+    expect(sentBody().curator_group_id).toBe('sc2')
+    // The unused target ships empty.
     expect(sentBody().group_ids).toEqual([])
+  })
+
+  it('a school picked and then abandoned for «Публичная» does not ship (curator_group_id is null)', async () => {
+    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+      items: [school('sc1', 'Тихая школа', 'curator')],
+    })
+    mount()
+    await flush()
+    await fillMinimalForm()
+
+    button('Школы')?.click()
+    await flush()
+    host?.querySelector<HTMLElement>('.v-chip')?.click()
+    await flush()
+    button('Публичная')?.click()
+    await flush()
+    submitForm()
+    await flush()
+
+    expect(vi.mocked(practicesApi.createPractice)).toHaveBeenCalledTimes(1)
+    expect(sentBody().audience_kind).toBe('public')
+    expect(sentBody().curator_group_id).toBeNull()
   })
 
   it('«Школы» with nothing picked blocks submit with the field error', async () => {
@@ -1741,7 +1769,7 @@ describe('CreatePracticeView -- «Школы» audience (FE-24 / GT P5)', () => 
     await flush()
 
     expect(vi.mocked(practicesApi.createPractice)).not.toHaveBeenCalled()
-    expect(text()).toContain('Выберите хотя бы одну школу')
+    expect(text()).toContain('Выберите школу')
   })
 })
 

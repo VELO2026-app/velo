@@ -94,7 +94,7 @@ from app.modules.practices.schemas import (
 )
 from app.modules.practices.service import (
     create_practice,
-    curator_group_names_for_practice,
+    curator_group_name_for_practice,
     delete_practice,
     get_practice_detail,
     group_names_for_practice,
@@ -276,7 +276,7 @@ async def create_practice_endpoint(
     # have a real status).
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
     audience_group_names = await group_names_for_practice(practice, session)
-    audience_curator_group_names = await curator_group_names_for_practice(
+    curator_group_name = await curator_group_name_for_practice(
         practice, session,
     )
     audience_unavailable = await curator_group_audience_is_dark(
@@ -289,7 +289,7 @@ async def create_practice_endpoint(
         zoom_meeting_status=zoom_meeting_status,
         deduplicated=deduplicated,
         audience_group_names=audience_group_names,
-        audience_curator_group_names=audience_curator_group_names,
+        curator_group_name=curator_group_name,
         audience_unavailable=audience_unavailable,
     )
 
@@ -623,7 +623,7 @@ async def update_practice_endpoint(
     # meeting) sees "готовится" immediately instead of a stale None.
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
     audience_group_names = await group_names_for_practice(practice, session)
-    audience_curator_group_names = await curator_group_names_for_practice(
+    curator_group_name = await curator_group_name_for_practice(
         practice, session,
     )
     audience_unavailable = await curator_group_audience_is_dark(
@@ -635,7 +635,7 @@ async def update_practice_endpoint(
         zoom_public_link_visible=True,
         zoom_meeting_status=zoom_meeting_status,
         audience_group_names=audience_group_names,
-        audience_curator_group_names=audience_curator_group_names,
+        curator_group_name=curator_group_name,
         audience_unavailable=audience_unavailable,
     )
 
@@ -667,7 +667,6 @@ async def preview_audience_change_endpoint(
         body.audience_kind.value,
         body.group_ids,
         session,
-        curator_group_ids=body.curator_group_ids,
     )
     return AudiencePreviewResponse(stranded_count=stranded_count)
 

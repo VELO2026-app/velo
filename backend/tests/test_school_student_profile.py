@@ -51,12 +51,13 @@ from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import (
     AudienceKind,
     Practice,
-    PracticeAudienceCuratorGroup,
     PracticeStatus,
     PracticeType,
 )
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
+
+PRACTICES_URL = "/api/v1/practices"
 
 PROFILE_URL = (
     "/api/v1/masters/me/curator-groups/{group_id}/students/{user_id}"
@@ -156,7 +157,7 @@ async def _join(
 async def _practice(
     db_session: AsyncSession,
     master: dict,
-    schools: list[CuratorGroup],
+    school: CuratorGroup | None,
     *,
     title: str = "Утренняя медитация",
     minutes: int = 60,
@@ -176,17 +177,11 @@ async def _practice(
         price_cents=0,
         currency="eur",
         audience_kind=(
-            AudienceKind.CURATOR_GROUPS.value if schools else None
+            AudienceKind.CURATOR_GROUPS.value if school is not None else None
         ),
+        curator_group_id=school.id if school is not None else None,
     )
     db_session.add(practice)
-    await db_session.flush()
-    for school in schools:
-        db_session.add(
-            PracticeAudienceCuratorGroup(
-                practice_id=practice.id, group_id=school.id,
-            )
-        )
     await db_session.flush()
     await db_session.commit()
     return practice
@@ -315,7 +310,7 @@ async def test_the_curator_and_a_master_of_the_school_see_the_same_thing(
     await _join(db_session, school, master, CuratorMemberKind.MASTER)
     await _join(db_session, school, student, CuratorMemberKind.STUDENT)
 
-    practice = await _practice(db_session, master, [school], minutes=90)
+    practice = await _practice(db_session, master, school, minutes=90)
     booking = await _attended(db_session, practice, student)
     await _checkin(db_session, practice, student, booking, mood=8)
     await _feedback(db_session, practice, student, booking, rating=10)
@@ -351,7 +346,7 @@ async def test_the_scores_are_raw_numbers_and_nothing_else(
     school = await _school(db_session, curator)
     await _join(db_session, school, student, CuratorMemberKind.STUDENT)
 
-    practice = await _practice(db_session, curator, [school])
+    practice = await _practice(db_session, curator, school)
     booking = await _attended(db_session, practice, student)
     await _checkin(db_session, practice, student, booking, mood=3)
     await _feedback(db_session, practice, student, booking, rating=7)
@@ -421,10 +416,10 @@ async def test_another_schools_practices_are_not_counted(
     await _join(db_session, theirs, student, CuratorMemberKind.STUDENT)
 
     here = await _practice(
-        db_session, curator, [mine], title="Моя практика", minutes=60,
+        db_session, curator, mine, title="Моя практика", minutes=60,
     )
     there = await _practice(
-        db_session, outsider, [theirs], title="Чужая практика", minutes=120,
+        db_session, outsider, theirs, title="Чужая практика", minutes=120,
     )
     booking_here = await _attended(db_session, here, student)
     booking_there = await _attended(db_session, there, student)
@@ -468,13 +463,13 @@ async def test_only_attended_bookings_count_and_cancelled_checkins_drop(
     await _join(db_session, school, student, CuratorMemberKind.STUDENT)
 
     attended = await _practice(
-        db_session, curator, [school], title="Посещённая", minutes=60,
+        db_session, curator, school, title="Посещённая", minutes=60,
     )
     confirmed = await _practice(
-        db_session, curator, [school], title="Только записан", minutes=60,
+        db_session, curator, school, title="Только записан", minutes=60,
     )
     cancelled = await _practice(
-        db_session, curator, [school], title="Отменённая бронь", minutes=60,
+        db_session, curator, school, title="Отменённая бронь", minutes=60,
     )
 
     booking = await _attended(db_session, attended, student)
@@ -505,31 +500,60 @@ async def test_only_attended_bookings_count_and_cancelled_checkins_drop(
 
 
 @pytest.mark.asyncio
-async def test_a_practice_addressed_to_two_schools_counts_once(
+async def test_a_second_school_is_refused_and_the_one_school_counts_once(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """Two audience rows, one practice, one hour.
+    """A practice names ONE school: two are refused; one counts once.
 
-    The belonging test is an EXISTS rather than a join, and this is the
-    assertion that fails the day somebody rewrites it as one: joining the
-    audience table would count this practice twice and double the hours
-    with it.
+    Before BE-74 this test built a practice with two audience rows and
+    asserted it counted once -- right while a practice could be addressed
+    to several schools, where joining the audience table would have doubled
+    the hours. The owner ruling of 2026-10-01 (a practice belongs to exactly
+    one school, a scalar column) made that practice impossible to build;
+    the precise statement now is the refusal at the door, paired with the
+    one-school practice counted once in its school and not at all in the
+    curator's other school -- so a profile that counted nothing could not
+    pass.
     """
     curator = await _master(client, db_session, _TID_CURATOR)
     student = await _student(client, _TID_STUDENT)
     morning = await _school(db_session, curator, name="Утро")
     evening = await _school(db_session, curator, name="Вечер")
     await _join(db_session, morning, student, CuratorMemberKind.STUDENT)
+    await _join(db_session, evening, student, CuratorMemberKind.STUDENT)
 
-    practice = await _practice(
-        db_session, curator, [morning, evening], minutes=60,
+    refused = await client.post(
+        PRACTICES_URL,
+        json={
+            "practice_type": "live",
+            "direction": "meditation",
+            "difficulty": "beginner",
+            "title": "Две школы",
+            "description": "x",
+            "scheduled_at": (datetime.now(UTC) + timedelta(days=8)).isoformat(),
+            "duration_minutes": 60,
+            "timezone": "UTC",
+            "max_participants": 20,
+            "is_free": True,
+            "price_cents": 0,
+            "currency": "eur",
+            "audience_kind": "curator_groups",
+            "curator_group_id": [str(morning.id), str(evening.id)],
+        },
+        headers=auth_headers(curator["session_token"]),
     )
+    assert refused.status_code == 422, refused.text
+
+    practice = await _practice(db_session, curator, morning, minutes=60)
     await _attended(db_session, practice, student)
 
-    profile = await _profile(client, curator, morning, student)
+    in_morning = await _profile(client, curator, morning, student)
+    in_evening = await _profile(client, curator, evening, student)
 
-    assert profile["practices_count"] == 1
-    assert profile["hours"] == 1.0
+    assert in_morning["practices_count"] == 1
+    assert in_morning["hours"] == 1.0
+    assert in_evening["practices_count"] == 0
+    assert in_evening["hours"] == 0
 
 
 @pytest.mark.asyncio
@@ -555,7 +579,7 @@ async def test_a_departed_masters_practice_stays_in_the_schools_history(
     )
     await _join(db_session, school, student, CuratorMemberKind.STUDENT)
 
-    practice = await _practice(db_session, master, [school], minutes=60)
+    practice = await _practice(db_session, master, school, minutes=60)
     booking = await _attended(db_session, practice, student)
     await _checkin(db_session, practice, student, booking, mood=7)
 

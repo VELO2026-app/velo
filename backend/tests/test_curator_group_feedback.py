@@ -21,7 +21,8 @@
 # stops checking anything. The pair is the test; the absence alone is not.
 #
 # TWO PREDICATES THAT DISAGREE ON PURPOSE. A practice belongs to a school
-# for as long as its audience row exists (history), while it reaches the
+# for as long as its curator_group_id names it (history; BE-74 -- the
+# owner column, set at creation and never moved), while it reaches the
 # school's feed only while its master is still a member (state). Owner
 # ruling, 2026-09-10. The pair of tests around
 # _teacher_leaves is the one that pins the disagreement; if somebody ever
@@ -60,7 +61,6 @@ from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import (
     AudienceKind,
     Practice,
-    PracticeAudienceCuratorGroup,
     PracticeStatus,
     PracticeType,
 )
@@ -180,7 +180,7 @@ async def _leave_school(
 async def _practice(
     db_session: AsyncSession,
     master: dict,
-    schools: list[CuratorGroup] | None = None,
+    school: CuratorGroup | None,
     *,
     title: str = "Утренняя практика",
     status: str = PracticeStatus.SCHEDULED.value,
@@ -200,16 +200,17 @@ async def _practice(
         is_free=True,
         price_cents=0,
         currency="eur",
-        audience_kind=AudienceKind.CURATOR_GROUPS.value,
+        # BE-74: a school practice is the school's by its own column; a
+        # practice without one is a practice of the general section --
+        # public, the only shape a master builds outside any school.
+        audience_kind=(
+            AudienceKind.CURATOR_GROUPS.value
+            if school is not None
+            else AudienceKind.PUBLIC.value
+        ),
+        curator_group_id=school.id if school is not None else None,
     )
     db_session.add(practice)
-    await db_session.flush()
-    for school in schools or []:
-        db_session.add(
-            PracticeAudienceCuratorGroup(
-                practice_id=practice.id, group_id=school.id,
-            )
-        )
     await db_session.flush()
     await db_session.commit()
     return practice
@@ -372,10 +373,10 @@ async def test_the_curator_reads_practices_they_did_not_run(
     await _join_school(db_session, school, teacher, CuratorMemberKind.MASTER)
 
     mine = await _practice(
-        db_session, curator, [school], title="Моя практика",
+        db_session, curator, school, title="Моя практика",
     )
     theirs = await _practice(
-        db_session, teacher, [school], title="Чужая практика",
+        db_session, teacher, school, title="Чужая практика",
     )
     await _attended(db_session, mine, student)
     await _attended(db_session, theirs, student)
@@ -403,7 +404,7 @@ async def test_the_student_is_named(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     student = await _make_student(client, _TID_STUDENT, first_name="Аня")
     school = await _school(db_session, curator)
-    practice = await _practice(db_session, curator, [school])
+    practice = await _practice(db_session, curator, school)
     await _attended(db_session, practice, student)
 
     assert [i["student_name"] for i in
@@ -425,8 +426,9 @@ async def test_a_departed_masters_practice_stays_in_the_schools_feedback(
 
     Owner ruling, 2026-09-10: masters can be invited for a season and
     collaboration between schools is normal, so a practice belongs to the
-    school it was addressed to for good. Before this ruling the school's
-    history would have been rewritten by somebody else's resignation.
+    school it was created in for good (BE-74: the owner column). Before
+    this ruling the school's history would have been rewritten by somebody
+    else's resignation.
 
     The BEFORE half is asserted too: without it, a feed that was empty all
     along would pass the AFTER half.
@@ -439,7 +441,7 @@ async def test_a_departed_masters_practice_stays_in_the_schools_feedback(
         db_session, school, teacher, CuratorMemberKind.MASTER,
     )
     practice = await _practice(
-        db_session, teacher, [school], title="Практика ушедшего",
+        db_session, teacher, school, title="Практика ушедшего",
     )
     await _attended(db_session, practice, student)
 
@@ -479,7 +481,7 @@ async def test_the_same_practice_leaves_the_school_feed_and_its_students(
     )
     await _join_school(db_session, school, watcher, CuratorMemberKind.STUDENT)
     practice = await _practice(
-        db_session, teacher, [school], title="Практика ушедшего",
+        db_session, teacher, school, title="Практика ушедшего",
     )
 
     assert "Практика ушедшего" in await _feed_titles(client, watcher)
@@ -501,14 +503,46 @@ async def test_the_same_practice_leaves_the_school_feed_and_its_students(
     assert gone.status_code == 404, gone.text
 
 
+async def _create_in_two_schools(
+    client: AsyncClient, author: dict, first: CuratorGroup, second: CuratorGroup,
+):
+    """POST a practice naming TWO schools -- the shape BE-74 refuses."""
+    return await client.post(
+        PRACTICES_URL,
+        json={
+            "practice_type": "live",
+            "direction": "meditation",
+            "difficulty": "beginner",
+            "title": "Две школы",
+            "description": "x",
+            "scheduled_at": (datetime.now(UTC) + timedelta(days=8)).isoformat(),
+            "duration_minutes": 60,
+            "timezone": "UTC",
+            "max_participants": 20,
+            "is_free": True,
+            "price_cents": 0,
+            "currency": "eur",
+            "audience_kind": "curator_groups",
+            "curator_group_id": [str(first.id), str(second.id)],
+        },
+        headers=auth_headers(author["session_token"]),
+    )
+
+
 @pytest.mark.asyncio
-async def test_a_practice_addressed_to_two_schools_reaches_both_curators(
+async def test_a_second_school_is_refused_and_only_the_owner_curator_sees_it(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """One practice, two schools, two curators -- and each sees it once.
+    """One practice, ONE school: two are refused, and the other curator
+    does not see the practice of a school that is not theirs.
 
-    Nothing is split between them: the same check-in is the history of both
-    schools, because the master pointed the practice at both.
+    Before BE-74 this test asserted that a practice addressed to two schools
+    reached both curators -- right while a practice could target several.
+    The owner ruling of 2026-10-01 (a practice belongs to exactly one
+    school) made that practice impossible to build. The precise statement
+    now: the two-school create is refused, and with the master teaching in
+    both schools, the practice of the first is the first school's history
+    only -- asserted on both sides, so an empty feed could not pass.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     curator_b = await _make_verified_master(
@@ -521,35 +555,41 @@ async def test_a_practice_addressed_to_two_schools_reaches_both_curators(
     await _join_school(db_session, school, teacher, CuratorMemberKind.MASTER)
     await _join_school(db_session, school_b, teacher, CuratorMemberKind.MASTER)
 
+    refused = await _create_in_two_schools(client, teacher, school, school_b)
+    assert refused.status_code == 422, refused.text
+
     practice = await _practice(
-        db_session, teacher, [school, school_b], title="Коллаборация",
+        db_session, teacher, school, title="Практика первой",
     )
     await _attended(db_session, practice, student)
 
     assert [i["practice_title"] for i in
-            await _checkins(client, curator, school)] == ["Коллаборация"]
-    assert [i["practice_title"] for i in
-            await _checkins(client, curator_b, school_b)] == ["Коллаборация"]
+            await _checkins(client, curator, school)] == ["Практика первой"]
+    assert await _checkins(client, curator_b, school_b) == []
 
 
 @pytest.mark.asyncio
-async def test_a_practice_in_two_schools_of_one_curator_arrives_once(
+async def test_two_schools_of_one_curator_are_refused_and_one_counts_once(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """Two audience rows must not become two feed rows.
+    """The same curator, two schools: two are refused; one counts once.
 
-    The predicate is an EXISTS and not a join, and this is the test that
-    fails the day somebody rewrites it as one. total is asserted alongside
-    the page, because a duplicate that the page happens to hide would still
-    inflate the count.
+    Before BE-74 this test guarded against two audience rows becoming two
+    feed rows (the predicate was an EXISTS over the audience table). With a
+    scalar owner column there is nothing to duplicate; the precise
+    statement now is the refusal, paired with the one-school practice
+    counted once -- items AND total -- in its school and not at all in the
+    curator's other school.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     student = await _make_student(client, _TID_STUDENT)
     school = await _school(db_session, curator, name="Утро")
     school_b = await _school(db_session, curator, name="Вечер")
-    practice = await _practice(
-        db_session, curator, [school, school_b], title="Общая",
-    )
+
+    refused = await _create_in_two_schools(client, curator, school, school_b)
+    assert refused.status_code == 422, refused.text
+
+    practice = await _practice(db_session, curator, school, title="Общая")
     await _attended(db_session, practice, student)
 
     resp = await _get(client, CHECKINS_URL, curator, school)
@@ -559,8 +599,8 @@ async def test_a_practice_in_two_schools_of_one_curator_arrives_once(
 
     resp = await _get(client, REVIEWS_URL, curator, school_b)
     assert resp.status_code == 200, resp.text
-    assert len(resp.json()["items"]) == 1
-    assert resp.json()["total"] == 1
+    assert resp.json()["items"] == []
+    assert resp.json()["total"] == 0
 
 
 @pytest.mark.asyncio
@@ -581,7 +621,7 @@ async def test_a_student_who_left_the_school_keeps_their_feedback_there(
     membership = await _join_school(
         db_session, school, student, CuratorMemberKind.STUDENT,
     )
-    practice = await _practice(db_session, curator, [school])
+    practice = await _practice(db_session, curator, school)
     await _attended(db_session, practice, student)
 
     assert len(await _reviews(client, curator, school)) == 1
@@ -694,7 +734,7 @@ async def test_the_killswitch_takes_both_endpoints_with_it(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     student = await _make_student(client, _TID_STUDENT)
     school = await _school(db_session, curator)
-    practice = await _practice(db_session, curator, [school])
+    practice = await _practice(db_session, curator, school)
     await _attended(db_session, practice, student)
 
     with patch.object(settings, _FLAG, False):
@@ -727,7 +767,7 @@ async def test_post_checkins_never_appear_while_pre_ones_do(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     student = await _make_student(client, _TID_STUDENT)
     school = await _school(db_session, curator)
-    practice = await _practice(db_session, curator, [school])
+    practice = await _practice(db_session, curator, school)
     booking = await _booking(db_session, practice, student)
     await _checkin(
         db_session, practice, student, booking,
@@ -761,7 +801,7 @@ async def test_a_cancelled_bookings_checkin_is_dropped_and_the_rest_stay(
     stayed = await _make_student(client, _TID_STUDENT, first_name="Аня")
     left = await _make_student(client, _TID_STUDENT_B, first_name="Боря")
     school = await _school(db_session, curator)
-    practice = await _practice(db_session, curator, [school])
+    practice = await _practice(db_session, curator, school)
 
     await _attended(db_session, practice, stayed)
     cancelled = await _booking(
@@ -792,7 +832,7 @@ async def test_mood_is_a_bucket_and_never_the_stored_score(
     mid = await _make_student(client, _TID_STUDENT_B, first_name="Серед")
     high = await _make_student(client, _TID_STUDENT_C, first_name="Верх")
     school = await _school(db_session, curator)
-    practice = await _practice(db_session, curator, [school])
+    practice = await _practice(db_session, curator, school)
 
     for who, mood in ((low, 2), (mid, 5), (high, 10)):
         booking = await _booking(db_session, practice, who)
@@ -821,7 +861,7 @@ async def test_rating_is_a_bucket_and_never_the_stored_score(
     mid = await _make_student(client, _TID_STUDENT_B, first_name="Серед")
     high = await _make_student(client, _TID_STUDENT_C, first_name="Верх")
     school = await _school(db_session, curator)
-    practice = await _practice(db_session, curator, [school])
+    practice = await _practice(db_session, curator, school)
 
     for who, rating in ((low, 1), (mid, 7), (high, 8)):
         booking = await _booking(db_session, practice, who)
@@ -849,7 +889,7 @@ async def test_no_contact_details_ride_along_with_the_identified_student(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     student = await _make_student(client, _TID_STUDENT, first_name="Аня")
     school = await _school(db_session, curator)
-    practice = await _practice(db_session, curator, [school])
+    practice = await _practice(db_session, curator, school)
     await _attended(db_session, practice, student)
 
     forbidden = {"email", "phone", "telegram_id", "balance", "mood_score"}
@@ -883,7 +923,7 @@ async def test_the_id_in_the_feed_does_not_open_the_students_dossier(
     student = await _make_student(client, _TID_STUDENT, first_name="Аня")
     school = await _school(db_session, curator)
     await _join_school(db_session, school, teacher, CuratorMemberKind.MASTER)
-    practice = await _practice(db_session, teacher, [school])
+    practice = await _practice(db_session, teacher, school)
     await _attended(db_session, practice, student)
 
     items = await _reviews(client, curator, school)
@@ -908,8 +948,12 @@ async def test_a_practice_outside_the_school_is_invisible_in_both_feeds(
 ) -> None:
     """Reach stops at the school's edge.
 
-    The same master runs two practices -- one addressed to the school, one
-    to nobody -- and only the first is the school's business. The included
+    The same master runs two practices -- one of the school, one from the
+    general section (public, no school) -- and only the first is the
+    school's business. Before BE-74 the second was a school-audience
+    practice addressed to no school; that shape is gone (the CHECK forbids
+    it), and the public one is the stricter neighbour: it is visible to
+    everybody, so only ownership keeps it out. The included
     one is asserted alongside, so the exclusion is not the whole page being
     empty.
     """
@@ -919,8 +963,8 @@ async def test_a_practice_outside_the_school_is_invisible_in_both_feeds(
     school = await _school(db_session, curator)
     await _join_school(db_session, school, teacher, CuratorMemberKind.MASTER)
 
-    inside = await _practice(db_session, teacher, [school], title="В школе")
-    outside = await _practice(db_session, teacher, [], title="Вне школы")
+    inside = await _practice(db_session, teacher, school, title="В школе")
+    outside = await _practice(db_session, teacher, None, title="Вне школы")
     await _attended(db_session, inside, student)
     await _attended(db_session, outside, student)
 
@@ -948,7 +992,7 @@ async def test_the_page_is_bounded_while_total_counts_the_whole_school(
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     school = await _school(db_session, curator)
-    practice = await _practice(db_session, curator, [school])
+    practice = await _practice(db_session, curator, school)
 
     for tid in (_TID_STUDENT, _TID_STUDENT_B, _TID_STUDENT_C):
         who = await _make_student(client, tid, first_name=f"S{tid}")
@@ -1001,8 +1045,8 @@ async def test_a_practice_with_no_feedback_yet_contributes_nothing(
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     student = await _make_student(client, _TID_STUDENT)
     school = await _school(db_session, curator)
-    silent = await _practice(db_session, curator, [school], title="Тишина")
-    loud = await _practice(db_session, curator, [school], title="Голос")
+    silent = await _practice(db_session, curator, school, title="Тишина")
+    loud = await _practice(db_session, curator, school, title="Голос")
     await _booking(db_session, silent, student)
     await _attended(db_session, loud, student)
 
@@ -1028,9 +1072,9 @@ async def test_practice_id_narrows_the_page_and_grants_nothing(
     stranger = await _make_verified_master(client, db_session, _TID_TEACHER_B)
     student = await _make_student(client, _TID_STUDENT)
     school = await _school(db_session, curator)
-    first = await _practice(db_session, curator, [school], title="Первая")
-    second = await _practice(db_session, curator, [school], title="Вторая")
-    elsewhere = await _practice(db_session, stranger, [], title="Чужая")
+    first = await _practice(db_session, curator, school, title="Первая")
+    second = await _practice(db_session, curator, school, title="Вторая")
+    elsewhere = await _practice(db_session, stranger, None, title="Чужая")
     await _attended(db_session, first, student)
     await _attended(db_session, second, student)
     await _attended(db_session, elsewhere, student)
@@ -1063,10 +1107,10 @@ async def test_the_feed_is_newest_first_across_practices(
     student = await _make_student(client, _TID_STUDENT)
     school = await _school(db_session, curator)
     later = await _practice(
-        db_session, curator, [school], title="Поздняя", hours_from_now=200,
+        db_session, curator, school, title="Поздняя", hours_from_now=200,
     )
     sooner = await _practice(
-        db_session, curator, [school], title="Ранняя", hours_from_now=10,
+        db_session, curator, school, title="Ранняя", hours_from_now=10,
     )
 
     first_booking = await _booking(db_session, later, student)

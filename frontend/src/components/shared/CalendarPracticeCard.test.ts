@@ -82,12 +82,13 @@ describe('CalendarPracticeCard -- «Для школы» badge (FE-24)', () => {
     }
   })
 
-  it('unavailable school audience: badge still renders (names and flag diverge on purpose)', async () => {
+  it('unavailable school audience: badge still renders (name and flag diverge on purpose)', async () => {
     const text = await mountCard(
       practice({
         audience_kind: 'curator_groups',
         audience_unavailable: true,
-        audience_curator_group_names: ['Тихая школа'],
+        curator_group_id: 'sc1',
+        curator_group_name: 'Тихая школа',
       }),
     )
     expect(text).toContain('Для школы')

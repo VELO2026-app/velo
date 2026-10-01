@@ -1435,8 +1435,6 @@ describe('EditPracticeView', () => {
       expect(practicesApi.previewAudienceChange).toHaveBeenCalledWith('p1', {
         audience_kind: 'students',
         group_ids: [],
-        // FE-24 (GT P5): the mirror array, empty for non-school kinds.
-        curator_group_ids: [],
       })
       expect(document.body.querySelector('.v-confirm__actions')).toBeNull()
       expect(practicesApi.updatePractice).toHaveBeenCalledTimes(1)
@@ -1532,88 +1530,110 @@ describe('EditPracticeView', () => {
   // LIVE flags are each proven by the re-entry tests above.
 })
 
-// -- «Школы» audience (FE-24 / GT P5) ------------------------------------------
+// -- «Школы» audience (FE-24 / GT P5; BE-74) -------------------------------------
+//
+// Before BE-74 this block asserted that Edit resolves a school practice's
+// chips from NAMES (PracticeResponse carried no ids) and saves the ids, and
+// that two same-named schools are never both auto-selected. Both were right
+// while a practice could target several schools and its schools could be
+// edited. BE-74 made the practice belong to exactly ONE school, fixed at
+// creation (practice_school_immutable), and put its id on the wire; with no
+// "public practice of a school" in the UI (owner Q2) a school practice's
+// audience is shown, not edited. The precise statements now: the school is
+// shown by its saved name, no school picker exists on this screen, the PATCH
+// never carries a school -- so a second school can never be added, by name
+// or otherwise.
 
-describe('EditPracticeView -- «Школы» audience (FE-24 / GT P5)', () => {
-  it('a curator_groups practice prefills its school chips from NAMES (no ids on the wire) and saves the ids', async () => {
-    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
-      items: [
-        {
-          id: 'sc1',
-          name: 'Тихая школа',
-          description: null,
-          curator: { user_id: 'u1', display_name: 'Мария Иванова', avatar_url: null },
-          masters_count: 2,
-          students_count: 3,
-          relation: 'master',
-        },
-      ],
-    })
+describe('EditPracticeView -- «Школы» audience (FE-24 / GT P5; BE-74)', () => {
+  const school = (id: string, name: string, curatorId: string) => ({
+    id,
+    name,
+    description: null,
+    curator: { user_id: curatorId, display_name: 'Куратор', avatar_url: null },
+    masters_count: 1,
+    students_count: 0,
+    relation: 'master' as const,
+  })
+
+  it('a practice of a school shows its audience and school read-only, and the PATCH carries no school', async () => {
     mountCached(
-      practice({ audience_kind: 'curator_groups', audience_curator_group_names: ['Тихая школа'] }),
+      practice({
+        audience_kind: 'curator_groups',
+        curator_group_id: 'sc1',
+        curator_group_name: 'Тихая школа',
+      }),
     )
     await flush()
 
-    // Selected WITHOUT a user tap: names resolved against the eligible list.
-    const chip = Array.from(host?.querySelectorAll<HTMLElement>('.v-chip') ?? []).find((c) =>
-      c.textContent?.includes('Тихая школа'),
+    expect(text()).toContain('Школы — школа «Тихая школа»')
+    // Nothing to pick: neither the kinds radio nor school chips.
+    expect(button('Публичная')).toBeUndefined()
+    expect(host?.querySelectorAll('.v-chip').length).toBe(0)
+
+    button('Сохранить')?.click()
+    await flush()
+
+    expect(practicesApi.previewAudienceChange).not.toHaveBeenCalled()
+    const call = vi.mocked(practicesApi.updatePractice).mock.calls[0]
+    expect(call?.[1]?.audience_kind).toBe('curator_groups')
+    expect(call?.[1]?.group_ids).toEqual([])
+    expect(call?.[1]).not.toHaveProperty('curator_group_id')
+    expect(call?.[1]).not.toHaveProperty('curator_group_ids')
+  })
+
+  it('a PUBLIC practice of a school (made outside this UI) is read-only too and stays public', async () => {
+    mountCached(
+      practice({
+        audience_kind: 'public',
+        curator_group_id: 'sc1',
+        curator_group_name: 'Тихая школа',
+      }),
     )
-    expect(chip?.className).toContain('v-chip--active')
+    await flush()
+
+    expect(text()).toContain('Публичная — школа «Тихая школа»')
+    expect(button('Все ученики')).toBeUndefined()
+
+    button('Сохранить')?.click()
+    await flush()
+
+    const call = vi.mocked(practicesApi.updatePractice).mock.calls[0]
+    expect(call?.[1]?.audience_kind).toBe('public')
+    expect(call?.[1]).not.toHaveProperty('curator_group_id')
+  })
+
+  it('same-named schools of the master cannot widen a school practice: Edit never asks for schools', async () => {
+    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+      items: [school('sc_a', 'Дубль', 'u1'), school('sc_b', 'Дубль', 'u2')],
+    })
+    mountCached(
+      practice({
+        audience_kind: 'curator_groups',
+        curator_group_id: 'sc_a',
+        curator_group_name: 'Дубль',
+      }),
+    )
+    await flush()
+
+    expect(cgApi.getMyCuratorGroups).not.toHaveBeenCalled()
+    expect(host?.querySelectorAll('.v-chip').length).toBe(0)
 
     button('Сохранить')?.click()
     await flush()
 
     const call = vi.mocked(practicesApi.updatePractice).mock.calls[0]
     expect(call?.[1]?.audience_kind).toBe('curator_groups')
-    expect(call?.[1]?.curator_group_ids).toEqual(['sc1'])
-    expect(call?.[1]?.group_ids).toEqual([])
+    expect(call?.[1]).not.toHaveProperty('curator_group_id')
   })
 
-  // Review P1: a school name is unique only PER CURATOR. The wire carries
-  // NAMES, not ids -- a blind name->id match would silently select BOTH
-  // same-named schools and widen the audience on the next save. The
-  // ambiguous name must NOT be auto-selected; the master picks consciously.
-  it('same-name schools: ambiguous name is not auto-selected, warned about, and a conscious pick saves exactly ONE id', async () => {
+  it('a practice without a school is not offered «Школы», even to a master who has schools', async () => {
     vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
-      items: [
-        {
-          id: 'sc_a',
-          name: 'Дубль',
-          description: null,
-          curator: { user_id: 'u1', display_name: 'Куратор Один', avatar_url: null },
-          masters_count: 1,
-          students_count: 0,
-          relation: 'master',
-        },
-        {
-          id: 'sc_b',
-          name: 'Дубль',
-          description: null,
-          curator: { user_id: 'u2', display_name: 'Куратор Два', avatar_url: null },
-          masters_count: 1,
-          students_count: 0,
-          relation: 'curator',
-        },
-      ],
+      items: [school('sc1', 'Тихая школа', 'u1')],
     })
-    mountCached(
-      practice({ audience_kind: 'curator_groups', audience_curator_group_names: ['Дубль'] }),
-    )
+    mountCached(practice({ audience_kind: 'public' }))
     await flush()
 
-    // NOT silently widened: no chip is active, the collision is named.
-    const chips = Array.from(host?.querySelectorAll<HTMLElement>('.v-chip') ?? [])
-    expect(chips.length).toBe(2)
-    expect(chips.every((c) => !c.className.includes('v-chip--active'))).toBe(true)
-    expect(text()).toContain('совпадает у нескольких ваших школ')
-
-    // A conscious pick saves exactly ONE target, not both.
-    chips[0]?.click()
-    await flush()
-    button('Сохранить')?.click()
-    await flush()
-
-    const call = vi.mocked(practicesApi.updatePractice).mock.calls[0]
-    expect(call?.[1]?.curator_group_ids).toEqual(['sc_a'])
+    expect(button('Публичная')).toBeTruthy()
+    expect(button('Школы')).toBeUndefined()
   })
 })

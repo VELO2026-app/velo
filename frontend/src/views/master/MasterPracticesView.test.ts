@@ -1309,6 +1309,52 @@ describe('MasterPracticesView', () => {
 
   // ===========================================================================
   describe('navigation', () => {
+    it('the unreachable-school mark is a statement, not a jump into the editor (BE-74)', async () => {
+      // Review P2 made the mark a button straight into the edit screen. BE-74
+      // made a school practice's audience and school read-only there, and a
+      // flagged practice always belongs to a school -- so the mark lost its
+      // control; a tap on it is a tap on the card.
+      const DARK = practice('u-dark', {
+        title: 'Тёмная',
+        scheduled_at: '2026-07-21T09:00:00Z',
+        audience_kind: 'curator_groups',
+        curator_group_id: 'sc1',
+        curator_group_name: 'Тихая школа',
+        audience_unavailable: true,
+      })
+      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(page([DARK]))
+      mount()
+      await flush()
+
+      const card = cardById('Тёмная')!
+      const mark = card.querySelector<HTMLElement>('.mp-stat--warn')
+      // THE PAIR: the mark is rendered with its statement ...
+      expect(mark).toBeTruthy()
+      expect(tidy(mark?.textContent)).toContain('Школа недоступна')
+      // ... and is no control and gives no advice.
+      expect(tidy(mark?.textContent)).not.toContain('смените аудиторию')
+      expect(mark?.getAttribute('role')).toBeNull()
+      expect(mark?.getAttribute('tabindex')).toBeNull()
+      mark?.click()
+      await flush()
+      expect(push).not.toHaveBeenCalledWith({
+        name: 'master-practice-edit',
+        params: { id: 'u-dark' },
+      })
+      expect(push).toHaveBeenCalledWith({
+        name: 'master-practice-detail',
+        params: { id: 'u-dark' },
+      })
+    })
+
+    it('a practice without the flag carries no mark', async () => {
+      mount()
+      await flush()
+
+      expect(cards().length).toBeGreaterThan(0)
+      expect(host?.querySelectorAll('.mp-stat--warn')).toHaveLength(0)
+    })
+
     it('the header «+» opens the create screen', async () => {
       mount()
       await flush()

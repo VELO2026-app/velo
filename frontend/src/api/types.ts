@@ -240,10 +240,6 @@ export interface UpdatePracticeRequest extends GeneratedUpdatePracticeRequest {
 export interface AudiencePreviewRequest {
   audience_kind: AudienceKind
   group_ids: string[]
-  /** FE-24 (GT P5): the mirror of group_ids for audience_kind=
-   *  'curator_groups' -- the generated schema carries it natively; this
-   *  bridge adds it in the same shape. Mutually exclusive with group_ids. */
-  curator_group_ids?: string[]
 }
 
 export interface AudiencePreviewResponse {

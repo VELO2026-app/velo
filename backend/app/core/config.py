@@ -657,7 +657,7 @@ class Settings(BaseSettings):
     # WHY SCHOOLS NEED A BRAKE AT ALL, unlike the four worker toggles above:
     # they change what OTHER PEOPLE see. A practice with
     # audience_kind='curator_groups' is hidden from anyone outside the
-    # target school, so a fault in school membership or in a curator's
+    # school it belongs to, so a fault in school membership or in a curator's
     # verification state removes practices from the calendars of people who
     # have never heard of schools. That is the blast radius this flag is
     # sized for.

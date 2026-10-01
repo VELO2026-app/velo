@@ -18,7 +18,20 @@
 # takes them in ONE order:
 #
 #     member -> master profile -> transfer -> master offer -> invite
-#            -> practice audience -> group
+#            -> practice -> group
+#
+# THE PRACTICE (BE-74) IS THE SECOND ROW HERE THIS MODULE DOES NOT OWN.
+# practices.curator_group_id names the school a practice belongs to, and
+# the writers that meet both rows take the practice first: update_practice
+# and cancel_practice (practices/) hold it FOR UPDATE and then write a
+# journal row -- KEY SHARE on the group -- or, cancelling as the curator,
+# lock the group as its owner (_lock_group_as_owner) before writing
+# anything. delete_curator_group clears its practices' owner (an UPDATE of
+# practices) before it deletes the group, so it waits for those writers
+# instead of holding the group they are waiting for. It replaced the
+# "practice audience" table at the same place in the order, for the same
+# reason. Of the module's own rows no practice writer takes any, so the
+# position before the group closes no cycle with member .. invite.
 #
 # THE MASTER PROFILE (BE-59) IS THE ONE ROW HERE THIS MODULE DOES NOT OWN,
 # and the one lock taken by a read: offer_curator_group_master reads the
@@ -136,9 +149,7 @@ from app.modules.practices.audience_service import (
     master_broadcasts_to_group_clause,
 )
 from app.modules.practices.models import (
-    AudienceKind,
     Practice,
-    PracticeAudienceCuratorGroup,
     PracticeStatus,
 )
 from app.modules.users.helpers import display_name
@@ -1012,6 +1023,27 @@ async def delete_curator_group(
     after the explicit deletes ran; those writers lock the group last, so
     nothing they hold is something this function is waiting for.
 
+    BE-74: THE SCHOOL'S PRACTICES LOSE THEIR OWNER, BY HAND, BEFORE THE
+    GROUP. They are not the school's children to delete -- a practice is its
+    master's -- but practices.curator_group_id points here, and leaving it
+    to ondelete="SET NULL" would lock those rows after the group: the order
+    the BE-95 paragraph above removed for the child tables, now against
+    update_practice and cancel_practice, which hold a practice and then
+    write a journal row (KEY SHARE on the group). So they are cleared here,
+    in the header's place for `practice`, and the FK action stays behind it
+    for a practice created after this UPDATE ran and committed before the
+    DELETE below. What losing the school means for them (owner ruling,
+    2026-10-01): every one becomes or stays an ordinary public practice of
+    its master. That rule is NOT written here -- this UPDATE sets only the
+    column, and the trigger of migration be74a1b2c3d4 turns a practice for
+    the school's students public in the same statement, on this path and on
+    the FK's alike. Nobody is notified of that change: the school it was
+    announced to is the thing being deleted.
+
+    No Practice object is read after this UPDATE in this session, so the
+    audience_kind the trigger rewrote behind the ORM's back is never seen
+    stale: nothing above loads a practice, and the router answers 204.
+
     THE GROUP ITSELF IS TAKEN BY OWNER, NOT BY id. A delete by id alone let
     a curator who had just handed the school over delete it from under its
     new owner -- the accept had answered 200 and its notification had gone
@@ -1025,9 +1057,14 @@ async def delete_curator_group(
         CuratorGroupTransfer,
         CuratorGroupMasterOffer,
         CuratorGroupInvite,
-        PracticeAudienceCuratorGroup,
     ):
         await session.execute(delete(child).where(child.group_id == group.id))
+    await session.execute(
+        update(Practice)
+        .where(Practice.curator_group_id == group.id)
+        .values(curator_group_id=None)
+        .execution_options(synchronize_session=False)
+    )
     deleted = (
         await session.execute(
             delete(CuratorGroup)
@@ -1392,26 +1429,29 @@ def _active_group_clause() -> ColumnElement[bool]:
     return _verified_profile_exists(CuratorGroup.curator_user_id)
 
 
-async def curated_group_ids_for_practice(
-    practice_id: UUID,
+async def curated_group_id_for_practice(
+    practice: Practice,
     user_id: UUID,
     session: AsyncSession,
-) -> list[UUID]:
-    """Schools of THIS practice that THIS user curates, right now (BE-21).
+) -> UUID | None:
+    """The practice's school, if THIS user curates it right now (BE-21).
 
     The entitlement behind "a curator may cancel a practice of their own
-    school": returns the ids of the practice's target schools whose curator
-    is this user and whose curator is verified NOW. Empty list means no
-    entitlement, and the caller turns that into the same 404 a stranger
-    gets -- never a distinct code (P-08: the answer must not reveal that
-    the practice exists, that it is a school practice, or that the school
-    is somebody else's).
+    school": the id of the school the practice BELONGS TO (BE-74), when its
+    curator is this user and is verified NOW; None otherwise, and the
+    caller turns None into the same 404 a stranger gets -- never a distinct
+    code (P-08: the answer must not reveal that the practice exists, that
+    it is a school practice, or that the school is somebody else's).
 
-    A LIST, NOT A BOOLEAN, and not one id. A practice can be addressed to
-    several schools, and one person can curate more than one of them; the
-    journal (GT-25 item 6) has to write to each school the actor curates,
-    because each of them lost the practice and the actor is the one who
-    did it. Returning a single id would have forced an arbitrary pick.
+    ONE id, not a list: a practice belongs to exactly one school (owner
+    ruling, 2026-10-01). Which practices a curator may cancel at all --
+    only those for the school's students, not its public ones (BE-74 Q4) --
+    is the caller's question, asked before this one.
+
+    A READ, AND THEREFORE NOT THE LAST WORD. The school can change hands
+    between this answer and the cancellation's writes; cancel_practice
+    re-checks ownership under the group lock (_lock_group_as_owner) before
+    it writes anything. This function is the fast path to the 404.
 
     Verification is _active_group_clause, not a hand-written check: the
     JSONB path to the account status stays spelled out once (I-6). A
@@ -1426,29 +1466,21 @@ async def curated_group_ids_for_practice(
     dependency on the two school routers. A killswitch on the routers
     guards the surface, not the mechanism.
 
-    An early return rather than a branch around the body: "schools are
-    off" means "this person curates none of this practice's schools", and
-    an empty list already says exactly that to every caller.
-
     Reads only. No commit, no flush (P-01).
     """
     if not settings.curator_groups_enabled:
-        return []
-
-    stmt = (
-        select(CuratorGroup.id)
-        .join(
-            PracticeAudienceCuratorGroup,
-            PracticeAudienceCuratorGroup.group_id == CuratorGroup.id,
+        return None
+    if practice.curator_group_id is None:
+        return None
+    return (
+        await session.execute(
+            select(CuratorGroup.id).where(
+                CuratorGroup.id == practice.curator_group_id,
+                CuratorGroup.curator_user_id == user_id,
+                _active_group_clause(),
+            )
         )
-        .where(
-            PracticeAudienceCuratorGroup.practice_id == practice_id,
-            CuratorGroup.curator_user_id == user_id,
-            _active_group_clause(),
-        )
-        .order_by(CuratorGroup.name)
-    )
-    return list((await session.execute(stmt)).scalars().all())
+    ).scalar_one_or_none()
 
 
 # The relation value for someone who OWNS the group. A literal, because it
@@ -3012,8 +3044,12 @@ async def _upcoming_practices_targeting_group(
     first place.
 
     Each occurrence of a series counts on its own -- every child carries its
-    own audience rows and its own date, so "how many sessions go dark" is a
-    count of sessions, not of series.
+    own owner and its own date, so the number is a count of sessions, not
+    of series.
+
+    BE-74: "TARGETING THIS SCHOOL" IS "BELONGING TO IT", and public ones
+    count (owner ruling, 2026-10-01, Q4): a practice of the school leaves
+    the school's page when its master leaves, whichever audience it has.
 
     An empty master list yields 0 without a query: the school has nobody who
     could be pointing a practice at it.
@@ -3023,12 +3059,8 @@ async def _upcoming_practices_targeting_group(
     return (
         await session.execute(
             select(func.count(Practice.id))
-            .join(
-                PracticeAudienceCuratorGroup,
-                PracticeAudienceCuratorGroup.practice_id == Practice.id,
-            )
             .where(
-                PracticeAudienceCuratorGroup.group_id == group_id,
+                Practice.curator_group_id == group_id,
                 Practice.master_id.in_(master_ids),
                 Practice.status.in_(_UPCOMING_PRACTICE_STATUSES),
                 Practice.scheduled_at > datetime.now(UTC),
@@ -3802,16 +3834,20 @@ async def announce_published_practice(
     actor: User,
     session: AsyncSession,
 ) -> tuple[int, int]:
-    """Journal + notify every school this practice was just published to.
+    """Journal + notify the school this practice belongs to, on publication.
 
-    THE PAIR IS COUNTED BY SCHOOL, NOT BY PERSON, and that is the only
-    formulation the two halves can both satisfy: a school with no members
-    gets its journal line and nobody gets a notification, while a person
-    who belongs to two target schools gets ONE notification against TWO
-    lines. Either half happens for a school or neither does, and a
-    rollback of the publication takes both -- everything here rides the
-    caller's transaction, the journal synchronously and the notifications
-    through the outbox.
+    BE-74: THE TRIGGER IS OWNERSHIP, NOT AUDIENCE. A practice created in a
+    school is announced to it whether it is for the school's students or
+    for everyone -- a public practice of a school is shown on its page,
+    and its people hear about it like about any other. A practice without
+    a school announces nothing. ONE school, never several: a practice
+    belongs to exactly one (owner ruling, 2026-10-01).
+
+    THE PAIR IS COUNTED BY SCHOOL, NOT BY PERSON: a school with no members
+    gets its journal line and nobody gets a notification. Either half
+    happens or neither does, and a rollback of the publication takes both
+    -- everything here rides the caller's transaction, the journal
+    synchronously and the notifications through the outbox.
 
     ONE ANNOUNCEMENT PER PUBLICATION, NOT PER OCCURRENCE. The caller hooks
     the draft -> scheduled branch, which a series ROOT passes once and its
@@ -3822,22 +3858,35 @@ async def announce_published_practice(
     turn two hundred members and forty occurrences into eight thousand
     messages from one button.
 
-    SCHOOLS ARE FILTERED BY master_broadcasts_to_group_clause -- the same
-    predicate the audience itself uses. A master who left a target school
-    since the draft was written still has its audience row (nothing
-    rewrites those on the way out), but the school can no longer see his
-    practices, so announcing one would be an arrival nobody can open. This
-    is NOT the BE-24 history/state split reappearing: that one preserves
-    what already happened, and this is a "look, it is here" message, which
-    is a present-tense claim.
+    THE SCHOOL IS FILTERED BY master_broadcasts_to_group_clause -- the same
+    predicate the audience and the school page use. A master who left the
+    school since the draft was written keeps the practice's owner (it never
+    changes), but the school can no longer see his practices, so announcing
+    one would be an arrival nobody can open.
+
+    NO "SCHOOL VANISHED" BRANCH, and none is missing. The caller,
+    update_practice, holds the practice row FOR UPDATE, and
+    delete_curator_group clears its practices' owner BEFORE it deletes the
+    school (header: practice before group). A deletion that started first
+    has already cleared this row's owner (and turned it public, BE-74
+    migration trigger); update_practice reads that after waiting on it --
+    the row is that session's first load of the practice, so it is read
+    fresh, not from an identity map -- and does not call this function at
+    all, because it calls only for a practice that has a school. One that
+    starts later waits on this row. Either way the school
+    read below still exists when its journal row is inserted -- the BE-95
+    savepoint that used to catch a deleted school here guarded a state the
+    lock order now excludes. The one other way a school goes, the CASCADE
+    from its curator's users row, takes the school before the practice and
+    meets this function as a lock wait, not as a missing row -- a savepoint
+    would not catch it either (BE-74 report, observations).
 
     NO ACTIVITY CHECK ON THE SCHOOL, and none is missing: a school whose
     curator lost verification goes dark for reads, but publishing into one
-    still succeeds (the gate that would refuse it sits on the audience
-    path, not on this one), and verification coming back makes both the
-    school and the practice visible again. The notification is early, not
-    wrong. A member of a dark school can receive it and find a 404 behind
-    it today -- named, not fixed here.
+    still succeeds, and verification coming back makes both the school and
+    the practice visible again. The notification is early, not wrong. A
+    member of a dark school can receive it and find a 404 behind it today
+    -- named, not fixed here.
 
     THE AUDIENCE IS EVERY MEMBERSHIP ROW plus the curator, minus the
     person who pressed the button. Membership, NOT the roster: a suspended
@@ -3852,110 +3901,49 @@ async def announce_published_practice(
         session: The caller's write session; no commit here (P-01).
 
     Returns:
-        (schools_announced, people_notified). Returned rather than logged
-        alone so the caller and the tests can assert the counts that the
-        pair invariant is stated in.
+        (schools_announced, people_notified) -- schools_announced is 0 or
+        1. Returned rather than logged alone so the caller and the tests can
+        assert the counts that the pair invariant is stated in.
     """
     # BE-43: schools off means there is nobody to tell. Without this the
-    # fan-out ran on a path no router guards: a journal line in every
-    # target school and a notification to every member, about a practice
-    # the audience predicate then hides from all of them -- the message
-    # arrives and the link behind it is a 404.
-    #
-    # Early return, same shape and same reason as the audience_kind test
-    # below it: zero schools announced, zero people notified is the honest
-    # answer, not an error.
+    # fan-out ran on a path no router guards: a journal line in the school
+    # and a notification to every member, about a practice the school page
+    # and the audience predicate then hide from all of them.
     if not settings.curator_groups_enabled:
         return (0, 0)
 
-    if practice.audience_kind != AudienceKind.CURATOR_GROUPS.value:
-        return (0, 0)
-
-    groups = list(
-        (
-            await session.execute(
-                select(CuratorGroup)
-                .join(
-                    PracticeAudienceCuratorGroup,
-                    PracticeAudienceCuratorGroup.group_id == CuratorGroup.id,
-                )
-                .where(
-                    PracticeAudienceCuratorGroup.practice_id == practice.id,
-                    master_broadcasts_to_group_clause(actor.id),
-                )
-                # BY NAME, AND NOT BY id. A UUID is random, so ordering
-                # by it is stable within one run and arbitrary between
-                # them -- the names below are joined into one string a
-                # person reads, and the order used to change from one
-                # publication to the next. It looked like an ordering and
-                # was not one; it turned the suite red a week after it
-                # shipped green.
-                #
-                # id STAYS, SECOND, as the tie-break: school names are
-                # unique per curator (UNIQUE (curator_user_id, name)), and
-                # a practice is addressed to schools of DIFFERENT curators,
-                # so two of them can share a name and the name alone would
-                # leave the same randomness -- rarer, and therefore more
-                # expensive to find.
-                #
-                # The same pair, for the same reason, in
-                # practices/cancel_service.py.
-                .order_by(CuratorGroup.name, CuratorGroup.id)
+    group = (
+        await session.execute(
+            select(CuratorGroup).where(
+                CuratorGroup.id == practice.curator_group_id,
+                master_broadcasts_to_group_clause(actor.id),
             )
-        ).scalars().all()
+        )
+    ).scalar_one_or_none()
+    if group is None:
+        return (0, 0)
+
+    _record_group_event(
+        group.id,
+        actor,
+        CuratorGroupEventKind.PRACTICE_PUBLISHED,
+        session,
+        data={
+            "practice_id": str(practice.id),
+            "practice_title": practice.title,
+        },
     )
-    if not groups:
-        return (0, 0)
-
-    group_ids = [group.id for group in groups]
-    # Joined, not picked: one person can belong to two of the target
-    # schools, and naming one of them would tell them the practice came
-    # from somewhere it also did not. The template's {group_name} is a
-    # scalar, so the join happens here rather than as branching in two
-    # files -- same call the cancellation notice makes (BE-21,
-    # practices/cancel_service.py).
-    group_names = ", ".join(group.name for group in groups)
-
-    # BE-95 F3: ONE SAVEPOINT PER SCHOOL. The schools were read above; one
-    # deleted since then fails its journal row on the FK, and that used to
-    # fail the whole request -- publishing a practice answered 500 because
-    # somebody deleted a school it was addressed to. A school that is gone
-    # is skipped, and it is dropped from the recipients and from the name
-    # list too: nobody is told about a school that no longer exists.
-    announced = []
-    for group in groups:
-        try:
-            async with session.begin_nested():
-                _record_group_event(
-                    group.id,
-                    actor,
-                    CuratorGroupEventKind.PRACTICE_PUBLISHED,
-                    session,
-                    data={
-                        "practice_id": str(practice.id),
-                        "practice_title": practice.title,
-                    },
-                )
-                await session.flush()
-        except IntegrityError:
-            continue
-        announced.append(group)
-    if not announced:
-        return (0, 0)
-    groups = announced
-    group_ids = [group.id for group in groups]
-    group_names = ", ".join(group.name for group in groups)
 
     member_ids = set(
         (
             await session.execute(
                 select(CuratorGroupMember.user_id).where(
-                    CuratorGroupMember.group_id.in_(group_ids),
+                    CuratorGroupMember.group_id == group.id,
                 )
             )
         ).scalars().all()
     )
-    recipients = member_ids | {group.curator_user_id for group in groups}
+    recipients = member_ids | {group.curator_user_id}
     recipients.discard(actor.id)
 
     actor_name = display_name(actor.first_name, actor.last_name)
@@ -3969,7 +3957,7 @@ async def announce_published_practice(
             title="Новая практика в школе",
             body=(
                 f"{actor_name} опубликовал практику «{practice.title}» "
-                f"в школе «{group_names}»."
+                f"в школе «{group.name}»."
             ),
             action_data={
                 # open_practice, not open_curator_group: the message is
@@ -3979,9 +3967,9 @@ async def announce_published_practice(
                 "action": "open_practice",
                 "params": {"practice_id": str(practice.id)},
                 "practice_title": practice.title,
-                "group_name": group_names,
+                "group_name": group.name,
                 "actor_name": actor_name,
             },
         )
 
-    return (len(groups), len(recipients))
+    return (1, len(recipients))

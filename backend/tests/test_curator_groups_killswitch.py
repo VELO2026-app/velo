@@ -79,7 +79,6 @@ from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import (
     AudienceKind,
     Practice,
-    PracticeAudienceCuratorGroup,
     PracticeStatus,
     PracticeType,
 )
@@ -209,7 +208,7 @@ async def _add_member(
 async def _make_school_practice(
     db_session: AsyncSession,
     master_id: str,
-    schools: list[CuratorGroup],
+    school: CuratorGroup,
     title: str = "Практика школы",
 ) -> Practice:
     practice = Practice(
@@ -227,15 +226,9 @@ async def _make_school_practice(
         price_cents=0,
         currency="eur",
         audience_kind=AudienceKind.CURATOR_GROUPS.value,
+        curator_group_id=school.id,
     )
     db_session.add(practice)
-    await db_session.flush()
-    for school in schools:
-        db_session.add(
-            PracticeAudienceCuratorGroup(
-                practice_id=practice.id, group_id=school.id,
-            )
-        )
     await db_session.flush()
     await db_session.commit()
     return practice
@@ -659,7 +652,7 @@ async def test_a_school_practice_leaves_every_feed_except_its_masters(
         db_session, school, student, CuratorMemberKind.STUDENT.value,
     )
     await _make_school_practice(
-        db_session, teacher["user"]["id"], [school], title="Практика школы",
+        db_session, teacher["user"]["id"], school, title="Практика школы",
     )
 
     with _on():
@@ -695,7 +688,7 @@ async def test_a_school_practice_detail_is_refused_by_the_audience_gate(
         db_session, school, teacher, CuratorMemberKind.MASTER.value,
     )
     practice = await _make_school_practice(
-        db_session, teacher["user"]["id"], [school],
+        db_session, teacher["user"]["id"], school,
     )
     url = DETAIL_URL.format(practice_id=str(practice.id))
 
@@ -730,13 +723,15 @@ async def test_a_school_practice_detail_is_refused_by_the_audience_gate(
 async def test_the_master_is_told_that_the_audience_is_unavailable(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """audience_unavailable flips to true, and the school names stay.
+    """audience_unavailable flips to true, and the school's name stays.
 
     The one place the flag is REPORTED rather than only enforced. The
-    master of a practice nobody can see has to know that, and the names
-    have to remain: the flag says "nobody sees this", the names say which
-    school it was pointed at. Reporting the flag while blanking the names
-    would tell them something is broken without telling them what.
+    master of a practice nobody can see has to know that, and the name has
+    to remain: the flag says "nobody sees this", the name says which school
+    the practice belongs to. Reporting the flag while blanking the name
+    would tell them something is broken without telling them what. (BE-74:
+    one owning school, so one id and one name, where a list of names used
+    to be.)
     """
     teacher = await _make_verified_master(client, db_session, _TID_MASTER_B)
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
@@ -745,7 +740,7 @@ async def test_the_master_is_told_that_the_audience_is_unavailable(
         db_session, school, teacher, CuratorMemberKind.MASTER.value,
     )
     practice = await _make_school_practice(
-        db_session, teacher["user"]["id"], [school],
+        db_session, teacher["user"]["id"], school,
     )
     url = DETAIL_URL.format(practice_id=str(practice.id))
     headers = auth_headers(teacher["session_token"])
@@ -753,12 +748,14 @@ async def test_the_master_is_told_that_the_audience_is_unavailable(
     with _on():
         body = (await client.get(url, headers=headers)).json()
         assert body["audience_unavailable"] is False
-        assert body["audience_curator_group_names"] == ["Тихое утро"]
+        assert body["curator_group_id"] == str(school.id)
+        assert body["curator_group_name"] == "Тихое утро"
 
     with _off():
         body = (await client.get(url, headers=headers)).json()
         assert body["audience_unavailable"] is True
-        assert body["audience_curator_group_names"] == ["Тихое утро"]
+        assert body["curator_group_id"] == str(school.id)
+        assert body["curator_group_name"] == "Тихое утро"
 
 
 @pytest.mark.asyncio
@@ -780,7 +777,7 @@ async def test_a_public_practice_is_untouched_by_the_flag(
         db_session, school, teacher, CuratorMemberKind.MASTER.value,
     )
     await _make_school_practice(
-        db_session, teacher["user"]["id"], [school], title="Школьная",
+        db_session, teacher["user"]["id"], school, title="Школьная",
     )
 
     public = Practice(
@@ -840,7 +837,7 @@ async def test_a_booking_holder_keeps_reading_the_practice_they_paid_for(
         db_session, school, booker, CuratorMemberKind.STUDENT.value,
     )
     practice = await _make_school_practice(
-        db_session, teacher["user"]["id"], [school],
+        db_session, teacher["user"]["id"], school,
     )
 
     db_session.add(
