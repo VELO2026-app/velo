@@ -91,7 +91,7 @@
         <div class="master-public__avatar">
           <VAvatar :url="profile.avatar_url ?? ''" :name="displayName" size="xl" />
           <span class="master-public__verified" role="img" aria-label="Верифицирован">
-            <IconCheck :size="12" />
+            <IconCheck :size="14" />
           </span>
         </div>
 
@@ -444,8 +444,8 @@ watch(masterId, (id) => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   border: 2px solid var(--velo-bg-card-solid);
   border-radius: var(--radius-full);
   background: var(--velo-teal-600);
