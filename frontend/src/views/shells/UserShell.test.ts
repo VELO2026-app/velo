@@ -99,6 +99,13 @@ function buildRouter(): Router {
         meta: { hideTabBar: true },
         component: StubChild,
       },
+      // Owner 2026-09-30: the master's page in the curator context -- the
+      // dock hides there (the CTA takes its place; mirrors router/index.ts).
+      {
+        path: '/user/masters/:id',
+        name: 'user-master-public',
+        component: StubChild,
+      },
       // Absent from every FOG_ROUTES / DIARY_ROUTES / FORM_ROUTES list --
       // the default-branch baseline.
       { path: '/user/somewhere-unlisted', name: 'user-unlisted', component: StubChild },
@@ -235,6 +242,24 @@ describe('UserShell', () => {
       expect(host?.querySelector('.v-tabbar')).not.toBeNull()
 
       keyboardOpenRef.value = true
+      await flush()
+
+      expect(host?.querySelector('.v-tabbar')).toBeNull()
+    })
+
+    // Owner 2026-09-30: the master's page in the CURATOR context (?groupId=)
+    // hides the dock -- the hanging «Создать практику» CTA takes its place.
+    // Without the marker the visitor keeps the dock.
+    it('user-master-public hides the tab bar only in the curator context', async () => {
+      await mount('user-master-public', { id: 'm1' })
+      await flush()
+      expect(host?.querySelector('.v-tabbar')).not.toBeNull()
+
+      await router.push({
+        name: 'user-master-public',
+        params: { id: 'm1' },
+        query: { groupId: 'g1' },
+      })
       await flush()
 
       expect(host?.querySelector('.v-tabbar')).toBeNull()

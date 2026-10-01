@@ -610,15 +610,15 @@ watch(masterId, (id) => {
   margin: 0;
 }
 
-/* The hanging curator CTA (owner 2026-09-30): fixed above the tab bar
-   (nav 64px + its --space-8 floor + a gap), on the content rail. The content
-   reserves matching tail room via --with-cta so the last panel can end up
-   under it. */
+/* The hanging curator CTA (owner 2026-09-30): the dock is HIDDEN in this
+   mode (UserShell's isMasterCuratorRoute), so the button takes the dock's
+   own place -- same floor (--space-8) + safe area, on the content rail. The
+   content reserves matching tail room via --with-cta. */
 .master-public__cta {
   position: fixed;
   left: var(--velo-rail-pad-x);
   right: var(--velo-rail-pad-x);
-  bottom: calc(var(--space-8) + 64px + var(--space-3) + env(safe-area-inset-bottom, 0px));
+  bottom: calc(var(--space-8) + env(safe-area-inset-bottom, 0px));
   z-index: var(--z-sticky);
 }
 

@@ -11,7 +11,14 @@
     :tabs="visibleTabs"
     :active-tab="activeTab"
     :fill="isFillRoute"
-    :hide-tab-bar="isDiaryRoute || isFormRoute || isChatRoute || isInboxRoute || keyboardOpen"
+    :hide-tab-bar="
+      isDiaryRoute ||
+      isFormRoute ||
+      isChatRoute ||
+      isInboxRoute ||
+      isMasterCuratorRoute ||
+      keyboardOpen
+    "
     :fog="isFogRoute"
     v-bind="fogTuning"
     @navigate="router.push($event)"
@@ -106,6 +113,14 @@ const isFormRoute = computed(() => FORM_ROUTES.includes(route.name as string))
 // route meta stays as documentation parity.
 const INBOX_ROUTES = ['user-inbox']
 const isInboxRoute = computed(() => INBOX_ROUTES.includes(route.name as string))
+
+// Owner 2026-09-30: the master's public page in the CURATOR context (the
+// roster's ?groupId= marker) hides the dock -- its place is taken by the
+// hanging «Создать практику» CTA (MasterPublicView renders it on the same
+// condition, so the shell and the view can never disagree).
+const isMasterCuratorRoute = computed(
+  () => route.name === 'user-master-public' && String(route.query.groupId ?? '') !== '',
+)
 
 // Edge-to-edge fog mask: the long scrolling lists/feeds + the practice-detail
 // screen (operator 2026-06-09: dissolve its hero under the header and its CTA
