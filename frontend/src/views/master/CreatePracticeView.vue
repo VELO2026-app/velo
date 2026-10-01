@@ -76,7 +76,7 @@
            ================================================================ -->
       <div v-if="delegatedMaster || masterOptions.length > 1" class="create-practice__section">
         <h2 class="velo-section-title">Мастер</h2>
-        <div class="create-practice__railed">
+        <div>
           <VCard class="create-practice__repeat" padding="none">
             <div v-if="delegatedMaster" class="create-practice__repeat-title">
               {{ delegatedMaster.name }}
@@ -99,9 +99,8 @@
            ================================================================ -->
       <div class="create-practice__section">
         <h2 class="velo-section-title">Использовать шаблон</h2>
-        <!-- Full width (NOT railed): the block carries no required-seal of its
-             own, so it spans the whole rail — as wide as a field PLUS its seal
-             indicator (operator PROMPT №233). -->
+        <!-- Full-width block: no required-seal of its own, so it spans the
+             whole rail like every field (owner 2026-10-01 seal canon). -->
         <UseTemplateBlock :practices="templatePractices" @select="applyTemplate" />
       </div>
 
@@ -112,7 +111,13 @@
       <div class="create-practice__section">
         <h2 class="velo-section-title">Основное</h2>
 
-        <VInput v-model="form.title" placeholder="Название" :error="errors.title" required />
+        <VInput
+          v-model="form.title"
+          placeholder="Название"
+          :error="errors.title"
+          required
+          class="cp-sealed"
+        />
 
         <!-- Направление = дисциплина (meditation/yoga/…). Подпись = плейсхолдер.
              Options catalog-first (T2 stage 2) -- see directionOptions. -->
@@ -122,12 +127,13 @@
           :options="directionOptions"
           :error="errors.direction"
           required
+          class="cp-sealed"
           @update:modelValue="onDirectionChange"
         />
 
         <!-- Вид практики = style. Показываем только если у направления есть виды
              (Q4=А: без явного «Без вида», не выбрано = null, необязательное). -->
-        <div v-if="styleOptionsForForm.length > 0" class="create-practice__railed">
+        <div v-if="styleOptionsForForm.length > 0">
           <VSelect v-model="form.style" placeholder="Вид практики" :options="styleOptionsForForm" />
         </div>
 
@@ -138,6 +144,7 @@
           :options="DIFFICULTY_OPTIONS_CREATE"
           :error="errors.difficulty"
           required
+          class="cp-sealed"
         />
       </div>
 
@@ -203,6 +210,7 @@
           :options="DURATION_OPTIONS"
           :error="errors.duration_minutes"
           required
+          class="cp-sealed"
         />
         <!-- Часовой пояс убран: берётся из профиля мастера (form.timezone),
              расписание задаётся в его часовом поясе (operator 2026-06-18). -->
@@ -217,7 +225,7 @@
       <div class="create-practice__section">
         <h2 class="velo-section-title">Повторение</h2>
 
-        <div class="create-practice__railed">
+        <div>
           <VCard class="create-practice__repeat" padding="none">
             <VCheckbox v-model="form.is_recurring" label="Сделать регулярной" />
           </VCard>
@@ -313,7 +321,7 @@
       <div class="create-practice__section">
         <h2 class="velo-section-title">Участники</h2>
 
-        <div class="create-practice__railed">
+        <div>
           <VInput
             v-model="form.max_participants_raw"
             type="number"
@@ -332,7 +340,7 @@
       <div class="create-practice__section">
         <h2 class="velo-section-title">Для кого практика</h2>
 
-        <div class="create-practice__railed">
+        <div>
           <VCard class="create-practice__repeat" padding="none">
             <PracticeAudiencePicker
               v-model:kind="form.audience_kind"
@@ -354,7 +362,7 @@
       <div class="create-practice__section">
         <h2 class="velo-section-title">Оплата</h2>
 
-        <div class="create-practice__railed">
+        <div>
           <VCard class="create-practice__repeat" padding="none">
             <VRadioGroup :model-value="'free'" :options="PAYMENT_OPTIONS" />
           </VCard>
@@ -367,7 +375,7 @@
       <div class="create-practice__section create-practice__section--desc">
         <h2 class="velo-section-title">Описание</h2>
 
-        <div class="create-practice__railed">
+        <div>
           <VTextarea
             v-model="form.description"
             placeholder="Расскажите подробее о вашей практике"
@@ -378,7 +386,7 @@
 
         <!-- 1-row start (rows=1) = the VInput height these were before; auto-grow
              past one line per the «Новая практика» SVG (operator Q1=А). -->
-        <div class="create-practice__railed">
+        <div>
           <VTextarea
             v-model="form.contraindications"
             placeholder="Противопоказания"
@@ -387,7 +395,7 @@
           />
         </div>
 
-        <div class="create-practice__railed">
+        <div>
           <VTextarea
             v-model="form.what_to_prepare"
             placeholder="Что подготовить"
@@ -1228,12 +1236,11 @@ async function submit(): Promise<void> {
   background: transparent;
   display: flex;
   flex-direction: column;
-  /* Seal-gutter = the reserved right column that VInput/VSelect `required`, the
-     date/time pickers and the recurrence seal-rows already inset their field by
-     (gap --space-2 + the 22px IconRequired). No-seal blocks reserve the SAME
-     gutter (.create-practice__railed) so every form block aligns to one rail
-     width — sealed and no-seal identical (NP-12/NP-3b). */
-  --cp-seal-gutter: calc(var(--space-2) + 22px);
+  /* Seal canon (owner 2026-10-01): every field spans the FULL rail width and
+     the required rosette sits INSIDE the plate's right padding -- no outer
+     seal gutter. The DS components (VInput/VSelect) keep their global
+     gutter behavior; this screen overrides the sealed ones via .cp-sealed
+     + :deep below. */
 }
 
 /* [FE-43] Same recipe as MasterGroupCreateView (FE-45 follow-up): while
@@ -1249,12 +1256,38 @@ html.is-keyboard-open .create-practice {
   min-height: var(--velo-frozen-vh, 100lvh);
 }
 
-/* No-seal blocks (use-template / make-recurring / participants / payment /
-   description / contraindications / what-to-prepare / connection / вид практики)
-   inset their right edge by the seal gutter so their width matches the sealed
-   fields above (operator NP-12/NP-3b: seal & no-seal blocks identical width). */
-.create-practice__railed {
-  margin-right: var(--cp-seal-gutter);
+/* Sealed DS fields (owner 2026-10-01): the rosette moves INSIDE the plate's
+   right padding and the plate takes the full row -- no outer gutter. Scoped
+   to .cp-sealed so non-required inputs keep their normal padding. */
+.create-practice :deep(.cp-sealed .v-input__row),
+.create-practice :deep(.cp-sealed .v-select__row) {
+  position: relative;
+  width: 100%;
+}
+
+.create-practice :deep(.cp-sealed .v-input__field) {
+  padding-right: 40px;
+}
+
+/* Rosette sits left of the native chevron (which keeps right:16px), both
+   inside the plate's padding. */
+.create-practice :deep(.cp-sealed .v-select__field) {
+  padding-right: 60px;
+}
+
+.create-practice :deep(.cp-sealed .v-input__seal),
+.create-practice :deep(.cp-sealed .v-select__seal) {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.create-practice :deep(.cp-sealed .v-input__seal) {
+  right: var(--space-2);
+}
+
+.create-practice :deep(.cp-sealed .v-select__seal) {
+  right: 30px;
 }
 
 .create-practice__content {
@@ -1343,6 +1376,7 @@ html.is-keyboard-open .create-practice {
 }
 
 .create-practice__field-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -1363,6 +1397,13 @@ html.is-keyboard-open .create-practice {
   cursor: pointer;
 }
 
+/* Sealed picker (date/time): full-width plate, rosette INSIDE the right
+   padding (owner 2026-10-01) -- the end-control picker has no seal and keeps
+   the symmetric padding. */
+.create-practice__field-row .create-practice__picker {
+  padding-right: 40px;
+}
+
 .create-practice__picker--empty {
   color: var(--velo-text-muted);
 }
@@ -1371,8 +1412,13 @@ html.is-keyboard-open .create-practice {
   border-color: var(--velo-error);
 }
 
+/* Required seal — overlay on the plate's right padding (owner 2026-10-01),
+   never shrinks. Red empty → green when filled. */
 .create-practice__seal {
-  flex-shrink: 0;
+  position: absolute;
+  right: var(--space-2);
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   color: var(--velo-error);
 }
@@ -1404,11 +1450,12 @@ html.is-keyboard-open .create-practice {
   margin: var(--space-3) 0 0;
 }
 
-/* -- Повторение: карточка повтора (grow) + печать обязательности справа (Q2=В). -- */
+/* -- Повторение: печать обязательности ВНУТРИ паддинга плашки (owner
+   2026-10-01) -- карточка/дни занимают всю ширину ряда. -- */
 .create-practice__seal-row {
+  position: relative;
   display: flex;
   align-items: flex-start;
-  gap: var(--space-2);
 }
 
 .create-practice__grow {
@@ -1417,10 +1464,11 @@ html.is-keyboard-open .create-practice {
 }
 
 .create-practice__seal-card {
-  flex-shrink: 0;
+  position: absolute;
+  right: var(--space-3);
+  top: var(--space-2);
   display: flex;
   color: var(--velo-error);
-  margin-top: var(--space-2);
 }
 
 .create-practice__seal-card--done {
