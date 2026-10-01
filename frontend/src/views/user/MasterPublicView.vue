@@ -596,6 +596,10 @@ watch(masterId, (id) => {
      the same --text-sm, so the row must not optically shrink inside the
      plate. */
   padding: var(--space-3) var(--space-4);
+  /* Header parity: the accordion header's text-lg arrow line inflates it to
+     ~58px (14×2 padding + 20×1.5 line) — match it so the --text-sm label
+     reads at the same optical size. */
+  min-height: 58px;
   background: var(--velo-bg-card-solid);
   border: 1px solid var(--velo-border-card);
   border-radius: var(--radius-md);
