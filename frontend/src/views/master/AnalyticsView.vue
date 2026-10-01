@@ -9,6 +9,13 @@
                   cards with inline rating badges.
     2. Платежи -- period income + transactions list + link to full Finance.
 
+  Owner 2026-10-01: payments are not live yet, so the tab slider is PARKED
+  (PAYMENTS_TAB_ENABLED below) and the screen renders the Отзывы tab only --
+  a single-option slider would be meaningless. The Платежи pane and its E2
+  wiring stay intact for the flip-back. The period toggle moved up into the
+  header's action slot (owner 2026-10-01): title left, Неделя/Месяц right --
+  one line, no second control row.
+
   Controls are the track+thumb pattern (single glass track, active fill pill) --
   the same shape as the master-dashboard period toggle, NOT the two-pill VSegment
   (operator design; VSegment<->track+thumb unification is a SHELL task).
@@ -32,21 +39,29 @@
 <template>
   <div class="analytics">
     <!-- Header (DS VHeader — uniform with the rest of the master zone, rides
-         MobileLayout's floating island; PROMPT №162). -->
-    <VHeader title="Аналитика" />
+         MobileLayout's floating island; PROMPT №162). The period toggle shares
+         the header line (owner 2026-10-01): title left, Неделя/Месяц right --
+         with the tab slider parked there is no second control row to reserve.
+         Visual-only until a period-scoped analytics API exists. -->
+    <VHeader title="Аналитика">
+      <template #action>
+        <VSegmentTrack
+          v-model="period"
+          :options="PERIOD_OPTIONS"
+          variant="toggle"
+          aria-label="Период статистики"
+        />
+      </template>
+    </VHeader>
 
-    <!-- Tab segment (track+thumb, DS primitive) -->
-    <VSegmentTrack v-model="activeTab" :options="TAB_OPTIONS" variant="tabs" />
-
-    <!-- Period toggle -- visual-only until a period-scoped analytics API exists. -->
-    <div class="analytics__period-row">
-      <VSegmentTrack
-        v-model="period"
-        :options="PERIOD_OPTIONS"
-        variant="toggle"
-        aria-label="Период статистики"
-      />
-    </div>
+    <!-- Tab segment (track+thumb, DS primitive). Parked while payments are
+         not live (owner 2026-10-01) -- a single-option slider is meaningless. -->
+    <VSegmentTrack
+      v-if="PAYMENTS_TAB_ENABLED"
+      v-model="activeTab"
+      :options="TAB_OPTIONS"
+      variant="tabs"
+    />
 
     <!-- ================================================================
          TAB: ОТЗЫВЫ
@@ -177,7 +192,7 @@
     <!-- ================================================================
          TAB: ПЛАТЕЖИ
          ================================================================ -->
-    <div v-show="activeTab === 'payments'" class="analytics__body">
+    <div v-if="PAYMENTS_TAB_ENABLED" v-show="activeTab === 'payments'" class="analytics__body">
       <div v-if="paymentsLoading" class="analytics__loader"><VLoader /></div>
 
       <VCard v-else-if="paymentsError" class="analytics__pay-error">
@@ -280,6 +295,13 @@ const insightsCache = diaryStore.insightsCache
 // =========================================================================
 // Tabs (track+thumb segment) + period toggle (visual-only)
 // =========================================================================
+
+// Owner 2026-10-01: payments are not live yet -- the Отзывы/Платежи slider is
+// parked and the screen renders the Отзывы tab only. Flip to true to restore
+// the slider, the Платежи pane and its data loads (everything below is kept).
+// Annotation is deliberate: a literal-false const would let TS narrow every
+// `if (PAYMENTS_TAB_ENABLED)` into provably-dead code.
+const PAYMENTS_TAB_ENABLED: boolean = false
 
 const activeTab = ref<'reviews' | 'payments'>('reviews')
 const TAB_OPTIONS: Array<{ value: 'reviews' | 'payments'; label: string }> = [
@@ -508,9 +530,11 @@ async function loadMoreTx(): Promise<void> {
 watch(period, () => {
   // Collapse the past list back to the preview when the period changes (#5).
   pastExpanded.value = false
-  void loadIncome().catch(() => {
-    /* keep the previous income value on a transient refetch error */
-  })
+  if (PAYMENTS_TAB_ENABLED) {
+    void loadIncome().catch(() => {
+      /* keep the previous income value on a transient refetch error */
+    })
+  }
 })
 
 // =========================================================================
@@ -539,7 +563,7 @@ function openReviews(practiceId: string): void {
 // =========================================================================
 
 onMounted(async () => {
-  void loadPayments()
+  if (PAYMENTS_TAB_ENABLED) void loadPayments()
   void loadReviews()
   // T22-5 (PROMPT №561): this tab only ever needs "Прошедшие" -- fetching the
   // combined bucket here would warm "Предстоящие" for no reason.
@@ -553,14 +577,6 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   min-height: 100%;
-}
-
-/* ===== Controls: period-toggle row (the track+thumb control itself is now the
-   shared VSegmentTrack DS primitive). ===== */
-.analytics__period-row {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: var(--space-3);
 }
 
 /* ===== Body ===== */
