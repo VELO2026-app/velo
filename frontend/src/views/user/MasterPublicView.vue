@@ -430,8 +430,8 @@ watch(masterId, (id) => {
 }
 
 /* The verified check rides the avatar's corner (owner 2026-09-30) -- the
-   ring is the card's own surface, so the disc reads as punched through
-   (never pure white: FE-43). */
+   ring is the card's own surface, so the disc reads as punched through.
+   Opaque disc + white check = the primary-button accent recipe. */
 .master-public__avatar {
   position: relative;
   flex-shrink: 0;
@@ -448,8 +448,8 @@ watch(masterId, (id) => {
   height: 22px;
   border: 2px solid var(--velo-bg-card-solid);
   border-radius: var(--radius-full);
-  background: var(--velo-glass-teal-30);
-  color: var(--velo-teal-600);
+  background: var(--velo-teal-600);
+  color: var(--velo-white);
 }
 
 .master-public__pills {
