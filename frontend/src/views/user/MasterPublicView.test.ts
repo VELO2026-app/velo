@@ -158,6 +158,13 @@ function mount(): HTMLElement {
   return host
 }
 
+function unmount(): void {
+  app?.unmount()
+  host?.remove()
+  app = null
+  host = null
+}
+
 async function flush(): Promise<void> {
   for (let i = 0; i < 5; i++) await nextTick()
 }
@@ -195,9 +202,6 @@ function statLabels(): string[] {
 }
 function upcomingSection(): HTMLElement | null {
   return host?.querySelector('.master-public__upcoming') ?? null
-}
-function upcomingHeaderBtn(): HTMLButtonElement | null {
-  return upcomingSection()?.querySelector<HTMLButtonElement>('.v-accordion__header') ?? null
 }
 function practiceCards(): HTMLElement[] {
   return Array.from(host?.querySelectorAll<HTMLElement>('.practice-list-card') ?? [])
@@ -550,7 +554,7 @@ describe('MasterPublicView', () => {
 
       expect(practicesApi.getPractices).toHaveBeenCalledWith(
         expect.objectContaining({ master_id: 'm_specific', status: 'scheduled' }),
-        10,
+        5,
         0,
       )
     })
@@ -564,13 +568,75 @@ describe('MasterPublicView', () => {
       await flush()
 
       expect(upcomingSection()).not.toBeNull()
-      upcomingHeaderBtn()?.click() // accordion defaults collapsed -- expand it
-      await nextTick()
+      // Owner 2026-09-30: the cards are always open -- no accordion to expand.
 
       expect(practiceCards()).toHaveLength(1)
       practiceCards()[0]?.click()
 
       expect(push).toHaveBeenCalledWith({ name: 'practice-detail', params: { id: 'pr1' } })
+    })
+
+    it('the cards block is capped at 5 even if the feed returns more (owner 2026-09-30)', async () => {
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(
+        page([
+          practice('pr1'),
+          practice('pr2'),
+          practice('pr3'),
+          practice('pr4'),
+          practice('pr5'),
+          practice('pr6'),
+        ]),
+      )
+      mount()
+      await flush()
+
+      expect(practiceCards()).toHaveLength(5)
+      expect(upcomingSection()?.textContent).not.toContain('pr6')
+    })
+
+    it('the «Предстоящие практики» nav row opens the master-practice calendar', async () => {
+      routeParams.id = 'm1'
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      mount()
+      await flush()
+
+      const nav = Array.from(
+        host?.querySelectorAll<HTMLButtonElement>('.master-public__nav') ?? [],
+      ).find((b) => b.textContent?.includes('Предстоящие практики'))
+      expect(nav).not.toBeNull()
+      nav!.click()
+
+      expect(push).toHaveBeenCalledWith({
+        name: 'user-calendar-master',
+        params: { masterId: 'm1' },
+      })
+    })
+
+    it('the «Аналитика» panel is a curator-only placeholder: hidden without ?groupId, shown with it', async () => {
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      mount()
+      await flush()
+
+      expect(content()?.textContent).not.toContain('Аналитика')
+
+      unmount()
+      routeQuery.groupId = 'g1'
+      mount()
+      await flush()
+
+      expect(content()?.textContent).toContain('Аналитика')
+      // The placeholder body lives in the accordion; expand THE ANALYTICS one
+      // (querySelector would hit the Методы accordion first) to prove the copy.
+      const analyticsAcc = Array.from(content()?.querySelectorAll('.v-accordion') ?? []).find(
+        (acc) => acc.querySelector('.v-accordion__title')?.textContent?.includes('Аналитика'),
+      )
+      analyticsAcc!.querySelector<HTMLButtonElement>('.v-accordion__header')!.click()
+      await nextTick()
+
+      expect(content()?.textContent).toContain('после подключения данных')
     })
   })
 
@@ -754,7 +820,7 @@ describe('MasterPublicView', () => {
 
       expect(practicesApi.getPractices).toHaveBeenLastCalledWith(
         expect.objectContaining({ master_id: 'm2', status: 'scheduled' }),
-        10,
+        5,
         0,
       )
     })

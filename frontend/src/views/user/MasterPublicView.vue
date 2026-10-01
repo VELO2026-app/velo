@@ -6,7 +6,12 @@
     - Hero card: avatar with a verified check badge on its corner, name, "N лет опыта" pill, bio
     - Two stat cards: practices_count "Практик" / reviews_count "Отзывов"
     - "Методы" accordion (method chips)
-    - "Ближайшие практики": upcoming practices by this master (reuses
+    - «Предстоящие практики» nav row (owner 2026-09-30) -> the stacked
+      user-calendar-master route (the master's practice calendar)
+    - «Аналитика» accordion, curator-of-the-school only (?groupId=):
+      PLACEHOLDER until the curator-analytics contract exists
+    - «Ближайшие практики»: plain heading + up to 5 upcoming-practice cards
+      (owner 2026-09-30 -- the collapsed accordion is retired; reuses
       getPractices with master_id -- no new endpoint, no dedicated store)
     - «⋯» меню: «Написать сообщение» -> ask-master flow (T2); в школьном
       контексте куратора — ещё «Изменить роль» и «Заблокировать» (владелец,
@@ -134,26 +139,41 @@
         </div>
       </VAccordion>
 
-      <!-- Ближайшие практики: СВЁРНУТЫЙ по умолчанию аккордеон (operator
-           2026-06-05) — чтобы меню действий в шапке (и «Написать сообщение»)
-           были сразу видны, без скролла мимо всех практик. Заголовок = белая
-           плашка (консистентно с «Методы»); тело прозрачное -> карточки лежат
-           отдельными прямоугольниками на фоне (не сливаются бело-на-белом).
-           show-date: практики идут в разные дни — карточка показывает дату
-           под иконкой + время в мета-линии. -->
-      <div v-if="upcoming.length" class="master-public__upcoming">
-        <VAccordion title="Ближайшие практики">
-          <div class="master-public__practices">
-            <CalendarPracticeCard
-              v-for="p in upcoming"
-              :key="p.id"
-              :practice="p"
-              show-date
-              @click="goToPractice"
-            />
-          </div>
-        </VAccordion>
-      </div>
+      <!-- «Предстоящие практики» (owner 2026-09-30): nav row to the stacked
+           master-practice calendar. A row, not an accordion -- it only
+           navigates. -->
+      <button type="button" class="master-public__nav" @click="goToCalendar">
+        <span class="master-public__nav-label">Предстоящие практики</span>
+        <IconChevronRight :size="16" />
+      </button>
+
+      <!-- Аналитика: curator-of-THIS-school only (the ?groupId= marker).
+           PLACEHOLDER until the curator-analytics contract exists (same
+           pattern as the Блок tab) -- no endpoint serves a member master's
+           figures to the school curator yet. -->
+      <VAccordion v-if="schoolContext" title="Аналитика">
+        <p class="master-public__note">
+          Аналитика мастера появится здесь после подключения данных.
+        </p>
+      </VAccordion>
+
+      <!-- Ближайшие практики (owner 2026-09-30): a plain heading with the
+           cards always open -- the collapsed accordion (operator 2026-06-05)
+           is retired; the ⋯ menu keeps floating above, so the actions stay
+           reachable. Up to 5 nearest scheduled practices. show-date: практики
+           идут в разные дни — карточка показывает дату + время. -->
+      <section v-if="upcoming.length" class="master-public__upcoming">
+        <h3 class="master-public__section-title">Ближайшие практики</h3>
+        <div class="master-public__practices">
+          <CalendarPracticeCard
+            v-for="p in upcoming"
+            :key="p.id"
+            :practice="p"
+            show-date
+            @click="goToPractice"
+          />
+        </div>
+      </section>
 
       <!-- «Написать сообщение» (the ⋯ menu) replaced the «Задать вопрос»
            button: opens/joins the eternal DM with this master (POST
@@ -230,7 +250,7 @@ import {
   VRadioGroup,
 } from '@/components/ui'
 import { VHeader } from '@/components/layout'
-import { IconCheck, IconLock, IconMessages, IconPen } from '@/components/icons'
+import { IconCheck, IconChevronRight, IconLock, IconMessages, IconPen } from '@/components/icons'
 import CalendarPracticeCard from '@/components/shared/CalendarPracticeCard.vue'
 import SendMessageModal from '@/components/shared/SendMessageModal.vue'
 import TargetUserCard from '@/components/shared/TargetUserCard.vue'
@@ -342,6 +362,14 @@ function goToPractice(id: string): void {
   void router.push({ name: 'practice-detail', params: { id } })
 }
 
+// The «Предстоящие практики» row: the stacked MASTER-practice calendar.
+function goToCalendar(): void {
+  void router.push({
+    name: 'user-calendar-master',
+    params: { masterId: masterId.value },
+  })
+}
+
 async function loadMaster(id: string): Promise<void> {
   loading.value = true
   error.value = null
@@ -358,10 +386,12 @@ async function loadMaster(id: string): Promise<void> {
           sort_by: 'scheduled_at',
           sort_order: 'asc',
         },
-        10,
+        5,
         0,
       )
-      upcoming.value = res.items
+      // The ≤5 cap is also enforced locally: the owner's 2026-09-30 spec is
+      // "up to 5 cards", independent of any server limit regression.
+      upcoming.value = res.items.slice(0, 5)
     } catch {
       // Non-fatal: the profile still renders without the upcoming list.
       upcoming.value = []
@@ -529,21 +559,41 @@ watch(masterId, (id) => {
 /* «Ближайшие практики» — свёрнутый аккордеон. Контейнер прозрачный (чтобы тело
  * не было белой плашкой), заголовок = белая плашка как «Методы», тело прозрачное
  * -> карточки лежат на фоне отдельными прямоугольниками (без «слитности»). */
-.master-public__upcoming :deep(.v-accordion) {
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  overflow: visible;
-}
-
-.master-public__upcoming :deep(.v-accordion__header) {
+/* «Предстоящие практики»: a nav row (owner 2026-09-30) -- card plate, label
+   + chevron, tap-only. */
+.master-public__nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-4);
   background: var(--velo-bg-card-solid);
   border: 1px solid var(--velo-border-card);
   border-radius: var(--radius-md);
+  color: var(--velo-text-primary);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  cursor: pointer;
 }
 
-.master-public__upcoming :deep(.v-accordion__body) {
-  padding: var(--space-2) 0 0;
+.master-public__note {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--velo-text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Ближайшие практики: plain heading (the bookings__section-title recipe),
+   cards always open -- no accordion. */
+.master-public__section-title {
+  font-family: var(--font-body);
+  font-size: var(--text-lg);
+  font-weight: 400;
+  color: var(--velo-text-primary);
+  letter-spacing: 0.02em;
+  margin: 0 0 var(--space-3);
 }
 
 .master-public__practices {

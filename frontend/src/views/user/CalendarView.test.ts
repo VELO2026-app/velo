@@ -116,8 +116,11 @@ vi.mock('@/api/practices')
 vi.mock('@/api/taxonomy')
 
 const push = vi.fn()
+// Master mode (owner 2026-09-30): the stacked route carries :masterId.
+const routeState = { params: {} as Record<string, string> }
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push }),
+  useRoute: () => ({ params: routeState.params }),
 }))
 
 // -----------------------------------------------------------------------------
@@ -193,7 +196,8 @@ let app: App | null = null
 let host: HTMLElement | null = null
 let pinia: Pinia
 
-function mount(): HTMLElement {
+function mount(routeParams: Record<string, string> = {}): HTMLElement {
+  routeState.params = routeParams
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(CalendarView)
@@ -295,6 +299,7 @@ beforeEach(() => {
 
   useAuthStore().user = user()
 
+  routeState.params = {}
   push.mockReset()
 })
 
@@ -666,6 +671,51 @@ describe('CalendarView', () => {
       await flush()
 
       expect(cardBadge(practiceCards()[0]!)).toContain('1 523,50')
+    })
+  })
+
+  // ===========================================================================
+  describe('master mode (user-calendar-master, owner 2026-09-30)', () => {
+    it("mounts with :masterId and fetches THAT master's scheduled practices; the viewer filter UI sits out", async () => {
+      mount({ masterId: 'm9' })
+      await flush()
+
+      expect(practicesApi.getPractices).toHaveBeenCalledWith(
+        expect.objectContaining({ master_id: 'm9', status: 'scheduled' }),
+        100,
+        0,
+      )
+      expect(text()).toContain('Практики мастера')
+      expect(text()).not.toContain('Выбрать практики')
+    })
+
+    it("the back control returns to the master's public profile", async () => {
+      mount({ masterId: 'm9' })
+      await flush()
+
+      const back = host?.querySelector<HTMLButtonElement>('.calendar__back')
+      expect(back).not.toBeNull()
+      back!.click()
+
+      expect(push).toHaveBeenCalledWith({
+        name: 'user-master-public',
+        params: { id: 'm9' },
+      })
+    })
+
+    it('leaving the screen resets the master scope -- the shared store must not poison the tab calendar', async () => {
+      mount({ masterId: 'm9' })
+      await flush()
+
+      const store = useCalendarStore()
+      expect(store.masterScope).toBe('m9')
+
+      app?.unmount()
+      host?.remove()
+      app = null
+      host = null
+
+      expect(store.masterScope).toBeNull()
     })
   })
 })

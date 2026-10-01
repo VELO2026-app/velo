@@ -111,6 +111,16 @@ export const useCalendarStore = defineStore('calendar', () => {
   // Active facet filters (server-applied on load).
   const filters = reactive<CalendarFacetFilters>({})
 
+  // MASTER scope (owner 2026-09-30): when set, the week feed is THIS master's
+  // scheduled practices (the public feed, master_id + status=scheduled) instead
+  // of the viewer's own -- the stacked user-calendar-master route. Pinia state
+  // is a singleton shared with the tab calendar, so the view resets it to null
+  // on unmount; loadWeek folds it into the query.
+  const masterScope = ref<string | null>(null)
+  function setMasterScope(masterId: string | null): void {
+    masterScope.value = masterId
+  }
+
   const loading = ref(false)
   const error = ref<string | null>(null)
 
@@ -230,6 +240,10 @@ export const useCalendarStore = defineStore('calendar', () => {
 
     const query: PracticeFilters = {
       ...filters,
+      // Master scope (owner 2026-09-30): the stacked master calendar reads the
+      // PUBLIC feed for one master, scheduled only -- never the viewer's own
+      // practices, never drafts/past ones.
+      ...(masterScope.value ? { master_id: masterScope.value, status: 'scheduled' } : {}),
       date_from: from.toISOString(),
       date_to: to.toISOString(),
       sort_by: 'scheduled_at',
@@ -341,6 +355,7 @@ export const useCalendarStore = defineStore('calendar', () => {
     selectedDate,
     weekPractices,
     filters,
+    masterScope,
     loading,
     error,
     // derived
@@ -356,6 +371,7 @@ export const useCalendarStore = defineStore('calendar', () => {
     nextWeek,
     shiftDays,
     applyFilters,
+    setMasterScope,
     init,
     // helpers (exported for the view: local day key of a Date)
     localDateKey,

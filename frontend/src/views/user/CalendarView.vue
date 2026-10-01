@@ -27,7 +27,29 @@
          on mount: null" crash that blanked the heading + broke the screen. -->
     <Teleport defer to=".mobile-layout__island" :disabled="!floating">
       <div class="calendar__island" :class="{ 'calendar__island--floating': floating }">
-        <h1 class="calendar__heading">Календарь</h1>
+        <!-- Master mode (owner 2026-09-30): a back control rides the island --
+             this stacked screen is NOT the tab hub, so the viewer must have a
+             way out; it returns to the master's profile deterministically. -->
+        <div class="calendar__heading-row">
+          <button
+            v-if="masterMode"
+            type="button"
+            class="calendar__back"
+            aria-label="Назад к профилю мастера"
+            @click="goBackToMaster"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M15 6l-6 6 6 6"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+          <h1 class="calendar__heading">{{ masterMode ? 'Практики мастера' : 'Календарь' }}</h1>
+        </div>
 
         <!-- Week selector -->
         <WeekStrip
@@ -42,8 +64,10 @@
       </div>
     </Teleport>
 
-    <!-- "Выбрать практики" control -->
-    <div class="calendar__selector">
+    <!-- "Выбрать практики" control: the viewer's OWN practice filters. In
+         master mode the feed is the master's scheduled practices -- the
+         facet modal has nothing to filter, so the control sits out. -->
+    <div v-if="!masterMode" class="calendar__selector">
       <!-- Collapsed: pill + funnel -->
       <button v-if="!expanded" type="button" class="calendar__select-pill" @click="expanded = true">
         <span class="calendar__select-label">Выбрать практики</span>
@@ -127,8 +151,12 @@
     <!-- Empty: no practices on the selected day -->
     <VEmptyState
       v-else-if="dayPractices.length === 0"
-      title="Нет практик"
-      description="На этот день практик нет. Выберите другой день или измените фильтры."
+      :title="masterMode ? 'Практик нет' : 'Нет практик'"
+      :description="
+        masterMode
+          ? 'У мастера пока нет практик на этот день. Выберите другой день.'
+          : 'На этот день практик нет. Выберите другой день или измените фильтры.'
+      "
     >
       <template #icon><IconClock :size="48" /></template>
     </VEmptyState>
@@ -155,8 +183,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useCalendarStore } from '@/stores/calendar'
 import { VLoader, VEmptyState, VButton, VCard } from '@/components/ui'
 import WeekStrip from '@/components/shared/WeekStrip.vue'
@@ -178,8 +206,36 @@ import type { PracticeResponse } from '@/api/types'
 import type { CalendarFacetFilters } from '@/stores/calendar'
 
 const router = useRouter()
+const route = useRoute()
 const store = useCalendarStore()
 const viewerTz = useViewerTimezone()
+
+// -- Master mode (owner 2026-09-30) ------------------------------------------
+// Stacked route user-calendar-master/:masterId: the week feed switches to the
+// master's scheduled practices (store.setMasterScope folds master_id +
+// status=scheduled into loadWeek) and the viewer's facet UI sits out. The
+// scope MUST reset on unmount -- the store is a singleton the tab calendar
+// shares; a leaked scope would poison the viewer's own week.
+const masterMode = computed(() => String(route.params.masterId ?? '') !== '')
+
+onMounted(() => {
+  if (masterMode.value) {
+    store.setMasterScope(String(route.params.masterId))
+  }
+})
+
+onUnmounted(() => {
+  if (masterMode.value) {
+    store.setMasterScope(null)
+  }
+})
+
+function goBackToMaster(): void {
+  void router.push({
+    name: 'user-master-public',
+    params: { id: String(route.params.masterId) },
+  })
+}
 
 // Title + week strip float as an island (G-1): the date nav stays in place while
 // the practice list scrolls under it.
@@ -320,6 +376,29 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+
+/* Master mode: back control + title share the island's heading row. */
+.calendar__heading-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.calendar__back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: var(--velo-glass-blue-15);
+  color: var(--velo-text-primary);
+  padding: 0;
+  border: none;
+  cursor: pointer;
 }
 
 .calendar__heading {
