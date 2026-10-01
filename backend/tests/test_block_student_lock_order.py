@@ -210,6 +210,62 @@ def _pause_first_call(
     return reached, release
 
 
+def _pause_after_first_call(
+    monkeypatch: pytest.MonkeyPatch, module: object, name: str,
+) -> tuple[asyncio.Event, asyncio.Event]:
+    """Pass-through hook: the FIRST caller of module.name makes the real
+    call -- taking whatever it locks -- and then stops until `release` is
+    set; later callers go straight through."""
+    reached, release = asyncio.Event(), asyncio.Event()
+    original = getattr(module, name)
+    state = {"first": True}
+
+    async def hook(*args: object, **kwargs: object) -> object:
+        value = await original(*args, **kwargs)
+        if state["first"]:
+            state["first"] = False
+            reached.set()
+            await release.wait()
+        return value
+
+    monkeypatch.setattr(module, name, hook)
+    return reached, release
+
+
+async def _master_student_rows(
+    db_session: AsyncSession, master_id: UUID, student_id: UUID,
+) -> list[MasterStudent]:
+    db_session.expire_all()
+    return list(
+        (
+            await db_session.execute(
+                select(MasterStudent).where(
+                    MasterStudent.master_id == master_id,
+                    MasterStudent.student_user_id == student_id,
+                )
+            )
+        ).scalars().all()
+    )
+
+
+def _then_hold(
+    work: Callable[[AsyncSession], Awaitable[object]],
+) -> tuple[Callable[[AsyncSession], Awaitable[object]], asyncio.Event, asyncio.Event]:
+    """Wrap `work` so that, after it returns, its transaction stays open --
+    holding whatever it wrote and locked -- until `release` is set. For
+    services with no later call to hook (set_student_tag returns right
+    after its write)."""
+    reached, release = asyncio.Event(), asyncio.Event()
+
+    async def held(session: AsyncSession) -> object:
+        value = await work(session)
+        reached.set()
+        await release.wait()
+        return value
+
+    return held, reached, release
+
+
 async def _refunds_for(
     db_session: AsyncSession, practice_id: UUID, student_id: UUID,
 ) -> int:
@@ -365,11 +421,14 @@ async def test_same_student_blocked_twice_at_once(
     left to cancel. Pair: the booking cancelled and refunded exactly once,
     the count 0, and its registrant queued for Zoom once.
 
-    The MasterStudent row exists beforehand (the master tagged the student
-    through the real service). Without it both blocks insert that row and
-    the second dies on uq_master_student_master_student -- before any
-    practice lock, so not a lock-order matter; found by this test, out of
-    BE-96's fence, reported (BE-96 report, observations)."""
+    No MasterStudent row beforehand (Zoom-2, part 1). This test used to
+    create one -- the master tagged the student first -- because without it
+    both blocks inserted the row by read-then-insert and the second died on
+    uq_master_student_master_student (found here, BE-96 report,
+    observations). That detour was right about the lock order and hid a
+    500. The row is now taken by an upsert: the second block waits on the
+    unique index for the first and then updates the same row, so the pair
+    gains "exactly one row, blocked"."""
     master = await _user(client, db_session, 69755, master=True)
     student = await _user(client, db_session, 69756)
     practice = await _practice(db_session, master)
@@ -383,10 +442,10 @@ async def test_same_student_blocked_twice_at_once(
     )
     await db_session.flush()
     booking = await create_booking(student, practice.id, session=db_session)
-    await groups_service.set_student_tag(master.id, student.id, "regular", db_session)
     await db_session.commit()
     master_id, student_id = master.id, student.id
     booking_id, practice_id = booking.id, practice.id
+    assert await _master_student_rows(db_session, master_id, student_id) == []
 
     reached, release = _pause_first_call(monkeypatch, groups_service, "refund_booking")
     first, second = _Outcome(), _Outcome()
@@ -428,3 +487,142 @@ async def test_same_student_blocked_twice_at_once(
     assert len(rows) == 1
     assert rows[0].zoom_cancel_pending is True
     assert rows[0].zoom_cancel_attempts == 0
+    pair = await _master_student_rows(db_session, master_id, student_id)
+    assert len(pair) == 1
+    assert pair[0].blocked_at is not None
+    assert pair[0].tag is None
+
+
+# ===========================================================================
+# The (master, student) row itself -- Zoom-2, part 1.
+#
+# Every writer of the pair takes the row with one upsert
+# (groups_service._take_master_student). The races below are the writers
+# of that row met two at a time: two tags; a tag and a block with no row
+# yet; a block while the tag is being cleared (the delete). Each asserts
+# the invariant -- one row, every committed write in it, no 500 -- and its
+# pair, that the competitor's own write was left as it left it.
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_same_student_tagged_twice_at_once(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """REPEAT, concurrent: two tags of one student with no row yet. The
+    first has written and holds its transaction open; Postgres reports the
+    second WAITING (on the unique index); then the first commits. Both
+    commit, one row, and it carries the tag written last -- one tag per
+    student, a second PUT overwrites (owner Q1=A)."""
+    master = await _user(client, db_session, 69757, master=True)
+    student = await _user(client, db_session, 69758)
+    await db_session.commit()
+    master_id, student_id = master.id, student.id
+
+    held, reached, release = _then_hold(
+        lambda s: groups_service.set_student_tag(master_id, student_id, "first", s),
+    )
+    first, second = _Outcome(), _Outcome()
+    first_task = asyncio.create_task(_in_own_session(held, first))
+    await asyncio.wait_for(reached.wait(), 5)
+    second_task = asyncio.create_task(_in_own_session(
+        lambda s: groups_service.set_student_tag(master_id, student_id, "second", s),
+        second,
+    ))
+
+    assert await _wait_until_waiting_on_lock(second), (
+        "the second tag never waited -- the two transactions did not overlap"
+    )
+    release.set()
+    await asyncio.wait_for(asyncio.gather(first_task, second_task), 15)
+
+    assert first.result == "committed", first.error
+    assert second.result == "committed", second.error
+    pair = await _master_student_rows(db_session, master_id, student_id)
+    assert [(r.tag, r.blocked_at) for r in pair] == [("second", None)]
+
+
+@pytest.mark.asyncio
+async def test_block_and_tag_at_once_with_no_row_keep_both(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """SHORTAGE, two different writers of one missing row: the tag has
+    written and holds; the block waits on the index. Both commit, one row,
+    and it carries BOTH writes -- the block did not drop the tag, the tag
+    did not survive as the only thing in the row."""
+    master = await _user(client, db_session, 69759, master=True)
+    student = await _user(client, db_session, 69760)
+    await db_session.commit()
+    master_id, student_id = master.id, student.id
+
+    held, reached, release = _then_hold(
+        lambda s: groups_service.set_student_tag(master_id, student_id, "regular", s),
+    )
+    tag, block = _Outcome(), _Outcome()
+    tag_task = asyncio.create_task(_in_own_session(held, tag))
+    await asyncio.wait_for(reached.wait(), 5)
+    block_task = asyncio.create_task(_in_own_session(
+        lambda s: groups_service.block_student(master_id, student_id, s), block,
+    ))
+
+    assert await _wait_until_waiting_on_lock(block), (
+        "the block never waited -- the two transactions did not overlap"
+    )
+    release.set()
+    await asyncio.wait_for(asyncio.gather(tag_task, block_task), 15)
+
+    assert tag.result == "committed", tag.error
+    assert block.result == "committed", block.error
+    pair = await _master_student_rows(db_session, master_id, student_id)
+    assert len(pair) == 1
+    assert pair[0].tag == "regular"
+    assert pair[0].blocked_at is not None
+
+
+@pytest.mark.asyncio
+async def test_block_while_the_tag_is_cleared_blocks(
+    client: AsyncClient, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """EMPTINESS mid-race: the row exists with a tag only. Clearing the tag
+    has LOCKED the row (its FOR UPDATE read) and is paused before deleting
+    it; the block arrives and Postgres reports it waiting on that row. The
+    clear then deletes and commits.
+
+    This is the test that tells the upsert's two forms apart. With
+    ON CONFLICT DO NOTHING + a re-read, the block's insert sees the live
+    committed row and does nothing, its re-read waits on the clear's lock,
+    and after the delete it reads NOTHING -- the block has no row to set.
+    DO UPDATE re-checks the deleted row and inserts. So: both commit, one
+    row, blocked, and (the pair) the clear's own write stands -- the tag is
+    gone, not resurrected by the block."""
+    master = await _user(client, db_session, 69761, master=True)
+    student = await _user(client, db_session, 69762)
+    await groups_service.set_student_tag(master.id, student.id, "regular", db_session)
+    await db_session.commit()
+    master_id, student_id = master.id, student.id
+
+    reached, release = _pause_after_first_call(
+        monkeypatch, groups_service, "_get_or_none_master_student",
+    )
+    clear, block = _Outcome(), _Outcome()
+    clear_task = asyncio.create_task(_in_own_session(
+        lambda s: groups_service.set_student_tag(master_id, student_id, None, s),
+        clear,
+    ))
+    await asyncio.wait_for(reached.wait(), 5)
+    block_task = asyncio.create_task(_in_own_session(
+        lambda s: groups_service.block_student(master_id, student_id, s), block,
+    ))
+
+    assert await _wait_until_waiting_on_lock(block), (
+        "the block never waited -- the two transactions did not overlap"
+    )
+    release.set()
+    await asyncio.wait_for(asyncio.gather(clear_task, block_task), 15)
+
+    assert clear.result == "committed", clear.error
+    assert block.result == "committed", block.error
+    pair = await _master_student_rows(db_session, master_id, student_id)
+    assert len(pair) == 1
+    assert pair[0].blocked_at is not None
+    assert pair[0].tag is None
