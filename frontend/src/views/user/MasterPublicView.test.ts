@@ -68,11 +68,13 @@ import * as mastersApi from '@/api/masters'
 import * as practicesApi from '@/api/practices'
 import { ApiResponseError } from '@/api/client'
 import * as chatsApi from '@/api/chats'
+import * as cgApi from '@/api/curatorGroups'
 import type { MasterPublicResponse, PracticeResponse } from '@/api/types'
 
 vi.mock('@/api/masters')
 vi.mock('@/api/practices')
 vi.mock('@/api/chats')
+vi.mock('@/api/curatorGroups')
 
 const back = vi.fn()
 const push = vi.fn()
@@ -83,15 +85,17 @@ const push = vi.fn()
 // course nothing re-fires, regardless of whether the source has a watch) --
 // caught by mutation-testing a simulated fix against the first draft.
 const routeParams = reactive<{ id: string }>({ id: 'm1' })
+const routeQuery = reactive<{ groupId?: string }>({})
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push, back, replace: vi.fn() }),
-  useRoute: () => ({ params: routeParams }),
+  useRoute: () => ({ params: routeParams, query: routeQuery }),
 }))
 
 const toastInfo = vi.fn()
 const toastError = vi.fn()
+const toastSuccess = vi.fn()
 vi.mock('@/composables/useToast', () => ({
-  useToast: () => ({ error: toastError, success: vi.fn(), info: toastInfo }),
+  useToast: () => ({ error: toastError, success: toastSuccess, info: toastInfo }),
 }))
 
 function masterProfile(overrides: Partial<MasterPublicResponse> = {}): MasterPublicResponse {
@@ -156,6 +160,13 @@ function mount(): HTMLElement {
   return host
 }
 
+function unmount(): void {
+  app?.unmount()
+  host?.remove()
+  app = null
+  host = null
+}
+
 async function flush(): Promise<void> {
   for (let i = 0; i < 5; i++) await nextTick()
 }
@@ -194,15 +205,16 @@ function statLabels(): string[] {
 function upcomingSection(): HTMLElement | null {
   return host?.querySelector('.master-public__upcoming') ?? null
 }
-function upcomingHeaderBtn(): HTMLButtonElement | null {
-  return upcomingSection()?.querySelector<HTMLButtonElement>('.v-accordion__header') ?? null
-}
 function practiceCards(): HTMLElement[] {
   return Array.from(host?.querySelectorAll<HTMLElement>('.practice-list-card') ?? [])
 }
-function askBtn(): HTMLButtonElement | null {
-  return host?.querySelector<HTMLButtonElement>('.master-public__actions .v-btn') ?? null
+function methodPills(): HTMLElement[] {
+  return Array.from(host?.querySelectorAll<HTMLElement>('.master-public__chips .v-tag') ?? [])
 }
+function pillTexts(): string[] {
+  return methodPills().map((p) => (p.textContent ?? '').trim().replace(/\s+/g, ' '))
+}
+// Owner 2026-09-30: the accordion is defaultOpen -- pills read directly.
 
 beforeEach(() => {
   pinia = createPinia()
@@ -216,6 +228,7 @@ beforeEach(() => {
   push.mockReset()
   back.mockReset()
   routeParams.id = 'm1'
+  routeQuery.groupId = undefined
 })
 
 afterEach(() => {
@@ -227,6 +240,223 @@ afterEach(() => {
 })
 
 describe('MasterPublicView', () => {
+  describe('curator school-context actions (owner 2026-09-30)', () => {
+    function menuButton(): HTMLElement | undefined {
+      return Array.from(document.body.querySelectorAll<HTMLButtonElement>('button') ?? []).find(
+        (b) => b.getAttribute('aria-label') === 'Действия с мастером',
+      )
+    }
+    function menuItem(label: string): HTMLButtonElement | undefined {
+      return Array.from(
+        document.body.querySelectorAll<HTMLButtonElement>('.v-menu-item') ?? [],
+      ).find((b) => b.getAttribute('aria-label') === label)
+    }
+    function liveModal(): HTMLElement | undefined {
+      const containers = Array.from(
+        document.body.querySelectorAll<HTMLElement>('.v-modal__container'),
+      )
+      return containers[containers.length - 1]
+    }
+    function modalButton(label: string): HTMLButtonElement | undefined {
+      return Array.from(liveModal()?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(
+        (b) => b.textContent?.trim() === label,
+      )
+    }
+    function openMenu(): Promise<void> {
+      menuButton()?.click()
+      return flush()
+    }
+
+    it('no ?groupId: the menu carries only «Написать сообщение» -- no curator actions', async () => {
+      mount()
+      await flush()
+      await openMenu()
+
+      expect(menuItem('Написать сообщение')).toBeTruthy()
+      expect(menuItem('Изменить роль')).toBeUndefined()
+      expect(menuItem('Заблокировать')).toBeUndefined()
+    })
+
+    it('with ?groupId the «⋯» menu carries the three curator actions', async () => {
+      routeQuery.groupId = 'g1'
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      mount()
+      await flush()
+      await openMenu()
+
+      expect(menuItem('Написать сообщение')).toBeTruthy()
+      expect(menuItem('Изменить роль')).toBeTruthy()
+      expect(menuItem('Заблокировать')).toBeTruthy()
+    })
+
+    it('«Написать сообщение» opens the composer; sending opens the DM, posts the text and closes', async () => {
+      routeQuery.groupId = 'g1'
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      vi.mocked(chatsApi.openChat).mockResolvedValue({
+        id: 'thread-9',
+        created_at: '2026-09-30T10:00:00+00:00',
+      })
+      vi.mocked(chatsApi.sendChatMessage).mockResolvedValue({
+        id: 'msg-9',
+        thread_id: 'thread-9',
+        sender: 'me',
+        body: 'Привет',
+        created_at: '2026-09-30T10:01:00+00:00',
+      })
+      mount()
+      await flush()
+      await openMenu()
+
+      menuItem('Написать сообщение')?.click()
+      await flush()
+
+      // The composer: recipient chip + textarea + pills.
+      expect(document.body.textContent).toContain('Отправить')
+      const modal = liveModal()
+      const field = modal?.querySelector<HTMLTextAreaElement>('.send-msg textarea')
+      field!.value = 'Привет'
+      field!.dispatchEvent(new Event('input'))
+      await flush()
+
+      modalButton('Отправить')?.click()
+      await flush()
+
+      // open-or-get the DM with THIS master, then post the text.
+      expect(chatsApi.openChat).toHaveBeenCalledWith('m1')
+      expect(chatsApi.sendChatMessage).toHaveBeenCalledWith('thread-9', 'Привет')
+      expect(toastSuccess).toHaveBeenCalledWith('Сообщение отправлено')
+    })
+
+    it('«Изменить роль»: preselects «Мастер»; the demote pick enables a marked no-op confirm (BE-59)', async () => {
+      routeQuery.groupId = 'g1'
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      mount()
+      await flush()
+      await openMenu()
+
+      menuItem('Изменить роль')?.click()
+      await flush()
+
+      const modal = liveModal()
+      expect(modal?.textContent).toContain('Изменить роль')
+      expect(modal?.textContent).toContain('Выберите роль')
+      expect(modalButton('Мастер')?.getAttribute('aria-checked')).toBe('true')
+      expect(modalButton('Изменить')?.disabled).toBe(true)
+
+      modalButton('Ученик')?.click()
+      await flush()
+      expect(modalButton('Изменить')?.disabled).toBe(false)
+
+      modalButton('Изменить')?.click()
+      await flush()
+
+      // The BE-59 demote is wired: the roster's school + the page's master.
+      expect(vi.mocked(cgApi.demoteCuratorGroupMaster)).toHaveBeenCalledWith('g1', 'm1')
+      expect(toastSuccess).toHaveBeenCalledWith('Роль изменена: участник теперь ученик школы')
+    })
+
+    it('«Изменить роль»: a demote failure toasts the API error and keeps the modal open', async () => {
+      routeQuery.groupId = 'g1'
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      vi.mocked(cgApi.demoteCuratorGroupMaster).mockRejectedValue(
+        new ApiResponseError(500, 'backend said no'),
+      )
+      mount()
+      await flush()
+      await openMenu()
+
+      menuItem('Изменить роль')?.click()
+      await flush()
+      modalButton('Ученик')?.click()
+      await flush()
+      modalButton('Изменить')?.click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Не удалось изменить роль')
+      expect(liveModal()).not.toBeNull()
+    })
+
+    it('«Заблокировать»: draft confirm; confirm is a marked no-op until BE-79', async () => {
+      routeQuery.groupId = 'g1'
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      mount()
+      await flush()
+      await openMenu()
+
+      menuItem('Заблокировать')?.click()
+      await flush()
+
+      const modal = liveModal()
+      expect(modal?.textContent).toContain('Заблокировать участника школы?')
+      expect(modal?.textContent).toContain('утратит доступ к школе')
+      expect(modal?.querySelector('.v-confirm__panel svg')).not.toBeNull()
+
+      modalButton('Заблокировать')?.click()
+      await flush()
+
+      expect(toastInfo).toHaveBeenCalledWith('Блокировка участника школы появится позже (BE-79)')
+    })
+  })
+
+  // ===========================================================================
+  describe('methods chips (FE-61/62/64)', () => {
+    it('a «Направление — Вид» pill shows the SHORT style label — the direction word never repeats inside one chip', async () => {
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(
+        masterProfile({
+          methods: [
+            'Медитация — Медитация молчания',
+            'Йога — Кундалини-йога',
+            'Мой уникальный метод',
+          ],
+        }),
+      )
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      mount()
+      await flush()
+
+      // Owner 2026-09-30: defaultOpen -- the pills are visible immediately,
+      // no expand-tap needed.
+      expect(pillTexts()).toEqual(['Молчания', 'Кундалини', 'Мой уникальный метод'])
+      // FE-64 regression: the raw flat string must not surface in any pill.
+      for (const t of pillTexts()) {
+        expect(t.toLowerCase()).not.toContain('медитация —')
+        expect(t.toLowerCase()).not.toContain('йога —')
+      }
+    })
+
+    it('every pill carries a direction icon (svg), the neutral fallback included for unknown strings', async () => {
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(
+        masterProfile({ methods: ['Медитация — Медитация молчания', 'Йога-нидра'] }),
+      )
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      mount()
+      await flush()
+
+      const pills = methodPills()
+      expect(pills.length).toBe(2)
+      for (const p of pills) expect(p.querySelector('svg')).not.toBeNull()
+    })
+
+    it('the «Методы» accordion ALWAYS renders: empty methods -> the honest note (owner 2026-09-30)', async () => {
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile({ methods: [] }))
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      mount()
+      await flush()
+
+      const acc = Array.from(content()?.querySelectorAll('.v-accordion') ?? []).find((node) =>
+        node.querySelector('.v-accordion__title')?.textContent?.includes('Методы'),
+      )
+      expect(acc).not.toBeNull()
+      expect(acc?.textContent).toContain('Методы пока не указаны')
+      expect(methodPills()).toHaveLength(0)
+    })
+  })
+
   // ===========================================================================
   describe('the ladder', () => {
     it('loading starts true from setup itself: the loader shows on the very first render, zero ticks after mount()', () => {
@@ -248,7 +478,10 @@ describe('MasterPublicView', () => {
       expect(emptyState()).toBeNull()
       expect(content()).not.toBeNull()
       expect(content()?.textContent).toContain('Анна Соколова')
-      expect(content()?.textContent).toContain('Верифицирован')
+      // Verified check is the small MasterCard-style disc now (icon-only --
+      // the text badge is gone; owner 2026-09-30).
+      expect(content()?.querySelector('.master-public__verified svg')).not.toBeNull()
+      expect(content()?.textContent).not.toContain('Верифицирован')
     })
 
     it('FIXED (B11 item 2, PROMPT №587): a 404 ApiResponseError shows "Мастер не найден" with the mapped table phrase, and NO retry action', async () => {
@@ -319,7 +552,7 @@ describe('MasterPublicView', () => {
       expect(practicesApi.getPractices).not.toHaveBeenCalled()
     })
 
-    it('a practices-fetch failure is non-fatal: the profile still renders in full, only "Ближайшие практики" is silently absent', async () => {
+    it('a practices-fetch failure is non-fatal: the profile still renders in full, the section keeps the title with the honest note', async () => {
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockRejectedValue(new Error('practices down'))
       mount()
@@ -328,16 +561,22 @@ describe('MasterPublicView', () => {
       expect(emptyState()).toBeNull() // NOT the error rung
       expect(content()).not.toBeNull()
       expect(content()?.textContent).toContain('Анна Соколова')
-      expect(upcomingSection()).toBeNull() // section absent, no error shown for it either
+      // Owner 2026-09-30: the title never disappears -- without data it says why.
+      expect(upcomingSection()).not.toBeNull()
+      expect(upcomingSection()?.textContent).toContain('Ближайшие практики')
+      expect(upcomingSection()?.textContent).toContain('Пока практик не запланировано')
+      expect(practiceCards()).toHaveLength(0)
     })
 
-    it('a genuinely empty practices list produces the SAME absence as a failed fetch -- indistinguishable to the user (proven, not asserted as a bug: header documents this as intentional)', async () => {
+    it('an empty practices list renders the same titled section with the note (owner 2026-09-30)', async () => {
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
       mount()
       await flush()
 
-      expect(upcomingSection()).toBeNull()
+      expect(upcomingSection()).not.toBeNull()
+      expect(upcomingSection()?.textContent).toContain('Пока практик не запланировано')
+      expect(practiceCards()).toHaveLength(0)
     })
 
     it('getPractices is called with the master_id derived from the route, not hardcoded', async () => {
@@ -351,7 +590,7 @@ describe('MasterPublicView', () => {
 
       expect(practicesApi.getPractices).toHaveBeenCalledWith(
         expect.objectContaining({ master_id: 'm_specific', status: 'scheduled' }),
-        10,
+        5,
         0,
       )
     })
@@ -365,13 +604,100 @@ describe('MasterPublicView', () => {
       await flush()
 
       expect(upcomingSection()).not.toBeNull()
-      upcomingHeaderBtn()?.click() // accordion defaults collapsed -- expand it
-      await nextTick()
+      // Owner 2026-09-30: the cards are always open -- no accordion to expand.
 
       expect(practiceCards()).toHaveLength(1)
       practiceCards()[0]?.click()
 
       expect(push).toHaveBeenCalledWith({ name: 'practice-detail', params: { id: 'pr1' } })
+    })
+
+    it('the cards block is capped at 5 even if the feed returns more (owner 2026-09-30)', async () => {
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(
+        page([
+          practice('pr1'),
+          practice('pr2'),
+          practice('pr3'),
+          practice('pr4'),
+          practice('pr5'),
+          practice('pr6'),
+        ]),
+      )
+      mount()
+      await flush()
+
+      expect(practiceCards()).toHaveLength(5)
+      expect(upcomingSection()?.textContent).not.toContain('pr6')
+    })
+
+    it('the «Предстоящие практики» nav row opens the master-practice calendar', async () => {
+      routeParams.id = 'm1'
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      mount()
+      await flush()
+
+      const nav = Array.from(
+        host?.querySelectorAll<HTMLButtonElement>('.master-public__nav') ?? [],
+      ).find((b) => b.textContent?.includes('Предстоящие практики'))
+      expect(nav).not.toBeNull()
+      nav!.click()
+
+      expect(push).toHaveBeenCalledWith({
+        name: 'user-calendar-master',
+        params: { masterId: 'm1' },
+      })
+    })
+
+    it('the «Аналитика» panel is a curator-only placeholder: hidden without ?groupId, shown with it', async () => {
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      mount()
+      await flush()
+
+      expect(content()?.textContent).not.toContain('Аналитика')
+
+      unmount()
+      routeQuery.groupId = 'g1'
+      mount()
+      await flush()
+
+      expect(content()?.textContent).toContain('Аналитика')
+      // The placeholder body lives in the accordion; expand THE ANALYTICS one
+      // (querySelector would hit the Методы accordion first) to prove the copy.
+      const analyticsAcc = Array.from(content()?.querySelectorAll('.v-accordion') ?? []).find(
+        (acc) => acc.querySelector('.v-accordion__title')?.textContent?.includes('Аналитика'),
+      )
+      analyticsAcc!.querySelector<HTMLButtonElement>('.v-accordion__header')!.click()
+      await nextTick()
+
+      expect(content()?.textContent).toContain('после подключения данных')
+    })
+
+    it('the hanging «Создать практику» CTA is curator-only and hands off to the create flow', async () => {
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      mount()
+      await flush()
+
+      // Without the school context: no CTA at all.
+      expect(host?.querySelector('.master-public__cta')).toBeNull()
+
+      unmount()
+      routeQuery.groupId = 'g1'
+      mount()
+      await flush()
+
+      const cta = host?.querySelector<HTMLButtonElement>('.master-public__cta button')
+      expect(cta).not.toBeNull()
+      expect(cta?.textContent).toContain('Создать практику')
+
+      cta!.click()
+      expect(push).toHaveBeenCalledWith({
+        name: 'master-practice-new',
+        query: { masterId: 'm1' },
+      })
     })
   })
 
@@ -392,36 +718,80 @@ describe('MasterPublicView', () => {
   })
 
   // ===========================================================================
-  describe('ask-master (REAL since T2 / H-T2-UI: opens the DM and navigates)', () => {
-    it("the button is fully enabled (a different shape than BookingConfirmedView's disabled textarea+button)", async () => {
+  describe('ask-master (REAL since T2 / H-T2-UI: «Написать сообщение» in the ⋯ menu)', () => {
+    function openActionsMenu(): Promise<void> {
+      const trigger = Array.from(
+        document.body.querySelectorAll<HTMLButtonElement>('button') ?? [],
+      ).find((b) => b.getAttribute('aria-label') === 'Действия с мастером')
+      trigger?.click()
+      return flush()
+    }
+    function messageItem(): HTMLButtonElement | undefined {
+      return Array.from(
+        document.body.querySelectorAll<HTMLButtonElement>('.v-menu-item') ?? [],
+      ).find((b) => b.getAttribute('aria-label') === 'Написать сообщение')
+    }
+    function liveModal(): HTMLElement | undefined {
+      const containers = Array.from(
+        document.body.querySelectorAll<HTMLElement>('.v-modal__container'),
+      )
+      return containers[containers.length - 1]
+    }
+    function modalButton(label: string): HTMLButtonElement | undefined {
+      return Array.from(liveModal()?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(
+        (b) => b.textContent?.trim() === label,
+      )
+    }
+
+    it("the menu item is fully enabled (a different shape than BookingConfirmedView's disabled textarea+button)", async () => {
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
       mount()
       await flush()
+      await openActionsMenu()
 
-      expect(askBtn()?.disabled).toBe(false)
+      const item = messageItem()
+      expect(item).toBeTruthy()
+      expect(item?.disabled).toBe(false)
     })
 
-    it('clicking it opens/joins the thread via POST /chats and navigates into it', async () => {
+    it('clicking it opens the composer; sending opens the DM, posts the text, toasts and closes', async () => {
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
       vi.mocked(chatsApi.openChat).mockResolvedValue({
         id: 'thread-1',
         created_at: '2026-08-01T10:30:00+00:00',
       })
+      vi.mocked(chatsApi.sendChatMessage).mockResolvedValue({
+        id: 'msg-1',
+        thread_id: 'thread-1',
+        sender: 'me',
+        body: 'Привет',
+        created_at: '2026-08-01T10:31:00+00:00',
+      })
       mount()
       await flush()
+      await openActionsMenu()
 
-      askBtn()?.click()
+      messageItem()?.click()
+      await flush()
+
+      const field = liveModal()?.querySelector<HTMLTextAreaElement>('.send-msg textarea')
+      field!.value = 'Привет'
+      field!.dispatchEvent(new Event('input'))
+      await flush()
+
+      modalButton('Отправить')?.click()
       await flush()
 
       // The actor is the session's, server-side: the view only names WHICH
       // master (the route's), never who is asking.
       expect(chatsApi.openChat).toHaveBeenCalledWith('m1')
-      expect(push).toHaveBeenCalledWith({ name: 'user-chat', params: { id: 'thread-1' } })
+      expect(chatsApi.sendChatMessage).toHaveBeenCalledWith('thread-1', 'Привет')
+      expect(toastSuccess).toHaveBeenCalledWith('Сообщение отправлено')
     })
 
-    it('negative twin: a failed open toasts and does NOT navigate', async () => {
+    it('negative twin: a failed open toasts, the draft stays standing, no navigation', async () => {
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
       vi.mocked(chatsApi.openChat).mockRejectedValue(
@@ -429,11 +799,23 @@ describe('MasterPublicView', () => {
       )
       mount()
       await flush()
+      await openActionsMenu()
 
-      askBtn()?.click()
+      messageItem()?.click()
+      await flush()
+
+      const field = liveModal()?.querySelector<HTMLTextAreaElement>('.send-msg textarea')
+      field!.value = 'Привет'
+      field!.dispatchEvent(new Event('input'))
+      await flush()
+
+      modalButton('Отправить')?.click()
       await flush()
 
       expect(toastError).toHaveBeenCalled()
+      // The draft stays standing (the retry is safe -- comms dedups on the
+      // pair); no navigation happened.
+      expect(liveModal()?.querySelector('.send-msg textarea')).not.toBeNull()
       expect(push).not.toHaveBeenCalled()
     })
   })
@@ -499,7 +881,7 @@ describe('MasterPublicView', () => {
 
       expect(practicesApi.getPractices).toHaveBeenLastCalledWith(
         expect.objectContaining({ master_id: 'm2', status: 'scheduled' }),
-        10,
+        5,
         0,
       )
     })

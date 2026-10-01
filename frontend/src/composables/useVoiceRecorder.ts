@@ -4,7 +4,8 @@
  * The recording half of composer voice input: MediaRecorder lifecycle wrapped
  * in a small state machine, plus the WAV handoff. Transcription does NOT live
  * here -- the caller (Composer) owns the transcription round-trip and the toasts
- * (see docs/voice-input-frontend-task.md §4/§5).
+ * (the voice-input spec file was never committed to the repo; FE-75 in Linear
+ * carries the step split and the step-2 scope).
  *
  * STATE MACHINE: idle -> requesting -> recording -> processing -> idle.
  *   - requesting: getUserMedia permission prompt in flight (UI shows nothing

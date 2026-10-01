@@ -108,6 +108,7 @@ import * as bookingsApi from '@/api/bookings'
 import * as notificationsApi from '@/api/notifications'
 import { useAuthStore } from '@/stores/auth'
 import { useBookingsStore } from '@/stores/bookings'
+import { useSchoolsHubStore } from '@/stores/schoolsHub'
 import { ApiResponseError } from '@/api/client'
 import type {
   BookingWithPracticeResponse,
@@ -1081,6 +1082,27 @@ describe('UserDashboardView', () => {
 
       expect(emptyState()).not.toBeNull()
       expect(sectionTitles()).toContain('Быстрый доступ')
+    })
+
+    it('a curator account (founding-right holder, owner 2026-10-01) gets no quick access', async () => {
+      // Both buttons write into the personal diary -- a curator account has
+      // none (schoolsHub.isCuratorAccount). Store state seeded directly: the
+      // probe is the shell's job, this screen only reads the answer.
+      useAuthStore().user = user()
+      useSchoolsHubStore().canCreate = true
+      mount()
+      await flush()
+
+      expect(sectionTitles()).toEqual(['Ближайшие практики', 'Ваш прогресс'])
+    })
+
+    it('a plain user keeps the quick access (known-non-curator, no probe needed)', async () => {
+      useAuthStore().user = user()
+      mount()
+      await flush()
+
+      expect(sectionTitles()).toContain('Быстрый доступ')
+      expect(quickBtn('Добавить запись')).toBeTruthy()
     })
 
     it('«Внести активность» routes to the external-activity form', async () => {

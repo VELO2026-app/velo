@@ -28,3 +28,5 @@ const isRunningInTelegram = !!window.Telegram?.WebApp?.initData
  * Telegram if launched from bot, standalone otherwise.
  */
 export const platform: Platform = isRunningInTelegram ? telegramPlatform : standalonePlatform
+
+export { historyHasBack } from './history'

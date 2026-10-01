@@ -88,6 +88,17 @@ vi.mock('vue-router', () => ({
 
 const NOW = new Date('2026-07-20T12:00:00Z')
 
+// -----------------------------------------------------------------------------
+// Payments are PARKED (owner 2026-10-01): the Отзывы/Платежи slider and the
+// Платежи pane are hidden until payments go live, their data loads gated with
+// them. This mirror flips TOGETHER with PAYMENTS_TAB_ENABLED in
+// AnalyticsView.vue -- the describes exercising the parked UI skip themselves
+// while it is false.
+// -----------------------------------------------------------------------------
+const PAYMENTS_TAB_ENABLED = false
+/** Runs the describe body only when the parked payments UI is restored. */
+const whenPaymentsLive = describe.skipIf(!PAYMENTS_TAB_ENABLED)
+
 /** U+2212 MINUS SIGN -- the screen's negative sign (.vue:465,470), NOT '-'. */
 const MINUS = '\u2212'
 /** U+2014 EM DASH -- the "no data yet" placeholder (.vue:346,352,458). */
@@ -496,7 +507,38 @@ afterEach(() => {
 
 describe('AnalyticsView', () => {
   // ===========================================================================
-  describe('the two tabs (v-show, so both panes are always mounted)', () => {
+  describe('the parked slider (owner 2026-10-01: payments are not live)', () => {
+    it('renders no tab chrome and keeps the Отзывы pane as the screen', async () => {
+      mount()
+      await flush()
+
+      expect(chromeButton('Отзывы')).toBeUndefined()
+      expect(chromeButton('Платежи')).toBeUndefined()
+      expect(shown(reviewsPane())).toBe(true)
+    })
+
+    it('fires no payments traffic: no income or transactions calls on mount', async () => {
+      mount()
+      await flush()
+
+      expect(mastersApi.getIncome).not.toHaveBeenCalled()
+      expect(mastersApi.getTransactions).not.toHaveBeenCalled()
+    })
+
+    it('the period toggle rides the header line, the freed control row is gone', async () => {
+      mount()
+      await flush()
+
+      const header = host?.querySelector('.v-header')
+      expect(header?.querySelector('.v-segment-track--toggle')).not.toBeNull()
+      expect(header?.querySelector('.v-segment-track__btn')?.textContent?.trim()).toBe('Неделя')
+      // The old second control row is removed entirely -- nothing reserves it.
+      expect(host?.querySelector('.analytics__period-row')).toBeNull()
+    })
+  })
+
+  // ===========================================================================
+  whenPaymentsLive('the two tabs (v-show, so both panes are always mounted)', () => {
     it('opens on Отзывы, with the Платежи pane present but hidden', async () => {
       mount()
       await flush()
@@ -937,7 +979,7 @@ describe('AnalyticsView', () => {
   })
 
   // ===========================================================================
-  describe('Платежи -- the ladder', () => {
+  whenPaymentsLive('Платежи -- the ladder', () => {
     it('loading: shows the loader in the Платежи pane and no income yet', async () => {
       vi.mocked(mastersApi.getIncome).mockReturnValue(new Promise(() => {}))
       mount()
@@ -996,7 +1038,7 @@ describe('AnalyticsView', () => {
   })
 
   // ===========================================================================
-  describe('Платежи -- money', () => {
+  whenPaymentsLive('Платежи -- money', () => {
     it('renders the period income (NBSP-grouped) with its signed delta', async () => {
       mount()
       await flush()
@@ -1109,7 +1151,7 @@ describe('AnalyticsView', () => {
   })
 
   // ===========================================================================
-  describe('the period toggle drives income, and only income', () => {
+  whenPaymentsLive('the period toggle drives income, and only income', () => {
     it('re-fetches income for the new period and renders ITS figures', async () => {
       mount()
       await flush()

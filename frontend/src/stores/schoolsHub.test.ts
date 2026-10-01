@@ -171,4 +171,81 @@ describe('schoolsHub store', () => {
     await hub.ensureCurator()
     expect(cgApi.getMyCuratorGroups).toHaveBeenCalledTimes(2)
   })
+
+  // -- isCuratorAccount (owner 2026-10-01: the founding right IS curatorship;
+  //    the user zone hides the personal-diary surfaces for a holder) --
+  describe('isCuratorAccount', () => {
+    it('a settled right holder reads as curator', async () => {
+      seedRoles(['user', 'master'])
+      vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({ items: [] })
+      vi.mocked(cgApi.getCuratorGroups).mockResolvedValue({
+        items: [],
+        can_create_groups: true,
+      })
+
+      const hub = useSchoolsHubStore()
+      await hub.ensureCurator()
+
+      expect(hub.isCuratorAccount).toBe(true)
+    })
+
+    it('a master-capable account with an unsettled probe reads as curator (fail-closed)', async () => {
+      // Both probes hang, like a stalled network: until the master probe
+      // answers, the account COULD hold the right -- the diary surfaces must
+      // not flash for a possible holder.
+      seedRoles(['user', 'master'])
+      vi.mocked(cgApi.getMyCuratorGroups).mockReturnValue(new Promise(() => {}))
+      vi.mocked(cgApi.getCuratorGroups).mockReturnValue(new Promise(() => {}))
+
+      const hub = useSchoolsHubStore()
+      void hub.ensureCurator()
+
+      expect(hub.isCuratorAccount).toBe(true)
+    })
+
+    it('a plain user is known-non-curator without any network round-trip (no flicker)', () => {
+      // No master capability -> the right is unreachable for this token (the
+      // same gate that keeps ensureCurator off the master surface), so the
+      // answer is available from the auth store alone.
+      seedRoles(['user'])
+
+      const hub = useSchoolsHubStore()
+
+      expect(hub.isCuratorAccount).toBe(false)
+    })
+
+    it('a master-capable account whose probe settled without the right is not a curator', async () => {
+      seedRoles(['user', 'master'])
+      vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({ items: [] })
+      vi.mocked(cgApi.getCuratorGroups).mockResolvedValue({
+        items: [],
+        can_create_groups: false,
+      })
+
+      const hub = useSchoolsHubStore()
+      await hub.ensureCurator()
+
+      expect(hub.canCreate).toBe(false)
+      expect(hub.isCuratorAccount).toBe(false)
+    })
+
+    it('$reset returns a right holder to the fail-closed unknown (no leak to the next account)', async () => {
+      seedRoles(['user', 'master'])
+      vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({ items: [] })
+      vi.mocked(cgApi.getCuratorGroups).mockResolvedValue({
+        items: [],
+        can_create_groups: true,
+      })
+
+      const hub = useSchoolsHubStore()
+      await hub.ensureCurator()
+      expect(hub.isCuratorAccount).toBe(true)
+
+      hub.$reset()
+      // Settled state is gone, the account may or may not hold the right
+      // again -> back to the fail-closed answer, not to a stale "not a
+      // curator".
+      expect(hub.isCuratorAccount).toBe(true)
+    })
+  })
 })

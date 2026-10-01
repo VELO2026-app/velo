@@ -99,6 +99,13 @@ function buildRouter(): Router {
         meta: { hideTabBar: true },
         component: StubChild,
       },
+      // Owner 2026-09-30: the master's page in the curator context -- the
+      // dock hides there (the CTA takes its place; mirrors router/index.ts).
+      {
+        path: '/user/masters/:id',
+        name: 'user-master-public',
+        component: StubChild,
+      },
       // Absent from every FOG_ROUTES / DIARY_ROUTES / FORM_ROUTES list --
       // the default-branch baseline.
       { path: '/user/somewhere-unlisted', name: 'user-unlisted', component: StubChild },
@@ -240,6 +247,24 @@ describe('UserShell', () => {
       expect(host?.querySelector('.v-tabbar')).toBeNull()
     })
 
+    // Owner 2026-09-30: the master's page in the CURATOR context (?groupId=)
+    // hides the dock -- the hanging «Создать практику» CTA takes its place.
+    // Without the marker the visitor keeps the dock.
+    it('user-master-public hides the tab bar only in the curator context', async () => {
+      await mount('user-master-public', { id: 'm1' })
+      await flush()
+      expect(host?.querySelector('.v-tabbar')).not.toBeNull()
+
+      await router.push({
+        name: 'user-master-public',
+        params: { id: 'm1' },
+        query: { groupId: 'g1' },
+      })
+      await flush()
+
+      expect(host?.querySelector('.v-tabbar')).toBeNull()
+    })
+
     it('the dock carries exactly the four unconditional tabs for a plain visitor', async () => {
       // tz-curator.md §1.2: USER_TABS now holds five items, but the
       // conditional «Школы» tab is filtered out unless the account belongs
@@ -282,15 +307,39 @@ describe('UserShell', () => {
       expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Дневник', 'Школы', 'Я'])
     })
 
-    it('the founding right alone no longer lights the USER-zone tab', async () => {
-      // can_create_groups keeps its entrance in the MASTER zone; the user
-      // zone's condition is membership only (owner 2026-09-22).
+    it('a founding-right holder (curator, owner 2026-10-01) gets no «Дневник»; with no schools, no «Школы» either', async () => {
+      // can_create_groups keeps its entrance in the MASTER zone; in the USER
+      // zone the holder IS a curator account: the personal-diary tab is gone
+      // (owner 2026-10-01), and with zero memberships so is «Школы».
       curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({ items: [] })
       curatorGroupsMock.getCuratorGroups.mockResolvedValue({
         items: [],
         can_create_groups: true,
       })
       await mount('user-dashboard', {}, seedAccount(['user', 'master']))
+      await flush()
+      await flush()
+
+      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Я'])
+    })
+
+    it("«Дневник» stays hidden while a master-capable account's probes are unsettled (fail-closed)", async () => {
+      // A possible right holder must never see the tab flash: hidden until
+      // the master probe answers (owner 2026-10-01; both probes stalled).
+      curatorGroupsMock.getMyCuratorGroups.mockReturnValue(new Promise(() => {}))
+      curatorGroupsMock.getCuratorGroups.mockReturnValue(new Promise(() => {}))
+      await mount('user-dashboard', {}, seedAccount(['user', 'master']))
+      await flush()
+      await flush()
+
+      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Я'])
+    })
+
+    it('a plain user keeps «Дневник» from the first paint (known-non-curator, no flicker)', async () => {
+      // No master capability -> curatorship resolves with zero network
+      // round-trips, so the majority case never sees the tab flicker.
+      curatorGroupsMock.getMyCuratorGroups.mockReturnValue(new Promise(() => {}))
+      await mount('user-dashboard', {}, seedAccount(['user']))
       await flush()
       await flush()
 
@@ -392,14 +441,14 @@ describe('UserShell', () => {
     // [2026-09-08] The dashboard's floating header is BACK (VHeader «Главная»
     // + the bell in its action slot), so its headerless meta is dropped per
     // the [FE-3] contract. With StubChild teleporting nothing, this frame is
-    // the pre-measurement one: the HEADER_FALLBACK (88) + z1 gap (16)
+    // the pre-measurement one: the HEADER_FALLBACK (68) + z1 gap (8)
     // reservation -- same contract as any headered route; the real screen's
     // VHeader then measures in and MobileLayout re-pads to its exact height.
     it('user-dashboard (header back, meta dropped) pads by the unmeasured-island contract', async () => {
       await mount('user-dashboard')
       await flush()
 
-      expect(mainEl().style.paddingTop).toBe('104px')
+      expect(mainEl().style.paddingTop).toBe('76px')
     })
 
     // [FE-3] the profile hub's own margin-top compensation is retired; the
@@ -411,11 +460,11 @@ describe('UserShell', () => {
       expect(mainEl().style.paddingTop).toBe('34px')
     })
 
-    it('a route without the meta keeps the clearance contract (unmeasured island: 88 + 16)', async () => {
+    it('a route without the meta keeps the clearance contract (unmeasured island: 68 + 8)', async () => {
       await mount('user-unlisted')
       await flush()
 
-      expect(mainEl().style.paddingTop).toBe('104px')
+      expect(mainEl().style.paddingTop).toBe('76px')
     })
   })
 })

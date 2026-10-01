@@ -1063,7 +1063,8 @@ onBeforeUnmount(() => {
    sized to the FROZEN height would still put the composer at the frozen
    box's bottom while only the SHRUNKEN visible area is actually on screen --
    the same Android defect, merely restructured (this is the device-measured
-   finding behind diary-behaviour-spec.md §4.1). [FE-44] corrects the REST
+   finding; the behaviour-spec doc was removed from docs/ 2026-09-29 and the
+   finding lives here now -- history in git). [FE-44] corrects the REST
    state: the live-height binding now applies ONLY under
    `html.is-keyboard-open` (see the gated rule below) -- at rest the column
    is a plain 100% of the frozen ancestor, immune to a STALE `--velo-vvh`

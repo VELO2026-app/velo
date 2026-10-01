@@ -27,11 +27,12 @@
       </div>
       <div v-if="methods?.length" class="master-card__tags">
         <VTag
-          v-for="(method, i) in methods"
-          :key="method"
+          v-for="(chip, i) in methodChips"
+          :key="`${i}:${chip.label}`"
           :variant="TAG_VARIANTS[i % TAG_VARIANTS.length]"
         >
-          {{ method }}
+          <component :is="chip.icon" :size="12" aria-hidden="true" />
+          {{ chip.label }}
         </VTag>
       </div>
     </div>
@@ -39,10 +40,12 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { VTag, VAvatar } from '@/components/ui'
 import { IconCheck } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
+import { methodChipFor } from '@/utils/methodChips'
 
 const props = withDefaults(
   defineProps<{
@@ -63,6 +66,11 @@ const props = withDefaults(
 
 // Master method tags cycle through three tints (Figma: blue / pink / sand).
 const TAG_VARIANTS = ['blue', 'pink', 'sand'] as const
+
+// FE-61/63: one chip = direction icon + SHORT skill label; the direction word
+// embedded in a style label is stripped so a pill never says the word twice
+// (FE-64) — see utils/methodChips.ts.
+const methodChips = computed(() => (props.methods ?? []).map(methodChipFor))
 
 const router = useRouter()
 const toast = useToast()

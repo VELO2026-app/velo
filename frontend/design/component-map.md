@@ -63,12 +63,13 @@
 | `VPaginationDots` | канонические точки переключения шагов                   | `total`, `active`                               | —     |
 | `VeloLogo`        | логотип-мандала VELΘ                                    | `size`, `variant`, `spin`                       | —     |
 
-## Иконки — 84 шт. (`@/components/icons`)
+## Иконки — 85 шт. (`@/components/icons`)
 
 - все рисуются `currentColor`, принимают `size` (по умолчанию 24);
 - исключения-иллюстрации со своими градиентами: `IconMoodLow/Mid/High`, `VeloLogo`;
 - **новые иконочные пакеты не тянуть** — новая иконка = новый SVG-компонент в бареле (как в `Design_prototype/assets/icons/`).
 - школа (`tz-curator.md` §1.2/§1.4): `IconSchool` — таб «Школы» (академическая шапка); `IconUsers` — ученики, `IconMeditation` — мастера в строке и hero школы.
+- `IconLock` — «Заблокировать» в меню профиля ученика (мастер-зона); арт владельца (2026-09-30), monochrome `currentColor`.
 
 ## Фичевые композиты (`shared/`, `layout/`)
 

@@ -3,13 +3,19 @@
 
   Public master profile shown to users who tap "Подробнее" on a practice's
   master card (frame 4). Figma node 541:2065:
-    - Hero card: avatar, name, "check Верифицирован" badge + "N лет опыта" pill, bio
+    - Hero card: avatar with a verified check badge on its corner, name, "N лет опыта" pill, bio
     - Two stat cards: practices_count "Практик" / reviews_count "Отзывов"
     - "Методы" accordion (method chips)
-    - "Ближайшие практики": upcoming practices by this master (reuses
+    - «Предстоящие практики» nav row (owner 2026-09-30) -> the stacked
+      user-calendar-master route (the master's practice calendar)
+    - «Аналитика» accordion, curator-of-the-school only (?groupId=):
+      PLACEHOLDER until the curator-analytics contract exists
+    - «Ближайшие практики»: plain heading + up to 5 upcoming-practice cards
+      (owner 2026-09-30 -- the collapsed accordion is retired; reuses
       getPractices with master_id -- no new endpoint, no dedicated store)
-    - "Задать вопрос" button -> ask-master flow (frame 6, not built yet:
-      toast placeholder, V2)
+    - «⋯» меню: «Написать сообщение» -> ask-master flow (T2); в школьном
+      контексте куратора — ещё «Изменить роль» и «Заблокировать» (владелец,
+      2026-09-30; интерим — ноопы до BE-59/BE-79)
 
   Backend: GET /api/v1/masters/:id (MasterPublicResponse). Only verified
   masters resolve; 404 otherwise -> "Мастер не найден" (no retry, nothing to
@@ -22,7 +28,38 @@
 
 <template>
   <div class="master-public">
-    <VHeader title="Мастер" show-back @back="router.back()" />
+    <VHeader title="Мастер" show-back @back="router.back()">
+      <!-- The ⋯ menu: «Написать сообщение» for EVERY visitor (owner
+           2026-09-30 -- replaced the «Задать вопрос» button). In the
+           curator's school context (the roster's master rows navigate here
+           with ?groupId=) it also carries the curator's actions: «Изменить
+           роль» and «Заблокировать» (INTERIM: marked no-ops until their
+           contracts land -- BE-59 demote extension / BE-79). -->
+      <template #action>
+        <VMenu aria-label="Действия с мастером">
+          <template #default="{ close }">
+            <VMenuItem
+              :icon="IconMessages"
+              ariaLabel="Написать сообщение"
+              @click="onMessageClick(close)"
+            />
+            <VMenuItem
+              v-if="schoolContext"
+              :icon="IconPen"
+              ariaLabel="Изменить роль"
+              @click="onRoleClick(close)"
+            />
+            <VMenuItem
+              v-if="schoolContext"
+              :icon="IconLock"
+              ariaLabel="Заблокировать"
+              danger
+              @click="onBlockClick(close)"
+            />
+          </template>
+        </VMenu>
+      </template>
+    </VHeader>
 
     <!-- Loading -->
     <div v-if="loading" class="master-public__loader">
@@ -51,18 +88,26 @@
     </VEmptyState>
 
     <!-- Content -->
-    <div v-else class="master-public__content">
+    <div
+      v-else
+      class="master-public__content"
+      :class="{ 'master-public__content--with-cta': schoolContext }"
+    >
       <!-- Hero -->
       <VCard class="master-public__hero" padding="none">
-        <VAvatar :url="profile.avatar_url ?? ''" :name="displayName" size="xl" />
+        <!-- The verified check rides the avatar's bottom-right corner (owner
+             2026-09-30): 22px disc, card-colored ring, no text badge. -->
+        <div class="master-public__avatar">
+          <VAvatar :url="profile.avatar_url ?? ''" :name="displayName" size="xl" />
+          <span class="master-public__verified" role="img" aria-label="Верифицирован">
+            <IconCheck :size="14" />
+          </span>
+        </div>
 
         <h1 class="master-public__name">{{ displayName }}</h1>
 
-        <div class="master-public__pills">
-          <span class="master-public__pill master-public__pill--verified">
-            <IconCheck :size="14" /> Верифицирован
-          </span>
-          <span v-if="profile.experience_years != null" class="master-public__pill">
+        <div v-if="profile.experience_years != null" class="master-public__pills">
+          <span class="master-public__pill">
             {{ profile.experience_years }} {{ pluralYears(profile.experience_years) }} опыта
           </span>
         </div>
@@ -84,56 +129,130 @@
         />
       </div>
 
-      <!-- Methods accordion -->
-      <VAccordion v-if="profile.methods?.length" title="Методы">
-        <div class="master-public__chips">
+      <!-- Methods accordion (owner 2026-09-30: ALWAYS renders -- like
+           «Ближайшие», the section never disappears; default-open, an empty
+           profile gets the honest note, the header stays as the entry
+           point). -->
+      <VAccordion title="Методы" default-open>
+        <div v-if="profile.methods?.length" class="master-public__chips">
           <VTag
-            v-for="(method, i) in profile.methods || []"
-            :key="method"
+            v-for="(chip, i) in methodChips"
+            :key="`${i}:${chip.label}`"
             :variant="TAG_VARIANTS[i % TAG_VARIANTS.length]"
           >
-            {{ method }}
+            <component :is="chip.icon" :size="12" aria-hidden="true" />
+            {{ chip.label }}
           </VTag>
         </div>
+        <p v-else class="master-public__note">Методы пока не указаны.</p>
       </VAccordion>
 
-      <!-- Ближайшие практики: СВЁРНУТЫЙ по умолчанию аккордеон (operator
-           2026-06-05) — чтобы кнопка «Задать вопрос» была сразу видна, без
-           скролла мимо всех практик. Заголовок = белая плашка (консистентно с
-           «Методы»); тело прозрачное -> карточки лежат отдельными прямоугольниками
-           на фоне (не сливаются бело-на-белом). show-date: практики идут в разные
-           дни — карточка показывает дату под иконкой + время в мета-линии. -->
-      <div v-if="upcoming.length" class="master-public__upcoming">
-        <VAccordion title="Ближайшие практики">
-          <div class="master-public__practices">
-            <CalendarPracticeCard
-              v-for="p in upcoming"
-              :key="p.id"
-              :practice="p"
-              show-date
-              @click="goToPractice"
-            />
-          </div>
-        </VAccordion>
-      </div>
+      <!-- «Предстоящие практики» (owner 2026-09-30): nav row to the stacked
+           master-practice calendar. A row, not an accordion -- it only
+           navigates. -->
+      <button type="button" class="master-public__nav" @click="goToCalendar">
+        <span class="master-public__nav-label">Предстоящие практики</span>
+        <IconChevronRight :size="16" />
+      </button>
 
-      <!-- Ask a question -- REAL since T2 (H-T2-UI phase «а»): opens/joins
-           the eternal DM with this master (POST /api/v1/chats is create-or-
-           get, so tapping twice lands in the same thread) and navigates in.
-           The «frame 6» placeholder is retired -- this button IS its slot. -->
-      <div class="master-public__actions">
-        <VButton
-          variant="primary"
-          size="lg"
-          block
-          :loading="openingChat"
-          :disabled="openingChat"
-          @click="onAsk"
-        >
-          Задать вопрос
-        </VButton>
-      </div>
+      <!-- Аналитика: curator-of-THIS-school only (the ?groupId= marker).
+           PLACEHOLDER until the curator-analytics contract exists (same
+           pattern as the Блок tab) -- no endpoint serves a member master's
+           figures to the school curator yet. -->
+      <VAccordion v-if="schoolContext" title="Аналитика">
+        <p class="master-public__note">
+          Аналитика мастера появится здесь после подключения данных.
+        </p>
+      </VAccordion>
+
+      <!-- Ближайшие практики (owner 2026-09-30): the title ALWAYS shows --
+           with cards when the master has scheduled practices, with the honest
+           «пока не запланировано» note when not (≤5 cards; the collapsed
+           accordion from operator 2026-06-05 is retired; the ⋯ menu keeps
+           floating above). show-date: практики идут в разные дни. -->
+      <section class="master-public__upcoming">
+        <h3 class="master-public__section-title">Ближайшие практики</h3>
+        <div v-if="upcoming.length" class="master-public__practices">
+          <CalendarPracticeCard
+            v-for="p in upcoming"
+            :key="p.id"
+            :practice="p"
+            show-date
+            @click="goToPractice"
+          />
+        </div>
+        <p v-else class="master-public__note">Пока практик не запланировано.</p>
+      </section>
+
+      <!-- «Написать сообщение» (the ⋯ menu) replaced the «Задать вопрос»
+           button: opens/joins the eternal DM with this master (POST
+           /api/v1/chats is create-or-get, so tapping twice lands in the same
+           thread) and navigates in. -->
     </div>
+
+    <!-- «Создать практику» (owner 2026-09-30): hangs above the tab bar,
+         curator-of-THIS-school only (?groupId=). Same §1.6 hand-off as the
+         school page: the create flow has no audience-preselect contract yet,
+         so this is a plain push to it. -->
+    <div v-if="schoolContext" class="master-public__cta">
+      <VButton variant="primary" block size="lg" @click="goCreatePractice">
+        Создать практику
+      </VButton>
+    </div>
+
+    <!-- «Написать сообщение» (owner 2026-09-30 -- replaced the «Задать
+           вопрос» button): the composer opens the eternal DM with this
+           master and posts the text; success toasts and closes. -->
+    <SendMessageModal
+      :open="composerOpen"
+      :master-id="masterId"
+      :name="displayName"
+      @close="composerOpen = false"
+    />
+
+    <!-- «Изменить роль» for a SCHOOL MASTER (owner ruling 2026-09-30). The
+         radio preselects the member's current role (master); choosing
+         «Ученик» is a DEMOTE request -- its contract does not exist yet
+         (§7.1 №6 + BE-59's extensible field), so confirm is a marked no-op
+         (info toast) and the copy stays a draft. -->
+    <VModal :open="roleOpen" :show-close="false" @close="onRoleClose">
+      <div class="master-public__role">
+        <h2 class="master-public__role-title">Изменить роль</h2>
+        <TargetUserCard :name="displayName" :avatar-url="profile?.avatar_url ?? null" />
+        <p class="master-public__role-sub">Выберите роль</p>
+        <VRadioGroup v-model="roleKind" :options="roleOptions" />
+        <div class="master-public__role-actions">
+          <VButton variant="danger" block @click="onRoleClose">Отмена</VButton>
+          <VButton
+            variant="primary"
+            block
+            :loading="demoting"
+            :disabled="roleConfirmDisabled"
+            @click="onRoleConfirm"
+          >
+            Изменить
+          </VButton>
+        </div>
+      </div>
+    </VModal>
+
+    <!-- Block confirm (owner ruling 2026-09-30: blocking covers masters too).
+         INTERIM (stopper BE-79): the school-block contract does not exist, so
+         confirm is a marked no-op (info toast); the copy is a DRAFT for the
+         owner's review. -->
+    <VConfirmDialog
+      :open="blockConfirmOpen"
+      title="Заблокировать участника школы?"
+      :message="blockCopy"
+      confirm-label="Заблокировать"
+      danger
+      warning-panel
+      cancel-variant="primary"
+      @confirm="onBlockConfirm"
+      @cancel="blockConfirmOpen = false"
+    >
+      <TargetUserCard :name="displayName" :avatar-url="profile?.avatar_url ?? null" />
+    </VConfirmDialog>
   </div>
 </template>
 
@@ -149,17 +268,25 @@ import {
   VAvatar,
   VStatCard,
   VCard,
+  VConfirmDialog,
+  VMenu,
+  VMenuItem,
+  VModal,
+  VRadioGroup,
 } from '@/components/ui'
 import { VHeader } from '@/components/layout'
-import { IconCheck } from '@/components/icons'
+import { IconCheck, IconChevronRight, IconLock, IconMessages, IconPen } from '@/components/icons'
 import CalendarPracticeCard from '@/components/shared/CalendarPracticeCard.vue'
+import SendMessageModal from '@/components/shared/SendMessageModal.vue'
+import TargetUserCard from '@/components/shared/TargetUserCard.vue'
 import { getPublicMaster } from '@/api/masters'
-import { openChat } from '@/api/chats'
 import { getPractices } from '@/api/practices'
+import { demoteCuratorGroupMaster } from '@/api/curatorGroups'
 import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import { plural } from '@/utils/plural'
+import { methodChipFor } from '@/utils/methodChips'
 import type { MasterPublicResponse, PracticeResponse } from '@/api/types'
 
 const route = useRoute()
@@ -184,6 +311,83 @@ const displayName = computed(() => profile.value?.display_name ?? 'Мастер'
 // Method tags cycle through three tints (same as MasterCard).
 const TAG_VARIANTS = ['blue', 'pink', 'sand'] as const
 
+// -- Curator's school-context actions (owner ruling 2026-09-30) ---------------
+//
+// The roster's master rows navigate here with ?groupId= -- that marker turns
+// on the action menu for the curator of THAT school. The plain public profile
+// (any other entry) renders no menu. «Изменить роль» is the BE-59 demote
+// (wired); block (BE-79) confirm remains a marked no-op (info toast).
+
+const groupId = computed(() => String(route.query.groupId ?? ''))
+const schoolContext = computed(() => groupId.value !== '')
+
+const roleOpen = ref(false)
+type MemberKind = 'student' | 'master'
+const roleKind = ref<MemberKind>('master')
+const roleOptions: { value: MemberKind; label: string }[] = [
+  { value: 'student', label: 'Ученик' },
+  { value: 'master', label: 'Мастер' },
+]
+const roleConfirmDisabled = computed(() => roleKind.value === 'master')
+
+function onRoleClick(close: () => void): void {
+  close()
+  roleKind.value = 'master'
+  roleOpen.value = true
+}
+
+function onRoleClose(): void {
+  roleOpen.value = false
+}
+
+// The demote (BE-59 B1): a school master becomes a student of THIS school.
+// No consent asked (owner ruling) -- the backend notifies the person. The
+// confirm is demote-only (roleConfirmDisabled guards the master pick), the
+// API is idempotent 204, so a double tap is harmless.
+const demoting = ref(false)
+
+async function onRoleConfirm(): Promise<void> {
+  if (demoting.value) return
+  demoting.value = true
+  try {
+    await demoteCuratorGroupMaster(groupId.value, masterId.value)
+    roleOpen.value = false
+    toast.success('Роль изменена: участник теперь ученик школы')
+  } catch (e) {
+    toast.error(extractApiError(e, 'Не удалось изменить роль'))
+  } finally {
+    demoting.value = false
+  }
+}
+
+const composerOpen = ref(false)
+const blockConfirmOpen = ref(false)
+
+const blockCopy =
+  'Участник утратит доступ к школе и её практикам. Вы сможете разблокировать его в любой момент.'
+
+function onBlockClick(close: () => void): void {
+  close()
+  blockConfirmOpen.value = true
+}
+
+function onBlockConfirm(): void {
+  // INTERIM (stopper BE-79): no school-block contract to call -- the no-op
+  // states itself rather than reading as success.
+  toast.info('Блокировка участника школы появится позже (BE-79)')
+  blockConfirmOpen.value = false
+}
+
+function onMessageClick(close: () => void): void {
+  close()
+  composerOpen.value = true
+}
+
+// FE-61/62: one chip = direction icon + SHORT skill label. The direction word
+// embedded in a style label («Медитация молчания») is stripped so a pill
+// never says the word twice (FE-64) — see utils/methodChips.ts.
+const methodChips = computed(() => (profile.value?.methods ?? []).map(methodChipFor))
+
 // -- Russian pluralization helpers (SW14: canonical impl in utils/plural.ts) --
 function pluralYears(n: number): string {
   return plural(n, 'год', 'года', 'лет')
@@ -199,22 +403,21 @@ function goToPractice(id: string): void {
   void router.push({ name: 'practice-detail', params: { id } })
 }
 
-const openingChat = ref(false)
+// The «Предстоящие практики» row: the stacked MASTER-practice calendar.
+function goToCalendar(): void {
+  void router.push({
+    name: 'user-calendar-master',
+    params: { masterId: masterId.value },
+  })
+}
 
-async function onAsk(): Promise<void> {
-  // T2 (H-T2-UI): open-or-get the DM with this master, then go there. The
-  // backend re-checks the verified predicate server-side (404 otherwise) --
-  // this view already only renders verified masters, so the states agree.
-  if (openingChat.value) return
-  openingChat.value = true
-  try {
-    const thread = await openChat(masterId.value)
-    await router.push({ name: 'user-chat', params: { id: thread.id } })
-  } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось открыть чат'))
-  } finally {
-    openingChat.value = false
-  }
+// The hanging «Создать практику» CTA: §1.6 hand-off naming the master --
+// the create flow preselects (and locks) this master from the query.
+function goCreatePractice(): void {
+  void router.push({
+    name: 'master-practice-new',
+    query: { masterId: masterId.value },
+  })
 }
 
 async function loadMaster(id: string): Promise<void> {
@@ -233,10 +436,12 @@ async function loadMaster(id: string): Promise<void> {
           sort_by: 'scheduled_at',
           sort_order: 'asc',
         },
-        10,
+        5,
         0,
       )
-      upcoming.value = res.items
+      // The ≤5 cap is also enforced locally: the owner's 2026-09-30 spec is
+      // "up to 5 cards", independent of any server limit regression.
+      upcoming.value = res.items.slice(0, 5)
     } catch {
       // Non-fatal: the profile still renders without the upcoming list.
       upcoming.value = []
@@ -304,6 +509,30 @@ watch(masterId, (id) => {
   margin: 0;
 }
 
+/* The verified check rides the avatar's corner (owner 2026-09-30) -- the
+   ring is the card's own surface, so the disc reads as punched through.
+   Same glass-teal recipe as MasterCard's disc (the solid teal-600 fill read
+   too bright over the avatar). */
+.master-public__avatar {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.master-public__verified {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--velo-bg-card-solid);
+  border-radius: var(--radius-full);
+  background: var(--velo-glass-teal-30);
+  color: var(--velo-teal-600);
+}
+
 .master-public__pills {
   display: flex;
   flex-wrap: wrap;
@@ -318,15 +547,11 @@ watch(masterId, (id) => {
   gap: var(--space-1);
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-full);
-  background: var(--velo-glass-blue-15);
+  /* Owner 2026-09-30: #E2F0FD fill, #619CD2 text (--velo-blue-100/400). */
+  background: var(--velo-blue-100);
   font-family: var(--font-body);
   font-size: var(--text-xs);
-  color: var(--velo-text-secondary);
-}
-
-.master-public__pill--verified {
-  background: var(--velo-glass-teal-30);
-  color: var(--velo-teal-600);
+  color: var(--velo-blue-400);
 }
 
 .master-public__bio {
@@ -354,24 +579,95 @@ watch(masterId, (id) => {
   gap: var(--space-1);
 }
 
+/* «Изменить роль» popup (owner ruling 2026-09-30): title / who / role picker
+   / pills -- the same skeleton the school student profile uses. */
+.master-public__role {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.master-public__role-title {
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: var(--text-lg);
+  color: var(--velo-text-primary);
+}
+
+.master-public__role-sub {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--velo-text-secondary);
+}
+
+.master-public__role-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
 /* «Ближайшие практики» — свёрнутый аккордеон. Контейнер прозрачный (чтобы тело
  * не было белой плашкой), заголовок = белая плашка как «Методы», тело прозрачное
  * -> карточки лежат на фоне отдельными прямоугольниками (без «слитности»). */
-.master-public__upcoming :deep(.v-accordion) {
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  overflow: visible;
-}
-
-.master-public__upcoming :deep(.v-accordion__header) {
+/* «Предстоящие практики»: a nav row (owner 2026-09-30) -- card plate, label
+   + chevron, tap-only. */
+.master-public__nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  /* Same vertical rhythm + font size as the page's :deep(.v-accordion__header)
+     (text-base) -- the three panel headers must read identically. */
+  padding: var(--space-3) var(--space-4);
+  /* Header parity: the accordion header's text-base line makes it ~58px --
+     match it so the label reads at the same optical size. */
+  min-height: 58px;
   background: var(--velo-bg-card-solid);
   border: 1px solid var(--velo-border-card);
   border-radius: var(--radius-md);
+  color: var(--velo-text-primary);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  cursor: pointer;
 }
 
-.master-public__upcoming :deep(.v-accordion__body) {
-  padding: var(--space-2) 0 0;
+.master-public__nav :deep(svg) {
+  color: var(--velo-text-muted);
+}
+
+.master-public__note {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--velo-text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* The hanging curator CTA (owner 2026-09-30): the dock is HIDDEN in this
+   mode (UserShell's isMasterCuratorRoute), so the button takes the dock's
+   own place -- same floor (--space-8) + safe area, on the content rail. The
+   content reserves matching tail room via --with-cta. */
+.master-public__cta {
+  position: fixed;
+  left: var(--velo-rail-pad-x);
+  right: var(--velo-rail-pad-x);
+  bottom: calc(var(--space-8) + env(safe-area-inset-bottom, 0px));
+  z-index: var(--z-sticky);
+}
+
+.master-public__content--with-cta {
+  padding-bottom: 140px;
+}
+
+/* Ближайшие практики: plain heading, --text-base like the other panel
+   headers (owner 2026-09-30), cards always open -- no accordion. */
+.master-public__section-title {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: 400;
+  color: var(--velo-text-primary);
+  margin: 0 0 var(--space-3);
 }
 
 .master-public__practices {

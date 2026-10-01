@@ -41,12 +41,17 @@
       </VEmptyState>
 
       <template v-else>
+        <!-- Required-fields legend: HIDDEN for now (owner 2026-10-01) -- the
+             section-title asterisk reads without an explanation. Restore the
+             block below when an explanation is needed again. -->
+        <!--
         <div class="ncg__legend">
           <IconRequired class="ncg__legend-seal" :size="22" />
           <span>— поля, обязательные для заполнения</span>
         </div>
+        -->
 
-        <h2 class="velo-section-title">Основное</h2>
+        <h2 class="velo-section-title">Основное <span class="ncg__req">*</span></h2>
 
         <VInput
           v-model="name"
@@ -54,9 +59,13 @@
           placeholder="Название"
           hide-label
           :error="fieldError"
-          required
           @focus="onFieldFocus"
         />
+        <!-- Constant-height slot (owner 2026-10-01): the message fades in
+             without growing its block, so an error never shifts the layout. -->
+        <span class="ncg__field-error" :class="{ 'ncg__field-error--show': !!fieldError }">{{
+          fieldError
+        }}</span>
 
         <VTextarea
           v-model="description"
@@ -96,15 +105,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { createCuratorGroup } from '@/api/curatorGroups'
 import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import { useToast } from '@/composables/useToast'
+import { queryDocument } from '@/platform/dom'
 import { SCHOOL_MEDIA_UPLOAD_ENABLED } from '@/utils/constants'
-import { IconRequired } from '@/components/icons'
 import { VButton, VEmptyState } from '@/components/ui'
 import VHeader from '@/components/layout/VHeader.vue'
 import { VInput, VTextarea } from '@/components/ui'
@@ -127,12 +136,22 @@ const bannerUrl = ref<string | null>(null)
  *  resets it short of leaving the route. */
 const refused = ref(false)
 
+/* Inline field error through the constant slot (owner 2026-10-01 canon). */
+async function showFieldError(message: string): Promise<void> {
+  fieldError.value = message
+  await nextTick()
+  queryDocument('.ncg__field-error--show')?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'center',
+  })
+}
+
 async function onCreate(): Promise<void> {
   const trimmed = name.value.trim()
   fieldError.value = ''
 
   if (!trimmed) {
-    fieldError.value = 'Введите название школы'
+    await showFieldError('Введите название школы')
     return
   }
 
@@ -149,7 +168,7 @@ async function onCreate(): Promise<void> {
     void router.replace({ name: 'master-curator-group', params: { id: created.id } })
   } catch (e) {
     if (e instanceof ApiResponseError && e.code === 'curator_group_name_taken') {
-      fieldError.value = 'У вас уже есть школа с таким названием'
+      await showFieldError('У вас уже есть школа с таким названием')
     }
     if (e instanceof ApiResponseError && e.code === 'group_creation_not_allowed') {
       // Not a field error and not a retryable failure -- the RIGHT is
@@ -169,6 +188,31 @@ async function onCreate(): Promise<void> {
   min-height: 100%;
   display: flex;
   flex-direction: column;
+}
+
+/* Section-title required marker + constant-height error slot (owner
+   2026-10-01 canon, same as the practice create form). VInput's own error
+   line is hidden -- its red border still marks the field. */
+.ncg__req {
+  color: var(--velo-error);
+}
+
+.ncg__field-error {
+  display: block;
+  min-height: 17px;
+  margin-top: 0;
+  font-size: var(--text-xs);
+  line-height: 1.2;
+  color: var(--velo-error);
+  opacity: 0;
+}
+
+.ncg__field-error--show {
+  opacity: 1;
+}
+
+.ncg :deep(.v-input__error) {
+  display: none;
 }
 
 /* [FE-45 follow-up] Keep the column at its AT-REST height while the keyboard

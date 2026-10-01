@@ -51,7 +51,7 @@
         <div class="profile__menu-title">Аккаунт</div>
         <div class="profile__menu-list">
           <VMenuRow label="Редактировать профиль" @click="onEditProfile">
-            <template #icon><IconEdit :size="20" /></template>
+            <template #icon><IconPen :size="20" /></template>
           </VMenuRow>
           <VMenuRow label="Мои бронирования" @click="router.push({ name: 'user-bookings' })">
             <template #icon><IconBookings :size="20" /></template>
@@ -134,7 +134,7 @@ import { useUiStore } from '@/stores/ui'
 import { VAvatar, VStatCard, VCard, VMenuRow } from '@/components/ui'
 import RoleSwitchSection from '@/components/shared/RoleSwitchSection.vue'
 import {
-  IconEdit,
+  IconPen,
   IconBookings,
   IconMessages,
   IconBell,

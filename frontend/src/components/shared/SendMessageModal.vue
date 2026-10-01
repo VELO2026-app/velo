@@ -3,13 +3,19 @@
 
   "Написать сообщение" sheet, reused on the student screens (list / profile /
   summary / analytics). REAL since the T3 chat backend landed: «Отправить»
-  open-or-gets the eternal DM with the student (POST /chats/students -- the
-  same thread the student's own «Задать вопрос» opens) and posts the text.
-  Same open-then-send split as BookingConfirmedView.onSendRequest: one
-  in-flight flag, success toasts and closes, a failure toasts and leaves the
-  sheet standing with the draft (the retry is safe -- comms dedups on the
-  pair). Visual contract: recipient chip + message textarea + Отмена /
-  Отправить.
+  open-or-gets the eternal DM and posts the text. Same open-then-send split
+  as BookingConfirmedView.onSendRequest: one in-flight flag, success toasts
+  and closes, a failure toasts and leaves the sheet standing with the draft
+  (the retry is safe -- comms dedups on the pair). Visual contract: recipient
+  chip + message textarea + Отмена / Отправить.
+
+  Two directed pairs, one component (owner 2026-09-30):
+    - studentId -- master-side caller: POST /chats/students {student_id}
+      (openStudentChat), the master zone screens' path;
+    - masterId  -- the PUBLIC master profile's «Написать сообщение»
+      (MasterPublicView): POST /chats {master_id} (openChat), the same
+      thread the visitor's own «Задать вопрос» opens. When both ids are
+      passed the master wins; exactly one is passed in practice.
 -->
 
 <template>
@@ -35,9 +41,20 @@ import { ref, watch } from 'vue'
 import { VModal, VAvatar, VTextarea, VButton } from '@/components/ui'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
-import { openStudentChat, sendChatMessage } from '@/api/chats'
+import { openChat, openStudentChat, sendChatMessage } from '@/api/chats'
 
-const props = defineProps<{ open: boolean; studentId: string; name: string }>()
+const props = withDefaults(
+  defineProps<{
+    open: boolean
+    /** Master-side caller (master zone screens): the student to DM. */
+    studentId?: string
+    name: string
+    /** Public-profile caller (MasterPublicView): the VERIFIED master to DM
+     *  -- wins over studentId when both are passed. */
+    masterId?: string
+  }>(),
+  { studentId: '', masterId: '' },
+)
 const emit = defineEmits<{ close: [] }>()
 
 const toast = useToast()
@@ -61,7 +78,9 @@ async function onSend(): Promise<void> {
   if (!body || sending.value) return
   sending.value = true
   try {
-    const thread = await openStudentChat(props.studentId)
+    const thread = props.masterId
+      ? await openChat(props.masterId)
+      : await openStudentChat(props.studentId)
     await sendChatMessage(thread.id, body)
     toast.success('Сообщение отправлено')
     emit('close')

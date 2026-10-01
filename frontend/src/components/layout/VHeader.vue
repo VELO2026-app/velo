@@ -92,9 +92,9 @@ defineEmits<{
      = the same 34px by value, but a separate source -- headered screens
      wouldn't move with --velo-fog-headerless-top changes; FE-48 sweep). The
      island's measured height adapts automatically (MobileLayout ResizeObserver);
-     HEADER_FALLBACK (88, MobileLayout) still safely over-reserves the
+     HEADER_FALLBACK (68, MobileLayout) still safely over-reserves the
      pre-measurement frame by the token's delta. */
-  padding: var(--velo-fog-headerless-top) var(--velo-rail-pad-x) var(--space-3);
+  padding: var(--velo-fog-headerless-top) var(--velo-rail-pad-x) var(--space-2);
   pointer-events: none;
 }
 

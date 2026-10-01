@@ -49,6 +49,19 @@ export const useSchoolsHubStore = defineStore('schoolsHub', () => {
    *  mine probe reads as "no schools". */
   const hasSchools = computed(() => mineSettled.value && mine.value.length > 0)
 
+  /** Owner 2026-10-01: whoever holds the admin-issued founding right
+   *  (can_create_groups) IS a curator account -- the user zone hides the
+   *  personal-diary surfaces (the «Дневник» tab, the dashboard quick
+   *  actions) for them. Fail-closed for POSSIBLE holders: a master-capable
+   *  account whose master probe has not settled yet reads as curator until
+   *  the probe answers, so a diary tab never flashes for a right holder.
+   *  A plain user (or an applicant) can never hold the right -- the same
+   *  gate ensureCurator probes the master surface through -- so they are
+   *  known-non-curator with zero network round-trips and nothing flickers. */
+  const isCuratorAccount = computed(
+    () => canCreate.value || (authStore.allowedRoles.includes('master') && !masterSettled.value),
+  )
+
   async function ensureCurator(): Promise<void> {
     const probes: Array<Promise<void>> = []
     if (!mineSettled.value) {
@@ -105,6 +118,7 @@ export const useSchoolsHubStore = defineStore('schoolsHub', () => {
     canCreate,
     mine,
     hasSchools,
+    isCuratorAccount,
     ensureCurator,
     refreshCurator,
     $reset,

@@ -82,6 +82,23 @@ const router = createRouter({
           component: () => import('@/views/user/CalendarView.vue'),
         },
         {
+          // The MASTER's practice calendar (owner 2026-09-30): the «Предстоящие
+          // практики» row on the master's public profile lands here. Stacked
+          // (not the tab hub) so the floating island's back control is honest.
+          path: 'calendar/master/:masterId',
+          name: 'user-calendar-master',
+          component: () => import('@/views/user/CalendarView.vue'),
+        },
+        {
+          // Owner 2026-10-01: «Предстоящие практики» on the school page opens
+          // the calendar scoped to that school. Stacked (not the tab hub) so
+          // the floating island's back control is honest; mirrors
+          // user-calendar-master above.
+          path: 'calendar/school/:groupId',
+          name: 'user-calendar-school',
+          component: () => import('@/views/user/CalendarView.vue'),
+        },
+        {
           path: 'diary',
           name: 'user-diary',
           component: () => import('@/views/user/DiaryFeedView.vue'),

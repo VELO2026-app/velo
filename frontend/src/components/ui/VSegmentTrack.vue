@@ -23,6 +23,10 @@
     <VSegmentTrack v-model="period" :options="PERIOD_OPTIONS" variant="toggle" />
     <VSegmentTrack v-model="activeTab" :options="TAB_OPTIONS" variant="tabs" />
     <VSegmentTrack v-model="filter" :options="OPTIONS" variant="tabs" scrollable />
+
+  An option may carry an `icon` (a DS icon component) rendered before the
+  label (SchoolMembersView's «Блок» lock). Iconless options -- every
+  pre-existing caller -- render exactly as before.
 -->
 <template>
   <div
@@ -41,15 +45,23 @@
       :class="{ 'v-segment-track__btn--active': modelValue === opt.value }"
       @click="emit('update:modelValue', opt.value)"
     >
-      {{ opt.label }}
+      <span v-if="opt.icon" class="v-segment-track__opt">
+        <component :is="opt.icon" :size="12" />
+        {{ opt.label }}
+      </span>
+      <template v-else>{{ opt.label }}</template>
     </button>
   </div>
 </template>
 
 <script setup lang="ts" generic="T extends string">
+import type { Component } from 'vue'
+
 interface SegOption {
   value: T
   label: string
+  /** Optional leading glyph (SchoolMembersView's «Блок» lock). */
+  icon?: Component
 }
 
 withDefaults(
@@ -152,5 +164,12 @@ const emit = defineEmits<{
 .v-segment-track--scrollable .v-segment-track__btn {
   flex: 0 0 auto;
   white-space: nowrap;
+}
+
+/* Optional icon+label composition (the «Блок» lock). */
+.v-segment-track__opt {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 </style>

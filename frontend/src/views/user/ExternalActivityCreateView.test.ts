@@ -273,18 +273,19 @@ afterEach(() => {
 
 describe('ExternalActivityCreateView', () => {
   describe('rendering + initial state', () => {
-    it('renders the header, the legend, the visible sections in order and the exact copy', () => {
+    it('renders the header, the visible sections in order and the exact copy (owner 2026-10-01: the legend is hidden)', () => {
       mount()
 
       expect(host?.querySelector('.ea__title')?.textContent?.trim()).toBe('Новое событие')
       // No "..." placeholder on the header line (owner 2026-09-10).
       expect(host?.querySelector('.ea__header-slot')).toBeNull()
-      expect(screenText()).toContain('— поля, обязательные для заполнения')
+      // The rosette legend is hidden -- the section stars replaced it.
+      expect(host?.textContent).not.toContain('— поля, обязательные для заполнения')
       const titles = Array.from(host?.querySelectorAll('.velo-section-title') ?? []).map((t) =>
         t.textContent?.trim(),
       )
       // «Мое состояние» is hidden for now (owner 2026-09-10).
-      expect(titles).toEqual(['Когда произошло событие', 'Выбор активности', 'Мысли'])
+      expect(titles).toEqual(['Когда произошло событие *', 'Выбор активности *', 'Мысли'])
       expect(thoughtTextarea().getAttribute('placeholder')).toBe(
         'Напишите, что это было и что с вами произошло. Вы можете вернуться к рефлексии позже',
       )
@@ -325,7 +326,7 @@ describe('ExternalActivityCreateView', () => {
       expect(screenText()).not.toContain('Мое состояние')
     })
 
-    it('required seals hug their full-width fields: seal is a child of the field wrapper (FE-80)', () => {
+    it('owner 2026-10-01: the rosettes are gone -- the section stars mark the required sections', () => {
       mount()
 
       // No flex shrink-wrappers: every field keeps the full rail.
@@ -337,33 +338,17 @@ describe('ExternalActivityCreateView', () => {
       ]) {
         const field = host?.querySelector<HTMLElement>(selector)
         expect(field).not.toBeNull()
-        const seal = field?.querySelector('.ea__seal') ?? null
-        expect(seal).not.toBeNull()
-        // The seal is anchored to the field block itself, not a row wrapper.
-        expect(seal?.parentElement).toBe(field)
-        expect(seal?.querySelector('svg')).toBeTruthy()
+        // No seal anywhere: the heading carries the marker now.
+        expect(field?.querySelector('.ea__seal')).toBeNull()
       }
+      const starred = Array.from(host?.querySelectorAll('.velo-section-title') ?? [])
+        .filter((t) => t.querySelector('.ea__req'))
+        .map((t) => t.textContent?.trim())
+      expect(starred).toEqual(['Когда произошло событие *', 'Выбор активности *'])
       // The 2026-09-10 screen-edge gutter classes stay gone.
       expect(host?.querySelector('.ea__seal--gutter')).toBeNull()
       expect(host?.querySelector('.ea__field-row')).toBeNull()
       expect(host?.querySelector('.ea__seal-row')).toBeNull()
-    })
-
-    it('a filled field swaps its seal to the done state on the SAME node beside the card', async () => {
-      mount()
-
-      const card = host?.querySelector('[data-field="activity"]')
-      const sealBefore = card?.querySelector('.ea__seal') ?? null
-      expect(sealBefore).not.toBeNull()
-      expect(sealBefore?.classList.contains('ea__seal--done')).toBe(false)
-
-      chip('Медитация').click()
-      await nextTick()
-
-      const sealAfter = card?.querySelector('.ea__seal') ?? null
-      // Same node beside the card: only the icon and colour swapped.
-      expect(sealAfter).toBe(sealBefore)
-      expect(sealAfter?.classList.contains('ea__seal--done')).toBe(true)
     })
   })
 

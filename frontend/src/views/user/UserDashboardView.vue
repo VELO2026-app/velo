@@ -165,8 +165,10 @@
          Two one-tap entries into writing: the external-activity form and the
          diary's note composer. Present regardless of the nearest-practice
          state above -- it is its own section, never part of a practice card.
+         Owner 2026-10-01: both buttons write into the personal diary, so a
+         curator account (founding-right holder, schoolsHub) gets no section.
          ================================================================ -->
-    <section class="dashboard__section">
+    <section v-if="!schoolsHub.isCuratorAccount" class="dashboard__section">
       <h3 class="dashboard__section-title">Быстрый доступ</h3>
       <div class="dashboard__quick">
         <button
@@ -215,6 +217,7 @@ import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useBookingsStore } from '@/stores/bookings'
 import { useNotificationsStore } from '@/stores/notifications'
+import { useSchoolsHubStore } from '@/stores/schoolsHub'
 import { getMyStats } from '@/api/bookings'
 import { useToast } from '@/composables/useToast'
 import { VHeader } from '@/components/layout'
@@ -243,6 +246,11 @@ const toast = useToast()
 // Header bell's unread presence -- store-shared with the inbox screen,
 // which writes server-confirmed badges after its mark-read calls.
 const notifications = useNotificationsStore()
+// The diary quick actions follow the curator rule (owner 2026-10-01): a
+// founding-right holder is a curator account with no personal-diary surfaces.
+// The probe itself is fired by the parent UserShell on mount; the store
+// answers fail-closed for a possible holder.
+const schoolsHub = useSchoolsHubStore()
 
 // -- Reactive clock: updated every 60s so alert computeds re-evaluate --
 const now = ref(Date.now())

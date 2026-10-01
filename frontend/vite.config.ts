@@ -30,6 +30,11 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         // Don't precache source maps.
         globIgnores: ['**/*.map'],
+        // The stand (vite preview + tunnel) must show a fresh build on the
+        // NEXT reload, not one reload later: without these flags the new SW
+        // waits for every client to close first (autoUpdate's default dance).
+        skipWaiting: true,
+        clientsClaim: true,
         // Runtime caching gives the service worker a valid strategy even when
         // the precache manifest is empty. Without this, workbox-build aborts
         // with "Couldn't find configuration for either precaching or runtime

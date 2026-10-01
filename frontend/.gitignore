@@ -24,3 +24,5 @@ npm-debug.log*
 
 # TypeScript cache
 *.tsbuildinfo
+# ESLint cache (verify-quick lane)
+.eslintcache

@@ -13,25 +13,9 @@
 
 ## Контракты и механика (код ссылается или опирается)
 - `support-sections-integration.md` — контракт секций поддержки с comms; **binding**-ссылки в `backend/app/modules/support/*` и в миграции.
-- `attendance-accounting.md` — как работает учёт посещаемости (порог / тайминг / идентификация); якоря сверены 2026-09-17 (`attendance_service.py:83`, `config.py:588/597`).
-- `device-verification-findings.md` — измерения и незакрытые наблюдения (V1, B21, B13, B24, B29); указан из `deliberately-not-fixed.md`; запреты из него продублированы там.
-- `diary-behaviour-map.md` + `diary-behaviour-spec.md` — пара «экран дневника: как сегодня / как должно»; спека — эталон, по которому грейдится сборка (сборка активна: FE-70/71/72).
-
-## ТЗ задач для агентов
-- `external-activity-frontend-task.md` — образец отработанного формата агентного ТЗ (реализовано FE-70); образец для шаблона Фазы 3б.
-- `voice-input-frontend-task.md` — голосовой ввод; шаг 1 (Composer) сделан в FE-75, шаг 2 (все textarea) не сделан; ссылки из `useVoiceRecorder.ts` и `constants.ts`.
-
-## Реконы
-- `t26-notification-prefs-recon.md` — T-26, предпочтения уведомлений (2026-09-16, свежий).
-
-## Решения и запреты (без дедлайна)
-- `deliberately-not-fixed.md` — что не чинить нарочно; правило для агентов (`.clinerules/10-frontend.md`).
-- `owner-parked-roadmap.md` — парк владельца «не строить»; разблокирует только владелец.
-- `owner-decisions-2026-07-25.md` — решения владельца, чтобы не переигрывать.
-- `number-key.md` — исторический ключ нумерации; не переиспользовать номера.
-
-## Ожидают решения владельца
-- `primer-b35-doctor-gate.md` — развилка A/B: как закрыть разрыв «зелёный doctor / красный boot» на плейсхолдерах `.env`. Проверено 2026-09-17: разрыв не закрыт (`velo-manage.sh` проверяет только наличие ключей; `config.py:955` — KNOWN GAP по REDIS_PASSWORD). Удалить после решения.
 
 ## Удалено 2026-09-17 (история в git)
 `seed-context.md` (описывал seed-систему до пересоздания репо; истина теперь — `velo seed --profile` + `backend/scripts/seed.py`), `probekit-sweep-2026-08.md` (снапшот-отчёт из git-ignored `.tmp`), `comms-handover-corrections.md` (опровержения к передаче comms; передача состоялась), `support-operator-model.md` (предстроительный рекон; рабочий контракт — `support-sections-integration.md`). Обоснования — в коммите.
+
+## Удалено 2026-09-29 по решению владельца (история в git)
+`attendance-accounting.md`, `device-verification-findings.md`, `diary-behaviour-map.md` + `diary-behaviour-spec.md`, `external-activity-frontend-task.md`, `t26-notification-prefs-recon.md`, `deliberately-not-fixed.md`, `owner-parked-roadmap.md`, `owner-decisions-2026-07-25.md`, `number-key.md`, `primer-b35-doctor-gate.md` — массовая чистка не-фабричных доков (ruling владельца 2026-09-29); обоснование — в коммите. `voice-input-frontend-task.md` снят с индекса: файла в репо уже не было на момент чистки — висячие ссылки из `useVoiceRecorder.ts`/`constants.ts` восстановить или снять при FE-75 Шаге 2. Намеренно остался: `support-sections-integration.md` — живой контракт с binding-ссылками из бэкенда (`support/service.py:8`, `models.py:23`, миграция `ab1c2d3e4f5a`); файлы бэка вне зоны FE-агента — перенос контракта в шапку `service.py` и удаление документа делегированы бэкенду (BE-91).

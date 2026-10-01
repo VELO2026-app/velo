@@ -50,7 +50,9 @@
         @update:model-value="switchKind"
       />
 
-      <div class="school-members__search">
+      <!-- The search rides the roster tabs; the Блок placeholder has nothing
+           to search, so the field sits out. -->
+      <div v-if="kind !== 'blocked'" class="school-members__search">
         <div class="school-members__search-field">
           <VInput
             v-model="search"
@@ -105,7 +107,11 @@
           icon="group"
           :title="trimmedSearch ? 'Никого не найдено' : emptyTitle"
           :description="trimmedSearch ? 'Попробуйте изменить запрос' : emptyDescription"
-        />
+        >
+          <template v-if="kind === 'blocked'" #icon>
+            <IconLock :size="48" />
+          </template>
+        </VEmptyState>
 
         <VLoader v-if="loading && items.length > 0" size="sm" />
         <VShowMore v-if="hasMore && !loading" label="Показать ещё" @click="loadMore" />
@@ -115,11 +121,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getCuratorGroupMembers, type CuratorGroupMemberKind } from '@/api/curatorGroups'
 import { ApiResponseError } from '@/api/client'
 import type { CuratorGroupMemberItem } from '@/api/types'
+import { IconLock } from '@/components/icons'
 import SchoolMemberRow from '@/components/shared/SchoolMemberRow.vue'
 import VShowMore from '@/components/shared/VShowMore.vue'
 import { VButton, VEmptyState, VInput, VLoader, VSegmentTrack } from '@/components/ui'
@@ -128,10 +135,18 @@ import { usePagination } from '@/composables/usePagination'
 import { useToast } from '@/composables/useToast'
 
 // §1.11 (owner 2026-09-22): the active roster rides ?kind= -- server truth
-// in the URL, so a refresh or a deep link reopens the same list.
-const KIND_OPTIONS: ReadonlyArray<{ value: CuratorGroupMemberKind; label: string }> = [
+// in the URL, so a refresh or a deep link reopens the same list. The third
+// tab «Блок» (owner 2026-09-30) is a BE-79 placeholder: no endpoint lists
+// blocked members yet, so the tab never fetches -- it renders the lock
+// empty state and hides the search. It is a view-local MemberTab, NOT
+// CuratorGroupMemberKind, so the API contract stays honest until the
+// backend lands.
+type MemberTab = CuratorGroupMemberKind | 'blocked'
+
+const KIND_OPTIONS: ReadonlyArray<{ value: MemberTab; label: string; icon?: Component }> = [
   { value: 'master', label: 'Мастера' },
   { value: 'student', label: 'Ученики' },
+  { value: 'blocked', label: 'Блок', icon: IconLock },
 ]
 
 const route = useRoute()
@@ -144,23 +159,29 @@ const groupId = computed(() => String(route.params.id ?? ''))
  *  from the server, exactly like on CuratorGroupPageView. */
 const inMasterZone = computed(() => String(route.name ?? '').startsWith('master'))
 
-function kindFromQuery(): CuratorGroupMemberKind {
-  return route.query.kind === 'student' ? 'student' : 'master'
+function kindFromQuery(): MemberTab {
+  if (route.query.kind === 'student') return 'student'
+  if (route.query.kind === 'blocked') return 'blocked'
+  return 'master'
 }
 
-const kind = ref<CuratorGroupMemberKind>(kindFromQuery())
+const kind = ref<MemberTab>(kindFromQuery())
 
 const searchPlaceholder = computed(() =>
   kind.value === 'master' ? 'Искать мастера...' : 'Искать ученика...',
 )
-const emptyTitle = computed(() =>
-  kind.value === 'master' ? 'В школе пока нет мастеров' : 'В школе пока нет учеников',
-)
-const emptyDescription = computed(() =>
-  kind.value === 'master'
+const emptyTitle = computed(() => {
+  if (kind.value === 'blocked') return 'Пока нет заблокированных'
+  return kind.value === 'master' ? 'В школе пока нет мастеров' : 'В школе пока нет учеников'
+})
+const emptyDescription = computed(() => {
+  if (kind.value === 'blocked') {
+    return 'Участник появится здесь, когда куратор заблокирует его через меню на странице профиля.'
+  }
+  return kind.value === 'master'
     ? 'Мастером школы участник становится после принятия предложения куратора.'
-    : 'Ученики появляются в школе после вступления по ссылке-приглашению.',
-)
+    : 'Ученики появляются в школе после вступления по ссылке-приглашению.'
+})
 const errorTitle = computed(() =>
   kind.value === 'master' ? 'Не удалось загрузить мастеров' : 'Не удалось загрузить учеников',
 )
@@ -186,6 +207,11 @@ const notFound = ref(false)
 
 const { items, loading, error, loadMoreError, hasMore, loadMore, refresh } =
   usePagination<CuratorGroupMemberItem>((limit, offset) => {
+    // BE-79 pending: no endpoint lists blocked members -- the tab is a
+    // placeholder screen, never a fake request.
+    if (kind.value === 'blocked') {
+      return Promise.resolve({ items: [], total: 0, limit, offset })
+    }
     return getCuratorGroupMembers(groupId.value, {
       kind: kind.value,
       search: trimmedSearch.value || undefined,
@@ -223,7 +249,7 @@ watch(search, () => {
  *  not navigation history), resets the search, and reloads: every request
  *  still carries the kind filter, so the §1.11.3 invariant survives. A new
  *  roster is a fresh screen, not a filtered version of the previous one. */
-async function switchKind(next: CuratorGroupMemberKind): Promise<void> {
+async function switchKind(next: MemberTab): Promise<void> {
   if (next === kind.value) return
   kind.value = next
   notFound.value = false
@@ -245,7 +271,8 @@ async function switchKind(next: CuratorGroupMemberKind): Promise<void> {
 watch(
   () => route.query.kind,
   (next) => {
-    const fromUrl: CuratorGroupMemberKind = next === 'student' ? 'student' : 'master'
+    const fromUrl: MemberTab =
+      next === 'student' ? 'student' : next === 'blocked' ? 'blocked' : 'master'
     if (fromUrl === kind.value) return
     kind.value = fromUrl
     notFound.value = false
@@ -287,7 +314,14 @@ function openMember(member: CuratorGroupMemberItem): void {
   // no guard on /user/masters/:id). A student has no public page, so their
   // school-context profile carries the curator actions instead.
   if (kind.value === 'master') {
-    void router.push({ name: 'user-master-public', params: { id: member.user_id } })
+    // Owner ruling 2026-09-30: the master's page carries the curator's action
+    // menu when opened from the school context -- the roster passes the
+    // ?groupId= marker that turns the menu on (no new route, no new screen).
+    void router.push({
+      name: 'user-master-public',
+      params: { id: member.user_id },
+      query: { groupId: groupId.value, name: member.name, avatar: member.avatar_url ?? '' },
+    })
     return
   }
   const zone = inMasterZone.value ? 'master' : 'user'

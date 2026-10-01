@@ -11,7 +11,14 @@
     :tabs="visibleTabs"
     :active-tab="activeTab"
     :fill="isFillRoute"
-    :hide-tab-bar="isDiaryRoute || isFormRoute || isChatRoute || isInboxRoute || keyboardOpen"
+    :hide-tab-bar="
+      isDiaryRoute ||
+      isFormRoute ||
+      isChatRoute ||
+      isInboxRoute ||
+      isMasterCuratorRoute ||
+      keyboardOpen
+    "
     :fog="isFogRoute"
     v-bind="fogTuning"
     @navigate="router.push($event)"
@@ -37,13 +44,21 @@ const router = useRouter()
 // unless the schoolsHub store sees the account in at least one school (any
 // relation). The probe starts on mount; until it settles the tab is simply
 // absent (fail-closed), then appears without a reload.
+// Owner 2026-10-01: `requires: 'diary'` («Дневник») resolves through the same
+// store -- a founding-right holder (can_create_groups) IS a curator account
+// and gets no personal-diary tab; the fail-closed unsettled-probe branch
+// lives in the store.
 const schoolsHub = useSchoolsHubStore()
 onMounted(() => {
   void schoolsHub.ensureCurator()
 })
 
 const visibleTabs = computed<TabItem[]>(() =>
-  USER_TABS.filter((tab) => !tab.requires || schoolsHub.hasSchools),
+  USER_TABS.filter((tab) => {
+    if (tab.requires === 'schools') return schoolsHub.hasSchools
+    if (tab.requires === 'diary') return !schoolsHub.isCuratorAccount
+    return true
+  }),
 )
 
 // Hide the floating tab bar while the soft keyboard is open, so it does not ride
@@ -106,6 +121,14 @@ const isFormRoute = computed(() => FORM_ROUTES.includes(route.name as string))
 // route meta stays as documentation parity.
 const INBOX_ROUTES = ['user-inbox']
 const isInboxRoute = computed(() => INBOX_ROUTES.includes(route.name as string))
+
+// Owner 2026-09-30: the master's public page in the CURATOR context (the
+// roster's ?groupId= marker) hides the dock -- its place is taken by the
+// hanging «Создать практику» CTA (MasterPublicView renders it on the same
+// condition, so the shell and the view can never disagree).
+const isMasterCuratorRoute = computed(
+  () => route.name === 'user-master-public' && String(route.query.groupId ?? '') !== '',
+)
 
 // Edge-to-edge fog mask: the long scrolling lists/feeds + the practice-detail
 // screen (operator 2026-06-09: dissolve its hero under the header and its CTA

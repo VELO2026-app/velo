@@ -48,7 +48,7 @@
                  openDestructive контекстный: черновик удаляет, запланированную
                  отменяет, с подтверждением). -->
             <VMenuItem
-              :icon="IconEdit"
+              :icon="IconPen"
               ariaLabel="Редактировать"
               @click="
                 () => {
@@ -361,7 +361,7 @@ import { VHeader } from '@/components/layout'
 import PracticeHeroCard from '@/components/shared/PracticeHeroCard.vue'
 import VShowMore from '@/components/shared/VShowMore.vue'
 import CancelPracticeDialog from '@/components/shared/CancelPracticeDialog.vue'
-import { IconEdit } from '@/components/icons'
+import { IconPen } from '@/components/icons'
 import { RATING_ICON } from '@/utils/ratingIcons'
 // IconTrash is not re-exported from the icons barrel; import the component
 // directly (same as EntryView).

@@ -32,7 +32,10 @@ import {
   joinCuratorGroup,
   getCuratorGroupPage,
   getCuratorGroupMasters,
+  getCuratorGroupCheckins,
+  getCuratorGroupReviews,
   getCuratorGroupPractices,
+  getCuratorGroupStudentProfile,
   getCuratorGroupLeavePreview,
   leaveCuratorGroup,
   acceptCuratorGroupTransfer,
@@ -248,6 +251,14 @@ describe('invite + transfer + join bodies', () => {
   })
 })
 
+describe('getCuratorGroupStudentProfile', () => {
+  it('GETs the school-scoped path with no query params (BE-54)', async () => {
+    await getCuratorGroupStudentProfile('g1', 'u9')
+
+    expect(api.get).toHaveBeenCalledWith(`${G}/g1/students/u9`)
+  })
+})
+
 // -- Query construction --------------------------------------------------------
 
 describe('getCuratorGroupMembers query', () => {
@@ -312,5 +323,45 @@ describe('paginated listings default to limit=20&offset=0', () => {
     expect(api.get).toHaveBeenNthCalledWith(2, `${M}/g1/practices?limit=5&offset=20`)
     expect(api.get).toHaveBeenNthCalledWith(3, `/api/v1/admin/curator-groups?limit=5&offset=20`)
     expect(api.get).toHaveBeenNthCalledWith(4, `${G}/g1/journal?limit=5&offset=20`)
+  })
+})
+
+// -- FE-69: curator feedback feeds --------------------------------------------
+
+describe('curator feedback feeds (FE-69)', () => {
+  it('checkins: default paging, no practice filter', async () => {
+    await getCuratorGroupCheckins('g1')
+
+    expect(api.get).toHaveBeenCalledWith(`${G}/g1/checkins?limit=20&offset=0`)
+  })
+
+  it('checkins: practice_id narrows the feed to one practice', async () => {
+    await getCuratorGroupCheckins('g1', { practiceId: 'p7' })
+
+    expect(api.get).toHaveBeenCalledWith(`${G}/g1/checkins?practice_id=p7&limit=20&offset=0`)
+  })
+
+  it('checkins: explicit pagination is forwarded', async () => {
+    await getCuratorGroupCheckins('g1', { practiceId: 'p7', limit: 5, offset: 20 })
+
+    expect(api.get).toHaveBeenCalledWith(`${G}/g1/checkins?practice_id=p7&limit=5&offset=20`)
+  })
+
+  it('reviews: default paging, no practice filter', async () => {
+    await getCuratorGroupReviews('g1')
+
+    expect(api.get).toHaveBeenCalledWith(`${G}/g1/reviews?limit=20&offset=0`)
+  })
+
+  it('reviews: practice_id narrows the feed to one practice', async () => {
+    await getCuratorGroupReviews('g1', { practiceId: 'p7' })
+
+    expect(api.get).toHaveBeenCalledWith(`${G}/g1/reviews?practice_id=p7&limit=20&offset=0`)
+  })
+
+  it('reviews: explicit pagination is forwarded', async () => {
+    await getCuratorGroupReviews('g1', { practiceId: 'p7', limit: 5, offset: 20 })
+
+    expect(api.get).toHaveBeenCalledWith(`${G}/g1/reviews?practice_id=p7&limit=5&offset=20`)
   })
 })

@@ -59,10 +59,42 @@
         </template>
       </Banner>
 
-      <!-- Required-fields legend (DS banner, Phase-3). -->
+      <!-- Required-fields legend: HIDDEN for now (owner 2026-10-01) -- the
+           section-title asterisk reads without an explanation. Restore the
+           block below when an explanation is needed again. -->
+      <!--
       <div class="create-practice__legend">
-        <IconRequired class="create-practice__legend-seal" :size="22" />
-        <span>— поля, обязательные для заполнения</span>
+        <span class="cp-req">*</span>
+        <span>— разделы с обязательными полями</span>
+      </div>
+      -->
+
+      <!-- ================================================================
+           Мастер (§1.6 delegation, STUB): whose practice this is. The
+           master-card entry preselects one master; the school-page entry
+           picks among that school's visible masters, «Я» first. No context
+           -> the caller owns the practice and this section does not render.
+           The backend cannot take a foreign master yet, so a foreign
+           target renders the notice and disables submit -- it must never
+           look like the practice was created for someone else.
+           ================================================================ -->
+      <div v-if="delegatedMaster || masterOptions.length > 1" class="create-practice__section">
+        <h2 class="velo-section-title">Мастер</h2>
+        <div>
+          <VCard class="create-practice__repeat" padding="none">
+            <div v-if="delegatedMaster" class="create-practice__repeat-title">
+              {{ delegatedMaster.name }}
+            </div>
+            <VRadioGroup v-else v-model="selectedMasterId" :options="masterOptions" />
+          </VCard>
+          <Banner
+            v-if="targetsForeignMaster"
+            class="cp-gap-top"
+            variant="warning"
+            title="Создание для другого мастера пока недоступно"
+            body="Практика будет создана, когда бэкенд научится принимать мастера. Сейчас создание доступно только от вашего имени."
+          />
+        </div>
       </div>
 
       <!-- ================================================================
@@ -72,9 +104,8 @@
            ================================================================ -->
       <div class="create-practice__section">
         <h2 class="velo-section-title">Использовать шаблон</h2>
-        <!-- Full width (NOT railed): the block carries no required-seal of its
-             own, so it spans the whole rail — as wide as a field PLUS its seal
-             indicator (operator PROMPT №233). -->
+        <!-- Full-width block: no required-seal of its own, so it spans the
+             whole rail like every field (owner 2026-10-01 seal canon). -->
         <UseTemplateBlock :practices="templatePractices" @select="applyTemplate" />
       </div>
 
@@ -83,9 +114,14 @@
            practice_type не показываем, выводим из «Повторения»)
            ================================================================ -->
       <div class="create-practice__section">
-        <h2 class="velo-section-title">Основное</h2>
+        <h2 class="velo-section-title">Основное <span class="cp-req">*</span></h2>
 
-        <VInput v-model="form.title" placeholder="Название" :error="errors.title" required />
+        <VInput v-model="form.title" placeholder="Название" :error="errors.title" />
+        <span
+          class="create-practice__field-error"
+          :class="{ 'create-practice__field-error--show': !!errors.title }"
+          >{{ errors.title }}</span
+        >
 
         <!-- Направление = дисциплина (meditation/yoga/…). Подпись = плейсхолдер.
              Options catalog-first (T2 stage 2) -- see directionOptions. -->
@@ -94,13 +130,17 @@
           placeholder="Направление практики"
           :options="directionOptions"
           :error="errors.direction"
-          required
           @update:modelValue="onDirectionChange"
         />
+        <span
+          class="create-practice__field-error"
+          :class="{ 'create-practice__field-error--show': !!errors.direction }"
+          >{{ errors.direction }}</span
+        >
 
         <!-- Вид практики = style. Показываем только если у направления есть виды
              (Q4=А: без явного «Без вида», не выбрано = null, необязательное). -->
-        <div v-if="styleOptionsForForm.length > 0" class="create-practice__railed">
+        <div v-if="styleOptionsForForm.length > 0">
           <VSelect v-model="form.style" placeholder="Вид практики" :options="styleOptionsForForm" />
         </div>
 
@@ -110,15 +150,19 @@
           placeholder="Уровень сложности"
           :options="DIFFICULTY_OPTIONS_CREATE"
           :error="errors.difficulty"
-          required
         />
+        <span
+          class="create-practice__field-error"
+          :class="{ 'create-practice__field-error--show': !!errors.difficulty }"
+          >{{ errors.difficulty }}</span
+        >
       </div>
 
       <!-- ================================================================
            Расписание
            ================================================================ -->
       <div class="create-practice__section">
-        <h2 class="velo-section-title">Расписание</h2>
+        <h2 class="velo-section-title">Расписание <span class="cp-req">*</span></h2>
 
         <!-- Дата: открывает DatePickerSheet. Подпись = плейсхолдер внутри поля. -->
         <div class="create-practice__field">
@@ -134,15 +178,12 @@
             >
               {{ form.date ? dateDisplay : 'Дата' }}
             </button>
-            <span
-              class="create-practice__seal"
-              :class="{ 'create-practice__seal--done': !!form.date }"
-            >
-              <IconRequired v-if="!form.date" :size="22" />
-              <IconRequiredDone v-else :size="22" />
-            </span>
           </div>
-          <span v-if="errors.date" class="create-practice__field-error">{{ errors.date }}</span>
+          <span
+            class="create-practice__field-error"
+            :class="{ 'create-practice__field-error--show': !!errors.date }"
+            >{{ errors.date }}</span
+          >
         </div>
 
         <!-- Время: открывает TimePickerSheet (24ч). Подпись = плейсхолдер. -->
@@ -159,15 +200,12 @@
             >
               {{ form.time || 'Время' }}
             </button>
-            <span
-              class="create-practice__seal"
-              :class="{ 'create-practice__seal--done': !!form.time }"
-            >
-              <IconRequired v-if="!form.time" :size="22" />
-              <IconRequiredDone v-else :size="22" />
-            </span>
           </div>
-          <span v-if="errors.time" class="create-practice__field-error">{{ errors.time }}</span>
+          <span
+            class="create-practice__field-error"
+            :class="{ 'create-practice__field-error--show': !!errors.time }"
+            >{{ errors.time }}</span
+          >
         </div>
 
         <VSelect
@@ -175,8 +213,12 @@
           placeholder="Длительность"
           :options="DURATION_OPTIONS"
           :error="errors.duration_minutes"
-          required
         />
+        <span
+          class="create-practice__field-error"
+          :class="{ 'create-practice__field-error--show': !!errors.duration_minutes }"
+          >{{ errors.duration_minutes }}</span
+        >
         <!-- Часовой пояс убран: берётся из профиля мастера (form.timezone),
              расписание задаётся в его часовом поясе (operator 2026-06-18). -->
       </div>
@@ -190,7 +232,7 @@
       <div class="create-practice__section">
         <h2 class="velo-section-title">Повторение</h2>
 
-        <div class="create-practice__railed">
+        <div>
           <VCard class="create-practice__repeat" padding="none">
             <VCheckbox v-model="form.is_recurring" label="Сделать регулярной" />
           </VCard>
@@ -203,34 +245,22 @@
               <div class="create-practice__repeat-title">Повтор:</div>
               <VRadioGroup v-model="form.recurrence" :options="RECURRENCE_OPTIONS" />
             </VCard>
-            <span
-              class="create-practice__seal-card"
-              :class="{ 'create-practice__seal-card--done': !!form.recurrence }"
-            >
-              <IconRequired v-if="!form.recurrence" :size="22" />
-              <IconRequiredDone v-else :size="22" />
-            </span>
           </div>
 
           <!-- Дни недели — ТОЛЬКО для weekly/biweekly. «Каждый день» (daily) не
-               использует дни недели, поэтому пикер и его печать обязательности не
-               рендерятся вовсе (operator NP-10). Валидация уже пропускает daily. -->
+               использует дни недели, поэтому пикер не рендерится вовсе
+               (operator NP-10). Валидация уже пропускает daily. -->
           <template v-if="form.recurrence !== 'daily'">
             <div class="create-practice__seal-row">
               <div class="create-practice__days create-practice__grow">
                 <VDayPicker v-model="form.recurrence_days" aria-label="Дни недели для повтора" />
               </div>
-              <span
-                class="create-practice__seal-card"
-                :class="{ 'create-practice__seal-card--done': form.recurrence_days.length > 0 }"
-              >
-                <IconRequired v-if="!form.recurrence_days.length" :size="22" />
-                <IconRequiredDone v-else :size="22" />
-              </span>
             </div>
-            <span v-if="errors.recurrence_days" class="create-practice__field-error">{{
-              errors.recurrence_days
-            }}</span>
+            <span
+              class="create-practice__field-error"
+              :class="{ 'create-practice__field-error--show': !!errors.recurrence_days }"
+              >{{ errors.recurrence_days }}</span
+            >
           </template>
 
           <!-- Завершить -->
@@ -263,20 +293,20 @@
                 @focus="onFieldFocus"
               />
             </VCard>
-            <span
-              class="create-practice__seal-card"
-              :class="{ 'create-practice__seal-card--done': !!form.recurrence_end }"
-            >
-              <IconRequired v-if="!form.recurrence_end" :size="22" />
-              <IconRequiredDone v-else :size="22" />
-            </span>
           </div>
-          <span v-if="errors.recurrence_end_date" class="create-practice__field-error">{{
-            errors.recurrence_end_date
-          }}</span>
-          <span v-if="errors.recurrence_count" class="create-practice__field-error">{{
-            errors.recurrence_count
-          }}</span>
+          <!-- Only the ACTIVE completion mode reserves an error line. -->
+          <span
+            v-if="form.recurrence_end === 'until_date'"
+            class="create-practice__field-error"
+            :class="{ 'create-practice__field-error--show': !!errors.recurrence_end_date }"
+            >{{ errors.recurrence_end_date }}</span
+          >
+          <span
+            v-else-if="form.recurrence_end === 'after_count'"
+            class="create-practice__field-error"
+            :class="{ 'create-practice__field-error--show': !!errors.recurrence_count }"
+            >{{ errors.recurrence_count }}</span
+          >
         </template>
       </div>
 
@@ -286,13 +316,18 @@
       <div class="create-practice__section">
         <h2 class="velo-section-title">Участники</h2>
 
-        <div class="create-practice__railed">
+        <div>
           <VInput
             v-model="form.max_participants_raw"
             type="number"
             placeholder="Максимум мест"
             :error="errors.max_participants"
           />
+          <span
+            class="create-practice__field-error"
+            :class="{ 'create-practice__field-error--show': !!errors.max_participants }"
+            >{{ errors.max_participants }}</span
+          >
         </div>
       </div>
 
@@ -305,7 +340,7 @@
       <div class="create-practice__section">
         <h2 class="velo-section-title">Для кого практика</h2>
 
-        <div class="create-practice__railed">
+        <div>
           <VCard class="create-practice__repeat" padding="none">
             <PracticeAudiencePicker
               v-model:kind="form.audience_kind"
@@ -327,7 +362,7 @@
       <div class="create-practice__section">
         <h2 class="velo-section-title">Оплата</h2>
 
-        <div class="create-practice__railed">
+        <div>
           <VCard class="create-practice__repeat" padding="none">
             <VRadioGroup :model-value="'free'" :options="PAYMENT_OPTIONS" />
           </VCard>
@@ -340,7 +375,7 @@
       <div class="create-practice__section create-practice__section--desc">
         <h2 class="velo-section-title">Описание</h2>
 
-        <div class="create-practice__railed">
+        <div>
           <VTextarea
             v-model="form.description"
             placeholder="Расскажите подробее о вашей практике"
@@ -351,7 +386,7 @@
 
         <!-- 1-row start (rows=1) = the VInput height these were before; auto-grow
              past one line per the «Новая практика» SVG (operator Q1=А). -->
-        <div class="create-practice__railed">
+        <div>
           <VTextarea
             v-model="form.contraindications"
             placeholder="Противопоказания"
@@ -360,7 +395,7 @@
           />
         </div>
 
-        <div class="create-practice__railed">
+        <div>
           <VTextarea
             v-model="form.what_to_prepare"
             placeholder="Что подготовить"
@@ -371,7 +406,15 @@
       </div>
 
       <!-- Submit -->
-      <VButton variant="primary" block size="lg" :loading="submitting" @click="submit">
+      <!-- STUB (§1.6): a foreign master target cannot reach the API yet. -->
+      <VButton
+        variant="primary"
+        block
+        size="lg"
+        :loading="submitting"
+        :disabled="targetsForeignMaster"
+        @click="submit"
+      >
         Создать практику
       </VButton>
 
@@ -404,9 +447,10 @@
 
 <script setup lang="ts">
 import { historyHasBack } from '@/platform/history'
+import { queryDocument } from '@/platform/dom'
 import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { DateTime } from 'luxon'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import {
   VButton,
@@ -418,14 +462,15 @@ import {
   VRadioGroup,
   VDayPicker,
 } from '@/components/ui'
-import { IconRequired, IconRequiredDone } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { useMasterStore } from '@/stores/master'
 import { createPractice, updatePractice } from '@/api/practices'
 import { getGroups } from '@/api/groups'
-import { getMyCuratorGroups } from '@/api/curatorGroups'
+import { getMyCuratorGroups, getCuratorGroupMembers } from '@/api/curatorGroups'
+import { getPublicMaster } from '@/api/masters'
 import type { GroupListItem } from '@/api/groups'
+import type { CuratorGroupMemberItem } from '@/api/types'
 import PracticeAudiencePicker from '@/components/shared/PracticeAudiencePicker.vue'
 import type { AudienceSchoolOption } from '@/components/shared/practiceAudience'
 import { formatShortDate, todayLocalISO } from '@/utils/format'
@@ -451,7 +496,66 @@ import type {
 } from '@/api/types'
 
 const router = useRouter()
+const route = useRoute()
 const toast = useToast()
+
+// §1.6 delegation: whose practice is being created. `masterId` in the query
+// (the master's public page CTA) names the master; `groupId` (the school
+// page CTA) offers that school's visible masters with «Я» first. No query
+// context -> the caller owns the practice, the historical behavior.
+//
+// STUB (owner 2026-10-01): the backend cannot create a practice for another
+// master yet (no master_id on POST /practices -- the contract is with the
+// backend task), so while a foreign master is targeted the section renders
+// the honest notice and DISABLES submit. «Я» and no-context flows behave
+// exactly as before.
+const delegatedMaster = ref<{ id: string; name: string } | null>(null)
+const schoolMasterOptions = ref<{ label: string; value: string }[]>([])
+const selectedMasterId = ref('')
+
+const targetsForeignMaster = computed(
+  () => delegatedMaster.value !== null || selectedMasterId.value !== '',
+)
+
+const masterOptions = computed(() => [{ label: 'Я', value: '' }, ...schoolMasterOptions.value])
+
+function queryParam(key: string): string {
+  const value = route.query[key]
+  return typeof value === 'string' ? value : ''
+}
+
+async function loadPracticeMasterContext(): Promise<void> {
+  const masterId = queryParam('masterId')
+  const groupId = queryParam('groupId')
+  if (masterId) {
+    try {
+      const profile = await getPublicMaster(masterId)
+      delegatedMaster.value = {
+        id: masterId,
+        name: profile.display_name ?? 'Мастер',
+      }
+    } catch {
+      // Keep the id: the backend re-validates the delegation on submit, so
+      // a cosmetic name lookup failure must not silently drop the target.
+      delegatedMaster.value = { id: masterId, name: 'Мастер' }
+    }
+    return
+  }
+  if (groupId) {
+    try {
+      const page = await getCuratorGroupMembers(groupId, { kind: 'master' })
+      schoolMasterOptions.value = page.items
+        .filter((m: CuratorGroupMemberItem) => m.is_visible && m.user_id !== authStore.user?.id)
+        .map((m: CuratorGroupMemberItem) => ({
+          label: m.name,
+          value: m.user_id,
+        }))
+    } catch {
+      // Picker falls back to «Я» alone -- the caller can still create.
+      schoolMasterOptions.value = []
+    }
+  }
+}
 
 // T24-24 (PROMPT №639): "Все ученики" -> "Все мои ученики", on THIS screen
 // ONLY -- passed to the shared PracticeAudiencePicker as `students-label`.
@@ -492,6 +596,7 @@ const customGroups = ref<GroupListItem[]>([])
 const eligibleSchools = ref<AudienceSchoolOption[]>([])
 onMounted(() => {
   void masterStore.fetchMyPractices()
+  void loadPracticeMasterContext()
   void ensureTaxonomyCatalog().then((c) => {
     catalog.value = c
   })
@@ -1006,7 +1111,15 @@ function buildRecurrence(): RecurrenceSpec {
 // parallel clicks both pass validate() before guard fires.
 async function submit(): Promise<void> {
   if (submitting.value) return
-  if (!validate()) return
+  if (!validate()) {
+    // The first invalid field may sit far above the submit button on this
+    // long form -- bring it into view instead of a silent dead click.
+    await nextTick()
+    queryDocument(
+      '.v-input--error, .v-select--error, .create-practice__picker--error, .create-practice__field-error--show',
+    )?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    return
+  }
   submitting.value = true
 
   try {
@@ -1131,12 +1244,10 @@ async function submit(): Promise<void> {
   background: transparent;
   display: flex;
   flex-direction: column;
-  /* Seal-gutter = the reserved right column that VInput/VSelect `required`, the
-     date/time pickers and the recurrence seal-rows already inset their field by
-     (gap --space-2 + the 22px IconRequired). No-seal blocks reserve the SAME
-     gutter (.create-practice__railed) so every form block aligns to one rail
-     width — sealed and no-seal identical (NP-12/NP-3b). */
-  --cp-seal-gutter: calc(var(--space-2) + 22px);
+  /* Required canon (owner 2026-10-01): fields span the FULL rail width;
+     the required marker is the red * on the section headings (.cp-req).
+     VInput/VSelect keep their global margin/gutter rhythm disabled on this
+     screen via :deep below. */
 }
 
 /* [FE-43] Same recipe as MasterGroupCreateView (FE-45 follow-up): while
@@ -1152,12 +1263,21 @@ html.is-keyboard-open .create-practice {
   min-height: var(--velo-frozen-vh, 100lvh);
 }
 
-/* No-seal blocks (use-template / make-recurring / participants / payment /
-   description / contraindications / what-to-prepare / connection / вид практики)
-   inset their right edge by the seal gutter so their width matches the sealed
-   fields above (operator NP-12/NP-3b: seal & no-seal blocks identical width). */
-.create-practice__railed {
-  margin-right: var(--cp-seal-gutter);
+/* Section-title required marker (owner 2026-10-01): sections holding
+   required fields carry a red * in their heading; the per-field rosettes
+   are gone from this screen (the DS components keep them elsewhere). */
+.cp-req {
+  color: var(--velo-error);
+}
+
+/* DS components carry margin-bottom: 16px on their roots (their own form
+   rhythm). This screen spaces fields through the 2px section gap + the
+   error slot, so the hint sits right under the plate like the date/time
+   pickers. The desc section re-adds 8px for its stacked textareas below. */
+.create-practice :deep(.v-input),
+.create-practice :deep(.v-select),
+.create-practice :deep(.v-textarea) {
+  margin-bottom: 0;
 }
 
 .create-practice__content {
@@ -1168,21 +1288,37 @@ html.is-keyboard-open .create-practice {
   padding: var(--space-2) 0 var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  /* Minimal acceptable section rhythm (owner 2026-10-01: «расстояния
+     огромные») -- 16px between sections. */
+  gap: var(--space-4);
 }
 
 /* -- Section -- */
 .create-practice__section {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  /* Minimal input-to-input distance (owner 2026-10-01): the error slot
+     (17px) + 2px IS the whole gap between consecutive inputs. Everything
+     that is not an input (headings, banners, card stacks) compensates with
+     its own margin below. */
+  gap: 2px;
+}
+
+.create-practice__section > .velo-section-title {
+  margin-bottom: 6px;
+}
+
+/* Non-input blocks after a plate need the breathing the 2px input gap
+   cannot give (master-section warning banner, ...). */
+.cp-gap-top {
+  margin-top: 6px;
 }
 
 /* «Описание» section: the textareas are spaced by the section gap alone — drop
    their own margin-bottom so Описание / Противопоказания / Что подготовить sit
    tight (one step, not the doubled gap + margin) (operator CP-A1). */
 .create-practice__section--desc :deep(.v-textarea) {
-  margin-bottom: 0;
+  margin-bottom: 8px;
 }
 
 /* T21-1 (PROMPT №541): honest caption for the now-fallback Zoom field. */
@@ -1207,11 +1343,6 @@ html.is-keyboard-open .create-practice {
   color: var(--velo-pink-700);
 }
 
-.create-practice__legend-seal {
-  flex-shrink: 0;
-  color: var(--velo-rating-good);
-}
-
 /* -- Draft-restore banner (B2) -- */
 .create-practice__draft-text {
   margin: 0;
@@ -1231,7 +1362,7 @@ html.is-keyboard-open .create-practice {
   padding: var(--space-3) var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 .create-practice__repeat-title {
@@ -1242,7 +1373,7 @@ html.is-keyboard-open .create-practice {
 
 /* -- Date/time picker trigger field (mirrors the white VInput plate) -- */
 .create-practice__field {
-  margin-bottom: var(--space-4);
+  margin-bottom: 0;
 }
 
 .create-practice__field-row {
@@ -1274,21 +1405,29 @@ html.is-keyboard-open .create-practice {
   border-color: var(--velo-error);
 }
 
-.create-practice__seal {
-  flex-shrink: 0;
-  display: flex;
-  color: var(--velo-error);
-}
-
-.create-practice__seal--done {
-  color: var(--velo-required-done);
-}
-
+/* Error slots are CONSTANT-height (owner 2026-10-01): the message fades in
+   without growing its block -- activating an error must never shift the
+   layout below. The DS components' own error lines are hidden (their red
+   borders still mark the field); this screen renders the message in the
+   reserved slot instead. 14px x 1.2 = 16.8px fits the 17px reserve: the
+   shown state is pixel-identical to the empty one. */
 .create-practice__field-error {
   display: block;
+  min-height: 17px;
+  margin-top: 0;
   font-size: var(--text-xs);
+  line-height: 1.2;
   color: var(--velo-error);
-  margin-top: var(--space-1);
+  opacity: 0;
+}
+
+.create-practice__field-error--show {
+  opacity: 1;
+}
+
+.create-practice :deep(.v-input__error),
+.create-practice :deep(.v-select__error) {
+  display: none;
 }
 
 /* -- Для кого практика (P5, PROMPT №594): group multi-select chips, same
@@ -1307,27 +1446,21 @@ html.is-keyboard-open .create-practice {
   margin: var(--space-3) 0 0;
 }
 
-/* -- Повторение: карточка повтора (grow) + печать обязательности справа (Q2=В). -- */
+/* -- Повторение: ряды карточек (карточка/дни занимают всю ширину). -- */
 .create-practice__seal-row {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-2);
+}
+
+/* Stacked plates (repeat card / days / end) need breathing the 2px section
+   gap cannot give them. */
+.create-practice__seal-row + .create-practice__seal-row {
+  margin-top: 6px;
 }
 
 .create-practice__grow {
   flex: 1;
   min-width: 0;
-}
-
-.create-practice__seal-card {
-  flex-shrink: 0;
-  display: flex;
-  color: var(--velo-error);
-  margin-top: var(--space-2);
-}
-
-.create-practice__seal-card--done {
-  color: var(--velo-required-done);
 }
 
 /* -- Дни недели: карточка-обёртка для DS-примитива VDayPicker. -- */

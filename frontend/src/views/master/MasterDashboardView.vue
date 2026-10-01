@@ -342,14 +342,29 @@ function deltaStr(pct: number | null | undefined): string {
   if (r === 0) return '0%'
   return `${r > 0 ? '+' : '−'}${Math.abs(r)}%`
 }
+
+// Owner 2026-10-01 (the fix stays client-side; the backend contract is
+// untouched): on day 1 of a month/quarter the calendar grid honestly reads 0
+// against a fully elapsed previous period and the chip shows "-100%" --
+// arithmetic truth with zero information that reads as a broken dashboard.
+// A zero current value can only be -100 (non-empty base) or null (empty one),
+// so the chip is withheld until there is something to trend. Mirrors the
+// backend's own S-1 "no baseline -> no percentage" rule on the display side.
+function deltaChip(value: number, pct: number | null | undefined): string {
+  return value === 0 ? '' : deltaStr(pct)
+}
 /** Tone: positive → up (teal), negative → down (rose, D5), zero/null → muted. */
 function deltaTone(pct: number | null | undefined): 'up' | 'down' | 'muted' {
   if (pct == null || Math.round(pct) === 0) return 'muted'
   return pct > 0 ? 'up' : 'down'
 }
 
-const practicesDelta = computed((): string => deltaStr(stats.value?.practices_delta_pct))
-const participantsDelta = computed((): string => deltaStr(stats.value?.participants_delta_pct))
+const practicesDelta = computed((): string =>
+  stats.value ? deltaChip(stats.value.practices_count, stats.value.practices_delta_pct) : '',
+)
+const participantsDelta = computed((): string =>
+  stats.value ? deltaChip(stats.value.participants_count, stats.value.participants_delta_pct) : '',
+)
 const practicesDeltaTone = computed(() => deltaTone(stats.value?.practices_delta_pct))
 const participantsDeltaTone = computed(() => deltaTone(stats.value?.participants_delta_pct))
 

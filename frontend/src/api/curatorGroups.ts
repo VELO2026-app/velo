@@ -29,6 +29,10 @@
 //   GET    /{id}/members/{user_id}/remove-preview -- advisory before removing
 //   GET    /{id}/journal                         -- the school's event feed,
 //                                                   CURATOR ONLY (BE-19)
+//   GET    /{id}/checkins                        -- PRE check-ins of the school,
+//                                                   scores as BUCKETS (BE-24)
+//   GET    /{id}/reviews                         -- named reviews of the school,
+//                                                   scores as BUCKETS (BE-24)
 //
 // MEMBER / ANY USER (prefix /api/v1/curator-groups):
 //   GET    /mine                                 -- my ACTIVE schools + relation
@@ -67,10 +71,13 @@ import type {
   JoinCuratorGroupResponse,
   OfferCuratorGroupTransferRequest,
   PaginatedAdminCuratorGroupsResponse,
+  PaginatedCuratorGroupCheckinsResponse,
   PaginatedCuratorGroupEventsResponse,
   PaginatedCuratorGroupMastersResponse,
   PaginatedCuratorGroupMembersResponse,
+  PaginatedCuratorGroupReviewsResponse,
   PaginatedPracticesResponse,
+  SchoolStudentProfileResponse,
   UpdateCuratorGroupRequest,
 } from '@/api/types'
 
@@ -177,11 +184,37 @@ export function getCuratorGroupMembers(
   return api.get<PaginatedCuratorGroupMembersResponse>(`${CURATOR_BASE}/${id}/members${qs}`)
 }
 
+/** GET /masters/me/curator-groups/{id}/students/{user_id} -- the SCHOOL-scoped
+ *  profile of one student (BE-54, tz-curator.md §1.13): attended-practice and
+ *  hours aggregates across EVERY practice of this school (BE-24's historical
+ *  belonging rule -- masters who since left stay counted), plus recent PRE
+ *  check-ins and named reviews. CURATOR ONLY: a non-curator, a non-student
+ *  and a stranger all get the same masked 404 (P-08). hours is
+ *  server-rounded to one decimal -- format it, never recompute it (§1.13.3).
+ *  The recent_* arrays are contract-carrying: the screen (owner 2026-09-22)
+ *  does not render them yet. */
+export function getCuratorGroupStudentProfile(
+  id: string,
+  userId: string,
+): Promise<SchoolStudentProfileResponse> {
+  return api.get(`${CURATOR_BASE}/${id}/students/${userId}`)
+}
+
 /** DELETE /masters/me/curator-groups/{id}/members/{user_id} -- remove a member
  *  of either kind. Idempotent: a miss is still 204. 404 is only ever about
  *  the GROUP not being mine, never about the user. */
 export function removeCuratorGroupMember(id: string, userId: string): Promise<void> {
   return api.delete(`${CURATOR_BASE}/${id}/members/${userId}`)
+}
+
+/** POST /masters/me/curator-groups/{id}/members/{user_id}/demote (BE-59 B1) --
+ *  a master of this school becomes a student of it again: membership kept,
+ *  the handover offered to them dropped, the person notified by the backend.
+ *  IDEMPOTENT 204: no master of this school by that id (already a student,
+ *  not a member) writes nothing. 404 only for a school that is not the
+ *  caller's (P-08). */
+export function demoteCuratorGroupMaster(id: string, userId: string): Promise<void> {
+  return api.post(`${CURATOR_BASE}/${id}/members/${userId}/demote`)
 }
 
 /** POST /masters/me/curator-groups/{id}/master-offers (GT-27) -- offer a
@@ -279,6 +312,47 @@ export function getCuratorGroupJournal(
 ): Promise<PaginatedCuratorGroupEventsResponse> {
   const qs = buildQuery({ limit, offset })
   return api.get<PaginatedCuratorGroupEventsResponse>(`${CURATOR_BASE}/${id}/journal${qs}`)
+}
+
+/** GET /masters/me/curator-groups/{id}/checkins -- PRE check-ins across EVERY
+ *  practice of this school (BE-24), newest first, CURATOR ONLY. Scores arrive
+ *  as BUCKETS ('low'|'mid'|'high' of 1-3/4-7/8-10), never the raw 1..10: the
+ *  curator reads other masters' groups in distribution shape, deliberately
+ *  less than the leading master sees on their own roster. user_id tells
+ *  same-named students apart and opens NO profile -- the master dossier 404s
+ *  for practices the caller does not lead; build no link from it.
+ *  practice_id narrows the feed to one practice; a practice outside the
+ *  school answers an empty page, not an error. */
+export function getCuratorGroupCheckins(
+  id: string,
+  options: { practiceId?: string; limit?: number; offset?: number } = {},
+): Promise<PaginatedCuratorGroupCheckinsResponse> {
+  const qs = buildQuery({
+    practice_id: options.practiceId,
+    limit: options.limit ?? 20,
+    offset: options.offset ?? 0,
+  })
+  return api.get<PaginatedCuratorGroupCheckinsResponse>(`${CURATOR_BASE}/${id}/checkins${qs}`)
+}
+
+/** GET /masters/me/curator-groups/{id}/reviews -- NAMED reviews across every
+ *  practice of this school (BE-24), newest first, CURATOR ONLY. Same bucket
+ *  contract as the check-ins ('confused'|'good'|'fire' of 1-3/4-7/8-10 -- the
+ *  vocabulary the master's own review feeds already render): a raw rating
+ *  never crosses the curator boundary. Names and avatars are shown on
+ *  purpose (owner ruling) -- do not anonymise. user_id: same rule as the
+ *  check-ins -- disambiguation only, opens no screen. practice_id narrows
+ *  the feed to one practice. */
+export function getCuratorGroupReviews(
+  id: string,
+  options: { practiceId?: string; limit?: number; offset?: number } = {},
+): Promise<PaginatedCuratorGroupReviewsResponse> {
+  const qs = buildQuery({
+    practice_id: options.practiceId,
+    limit: options.limit ?? 20,
+    offset: options.offset ?? 0,
+  })
+  return api.get<PaginatedCuratorGroupReviewsResponse>(`${CURATOR_BASE}/${id}/reviews${qs}`)
 }
 
 // =============================================================================

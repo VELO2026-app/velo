@@ -21,6 +21,8 @@ export { default as IconGroup } from './IconGroup.vue'
 export { default as IconWarning } from './IconWarning.vue'
 export { default as IconBrain } from './IconBrain.vue'
 export { default as IconClock } from './IconClock.vue'
+export { default as IconLock } from './IconLock.vue'
+export { default as IconChevronRight } from './IconChevronRight.vue'
 export { default as IconMeditation } from './IconMeditation.vue'
 export { default as IconBreathwork } from './IconBreathwork.vue'
 export { default as IconYoga } from './IconYoga.vue'
@@ -67,7 +69,8 @@ export { default as IconStop } from './IconStop.vue'
 // superseded by IconDecor (part) / IconDecor2 (part) in DiaryTimeline.
 
 // -- Profile menu (Screen A): monochrome glyphs (currentColor) --
-export { default as IconEdit } from './IconEdit.vue'
+// IconEdit removed 2026-09-30: its edit affordances were consolidated into
+// IconPen (owner-supplied stylus redraw), so there is one pen glyph.
 export { default as IconBookings } from './IconBookings.vue'
 export { default as IconBell } from './IconBell.vue'
 export { default as IconBellPlain } from './IconBellPlain.vue'
@@ -113,4 +116,5 @@ export { default as IconUserMode } from './IconUserMode.vue'
 export { default as IconUsers } from './IconUsers.vue'
 export { default as IconView } from './IconView.vue'
 export { default as IconCopy } from './IconCopy.vue'
+export { default as IconLink } from './IconLink.vue'
 export { default as IconRefresh } from './IconRefresh.vue'

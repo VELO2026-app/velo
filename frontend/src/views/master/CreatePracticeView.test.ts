@@ -83,10 +83,12 @@ import CreatePracticeView from '@/views/master/CreatePracticeView.vue'
 import * as practicesApi from '@/api/practices'
 import * as groupsApi from '@/api/groups'
 import * as cgApi from '@/api/curatorGroups'
+import * as mastersApi from '@/api/masters'
 import { ApiResponseError } from '@/api/client'
 import type {
   CreatePracticeRequest,
   MasterProfileResponse,
+  MasterPublicResponse,
   PracticeResponse,
   UserResponse,
 } from '@/api/types'
@@ -102,6 +104,10 @@ vi.mock('@/api/groups')
 // mount -- mocked wholesale for the same reason as groups above.
 vi.mock('@/api/curatorGroups')
 
+// §1.6 delegation: the masterId query resolves the target's display name on
+// mount -- mocked wholesale like the other api modules.
+vi.mock('@/api/masters')
+
 // Seamed at the helper, not at @/api/taxonomy: the real one caches for the whole
 // file (see the banner). Resolving null = catalog cold -> hardcoded fallback.
 vi.mock('@/utils/methodTaxonomy', async () => {
@@ -114,8 +120,13 @@ import { ensureTaxonomyCatalog } from '@/utils/methodTaxonomy'
 const push = vi.fn()
 const back = vi.fn()
 const replace = vi.fn()
+// §1.6 delegation: the entry points arrive as query params (masterId from the
+// master's public page, groupId from the school page). Mutable so a test
+// mounts WITH its query context.
+const routeQuery: Record<string, string> = {}
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push, back, replace }),
+  useRoute: () => ({ query: routeQuery }),
 }))
 
 const toastError = vi.fn()
@@ -406,6 +417,15 @@ beforeEach(() => {
   refreshMyPractices.mockReset().mockResolvedValue(undefined)
   vi.mocked(groupsApi.getGroups).mockReset().mockResolvedValue({ items: [] })
   vi.mocked(cgApi.getMyCuratorGroups).mockReset().mockResolvedValue({ items: [] })
+  // §1.6 delegation: no query context and empty lookups by default -- the
+  // master section must not render, and the body must carry no master_id.
+  for (const key of Object.keys(routeQuery)) delete routeQuery[key]
+  vi.mocked(cgApi.getCuratorGroupMembers)
+    .mockReset()
+    .mockResolvedValue({ items: [], total: 0, limit: 50, offset: 0 })
+  vi.mocked(mastersApi.getPublicMaster)
+    .mockReset()
+    .mockRejectedValue(new Error('getPublicMaster not stubbed in this test'))
   push.mockReset()
   back.mockReset()
   replace.mockReset()
@@ -1722,5 +1742,209 @@ describe('CreatePracticeView -- «Школы» audience (FE-24 / GT P5)', () => 
 
     expect(vi.mocked(practicesApi.createPractice)).not.toHaveBeenCalled()
     expect(text()).toContain('Выберите хотя бы одну школу')
+  })
+})
+
+// =============================================================================
+// §1.6 delegation: whose practice is being created (STUB)
+// =============================================================================
+// masterId in the query (the master's public page CTA) and groupId (the
+// school page CTA) surface the master context. The backend cannot take a
+// foreign master yet, so the stub must make that state HONEST: the notice
+// renders and submit is disabled -- a foreign target can never reach the
+// API and silently create a practice for the caller instead. «Я» and the
+// no-context flow behave exactly as the historical form.
+describe('§1.6 delegation: the master context (stub)', () => {
+  it('masterId query: shows the master, warns, and blocks submit', async () => {
+    routeQuery.masterId = 'm_pub'
+    vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
+      display_name: 'Анна Ли',
+    } as MasterPublicResponse)
+    mount()
+    await flush()
+    expect(text()).toContain('Мастер')
+    expect(text()).toContain('Анна Ли')
+    expect(text()).toContain('Создание для другого мастера пока недоступно')
+
+    await fillMinimalForm()
+    const submitBtn = button('Создать практику')
+    expect(submitBtn?.disabled).toBe(true)
+    submitBtn?.click()
+    await flush()
+    expect(vi.mocked(practicesApi.createPractice)).not.toHaveBeenCalled()
+  })
+
+  it('groupId query: lists visible school masters, «Я» stays creatable', async () => {
+    routeQuery.groupId = 'g1'
+    vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue({
+      items: [
+        {
+          user_id: 'u1',
+          name: 'Сама куратор',
+          kind: 'master',
+          avatar_url: null,
+          joined_at: '2026-09-01T00:00:00Z',
+          is_visible: true,
+        },
+        {
+          user_id: 'm2',
+          name: 'Пётр Романов',
+          kind: 'master',
+          avatar_url: null,
+          joined_at: '2026-09-01T00:00:00Z',
+          is_visible: true,
+        },
+        {
+          user_id: 'm3',
+          name: 'Заморожен',
+          kind: 'master',
+          avatar_url: null,
+          joined_at: '2026-09-01T00:00:00Z',
+          is_visible: false,
+        },
+      ],
+      total: 3,
+      limit: 50,
+      offset: 0,
+    })
+    mount()
+    await flush()
+    expect(text()).toContain('Пётр Романов')
+    // An invisible (suspended) master is not offered.
+    expect(text()).not.toContain('Заморожен')
+    // Default «Я»: no warning, submit enabled -- the historical flow.
+    expect(text()).not.toContain('Создание для другого мастера пока недоступно')
+    expect(button('Создать практику')?.disabled).toBe(false)
+
+    await fillMinimalForm()
+    submitForm()
+    await flush()
+    expect(vi.mocked(practicesApi.createPractice)).toHaveBeenCalled()
+    // No master_id in the body, ever: the field does not exist on the wire
+    // until the backend task lands.
+    expect('master_id' in sentBody()).toBe(false)
+  })
+
+  it('groupId query: picking a school master warns and blocks submit', async () => {
+    routeQuery.groupId = 'g1'
+    vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue({
+      items: [
+        {
+          user_id: 'm2',
+          name: 'Пётр Романов',
+          kind: 'master',
+          avatar_url: null,
+          joined_at: '2026-09-01T00:00:00Z',
+          is_visible: true,
+        },
+      ],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    })
+    mount()
+    await flush()
+
+    // VRadioGroup options are role="radio" BUTTONS, not labels.
+    const option = Array.from(
+      host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? [],
+    ).find((b) => b.textContent?.includes('Пётр Романов'))
+    if (!option) throw new Error('school master option not rendered')
+    option.click()
+    await flush()
+
+    expect(text()).toContain('Создание для другого мастера пока недоступно')
+    const submitBtn = button('Создать практику')
+    expect(submitBtn?.disabled).toBe(true)
+    submitBtn?.click()
+    await flush()
+    expect(vi.mocked(practicesApi.createPractice)).not.toHaveBeenCalled()
+  })
+
+  it('no context: no master section at all', async () => {
+    mount()
+    await flush()
+    expect(text()).not.toContain('Мастер')
+
+    await fillMinimalForm()
+    submitForm()
+    await flush()
+    expect(vi.mocked(practicesApi.createPractice)).toHaveBeenCalled()
+  })
+
+  it('required sections carry the red * marker; optional ones do not', async () => {
+    mount()
+    await flush()
+    const starred = (title: string): boolean => {
+      const h2 = Array.from(host?.querySelectorAll('h2') ?? []).find((x) =>
+        x.textContent?.includes(title),
+      )
+      return h2?.querySelector('.cp-req') != null
+    }
+    expect(starred('Основное')).toBe(true)
+    expect(starred('Расписание')).toBe(true)
+    expect(starred('Повторение')).toBe(false)
+    expect(starred('Описание')).toBe(false)
+  })
+
+  it('a failed submit scrolls the first invalid field into view', async () => {
+    if (!('scrollIntoView' in Element.prototype)) {
+      Object.defineProperty(Element.prototype, 'scrollIntoView', {
+        value: vi.fn(),
+        configurable: true,
+        writable: true,
+      })
+    }
+    const scrollSpy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {})
+    mount()
+    await flush()
+    // Nothing filled: validate() fails on the title (the first required).
+    submitForm()
+    await flush()
+    expect(vi.mocked(practicesApi.createPractice)).not.toHaveBeenCalled()
+    expect(scrollSpy).toHaveBeenCalledTimes(1)
+    // The scroll lands ON the first unfilled required field, not elsewhere.
+    const scrolled = scrollSpy.mock.instances[0] as Element | undefined
+    expect(scrolled).toBe(host?.querySelector('.v-input--error'))
+    expect(scrolled?.querySelector('input')?.placeholder).toBe('Название')
+    expect(text()).toContain('Введите название')
+    scrollSpy.mockRestore()
+  })
+
+  it('with the title filled, the scroll targets the NEXT unfilled field', async () => {
+    if (!('scrollIntoView' in Element.prototype)) {
+      Object.defineProperty(Element.prototype, 'scrollIntoView', {
+        value: vi.fn(),
+        configurable: true,
+        writable: true,
+      })
+    }
+    const scrollSpy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {})
+    mount()
+    await flush()
+    typeInto(inputByPlaceholder('Название'), 'Утренняя практика')
+    submitForm()
+    await flush()
+    expect(vi.mocked(practicesApi.createPractice)).not.toHaveBeenCalled()
+    // The first unfilled required field is now the direction select.
+    const scrolled = scrollSpy.mock.instances[0] as Element | undefined
+    expect(scrolled).toBe(host?.querySelector('.v-select--error'))
+    expect(scrolled?.textContent).toContain('Выберите направление')
+    scrollSpy.mockRestore()
+  })
+
+  it('error slots are constant-height: a failed submit inserts no new nodes', async () => {
+    // The zero-shift contract (owner 2026-10-01): every error-capable field
+    // owns a permanent reserved slot -- the failed submit only toggles
+    // --show inside existing nodes, so nothing below can jump.
+    mount()
+    await flush()
+    const slots = (): number => host?.querySelectorAll('.create-practice__field-error').length ?? 0
+    const before = slots()
+    expect(before).toBeGreaterThan(0)
+    submitForm()
+    await flush()
+    expect(slots()).toBe(before)
+    expect(host?.querySelectorAll('.create-practice__field-error--show').length).toBeGreaterThan(0)
   })
 })

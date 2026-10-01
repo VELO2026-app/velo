@@ -201,7 +201,7 @@ describe('CuratorGroupPageView -- relation matrix', () => {
     expect(rowWith('Участники')).toBeUndefined()
     expect(rowWith('Аналитика')).toBeUndefined()
     // §1.6 (owner 2026-09-22): the invite field is curator-only too.
-    expect(text()).not.toContain('Копировать ссылку-приглашение')
+    expect(text()).not.toContain('Ссылка-приглашение')
     expect(text()).not.toContain('Ученики')
     // The feed is for everyone.
     expect(text()).toContain('Практика p1')
@@ -234,9 +234,25 @@ describe('CuratorGroupPageView -- relation matrix', () => {
       expect(rowWith(row)).toBeTruthy()
     }
     expect(buttonWith('Создать практику')).toBeTruthy()
-    // §1.6 (owner 2026-09-22): the invite CTA rides the hero for the
-    // curator.
-    expect(text()).toContain('Копировать ссылку-приглашение')
+    // §1.6 (owner 2026-09-22): the invite field rides the hero for the
+    // curator (Group 3801 form: the label pill reads «Ссылка-приглашение»).
+    expect(text()).toContain('Ссылка-приглашение')
+  })
+
+  it('«Предстоящие практики» opens the school-scoped calendar (owner 2026-10-01)', async () => {
+    // Was a scroll to the feed below; the owner moved the entry point onto
+    // the calendar view, which carries the school's full upcoming list.
+    mockHappyLoad('curator')
+    mount()
+    await flush()
+
+    rowWith('Предстоящие практики')?.click()
+    await flush()
+
+    expect(push).toHaveBeenCalledWith({
+      name: 'user-calendar-school',
+      params: { groupId: 'g1' },
+    })
   })
 
   it('a frozen/absent school is the honest 404', async () => {
@@ -553,7 +569,10 @@ describe('CuratorGroupPageView -- §1.6 page body', () => {
 
     buttonWith('Создать практику')?.click()
     await flush()
-    expect(push).toHaveBeenCalledWith({ name: 'master-practice-new' })
+    expect(push).toHaveBeenCalledWith({
+      name: 'master-practice-new',
+      query: { groupId: 'g1' },
+    })
   })
 
   it('a non-curator gets no edit row, no participants row and no create CTA', async () => {
