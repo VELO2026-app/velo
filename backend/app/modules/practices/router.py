@@ -1363,10 +1363,11 @@ async def public_practice_guest_endpoint(
     guest_name = None
     if not await _guest_over_limit("view", practice):
         guest_name = await claim_guest_name(practice, meeting, session)
-    # Commit BEFORE the page is drawn (BE-66): get_db_session commits only
-    # after the response has been SENT (FastAPI runs a request-scoped yield
-    # dependency's exit after `await response(...)`), so without this the
-    # page would show a name that a failed commit never reserved.
+    # Commit BEFORE the page is drawn (BE-66): get_db_session commits when
+    # the endpoint returns (BE-83), i.e. after _public_page below has already
+    # drawn the name. Without this, a failed commit would turn into a 500, but
+    # the drawn page would still have held a name the commit never reserved,
+    # and the request would keep its connection through the drawing.
     await session.commit()
     return _public_page(
         title=practice.title,
