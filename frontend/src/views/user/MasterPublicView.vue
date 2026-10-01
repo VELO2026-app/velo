@@ -635,12 +635,11 @@ watch(masterId, (id) => {
   padding-bottom: 140px;
 }
 
-/* Ближайшие практики: plain heading, same size as the other panel headers
-   (owner 2026-09-30: все заголовки панелей -- одного размера), cards always
-   open -- no accordion. */
+/* Ближайшие практики: plain heading, --text-base like the other panel
+   headers (owner 2026-09-30), cards always open -- no accordion. */
 .master-public__section-title {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   font-weight: 400;
   color: var(--velo-text-primary);
   margin: 0 0 var(--space-3);
