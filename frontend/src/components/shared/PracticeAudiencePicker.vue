@@ -3,22 +3,26 @@
 
   The «Для кого практика» selector, extracted from the audience block that
   used to live (twice, drifting) in CreatePracticeView and EditPracticeView:
-  a VRadioGroup of kinds plus, for the two targeted kinds, a VChip
-  multi-select of this master's own targets.
+  a VRadioGroup of kinds plus, for the two targeted kinds, VChips of this
+  master's own targets: a multi-select of groups, a SINGLE select of schools.
+  A practice belongs to exactly one school (BE-74, owner ruling 2026-10-01),
+  so the school chips behave as a radio: picking one replaces the previous
+  pick, and picking the picked one again clears it.
 
   The fourth kind appears in the radio ONLY when `schools` is non-empty
   (audienceOptions, practiceOptions.ts) -- a master who belongs to no school
-  sees the exact three options they always saw. Selecting A and B means
-  "anyone in at least one of them", the same multiplicity group_ids has.
+  sees the exact three options they always saw. Selecting groups A and B
+  means "anyone in at least one of them"; there is no such union for schools.
 
   Layout-neutral on purpose: the caller owns headings and wrappers (Create
   wraps this in its VCard section, Edit renders it flat under a field label)
-  -- this component owns only the audience MECHANICS: kind, two id arrays,
-  their empty states, and the single validation-error line.
+  -- this component owns only the audience MECHANICS: kind, the group ids,
+  the school id, their empty states, and the single validation-error line.
 
-  v-model:kind / v-model:groupIds / v-model:curatorGroupIds -- arrays are
-  replaced immutably (a fresh array per toggle), never mutated in place, so
-  the caller's reactivity and its own change-detection stay honest.
+  v-model:kind / v-model:groupIds / v-model:curatorGroupId -- the group array
+  is replaced immutably (a fresh array per toggle), never mutated in place, so
+  the caller's reactivity and its own change-detection stay honest; the school
+  is one id or null.
 -->
 
 <template>
@@ -50,7 +54,7 @@
           :key="s.id"
           size="md"
           clickable
-          :active="curatorGroupIds.includes(s.id)"
+          :active="curatorGroupId === s.id"
           @click="toggleSchool(s.id)"
         >
           {{ s.name }}
@@ -96,7 +100,7 @@ const props = defineProps<{
 
 const kindModel = defineModel<PracticeAudienceKind>('kind', { required: true })
 const groupIds = defineModel<string[]>('groupIds', { required: true })
-const curatorGroupIds = defineModel<string[]>('curatorGroupIds', { required: true })
+const curatorGroupId = defineModel<string | null>('curatorGroupId', { required: true })
 
 const options = computed(() => {
   const base = audienceOptions(props.schools.length > 0)
@@ -111,9 +115,7 @@ function toggleGroup(id: string): void {
 }
 
 function toggleSchool(id: string): void {
-  curatorGroupIds.value = curatorGroupIds.value.includes(id)
-    ? curatorGroupIds.value.filter((x) => x !== id)
-    : [...curatorGroupIds.value, id]
+  curatorGroupId.value = curatorGroupId.value === id ? null : id
 }
 </script>
 

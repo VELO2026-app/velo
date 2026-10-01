@@ -12,9 +12,10 @@
 # WHY test_curator_groups_killswitch.py DOES NOT COVER THIS, and why that
 # is not a gap in it. BE-35 replaced its hand-written list of five calls
 # with one derived from the two school routers, and it honestly walks all
-# twenty-eight operations. Both paths below are OUTSIDE those routers: a
-# curator cancels through practices/, and the announcement rides the
-# publication branch. The killswitch on the routers guards THE SURFACE,
+# twenty-eight operations. The paths below are OUTSIDE those routers: a
+# curator cancels through practices/, the announcement rides the
+# publication branch, and (BE-74) a practice is created INTO a school
+# through POST /practices. The killswitch on the routers guards THE SURFACE,
 # NOT THE MECHANISM -- the two are different things and the older file is
 # right about the one it names.
 #
@@ -170,7 +171,7 @@ async def _school_with_practice(
             "price_cents": 0,
             "currency": "eur",
             "audience_kind": "curator_groups",
-            "curator_group_ids": [str(school.id)],
+            "curator_group_id": str(school.id),
         },
         headers=auth_headers(master["session_token"]),
     )
@@ -389,7 +390,7 @@ async def _school_with_practice_for_on(
             "price_cents": 0,
             "currency": "eur",
             "audience_kind": "curator_groups",
-            "curator_group_ids": [str(school.id)],
+            "curator_group_id": str(school.id),
         },
         headers=auth_headers(master["session_token"]),
     )
@@ -475,3 +476,60 @@ async def test_a_practice_without_schools_is_unaffected_by_the_flag(
         )
     ).scalars().all()
     assert messages == []
+
+
+def _school_body(school: CuratorGroup, title: str) -> dict:
+    return {
+        "practice_type": "live",
+        "direction": "meditation",
+        "difficulty": "beginner",
+        "title": title,
+        "description": "x",
+        "scheduled_at": (datetime.now(UTC) + timedelta(days=10)).isoformat(),
+        "duration_minutes": 60,
+        "timezone": "UTC",
+        "max_participants": 20,
+        "is_free": True,
+        "price_cents": 0,
+        "currency": "eur",
+        "audience_kind": "curator_groups",
+        "curator_group_id": str(school.id),
+    }
+
+
+@pytest.mark.asyncio
+async def test_creating_a_practice_in_a_school_stops_with_the_flag(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """BE-74: setting the owning school is a write path outside the school
+    routers, and it listens to the switch (_usable_curator_group_or_400).
+
+    Schools off: the same master, the same school, the same body -- 400,
+    and no practice of that title exists. Schools on: 201. The pair is the
+    test: a 400 alone would pass with the create path broken outright.
+    """
+    _curator, master, school, _practice_id = await _school_with_practice(
+        client, db_session,
+    )
+    headers = auth_headers(master["session_token"])
+
+    with _off():
+        refused = await client.post(
+            PRACTICES_URL, json=_school_body(school, "Выключено"),
+            headers=headers,
+        )
+    assert refused.status_code == 400, refused.text
+    left = (
+        await db_session.execute(
+            select(Practice.id).where(Practice.title == "Выключено")
+        )
+    ).all()
+    assert left == []
+
+    with _on():
+        created = await client.post(
+            PRACTICES_URL, json=_school_body(school, "Включено"),
+            headers=headers,
+        )
+    assert created.status_code == 201, created.text
+    assert created.json()["curator_group_id"] == str(school.id)

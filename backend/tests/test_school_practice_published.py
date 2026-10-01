@@ -181,7 +181,7 @@ async def _suspend_curator(
 async def _draft(
     client: AsyncClient,
     author: dict,
-    schools: list[CuratorGroup],
+    school: CuratorGroup | None,
     *,
     title: str = "Утренняя практика",
     recurrence: dict | None = None,
@@ -200,9 +200,9 @@ async def _draft(
         "price_cents": 0,
         "currency": "eur",
     }
-    if schools:
+    if school is not None:
         body["audience_kind"] = "curator_groups"
-        body["curator_group_ids"] = [str(s.id) for s in schools]
+        body["curator_group_id"] = str(school.id)
     if recurrence:
         body["recurrence"] = recurrence
     created = await client.post(
@@ -333,7 +333,7 @@ async def test_publishing_tells_the_school_and_writes_its_journal(
     await _join(db_session, school, author, CuratorMemberKind.MASTER)
     await _join(db_session, school, student)
 
-    practice_id = await _draft(client, author, [school])
+    practice_id = await _draft(client, author, school)
     await _publish_ok(client, author, practice_id)
 
     assert len(await _lines(db_session, school)) == 1
@@ -362,7 +362,7 @@ async def test_the_author_is_not_told_about_their_own_publication(
     await _join(db_session, school, student)
 
     await _publish_ok(
-        client, author, await _draft(client, author, [school]),
+        client, author, await _draft(client, author, school),
     )
 
     assert await _notified(db_session, author) == []
@@ -383,12 +383,12 @@ async def test_the_curator_is_told_and_is_not_when_they_published_it(
     await _join(db_session, school, author, CuratorMemberKind.MASTER)
 
     await _publish_ok(
-        client, author, await _draft(client, author, [school]),
+        client, author, await _draft(client, author, school),
     )
     assert len(await _notified(db_session, curator)) == 1
 
     await _publish_ok(
-        client, curator, await _draft(client, curator, [school]),
+        client, curator, await _draft(client, curator, school),
     )
     assert len(await _notified(db_session, curator)) == 1
     assert len(await _lines(db_session, school)) == 2
@@ -415,7 +415,7 @@ async def test_a_suspended_master_member_is_still_told(
     await _join(db_session, school, shadowed, CuratorMemberKind.MASTER)
 
     await _publish_ok(
-        client, author, await _draft(client, author, [school]),
+        client, author, await _draft(client, author, school),
     )
 
     assert len(await _notified(db_session, shadowed)) == 1
@@ -430,13 +430,15 @@ async def test_a_suspended_master_member_is_still_told(
 async def test_one_person_in_two_target_schools_is_told_once(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """ONE message against TWO journal lines -- the pair is per school.
+    """A practice names ONE school: two in the request are refused, and
+    nobody in either school is told anything.
 
-    Both numbers are asserted in the same test because each alone is
-    satisfiable by the wrong implementation: one message could mean one
-    school was processed, and two lines could sit beside two messages.
-    Both school names ride in the single message, joined, so the person is
-    not told it came from only one of them.
+    Before BE-74 this test asserted one message against two journal lines
+    for a practice addressed to both schools -- right while a practice
+    could target several. The owner ruling of 2026-10-01 (a practice
+    belongs to exactly one school) made that practice impossible to build;
+    the precise statement now is the refusal itself, paired with the
+    silence on both sides, so a create that half-succeeded could not pass.
     """
     curator = await _master(client, db_session, _TID_CURATOR)
     author = await _master(client, db_session, _TID_AUTHOR)
@@ -447,21 +449,35 @@ async def test_one_person_in_two_target_schools_is_told_once(
         await _join(db_session, school, author, CuratorMemberKind.MASTER)
         await _join(db_session, school, student)
 
-    await _publish_ok(
-        client, author, await _draft(client, author, [morning, evening]),
+    created = await client.post(
+        PRACTICES_URL,
+        json={
+            "practice_type": "live",
+            "direction": "meditation",
+            "difficulty": "beginner",
+            "title": "Две школы",
+            "description": "x",
+            "scheduled_at": (datetime.now(UTC) + timedelta(days=8)).isoformat(),
+            "duration_minutes": 60,
+            "timezone": "UTC",
+            "max_participants": 20,
+            "is_free": True,
+            "price_cents": 0,
+            "currency": "eur",
+            "audience_kind": "curator_groups",
+            "curator_group_id": [str(morning.id), str(evening.id)],
+        },
+        headers=auth_headers(author["session_token"]),
     )
-
-    messages = await _notified(db_session, student)
-    assert len(messages) == 1
+    assert created.status_code == 422, created.text
+    assert await _notified(db_session, student) == []
+    assert await _lines(db_session, morning) == []
+    assert await _lines(db_session, evening) == []
+    # The pair: the same author and the same school in the one-school form
+    # IS announced, so the silence above is the refusal's, not the setup's.
+    await _publish_ok(client, author, await _draft(client, author, morning))
+    assert len(await _notified(db_session, student)) == 1
     assert len(await _lines(db_session, morning)) == 1
-    assert len(await _lines(db_session, evening)) == 1
-    # ALPHABETICAL, and the order is the assertion. This line used to
-    # read "Утро, Вечер" and passed for a week: the query ordered by
-    # CuratorGroup.id, a UUID, which is stable inside one run and random
-    # between them. The suite went red on a commit that touched nothing
-    # here. Ordering by name makes the joined string a property of the
-    # schools rather than of the run.
-    assert messages[0]["action_data"]["group_name"] == "Вечер, Утро"
 
 
 @pytest.mark.asyncio
@@ -489,7 +505,7 @@ async def test_a_series_of_forty_occurrences_announces_once(
     practice_id = await _draft(
         client,
         author,
-        [school],
+        school,
         recurrence={"period": "daily", "end": "after_count", "count": 40},
     )
     await _publish_ok(client, author, practice_id)
@@ -523,7 +539,7 @@ async def test_a_school_with_no_members_gets_its_line_and_no_messages(
     await _join(db_session, empty, author, CuratorMemberKind.MASTER)
 
     await _publish_ok(
-        client, author, await _draft(client, author, [empty]),
+        client, author, await _draft(client, author, empty),
     )
 
     assert len(await _lines(db_session, empty)) == 1
@@ -542,7 +558,10 @@ async def test_a_school_with_no_members_gets_its_line_and_no_messages(
 async def test_a_practice_outside_any_school_announces_nothing(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """Public practices have no school to tell.
+    """A practice that belongs to no school has no school to tell -- here,
+    a public practice from the general section by a master of the school
+    (BE-74: belonging is set by where the practice is made, not by who
+    made it).
 
     The school practice in the same test is what keeps this from passing
     on a fan-out that never runs.
@@ -554,12 +573,12 @@ async def test_a_practice_outside_any_school_announces_nothing(
     await _join(db_session, school, author, CuratorMemberKind.MASTER)
     await _join(db_session, school, student)
 
-    await _publish_ok(client, author, await _draft(client, author, []))
+    await _publish_ok(client, author, await _draft(client, author, None))
     assert await _notified(db_session, student) == []
     assert await _lines(db_session, school) == []
 
     await _publish_ok(
-        client, author, await _draft(client, author, [school]),
+        client, author, await _draft(client, author, school),
     )
     assert len(await _notified(db_session, student)) == 1
 
@@ -568,10 +587,10 @@ async def test_a_practice_outside_any_school_announces_nothing(
 async def test_an_author_who_left_the_school_announces_nothing(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """The audience row survives the departure; the broadcast does not.
+    """The ownership survives the departure; the broadcast does not.
 
-    Nothing rewrites practice_audience_curator_group when a master leaves,
-    and the publish path does not re-check membership -- the gate that
+    Nothing rewrites the practice's curator_group_id when a master leaves
+    (BE-74: the owner column never moves), and the publish path does not re-check membership -- the gate that
     would sits on the audience branch, which a status-only PATCH never
     enters. So the publication itself SUCCEEDS, and it is
     _master_in_curator_group_clause that keeps the announcement from going
@@ -590,7 +609,7 @@ async def test_an_author_who_left_the_school_announces_nothing(
     )
     await _join(db_session, school, student)
 
-    practice_id = await _draft(client, author, [school])
+    practice_id = await _draft(client, author, school)
 
     await db_session.delete(
         await db_session.get(CuratorGroupMember, membership.id)
@@ -629,7 +648,7 @@ async def test_a_dark_school_is_still_announced_to(
     await _join(db_session, school, author, CuratorMemberKind.MASTER)
     await _join(db_session, school, student)
 
-    practice_id = await _draft(client, author, [school])
+    practice_id = await _draft(client, author, school)
     await _suspend_curator(db_session, curator)
 
     await _publish_ok(client, author, practice_id)
@@ -655,7 +674,7 @@ async def test_rescheduling_after_publication_announces_nothing_again(
     await _join(db_session, school, author, CuratorMemberKind.MASTER)
     await _join(db_session, school, student)
 
-    practice_id = await _draft(client, author, [school])
+    practice_id = await _draft(client, author, school)
     await _publish_ok(client, author, practice_id)
 
     moved = await client.patch(
@@ -692,7 +711,7 @@ async def test_a_failed_publication_leaves_neither_half(
     await _join(db_session, school, author, CuratorMemberKind.MASTER)
     await _join(db_session, school, student)
 
-    practice_id = await _draft(client, author, [school])
+    practice_id = await _draft(client, author, school)
 
     with patch(
         "app.modules.curator_groups.service.emit_notification",

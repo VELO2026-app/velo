@@ -28,9 +28,11 @@
 # bigger version of this feature, it would be a different one.
 #
 # WHICH PRACTICES ARE THE SCHOOL'S is practice_in_curator_group_clause
-# (practices/audience_service.py) -- an audience row, and nothing else. A
-# practice by a master who has since left the school still counts; see that
-# predicate's docstring for the owner ruling behind it.
+# (practices/audience_service.py) -- the practice's owning school
+# (Practice.curator_group_id, BE-74), whatever its audience, public ones
+# included, and nothing else. A practice by a master who has since left the
+# school still counts; see that predicate's docstring for the owner rulings
+# behind both.
 #
 # SESSION RULES: read-only -- callers pass get_db_reader. No commit (P-01).
 # =============================================================================
@@ -71,7 +73,7 @@ async def list_curator_group_checkins(
     another school learns nothing about this one.
 
     THREE FILTERS, EACH LOAD-BEARING:
-      - the practice belongs to the school (an audience row);
+      - the practice belongs to the school (its owner column, BE-74);
       - the check-in is PRE. POST is a future socket, and the only
         master-facing place it surfaces is the per-student dossier;
       - the booking is not CANCELLED. get_attendance drops those rows from

@@ -4,8 +4,9 @@
 //
 // The picker owns the fourth audience option's WHOLE contract: it appears
 // only when the master belongs to at least one school, its chips are a
-// separate id array from the student-groups one, toggles replace arrays
-// immutably, and the empty/validation states stay honest. The Create/Edit
+// separate model from the student-groups one -- ONE school id or null (a
+// practice belongs to exactly one school, BE-74), the group toggles replace
+// their array immutably, and the empty/validation states stay honest. The Create/Edit
 // suites cover their own wiring; this file covers the shared mechanism.
 // =============================================================================
 
@@ -36,7 +37,7 @@ let host: HTMLElement | null = null
 // Model state, held by the wrapper and readable from the assertions.
 const kind = ref<PracticeAudienceKind>('public')
 const groupIds = ref<string[]>([])
-const curatorGroupIds = ref<string[]>([])
+const curatorGroupId = ref<string | null>(null)
 
 interface MountOpts {
   groups?: GroupListItem[]
@@ -48,7 +49,7 @@ interface MountOpts {
 function mount(opts: MountOpts = {}): HTMLElement {
   kind.value = 'public'
   groupIds.value = []
-  curatorGroupIds.value = []
+  curatorGroupId.value = null
   host = document.createElement('div')
   document.body.appendChild(host)
   const Wrapper = defineComponent({
@@ -63,9 +64,9 @@ function mount(opts: MountOpts = {}): HTMLElement {
           'onUpdate:groupIds': (v: string[]) => {
             groupIds.value = v
           },
-          curatorGroupIds: curatorGroupIds.value,
-          'onUpdate:curatorGroupIds': (v: string[]) => {
-            curatorGroupIds.value = v
+          curatorGroupId: curatorGroupId.value,
+          'onUpdate:curatorGroupId': (v: string | null) => {
+            curatorGroupId.value = v
           },
           groups: opts.groups ?? GROUPS,
           schools: opts.schools ?? [],
@@ -149,28 +150,29 @@ describe('PracticeAudiencePicker', () => {
     expect(chipWith('Утро')).toBeFalsy()
   })
 
-  it('toggling a school chip updates the model array immutably', async () => {
+  it('a school chip is a single select: a second school REPLACES the first, a re-tap clears', async () => {
+    // Before BE-74 this test asserted that two school taps accumulate into
+    // ['sc1', 'sc2'] -- right while a practice could target several schools.
+    // The owner ruling of 2026-10-01 (a practice belongs to exactly ONE
+    // school) made that union false; the precise statement now is that the
+    // second tap replaces the first, so the model can never hold two.
     mount({ schools: SCHOOLS })
     kind.value = 'curator_groups'
     await flush()
 
-    const before = curatorGroupIds.value
     chipWith('Тихая школа')?.click()
     await flush()
-    expect(curatorGroupIds.value).toEqual(['sc1'])
-    expect(curatorGroupIds.value).not.toBe(before)
+    expect(curatorGroupId.value).toBe('sc1')
 
-    chipWith('Тихая школа')?.click()
-    await flush()
-    expect(curatorGroupIds.value).toEqual([])
-
-    chipWith('Тихая школа')?.click()
-    await flush()
-    // A tick between taps: the immutable-emit pattern updates the child's
-    // prop on re-render, and no real user taps two chips within one tick.
+    // A tick between taps: the emit updates the child's prop on re-render,
+    // and no real user taps two chips within one tick.
     chipWith('Утренняя школа')?.click()
     await flush()
-    expect(curatorGroupIds.value).toEqual(['sc1', 'sc2'])
+    expect(curatorGroupId.value).toBe('sc2')
+
+    chipWith('Утренняя школа')?.click()
+    await flush()
+    expect(curatorGroupId.value).toBeNull()
     // The student-groups array is untouched by school taps.
     expect(groupIds.value).toEqual([])
   })

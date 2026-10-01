@@ -15,7 +15,6 @@ from zoneinfo import ZoneInfo
 
 import structlog
 from sqlalchemy import delete, func, select, update
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -27,39 +26,12 @@ from app.core.exceptions import BadRequestError
 from app.modules.practices.models import (
     AudienceKind,
     Practice,
-    PracticeAudienceCuratorGroup,
     PracticeAudienceGroup,
     PracticeStatus,
     PracticeType,
 )
 
 logger = structlog.get_logger()
-
-
-async def add_curator_group_audience_row(
-    practice_id: UUID, group_id: UUID, session: AsyncSession,
-) -> bool:
-    """Address a practice to one school; False if the school is gone (BE-95).
-
-    ONE SAVEPOINT PER ROW, because the school can be deleted between the
-    read that chose it and this INSERT. delete_curator_group locks the
-    group row last (curator_groups/service.py, header), so an INSERT
-    arriving while that delete is in flight waits on the FK and then fails
-    it -- and a bare session.add turned that into a 500 for the whole
-    practice request. The savepoint confines the failure to this row; the
-    caller decides what a vanished school means for it.
-    """
-    try:
-        async with session.begin_nested():
-            session.add(
-                PracticeAudienceCuratorGroup(
-                    practice_id=practice_id, group_id=group_id,
-                )
-            )
-            await session.flush()
-    except IntegrityError:
-        return False
-    return True
 
 
 def _series_occurrence_starts(
@@ -191,6 +163,12 @@ def _build_child_occurrence(
         # target GROUP rows live in a separate table and are copied
         # after flush in generate_series_occurrences.
         audience_kind=root.audience_kind,
+        # BE-74: the owning school is inherited by every session of the
+        # series, at birth, and never changes afterwards -- so this copy is
+        # the whole of it: propagate_audience_to_children has no school to
+        # push down. Copied for every audience, public included: a public
+        # course of a school is the school's in each of its sessions.
+        curator_group_id=root.curator_group_id,
     )
     taxonomy = (root.data or {}).get("taxonomy")
     if taxonomy is not None:
@@ -304,26 +282,6 @@ async def generate_series_occurrences(
             ).scalars().all()
         )
 
-    # SECURITY (C1, P5/GT-11): the same hole on the new table. A
-    # 'curator_groups' series whose children carried no target-school rows
-    # would leave every occurrence matching none of the audience clause's
-    # branches -- and _build_child_occurrence copies audience_kind but not
-    # the rows, so each child would be a 'curator_groups' practice that no
-    # school can see and the master cannot explain. Worse in the other
-    # direction if the kind were ever defaulted: publicly bookable copies of
-    # a restricted series.
-    root_curator_group_ids: list[UUID] = []
-    if root.audience_kind == AudienceKind.CURATOR_GROUPS.value:
-        root_curator_group_ids = list(
-            (
-                await session.execute(
-                    select(PracticeAudienceCuratorGroup.group_id).where(
-                        PracticeAudienceCuratorGroup.practice_id == root.id,
-                    )
-                )
-            ).scalars().all()
-        )
-
     children: list[Practice] = []
     for start_utc in starts:
         child = _build_child_occurrence(root, start_utc)
@@ -337,11 +295,6 @@ async def generate_series_occurrences(
                     group_id=group_id,
                 )
             )
-        # BE-95 F7: a school deleted since the root's rows were read is
-        # skipped -- the root's own row went with it (ondelete=CASCADE), so
-        # the child ends up addressed exactly as the root now is.
-        for group_id in root_curator_group_ids:
-            await add_curator_group_audience_row(child.id, group_id, session)
         session.add(
             ZoomMeeting(
                 practice_id=child.id,
@@ -458,41 +411,6 @@ async def propagate_audience_to_children(
                         practice_id=child_id,
                         group_id=group_id,
                     )
-                )
-
-    # 3. The same, on the target-SCHOOL table (P5/GT-11). The delete is
-    #    UNCONDITIONAL, exactly like the one above: a root switched from
-    #    'curator_groups' to anything else must not leave its children
-    #    carrying school rows, or a later switch back would resurrect an
-    #    audience the master abandoned -- the litter problem the single-
-    #    practice path solves in update_practice.
-    #
-    #    BOTH deletes and both inserts sit under the SAME child_ids list,
-    #    filtered once by _TERMINAL_CHILD_STATUSES above. The existing
-    #    comment on that filter says applying it to only one write leaves a
-    #    child with the old kind and the new rows; with two tables there are
-    #    now four writes to keep under it, and the reason has not changed.
-    await session.execute(
-        delete(PracticeAudienceCuratorGroup).where(
-            PracticeAudienceCuratorGroup.practice_id.in_(child_ids),
-        )
-    )
-    if root.audience_kind == AudienceKind.CURATOR_GROUPS.value:
-        root_curator_group_ids = list(
-            (
-                await session.execute(
-                    select(PracticeAudienceCuratorGroup.group_id).where(
-                        PracticeAudienceCuratorGroup.practice_id == root.id,
-                    )
-                )
-            ).scalars().all()
-        )
-        # BE-95 F7: as in generate_series_occurrences -- a school deleted
-        # since the root's rows were read is skipped, as it was for the root.
-        for child_id in child_ids:
-            for group_id in root_curator_group_ids:
-                await add_curator_group_audience_row(
-                    child_id, group_id, session,
                 )
 
     logger.info(

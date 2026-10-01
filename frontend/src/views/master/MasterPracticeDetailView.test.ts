@@ -1524,28 +1524,40 @@ describe('MasterPracticeDetailView', () => {
 // -- Audience-unavailable warning (FE-24 / GT P5) ------------------------------
 
 describe('MasterPracticeDetailView -- audience_unavailable (FE-24 / GT P5)', () => {
-  it('flag true: the warning renders on an upcoming practice and its button opens the EDIT screen', async () => {
+  it('flag true: the warning renders and offers no way into the editor (BE-74)', async () => {
+    // Before BE-74 the banner said «Смените аудиторию» and its button opened
+    // the edit screen -- right while a school audience could be swapped there.
+    // BE-74 made a school practice's audience and school read-only on that
+    // screen, and every flagged practice belongs to a school (the flag is set
+    // only for 'curator_groups', which the CHECK forbids without one). So the
+    // jump led to a screen with nothing to change: the advice and the button
+    // are gone, the statement stays.
     vi.mocked(practicesApi.getPractice).mockResolvedValue(
       practice({
         audience_kind: 'curator_groups',
-        audience_curator_group_names: ['Тихая школа'],
+        curator_group_id: 'sc1',
+        curator_group_name: 'Тихая школа',
         audience_unavailable: true,
       }),
     )
     mount()
     await flush()
 
-    expect(text()).toContain('Школа недоступна')
-    // The names still arrive filled (deliberate: the flag alone would not say
-    // WHAT to fix) -- the banner explains the consequence instead.
-    expect(text()).toContain('Смените аудиторию')
-
-    const edit = Array.from(host?.querySelectorAll<HTMLElement>('button') ?? []).find((b) =>
-      b.textContent?.includes('Изменить аудиторию'),
-    )
-    edit?.click()
+    // THE PAIR: the warning is there and says what it means ...
+    const warn = host?.querySelector<HTMLElement>('.pd-audience-warn')
+    expect(warn).toBeTruthy()
+    expect(warn?.textContent).toContain('Школа недоступна')
+    expect(warn?.textContent).toContain('кроме вас и уже записавшихся')
+    // ... and carries neither the advice nor any control.
+    expect(text()).not.toContain('Смените аудиторию')
+    expect(text()).not.toContain('Изменить аудиторию')
+    expect(warn?.querySelectorAll('button')).toHaveLength(0)
+    warn?.click()
     await flush()
-    expect(push).toHaveBeenCalledWith({ name: 'master-practice-edit', params: { id: 'p1' } })
+    expect(push).not.toHaveBeenCalledWith({
+      name: 'master-practice-edit',
+      params: { id: 'p1' },
+    })
   })
 
   it('flag absent/false: no warning at all', async () => {

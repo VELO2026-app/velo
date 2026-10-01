@@ -25,7 +25,6 @@ from sqlalchemy import (
     Index,
     String,
     Text,
-    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -45,7 +44,7 @@ class MasterGroup(UUIDMixin, Base):
 
     __tablename__ = "master_group"
     __table_args__ = (
-        UniqueConstraint("master_id", "name", name="uq_master_group_master_name"),
+        Index("uq_master_group_master_name", "master_id", "name", unique=True),
     )
 
     master_id: Mapped[UUID] = mapped_column(
@@ -84,9 +83,10 @@ class MasterGroupMembership(UUIDMixin, Base):
 
     __tablename__ = "master_group_membership"
     __table_args__ = (
-        UniqueConstraint(
+        Index(
+            "uq_master_group_membership_group_student",
             "group_id", "student_user_id",
-            name="uq_master_group_membership_group_student",
+            unique=True,
         ),
     )
 

@@ -1078,9 +1078,18 @@ async def list_group_practices_endpoint(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> PaginatedPracticesResponse:
-    """Upcoming practices by the school's masters.
+    """Upcoming practices that BELONG TO the school, by its present masters.
 
-    This is the PUBLIC FEED narrowed to a set of masters, not a new query:
+    BE-74: two narrowings, both required. The practice belongs to this
+    school (Practice.curator_group_id) -- so a master's public practice
+    from the general section and his practice of another school stay off
+    this page -- and its master is still in the school (curator + visible
+    masters, the roster's set) -- so a master who left, was demoted or lost
+    verification takes his practices off the page with him. Either audience
+    of a school practice appears: a public one to every viewer of the page,
+    one for the school's students to those of them who may see it.
+
+    This is the PUBLIC FEED narrowed, not a new query:
     the status/time gate, the audience clause with its owner-bypass, the
     block clause and the per-user is_booked/is_paid flags all come from
     list_public_practices unchanged. A master who blocked this viewer
@@ -1089,7 +1098,12 @@ async def list_group_practices_endpoint(
     """
     master_ids = await list_group_practice_master_ids(group_id, user.id, session)
     return await list_public_practices(
-        session, user=user, limit=limit, offset=offset, master_ids=master_ids,
+        session,
+        user=user,
+        limit=limit,
+        offset=offset,
+        master_ids=master_ids,
+        curator_group_id=group_id,
     )
 
 

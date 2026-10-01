@@ -63,7 +63,6 @@ from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import (
     AudienceKind,
     Practice,
-    PracticeAudienceCuratorGroup,
     PracticeAudienceGroup,
 )
 
@@ -257,19 +256,22 @@ def _viewer_in_curator_group_clause(user_id: UUID) -> ColumnElement[bool]:
 
 
 def _is_curator_group_audience_clause(user_id: UUID) -> ColumnElement[bool]:
-    """True iff `user_id` may see the (correlated) Practice through one of
-    its target SCHOOLS.
+    """True iff `user_id` may see the (correlated) Practice through the
+    school it BELONGS TO (Practice.curator_group_id, BE-74).
 
-    Three conditions on the SAME school row, all required:
+    Three conditions on that school's row, all required:
       1. the school is ACTIVE -- its curator is verified right now (I-6),
          the same rule that makes an inactive school a 404 for its own
          members;
       2. the viewer belongs to that school;
       3. the practice's master still belongs to that school.
 
-    EXISTS rather than a join, so a viewer who is in two of the practice's
-    target schools yields ONE row in the feed, not two. Same shape as
-    _is_group_member_clause next door, for the same reason.
+    EXISTS over curator_group rather than a join: the conditions below are
+    correlated to CuratorGroup, and the caller's query selects FROM
+    Practice -- the EXISTS is what gives them a school row to stand on
+    without adding one to the caller's FROM. A 'curator_groups' practice
+    always has a school (ck_practices_school_audience_has_school; one that
+    loses its school is turned public, BE-74 migration trigger).
 
     THE SCHOOLS KILLSWITCH IS CHECKED HERE, AND HERE IS THE WHOLE READ
     SIDE OF IT (GT-19). One false() closes both consumers at once, because
@@ -296,13 +298,9 @@ def _is_curator_group_audience_clause(user_id: UUID) -> ColumnElement[bool]:
         return false()
 
     return (
-        select(PracticeAudienceCuratorGroup.id)
-        .join(
-            CuratorGroup,
-            CuratorGroup.id == PracticeAudienceCuratorGroup.group_id,
-        )
+        select(CuratorGroup.id)
         .where(
-            PracticeAudienceCuratorGroup.practice_id == Practice.id,
+            CuratorGroup.id == Practice.curator_group_id,
             _curator_profile_verified(CuratorGroup.curator_user_id),
             _viewer_in_curator_group_clause(user_id),
             _master_in_curator_group_clause(Practice.master_id),
@@ -326,34 +324,31 @@ def master_broadcasts_to_group_clause(master_id: UUID) -> ColumnElement[bool]:
 
 
 def practice_in_curator_group_clause(group_id: UUID) -> ColumnElement[bool]:
-    """True iff the (correlated) Practice was ever addressed to this school.
+    """True iff the (correlated) Practice BELONGS TO this school (BE-74).
 
     THIS ONE ANSWERS "WHAT HAPPENED"; _master_in_curator_group_clause above
     answers "what to show now", and the two are meant to disagree. Owner
     ruling, 2026-09-10: masters can be invited into a school for a season
     and collaboration between schools is normal, so the feedback a school
-    collected stays its history after the teacher walks out.
+    collected stays its history after the teacher walks out -- the owner
+    of a practice never changes, so neither does this answer.
 
-    One row in practice_audience_curator_group and nothing else -- no
-    membership, no verification, no status of the practice. EXISTS rather
-    than a join, so a practice addressed to this school once yields one row
-    and not one per audience row.
+    EVERY AUDIENCE COUNTS, public included (owner ruling, 2026-10-01, Q4):
+    a public practice made in the school is the school's, and so is what
+    its participants wrote. A practice whose school was deleted has no
+    owner and belongs to no school's history -- there is no school left to
+    read it.
 
+    A plain equality on the practice's own column: no membership, no
+    verification, no status of the practice, and nothing to deduplicate.
     Correlated to the module-level Practice table: the calling query must
     select FROM Practice, the same contract the clauses above state. NO
     KILLSWITCH CHECK HERE, unlike _is_curator_group_audience_clause: this
-    predicate's only caller sits behind the curator router's router-level
+    predicate's callers sit behind the curator router's router-level
     _require_curator_groups_enabled, and a flag answered in two places is a
     flag with a hole in it.
     """
-    return (
-        select(PracticeAudienceCuratorGroup.id)
-        .where(
-            PracticeAudienceCuratorGroup.practice_id == Practice.id,
-            PracticeAudienceCuratorGroup.group_id == group_id,
-        )
-        .exists()
-    )
+    return Practice.curator_group_id == group_id
 
 
 def viewer_audience_clause(user_id: UUID) -> ColumnElement[bool]:
@@ -481,7 +476,7 @@ async def assert_viewer_can_access_practice(
             practice.id, _is_curator_group_audience_clause(user_id), session,
         ):
             raise ForbiddenError(
-                "You are not a member of this practice's target school(s)",
+                "You are not a member of this practice's school",
                 code="not_in_audience",
             )
         return
@@ -568,7 +563,6 @@ async def count_stranded_active_bookings(
     proposed_audience_kind: str,
     proposed_group_ids: list[UUID],
     session: AsyncSession,
-    proposed_curator_group_ids: list[UUID] | None = None,
 ) -> int:
     """Owner Q15 (PROMPT №613): how many of `booker_ids` (this practice's
     CURRENT active bookers -- the caller, practices/service.py, already owns
@@ -596,8 +590,13 @@ async def count_stranded_active_bookings(
     STUDENT_ENTITLEMENT_STATUSES), so stranded_count is numerically
     unchanged for every booking this system can currently produce.
 
-    CURATOR_GROUPS (P5/GT-11) is the GROUPS case again, with ONE deliberate
-    difference: the membership lookup also accepts the school's CURATOR.
+    CURATOR_GROUPS (P5/GT-11) is the GROUPS case again, against the
+    practice's OWN school (BE-74): the school is not part of the proposal,
+    because neither a preview nor a PATCH can change it -- proposing
+    'curator_groups' means "for the students of the school this practice
+    belongs to". The caller has already refused the kind for a practice
+    without a school (check_school_audience). ONE deliberate difference
+    from GROUPS: the membership lookup also accepts the school's CURATOR.
     A curator holds no curator_group_member row at all (I-2 -- ownership
     lives in curator_group.curator_user_id and nowhere else), so a literal
     mirror of the query below would report a curator who booked their own
@@ -606,7 +605,7 @@ async def count_stranded_active_bookings(
     with its model.
 
     WHAT THIS FUNCTION DELIBERATELY DOES NOT CHECK for that kind: whether
-    the practice's MASTER still belongs to the proposed schools. That
+    the practice's MASTER still belongs to the school. That
     condition can black out the audience entirely, but it is not a
     consequence of the change being previewed -- the master is not editing
     their own membership here. Folding it in would answer a question nobody
@@ -642,17 +641,17 @@ async def count_stranded_active_bookings(
             .all()
         )
 
-    proposed_school_ids = proposed_curator_group_ids or []
+    school_id = practice.curator_group_id
     proposed_school_member_ids: set[UUID] = set()
     if (
         proposed_audience_kind == AudienceKind.CURATOR_GROUPS.value
-        and proposed_school_ids
+        and school_id is not None
     ):
         proposed_school_member_ids = set(
             (
                 await session.execute(
                     select(CuratorGroupMember.user_id).where(
-                        CuratorGroupMember.group_id.in_(proposed_school_ids),
+                        CuratorGroupMember.group_id == school_id,
                         CuratorGroupMember.user_id.in_(booker_ids),
                     )
                 )
@@ -660,13 +659,13 @@ async def count_stranded_active_bookings(
             .scalars()
             .all()
         )
-        # The curators of the proposed schools, added separately -- see the
-        # docstring: they have no membership row to find.
+        # The school's curator, added separately -- see the docstring: they
+        # have no membership row to find.
         proposed_school_member_ids |= set(
             (
                 await session.execute(
                     select(CuratorGroup.curator_user_id).where(
-                        CuratorGroup.id.in_(proposed_school_ids),
+                        CuratorGroup.id == school_id,
                         CuratorGroup.curator_user_id.in_(booker_ids),
                     )
                 )
@@ -713,13 +712,14 @@ async def count_stranded_active_bookings(
 async def curator_group_audience_is_dark(
     practice: Practice, session: AsyncSession,
 ) -> bool:
-    """Does this practice reach NOBODY through its target schools?
+    """Does this practice reach NOBODY through its school?
 
     P5/GT-12. Answers the master's question, not a viewer's: "my practice is
     set to my school and nobody can see it -- why". True exactly when
-    audience_kind is 'curator_groups' and not one of the target schools is
-    still usable, i.e. the practice is visible only to its own master and to
-    whoever already holds a booking (H-R2-8 grandfather).
+    audience_kind is 'curator_groups' and the school it belongs to is not
+    usable -- frozen, left by the master, or schools switched off (GT-19,
+    below) -- i.e. the practice is visible only to its own master and to whoever
+    already holds a booking (H-R2-8 grandfather).
 
     NOT A NEGATION OF _is_curator_group_audience_clause, and deliberately a
     separate function rather than a reuse of it: that clause asks about a
@@ -731,12 +731,15 @@ async def curator_group_audience_is_dark(
     platform; a second function reusing the same two bricks is cheaper and
     cannot change anyone's access.
 
-    A dark practice has NOT lost its target rows -- they are all still
-    there, and so are the names (see curator_group_names_for_practice). The
-    master needs both halves: the flag says "nobody sees this", the names
-    say WHICH school it was pointed at. Reporting the flag while blanking
-    the names would tell them something is broken without telling them what
-    to fix.
+    A dark practice whose school still exists has NOT lost its owner, and
+    the name is still reported (see curator_group_name_for_practice). The
+    master needs both halves: the flag says "nobody sees this", the name
+    says WHICH school it belongs to. Reporting the flag while blanking the
+    name would tell them something is broken without telling them what to
+    fix. A deleted school never reaches this function as a dark practice:
+    a practice that loses its school stops being 'curator_groups' in the
+    same statement (BE-74 migration trigger, and the CHECK that forbids
+    'curator_groups' without a school).
 
     Always False for the other three audience kinds -- not None, not
     absent: a public practice's audience cannot become unavailable, and a
@@ -758,17 +761,11 @@ async def curator_group_audience_is_dark(
 
     usable = (
         await session.execute(
-            select(PracticeAudienceCuratorGroup.id)
-            .join(
-                CuratorGroup,
-                CuratorGroup.id == PracticeAudienceCuratorGroup.group_id,
-            )
-            .where(
-                PracticeAudienceCuratorGroup.practice_id == practice.id,
+            select(CuratorGroup.id).where(
+                CuratorGroup.id == practice.curator_group_id,
                 _curator_profile_verified(CuratorGroup.curator_user_id),
                 _master_in_curator_group_clause(practice.master_id),
             )
-            .limit(1)
         )
     ).scalar_one_or_none()
     return usable is None

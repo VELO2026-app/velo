@@ -463,7 +463,9 @@ async def ensure_practice(
         school = (schools or {})[school_name]
         audience_kwargs = {
             "audience_kind": AudienceKind.CURATOR_GROUPS,
-            "curator_group_ids": [school.id],
+            # BE-74: the practice is created IN the school and belongs to
+            # it; 'curator_groups' then means that school's students.
+            "curator_group_id": school.id,
         }
 
     body = CreatePracticeRequest(

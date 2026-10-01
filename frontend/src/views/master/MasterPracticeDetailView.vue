@@ -89,23 +89,19 @@
       <!-- ===================== UPCOMING hub (WI-B) ===================== -->
       <div v-if="isUpcoming" class="practice-detail__content">
         <!-- FE-24 (GT P5): the school audience stopped matching this master
-             (they left or were removed from every targeted school, or a
-             school froze). Nobody but the master and the already-booked can
-             see the practice; existing bookings stay valid. The school NAMES
-             still arrive filled -- on purpose, so the master knows WHAT to
-             fix -- this banner just points at the edit screen. -->
+             (they left or were removed from the practice's school, the school
+             froze, or schools are switched off). Nobody but the master and the
+             already-booked can see the practice; existing bookings stay valid.
+             The school's name still arrives filled -- on purpose, so the master
+             knows WHAT went dark. BE-74: the banner offers no action. A flagged
+             practice always belongs to a school (the flag is set only for
+             'curator_groups', and the CHECK forbids that audience without a
+             school), and a school practice's audience and school are read-only
+             on the edit screen -- so there is nothing there to change. -->
         <div v-if="practice.audience_unavailable" class="pd-audience-warn">
           <span class="pd-audience-warn__text">
-            Школа недоступна — практику не видит никто, кроме вас и уже записавшихся. Смените
-            аудиторию.
+            Школа недоступна — практику не видит никто, кроме вас и уже записавшихся.
           </span>
-          <VButton
-            size="sm"
-            variant="outline"
-            @click="router.push({ name: 'master-practice-edit', params: { id: practice.id } })"
-          >
-            Изменить аудиторию
-          </VButton>
         </div>
 
         <!-- Hero (shared PracticeHeroCard — FORK4). Recurrence-days line is

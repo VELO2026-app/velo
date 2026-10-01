@@ -7,16 +7,25 @@
 # delete and an accept, or an FK failure escaping from a writer that read
 # a school a moment before somebody deleted it.
 #
-# THE "DELETE IN FLIGHT" SHAPE. Several writers here (announce, a practice's
-# audience, a curator's cancellation, the invite link) have no async call
-# inside their window to pause at. Their window is the other way round: it
-# is open while a delete of the school holds the group row and has not yet
-# committed. So the delete is the holder: the real delete_curator_group
-# runs, and then the test's own _delete_in_flight pauses before returning
-# -- before the harness commits it. The writer runs into the locked group
-# row, Postgres reports it waiting, the delete is released and commits, and
-# the writer's FK check fails against a school that is gone. Nothing in the
-# module is replaced or given a hook for the test.
+# THE "DELETE IN FLIGHT" SHAPE. Several writers here (publication, a
+# curator's cancellation, the invite link) have no async call inside their
+# window to pause at. Their window is the other way round: it is open while
+# a delete of the school holds its rows and has not yet committed. So the
+# delete is the holder: the real delete_curator_group runs, and then the
+# test's own _delete_in_flight pauses before returning -- before the
+# harness commits it. The writer runs into a row the delete holds, Postgres
+# reports it waiting, the delete is released and commits, and the writer
+# goes on against what the delete left. Nothing in the module is replaced
+# or given a hook for the test.
+#
+# BE-74: for the practice writers the row they wait on is the PRACTICE,
+# not the group. delete_curator_group clears the owner column of the
+# school's practices before it deletes the group (the trigger makes a
+# 'curator_groups' practice public in the same statement), so a writer
+# taking the practice FOR UPDATE waits for that UPDATE and then reads a
+# public practice with no school. The 500s these tests were written for
+# (an FK failure into a school that is gone) have no row left to fail on;
+# what they pin now is the reachable outcome after the wait.
 # =============================================================================
 
 import sys
@@ -28,7 +37,8 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
+from app.core.events.models import OutboxEvent
+from app.core.exceptions import ConflictError, NotFoundError
 from app.modules.curator_groups import service as curator_service
 from app.modules.curator_groups.models import (
     CuratorGroup,
@@ -44,11 +54,10 @@ from app.modules.practices import service as practices_service
 from app.modules.practices.models import (
     AudienceKind,
     Practice,
-    PracticeAudienceCuratorGroup,
     PracticeStatus,
     PracticeType,
 )
-from app.modules.practices.series_service import add_curator_group_audience_row
+from app.modules.practices.schemas import UpdatePracticeRequest
 from app.modules.users.models import User, UserRole
 from tests.curator_race_harness import assert_no_deadlock, race
 from tests.helpers import full_cleanup_range, login_user
@@ -119,14 +128,16 @@ async def _school(
     return s
 
 
-async def _practice(db_session, s: School, *, addressed: bool) -> UUID:
-    """A scheduled practice of the third master, addressed to the school."""
+async def _practice(
+    db_session, s: School, *, status: str = PracticeStatus.SCHEDULED.value,
+) -> UUID:
+    """A practice of the third master, owned by the school (BE-74)."""
     practice = Practice(
         master_id=s.third,
         title="Практика BE-95",
         description="x",
         practice_type=PracticeType.LIVE.value,
-        status=PracticeStatus.SCHEDULED.value,
+        status=status,
         scheduled_at=datetime.now(UTC) + timedelta(hours=48),
         duration_minutes=60,
         timezone="UTC",
@@ -136,15 +147,18 @@ async def _practice(db_session, s: School, *, addressed: bool) -> UUID:
         price_cents=0,
         currency="eur",
         audience_kind=AudienceKind.CURATOR_GROUPS.value,
+        curator_group_id=s.id,
     )
     db_session.add(practice)
-    await db_session.flush()
-    if addressed:
-        db_session.add(
-            PracticeAudienceCuratorGroup(practice_id=practice.id, group_id=s.id)
-        )
     await db_session.commit()
     return practice.id
+
+
+async def _fresh_practice(db_session, practice_id: UUID) -> Practice:
+    db_session.expire_all()
+    return (
+        await db_session.execute(select(Practice).where(Practice.id == practice_id))
+    ).scalar_one()
 
 
 async def _group(db_session, s: School) -> CuratorGroup | None:
@@ -353,22 +367,53 @@ async def _against_delete(monkeypatch, s: School, rival):
 
 
 @pytest.mark.asyncio
-async def test_announcing_into_a_school_being_deleted(
+async def test_publishing_into_a_school_being_deleted(
     client, db_session, monkeypatch,
 ) -> None:
-    """F3: publishing a practice used to answer 500 for a deleted school."""
-    s = await _school(client, db_session)
-    practice_id = await _practice(db_session, s, addressed=True)
+    """F3: publishing a practice used to answer 500 for a deleted school.
 
-    async def announce(session):
-        practice = await session.get(Practice, practice_id)
-        return await curator_service.announce_published_practice(
-            practice, await _actor(session, s.third), session,
+    Before BE-74 the rival was announce_published_practice called directly,
+    and it met the delete on the group row. BE-74 moved the meeting point:
+    the real publication (update_practice, draft -> scheduled) takes the
+    practice FOR UPDATE first and waits on the delete's UPDATE of that row.
+    After the wait the practice is public with no school, so the condition
+    for the announcement (an owning school) is false and nothing is sent.
+    Driven through update_practice rather than the announcer, because the
+    announcer no longer answers for a practice without a school -- its
+    caller decides.
+
+    THE PAIR: the publication itself went through (scheduled), the practice
+    is the public, ownerless one the delete left, and the school's student
+    -- a member until the delete -- received no announcement.
+    """
+    s = await _school(client, db_session)
+    practice_id = await _practice(
+        db_session, s, status=PracticeStatus.DRAFT.value,
+    )
+
+    async def publish(session):
+        await practices_service.update_practice(
+            practice_id, await _actor(session, s.third),
+            UpdatePracticeRequest(status=PracticeStatus.SCHEDULED.value),
+            session,
         )
 
-    result = await _against_delete(monkeypatch, s, announce)
+    result = await _against_delete(monkeypatch, s, publish)
     assert result.rival.committed, result.rival.error
-    assert result.rival.result == (0, 0), "a school that is gone was announced"
+    practice = await _fresh_practice(db_session, practice_id)
+    assert practice.status == PracticeStatus.SCHEDULED.value
+    assert practice.audience_kind == AudienceKind.PUBLIC.value
+    assert practice.curator_group_id is None
+    told = (
+        await db_session.execute(
+            select(OutboxEvent.id).where(
+                OutboxEvent.payload["type"].astext
+                == "curator_group.practice_published",
+                OutboxEvent.payload["target_value"].astext == str(s.student),
+            )
+        )
+    ).all()
+    assert told == []
     assert await _group(db_session, s) is None
 
 
@@ -404,70 +449,26 @@ async def test_the_invite_link_of_a_school_being_deleted(
 
 
 @pytest.mark.asyncio
-async def test_addressing_a_practice_to_a_school_being_deleted(
-    client, db_session, monkeypatch,
-) -> None:
-    """F7: the audience writer refuses with the validation's own 400."""
-    s = await _school(client, db_session)
-    practice_id = await _practice(db_session, s, addressed=False)
-
-    async def address(session):
-        await practices_service._set_practice_audience_curator_groups(
-            practice_id, [s.id], session,
-        )
-
-    result = await _against_delete(monkeypatch, s, address)
-    assert isinstance(result.rival.error, BadRequestError), result.rival
-    rows = (
-        await db_session.execute(
-            select(PracticeAudienceCuratorGroup.id).where(
-                PracticeAudienceCuratorGroup.practice_id == practice_id
-            )
-        )
-    ).all()
-    assert rows == []
-
-
-@pytest.mark.asyncio
-async def test_a_series_row_for_a_school_being_deleted_is_skipped(
-    client, db_session, monkeypatch,
-) -> None:
-    """F7, the series writers: the row is skipped, the request survives.
-
-    THE PAIR: the helper reports the skip AND the same request can still
-    write -- the savepoint confined the failure to the one row.
-    """
-    s = await _school(client, db_session)
-    practice_id = await _practice(db_session, s, addressed=False)
-
-    async def copy_row(session):
-        skipped_ok = await add_curator_group_audience_row(
-            practice_id, s.id, session,
-        )
-        practice = await session.get(Practice, practice_id)
-        practice.title = "Практика BE-95, после пропуска"
-        await session.flush()
-        return skipped_ok
-
-    result = await _against_delete(monkeypatch, s, copy_row)
-    assert result.rival.committed, result.rival.error
-    assert result.rival.result is False
-    db_session.expire_all()
-    practice = await db_session.get(Practice, practice_id)
-    assert practice.title == "Практика BE-95, после пропуска"
-
-
-@pytest.mark.asyncio
 async def test_a_curator_cancelling_into_a_school_being_deleted(
     client, db_session, monkeypatch,
 ) -> None:
     """F8: the cancellation committed its refunds and then failed its FK.
 
-    THE PAIR: the practice IS cancelled, and no journal row survived for a
-    school that is gone.
+    Before BE-74 the curator's cancellation met the delete on the group row
+    and, once the guard was in, the practice WAS cancelled with no journal
+    row left for a school that is gone. BE-74 moved the meeting point to
+    the practice row (cancel_practice takes it FOR UPDATE first), and after
+    the wait the practice is public with no school: the curator's right --
+    a 'curator_groups' practice of their own school -- is gone with the
+    school, so the answer is the same 404 a stranger gets (owner ruling,
+    2026-10-01).
+
+    THE PAIR: the refusal left the practice exactly as the delete did --
+    still scheduled, public, without a school -- and no journal row exists
+    for the school.
     """
     s = await _school(client, db_session)
-    practice_id = await _practice(db_session, s, addressed=True)
+    practice_id = await _practice(db_session, s)
 
     async def cancel(session):
         await cancel_service.cancel_practice(
@@ -475,10 +476,11 @@ async def test_a_curator_cancelling_into_a_school_being_deleted(
         )
 
     result = await _against_delete(monkeypatch, s, cancel)
-    assert result.rival.committed, result.rival.error
-    db_session.expire_all()
-    practice = await db_session.get(Practice, practice_id)
-    assert practice.status == PracticeStatus.CANCELLED.value
+    assert isinstance(result.rival.error, NotFoundError), result.rival
+    practice = await _fresh_practice(db_session, practice_id)
+    assert practice.status == PracticeStatus.SCHEDULED.value
+    assert practice.audience_kind == AudienceKind.PUBLIC.value
+    assert practice.curator_group_id is None
     left = (
         await db_session.execute(
             select(CuratorGroupEvent.id).where(
@@ -487,3 +489,4 @@ async def test_a_curator_cancelling_into_a_school_being_deleted(
         )
     ).all()
     assert left == []
+    assert await _group(db_session, s) is None

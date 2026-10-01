@@ -30,7 +30,6 @@ from sqlalchemy import (
     Index,
     String,
     Text,
-    UniqueConstraint,
     func,
 )
 from sqlalchemy import text as sa_text
@@ -116,8 +115,10 @@ class CuratorGroup(UUIDMixin, TimestampMixin, Base):
 
     __tablename__ = "curator_group"
     __table_args__ = (
-        UniqueConstraint(
-            "curator_user_id", "name", name="uq_curator_group_curator_name",
+        Index(
+            "uq_curator_group_curator_name",
+            "curator_user_id", "name",
+            unique=True,
         ),
     )
 
@@ -152,8 +153,10 @@ class CuratorGroupMember(UUIDMixin, Base):
 
     __tablename__ = "curator_group_member"
     __table_args__ = (
-        UniqueConstraint(
-            "group_id", "user_id", name="uq_curator_group_member_group_user",
+        Index(
+            "uq_curator_group_member_group_user",
+            "group_id", "user_id",
+            unique=True,
         ),
     )
 
@@ -202,8 +205,8 @@ class CuratorGroupInvite(UUIDMixin, Base):
 
     __tablename__ = "curator_group_invite"
     __table_args__ = (
-        UniqueConstraint("group_id", name="uq_curator_group_invite_group"),
-        UniqueConstraint("token", name="uq_curator_group_invite_token"),
+        Index("uq_curator_group_invite_group", "group_id", unique=True),
+        Index("uq_curator_group_invite_token", "token", unique=True),
     )
 
     group_id: Mapped[UUID] = mapped_column(
@@ -232,7 +235,7 @@ class CuratorGroupTransfer(UUIDMixin, Base):
 
     __tablename__ = "curator_group_transfer"
     __table_args__ = (
-        UniqueConstraint("group_id", name="uq_curator_group_transfer_group"),
+        Index("uq_curator_group_transfer_group", "group_id", unique=True),
     )
 
     group_id: Mapped[UUID] = mapped_column(
@@ -286,9 +289,10 @@ class CuratorGroupMasterOffer(UUIDMixin, Base):
 
     __tablename__ = "curator_group_master_offer"
     __table_args__ = (
-        UniqueConstraint(
+        Index(
+            "uq_curator_group_master_offer_group_user",
             "group_id", "to_user_id",
-            name="uq_curator_group_master_offer_group_user",
+            unique=True,
         ),
     )
 

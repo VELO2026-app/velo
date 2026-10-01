@@ -344,7 +344,8 @@ class ZoomGuestName(UUIDMixin, TimestampMixin, Base):
             name="ck_zoom_guest_names_display_name_not_blank",
         ),
         # Leads with practice_id, so no separate index on it -- same rule as
-        # practice_audience_curator_group (2026-08-26).
+        # the former practice_audience_curator_group (2026-08-26; dropped
+        # by BE-74).
         #
         # KNOWN CEILING -- byte-exact uniqueness admits case-variant twins.
         # Mechanics: "Аня" and "аня" are two rows a human reads as one name.
