@@ -207,6 +207,16 @@ export function removeCuratorGroupMember(id: string, userId: string): Promise<vo
   return api.delete(`${CURATOR_BASE}/${id}/members/${userId}`)
 }
 
+/** POST /masters/me/curator-groups/{id}/members/{user_id}/demote (BE-59 B1) --
+ *  a master of this school becomes a student of it again: membership kept,
+ *  the handover offered to them dropped, the person notified by the backend.
+ *  IDEMPOTENT 204: no master of this school by that id (already a student,
+ *  not a member) writes nothing. 404 only for a school that is not the
+ *  caller's (P-08). */
+export function demoteCuratorGroupMaster(id: string, userId: string): Promise<void> {
+  return api.post(`${CURATOR_BASE}/${id}/members/${userId}/demote`)
+}
+
 /** POST /masters/me/curator-groups/{id}/master-offers (GT-27) -- offer a
  *  member of this school its master role. THE APPOINTMENT DOES NOT TAKE
  *  EFFECT HERE: the roster changes only when the appointee accepts, so this

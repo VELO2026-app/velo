@@ -68,11 +68,13 @@ import * as mastersApi from '@/api/masters'
 import * as practicesApi from '@/api/practices'
 import { ApiResponseError } from '@/api/client'
 import * as chatsApi from '@/api/chats'
+import * as cgApi from '@/api/curatorGroups'
 import type { MasterPublicResponse, PracticeResponse } from '@/api/types'
 
 vi.mock('@/api/masters')
 vi.mock('@/api/practices')
 vi.mock('@/api/chats')
+vi.mock('@/api/curatorGroups')
 
 const back = vi.fn()
 const push = vi.fn()
@@ -351,7 +353,31 @@ describe('MasterPublicView', () => {
       modalButton('Изменить')?.click()
       await flush()
 
-      expect(toastInfo).toHaveBeenCalledWith('Заявка на смену роли появится позже (BE-59)')
+      // The BE-59 demote is wired: the roster's school + the page's master.
+      expect(vi.mocked(cgApi.demoteCuratorGroupMaster)).toHaveBeenCalledWith('g1', 'm1')
+      expect(toastSuccess).toHaveBeenCalledWith('Роль изменена: участник теперь ученик школы')
+    })
+
+    it('«Изменить роль»: a demote failure toasts the API error and keeps the modal open', async () => {
+      routeQuery.groupId = 'g1'
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      vi.mocked(cgApi.demoteCuratorGroupMaster).mockRejectedValue(
+        new ApiResponseError(500, 'backend said no'),
+      )
+      mount()
+      await flush()
+      await openMenu()
+
+      menuItem('Изменить роль')?.click()
+      await flush()
+      modalButton('Ученик')?.click()
+      await flush()
+      modalButton('Изменить')?.click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Не удалось изменить роль')
+      expect(liveModal()).not.toBeNull()
     })
 
     it('«Заблокировать»: draft confirm; confirm is a marked no-op until BE-79', async () => {

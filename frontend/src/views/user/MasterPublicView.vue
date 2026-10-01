@@ -223,7 +223,13 @@
         <VRadioGroup v-model="roleKind" :options="roleOptions" />
         <div class="master-public__role-actions">
           <VButton variant="danger" block @click="onRoleClose">Отмена</VButton>
-          <VButton variant="primary" block :disabled="roleConfirmDisabled" @click="onRoleConfirm">
+          <VButton
+            variant="primary"
+            block
+            :loading="demoting"
+            :disabled="roleConfirmDisabled"
+            @click="onRoleConfirm"
+          >
             Изменить
           </VButton>
         </div>
@@ -275,6 +281,7 @@ import SendMessageModal from '@/components/shared/SendMessageModal.vue'
 import TargetUserCard from '@/components/shared/TargetUserCard.vue'
 import { getPublicMaster } from '@/api/masters'
 import { getPractices } from '@/api/practices'
+import { demoteCuratorGroupMaster } from '@/api/curatorGroups'
 import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
@@ -308,11 +315,11 @@ const TAG_VARIANTS = ['blue', 'pink', 'sand'] as const
 //
 // The roster's master rows navigate here with ?groupId= -- that marker turns
 // on the action menu for the curator of THAT school. The plain public profile
-// (any other entry) renders no menu. INTERIM: change-role (a DEMOTE request --
-// its contract does not exist yet, §7.1 №6 + BE-59's extensible field) and
-// block (BE-79) confirm as marked no-ops (info toast); the copy is a draft.
+// (any other entry) renders no menu. «Изменить роль» is the BE-59 demote
+// (wired); block (BE-79) confirm remains a marked no-op (info toast).
 
-const schoolContext = computed(() => String(route.query.groupId ?? '') !== '')
+const groupId = computed(() => String(route.query.groupId ?? ''))
+const schoolContext = computed(() => groupId.value !== '')
 
 const roleOpen = ref(false)
 type MemberKind = 'student' | 'master'
@@ -333,9 +340,24 @@ function onRoleClose(): void {
   roleOpen.value = false
 }
 
-function onRoleConfirm(): void {
-  toast.info('Заявка на смену роли появится позже (BE-59)')
-  roleOpen.value = false
+// The demote (BE-59 B1): a school master becomes a student of THIS school.
+// No consent asked (owner ruling) -- the backend notifies the person. The
+// confirm is demote-only (roleConfirmDisabled guards the master pick), the
+// API is idempotent 204, so a double tap is harmless.
+const demoting = ref(false)
+
+async function onRoleConfirm(): Promise<void> {
+  if (demoting.value) return
+  demoting.value = true
+  try {
+    await demoteCuratorGroupMaster(groupId.value, masterId.value)
+    roleOpen.value = false
+    toast.success('Роль изменена: участник теперь ученик школы')
+  } catch (e) {
+    toast.error(extractApiError(e, 'Не удалось изменить роль'))
+  } finally {
+    demoting.value = false
+  }
 }
 
 const composerOpen = ref(false)
