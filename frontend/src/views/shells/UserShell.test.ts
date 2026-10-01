@@ -307,15 +307,39 @@ describe('UserShell', () => {
       expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Дневник', 'Школы', 'Я'])
     })
 
-    it('the founding right alone no longer lights the USER-zone tab', async () => {
-      // can_create_groups keeps its entrance in the MASTER zone; the user
-      // zone's condition is membership only (owner 2026-09-22).
+    it('a founding-right holder (curator, owner 2026-10-01) gets no «Дневник»; with no schools, no «Школы» either', async () => {
+      // can_create_groups keeps its entrance in the MASTER zone; in the USER
+      // zone the holder IS a curator account: the personal-diary tab is gone
+      // (owner 2026-10-01), and with zero memberships so is «Школы».
       curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({ items: [] })
       curatorGroupsMock.getCuratorGroups.mockResolvedValue({
         items: [],
         can_create_groups: true,
       })
       await mount('user-dashboard', {}, seedAccount(['user', 'master']))
+      await flush()
+      await flush()
+
+      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Я'])
+    })
+
+    it("«Дневник» stays hidden while a master-capable account's probes are unsettled (fail-closed)", async () => {
+      // A possible right holder must never see the tab flash: hidden until
+      // the master probe answers (owner 2026-10-01; both probes stalled).
+      curatorGroupsMock.getMyCuratorGroups.mockReturnValue(new Promise(() => {}))
+      curatorGroupsMock.getCuratorGroups.mockReturnValue(new Promise(() => {}))
+      await mount('user-dashboard', {}, seedAccount(['user', 'master']))
+      await flush()
+      await flush()
+
+      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Я'])
+    })
+
+    it('a plain user keeps «Дневник» from the first paint (known-non-curator, no flicker)', async () => {
+      // No master capability -> curatorship resolves with zero network
+      // round-trips, so the majority case never sees the tab flicker.
+      curatorGroupsMock.getMyCuratorGroups.mockReturnValue(new Promise(() => {}))
+      await mount('user-dashboard', {}, seedAccount(['user']))
       await flush()
       await flush()
 

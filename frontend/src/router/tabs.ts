@@ -38,14 +38,20 @@ export interface TabItem {
    *  the named server-side condition holds; VTabBar stays dumb. Omit for the
    *  unconditional default. 'schools' = the account belongs to >= 1 school
    *  (stores/schoolsHub, any relation); the MASTER zone's shell keeps the
-   *  tab also for the admin-issued founding right (can_create_groups). */
-  requires?: 'schools'
+   *  tab also for the admin-issued founding right (can_create_groups).
+   *  'diary' = the account is NOT a curator (owner 2026-10-01: a
+   *  can_create_groups holder IS a curator account -- no personal-diary
+   *  tab); resolved by the user zone's shell through schoolsHub. */
+  requires?: 'schools' | 'diary'
 }
 
 export const USER_TABS: TabItem[] = [
   { icon: IconHome, label: 'Дашборд', to: '/user/dashboard' },
   { icon: IconCalendar, label: 'Календарь', to: '/user/calendar' },
-  { icon: IconDiary, label: 'Дневник', to: '/user/diary' },
+  // Owner 2026-10-01: a founding-right holder (can_create_groups) IS a
+  // curator account -- no personal-diary tab for them (schoolsHub resolves
+  // 'diary' fail-closed, so the tab never flashes while the probe runs).
+  { icon: IconDiary, label: 'Дневник', to: '/user/diary', requires: 'diary' },
   // tz-curator.md §1.2 (owner 2026-09-22): «Школы» sits between «Дневник»
   // and «Я», shown to anyone who BELONGS to at least one school (the shell
   // filters by the schoolsHub store) -- curators, masters of, and plain
