@@ -148,14 +148,18 @@
 
         <!-- §1.6: the page's primary CTA, curator only (the page payload
              carries no per-master creation right, so relation is the one
-             honest signal). The create-flow has no audience-preselect
-             contract yet (§1.6: «если контракт маршрута это умеет»), so this
-             is a plain hand-off to it. -->
+             honest signal). The hand-off names the school -- the create
+             flow scopes its master picker to this school's masters. -->
         <VButton
           v-if="isCurator"
           variant="primary"
           block
-          @click="router.push({ name: 'master-practice-new' })"
+          @click="
+            router.push({
+              name: 'master-practice-new',
+              query: { groupId },
+            })
+          "
         >
           Создать практику
         </VButton>

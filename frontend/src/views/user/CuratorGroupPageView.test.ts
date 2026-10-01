@@ -553,7 +553,10 @@ describe('CuratorGroupPageView -- §1.6 page body', () => {
 
     buttonWith('Создать практику')?.click()
     await flush()
-    expect(push).toHaveBeenCalledWith({ name: 'master-practice-new' })
+    expect(push).toHaveBeenCalledWith({
+      name: 'master-practice-new',
+      query: { groupId: 'g1' },
+    })
   })
 
   it('a non-curator gets no edit row, no participants row and no create CTA', async () => {

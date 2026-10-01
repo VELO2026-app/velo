@@ -389,10 +389,13 @@ function goToCalendar(): void {
   })
 }
 
-// The hanging «Создать практику» CTA: same §1.6 hand-off the school page
-// uses -- the create flow has no audience-preselect contract yet.
+// The hanging «Создать практику» CTA: §1.6 hand-off naming the master --
+// the create flow preselects (and locks) this master from the query.
 function goCreatePractice(): void {
-  void router.push({ name: 'master-practice-new' })
+  void router.push({
+    name: 'master-practice-new',
+    query: { masterId: masterId.value },
+  })
 }
 
 async function loadMaster(id: string): Promise<void> {

@@ -66,6 +66,33 @@
       </div>
 
       <!-- ================================================================
+           Мастер (§1.6 delegation, STUB): whose practice this is. The
+           master-card entry preselects one master; the school-page entry
+           picks among that school's visible masters, «Я» first. No context
+           -> the caller owns the practice and this section does not render.
+           The backend cannot take a foreign master yet, so a foreign
+           target renders the notice and disables submit -- it must never
+           look like the practice was created for someone else.
+           ================================================================ -->
+      <div v-if="delegatedMaster || masterOptions.length > 1" class="create-practice__section">
+        <h2 class="velo-section-title">Мастер</h2>
+        <div class="create-practice__railed">
+          <VCard class="create-practice__repeat" padding="none">
+            <div v-if="delegatedMaster" class="create-practice__repeat-title">
+              {{ delegatedMaster.name }}
+            </div>
+            <VRadioGroup v-else v-model="selectedMasterId" :options="masterOptions" />
+          </VCard>
+          <Banner
+            v-if="targetsForeignMaster"
+            variant="warning"
+            title="Создание для другого мастера пока недоступно"
+            body="Практика будет создана, когда бэкенд научится принимать мастера. Сейчас создание доступно только от вашего имени."
+          />
+        </div>
+      </div>
+
+      <!-- ================================================================
            Использовать шаблон — prefill from one of the master's own past
            practices (newest-first). Reuses PracticeListCard rows. Date/time
            are NOT copied (a template must not schedule in the past).
@@ -371,7 +398,15 @@
       </div>
 
       <!-- Submit -->
-      <VButton variant="primary" block size="lg" :loading="submitting" @click="submit">
+      <!-- STUB (§1.6): a foreign master target cannot reach the API yet. -->
+      <VButton
+        variant="primary"
+        block
+        size="lg"
+        :loading="submitting"
+        :disabled="targetsForeignMaster"
+        @click="submit"
+      >
         Создать практику
       </VButton>
 
@@ -406,7 +441,7 @@
 import { historyHasBack } from '@/platform/history'
 import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { DateTime } from 'luxon'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import {
   VButton,
@@ -424,8 +459,10 @@ import { useAuthStore } from '@/stores/auth'
 import { useMasterStore } from '@/stores/master'
 import { createPractice, updatePractice } from '@/api/practices'
 import { getGroups } from '@/api/groups'
-import { getMyCuratorGroups } from '@/api/curatorGroups'
+import { getMyCuratorGroups, getCuratorGroupMembers } from '@/api/curatorGroups'
+import { getPublicMaster } from '@/api/masters'
 import type { GroupListItem } from '@/api/groups'
+import type { CuratorGroupMemberItem } from '@/api/types'
 import PracticeAudiencePicker from '@/components/shared/PracticeAudiencePicker.vue'
 import type { AudienceSchoolOption } from '@/components/shared/practiceAudience'
 import { formatShortDate, todayLocalISO } from '@/utils/format'
@@ -451,7 +488,66 @@ import type {
 } from '@/api/types'
 
 const router = useRouter()
+const route = useRoute()
 const toast = useToast()
+
+// §1.6 delegation: whose practice is being created. `masterId` in the query
+// (the master's public page CTA) names the master; `groupId` (the school
+// page CTA) offers that school's visible masters with «Я» first. No query
+// context -> the caller owns the practice, the historical behavior.
+//
+// STUB (owner 2026-10-01): the backend cannot create a practice for another
+// master yet (no master_id on POST /practices -- the contract is with the
+// backend task), so while a foreign master is targeted the section renders
+// the honest notice and DISABLES submit. «Я» and no-context flows behave
+// exactly as before.
+const delegatedMaster = ref<{ id: string; name: string } | null>(null)
+const schoolMasterOptions = ref<{ label: string; value: string }[]>([])
+const selectedMasterId = ref('')
+
+const targetsForeignMaster = computed(
+  () => delegatedMaster.value !== null || selectedMasterId.value !== '',
+)
+
+const masterOptions = computed(() => [{ label: 'Я', value: '' }, ...schoolMasterOptions.value])
+
+function queryParam(key: string): string {
+  const value = route.query[key]
+  return typeof value === 'string' ? value : ''
+}
+
+async function loadPracticeMasterContext(): Promise<void> {
+  const masterId = queryParam('masterId')
+  const groupId = queryParam('groupId')
+  if (masterId) {
+    try {
+      const profile = await getPublicMaster(masterId)
+      delegatedMaster.value = {
+        id: masterId,
+        name: profile.display_name ?? 'Мастер',
+      }
+    } catch {
+      // Keep the id: the backend re-validates the delegation on submit, so
+      // a cosmetic name lookup failure must not silently drop the target.
+      delegatedMaster.value = { id: masterId, name: 'Мастер' }
+    }
+    return
+  }
+  if (groupId) {
+    try {
+      const page = await getCuratorGroupMembers(groupId, { kind: 'master' })
+      schoolMasterOptions.value = page.items
+        .filter((m: CuratorGroupMemberItem) => m.is_visible && m.user_id !== authStore.user?.id)
+        .map((m: CuratorGroupMemberItem) => ({
+          label: m.name,
+          value: m.user_id,
+        }))
+    } catch {
+      // Picker falls back to «Я» alone -- the caller can still create.
+      schoolMasterOptions.value = []
+    }
+  }
+}
 
 // T24-24 (PROMPT №639): "Все ученики" -> "Все мои ученики", on THIS screen
 // ONLY -- passed to the shared PracticeAudiencePicker as `students-label`.
@@ -492,6 +588,7 @@ const customGroups = ref<GroupListItem[]>([])
 const eligibleSchools = ref<AudienceSchoolOption[]>([])
 onMounted(() => {
   void masterStore.fetchMyPractices()
+  void loadPracticeMasterContext()
   void ensureTaxonomyCatalog().then((c) => {
     catalog.value = c
   })

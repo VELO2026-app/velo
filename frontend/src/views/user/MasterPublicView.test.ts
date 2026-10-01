@@ -668,7 +668,10 @@ describe('MasterPublicView', () => {
       expect(cta?.textContent).toContain('Создать практику')
 
       cta!.click()
-      expect(push).toHaveBeenCalledWith({ name: 'master-practice-new' })
+      expect(push).toHaveBeenCalledWith({
+        name: 'master-practice-new',
+        query: { masterId: 'm1' },
+      })
     })
   })
 
