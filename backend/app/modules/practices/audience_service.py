@@ -511,9 +511,10 @@ async def assert_viewer_not_blocked(
     without the audience branches.
 
     RETROACTIVE POLICY (B) (H-R2-8): the dedicated entry point for
-    diary/checkins_service.py upsert_checkin. Check-in runs only for
-    holders of a CONFIRMED booking (booking-first, NotFound without one),
-    and decision (B) grandfathers that paid access through audience
+    diary/checkins_service.py upsert_checkin. It runs only for holders of
+    a live (not cancelled) booking -- booking-first, NotFound without one;
+    a check-in itself still needs CONFIRMED (BE-92) -- and decision (B)
+    grandfathers that paid access through audience
     NARROWING: narrowing is an impersonal reconfiguration and must not
     retroactively strip access already bought. A personal BLOCK is
     targeted moderation and still refuses the ACTION. A separate
@@ -528,8 +529,8 @@ async def assert_viewer_not_blocked(
 
     OWNER BYPASS mirrored from the parent (P5 hardening, ПРОМТ №596),
     and the parent's old inertness argument for check-in lives HERE now:
-    unreachable transitively -- upsert_checkin requires an existing
-    CONFIRMED Booking, and a booking can only be created via the gated
+    unreachable transitively -- upsert_checkin requires an existing live
+    Booking, and a booking can only be created via the gated
     paths (create_booking / confirm_waitlist), both of which reject a
     master acting on their own practice. Kept anyway so this function,
     like its parent, does not depend on that caller discipline
@@ -540,10 +541,17 @@ async def assert_viewer_not_blocked(
     confirmed bookings, and the check-in window closes AT scheduled_at
     -- so any practice still check-in-able is "future" and its booking
     is cancelled by the block itself, landing on the booking-first
-    NotFound. This 403 is therefore reachable only if blocked_at and a
-    CONFIRMED booking coexist (flow changes, re-confirmation after an
-    unblock..re-block, or direct state) -- kept as the belt to that
-    flow's suspenders, not dead code.
+    NotFound. Before the start this 403 is therefore reachable only if
+    blocked_at and a CONFIRMED booking coexist (flow changes,
+    re-confirmation after an unblock..re-block, or direct state) -- kept
+    as the belt to that flow's suspenders, not dead code. After the start
+    it is reachable directly (BE-92): the block leaves PAST bookings
+    alone, and upsert_checkin now reaches this probe for any live booking
+    (confirmed, attended, no_show), so a blocked viewer of a past practice
+    gets this 403 rather than "window closed". The same holds before the
+    start for a PENDING booking: the block cancels only CONFIRMED future
+    ones, and a pending one now reaches this probe too (it used to stop
+    at the booking-first NotFound).
     """
     if practice.master_id == user_id:
         return

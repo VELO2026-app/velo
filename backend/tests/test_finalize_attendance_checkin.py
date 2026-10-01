@@ -357,7 +357,12 @@ async def _feedback_notifs(session: AsyncSession, practice_id) -> list:
             OutboxEvent.event_type == "notification_request",
             OutboxEvent.payload["type"].astext
             == "prompt.leave_feedback",
-            OutboxEvent.payload["action_data"]["practice_id"].astext
+            # The practice is read from the deep link's params. A
+            # top-level action_data.practice_id used to sit beside it as
+            # a correlation key for the old letter-reading cancel; comms
+            # 3.0.0 cancels by the envelope and the prompt is never
+            # cancelled, so that copy is gone.
+            OutboxEvent.payload["action_data"]["params"]["practice_id"].astext
             == str(practice_id),
         )
     )

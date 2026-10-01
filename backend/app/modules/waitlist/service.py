@@ -370,6 +370,12 @@ async def confirm_waitlist(
         from app.core.events.notify import emit_notification
         await emit_notification(
             session,
+            # A waitlist row is REUSED (re-join, spot taken -> back to
+            # WAITING), so the entry id alone is not the fact: one HOLD
+            # is, and its deadline identifies it.
+            idempotency_key=(
+                f"waitlist-expired:{entry.id}:{entry.expires_at.isoformat()}"
+            ),
             type="waitlist.expired",
             target_type="user",
             target_value=str(entry.user_id),
@@ -511,6 +517,7 @@ async def confirm_waitlist(
     # reminder series in the same transaction (dictionary §2, ID-2).
     from app.core.events.notify import emit_notification
     from app.core.events.reminders import (
+        BOOKED_ACT,
         format_event_time,
         schedule_booking_reminders,
     )
@@ -520,6 +527,7 @@ async def confirm_waitlist(
     when_text = format_event_time(practice.scheduled_at)
     await emit_notification(
         session,
+        idempotency_key=f"booking-confirmed:{booking.id}",
         type="booking.confirmed",
         target_type="user",
         target_value=str(user.id),
@@ -544,6 +552,7 @@ async def confirm_waitlist(
         practice_title=practice.title,
         master_name=master_name,
         scheduled_at=practice.scheduled_at,
+        act=BOOKED_ACT,
     )
 
     # Update cached participant count (Frontend Backlog A-03).
@@ -622,6 +631,12 @@ async def process_waitlist(
     expires_text = format_event_time(entry.expires_at)
     await emit_notification(
         session,
+        # One HOLD, not one entry: the row is reused across holds (re-join,
+        # spot taken -> back to WAITING), and each hold's deadline is set
+        # just above.
+        idempotency_key=(
+            f"waitlist-spot:{entry.id}:{entry.expires_at.isoformat()}"
+        ),
         type="waitlist.spot_available",
         target_type="user",
         target_value=str(entry.user_id),
@@ -640,7 +655,6 @@ async def process_waitlist(
             "master_name": master_name,
             "expires_at": expires_text,
         },
-        priority=2,
         expiry_at=entry.expires_at,
     )
 

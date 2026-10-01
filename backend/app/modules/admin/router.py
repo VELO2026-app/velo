@@ -24,6 +24,8 @@
 # each sub-router, not globally here.
 # =============================================================================
 
+from uuid import uuid4
+
 import structlog
 from fastapi import APIRouter, Depends
 
@@ -112,8 +114,16 @@ async def create_announcement(
     target_type, target_value = (
         TARGET_ALL if request.audience == "all" else TARGET_GROUP_MASTERS
     )
+    # THE FACT IS THE ADMIN'S PRESS, and it has no row of its own: an
+    # announcement is not stored anywhere but the outbox, so there is no
+    # domain id to name it by. A fresh key per request is therefore the
+    # honest identity -- two presses are two announcements. The relay's
+    # own replays still collapse in comms, because the key travels inside
+    # the one outbox row. A client-supplied key is a different contract
+    # (the resource protocol's Idempotency-Key) and not this endpoint's.
     event = await emit_notification(
         session,
+        idempotency_key=f"announcement:{uuid4().hex}",
         type="system.announcement",
         target_type=target_type,
         target_value=target_value,

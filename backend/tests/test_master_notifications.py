@@ -225,7 +225,7 @@ async def _cancel_events(session: AsyncSession) -> list[dict]:
     rows = (
         await session.execute(
             select(OutboxEvent)
-            .where(OutboxEvent.payload["correlation_key"].astext.isnot(None))
+            .where(OutboxEvent.event_type == "reminder_cancel")
             .order_by(OutboxEvent.id)
         )
     ).scalars().all()
@@ -265,7 +265,10 @@ async def _pull_practice_into_checkin_window(
 
 
 def _load_profile() -> dict:
-    return yaml.safe_load((_profile_dir() / "types.yaml").read_text())
+    """The type records -- under `types:` since the profile's schema v2."""
+    doc = yaml.safe_load((_profile_dir() / "types.yaml").read_text())
+    assert doc["version"] == 2
+    return doc["types"]
 
 
 def _category_of(type_key: str) -> str | None:
@@ -411,9 +414,12 @@ async def test_publishing_schedules_the_masters_own_reminder(
 ) -> None:
     """One reminder, to the master, an hour before his own session.
 
-    Correlated by practice_id and NOT by booking_id: the reminder belongs
-    to the practice, and the missing key is asserted because its presence
-    would quietly opt this reminder into the per-booking cancel as well.
+    Correlated by the practice and NOT by a booking: the reminder belongs
+    to the practice. Since comms 3.0.0 the correlation is one ENVELOPE
+    string, so the test reads "practice:<id>" there; it used to read
+    action_data.practice_id and assert action_data.booking_id absent --
+    the letter-field correlation 3.0.0 no longer reads. The letter now
+    carries no correlation key at all, which is asserted too.
     """
     master = await _make_verified_master(client, db_session, _TID_MASTER)
     practice_id = await _create_and_publish(client, master)
@@ -424,7 +430,9 @@ async def test_publishing_schedules_the_masters_own_reminder(
     assert len(events) == 1
     payload = events[0]
     assert payload["target_value"] == master["user"]["id"]
-    assert payload["action_data"]["practice_id"] == practice_id
+    assert payload["correlation"] == f"practice:{practice_id}"
+    assert payload["action_data"]["params"] == {"practice_id": practice_id}
+    assert "practice_id" not in payload["action_data"]
     assert "booking_id" not in payload["action_data"]
 
 
@@ -454,11 +462,17 @@ async def test_cancelling_the_practice_cancels_the_masters_reminder(
 ) -> None:
     """The cancel event must NAME the master's type.
 
-    comms expires `Notification.type.in_(types)` AND the correlation, so a
+    comms cancels `Notification.type.in_(types)` AND the correlation, so a
     type absent from the list survives the cancellation of its own
     practice -- it would fire an hour before a session that no longer
-    exists. The booking types are asserted alongside: this list is
-    additive, not a replacement.
+    exists.
+
+    This test used to assert the booking types in the SAME list: one
+    practice-wide cancel then covered both series, matched on letter
+    fields. comms 3.0.0 matches the job's one envelope correlation, so
+    the master's cancel carries "practice:<id>" and only the master's
+    type; a participant's series is cancelled by its own booking's
+    correlation (asserted in test_comms_protocol_3.py).
     """
     master = await _make_verified_master(client, db_session, _TID_MASTER)
     practice_id = await _create_and_publish(client, master)
@@ -475,12 +489,11 @@ async def test_cancelling_the_practice_cancels_the_masters_reminder(
 
     cancels = [
         c for c in await _cancel_events(db_session)
-        if c.get("correlation_value") == practice_id
+        if c.get("correlation") == f"practice:{practice_id}"
     ]
-    assert cancels, "no reminder_cancel was emitted for the practice"
-    named = cancels[-1]["types"]
-    assert MASTER_REMINDER_TYPE in named
-    assert set(BOOKING_REMINDER_TYPES) <= set(named)
+    assert len(cancels) == 1, "no reminder_cancel was emitted for the practice"
+    assert cancels[0]["types"] == [MASTER_REMINDER_TYPE]
+    assert "target_type" not in cancels[0]
 
 
 @pytest.mark.asyncio
@@ -511,10 +524,14 @@ async def test_rescheduling_re_anchors_the_masters_reminder(
     assert events[0]["action_data"]["scheduled_at"] != (
         events[1]["action_data"]["scheduled_at"]
     )
+    # The re-anchored reminder must NOT reuse the cancelled one's key:
+    # comms holds a key forever, and a reused key would be refused as a
+    # conflict -- the moved practice would have no reminder at all.
+    assert events[0]["idempotency_key"] != events[1]["idempotency_key"]
 
     cancels = [
         c for c in await _cancel_events(db_session)
-        if c.get("correlation_value") == practice_id
+        if c.get("correlation") == f"practice:{practice_id}"
     ]
     assert cancels and MASTER_REMINDER_TYPE in cancels[-1]["types"]
 
@@ -552,7 +569,11 @@ async def test_every_session_of_a_series_reminds_the_master(
     events = await _events(
         db_session, type_=MASTER_REMINDER_TYPE, to=master,
     )
-    practice_ids = {e["action_data"]["practice_id"] for e in events}
+    practice_ids = {e["action_data"]["params"]["practice_id"] for e in events}
+    # One correlation per occurrence, each its own practice's.
+    assert {e["correlation"] for e in events} == {
+        f"practice:{pid}" for pid in practice_ids
+    }
     assert len(events) == 4
     assert len(practice_ids) == 4
 

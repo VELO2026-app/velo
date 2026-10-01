@@ -767,7 +767,8 @@ class TestProfile:
         dictionary, it renders for a type nobody can send.
         """
         profile = _profile_dir()
-        types = yaml.safe_load((profile / "types.yaml").read_text())
+        # Schema v2: the records live under `types:`.
+        types = yaml.safe_load((profile / "types.yaml").read_text())["types"]
         assert _TYPE in types
 
         for locale in ("ru", "en"):
@@ -787,9 +788,17 @@ class TestProfile:
         would lose a role, silencing this loses an announcement still
         visible on the school's page.
         """
-        types = yaml.safe_load((_profile_dir() / "types.yaml").read_text())
+        types = yaml.safe_load(
+            (_profile_dir() / "types.yaml").read_text()
+        )["types"]
         assert types[_TYPE]["category"] == "curator_groups"
         assert types["curator_group.member_joined"]["category"] == (
             "curator_groups"
         )
-        assert types["curator_group.transfer_offered"] is None
+        # "No category" used to read as an empty record (`is None`). Since
+        # 3.0.0 the record also carries the type's channels, so it is not
+        # empty any more -- the property is the absent category, paired
+        # with the record actually being there.
+        offered = types["curator_group.transfer_offered"]
+        assert "category" not in offered
+        assert offered["channels"] == ["in_app", "telegram"]

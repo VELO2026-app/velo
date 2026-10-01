@@ -42,6 +42,11 @@ CuratorGroupDescriptionStr = Annotated[str, StringConstraints(max_length=500)]
 
 CuratorMemberKindLiteral = Literal["master", "student"]
 
+# BE-59: models.py::CuratorMasterOfferState, as the response spells it.
+CuratorMasterOfferStateLiteral = Literal[
+    "awaiting_verification", "awaiting_answer",
+]
+
 # ===========================================================================
 # The school's avatar url (GT-17)
 #
@@ -268,6 +273,11 @@ class CuratorGroupMemberItem(BaseModel):
     master as a row with is_visible=false -- "in the shadow" -- rather than
     watching them vanish, because the row is real and comes back by itself
     when the admin re-verifies.
+
+    master_offer (BE-59) -- the curator's pending appointment of this
+    member: awaiting_verification while they are not a verified master,
+    awaiting_answer once they are; null when there is none. Live, like
+    is_visible: a verification or a revocation moves it with no write.
     """
 
     user_id: UUID
@@ -276,6 +286,7 @@ class CuratorGroupMemberItem(BaseModel):
     kind: CuratorMemberKindLiteral
     joined_at: datetime
     is_visible: bool
+    master_offer: CuratorMasterOfferStateLiteral | None = None
 
 
 class PaginatedCuratorGroupMembersResponse(BaseModel):
@@ -732,3 +743,84 @@ class PaginatedCuratorGroupReviewsResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+# ===========================================================================
+# School student profile (BE-54)
+# ===========================================================================
+#
+# THE SCORES ARE RAW 1..10 IN BOTH ITEMS, and that is the contract. BE-24's
+# two school feeds bucket them, because a notification and a feed card are
+# read at a glance; this screen is a dossier, and turning a number into a
+# face is the frontend's single responsibility here. The field names are the
+# ones the writing forms use -- `mood` on a check-in, `rating` on a review --
+# so nobody has to translate between what was typed and what is shown.
+#
+# `practice_id` and `practice_title` ride along because a school's practices
+# belong to several masters: without the title the reader cannot tell which
+# class a remark is about. The master's own CRM dossier
+# (masters/students_schemas.py) carries neither, and correctly -- there
+# every practice is his.
+
+
+class SchoolStudentCheckinItem(BaseModel):
+    """One PRE check-in the student left on a practice of this school.
+
+    POST check-ins never appear, and neither do check-ins whose booking was
+    cancelled: both are absent from the practice's own master's roster, and
+    the school does not see deeper than the person who taught.
+    """
+
+    mood: int
+    comment: str | None
+    practice_id: UUID
+    practice_title: str
+    created_at: datetime
+
+
+class SchoolStudentFeedbackItem(BaseModel):
+    """One review the student left on a practice of this school.
+
+    Unlike the check-ins above this list carries NO booking-status filter,
+    and the asymmetry is deliberate: a review the practice's master reads is
+    a review the school may read, and the master's own review feeds do not
+    filter by booking either (BE-24).
+    """
+
+    rating: int
+    comment: str | None
+    practice_id: UUID
+    practice_title: str
+    created_at: datetime
+
+
+class SchoolStudentProfileResponse(BaseModel):
+    """GET /masters/me/curator-groups/{group_id}/students/{user_id}.
+
+    What the school knows about one of its students, across every practice
+    of the school -- including practices taught by other masters, and
+    including practices whose master has since left. Belonging is a fact
+    about the practice, not about anybody's current membership (owner
+    ruling, 10 September).
+
+    practices_count -- practices of this school the student ATTENDED.
+    hours           -- their duration summed, in hours, one decimal,
+                       rounded on the server: the client does not compute
+                       this (TZ 1.13.3).
+    Both are zero, and the arrays empty, for a student who has attended
+    nothing -- a 200, never a 404.
+
+    master_offer (BE-59) -- the state of the curator's pending appointment
+    of this student, as on the roster. Filled for the CURATOR only; a
+    master of the school reads null whatever the state, as a member
+    outside a transfer reads null for it.
+    """
+
+    user_id: UUID
+    display_name: str
+    avatar_url: str | None
+    practices_count: int
+    hours: float
+    master_offer: CuratorMasterOfferStateLiteral | None = None
+    recent_checkins: list[SchoolStudentCheckinItem]
+    recent_feedbacks: list[SchoolStudentFeedbackItem]

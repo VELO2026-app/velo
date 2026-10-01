@@ -117,7 +117,10 @@ from app.modules.practices.schemas import (
     PracticeResponse,
     UpdatePracticeRequest,
 )
-from app.modules.practices.series_service import generate_series_occurrences
+from app.modules.practices.series_service import (
+    add_curator_group_audience_row,
+    generate_series_occurrences,
+)
 from app.modules.practices.taxonomy_models import TaxonomyDirection, TaxonomyStyle
 from app.modules.users.models import User
 
@@ -328,11 +331,16 @@ async def _set_practice_audience_curator_groups(
         )
     )
     for group_id in group_ids:
-        session.add(
-            PracticeAudienceCuratorGroup(
-                practice_id=practice_id, group_id=group_id,
+        # BE-95 F7: the schools were validated by _member_curator_group_ids_
+        # or_400 a moment ago; one deleted since then used to fail its FK
+        # here as a 500. It is the same fact the validation refuses -- not
+        # an active school you belong to -- so it gets the same 400.
+        if not await add_curator_group_audience_row(
+            practice_id, group_id, session,
+        ):
+            raise BadRequestError(
+                "curator_group_ids must be active schools you belong to"
             )
-        )
     await session.flush()
 
 
@@ -1915,18 +1923,29 @@ async def update_practice(
         # Comms (T1, dictionary §2): practice.rescheduled (ONLY a time
         # move -- this branch already gates on scheduled_at actually
         # changing) fanned out to every booked user (velo expands the
-        # domain audience, ID-4), and the reminder series is moved to
-        # the new anchor: cancel by practice_id correlation +
-        # re-schedule per active booking (donor rule: reschedule =
-        # cancel + schedule by the caller). Same transaction as the
-        # update (ID-2).
+        # domain audience, ID-4), and every reminder is moved to the new
+        # anchor: cancel (one per booking by its "booking:<id>"
+        # correlation, plus the master's by "practice:<id>") + re-schedule
+        # (donor rule: reschedule = cancel + schedule by the caller). Same
+        # transaction as the update (ID-2).
+        #
+        # ONE ACT, ONE IDENTITY: `act` names this move in every key it
+        # emits (core/events/reminders.py header). A key without it would
+        # collide with the cancelled series of the previous anchor -- comms
+        # holds a key forever -- and the moved practice would have no
+        # reminders. Minting is safe because this branch runs only when
+        # scheduled_at actually changed, on the row locked FOR UPDATE
+        # above: a repeated request to the same time never reaches here.
         from app.core.events.notify import emit_notification
         from app.core.events.reminders import (
+            BookingRef,
             cancel_practice_reminders,
             format_event_time,
+            new_reschedule_act,
             schedule_booking_reminders,
             schedule_master_practice_reminder,
         )
+        act = new_reschedule_act()
         from app.modules.bookings.models import Booking, BookingStatus
         booked_stmt = (
             select(Booking)
@@ -1942,6 +1961,9 @@ async def update_practice(
         for booking in booked:
             await emit_notification(
                 session,
+                idempotency_key=(
+                    f"practice-rescheduled:{act}:{booking.user_id}"
+                ),
                 type="practice.rescheduled",
                 target_type="user",
                 target_value=str(booking.user_id),
@@ -1959,7 +1981,14 @@ async def update_practice(
                 },
             )
         await cancel_practice_reminders(
-            session, practice_id=str(practice.id),
+            session,
+            practice_id=str(practice.id),
+            bookings=[
+                BookingRef(
+                    booking_id=str(booking.id), user_id=str(booking.user_id),
+                )
+                for booking in booked
+            ],
         )
         for booking in booked:
             await schedule_booking_reminders(
@@ -1970,9 +1999,10 @@ async def update_practice(
                 practice_title=practice.title,
                 master_name=master_name,
                 scheduled_at=new_scheduled_at,
+                act=act,
             )
         # BE-33: the master's own reminder rides the same cancel above
-        # (practice_id correlation, MASTER_REMINDER_TYPES) and has to be
+        # ("practice:<id>" correlation, MASTER_REMINDER_TYPES) and has to be
         # re-anchored here for the same reason the series is -- it is not
         # per-booking, so it sits outside the loop and happens even for a
         # practice nobody has booked.
@@ -1982,6 +2012,7 @@ async def update_practice(
             master_user_id=str(practice.master_id),
             practice_title=practice.title,
             scheduled_at=new_scheduled_at,
+            act=act,
         )
 
         # E21: keep the Zoom meeting's start time in sync, then re-fetch and
@@ -2032,6 +2063,7 @@ async def update_practice(
         and practice.status == PracticeStatus.SCHEDULED.value
         and practice.scheduled_at is not None
     ):
+        from app.core.events.reminders import PUBLISHED_ACT
         from app.core.events.reminders import (
             schedule_master_practice_reminder as _schedule_master_reminder,
         )
@@ -2041,6 +2073,7 @@ async def update_practice(
             master_user_id=str(practice.master_id),
             practice_title=practice.title,
             scheduled_at=practice.scheduled_at,
+            act=PUBLISHED_ACT,
         )
 
     # BE-30: tell the target schools their teacher opened something.

@@ -13,6 +13,7 @@ from uuid import UUID
 
 import structlog
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import record_audit
@@ -82,6 +83,25 @@ async def _cancel_one(
     affected_user_ids = list(
         (await session.execute(affected_ids_stmt)).scalars().all()
     )
+
+    # Comms (3.0.0): the bookings whose reminder series this cancellation
+    # must cancel -- collected BEFORE the refund for the same reason as the
+    # users above, and it matters more here: a booking's series is
+    # cancelled by its own "booking:<id>" correlation, so a list read
+    # after the refund would be empty and every participant's reminders
+    # would survive the practice. The set is exactly the refund's
+    # (refund_all_bookings_for_practice: PENDING + CONFIRMED) -- every
+    # booking this cancellation cancels, the per-booking rule of
+    # cancel_booking applied to each. A booking cancelled earlier had its
+    # series cancelled then.
+    reminder_refs_stmt = select(Booking.id, Booking.user_id).where(
+        Booking.practice_id == practice.id,
+        Booking.status.in_({
+            BookingStatus.PENDING.value,
+            BookingStatus.CONFIRMED.value,
+        }),
+    )
+    reminder_rows = (await session.execute(reminder_refs_stmt)).all()
 
     # Comms (T1, dictionary §2): the waitlist branch of the
     # cancellation gets its own type (practice.cancelled_waitlist) --
@@ -176,11 +196,13 @@ async def _cancel_one(
     # Comms (T1, dictionary §2): practice.cancelled to every booked
     # user + practice.cancelled_waitlist (its own sheet, type #16) to
     # the queue -- both audiences are DOMAIN relations, expanded by
-    # velo into per-user emits (C-boundary ID-4). The practice's whole
-    # pending reminder series is expired by practice_id correlation.
+    # velo into per-user emits (C-boundary ID-4). Every pending reminder
+    # of the practice is cancelled as a fan-out: one cancel per booking
+    # collected above, plus the master's (cancel_practice_reminders).
     # All in the cancellation's transaction (ID-2).
     from app.core.events.notify import emit_notification
     from app.core.events.reminders import (
+        BookingRef,
         cancel_practice_reminders,
         format_event_time,
     )
@@ -188,6 +210,7 @@ async def _cancel_one(
     for uid in affected_user_ids:
         await emit_notification(
             session,
+            idempotency_key=f"practice-cancelled:{practice.id}:{uid}",
             type="practice.cancelled",
             target_type="user",
             target_value=str(uid),
@@ -206,6 +229,7 @@ async def _cancel_one(
     for uid in waitlisted_user_ids:
         await emit_notification(
             session,
+            idempotency_key=f"practice-cancelled-waitlist:{practice.id}:{uid}",
             type="practice.cancelled_waitlist",
             target_type="user",
             target_value=str(uid),
@@ -222,7 +246,12 @@ async def _cancel_one(
             },
         )
     await cancel_practice_reminders(
-        session, practice_id=str(practice.id),
+        session,
+        practice_id=str(practice.id),
+        bookings=[
+            BookingRef(booking_id=str(bid), user_id=str(uid))
+            for bid, uid in reminder_rows
+        ],
     )
 
     # BE-21: two things only a CURATOR cancellation produces.
@@ -271,6 +300,7 @@ async def _cancel_one(
         group_names = ", ".join(g.name for g in groups)
         await emit_notification(
             session,
+            idempotency_key=f"practice-cancelled-by-curator:{practice.id}",
             type="practice.cancelled_by_curator",
             target_type="user",
             target_value=str(practice.master_id),
@@ -288,22 +318,35 @@ async def _cancel_one(
                 "group_name": group_names,
             },
         )
+        # BE-95 F8: one savepoint per school, as announce_published_practice
+        # does (curator_groups/service.py). A school deleted since the read
+        # above fails its journal row on the FK, and that used to fail the
+        # cancellation itself with a 500 -- after the refunds had been
+        # computed. Its journal went with it; the row is skipped.
         for group in groups:
-            _record_group_event(
-                group.id,
-                user,
-                CuratorGroupEventKind.PRACTICE_CANCELLED,
-                session,
-                data={
-                    "practice_id": str(practice.id),
-                    "practice_title": practice.title,
-                },
-            )
+            try:
+                async with session.begin_nested():
+                    _record_group_event(
+                        group.id,
+                        user,
+                        CuratorGroupEventKind.PRACTICE_CANCELLED,
+                        session,
+                        data={
+                            "practice_id": str(practice.id),
+                            "practice_title": practice.title,
+                        },
+                    )
+                    await session.flush()
+            except IntegrityError:
+                continue
 
-    # E21: best-effort delete the practice's Zoom meeting so a cancelled
-    # session can't still be joined via a still-live personal link. Skips
-    # meetings that already have attendance segments, and never raises --
-    # refunds/cancellation must proceed regardless of Zoom's outcome.
+    # E21: the practice's Zoom meeting goes dead with the practice, so a
+    # cancelled session can't still be joined via a still-live personal
+    # link: an active meeting's row is marked deleted here and the
+    # Zoom-side DELETE is queued for the retry poller -- no Zoom HTTP
+    # inside this transaction.
+    # Skips meetings that already have attendance segments, and never
+    # raises -- refunds/cancellation must proceed regardless of Zoom.
     from app.modules.zoom.service import delete_meeting_for_practice
     await delete_meeting_for_practice(practice, session)
 

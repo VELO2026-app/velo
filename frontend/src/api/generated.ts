@@ -462,6 +462,7 @@ export interface BookingWithPracticeResponse {
   has_checkin: boolean
   practice: PracticeSummary
   zoom_registrant_join_url?: string | null
+  zoom_registrant_link_unavailable?: boolean
 }
 
 /** DELETE /api/v1/bookings/{id} -- optional body. */
@@ -717,7 +718,7 @@ export interface CuratorGroupMasterOfferRequest {
   to_user_id: string
 }
 
-/** One row of a curator group's roster. is_visible is ALWAYS true for a student and reflects the live MasterProfile status for a master (I-4). The curator sees a suspended master as a row with is_visible=false -- "in the shadow" -- rather than watching them vanish, because the row is real and comes back by itself when the admin re-verifies. */
+/** One row of a curator group's roster. is_visible is ALWAYS true for a student and reflects the live MasterProfile status for a master (I-4). The curator sees a suspended master as a row with is_visible=false -- "in the shadow" -- rather than watching them vanish, because the row is real and comes back by itself when the admin re-verifies. master_offer (BE-59) -- the curator's pending appointment of this member: awaiting_verification while they are not a verified master, awaiting_answer once they are; null when there is none. Live, like is_visible: a verification or a revocation moves it with no write. */
 export interface CuratorGroupMemberItem {
   user_id: string
   name: string
@@ -725,6 +726,7 @@ export interface CuratorGroupMemberItem {
   kind: 'master' | 'student'
   joined_at: string
   is_visible: boolean
+  master_offer?: 'awaiting_verification' | 'awaiting_answer' | null
 }
 
 /** One row of GET /curator-groups/mine. `relation` is the viewer's own tie to this group and is what the frontend keys the row's chip off. `transfer_offered` is true ONLY for the person being offered the group, and it is a bool rather than the full ref on purpose: this is a list row, and everything the offer contains is already known to whoever it was made to. The curator sees false here even for their own pending offer -- the list says "somebody is waiting on YOU", and nobody is. Until GT-4 the field was absent because a field that is always false is a promise with no writer behind it. */
@@ -1661,6 +1663,36 @@ export interface ScheduleIn {
   days: string[]
 }
 
+/** One PRE check-in the student left on a practice of this school. POST check-ins never appear, and neither do check-ins whose booking was cancelled: both are absent from the practice's own master's roster, and the school does not see deeper than the person who taught. */
+export interface SchoolStudentCheckinItem {
+  mood: number
+  comment: string | null
+  practice_id: string
+  practice_title: string
+  created_at: string
+}
+
+/** One review the student left on a practice of this school. Unlike the check-ins above this list carries NO booking-status filter, and the asymmetry is deliberate: a review the practice's master reads is a review the school may read, and the master's own review feeds do not filter by booking either (BE-24). */
+export interface SchoolStudentFeedbackItem {
+  rating: number
+  comment: string | null
+  practice_id: string
+  practice_title: string
+  created_at: string
+}
+
+/** GET /masters/me/curator-groups/{group_id}/students/{user_id}. What the school knows about one of its students, across every practice of the school -- including practices taught by other masters, and including practices whose master has since left. Belonging is a fact about the practice, not about anybody's current membership (owner ruling, 10 September). practices_count -- practices of this school the student ATTENDED. hours -- their duration summed, in hours, one decimal, rounded on the server: the client does not compute this (TZ 1.13.3). Both are zero, and the arrays empty, for a student who has attended nothing -- a 200, never a 404. master_offer (BE-59) -- the state of the curator's pending appointment of this student, as on the roster. Filled for the CURATOR only; a master of the school reads null whatever the state, as a member outside a transfer reads null for it. */
+export interface SchoolStudentProfileResponse {
+  user_id: string
+  display_name: string
+  avatar_url: string | null
+  practices_count: number
+  hours: number
+  master_offer?: 'awaiting_verification' | 'awaiting_answer' | null
+  recent_checkins: SchoolStudentCheckinItem[]
+  recent_feedbacks: SchoolStudentFeedbackItem[]
+}
+
 export interface SendMessageIn {
   topic?: string | null
   body: string
@@ -1962,7 +1994,7 @@ export interface WithdrawalResponse {
 
 /** GET /api/v1/practices/{id}/zoom/resolve (T-35) -- the SERVER's answer to "how does this person enter this practice right now". The choice itself lives on the server (zoom/service.py's resolve_zoom_entry) and this schema only transports it: the client renders `kind` and never decides between two links. That is the point of the endpoint -- the old ladder lived in frontend/src/utils/zoomLink.ts, where it was a rule every entry point had to remember, and a rule cannot be enforced by construction. url is deliberately nullable on TWO kinds, and a caller must handle both without collapsing either into 'failed': - 'host' -- by design; the master starts his own meeting through the existing start-ticket flow, never through a stored URL. - 'guest' -- when ensure_shared_registrant never succeeded. The meeting exists; only the guest seat in it does not. */
 export interface ZoomEntryResolveResponse {
-  kind: 'personal' | 'host' | 'guest' | 'pending' | 'failed' | 'cancelled'
+  kind: 'personal' | 'host' | 'guest' | 'pending' | 'failed' | 'cancelled' | 'unavailable'
   url?: string | null
 }
 

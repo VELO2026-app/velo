@@ -48,8 +48,9 @@ EVENT_USER_UPSERTED = "user_upserted"
 EVENT_GROUP_CHANGED = "group_changed"
 # Additive T1 extension of the frozen 3c contract (Master-chat
 # approved 2026-07-28; ships in the comms delivery raked out FIRST --
-# provider before product, arch decision 8): expires PENDING reminders
-# by correlation, mirroring comms engine/reminders.cancel_reminders.
+# provider before product, arch decision 8): cancels the active jobs of
+# the given types whose ENVELOPE correlation equals the given one
+# (comms 3.0.0, engine/reminders.cancel_reminders; never by the letter).
 EVENT_REMINDER_CANCEL = "reminder_cancel"
 
 KNOWN_EVENT_TYPES = frozenset(

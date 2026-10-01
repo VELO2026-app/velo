@@ -35,6 +35,7 @@ from uuid import UUID
 
 import structlog
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
@@ -75,7 +76,7 @@ async def _needs_attention_map(
             Practice.master_id == master_id,
             Feedback.user_id.in_(student_ids),
         )
-        .distinct(Feedback.user_id)
+        .ext(distinct_on(Feedback.user_id))
         .order_by(Feedback.user_id, Feedback.created_at.desc())
     )
     rows = (await session.execute(stmt)).all()

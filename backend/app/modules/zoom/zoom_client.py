@@ -451,19 +451,51 @@ async def get_participants_report(
     zoom_meeting_id: str,
     include_registrant_id: bool,
 ) -> list[dict]:
-    """Fetch the post-meeting participants report.
+    """Fetch the post-meeting participants report -- EVERY page of it.
 
     include_registrant_id toggles include_fields=registrant_id -- E21
     research could not confirm whether that parameter changes anything;
     the caller (attendance-decision step, not this one) calls both ways
     and reconciles.
+
+    PAGINATION (BE-41). Zoom returns at most 300 rows per page plus a
+    next_page_token while more remain; an empty or absent token ends the
+    report. Reading only the first page -- as this function once did --
+    handed every participant past row 300 a no_show verdict decided "via
+    Zoom", authoritative and wrong. Two ways the walk can go bad, and both
+    RAISE rather than return what was read, because a partial report is
+    worse than none (the caller treats a raise as "not ingested yet", and
+    the deadline fallback bounds that):
+      - the same token comes back twice (a broken cursor would otherwise
+        spin until the cap);
+      - settings.zoom_report_max_pages pages were read and a token is
+        still pending.
     """
-    params: dict = {"page_size": 300}
-    if include_registrant_id:
-        params["include_fields"] = "registrant_id"
-    data = await _request(
-        "GET",
-        f"/report/meetings/{zoom_meeting_id}/participants",
-        params=params,
+    rows: list[dict] = []
+    token: str | None = None
+    seen_tokens: set[str] = set()
+    for _ in range(settings.zoom_report_max_pages):
+        params: dict = {"page_size": 300}
+        if include_registrant_id:
+            params["include_fields"] = "registrant_id"
+        if token:
+            params["next_page_token"] = token
+        data = await _request(
+            "GET",
+            f"/report/meetings/{zoom_meeting_id}/participants",
+            params=params,
+        )
+        rows.extend(data.get("participants", []))
+        token = data.get("next_page_token") or None
+        if token is None:
+            return rows
+        if token in seen_tokens:
+            raise ZoomAPIError(
+                "Zoom participants report: next_page_token repeated "
+                f"after {len(seen_tokens) + 1} pages"
+            )
+        seen_tokens.add(token)
+    raise ZoomAPIError(
+        "Zoom participants report: page cap reached with a token pending "
+        f"({settings.zoom_report_max_pages} pages)"
     )
-    return data.get("participants", [])

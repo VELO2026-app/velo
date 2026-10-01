@@ -14,6 +14,24 @@
 # reused for the same reason cancel_booking() calls it.
 #
 # SESSION RULES: no session.commit() here (P-01) -- the router flushes.
+#
+# LOCK ORDER (the module's one record of it; every writer here follows it):
+#
+#   master_student (the (master, student) row) -> Practice (by id)
+#     -> Booking -> master_profiles
+#
+#   master_student is taken FIRST and by an upsert (_take_master_student),
+#   never by read-then-insert: two writers of the same pair meet on the
+#   unique index uq_master_student_master_student, the second waits for the
+#   first and then takes the same row (BE-83 comment, found by BE-96). No
+#   path that holds a Practice or Booking lock touches master_student --
+#   booking and audience code only read it, unlocked -- so taking it first
+#   cannot close a cycle.
+#
+#   Practice -> Booking -> master_profiles is BE-99's order, the one
+#   cancel_booking (T-13) and the master's practice cancel already use;
+#   block_student explains, at its booking step, why bookings-first was a
+#   deadlock.
 # =============================================================================
 
 import secrets
@@ -22,6 +40,7 @@ from uuid import UUID
 
 import structlog
 from sqlalchemy import and_, delete, func, literal_column, select, union
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -865,6 +884,61 @@ async def _get_or_none_master_student(
     ).scalar_one_or_none()
 
 
+async def _take_master_student(
+    master_id: UUID,
+    student_user_id: UUID,
+    session: AsyncSession,
+    **values: object,
+) -> MasterStudent:
+    """Create-or-update this pair's row with `values`, and return it locked.
+
+    ONE statement: INSERT ... ON CONFLICT (master_id, student_user_id)
+    DO UPDATE ... RETURNING. A read-then-insert raced into IntegrityError ->
+    500 when two writers of the same pair found no row and both inserted
+    (BE-83 comment, found by BE-96). Here the second writer waits on the
+    unique index for the first, then updates the row the first committed.
+
+    Not DO NOTHING + re-read: under READ COMMITTED the re-read can come back
+    EMPTY -- set_student_tag(tag=None) or unblock_student may delete the
+    conflicting row between the two statements. DO UPDATE re-checks a
+    conflicting row that was deleted meanwhile and inserts instead, so one
+    statement always yields a row (tests/test_block_student_lock_order.py,
+    the block-vs-tag-clear race).
+
+    The row comes back locked by this transaction (DO UPDATE takes the row
+    lock), the same strength the old SELECT ... FOR UPDATE gave callers.
+    updated_at is set explicitly on the conflict branch: ORM onupdate does
+    not fire for a Core upsert.
+
+    P-01: this is the caller's FIRST mutation. If the caller refuses later
+    (raises), the row -- insert or update -- survives only until
+    get_db_session rolls the transaction back; that rollback, not this
+    function, is what undoes it.
+    """
+    stmt = (
+        pg_insert(MasterStudent)
+        .values(master_id=master_id, student_user_id=student_user_id, **values)
+        .on_conflict_do_update(
+            # Inferred from the columns, not named:
+            # uq_master_student_master_student is a unique INDEX (see the
+            # MasterStudent docstring), and ON CONFLICT ON CONSTRAINT does
+            # not accept an index name.
+            index_elements=[
+                MasterStudent.master_id, MasterStudent.student_user_id,
+            ],
+            set_={**values, "updated_at": func.now()},
+        )
+        .returning(MasterStudent)
+    )
+    return (
+        await session.execute(
+            select(MasterStudent)
+            .from_statement(stmt)
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one()
+
+
 async def set_student_tag(
     master_id: UUID, student_user_id: UUID, tag: str | None, session: AsyncSession,
 ) -> str | None:
@@ -878,9 +952,11 @@ async def set_student_tag(
     if student is None:
         raise NotFoundError("Student not found")
 
-    row = await _get_or_none_master_student(master_id, student_user_id, session)
-
     if tag is None:
+        # Clearing never creates a row: nothing to clear is nothing to do.
+        row = await _get_or_none_master_student(
+            master_id, student_user_id, session,
+        )
         if row is None:
             return None
         if row.blocked_at is not None:
@@ -891,14 +967,7 @@ async def set_student_tag(
         await session.flush()
         return None
 
-    if row is None:
-        row = MasterStudent(
-            master_id=master_id, student_user_id=student_user_id, tag=tag,
-        )
-        session.add(row)
-    else:
-        row.tag = tag
-    await session.flush()
+    await _take_master_student(master_id, student_user_id, session, tag=tag)
     return tag
 
 
@@ -920,6 +989,11 @@ async def block_student(
     cancel -- cancelled_by_master=True, unconditional 100% refund. No new
     ledger-writing code.
 
+    Zoom (BE-71, BE-96): each cancelled booking's registrant is cancelled
+    through the same cancel_registrant_for_booking cancel_booking calls --
+    our row goes cancelled here, the Zoom-side cancel is queued and made by
+    the retry poller after commit, and a Zoom failure never fails the block.
+
     Waitlist (owner Q13): WITHOUT this, process_waitlist (waitlist/
     service.py:439) would still notify a blocked student when their turn
     comes up -- they'd get a "spot available" push from the master who
@@ -937,12 +1011,11 @@ async def block_student(
 
     now = datetime.now(UTC)
 
-    row = await _get_or_none_master_student(master_id, student_user_id, session)
-    if row is None:
-        row = MasterStudent(master_id=master_id, student_user_id=student_user_id)
-        session.add(row)
-        await session.flush()
-    row.blocked_at = now
+    # The pair's row, taken first -- see LOCK ORDER in the module header.
+    # A repeat block overwrites blocked_at, as it always has.
+    await _take_master_student(
+        master_id, student_user_id, session, blocked_at=now,
+    )
 
     # Drop from ALL this master's custom groups.
     await session.execute(
@@ -955,29 +1028,87 @@ async def block_student(
     )
 
     # Cancel + refund FUTURE CONFIRMED bookings on this master's practices.
-    future_rows = (
-        await session.execute(
-            select(Booking, Practice)
-            .join(Practice, Booking.practice_id == Practice.id)
-            .where(
-                Practice.master_id == master_id,
-                Booking.user_id == student_user_id,
-                Booking.status == BookingStatus.CONFIRMED.value,
-                Practice.scheduled_at > now,
+    #
+    # BE-99 lock order (LOCK ORDER, module header): Practice (by id) ->
+    # Booking -> master_profiles -- the order cancel_booking (T-13) and the
+    # master's practice cancel already use. Locking the bookings first was
+    # a deadlock, measured into 40P01 with two independent sessions: this
+    # path reaches the practice row twice AFTER its bookings --
+    # refund_booking's INSERT into master_ledger takes FOR KEY SHARE on it
+    # (master_ledger.practice_id is a FK), and recalculate_participants
+    # takes FOR UPDATE on it. Crossed
+    # with the student's own cancel_booking of the same booking (Practice,
+    # then Booking), and with a second block of another student on a shared
+    # practice (KEY SHARE held by both, FOR UPDATE wanted by both). Id
+    # order keeps two blocks over several shared practices from crossing.
+    #
+    # Peek-then-lock-the-parent-first, as in cancel_booking: practice ids
+    # are read unlocked, those practices locked, and the bookings selected
+    # again under the lock with the same filters, restricted to the locked
+    # practices -- one that stopped qualifying in between just drops out.
+    filters = (
+        Practice.master_id == master_id,
+        Booking.user_id == student_user_id,
+        Booking.status == BookingStatus.CONFIRMED.value,
+        Practice.scheduled_at > now,
+    )
+    practice_ids = sorted(
+        (
+            await session.execute(
+                select(Booking.practice_id)
+                .join(Practice, Booking.practice_id == Practice.id)
+                .where(*filters)
+                .distinct()
             )
-            .with_for_update(of=Booking)
+        ).scalars().all()
+    )
+    future_rows = []
+    if practice_ids:
+        await session.execute(
+            select(Practice.id)
+            .where(Practice.id.in_(practice_ids))
+            .order_by(Practice.id)
+            .with_for_update()
         )
-    ).all()
+        future_rows = (
+            await session.execute(
+                select(Booking, Practice)
+                .join(Practice, Booking.practice_id == Practice.id)
+                .where(Practice.id.in_(practice_ids), *filters)
+                .order_by(Practice.id, Booking.id)
+                .with_for_update(of=Booking)
+            )
+        ).all()
 
     cancelled_count = 0
     touched_practice_ids: set[UUID] = set()
     # Comms (T1): blocking cancels + refunds future bookings, so their
     # pending reminder series must be expired too -- otherwise a
-    # refunded, blocked user still gets "Practice tomorrow". Correlated
-    # by booking_id (same per-booking cancel as bookings/service.py::
-    # cancel_booking); rides this transaction (ID-2). Lazy import keeps
+    # refunded, blocked user still gets "Practice tomorrow". Cancelled by
+    # the booking's "booking:<id>" envelope correlation (same per-booking
+    # cancel as bookings/service.py::cancel_booking); rides this
+    # transaction (ID-2). Lazy import keeps
     # masters -> core.events one-way at call time.
     from app.core.events.reminders import cancel_booking_reminders
+
+    # BE-71: the same registrant cancel cancel_booking makes (bookings/
+    # service.py, E21 step E). Without it the registrant stayed
+    # non-cancelled with a live join_url and a booking_id pointing at the
+    # booking cancelled here -- the blocked student could still enter by the
+    # old link, and a rebook of the same practice after unblock REUSED that
+    # registrant (create_registrant_for_booking reuses by (meeting, user))
+    # while it kept pointing at the dead booking: the new booking got no
+    # link and was never judged by its own registrant. Lazy import: same
+    # shape as cancel_booking's own.
+    #
+    # No Zoom HTTP in this transaction (BE-96): the call marks our row
+    # cancelled and queues the Zoom-side cancel, which zoom/retry_poller.py
+    # makes after commit. The Zoom-side cancel itself is kept, not dropped:
+    # whether Zoom honours a cancel is unconfirmed (E21), but it is the only
+    # thing that can invalidate the link on Zoom's side. The one way this
+    # transaction can still wait on a Zoom call -- someone else's -- is the
+    # KNOWN CEILING in cancel_registrant_for_booking (zoom/service.py).
+    from app.modules.zoom.service import cancel_registrant_for_booking
 
     for booking, practice in future_rows:
         booking.status = BookingStatus.CANCELLED.value
@@ -994,10 +1125,13 @@ async def block_student(
             booking_id=str(booking.id),
             user_id=str(student_user_id),
         )
+        await cancel_registrant_for_booking(booking, session)
         touched_practice_ids.add(practice.id)
         cancelled_count += 1
 
-    for practice_id in touched_practice_ids:
+    # Id order, as the practices were locked above. The rows are already
+    # held, so this takes nothing new -- it keeps the order honest.
+    for practice_id in sorted(touched_practice_ids):
         await recalculate_participants(practice_id, session)
 
     # Remove ACTIVE waitlist entries for THIS master's practices only --

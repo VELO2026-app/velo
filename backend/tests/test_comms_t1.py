@@ -6,17 +6,20 @@
 # consumed by the 88xxx band migration of this same delivery).
 #
 # Covers:
-#   1. emit_notification -- notification_request document per the frozen
-#      3c contract mirror: v stamped, idempotency_key minted, channels
-#      default ["in_app", "telegram"], scheduled_at/expiry_at as tz-aware
-#      iso strings.
+#   1. emit_notification -- notification_request document per comms
+#      protocol 3.0.0: v stamped, the caller's idempotency_key carried
+#      verbatim, no channels / priority (the profile routes), correlation
+#      only when given, scheduled_at/expiry_at as tz-aware iso strings.
 #   2. Reminder orchestration (core/events/reminders.py):
 #      - the 24h/1h/10m series anchored at practice.scheduled_at with
-#        expiry_at = anchor and both correlation keys stored;
+#        expiry_at = anchor and the "booking:<id>" envelope correlation;
 #      - the min-lead cutoff skips leads already (almost) due;
-#      - cancel emits: per-booking (booking_id + user target) and
-#        per-practice (practice_id, no target); half-target rejected;
+#      - cancel emits: per-booking ("booking:<id>" + user target) and
+#        the practice fan-out (one per booking + the master's
+#        "practice:<id>", no target); half-target rejected;
 #      - the feedback prompt: future scheduled_at + expiry window.
+#   The 3.0.0 axes (duplicates, empties, shortfalls) of the same seam are
+#   in test_comms_protocol_3.py.
 #   3. The notifications proxy (app/modules/comms_proxy/router.py):
 #      - recipient_id is stamped server-side from the session (the comms
 #        path carries the AUTHENTICATED user's id, whatever the client
@@ -48,14 +51,18 @@ from sqlalchemy import delete, or_, select
 from app.core.config import settings
 from app.core.events.models import OutboxEvent
 from app.core.events.notify import (
-    DEFAULT_CHANNELS,
     emit_notification,
     emit_reminder_cancel,
 )
 from app.core.events.reminders import (
+    BOOKED_ACT,
     BOOKING_REMINDER_TYPES,
+    MASTER_REMINDER_TYPES,
+    BookingRef,
+    booking_correlation,
     cancel_booking_reminders,
     cancel_practice_reminders,
+    practice_correlation,
     schedule_booking_reminders,
     schedule_feedback_prompt,
 )
@@ -84,6 +91,11 @@ SYNTH_USER = "aaaaaaaa-89520000-4000-8000-000000000001"
 SYNTH_BOOKING = "aaaaaaaa-89520000-4000-8000-000000000002"
 SYNTH_PRACTICE = "aaaaaaaa-89520000-4000-8000-000000000003"
 _SYNTH_IDS = {SYNTH_USER, SYNTH_BOOKING, SYNTH_PRACTICE}
+# A cancel with no target (the master's) is ours only by its correlation.
+_SYNTH_CORRELATIONS = {
+    booking_correlation(SYNTH_BOOKING),
+    practice_correlation(SYNTH_PRACTICE),
+}
 
 
 @pytest.fixture(autouse=True)
@@ -99,10 +111,10 @@ async def _clean_band(db_session):
         band_ids = [str(uid) for uid in result.scalars().all()]
         await cleanup_range(db_session, BAND_MIN, BAND_MAX)
         target = OutboxEvent.payload["target_value"].astext
-        corr_b = OutboxEvent.payload["correlation_value"].astext
+        corr = OutboxEvent.payload["correlation"].astext
         conditions = [
             target.in_(_SYNTH_IDS | set(band_ids)),
-            corr_b.in_(_SYNTH_IDS),
+            corr.in_(_SYNTH_CORRELATIONS),
         ]
         await db_session.execute(
             delete(OutboxEvent).where(or_(*conditions))
@@ -116,10 +128,10 @@ async def _clean_band(db_session):
 
 async def _my_events(session) -> list[OutboxEvent]:
     target = OutboxEvent.payload["target_value"].astext
-    corr = OutboxEvent.payload["correlation_value"].astext
+    corr = OutboxEvent.payload["correlation"].astext
     result = await session.execute(
         select(OutboxEvent)
-        .where(or_(target.in_(_SYNTH_IDS), corr.in_(_SYNTH_IDS)))
+        .where(or_(target.in_(_SYNTH_IDS), corr.in_(_SYNTH_CORRELATIONS)))
         .order_by(OutboxEvent.id)
     )
     return list(result.scalars().all())
@@ -134,6 +146,7 @@ class TestEmitNotification:
     async def test_document_form(self, db_session) -> None:
         await emit_notification(
             db_session,
+            idempotency_key="t1-document-form",
             type="booking.confirmed",
             target_type="user",
             target_value=SYNTH_USER,
@@ -148,19 +161,36 @@ class TestEmitNotification:
         p = event.payload
         assert p["v"] == 1
         assert p["type"] == "booking.confirmed"
-        assert p["idempotency_key"]
-        assert p["channels"] == DEFAULT_CHANNELS
-        assert p["priority"] == 5
+        assert p["idempotency_key"] == "t1-document-form"
+        # 3.0.0: the profile routes, the request's field set is closed.
+        # This test used to pin channels == DEFAULT_CHANNELS and
+        # priority == 5 -- right for protocol 2.0.0, where the request
+        # carried both; 3.0.0 refuses a request that still does.
+        assert "channels" not in p
+        assert "priority" not in p
+        # No correlation passed -> none on the wire (not a null).
+        assert "correlation" not in p
         assert p["action_data"]["practice_title"] == "Yoga"
         # The document is wire-clean (relay json.dumps must not choke).
         json.dumps(p)
 
-    async def test_idempotency_keys_unique_per_emit(
+    async def test_idempotency_key_is_the_callers_verbatim(
         self, db_session,
     ) -> None:
+        """The key is the domain fact's, carried as given -- twice.
+
+        This test used to assert the OPPOSITE: two emits, two distinct
+        keys, because the emitter minted uuid4().hex per call. That was a
+        true statement about the old seam and it was the defect -- comms
+        dedups by key, so a minted key protected only relay replays, and
+        a domain repeat created a second job. 3.0.0 makes the key the
+        caller's; the same fact emitted twice must now carry ONE key
+        (comms keeps one job for it -- that half lives in comms).
+        """
         for _ in range(2):
             await emit_notification(
                 db_session,
+                idempotency_key=f"booking-confirmed:{SYNTH_BOOKING}",
                 type="booking.confirmed",
                 target_type="user",
                 target_value=SYNTH_USER,
@@ -169,8 +199,9 @@ class TestEmitNotification:
             )
         await db_session.commit()
         events = await _my_events(db_session)
+        assert len(events) == 2
         keys = {e.payload["idempotency_key"] for e in events}
-        assert len(keys) == 2
+        assert keys == {f"booking-confirmed:{SYNTH_BOOKING}"}
 
 
 # ===========================================================================
@@ -191,6 +222,7 @@ class TestReminderOrchestration:
             practice_title="Yoga",
             master_name="Anna",
             scheduled_at=anchor,
+            act=BOOKED_ACT,
         )
         await db_session.commit()
 
@@ -206,9 +238,21 @@ class TestReminderOrchestration:
             sent_at = datetime.fromisoformat(p["scheduled_at"])
             assert sent_at == anchor - lead
             assert datetime.fromisoformat(p["expiry_at"]) == anchor
-            assert p["action_data"]["booking_id"] == SYNTH_BOOKING
-            assert p["action_data"]["practice_id"] == SYNTH_PRACTICE
-            assert p["priority"] == 2
+            # 3.0.0: cancellation keys travel in the ENVELOPE, never in
+            # the letter. This used to assert booking_id / practice_id in
+            # action_data and priority == 2 -- true while comms cancelled
+            # by letter fields and queued by priority; it now does
+            # neither, so the letter carries no correlation at all.
+            assert p["correlation"] == booking_correlation(SYNTH_BOOKING)
+            assert "booking_id" not in p["action_data"]
+            assert "practice_id" not in p["action_data"]
+            assert p["action_data"]["params"] == {
+                "practice_id": SYNTH_PRACTICE,
+            }
+            assert "priority" not in p
+            assert p["idempotency_key"] == (
+                f"reminder:{SYNTH_BOOKING}:{p['type']}:{BOOKED_ACT}"
+            )
 
     async def test_min_lead_skips_near_reminders(self, db_session) -> None:
         """Anchor in 30 minutes: 24h and 1h sends are in the past,
@@ -222,6 +266,7 @@ class TestReminderOrchestration:
             practice_title="Yoga",
             master_name="Anna",
             scheduled_at=anchor,
+            act=BOOKED_ACT,
         )
         await db_session.commit()
 
@@ -235,23 +280,36 @@ class TestReminderOrchestration:
             booking_id=SYNTH_BOOKING,
             user_id=SYNTH_USER,
         )
-        await cancel_practice_reminders(
-            db_session, practice_id=SYNTH_PRACTICE,
+        queued = await cancel_practice_reminders(
+            db_session,
+            practice_id=SYNTH_PRACTICE,
+            bookings=[
+                BookingRef(booking_id=SYNTH_BOOKING, user_id=SYNTH_USER),
+            ],
         )
         await db_session.commit()
 
-        per_booking, per_practice = await _my_events(db_session)
-        assert per_booking.event_type == EVENT_REMINDER_CANCEL
-        p = per_booking.payload
-        assert p["types"] == BOOKING_REMINDER_TYPES
-        assert p["correlation_key"] == "booking_id"
-        assert p["correlation_value"] == SYNTH_BOOKING
-        assert p["target_type"] == "user"
-        assert p["target_value"] == SYNTH_USER
+        # The practice cancel is a FAN-OUT now: one per-booking cancel per
+        # booking, plus the master's. It used to be ONE event matching
+        # practice_id across both series -- right while comms read the
+        # letter; 3.0.0 matches the job's one envelope correlation, so a
+        # participant's series is reachable only by its booking's.
+        assert queued == 2
+        per_booking, fanned, master = await _my_events(db_session)
+        for event in (per_booking, fanned):
+            assert event.event_type == EVENT_REMINDER_CANCEL
+            p = event.payload
+            assert p["types"] == BOOKING_REMINDER_TYPES
+            assert p["correlation"] == booking_correlation(SYNTH_BOOKING)
+            assert p["target_type"] == "user"
+            assert p["target_value"] == SYNTH_USER
+            assert "correlation_key" not in p
+            assert "correlation_value" not in p
 
-        q = per_practice.payload
-        assert q["correlation_key"] == "practice_id"
-        assert q["correlation_value"] == SYNTH_PRACTICE
+        q = master.payload
+        assert master.event_type == EVENT_REMINDER_CANCEL
+        assert q["types"] == MASTER_REMINDER_TYPES
+        assert q["correlation"] == practice_correlation(SYNTH_PRACTICE)
         assert "target_type" not in q and "target_value" not in q
 
     async def test_half_target_rejected(self, db_session) -> None:
@@ -259,8 +317,7 @@ class TestReminderOrchestration:
             await emit_reminder_cancel(
                 db_session,
                 types=["booking.reminder_1h"],
-                correlation_key="booking_id",
-                correlation_value=SYNTH_BOOKING,
+                correlation=booking_correlation(SYNTH_BOOKING),
                 target_type="user",
             )
 
@@ -277,6 +334,11 @@ class TestReminderOrchestration:
         (event,) = await _my_events(db_session)
         p = event.payload
         assert p["type"] == "prompt.leave_feedback"
+        assert p["idempotency_key"] == (
+            f"feedback-prompt:{SYNTH_PRACTICE}:{SYNTH_USER}"
+        )
+        # Never cancelled -> no correlation on the wire.
+        assert "correlation" not in p
         sent_at = datetime.fromisoformat(p["scheduled_at"])
         expiry = datetime.fromisoformat(p["expiry_at"])
         delay = timedelta(seconds=settings.prompt_feedback_delay_seconds)
@@ -348,7 +410,12 @@ class TestNotificationsProxy:
         a person could have caused.
         """
         login = await login_user(client, telegram_id=TID_PROXY)
-        seam = AsyncMock()
+        # BE-89: a guard with comms 3.0.0's shape, not a bare AsyncMock --
+        # if it ever fires, the status assertion below fails on a real
+        # answer instead of on whatever a MagicMock body turns into.
+        seam = AsyncMock(
+            return_value={"items": [], "next_cursor": None, "unread": 0},
+        )
         with patch(_PROXY_SEAM, seam):
             response = await client.get(
                 "/api/v1/notifications?recipient_id=someone-else",
@@ -507,7 +574,12 @@ class TestNotificationsProxy:
         test green. The code assertion is what closes that.
         """
         login = await login_user(client, telegram_id=TID_PREFS)
-        seam = AsyncMock()
+        # BE-89: a guard with comms 3.0.0's shape, not a bare AsyncMock --
+        # if it ever fires, the status assertion below fails on a real
+        # answer instead of on whatever a MagicMock body turns into.
+        seam = AsyncMock(return_value={
+            "categories": {}, "schedule": None, "timezone": None,
+        })
         with patch(_PROXY_SEAM, seam):
             response = await client.put(
                 "/api/v1/notifications/prefs",
@@ -682,7 +754,12 @@ class TestNotificationsProxy:
 
     async def test_prefs_unknown_key_rejected(self, client) -> None:
         login = await login_user(client, telegram_id=TID_PREFS)
-        seam = AsyncMock()
+        # BE-89: a guard with comms 3.0.0's shape, not a bare AsyncMock --
+        # if it ever fires, the status assertion below fails on a real
+        # answer instead of on whatever a MagicMock body turns into.
+        seam = AsyncMock(return_value={
+            "categories": {}, "schedule": None, "timezone": None,
+        })
         with patch(_PROXY_SEAM, seam):
             response = await client.put(
                 "/api/v1/notifications/prefs",
@@ -762,7 +839,20 @@ class TestNotificationsProxy:
         self, client, comms_status: int, expected: int,
     ) -> None:
         """core/comms.py must map comms auth/undefined statuses to 502
-        and only forward the client-meaningful 3b statuses."""
+        and only forward the client-meaningful ones.
+
+        The refusal body is comms 3.0.0's ONE form, {"error": {"class",
+        "message"}}, with the class that travels with each status. This
+        test used to send {"detail": ...} -- comms 2.0.0's body, right
+        while core/comms.py decided by status alone; 3.0.0 decides by the
+        CLASS and cross-checks the status, so a body without `error` is
+        itself a refusal we cannot read (502, pinned in
+        test_comms_refusals.py). 418 has no class and stays a 502.
+        """
+        refusal_class = {
+            401: "unauthorized", 403: "forbidden", 404: "not_found",
+            409: "conflict", 422: "validation", 500: "internal",
+        }.get(comms_status)
         login = await login_user(client, telegram_id=TID_PROXY)
 
         class _StatusClient:
@@ -776,9 +866,12 @@ class TestNotificationsProxy:
                 return None
 
             async def request(self, *args: object, **kwargs: object):
-                return httpx.Response(
-                    comms_status, json={"detail": "comms internal detail"},
+                body = (
+                    {"error": {"class": refusal_class, "message": "comms text"}}
+                    if refusal_class is not None
+                    else {"error": {"message": "no class"}}
                 )
+                return httpx.Response(comms_status, json=body)
 
         with (
             patch.object(
@@ -792,8 +885,11 @@ class TestNotificationsProxy:
             )
         assert response.status_code == expected
         if expected == 502:
-            # The internal service's auth detail never leaks out.
-            assert "comms internal detail" not in response.text
+            # The internal service's refusal text never leaks out.
+            assert "comms text" not in response.text
+        else:
+            # Forwarded: comms' message becomes the detail.
+            assert response.json()["detail"] == "comms text"
 
 
 # ===========================================================================

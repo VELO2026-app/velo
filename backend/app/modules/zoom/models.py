@@ -32,6 +32,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -39,6 +40,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    false,
     func,
     text,
 )
@@ -63,8 +65,10 @@ class ZoomMeetingStatus(enum.StrEnum):
                           create_failed (retry_poller.py claims both).
     create_failed     -- creation (or a retry) failed; retry_count / last_sync_error
                           record why. The retry poller keeps trying until the cap.
-    deleted           -- we deleted the Zoom-side meeting (practice cancelled
-                          before it happened).
+    deleted           -- the practice was cancelled before it happened: our
+                          row is dead from that moment, whatever Zoom says;
+                          the Zoom-side DELETE is queued (zoom_delete_pending)
+                          and made by the retry poller after commit.
     """
 
     ACTIVE = "active"
@@ -140,6 +144,20 @@ class ZoomMeeting(UUIDMixin, TimestampMixin, Base):
         Integer, default=0, server_default="0",
     )
     last_sync_error: Mapped[str | None] = mapped_column(Text, default=None)
+
+    # Zoom-side DELETE queue. delete_meeting_for_practice sets
+    # status=deleted AND zoom_delete_pending=True on an ACTIVE meeting in
+    # the practice cancel's transaction; zoom/retry_poller.py makes the
+    # call after commit and clears the flag. zoom_delete_attempts counts
+    # failed Zoom DELETE calls, capped by
+    # settings.zoom_meeting_delete_max_retries; at the cap the row stays
+    # VISIBLY pending, last_sync_error saying so.
+    zoom_delete_pending: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(),
+    )
+    zoom_delete_attempts: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0",
+    )
 
     # E21 step F: set the moment the report poller successfully pulls this
     # meeting's report, regardless of whether any rows came back -- a
@@ -237,6 +255,24 @@ class ZoomRegistrant(UUIDMixin, TimestampMixin, Base):
         Integer, default=0, server_default="0",
     )
     last_sync_error: Mapped[str | None] = mapped_column(Text, default=None)
+
+    # Zoom-side cancel queue (BE-96). cancel_registrant_for_booking sets
+    # status=cancelled AND zoom_cancel_pending=True in the caller's
+    # transaction -- always, whether or not a zoom_registrant_id is visible
+    # to it (a retry-poller create racing the cancel may write the id under
+    # its own row lock; the flag is what makes that id get cancelled too).
+    # zoom/retry_poller.py makes the Zoom call after commit and clears the
+    # flag. A flag, not a status: the partial unique index below counts
+    # every non-'cancelled' status as active. zoom_cancel_attempts counts
+    # failed Zoom cancel calls, capped by
+    # settings.zoom_registrant_cancel_max_retries; at the cap the row stays
+    # VISIBLY pending, last_sync_error saying so.
+    zoom_cancel_pending: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(),
+    )
+    zoom_cancel_attempts: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0",
+    )
 
     __table_args__ = (
         # One ACTIVE registrant per (meeting, user) -- same partial-unique

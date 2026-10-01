@@ -121,6 +121,7 @@ async def approve_withdrawal(
     payout_text = f"{payout_amount / 100:.2f}"
     await emit_notification(
         session,
+        idempotency_key=f"withdrawal-approved:{withdrawal.id}",
         type="wallet.withdrawal_approved",
         target_type="user",
         target_value=str(withdrawal.user_id),
@@ -205,6 +206,7 @@ async def reject_withdrawal(
     amount_text = f"{withdrawal.amount_cents / 100:.2f}"
     await emit_notification(
         session,
+        idempotency_key=f"withdrawal-rejected:{withdrawal.id}",
         type="wallet.withdrawal_rejected",
         target_type="user",
         target_value=str(withdrawal.user_id),

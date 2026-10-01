@@ -782,9 +782,15 @@ class TestIdentitySync:
             language = "en"
             timezone = "UTC"
             is_active = True
+            # comms 3.0.0: the snapshot carries its version. The duck used
+            # to stop at is_active -- complete for the unversioned
+            # snapshot; the SyncedUser protocol now has one field more.
+            snapshot_version = 1
 
         snap = user_snapshot(Duck())
         assert snap["email"] is None
+        assert snap["version"] == 1
+        assert snap["locale"] == "en"
 
 
 # ===========================================================================

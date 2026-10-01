@@ -45,6 +45,7 @@ from httpx import AsyncClient
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_session_factory
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import Practice, PracticeStatus
@@ -269,17 +270,36 @@ def test_generate_suffix_starts_at_2_and_steps_past_taken_numbers() -> None:
 
 
 def test_generate_never_fails_at_eighteen_thousand_taken() -> None:
-    """The owner's ceiling-free case: about 18 000 guests on one practice.
-    Every call returns a name outside the set."""
+    """The owner's ceiling-free case: about 18 000 names taken on one
+    practice. Every call returns a name outside the set.
+
+    WHAT CHANGED, AND WHY THIS IS NOT A WEAKER TEST. The first version grew
+    the set by 18 000 sequential generate() calls. Each call casefolds the
+    whole set, so the test was quadratic -- 33 s locally, the slowest test in
+    the suite. Its one assertion was "the answer is outside the set". That
+    assertion is kept at the same size, on the set built directly:
+      - DENSE: every base holds every number up to 24 (18 432 names) -- the
+        answer must be outside it, i.e. number 25;
+      - WITH HOLES: 18 000 of those, sampled -- a shape the sequential build
+        never produced, where a free base or a lower free number must be
+        found instead.
+    """
+    bases = [b.display for b in _all_bases()]
+    dense = bases + [f"{b} {n}" for b in bases for n in range(2, 25)]
+    assert len(dense) == 768 * 24
     rng = random.Random(7)
-    taken: list[str] = []
-    seen: set[str] = set()
-    for _ in range(18000):
-        name = generate(taken, rng).display
-        assert name.casefold() not in seen
-        seen.add(name.casefold())
-        taken.append(name)
-    assert len(taken) == 18000
+
+    dense_cf = {name.casefold() for name in dense}
+    for _ in range(100):
+        name = generate(dense, rng).display
+        assert name.casefold() not in dense_cf
+        assert name.endswith(" 25")
+
+    holed = rng.sample(dense, 18000)
+    holed_cf = {name.casefold() for name in holed}
+    for _ in range(100):
+        name = generate(holed, rng).display
+        assert name.casefold() not in holed_cf
 
 
 # ===========================================================================
@@ -361,19 +381,35 @@ async def test_other_pages_keep_form_action_none(
 
 
 @pytest.mark.asyncio
-async def test_each_view_claims_a_new_name(
-    client: AsyncClient, db_session: AsyncSession,
+async def test_each_view_claims_a_new_name_up_to_the_ceiling(
+    client: AsyncClient, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """THE REPEAT AXIS, owner ruling: opening the page again ("Другое" is
-    exactly that) gives a new name, and the earlier one stays taken."""
+    exactly that) gives a new name, and the earlier one stays taken --
+    UNTIL zoom_guest_names_max_per_practice.
+
+    WHAT CHANGED (BE-66), AND WHY THIS IS NOT A WEAKER TEST. This was
+    test_each_view_claims_a_new_name, asserting that every view claims a new
+    row. That was true and is still true below the ceiling; without a
+    ceiling it also blessed unbounded growth -- a loop of GETs grew the
+    table, and the cost of each next claim, forever. BE-66 added the
+    ceiling, so the unconditional claim became false. Now: every view below
+    the ceiling claims a distinct name, and the view past it writes nothing
+    and shows the page without a proposed name, still with the field.
+    """
+    monkeypatch.setattr(settings, "zoom_guest_names_max_per_practice", 3)
     practice_id, code = await _published_practice(client, db_session, 67902)
 
     for _ in range(3):
         assert (await client.get(f"/z/{code}/guest")).status_code == 200
+    past = await client.get(f"/z/{code}/guest")
 
     rows = await _rows(db_session, practice_id)
     assert len(rows) == 3
     assert len({r.display_name for r in rows}) == 3
+    assert past.status_code == 200
+    assert "guest_name_id" not in past.text
+    assert "name='name'" in past.text
 
 
 # ===========================================================================

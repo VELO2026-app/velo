@@ -901,6 +901,34 @@ describe('CheckinView', () => {
       expect(successTitle()).toBe('')
     })
 
+    // BE-92: the backend's check-in refusals carry their own codes now --
+    // each reaches the screen as its own phrase from ERROR_MESSAGES, none of
+    // them as the generic «Запрошенный ресурс не найден» / «Некорректный
+    // запрос» they used to fall back to.
+    describe('honest check-in codes (BE-92)', () => {
+      it.each([
+        [404, 'no_active_booking', 'У вас нет подтверждённой брони на эту практику'],
+        [400, 'checkin_window_closed', 'Check-in закрыт — практика уже началась'],
+        [
+          400,
+          'checkin_window_not_open',
+          'Check-in ещё не открыт — он откроется ближе к началу практики',
+        ],
+      ])('%s %s shows its own phrase', async (status, code, phrase) => {
+        upsertCheckinMock.mockRejectedValue(new ApiResponseError(status, 'English detail', code))
+        mount()
+        await flush()
+
+        submitBtn()?.click()
+        await flush()
+
+        expect(toastError).toHaveBeenCalledWith(phrase)
+        expect(toastError).not.toHaveBeenCalledWith('Запрошенный ресурс не найден')
+        expect(toastError).not.toHaveBeenCalledWith('Некорректный запрос')
+        expect(successTitle()).toBe('')
+      })
+    })
+
     // P5 (PROMPT №594): the audience/block gate on POST .../checkin
     // (upsert_checkin, audience_service.py) -- covers the retroactive case
     // (a booking made before the master narrowed the audience or blocked

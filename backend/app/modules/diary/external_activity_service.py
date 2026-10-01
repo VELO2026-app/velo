@@ -23,6 +23,7 @@ from datetime import datetime
 
 import structlog
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import record_audit
@@ -195,7 +196,7 @@ async def list_custom_activity_names(
             ExternalActivity.user_id == user.id,
             ExternalActivity.custom_activity_name.is_not(None),
         )
-        .distinct(folded)
+        .ext(distinct_on(folded))
         .order_by(
             folded,
             ExternalActivity.occurred_at.desc(),

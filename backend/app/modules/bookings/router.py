@@ -226,8 +226,16 @@ async def list_my_bookings_endpoint(
                     if booking.status in ZOOM_VISIBLE_BOOKING_STATUSES
                     else None
                 ),
+                # BE-72: behind the same M-3 gate as the link it explains.
+                zoom_registrant_link_unavailable=(
+                    link_unavailable
+                    and booking.status in ZOOM_VISIBLE_BOOKING_STATUSES
+                ),
             )
-            for booking, practice, has_feedback, has_checkin, zoom_join_url in items
+            for (
+                booking, practice, has_feedback, has_checkin, zoom_join_url,
+                link_unavailable,
+            ) in items
         ],
         total=total,
         limit=limit,
@@ -299,8 +307,15 @@ async def list_my_upcoming_bookings_endpoint(
                 if booking.status in ZOOM_VISIBLE_BOOKING_STATUSES
                 else None
             ),
+            zoom_registrant_link_unavailable=(
+                link_unavailable
+                and booking.status in ZOOM_VISIBLE_BOOKING_STATUSES
+            ),
         )
-        for booking, practice, has_feedback, has_checkin, zoom_join_url in items
+        for (
+            booking, practice, has_feedback, has_checkin, zoom_join_url,
+            link_unavailable,
+        ) in items
     ]
 
 
