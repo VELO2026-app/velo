@@ -431,7 +431,8 @@ watch(masterId, (id) => {
 
 /* The verified check rides the avatar's corner (owner 2026-09-30) -- the
    ring is the card's own surface, so the disc reads as punched through.
-   Opaque disc + white check = the primary-button accent recipe. */
+   Same glass-teal recipe as MasterCard's disc (the solid teal-600 fill read
+   too bright over the avatar). */
 .master-public__avatar {
   position: relative;
   flex-shrink: 0;
@@ -448,8 +449,8 @@ watch(masterId, (id) => {
   height: 26px;
   border: 2px solid var(--velo-bg-card-solid);
   border-radius: var(--radius-full);
-  background: var(--velo-teal-600);
-  color: var(--velo-white);
+  background: var(--velo-glass-teal-30);
+  color: var(--velo-teal-600);
 }
 
 .master-public__pills {
