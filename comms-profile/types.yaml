@@ -254,6 +254,15 @@ types:
   curator_group.master_offered:
     channels: [in_app, telegram]
 
+  # -- BE-59 B1: member_demoted goes to the FORMER MASTER, and it is about
+  #    their own standing in the school -- the role taken away by the
+  #    curator, without their consent -- so no category, like master_offered
+  #    and member_removed: silencing it would lose the only signal that the
+  #    role is gone. --
+
+  curator_group.member_demoted:
+    channels: [in_app, telegram]
+
   curator_group.master_verification_required:
     channels: [in_app, telegram]
 

@@ -181,6 +181,11 @@ curator_group.master_offered:
     title: "You are invited to teach"
     body: "🏛 <b>{actor_name}</b> invites you to become a master of <b>{group_name}</b>.\n\nOpen the app to accept or decline."
 
+curator_group.member_demoted:
+  telegram:
+    title: "You are no longer a master of the school"
+    body: "🏛 <b>{actor_name}</b> made you a student of <b>{group_name}</b>.\n\nYou stay in the school, but no longer teach in it."
+
 curator_group.master_verification_required:
   telegram:
     title: "Master verification needed"

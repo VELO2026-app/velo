@@ -708,9 +708,9 @@ class TestProfileV2:
         doc = self._doc()
         assert set(doc) == {"version", "types"}
         assert doc["version"] == 2
-        # 38 since BE-59 (master_verification_required, master_offer_closed);
-        # 36 was right until then.
-        assert len(doc["types"]) == 38
+        # 39 since BE-59 B1 (member_demoted); 38 after BE-59 A
+        # (master_verification_required, master_offer_closed); 36 before.
+        assert len(doc["types"]) == 39
 
     def test_every_record_is_closed(self) -> None:
         """An unknown key refuses comms startup; only x-... is tolerated."""
@@ -732,7 +732,7 @@ class TestProfileV2:
         types = self._doc()["types"]
         velo = {k: v for k, v in types.items() if not k.startswith("msg.")}
         comms_own = {k: v for k, v in types.items() if k.startswith("msg.")}
-        assert len(velo) == 35  # 33 until BE-59 added two curator types
+        assert len(velo) == 36  # 33 before BE-59, +2 in A, +1 in B1
         assert sorted(comms_own) == [
             "msg.participant_message",
             "msg.support_message",

@@ -1244,6 +1244,100 @@ async def remove_curator_group_member(
     )
 
 
+async def demote_curator_group_master(
+    curator_user_id: UUID,
+    group_id: UUID,
+    user_id: UUID,
+    session: AsyncSession,
+    *,
+    actor: User,
+) -> None:
+    """Make a master of this school a student of it again (BE-59 B1).
+
+    THE CURATOR'S DECISION ALONE, no consent: owner ruling. The person
+    STAYS in the school -- they may have been invited to sessions as a
+    student -- and is told. Their platform verification is untouched: this
+    is a role inside one school, not a judgement about the teacher.
+
+    IDEMPOTENT 204 WITH NOTHING WRITTEN when there is no master of this
+    school by that id -- already a student (owner ruling: a second demotion
+    is a 204 without journal or notification), or not a member at all. The
+    shape of remove_curator_group_member: the caller asserts "this person
+    is not a master of my school", and that is the state afterwards either
+    way. A stranger's school is the only 404 (P-08).
+
+    THE MEMBER ROW IS TAKEN, NOT READ, first in the module's order
+    (header): a no-op UPDATE ... RETURNING whose predicate is kind='master'
+    is the check, and the kind is written only on a row it took. A plain
+    read first would answer from the row as it was before a concurrent
+    removal, leave or promotion committed; the predicate is re-evaluated
+    against what they committed.
+
+    THE PRACTICES ARE NOT TOUCHED HERE (B1). They stop reaching the school
+    by themselves the moment kind is 'student': the school's audience is
+    lent to its masters only while they are masters of it
+    (practices/audience_service.py::master_broadcasts_to_group_clause).
+    Handing the future ones to the curator is BE-59 B2.
+    """
+    group = await _get_group_or_404(curator_user_id, group_id, session)
+
+    if not await _lock_member(
+        group.id, user_id, session, kind=CuratorMemberKind.MASTER.value,
+    ):
+        # No master row to take: a student, a non-member, or somebody a
+        # concurrent removal / leave / handover just took away. Nothing to
+        # demote, nothing to record.
+        return
+    await session.execute(
+        update(CuratorGroupMember)
+        .where(
+            CuratorGroupMember.group_id == group.id,
+            CuratorGroupMember.user_id == user_id,
+        )
+        .values(kind=CuratorMemberKind.STUDENT.value)
+        .execution_options(synchronize_session=False)
+    )
+
+    # A school is handed only to one of its visible masters
+    # (offer_curator_group_transfer); a pending handover to the person who
+    # just stopped being one would be an offer its own rule refuses. The
+    # same helper and the same journal flag as remove and leave.
+    transfer_cancelled = await _drop_pending_transfer_for(
+        group.id, user_id, session,
+    )
+
+    # OWNERSHIP RE-CHECKED UNDER THE GROUP LOCK, once, before the journal
+    # row's INSERT (header): the school can change hands between
+    # _get_group_or_404 and here, and a former curator must not demote
+    # anybody in the new owner's school. The rollback (P-01) puts the kind
+    # and the transfer back.
+    if not await _lock_group_as_owner(curator_user_id, group.id, session):
+        raise NotFoundError("Curator group not found")
+
+    data = _target_data(user_id, await _frozen_name(user_id, session))
+    if transfer_cancelled:
+        data["transfer_cancelled"] = True
+    journal = _record_group_event(
+        group.id, actor, CuratorGroupEventKind.MEMBER_DEMOTED, session,
+        data=data,
+    )
+    actor_name = display_name(actor.first_name, actor.last_name)
+    await _notify_group_event(
+        session,
+        journal_event_id=journal.id,
+        type="curator_group.member_demoted",
+        recipient_id=user_id,
+        title="Вы больше не мастер школы",
+        body=(
+            f"{actor_name} перевёл вас в ученики школы «{group.name}». "
+            f"Вы остаётесь в школе, но больше не ведёте в ней практики."
+        ),
+        group_id=group.id,
+        group_name=group.name,
+        actor_name=actor_name,
+    )
+
+
 async def get_group_counts(
     group_id: UUID, session: AsyncSession,
 ) -> tuple[int, int]:
@@ -2356,10 +2450,12 @@ async def _drop_pending_transfer_for(
 ) -> bool:
     """Drop the offer if it was addressed to this person leaving the group.
 
-    TZ 3.4 names EXACTLY TWO points where an offer disappears because its
-    addressee is gone -- leave and remove_member -- and this helper is why
-    there are two call sites and not two copies. A third copy would be the
-    one that gets forgotten when the rule changes.
+    TZ 3.4 named two points where an offer disappears because its addressee
+    is gone -- leave and remove_member. BE-59 B1 adds the third: demotion
+    (demote_curator_group_master), because a school is handed only to one
+    of its masters and the addressee just stopped being one. This helper is
+    why there are three call sites and not three copies; a copy would be
+    the one that gets forgotten when the rule changes.
 
     Scoped to (group, addressee): somebody else walking out of the same
     group must not cancel a pending offer they have nothing to do with.

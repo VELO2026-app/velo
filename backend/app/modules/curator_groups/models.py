@@ -350,6 +350,11 @@ class CuratorGroupEventKind(enum.StrEnum):
     would stamp an admin's name into it. Those reach the school as
     notifications only.
 
+    MEMBER_DEMOTED (BE-59 B1) is member_promoted's reverse: the curator
+    made a master of the school a student of it again. Written by the fact
+    of the demotion and only when there was a master to demote -- a second
+    demotion of the same person writes nothing.
+
     A DELETED SCHOOL HAS NO "school deleted" EVENT and never will. The
     journal cascades with the group, so the row would be written and
     dropped inside one transaction -- a value here for it would be a
@@ -362,6 +367,7 @@ class CuratorGroupEventKind(enum.StrEnum):
     GROUP_AVATAR_CHANGED = "group_avatar_changed"
     MEMBER_JOINED = "member_joined"
     MEMBER_PROMOTED = "member_promoted"
+    MEMBER_DEMOTED = "member_demoted"
     MEMBER_REMOVED = "member_removed"
     MEMBER_LEFT = "member_left"
     INVITE_CREATED = "invite_created"
@@ -387,8 +393,9 @@ class CuratorGroupEventKind(enum.StrEnum):
 # word and was dropped from both rather than frozen at "student".
 EVENT_DATA_KIND = "kind"                  # join, promote, remove, leave
 EVENT_DATA_ACTOR_NAME = "actor_name"      # all twelve
-EVENT_DATA_TARGET_USER_ID = "target_user_id"   # remove, offer, accept, decline, cancel
-EVENT_DATA_TARGET_NAME = "target_name"         # remove, offer, accept, decline, cancel
+# target_user_id / target_name: remove, offer, accept, decline, cancel, demote
+EVENT_DATA_TARGET_USER_ID = "target_user_id"
+EVENT_DATA_TARGET_NAME = "target_name"
 
 
 class CuratorGroupEvent(Base):

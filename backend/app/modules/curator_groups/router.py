@@ -87,6 +87,7 @@ from app.modules.curator_groups.service import (
     decline_curator_group_transfer,
     delete_curator_group,
     delete_group_preview,
+    demote_curator_group_master,
     get_curator_group_page,
     get_group_counts,
     get_group_transfer_ref,
@@ -545,6 +546,36 @@ async def remove_curator_group_member_endpoint(
         user.id, group_id, user_id, session, actor=user,
     )
     await session.flush()
+
+
+@router.post(
+    "/me/curator-groups/{group_id}/members/{user_id}/demote",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def demote_curator_group_master_endpoint(
+    group_id: UUID,
+    user_id: UUID,
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Make a master of this school a student of it again (BE-59 B1).
+
+    No consent asked; the person stays a member and is notified. Idempotent:
+    somebody who is not a master of this school -- already a student, or not
+    a member -- is a 204 with nothing written. 404 only for a school that is
+    not yours (P-08).
+    """
+    user, _profile = master_tuple
+    await demote_curator_group_master(
+        user.id, group_id, user_id, session, actor=user,
+    )
+    await session.flush()
+    logger.info(
+        "curator_group_master_demoted",
+        group_id=str(group_id),
+        user_id=str(user_id),
+        curator_id=str(user.id),
+    )
 
 
 @router.post(
