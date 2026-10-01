@@ -327,6 +327,17 @@ const STATS_QUARTER: MasterStatsResponse = {
   income_cents: 3456000,
   income_delta_pct: 7.7,
 }
+// Owner 2026-10-01: day 1 of a month/quarter -- the backend's honest calendar
+// answer when nothing has completed yet. The -100 deltas ride along to prove
+// the screen withholds the chip for a zero value instead of showing them.
+const STATS_ZERO_DAY: MasterStatsResponse = {
+  practices_count: 0,
+  practices_delta_pct: -100,
+  participants_count: 0,
+  participants_delta_pct: -100,
+  income_cents: 0,
+  income_delta_pct: null,
+}
 
 function user(overrides: Partial<UserResponse> = {}): UserResponse {
   return {
@@ -977,6 +988,26 @@ describe('MasterDashboardView', () => {
       await flush()
 
       expect(statValue('Участников')).toBe('500')
+      expect(statDelta('Участников')).toBeNull()
+    })
+
+    it('a zero value carries no delta chip: a day-1 month reads «0», not «-100%»', async () => {
+      // Owner 2026-10-01: day 1 of a month/quarter the backend's honest
+      // calendar math is 0 against a fully elapsed previous period -> -100%,
+      // which a healthy master reads as a broken dashboard. The screen
+      // withholds the chip for a zero value (deltaChip); the -100 deltas in
+      // the fixture prove the suppression, not a missing field.
+      vi.mocked(mastersApi.getMasterStats)
+        .mockResolvedValueOnce(STATS_WEEK)
+        .mockResolvedValueOnce(STATS_ZERO_DAY)
+      mount()
+      await flush()
+      periodButton('Месяц')?.click()
+      await flush()
+
+      expect(statValue('Практик')).toBe('0')
+      expect(statDelta('Практик')).toBeNull()
+      expect(statValue('Участников')).toBe('0')
       expect(statDelta('Участников')).toBeNull()
     })
 
