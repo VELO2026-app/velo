@@ -159,7 +159,7 @@ function fogDefaults() {
     return Number.isFinite(v) ? v : fallback
   }
   fogDefaultsCache = {
-    topGap: tok('--velo-fog-z1', 16),
+    topGap: tok('--velo-fog-z1', 8),
     topHard: tok('--velo-fog-z2', 40),
     botFade: tok('--velo-fog-z3', 70),
     botHard: tok('--velo-fog-z4', 90),
@@ -182,10 +182,11 @@ function fogDefaults() {
 // Pre-measurement fallback (islandH===0 race): clear the floating VHeader's REAL
 // rendered height instead of a too-small base, so a back-button screen («Отзывы о
 // практике» / «Вывод средств») doesn't underlap its header before the island is
-// measured. Derived from VHeader.vue: padding-top calc(--space-3 + 20px)=34 +
-// the 40px back button + padding-bottom --space-3=14 ≈ 88px. The measured
-// islandH>0 path stays unchanged. (operator PROMPT №164)
-const HEADER_FALLBACK = 88
+// measured. Derived from VHeader.vue (floating): --velo-fog-headerless-top=20 +
+// the 40px back row + padding-bottom --space-2=8 ≈ 68px. The measured
+// islandH>0 path stays unchanged. (operator PROMPT №164; retuned 2026-09-30
+// when the header's bottom pad moved to --space-2.)
+const HEADER_FALLBACK = 68
 const mainStyle = computed(() => {
   const d = fogDefaults()
   const topGap = props.topGap ?? d.topGap

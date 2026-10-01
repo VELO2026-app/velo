@@ -392,14 +392,14 @@ describe('UserShell', () => {
     // [2026-09-08] The dashboard's floating header is BACK (VHeader «Главная»
     // + the bell in its action slot), so its headerless meta is dropped per
     // the [FE-3] contract. With StubChild teleporting nothing, this frame is
-    // the pre-measurement one: the HEADER_FALLBACK (88) + z1 gap (16)
+    // the pre-measurement one: the HEADER_FALLBACK (68) + z1 gap (8)
     // reservation -- same contract as any headered route; the real screen's
     // VHeader then measures in and MobileLayout re-pads to its exact height.
     it('user-dashboard (header back, meta dropped) pads by the unmeasured-island contract', async () => {
       await mount('user-dashboard')
       await flush()
 
-      expect(mainEl().style.paddingTop).toBe('104px')
+      expect(mainEl().style.paddingTop).toBe('76px')
     })
 
     // [FE-3] the profile hub's own margin-top compensation is retired; the
@@ -411,11 +411,11 @@ describe('UserShell', () => {
       expect(mainEl().style.paddingTop).toBe('34px')
     })
 
-    it('a route without the meta keeps the clearance contract (unmeasured island: 88 + 16)', async () => {
+    it('a route without the meta keeps the clearance contract (unmeasured island: 68 + 8)', async () => {
       await mount('user-unlisted')
       await flush()
 
-      expect(mainEl().style.paddingTop).toBe('104px')
+      expect(mainEl().style.paddingTop).toBe('76px')
     })
   })
 })

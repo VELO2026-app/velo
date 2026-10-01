@@ -295,9 +295,9 @@
        z2 = top hard    — fully-transparent top zone
        z3 = bottom fade — bottom fade zone
        z4 = bottom hard — fully-transparent zone under the tab bar
-     Values are MobileLayout's former hardcoded defaults (z1 fixed 20→16 to match
-     the live gap), so wiring these in is appearance-preserving. */
-  --velo-fog-z1: 16px;
+     Values are MobileLayout's former hardcoded defaults (z1 history: 20 → 16
+     → 8; owner 2026-09-30 — the header→content band read loose app-wide). */
+  --velo-fog-z1: 8px;
   --velo-fog-z2: 40px;
   --velo-fog-z3: 70px;
   --velo-fog-z4: 90px;
