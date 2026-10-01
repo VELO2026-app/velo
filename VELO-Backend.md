@@ -3,7 +3,7 @@
 **Версия:** 2.0
 **Дата:** 20 июня 2026
 **Статус:** Active
-**Тесты:** 615 passed, 12 skipped  
+**Тесты:** 615 passed, 12 skipped 
 
 > **Freshness (PROMPT №510, 2026-07-19, verified against `8d4948f` on `test`):** graded
 > STALE-BUT-HARMLESS overall — NOT rewritten this round; the test count in the header above
