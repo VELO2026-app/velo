@@ -121,6 +121,7 @@ from app.modules.practices.service import (  # noqa: E402
     update_practice,
 )
 from app.modules.users.models import User, UserRole  # noqa: E402
+from app.modules.users.service import lock_user_row  # noqa: E402
 
 PROFILES_DIR = _SCRIPTS_DIR / "seed_profiles"
 
@@ -297,6 +298,10 @@ async def ensure_master(
         session, spec["telegram_id"], spec["display_name"]
     )
     await session.flush()
+    # BE-85: take the users row FOR NO KEY UPDATE (and refresh it) before
+    # the profile and before _set_role_master rewrites credentials -- the
+    # users -> master_profiles order of users/service.py (ROW LOCK ON users).
+    await lock_user_row(session, user.id)
 
     profile = await session.get(MasterProfile, user.id)
     had_master = _master_capability(profile)

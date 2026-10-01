@@ -62,6 +62,7 @@ from app.modules.users.schemas import (
     credentials_without_admin_home,
     has_admin_home,
 )
+from app.modules.users.service import lock_user_row
 
 logger = structlog.get_logger()
 
@@ -418,8 +419,13 @@ async def make_master(
 
     Idempotent-reject: a user who is already a master -> 409 (already_master).
     Write session (get_db_session); the caller flushes (P-01, no commit here).
+
+    BE-85: the users row is taken FOR NO KEY UPDATE first and the
+    already_master check reads it under that lock; the profile comes
+    after it -- the users -> master_profiles order written in
+    users/service.py (ROW LOCK ON users).
     """
-    user = await session.get(User, user_id)
+    user = await lock_user_row(session, user_id)
     if user is None:
         raise NotFoundError("User not found")
 

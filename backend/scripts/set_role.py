@@ -144,7 +144,19 @@ def _full_name(user: User) -> str:
 
 
 async def _find_user(session: AsyncSession, telegram_id: int) -> User | None:
-    stmt = select(User).where(User.telegram_id == telegram_id)
+    """The user to change, taken FOR NO KEY UPDATE (BE-85).
+
+    Every handler rewrites role and credentials (_set_role), to_master and
+    to_user then the profile, so the users row is locked first and held to
+    the CLI's single commit -- the users -> master_profiles order written in
+    app/modules/users/service.py (ROW LOCK ON users). This is the row's
+    first load in the session, so the lock reads its committed values.
+    """
+    stmt = (
+        select(User)
+        .where(User.telegram_id == telegram_id)
+        .with_for_update(key_share=True)
+    )
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
