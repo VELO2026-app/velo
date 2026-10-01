@@ -9,7 +9,7 @@
 
 // -- Enums --------------------------------------------------------------------
 
-/** Who can see/book a practice (Master GROUPS P5, PROMPT №594). PUBLIC: everyone (default -- matches every practice's behavior before this column existed, see the migration's backfill). STUDENTS: anyone with >= 1 non-cancelled booking on this master's practices (the same "derived «Ученики»" rule groups_service.py already uses). GROUPS: members of at least one of the practice's target CUSTOM groups (practice_audience_group). CURATOR_GROUPS: the curator and every member of at least one of the practice's target SCHOOLS (practice_audience_curator_group, P5/GT-11) -- AND only while the master still belongs to that school. That second half has no counterpart in the three kinds above and is the point of this one: a school's audience is lent to a teacher, not given. A master who leaves or is removed stops broadcasting to a room that is no longer theirs, without anyone editing the practice. A blocked student is EXCLUDED from all four -- see practices/audience_service.py, the single shared predicate every enforcement point reuses. */
+/** Who can see/book a practice (Master GROUPS P5, PROMPT №594). PUBLIC: everyone (default -- matches every practice's behavior before this column existed, see the migration's backfill). STUDENTS: anyone with >= 1 non-cancelled booking on this master's practices (the same "derived «Ученики»" rule groups_service.py already uses). GROUPS: members of at least one of the practice's target CUSTOM groups (practice_audience_group). CURATOR_GROUPS: the curator and every member of the school the practice BELONGS TO (Practice.curator_group_id, BE-74) -- AND only while the master still belongs to that school. That second half has no counterpart in the three kinds above and is the point of this one: a school's audience is lent to a teacher, not given. A master who leaves or is removed stops broadcasting to a room that is no longer theirs, without anyone editing the practice. Requires an owning school: a practice without one cannot carry this kind. A blocked student is EXCLUDED from all four -- see practices/audience_service.py, the single shared predicate every enforcement point reuses. */
 export type AudienceKind = 'public' | 'students' | 'groups' | 'curator_groups'
 
 /** Booking lifecycle statuses. */
@@ -380,7 +380,6 @@ export interface AttendanceResponse {
 export interface AudiencePreviewRequest {
   audience_kind: AudienceKind
   group_ids?: string[]
-  curator_group_ids?: string[]
 }
 
 /** POST /api/v1/practices/{id}/audience-preview -- read-only, never persists anything. `stranded_count` is how many of this practice's ACTIVE (pending/confirmed) bookers would fall OUTSIDE the proposed audience -- the frontend warns and requires confirmation when this is above zero, saves silently when it's zero (owner-ruled). */
@@ -604,7 +603,7 @@ export interface CreatePracticeRequest {
   recurrence?: RecurrenceSpec | null
   audience_kind?: AudienceKind
   group_ids?: string[]
-  curator_group_ids?: string[]
+  curator_group_id?: string | null
 }
 
 /** User submits a new report. */
@@ -1443,7 +1442,8 @@ export interface PracticeResponse {
   difficulty?: string | null
   audience_kind?: AudienceKind
   audience_group_names?: string[]
-  audience_curator_group_names?: string[]
+  curator_group_id?: string | null
+  curator_group_name?: string | null
   audience_unavailable?: boolean
   recurrence_days?: number[] | null
   total_sessions?: number | null
@@ -1874,7 +1874,7 @@ export interface UpdatePracticeRequest {
   style?: string | null
   audience_kind?: AudienceKind | null
   group_ids?: string[] | null
-  curator_group_ids?: string[] | null
+  curator_group_id?: string | null
 }
 
 /** User edits their own pending report (reason only). */
