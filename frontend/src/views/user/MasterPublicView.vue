@@ -467,10 +467,11 @@ watch(masterId, (id) => {
   gap: var(--space-1);
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-full);
-  background: var(--velo-glass-blue-15);
+  /* Owner 2026-09-30: #E2F0FD fill, #619CD2 text (--velo-blue-100/400). */
+  background: var(--velo-blue-100);
   font-family: var(--font-body);
   font-size: var(--text-xs);
-  color: var(--velo-text-secondary);
+  color: var(--velo-blue-400);
 }
 
 .master-public__bio {
