@@ -93,7 +93,7 @@
         <div class="master-public__name-row">
           <h1 class="master-public__name">{{ displayName }}</h1>
           <span class="master-public__verified" role="img" aria-label="Верифицирован">
-            <IconCheck :size="14" />
+            <IconCheck :size="10" />
           </span>
         </div>
 
@@ -444,8 +444,10 @@ watch(masterId, (id) => {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 26px;
-  height: 26px;
+  /* Smaller than MasterCard's 26px disc -- next to a text-lg name it read
+     heavy; 18px is the disc's pre-Figma-bump size. */
+  width: 18px;
+  height: 18px;
   border-radius: var(--radius-full);
   background: var(--velo-glass-teal-30);
   color: var(--velo-teal-600);
