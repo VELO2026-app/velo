@@ -592,20 +592,18 @@ watch(masterId, (id) => {
   justify-content: space-between;
   gap: var(--space-2);
   width: 100%;
-  /* Same vertical rhythm as the accordion headers (--space-3): the label is
-     the same --text-sm, so the row must not optically shrink inside the
-     plate. */
+  /* Same vertical rhythm + font size as the page's :deep(.v-accordion__header)
+     (text-base) -- the three panel headers must read identically. */
   padding: var(--space-3) var(--space-4);
-  /* Header parity: the accordion header's text-lg arrow line inflates it to
-     ~58px (14×2 padding + 20×1.5 line) — match it so the --text-sm label
-     reads at the same optical size. */
+  /* Header parity: the accordion header's text-base line makes it ~58px --
+     match it so the label reads at the same optical size. */
   min-height: 58px;
   background: var(--velo-bg-card-solid);
   border: 1px solid var(--velo-border-card);
   border-radius: var(--radius-md);
   color: var(--velo-text-primary);
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   cursor: pointer;
 }
 
