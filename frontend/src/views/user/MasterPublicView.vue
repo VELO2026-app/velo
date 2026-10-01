@@ -88,7 +88,11 @@
     </VEmptyState>
 
     <!-- Content -->
-    <div v-else class="master-public__content">
+    <div
+      v-else
+      class="master-public__content"
+      :class="{ 'master-public__content--with-cta': schoolContext }"
+    >
       <!-- Hero -->
       <VCard class="master-public__hero" padding="none">
         <!-- The verified check rides the avatar's bottom-right corner (owner
@@ -157,14 +161,14 @@
         </p>
       </VAccordion>
 
-      <!-- Ближайшие практики (owner 2026-09-30): a plain heading with the
-           cards always open -- the collapsed accordion (operator 2026-06-05)
-           is retired; the ⋯ menu keeps floating above, so the actions stay
-           reachable. Up to 5 nearest scheduled practices. show-date: практики
-           идут в разные дни — карточка показывает дату + время. -->
-      <section v-if="upcoming.length" class="master-public__upcoming">
+      <!-- Ближайшие практики (owner 2026-09-30): the title ALWAYS shows --
+           with cards when the master has scheduled practices, with the honest
+           «пока не запланировано» note when not (≤5 cards; the collapsed
+           accordion from operator 2026-06-05 is retired; the ⋯ menu keeps
+           floating above). show-date: практики идут в разные дни. -->
+      <section class="master-public__upcoming">
         <h3 class="master-public__section-title">Ближайшие практики</h3>
-        <div class="master-public__practices">
+        <div v-if="upcoming.length" class="master-public__practices">
           <CalendarPracticeCard
             v-for="p in upcoming"
             :key="p.id"
@@ -173,12 +177,23 @@
             @click="goToPractice"
           />
         </div>
+        <p v-else class="master-public__note">Пока практик не запланировано.</p>
       </section>
 
       <!-- «Написать сообщение» (the ⋯ menu) replaced the «Задать вопрос»
            button: opens/joins the eternal DM with this master (POST
            /api/v1/chats is create-or-get, so tapping twice lands in the same
            thread) and navigates in. -->
+    </div>
+
+    <!-- «Создать практику» (owner 2026-09-30): hangs above the tab bar,
+         curator-of-THIS-school only (?groupId=). Same §1.6 hand-off as the
+         school page: the create flow has no audience-preselect contract yet,
+         so this is a plain push to it. -->
+    <div v-if="schoolContext" class="master-public__cta">
+      <VButton variant="primary" block size="lg" @click="goCreatePractice">
+        Создать практику
+      </VButton>
     </div>
 
     <!-- «Написать сообщение» (owner 2026-09-30 -- replaced the «Задать
@@ -368,6 +383,12 @@ function goToCalendar(): void {
     name: 'user-calendar-master',
     params: { masterId: masterId.value },
   })
+}
+
+// The hanging «Создать практику» CTA: same §1.6 hand-off the school page
+// uses -- the create flow has no audience-preselect contract yet.
+function goCreatePractice(): void {
+  void router.push({ name: 'master-practice-new' })
 }
 
 async function loadMaster(id: string): Promise<void> {
@@ -583,6 +604,22 @@ watch(masterId, (id) => {
   color: var(--velo-text-secondary);
   line-height: 1.6;
   margin: 0;
+}
+
+/* The hanging curator CTA (owner 2026-09-30): fixed above the tab bar
+   (nav 64px + its --space-8 floor + a gap), on the content rail. The content
+   reserves matching tail room via --with-cta so the last panel can end up
+   under it. */
+.master-public__cta {
+  position: fixed;
+  left: var(--velo-rail-pad-x);
+  right: var(--velo-rail-pad-x);
+  bottom: calc(var(--space-8) + 64px + var(--space-3) + env(safe-area-inset-bottom, 0px));
+  z-index: var(--z-sticky);
+}
+
+.master-public__content--with-cta {
+  padding-bottom: 140px;
 }
 
 /* Ближайшие практики: plain heading (the bookings__section-title recipe),

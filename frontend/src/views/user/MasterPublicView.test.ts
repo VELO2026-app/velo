@@ -522,7 +522,7 @@ describe('MasterPublicView', () => {
       expect(practicesApi.getPractices).not.toHaveBeenCalled()
     })
 
-    it('a practices-fetch failure is non-fatal: the profile still renders in full, only "Ближайшие практики" is silently absent', async () => {
+    it('a practices-fetch failure is non-fatal: the profile still renders in full, the section keeps the title with the honest note', async () => {
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockRejectedValue(new Error('practices down'))
       mount()
@@ -531,16 +531,22 @@ describe('MasterPublicView', () => {
       expect(emptyState()).toBeNull() // NOT the error rung
       expect(content()).not.toBeNull()
       expect(content()?.textContent).toContain('Анна Соколова')
-      expect(upcomingSection()).toBeNull() // section absent, no error shown for it either
+      // Owner 2026-09-30: the title never disappears -- without data it says why.
+      expect(upcomingSection()).not.toBeNull()
+      expect(upcomingSection()?.textContent).toContain('Ближайшие практики')
+      expect(upcomingSection()?.textContent).toContain('Пока практик не запланировано')
+      expect(practiceCards()).toHaveLength(0)
     })
 
-    it('a genuinely empty practices list produces the SAME absence as a failed fetch -- indistinguishable to the user (proven, not asserted as a bug: header documents this as intentional)', async () => {
+    it('an empty practices list renders the same titled section with the note (owner 2026-09-30)', async () => {
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
       mount()
       await flush()
 
-      expect(upcomingSection()).toBeNull()
+      expect(upcomingSection()).not.toBeNull()
+      expect(upcomingSection()?.textContent).toContain('Пока практик не запланировано')
+      expect(practiceCards()).toHaveLength(0)
     })
 
     it('getPractices is called with the master_id derived from the route, not hardcoded', async () => {
@@ -637,6 +643,28 @@ describe('MasterPublicView', () => {
       await nextTick()
 
       expect(content()?.textContent).toContain('после подключения данных')
+    })
+
+    it('the hanging «Создать практику» CTA is curator-only and hands off to the create flow', async () => {
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      mount()
+      await flush()
+
+      // Without the school context: no CTA at all.
+      expect(host?.querySelector('.master-public__cta')).toBeNull()
+
+      unmount()
+      routeQuery.groupId = 'g1'
+      mount()
+      await flush()
+
+      const cta = host?.querySelector<HTMLButtonElement>('.master-public__cta button')
+      expect(cta).not.toBeNull()
+      expect(cta?.textContent).toContain('Создать практику')
+
+      cta!.click()
+      expect(push).toHaveBeenCalledWith({ name: 'master-practice-new' })
     })
   })
 
