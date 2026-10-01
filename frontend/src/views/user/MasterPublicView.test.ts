@@ -206,23 +206,13 @@ function upcomingSection(): HTMLElement | null {
 function practiceCards(): HTMLElement[] {
   return Array.from(host?.querySelectorAll<HTMLElement>('.practice-list-card') ?? [])
 }
-function methodsHeaderBtn(): HTMLButtonElement | null {
-  const headers = Array.from(
-    host?.querySelectorAll<HTMLButtonElement>('.v-accordion__header') ?? [],
-  )
-  return headers.find((b) => (b.textContent ?? '').includes('Методы')) ?? null
-}
 function methodPills(): HTMLElement[] {
   return Array.from(host?.querySelectorAll<HTMLElement>('.master-public__chips .v-tag') ?? [])
 }
 function pillTexts(): string[] {
   return methodPills().map((p) => (p.textContent ?? '').trim().replace(/\s+/g, ' '))
 }
-// The «Методы» accordion defaults collapsed -- expand it before reading pills.
-async function openMethods(): Promise<void> {
-  methodsHeaderBtn()?.click()
-  await flush()
-}
+// Owner 2026-09-30: the accordion is defaultOpen -- pills read directly.
 
 beforeEach(() => {
   pinia = createPinia()
@@ -402,8 +392,9 @@ describe('MasterPublicView', () => {
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
       mount()
       await flush()
-      await openMethods()
 
+      // Owner 2026-09-30: defaultOpen -- the pills are visible immediately,
+      // no expand-tap needed.
       expect(pillTexts()).toEqual(['Молчания', 'Кундалини', 'Мой уникальный метод'])
       // FE-64 regression: the raw flat string must not surface in any pill.
       for (const t of pillTexts()) {
@@ -419,7 +410,6 @@ describe('MasterPublicView', () => {
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
       mount()
       await flush()
-      await openMethods()
 
       const pills = methodPills()
       expect(pills.length).toBe(2)

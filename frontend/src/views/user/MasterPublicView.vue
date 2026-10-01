@@ -129,8 +129,9 @@
         />
       </div>
 
-      <!-- Methods accordion -->
-      <VAccordion v-if="profile.methods?.length" title="Методы">
+      <!-- Methods accordion (owner 2026-09-30: defaultOpen -- the collapsed
+           default hid the chips behind a tap and read as «методов нет»). -->
+      <VAccordion v-if="profile.methods?.length" title="Методы" default-open>
         <div class="master-public__chips">
           <VTag
             v-for="(chip, i) in methodChips"
