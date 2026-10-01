@@ -920,6 +920,11 @@ async def block_student(
     cancel -- cancelled_by_master=True, unconditional 100% refund. No new
     ledger-writing code.
 
+    Zoom (BE-71): each cancelled booking's registrant is cancelled through
+    the same cancel_registrant_for_booking cancel_booking calls -- our row
+    goes cancelled whatever Zoom answers, and a Zoom failure never fails
+    the block.
+
     Waitlist (owner Q13): WITHOUT this, process_waitlist (waitlist/
     service.py:439) would still notify a blocked student when their turn
     comes up -- they'd get a "spot available" push from the master who
@@ -980,6 +985,41 @@ async def block_student(
     # masters -> core.events one-way at call time.
     from app.core.events.reminders import cancel_booking_reminders
 
+    # BE-71: the same best-effort Zoom-side registrant cancel cancel_booking
+    # makes (bookings/service.py, E21 step E). Without it the registrant
+    # stayed non-cancelled with a live join_url and a booking_id pointing at
+    # the booking cancelled here -- the blocked student could still enter by
+    # the old link, and a rebook of the same practice after unblock REUSED
+    # that registrant (create_registrant_for_booking reuses by
+    # (meeting, user)) while it kept pointing at the dead booking: the new
+    # booking got no link and was never judged by its own registrant. Our
+    # row's status is the authority regardless of Zoom's outcome (see
+    # cancel_registrant_for_booking's docstring). Lazy import: same shape
+    # as cancel_booking's own.
+    #
+    # KNOWN CEILING (BE-71):
+    # 1. mechanics: cancel_registrant_for_booking makes one Zoom HTTP call
+    #    per REGISTERED registrant (_request timeout 15 s, OAuth 10 s when
+    #    the token is not cached), sequentially, inside this transaction --
+    #    the pooled connection and the FOR UPDATE locks on every booking
+    #    selected above are held for all N calls. N is every future
+    #    CONFIRMED booking of this student on this master's practices and
+    #    is not bounded by code (a series alone yields up to
+    #    practice_series_max_occurrences). Worst case is N x ~15 s.
+    # 2. status: acknowledged by design.
+    # 3. task: BE-96.
+    # 4. unfreeze trigger: a block_student request observed holding its
+    #    transaction longer than the request timeout, or Zoom answering
+    #    these cancels with 429.
+    # 5. agreed fix shape: set our registrant rows cancelled inside the
+    #    transaction, make the Zoom cancel calls after commit (BE-96).
+    # 6. rejected: dropping the Zoom-side call -- whether Zoom honours a
+    #    cancel is unconfirmed (E21), but the call is the only thing that
+    #    can invalidate the link on Zoom's side; changing
+    #    cancel_registrant_for_booking's "never raises / our status is the
+    #    sole authority" contract -- cancel_booking relies on it as is.
+    from app.modules.zoom.service import cancel_registrant_for_booking
+
     for booking, practice in future_rows:
         booking.status = BookingStatus.CANCELLED.value
         booking.cancelled_at = now
@@ -995,6 +1035,7 @@ async def block_student(
             booking_id=str(booking.id),
             user_id=str(student_user_id),
         )
+        await cancel_registrant_for_booking(booking, session)
         touched_practice_ids.add(practice.id)
         cancelled_count += 1
 

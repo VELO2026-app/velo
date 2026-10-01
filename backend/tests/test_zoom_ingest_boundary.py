@@ -14,9 +14,13 @@
 #      and once report_ingested_at was set the poller never came back. The
 #      booking stayed CONFIRMED forever. The ingest now decides every
 #      remaining CONFIRMED booking via the legacy proxy before the stamp.
-#      The way in is built for real, through the services, not by deleting
-#      a row by hand: block -> unblock -> book again reuses the old
-#      registrant, which still points at the cancelled booking.
+#      The way in used to be built for real, through the services: block ->
+#      unblock -> book again reused the old registrant, which still pointed
+#      at the cancelled booking. BE-71 closed that way in (block_student
+#      now cancels the registrant, so the rebook gets its own);
+#      test_rebooked_after_unblock_is_decided_not_left_confirmed now pins
+#      the closed path, and the bound itself is exercised by the hand-built
+#      orphan booking in test_each_booking_is_decided_by_its_own_route.
 #   2. PAGINATION. The report used to be read as its first page only
 #      (page_size=300): everyone past row 300 became a no_show "via Zoom".
 #      Now every page is read; a repeated token or the page cap is a
@@ -178,9 +182,22 @@ async def _student_registrant(
 async def test_rebooked_after_unblock_is_decided_not_left_confirmed(
     client: AsyncClient, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The reachable way in, through the real services. The precondition
-    asserts document the root (which this delivery does NOT fix): the
-    reused registrant still points at the cancelled booking."""
+    """Block -> unblock -> book again, through the real services, then a
+    successful ingest: the second booking is decided, not left CONFIRMED.
+
+    WHAT CHANGED (BE-71). Until BE-71 this test held the root as its
+    precondition -- the registrant was REUSED by the rebook and still
+    pointed at the cancelled first booking (`registrant.booking_id ==
+    first.id`). That was true: block_student cancelled bookings without
+    cancelling their registrants, so the old row stayed non-cancelled and
+    create_registrant_for_booking returned it as-is. BE-71 makes
+    block_student cancel the registrant the same way cancel_booking does,
+    so the partial unique index (status != 'cancelled') lets the rebook
+    insert a NEW registrant. The precondition is now the precise opposite:
+    two student rows, each pointing at its own booking, the old one
+    cancelled. The student who walks in on the old (cancelled) link is no
+    longer tied to the second booking by anything -- the second booking is
+    judged by its OWN registrant, which has no segments."""
     master = await _user(client, db_session, 60000, master=True)
     student = await _user(client, db_session, 60001)
     practice, meeting = await _future_practice_with_meeting(db_session, master)
@@ -190,19 +207,36 @@ async def test_rebooked_after_unblock_is_decided_not_left_confirmed(
     await unblock_student(master.id, student.id, db_session)
     second = await create_booking(student, practice.id, session=db_session)
     await db_session.flush()
-
-    registrant = await _student_registrant(db_session, meeting, student)
     await db_session.refresh(first)
+
+    # Selected per booking, not per (meeting, user): there are two student
+    # rows for this pair now, and that is the point.
+    rows = (
+        await db_session.execute(
+            select(ZoomRegistrant).where(
+                ZoomRegistrant.zoom_meeting_id == meeting.id,
+                ZoomRegistrant.user_id == student.id,
+                ZoomRegistrant.role == ZoomRegistrantRole.STUDENT.value,
+            )
+        )
+    ).scalars().all()
+    by_booking = {r.booking_id: r for r in rows}
+    assert len(rows) == 2
+    old_registrant = by_booking[first.id]
+    new_registrant = by_booking[second.id]
+
     assert first.status == BookingStatus.CANCELLED.value
     assert second.status == BookingStatus.CONFIRMED.value
-    assert registrant.status != ZoomRegistrantStatus.CANCELLED.value
-    assert registrant.booking_id == first.id  # the root: reused, not re-pointed
+    assert old_registrant.status == ZoomRegistrantStatus.CANCELLED.value
+    assert new_registrant.status == ZoomRegistrantStatus.REGISTERED.value
+    assert new_registrant.id != old_registrant.id
+    assert new_registrant.zoom_registrant_id != old_registrant.zoom_registrant_id
 
     await _finish(db_session, practice)
-    # He really sat through it on the reused link -- which Zoom cannot tie
-    # to this booking; the proxy decides it, the bound's documented cost.
+    # He sits through it on the OLD, cancelled link: the report carries the
+    # old registrant_id only.
     _report(monkeypatch, [
-        {"registrant_id": registrant.zoom_registrant_id, "duration": 3600},
+        {"registrant_id": old_registrant.zoom_registrant_id, "duration": 3600},
     ])
 
     ok = await ingest_report_for_meeting(meeting, practice, db_session)
@@ -210,9 +244,14 @@ async def test_rebooked_after_unblock_is_decided_not_left_confirmed(
     await db_session.refresh(second)
     await db_session.refresh(meeting)
 
+    # Measured on the run, not reasoned (BE-71): until BE-71 the second
+    # booking had no registrant of its own and went to the legacy proxy.
+    # Now its own registrant decides it via Zoom -- with zero segments, a
+    # no_show. The minutes on the old link back nothing: that link was
+    # cancelled with the blocked booking.
     assert ok is True
-    assert second.status in {BookingStatus.ATTENDED.value, BookingStatus.NO_SHOW.value}
-    assert second.attendance_decided_via == "legacy_proxy"
+    assert second.status == BookingStatus.NO_SHOW.value
+    assert second.attendance_decided_via == "zoom_report"
     assert meeting.report_ingested_at is not None
 
 
