@@ -157,6 +157,16 @@
            thread) and navigates in. -->
     </div>
 
+    <!-- «Написать сообщение» (owner 2026-09-30 -- replaced the «Задать
+           вопрос» button): the composer opens the eternal DM with this
+           master and posts the text; success toasts and closes. -->
+    <SendMessageModal
+      :open="composerOpen"
+      :master-id="masterId"
+      :name="displayName"
+      @close="composerOpen = false"
+    />
+
     <!-- «Изменить роль» for a SCHOOL MASTER (owner ruling 2026-09-30). The
          radio preselects the member's current role (master); choosing
          «Ученик» is a DEMOTE request -- its contract does not exist yet
@@ -218,9 +228,9 @@ import {
 import { VHeader } from '@/components/layout'
 import { IconCheck, IconLock, IconMessages, IconPen } from '@/components/icons'
 import CalendarPracticeCard from '@/components/shared/CalendarPracticeCard.vue'
+import SendMessageModal from '@/components/shared/SendMessageModal.vue'
 import TargetUserCard from '@/components/shared/TargetUserCard.vue'
 import { getPublicMaster } from '@/api/masters'
-import { openChat } from '@/api/chats'
 import { getPractices } from '@/api/practices'
 import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
@@ -285,6 +295,7 @@ function onRoleConfirm(): void {
   roleOpen.value = false
 }
 
+const composerOpen = ref(false)
 const blockConfirmOpen = ref(false)
 
 const blockCopy =
@@ -302,11 +313,9 @@ function onBlockConfirm(): void {
   blockConfirmOpen.value = false
 }
 
-// «Написать сообщение» reuses onAsk: open-or-get the DM with this master,
-// then navigate into it (the same thread the «Задать вопрос» pill opens).
 function onMessageClick(close: () => void): void {
   close()
-  void onAsk()
+  composerOpen.value = true
 }
 
 // FE-61/62: one chip = direction icon + SHORT skill label. The direction word
@@ -327,24 +336,6 @@ function pluralReviews(n: number): string {
 
 function goToPractice(id: string): void {
   void router.push({ name: 'practice-detail', params: { id } })
-}
-
-const openingChat = ref(false)
-
-async function onAsk(): Promise<void> {
-  // T2 (H-T2-UI): open-or-get the DM with this master, then go there. The
-  // backend re-checks the verified predicate server-side (404 otherwise) --
-  // this view already only renders verified masters, so the states agree.
-  if (openingChat.value) return
-  openingChat.value = true
-  try {
-    const thread = await openChat(masterId.value)
-    await router.push({ name: 'user-chat', params: { id: thread.id } })
-  } catch (e) {
-    toast.error(extractApiError(e, 'Не удалось открыть чат'))
-  } finally {
-    openingChat.value = false
-  }
 }
 
 async function loadMaster(id: string): Promise<void> {

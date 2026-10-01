@@ -91,8 +91,9 @@ vi.mock('vue-router', () => ({
 
 const toastInfo = vi.fn()
 const toastError = vi.fn()
+const toastSuccess = vi.fn()
 vi.mock('@/composables/useToast', () => ({
-  useToast: () => ({ error: toastError, success: vi.fn(), info: toastInfo }),
+  useToast: () => ({ error: toastError, success: toastSuccess, info: toastInfo }),
 }))
 
 function masterProfile(overrides: Partial<MasterPublicResponse> = {}): MasterPublicResponse {
@@ -293,13 +294,20 @@ describe('MasterPublicView', () => {
       expect(menuItem('Заблокировать')).toBeTruthy()
     })
 
-    it('«Написать сообщение» opens the DM and navigates into it', async () => {
+    it('«Написать сообщение» opens the composer; sending opens the DM, posts the text and closes', async () => {
       routeQuery.groupId = 'g1'
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
       vi.mocked(chatsApi.openChat).mockResolvedValue({
         id: 'thread-9',
         created_at: '2026-09-30T10:00:00+00:00',
+      })
+      vi.mocked(chatsApi.sendChatMessage).mockResolvedValue({
+        id: 'msg-9',
+        thread_id: 'thread-9',
+        sender: 'me',
+        body: 'Привет',
+        created_at: '2026-09-30T10:01:00+00:00',
       })
       mount()
       await flush()
@@ -308,8 +316,21 @@ describe('MasterPublicView', () => {
       menuItem('Написать сообщение')?.click()
       await flush()
 
+      // The composer: recipient chip + textarea + pills.
+      expect(document.body.textContent).toContain('Отправить')
+      const modal = liveModal()
+      const field = modal?.querySelector<HTMLTextAreaElement>('.send-msg textarea')
+      field!.value = 'Привет'
+      field!.dispatchEvent(new Event('input'))
+      await flush()
+
+      modalButton('Отправить')?.click()
+      await flush()
+
+      // open-or-get the DM with THIS master, then post the text.
       expect(chatsApi.openChat).toHaveBeenCalledWith('m1')
-      expect(push).toHaveBeenCalledWith({ name: 'user-chat', params: { id: 'thread-9' } })
+      expect(chatsApi.sendChatMessage).toHaveBeenCalledWith('thread-9', 'Привет')
+      expect(toastSuccess).toHaveBeenCalledWith('Сообщение отправлено')
     })
 
     it('«Изменить роль»: preselects «Мастер»; the demote pick enables a marked no-op confirm (BE-59)', async () => {
@@ -580,6 +601,17 @@ describe('MasterPublicView', () => {
         document.body.querySelectorAll<HTMLButtonElement>('.v-menu-item') ?? [],
       ).find((b) => b.getAttribute('aria-label') === 'Написать сообщение')
     }
+    function liveModal(): HTMLElement | undefined {
+      const containers = Array.from(
+        document.body.querySelectorAll<HTMLElement>('.v-modal__container'),
+      )
+      return containers[containers.length - 1]
+    }
+    function modalButton(label: string): HTMLButtonElement | undefined {
+      return Array.from(liveModal()?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(
+        (b) => b.textContent?.trim() === label,
+      )
+    }
 
     it("the menu item is fully enabled (a different shape than BookingConfirmedView's disabled textarea+button)", async () => {
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
@@ -593,12 +625,19 @@ describe('MasterPublicView', () => {
       expect(item?.disabled).toBe(false)
     })
 
-    it('clicking it opens/joins the thread via POST /chats and navigates into it', async () => {
+    it('clicking it opens the composer; sending opens the DM, posts the text, toasts and closes', async () => {
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
       vi.mocked(chatsApi.openChat).mockResolvedValue({
         id: 'thread-1',
         created_at: '2026-08-01T10:30:00+00:00',
+      })
+      vi.mocked(chatsApi.sendChatMessage).mockResolvedValue({
+        id: 'msg-1',
+        thread_id: 'thread-1',
+        sender: 'me',
+        body: 'Привет',
+        created_at: '2026-08-01T10:31:00+00:00',
       })
       mount()
       await flush()
@@ -607,13 +646,22 @@ describe('MasterPublicView', () => {
       messageItem()?.click()
       await flush()
 
+      const field = liveModal()?.querySelector<HTMLTextAreaElement>('.send-msg textarea')
+      field!.value = 'Привет'
+      field!.dispatchEvent(new Event('input'))
+      await flush()
+
+      modalButton('Отправить')?.click()
+      await flush()
+
       // The actor is the session's, server-side: the view only names WHICH
       // master (the route's), never who is asking.
       expect(chatsApi.openChat).toHaveBeenCalledWith('m1')
-      expect(push).toHaveBeenCalledWith({ name: 'user-chat', params: { id: 'thread-1' } })
+      expect(chatsApi.sendChatMessage).toHaveBeenCalledWith('thread-1', 'Привет')
+      expect(toastSuccess).toHaveBeenCalledWith('Сообщение отправлено')
     })
 
-    it('negative twin: a failed open toasts and does NOT navigate', async () => {
+    it('negative twin: a failed open toasts, the draft stays standing, no navigation', async () => {
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
       vi.mocked(chatsApi.openChat).mockRejectedValue(
@@ -626,7 +674,18 @@ describe('MasterPublicView', () => {
       messageItem()?.click()
       await flush()
 
+      const field = liveModal()?.querySelector<HTMLTextAreaElement>('.send-msg textarea')
+      field!.value = 'Привет'
+      field!.dispatchEvent(new Event('input'))
+      await flush()
+
+      modalButton('Отправить')?.click()
+      await flush()
+
       expect(toastError).toHaveBeenCalled()
+      // The draft stays standing (the retry is safe -- comms dedups on the
+      // pair); no navigation happened.
+      expect(liveModal()?.querySelector('.send-msg textarea')).not.toBeNull()
       expect(push).not.toHaveBeenCalled()
     })
   })
