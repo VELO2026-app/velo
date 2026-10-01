@@ -1903,7 +1903,33 @@ describe('§1.6 delegation: the master context (stub)', () => {
     await flush()
     expect(vi.mocked(practicesApi.createPractice)).not.toHaveBeenCalled()
     expect(scrollSpy).toHaveBeenCalledTimes(1)
+    // The scroll lands ON the first unfilled required field, not elsewhere.
+    const scrolled = scrollSpy.mock.instances[0] as Element | undefined
+    expect(scrolled).toBe(host?.querySelector('.v-input--error'))
+    expect(scrolled?.querySelector('input')?.placeholder).toBe('Название')
     expect(text()).toContain('Введите название')
+    scrollSpy.mockRestore()
+  })
+
+  it('with the title filled, the scroll targets the NEXT unfilled field', async () => {
+    if (!('scrollIntoView' in Element.prototype)) {
+      Object.defineProperty(Element.prototype, 'scrollIntoView', {
+        value: vi.fn(),
+        configurable: true,
+        writable: true,
+      })
+    }
+    const scrollSpy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {})
+    mount()
+    await flush()
+    typeInto(inputByPlaceholder('Название'), 'Утренняя практика')
+    submitForm()
+    await flush()
+    expect(vi.mocked(practicesApi.createPractice)).not.toHaveBeenCalled()
+    // The first unfilled required field is now the direction select.
+    const scrolled = scrollSpy.mock.instances[0] as Element | undefined
+    expect(scrolled).toBe(host?.querySelector('.v-select--error'))
+    expect(scrolled?.textContent).toContain('Выберите направление')
     scrollSpy.mockRestore()
   })
 })
