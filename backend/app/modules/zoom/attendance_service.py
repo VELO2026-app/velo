@@ -197,12 +197,14 @@ async def ingest_report_for_meeting(
     for zero SEGMENTS, false for zero REGISTRANTS: the loop walks
     registrants, so a booking no registrant points at never entered it, and
     once report_ingested_at was set the poller never looked at the practice
-    again -- the booking stayed CONFIRMED forever. The reachable way in: a
-    master blocks a student (masters/groups_service.py cancels the booking
-    without cancelling its registrant), unblocks him, he books again, and
-    create_registrant_for_booking reuses the old registrant row, still
-    pointing at the cancelled booking. Step 2 is the bound for that and for
-    any other way a booking ends up without a registrant: nothing CONFIRMED
+    again -- the booking stayed CONFIRMED forever. The way in found then: a
+    master blocked a student (masters/groups_service.py cancelled the
+    booking without cancelling its registrant), unblocked him, he booked
+    again, and create_registrant_for_booking reused the old registrant row,
+    still pointing at the cancelled booking. BE-71 closed that way in:
+    block_student now cancels the registrant as cancel_booking does, so the
+    rebook gets a registrant of its own. Step 2 is the bound for any way a
+    booking ends up without a registrant: nothing CONFIRMED
     outlives a successful ingest. It is not a wider matching ladder -- a
     booking with no registrant gets the same proxy the deadline fallback
     uses, never a Zoom no_show it cannot back.
