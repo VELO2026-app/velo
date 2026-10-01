@@ -3,7 +3,7 @@
 
   Public master profile shown to users who tap "Подробнее" on a practice's
   master card (frame 4). Figma node 541:2065:
-    - Hero card: avatar, name + small verified check icon, "N лет опыта" pill, bio
+    - Hero card: avatar with a verified check badge on its corner, name, "N лет опыта" pill, bio
     - Two stat cards: practices_count "Практик" / reviews_count "Отзывов"
     - "Методы" accordion (method chips)
     - "Ближайшие практики": upcoming practices by this master (reuses
@@ -86,16 +86,16 @@
     <div v-else class="master-public__content">
       <!-- Hero -->
       <VCard class="master-public__hero" padding="none">
-        <VAvatar :url="profile.avatar_url ?? ''" :name="displayName" size="xl" />
-
-        <!-- The verified check is the small MasterCard-style disc (owner
-             2026-09-30): icon-only, no text badge. -->
-        <div class="master-public__name-row">
-          <h1 class="master-public__name">{{ displayName }}</h1>
+        <!-- The verified check rides the avatar's bottom-right corner (owner
+             2026-09-30): 22px disc, card-colored ring, no text badge. -->
+        <div class="master-public__avatar">
+          <VAvatar :url="profile.avatar_url ?? ''" :name="displayName" size="xl" />
           <span class="master-public__verified" role="img" aria-label="Верифицирован">
-            <IconCheck :size="10" />
+            <IconCheck :size="12" />
           </span>
         </div>
+
+        <h1 class="master-public__name">{{ displayName }}</h1>
 
         <div v-if="profile.experience_years != null" class="master-public__pills">
           <span class="master-public__pill">
@@ -429,25 +429,24 @@ watch(masterId, (id) => {
   margin: 0;
 }
 
-/* The verified check: the small MasterCard-style disc (owner 2026-09-30) --
-   icon-only, the «Верифицирован» text pill is gone. Same tokens. */
-.master-public__name-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  width: 100%;
+/* The verified check rides the avatar's corner (owner 2026-09-30) -- the
+   ring is the card's own surface, so the disc reads as punched through
+   (never pure white: FE-43). */
+.master-public__avatar {
+  position: relative;
+  flex-shrink: 0;
 }
 
 .master-public__verified {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  /* Smaller than MasterCard's 26px disc -- next to a text-lg name it read
-     heavy; 18px is the disc's pre-Figma-bump size. */
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--velo-bg-card-solid);
   border-radius: var(--radius-full);
   background: var(--velo-glass-teal-30);
   color: var(--velo-teal-600);
