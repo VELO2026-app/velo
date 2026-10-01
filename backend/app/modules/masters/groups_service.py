@@ -919,10 +919,10 @@ async def _take_master_student(
         pg_insert(MasterStudent)
         .values(master_id=master_id, student_user_id=student_user_id, **values)
         .on_conflict_do_update(
-            # Inferred from the columns, not named: the migration built
-            # uq_master_student_master_student as a unique INDEX, not the
-            # constraint groups_models.py declares, and ON CONFLICT ON
-            # CONSTRAINT does not accept an index name.
+            # Inferred from the columns, not named:
+            # uq_master_student_master_student is a unique INDEX (see the
+            # MasterStudent docstring), and ON CONFLICT ON CONSTRAINT does
+            # not accept an index name.
             index_elements=[
                 MasterStudent.master_id, MasterStudent.student_user_id,
             ],
