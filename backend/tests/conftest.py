@@ -22,6 +22,7 @@
 #   Deleting those key prefixes before each test prevents the cascade.
 # =============================================================================
 
+import os
 import subprocess
 from collections.abc import AsyncGenerator
 
@@ -33,6 +34,11 @@ from app.core.config import settings
 from app.core.database import dispose_engine, get_session_factory
 from app.core.redis import close_redis, get_redis, init_redis
 from app.main import app
+from tests.pg_isolation import (
+    PgIsolationError,
+    isolated_database_url,
+    recreate_database,
+)
 from tests.redis_isolation import RedisIsolationError, isolated_redis_url
 
 
@@ -75,11 +81,26 @@ async def setup_infrastructure():
     # monkeypatch snapshots and restores whatever was here before it ran.
     settings.zoom_client_secret = "TEST"
 
+    # BE-86: the suite runs in a Postgres database of its own, DROPPED,
+    # CREATED and migrated from zero here -- never in the application's
+    # (tests/pg_isolation.py says why, and why the name is fixed). The URL
+    # is moved BEFORE anything touches the lazy engine, and handed to the
+    # alembic subprocess through its environment (it does not see
+    # `settings`). Any refusal stops the whole run, before any statement.
+    app_database_url = settings.database_url
+    try:
+        test_database_url = isolated_database_url(app_database_url)
+        await recreate_database(app_database_url)
+    except PgIsolationError as refusal:
+        pytest.exit(f"BE-86 Postgres isolation: {refusal}", returncode=3)
+    settings.database_url = test_database_url
+
     # Run Alembic migrations (ensures tables exist).
     result = subprocess.run(
         ["python", "-m", "alembic", "upgrade", "head"],
         capture_output=True,
         text=True,
+        env={**os.environ, "DATABASE_URL": test_database_url},
     )
     if result.returncode != 0:
         raise RuntimeError(
