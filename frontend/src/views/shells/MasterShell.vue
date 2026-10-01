@@ -225,8 +225,11 @@ const COMPACT_BOTTOM_FOG_ROUTES = ['master-practice-detail']
 // practice-detail's non-VHeader hero header). practice-detail stays on
 // compactBottomFog. Reuses the fogPx reader; the header stays transparent (no
 // solid plate).
+// Owner 2026-10-01: master-practice-new LEFT the form grade -- its header
+// must read like the master page's (default fog: z1 top gap, z2 hard, the
+// visible ~31px fade under the plate). The keyboard-era form grade remains
+// for the other form screens.
 const FORM_FOG_ROUTES = [
-  'master-practice-new',
   'master-practice-edit',
   'master-promocode-new',
   'master-finance',
@@ -249,7 +252,11 @@ function formFog() {
   if (formFogCache) return formFogCache
   const cs = rootComputedStyle()
   formFogCache = {
-    topGap: fogPx(cs, '--velo-fog-pd-top-gap', 25),
+    // Owner 2026-10-01: the form screens' header band read ~17px taller than
+    // every other screen (pd-top-gap 25 vs the shared z1 8). The keyboard
+    // protection stays in the fog grade (top-hard-form 88, clamped to the
+    // clearance); only the dead air above the header normalizes to z1.
+    topGap: fogPx(cs, '--velo-fog-z1', 8),
     fogTopHard: fogPx(cs, '--velo-fog-pd-top-hard-form', 88),
     fogBotFade: fogPx(cs, '--velo-fog-list-z3', 48),
     fogBotHard: fogPx(cs, '--velo-fog-list-z4', 0),
