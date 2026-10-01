@@ -238,7 +238,7 @@
               <VRadioGroup v-model="form.recurrence" :options="RECURRENCE_OPTIONS" />
             </VCard>
             <span
-              class="create-practice__seal-card"
+              class="create-practice__seal-card create-practice__seal-card--rail"
               :class="{ 'create-practice__seal-card--done': !!form.recurrence }"
             >
               <IconRequired v-if="!form.recurrence" :size="22" />
@@ -1255,23 +1255,14 @@ html.is-keyboard-open .create-practice {
   min-height: var(--velo-frozen-vh, 100lvh);
 }
 
-/* Sealed DS fields (owner 2026-10-01): the rosette moves INSIDE the plate's
-   right padding and the plate takes the full row -- no outer gutter. Scoped
-   to .cp-sealed so non-required inputs keep their normal padding. */
+/* Sealed DS fields (owner 2026-10-01, refined): the field spans the full
+   rail width and keeps its native padding UNCHANGED; the rosette lives in
+   the page's right rail padding (24px) BETWEEN the plate and the screen
+   edge -- never on the plate, never reserving field width. */
 .create-practice :deep(.cp-sealed .v-input__row),
 .create-practice :deep(.cp-sealed .v-select__row) {
   position: relative;
   width: 100%;
-}
-
-.create-practice :deep(.cp-sealed .v-input__field) {
-  padding-right: 40px;
-}
-
-/* Rosette sits left of the native chevron (which keeps right:16px), both
-   inside the plate's padding. */
-.create-practice :deep(.cp-sealed .v-select__field) {
-  padding-right: 60px;
 }
 
 .create-practice :deep(.cp-sealed .v-input__seal),
@@ -1279,14 +1270,8 @@ html.is-keyboard-open .create-practice {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-}
-
-.create-practice :deep(.cp-sealed .v-input__seal) {
-  right: var(--space-2);
-}
-
-.create-practice :deep(.cp-sealed .v-select__seal) {
-  right: 30px;
+  /* 22px rosette fully inside the 24px rail: 2px to the screen edge. */
+  right: calc(2px - var(--velo-rail-pad-x));
 }
 
 .create-practice__content {
@@ -1396,13 +1381,8 @@ html.is-keyboard-open .create-practice {
   cursor: pointer;
 }
 
-/* Sealed picker (date/time): full-width plate, rosette INSIDE the right
-   padding (owner 2026-10-01) -- the end-control picker has no seal and keeps
-   the symmetric padding. */
-.create-practice__field-row .create-practice__picker {
-  padding-right: 40px;
-}
-
+/* Sealed picker (date/time): the plate keeps its symmetric padding and full
+   width; the rosette is placed by .create-practice__seal below. */
 .create-practice__picker--empty {
   color: var(--velo-text-muted);
 }
@@ -1411,13 +1391,11 @@ html.is-keyboard-open .create-practice {
   border-color: var(--velo-error);
 }
 
-/* Required seal — overlay on the plate's right padding (owner 2026-10-01),
-   never shrinks. Red empty → green when filled. */
 .create-practice__seal {
   position: absolute;
-  right: var(--space-2);
   top: 50%;
   transform: translateY(-50%);
+  right: calc(2px - var(--velo-rail-pad-x));
   display: flex;
   color: var(--velo-error);
 }
@@ -1468,6 +1446,13 @@ html.is-keyboard-open .create-practice {
   top: var(--space-2);
   display: flex;
   color: var(--velo-error);
+}
+
+/* The repeat CARD sits at the content edge, so its seal goes to the page's
+   right rail padding like the field rosettes (owner 2026-10-01). Nested
+   seals (days / end-date) keep the inner placement. */
+.create-practice__seal-card--rail {
+  right: calc(2px - var(--velo-rail-pad-x));
 }
 
 .create-practice__seal-card--done {
