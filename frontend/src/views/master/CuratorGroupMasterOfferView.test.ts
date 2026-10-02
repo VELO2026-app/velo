@@ -201,7 +201,7 @@ describe('CuratorGroupMasterOfferView -- the accept gate', () => {
   it('accept 403 master_required: the apply wizard is the way out -- the offer survives', async () => {
     vi.mocked(cgApi.getCuratorGroupPage).mockResolvedValue(pageResponse())
     vi.mocked(cgApi.acceptCuratorGroupMasterOffer).mockRejectedValue(
-      new ApiResponseError(403, 'master_required', 'forbidden'),
+      new ApiResponseError(403, 'forbidden', 'master_required'),
     )
     mount()
     await flush()

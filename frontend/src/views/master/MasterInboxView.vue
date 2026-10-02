@@ -229,15 +229,32 @@ async function markAll(): Promise<void> {
 
 // -- Deep links -----------------------------------------------------------------
 // The routing key is action_data.action -- velo's emit sites NAME the intent
-// (same vocabulary as the user map), but every target is a MASTER-zone
-// route. IDs are narrowed from unknown at this boundary; a missing or
-// malformed id means mark-read-only, never a push with an undefined param.
+// (same vocabulary as the user map), and every target but the school-offer
+// screen below is a MASTER-zone route -- that one is standalone, opened from
+// here because its recipient is always a verified master. IDs are narrowed
+// from unknown at this boundary; a missing or malformed id means
+// mark-read-only, never a push with an undefined param.
 function routeFor(
   item: NotificationItem,
 ): { name: string; params?: Record<string, string> } | null {
   const action = item.action_data?.action
   const params = item.action_data?.params ?? {}
   const practiceId = typeof params.practice_id === 'string' ? params.practice_id : null
+
+  // BE-59: the master-offer prompt («Вас приглашают вести школу») rides the
+  // generic open_curator_group action like every school event -- the TYPE is
+  // what makes it this screen's. The recipient is always a verified master
+  // (unverified candidates get master_verification_required instead), so this
+  // inbox -- not the user one -- is where the offer is accepted. A missing or
+  // malformed group_id stays mark-read-only, same as every narrowed id below.
+  if (
+    item.type === 'curator_group.master_offered' &&
+    action === 'open_curator_group' &&
+    typeof params.group_id === 'string' &&
+    params.group_id
+  ) {
+    return { name: 'curator-group-master-offer', params: { id: params.group_id } }
+  }
 
   switch (action) {
     case 'open_practice':
