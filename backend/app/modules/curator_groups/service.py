@@ -40,9 +40,11 @@
 # (BE-102, _effective_master_id_or_4xx) and a curator publishing a master's
 # draft (BE-63, update_practice) read that master's member row and then
 # their master profile FOR SHARE (_lock_school_master_or_400); the first
-# then locks the group as its owner and INSERTs the practice, the second
-# takes the practice FOR UPDATE and then the group as its owner --
-# member -> master profile -> practice -> group, the order above. A
+# then, for a series child, takes the parent practice FOR SHARE (its
+# INSERT will wait on the parent's holder: BE-103 N1), locks the group as
+# its owner and INSERTs the practice; the second takes the practice FOR
+# UPDATE and then the group as its owner -- member -> master profile ->
+# practice -> group, the order above. A
 # curator's edit and delete (BE-63/BE-64, update_practice, delete_practice)
 # take the practice and then the group as its owner, before any journal
 # row (_relock_school_or_404 in practices/service.py). Every other practice

@@ -273,10 +273,52 @@ async def _owned_root_parent_or_400(
     Returns the validated parent (None when parent_id is None) so the
     caller can inherit from it without a second fetch -- T-23 (owner-ruled
     2026-08-17) needs the parent's audience_kind and group rows.
+
+    The parent is LOCKED, FOR SHARE, and held to the commit (BE-103 W-a):
+    the child inherits the parent's audience from this row and the
+    parent's group rows after its INSERT, and both must be one state of
+    the parent. A plain read let an audience edit of the root commit in
+    between -- the child came out with the old kind and the new rows
+    (public -> groups: a public child without groups; groups -> public: a
+    'groups' child with none). Under the lock the edit (update_practice,
+    FOR UPDATE on the root) waits for this transaction, or this lock waits
+    for the edit and reads it whole.
+
+    WHY FOR SHARE, not KEY SHARE (the strength the child's FK takes
+    anyway): KEY SHARE conflicts only with FOR UPDATE. Every writer of the
+    root's audience takes FOR UPDATE today -- but the first writer that
+    updates it with a plain UPDATE (FOR NO KEY UPDATE) would pass a KEY
+    SHARE and bring W-a back silently. FOR SHARE conflicts with both; the
+    reason for the strength is that conflict, not today's list of writers.
+    No upgrade follows: the FK check's KEY SHARE is weaker than what is
+    held.
+
+    The other half of the window is update_practice's: a child born while
+    its lock statement waits on the root is not in that statement's set,
+    and the edit is refused with 409 (_refuse_unheld_children_or_409).
+
+    WHERE it is called is part of the order (PRACTICE ROW ORDER, and the
+    curator_groups module header: member -> master profile -> practice ->
+    group): before any group lock. On the path for another master that is
+    inside _effective_master_id_or_4xx, between the target's rows and the
+    school; on the caller's own path, in create_practice, which locks no
+    group at all.
+
+    populate_existing: no read on today's create path loads the parent
+    before this lock, but the session is the caller's, and a lock does not
+    refresh an object already in it (BE-85) -- the inherited audience must
+    come from the locked row, whoever loaded it first.
     """
     if parent_id is None:
         return None
-    parent = await session.get(Practice, parent_id)
+    parent = (
+        await session.execute(
+            select(Practice)
+            .where(Practice.id == parent_id)
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
     if (
         parent is None
         or parent.master_id != master_id
@@ -375,8 +417,11 @@ _MASTER_NOT_IN_SCHOOL = "master_id must be a verified master of this school"
 
 async def _effective_master_id_or_4xx(
     user: User, body: CreatePracticeRequest, session: AsyncSession,
-) -> UUID:
-    """Return who leads the practice being created (BE-102).
+) -> tuple[UUID, Practice | None]:
+    """Return who leads the practice being created (BE-102) -- and, on the
+    path for another master, the locked series parent (BE-103 N1; None
+    without parent_practice_id, and always None on the caller's own path,
+    where create_practice locks the parent itself).
 
     The caller, unless body.master_id names somebody else. Somebody else is
     a school curator creating a practice for a master of that school, and
@@ -431,7 +476,7 @@ async def _effective_master_id_or_4xx(
     not passed the checks above would hand out another master's practice.
     """
     if body.master_id is None or body.master_id == user.id:
-        return user.id
+        return user.id, None
     target_id = body.master_id
     school_id = body.curator_group_id
     if school_id is None:
@@ -450,16 +495,29 @@ async def _effective_master_id_or_4xx(
     if curator_id != user.id:
         raise ForbiddenError(_CURATOR_ONLY, code="curator_only")
     await _lock_school_master_or_400(school_id, target_id, session)
+    # BE-103 N1: the series parent, in its place in the order -- after the
+    # target's rows, BEFORE the group. A child's INSERT takes KEY SHARE on
+    # its parent (FK), so a new practice row does wait for its parent's
+    # holder: taken after the group, that is group -> practice, against
+    # update_practice and the series cancellation, which hold the series
+    # and then want the group (40P01). It cannot go below the dedup either:
+    # the group re-check below must run first (see above), and the parent
+    # comes before it. Validated against the TARGET master: the child is
+    # theirs.
+    parent = await _owned_root_parent_or_400(
+        target_id, body.parent_practice_id, session,
+    )
     # BE-63: the curator's right, re-checked UNDER THE GROUP LOCK, after the
-    # target's rows (module order: member -> master profile -> ... ->
-    # practice -> group) and before the INSERT -- a new practice row waits
-    # for nobody, and its FK check is covered by the lock already held. The
-    # read above is the fast path; the school can change hands between it
-    # and here (accept of a transfer), and a former curator must not create
-    # in the new owner's school. Same 403 as the read: one fact, one code.
+    # target's rows and the parent (module order: member -> master profile
+    # -> practice -> group) and before the INSERT. The INSERT's FK checks
+    # are covered by locks already held: the parent's above, this group's
+    # here. The read above is the fast path; the school can change hands
+    # between it and here (accept of a transfer), and a former curator must
+    # not create in the new owner's school. Same 403 as the read: one fact,
+    # one code.
     if not await _lock_group_as_owner(user.id, school_id, session):
         raise ForbiddenError(_CURATOR_ONLY, code="curator_only")
-    return target_id
+    return target_id, parent
 
 
 async def _lock_school_master_or_400(
@@ -1703,7 +1761,7 @@ async def create_practice(
     """
     # BE-102: before the dedup, which would otherwise hand the target's
     # existing practice to a caller who has not passed the checks.
-    master_id = await _effective_master_id_or_4xx(user, body, session)
+    master_id, parent = await _effective_master_id_or_4xx(user, body, session)
     for_another_master = master_id != user.id
     duplicate = await _find_recent_duplicate_practice(master_id, body, session)
     if duplicate is not None:
@@ -1736,10 +1794,14 @@ async def create_practice(
             user.id, body.curator_group_id, session,
         )
     # H-R2 (3.4): validate parent_practice_id BEFORE anything is inserted
-    # -- same placement discipline as the group check above.
-    parent = await _owned_root_parent_or_400(
-        master_id, body.parent_practice_id, session,
-    )
+    # -- same placement discipline as the group check above. BE-103: the
+    # parent is locked here on the caller's own path; for another master
+    # it already is, in its place before the school's group
+    # (_effective_master_id_or_4xx) -- one lock, not two.
+    if not for_another_master:
+        parent = await _owned_root_parent_or_400(
+            master_id, body.parent_practice_id, session,
+        )
 
     # T-23 (owner-ruled 2026-08-17): a manually-attached child (this path;
     # the auto-generated recurrence path already does this in
@@ -1875,6 +1937,17 @@ async def create_practice(
         # inherits the whole restriction, and body.group_ids is empty here
         # by construction (the caller sent neither field). Same shape as
         # series_service.py's root_group_ids copy for Path A.
+        #
+        # Read AFTER the flush, a statement later than the audience_kind
+        # taken off the parent -- and still the same state of the parent
+        # (BE-103 W-a): the parent is held FOR SHARE since
+        # _owned_root_parent_or_400, the root's group rows are written by
+        # update_practice, and update_practice holds the root FOR UPDATE,
+        # so it waits for this transaction. The one writer of these rows
+        # that does NOT pass the practice's lock is the FK cascade of
+        # masters/groups_service.py::delete_group (master_group ->
+        # practice_audience_group, ON DELETE CASCADE): a group deleted in
+        # between drops its row here as everywhere (BE-103 N2, open).
         parent_group_ids = list(
             (
                 await session.execute(
