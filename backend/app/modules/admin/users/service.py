@@ -362,23 +362,36 @@ async def get_master_by_id(
 _MAKE_MASTER_EDIT = "Отредактировать"
 
 
-def _admin_make_master_data(user: User) -> dict:
+def _make_master_verification(admin: User, notes: str) -> dict:
+    """A FRESH verification block for a make-master grant (BE-104, 2).
+
+    The same shape verify_master writes: verified_by is the granting admin's
+    id, and which make-master path it was goes into notes -- verified_by
+    names a person, not a code path.
+    """
+    return {
+        "verified_at": datetime.now(UTC).isoformat(),
+        "verified_by": str(admin.id),
+        "notes": notes,
+    }
+
+
+def _admin_make_master_data(user: User, admin: User) -> dict:
     """Verified MasterProfile.data for an explicit admin make-master grant.
 
     Mirrors scripts/set_role.py `_build_verified_data` (which mirrors
     masters/service._build_data) with account.status pre-set to 'verified'.
     Blank profile fields are stubbed; the master/admin edits them later.
+    The verification block names the granting admin (_make_master_verification).
     """
     now_iso = datetime.now(UTC).isoformat()
     return {
         "account": {
             "status": "verified",
             "applied_at": now_iso,
-            "verification": {
-                "verified_at": now_iso,
-                "verified_by": "admin_make_master",
-                "notes": "master granted via admin make-master",
-            },
+            "verification": _make_master_verification(
+                admin, "master granted via admin make-master",
+            ),
             "rejections": [],
         },
         "profile": {
@@ -469,23 +482,24 @@ async def make_master(
     )
     if profile is None:
         profile = MasterProfile(
-            user_id=user_id, data=_admin_make_master_data(user)
+            user_id=user_id, data=_admin_make_master_data(user, admin)
         )
         session.add(profile)
     else:
         status = (profile.data or {}).get("account", {}).get("status")
         if status != "verified":
-            # Re-verify an existing pending/rejected/suspended profile in place.
+            # Re-verify an existing pending/rejected/cancelled_by_user/
+            # suspended profile in place. The verification block is ASSIGNED,
+            # not setdefault-ed (BE-104, 2): a pending/rejected profile carries
+            # an explicit "verification": None (_build_data), which setdefault
+            # kept, and a suspended one carries the block of an EARLIER
+            # verification, which setdefault kept too -- another admin, another
+            # date. No verification history is kept: the old block goes.
             data = copy.deepcopy(profile.data or {})
             acct = data.setdefault("account", {})
             acct["status"] = "verified"
-            acct.setdefault(
-                "verification",
-                {
-                    "verified_at": datetime.now(UTC).isoformat(),
-                    "verified_by": "admin_make_master",
-                    "notes": "re-verified via admin make-master",
-                },
+            acct["verification"] = _make_master_verification(
+                admin, "re-verified via admin make-master",
             )
             data.setdefault("availability", {})["is_accepting"] = True
             profile.set_jsonb("data", data)

@@ -20,6 +20,7 @@
 
 import string
 from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
@@ -51,7 +52,9 @@ _TID_A = 70901
 _TID_B = 70902
 _TID_C = 70903
 _TID_D = 70904
+_TID_E = 70905
 _TID_ADMIN = 70990
+_TID_ADMIN_B = 70991
 
 APPLY_URL = "/api/v1/masters/apply"
 WITHDRAW_URL = "/api/v1/masters/me/application"
@@ -123,8 +126,12 @@ async def _user(client: AsyncClient, tid: int, name: str = "Applicant") -> dict:
     return await login_user(client, telegram_id=tid, first_name=name)
 
 
-async def _admin(client: AsyncClient, db_session: AsyncSession) -> tuple[str, UUID]:
-    auth = await login_user(client, telegram_id=_TID_ADMIN, first_name="Admin")
+async def _admin(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    tid: int = _TID_ADMIN,
+) -> tuple[str, UUID]:
+    auth = await login_user(client, telegram_id=tid, first_name="Admin")
     await db_session.execute(
         update(User)
         .where(User.id == auth["user"]["id"])
@@ -508,8 +515,9 @@ async def test_verify_revoke_make_master_are_two_transitions_two_keys(
 ) -> None:
     """The key names the transition, not the person.
 
-    make_master keeps the old verification block (setdefault), so a key built
-    from verified_at would repeat here and comms would drop the second.
+    The key is a uuid4 per transition by construction; since BE-104
+    delivery 2 the verification stamp would differ here too, but the key
+    does not rest on what a writer remembers to stamp.
     """
     admin_token, _ = await _admin(client, db_session)
     auth = await _user(client, _TID_A)
@@ -546,6 +554,155 @@ async def test_make_master_on_a_missing_user_queues_nothing(
         await _make_master(client, admin_token, real["user"]["id"])
     ).status_code == 200
     assert len(await _status_rows(real["user"]["id"], VERIFIED)) == 1
+
+
+# ---------------------------------------------------------------------------
+# make_master writes a FRESH verification block (BE-104, delivery 2)
+# ---------------------------------------------------------------------------
+
+_GRANTED = "master granted via admin make-master"
+_REVERIFIED = "re-verified via admin make-master"
+
+
+async def _to_pending(client, admin_token, auth) -> None:
+    assert (await _apply(client, auth)).status_code == 201
+
+
+async def _to_rejected(client, admin_token, auth) -> None:
+    await _to_pending(client, admin_token, auth)
+    resp = await _reject(client, admin_token, auth["user"]["id"], "no")
+    assert resp.status_code == 200
+
+
+async def _to_cancelled(client, admin_token, auth) -> None:
+    await _to_pending(client, admin_token, auth)
+    resp = await client.delete(
+        WITHDRAW_URL,
+        headers=auth_headers(auth["session_token"]),
+    )
+    assert resp.status_code == 204
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("setup", "status_before"),
+    [
+        (_to_pending, "pending"),
+        (_to_rejected, "rejected"),
+        (_to_cancelled, "cancelled_by_user"),
+    ],
+)
+async def test_make_master_replaces_the_explicit_none_block(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    setup,
+    status_before,
+) -> None:
+    """EMPTINESS: _build_data stores "verification": None; it is replaced.
+
+    setdefault kept the None, leaving a verified profile that recorded no
+    verification at all.
+    """
+    admin_token, admin_id = await _admin(client, db_session)
+    auth = await _user(client, _TID_A)
+    uid = auth["user"]["id"]
+    await setup(client, admin_token, auth)
+    before = await _account(uid)
+    assert before["status"] == status_before
+    assert before["verification"] is None
+
+    started = datetime.now(UTC)
+    assert (await _make_master(client, admin_token, uid)).status_code == 200
+    block = (await _account(uid))["verification"]
+    assert block["verified_by"] == str(admin_id)
+    assert block["notes"] == _REVERIFIED
+    assert datetime.fromisoformat(block["verified_at"]) >= started
+
+
+@pytest.mark.asyncio
+async def test_make_master_overwrites_the_block_of_an_earlier_verification(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """suspended -> verified: another admin's old block goes, no history kept."""
+    token_b, admin_b = await _admin(client, db_session, _TID_ADMIN_B)
+    token_a, admin_a = await _admin(client, db_session)
+    auth = await _user(client, _TID_A)
+    uid = auth["user"]["id"]
+    assert (await _apply(client, auth)).status_code == 201
+    assert (await _verify(client, token_b, uid)).status_code == 200
+    revoked = await client.post(
+        REVOKE_URL.format(user_id=uid),
+        headers=auth_headers(token_b),
+    )
+    assert revoked.status_code == 200, revoked.text
+    old = (await _account(uid))["verification"]
+    assert old["verified_by"] == str(admin_b)
+
+    assert (await _make_master(client, token_a, uid)).status_code == 200
+    new = (await _account(uid))["verification"]
+    assert new["verified_by"] == str(admin_a)
+    assert new["notes"] == _REVERIFIED
+    assert datetime.fromisoformat(new["verified_at"]) > datetime.fromisoformat(
+        old["verified_at"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_make_master_on_no_profile_names_the_admin(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    admin_token, admin_id = await _admin(client, db_session)
+    auth = await _user(client, _TID_A)
+    uid = auth["user"]["id"]
+    started = datetime.now(UTC)
+    assert (await _make_master(client, admin_token, uid)).status_code == 200
+    block = (await _account(uid))["verification"]
+    assert block["verified_by"] == str(admin_id)
+    assert block["notes"] == _GRANTED
+    assert datetime.fromisoformat(block["verified_at"]) >= started
+
+
+@pytest.mark.asyncio
+async def test_a_repeated_make_master_leaves_the_block_byte_for_byte(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """REPEAT: the second call is 409 already_master and writes nothing."""
+    admin_token, _ = await _admin(client, db_session)
+    auth = await _user(client, _TID_A)
+    uid = auth["user"]["id"]
+    await _to_rejected(client, admin_token, auth)
+    assert (await _make_master(client, admin_token, uid)).status_code == 200
+    first = await _account(uid)
+    assert first["verification"]["notes"] == _REVERIFIED
+
+    again = await _make_master(client, admin_token, uid)
+    assert again.status_code == 409, again.text
+    assert await _account(uid) == first
+
+
+@pytest.mark.asyncio
+async def test_make_master_on_an_approved_applicant_keeps_verifys_block(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """SHORTAGE: had_master -- verify_master wrote the block, and it stays."""
+    token_b, admin_b = await _admin(client, db_session, _TID_ADMIN_B)
+    token_a, _ = await _admin(client, db_session)
+    auth = await _user(client, _TID_E)
+    uid = auth["user"]["id"]
+    assert (await _apply(client, auth)).status_code == 201
+    assert (await _verify(client, token_b, uid)).status_code == 200
+    verified = (await _account(uid))["verification"]
+    assert verified["verified_by"] == str(admin_b) and verified["notes"] == "ok"
+
+    assert (await _make_master(client, token_a, uid)).status_code == 200
+    assert (await _account(uid))["verification"] == verified
+    # Pair: the call did something -- the role moved.
+    user = await fresh_get(User, UUID(uid))
+    assert user is not None and user.role == UserRole.MASTER.value
 
 
 # ---------------------------------------------------------------------------
@@ -642,7 +799,8 @@ async def test_a_verification_waits_for_make_master_in_flight(
     assert len(await _status_rows(uid, VERIFIED)) == 1
     account = await _account(uid)
     # make_master's grant, not the rival's verification, is what stands.
-    assert (account.get("verification") or {}).get("notes") != "raced"
+    assert account["verification"]["notes"] == "re-verified via admin make-master"
+    assert account["verification"]["verified_by"] == str(admin_id)
     assert account.get("can_create_groups") is not True
 
 

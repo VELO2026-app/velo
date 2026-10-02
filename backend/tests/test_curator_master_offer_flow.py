@@ -32,6 +32,7 @@
 # =============================================================================
 
 from collections.abc import AsyncGenerator
+from datetime import datetime
 from uuid import UUID
 
 import pytest
@@ -489,11 +490,16 @@ async def test_reverification_after_revoke_asks_again_under_a_new_key(
 async def test_make_master_after_revoke_asks_again_under_a_new_key(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """REPEAT, the case that ruled out verified_at as the key.
+    """REPEAT: two verifications of one person, two prompts, two keys.
 
-    make_master re-verifies a suspended profile with setdefault, which
-    KEEPS the earlier verification block -- verified_at is the same
-    before and after. The key must still differ.
+    WAS: the stamp did not move. make_master re-verified a suspended profile
+    with setdefault, which KEPT the earlier verification block, so
+    verified_at was the same before and after -- the measured premise for
+    keying on a uuid4 rather than the stamp. That was right about the code
+    it ran against. BE-104 delivery 2 (finding No.5 of the BE-104 report)
+    made make_master ASSIGN a fresh block, so the stamp now moves and names
+    the granting admin. The key must differ all the same: it names the
+    transition, which is why it never rested on the stamp.
     """
     curator = await _master(client, db_session, _TID_CURATOR)
     admin = await _admin(client, db_session)
@@ -510,11 +516,13 @@ async def test_make_master_after_revoke_asks_again_under_a_new_key(
     assert resp.status_code == 200, resp.text
 
     after = (await fresh_get(MasterProfile, UUID(cand["user"]["id"]))).data
-    # The premise of this test, measured: the stamp did not move.
-    assert (
-        after["account"]["verification"]["verified_at"]
-        == before["account"]["verification"]["verified_at"]
+    # The block is make_master's own now: a later stamp, the granting admin.
+    old_block = before["account"]["verification"]
+    new_block = after["account"]["verification"]
+    assert datetime.fromisoformat(new_block["verified_at"]) > datetime.fromisoformat(
+        old_block["verified_at"]
     )
+    assert new_block["verified_by"] == admin["user"]["id"]
     offered = [p for p in await _outbox_for(cand) if p["type"] == OFFERED]
     assert len(offered) == 2
     assert len({p["idempotency_key"] for p in offered}) == 2
