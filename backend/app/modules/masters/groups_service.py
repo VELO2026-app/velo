@@ -28,6 +28,9 @@
 #   booking and audience code only read it, unlocked -- so taking it first
 #   cannot close a cycle.
 #
+#   "Practice (by id)" is the order recorded once for every writer of
+#   several practices in practices/service.py (PRACTICE ROW ORDER).
+#
 #   Practice -> Booking -> master_profiles is BE-99's order, the one
 #   cancel_booking (T-13) and the master's practice cancel already use;
 #   block_student explains, at its booking step, why bookings-first was a

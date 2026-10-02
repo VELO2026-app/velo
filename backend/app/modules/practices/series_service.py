@@ -366,6 +366,8 @@ async def propagate_audience_to_children(
     # them, a terminal child would end up with the old audience_kind and the
     # new group rows (or the reverse) -- a state worse than either, and one
     # no read path expects.
+    # Takes the children AFTER the caller took the root, with no order:
+    # the KNOWN CEILING under PRACTICE ROW ORDER in practices/service.py.
     child_ids = list(
         (
             await session.execute(

@@ -13,9 +13,9 @@
 # The race: the cascade against the same curator's edit of one of the
 # series' occurrences. The edit holds that practice and waits for the
 # school as its owner; a cascade that took the school before the siblings
-# deadlocked against it (40P01). The fixed order -- primary, siblings,
-# school -- is written once, in the LOCK ORDER header of
-# curator_groups/service.py.
+# deadlocked against it (40P01). The fixed order -- every practice row
+# first, in one statement by id, then the school -- is written once, under
+# PRACTICE ROW ORDER in practices/service.py.
 #
 # Practices are built with the same helper shape as
 # test_practice_cancel_by_curator.py: every occurrence of a series has its
@@ -581,8 +581,8 @@ async def test_cascade_against_the_curators_edit_of_a_sibling_does_not_deadlock(
     """Holder: the curator edits the series' later occurrence -- it holds
     that practice FOR UPDATE and is paused just before it locks the school
     as its owner (_relock_school_or_404 -> _lock_group_as_owner). Rival:
-    the same curator's cascade from the root -- it locks the root, then
-    waits for the held sibling.
+    the same curator's cascade from the root -- it locks the series in one
+    statement by id and waits at the held sibling.
 
     With the school taken AFTER the siblings, the rival holds no school
     while it waits: the holder gets the school, commits, and the cascade

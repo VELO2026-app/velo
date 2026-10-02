@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 import structlog
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import record_audit
@@ -367,21 +367,9 @@ async def _tell_master_cancelled_by_curator(
     )
 
 
-async def _lock_later_occurrences(
-    primary: Practice,
-    user: User,
-    curated_group_id: UUID | None,
-    session: AsyncSession,
-) -> list[Practice]:
-    """Lock the later, still-cancellable occurrences of primary's series.
-
-    Series identity = the root id (parent if primary is a child, else its
-    own id). A non-series practice has no siblings: the list is empty and
-    "this_and_future" reduces to "this". Past, completed and
-    already-cancelled occurrences are never selected.
-
-    THE ACTOR'S RIGHT OVER EACH SIBLING, WRITTEN AS A PREDICATE -- the
-    one rule (_manager_of_practice_or_404) asked of every row at once:
+def _right_over_sibling(user: User, curated_group_id: UUID | None):
+    """THE ACTOR'S RIGHT OVER EACH OCCURRENCE OF THE SERIES, as a predicate
+    -- the one rule (_manager_of_practice_or_404) asked of every row at once:
       - the master (curated_group_id None): Practice.master_id == user.id
         (C2). Defense in depth since C2-b removed parent_practice_id from
         UpdatePracticeRequest: the series identity is set at birth only.
@@ -397,33 +385,96 @@ async def _lock_later_occurrences(
         that is not the curator's right, and once a series may have
         occurrences of several masters (B2) it would silently narrow the
         cancellation.
-
-    Called BEFORE the school is locked -- see the LOCK ORDER header of
-    curator_groups/service.py (the series cascade is written there).
     """
-    root_id = primary.parent_practice_id or primary.id
-    root_expr = func.coalesce(Practice.parent_practice_id, Practice.id)
-    right = (
+    return (
         Practice.master_id == user.id
         if curated_group_id is None
         else Practice.curator_group_id == curated_group_id
     )
+
+
+async def _lock_cancel_set(
+    read: Practice,
+    user: User,
+    curated_group_id: UUID | None,
+    scope: str,
+    session: AsyncSession,
+) -> list[Practice]:
+    """Lock every practice this cancellation may touch -- in ONE statement,
+    ORDER BY id (PRACTICE ROW ORDER, practices/service.py).
+
+    The set is the primary itself plus, for "this_and_future", its series:
+    the same root, the actor's right over each row, still cancellable. The
+    TIME BOUNDARY (later than the primary) is deliberately NOT in this
+    statement: it would come from the unlocked read, and the primary's
+    scheduled_at can be moved (UpdatePracticeRequest) between that read
+    and this lock. FOR UPDATE re-checks the rows, not the parameters of
+    the predicate -- so the boundary is applied after the lock, from the
+    locked primary (cancel_practice). The cost: earlier non-terminal
+    occurrences of the series are locked too, and released at commit
+    untouched; past ones are normally completed and fall out on status.
+
+    The root id from the read does not go stale: parent_practice_id is set
+    at birth and never written again (C2-b removed it from
+    UpdatePracticeRequest; one school per series, BE-74).
+
+    populate_existing: the read put the primary into this session, and a
+    lock does not refresh an object already there (BE-85).
+    """
+    wanted = Practice.id == read.id
+    if scope == "this_and_future":
+        root_id = read.parent_practice_id or read.id
+        root_expr = func.coalesce(Practice.parent_practice_id, Practice.id)
+        wanted = or_(
+            wanted,
+            and_(
+                root_expr == root_id,
+                _right_over_sibling(user, curated_group_id),
+                Practice.status.in_(_CANCELLABLE_PRACTICE_STATUSES),
+            ),
+        )
     return list(
         (
             await session.execute(
                 select(Practice)
-                .where(
-                    root_expr == root_id,
-                    right,
-                    Practice.id != primary.id,
-                    Practice.scheduled_at >= primary.scheduled_at,
-                    Practice.status.in_(_CANCELLABLE_PRACTICE_STATUSES),
-                )
-                .order_by(Practice.scheduled_at)
+                .where(wanted)
+                .order_by(Practice.id)
                 .with_for_update()
+                .execution_options(populate_existing=True)
             )
         ).scalars().all()
     )
+
+
+async def _primary_and_later(
+    practice_id: UUID, locked: list[Practice],
+) -> tuple[Practice, list[Practice]]:
+    """The locked primary, checked, and the occurrences after it.
+
+    Everything here is decided on LOCKED rows: the primary's status and
+    the time boundary come from the row this transaction holds, not from
+    the read that chose the set. A primary gone between the read and the
+    lock (a draft deleted) is the stranger's 404 (P-08).
+
+    Async although it awaits nothing: it is the point right after the
+    practice rows are taken, and the race tests pause there
+    (tests/test_practice_row_order.py).
+    """
+    primary = next((p for p in locked if p.id == practice_id), None)
+    if primary is None:
+        raise NotFoundError("Practice not found")
+    if primary.status not in _CANCELLABLE_PRACTICE_STATUSES:
+        raise BadRequestError(
+            f"Cannot cancel practice in status "
+            f"{primary.status}"
+        )
+    later = [
+        p for p in locked
+        if p.id != primary.id
+        and p.scheduled_at >= primary.scheduled_at
+        and p.status in _CANCELLABLE_PRACTICE_STATUSES
+    ]
+    return primary, later
 
 
 async def cancel_practice(
@@ -464,16 +515,15 @@ async def cancel_practice(
     Raises BadRequestError if the primary practice is not in a cancellable
     state.
     """
-    # Lock + validate the primary occurrence.
-    primary = (
-        await session.execute(
-            select(Practice)
-            .where(Practice.id == practice_id)
-            .with_for_update()
-        )
+    # READ, not lock: the right and the shape of the set are decided on an
+    # unlocked copy, and every row is then taken in ONE statement by id
+    # (PRACTICE ROW ORDER, practices/service.py). Taking the primary first
+    # and its series after was a 40P01 against delete_curator_group and
+    # block_student (BE-64 follow-up, O1/O2).
+    read = (
+        await session.execute(select(Practice).where(Practice.id == practice_id))
     ).scalar_one_or_none()
-
-    if not primary:
+    if read is None:
         raise NotFoundError("Practice not found")
 
     # BE-63: "the master or the curator of the practice's school" is ONE
@@ -481,32 +531,21 @@ async def cancel_practice(
     # update_practice and delete_practice. None: the actor is the master;
     # a school id: the actor curates the practice's school; anyone else:
     # the same 404 as "no such practice" (P-08). BE-64 removed the
-    # audience restriction this function used to ask first: the curator
-    # may cancel any practice of the school, public included (owner,
-    # 2026-10-01).
+    # audience restriction this function used to ask first. Asked on the
+    # read: master_id and the school never change (BE-74), and the
+    # curator's hold on the school is re-checked under the group lock
+    # below.
     curated_group_id = await _manager_of_practice_or_404(
-        primary, user, session,
+        read, user, session,
     )
 
-    if primary.status not in _CANCELLABLE_PRACTICE_STATUSES:
-        raise BadRequestError(
-            f"Cannot cancel practice in status "
-            f"{primary.status}"
-        )
+    locked = await _lock_cancel_set(
+        read, user, curated_group_id, scope, session,
+    )
+    primary, siblings = await _primary_and_later(practice_id, locked)
 
-    # LOCK ORDER (curator_groups/service.py, header -- the series cascade
-    # is written there, not here): the primary, then its later
-    # occurrences, then the school. The siblings are taken BEFORE the
-    # school, for the curator and the master alike: a curator's edit or
-    # delete of one of them holds that practice and then waits for the
-    # school as its owner (_relock_school_or_404), so a cascade holding
-    # the school while waiting for that practice was a 40P01 (BE-64).
-    siblings: list[Practice] = []
-    if scope == "this_and_future":
-        siblings = await _lock_later_occurrences(
-            primary, user, curated_group_id, session,
-        )
-
+    # The school comes AFTER every practice row (practice -> group,
+    # curator_groups/service.py header).
     # BE-74 (the BE-59 finding, carried here): OWNERSHIP RE-CHECKED UNDER
     # THE GROUP LOCK before anything is written. curated_group_id_for_
     # practice is a read, and the school can change hands between it and

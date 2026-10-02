@@ -67,6 +67,58 @@
 #   update_practice(), delete_practice(), and cancel_practice() use
 #   with_for_update() (P-12) to prevent lost updates on status transitions.
 #
+# PRACTICE ROW ORDER (the ONE record of it; every other place points here):
+#   A writer that holds MORE THAN ONE practice row in a transaction takes
+#   ALL of them in ONE statement, ORDER BY Practice.id, FOR UPDATE -- and
+#   takes no practice row before or after that statement. LockRows sits
+#   above the Sort in that plan (EXPLAIN, BE-64 follow-up), so the rows are
+#   locked in id order. Two such writers then meet at the lowest common id
+#   and the second waits holding nothing it shares with the first; a
+#   writer of ONE practice cannot close a cycle among practices at all.
+#   Rows a writer must decide on (status, right, the series boundary) are
+#   read WITHOUT a lock first and re-checked on the locked rows -- with
+#   populate_existing=True wherever the read already put the row in the
+#   session (BE-85).
+#
+#   Writers of several practices and where they take them:
+#     cancel_practice, this_and_future (practices/cancel_service.py):
+#       the primary and its series in one statement, the time boundary
+#       applied after the lock (_lock_cancel_set);
+#     delete_curator_group (curator_groups/service.py): the school's
+#       practices, before its UPDATE of them;
+#     block_student (masters/groups_service.py): the student's future
+#       practices of the master (BE-99, already in this form).
+#   Second cycle of the same pair, not through practices: block_student's
+#   master_student upsert holds KEY SHARE on the student's users row, and a
+#   cancellation refunding that student locks the row for the balance --
+#   payments/service.py::record_user_ledger takes it FOR NO KEY UPDATE, which
+#   does not conflict with KEY SHARE (BE-64 follow-up, O2).
+#
+#   What comes after the practice rows stays as recorded elsewhere:
+#   practice -> group (curator_groups/service.py, header) and
+#   practice -> booking (masters/groups_service.py, header).
+#
+#   KNOWN CEILING -- update_practice + propagate_audience_to_children.
+#     1. mechanics: an audience change on a series ROOT takes the root FOR
+#        UPDATE, then (a curator) the school as its owner, then UPDATEs the
+#        root's children with no order (series_service.py). Root first and
+#        children after breaks the one-statement rule, and children after
+#        the school breaks practice -> group: it can meet a cascade from a
+#        child, block_student or delete_curator_group in 40P01.
+#     2. status: acknowledged by design (owner, 2026-10-02: split from the
+#        delivery that wrote this order).
+#     3. task: BE-103.
+#     4. trigger: the delivery for update_practice (W4) is rolled out --
+#        it removes this marker.
+#     5. agreed fix: update_practice takes the root and its non-terminal
+#        children in one statement ORDER BY id, before the school, when the
+#        change touches the root's audience; the propagation then writes
+#        rows it already holds.
+#     6. rejected: ordering only the children's UPDATE (the root is still
+#        taken first, outside the order); ordering by scheduled_at (a
+#        rescheduled root is not the minimum of its series, and
+#        block_student's BE-99 order is by id).
+#
 # DELETE vs CANCEL:
 #   DELETE sets status=deleted (only from draft).
 #   CANCEL sets status=cancelled + refunds all bookings (Phase 6.5).

@@ -26,13 +26,10 @@
 # and cancel_practice (practices/) hold it FOR UPDATE and then write a
 # journal row -- KEY SHARE on the group -- or, cancelling as the curator,
 # lock the group as its owner (_lock_group_as_owner) before writing
-# anything. A cancellation of a series ("this_and_future") holds SEVERAL
-# practices -- the primary, then the later occurrences of its series --
-# and takes ALL of them before the group, for the master and the curator
-# alike (BE-64, cancel_practice): a curator's edit or delete of one of
-# those occurrences holds it and waits for the group as its owner, so a
-# cascade that took the group between the primary and the siblings
-# deadlocked against it. delete_curator_group clears its practices' owner (an UPDATE of
+# anything. A writer of SEVERAL practices takes them all before the group,
+# in the one order recorded in practices/service.py (PRACTICE ROW ORDER):
+# the series cancellation and this module's delete_curator_group follow
+# it. delete_curator_group clears its practices' owner (an UPDATE of
 # practices) before it deletes the group, so it waits for those writers
 # instead of holding the group they are waiting for. It replaced the
 # "practice audience" table at the same place in the order, for the same
@@ -1076,6 +1073,17 @@ async def delete_curator_group(
         CuratorGroupInvite,
     ):
         await session.execute(delete(child).where(child.group_id == group.id))
+    # The school's practices are LOCKED FIRST, in one statement by id
+    # (PRACTICE ROW ORDER, practices/service.py), and only then cleared.
+    # The UPDATE alone locks them in scan order, and against a writer that
+    # takes practices by id that is a 40P01: each holds a row the other
+    # needs next (BE-64 follow-up, O1/G7).
+    await session.execute(
+        select(Practice.id)
+        .where(Practice.curator_group_id == group.id)
+        .order_by(Practice.id)
+        .with_for_update()
+    )
     await session.execute(
         update(Practice)
         .where(Practice.curator_group_id == group.id)
