@@ -99,6 +99,14 @@ function buildRouter(): Router {
         meta: { hideTabBar: true },
         component: StubChild,
       },
+      // §6 (owner 2026-10-02): the school's analytics screen -- the same
+      // FOG_ROUTES + hideTabBar pair (mirrors router/index.ts).
+      {
+        path: '/user/groups/g1/analytics',
+        name: 'user-curator-group-analytics',
+        meta: { hideTabBar: true },
+        component: StubChild,
+      },
       // Owner 2026-09-30: the master's page in the curator context -- the
       // dock hides there (the CTA takes its place; mirrors router/index.ts).
       {
@@ -412,6 +420,13 @@ describe('UserShell', () => {
 
     it('the participants screen (§1.11) is a fog screen like the school page', async () => {
       await mount('user-curator-group-members')
+      await flush()
+
+      expect(mainEl().classList.contains('mobile-layout__main--fog')).toBe(true)
+    })
+
+    it('the analytics screen (§6) is a fog screen like the school page', async () => {
+      await mount('user-curator-group-analytics')
       await flush()
 
       expect(mainEl().classList.contains('mobile-layout__main--fog')).toBe(true)

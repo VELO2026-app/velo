@@ -152,6 +152,10 @@ const FOG_ROUTES = [
   // school's roster feed -- rows dissolve under the floating header like on
   // the school PAGE above; the glass switcher stays above the fade.
   'user-curator-group-members',
+  // tz-curator.md §6 (owner 2026-10-02): the school's analytics screen --
+  // the same scrolling feed under the floating header as the school PAGE
+  // above (without this entry the header floats over raw content).
+  'user-curator-group-analytics',
   // FE-11: the bell feed -- a scrolling list like bookings, dissolves under
   // the floating header; «Прочитать всё» sits in the header, not in-flow.
   'user-inbox',
