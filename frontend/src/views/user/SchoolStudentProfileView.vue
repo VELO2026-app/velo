@@ -43,7 +43,7 @@
 <template>
   <div class="ssp">
     <VHeader title="Ученик" show-back @back="goBack">
-      <template v-if="loaded" #action>
+      <template v-if="loaded && isCurator" #action>
         <VMenu aria-label="Действия с учеником">
           <template #default="{ close }">
             <VMenuItem
@@ -51,7 +51,12 @@
               ariaLabel="Написать сообщение"
               @click="onMessageClick(close)"
             />
-            <VMenuItem :icon="IconPen" ariaLabel="Изменить роль" @click="onRoleClick(close)" />
+            <VMenuItem
+              v-if="!masterOffer"
+              :icon="IconPen"
+              ariaLabel="Изменить роль"
+              @click="onRoleClick(close)"
+            />
             <!-- The lock is live: it opens the block confirm (owner ruling
                  2026-09-30 -- blocking replaced the removed exclusion).
                  INTERIM (stopper BE-79): confirm is a marked no-op. -->
@@ -107,6 +112,22 @@
           <VStatCard layout="row" :value="practicesLabel" label="Практик" />
           <VStatCard layout="row" :value="hoursLabel" label="Часов" />
         </div>
+        <VCard v-if="isCurator && masterOffer" class="ssp__offer">
+          <h2 class="ssp__offer-title">{{ masterOfferLabel(masterOffer) }}</h2>
+          <p class="ssp__offer-text">
+            {{
+              masterOffer === 'awaiting_verification'
+                ? 'Участнику нужно пройти проверку мастера платформы. После одобрения он сможет принять предложение школы.'
+                : 'Участник подтверждён как мастер платформы. Он станет мастером школы, когда примет предложение.'
+            }}
+          </p>
+          <p class="ssp__offer-text">
+            До принятия предложения он остаётся учеником. Срок не ограничен.
+          </p>
+          <VButton variant="outline" block @click="cancelOfferOpen = true">
+            Отменить предложение
+          </VButton>
+        </VCard>
       </template>
     </div>
 
@@ -120,6 +141,14 @@
         <TargetUserCard :name="studentName" :avatar-url="studentAvatar || null" />
         <p class="ssp__role-sub">Выберите роль</p>
         <VRadioGroup v-model="roleKind" :options="roleOptions" :disabled="roleBusy" />
+        <template v-if="kindError">
+          <p class="ssp__offer-text" role="alert">Не удалось проверить роль участника.</p>
+          <VButton variant="outline" @click="resolveCurrentKind">Повторить</VButton>
+        </template>
+        <p v-else-if="roleKind === 'master' && currentKind === 'student'" class="ssp__offer-text">
+          Участник получит предложение. Для назначения нужны подтверждение мастера платформы и его
+          согласие.
+        </p>
         <div class="ssp__role-actions">
           <VButton variant="danger" block :disabled="rolePending" @click="onRoleClose">
             Отмена
@@ -136,6 +165,16 @@
         </div>
       </div>
     </VModal>
+
+    <VConfirmDialog
+      :open="cancelOfferOpen"
+      title="Отменить предложение?"
+      message="Участник останется учеником школы. Вы сможете предложить ему роль мастера снова."
+      confirm-label="Отменить предложение"
+      :loading="cancellingOffer"
+      @confirm="onCancelOffer"
+      @cancel="cancelOfferOpen = false"
+    />
 
     <SendMessageModal
       :open="msgOpen"
@@ -204,11 +243,14 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   getCuratorGroupMembers,
+  getCuratorGroupPage,
   getCuratorGroupStudentProfile,
   offerCuratorGroupMaster,
+  cancelCuratorGroupMasterOffer,
 } from '@/api/curatorGroups'
 import { ApiResponseError } from '@/api/client'
 import type { SchoolStudentProfileResponse } from '@/api/types'
+import { masterOfferLabel } from '@/utils/masterOffers'
 import { IconLock, IconMessages, IconPen } from '@/components/icons'
 import {
   VAvatar,
@@ -268,18 +310,31 @@ function goBack(): void {
 
 const loading = ref(true)
 const loaded = ref(false)
+const isCurator = ref(false)
 const profileNotFound = ref(false)
 const profileError = ref(false)
 const profile = ref<SchoolStudentProfileResponse | null>(null)
+const masterOffer = computed(() => profile.value?.master_offer ?? null)
+let loadVersion = 0
 
 async function load(): Promise<void> {
+  const version = ++loadVersion
   loading.value = true
+  loaded.value = false
+  isCurator.value = false
   profileNotFound.value = false
   profileError.value = false
   try {
-    profile.value = await getCuratorGroupStudentProfile(groupId.value, userId.value)
+    const [student, school] = await Promise.all([
+      getCuratorGroupStudentProfile(groupId.value, userId.value),
+      getCuratorGroupPage(groupId.value),
+    ])
+    if (version !== loadVersion) return
+    profile.value = student
+    isCurator.value = school.viewer.relation === 'curator'
     loaded.value = true
   } catch (e) {
+    if (version !== loadVersion) return
     // The 404 is MASKED by design (P-08): not-curator, not-a-student and a
     // dead school are one answer -- §1.13.1's «Ученик недоступен».
     if (e instanceof ApiResponseError && e.status === 404) {
@@ -288,7 +343,7 @@ async function load(): Promise<void> {
       profileError.value = true
     }
   } finally {
-    loading.value = false
+    if (version === loadVersion) loading.value = false
   }
 }
 
@@ -298,6 +353,8 @@ onMounted(() => {
 
 // Router reuse under the same record: reload for the new student.
 watch([groupId, userId], () => {
+  roleOpen.value = false
+  cancelOfferOpen.value = false
   if (groupId.value && userId.value) void load()
 })
 
@@ -323,6 +380,7 @@ type MemberKind = 'student' | 'master'
 const roleOpen = ref(false)
 const rolePending = ref(false)
 const kindResolving = ref(false)
+const kindError = ref(false)
 const currentKind = ref<MemberKind>('student')
 const roleKind = ref<MemberKind>('student')
 
@@ -341,10 +399,18 @@ const roleOptions = computed(() =>
       ],
 )
 
-const roleConfirmDisabled = computed(() => roleBusy.value || roleKind.value === currentKind.value)
+const roleConfirmDisabled = computed(
+  () =>
+    roleBusy.value ||
+    kindError.value ||
+    !!masterOffer.value ||
+    roleKind.value === currentKind.value,
+)
 
 async function resolveCurrentKind(): Promise<void> {
+  if (kindResolving.value) return
   kindResolving.value = true
+  kindError.value = false
   try {
     // The page response carries no members; the roster is the role's source
     // of truth. The masters page is bounded (visible verified masters only),
@@ -368,10 +434,7 @@ async function resolveCurrentKind(): Promise<void> {
       }
     }
   } catch {
-    // A failed lookup must not preselect a lie; the default (student) is the
-    // only kind this screen is reached for anyway, and the interim action is
-    // idempotent and explains its own 403 master_required.
-    currentKind.value = 'student'
+    kindError.value = true
   } finally {
     roleKind.value = currentKind.value
     kindResolving.value = false
@@ -390,16 +453,35 @@ function onRoleClose(): void {
 }
 
 async function onRoleConfirm(): Promise<void> {
-  if (roleConfirmDisabled.value || rolePending.value) return
+  if (!isCurator.value || roleConfirmDisabled.value || rolePending.value) return
   rolePending.value = true
   try {
     await offerCuratorGroupMaster(groupId.value, userId.value)
     toast.success('Предложение отправлено')
     roleOpen.value = false
+    await load()
   } catch (e) {
     toast.error(extractApiError(e, 'Не удалось отправить предложение'))
   } finally {
     rolePending.value = false
+  }
+}
+
+const cancelOfferOpen = ref(false)
+const cancellingOffer = ref(false)
+
+async function onCancelOffer(): Promise<void> {
+  if (!isCurator.value || !masterOffer.value || cancellingOffer.value) return
+  cancellingOffer.value = true
+  try {
+    await cancelCuratorGroupMasterOffer(groupId.value, userId.value)
+    toast.success('Предложение отменено')
+    cancelOfferOpen.value = false
+    await load()
+  } catch (e) {
+    toast.error(extractApiError(e, 'Не удалось отменить предложение'))
+  } finally {
+    cancellingOffer.value = false
   }
 }
 
@@ -485,6 +567,25 @@ function onReportOfferAccept(): void {
 
 .ssp__stats > * {
   flex: 1;
+}
+
+.ssp__offer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.ssp__offer-title {
+  margin: 0;
+  font-size: var(--text-base);
+  color: var(--velo-text-primary);
+}
+
+.ssp__offer-text {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--velo-text-secondary);
 }
 
 /* «Изменить роль» popup (FE-87, §1.12.3): title / who / role picker / pills. */

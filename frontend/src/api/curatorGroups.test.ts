@@ -21,6 +21,7 @@ import {
   getCuratorGroupMembers,
   removeCuratorGroupMember,
   offerCuratorGroupMaster,
+  cancelCuratorGroupMasterOffer,
   createCuratorGroupInvite,
   revokeCuratorGroupInvite,
   offerCuratorGroupTransfer,
@@ -72,6 +73,12 @@ beforeEach(() => {
 // -- URL/method table: every no-argument-or-path-only wrapper ------------------
 
 describe.each([
+  [
+    'cancelCuratorGroupMasterOffer',
+    () => cancelCuratorGroupMasterOffer('g1', 'u2'),
+    'delete',
+    `${G}/g1/master-offers/u2`,
+  ],
   ['getCuratorGroups', getCuratorGroups, 'get', `${G}`],
   ['deleteCuratorGroup', () => deleteCuratorGroup('g1'), 'delete', `${G}/g1`],
   [
