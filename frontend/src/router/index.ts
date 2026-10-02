@@ -253,6 +253,15 @@ const router = createRouter({
           component: () => import('@/views/user/SchoolMembersView.vue'),
         },
         {
+          // tz-curator.md §6 MVP (owner unblocked 2026-10-02): the school's
+          // analytics screen, curator-only like the roster -- the server
+          // answers everyone else with the same masked 404.
+          path: 'groups/:id/analytics',
+          name: 'user-curator-group-analytics',
+          meta: { hideTabBar: true },
+          component: () => import('@/views/user/SchoolAnalyticsView.vue'),
+        },
+        {
           // tz-curator.md §1.11.4 (owner 2026-09-22): the school-context
           // student profile -- there is no public student page, and the CRM
           // profile 404s for school-only students, so the curator actions
@@ -540,6 +549,15 @@ const router = createRouter({
           beforeEnter: masterStatusGuard,
           meta: { hideTabBar: true },
           component: () => import('@/views/user/SchoolMembersView.vue'),
+        },
+        {
+          // tz-curator.md §6 MVP: the same analytics screen the user zone
+          // mounts; the zone only picks the back target.
+          path: 'curator-groups/:id/analytics',
+          name: 'master-curator-group-analytics',
+          beforeEnter: masterStatusGuard,
+          meta: { hideTabBar: true },
+          component: () => import('@/views/user/SchoolAnalyticsView.vue'),
         },
         {
           // tz-curator.md §1.11.4 (owner 2026-09-22): same student profile
