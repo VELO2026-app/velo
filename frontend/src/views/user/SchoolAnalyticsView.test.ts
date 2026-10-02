@@ -17,7 +17,7 @@ import { createApp, nextTick, type App } from 'vue'
 import SchoolAnalyticsView from '@/views/user/SchoolAnalyticsView.vue'
 import * as cgApi from '@/api/curatorGroups'
 import { ApiResponseError } from '@/api/client'
-import type { CuratorGroupAnalyticsResponse } from '@/api/curatorGroups'
+import type { CuratorGroupAnalyticsResponse } from '@/api/types'
 
 vi.mock('@/api/curatorGroups')
 
@@ -105,7 +105,8 @@ function analyticsFixture(): CuratorGroupAnalyticsResponse {
     feedback: {
       checkins_count: 3,
       reviews_count: 4,
-      mood: { low: 1, mid: 2, high: 0 },
+      // BE-77: the mood distribution is five zones too (was low/mid/high).
+      mood: { bad: 1, low: 0, neutral: 2, good: 0, fire: 0 },
       rating: { bad: 1, low: 0, neutral: 0, good: 2, fire: 1 },
     },
     top_practices: [],

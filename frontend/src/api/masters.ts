@@ -267,9 +267,9 @@ export function getMasterReviews(
   offset = 0,
   attention = false,
 ): Promise<PaginatedMasterReviewsResponse> {
-  // attention=true narrows the feed to the negative (confused) bucket
-  // server-side (E1) so the «Требуют внимания» block sees a full page of
-  // low-rated reviews, not only those that fall in the first mixed page.
+  // attention=true narrows the feed to ratings 1-4 (zones bad and low,
+  // BE-77) server-side (E1) so the «Требуют внимания» block sees a full page
+  // of them, not only those that fall in the first mixed page.
   const query = buildQuery({ limit, offset, attention: attention || undefined })
   return api.get<PaginatedMasterReviewsResponse>(`/api/v1/masters/me/reviews${query}`)
 }

@@ -360,7 +360,10 @@ async def test_the_scores_are_raw_numbers_and_nothing_else(
     assert feedback["rating"] == 7
     assert isinstance(feedback["rating"], int)
 
-    derived = {"mood_bucket", "rating_bucket", "bucket", "emoji", "face"}
+    derived = {
+        "mood_bucket", "rating_bucket", "bucket", "zone", "score_zone",
+        "emoji", "face",
+    }
     assert derived & set(checkin) == set()
     assert derived & set(feedback) == set()
 

@@ -593,8 +593,9 @@ async def ensure_feedback(
     """One review. Unique per (practice, user).
 
     Only feedback on the master's COMPLETED practices reaches «Отзывы» and
-    «Ключевые отзывы» (masters/reviews_service.py), and only a rating <= 3
-    puts a student into «Требуют внимания» (students_service.py). A profile
+    «Ключевые отзывы» (masters/reviews_service.py), and only a rating <= 4
+    (ATTENTION_RATING_MAX, BE-77) puts a student into «Требуют внимания»
+    (students_service.py). A profile
     that wants both blocks populated must therefore seed both high and low
     ratings on completed practices -- there is no other way to light them up.
     """

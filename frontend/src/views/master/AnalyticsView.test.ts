@@ -70,6 +70,7 @@ import type {
   MasterReviewItem,
   MasterTransactionItem,
   IncomeResponse,
+  ScoreZoneCounts,
 } from '@/api/types'
 
 // Both stores under this screen read from these two modules, so mocking them
@@ -170,8 +171,8 @@ const PRACTICES = [P_MONTH, P_NEW, P_ANCIENT, P_FUTURE, P_MID]
 function insights(
   practiceId: string,
   participants: number,
-  checkins: { high: number; mid: number; low: number },
-  feedbacks: { fire: number; good: number; confused: number },
+  checkins: ScoreZoneCounts,
+  feedbacks: ScoreZoneCounts,
 ): PracticeInsightsResponse {
   return {
     practice_id: practiceId,
@@ -183,16 +184,20 @@ function insights(
 }
 
 // Week (p1+p2): 20 participants, 10 check-ins -> 50%; 8 feedbacks -> 40%.
-//               fire 4 / good 3 / confused 1  (total 8)
+//               fire 4 / good 1 / neutral 2 / low 0 / bad 1  (total 8)
 // Month (+p3):  25 participants, 15 check-ins -> 60%; 11 feedbacks -> 44%.
-//               fire 4 / good 4 / confused 3  (total 11)
+//               fire 4 / good 2 / neutral 2 / low 1 / bad 2  (total 11)
+// BE-77: five zones (was fire/good/confused). Totals per practice are kept
+// (5 / 3 / 3 feedbacks, 7 / 3 / 5 check-ins) so the rate figures stay; the
+// zones are spread so every one of the five carries a distinct number in
+// some period -- a crossed zone would show up as a wrong bar.
 // The two periods differ on EVERY figure on purpose -- equal numbers would let a
 // toggle that does nothing pass.
 const INSIGHTS: Record<string, PracticeInsightsResponse> = {
-  p1: insights('p1', 10, { high: 4, mid: 2, low: 1 }, { fire: 3, good: 1, confused: 1 }),
-  p2: insights('p2', 10, { high: 2, mid: 1, low: 0 }, { fire: 1, good: 2, confused: 0 }),
-  p3: insights('p3', 5, { high: 5, mid: 0, low: 0 }, { fire: 0, good: 1, confused: 2 }),
-  p5: insights('p5', 100, { high: 100, mid: 0, low: 0 }, { fire: 100, good: 0, confused: 0 }),
+  p1: insights('p1', 10, { bad: 1, low: 0, neutral: 2, good: 0, fire: 4 }, { bad: 1, low: 0, neutral: 0, good: 1, fire: 3 }),
+  p2: insights('p2', 10, { bad: 0, low: 0, neutral: 1, good: 0, fire: 2 }, { bad: 0, low: 0, neutral: 2, good: 0, fire: 1 }),
+  p3: insights('p3', 5, { bad: 0, low: 0, neutral: 0, good: 0, fire: 5 }, { bad: 1, low: 1, neutral: 0, good: 1, fire: 0 }),
+  p5: insights('p5', 100, { bad: 0, low: 0, neutral: 0, good: 0, fire: 100 }, { bad: 0, low: 0, neutral: 0, good: 0, fire: 100 }),
 }
 
 function review(overrides: Partial<MasterReviewItem> = {}): MasterReviewItem {
@@ -200,7 +205,7 @@ function review(overrides: Partial<MasterReviewItem> = {}): MasterReviewItem {
     user_id: 'u1',
     reviewer_name: 'Анна',
     avatar_url: null,
-    rating: 'confused',
+    rating: 'low',
     comment: null,
     practice_title: 'Утренняя практика',
     created_at: '2026-07-19T12:00:00Z',
@@ -223,14 +228,15 @@ const RV_OLD = review({
   practice_title: 'Дыхание',
   created_at: '2026-06-30T12:00:00Z',
 })
-// Recent, but a POSITIVE rating. The endpoint is called with attention=true so
-// the backend already narrows to `confused` -- but the screen re-filters on
-// rating client-side (.vue:419-421), and this fixture is what holds that filter
-// honest if the server contract ever loosens.
-const RV_HAPPY = review({
+// A second recent review, in the OTHER attention zone (bad). BE-77: this was
+// RV_HAPPY, a positive rating the screen used to re-filter out client-side.
+// The owner removed that filter -- attention=true is the server's answer and
+// the threshold lives only there -- so the fixture now pins the opposite: what
+// the server returns inside the period is rendered, whatever its zone.
+const RV_BAD = review({
   user_id: 'u3',
   reviewer_name: 'Вера',
-  rating: 'fire',
+  rating: 'bad',
   comment: 'Отлично',
   practice_title: 'Вечерняя практика',
   created_at: '2026-07-19T12:00:00Z',
@@ -397,18 +403,21 @@ function stat(label: string): string {
 }
 
 /** A «Общая статистика» bar's «NN% (count)» meta, found by its bucket label. */
-function distMeta(label: string): string {
-  const row = Array.from(reviewsPane().querySelectorAll<HTMLElement>('.v-rating-dist__row')).find(
-    (r) => r.querySelector('.v-rating-dist__head')?.textContent?.includes(label),
-  )
-  return norm(row?.querySelector('.v-rating-dist__meta')?.textContent).trim()
-}
 
 function pcards(): HTMLElement[] {
   return Array.from(reviewsPane().querySelectorAll<HTMLElement>('.analytics__pcard'))
 }
 function pcardTitles(): string[] {
   return pcards().map((c) => c.querySelector('.analytics__pcard-title')?.textContent?.trim() ?? '')
+}
+/** Every distribution bar as label -> meta: a missing/extra bar fails toEqual. */
+function distAll(): Record<string, string> {
+  return Object.fromEntries(
+    Array.from(reviewsPane().querySelectorAll<HTMLElement>('.v-rating-dist__row')).map((r) => [
+      norm(r.querySelector('.v-rating-dist__head')?.textContent).trim(),
+      norm(r.querySelector('.v-rating-dist__meta')?.textContent).trim(),
+    ]),
+  )
 }
 function badgesOf(card: HTMLElement): string[] {
   return Array.from(card.querySelectorAll('.v-rating-badges__badge')).map((b) =>
@@ -465,7 +474,7 @@ beforeEach(() => {
   mockBucketedPractices(PRACTICES)
   vi.mocked(mastersApi.getMasterReviews)
     .mockReset()
-    .mockResolvedValue(reviewsPage([RV_RECENT, RV_OLD, RV_HAPPY]))
+    .mockResolvedValue(reviewsPage([RV_RECENT, RV_OLD]))
   vi.mocked(mastersApi.getIncome)
     .mockReset()
     .mockImplementation(async (period) => (period === 'month' ? INCOME_MONTH : INCOME_WEEK))
@@ -695,26 +704,34 @@ describe('AnalyticsView', () => {
       expect(stat('Отзывов')).toBe('0')
     })
 
-    it('the distribution bars sum the period feedbacks: 50% (4) / 38% (3) / 13% (1)', async () => {
-      // fire 3+1, good 1+2, confused 1+0 over a total of 8.
+    it('the distribution bars sum the period feedbacks over all five zones', async () => {
+      // fire 3+1, good 1+0, neutral 0+2, low 0+0, bad 1+0 over a total of 8.
       mount()
       await flush()
 
-      expect(distMeta('Огонь!')).toBe('50% (4)')
-      expect(distMeta('Хорошо')).toBe('38% (3)')
-      expect(distMeta('Есть вопросы')).toBe('13% (1)')
+      expect(distAll()).toEqual({
+        Огонь: '50% (4)',
+        Хорошо: '13% (1)',
+        Нормально: '25% (2)',
+        'Не очень': '0% (0)',
+        Плохо: '13% (1)',
+      })
     })
 
-    it('the distribution follows the period: month is 36% (4) / 36% (4) / 27% (3)', async () => {
+    it('the distribution follows the period: month moves every zone', async () => {
       mount()
       await flush()
 
       chromeButton('Месяц')?.click()
       await flush()
 
-      expect(distMeta('Огонь!')).toBe('36% (4)')
-      expect(distMeta('Хорошо')).toBe('36% (4)')
-      expect(distMeta('Есть вопросы')).toBe('27% (3)')
+      expect(distAll()).toEqual({
+        Огонь: '36% (4)',
+        Хорошо: '18% (2)',
+        Нормально: '18% (2)',
+        'Не очень': '9% (1)',
+        Плохо: '18% (2)',
+      })
     })
 
     it('renders 0% bars rather than nothing when the period has no feedback', async () => {
@@ -722,20 +739,26 @@ describe('AnalyticsView', () => {
       mount()
       await flush()
 
-      expect(distMeta('Огонь!')).toBe('0% (0)')
-      expect(distMeta('Есть вопросы')).toBe('0% (0)')
+      expect(distAll()).toEqual({
+        Огонь: '0% (0)',
+        Хорошо: '0% (0)',
+        Нормально: '0% (0)',
+        'Не очень': '0% (0)',
+        Плохо: '0% (0)',
+      })
     })
   })
 
   // ===========================================================================
   describe('Отзывы -- the inline per-practice badges', () => {
     it('renders each card its OWN percentages, not the aggregate', async () => {
-      // p1: 3/1/1 of 5 -> 60/20/20.  p2: 1/2/0 of 3 -> 33/67/0.
+      // Best zone first (fire, good, neutral, low, bad).
+      // p1: 3/1/0/0/1 of 5 -> 60/20/0/0/20.  p2: 1/0/2/0/0 of 3 -> 33/0/67/0/0.
       mount()
       await flush()
 
-      expect(badgesOf(pcards()[0]!)).toEqual(['60%', '20%', '20%'])
-      expect(badgesOf(pcards()[1]!)).toEqual(['33%', '67%', '0%'])
+      expect(badgesOf(pcards()[0]!)).toEqual(['60%', '20%', '0%', '0%', '20%'])
+      expect(badgesOf(pcards()[1]!)).toEqual(['33%', '0%', '67%', '0%', '0%'])
     })
 
     it('shows no badges on a practice whose insights failed to load', async () => {
@@ -749,15 +772,15 @@ describe('AnalyticsView', () => {
       mount()
       await flush()
 
-      expect(badgesOf(pcards()[0]!)).toEqual(['60%', '20%', '20%'])
+      expect(badgesOf(pcards()[0]!)).toEqual(['60%', '20%', '0%', '0%', '20%'])
       expect(badgesOf(pcards()[1]!)).toEqual([])
     })
 
     it('shows no badges when insights arrived but nobody left feedback', async () => {
       // `totalFeedbacks(p.id) > 0` (.vue:148) -- a practice with check-ins but
-      // zero feedback would otherwise show a confident 0%/0%/0% trio.
+      // zero feedback would otherwise show a confident row of 0% badges.
       vi.mocked(diaryApi.getPracticeInsights).mockResolvedValue(
-        insights('p1', 10, { high: 4, mid: 0, low: 0 }, { fire: 0, good: 0, confused: 0 }),
+        insights('p1', 10, { bad: 0, low: 0, neutral: 0, good: 0, fire: 4 }, { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 }),
       )
       mount()
       await flush()
@@ -851,8 +874,8 @@ describe('AnalyticsView', () => {
 
   // ===========================================================================
   describe('Требуют внимания', () => {
-    it('lists only CONFUSED reviews inside the period', async () => {
-      // RV_HAPPY is recent but positive; RV_OLD is confused but 20 days old.
+    it('lists the attention reviews inside the period', async () => {
+      // RV_RECENT (low) is recent; RV_OLD is 20 days old -> week shows Анна.
       mount()
       await flush()
 
@@ -860,7 +883,7 @@ describe('AnalyticsView', () => {
       expect(paneText(reviewsPane())).toContain('Требуют внимания')
     })
 
-    it('month widens the window to the older confused review', async () => {
+    it('month widens the window to the older attention review', async () => {
       mount()
       await flush()
 
@@ -894,8 +917,19 @@ describe('AnalyticsView', () => {
       expect(attentionCards()[0]?.querySelector('.analytics__attention-quote')).toBeNull()
     })
 
+    it('renders every review the server returned for attention, of either zone (no client zone filter)', async () => {
+      // BE-77, owner decision: the server owns the threshold (attention=true,
+      // ratings 1-4). A bad and a low review inside the week both render; the
+      // screen restates no zone check of its own.
+      vi.mocked(mastersApi.getMasterReviews).mockResolvedValue(reviewsPage([RV_RECENT, RV_BAD]))
+      mount()
+      await flush()
+
+      expect(attentionNames()).toEqual(['Анна', 'Вера'])
+    })
+
     it('hides the section AND its heading when nothing needs attention', async () => {
-      vi.mocked(mastersApi.getMasterReviews).mockResolvedValue(reviewsPage([RV_HAPPY]))
+      vi.mocked(mastersApi.getMasterReviews).mockResolvedValue(reviewsPage([]))
       mount()
       await flush()
 
@@ -916,9 +950,9 @@ describe('AnalyticsView', () => {
       expect(stat('Check-in')).toBe('50%')
     })
 
-    it('asks the backend for the negative bucket, not a mixed page', async () => {
-      // attention=true (.vue:408) -- a mixed page can be all-positive and leave
-      // the block empty while confused reviews exist further down the feed. The
+    it('asks the backend for the attention reviews, not a mixed page', async () => {
+      // attention=true -- a mixed page can be all-positive and leave the block
+      // empty while attention reviews exist further down the feed. The
       // ONE call-shape assertion in this file, because the argument is the
       // behaviour: nothing rendered can distinguish it.
       mount()

@@ -74,7 +74,7 @@ from app.core.periods import (
     rate_delta_pp,
 )
 from app.modules.bookings.models import Booking, BookingStatus
-from app.modules.diary.insights_service import mood_bucket, rating_bucket
+from app.modules.diary.insights_service import zone_counts
 from app.modules.diary.models import Checkin, CheckType, Feedback
 from app.modules.masters.finance_service import get_master_income
 from app.modules.practices.models import Practice, PracticeStatus
@@ -200,10 +200,10 @@ async def get_master_stats(
 #   - rates are percentages, so their delta is in POINTS (rate_delta_pp), not
 #     a percent change of a percent.
 #
-# Buckets come from diary.insights_service (mood_bucket / rating_bucket), the
-# same helpers the per-practice insights and the curator feeds use. The 1-3 /
-# 4-7 / 8-10 thresholds are NOT restated here: a fourth copy is how three
-# screens start disagreeing about what "good" means.
+# Zones come from diary.insights_service (zone_counts / score_zone), the
+# same helpers the per-practice insights and the curator feeds use. The
+# zone boundaries are NOT restated here: a second copy is how screens
+# start disagreeing about what "good" means.
 
 # THE DENOMINATOR -- which bookings count as "записавшиеся".
 #
@@ -289,12 +289,12 @@ async def _mood_distribution(
     end: datetime,
     session: AsyncSession,
 ) -> dict[str, int]:
-    """Check-in counts by mood bucket across the period's completed practices.
+    """Check-in counts per zone across the period's completed practices.
 
-    Scores are pulled and bucketed in Python, exactly as the per-practice
-    insights do it: grouping by a bucket in SQL would mean writing the 1-3 /
-    4-7 / 8-10 boundaries into a query, which is the copy mood_bucket exists
-    to prevent.
+    Scores are pulled and folded in Python (zone_counts), exactly as the
+    per-practice insights do it: grouping by a zone in SQL would mean
+    writing the zone boundaries into a query, which is the copy zone_counts
+    exists to prevent.
     Only PRE check-ins, like every other reader of this table
     (checkins_service, bookings/service, curator_groups/feedback_service,
     practices/enrichment_service). Not defensive decoration: uq_checkin_booking
@@ -316,10 +316,7 @@ async def _mood_distribution(
         )
         .group_by(Checkin.mood)
     )
-    buckets = {"high": 0, "mid": 0, "low": 0}
-    for score, count in (await session.execute(stmt)).all():
-        buckets[mood_bucket(score)] += count
-    return buckets
+    return zone_counts((await session.execute(stmt)).all())
 
 
 async def _rating_distribution(
@@ -328,10 +325,9 @@ async def _rating_distribution(
     end: datetime,
     session: AsyncSession,
 ) -> dict[str, int]:
-    """Feedback counts by rating bucket across the period's completed practices.
+    """Feedback counts per zone across the period's completed practices.
 
-    mood_distribution's twin; rating_bucket renames the same three ranges into
-    the feedback vocabulary (confused / good / fire).
+    _mood_distribution's twin over the same five zones.
     """
     stmt = (
         select(Feedback.rating, func.count(Feedback.id))
@@ -345,10 +341,7 @@ async def _rating_distribution(
         )
         .group_by(Feedback.rating)
     )
-    buckets = {"fire": 0, "good": 0, "confused": 0}
-    for score, count in (await session.execute(stmt)).all():
-        buckets[rating_bucket(score)] += count
-    return buckets
+    return zone_counts((await session.execute(stmt)).all())
 
 
 async def _analytics_window(

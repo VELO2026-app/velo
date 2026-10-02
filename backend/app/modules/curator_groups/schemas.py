@@ -22,6 +22,9 @@ from pydantic import (
     UrlConstraints,
 )
 
+from app.modules.diary.models import ScoreZone
+from app.modules.diary.schemas import ScoreZoneCounts
+
 # strip_whitespace=True is a DELIBERATE divergence from GroupNameStr
 # (masters/groups_schemas.py), which has min_length=1 without stripping.
 # There, a name of a single space passes validation and is stored as " ".
@@ -681,10 +684,8 @@ class CuratorGroupMasterOfferRequest(BaseModel):
 class CuratorGroupCheckinItem(BaseModel):
     """One PRE check-in left on a practice of this school.
 
-    `mood` is the stored 1..10 score mapped to the three distribution
-    buckets (1-3 low / 4-7 mid / 8-10 high) -- the same vocabulary the
-    anonymous per-practice insights already use, so the frontend reuses the
-    mood icons it renders there.
+    `mood` is the stored 1..10 score mapped to its zone (ScoreZone, BE-77)
+    -- the same five keys every distribution and feed uses.
 
     POST check-ins never appear here, and neither do check-ins whose
     booking was later cancelled: both are absent from the master's own
@@ -699,7 +700,7 @@ class CuratorGroupCheckinItem(BaseModel):
     user_id: UUID
     student_name: str
     avatar_url: str | None
-    mood: Literal["high", "mid", "low"]
+    mood: ScoreZone
     comment: str | None
     practice_id: UUID
     practice_title: str
@@ -718,9 +719,9 @@ class PaginatedCuratorGroupCheckinsResponse(BaseModel):
 class CuratorGroupReviewItem(BaseModel):
     """One named review left on a practice of this school.
 
-    `rating` is the stored 1..10 score mapped to the three feedback buckets
-    (1-3 confused / 4-7 good / 8-10 fire), identical to what the practice's
-    master reads in their own per-practice and cross-practice review feeds.
+    `rating` is the stored 1..10 score mapped to its zone (ScoreZone,
+    BE-77), identical to what the practice's master reads in their own
+    per-practice and cross-practice review feeds.
 
     user_id identifies the reviewer, as it does in the master's own review
     items; the screens behind it enforce their own access.
@@ -729,7 +730,7 @@ class CuratorGroupReviewItem(BaseModel):
     user_id: UUID
     student_name: str
     avatar_url: str | None
-    rating: Literal["fire", "good", "confused"]
+    rating: ScoreZone
     comment: str | None
     practice_id: UUID
     practice_title: str
@@ -856,34 +857,6 @@ class CuratorGroupMemberTotals(BaseModel):
     students: int
 
 
-class CuratorGroupMoodTotals(BaseModel):
-    """PRE check-in moods, in the anonymous distribution's vocabulary."""
-
-    low: int
-    mid: int
-    high: int
-
-
-class CuratorGroupRatingTotals(BaseModel):
-    """Review ratings on the FIVE scale (tz-mood-scale contract).
-
-    Keys are the frontend moodScale.ts keys -- 1-2 bad («Плохо»), 3-4 low
-    («Не очень»), 5-6 neutral («Нормально»), 7-8 good («Хорошо»), 9-10
-    fire («Огонь») -- so the school strip and the practice mood strips
-    render the same five segments. Owner 2026-10-02 widened the school
-    analytics from the three-chip feedback vocabulary to this scale; the
-    /reviews FEED keeps its confused/good/fire chips (tz-mood-scale §5
-    leaves the unification of the feeds to its own task), so a chip and a
-    strip segment are different answers by design.
-    """
-
-    bad: int
-    low: int
-    neutral: int
-    good: int
-    fire: int
-
-
 class CuratorGroupConductedPracticeItem(BaseModel):
     """One COMPLETED practice of the window (part 3, owner 2026-10-02).
 
@@ -891,7 +864,7 @@ class CuratorGroupConductedPracticeItem(BaseModel):
     for the direction icon), title, master, date, then the practice's own
     aggregates -- attendees (distinct ATTENDED), check-ins (PRE on
     non-cancelled bookings) and the feedback pair (distinct reviewers +
-    the five-scale buckets). Same predicates as the totals, so a card
+    the five zone counts). Same predicates as the totals, so a card
     reconciles with the cards around it.
     """
 
@@ -905,7 +878,7 @@ class CuratorGroupConductedPracticeItem(BaseModel):
     checkins_count: int
     reviewers_count: int
     reviews_count: int
-    rating: CuratorGroupRatingTotals
+    rating: ScoreZoneCounts
 
 
 class CuratorGroupEngagementTotals(BaseModel):
@@ -935,13 +908,13 @@ class CuratorGroupEngagementTotals(BaseModel):
     joined_never_came: int
     # Part 2 (owner brief 2026-10-02), the feedback share under the same
     # slider: distinct users whose review landed on an in-window practice,
-    # and the in-window rating buckets (same rating_bucket mapping as the
+    # and the in-window rating zones (same zone_counts mapping as the
     # all-time `feedback.rating`, so the two always reconcile). The
     # «процент фидбеков» denominator is members.students -- the client
     # divides by the number already in this payload; carrying a second copy
     # of that count here would put one fact in two fields.
     reviewers: int
-    rating: CuratorGroupRatingTotals
+    rating: ScoreZoneCounts
     # Part 3 (owner brief 2026-10-02): every COMPLETED practice of the
     # window, newest first -- the client renders a card per practice with
     # its own five-scale strip. Empty list on a window without practices.
@@ -949,12 +922,13 @@ class CuratorGroupEngagementTotals(BaseModel):
 
 
 class CuratorGroupFeedbackTotals(BaseModel):
-    """How the school's practices landed: counts plus the two distributions."""
+    """How the school's practices landed: counts plus the two distributions
+    (five-zone ScoreZoneCounts, BE-77)."""
 
     checkins_count: int
     reviews_count: int
-    mood: CuratorGroupMoodTotals
-    rating: CuratorGroupRatingTotals
+    mood: ScoreZoneCounts
+    rating: ScoreZoneCounts
 
 
 class CuratorGroupTopPracticeItem(BaseModel):

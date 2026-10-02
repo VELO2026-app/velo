@@ -21,7 +21,7 @@
 # and screenshottable, and outlives the practice, the booking and the app
 # session. A participant's exact score has no business living there.
 #
-# An emoji rather than the bucket token ("fire" / "good" / "confused"): the
+# An emoji rather than the zone token ("bad" .. "fire"): the
 # profile carries a Russian and an English sheet and velo emits ONE payload,
 # so a word would be wrong in one of them. Emoji are what these sheets
 # already speak.
@@ -29,7 +29,7 @@
 # WHY THIS SITS IN diary/ AND NOT core/events/ NEXT TO notify.py: nothing
 # under core/ imports app.modules -- checked across the whole package, not
 # assumed -- and these two helpers need Checkin, Feedback, Practice, User
-# and the bucket helpers. Putting them in core would make this file the
+# and the zone helper. Putting them in core would make this file the
 # first breach of that direction, for no gain: diary already owns both
 # records and already imports practices and users.
 #
@@ -42,8 +42,8 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events.notify import emit_notification
-from app.modules.diary.insights_service import mood_bucket, rating_bucket
-from app.modules.diary.models import Checkin, Feedback
+from app.modules.diary.insights_service import score_zone
+from app.modules.diary.models import Checkin, Feedback, ScoreZone
 from app.modules.practices.models import Practice
 from app.modules.users.helpers import display_name
 from app.modules.users.models import User
@@ -53,30 +53,19 @@ logger = structlog.get_logger()
 CHECKIN_RECEIVED_TYPE = "practice.checkin_received"
 FEEDBACK_RECEIVED_TYPE = "practice.feedback_received"
 
-# Bucket -> emoji. The mood buckets are low/mid/high and the rating buckets
-# confused/good/fire (diary/insights_service.py); the same three ranges under
-# two vocabularies, so one map with both spellings keeps the ranges written
-# down once here too.
-_BUCKET_EMOJI = {
-    "low": "😕",
-    "mid": "🙂",
-    "high": "🔥",
-    "confused": "😕",
-    "good": "🙂",
-    "fire": "🔥",
+# Zone -> emoji (owner decision, BE-77). Keyed by ScoreZone -- the zones
+# and their boundaries live in diary/insights_service.py (score_zone).
+# Indexed directly, no fallback: score_zone is total over 1..10, and the
+# map's completeness over ScoreZone is asserted by the suite
+# (test_master_notifications), not by a silent default that would show a
+# wrong face.
+_BUCKET_EMOJI: dict[ScoreZone, str] = {
+    ScoreZone.BAD: "😣",
+    ScoreZone.LOW: "😕",
+    ScoreZone.NEUTRAL: "😐",
+    ScoreZone.GOOD: "🙂",
+    ScoreZone.FIRE: "🔥",
 }
-
-
-def _emoji(bucket: str) -> str:
-    """Emoji for a mood/rating bucket, falling back to a neutral face.
-
-    The fallback is not defensive decoration: mood_bucket and rating_bucket
-    are total over 1..10 and a miss would mean somebody widened the buckets
-    without touching this map -- better a plain face in one message than a
-    KeyError inside the participant's own write transaction, which would
-    roll back their check-in over a rendering detail.
-    """
-    return _BUCKET_EMOJI.get(bucket, "🙂")
 
 
 async def notify_master_of_checkin(
@@ -115,7 +104,7 @@ async def notify_master_of_checkin(
             "params": {"practice_id": str(practice.id)},
             "practice_title": practice.title,
             "participant_name": name,
-            "mood": _emoji(mood_bucket(checkin.mood)),
+            "mood": _BUCKET_EMOJI[score_zone(checkin.mood)],
             "comment": comment,
         },
     )
@@ -160,7 +149,7 @@ async def notify_master_of_feedback(
             "params": {"practice_id": str(practice.id)},
             "practice_title": practice.title,
             "participant_name": name,
-            "rating": _emoji(rating_bucket(feedback.rating)),
+            "rating": _BUCKET_EMOJI[score_zone(feedback.rating)],
             "comment": comment,
         },
     )

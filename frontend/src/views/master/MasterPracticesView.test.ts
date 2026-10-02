@@ -86,7 +86,7 @@ import { useMasterStore } from '@/stores/master'
 import * as mastersApi from '@/api/masters'
 import * as diaryApi from '@/api/diary'
 import { ApiResponseError } from '@/api/client'
-import type { PracticeResponse, PracticeInsightsResponse } from '@/api/types'
+import type { PracticeResponse, PracticeInsightsResponse, ScoreZoneCounts } from '@/api/types'
 
 // The two seams under the two REAL stores: useMasterStore reads @/api/masters
 // (stores/master.ts:12), useDiaryStore reads @/api/diary. ApiResponseError is
@@ -218,23 +218,25 @@ const ALL = [U_DRAFT, P_RECENT, X_CANCELLED, U_LIVE, P_OLD, X_DELETED, U_SCHED]
 function insights(
   practiceId: string,
   participants: number,
-  feedbacks: { fire: number; good: number; confused: number },
+  feedbacks: ScoreZoneCounts,
 ): PracticeInsightsResponse {
   return {
     practice_id: practiceId,
     participants,
-    checkins: { high: 0, mid: 0, low: 0 },
+    checkins: { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 },
     feedbacks,
     comments_count: 0,
   }
 }
 
-// p-recent: 3/1/1 of 5 -> 60/20/20.  p-old: 1/2/1 of 4 -> 25/50/25.
-// Different on every bucket, so a card rendering the WRONG practice's insights
+// Five zones since BE-77 (was fire/good/confused 3/1/1 and 1/2/1). Badges read
+// best zone first (fire, good, neutral, low, bad):
+// p-recent: 3/1/0/0/1 of 5 -> 60/20/0/0/20.  p-old: 1/1/1/1/0 of 4 -> 25/25/25/25/0.
+// Different on every zone, so a card rendering the WRONG practice's insights
 // cannot pass.
 const INSIGHTS: Record<string, PracticeInsightsResponse> = {
-  'p-recent': insights('p-recent', 5, { fire: 3, good: 1, confused: 1 }),
-  'p-old': insights('p-old', 4, { fire: 1, good: 2, confused: 1 }),
+  'p-recent': insights('p-recent', 5, { bad: 1, low: 0, neutral: 0, good: 1, fire: 3 }),
+  'p-old': insights('p-old', 4, { bad: 0, low: 1, neutral: 1, good: 1, fire: 1 }),
 }
 
 function page(items: PracticeResponse[], total = items.length, offset = 0) {
@@ -1046,12 +1048,12 @@ describe('MasterPracticesView', () => {
     })
 
     it('renders each card its OWN rating percentages from the insights cache', async () => {
-      // p-recent 3/1/1 of 5 -> 60/20/20; p-old 1/2/1 of 4 -> 25/50/25. Distinct
-      // on every bucket, so a card reading the wrong practice's insights fails.
+      // See the INSIGHTS fixture: distinct on every zone, so a card reading the
+      // wrong practice's insights fails.
       await mountOnPast()
 
-      expect(badgesOf(cardById('Недавняя')!)).toEqual(['60%', '20%', '20%'])
-      expect(badgesOf(cardById('Давняя')!)).toEqual(['25%', '50%', '25%'])
+      expect(badgesOf(cardById('Недавняя')!)).toEqual(['60%', '20%', '0%', '0%', '20%'])
+      expect(badgesOf(cardById('Давняя')!)).toEqual(['25%', '25%', '25%', '25%', '0%'])
     })
 
     it('shows no badges on a practice whose insights never arrived', async () => {
@@ -1064,15 +1066,15 @@ describe('MasterPracticesView', () => {
       })
       await mountOnPast()
 
-      expect(badgesOf(cardById('Недавняя')!)).toEqual(['60%', '20%', '20%'])
+      expect(badgesOf(cardById('Недавняя')!)).toEqual(['60%', '20%', '0%', '0%', '20%'])
       expect(badgesOf(cardById('Давняя')!)).toEqual([])
     })
 
     it('shows no badges when insights arrived but nobody left feedback', async () => {
       // `totalFeedbacks(id) > 0` (.vue:260) -- a practice that ran but drew no
-      // feedback would otherwise show a confident 0%/0%/0% trio.
+      // feedback would otherwise show a confident row of 0% badges.
       vi.mocked(diaryApi.getPracticeInsights).mockImplementation(async (id: string) =>
-        insights(id, 5, { fire: 0, good: 0, confused: 0 }),
+        insights(id, 5, { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 }),
       )
       await mountOnPast()
 
@@ -1121,7 +1123,7 @@ describe('MasterPracticesView', () => {
       mount()
       await flush()
 
-      expect(badgesOf(cardById('Недавняя')!)).toEqual(['60%', '20%', '20%'])
+      expect(badgesOf(cardById('Недавняя')!)).toEqual(['60%', '20%', '0%', '0%', '20%'])
     })
   })
 
@@ -1165,14 +1167,14 @@ describe('MasterPracticesView', () => {
         status: 'completed',
         scheduled_at: '2026-07-05T10:00:00Z',
       })
-      INSIGHTS['p-next'] = insights('p-next', 4, { fire: 2, good: 2, confused: 0 })
+      INSIGHTS['p-next'] = insights('p-next', 4, { bad: 0, low: 0, neutral: 0, good: 2, fire: 2 })
       vi.mocked(mastersApi.getMyPractices).mockResolvedValue(page([NEXT], 2, 1))
 
       buttonWith('Показать ещё')?.click()
       await flush()
 
       expect(cardTitles()).toEqual(['Недавняя', 'Догруженная прошедшая'])
-      expect(badgesOf(cardById('Догруженная прошедшая')!)).toEqual(['50%', '50%', '0%'])
+      expect(badgesOf(cardById('Догруженная прошедшая')!)).toEqual(['50%', '50%', '0%', '0%', '0%'])
       delete INSIGHTS['p-next']
     })
 

@@ -41,8 +41,6 @@ import type {
   CreateExternalActivityRequest,
   ExternalActivityResponse,
   PracticeInsightsResponse,
-  Mood,
-  FeedbackRating,
 } from '@/api/types'
 
 // ============================================================================
@@ -111,7 +109,8 @@ export function upsertFeedback(
 
 export interface ListFeedbacksParams {
   practice_id?: string
-  rating?: FeedbackRating
+  /** Raw 1..10 score (the endpoint's `rating` query is an int). */
+  rating?: number
   date_from?: string
   date_to?: string
   limit?: number
@@ -158,7 +157,8 @@ export function createDiaryEntry(body: CreateDiaryEntryRequest): Promise<DiaryEn
 
 export interface ListDiaryEntriesParams {
   practice_id?: string
-  mood?: Mood
+  /** Raw 1..10 score (the endpoint's `mood` query is an int). */
+  mood?: number
   date_from?: string
   date_to?: string
   limit?: number

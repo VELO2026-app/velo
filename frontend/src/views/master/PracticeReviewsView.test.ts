@@ -13,7 +13,7 @@
 //
 // THE NUMBERS ARE PERCENTAGES, NOT COUNTS -- and that is easy to get backwards
 // from a glance at the .vue, because PracticeReviewsView passes RAW COUNTS to
-// VRatingDistribution (.vue:47-51 -- `:fire="feedbackCounts.fire"`). The
+// VRatingDistribution (`:counts="feedbackCounts"`). The
 // percentage maths lives one level DOWN, inside the child
 // (VRatingDistribution.vue:72-82), which renders «NN% (count)» -- BOTH, the
 // percentage first. Reading only this screen's template you would assert «3»;
@@ -76,7 +76,14 @@ import { useDiaryStore } from '@/stores/diary'
 import * as practicesApi from '@/api/practices'
 import * as diaryApi from '@/api/diary'
 import { ApiResponseError } from '@/api/client'
-import type { PracticeResponse, PracticeInsightsResponse, ReviewItem } from '@/api/types'
+import type {
+  PracticeResponse,
+  PracticeInsightsResponse,
+  ReviewItem,
+  ScoreZone,
+  ScoreZoneCounts,
+} from '@/api/types'
+import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
 
 // The hero card + the reviews list (.vue:96). Auto-mocked: nothing in this
 // module needs preserving -- ApiResponseError lives in @/api/client, which stays
@@ -130,17 +137,22 @@ function practice(overrides: Partial<PracticeResponse> = {}): PracticeResponse {
 
 function insights(
   participants: number,
-  checkins: { high: number; mid: number; low: number },
-  feedbacks: { fire: number; good: number; confused: number },
+  checkins: ScoreZoneCounts,
+  feedbacks: ScoreZoneCounts,
 ): PracticeInsightsResponse {
   return { practice_id: 'p1', participants, checkins, feedbacks, comments_count: 0 }
 }
 
 // 10 participants; 4+2+1 = 7 check-ins -> 70%; 3+1+1 = 5 feedbacks -> 50%.
-// Distribution over those 5: fire 60% (3) / good 20% (1) / confused 20% (1).
+// Distribution over those 5 (five zones since BE-77, was fire/good/confused):
+// fire 60% (3) / good 20% (1) / neutral 0% / low 0% / bad 20% (1).
 // Every one of the five figures is DIFFERENT on purpose -- equal numbers would
 // let two computeds be wired to each other's source and still pass.
-const INSIGHTS = insights(10, { high: 4, mid: 2, low: 1 }, { fire: 3, good: 1, confused: 1 })
+const INSIGHTS = insights(
+  10,
+  { bad: 1, low: 0, neutral: 2, good: 0, fire: 4 },
+  { bad: 1, low: 0, neutral: 0, good: 1, fire: 3 },
+)
 
 function review(n: number, overrides: Partial<ReviewItem> = {}): ReviewItem {
   return {
@@ -156,9 +168,10 @@ function review(n: number, overrides: Partial<ReviewItem> = {}): ReviewItem {
 
 const RV_FIRE = review(1, { reviewer_name: 'Анна', rating: 'fire', comment: 'Очень понравилось' })
 const RV_GOOD = review(2, { reviewer_name: 'Борис', rating: 'good', comment: null })
-const RV_CONFUSED = review(3, {
+// BE-77: was RV_CONFUSED ('confused'); the attention zone is now 'low'.
+const RV_LOW = review(3, {
   reviewer_name: 'Вера',
-  rating: 'confused',
+  rating: 'low',
   comment: 'Было сложно успевать',
 })
 
@@ -235,6 +248,16 @@ function distMeta(label: string): string {
   return norm(row?.querySelector('.v-rating-dist__meta')?.textContent).trim()
 }
 
+/** Every distribution bar as label -> meta: a missing/extra bar fails toEqual. */
+function distAll(): Record<string, string> {
+  return Object.fromEntries(
+    Array.from(host?.querySelectorAll<HTMLElement>('.v-rating-dist__row') ?? []).map((r) => [
+      norm(r.querySelector('.v-rating-dist__head')?.textContent).trim(),
+      norm(r.querySelector('.v-rating-dist__meta')?.textContent).trim(),
+    ]),
+  )
+}
+
 function heroMeta(): string {
   return norm(host?.querySelector('.hero-card__meta')?.textContent).replace(/\s+/g, ' ').trim()
 }
@@ -249,27 +272,33 @@ function reviewNames(): string[] {
   )
 }
 
-/** The inline colour the screen stamped on a review's rating icon (.vue:76). */
-function reviewIconColors(): string[] {
+/** Each review's rendered face, as markup. */
+function reviewFaces(): string[] {
   return reviewCards().map(
-    (c) =>
-      c.querySelector('.practice-reviews__review-ident svg')?.getAttribute('style')?.trim() ?? '',
+    (c) => normFace(c.querySelector('.practice-reviews__review-ident svg')?.outerHTML ?? ''),
   )
 }
 
 /**
- * Each review icon's viewBox -- the only thing that distinguishes the three
- * IconRating* components from the DOM (they are otherwise three <svg fill=
- * "currentColor"> of the same shape). Asserted for DISTINCTNESS rather than for
- * literal values: the claim under test is that RATING_ICON (.vue:194-198) maps
- * the rating to a DIFFERENT component per bucket, and pinning the three
- * viewBoxes would fail on an icon redesign that broke nothing.
+ * Face markup with the per-mount noise removed: the parent's scoped-style
+ * attribute and the useId suffix of the gradient ids. What is left is the
+ * artwork itself, which is what tells one zone's face from another's.
  */
-function reviewIconShapes(): string[] {
-  return reviewCards().map(
-    (c) =>
-      c.querySelector('.practice-reviews__review-ident svg')?.getAttribute('viewBox')?.trim() ?? '',
-  )
+function normFace(html: string): string {
+  return html.replace(/ data-v-[0-9a-f]+=""/g, '').replace(/-v-\d+/g, '-v-')
+}
+/**
+ * A zone's approved face rendered on its own at the screen's size -- the
+ * reference a review's face is compared against (BE-77: full-colour faces,
+ * no accent colour, so the face itself tells the zone).
+ */
+function faceOf(zone: ScoreZone): string {
+  const el = document.createElement('div')
+  const app = createApp(MOOD_SCALE_ICON[zone], { size: 28 })
+  app.mount(el)
+  const html = normFace(el.querySelector('svg')?.outerHTML ?? '')
+  app.unmount()
+  return html
 }
 
 function buttonWith(label: string): HTMLButtonElement | undefined {
@@ -289,7 +318,7 @@ beforeEach(() => {
   vi.mocked(practicesApi.getPractice).mockReset().mockResolvedValue(practice())
   vi.mocked(practicesApi.getPracticeReviews)
     .mockReset()
-    .mockResolvedValue(reviewsPage([RV_FIRE, RV_GOOD, RV_CONFUSED]))
+    .mockResolvedValue(reviewsPage([RV_FIRE, RV_GOOD, RV_LOW]))
 
   push.mockReset()
   back.mockReset()
@@ -365,7 +394,7 @@ describe('PracticeReviewsView', () => {
       // 2 of 3 = 66.66..% -> «67%» (Math.round, .vue:160). Asserted because the
       // fixture above divides evenly and would not notice a missing round().
       vi.mocked(diaryApi.getPracticeInsights).mockResolvedValue(
-        insights(3, { high: 1, mid: 1, low: 0 }, { fire: 1, good: 0, confused: 0 }),
+        insights(3, { bad: 0, low: 0, neutral: 1, good: 0, fire: 1 }, { bad: 0, low: 0, neutral: 0, good: 0, fire: 1 }),
       )
       mount()
       await flush()
@@ -412,7 +441,7 @@ describe('PracticeReviewsView', () => {
       // zero reviews, which is a fact worth stating. «0» here is honest;
       // «0%» above would not have been.
       vi.mocked(diaryApi.getPracticeInsights).mockResolvedValue(
-        insights(0, { high: 0, mid: 0, low: 0 }, { fire: 0, good: 0, confused: 0 }),
+        insights(0, { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 }, { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 }),
       )
       mount()
       await flush()
@@ -426,7 +455,7 @@ describe('PracticeReviewsView', () => {
       // The mirror of the case above, and the reason it cannot be folded into it:
       // 10 people in the room and no feedback IS a 0% score, not «no data».
       vi.mocked(diaryApi.getPracticeInsights).mockResolvedValue(
-        insights(10, { high: 3, mid: 0, low: 0 }, { fire: 0, good: 0, confused: 0 }),
+        insights(10, { bad: 0, low: 0, neutral: 0, good: 0, fire: 3 }, { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 }),
       )
       mount()
       await flush()
@@ -439,7 +468,7 @@ describe('PracticeReviewsView', () => {
 
   // ===========================================================================
   describe('«Распределение» -- PERCENTAGES with the count in parentheses', () => {
-    it('splits the five feedbacks 60% (3) / 20% (1) / 20% (1)', async () => {
+    it('splits the five feedbacks over all five zones', async () => {
       // The screen passes RAW COUNTS (.vue:47-51); the child divides them by
       // their own total -- 5, NOT the 10 participants (VRatingDistribution.vue:
       // 73-81). So this row is «share of the feedback given», while the Feedback
@@ -448,48 +477,68 @@ describe('PracticeReviewsView', () => {
       mount()
       await flush()
 
-      expect(distMeta('Огонь!')).toBe('60% (3)')
-      expect(distMeta('Хорошо')).toBe('20% (1)')
-      expect(distMeta('Есть вопросы')).toBe('20% (1)')
+      expect(distAll()).toEqual({
+        Огонь: '60% (3)',
+        Хорошо: '20% (1)',
+        Нормально: '0% (0)',
+        'Не очень': '0% (0)',
+        Плохо: '20% (1)',
+      })
     })
 
     it('renders 0% bars rather than nothing when the insights never arrived', async () => {
-      // feedbackCounts falls back to { fire: 0, good: 0, confused: 0 } (.vue:
-      // 178-180) and the child guards its division on `total > 0`
+      // feedbackCounts falls back to all five zones at 0 and the child guards its division on `total > 0`
       // (VRatingDistribution.vue:80). A NaN% bar -- 0/0 -- is what a missing
       // guard looks like, and it would render as the string «NaN%».
       vi.mocked(diaryApi.getPracticeInsights).mockRejectedValue(new TypeError('boom'))
       mount()
       await flush()
 
-      expect(distMeta('Огонь!')).toBe('0% (0)')
-      expect(distMeta('Хорошо')).toBe('0% (0)')
-      expect(distMeta('Есть вопросы')).toBe('0% (0)')
+      expect(distAll()).toEqual({
+        Огонь: '0% (0)',
+        Хорошо: '0% (0)',
+        Нормально: '0% (0)',
+        'Не очень': '0% (0)',
+        Плохо: '0% (0)',
+      })
       expect(text()).not.toContain('NaN')
     })
 
     it('renders 0% bars when the insights arrived carrying an empty distribution', async () => {
       vi.mocked(diaryApi.getPracticeInsights).mockResolvedValue(
-        insights(10, { high: 3, mid: 0, low: 0 }, { fire: 0, good: 0, confused: 0 }),
+        insights(10, { bad: 0, low: 0, neutral: 0, good: 0, fire: 3 }, { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 }),
       )
       mount()
       await flush()
 
-      expect(distMeta('Огонь!')).toBe('0% (0)')
-      expect(distMeta('Есть вопросы')).toBe('0% (0)')
+      expect(distAll()).toEqual({
+        Огонь: '0% (0)',
+        Хорошо: '0% (0)',
+        Нормально: '0% (0)',
+        'Не очень': '0% (0)',
+        Плохо: '0% (0)',
+      })
       expect(text()).not.toContain('NaN')
     })
 
-    it('a single-bucket practice reads 100% (2) / 0% (0) / 0% (0)', async () => {
+    it('a single-zone practice reads 100% (2) on that zone and 0% (0) elsewhere', async () => {
       vi.mocked(diaryApi.getPracticeInsights).mockResolvedValue(
-        insights(4, { high: 2, mid: 0, low: 0 }, { fire: 0, good: 0, confused: 2 }),
+        insights(
+          4,
+          { bad: 0, low: 0, neutral: 0, good: 0, fire: 2 },
+          { bad: 2, low: 0, neutral: 0, good: 0, fire: 0 },
+        ),
       )
       mount()
       await flush()
 
-      expect(distMeta('Есть вопросы')).toBe('100% (2)')
-      expect(distMeta('Огонь!')).toBe('0% (0)')
-      expect(distMeta('Хорошо')).toBe('0% (0)')
+      expect(distAll()).toEqual({
+        Огонь: '0% (0)',
+        Хорошо: '0% (0)',
+        Нормально: '0% (0)',
+        'Не очень': '0% (0)',
+        Плохо: '100% (2)',
+      })
     })
   })
 
@@ -507,7 +556,7 @@ describe('PracticeReviewsView', () => {
 
       expect(diaryApi.getPracticeInsights).not.toHaveBeenCalled()
       expect(stat('Check-in')).toBe('70%')
-      expect(distMeta('Огонь!')).toBe('60% (3)')
+      expect(distMeta('Огонь')).toBe('60% (3)')
     })
 
     it('reads the cache entry for THIS practice, not whatever was cached first', async () => {
@@ -516,13 +565,17 @@ describe('PracticeReviewsView', () => {
       // practice's verdict the moment the master opened a second one.
       useDiaryStore().insightsCache.set(
         'p9',
-        insights(100, { high: 100, mid: 0, low: 0 }, { fire: 100, good: 0, confused: 0 }),
+        insights(
+          100,
+          { bad: 0, low: 0, neutral: 0, good: 0, fire: 100 },
+          { bad: 0, low: 0, neutral: 0, good: 0, fire: 100 },
+        ),
       )
       mount()
       await flush()
 
       expect(stat('Check-in')).toBe('70%')
-      expect(distMeta('Огонь!')).toBe('60% (3)')
+      expect(distMeta('Огонь')).toBe('60% (3)')
     })
 
     it('asks the store for the id in the route, not a hardcoded one', async () => {
@@ -623,23 +676,17 @@ describe('PracticeReviewsView', () => {
       ).toBe('«Было сложно успевать»')
     })
 
-    it("content: each review carries ITS rating's icon and accent colour", async () => {
-      // RATING_ICON (.vue:194-198) picks the component; RATING_ICON_COLOR
-      // (displayHelpers.ts:110-114) the accent. Both are Record<FeedbackRating,…>
-      // literals -- a transposed key here paints a confused review as fire, which
-      // is precisely the review a master must not miss.
+    it("content: each review carries ITS zone's face", async () => {
+      // MOOD_SCALE_ICON picks the face by the server's zone key (BE-77; was
+      // RATING_ICON + RATING_ICON_COLOR on three buckets). A transposed key
+      // here paints a low review as fire, which is precisely the review a
+      // master must not miss.
       mount()
       await flush()
 
-      expect(reviewIconColors()).toEqual([
-        'color: var(--velo-rating-fire);',
-        'color: var(--velo-rating-good);',
-        'color: var(--velo-rating-confused);',
-      ])
-
-      // Three ratings must resolve to three DIFFERENT components -- a constant
-      // icon would satisfy the colour assertion above on its own.
-      expect(new Set(reviewIconShapes()).size).toBe(3)
+      expect(reviewFaces()).toEqual([faceOf('fire'), faceOf('good'), faceOf('low')])
+      // The pair: three DIFFERENT references, so a constant face cannot pass.
+      expect(new Set([faceOf('fire'), faceOf('good'), faceOf('low')]).size).toBe(3)
     })
 
     it('«Повторить» recovers a failed load into real content', async () => {
@@ -684,7 +731,7 @@ describe('PracticeReviewsView', () => {
       await flush()
 
       vi.mocked(practicesApi.getPracticeReviews).mockResolvedValue(
-        reviewsPage([RV_GOOD, RV_CONFUSED], 3, 1),
+        reviewsPage([RV_GOOD, RV_LOW], 3, 1),
       )
       buttonWith('Показать ещё')?.click()
       await flush()

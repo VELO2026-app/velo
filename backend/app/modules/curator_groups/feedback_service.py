@@ -10,8 +10,8 @@
 # practices; per practice they see no more than the master who ran it, and
 # on two axes deliberately less:
 #
-#   - the SCORES ARE BUCKETS, never the stored 1..10. mood_bucket /
-#     rating_bucket, the same helpers the master's own feeds use
+#   - the SCORES ARE ZONES, never the stored 1..10. score_zone, the
+#     same helper the master's own feeds use
 #     (diary/insights_service.py). The raw numbers exist in exactly one
 #     master-facing place -- GET /masters/me/students/{id}, the per-student
 #     dossier -- and that path is the one thing a curator must not have.
@@ -45,7 +45,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.curator_groups.service import _get_group_or_404
-from app.modules.diary.insights_service import mood_bucket, rating_bucket
+from app.modules.diary.insights_service import score_zone
 from app.modules.diary.models import Checkin, CheckType, Feedback
 from app.modules.practices.audience_service import (
     practice_in_curator_group_clause,
@@ -145,7 +145,7 @@ async def list_curator_group_checkins(
             "user_id": author.id,
             "student_name": display_name(author.first_name, author.last_name),
             "avatar_url": author.avatar_url,
-            "mood": mood_bucket(checkin.mood),
+            "mood": score_zone(checkin.mood),
             "comment": checkin.comment,
             "practice_id": checkin.practice_id,
             "practice_title": practice_title,
@@ -169,7 +169,7 @@ async def list_curator_group_reviews(
     """Named reviews on this school's practices, newest first.
 
     The school-scoped counterpart to masters/reviews_service.py's
-    list_master_reviews, and shaped after it on purpose: same bucketed
+    list_master_reviews, and shaped after it on purpose: same zoned
     rating, same newest-first order, same total-from-the-base-query.
 
     NO BOOKING-STATUS FILTER, unlike the check-in feed above. It is not an
@@ -208,7 +208,7 @@ async def list_curator_group_reviews(
             "user_id": author.id,
             "student_name": display_name(author.first_name, author.last_name),
             "avatar_url": author.avatar_url,
-            "rating": rating_bucket(feedback.rating),
+            "rating": score_zone(feedback.rating),
             "comment": feedback.comment,
             "practice_id": feedback.practice_id,
             "practice_title": practice_title,

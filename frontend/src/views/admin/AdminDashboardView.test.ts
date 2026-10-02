@@ -139,7 +139,7 @@ function checkinResult(rate_pct: number) {
   return { rate_pct, total_records: 0, checked_in: 0, series: [], low_practices: [] }
 }
 function feedbackResult(rate_pct: number) {
-  return { rate_pct, visited: 0, left_review: 0, distribution: { fire: 0, good: 0, confused: 0 } }
+  return { rate_pct, visited: 0, left_review: 0, distribution: { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 } }
 }
 function returnResult(rate_pct: number) {
   return { rate_pct, total_users: 0, returning: 0, top_users: [] }

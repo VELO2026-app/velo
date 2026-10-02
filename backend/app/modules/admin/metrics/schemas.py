@@ -11,13 +11,15 @@
 # rate_pct is an integer percent (0 when the denominator is 0 -- honest empty).
 # low_practices / top_users are STRUCTURED (id + name + number); the frontend
 # composes the Russian subtitle, so no UI strings live in the backend.
-# distribution uses counts with the E1 buckets: confused 1-3 / good 4-7 /
-# fire 8-10.
+# distribution counts ratings per zone (ScoreZoneCounts, BE-77): the one
+# shared distribution shape, boundaries in diary.insights_service.
 # =============================================================================
 
 from uuid import UUID
 
 from pydantic import BaseModel
+
+from app.modules.diary.schemas import ScoreZoneCounts
 
 
 # ---------------------------------------------------------------------------
@@ -52,26 +54,13 @@ class CheckinMetricResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # feedback
 # ---------------------------------------------------------------------------
-class FeedbackRatingDistribution(BaseModel):
-    """Feedback counts by bucket (confused 1-3 / good 4-7 / fire 8-10).
-
-    Named distinctly from diary.schemas.RatingDistribution to avoid an
-    OpenAPI component-name collision (both would otherwise be emitted under
-    module-qualified names, breaking the frontend's flat re-export).
-    """
-
-    fire: int
-    good: int
-    confused: int
-
-
 class FeedbackMetricResponse(BaseModel):
     """GET /api/v1/admin/metrics/feedback."""
 
     rate_pct: int
     visited: int
     left_review: int
-    distribution: FeedbackRatingDistribution
+    distribution: ScoreZoneCounts
 
 
 # ---------------------------------------------------------------------------

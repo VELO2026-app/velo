@@ -13,7 +13,7 @@
 #   DiaryEntryResponse / PaginatedDiaryEntriesResponse
 #
 # INSIGHTS (master-facing):
-#   MoodDistribution / RatingDistribution / PracticeInsightsResponse
+#   ScoreZoneCounts / PracticeInsightsResponse
 #
 # SUGGESTION-6 fix: ConfigDict(from_attributes=True) instead of dict style.
 # NO-LITERALS: field limits sourced from config.py:
@@ -21,10 +21,10 @@
 #   settings.diary_entry_content_max_length
 #   settings.diary_entry_title_max_length
 # mood / rating are 1..10 integer scores (slider); validated by range,
-#   not by a config list. UI derives the icon/label from the range
-#   (1-3 / 4-7 / 8-10).
+#   not by a config list. Read surfaces that publish a zone instead of the
+#   number use ScoreZone (diary.insights_service.score_zone, BE-77).
 #
-# CR-01: MoodDistribution / RatingDistribution fields changed from
+# CR-01: distribution fields (now ScoreZoneCounts) changed from
 #   optional (default=0) to required. These are response-only schemas --
 #   the service always provides concrete values. Removing defaults makes
 #   OpenAPI mark them as required, so the TS generator emits non-optional
@@ -32,7 +32,6 @@
 # =============================================================================
 
 from datetime import UTC, datetime
-from typing import Literal
 from uuid import UUID
 
 from pydantic import (
@@ -44,7 +43,7 @@ from pydantic import (
 )
 
 from app.core.config import settings
-from app.modules.diary.models import ExternalActivityType
+from app.modules.diary.models import ExternalActivityType, ScoreZone
 
 
 # ===================================================================
@@ -296,38 +295,26 @@ class PaginatedDiaryEntriesResponse(BaseModel):
 # ===================================================================
 
 
-class MoodDistribution(BaseModel):
-    """Check-in mood counts for a practice, bucketed by score range.
+class ScoreZoneCounts(BaseModel):
+    """Counts of 1..10 scores per zone (BE-77) -- THE distribution shape.
 
-    mood is a 1..10 score; counts are grouped into three buckets:
-      low  = scores 1-3
-      mid  = scores 4-7
-      high = scores 8-10
+    One class for every server distribution, check-in moods and feedback
+    ratings alike: the practice insights, the master's analytics, the admin
+    feedback metric and the school aggregate. The keys are ScoreZone, the
+    boundaries live in diary.insights_service.score_zone: bad 1-2, low 3-4,
+    neutral 5-6, good 7-8, fire 9-10 -- the frontend's moodScale.ts keys.
+    One class is also one OpenAPI component, so there is no module-qualified
+    name collision to dodge.
 
     CR-01: fields are required (no default=0). This is a response-only
-    schema -- the service always provides concrete values.
+    schema -- the service always provides all five (zone_counts).
     """
 
-    high: int
-    mid: int
+    bad: int
     low: int
-
-
-class RatingDistribution(BaseModel):
-    """Feedback rating counts for a practice, bucketed by score range.
-
-    rating is a 1..10 score; counts are grouped into three buckets:
-      confused = scores 1-3
-      good     = scores 4-7
-      fire     = scores 8-10
-
-    CR-01: fields are required (no default=0). Same rationale as
-    MoodDistribution above.
-    """
-
-    fire: int
+    neutral: int
     good: int
-    confused: int
+    fire: int
 
 
 class PracticeInsightsResponse(BaseModel):
@@ -339,8 +326,8 @@ class PracticeInsightsResponse(BaseModel):
 
     practice_id: UUID
     participants: int
-    checkins: MoodDistribution
-    feedbacks: RatingDistribution
+    checkins: ScoreZoneCounts
+    feedbacks: ScoreZoneCounts
     comments_count: int
 
 
@@ -352,11 +339,11 @@ class PracticeInsightsResponse(BaseModel):
 class ReviewItem(BaseModel):
     """One named review (GET /api/v1/practices/{id}/reviews).
 
-    The de-anonymised counterpart to RatingDistribution: where insights expose
-    only numeric buckets, this carries the reviewer's name, avatar and comment
-    text. `rating` is the stored 1..10 score mapped to the three UI buckets
-    (1-3 confused / 4-7 good / 8-10 fire) so the frontend reuses the same
-    rating icons it already renders for the anonymous distribution.
+    The de-anonymised counterpart to the insights' feedbacks distribution:
+    where insights expose only counts, this carries the reviewer's name,
+    avatar and comment text. `rating` is the stored 1..10 score mapped to
+    its zone (ScoreZone, BE-77) -- the same five keys the distribution
+    counts.
 
     user_id is the reviewer's User.id (E1 remainder) -- it lets the frontend
     navigate from a review to that student's profile. The author User is
@@ -366,7 +353,7 @@ class ReviewItem(BaseModel):
     user_id: UUID
     reviewer_name: str
     avatar_url: str | None
-    rating: Literal["fire", "good", "confused"]
+    rating: ScoreZone
     comment: str | None
     created_at: datetime
 

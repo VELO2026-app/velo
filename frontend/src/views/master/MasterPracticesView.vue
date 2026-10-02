@@ -149,9 +149,7 @@
             <VRatingBadges
               v-if="hasRating(p.id)"
               class="mp-card__rbadges"
-              :fire="ratingPct(p.id, 'fire')"
-              :good="ratingPct(p.id, 'good')"
-              :confused="ratingPct(p.id, 'confused')"
+              :pcts="ratingPcts(p.id)"
             />
           </article>
         </template>
@@ -190,6 +188,7 @@ import { useMasterStore } from '@/stores/master'
 import { useDiaryStore } from '@/stores/diary'
 import { useToast } from '@/composables/useToast'
 import { practiceIconFor } from '@/utils/displayHelpers'
+import { zonePercents, zoneTotal, type MoodScaleKey } from '@/utils/moodScale'
 import { checkinLabel, recurrenceLabel, remainingSessionsLabel } from '@/utils/practiceCardMeta'
 import { formatDateShort, formatShortDate, formatTime } from '@/utils/format'
 import { practiceHasEnded } from '@/utils/practiceStatus'
@@ -288,7 +287,7 @@ function participantsCount(p: PracticeResponse): string {
 
 function totalFeedbacks(id: string): number {
   const i = insightsCache.get(id)
-  return i ? i.feedbacks.fire + i.feedbacks.good + i.feedbacks.confused : 0
+  return i ? zoneTotal(i.feedbacks) : 0
 }
 
 // checkinLabel / recurrenceLabel / remainingSessionsLabel moved to
@@ -298,11 +297,9 @@ function hasRating(id: string): boolean {
   return insightsCache.has(id) && totalFeedbacks(id) > 0
 }
 
-function ratingPct(id: string, key: 'fire' | 'good' | 'confused'): number {
-  const i = insightsCache.get(id)
-  if (!i) return 0
-  const total = totalFeedbacks(id)
-  return total > 0 ? Math.round((i.feedbacks[key] / total) * 100) : 0
+// Rendered only under hasRating, so the insights are cached there.
+function ratingPcts(id: string): Record<MoodScaleKey, number> {
+  return zonePercents(insightsCache.get(id)!.feedbacks)
 }
 
 /** Eager-load insights for the visible tab (idempotent: cached ids are skipped).
@@ -511,9 +508,8 @@ onUnmounted(() => {
   opacity: 0.8;
 }
 
-/* Rating-distribution badges (sand/pink/blue-100 tints; confused = blue-400
-   per operator SVG 2026-06-11). */
-/* Margin only — the trio itself is the shared VRatingBadges component. */
+/* Margin only — the five-zone badge row itself is the shared VRatingBadges
+   component. */
 .mp-card__rbadges {
   margin-top: 13px;
 }

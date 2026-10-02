@@ -262,7 +262,6 @@ import { useDiaryStore, type ExternalActivityFieldErrors } from '@/stores/diary'
 import { useToast } from '@/composables/useToast'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import { EXTERNAL_ACTIVITY_MOOD_HIDDEN } from '@/utils/constants'
-import { RATING_ICON_COLOR } from '@/utils/displayHelpers'
 import { formatShortDate } from '@/utils/format'
 import type { ExternalActivityType } from '@/api/types'
 
@@ -287,24 +286,30 @@ const ACTIVITY_OPTIONS: ReadonlyArray<{ value: ExternalActivityType; label: stri
 // The three MoodSlider zone centres (2 / 6 / 9) as plain icon buttons: this
 // screen has no track/thumb/zone labels, and the initial value stays null --
 // a silently pre-picked «Хорошо» would answer the question for the person.
+//
+// The accents are this picker's OWN palette (the --velo-rating-* tokens), not
+// a shared zone map: the server's zones are five since BE-77 and the shared
+// three-key maps were removed with them. This picker is its own product
+// scenario (PM-9 / FE-74) and keeps its three buttons until that scenario is
+// redesigned.
 const STATE_OPTIONS = [
   {
     score: 2 as const,
     label: 'Есть вопросы',
     icon: IconRatingConfused,
-    color: RATING_ICON_COLOR.confused,
+    color: 'var(--velo-rating-confused)',
   },
   {
     score: 6 as const,
     label: 'Хорошо',
     icon: IconRatingGood,
-    color: RATING_ICON_COLOR.good,
+    color: 'var(--velo-rating-good)',
   },
   {
     score: 9 as const,
     label: 'Огонь',
     icon: IconRatingFire,
-    color: RATING_ICON_COLOR.fire,
+    color: 'var(--velo-rating-fire)',
   },
 ]
 

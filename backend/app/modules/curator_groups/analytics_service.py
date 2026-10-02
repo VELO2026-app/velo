@@ -69,10 +69,7 @@ from app.modules.curator_groups.models import (
     CuratorMemberKind,
 )
 from app.modules.curator_groups.service import _get_group_or_404
-from app.modules.diary.insights_service import (
-    mood_bucket,
-    rating_bucket_five,
-)
+from app.modules.diary.insights_service import zone_counts
 from app.modules.diary.models import Checkin, CheckType, Feedback
 from app.modules.practices.audience_service import (
     practice_in_curator_group_clause,
@@ -149,13 +146,13 @@ async def _feedback_and_top(
     upcoming: int,
     by_kind: dict,
 ) -> dict:
-    """The second half of the aggregate: the two bucketed distributions and
+    """The second half of the aggregate: the two zone distributions and
     the top-practices ranking. Split out only to keep each function's shape
     readable; there is no second caller."""
-    # -- Mood buckets over PRE check-ins on the school's practices. Grouped
-    #    by the RAW score (at most ten groups) and bucketed in Python, so
-    #    the 1-3/4-7/8-10 boundaries live only in insights_service, exactly
-    #    as the feeds do it.
+    # -- Mood zones over PRE check-ins on the school's practices. Grouped
+    #    by the RAW score (at most ten groups) and folded in Python
+    #    (zone_counts), so the zone boundaries live only in
+    #    insights_service, exactly as the feeds do it.
     mood_rows = (
         await session.execute(
             select(Checkin.mood, func.count())
@@ -169,11 +166,9 @@ async def _feedback_and_top(
             .group_by(Checkin.mood)
         )
     ).all()
-    mood = {"low": 0, "mid": 0, "high": 0}
-    for raw_mood, count in mood_rows:
-        mood[mood_bucket(raw_mood)] += count
+    mood = zone_counts(mood_rows)
 
-    # -- Rating buckets over reviews. NO booking-status filter, matching
+    # -- Rating zones over reviews. NO booking-status filter, matching
     #    the reviews feed (BE-24): a review the practice's master reads is
     #    a review the school counts.
     rating_rows = (
@@ -184,9 +179,7 @@ async def _feedback_and_top(
             .group_by(Feedback.rating)
         )
     ).all()
-    rating = {"bad": 0, "low": 0, "neutral": 0, "good": 0, "fire": 0}
-    for raw_rating, count in rating_rows:
-        rating[rating_bucket_five(raw_rating)] += count
+    rating = zone_counts(rating_rows)
 
     # -- The completed practices ranked by engagement. The per-practice
     #    counts reuse the same predicates as the two aggregates above, so a
@@ -337,10 +330,9 @@ async def _engagement(
 
     # -- The feedback share («Процент фидбеков», owner 2026-10-02): distinct
     #    users whose review landed on an in-window practice, plus the
-    #    in-window rating buckets on the FIVE scale (rating_bucket_five --
-    #    the same mapping as the all-time group above, so the two always
-    #    reconcile; the /reviews FEED keeps its three-chip rating_bucket,
-    #    a chip and a strip segment are different answers by design).
+    #    in-window rating zones (zone_counts -- the same mapping as the
+    #    all-time group above and every feed, so the two always
+    #    reconcile).
     #    SAME anchor as attendance (the practice's scheduled_at).
     #    The denominator is NOT computed here: it is members.students, which
     #    already rides the payload -- one fact, one field.
@@ -369,9 +361,7 @@ async def _engagement(
             .group_by(Feedback.rating)
         )
     ).all()
-    window_rating = {"bad": 0, "low": 0, "neutral": 0, "good": 0, "fire": 0}
-    for raw_rating, count in window_rating_rows:
-        window_rating[rating_bucket_five(raw_rating)] += count
+    window_rating = zone_counts(window_rating_rows)
 
     # -- The period's conducted practices (part 3, owner 2026-10-02): every
     #    COMPLETED practice of the window, newest first. The practices are
@@ -448,12 +438,15 @@ async def _engagement(
                 .group_by(Feedback.practice_id, Feedback.rating)
             )
         ).all()
-        ratings: dict[UUID, dict[str, int]] = {
-            practice_id: {"bad": 0, "low": 0, "neutral": 0, "good": 0, "fire": 0}
-            for practice_id in practice_ids
+        rows_by_practice: dict[UUID, list[tuple[int, int]]] = {
+            practice_id: [] for practice_id in practice_ids
         }
         for practice_id, raw_rating, count in practice_rating_rows:
-            ratings[practice_id][rating_bucket_five(raw_rating)] += count
+            rows_by_practice[practice_id].append((raw_rating, count))
+        ratings: dict[UUID, dict[str, int]] = {
+            practice_id: zone_counts(rows)
+            for practice_id, rows in rows_by_practice.items()
+        }
 
         for practice, master in practice_rows:
             conducted.append(

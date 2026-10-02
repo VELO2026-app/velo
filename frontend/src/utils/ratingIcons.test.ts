@@ -2,23 +2,26 @@
 // VELO Frontend -- ratingIcons.ts Unit Tests
 // =============================================================================
 //
-// Pins the shared MOOD_SCALE_ICON / RATING_ICON maps by component identity, so
-// a future edit at any consuming site cannot silently drift the mapping
-// without a test noticing. RATING_ICON stays the PRE-BUCKETED analytics map
-// (FeedbackRating) -- it is deliberately not widened to five (tz-mood-scale §5).
+// Pins the shared MOOD_SCALE_ICON map by component identity, so a future edit
+// at any consuming site cannot silently drift the mapping without a test
+// noticing.
+//
+// BE-77: the three-key RATING_ICON ('fire'|'good'|'confused') used to be
+// pinned here too -- right while the server sent three buckets. The owner's
+// five-zone decision made the server send the moodScale keys, and the map was
+// deleted (no legacy). Its block is replaced by the exact statement of that:
+// the module exports ONE map, and it is the five-key one.
 // =============================================================================
 
 import { describe, it, expect } from 'vitest'
-import { MOOD_SCALE_ICON, RATING_ICON } from '@/utils/ratingIcons'
+import * as ratingIcons from '@/utils/ratingIcons'
+import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
 import {
   IconMoodScaleBad,
   IconMoodScaleLow,
   IconMoodScaleNeutral,
   IconMoodScaleGood,
   IconMoodScaleFire,
-  IconRatingFire,
-  IconRatingGood,
-  IconRatingConfused,
 } from '@/components/icons'
 
 describe('MOOD_SCALE_ICON', () => {
@@ -35,14 +38,9 @@ describe('MOOD_SCALE_ICON', () => {
   })
 })
 
-describe('RATING_ICON (pre-bucketed analytics surfaces)', () => {
-  it('maps each bucket to its own icon component', () => {
-    expect(RATING_ICON.fire).toBe(IconRatingFire)
-    expect(RATING_ICON.good).toBe(IconRatingGood)
-    expect(RATING_ICON.confused).toBe(IconRatingConfused)
-  })
-
-  it('has exactly the three buckets -- no extra, no missing', () => {
-    expect(Object.keys(RATING_ICON).sort()).toEqual(['confused', 'fire', 'good'])
+describe('ratingIcons module surface (BE-77)', () => {
+  it('exports exactly one map, MOOD_SCALE_ICON -- no three-bucket RATING_ICON', () => {
+    expect(Object.keys(ratingIcons)).toEqual(['MOOD_SCALE_ICON'])
+    expect(Object.keys(ratingIcons.MOOD_SCALE_ICON)).toHaveLength(5)
   })
 })

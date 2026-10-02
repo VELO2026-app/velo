@@ -15,9 +15,24 @@
 // Drag on the range keeps the exact number the user stopped on (1/3/5/7/9
 // included); a card tap / finished swipe picks the TOP score of the pair
 // (2/4/6/8/10). The boundary between emotions is 2|3, 4|5, 6|7, 8|9.
+//
+// SERVER ZONES (BE-77): the backend splits every stored score into the same
+// five zones and sends the zone KEY (ScoreZone in generated.ts) on its feeds
+// and distributions. MoodScaleKey is checked against ScoreZone at the type
+// level below -- a key added, removed or renamed on either side fails
+// vue-tsc, so the two vocabularies cannot drift. That check is a lock on this
+// module, not a second dictionary.
 // =============================================================================
 
+import type { ScoreZone } from '@/api/types'
+
 export type MoodScaleKey = 'bad' | 'low' | 'neutral' | 'good' | 'fire'
+
+// Exact type equality (not mutual assignability, which a union subset would
+// pass through a widening context). Exported so noUnusedLocals keeps it.
+type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false
+type AssertTrue<T extends true> = T
+export type MoodScaleKeyMatchesServerZone = AssertTrue<Equal<MoodScaleKey, ScoreZone>>
 
 export const MOOD_SCALE_MIN = 1
 export const MOOD_SCALE_MAX = 10
@@ -76,4 +91,19 @@ export function moodLabelFromScore(score: number): string {
 /** Range input's aria-valuetext: «5 из 10 — Нормально» (tz §8). */
 export function moodValueText(score: number): string {
   return `${clampMoodScore(score)} из ${MOOD_SCALE_MAX} — ${moodLabelFromScore(score)}`
+}
+
+/** Sum of a per-zone count record (the server's ScoreZoneCounts). */
+export function zoneTotal(counts: Record<MoodScaleKey, number>): number {
+  return MOOD_SCALE_KEYS.reduce((sum, key) => sum + counts[key], 0)
+}
+
+/** Per-zone counts -> rounded percentages of their total (all 0 when empty). */
+export function zonePercents(counts: Record<MoodScaleKey, number>): Record<MoodScaleKey, number> {
+  const total = zoneTotal(counts)
+  const pcts = {} as Record<MoodScaleKey, number>
+  for (const key of MOOD_SCALE_KEYS) {
+    pcts[key] = total > 0 ? Math.round((counts[key] / total) * 100) : 0
+  }
+  return pcts
 }

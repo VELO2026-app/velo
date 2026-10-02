@@ -6,9 +6,9 @@
 #   GET /api/v1/masters/me/reviews?attention=true|false&limit=&offset=
 #     -> paginated named reviews across the master's completed practices.
 #
-# attention=true serves the dashboard "Требуют внимания" block (confused
-# bucket only); attention=false serves the full cross-practice feed. Mirrors
-# E1's per-practice ?attention= switch.
+# attention=true serves the dashboard "Требуют внимания" block (ratings
+# 1-4, zones bad and low); attention=false serves the full cross-practice
+# feed. Mirrors E1's per-practice ?attention= switch.
 #
 # AUTH: get_current_master (verified master only). SESSION: get_db_reader.
 # =============================================================================
@@ -38,7 +38,7 @@ async def list_my_reviews_endpoint(
 ) -> PaginatedMasterReviewsResponse:
     """Named reviews across the master's completed practices.
 
-    attention=true narrows to the negative (confused) bucket for the
+    attention=true narrows to ratings 1-4 (zones bad and low) for the
     dashboard "needs attention" block; otherwise returns the full feed.
     """
     user, _profile = master_tuple

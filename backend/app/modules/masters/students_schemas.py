@@ -23,7 +23,8 @@ class StudentListItem(BaseModel):
     """One student in the master's students list.
 
     needs_attention is True when the student's MOST RECENT feedback on this
-    master's practices is in the negative bucket (rating 1-3) -- the same
+    master's practices needs attention (rating 1-4, zones bad and low --
+    BE-77) -- the same
     signal that feeds the dashboard "needs attention" block (consistent with
     the reviews projection).
     """

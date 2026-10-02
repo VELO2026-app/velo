@@ -239,9 +239,8 @@ export function zoomStartRedirectUrl(ticket: string): string | null {
  *
  * The de-anonymised counterpart to the anonymous rating distribution: each
  * item carries the reviewer's name, avatar and comment. `rating` arrives
- * pre-mapped to the three UI buckets ('fire' | 'good' | 'confused') by the
- * backend, so the frontend reuses the same rating icons/labels it already
- * renders for the anonymous distribution.
+ * pre-mapped to its zone (ScoreZone, BE-77) by the backend -- the same five
+ * moodScale.ts keys the anonymous distribution counts.
  */
 export function getPracticeReviews(
   id: string,

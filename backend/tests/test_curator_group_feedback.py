@@ -816,13 +816,15 @@ async def test_a_cancelled_bookings_checkin_is_dropped_and_the_rest_stay(
 
 
 @pytest.mark.asyncio
-async def test_mood_is_a_bucket_and_never_the_stored_score(
+async def test_mood_is_a_zone_and_never_the_stored_score(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     """The 1..10 mood does not leave the master's dossier.
 
-    Three participants across the three ranges, so the mapping is asserted
-    rather than a single value that a constant would satisfy. The type
+    Three participants in three different zones, so the mapping is asserted
+    rather than a single value that a constant would satisfy. BE-77: the
+    same 2 / 5 / 10 read low / mid / high under the three-bucket split;
+    under the owner's five zones they are bad / neutral / fire. The type
     check is explicit: `9 == "high"` is False in Python, but a schema that
     quietly widened to `int | str` would pass a value-only assertion on a
     seeded 9 and fail nothing until production.
@@ -843,18 +845,20 @@ async def test_mood_is_a_bucket_and_never_the_stored_score(
 
     assert len(items) == 3
     assert all(isinstance(v, str) for v in by_name.values())
-    assert by_name == {"Низ": "low", "Серед": "mid", "Верх": "high"}
+    assert by_name == {"Низ": "bad", "Серед": "neutral", "Верх": "fire"}
 
 
 @pytest.mark.asyncio
-async def test_rating_is_a_bucket_and_never_the_stored_score(
+async def test_rating_is_a_zone_and_never_the_stored_score(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     """The 1..10 rating does not leave the master's dossier either.
 
-    The vocabulary is the feedback one (confused / good / fire), which is
-    what both master-facing review feeds already publish -- so the curator
-    reads a review in exactly the shape its own master reads it.
+    The vocabulary is the zone one (ScoreZone, BE-77), which is what both
+    master-facing review feeds publish -- so the curator reads a review in
+    exactly the shape its own master reads it. The inputs were 1 / 7 / 8
+    (confused / good / fire under the old split); 7 and 8 now share "good",
+    so the 8 is a 9 to keep three distinct zones: bad / good / fire.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     low = await _make_student(client, _TID_STUDENT, first_name="Низ")
@@ -863,7 +867,7 @@ async def test_rating_is_a_bucket_and_never_the_stored_score(
     school = await _school(db_session, curator)
     practice = await _practice(db_session, curator, school)
 
-    for who, rating in ((low, 1), (mid, 7), (high, 8)):
+    for who, rating in ((low, 1), (mid, 7), (high, 9)):
         booking = await _booking(db_session, practice, who)
         await _feedback(db_session, practice, who, booking, rating=rating)
 
@@ -872,7 +876,7 @@ async def test_rating_is_a_bucket_and_never_the_stored_score(
 
     assert len(items) == 3
     assert all(isinstance(v, str) for v in by_name.values())
-    assert by_name == {"Низ": "confused", "Серед": "good", "Верх": "fire"}
+    assert by_name == {"Низ": "bad", "Серед": "good", "Верх": "fire"}
 
 
 @pytest.mark.asyncio

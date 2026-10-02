@@ -173,11 +173,8 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ApiResponseError } from '@/api/client'
-import {
-  getCuratorGroupAnalytics,
-  type CuratorGroupAnalyticsResponse,
-  type SchoolAnalyticsPeriod,
-} from '@/api/curatorGroups'
+import { getCuratorGroupAnalytics, type SchoolAnalyticsPeriod } from '@/api/curatorGroups'
+import type { CuratorGroupAnalyticsResponse } from '@/api/types'
 import { VButton, VCard, VEmptyState, VLoader, VSegmentTrack } from '@/components/ui'
 import DistributionCard from '@/components/shared/DistributionCard.vue'
 import VHeader from '@/components/layout/VHeader.vue'
@@ -210,8 +207,8 @@ const PERIOD_OPTIONS: ReadonlyArray<{ value: SchoolAnalyticsPeriod; label: strin
 //    percent is derived, never a second server copy of one number. The
 //    strip is the FIVE mood-scale gradations («Плохо» .. «Огонь») with the
 //    shared mood palette + faces -- visually the same segments the practice
-//    strips render; the /reviews feed's three chips are a different
-//    surface (tz-mood-scale §5). Every read is fault-tolerant: an older
+//    strips render, and since BE-77 the same five zones every feed and
+//    distribution carries. Every read is fault-tolerant: an older
 //    payload (no rating / reviewers yet) degrades to the empty scaffold,
 //    never a crash -- the «бек доедет» ruling. --
 const feedbackReviewPct = computed((): number => {

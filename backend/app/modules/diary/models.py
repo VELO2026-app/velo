@@ -101,6 +101,23 @@ from app.core.database import Base
 from app.core.mixins import JSONBMixin, TimestampMixin, UUIDMixin
 
 
+class ScoreZone(enum.StrEnum):
+    """The five zones of a 1..10 mood / rating score (BE-77).
+
+    Not stored -- Checkin.mood and Feedback.rating keep the raw score; the
+    zone is derived on read by diary.insights_service.score_zone, which
+    owns the boundaries. A StrEnum rather than a Literal so the OpenAPI
+    document carries ONE named component the frontend's moodScale.ts keys
+    are type-checked against. Member order is the scale order, low to high.
+    """
+
+    BAD = "bad"
+    LOW = "low"
+    NEUTRAL = "neutral"
+    GOOD = "good"
+    FIRE = "fire"
+
+
 class CheckType(enum.StrEnum):
     """Check-in timing relative to practice.
 
@@ -234,9 +251,9 @@ class Checkin(UUIDMixin, TimestampMixin, Base):
     )
 
     # -- Check-in data --
-    # mood is a 1..10 score (slider). The icon/label shown in the UI is
-    # derived from the range: 1-3 / 4-7 / 8-10. Range enforced by
-    # ck_checkin_mood below.
+    # mood is a 1..10 score (slider). The zone shown in the UI is derived
+    # on read (ScoreZone, boundaries in diary.insights_service.score_zone).
+    # Range enforced by ck_checkin_mood below.
     mood: Mapped[int] = mapped_column(
         Integer, nullable=False,
     )
@@ -306,9 +323,9 @@ class Feedback(UUIDMixin, TimestampMixin, Base):
     )
 
     # -- Feedback data --
-    # rating is a 1..10 score (slider). The icon/label shown in the UI is
-    # derived from the range: 1-3 / 4-7 / 8-10. Range enforced by
-    # ck_feedback_rating below.
+    # rating is a 1..10 score (slider). The zone shown in the UI is derived
+    # on read (ScoreZone, boundaries in diary.insights_service.score_zone).
+    # Range enforced by ck_feedback_rating below.
     rating: Mapped[int] = mapped_column(
         Integer, nullable=False,
     )

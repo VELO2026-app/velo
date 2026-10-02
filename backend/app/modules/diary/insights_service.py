@@ -5,20 +5,22 @@
 #
 # Master-facing analytics: anonymous aggregated insights (get_practice_insights)
 # and named/de-anonymised reviews (list_practice_reviews) for a completed
-# practice. ATTENTION_RATING_MAX, rating_bucket and mood_bucket are consumed
-# by two masters modules (masters/reviews_service.py,
-# masters/students_service.py) and, since BE-24, by
-# curator_groups/feedback_service.py -- the reason this area is public API,
-# not just internal to diary.
+# practice. score_zone, zone_counts and ATTENTION_RATING_MAX are THE source
+# of the 1..10 -> zone boundaries (BE-77) and are consumed by masters
+# (reviews_service, students_service, stats_service), curator_groups
+# (feedback_service, analytics_service), admin/metrics and
+# diary/notify_master -- the reason this area is public API, not just
+# internal to diary.
 # =============================================================================
 
+from collections.abc import Iterable
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BadRequestError, NotFoundError
-from app.modules.diary.models import Checkin, Feedback
+from app.modules.diary.models import Checkin, Feedback, ScoreZone
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.users.helpers import display_name
 from app.modules.users.models import User
@@ -29,18 +31,60 @@ from app.modules.users.models import User
 # ===================================================================
 
 
-def _score_bucket(score: int) -> str:
-    """Map a 1..10 mood/rating score into a distribution bucket.
+# ===================================================================
+# Score zones (BE-77) -- the ONLY place the boundaries are written
+# ===================================================================
+#
+# Owner decision (BE-77, 2026-10-02): every server surface -- distributions,
+# feeds, notifications, the school aggregate -- splits a 1..10 mood or
+# rating into the same five zones, keyed exactly like the frontend's
+# utils/moodScale.ts. One table, top score of each zone in scale order; a
+# zone starts one above the previous zone's top. Check-in moods and
+# feedback ratings share it: one scale, one vocabulary.
+_ZONES: tuple[tuple[ScoreZone, int], ...] = (
+    (ScoreZone.BAD, 2),
+    (ScoreZone.LOW, 4),
+    (ScoreZone.NEUTRAL, 6),
+    (ScoreZone.GOOD, 8),
+    (ScoreZone.FIRE, 10),
+)
 
-    1-3 -> low, 4-7 -> mid, 8-10 -> high. Feedback ratings reuse the same
-    ranges under different names (confused/good/fire) via a name map at the
-    call site.
+_ZONE_BY_SCORE: dict[int, ScoreZone] = {}
+_bottom = 1
+for _zone, _top in _ZONES:
+    for _score in range(_bottom, _top + 1):
+        _ZONE_BY_SCORE[_score] = _zone
+    _bottom = _top + 1
+del _bottom, _zone, _top, _score
+
+# "Needs attention" (owner decision, BE-77): a rating in the two lowest
+# zones, bad and low -- i.e. 1..4. Derived from the table, not written as a
+# second number, so the threshold cannot drift from the zones it names.
+ATTENTION_RATING_MAX: int = dict(_ZONES)[ScoreZone.LOW]
+
+
+def score_zone(score: int) -> ScoreZone:
+    """Map a stored 1..10 mood / rating score to its zone.
+
+    A plain lookup: the score is 1..10 by the ck_checkin_mood /
+    ck_feedback_rating CHECKs and the request schemas, so every reachable
+    score has an entry.
     """
-    if score <= 3:
-        return "low"
-    if score <= 7:
-        return "mid"
-    return "high"
+    return _ZONE_BY_SCORE[score]
+
+
+def zone_counts(rows: Iterable[tuple[int, int]]) -> dict[str, int]:
+    """Fold (score, count) rows into counts for ALL five zones.
+
+    Every zone is present, at 0 when no score falls in it -- the response
+    schemas (ScoreZoneCounts) require all five keys. Scores are folded in
+    Python rather than grouped by zone in SQL: a CASE in a query would be a
+    second copy of the boundaries.
+    """
+    counts = {zone.value: 0 for zone in ScoreZone}
+    for score, count in rows:
+        counts[score_zone(score).value] += count
+    return counts
 
 
 async def get_practice_insights(
@@ -87,31 +131,24 @@ async def get_practice_insights(
     )
     participants = (await session.execute(participants_stmt)).scalar_one()
 
-    # 3. Mood distribution from check-ins, bucketed by score range
-    #    (1-3 low / 4-7 mid / 8-10 high). mood is a 1..10 score now, so we
-    #    pull the scores and bucket in Python rather than GROUP BY a string.
+    # 3. Mood distribution from check-ins, folded into the five zones
+    #    (zone_counts).
     checkins_stmt = (
         select(Checkin.mood, func.count(Checkin.id))
         .where(Checkin.practice_id == practice_id)
         .group_by(Checkin.mood)
     )
     checkins_result = await session.execute(checkins_stmt)
-    checkins_buckets = {"low": 0, "mid": 0, "high": 0}
-    for score, count in checkins_result.all():
-        checkins_buckets[_score_bucket(score)] += count
+    checkins = zone_counts(checkins_result.all())
 
-    # 4. Rating distribution from feedbacks, bucketed by the same ranges
-    #    (1-3 confused / 4-7 good / 8-10 fire).
+    # 4. Rating distribution from feedbacks, the same five zones.
     feedbacks_stmt = (
         select(Feedback.rating, func.count(Feedback.id))
         .where(Feedback.practice_id == practice_id)
         .group_by(Feedback.rating)
     )
     feedbacks_result = await session.execute(feedbacks_stmt)
-    feedbacks_buckets = {"confused": 0, "good": 0, "fire": 0}
-    _rating_bucket_name = {"low": "confused", "mid": "good", "high": "fire"}
-    for score, count in feedbacks_result.all():
-        feedbacks_buckets[_rating_bucket_name[_score_bucket(score)]] += count
+    feedbacks = zone_counts(feedbacks_result.all())
 
     # 5. Count feedbacks with comments.
     comments_stmt = (
@@ -123,21 +160,13 @@ async def get_practice_insights(
     )
     comments_count = (await session.execute(comments_stmt)).scalar_one()
 
-    # MoodDistribution / RatingDistribution fields are required; the buckets
-    # above are pre-seeded with all keys at 0, so missing scores are covered.
+    # ScoreZoneCounts fields are required; zone_counts returns every zone,
+    # at 0 when empty.
     return {
         "practice_id": practice_id,
         "participants": participants,
-        "checkins": {
-            "high": checkins_buckets["high"],
-            "mid": checkins_buckets["mid"],
-            "low": checkins_buckets["low"],
-        },
-        "feedbacks": {
-            "fire": feedbacks_buckets["fire"],
-            "good": feedbacks_buckets["good"],
-            "confused": feedbacks_buckets["confused"],
-        },
+        "checkins": checkins,
+        "feedbacks": feedbacks,
         "comments_count": comments_count,
     }
 
@@ -146,61 +175,9 @@ async def get_practice_insights(
 # Practice reviews (E1, master-facing, NON-anonymous)
 # ===================================================================
 
-# Rating helpers shared with the cross-practice feed in masters/reviews_service
-# (S-1): public so the import targets diary's intentional API. The reviewer's
-# display name uses the shared users.display_name formatter (S-1c) -- see
-# list_practice_reviews below.
-#
-# A review with rating in this range is "negative" -- the confused bucket
-# (1-3). attention=True narrows the feed to exactly these for the dashboard
-# "needs attention" block.
-ATTENTION_RATING_MAX = 3
-
-
-def rating_bucket(score: int) -> str:
-    """Map a 1..10 feedback rating to its UI bucket name.
-
-    Same ranges as _score_bucket (1-3 / 4-7 / 8-10), but renamed to the
-    feedback vocabulary (confused / good / fire) so the frontend reuses the
-    rating icons it already renders for the anonymous distribution.
-    """
-    return {"low": "confused", "mid": "good", "high": "fire"}[
-        _score_bucket(score)
-    ]
-
-
-def rating_bucket_five(score: int) -> str:
-    """Map a 1..10 feedback rating to its FIVE-scale key.
-
-    The exact tz-mood-scale numeric contract the frontend's moodScale.ts
-    implements: boundaries 2|3, 4|5, 6|7, 8|9 -- 1-2 «Плохо» (bad), 3-4
-    «Не очень» (low), 5-6 «Нормально» (neutral), 7-8 «Хорошо» (good),
-    9-10 «Огонь» (fire). This is the widening tz-mood-scale §5 reserved
-    for "the separate analytics backend task"; the school analytics
-    aggregate consumes it so its strip reads identically to the practice
-    mood strips. Deliberately NOT a change to rating_bucket: the /reviews
-    feed keeps its three-chip vocabulary until the owner unifies the
-    feeds, so a feed chip and an aggregate segment are different answers
-    by design.
-    """
-    return ("bad", "low", "neutral", "good", "fire")[
-        max(0, min(4, (score - 1) // 2))
-    ]
-
-
-def mood_bucket(score: int) -> str:
-    """Map a 1..10 check-in mood to its UI bucket name (low / mid / high).
-
-    rating_bucket's twin for the OTHER score, and public for the same
-    reason: curator_groups/feedback_service.py must publish a check-in
-    without publishing the number behind it, and writing the 1-3 / 4-7 /
-    8-10 boundaries into a third module would put one fact in three places.
-
-    The vocabulary is the anonymous distribution's (MoodDistribution:
-    high / mid / low), not the feedback one -- moods have never been called
-    confused/good/fire anywhere the frontend can see.
-    """
-    return _score_bucket(score)
+# The reviewer's display name uses the shared users.display_name formatter
+# (S-1c). The zone and the attention threshold are score_zone /
+# ATTENTION_RATING_MAX above, shared with masters/reviews_service.
 
 
 async def list_practice_reviews(
@@ -221,7 +198,8 @@ async def list_practice_reviews(
 
     All feedbacks are included -- a missing comment is allowed and the rating
     always exists -- ordered newest-first. When attention=True, the page is
-    narrowed to the negative bucket (rating 1-3) for the dashboard
+    narrowed to the reviews that need attention (rating 1-4, zones bad and
+    low -- ATTENTION_RATING_MAX) for the dashboard
     "needs attention" feed; the same endpoint otherwise serves the full
     per-practice list.
 
@@ -231,7 +209,8 @@ async def list_practice_reviews(
         session: Read session.
         limit: Page size.
         offset: Page offset.
-        attention: When True, return only negative reviews (rating 1-3).
+        attention: When True, return only reviews that need attention
+            (rating <= ATTENTION_RATING_MAX, i.e. 1-4).
 
     Returns:
         Tuple of (items, total_count). Each item is a dict ready for ReviewItem.
@@ -283,7 +262,7 @@ async def list_practice_reviews(
             "user_id": author.id,
             "reviewer_name": display_name(author.first_name, author.last_name),
             "avatar_url": author.avatar_url,
-            "rating": rating_bucket(feedback.rating),
+            "rating": score_zone(feedback.rating),
             "comment": feedback.comment,
             "created_at": feedback.created_at,
         }

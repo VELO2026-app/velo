@@ -62,6 +62,7 @@ import { api } from '@/api/client'
 import { buildQuery } from '@/api/utils'
 import type {
   CreateCuratorGroupRequest,
+  CuratorGroupAnalyticsResponse,
   CuratorGroupDeletePreviewResponse,
   CuratorGroupInvitePreviewResponse,
   CuratorGroupInviteResponse,
@@ -326,7 +327,7 @@ export function getCuratorGroupJournal(
 
 /** GET /masters/me/curator-groups/{id}/checkins -- PRE check-ins across EVERY
  *  practice of this school (BE-24), newest first, CURATOR ONLY. Scores arrive
- *  as BUCKETS ('low'|'mid'|'high' of 1-3/4-7/8-10), never the raw 1..10: the
+ *  as ZONES (ScoreZone, the moodScale.ts keys -- BE-77), never the raw 1..10: the
  *  curator reads other masters' groups in distribution shape, deliberately
  *  less than the leading master sees on their own roster. user_id tells
  *  same-named students apart and opens NO profile -- the master dossier 404s
@@ -346,9 +347,9 @@ export function getCuratorGroupCheckins(
 }
 
 /** GET /masters/me/curator-groups/{id}/reviews -- NAMED reviews across every
- *  practice of this school (BE-24), newest first, CURATOR ONLY. Same bucket
- *  contract as the check-ins ('confused'|'good'|'fire' of 1-3/4-7/8-10 -- the
- *  vocabulary the master's own review feeds already render): a raw rating
+ *  practice of this school (BE-24), newest first, CURATOR ONLY. Same zone
+ *  contract as the check-ins (ScoreZone -- the vocabulary the master's own
+ *  review feeds render too): a raw rating
  *  never crosses the curator boundary. Names and avatars are shown on
  *  purpose (owner ruling) -- do not anonymise. user_id: same rule as the
  *  check-ins -- disambiguation only, opens no screen. practice_id narrows
@@ -368,12 +369,11 @@ export function getCuratorGroupReviews(
 // =============================================================================
 // School analytics (tz-curator.md §6 -- owner unblocked 2026-10-02)
 //
-// STAND-IN TYPES until the next generated.ts regen (the groups.ts
-// precedent): the endpoint is new, the openapi-generated contract does not
-// exist for it yet. The shapes mirror
-// backend/app/modules/curator_groups/schemas.py verbatim; delete this
-// block and re-derive from @/api/types after the regen. Same BE-24 rule as
-// the feeds above: buckets only, no per-student rows, no raw scores.
+// Types: CuratorGroupAnalyticsResponse is the GENERATED contract (re-exported
+// via @/api/types) -- the hand-written stand-in that lived here until the
+// regen was removed by BE-77 when the zone schemas changed under it. Same
+// BE-24 rule as the feeds above: zones only, no per-student rows, no raw
+// scores.
 //
 // PART 1 (owner brief 2026-10-02): the screen is the period slider +
 // the four `engagement` cards; `period` scopes those to the curator's own
@@ -387,58 +387,6 @@ export function getCuratorGroupReviews(
 /** The analytics slider's period vocabulary -- the same three values the
  *  master dashboard's toggle sends (core/periods.py bounds server-side). */
 export type SchoolAnalyticsPeriod = 'week' | 'month' | 'quarter'
-
-/** §6 aggregate for the curator's school analytics screen. CURATOR ONLY --
- *  everyone else gets the same masked 404 as every school surface. */
-export interface CuratorGroupAnalyticsResponse {
-  practices: { total: number; completed: number; upcoming: number }
-  members: { masters: number; students: number }
-  /** The period-scoped cards: conducted / came / came again / joined and
-   *  never came (the last one lifetime -- it does not move with the
-   *  slider). repeat_pct is 0 when the period had no attendees.
-   *  reviewers + rating feed the «Процент фидбеков» block (part 2): the
-   *  percent divides reviewers by members.students client-side; rating is
-   *  the FIVE-scale distribution (moodScale.ts keys, tz-mood-scale), not
-   *  the three-chip /reviews feed vocabulary. */
-  engagement: {
-    practices_conducted: number
-    attendees: number
-    repeat_attendees: number
-    repeat_pct: number
-    joined_never_came: number
-    reviewers: number
-    rating: { bad: number; low: number; neutral: number; good: number; fire: number }
-    /** Part 3: every COMPLETED practice of the window, newest first, each
-     *  with its own attendance / check-in / feedback aggregates. */
-    conducted_practices: Array<{
-      practice_id: string
-      title: string
-      direction: string | null
-      master_name: string
-      scheduled_at: string
-      timezone: string
-      attendees_count: number
-      checkins_count: number
-      reviewers_count: number
-      reviews_count: number
-      rating: { bad: number; low: number; neutral: number; good: number; fire: number }
-    }>
-  }
-  feedback: {
-    checkins_count: number
-    reviews_count: number
-    mood: { low: number; mid: number; high: number }
-    rating: { bad: number; low: number; neutral: number; good: number; fire: number }
-  }
-  top_practices: Array<{
-    practice_id: string
-    title: string
-    master_name: string
-    scheduled_at: string
-    checkins_count: number
-    reviews_count: number
-  }>
-}
 
 export function getCuratorGroupAnalytics(
   id: string,

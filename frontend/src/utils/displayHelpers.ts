@@ -9,7 +9,6 @@
 // =============================================================================
 
 import type {
-  FeedbackRating,
   PracticeDirection,
   PracticeDifficulty,
   DurationBucket,
@@ -46,32 +45,8 @@ import {
 // five-emotion scale (keys + labels + index math) lives in utils/moodScale.ts,
 // and raw-score read surfaces import it from there -- one module so a saved
 // score is never named a different emotion on some other screen (tz §1, §4).
-// The color maps below stay here: they key on the backend's PRE-BUCKETED
-// analytics triad ('confused'/'good'/'fire'), not on scores (tz §5).
-
-/**
- * Rating progress-bar FILL colours (analytics / per-practice reviews).
- * Canon from the operator SVGs (2026-06-11): fire = peach, good = rose,
- * confused = blue. A DIFFERENT palette from RATING_ICON_COLOR (the icon accents)
- * on purpose -- bars are the lighter fills, icons are the saturated accents.
- */
-export const RATING_COLOR: Record<FeedbackRating, string> = {
-  fire: 'var(--velo-peach-300)', // #fbc088
-  good: 'var(--velo-pink-300)', // #f795a2
-  confused: 'var(--velo-blue-400)', // #619cd2
-}
-
-/**
- * Accent color per rating ICON on the feedback form (Figma feedback design):
- * confused = brand blue, good = rose, fire = peach/orange. Separate from
- * RATING_COLOR (analytics bar fills) on purpose -- different surfaces,
- * different palettes. Values reference --velo-rating-* tokens (variables.css).
- */
-export const RATING_ICON_COLOR: Record<FeedbackRating, string> = {
-  confused: 'var(--velo-rating-confused)',
-  good: 'var(--velo-rating-good)',
-  fire: 'var(--velo-rating-fire)',
-}
+// The fill map below stays here (a color map, like the rest of this file);
+// it keys on the same moodScale.ts keys the server's zones use (BE-77).
 
 /**
  * Five-scale mood strip FILL colours (tz-mood-scale palette), keyed by the
@@ -80,8 +55,8 @@ export const RATING_ICON_COLOR: Record<FeedbackRating, string> = {
  * styles/variables.css (the token wins at runtime; the fallback only covers
  * a context where the stylesheet did not load). Every five-segment
  * analytics strip (practice «До/После практики», the school feedback
- * block) reads its segment colors from here, so the surfaces cannot drift
- * apart.
+ * block, the rating bars and the feeds' distributions since BE-77) reads
+ * its segment colors from here, so the surfaces cannot drift apart.
  */
 export const MOOD_SCALE_FILLS: Record<MoodScaleKey, string> = {
   bad: 'var(--velo-analytics-bad, #fe9093)',

@@ -11,7 +11,8 @@
 # purpose). Group attended bookings on the master's practices by user.
 # practices_count = number of attended practices. needs_attention = the
 # student's MOST RECENT feedback on this master's practices is in the
-# negative bucket (rating <= 3), computed for the current page only via
+# attention zones (rating <= ATTENTION_RATING_MAX, i.e. 1-4 -- BE-77),
+# computed for the current page only via
 # one DISTINCT ON query. Optional case-insensitive name search;
 # offset/limit pagination.
 #
@@ -59,7 +60,10 @@ async def _needs_attention_map(
     student_ids: list[UUID],
     session: AsyncSession,
 ) -> dict[UUID, bool]:
-    """Map student_id -> whether their latest feedback is negative (<= 3).
+    """Map student_id -> whether their latest feedback needs attention.
+
+    "Needs attention" is rating <= ATTENTION_RATING_MAX (1-4, zones bad and
+    low -- diary.insights_service, BE-77).
 
     One DISTINCT ON query: ordering by (user_id, created_at DESC) makes the
     first row per user the most recent feedback. Only the current page of

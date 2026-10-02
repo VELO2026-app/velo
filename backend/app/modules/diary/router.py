@@ -596,8 +596,9 @@ async def list_practice_reviews_endpoint(
     attention: bool = Query(
         default=False,
         description=(
-            "When true, return only negative reviews (rating 1-3, the "
-            "'confused' bucket) -- the dashboard 'needs attention' feed."
+            "When true, return only reviews that need attention (rating "
+            "1-4, zones 'bad' and 'low') -- the dashboard 'needs "
+            "attention' feed."
         ),
     ),
 ) -> PaginatedReviewsResponse:

@@ -13,6 +13,8 @@
 
 from pydantic import BaseModel
 
+from app.modules.diary.schemas import ScoreZoneCounts
+
 
 class MasterStatsResponse(BaseModel):
     """GET /api/v1/masters/me/stats?period=week|month|quarter.
@@ -47,32 +49,6 @@ class MasterStatsResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Analytics summary (BE-34)
 # ---------------------------------------------------------------------------
-class AnalyticsMoodDistribution(BaseModel):
-    """Check-in counts by mood bucket (low 1-3 / mid 4-7 / high 8-10).
-
-    Named apart from diary.schemas.MoodDistribution on purpose, following
-    admin.metrics.schemas.FeedbackRatingDistribution: two components with one
-    name would be emitted module-qualified in the OpenAPI document and break
-    the frontend's flat re-export. Same shape, same thresholds, one owner --
-    diary.insights_service.mood_bucket, which computes both.
-    """
-
-    high: int
-    mid: int
-    low: int
-
-
-class AnalyticsRatingDistribution(BaseModel):
-    """Feedback counts by rating bucket (confused 1-3 / good 4-7 / fire 8-10).
-
-    AnalyticsMoodDistribution's twin, named apart for the same reason.
-    """
-
-    fire: int
-    good: int
-    confused: int
-
-
 class MasterAnalyticsResponse(BaseModel):
     """GET /api/v1/masters/me/analytics?period=week|month|quarter.
 
@@ -111,5 +87,6 @@ class MasterAnalyticsResponse(BaseModel):
     feedback_rate_pct: int
     feedback_rate_delta_pp: int | None
 
-    checkins: AnalyticsMoodDistribution
-    feedbacks: AnalyticsRatingDistribution
+    # Five-zone counts (BE-77): the one shared distribution shape.
+    checkins: ScoreZoneCounts
+    feedbacks: ScoreZoneCounts

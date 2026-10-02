@@ -10,14 +10,16 @@
 #
 # Class names are Master-prefixed and distinct from diary's ReviewItem to
 # avoid OpenAPI component-name collisions in the generated frontend types.
-# rating is the UI bucket name (fire / good / confused), same vocabulary E1
-# already returns, so the frontend reuses its rating icons.
+# rating is the score's zone (ScoreZone, BE-77), the same five keys E1
+# returns.
 # =============================================================================
 
 from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel
+
+from app.modules.diary.models import ScoreZone
 
 
 class MasterReviewItem(BaseModel):
@@ -31,7 +33,7 @@ class MasterReviewItem(BaseModel):
     user_id: UUID
     reviewer_name: str
     avatar_url: str | None
-    rating: str  # "fire" | "good" | "confused"
+    rating: ScoreZone
     comment: str | None
     practice_title: str
     created_at: datetime

@@ -530,19 +530,25 @@ async def test_post_checkins_are_not_counted(
 
     body = await _analytics(client, master)
     assert body["checkins_count"] == 1
-    assert body["checkins"]["mid"] == 1
-    assert body["checkins"]["high"] == 0
+    # BE-77: the PRE 7 is "good" and the POST 9 would be "fire" (they used
+    # to read mid / high); the whole dict pins that only the PRE one counts.
+    assert body["checkins"] == {
+        "bad": 0, "low": 0, "neutral": 0, "good": 1, "fire": 0,
+    }
 
 
-async def test_distributions_use_the_shared_bucket_thresholds(
+async def test_distributions_use_the_shared_zone_boundaries(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """Scores land in low/mid/high and confused/good/fire by the 3 / 7 edges.
+    """Scores land in the five zones by the 2|3, 4|5, 6|7, 8|9 edges.
 
-    The edge scores are chosen, not sampled: 3 and 4 straddle the first
-    boundary and 7 and 8 the second, so an off-by-one in either direction
-    moves a count. The thresholds themselves live in diary.insights_service --
-    this asserts that this screen asks it rather than carrying a fourth copy.
+    BE-77: this used to straddle the three-bucket edges 3|4 and 7|8 with the
+    scores 3, 4, 7, 8 -- right for that split, which the owner's five-zone
+    decision replaced. The edge scores are still chosen, not sampled: 2..9
+    put a score on both sides of every one of the four boundaries, so an
+    off-by-one in either direction moves a count. The boundaries live in
+    diary.insights_service -- this asserts that this screen asks it rather
+    than carrying a copy.
     """
     master = await _make_verified_master(client, db_session)
     master_id = master["user"]["id"]
@@ -550,16 +556,17 @@ async def test_distributions_use_the_shared_bucket_thresholds(
         db_session, master_id, scheduled_at=_inside("week"),
     )
 
-    for mood, rating in ((3, 3), (4, 4), (7, 7), (8, 8)):
+    for score in range(2, 10):
         booking = await _book(
             db_session, practice.id, await _participant(client),
         )
-        await _check_in(db_session, booking, mood=mood)
-        await _leave_feedback(db_session, booking, rating=rating)
+        await _check_in(db_session, booking, mood=score)
+        await _leave_feedback(db_session, booking, rating=score)
 
     body = await _analytics(client, master)
-    assert body["checkins"] == {"low": 1, "mid": 2, "high": 1}
-    assert body["feedbacks"] == {"confused": 1, "good": 2, "fire": 1}
+    five = {"bad": 1, "low": 2, "neutral": 2, "good": 2, "fire": 1}
+    assert body["checkins"] == five
+    assert body["feedbacks"] == five
 
 
 async def test_empty_period_is_zeroes_and_null_deltas(

@@ -625,7 +625,7 @@ async def test_list_feedbacks_filter_rating(
     await _create_attended_booking(db_session, auth["user"]["id"], p2.id)
     await db_session.commit()
 
-    # Fire for p1, confused for p2.
+    # Raw 9 for p1, raw 2 for p2 (the filter is the raw 1..10 score).
     await client.post(
         FEEDBACK_URL.format(practice_id=p1.id),
         json={"rating": 9},

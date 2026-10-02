@@ -9,14 +9,14 @@
     - VHeader (back + title).
     - Practice header card: direction icon + title + date · participants.
     - 3 VStatCard: Check-in % / Feedback % / Отзывов (count).
-    - «Распределение»: rating bars (fill = RATING_COLOR, icon = RATING_ICON_COLOR).
+    - «Распределение»: five zone bars (VRatingDistribution: MOOD_SCALE_FILLS + faces).
     - «Отзывы»: individual reviews list.
 
   Data reality (E1 wired, 2026-06-16):
     REAL: practice header (getPractice) + stats/distribution (getPracticeInsights,
           reused from diaryStore cache — eager-loaded by AnalyticsView).
     REAL: the «Отзывы» list — getPracticeReviews (E1 named reviews, paginated).
-          `rating` arrives pre-bucketed ('fire'|'good'|'confused') from the backend.
+          `rating` arrives as the server's zone key (ScoreZone, BE-77).
 -->
 
 <template>
@@ -52,11 +52,7 @@
     <!-- Распределение -->
     <section class="practice-reviews__section">
       <h2 class="velo-section-title">Распределение</h2>
-      <VRatingDistribution
-        :fire="feedbackCounts.fire"
-        :good="feedbackCounts.good"
-        :confused="feedbackCounts.confused"
-      />
+      <VRatingDistribution :counts="feedbackCounts" />
     </section>
 
     <!-- Отзывы (E1 named reviews) -->
@@ -78,11 +74,7 @@
         >
           <div class="practice-reviews__review-top">
             <span class="practice-reviews__review-ident">
-              <component
-                :is="RATING_ICON[r.rating]"
-                :size="28"
-                :style="{ color: RATING_ICON_COLOR[r.rating] }"
-              />
+              <component :is="MOOD_SCALE_ICON[r.rating]" :size="28" />
             </span>
             <span class="practice-reviews__review-name">{{ r.reviewer_name }}</span>
           </div>
@@ -106,10 +98,10 @@ import { VStatCard, VCard, VButton, VLoader, VEmptyState } from '@/components/ui
 import VRatingDistribution from '@/components/shared/VRatingDistribution.vue'
 import PracticeHeroCard from '@/components/shared/PracticeHeroCard.vue'
 import { VHeader } from '@/components/layout'
-import { RATING_ICON_COLOR } from '@/utils/displayHelpers'
-import { RATING_ICON } from '@/utils/ratingIcons'
+import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
+import { zoneTotal } from '@/utils/moodScale'
 import { formatShortDate } from '@/utils/format'
-import type { PracticeResponse, ReviewItem } from '@/api/types'
+import type { PracticeResponse, ReviewItem, ScoreZoneCounts } from '@/api/types'
 import PracticeAnalytics from '@/components/shared/practice-analytics/PracticeAnalytics.vue'
 import type {
   PracticeAnalyticsData,
@@ -225,12 +217,12 @@ const participantsLabel = computed((): string => {
 
 const totalCheckins = computed((): number => {
   const i = insights.value
-  return i ? i.checkins.high + i.checkins.mid + i.checkins.low : 0
+  return i ? zoneTotal(i.checkins) : 0
 })
 
 const totalFeedbacks = computed((): number => {
   const i = insights.value
-  return i ? i.feedbacks.fire + i.feedbacks.good + i.feedbacks.confused : 0
+  return i ? zoneTotal(i.feedbacks) : 0
 })
 
 const checkinPct = computed((): string => {
@@ -255,8 +247,8 @@ const feedbacksLabel = computed((): string | number =>
 // =========================================================================
 
 const feedbackCounts = computed(
-  (): { fire: number; good: number; confused: number } =>
-    insights.value?.feedbacks ?? { fire: 0, good: 0, confused: 0 },
+  (): ScoreZoneCounts =>
+    insights.value?.feedbacks ?? { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 },
 )
 
 // =========================================================================

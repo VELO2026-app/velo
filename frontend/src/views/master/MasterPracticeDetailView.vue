@@ -256,9 +256,7 @@
           <template v-if="hasRating" #extra>
             <VRatingBadges
               size="lg"
-              :fire="ratingPct('fire')"
-              :good="ratingPct('good')"
-              :confused="ratingPct('confused')"
+              :pcts="ratingPcts"
             />
           </template>
         </PracticeHeroCard>
@@ -278,11 +276,8 @@
           <template v-else-if="reviews.length > 0">
             <div v-for="(r, i) in visibleReviews" :key="i" class="practice-detail__review">
               <div class="practice-detail__review-top">
-                <span
-                  class="practice-detail__review-ic"
-                  :style="{ color: RATING_ICON_COLOR[r.rating] }"
-                >
-                  <component :is="RATING_ICON[r.rating]" :size="28" />
+                <span class="practice-detail__review-ic">
+                  <component :is="MOOD_SCALE_ICON[r.rating]" :size="28" />
                 </span>
                 <span class="practice-detail__review-name">{{ r.reviewer_name }}</span>
               </div>
@@ -358,12 +353,12 @@ import PracticeHeroCard from '@/components/shared/PracticeHeroCard.vue'
 import VShowMore from '@/components/shared/VShowMore.vue'
 import CancelPracticeDialog from '@/components/shared/CancelPracticeDialog.vue'
 import { IconPen } from '@/components/icons'
-import { RATING_ICON } from '@/utils/ratingIcons'
+import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
+import { zonePercents, zoneTotal, type MoodScaleKey } from '@/utils/moodScale'
 // IconTrash is not re-exported from the icons barrel; import the component
 // directly (same as EntryView).
 import { IconTrash } from '@/components/icons'
 import {
-  RATING_ICON_COLOR,
   DIFFICULTY_DOTS,
   DIFFICULTY_LABEL,
   recurrenceDaysLabel,
@@ -500,15 +495,13 @@ const brokenAvatars = ref(new Set<string>())
 // -- Past: rating distribution badges (REAL, anonymous insights) --
 const totalFeedbacks = computed((): number => {
   const f = insights.value?.feedbacks
-  return f ? f.fire + f.good + f.confused : 0
+  return f ? zoneTotal(f) : 0
 })
 const hasRating = computed((): boolean => insights.value != null && totalFeedbacks.value > 0)
-function ratingPct(key: 'fire' | 'good' | 'confused'): number {
-  const f = insights.value?.feedbacks
-  if (!f) return 0
-  const total = totalFeedbacks.value
-  return total > 0 ? Math.round((f[key] / total) * 100) : 0
-}
+// Rendered only under hasRating, so the insights are loaded there.
+const ratingPcts = computed((): Record<MoodScaleKey, number> =>
+  zonePercents(insights.value!.feedbacks),
+)
 
 // -- Past: stats (REAL via getAttendance; "—" until loaded) --
 const attendedValue = computed((): string | number =>

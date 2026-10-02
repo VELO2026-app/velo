@@ -337,16 +337,25 @@ async def test_aggregate_reconciles_with_the_feed_predicates(
     assert data["members"] == {"masters": 1, "students": 3}
 
     # The mood aggregate saw exactly the PRE-on-live-booking check-ins
-    # (9=high, 5=mid, 2=low, 7=mid); the POST one and the cancelled-booking
-    # one did not pass.
+    # (9=fire, 5=neutral, 2=bad, 7=good); the POST one and the
+    # cancelled-booking one did not pass. BE-77: this was the three-bucket
+    # {low 1, mid 2, high 1} -- right for that split, replaced by the
+    # owner's five zones for check-in moods too; the whole five-key dict
+    # (with the explicit low 0) is the more exact statement.
     feedback = data["feedback"]
     assert feedback["checkins_count"] == 4
-    assert feedback["mood"] == {"low": 1, "mid": 2, "high": 1}
+    assert feedback["mood"] == {
+        "bad": 1,
+        "low": 0,
+        "neutral": 1,
+        "good": 1,
+        "fire": 1,
+    }
 
     # The rating aggregate saw ALL six reviews -- including the two left on
     # the POST/cancelled bookings of P2, because /reviews has no booking
-    # filter and these numbers must reconcile with that feed. Five-scale
-    # buckets: 10,9,9,10 -> fire; 6 -> neutral; 2 -> bad.
+    # filter and these numbers must reconcile with that feed. Five zones:
+    # 10,9,9,10 -> fire; 6 -> neutral; 2 -> bad.
     assert feedback["reviews_count"] == 6
     assert feedback["rating"] == {
         "bad": 1,
@@ -392,7 +401,7 @@ async def test_empty_school_is_zeros_not_404(client: AsyncClient, db_session: As
         "feedback": {
             "checkins_count": 0,
             "reviews_count": 0,
-            "mood": {"low": 0, "mid": 0, "high": 0},
+            "mood": {"bad": 0, "low": 0, "neutral": 0, "good": 0, "fire": 0},
             "rating": {"bad": 0, "low": 0, "neutral": 0, "good": 0, "fire": 0},
         },
         "top_practices": [],

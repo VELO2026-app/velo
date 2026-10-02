@@ -77,6 +77,7 @@ import type {
   AttendanceResponse,
   AttendanceItemResponse,
   PracticeInsightsResponse,
+  ScoreZoneCounts,
   ReviewItem,
 } from '@/api/types'
 
@@ -188,14 +189,24 @@ function attendance(overrides: Partial<AttendanceResponse> = {}): AttendanceResp
   }
 }
 
-function insights(fire: number, good: number, confused: number): PracticeInsightsResponse {
+// BE-77: feedbacks are the five zones (was fire / good / confused);
+// unnamed zones are 0.
+function insights(feedbacks: Partial<ScoreZoneCounts>): PracticeInsightsResponse {
+  const five: ScoreZoneCounts = { bad: 0, low: 0, neutral: 0, good: 0, fire: 0, ...feedbacks }
   return {
     practice_id: 'p1',
-    participants: fire + good + confused,
-    checkins: { high: 0, mid: 0, low: 0 },
-    feedbacks: { fire, good, confused },
+    participants: five.bad + five.low + five.neutral + five.good + five.fire,
+    checkins: { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 },
+    feedbacks: five,
     comments_count: 0,
   }
+}
+
+/** The hero badges, best zone first (fire, good, neutral, low, bad). */
+function badgeTexts(): string[] {
+  return Array.from(host?.querySelectorAll('.v-rating-badges__badge') ?? []).map((b) =>
+    norm(b.textContent).trim(),
+  )
 }
 
 function review(n: number, overrides: Partial<ReviewItem> = {}): ReviewItem {
@@ -942,34 +953,31 @@ describe('MasterPracticeDetailView', () => {
     })
 
     it('loads insights for the PAST branch and renders the distribution as PERCENTAGES', async () => {
-      // ratingPct (.vue:450-455) turns raw counts into percents. 6/3/1 of 10 ->
-      // 60/30/10. Rendering the raw counts as "%" would be a silent lie about
-      // how the practice landed.
-      insightsFixture = insights(6, 3, 1)
+      // zonePercents turns raw counts into percents. fire 6 / good 3 / bad 1
+      // of 10 -> 60/30/0/0/10 (all five zones, BE-77). Rendering the raw counts
+      // as "%" would be a silent lie about how the practice landed.
+      insightsFixture = insights({ fire: 6, good: 3, bad: 1 })
       vi.mocked(practicesApi.getPractice).mockResolvedValue(practice({ status: 'completed' }))
       mount()
       await flush()
 
       expect(loadInsights).toHaveBeenCalledWith('p1')
-      const badges = norm(host?.querySelector('.v-rating-badges')?.textContent)
-      expect(badges).toContain('60%')
-      expect(badges).toContain('30%')
-      expect(badges).toContain('10%')
+      expect(badgeTexts()).toEqual(['60%', '30%', '0%', '0%', '10%'])
     })
 
     it('rounds rather than truncates (1/3 -> 33/33/33)', async () => {
-      insightsFixture = insights(1, 1, 1)
+      insightsFixture = insights({ fire: 1, neutral: 1, bad: 1 })
       vi.mocked(practicesApi.getPractice).mockResolvedValue(practice({ status: 'completed' }))
       mount()
       await flush()
 
-      expect(norm(host?.querySelector('.v-rating-badges')?.textContent)).toContain('33%')
+      expect(badgeTexts()).toEqual(['33%', '0%', '33%', '0%', '33%'])
     })
 
     it('ZERO feedbacks hides the badges -- it does not render 0/0/0', async () => {
       // hasRating gates on totalFeedbacks > 0 (.vue:449). 0/0/0 would read as a
       // practice everyone hated rather than one nobody rated.
-      insightsFixture = insights(0, 0, 0)
+      insightsFixture = insights({})
       vi.mocked(practicesApi.getPractice).mockResolvedValue(practice({ status: 'completed' }))
       mount()
       await flush()
