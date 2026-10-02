@@ -24,6 +24,9 @@ export type PracticeStatus = 'draft' | 'scheduled' | 'live' | 'completed' | 'can
 /** Format of a practice session. NOTE: this is the *format*, not the content direction. The content direction (meditation / yoga / breathwork) lives in data.taxonomy. */
 export type PracticeType = 'live' | 'series' | 'one_on_one' | 'replay'
 
+/** The five zones of a 1..10 mood / rating score (BE-77). Not stored -- Checkin.mood and Feedback.rating keep the raw score; the zone is derived on read by diary.insights_service.score_zone, which owns the boundaries. A StrEnum rather than a Literal so the OpenAPI document carries ONE named component the frontend's moodScale.ts keys are type-checked against. Member order is the scale order, low to high. */
+export type ScoreZone = 'bad' | 'low' | 'neutral' | 'good' | 'fire'
+
 /** User roles in the platform. USER: default role, can browse and book practices. MASTER: verified facilitator, can create and host practices. ADMIN: platform operator, can manage users and content. */
 export type UserRole = 'user' | 'master' | 'admin'
 
@@ -313,20 +316,6 @@ export interface AdminZoomUnmatchedRow {
   join_time: string | null
   leave_time: string | null
   duration_seconds: number | null
-}
-
-/** Check-in counts by mood bucket (low 1-3 / mid 4-7 / high 8-10). Named apart from diary.schemas.MoodDistribution on purpose, following admin.metrics.schemas.FeedbackRatingDistribution: two components with one name would be emitted module-qualified in the OpenAPI document and break the frontend's flat re-export. Same shape, same thresholds, one owner -- diary.insights_service.mood_bucket, which computes both. */
-export interface AnalyticsMoodDistribution {
-  high: number
-  mid: number
-  low: number
-}
-
-/** Feedback counts by rating bucket (confused 1-3 / good 4-7 / fire 8-10). AnalyticsMoodDistribution's twin, named apart for the same reason. */
-export interface AnalyticsRatingDistribution {
-  fire: number
-  good: number
-  confused: number
 }
 
 /** Admin announcement: pre-rendered title/body + audience pick. */
@@ -635,19 +624,19 @@ export interface CuratorGroupAnalyticsResponse {
   top_practices: CuratorGroupTopPracticeItem[]
 }
 
-/** One PRE check-in left on a practice of this school. `mood` is the stored 1..10 score mapped to the three distribution buckets (1-3 low / 4-7 mid / 8-10 high) -- the same vocabulary the anonymous per-practice insights already use, so the frontend reuses the mood icons it renders there. POST check-ins never appear here, and neither do check-ins whose booking was later cancelled: both are absent from the master's own roster for this practice, and the school widens a curator's reach without deepening it. user_id identifies the participant so that two students of the same name stay distinct; it opens no screen a curator would otherwise be refused. */
+/** One PRE check-in left on a practice of this school. `mood` is the stored 1..10 score mapped to its zone (ScoreZone, BE-77) -- the same five keys every distribution and feed uses. POST check-ins never appear here, and neither do check-ins whose booking was later cancelled: both are absent from the master's own roster for this practice, and the school widens a curator's reach without deepening it. user_id identifies the participant so that two students of the same name stay distinct; it opens no screen a curator would otherwise be refused. */
 export interface CuratorGroupCheckinItem {
   user_id: string
   student_name: string
   avatar_url: string | null
-  mood: 'high' | 'mid' | 'low'
+  mood: ScoreZone
   comment: string | null
   practice_id: string
   practice_title: string
   created_at: string
 }
 
-/** One COMPLETED practice of the window (part 3, owner 2026-10-02). The card the client renders: direction (schema-on-read data.taxonomy, for the direction icon), title, master, date, then the practice's own aggregates -- attendees (distinct ATTENDED), check-ins (PRE on non-cancelled bookings) and the feedback pair (distinct reviewers + the five-scale buckets). Same predicates as the totals, so a card reconciles with the cards around it. */
+/** One COMPLETED practice of the window (part 3, owner 2026-10-02). The card the client renders: direction (schema-on-read data.taxonomy, for the direction icon), title, master, date, then the practice's own aggregates -- attendees (distinct ATTENDED), check-ins (PRE on non-cancelled bookings) and the feedback pair (distinct reviewers + the five zone counts). Same predicates as the totals, so a card reconciles with the cards around it. */
 export interface CuratorGroupConductedPracticeItem {
   practice_id: string
   title: string
@@ -659,7 +648,7 @@ export interface CuratorGroupConductedPracticeItem {
   checkins_count: number
   reviewers_count: number
   reviews_count: number
-  rating: CuratorGroupRatingTotals
+  rating: ScoreZoneCounts
 }
 
 /** The group's owner, as anyone in the group may see them. A strict subset of MasterPublicResponse -- the declared isolation boundary in masters/schemas.py. Nothing financial, nothing contact-like, and no status: a group is only ever visible while its curator is verified (I-6), so exposing the status would only ever print one value. */
@@ -684,7 +673,7 @@ export interface CuratorGroupEngagementTotals {
   repeat_pct: number
   joined_never_came: number
   reviewers: number
-  rating: CuratorGroupRatingTotals
+  rating: ScoreZoneCounts
   conducted_practices: CuratorGroupConductedPracticeItem[]
 }
 
@@ -703,12 +692,12 @@ export interface CuratorGroupEventItem {
   created_at: string
 }
 
-/** How the school's practices landed: counts plus the two distributions. */
+/** How the school's practices landed: counts plus the two distributions (five-zone ScoreZoneCounts, BE-77). */
 export interface CuratorGroupFeedbackTotals {
   checkins_count: number
   reviews_count: number
-  mood: CuratorGroupMoodTotals
-  rating: CuratorGroupRatingTotals
+  mood: ScoreZoneCounts
+  rating: ScoreZoneCounts
 }
 
 /** The card shown to someone who opened an invite link. curator_name is a STRING here, not the {user_id, display_name, avatar_url} object the group page returns: whoever is looking has no relation to the group yet, so they get the school's name and its curator's name, not a handle to go look the curator up with. */
@@ -797,13 +786,6 @@ export interface CuratorGroupMineResponse {
   items: CuratorGroupMineItem[]
 }
 
-/** PRE check-in moods, in the anonymous distribution's vocabulary. */
-export interface CuratorGroupMoodTotals {
-  low: number
-  mid: number
-  high: number
-}
-
 /** GET /curator-groups/{id} -- the group as a member sees it. Deliberately NOT the same shape as CuratorGroupResponse (the curator's own row): that one is a management view keyed by ownership, this one carries `curator` and `viewer` because the reader is not necessarily the owner. Two shapes rather than one with half the fields null. `transfer` is filled for exactly two people -- the curator and the person being offered the group -- and is null for every other member (TZ 5.2). Null rather than an absent key: the field exists for everyone, only its value differs, which keeps one OpenAPI shape instead of two. A member who is not part of the deal learns nothing about it, not even that one is under way. */
 export interface CuratorGroupPageResponse {
   id: string
@@ -825,15 +807,6 @@ export interface CuratorGroupPracticeTotals {
   upcoming: number
 }
 
-/** Review ratings on the FIVE scale (tz-mood-scale contract). Keys are the frontend moodScale.ts keys -- 1-2 bad («Плохо»), 3-4 low («Не очень»), 5-6 neutral («Нормально»), 7-8 good («Хорошо»), 9-10 fire («Огонь») -- so the school strip and the practice mood strips render the same five segments. Owner 2026-10-02 widened the school analytics from the three-chip feedback vocabulary to this scale; the /reviews FEED keeps its confused/good/fire chips (tz-mood-scale §5 leaves the unification of the feeds to its own task), so a chip and a strip segment are different answers by design. */
-export interface CuratorGroupRatingTotals {
-  bad: number
-  low: number
-  neutral: number
-  good: number
-  fire: number
-}
-
 /** GET /masters/me/curator-groups/{id}/members/{user_id}/remove-preview. The same number for the member the curator is about to remove. Zero for a student, and zero -- not 404 -- for somebody who is not in the group at all: the removal itself is idempotent and answers 204 on that same target, so the advisory must not be stricter than the action it describes. */
 export interface CuratorGroupRemovePreviewResponse {
   upcoming_practices_targeting_group: number
@@ -851,12 +824,12 @@ export interface CuratorGroupResponse {
   created_at: string
 }
 
-/** One named review left on a practice of this school. `rating` is the stored 1..10 score mapped to the three feedback buckets (1-3 confused / 4-7 good / 8-10 fire), identical to what the practice's master reads in their own per-practice and cross-practice review feeds. user_id identifies the reviewer, as it does in the master's own review items; the screens behind it enforce their own access. */
+/** One named review left on a practice of this school. `rating` is the stored 1..10 score mapped to its zone (ScoreZone, BE-77), identical to what the practice's master reads in their own per-practice and cross-practice review feeds. user_id identifies the reviewer, as it does in the master's own review items; the screens behind it enforce their own access. */
 export interface CuratorGroupReviewItem {
   user_id: string
   student_name: string
   avatar_url: string | null
-  rating: 'fire' | 'good' | 'confused'
+  rating: ScoreZone
   comment: string | null
   practice_id: string
   practice_title: string
@@ -959,14 +932,7 @@ export interface FeedbackMetricResponse {
   rate_pct: number
   visited: number
   left_review: number
-  distribution: FeedbackRatingDistribution
-}
-
-/** Feedback counts by bucket (confused 1-3 / good 4-7 / fire 8-10). Named distinctly from diary.schemas.RatingDistribution to avoid an OpenAPI component-name collision (both would otherwise be emitted under module-qualified names, breaking the frontend's flat re-export). */
-export interface FeedbackRatingDistribution {
-  fire: number
-  good: number
-  confused: number
+  distribution: ScoreZoneCounts
 }
 
 /** POST /api/v1/practices/{id}/feedback body. */
@@ -1091,8 +1057,8 @@ export interface MasterAnalyticsResponse {
   checkin_rate_delta_pp: number | null
   feedback_rate_pct: number
   feedback_rate_delta_pp: number | null
-  checkins: AnalyticsMoodDistribution
-  feedbacks: AnalyticsRatingDistribution
+  checkins: ScoreZoneCounts
+  feedbacks: ScoreZoneCounts
 }
 
 /** The user's master-application state, read from MasterProfile.data.account. Surfaced on UserResponse (T5) so a role='user' applicant can see the verdict of their application (pending / verified / rejected + the rejection reason) without the master-only GET /masters/me endpoint. Set by the GET /users/me router from the same MasterProfile load used for master capability. */
@@ -1180,7 +1146,7 @@ export interface MasterReviewItem {
   user_id: string
   reviewer_name: string
   avatar_url: string | null
-  rating: string
+  rating: ScoreZone
   comment: string | null
   practice_title: string
   created_at: string
@@ -1228,13 +1194,6 @@ export interface MethodChangeRequest {
 /** POST /masters/me/method-change-request -- proposed flat method set. M3 ships FLAT: the request carries a plain list of method strings (same shape/limits as MasterApplyExperience.methods). The two-level direction->kind taxonomy (E19) is deferred / out of scope. */
 export interface MethodChangeRequestSubmit {
   proposed_methods: string[]
-}
-
-/** Check-in mood counts for a practice, bucketed by score range. mood is a 1..10 score; counts are grouped into three buckets: low = scores 1-3 mid = scores 4-7 high = scores 8-10 CR-01: fields are required (no default=0). This is a response-only schema -- the service always provides concrete values. */
-export interface MoodDistribution {
-  high: number
-  mid: number
-  low: number
 }
 
 /** POST /masters/me/curator-groups/{id}/transfer. to_user_id only: the eligible set is the group's visible masters, and the service checks membership against exactly the roster it shows, so there is nothing else for the caller to state. */
@@ -1494,8 +1453,8 @@ export interface PayoutDetailsUpdate {
 export interface PracticeInsightsResponse {
   practice_id: string
   participants: number
-  checkins: MoodDistribution
-  feedbacks: RatingDistribution
+  checkins: ScoreZoneCounts
+  feedbacks: ScoreZoneCounts
   comments_count: number
 }
 
@@ -1646,13 +1605,6 @@ export interface PurchaseWithPracticeResponse {
   practice: PracticeSummary
 }
 
-/** Feedback rating counts for a practice, bucketed by score range. rating is a 1..10 score; counts are grouped into three buckets: confused = scores 1-3 good = scores 4-7 fire = scores 8-10 CR-01: fields are required (no default=0). Same rationale as MoodDistribution above. */
-export interface RatingDistribution {
-  fire: number
-  good: number
-  confused: number
-}
-
 /** Recurrence rule for a series practice. Fields: period -- daily: every calendar day after the root; weekly: on `days`, every week; biweekly: on `days`, every other week. days -- ISO weekday ints (1=Mon .. 7=Sun) the series recurs on. REQUIRED and non-empty for weekly/biweekly; ignored for daily (generation does not read it). end -- never: generate up to the cap; until_date: occurrences through `until_date` (inclusive, local date); after_count: exactly `count` occurrences. count -- TOTAL occurrences INCLUDING the root (so count=40 yields the root + 39 children). Required for after_count; 1..cap. An explicit count above the cap is a 422 (the user named the number -- we do not silently truncate it; until_date / never are truncated silently instead). until_date -- local calendar date of the last allowed occurrence; required for until_date. */
 export interface RecurrenceSpec {
   period: 'daily' | 'weekly' | 'biweekly'
@@ -1711,12 +1663,12 @@ export interface ReturnMetricResponse {
   top_users: TopUser[]
 }
 
-/** One named review (GET /api/v1/practices/{id}/reviews). The de-anonymised counterpart to RatingDistribution: where insights expose only numeric buckets, this carries the reviewer's name, avatar and comment text. `rating` is the stored 1..10 score mapped to the three UI buckets (1-3 confused / 4-7 good / 8-10 fire) so the frontend reuses the same rating icons it already renders for the anonymous distribution. user_id is the reviewer's User.id (E1 remainder) -- it lets the frontend navigate from a review to that student's profile. The author User is already joined in list_practice_reviews, so this adds no query. */
+/** One named review (GET /api/v1/practices/{id}/reviews). The de-anonymised counterpart to the insights' feedbacks distribution: where insights expose only counts, this carries the reviewer's name, avatar and comment text. `rating` is the stored 1..10 score mapped to its zone (ScoreZone, BE-77) -- the same five keys the distribution counts. user_id is the reviewer's User.id (E1 remainder) -- it lets the frontend navigate from a review to that student's profile. The author User is already joined in list_practice_reviews, so this adds no query. */
 export interface ReviewItem {
   user_id: string
   reviewer_name: string
   avatar_url: string | null
-  rating: 'fire' | 'good' | 'confused'
+  rating: ScoreZone
   comment: string | null
   created_at: string
 }
@@ -1775,6 +1727,15 @@ export interface SchoolStudentProfileResponse {
   master_offer?: 'awaiting_verification' | 'awaiting_answer' | null
   recent_checkins: SchoolStudentCheckinItem[]
   recent_feedbacks: SchoolStudentFeedbackItem[]
+}
+
+/** Counts of 1..10 scores per zone (BE-77) -- THE distribution shape. One class for every server distribution, check-in moods and feedback ratings alike: the practice insights, the master's analytics, the admin feedback metric and the school aggregate. The keys are ScoreZone, the boundaries live in diary.insights_service.score_zone: bad 1-2, low 3-4, neutral 5-6, good 7-8, fire 9-10 -- the frontend's moodScale.ts keys. One class is also one OpenAPI component, so there is no module-qualified name collision to dodge. CR-01: fields are required (no default=0). This is a response-only schema -- the service always provides all five (zone_counts). */
+export interface ScoreZoneCounts {
+  bad: number
+  low: number
+  neutral: number
+  good: number
+  fire: number
 }
 
 export interface SendMessageIn {
@@ -1840,7 +1801,7 @@ export interface StudentGroupsResponse {
   groups: StudentGroupItem[]
 }
 
-/** One student in the master's students list. needs_attention is True when the student's MOST RECENT feedback on this master's practices is in the negative bucket (rating 1-3) -- the same signal that feeds the dashboard "needs attention" block (consistent with the reviews projection). */
+/** One student in the master's students list. needs_attention is True when the student's MOST RECENT feedback on this master's practices needs attention (rating 1-4, zones bad and low -- BE-77) -- the same signal that feeds the dashboard "needs attention" block (consistent with the reviews projection). */
 export interface StudentListItem {
   id: string
   name: string
