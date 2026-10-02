@@ -27,6 +27,8 @@
 #       value = await redis.get("my-key")
 # =============================================================================
 
+import redis.asyncio as aioredis
+
 from app.core.config import settings
 
 # Global Redis client instance. Initialized at app startup.

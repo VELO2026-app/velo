@@ -46,7 +46,7 @@
 
 import ipaddress
 
-from app.core import redis as aioredis
+import redis.asyncio as aioredis
 
 from app.core.redis import get_redis
 
