@@ -158,6 +158,87 @@ async def list_master_practices(
     )
 
 
+SchoolPracticeStatus = Literal[
+    "draft", "scheduled", "live", "completed", "cancelled",
+]
+
+
+async def list_school_practices_for_curator(
+    session: AsyncSession,
+    user: User,
+    group_id: UUID,
+    *,
+    status: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> PaginatedPracticesResponse:
+    """Every practice of a school, for its curator to manage (BE-63).
+
+    NOT the school page (list_group_practices_endpoint): that one is the
+    public feed narrowed to the school, for members, upcoming and published
+    only, by the school's PRESENT masters. This is the curator's working
+    list (owner ruling Q6): every non-deleted practice that BELONGS to the
+    school (Practice.curator_group_id), drafts included, whether or not its
+    master is still in the school -- a draft of a master who left is still
+    the curator's to fix or throw away. Ordered by scheduled_at ascending,
+    id as the tie-break so a page boundary is stable.
+
+    The school must be the caller's (404 otherwise, the same answer as for
+    a school that does not exist). The owner-only Zoom fields stay the
+    masters' (as on every curator-facing response): no host link, no
+    public link -- unless the curator is the practice's own master.
+    """
+    from app.modules.curator_groups.service import _get_group_or_404
+
+    await _get_group_or_404(user.id, group_id, session)
+    base_filter = (
+        Practice.curator_group_id == group_id,
+        Practice.status != PracticeStatus.DELETED.value,
+    )
+    if status is not None:
+        base_filter = (*base_filter, Practice.status == status)
+    total = (
+        await session.execute(select(func.count(Practice.id)).where(*base_filter))
+    ).scalar_one()
+    rows = (
+        await session.execute(
+            select(Practice, User.first_name, User.last_name)
+            .join(User, Practice.master_id == User.id)
+            .where(*base_filter)
+            .order_by(Practice.scheduled_at.asc(), Practice.id.asc())
+            .limit(limit)
+            .offset(offset)
+        )
+    ).all()
+    page_practices = [p for p, _first, _last in rows]
+    series_meta = await series_meta_for_practices(page_practices, session)
+    from app.modules.zoom.service import (
+        get_host_join_urls,
+        get_zoom_meeting_statuses,
+    )
+    own_ids = [p.id for p in page_practices if p.master_id == user.id]
+    host_join_urls = await get_host_join_urls(own_ids, session)
+    zoom_meeting_statuses = await get_zoom_meeting_statuses(
+        [p.id for p in page_practices], session,
+    )
+    return PaginatedPracticesResponse(
+        items=[
+            practice_to_response(
+                p,
+                master_full_name(first, last),
+                zoom_host_join_url=host_join_urls.get(p.id),
+                zoom_public_link_visible=p.master_id == user.id,
+                zoom_meeting_status=zoom_meeting_statuses.get(p.id),
+                **series_meta_kwargs(series_meta.get(p.id)),
+            )
+            for p, first, last in rows
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
 def _local_hour(column_tz, column_ts):
     """Local hour (0-23) of a timestamp in a given timezone.
 

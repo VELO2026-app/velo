@@ -11,14 +11,15 @@
 #   GET    /api/v1/practices/{id}/zoom/resolve    -- how THIS user enters (T-35)
 #   GET    /api/v1/practices/zoom/start           -- redeem ticket, redirect to Zoom (556)
 #   GET    /api/v1/practices/{id}                 -- get by id (any auth user)
-#   PATCH  /api/v1/practices/{id}                 -- update (owner master only)
-#   DELETE /api/v1/practices/{id}                 -- soft delete draft (owner only)
+#   PATCH  /api/v1/practices/{id}                 -- update (master or school curator)
+#   DELETE /api/v1/practices/{id}                 -- soft delete draft (master|curator)
 #   POST   /api/v1/practices/{id}/cancel          -- cancel + refund all (6.5)
 #
 # MASTER_NAME (Frontend F3 prep):
 #   - list/get endpoints: service returns master_name via JOIN.
-#   - create/update/delete/cancel: user object already available from
-#     get_current_master dependency, so practice_to_response(p, user.first_name).
+#   - create/update/delete/cancel: the caller's first_name when the caller
+#     is the practice's master, else the master's (a school curator may call
+#     all four -- BE-21, BE-102, BE-63).
 #
 # AUTH:
 #   GET list uses get_current_user (any authenticated user).
@@ -603,6 +604,27 @@ async def get_practice_endpoint(
     return await get_practice_detail(practice_id, user, session)
 
 
+async def _owner_view(
+    practice: Practice, user: User, session: AsyncSession,
+) -> tuple[bool, str | None, str | None]:
+    """(is_owner, master_first_name, host_join_url) for a response (BE-63).
+
+    PATCH and DELETE stopped being owner-only: the curator of the
+    practice's school may call them. The owner-only Zoom fields are the
+    MASTER's private property -- the host link is host control of their
+    meeting -- so a curator gets what a non-owner gets (as on cancel,
+    BE-21), and master_name names the practice's master, not the caller.
+    The master's row exists: practices.master_id is a FK.
+    """
+    from app.modules.zoom.service import get_host_join_url
+
+    is_owner = practice.master_id == user.id
+    if is_owner:
+        return True, user.first_name, await get_host_join_url(practice.id, session)
+    master = await session.get(User, practice.master_id)
+    return False, master.first_name, None
+
+
 # ------------------------------------------------------------------
 # PATCH /api/v1/practices/{id} -- update (Phase 4.2)
 # ------------------------------------------------------------------
@@ -618,24 +640,21 @@ async def update_practice_endpoint(
     ),
     session: AsyncSession = Depends(get_db_session),
 ) -> PracticeResponse:
-    """Update a practice (owner master only)."""
+    """Update a practice (its master, or the curator of its school, BE-63)."""
     user, _profile = master_tuple
     practice = await update_practice(
         practice_id, user, body, session,
     )
     await session.flush()
     await session.refresh(practice)
-    # F1 (№263): this endpoint is owner-only (master guard + ownership check),
-    # so the response carries the caller's OWN owner-only Zoom fields —
-    # consistent with the owner-always-sees rule on the detail and the
-    # master list (Z-6).
+    # F1 (№263) / BE-63: the owner-only Zoom fields go to the practice's
+    # master only (_owner_view).
     # T21-1: same owner-only posture for the host's own join_url (may become
     # non-None here if this update is the draft->scheduled publish).
-    from app.modules.zoom.service import (
-        get_host_join_url,
-        get_zoom_meeting_status,
+    from app.modules.zoom.service import get_zoom_meeting_status
+    is_owner, master_first_name, host_join_url = await _owner_view(
+        practice, user, session,
     )
-    host_join_url = await get_host_join_url(practice.id, session)
     # T24-38 (PROMPT №642): same reasoning as host_join_url -- becomes
     # non-None here too if this update is the draft->scheduled publish.
     # A4 V2 (PROMPT №572): so a master publishing a draft (creating the Zoom
@@ -649,9 +668,9 @@ async def update_practice_endpoint(
         practice, session,
     )
     return practice_to_response(
-        practice, user.first_name,
+        practice, master_first_name,
         zoom_host_join_url=host_join_url,
-        zoom_public_link_visible=True,
+        zoom_public_link_visible=is_owner,
         zoom_meeting_status=zoom_meeting_status,
         audience_group_names=audience_group_names,
         curator_group_name=curator_group_name,
@@ -704,7 +723,7 @@ async def delete_practice_endpoint(
     ),
     session: AsyncSession = Depends(get_db_session),
 ) -> PracticeResponse:
-    """Soft-delete a draft practice (owner master only).
+    """Soft-delete a draft practice (its master or school curator, BE-64).
 
     Sets status=deleted. Only works on drafts. Published practices
     must be cancelled via POST /{id}/cancel (Phase 6.5).
@@ -713,25 +732,20 @@ async def delete_practice_endpoint(
     practice = await delete_practice(practice_id, user, session)
     await session.flush()
     await session.refresh(practice)
-    # F1 (№263): this endpoint is owner-only (master guard + ownership check),
-    # so the response carries the caller's OWN owner-only Zoom fields —
-    # consistent with the owner-always-sees rule on the detail and the
-    # master list (Z-6).
-    # T21-1: soft-deleted drafts never had a meeting created (E21 fires on
-    # publish only), so this is always None here -- fetched anyway for
-    # consistency with the other three owner-only sites.
-    from app.modules.zoom.service import (
-        get_host_join_url,
-        get_zoom_meeting_status,
+    # F1 (№263) / BE-63: owner-only Zoom fields to the master only
+    # (_owner_view). T21-1: soft-deleted drafts never had a meeting created
+    # (E21 fires on publish only), so the host link is None here anyway.
+    from app.modules.zoom.service import get_zoom_meeting_status
+    is_owner, master_first_name, host_join_url = await _owner_view(
+        practice, user, session,
     )
-    host_join_url = await get_host_join_url(practice.id, session)
     # T24-38 (PROMPT №642): soft-deleted drafts never had a meeting created
     # either -- always None here, fetched anyway for consistency.
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
     return practice_to_response(
-        practice, user.first_name,
+        practice, master_first_name,
         zoom_host_join_url=host_join_url,
-        zoom_public_link_visible=True,
+        zoom_public_link_visible=is_owner,
         zoom_meeting_status=zoom_meeting_status,
     )
 

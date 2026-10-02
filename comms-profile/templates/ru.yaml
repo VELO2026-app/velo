@@ -225,6 +225,21 @@ curator_group.practice_created_for_master:
     title: "Куратор создал практику от вашего имени"
     body: "🏛 <b>{actor_name}</b> создал черновик практики <b>{practice_title}</b> ({scheduled_at}) в школе <b>{group_name}</b> от вашего имени.\n\nПроверьте его и опубликуйте."
 
+curator_group.master_practice_published:
+  telegram:
+    title: "Куратор опубликовал вашу практику"
+    body: "🏛 <b>{actor_name}</b> опубликовал вашу практику <b>{practice_title}</b> ({scheduled_at}) в школе <b>{group_name}</b>.\n\nОна видна в школе."
+
+curator_group.master_practice_edited:
+  telegram:
+    title: "Куратор изменил вашу практику"
+    body: "🏛 <b>{actor_name}</b> изменил вашу практику <b>{practice_title}</b> ({scheduled_at}) в школе <b>{group_name}</b>.\n\nПроверьте, всё ли верно."
+
+curator_group.master_practice_deleted:
+  telegram:
+    title: "Куратор удалил ваш черновик"
+    body: "🏛 <b>{actor_name}</b> удалил ваш черновик <b>{practice_title}</b> ({scheduled_at}) в школе <b>{group_name}</b>.\n\nЧерновик больше недоступен."
+
 # -- Master-facing (BE-33) --
 #
 # {mood} and {rating} arrive as an EMOJI, never as the stored 1..10 score

@@ -76,11 +76,13 @@
 # =============================================================================
 
 import copy
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import structlog
 from sqlalchemy import delete, func, or_, select
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -404,17 +406,48 @@ async def _effective_master_id_or_4xx(
         )
     ).scalar_one_or_none()
     if curator_id != user.id:
-        raise ForbiddenError(
-            "Only the school's curator may create a practice for another "
-            "master",
-            code="curator_only",
-        )
+        raise ForbiddenError(_CURATOR_ONLY, code="curator_only")
+    await _lock_school_master_or_400(school_id, target_id, session)
+    # BE-63: the curator's right, re-checked UNDER THE GROUP LOCK, after the
+    # target's rows (module order: member -> master profile -> ... ->
+    # practice -> group) and before the INSERT -- a new practice row waits
+    # for nobody, and its FK check is covered by the lock already held. The
+    # read above is the fast path; the school can change hands between it
+    # and here (accept of a transfer), and a former curator must not create
+    # in the new owner's school. Same 403 as the read: one fact, one code.
+    if not await _lock_group_as_owner(user.id, school_id, session):
+        raise ForbiddenError(_CURATOR_ONLY, code="curator_only")
+    return target_id
+
+
+async def _lock_school_master_or_400(
+    school_id: UUID, master_id: UUID, session: AsyncSession,
+) -> None:
+    """Take this master's place in this school, or refuse (BE-102, BE-63).
+
+    kind='master' member row of THIS school, then the master profile
+    verified NOW -- both FOR SHARE, in the curator_groups module order
+    (member -> master profile), and before the caller locks the practice
+    or the group. A demotion / removal (UPDATE / DELETE of the member row)
+    or a verification taken away (UPDATE of the profile) either commits
+    first -- READ COMMITTED re-evaluates the predicates against it, and
+    this refuses -- or waits for the caller's commit.
+
+    ONE 400 master_not_in_school for every cause: split by cause, the code
+    would tell whether an arbitrary user id is a verified master.
+
+    Used by create_practice for another master (BE-102) and by a curator's
+    publication of a master's draft (BE-63, owner Q5): a practice published
+    for somebody who is no longer a master of the school is a practice the
+    school does not show, and it would slip past the hand-over of a demoted
+    master's future practices (B2).
+    """
     member = (
         await session.execute(
             select(CuratorGroupMember.id)
             .where(
                 CuratorGroupMember.group_id == school_id,
-                CuratorGroupMember.user_id == target_id,
+                CuratorGroupMember.user_id == master_id,
                 CuratorGroupMember.kind == CuratorMemberKind.MASTER.value,
             )
             .with_for_update(read=True)
@@ -428,7 +461,7 @@ async def _effective_master_id_or_4xx(
         await session.execute(
             select(MasterProfile.user_id)
             .where(
-                MasterProfile.user_id == target_id,
+                MasterProfile.user_id == master_id,
                 MasterProfile.data["account"]["status"].as_string()
                 == "verified",
             )
@@ -439,27 +472,167 @@ async def _effective_master_id_or_4xx(
         raise BadRequestError(
             _MASTER_NOT_IN_SCHOOL, code="master_not_in_school",
         )
-    return target_id
 
 
-async def _announce_practice_created_for_master(
-    curator: User, practice: Practice, session: AsyncSession,
+_CURATOR_ONLY = (
+    "Only the school's curator may create a practice for another master"
+)
+_NOT_FOUND = "Practice not found"
+
+
+async def _lock_group_as_owner(
+    curator_user_id: UUID, school_id: UUID, session: AsyncSession,
+) -> bool:
+    """curator_groups' _lock_group_as_owner, imported lazily (import cycle:
+    curator_groups/service.py imports practices/models.py)."""
+    from app.modules.curator_groups.service import (
+        _lock_group_as_owner as lock,
+    )
+    return await lock(curator_user_id, school_id, session)
+
+
+async def _curated_school_of(
+    practice: Practice, user: User, session: AsyncSession,
+) -> UUID | None:
+    """The practice's school if the caller curates it right now, else None.
+
+    THE BODY OF THE RULE is curated_group_id_for_practice (BE-21): the
+    killswitch, the practice's own school, the caller its curator, the
+    school active. A READ -- the fast path; writers re-check it under the
+    group lock (_relock_school_or_404).
+    """
+    from app.modules.curator_groups.service import (
+        curated_group_id_for_practice,
+    )
+    return await curated_group_id_for_practice(practice, user.id, session)
+
+
+async def _manager_of_practice_or_404(
+    practice: Practice, user: User, session: AsyncSession,
+) -> UUID | None:
+    """THE ONE RULE for acting on a practice (BE-63): its master OR the
+    curator of the school it belongs to.
+
+    None -> the caller is the practice's master (no query at all);
+    a school id -> the caller curates the practice's school;
+    anybody else -> 404, the identical answer to "no such practice" (P-08:
+    "not your school", "not a school practice" and "no such practice" must
+    be one answer). A practice without a school -- the general section, or
+    one whose school was deleted -- is its master's only.
+
+    Readers use the answer as it is; every WRITER that got a school id
+    re-checks it under the group lock before it writes (_relock_school_or_404).
+    """
+    if practice.master_id == user.id:
+        return None
+    school_id = await _curated_school_of(practice, user, session)
+    if school_id is None:
+        raise NotFoundError(_NOT_FOUND)
+    return school_id
+
+
+async def _relock_school_or_404(
+    user: User, school_id: UUID, session: AsyncSession,
 ) -> None:
-    """Audit the curator's act and tell the master (BE-102, owner Q1/Q4).
+    """The curator's right, re-checked under the group lock (BE-63).
 
-    Called only when the practice was really INSERTED for somebody other
-    than the caller -- not on either dedup return, where nothing new
-    exists. Both writes are in the request's transaction: an audit row or
-    a notification about a practice that a rollback removed would record
-    and announce something that did not happen.
+    Called by a writer that holds the practice FOR UPDATE, before it writes
+    anything that takes the group (a journal row: KEY SHARE) -- the module
+    order practice -> group, the group taken once at the strength it ends
+    up needing. A school that changed hands since the read answers 404;
+    writes already made are undone by get_db_session's rollback (P-01).
+    """
+    if not await _lock_group_as_owner(user.id, school_id, session):
+        raise NotFoundError(_NOT_FOUND)
 
-    The audit is a distinct EVENT, like practice_cancelled_by_curator
-    (cancel_service.py): actor_id is the curator, the practice's master_id
-    is the master, and group_id says which school the right came from.
 
-    The notification has ONE addressee, the master, who is a party to the
-    fact; idempotency key = the practice, which is born once. It opens the
-    practice: it is the master's draft, and publishing it is theirs.
+@dataclass(frozen=True)
+class _CuratorAct:
+    """One kind of thing a curator does to a master's practice (BE-102,
+    BE-63): its audit event, its notification type, how its notification
+    is keyed, and how it reads."""
+
+    event: str
+    type: str
+    key: str
+    per_act: bool
+    title: str
+    verb: str
+    tail: str
+
+
+# The idempotency key is the identity of the FACT. Creation, publication
+# and deletion happen to a practice once (each is a one-way transition),
+# so the practice is the whole key. An edit can happen many times, each a
+# new fact: it is keyed on a fresh act id minted when the edit WROTE
+# something -- a resent request that changes nothing never reaches here.
+_CURATOR_CREATED = _CuratorAct(
+    event="practice_created_by_curator",
+    type="curator_group.practice_created_for_master",
+    key="practice-created-by-curator",
+    per_act=False,
+    title="Куратор создал практику от вашего имени",
+    verb="создал от вашего имени черновик практики",
+    tail="Проверьте его и опубликуйте.",
+)
+_CURATOR_PUBLISHED = _CuratorAct(
+    event="practice_published_by_curator",
+    type="curator_group.master_practice_published",
+    key="practice-published-by-curator",
+    per_act=False,
+    title="Куратор опубликовал вашу практику",
+    verb="опубликовал вашу практику",
+    tail="Она видна в школе.",
+)
+_CURATOR_EDITED = _CuratorAct(
+    event="practice_updated_by_curator",
+    type="curator_group.master_practice_edited",
+    key="practice-edited-by-curator",
+    per_act=True,
+    title="Куратор изменил вашу практику",
+    verb="изменил вашу практику",
+    tail="Проверьте, всё ли верно.",
+)
+_CURATOR_DELETED = _CuratorAct(
+    event="practice_deleted_by_curator",
+    type="curator_group.master_practice_deleted",
+    key="practice-deleted-by-curator",
+    per_act=False,
+    title="Куратор удалил ваш черновик",
+    verb="удалил ваш черновик",
+    tail="Черновик больше недоступен.",
+)
+
+
+def _practice_snapshot(practice: Practice) -> dict:
+    """Every mapped column of the practice except updated_at, deep-copied:
+    "did this request write anything" is "does the snapshot differ". The
+    audience-group rows are not in it -- a school practice has none
+    (check_school_audience), and only a school practice has a curator."""
+    return {
+        attr.key: copy.deepcopy(getattr(practice, attr.key))
+        for attr in sa_inspect(Practice).column_attrs
+        if attr.key != "updated_at"
+    }
+
+
+async def _tell_master_of_curator_act(
+    curator: User, practice: Practice, act: _CuratorAct, session: AsyncSession,
+) -> None:
+    """Audit a curator's act on a master's practice and tell the master.
+
+    Called only when the act really happened to somebody else's practice
+    -- never on a dedup return, never when the curator is the practice's
+    own master. Both writes are in the request's transaction: an audit row
+    or a notification about something a rollback undid would record and
+    announce what did not happen.
+
+    The audit is a distinct EVENT per act, like
+    practice_cancelled_by_curator (cancel_service.py): actor_id is the
+    curator, master_id the practice's master, group_id the school the
+    right came from. The notification has ONE addressee, the master -- a
+    party to the fact -- and opens the practice (the deleted draft is
+    gone, so that one opens nothing and carries no practice id).
     """
     from app.core.audit import record_audit
     from app.core.events.notify import emit_notification
@@ -467,7 +640,7 @@ async def _announce_practice_created_for_master(
     from app.modules.users.helpers import display_name
 
     await record_audit(
-        event="practice_created_by_curator",
+        event=act.event,
         actor_id=curator.id,
         actor_type="user",
         target_type="practice",
@@ -487,21 +660,27 @@ async def _announce_practice_created_for_master(
     ).scalar_one()
     actor_name = display_name(curator.first_name, curator.last_name)
     when_text = format_event_time(practice.scheduled_at)
+    key = f"{act.key}:{practice.id}"
+    if act.per_act:
+        key = f"{key}:{uuid4()}"
+    action: dict = (
+        {"action": "open_practice", "params": {"practice_id": str(practice.id)}}
+        if act is not _CURATOR_DELETED
+        else {"action": "open_master_practices", "params": {}}
+    )
     await emit_notification(
         session,
-        idempotency_key=f"practice-created-by-curator:{practice.id}",
-        type="curator_group.practice_created_for_master",
+        idempotency_key=key,
+        type=act.type,
         target_type="user",
         target_value=str(practice.master_id),
-        title="Куратор создал практику от вашего имени",
+        title=act.title,
         body=(
-            f"{actor_name} создал черновик практики «{practice.title}» "
-            f"({when_text}) в школе «{group_name}» от вашего имени. "
-            f"Проверьте его и опубликуйте."
+            f"{actor_name} {act.verb} «{practice.title}» ({when_text}) "
+            f"в школе «{group_name}». {act.tail}"
         ),
         action_data={
-            "action": "open_practice",
-            "params": {"practice_id": str(practice.id)},
+            **action,
             "practice_title": practice.title,
             "scheduled_at": when_text,
             "group_name": group_name,
@@ -806,10 +985,15 @@ async def _assert_master_confirmed_taxonomy(
     direction: str,
     style: str | None,
     session: AsyncSession,
+    *,
+    own: bool = True,
 ) -> None:
     """Reject a direction/style the practice's master has not been CONFIRMED
     for (T21-6). master_id is the practice's master -- the caller, or the
     master a school curator creates the practice for (BE-102).
+    own=False when the caller is not that master (a curator): the refusal
+    then speaks of "this master's" methods, not "your" -- the codes are
+    the same either way (BE-63).
     Confirmed = MasterProfile.data.profile.methods -- the live field,
     overwritten only on admin approval (approve_method_change).
     Deliberately does NOT read method_change_request.proposed_methods: a
@@ -877,6 +1061,7 @@ async def _assert_master_confirmed_taxonomy(
             select(MasterProfile).where(MasterProfile.user_id == master_id)
         )
     ).scalar_one_or_none()
+    whose = "your" if own else "this master's"
     methods: list[str] = (
         (profile.data or {}).get("profile", {}).get("methods", [])
         if profile
@@ -902,7 +1087,7 @@ async def _assert_master_confirmed_taxonomy(
         # from the master's side it IS simply not one of their methods.
         if await _direction_in_catalog(direction, session):
             raise BadRequestError(
-                f"direction '{direction}' is not in your catalog",
+                f"direction '{direction}' is not in {whose} catalog",
                 code="direction_not_confirmed",
             )
         # Cause B, the original one, and its reasoning is untouched:
@@ -938,11 +1123,11 @@ async def _assert_master_confirmed_taxonomy(
 
     if style is None:
         raise BadRequestError(
-            f"direction '{direction}' is not among your confirmed methods",
+            f"direction '{direction}' is not among {whose} confirmed methods",
             code="direction_not_confirmed",
         )
     raise BadRequestError(
-        f"style '{style}' for direction '{direction}' is not among your "
+        f"style '{style}' for direction '{direction}' is not among {whose} "
         f"confirmed methods",
         code="style_not_confirmed",
     )
@@ -1350,7 +1535,7 @@ async def create_practice(
     master_id. The CALLER stays the one who acted: the logs' actor_id, the
     school check of _usable_curator_group_or_400, and the audit row plus
     the master's notification written when a practice was really created
-    for somebody else (_announce_practice_created_for_master).
+    for somebody else (_tell_master_of_curator_act).
     """
     # BE-102: before the dedup, which would otherwise hand the target's
     # existing practice to a caller who has not passed the checks.
@@ -1371,6 +1556,7 @@ async def create_practice(
     await _validate_taxonomy(body.direction, body.style, session)
     await _assert_master_confirmed_taxonomy(
         master_id, body.direction, body.style, session,
+        own=not for_another_master,
     )
     price_cents = _enforce_pricing(body.is_free, body.price_cents)
     # P5 (PROMPT №594): reject a group_id that isn't one of THIS master's own
@@ -1539,7 +1725,9 @@ async def create_practice(
         await _set_practice_audience_groups(practice.id, body.group_ids, session)
 
     if for_another_master:
-        await _announce_practice_created_for_master(user, practice, session)
+        await _tell_master_of_curator_act(
+            user, practice, _CURATOR_CREATED, session,
+        )
 
     logger.info(
         "practice_created",
@@ -1596,12 +1784,14 @@ async def get_practice(
     practice, first_name, last_name, master_avatar_url, profile_data = row
     master_name = master_full_name(first_name, last_name)
 
-    # Draft/deleted visible only to owner (P-08: 404 not 403).
-    if (
-        practice.status not in _PUBLIC_STATUSES
-        and practice.master_id != user.id
-    ):
-        raise NotFoundError("Practice not found")
+    # Draft/deleted visible only to owner (P-08: 404 not 403). BE-63: the
+    # owner is the master or the curator of the practice's school -- the
+    # curator reads the school's drafts to publish or fix them. A deleted
+    # practice stays nobody's to read but its master's, as before.
+    if practice.status not in _PUBLIC_STATUSES and practice.master_id != user.id:
+        if practice.status == PracticeStatus.DELETED.value:
+            raise NotFoundError("Practice not found")
+        await _manager_of_practice_or_404(practice, user, session)
 
     master_methods: list[str] = (
         profile_data.get("profile", {}).get("methods", [])
@@ -1668,7 +1858,13 @@ async def get_practice_detail(
         )
     ).scalar_one() > 0
 
-    if practice.master_id != user.id and not holds_access_booking:
+    # BE-63: the curator of the practice's school passes too -- they
+    # manage it, whatever its audience (a draft has no audience yet).
+    if (
+        practice.master_id != user.id
+        and not holds_access_booking
+        and await _curated_school_of(practice, user, session) is None
+    ):
         from app.core.exceptions import ForbiddenError
         from app.modules.practices.audience_service import (
             assert_viewer_can_access_practice,
@@ -1762,11 +1958,47 @@ async def update_practice(
     separate JSONB branch (data.taxonomy) -- see _TAXONOMY_FIELDS. These keys
     are pulled out of update_data BEFORE the column setattr loop so that
     setattr() never targets a non-existent column.
+
+    BE-63: "the owner" is the practice's master OR the curator of its
+    school (_manager_of_practice_or_404, the one rule). For a curator:
+      - publishing a master's draft needs that master to be a master of
+        the school NOW (owner Q5): their member row and profile are taken
+        FOR SHARE first (_lock_school_master_or_400), BEFORE the practice
+        -- the module order is member -> master profile -> practice ->
+        group, and delete_curator_group takes members and then practices;
+      - the practice is then taken FOR UPDATE, and the curator's right is
+        re-checked under the group lock before anything is written;
+      - "whose" stays the MASTER's everywhere it meant the owner: the
+        confirmed methods, the master's own groups, the school fan-out's
+        author (owner ruling: the master, and the fan-out skips them);
+      - the act is audited and the master is told (_tell_master_of_
+        curator_act) -- once per publication, once per edit that wrote
+        something; a repeated request that changes nothing tells nobody.
     """
+    # BE-63: a plain read first, to learn whose practice and which school
+    # before any lock -- the curator's publication must take the master's
+    # rows ahead of the practice. practices.master_id has no writer after
+    # creation, so what this read says about the master is the row's.
+    pre = await session.get(Practice, practice_id)
+    if pre is None:
+        raise NotFoundError(_NOT_FOUND)
+    managing_school = await _manager_of_practice_or_404(pre, user, session)
+    publishes = (
+        body.model_dump(exclude_unset=True).get("status")
+        == PracticeStatus.SCHEDULED.value
+    )
+    if managing_school is not None and publishes:
+        await _lock_school_master_or_400(
+            managing_school, pre.master_id, session,
+        )
+
     stmt = (
         select(Practice)
         .where(Practice.id == practice_id)
         .with_for_update()
+        # The read above put the row in the identity map; a lock on a row
+        # already there does not refresh it without this (BE-85).
+        .execution_options(populate_existing=True)
     )
     result = await session.execute(stmt)
     practice = result.scalar_one_or_none()
@@ -1774,10 +2006,10 @@ async def update_practice(
     if not practice:
         raise NotFoundError("Practice not found")
 
-    # R-01 fix: 404 not 403 for non-owner (P-08).
-    # Consistent with cancel_practice(), bookings, waitlist, reports.
-    if practice.master_id != user.id:
-        raise NotFoundError("Practice not found")
+    if managing_school is not None:
+        await _relock_school_or_404(user, managing_school, session)
+    acting_for_master = managing_school is not None
+    before = _practice_snapshot(practice)
 
     if practice.status == PracticeStatus.DELETED.value:
         raise BadRequestError("Cannot edit a deleted practice")
@@ -1861,7 +2093,9 @@ async def update_practice(
             raise BadRequestError(
                 "group_ids is only allowed when audience_kind='groups'"
             )
-        await _owned_group_ids_or_400(user.id, group_ids_value, session)
+        await _owned_group_ids_or_400(
+            practice.master_id, group_ids_value, session,
+        )
     elif final_audience_kind == AudienceKind.GROUPS.value:
         # Switching TO (or staying on) 'groups' without sending new
         # group_ids in THIS request -- only valid if the practice already
@@ -2070,7 +2304,8 @@ async def update_practice(
                 # create_practice -- an update can equally smuggle in a
                 # direction/style the master was never confirmed for.
                 await _assert_master_confirmed_taxonomy(
-                    user.id, new_direction, new_style, session,
+                    practice.master_id, new_direction, new_style, session,
+                    own=not acting_for_master,
                 )
         elif "style" in taxonomy_updates:
             # W-1: style changed WITHOUT direction in the same request --
@@ -2082,7 +2317,8 @@ async def update_practice(
             if new_style != stored_style:
                 await _validate_style_choice(stored_direction, new_style, session)
                 await _assert_master_confirmed_taxonomy(
-                    user.id, stored_direction, new_style, session,
+                    practice.master_id, stored_direction, new_style, session,
+                    own=not acting_for_master,
                 )
 
         data = copy.deepcopy(practice.data) if practice.data else {}
@@ -2094,7 +2330,8 @@ async def update_practice(
     logger.info(
         "practice_updated",
         practice_id=str(practice_id),
-        master_id=str(user.id),
+        master_id=str(practice.master_id),
+        actor_id=str(user.id),
         fields=list(update_data.keys()),
         taxonomy_fields=list(taxonomy_updates.keys()),
     )
@@ -2311,7 +2548,14 @@ async def update_practice(
         from app.modules.curator_groups.service import (
             announce_published_practice,
         )
-        await announce_published_practice(practice, user, session)
+        # BE-63 (owner ruling): the fan-out's author is the MASTER, also
+        # when the curator pressed publish -- the school hears its teacher
+        # opened something, and the master is the one it skips.
+        author = (
+            user if not acting_for_master
+            else await session.get(User, practice.master_id)
+        )
+        await announce_published_practice(practice, author, session)
 
     # H-R2 (3.3): a capacity RELAXATION frees seats -- hand them to the
     # waitlist NOW instead of leaving the queue to wait for someone
@@ -2388,6 +2632,23 @@ async def update_practice(
                     ) is None:
                         break  # queue drained before the seats did
 
+    # BE-63: a curator's act on a master's practice is audited and told to
+    # the master -- ONE message: a publication that also edited fields is
+    # "published", and an edit that wrote nothing (a resent PATCH, values
+    # equal to the stored ones) is no act at all.
+    if acting_for_master:
+        if (
+            old_status == PracticeStatus.DRAFT.value
+            and practice.status == PracticeStatus.SCHEDULED.value
+        ):
+            await _tell_master_of_curator_act(
+                user, practice, _CURATOR_PUBLISHED, session,
+            )
+        elif _practice_snapshot(practice) != before:
+            await _tell_master_of_curator_act(
+                user, practice, _CURATOR_EDITED, session,
+            )
+
     return practice
 
 
@@ -2419,11 +2680,13 @@ async def preview_audience_change(
     school id to feed in.
     """
     practice = await session.get(Practice, practice_id)
-    if practice is None or practice.master_id != user.id:
+    if practice is None:
         raise NotFoundError("Practice not found")
+    # BE-63: the same rule as the PATCH it previews.
+    await _manager_of_practice_or_404(practice, user, session)
 
     if group_ids:
-        await _owned_group_ids_or_400(user.id, group_ids, session)
+        await _owned_group_ids_or_400(practice.master_id, group_ids, session)
     try:
         check_school_audience(audience_kind, practice.curator_group_id)
     except ValueError as exc:
@@ -2461,6 +2724,13 @@ async def delete_practice(
 
     Raises NotFoundError if not found or not owner (P-08).
     Raises BadRequestError if not a draft.
+
+    BE-63/BE-64: the owner is the master or the curator of the practice's
+    school (_manager_of_practice_or_404). A curator's right is re-checked
+    under the group lock after the practice row (order practice -> group),
+    and the deletion is audited and told to the master. Only a draft is
+    deleted, so there is no series cascade here: a series root's sessions
+    are born at its publication, and a draft has none.
     """
     stmt = (
         select(Practice)
@@ -2474,9 +2744,7 @@ async def delete_practice(
         raise NotFoundError("Practice not found")
 
     # R-01 fix: 404 not 403 for non-owner (P-08).
-    # Consistent with cancel_practice(), bookings, waitlist, reports.
-    if practice.master_id != user.id:
-        raise NotFoundError("Practice not found")
+    managing_school = await _manager_of_practice_or_404(practice, user, session)
 
     if practice.status != PracticeStatus.DRAFT.value:
         raise BadRequestError(
@@ -2484,12 +2752,21 @@ async def delete_practice(
             "Use cancel for published practices."
         )
 
+    if managing_school is not None:
+        await _relock_school_or_404(user, managing_school, session)
+
     practice.status = PracticeStatus.DELETED.value
+
+    if managing_school is not None:
+        await _tell_master_of_curator_act(
+            user, practice, _CURATOR_DELETED, session,
+        )
 
     logger.info(
         "practice_deleted",
         practice_id=str(practice_id),
-        master_id=str(user.id),
+        master_id=str(practice.master_id),
+        actor_id=str(user.id),
     )
 
     return practice

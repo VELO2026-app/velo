@@ -114,7 +114,11 @@ from app.modules.curator_groups.student_profile_service import (
     get_school_student_profile,
 )
 from app.modules.masters.models import MasterProfile
-from app.modules.practices.listing_service import list_public_practices
+from app.modules.practices.listing_service import (
+    SchoolPracticeStatus,
+    list_public_practices,
+    list_school_practices_for_curator,
+)
 from app.modules.practices.schemas import PaginatedPracticesResponse
 from app.modules.users.models import User
 
@@ -352,6 +356,27 @@ async def list_curator_group_members_endpoint(
         total=total,
         limit=limit,
         offset=offset,
+    )
+
+
+@router.get(
+    "/me/curator-groups/{group_id}/practices/manage",
+    response_model=PaginatedPracticesResponse,
+)
+async def list_curator_group_manage_practices_endpoint(
+    group_id: UUID,
+    status: SchoolPracticeStatus | None = Query(default=None),
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_reader),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> PaginatedPracticesResponse:
+    """The school's practices for its curator to manage, drafts included
+    (BE-63) -- see list_school_practices_for_curator. 404 for a school
+    that is not the caller's."""
+    user, _profile = master_tuple
+    return await list_school_practices_for_curator(
+        session, user, group_id, status=status, limit=limit, offset=offset,
     )
 
 

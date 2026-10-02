@@ -211,6 +211,21 @@ curator_group.practice_created_for_master:
     title: "A curator created a practice for you"
     body: "🏛 <b>{actor_name}</b> created a draft practice <b>{practice_title}</b> ({scheduled_at}) in <b>{group_name}</b> on your behalf.\n\nReview it and publish it."
 
+curator_group.master_practice_published:
+  telegram:
+    title: "A curator published your practice"
+    body: "🏛 <b>{actor_name}</b> published your practice <b>{practice_title}</b> ({scheduled_at}) in <b>{group_name}</b>.\n\nIt is now visible in the school."
+
+curator_group.master_practice_edited:
+  telegram:
+    title: "A curator edited your practice"
+    body: "🏛 <b>{actor_name}</b> edited your practice <b>{practice_title}</b> ({scheduled_at}) in <b>{group_name}</b>.\n\nCheck that everything is right."
+
+curator_group.master_practice_deleted:
+  telegram:
+    title: "A curator deleted your draft"
+    body: "🏛 <b>{actor_name}</b> deleted your draft <b>{practice_title}</b> ({scheduled_at}) in <b>{group_name}</b>.\n\nThe draft is no longer available."
+
 # -- Master-facing (BE-33) --
 #
 # {mood} and {rating} arrive as an EMOJI, never as the stored 1..10 score

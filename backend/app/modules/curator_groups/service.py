@@ -30,14 +30,19 @@
 # practices) before it deletes the group, so it waits for those writers
 # instead of holding the group they are waiting for. It replaced the
 # "practice audience" table at the same place in the order, for the same
-# reason. Of the module's own rows ONE practice writer takes one: since
-# BE-102, create_practice (practices/, _effective_master_id_or_4xx), when a
-# curator creates a practice for a master of the school, reads that
-# master's member row and then their master profile FOR SHARE, and only
-# then INSERTs the practice (KEY SHARE on the group by the FK) -- member ->
-# master profile -> practice -> group, the order above. Every other
-# practice writer takes none of member .. invite, so the position before
-# the group closes no cycle with them.
+# reason. Of the module's own rows TWO practice writers take one, and
+# both before any practice row: create_practice for another master
+# (BE-102, _effective_master_id_or_4xx) and a curator publishing a master's
+# draft (BE-63, update_practice) read that master's member row and then
+# their master profile FOR SHARE (_lock_school_master_or_400); the first
+# then locks the group as its owner and INSERTs the practice, the second
+# takes the practice FOR UPDATE and then the group as its owner --
+# member -> master profile -> practice -> group, the order above. A
+# curator's edit and delete (BE-63/BE-64, update_practice, delete_practice)
+# take the practice and then the group as its owner, before any journal
+# row (_relock_school_or_404 in practices/service.py). Every other practice
+# writer takes none of member .. invite, so the position before the group
+# closes no cycle with them.
 #
 # THE MASTER PROFILE (BE-59) IS THE ONE ROW HERE THIS MODULE DOES NOT OWN,
 # and the one lock THIS MODULE takes by a read: offer_curator_group_master

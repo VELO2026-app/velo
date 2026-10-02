@@ -287,6 +287,20 @@ types:
   curator_group.practice_created_for_master:
     channels: [in_app, telegram]
 
+  # -- BE-63/BE-64: the curator published, edited or deleted the MASTER's
+  #    practice. Same addressee and same reason for no category as
+  #    practice_created_for_master: somebody else acted on what carries the
+  #    master's name, and the master is the one party who must know. --
+
+  curator_group.master_practice_published:
+    channels: [in_app, telegram]
+
+  curator_group.master_practice_edited:
+    channels: [in_app, telegram]
+
+  curator_group.master_practice_deleted:
+    channels: [in_app, telegram]
+
   # -- BE-30, the school hears that its teacher opened something. The arrival
   #    the comment above predicted, and it lands in curator_groups for the
   #    reason that made the category: it SCALES. member_joined scales with the

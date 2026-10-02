@@ -1,7 +1,7 @@
 # VELO comms profile -- delivery
 
 Source of the VELO product profile for the comms service: the type
-dictionary (`types.yaml`, schema `version: 2` -- 37 velo domain types
+dictionary (`types.yaml`, schema `version: 2` -- 40 velo domain types
 + 3 comms-native `msg.*` chat-baseline types, each routed to its
 channels by the profile) and the template sheets (`templates/ru.yaml`,
 `templates/en.yaml`).

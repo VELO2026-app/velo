@@ -24,7 +24,10 @@ from app.modules.practices.models import (
     Practice,
     PracticeStatus,
 )
-from app.modules.practices.service import master_full_name
+from app.modules.practices.service import (
+    _manager_of_practice_or_404,
+    master_full_name,
+)
 from app.modules.users.models import User
 
 logger = structlog.get_logger()
@@ -382,26 +385,23 @@ async def cancel_practice(
     # school's students. A PUBLIC practice of the school is not the
     # curator's to cancel yet -- that right is BE-61..64's, and granting
     # it here as a side effect of ownership would be a new power nobody
-    # ruled on (owner, 2026-10-01, Q4). Lazy import because
-    # curator_groups/service.py imports practices/models.py, so a
-    # module-level import here closes a cycle -- the same reason the
-    # imports inside _cancel_one are lazy.
-    curated_group_id: UUID | None = None
+    # ruled on (owner, 2026-10-01, Q4).
+    # BE-63: "the master or the curator of the practice's school" is ONE
+    # rule now, _manager_of_practice_or_404 -- asked here exactly as by
+    # update_practice and delete_practice. The audience restriction above
+    # stays this function's own and is asked first, with the same 404.
     is_owner = primary.master_id == user.id
+    curated_group_id: UUID | None = None
     if not is_owner:
-        if primary.audience_kind == AudienceKind.CURATOR_GROUPS.value:
-            from app.modules.curator_groups.service import (
-                curated_group_id_for_practice,
-            )
-            curated_group_id = await curated_group_id_for_practice(
-                primary, user.id, session,
-            )
         # P-08: 404, and deliberately the identical message and code the
         # "no such practice" branch above raises. "Not your school",
         # "not a school practice" and "no such practice" must be one
         # answer, or the difference between them is the leak.
-        if curated_group_id is None:
+        if primary.audience_kind != AudienceKind.CURATOR_GROUPS.value:
             raise NotFoundError("Practice not found")
+        curated_group_id = await _manager_of_practice_or_404(
+            primary, user, session,
+        )
 
     if primary.status not in _CANCELLABLE_PRACTICE_STATUSES:
         raise BadRequestError(
