@@ -341,14 +341,15 @@ async def ensure_master(
         acct = data.setdefault("account", {})
         if not had_master:
             acct["status"] = "verified"
-            acct.setdefault(
-                "verification",
-                {
-                    "verified_at": datetime.now(UTC).isoformat(),
-                    "verified_by": "cli_seed",
-                    "notes": "re-verified via velo seed",
-                },
-            )
+            # ASSIGNED, not setdefault-ed: a pending/rejected/withdrawn
+            # profile carries an explicit "verification": None and a
+            # suspended one the block of an EARLIER verification -- setdefault
+            # kept both. The same fix as make_master (BE-104 delivery 2).
+            acct["verification"] = {
+                "verified_at": datetime.now(UTC).isoformat(),
+                "verified_by": "cli_seed",
+                "notes": "re-verified via velo seed",
+            }
             data.setdefault("availability", {})["is_accepting"] = True
 
         if spec.get(_PROFILE_FIELD_CAN_CREATE_GROUPS) and not acct.get(
@@ -472,6 +473,10 @@ async def ensure_practice(
         practice_type=spec.get("practice_type", "live"),
         title=title,
         description=spec.get("description"),
+        # BE-106: the two practice blocks the demo profiles carry; a profile
+        # without them leaves None, the same as a master who skips them.
+        what_to_prepare=spec.get("what_to_prepare"),
+        contraindications=spec.get("contraindications"),
         scheduled_at=create_at,
         duration_minutes=spec["duration_minutes"],
         timezone=spec.get("timezone", "Europe/Moscow"),

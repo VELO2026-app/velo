@@ -3739,15 +3739,12 @@ async def announce_pending_master_offers(
     THE IDEMPOTENCY KEY CARRIES A transition_id MINTED HERE, one uuid4 per
     call, shared by every offer of the call. NOT verified_at: the key has to
     name the TRANSITION, and a uuid4 per call does that by construction,
-    while a data stamp does it only for as long as every caller writes a
-    fresh one. Not all of them do: set_role still re-verifies an
-    existing profile with setdefault("verification", ...), which keeps the
-    block of an EARLIER verification (verified, revoked, re-granted: the
-    old verified_at survives) and an explicit None on a pending profile.
-    (make_master did the same until BE-104 delivery 2; it now writes a
-    fresh block.) A key built from the stamp would repeat across two
-    verifications there, and comms would silently drop the second prompt
-    -- the case the key exists to tell apart. A uuid4 per call is a new
+    while a data stamp does it only for as long as every caller keeps
+    writing a fresh one. (Until BE-104 delivery 2 and BE-106, make_master
+    and set_role re-verified with setdefault and kept an EARLIER block --
+    a key built from the stamp would then repeat across two verifications,
+    and comms would silently drop the second prompt, the case the key
+    exists to tell apart.) A uuid4 per call is a new
     key exactly per transition, and it does not send twice: a request
     that rolls back takes its outbox rows with it (same transaction), and
     a request repeated after a commit meets the profile already verified

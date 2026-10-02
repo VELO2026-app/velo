@@ -355,12 +355,8 @@ async def _emit_application_received(
 #   verified  -- a uuid4 minted per call, NOT verification.verified_at.
 #       The key has to name the TRANSITION, and a uuid4 per call does that by
 #       construction; a data stamp names it only for as long as every path
-#       into "verified" writes a fresh one. Today both emitting paths do
-#       (verify_master, and make_master since BE-104 delivery 2), but
-#       scripts/set_role.py and seed still re-verify with
-#       setdefault("verification", ...), which keeps an earlier block -- a key
-#       resting on the stamp would make every such writer a way to have
-#       comms silently drop a notification. The same remedy as
+#       into "verified" keeps writing a fresh one, and a key must not rest on
+#       what each future writer remembers to stamp. The same remedy as
 #       announce_pending_master_offers (curator_groups/service.py). A uuid4
 #       does not send twice: a rolled-back request takes its outbox row with
 #       it, and a request repeated after a commit meets its own guard (409)

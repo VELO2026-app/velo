@@ -449,14 +449,16 @@ async def to_master(session: AsyncSession, user: User, assume_yes: bool) -> bool
         data = copy.deepcopy(profile.data or {})
         acct = data.setdefault("account", {})
         acct["status"] = "verified"
-        acct.setdefault(
-            "verification",
-            {
-                "verified_at": datetime.now(UTC).isoformat(),
-                "verified_by": "cli_setrole",
-                "notes": "re-verified via velo setrole",
-            },
-        )
+        # ASSIGNED, not setdefault-ed: an explicit "verification": None
+        # (pending/rejected/withdrawn) and an EARLIER verification's block
+        # (suspended) both survived setdefault. Same fix as make_master
+        # (BE-104 delivery 2). verified_by stays the tool's name: the CLI has
+        # no admin user behind it.
+        acct["verification"] = {
+            "verified_at": datetime.now(UTC).isoformat(),
+            "verified_by": "cli_setrole",
+            "notes": "re-verified via velo setrole",
+        }
         data.setdefault("availability", {})["is_accepting"] = True
         profile.set_jsonb("data", data)
         _set_role(user, UserRole.MASTER)
