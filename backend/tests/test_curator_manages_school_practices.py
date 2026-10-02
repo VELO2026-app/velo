@@ -545,17 +545,35 @@ async def test_delete_refusals(client, s: _S) -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_public_school_practice_is_still_not_the_curators_to_cancel(
+async def test_a_public_school_practice_is_the_curators_to_cancel(
     client, s: _S,
 ) -> None:
-    """Delivery A moves cancel onto the one rule but not its audience
-    restriction: that is lifted in B."""
+    """Delivery B (BE-64) lifts the audience restriction delivery A kept.
+
+    The old form of this test (..._is_still_not_the_curators_to_cancel)
+    asserted a 404 and was right while cancel_practice refused a curator
+    any practice of the school that was not for the school's students
+    (BE-74 Q4). The owner's ruling of 2026-10-01 gives the curator every
+    practice of the school, public included, and BE-64 removed that
+    refusal -- so the precise statement now is the opposite one, with its
+    traces: the public practice is cancelled, the audit names the curator,
+    the school and the master, and the master is told once.
+    """
     resp = await client.post(
         CANCEL_URL.format(practice_id=s.published),
         headers=auth_headers(s.token("curator")),
     )
-    assert resp.status_code == 404, resp.text
-    assert await _status(s.published) == "scheduled"
+    assert resp.status_code == 200, resp.text
+    assert await _status(s.published) == "cancelled"
+
+    audits = await _audits("practice_cancelled_by_curator", s.published)
+    assert len(audits) == 1
+    assert audits[0].actor_id == s.uid("curator")
+    assert audits[0].data["group_id"] == str(s.school)
+    assert audits[0].data["master_id"] == s.id("master")
+    assert len(
+        await _notes("practice.cancelled_by_curator", s.id("master")),
+    ) == 1
 
 
 # ===========================================================================

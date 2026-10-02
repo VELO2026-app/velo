@@ -625,20 +625,24 @@ async def test_curator_who_lost_verification_loses_the_lever(
 
 
 # ===========================================================================
-# 3. Scope -- the cascade stays master-only (item 2)
+# 3. Scope -- the cascade is the curator's too (BE-64)
 # ===========================================================================
 
 
 @pytest.mark.asyncio
-async def test_curator_is_refused_the_series_cascade(
+async def test_curator_cascades_the_series_of_the_school(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """400 with its own code, and the later occurrence survives.
+    """The cascade is the curator's too (BE-64), with ONE note to the master.
 
-    The code is distinct here, unlike every 404 above, and the difference is
-    not an inconsistency: by the time this fires the caller has already been
-    told the practice exists (they are entitled to cancel it), so there is
-    no secret left to keep and the frontend needs to say something true.
+    The old form (test_curator_is_refused_the_series_cascade) asserted 400
+    curator_cannot_cancel_series and both occurrences surviving. It was
+    right while the cascade was master-only by decision (BE-21: the C2
+    filter Practice.master_id == user.id had no curator equivalent). BE-64
+    gave the cascade a curator predicate (the school) and removed the
+    refusal, so the precise statement is now the cascade's traces: both
+    occurrences cancelled, one audit row and one journal row PER
+    occurrence, and one notification to the master for the whole action.
     """
     master = await _make_verified_master(client, db_session, _TID_MASTER)
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
@@ -651,79 +655,120 @@ async def test_curator_is_refused_the_series_cascade(
         db_session, master["user"]["id"], school=school,
         hours_from_now=72, parent_practice_id=root.id,
     )
+    ids = (root.id, later.id)
 
     resp = await client.post(
         CANCEL_URL.format(practice_id=root.id),
         headers=auth_headers(curator["session_token"]),
         json={"scope": "this_and_future"},
     )
-    assert resp.status_code == 400
-    assert resp.json()["error"] == "curator_cannot_cancel_series"
+    assert resp.status_code == 200, resp.text
 
-    for pid in (root.id, later.id):
+    for pid in ids:
         fresh = (await fresh_execute(
             select(Practice).where(Practice.id == pid),
         )).scalar_one()
-        assert fresh.status == PracticeStatus.SCHEDULED.value
+        assert fresh.status == PracticeStatus.CANCELLED.value
+    audits = (await fresh_execute(
+        select(AuditLog).where(
+            AuditLog.event == "practice_cancelled_by_curator",
+            AuditLog.target_id.in_(ids),
+        ),
+    )).scalars().all()
+    assert sorted(a.target_id for a in audits) == sorted(ids)
+    journal = (await fresh_execute(
+        select(CuratorGroupEvent).where(
+            CuratorGroupEvent.group_id == school.id,
+        ),
+    )).scalars().all()
+    assert sorted(e.data["practice_id"] for e in journal) == sorted(
+        str(pid) for pid in ids
+    )
+    assert (await _outbox_types_for(master["user"]["id"])).count(
+        "practice.cancelled_by_curator",
+    ) == 1
 
 
 @pytest.mark.asyncio
-async def test_curator_cannot_reach_another_masters_series_at_all(
+async def test_curator_cascade_stays_inside_this_series(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """The C2 hole, from the curator's side.
+    """The curator's cascade cancels this series and nothing beside it.
 
-    The setup that matters: the series root belongs to ANOTHER MASTER and is
-    belongs to the curator's school, so the curator is genuinely entitled
-    to cancel that one occurrence. An attacker then points their own,
-    unrelated practice at that root -- parent_practice_id is client-writable
-    -- and hopes a curator's cascade walks the tree and refunds it.
+    WHAT THE OLD FORM BUILT, AND WHY IT IS GONE.
+    test_curator_cannot_reach_another_masters_series_at_all forged a child:
+    another master's PUBLIC practice, outside the school, with
+    parent_practice_id pointing at the school series' root -- inserted by
+    hand, past the API -- and asserted the refused cascade left it alone.
+    That child cannot exist. C2-b removed parent_practice_id from
+    UpdatePracticeRequest, and at creation the parent must be the master's
+    own root and the child inherits its school or is refused
+    (practice_school_immutable, BE-74); the generator copies both. Every
+    occurrence of a series has its root's master and school, so the shape
+    was the impossible documented (§5).
 
-    The refusal fires before the sibling query runs, so both the root and
-    the forged child survive. Both are asserted: "the cascade was refused"
-    and "the cascade ran and found nothing" are indistinguishable from the
-    status code alone, and only the second would be a hole.
-
-    The first version of this test made the ROOT the curator's own practice,
-    which made him the owner -- the cascade was allowed, the endpoint
-    answered 200, and the test caught its own setup rather than the code.
+    THE REACHABLE STATEMENT. Around a series of the school stand everything
+    that IS reachable and must survive: the same master's other series in
+    the same school, another master's series in the same school, and the
+    same master's practice outside the school. Dropping the series filter
+    (the root) from the cascade lets the school predicate take the first
+    two -- that is the mutation this test reddens.
     """
-    victim = await _make_verified_master(client, db_session, _TID_MASTER)
-    attacker = await _make_verified_master(
+    master = await _make_verified_master(client, db_session, _TID_MASTER)
+    other_master = await _make_verified_master(
         client, db_session, _TID_STRANGER_MASTER,
     )
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     school = await _school(db_session, curator["user"]["id"])
+    mid, oid = master["user"]["id"], other_master["user"]["id"]
+
     root = await _create_practice(
-        db_session, victim["user"]["id"], school=school,
-        hours_from_now=24, title="Практика школы",
+        db_session, mid, school=school, hours_from_now=24, title="Эта",
     )
-    root_id = root.id
-    forged = await _create_practice(
-        db_session, attacker["user"]["id"],
-        audience_kind=AudienceKind.PUBLIC.value, hours_from_now=72,
-        parent_practice_id=root_id, title="Подкладка",
+    later = await _create_practice(
+        db_session, mid, school=school, hours_from_now=72,
+        parent_practice_id=root.id, title="Эта, позже",
     )
-    forged_id = forged.id
+    other_root = await _create_practice(
+        db_session, mid, school=school, hours_from_now=30, title="Другая",
+    )
+    other_child = await _create_practice(
+        db_session, mid, school=school, hours_from_now=80,
+        parent_practice_id=other_root.id, title="Другая, позже",
+    )
+    foreign_root = await _create_practice(
+        db_session, oid, school=school, hours_from_now=36, title="Чужая",
+    )
+    foreign_child = await _create_practice(
+        db_session, oid, school=school, hours_from_now=90,
+        parent_practice_id=foreign_root.id, title="Чужая, позже",
+    )
+    outside = await _create_practice(
+        db_session, mid, audience_kind=AudienceKind.PUBLIC.value,
+        hours_from_now=100, title="Вне школы",
+    )
+    cancelled = {root.id, later.id}
+    survivors = {
+        other_root.id, other_child.id, foreign_root.id, foreign_child.id,
+        outside.id,
+    }
 
     resp = await client.post(
-        CANCEL_URL.format(practice_id=root_id),
+        CANCEL_URL.format(practice_id=root.id),
         headers=auth_headers(curator["session_token"]),
         json={"scope": "this_and_future"},
     )
-    assert resp.status_code == 400
-    assert resp.json()["error"] == "curator_cannot_cancel_series"
+    assert resp.status_code == 200, resp.text
 
-    for pid in (root_id, forged_id):
-        fresh = (await fresh_execute(
-            select(Practice).where(Practice.id == pid),
-        )).scalar_one()
-        assert fresh.status == PracticeStatus.SCHEDULED.value
-
-
-# ===========================================================================
-# 4. What the cancellation writes down (items 3, 5, 6)
-# ===========================================================================
+    statuses = dict((await fresh_execute(
+        select(Practice.id, Practice.status).where(
+            Practice.id.in_(cancelled | survivors),
+        ),
+    )).all())
+    assert {pid for pid, st in statuses.items()
+            if st == PracticeStatus.CANCELLED.value} == cancelled
+    assert {pid for pid, st in statuses.items()
+            if st == PracticeStatus.SCHEDULED.value} == survivors
 
 
 @pytest.mark.asyncio
@@ -872,19 +917,27 @@ async def test_a_refused_cancellation_leaves_no_journal_row(
 ) -> None:
     """The journal must not report things that did not happen.
 
-    A curator asks for the cascade, is refused, and the school's journal is
-    untouched -- paired with the previous test's "one row on success", so
-    neither an always-write nor a never-write implementation passes both.
+    A curator is refused, and the school's journal is untouched -- paired
+    with the previous test's "one row on success", so neither an
+    always-write nor a never-write implementation passes both.
+
+    The refusal used to be the series cascade (400
+    curator_cannot_cancel_series); BE-64 opened the cascade to the curator,
+    so that refusal no longer exists. The refusal now is the one that still
+    comes AFTER the curator's right is granted: a practice that is not in a
+    cancellable state -- the same place in the function, so "the right was
+    granted and nothing was written" is still what is asserted.
     """
     master = await _make_verified_master(client, db_session, _TID_MASTER)
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     school = await _school(db_session, curator["user"]["id"])
-    root = await _create_practice(
+    done = await _create_practice(
         db_session, master["user"]["id"], school=school,
+        status=PracticeStatus.COMPLETED.value,
     )
 
     resp = await client.post(
-        CANCEL_URL.format(practice_id=root.id),
+        CANCEL_URL.format(practice_id=done.id),
         headers=auth_headers(curator["session_token"]),
         json={"scope": "this_and_future"},
     )
@@ -896,6 +949,9 @@ async def test_a_refused_cancellation_leaves_no_journal_row(
         ),
     )).scalars().all()
     assert rows == []
+    assert "practice.cancelled_by_curator" not in await _outbox_types_for(
+        master["user"]["id"],
+    )
 
 
 @pytest.mark.asyncio
@@ -960,11 +1016,11 @@ async def test_scope_axes_empty_repeat_and_short(
 ) -> None:
     """PUSTOTA / POVTOR / NEHVATKA on the scope body, for a CURATOR.
 
-    Emptiness must land on "this" (the historical default) rather than on
-    the refusal, or a curator with no body would be told he cannot cancel
-    series he never asked about. A repeated key resolves to the LAST value
-    by JSON parsing, so the refusal is what a duplicated scope must produce
-    -- asserted rather than assumed. A short/unknown value is rejected
+    Emptiness must land on "this" (the historical default), or a curator
+    with no body would cancel a whole series he never asked about. A
+    repeated key resolves to the LAST value by JSON parsing, so a
+    duplicated scope must cascade -- asserted rather than assumed (the
+    later occurrence is cancelled). A short/unknown value is rejected
     before the entitlement is even consulted.
     """
     master = await _make_verified_master(client, db_session, _TID_MASTER)
@@ -976,6 +1032,10 @@ async def test_scope_axes_empty_repeat_and_short(
     repeat = await _create_practice(
         db_session, master["user"]["id"], school=school, title="repeat",
     )
+    repeat_later = await _create_practice(
+        db_session, master["user"]["id"], school=school, title="repeat later",
+        hours_from_now=96, parent_practice_id=repeat.id,
+    )
     short = await _create_practice(
         db_session, master["user"]["id"], school=school, title="short",
     )
@@ -986,14 +1046,20 @@ async def test_scope_axes_empty_repeat_and_short(
         CANCEL_URL.format(practice_id=empty.id), headers=token,
     )).status_code == 200
 
-    # POVTOR -- the key twice; the last one wins and is refused.
+    # POVTOR -- the key twice; the last one wins. Its observable used to be
+    # the curator's refusal of the cascade (curator_cannot_cancel_series),
+    # which BE-64 removed; the same property now shows as the cascade
+    # itself: the later occurrence is cancelled only if "this_and_future"
+    # -- the LAST value -- is what the server read.
     resp = await client.post(
         CANCEL_URL.format(practice_id=repeat.id),
         headers={**token, "Content-Type": "application/json"},
         content='{"scope": "this", "scope": "this_and_future"}',
     )
-    assert resp.status_code == 400
-    assert resp.json()["error"] == "curator_cannot_cancel_series"
+    assert resp.status_code == 200, resp.text
+    assert (await fresh_execute(
+        select(Practice.status).where(Practice.id == repeat_later.id),
+    )).scalar_one() == PracticeStatus.CANCELLED.value
 
     # NEHVATKA -- a value that is neither.
     assert (await client.post(

@@ -26,7 +26,13 @@
 # and cancel_practice (practices/) hold it FOR UPDATE and then write a
 # journal row -- KEY SHARE on the group -- or, cancelling as the curator,
 # lock the group as its owner (_lock_group_as_owner) before writing
-# anything. delete_curator_group clears its practices' owner (an UPDATE of
+# anything. A cancellation of a series ("this_and_future") holds SEVERAL
+# practices -- the primary, then the later occurrences of its series --
+# and takes ALL of them before the group, for the master and the curator
+# alike (BE-64, cancel_practice): a curator's edit or delete of one of
+# those occurrences holds it and waits for the group as its owner, so a
+# cascade that took the group between the primary and the siblings
+# deadlocked against it. delete_curator_group clears its practices' owner (an UPDATE of
 # practices) before it deletes the group, so it waits for those writers
 # instead of holding the group they are waiting for. It replaced the
 # "practice audience" table at the same place in the order, for the same
@@ -1455,9 +1461,8 @@ async def curated_group_id_for_practice(
     it is a school practice, or that the school is somebody else's).
 
     ONE id, not a list: a practice belongs to exactly one school (owner
-    ruling, 2026-10-01). Which practices a curator may cancel at all --
-    only those for the school's students, not its public ones (BE-74 Q4) --
-    is the caller's question, asked before this one.
+    ruling, 2026-10-01). The answer covers every practice of the school,
+    public ones included (BE-64): the curator may cancel any of them.
 
     A READ, AND THEREFORE NOT THE LAST WORD. The school can change hands
     between this answer and the cancellation's writes; cancel_practice

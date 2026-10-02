@@ -770,15 +770,16 @@ async def cancel_practice_endpoint(
     100% refund to every active booking. Waitlist entries cleared. Only works
     on scheduled/live practices. This is the only way to reach cancelled status.
 
-    Two actors (BE-21): the practice's MASTER, and the CURATOR of a school the
-    practice is published to. Everyone else -- including a master who is
-    neither -- gets 404 with the code `not_found`, the same answer a
-    nonexistent practice gives (P-08).
+    Two actors (BE-21): the practice's MASTER, and the CURATOR of the school
+    the practice belongs to (any practice of the school, public included,
+    BE-64). Everyone else -- including a master who is neither -- gets 404
+    with the code `not_found`, the same answer a nonexistent practice gives
+    (P-08).
 
     Optional body {scope}: "this" (the default, or no body) cancels only this
     occurrence; "this_and_future" also cancels every later occurrence of the
-    same series (a non-series practice behaves like "this"). MASTER ONLY --
-    a curator asking for the cascade gets 400 `curator_cannot_cancel_series`.
+    same series (a non-series practice behaves like "this"), for either actor
+    (BE-64).
     """
     user, _profile = master_tuple
     scope = (body or CancelPracticeRequest()).scope

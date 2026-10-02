@@ -56,10 +56,12 @@ practice.cancelled_waitlist:
     body: "❌ Практика <b>{practice_title}</b> {scheduled_at}, на которую вы стояли в листе ожидания, отменена."
 
 # BE-21: to the practice's OWN master, when a school curator cancelled it.
+# BE-64: ONCE per action, a series cascade included; cancelled_count is
+# every occurrence the action cancelled (the addressed one too, >= 1).
 practice.cancelled_by_curator:
   telegram:
     title: "Вашу практику отменили"
-    body: "❌ Практику <b>{practice_title}</b> {scheduled_at} отменил куратор школы <b>{group_name}</b>.\n\n💰 Участникам возвращена оплата."
+    body: "❌ Практику <b>{practice_title}</b> {scheduled_at} отменил куратор школы <b>{group_name}</b>.\nОтменено занятий: {cancelled_count}\n\n💰 Участникам возвращена оплата."
 
 # -- Waitlist --
 
