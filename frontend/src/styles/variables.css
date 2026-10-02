@@ -130,6 +130,20 @@
   --velo-rating-good: #d66674; /* new */
   --velo-rating-fire: var(--velo-peach-500); /* #d4863c */
 
+  /* === Colors: Analytics five-scale strip (tz-mood-scale) ===
+   * Segment fills of the analytics distributions (DistributionCard: the
+   * school «Процент фидбеков» block, the practice «До/После практики»
+   * strips). Owner canon 2026-10-02 -- these hexes ARE the standard, not
+   * approximations; the TS fallbacks in MOOD_SCALE_FILLS mirror them.
+   * Keys follow utils/moodScale.ts: bad «Плохо», low «Не очень»,
+   * neutral «Нормально», good «Хорошо», fire «Огонь».
+   */
+  --velo-analytics-bad: #fe9093;
+  --velo-analytics-low: #faaa63;
+  --velo-analytics-neutral: #f7cf17;
+  --velo-analytics-good: #b5eb88;
+  --velo-analytics-fire: #5abafd;
+
   /* === Typography === */
   --font-body: 'Marmelad', 'Noto Sans', sans-serif;
   --font-heading: 'Marmelad', 'Noto Sans', sans-serif;
