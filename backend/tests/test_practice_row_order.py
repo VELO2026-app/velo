@@ -208,6 +208,18 @@ async def _scan_order(*pids: UUID) -> list[UUID]:
     return list(rows)
 
 
+async def _heap_in_time_order() -> None:
+    """Rewrite the practices table in scheduled_at order (index name from
+    pg_indexes, not from the model). After it the scan order of any plan
+    over these rows -- seq scan, or an index scan on curator_group_id,
+    whose equal keys follow the heap -- is the time order."""
+    async with get_session_factory()() as session:
+        await session.execute(
+            text("CLUSTER practices USING ix_practices_scheduled_at")
+        )
+        await session.commit()
+
+
 def _cascade(w: dict, pid: UUID):
     async def call(session: AsyncSession):
         user = await session.get(User, w["cid"])
@@ -358,17 +370,23 @@ async def test_g7_deleting_the_school_against_blocking_through_a_gate(
     """delete_curator_group must take the school's practices by id.
 
     Rows x1 < x2 by id, the student booked on both; x2 sits EARLIER in the
-    heap, so an UPDATE without order meets it first. The gate holds x1. The
+    heap, so an UPDATE without order meets it first. The heap order is
+    BUILT, not hoped for: a booking rewrites the practice row
+    (current_participants), and where the new version lands is the free
+    space map's choice -- it came out the other way on the stand. CLUSTER
+    by the scheduled_at index lays the table out in time order, and x2 is
+    the earlier one. The gate holds x1. The
     block (by id) queues on x1 holding nothing. The deletion then queues
     too: by id it waits on x1 holding nothing; by scan order it takes x2
     first and waits on x1 -- and when the gate opens the block gets x1 and
     walks into x2. Preconditions asserted, not assumed.
     """
     x1, x2 = _ids(2)
-    await _practice(db_session, w, x2, hours=20)
-    await _practice(db_session, w, x1, hours=10)
+    await _practice(db_session, w, x2, hours=10)
+    await _practice(db_session, w, x1, hours=20)
     for pid in (x2, x1):
         await _book(client, w, pid)
+    await _heap_in_time_order()
     assert await _scan_order(x1, x2) == [x2, x1], (
         "the heap order the window needs (x2 before x1) was not built"
     )
