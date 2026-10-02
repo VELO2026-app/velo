@@ -33,6 +33,7 @@
 //                                                   scores as BUCKETS (BE-24)
 //   GET    /{id}/reviews                         -- named reviews of the school,
 //                                                   scores as BUCKETS (BE-24)
+//   GET    /{id}/analytics                       -- the §6 MVP aggregate
 //
 // MEMBER / ANY USER (prefix /api/v1/curator-groups):
 //   GET    /mine                                 -- my ACTIVE schools + relation
@@ -227,10 +228,15 @@ export function demoteCuratorGroupMaster(id: string, userId: string): Promise<vo
  *  answering 204 never justifies mutating the row locally. Idempotent per
  *  candidate (re-sending is not a conflict). Errors: 404 not_found (not your
  *  school, or the candidate is not in it -- one answer, P-08);
- *  409 already_master; 403 master_required (no verified master profile). */
+ *  409 already_master. An unverified candidate receives a verification prompt. */
 export function offerCuratorGroupMaster(id: string, toUserId: string): Promise<void> {
   const body: CuratorGroupMasterOfferRequest = { to_user_id: toUserId }
   return api.post<void>(`${CURATOR_BASE}/${id}/master-offers`, body)
+}
+
+/** Withdraw a pending offer in either state. Membership remains unchanged. */
+export function cancelCuratorGroupMasterOffer(id: string, userId: string): Promise<void> {
+  return api.delete(`${CURATOR_BASE}/${id}/master-offers/${userId}`)
 }
 
 /** POST /masters/me/curator-groups/{id}/invites -- get-or-mint the school's
@@ -357,6 +363,89 @@ export function getCuratorGroupReviews(
     offset: options.offset ?? 0,
   })
   return api.get<PaginatedCuratorGroupReviewsResponse>(`${CURATOR_BASE}/${id}/reviews${qs}`)
+}
+
+// =============================================================================
+// School analytics (tz-curator.md §6 -- owner unblocked 2026-10-02)
+//
+// STAND-IN TYPES until the next generated.ts regen (the groups.ts
+// precedent): the endpoint is new, the openapi-generated contract does not
+// exist for it yet. The shapes mirror
+// backend/app/modules/curator_groups/schemas.py verbatim; delete this
+// block and re-derive from @/api/types after the regen. Same BE-24 rule as
+// the feeds above: buckets only, no per-student rows, no raw scores.
+//
+// PART 1 (owner brief 2026-10-02): the screen is the period slider +
+// the four `engagement` cards; `period` scopes those to the curator's own
+// calendar (week|month|quarter, default week -- the master stats
+// convention). The all-time groups (practices/members/feedback/
+// top_practices) ride the same response unchanged: members.students is the
+// «из N в школе» denominator of card 2, and the distributions are the raw
+// material for the screen's later parts.
+// =============================================================================
+
+/** The analytics slider's period vocabulary -- the same three values the
+ *  master dashboard's toggle sends (core/periods.py bounds server-side). */
+export type SchoolAnalyticsPeriod = 'week' | 'month' | 'quarter'
+
+/** §6 aggregate for the curator's school analytics screen. CURATOR ONLY --
+ *  everyone else gets the same masked 404 as every school surface. */
+export interface CuratorGroupAnalyticsResponse {
+  practices: { total: number; completed: number; upcoming: number }
+  members: { masters: number; students: number }
+  /** The period-scoped cards: conducted / came / came again / joined and
+   *  never came (the last one lifetime -- it does not move with the
+   *  slider). repeat_pct is 0 when the period had no attendees.
+   *  reviewers + rating feed the «Процент фидбеков» block (part 2): the
+   *  percent divides reviewers by members.students client-side; rating is
+   *  the FIVE-scale distribution (moodScale.ts keys, tz-mood-scale), not
+   *  the three-chip /reviews feed vocabulary. */
+  engagement: {
+    practices_conducted: number
+    attendees: number
+    repeat_attendees: number
+    repeat_pct: number
+    joined_never_came: number
+    reviewers: number
+    rating: { bad: number; low: number; neutral: number; good: number; fire: number }
+    /** Part 3: every COMPLETED practice of the window, newest first, each
+     *  with its own attendance / check-in / feedback aggregates. */
+    conducted_practices: Array<{
+      practice_id: string
+      title: string
+      direction: string | null
+      master_name: string
+      scheduled_at: string
+      timezone: string
+      attendees_count: number
+      checkins_count: number
+      reviewers_count: number
+      reviews_count: number
+      rating: { bad: number; low: number; neutral: number; good: number; fire: number }
+    }>
+  }
+  feedback: {
+    checkins_count: number
+    reviews_count: number
+    mood: { low: number; mid: number; high: number }
+    rating: { bad: number; low: number; neutral: number; good: number; fire: number }
+  }
+  top_practices: Array<{
+    practice_id: string
+    title: string
+    master_name: string
+    scheduled_at: string
+    checkins_count: number
+    reviews_count: number
+  }>
+}
+
+export function getCuratorGroupAnalytics(
+  id: string,
+  period: SchoolAnalyticsPeriod = 'week',
+): Promise<CuratorGroupAnalyticsResponse> {
+  const qs = buildQuery({ period })
+  return api.get<CuratorGroupAnalyticsResponse>(`${CURATOR_BASE}/${id}/analytics${qs}`)
 }
 
 // =============================================================================

@@ -10,7 +10,9 @@
 // GONE from this page -- their tests went with them. Still covered: the
 // hero counters, relation gating of rows/CTA, the edit sheet, the LEAVE
 // flow (advisory preview + frozen-school 404 path), the transfer banner
-// (server-driven accept/decline/cancel) and the analytics stub row.
+// (server-driven accept/decline/cancel) and the analytics row, which since
+// §6 MVP (owner 2026-10-02) navigates to the school analytics screen -- the
+// zone only picks the route family.
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -617,16 +619,31 @@ describe('CuratorGroupPageView -- §1.6 page body', () => {
     })
   })
 
-  it('the analytics row is an honest stub while §6 has no page', async () => {
+  it('§6 MVP: the analytics row opens the school analytics screen (user zone)', async () => {
     mockHappyLoad('curator')
     mount()
     await flush()
 
     rowWith('Аналитика')?.click()
     await flush()
+    expect(push).toHaveBeenCalledWith({
+      name: 'user-curator-group-analytics',
+      params: { id: 'g1' },
+    })
+  })
 
-    expect(toastInfo).toHaveBeenCalledWith('Аналитика школы появится позже')
-    expect(push).not.toHaveBeenCalled()
+  it('§6 MVP: the analytics row follows the zone (master zone)', async () => {
+    routeState.name = 'master-curator-group'
+    mockHappyLoad('curator')
+    mount()
+    await flush()
+
+    rowWith('Аналитика')?.click()
+    await flush()
+    expect(push).toHaveBeenCalledWith({
+      name: 'master-curator-group-analytics',
+      params: { id: 'g1' },
+    })
   })
 
   it("the feed shows at most five practices and is the page's last section", async () => {

@@ -116,8 +116,8 @@
              no chevron; the nav rows that follow carry NO left icons --
              only the label and the enlarged dark chevron (§1.9). «Участники»
              opens the merged roster screen (§1.11, curator only); the
-             rosters no longer live on this page, and «Аналитика» stays
-             fully hidden behind its flag until §6, never shown disabled. -->
+             rosters no longer live on this page. «Аналитика» opens the
+             school's analytics screen (§6 MVP, owner 2026-10-02). -->
         <div class="cgp__actions">
           <VMenuRow
             v-if="isCurator"
@@ -146,7 +146,7 @@
             v-if="isCurator"
             class="cgp__nav-row"
             label="Аналитика"
-            @click="onAnalyticsClick"
+            @click="openAnalytics"
           />
         </div>
 
@@ -323,11 +323,13 @@ function openPracticesCalendar(): void {
 // API contract is untouched); the cap is presentation-only.
 const upcomingPractices = computed(() => practices.value.slice(0, 5))
 
-// §6 (school analytics) is blocked on the metrics spec -- there is no page to
-// navigate to yet, so the row the owner asked for says so honestly instead of
-// pretending (a dead link or a fake page would both be worse).
-function onAnalyticsClick(): void {
-  toast.info('Аналитика школы появится позже')
+// §6 MVP (owner 2026-10-02, PM-2 refinement pending): the school's analytics
+// screen. Same zone pick as the roster rows -- one screen, two mounts.
+function openAnalytics(): void {
+  void router.push({
+    name: inMasterZone.value ? 'master-curator-group-analytics' : 'user-curator-group-analytics',
+    params: { id: groupId.value },
+  })
 }
 
 // §1.11 (owner 2026-09-22): the merged participants screen; the zone picks
