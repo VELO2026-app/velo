@@ -2,11 +2,14 @@
 # VELO Backend -- Tests: the school analytics aggregate (tz-curator.md §6 MVP)
 # =============================================================================
 #
-# telegram_id band: 65900-65999 (curator 65901, teacher 65902, a second
-# curator 65904, students 65910-65912). Declared module-level below as
+# telegram_id band: 89260-89399 (curator 89261, teacher 89262, a second
+# curator 89264, students 89270-89272). Declared module-level below as
 # _TID_MIN/_TID_MAX, ONCE -- tests/telegram_id_bands.py parses that
-# declaration out of the AST on every run. Claimed after
-# test_curator_group_feedback.py took (65800, 65899); free before it.
+# declaration out of the AST on every run. First claimed (65900, 65999)
+# after test_curator_group_feedback.py took (65800, 65899); re-claimed
+# here 2026-10-02 -- the test branch's test_master_notifications.py
+# declares the same 65900-65999 window, and the bands meta-test forbids
+# the unrecorded collision, so this file moved (the other side is pushed).
 #
 # WHAT THIS FILE PINNS. One GET answers the curator's whole analytics
 # screen. Four axes, each with its own failure mode:
@@ -65,15 +68,15 @@ from tests.helpers import auth_headers, full_cleanup_range, login_user
 
 ANALYTICS_URL = "/api/v1/masters/me/curator-groups/{group_id}/analytics"
 
-_TID_MIN = 65900
-_TID_MAX = 65999
+_TID_MIN = 89260
+_TID_MAX = 89399
 
-_TID_CURATOR = 65901
-_TID_TEACHER = 65902
-_TID_CURATOR_B = 65904
-_TID_STUDENT = 65910
-_TID_STUDENT_B = 65911
-_TID_STUDENT_C = 65912
+_TID_CURATOR = 89261
+_TID_TEACHER = 89262
+_TID_CURATOR_B = 89264
+_TID_STUDENT = 89270
+_TID_STUDENT_B = 89271
+_TID_STUDENT_C = 89272
 
 async def _make_verified_master(
     client: AsyncClient,
@@ -240,7 +243,7 @@ async def _clean_band(db_session: AsyncSession) -> AsyncGenerator[None, None]:
     await db_session.commit()
 
 
-_TID_OUTSIDER = 65930
+_TID_OUTSIDER = 89290
 
 
 async def _seed_lively_school(
