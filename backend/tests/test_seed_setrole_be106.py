@@ -21,6 +21,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session_factory
+from app.modules.curator_groups.models import CuratorGroup
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import Practice
 from app.modules.users.models import User, UserRole
@@ -35,6 +36,7 @@ _TID_A = 71010
 _TID_LIVE = 71090
 
 _PREFIX = "[t106"
+_SCHOOL = "t106 shared school"
 APPLY_URL = "/api/v1/masters/apply"
 
 _OLD_BLOCK = {
@@ -46,6 +48,7 @@ _OLD_BLOCK = {
 
 async def _wipe(db_session: AsyncSession) -> None:
     await db_session.execute(delete(Practice).where(Practice.title.startswith(_PREFIX)))
+    await db_session.execute(delete(CuratorGroup).where(CuratorGroup.name == _SCHOOL))
     await full_cleanup_range(db_session, _TID_MIN, _TID_MAX)
     await db_session.commit()
 
@@ -275,3 +278,96 @@ async def test_a_verified_profile_keeps_its_block_byte_for_byte(
     # Pair: the call did something -- the role moved.
     user = await fresh_get(User, uid)
     assert user.role == UserRole.MASTER.value
+
+
+# ---------------------------------------------------------------------------
+# Item 3: --reset-all
+# ---------------------------------------------------------------------------
+
+
+def _profiles() -> dict[str, dict]:
+    """Two profiles sharing one school pair (curator + name), as on the stand."""
+    master = {"key": "m", "telegram_id": _TID_MASTER}
+    school = {"curator": "m", "name": _SCHOOL}
+    return {
+        "p-a": {
+            "title_prefix": "[t106a]",
+            "masters": [master],
+            "curator_groups": [school],
+        },
+        "p-b": {
+            "title_prefix": "[t106b]",
+            "masters": [master],
+            "curator_groups": [school],
+        },
+    }
+
+
+@pytest.fixture
+def two_profiles(monkeypatch: pytest.MonkeyPatch) -> dict[str, dict]:
+    profiles = _profiles()
+    monkeypatch.setattr(seed, "list_profiles", lambda: sorted(profiles))
+    monkeypatch.setattr(seed, "load_profile", lambda name: profiles[name])
+    return profiles
+
+
+async def _reset_all() -> dict[str, dict]:
+    async with get_session_factory()() as s:
+        result = await seed.reset_all_profiles(s)
+        await s.commit()
+        return result
+
+
+async def _titles(prefix: str) -> list[str]:
+    async with get_session_factory()() as s:
+        return list(
+            (
+                await s.execute(
+                    select(Practice.title).where(Practice.title.startswith(prefix))
+                )
+            ).scalars()
+        )
+
+
+@pytest.mark.asyncio
+async def test_reset_all_wipes_every_profile_and_spares_live_accounts(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    two_profiles,
+) -> None:
+    await _seed_practice({**_practice_spec("a"), "title": "[t106a] one"})
+    await _seed_practice({**_practice_spec("b"), "title": "[t106b] two"})
+    master = (
+        await db_session.execute(select(User).where(User.telegram_id == _TID_MASTER))
+    ).scalar_one()
+    db_session.add(CuratorGroup(curator_user_id=master.id, name=_SCHOOL))
+    await db_session.commit()
+    live = await login_user(client, telegram_id=_TID_LIVE, first_name="Live")
+    assert await _titles("[t106a]") and await _titles("[t106b]")
+
+    result = await _reset_all()
+
+    assert set(result) == {"p-a", "p-b"}
+    assert result["p-a"]["practices"] == 1 and result["p-b"]["practices"] == 1
+    # The shared school goes once, on the first profile; the second finds 0.
+    assert result["p-a"]["curator_groups"] == 1
+    assert result["p-b"]["curator_groups"] == 0
+    assert await _titles("[t106a]") == [] and await _titles("[t106b]") == []
+    # Live accounts survive: the master keeps role and profile, the user stays.
+    kept = await fresh_get(User, master.id)
+    assert kept is not None and kept.role == UserRole.MASTER.value
+    assert await fresh_get(MasterProfile, master.id) is not None
+    assert await fresh_get(User, UUID(live["user"]["id"])) is not None
+
+
+@pytest.mark.asyncio
+async def test_reset_all_on_a_clean_stand_is_zeros_not_an_error(
+    db_session: AsyncSession,
+    two_profiles,
+) -> None:
+    """REPEAT: a second --reset-all finds nothing and says so."""
+    first = await _reset_all()
+    second = await _reset_all()
+    zero = {"practices": 0, "students": 0, "curator_groups": 0}
+    assert second == {"p-a": zero, "p-b": zero}
+    assert set(first) == {"p-a", "p-b"}  # the pair: both profiles were visited

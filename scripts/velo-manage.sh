@@ -2603,9 +2603,54 @@ case "${1:-}" in
         #   velo seed                      -- default profile
         #   velo seed --profile 15082026   -- a named profile
         #   velo seed --reset              -- wipe seeded data first
+        #   velo seed --reset-all          -- wipe EVERY profile's data, stop
+        #   velo seed --reset-all --resync-comms [--yes]
+        #                                  -- the same, then resync comms
         #   velo seed --list               -- show available profiles
+        # --resync-comms and --yes are THIS script's flags (BE-106): they are
+        # taken off here and never reach seed.py, which knows nothing about
+        # comms. The resync runs only after seed.py exited 0, and only after
+        # the operator confirmed -- it truncates the projection, and the
+        # CASCADE takes every chat on the stand with it.
         shift  # drop "seed"
-        $COMPOSE_CMD exec -T app python scripts/seed.py "$@"
+        seed_resync=0
+        seed_yes=0
+        seed_reset_all=0
+        seed_args=()
+        for seed_arg in "$@"; do
+            case "$seed_arg" in
+                --resync-comms) seed_resync=1 ;;
+                --yes) seed_yes=1 ;;
+                --reset-all) seed_reset_all=1; seed_args+=("$seed_arg") ;;
+                *) seed_args+=("$seed_arg") ;;
+            esac
+        done
+        if [ "$seed_resync" = 1 ] && [ "$seed_reset_all" != 1 ]; then
+            echo -e "${RED}✗ --resync-comms goes only with --reset-all; to resync alone: velo resync-comms${NC}"
+            exit 1
+        fi
+        if [ "$seed_resync" = 1 ]; then
+            echo -e "${YELLOW}This will:${NC}"
+            echo "  1. remove the seeded data of EVERY profile in seed_profiles/ (live accounts survive)"
+            echo "  2. resync the comms projection (truncate + backfill) -- this DELETES ALL CHATS ON THE STAND"
+            if [ "$seed_yes" != 1 ]; then
+                read -r -p "Continue? (y/n): " seed_reply
+                if [ "$seed_reply" != "y" ] && [ "$seed_reply" != "Y" ]; then
+                    echo "Cancelled -- nothing was removed."
+                    exit 1
+                fi
+            fi
+        fi
+        if ! $COMPOSE_CMD exec -T app python scripts/seed.py ${seed_args[@]+"${seed_args[@]}"}; then
+            if [ "$seed_resync" = 1 ]; then
+                echo -e "${RED}✗ seed.py failed -- comms NOT resynced${NC}"
+            fi
+            exit 1
+        fi
+        if [ "$seed_resync" = 1 ]; then
+            echo "--resync-comms: resyncing comms now (the warning above is what this fixes)"
+            resync_comms_projection || exit 1
+        fi
         ;;
 
     # === Roles ===
@@ -2752,6 +2797,8 @@ case "${1:-}" in
         echo "  seed --profile <name> — Use a named profile (default: default)"
         echo "  seed --list         — List available profiles"
         echo "  seed --reset        — Wipe seeded data, then re-seed"
+        echo "  seed --reset-all    — Wipe the seeded data of EVERY profile, stop (comms untouched)"
+        echo "  seed --reset-all --resync-comms [--yes] — The same, then resync comms (DELETES ALL CHATS; asks first)"
         echo ""
         echo "Roles:"
         echo "  setrole <tg> <A|M|U>  — Set a user's role (admin/master/user)"

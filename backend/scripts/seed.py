@@ -7,10 +7,15 @@
 #   velo seed                        -- seed from the default profile
 #   velo seed --profile 15082026     -- seed from a named profile
 #   velo seed --reset                -- wipe seeded data, then seed
+#   velo seed --reset-all            -- wipe the data of EVERY profile, stop
+#   velo seed --reset-all --resync-comms
+#                                    -- the same, then velo-manage.sh resyncs
+#                                       comms (deletes every chat; asks first)
 #   velo seed --list                 -- list available profiles
 #
 # DIRECTLY (inside the app container):
 #   python scripts/seed.py [--profile NAME] [--reset] [--list] [--dry-run]
+#   python scripts/seed.py --reset-all
 #
 # -----------------------------------------------------------------------------
 # WHY THIS REPLACED THREE SCRIPTS
@@ -958,6 +963,23 @@ def _warn_comms_projection_diverged(removed_users: int) -> None:
     )
 
 
+async def reset_all_profiles(session: AsyncSession) -> dict[str, dict]:
+    """--reset-all: reset_seed_data for EVERY profile, in one transaction.
+
+    No second cleanup logic -- each profile's own reset_seed_data, in
+    list_profiles() order, so the rule "live accounts survive" is the one
+    already written there. Profiles that share a school (the same curator +
+    name pair) are fine in one transaction: the first reset deletes the
+    school, the second finds nothing and counts 0. Synthetic students are
+    matched by id range, not by profile, so they too go on the first
+    profile and count 0 after it. The caller commits.
+    """
+    return {
+        name: await reset_seed_data(session, load_profile(name))
+        for name in list_profiles()
+    }
+
+
 async def main_async(args: argparse.Namespace) -> int:
     if args.list:
         names = list_profiles()
@@ -968,6 +990,35 @@ async def main_async(args: argparse.Namespace) -> int:
         for n in names:
             data = load_profile(n)
             print(f"  {n:12}  {data.get('description', '')}")
+        return 0
+
+    if args.reset_all:
+        # BE-106 item 3: wipe what every profile seeded and stop. comms is
+        # NOT touched here -- velo-manage.sh runs the resync after this
+        # exits 0, and only when the operator asked for --resync-comms.
+        session_factory = get_session_factory()
+        try:
+            async with session_factory() as session:
+                per_profile = await reset_all_profiles(session)
+                await session.commit()
+        finally:
+            await dispose_engine()
+        totals = {"practices": 0, "curator_groups": 0, "students": 0}
+        for name, counts in per_profile.items():
+            info(
+                f"  {name}: {counts['practices']} practices, "
+                f"{counts['curator_groups']} schools, "
+                f"{counts['students']} synthetic students"
+            )
+            for key in totals:
+                totals[key] += counts[key]
+        warn(
+            f"reset-all ({len(per_profile)} profiles): removed "
+            f"{totals['practices']} practices, {totals['curator_groups']} "
+            f"schools, {totals['students']} synthetic students "
+            f"(live accounts untouched)"
+        )
+        _warn_comms_projection_diverged(totals["students"])
         return 0
 
     profile = load_profile(args.profile)
@@ -1031,6 +1082,14 @@ def main() -> int:
         help="remove seeded data and stop, without seeding again",
     )
     parser.add_argument(
+        "--reset-all",
+        action="store_true",
+        help=(
+            "remove the data of EVERY profile in seed_profiles/ and stop "
+            "(live accounts survive; comms is not touched)"
+        ),
+    )
+    parser.add_argument(
         "--list", action="store_true", help="list available profiles"
     )
     parser.add_argument(
@@ -1039,6 +1098,10 @@ def main() -> int:
         help="print the plan without writing anything",
     )
     args = parser.parse_args()
+    if args.reset_all and (args.reset or args.reset_only or args.dry_run):
+        # --dry-run must never reach a delete; --reset/--reset-only name one
+        # profile and would make "all" ambiguous.
+        parser.error("--reset-all stands alone (no --reset, --reset-only, --dry-run)")
     if args.reset_only:
         args.reset = True
     return asyncio.run(main_async(args))
