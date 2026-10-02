@@ -8,10 +8,14 @@
 #   1. Check user.role == USER (masters can't reapply)
 #   2. Check if MasterProfile exists:
 #      a) No profile -> create with status "pending"
-#      b) Profile with status "rejected" -> update data, reset to "pending"
+#      b) Profile with any other status but "pending"/"verified" --
+#         "rejected", "cancelled_by_user" (withdrawn), "suspended"
+#         (revoked) -> update data, reset to "pending" (a REAPPLICATION)
 #      c) Profile with status "pending" -> ConflictError (already pending)
 #      d) Profile with status "verified" -> should not happen (role=master)
-#   3. Return updated/created MasterProfile
+#   3. Notify (BE-104): master.application_received to group:admins and
+#      master.application_submitted to the applicant, same transaction
+#   4. Return updated/created MasterProfile
 #
 # RACE CONDITION GUARD:
 #   Two concurrent apply requests may both pass the SELECT check (no profile).
@@ -38,7 +42,7 @@
 import copy
 import hashlib
 from datetime import UTC, datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import structlog
 from sqlalchemy import func, select
@@ -209,6 +213,9 @@ async def apply_for_master(
         )
 
         await announce_pending_master_offers(user.id, session)
+        # BE-104, owner ruling: NO master.verified here. Nobody else decided
+        # anything -- the person filled the form and sees the verified
+        # profile in the response to their own request.
         logger.info("master_self_provisioned", user_id=str(user.id))
         return profile
 
@@ -238,12 +245,14 @@ async def apply_for_master(
             # Should not happen (user.role would be MASTER), but guard anyway.
             raise ConflictError("Already verified as master")
 
-        # Status is "rejected" -- allow reapplication.
+        # Any other status -- "rejected", "cancelled_by_user" (withdrawn),
+        # "suspended" (revoked, role back to user) -- is a reapplication.
         # Uses set_jsonb() to ensure SQLAlchemy detects the JSONB change.
         existing.set_jsonb("data", _build_reapply_data(existing.data, body))
-        await _emit_application_received(
-            session, user,
-            applied_at=existing.data["account"]["applied_at"],
+        applied_at = existing.data["account"]["applied_at"]
+        await _emit_application_received(session, user, applied_at=applied_at)
+        await _emit_application_submitted(
+            session, user.id, applied_at=applied_at,
         )
         logger.info(
             "master_reapplication_submitted",
@@ -267,9 +276,9 @@ async def apply_for_master(
     except IntegrityError:
         raise ConflictError("Application already pending")
 
-    await _emit_application_received(
-        session, user, applied_at=profile.data["account"]["applied_at"],
-    )
+    applied_at = profile.data["account"]["applied_at"]
+    await _emit_application_received(session, user, applied_at=applied_at)
+    await _emit_application_submitted(session, user.id, applied_at=applied_at)
 
     logger.info(
         "master_application_submitted",
@@ -316,6 +325,149 @@ async def _emit_application_received(
             "params": {"user_id": str(user.id)},
             "applicant_name": applicant,
         },
+    )
+
+
+# ---------------------------------------------------------------------------
+# BE-104: status notifications to the APPLICANT
+# ---------------------------------------------------------------------------
+#
+# Three types, one per transition of the applicant's own status, emitted in
+# the transaction of the transition (outbox, ID-2):
+#   master.application_submitted -- apply_for_master, first application and
+#       every reapplication (not the self-provision branch);
+#   master.verified -- verify_master (pending -> verified) and make_master
+#       ONLY when the person was not a master before (not had_master): the
+#       notification is on the TRANSITION "not a master -> master", the same
+#       condition announce_pending_master_offers runs on;
+#   master.rejected -- reject_master (pending -> rejected), with the reason.
+# scripts/set_role.py sends none of them (operator tool, owner ruling).
+#
+# NO CATEGORY in comms-profile/types.yaml, like every master.* status type
+# (decision A): the person cannot mute news about their own status.
+#
+# IDEMPOTENCY KEYS live in their own namespace, master-status-<kind>:, and
+# name a TRANSITION, not a person (comms keeps one job per key forever and
+# silently drops a repeat):
+#   submitted -- account.applied_at, stamped fresh by _build_data on every
+#       application (the same reason _emit_application_received uses it);
+#   rejected  -- account.rejected_at, stamped fresh by every reject_master;
+#   verified  -- a uuid4 minted per call, NOT verification.verified_at:
+#       make_master re-verifies with setdefault("verification", ...), which
+#       keeps the block of an EARLIER verification (verify -> revoke ->
+#       make_master: the old verified_at survives) and an explicit None on a
+#       pending profile. The same reasoning and the same remedy as
+#       announce_pending_master_offers (curator_groups/service.py). A uuid4
+#       does not send twice: a rolled-back request takes its outbox row with
+#       it, and a request repeated after a commit meets its own guard (409)
+#       before it gets here.
+#
+# ACTIONS (the front maps them; an unmapped action is "mark as read"):
+# open_master_application -- the applicant's application screen;
+# open_master_zone -- the master zone, or the offer to switch into it for a
+# role='user' account that holds the capability. No params: the target is
+# the reader's own account.
+
+MASTER_APPLICATION_SUBMITTED_TYPE = "master.application_submitted"
+MASTER_VERIFIED_TYPE = "master.verified"
+MASTER_REJECTED_TYPE = "master.rejected"
+
+ACTION_OPEN_MASTER_APPLICATION = "open_master_application"
+ACTION_OPEN_MASTER_ZONE = "open_master_zone"
+
+
+async def _emit_master_status(
+    session: AsyncSession,
+    user_id: UUID,
+    *,
+    kind: str,
+    discriminator: str,
+    type_: str,
+    title: str,
+    body: str,
+    action: str,
+    variables: dict[str, str] | None = None,
+) -> None:
+    """One user-targeted master-status notification (BE-104, header above)."""
+    from app.core.events.notify import emit_notification
+
+    await emit_notification(
+        session,
+        idempotency_key=f"master-status-{kind}:{user_id}:{discriminator}",
+        type=type_,
+        target_type="user",
+        target_value=str(user_id),
+        title=title,
+        body=body,
+        action_data={"action": action, "params": {}, **(variables or {})},
+    )
+
+
+async def _emit_application_submitted(
+    session: AsyncSession, user_id: UUID, *, applied_at: str,
+) -> None:
+    """master.application_submitted to the applicant (BE-104)."""
+    await _emit_master_status(
+        session,
+        user_id,
+        kind="submitted",
+        discriminator=applied_at,
+        type_=MASTER_APPLICATION_SUBMITTED_TYPE,
+        title="Заявка отправлена",
+        body=(
+            "Заявка на профиль мастера получена -- мы проверим её и "
+            "сообщим о решении."
+        ),
+        action=ACTION_OPEN_MASTER_APPLICATION,
+    )
+
+
+async def emit_master_verified(session: AsyncSession, user_id: UUID) -> None:
+    """master.verified to the person who just became a master (BE-104).
+
+    ONE helper for verify_master and make_master, so the text cannot drift
+    between the two: it says nothing about an application, because
+    make_master grants without one. Call it only on the transition -- the
+    callers' guards are what keep it to one per transition (header above).
+    """
+    await _emit_master_status(
+        session,
+        user_id,
+        kind="verified",
+        discriminator=str(uuid4()),
+        type_=MASTER_VERIFIED_TYPE,
+        title="Профиль мастера открыт",
+        body=(
+            "Вам открыт профиль мастера -- теперь вы можете создавать "
+            "практики."
+        ),
+        action=ACTION_OPEN_MASTER_ZONE,
+    )
+
+
+async def emit_master_rejected(
+    session: AsyncSession, user_id: UUID, *, rejected_at: str, reason: str,
+) -> None:
+    """master.rejected to the applicant, with the admin's reason (BE-104).
+
+    The reason is the one the applicant already sees on their application
+    screen (RejectMasterRequest: "shown to applicant"); it travels in
+    action_data because the telegram sheets read {reason}, and a variable
+    the letter does not carry renders as the literal "{reason}".
+    """
+    await _emit_master_status(
+        session,
+        user_id,
+        kind="rejected",
+        discriminator=rejected_at,
+        type_=MASTER_REJECTED_TYPE,
+        title="Заявка отклонена",
+        body=(
+            "Заявка на профиль мастера не одобрена -- вы можете подать "
+            f"новую. Причина: {reason}"
+        ),
+        action=ACTION_OPEN_MASTER_APPLICATION,
+        variables={"reason": reason},
     )
 
 

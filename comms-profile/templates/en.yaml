@@ -65,18 +65,23 @@ waitlist.expired:
 
 master.verified:
   telegram:
-    title: "Application approved"
-    body: "🎉 Congratulations! Your master application has been approved.\n\nYou can now create and manage practices."
+    title: "Master profile enabled"
+    body: "🎉 Your master profile is now enabled.\n\nYou can now create practices."
 
 master.rejected:
   telegram:
     title: "Application rejected"
-    body: "Your master application has been reviewed and unfortunately was not approved at this time.\n\nYou can submit a new application."
+    body: "Your master application was not approved.\n\nReason: {reason}\n\nYou can submit a new application."
 
 master.application_received:
   telegram:
     title: "New master application"
     body: "📨 A new master application has been submitted.\n\n👤 {applicant_name}"
+
+master.application_submitted:
+  telegram:
+    title: "Application submitted"
+    body: "📨 Your master application has been received.\n\nWe will review it and let you know the decision."
 
 # -- Wallet --
 

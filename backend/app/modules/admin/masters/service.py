@@ -10,7 +10,8 @@
 #   3. Update JSONB: status -> "verified", add verification info
 #   4. Change User.role -> MASTER
 #   5. Record audit event (M-01)
-#   6. Return updated profile (caller does flush + refresh)
+#   6. Notify the applicant: master.verified (BE-104)
+#   7. Return updated profile (caller does flush + refresh)
 #
 # REJECT FLOW:
 #   1. Load MasterProfile by user_id with FOR UPDATE (P-07)
@@ -18,7 +19,8 @@
 #   3. Update JSONB: status -> "rejected", store reason
 #   4. Do NOT change User.role
 #   5. Record audit event (M-01)
-#   6. Return updated profile
+#   6. Notify the applicant: master.rejected with the reason (BE-104)
+#   7. Return updated profile
 #
 # REVOKE FLOW (lock order, BE-85):
 #   users FOR NO KEY UPDATE first, then MasterProfile FOR UPDATE
@@ -72,6 +74,10 @@ from app.modules.curator_groups.service import (
     close_pending_master_offers,
 )
 from app.modules.masters.models import MasterProfile
+from app.modules.masters.service import (
+    emit_master_rejected,
+    emit_master_verified,
+)
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.practices.taxonomy_models import TaxonomyDirection
 from app.modules.users.models import User, UserRole
@@ -195,6 +201,12 @@ async def verify_master(
             had=False,
             has=True,
         )
+
+    # BE-104: the person is told first, then the waiting schools ask --
+    # publication order follows emission order inside a transaction.
+    # pending -> verified is the transition (the guard admits only pending),
+    # so a repeated call 409s before reaching this.
+    await emit_master_verified(session, user_id)
 
     # BE-59: every school that offered this person a master role while
     # they were not verified now asks them "yes / no". Here, while the
@@ -499,11 +511,18 @@ async def reject_master(
 
     # -- Update JSONB (P-03: deepcopy + set_jsonb) --
     new_data = copy.deepcopy(profile.data)
+    rejected_at = datetime.now(UTC).isoformat()
     new_data["account"]["status"] = "rejected"
-    new_data["account"]["rejected_at"] = datetime.now(UTC).isoformat()
+    new_data["account"]["rejected_at"] = rejected_at
     new_data["account"]["rejection_reason"] = reason
     new_data["account"]["rejected_by"] = str(admin.id)
     profile.set_jsonb("data", new_data)
+
+    # BE-104: the applicant hears the decision and its reason. rejected_at
+    # names this rejection -- a reapplication rejected again gets its own.
+    await emit_master_rejected(
+        session, user_id, rejected_at=rejected_at, reason=reason,
+    )
 
     # BE-59: the appointments waiting for this verification are closed, and
     # each school's curator is told. Under the same FOR UPDATE as the

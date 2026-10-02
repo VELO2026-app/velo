@@ -3,9 +3,11 @@
 # =============================================================================
 #
 # Contract with the comms service (Velo-Comms-Integration-Design.md,
-# locked 2026-07-27): the 15 velo domain types of dictionary §2 plus
-# the 3 comms-native msg.* chat-baseline types, each mapped to a
-# preference category of grid §3.
+# locked 2026-07-27): the velo domain types (dictionary §2 and the ones
+# added after it, each beside its own comment below) plus the 3
+# comms-native msg.* chat-baseline types, each mapped to a preference
+# category of grid §3 or deliberately to none. The count is asserted
+# once, by tests/test_comms_protocol_3.py, not repeated here.
 #
 # Format (comms app/profile/loader.py, schema version 2):
 # {version: 2, types: {type_key: {field: value}}}.
@@ -148,6 +150,12 @@ types:
     channels: [in_app, telegram]
 
   master.application_received:
+    channels: [in_app, telegram]
+
+  # BE-104: the APPLICANT's own "your application is in". Same family and
+  # same reading as master.verified / master.rejected -- news about your
+  # own status, not a stream -- so NO category either.
+  master.application_submitted:
     channels: [in_app, telegram]
 
   # -- System announcements: NO category on purpose (decision A, same

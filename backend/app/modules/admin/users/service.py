@@ -55,6 +55,7 @@ from app.modules.curator_groups.service import (
     master_can_create_groups,
 )
 from app.modules.masters.models import MasterProfile
+from app.modules.masters.service import emit_master_verified
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.users.models import User, UserRole
 from app.modules.users.schemas import (
@@ -424,6 +425,23 @@ async def make_master(
     already_master check reads it under that lock; the profile comes
     after it -- the users -> master_profiles order written in
     users/service.py (ROW LOCK ON users).
+
+    BE-104: the profile is taken FOR UPDATE, not read. It used to be a
+    plain session.get: verify_master / reject_master / apply_for_master
+    hold the PROFILE (not the users row), so each of them and this
+    function passed its own guard on one pending profile -- the person
+    got master.verified twice (or master.rejected and master.verified for
+    one application), and this function's stale copy overwrote what the
+    other had written (verify_master's verification block and
+    can_create_groups). Under the lock it waits, then reads the committed
+    status: had_master is true after a verify that won the race, and the
+    notification goes once. populate_existing: a locking SELECT does not
+    refresh an instance the identity map already holds. No caller loads
+    this profile into the session first today, so it is a belt for the
+    next one, not a property the suite can turn red.
+
+    master.verified (BE-104) goes ONLY when not had_master -- the same
+    transition condition as announce_pending_master_offers below.
     """
     user = await lock_user_row(session, user_id)
     if user is None:
@@ -434,7 +452,14 @@ async def make_master(
             message="User is already a master", code="already_master"
         )
 
-    profile = await session.get(MasterProfile, user_id)
+    profile = (
+        await session.execute(
+            select(MasterProfile)
+            .where(MasterProfile.user_id == user_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
     # Phase 6 / T0: master capability BEFORE this grant -- an approved
     # applicant who never self-switched arrives here already verified
     # (capability held, no delta); everyone else gains it below.
@@ -492,11 +517,14 @@ async def make_master(
     # BE-59: master capability gained HERE (not held before -- had_master)
     # is a verification like verify_master's, so every school waiting for
     # it asks "yes / no". An approved applicant who never self-switched
-    # arrives verified already and was announced by verify_master then.
-    # The profile write above is flushed ahead of the offers by the
-    # autoflush in front of the call -- profile before offers, the order of
-    # curator_groups/service.py's header.
+    # arrives verified already and was announced (and told, BE-104) by
+    # verify_master then. The profile is held FOR UPDATE since it was
+    # loaded (or, freshly created, by its INSERT, flushed by the autoflush
+    # in front of the call) -- profile before offers, the order of
+    # curator_groups/service.py's header. BE-104: the person is told
+    # before the schools ask.
     if not had_master:
+        await emit_master_verified(session, user_id)
         await announce_pending_master_offers(user_id, session)
 
     logger.info(
