@@ -48,6 +48,10 @@
 //   DELETE /{id}/membership                      -- leave (idempotent)
 //   POST   /{id}/transfer/accept                 -- take over (page response)
 //   POST   /{id}/transfer/decline                -- refuse (204 even if not yours)
+//   POST   /{id}/master-offer/accept             -- consent to the master-role
+//                                                  appointment (BE-59/GT-27)
+//   POST   /{id}/master-offer/decline            -- refuse it (204 even if
+//                                                  not yours)
 //
 // ADMIN:
 //   GET    /api/v1/admin/curator-groups          -- ALL schools incl. frozen
@@ -468,6 +472,28 @@ export function acceptCuratorGroupTransfer(id: string): Promise<CuratorGroupPage
  *  success is honest and says nothing about whether an offer existed. */
 export function declineCuratorGroupTransfer(id: string): Promise<void> {
   return api.post(`${MEMBER_BASE}/${id}/transfer/decline`)
+}
+
+/** POST /curator-groups/{id}/master-offer/accept -- consent to becoming a
+ *  master of this school (BE-59/GT-27). This is where the appointment takes
+ *  effect: the caller's member row becomes a master's. 204, no body. Errors:
+ *  404 master_offer_not_found -- no offer for you here, the school is dark,
+ *  or it is gone (one answer, P-08; the offer may ALSO have been cancelled
+ *  or accepted elsewhere -- indistinguishable by design); 403
+ *  master_required -- the caller's master verification lapsed since the
+ *  offer, and the offer SURVIVES it: re-verify and it is still there. */
+export function acceptCuratorGroupMasterOffer(id: string): Promise<void> {
+  return api.post(`${MEMBER_BASE}/${id}/master-offer/accept`)
+}
+
+/** POST /curator-groups/{id}/master-offer/decline -- refuse the appointment.
+ *  Same asymmetry as the transfer pair: accept answers 404 to a
+ *  non-addressee because it changes the roster, decline answers 204 because
+ *  it changes nothing and so reveals nothing. Not gated on the school being
+ *  active: an answer the appointee is entitled to give must not depend on
+ *  somebody else's verification status. */
+export function declineCuratorGroupMasterOffer(id: string): Promise<void> {
+  return api.post(`${MEMBER_BASE}/${id}/master-offer/decline`)
 }
 
 // =============================================================================

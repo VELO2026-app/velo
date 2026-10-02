@@ -20,6 +20,20 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { listNotifications } from '@/api/notifications'
+import { useAuthStore } from '@/stores/auth'
+
+// MASTER INVITE SIMULATION (owner 2026-10-01, UserInboxView): the mock
+// «приглашение стать мастером» row exists client-side only, so the server's
+// `unread` never counts it. For the simulation account the badge carries +1,
+// applied at EVERY entry point below -- the dock bell and the inbox light
+// from this same store. Remove with the MASTER_INVITE_SIMULATION block in
+// UserInboxView when the real invite ships.
+const MASTER_INVITE_SIMULATION_TELEGRAM_ID = 388101199
+
+function withSimulationBadge(value: number): number {
+  const auth = useAuthStore()
+  return auth.user?.telegram_id === MASTER_INVITE_SIMULATION_TELEGRAM_ID ? value + 1 : value
+}
 
 export const useNotificationsStore = defineStore('notifications', () => {
   /** Unread bell items; 0 = no dot (presence only -- no number by ruling). */
@@ -29,7 +43,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
    *  the last known value, never throws into a host screen. */
   async function refreshUnread(): Promise<void> {
     try {
-      unread.value = (await listNotifications()).unread
+      unread.value = withSimulationBadge((await listNotifications()).unread)
     } catch {
       // silent by design
     }
@@ -37,7 +51,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
 
   /** Apply a server-confirmed badge (list / mark-read / mark-all responses). */
   function applyUnread(value: number): void {
-    unread.value = value
+    unread.value = withSimulationBadge(value)
   }
 
   return { unread, refreshUnread, applyUnread }

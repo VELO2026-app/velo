@@ -124,7 +124,7 @@ describe('CuratorGroupJoinView -- preview states', () => {
     expect(text()).toContain('Проверяем приглашение…')
   })
 
-  it('renders the school card for a green preview: name, curator, counts', async () => {
+  it('renders the invite card for a green preview: name, counts, description, heading', async () => {
     vi.mocked(cgApi.getCuratorGroupInvitePreview).mockResolvedValue(previewResponse())
     mount()
     await flush()
@@ -132,13 +132,14 @@ describe('CuratorGroupJoinView -- preview states', () => {
     expect(text()).toContain('Тихая школа')
     expect(text()).toContain('Куратор: Мария Иванова')
     expect(text()).toContain('Практики тишины')
-    expect(text()).toContain('Мастеров: 3')
-    expect(text()).toContain('Приглашение в школу')
+    expect(text()).toContain('12 учеников')
+    expect(text()).toContain('3 мастера')
+    expect(text()).toContain('Вас пригласили в школу!')
     expect(buttonWith('Вступить')).toBeTruthy()
     expect(buttonWith('Отказаться')).toBeTruthy()
   })
 
-  it('hides the optional curator line when the preview has none (honest empties)', async () => {
+  it('omits a blank description and spells honest zeroes (honest empties)', async () => {
     vi.mocked(cgApi.getCuratorGroupInvitePreview).mockResolvedValue(
       previewResponse({
         group: {
@@ -154,7 +155,9 @@ describe('CuratorGroupJoinView -- preview states', () => {
     mount()
     await flush()
 
-    expect(text()).not.toContain('Куратор:')
+    expect(text()).toContain('0 учеников')
+    expect(text()).toContain('0 мастеров')
+    expect(text()).toContain('Вас пригласили в школу!')
     expect(buttonWith('Вступить')).toBeTruthy()
   })
 

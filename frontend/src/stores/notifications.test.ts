@@ -19,6 +19,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useNotificationsStore } from '@/stores/notifications'
+import { useAuthStore } from '@/stores/auth'
 import * as notificationsApi from '@/api/notifications'
 
 vi.mock('@/api/notifications')
@@ -71,6 +72,43 @@ describe('notifications store', () => {
 
     store.applyUnread(5)
 
+    expect(store.unread).toBe(5)
+  })
+
+  // -- MASTER INVITE SIMULATION (owner 2026-10-01): the mock invite is
+  //    client-side only, so the simulation account's badge carries +1 at
+  //    every entry point. Remove with the UserInboxView block. --
+  it('the simulation account (telegram 388101199) carries +1 on every badge entry', async () => {
+    const auth = useAuthStore()
+    auth.user = { telegram_id: 388101199 } as never
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+      items: [],
+      next_cursor: null,
+      unread: 2,
+    })
+    const store = useNotificationsStore()
+
+    await store.refreshUnread()
+    expect(store.unread).toBe(3)
+
+    store.applyUnread(5)
+    expect(store.unread).toBe(6)
+  })
+
+  it('other accounts see the raw server badge, no simulation bump', async () => {
+    const auth = useAuthStore()
+    auth.user = { telegram_id: 1 } as never
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+      items: [],
+      next_cursor: null,
+      unread: 2,
+    })
+    const store = useNotificationsStore()
+
+    await store.refreshUnread()
+    expect(store.unread).toBe(2)
+
+    store.applyUnread(5)
     expect(store.unread).toBe(5)
   })
 })

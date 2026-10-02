@@ -121,6 +121,7 @@ export function decodePracticeCode(code: string): string | null {
  *   master_onboarding__{token}  -> { name: 'master-invite', params: { token } }
  *   group_invite__{token}       -> { name: 'group-join', params: { token } } (P4, PROMPT №593)
  *   curator_group_invite__{token} -> { name: 'curator-group-join', params: { token } } (FE-18)
+ *   curator_group_master_offer__{uuid} -> { name: 'curator-group-master-offer', params: { id } } (FE-67)
  *
  * T-35: zoom__ is ADDED, open_practice__ is NOT replaced. They are two
  * different actions, not two formats for one: open_practice__ means "show me
@@ -179,6 +180,17 @@ export function parseStartParam(
   const curatorInviteMatch = startParam.match(/^curator_group_invite__([A-Za-z0-9_-]{16,128})$/)
   if (curatorInviteMatch?.[1]) {
     return { name: 'curator-group-join', params: { token: curatorInviteMatch[1] } }
+  }
+
+  // Master-role appointment consent (FE-67 / BE-29): the curator offered the
+  // school's master role to THIS account. Unlike the invite links above the
+  // parameter is a school UUID, not a secret -- the candidate is the session
+  // ("предложение однозначно задаётся парой (школа, я)"), so the screen
+  // proves the offer at the accept gate, not here. UUID shape, 64 chars
+  // total against the school invite's 65.
+  const masterOfferMatch = startParam.match(/^curator_group_master_offer__([0-9a-f-]{36})$/)
+  if (masterOfferMatch?.[1]) {
+    return { name: 'curator-group-master-offer', params: { id: masterOfferMatch[1] } }
   }
 
   return null
