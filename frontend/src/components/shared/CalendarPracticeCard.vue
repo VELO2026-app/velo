@@ -22,15 +22,10 @@
         <IconCheck v-if="badge.paid" :size="12" />
         {{ badge.label }}
       </VBadge>
-      <!-- FE-24 (GT P5): the school-audience marker. Shown for BOTH the
-           reachable and the lended-out-and-lost case -- the flag and the
-           school's name diverge on purpose (a frozen school still reports its
-           name so the master knows WHAT went dark, only the audience clause
-           stopped matching), and this badge never guesses which one it is. -->
-      <VBadge v-if="practice.audience_kind === 'curator_groups'" variant="muted">
-        Для школы
-      </VBadge>
     </template>
+    <!-- No school-audience marker here: school practices are listed like any
+         other practice (owner 2026-10-02 retired the FE-24 «Для школы» badge);
+         the master zone keeps its audience_unavailable warning instead. -->
   </PracticeListCard>
 </template>
 

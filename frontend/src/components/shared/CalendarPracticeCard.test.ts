@@ -1,12 +1,12 @@
 // =============================================================================
-// VELO Frontend -- CalendarPracticeCard badge tests (FE-24 / GT P5)
+// VELO Frontend -- CalendarPracticeCard school-marker tests
 // =============================================================================
 //
-// The card's ONLY audience-aware surface: the muted «Для школы» badge for
-// audience_kind === 'curator_groups', absent for every other kind. Rendered
-// for the unavailable case too (flag and names diverge on purpose -- the
-// badge never guesses which one it is; the master detail screen carries the
-// warning).
+// School practices (audience_kind === 'curator_groups') are listed exactly
+// like every other practice: the muted «Для школы» badge (FE-24 / GT P5) was
+// retired by owner decision 2026-10-02. Asserted on the unavailable-school
+// case too -- the master zone carries the audience_unavailable warning, the
+// shared card carries nothing.
 // =============================================================================
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
@@ -69,20 +69,14 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('CalendarPracticeCard -- «Для школы» badge (FE-24)', () => {
-  it('curator_groups audience: the badge renders', async () => {
+describe('CalendarPracticeCard -- school practices carry no marker', () => {
+  it('curator_groups audience: no «Для школы» badge, card renders normally', async () => {
     const text = await mountCard(practice({ audience_kind: 'curator_groups' }))
-    expect(text).toContain('Для школы')
+    expect(text).toContain('Практика')
+    expect(text).not.toContain('Для школы')
   })
 
-  it('every other audience kind: no badge', async () => {
-    for (const kind of ['public', 'students', 'groups'] as const) {
-      const text = await mountCard(practice({ audience_kind: kind }))
-      expect(text).not.toContain('Для школы')
-    }
-  })
-
-  it('unavailable school audience: badge still renders (name and flag diverge on purpose)', async () => {
+  it('unavailable school audience: no badge either (the master zone keeps the warning)', async () => {
     const text = await mountCard(
       practice({
         audience_kind: 'curator_groups',
@@ -91,6 +85,7 @@ describe('CalendarPracticeCard -- «Для школы» badge (FE-24)', () => {
         curator_group_name: 'Тихая школа',
       }),
     )
-    expect(text).toContain('Для школы')
+    expect(text).toContain('Практика')
+    expect(text).not.toContain('Для школы')
   })
 })
