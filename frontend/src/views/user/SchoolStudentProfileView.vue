@@ -15,13 +15,13 @@
       the master zone already uses).
     - «Изменить роль» (FE-87, tz-curator.md §1.12.3): the role-choice popup
       preselected on the member's CURRENT roster role (owner decision
-      2026-09-22). INTERIM (stopper BE-59): confirming still sends the
-      GT-27 master-offer; it becomes the admin role-request (and the toast
-      becomes «Отправлено на согласование администратору») the moment
-      BE-59's /role-requests contract and generated types land. Demotion
-      has no contract yet (§7.1 №6), so a current master sees no student
-      option at all. No optimistic changes either way: the roster moves
-      server-side only.
+      2026-09-22). «Мастер» sends the school's master offer
+      (offerCuratorGroupMaster, BE-59): a verified master answers yes / no,
+      an unverified one is invited to get verified first; the toast is
+      «Предложение отправлено». There is no admin role-request (owner
+      ruling). Demotion lives on the master's public profile (MasterPublicView,
+      demoteCuratorGroupMaster), not here, so a current master sees no student
+      option. No optimistic changes: the roster moves server-side only.
     - «Заблокировать» (lock, owner ruling 2026-09-30): the ONLY way a
       curator ends a school membership now -- «Исключить из школы» is
       REMOVED (an exclusion no longer exists). The confirm popup is built
@@ -369,11 +369,11 @@ function onMessageClick(close: () => void): void {
 
 // -- «Изменить роль» (FE-87, tz-curator.md §1.12.3) ----------------------------
 //
-// INTERIM (stopper BE-59): confirming still sends the GT-27 master-offer --
-// it becomes the admin role-request the moment BE-59's /role-requests
-// contract and generated types land, and only then does the toast become
-// «Отправлено на согласование администратору». Either way there are NO
-// optimistic changes: the roster moves server-side only.
+// Confirming «Мастер» sends the school's master offer (offerCuratorGroupMaster,
+// BE-59): a verified master answers yes / no, an unverified one is invited to
+// get verified first; toast «Предложение отправлено». No admin role-request
+// exists or is planned (owner ruling). NO optimistic changes: the roster
+// moves server-side only.
 
 type MemberKind = 'student' | 'master'
 
@@ -386,10 +386,10 @@ const roleKind = ref<MemberKind>('student')
 
 const roleBusy = computed(() => rolePending.value || kindResolving.value)
 
-// Demotion (master -> student) has no contract yet (tz-curator.md §7.1 №6):
-// a current master sees only the master option, which preselects itself and
-// keeps «Изменить» disabled -- the popup never fabricates a demotion it
-// cannot send.
+// Demotion (master -> student) lives on the master's public profile
+// (MasterPublicView, demoteCuratorGroupMaster), not on this screen: a current
+// master sees only the master option, which preselects itself and keeps
+// «Изменить» disabled -- the popup never offers a demotion it does not send.
 const roleOptions = computed(() =>
   currentKind.value === 'master'
     ? [{ value: 'master', label: 'Мастер' }]

@@ -21,12 +21,12 @@
     - "Ближайшие практики": up to 2 upcoming practice cards, each with
       "Изменить" -> edit and "Check-ins" -> attendance.
 
-  STUBS (no backend yet -> roadmap for Zod; non-working taps show a toast):
-    (The stats grid left this list with E7 -- GET /masters/me/stats is real,
-    week|month|quarter, and the toggle refetches it.)
-    - AI summary "Подробнее" (no master-AI), practice checkin-count +
-      recurrence meta (no fields) -> rendered only when the data exists
-      (v-if), absent for now. The bell is NOT in this list any more (T-26).
+  No stubs left on this screen. The stats grid is real (E7 -- GET
+  /masters/me/stats, week|month|quarter, the toggle refetches it); the
+  practice-card meta -- check-ins (checkin_count), recurrence
+  (recurrence_days) and «Осталось N из M» (total_sessions) -- is real
+  (practiceCardMeta.ts) and rendered when the practice carries it (v-if);
+  the AI summary is gone (owner pass below); the bell is real (T-26).
 
   [owner pass] The "Саммари недели" section (heading + VCard teaser ->
   master-summary) is REMOVED from the dashboard entirely -- no master-AI
@@ -423,7 +423,7 @@ function practiceWhen(p: PracticeResponse): string {
 function onBell(): void {
   void router.push({ name: 'master-inbox' })
 }
-// -- Stub actions (no backend) --
+// -- Navigation (real routes) --
 function onGroups(): void {
   void router.push({ name: 'master-groups' })
 }

@@ -182,16 +182,6 @@ const router = createRouter({
           component: () => import('@/views/user/UserInboxView.vue'),
         },
         {
-          // Owner 2026-10-01 (SIMULATION): the landing page of the «вас
-          // приглашают стать мастером» inbox mock -- UserInboxView injects
-          // the row for telegram 388101199 only. PLACEHOLDER -- the owner
-          // lays out the real invitation page later.
-          path: 'master-invite',
-          name: 'user-master-invite',
-          meta: { hideTabBar: true },
-          component: () => import('@/views/user/UserMasterInviteView.vue'),
-        },
-        {
           // FE-19 (GT P3): "Мои группы" in the user zone means SCHOOLS
           // (curator groups) -- the master's student groups are a master-zone
           // concept a plain user never sees. Entry row: UserProfileView,

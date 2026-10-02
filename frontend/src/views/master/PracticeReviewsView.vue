@@ -120,9 +120,10 @@ const practiceId = computed(() => route.params.id as string)
 // contract (tz-practice-analytics.md) needs per-student RAW 1..10 answers,
 // which no backend endpoint serves yet. For telegram 388101199 the screen
 // renders <PracticeAnalytics> over deterministic demo answers so the layout
-// can be reviewed; every other viewer keeps the current screen. Remove with
-// the MASTER_INVITE_SIMULATION batch when the backend contract ships
-// (search: ANALYTICS_SIMULATION).
+// can be reviewed; every other viewer keeps the current screen. Remove when
+// the backend contract ships -- the real screen comes with BE-78 (search:
+// ANALYTICS_SIMULATION). The rest of that simulation batch, the inbox
+// mocks, is already gone.
 // ==========================================================================
 
 const auth = useAuthStore()

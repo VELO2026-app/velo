@@ -67,7 +67,8 @@ function item(overrides: Partial<NotificationItem> = {}): NotificationItem {
   }
 }
 
-/** One /curator-groups/mine row -- the school-offer simulation's probe seam. */
+/** One /curator-groups/mine row: a curated school the removed inbox mocks would
+ *  have minted an invite for -- the «nothing but the feed» test seeds it. */
 function mineItem(overrides: Partial<CuratorGroupMineItem> = {}): CuratorGroupMineItem {
   return {
     id: 'g1',
@@ -700,128 +701,58 @@ describe('UserInboxView', () => {
   })
 
   // ===========================================================================
-  // Master invite simulation (owner 2026-10-01): for telegram 388101199 the
-  // inbox injects a client-side mock row that routes to the placeholder
-  // user-master-invite page. Remove with the MASTER_INVITE_SIMULATION block.
+  // The bell is ONLY the server (owner 2026-10-02): the client-side invite
+  // mocks for telegram 388101199 were removed. The account that used to see
+  // them now sees exactly the server page and the server badge, and opening
+  // the bell calls nothing but the feed -- the mocks used to mint a real
+  // school invite token (createCuratorGroupInvite) on every open.
   // ===========================================================================
-  describe('master invite simulation', () => {
-    function seedTelegram(telegramId: number | null): void {
-      const auth = useAuthStore()
-      auth.user = (
-        telegramId === null
-          ? null
-          : {
-              id: 'u_sim',
-              telegram_id: telegramId,
-              role: 'user',
-              first_name: 'Тест',
-              last_name: null,
-              avatar_url: null,
-              timezone: 'Europe/Moscow',
-              language: 'ru',
-              is_active: true,
-              balance_cents: 0,
-              created_at: '2026-01-01T00:00:00Z',
-              last_login_at: null,
-              onboarding_completed: true,
-              master_onboarding_completed: false,
-              phone: null,
-              bio: null,
-              email: null,
-              role_switch: null,
-            }
-      ) as never
+  describe('the former simulation account sees only the server', () => {
+    function seedTelegram(telegramId: number): void {
+      useAuthStore().user = { id: 'u_sim', telegram_id: telegramId, role: 'user' } as never
     }
 
-    it('for telegram 388101199 the mock invite rides on top, unread, badge bumped', async () => {
+    it('telegram 388101199: rows and badge are exactly the server page', async () => {
       seedTelegram(388101199)
-      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
-        items: [item({ id: 'a' })],
-        next_cursor: null,
-        unread: 1,
-      })
-      mount()
-      await flush()
-
-      expect(rows()).toHaveLength(2)
-      expect(row(0).textContent).toContain('Вас приглашают стать мастером')
-      expect(isUnread(row(0))).toBe(true)
-      // The mock bumps the badge, so «Прочитать всё» renders.
-      expect(readAllButton()).toBeTruthy()
-    })
-
-    it('tapping it routes to the placeholder page and marks read LOCALLY -- no API call', async () => {
-      seedTelegram(388101199)
-      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
-        items: [],
-        next_cursor: null,
-        unread: 0,
-      })
-      mount()
-      await flush()
-
-      row(0).click()
-      await flush()
-
-      expect(push).toHaveBeenCalledWith({ name: 'user-master-invite' })
-      // Client-side mock: no server row exists, so mark-read is local only.
-      expect(notificationsApi.markNotificationRead).not.toHaveBeenCalled()
-      expect(isUnread(row(0))).toBe(false)
-    })
-
-    it('any other telegram id gets no mock row', async () => {
-      seedTelegram(424242)
-      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
-        items: [],
-        next_cursor: null,
-        unread: 0,
-      })
-      mount()
-      await flush()
-
-      expect(rows()).toHaveLength(0)
-      expect(host?.textContent).not.toContain('Вас приглашают стать мастером')
-    })
-
-    it('both SCHOOL invitations ride the real routing (join by token, offer by id)', async () => {
-      // School simulations: participant (curator_group.invited -> the join
-      // screen, by the REAL minted token) and master offer
-      // (curator_group.master_offered -> the consent screen, by school id).
-      seedTelegram(388101199)
+      // A curated school exists -- the removed mock would have used it.
       vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
-        items: [mineItem({ id: 'g9', name: 'Школа Владимира', relation: 'curator' })],
-      } as never)
-      vi.mocked(cgApi.createCuratorGroupInvite).mockResolvedValue({
-        invite_url: 'https://t.me/velobot?start=curator_group_invite__tok123',
+        items: [mineItem({ relation: 'curator' })],
       } as never)
       vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
-        items: [item({ id: 'a' })],
+        items: [item({ id: 'a', read_at: '2026-01-01T00:00:00Z' })],
         next_cursor: null,
-        unread: 1,
+        unread: 0,
       })
       mount()
       await flush()
+
+      expect(rows()).toHaveLength(1)
+      expect(isUnread(row(0))).toBe(false)
+      expect(useNotificationsStore().unread).toBe(0)
+      expect(readAllButton()).toBeFalsy()
+      // The only API the bell touched is the feed.
+      expect(notificationsApi.listNotifications).toHaveBeenCalledTimes(1)
+      expect(cgApi.getMyCuratorGroups).not.toHaveBeenCalled()
+      expect(cgApi.createCuratorGroupInvite).not.toHaveBeenCalled()
+    })
+
+    it('telegram 388101199: a tap marks read on the SERVER (no client-only rows)', async () => {
+      seedTelegram(388101199)
+      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+        items: [item({ id: 'srv' })],
+        next_cursor: null,
+        unread: 1,
+      })
+      vi.mocked(notificationsApi.markNotificationRead).mockResolvedValue({ unread: 0 })
+      mount()
       await flush()
 
-      expect(rows()).toHaveLength(4)
-      expect(row(0).textContent).toContain('Вас приглашают вести школу «Школа Владимира»')
-      expect(row(1).textContent).toContain('Вас пригласили в школу «Школа Владимира»')
-      expect(row(2).textContent).toContain('Вас приглашают стать мастером')
-
+      expect(rows()).toHaveLength(1)
       row(0).click()
       await flush()
-      expect(push).toHaveBeenCalledWith({
-        name: 'curator-group-master-offer',
-        params: { id: 'g9' },
-      })
 
-      row(1).click()
-      await flush()
-      expect(push).toHaveBeenCalledWith({
-        name: 'curator-group-join',
-        params: { token: 'tok123' },
-      })
-      expect(notificationsApi.markNotificationRead).not.toHaveBeenCalled()
+      expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith('srv')
+      expect(useNotificationsStore().unread).toBe(0)
     })
   })
 })

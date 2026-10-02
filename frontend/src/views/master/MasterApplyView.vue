@@ -7,18 +7,18 @@
   Steps:
     1. Профиль   -- display_name (required), email, phone + privacy consent
     2. Опыт      -- methods (VChip pills + «Свой вариант»), experience_years
-                    (VSelect), bio (kept), language (Русский/English — honest
-                    stub, no backend field yet → Zod E16)
+                    (VSelect), bio (kept), language (Русский/English -- sent
+                    as experience.languages, E16)
     3. Документы -- passport / certificates / profile-photo upload zones
                     (honest stub → Zod E13: tap shows «недоступно», no file POST)
                     + privacy paragraph + processing consent
 
   FORKS (operator-locked): NO password fields (Telegram initData auth, F1) ·
-  bio retained (F2) · language stub (F3) · full method list incl. «Кундалини
+  bio retained (F2) · language sent (F3, E16) · full method list incl. «Кундалини
   йога» (F6). Step indicator = the canonical VPaginationDots (top-left).
 
   All collected data is sent as one POST /api/v1/masters/apply on step-3 submit
-  (language + uploaded files are NOT in the request yet — Zod E16/E13). On
+  (uploaded files are NOT in the request yet -- documents: [], Zod E13). On
   success -> /master/pending.
 
   Back on step 1 -> router.back() (typically /user/profile); steps 2-3 -> prev step.
@@ -109,8 +109,8 @@
           :error="errors.bio"
         />
 
-        <!-- Язык проведения практик — honest stub (no backend field, Zod E16):
-             toggles locally, not sent with the application. -->
+        <!-- Язык проведения практик (E16): sent with the application as
+             experience.languages (selectedLanguages). -->
         <div class="apply-view__field">
           <label class="apply-view__label">Язык проведения практик</label>
           <VCard class="apply-view__langs" padding="none">

@@ -75,29 +75,12 @@ describe('notifications store', () => {
     expect(store.unread).toBe(5)
   })
 
-  // -- MASTER INVITE SIMULATION (owner 2026-10-01): the mock invite is
-  //    client-side only, so the simulation account's badge carries +1 at
-  //    every entry point. Remove with the UserInboxView block. --
-  it('the simulation account (telegram 388101199) carries +1 on every badge entry', async () => {
+  // Owner 2026-10-02: the +1 badge bump for the inbox-mock account (telegram
+  // 388101199) is gone with the mocks -- EVERY account, that one included,
+  // carries exactly the server's unread.
+  it.each([1, 388101199])('telegram %i sees the raw server badge, no bump', async (tid) => {
     const auth = useAuthStore()
-    auth.user = { telegram_id: 388101199 } as never
-    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
-      items: [],
-      next_cursor: null,
-      unread: 2,
-    })
-    const store = useNotificationsStore()
-
-    await store.refreshUnread()
-    expect(store.unread).toBe(3)
-
-    store.applyUnread(5)
-    expect(store.unread).toBe(6)
-  })
-
-  it('other accounts see the raw server badge, no simulation bump', async () => {
-    const auth = useAuthStore()
-    auth.user = { telegram_id: 1 } as never
+    auth.user = { telegram_id: tid } as never
     vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
       items: [],
       next_cursor: null,

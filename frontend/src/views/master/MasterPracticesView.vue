@@ -22,10 +22,12 @@
              insights.checkins mood tally, now distinct PRE check-ins, see
              practiceCardMeta.ts) + rating distribution (insights.feedbacks,
              reused from diaryStore cache like AnalyticsView, PAST tab only).
-    STUB  -- attended/no-show counts (no aggregate field) → «—»; recurrence days
-             («Регулярная» shown for series, exact days TBD); «осталось N из M»
-             omitted (no series-session field). All recorded in
-             master-ds-zod-roadmap.md.
+             Also REAL (practiceCardMeta.ts): recurrence days from
+             recurrence_days («Регулярная» only for a series without a day
+             list) and «Осталось N из M занятий» from total_sessions /
+             completed_sessions.
+    NOT SHOWN -- attended/no-show counts: no aggregate field, so the card
+             renders nothing for them (no placeholder).
 -->
 
 <template>
