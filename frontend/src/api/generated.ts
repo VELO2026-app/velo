@@ -626,6 +626,15 @@ export interface CreateWithdrawalRequest {
   amount_cents: number
 }
 
+/** GET /masters/me/curator-groups/{group_id}/analytics (§6). `engagement` answers the request's ?period; every other group is the school's all-time shape and does not move with the slider. */
+export interface CuratorGroupAnalyticsResponse {
+  practices: CuratorGroupPracticeTotals
+  members: CuratorGroupMemberTotals
+  engagement: CuratorGroupEngagementTotals
+  feedback: CuratorGroupFeedbackTotals
+  top_practices: CuratorGroupTopPracticeItem[]
+}
+
 /** One PRE check-in left on a practice of this school. `mood` is the stored 1..10 score mapped to the three distribution buckets (1-3 low / 4-7 mid / 8-10 high) -- the same vocabulary the anonymous per-practice insights already use, so the frontend reuses the mood icons it renders there. POST check-ins never appear here, and neither do check-ins whose booking was later cancelled: both are absent from the master's own roster for this practice, and the school widens a curator's reach without deepening it. user_id identifies the participant so that two students of the same name stay distinct; it opens no screen a curator would otherwise be refused. */
 export interface CuratorGroupCheckinItem {
   user_id: string
@@ -636,6 +645,21 @@ export interface CuratorGroupCheckinItem {
   practice_id: string
   practice_title: string
   created_at: string
+}
+
+/** One COMPLETED practice of the window (part 3, owner 2026-10-02). The card the client renders: direction (schema-on-read data.taxonomy, for the direction icon), title, master, date, then the practice's own aggregates -- attendees (distinct ATTENDED), check-ins (PRE on non-cancelled bookings) and the feedback pair (distinct reviewers + the five-scale buckets). Same predicates as the totals, so a card reconciles with the cards around it. */
+export interface CuratorGroupConductedPracticeItem {
+  practice_id: string
+  title: string
+  direction: string | null
+  master_name: string
+  scheduled_at: string
+  timezone: string
+  attendees_count: number
+  checkins_count: number
+  reviewers_count: number
+  reviews_count: number
+  rating: CuratorGroupRatingTotals
 }
 
 /** The group's owner, as anyone in the group may see them. A strict subset of MasterPublicResponse -- the declared isolation boundary in masters/schemas.py. Nothing financial, nothing contact-like, and no status: a group is only ever visible while its curator is verified (I-6), so exposing the status would only ever print one value. */
@@ -652,6 +676,18 @@ export interface CuratorGroupDeletePreviewResponse {
   upcoming_practices_targeting_group: number
 }
 
+/** The period-scoped heart of the screen (owner brief 2026-10-02). conducted / attendees / repeat_* / reviewers / rating are scoped to the calendar period the request named, over the curator's own timezone (BE-34 bounds); joined_never_came is LIFETIME by definition -- a member who never came has not come in any period, so the slider does not move it. Vocabulary (pinned once in analytics_service): «проведено» counts COMPLETED practices in the window (GT-20 -- the session settled, not the clock passed); «приходило» counts distinct users with an ATTENDED booking on those sessions; «пришли ещё раз» counts the users with >=2. Members counted are STUDENT-kind rows: masters join by appointment and conduct rather than book, so counting them would put structurally non-attending people into every denominator. */
+export interface CuratorGroupEngagementTotals {
+  practices_conducted: number
+  attendees: number
+  repeat_attendees: number
+  repeat_pct: number
+  joined_never_came: number
+  reviewers: number
+  rating: CuratorGroupRatingTotals
+  conducted_practices: CuratorGroupConductedPracticeItem[]
+}
+
 /** Who did the thing, as the journal recorded them at the time. NOT NULLABLE, and that is a consequence of how the row is built rather than an optimism about the data. All thirteen event kinds are somebody's action, actor_id is NOT NULL, and the name is frozen INTO the row when the event is written -- so there is no state in which the journal knows an event happened but cannot say who did it. A `| None` here would be a branch the frontend has to handle and the backend cannot produce. display_name IS A SNAPSHOT, NOT A LOOKUP. It is whatever the person was called when they acted, and it does not follow later renames -- deliberately: "Мария удалила Петра" is a record of the past and must keep saying Мария. See CuratorGroupEvent's docstring for the full argument, and do not replace this with a join to users. user_id is still the live handle: whoever reads the feed can go look the person up if they are still around. */
 export interface CuratorGroupEventActor {
   user_id: string
@@ -665,6 +701,14 @@ export interface CuratorGroupEventItem {
   actor: CuratorGroupEventActor
   data: Record<string, unknown>
   created_at: string
+}
+
+/** How the school's practices landed: counts plus the two distributions. */
+export interface CuratorGroupFeedbackTotals {
+  checkins_count: number
+  reviews_count: number
+  mood: CuratorGroupMoodTotals
+  rating: CuratorGroupRatingTotals
 }
 
 /** The card shown to someone who opened an invite link. curator_name is a STRING here, not the {user_id, display_name, avatar_url} object the group page returns: whoever is looking has no relation to the group yet, so they get the school's name and its curator's name, not a handle to go look the curator up with. */
@@ -729,6 +773,12 @@ export interface CuratorGroupMemberItem {
   master_offer?: 'awaiting_verification' | 'awaiting_answer' | null
 }
 
+/** Active memberships by kind -- the same rows the roster pages. */
+export interface CuratorGroupMemberTotals {
+  masters: number
+  students: number
+}
+
 /** One row of GET /curator-groups/mine. `relation` is the viewer's own tie to this group and is what the frontend keys the row's chip off. `transfer_offered` is true ONLY for the person being offered the group, and it is a bool rather than the full ref on purpose: this is a list row, and everything the offer contains is already known to whoever it was made to. The curator sees false here even for their own pending offer -- the list says "somebody is waiting on YOU", and nobody is. Until GT-4 the field was absent because a field that is always false is a promise with no writer behind it. */
 export interface CuratorGroupMineItem {
   id: string
@@ -747,6 +797,13 @@ export interface CuratorGroupMineResponse {
   items: CuratorGroupMineItem[]
 }
 
+/** PRE check-in moods, in the anonymous distribution's vocabulary. */
+export interface CuratorGroupMoodTotals {
+  low: number
+  mid: number
+  high: number
+}
+
 /** GET /curator-groups/{id} -- the group as a member sees it. Deliberately NOT the same shape as CuratorGroupResponse (the curator's own row): that one is a management view keyed by ownership, this one carries `curator` and `viewer` because the reader is not necessarily the owner. Two shapes rather than one with half the fields null. `transfer` is filled for exactly two people -- the curator and the person being offered the group -- and is null for every other member (TZ 5.2). Null rather than an absent key: the field exists for everyone, only its value differs, which keeps one OpenAPI shape instead of two. A member who is not part of the deal learns nothing about it, not even that one is under way. */
 export interface CuratorGroupPageResponse {
   id: string
@@ -759,6 +816,22 @@ export interface CuratorGroupPageResponse {
   viewer: CuratorGroupViewer
   transfer?: CuratorGroupTransferRef | null
   created_at: string
+}
+
+/** The school's practices counted by lifecycle state. total = completed + upcoming; drafts, cancelled and deleted sessions are nobody's analytics and are absent from all three numbers. */
+export interface CuratorGroupPracticeTotals {
+  total: number
+  completed: number
+  upcoming: number
+}
+
+/** Review ratings on the FIVE scale (tz-mood-scale contract). Keys are the frontend moodScale.ts keys -- 1-2 bad («Плохо»), 3-4 low («Не очень»), 5-6 neutral («Нормально»), 7-8 good («Хорошо»), 9-10 fire («Огонь») -- so the school strip and the practice mood strips render the same five segments. Owner 2026-10-02 widened the school analytics from the three-chip feedback vocabulary to this scale; the /reviews FEED keeps its confused/good/fire chips (tz-mood-scale §5 leaves the unification of the feeds to its own task), so a chip and a strip segment are different answers by design. */
+export interface CuratorGroupRatingTotals {
+  bad: number
+  low: number
+  neutral: number
+  good: number
+  fire: number
 }
 
 /** GET /masters/me/curator-groups/{id}/members/{user_id}/remove-preview. The same number for the member the curator is about to remove. Zero for a student, and zero -- not 404 -- for somebody who is not in the group at all: the removal itself is idempotent and answers 204 on that same target, so the advisory must not be stricter than the action it describes. */
@@ -788,6 +861,16 @@ export interface CuratorGroupReviewItem {
   practice_id: string
   practice_title: string
   created_at: string
+}
+
+/** One completed practice of the school with its engagement counts. Ordered by engagement (check-ins + reviews), newest first on ties -- "what actually landed", not a second feed, so no comment text and no student names ride along. */
+export interface CuratorGroupTopPracticeItem {
+  practice_id: string
+  title: string
+  master_name: string
+  scheduled_at: string
+  checkins_count: number
+  reviews_count: number
 }
 
 /** A pending offer to hand the group over. ONE schema for all three places that report an offer (the curator's own row, that row after a PATCH, and the group page). Three flat triples of the same fields would drift the first time one of them gained a fourth. to_display_name uses display_name(first_name, last_name) from users/helpers.py, NOT the master-profile lookup _curator_display_name uses. The tree holds two different naming rules and this is a deliberate pick between them: the addressee here is a PERSON being offered something, not a public master card, and the profile-based rule may return None -- which would leave the confirm dialog reading "offer sent to —". display_name always yields something, falling back to the neutral «Участник». */
