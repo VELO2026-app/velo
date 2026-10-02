@@ -79,6 +79,25 @@ describe('parseStartParam', () => {
     expect(parseStartParam('curator_group_invite__')).toBeNull()
     expect(parseStartParam('curator_group_invite')).toBeNull()
   })
+
+  // FE-67/BE-29: the master-offer consent deep link. The parameter is a
+  // school UUID (the candidate is the session), not a secret token -- the
+  // same 36-char shape open_practice__ uses, 64 characters total against
+  // the school invite's 65.
+  it('parses curator_group_master_offer__{uuid} (FE-67)', () => {
+    const groupId = '123e4567-e89b-12d3-a456-426614174000'
+    expect(parseStartParam(`curator_group_master_offer__${groupId}`)).toEqual({
+      name: 'curator-group-master-offer',
+      params: { id: groupId },
+    })
+  })
+
+  it('rejects a curator_group_master_offer id that is not a 36-char UUID', () => {
+    expect(parseStartParam('curator_group_master_offer__not-a-uuid')).toBeNull()
+    expect(parseStartParam('curator_group_master_offer__short')).toBeNull()
+    expect(parseStartParam(`curator_group_master_offer__${'x'.repeat(37)}`)).toBeNull()
+    expect(parseStartParam('curator_group_master_offer__')).toBeNull()
+  })
   // ===========================================================================
   // T-35: zoom__<22> -- the public practice code as a deep link.
   //

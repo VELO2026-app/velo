@@ -28,10 +28,14 @@ import { createApp, nextTick, type App } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import UserInboxView from '@/views/user/UserInboxView.vue'
 import * as notificationsApi from '@/api/notifications'
+import * as cgApi from '@/api/curatorGroups'
 import type { NotificationItem } from '@/api/notifications'
+import type { CuratorGroupMineItem } from '@/api/types'
 import { useNotificationsStore } from '@/stores/notifications'
+import { useAuthStore } from '@/stores/auth'
 
 vi.mock('@/api/notifications')
+vi.mock('@/api/curatorGroups')
 
 const back = vi.fn()
 const push = vi.fn()
@@ -61,6 +65,20 @@ function item(overrides: Partial<NotificationItem> = {}): NotificationItem {
     created_at: '2026-08-14T10:00:00Z',
     ...overrides,
   }
+}
+
+/** One /curator-groups/mine row -- the school-offer simulation's probe seam. */
+function mineItem(overrides: Partial<CuratorGroupMineItem> = {}): CuratorGroupMineItem {
+  return {
+    id: 'g1',
+    name: 'Тихая школа',
+    description: null,
+    curator: { user_id: 'u1', display_name: 'Мария', avatar_url: null },
+    masters_count: 1,
+    students_count: 3,
+    relation: 'curator',
+    ...overrides,
+  } as CuratorGroupMineItem
 }
 
 // -----------------------------------------------------------------------------
@@ -112,6 +130,16 @@ beforeEach(() => {
   vi.mocked(notificationsApi.listNotifications).mockReset()
   vi.mocked(notificationsApi.markNotificationRead).mockReset()
   vi.mocked(notificationsApi.markAllNotificationsRead).mockReset()
+  vi.mocked(cgApi.getMyCuratorGroups)
+    .mockReset()
+    .mockResolvedValue({
+      items: [],
+    } as never)
+  vi.mocked(cgApi.createCuratorGroupInvite)
+    .mockReset()
+    .mockResolvedValue({
+      invite_url: 'https://t.me/velobot?start=curator_group_invite__tok123',
+    } as never)
 })
 
 afterEach(() => {
@@ -291,6 +319,81 @@ describe('UserInboxView', () => {
     await flush()
 
     expect(push).toHaveBeenCalledWith({ name: 'user-topup' })
+  })
+
+  it('curator_group.master_offered rides open_curator_group into the consent screen (BE-59)', async () => {
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+      items: [
+        item({
+          id: 'mo',
+          type: 'curator_group.master_offered',
+          title: 'Вас приглашают вести школу',
+          body: 'Мария Иванова предлагает вам стать мастером школы «Тихая школа».',
+          action_data: { action: 'open_curator_group', params: { group_id: 'g1' } },
+        }),
+      ],
+      next_cursor: null,
+      unread: 1,
+    })
+    vi.mocked(notificationsApi.markNotificationRead).mockResolvedValue({ unread: 0 })
+    mount()
+    await flush()
+
+    row(0).click()
+    await flush()
+
+    expect(push).toHaveBeenCalledWith({
+      name: 'curator-group-master-offer',
+      params: { id: 'g1' },
+    })
+  })
+
+  it('another school event with the same open_curator_group action stays mark-read-only', async () => {
+    // The master-offer mapping keys on the TYPE, not the action: every
+    // curator_group.* event carries open_curator_group, and only the
+    // appointment prompt has a consent screen.
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+      items: [
+        item({
+          id: 'tr',
+          type: 'curator_group.transfer_offered',
+          action_data: { action: 'open_curator_group', params: { group_id: 'g1' } },
+        }),
+      ],
+      next_cursor: null,
+      unread: 1,
+    })
+    vi.mocked(notificationsApi.markNotificationRead).mockResolvedValue({ unread: 0 })
+    mount()
+    await flush()
+
+    row(0).click()
+    await flush()
+
+    expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith('tr')
+    expect(push).not.toHaveBeenCalled()
+  })
+
+  it('open_master_application -> the apply wizard (BE-59 verification prompt)', async () => {
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+      items: [
+        item({
+          id: 'mv',
+          type: 'curator_group.master_verification_required',
+          action_data: { action: 'open_master_application', params: { group_id: 'g1' } },
+        }),
+      ],
+      next_cursor: null,
+      unread: 1,
+    })
+    vi.mocked(notificationsApi.markNotificationRead).mockResolvedValue({ unread: 0 })
+    mount()
+    await flush()
+
+    row(0).click()
+    await flush()
+
+    expect(push).toHaveBeenCalledWith({ name: 'master-apply' })
   })
 
   it('unmapped action and not msg.* -> mark-read only, NO navigation', async () => {
@@ -546,6 +649,132 @@ describe('UserInboxView', () => {
       expect(host?.textContent).toContain(
         'Здесь появятся уведомления о записях, сообщениях и операциях',
       )
+    })
+  })
+
+  // ===========================================================================
+  // Master invite simulation (owner 2026-10-01): for telegram 388101199 the
+  // inbox injects a client-side mock row that routes to the placeholder
+  // user-master-invite page. Remove with the MASTER_INVITE_SIMULATION block.
+  // ===========================================================================
+  describe('master invite simulation', () => {
+    function seedTelegram(telegramId: number | null): void {
+      const auth = useAuthStore()
+      auth.user = (
+        telegramId === null
+          ? null
+          : {
+              id: 'u_sim',
+              telegram_id: telegramId,
+              role: 'user',
+              first_name: 'Тест',
+              last_name: null,
+              avatar_url: null,
+              timezone: 'Europe/Moscow',
+              language: 'ru',
+              is_active: true,
+              balance_cents: 0,
+              created_at: '2026-01-01T00:00:00Z',
+              last_login_at: null,
+              onboarding_completed: true,
+              master_onboarding_completed: false,
+              phone: null,
+              bio: null,
+              email: null,
+              role_switch: null,
+            }
+      ) as never
+    }
+
+    it('for telegram 388101199 the mock invite rides on top, unread, badge bumped', async () => {
+      seedTelegram(388101199)
+      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+        items: [item({ id: 'a' })],
+        next_cursor: null,
+        unread: 1,
+      })
+      mount()
+      await flush()
+
+      expect(rows()).toHaveLength(2)
+      expect(row(0).textContent).toContain('Вас приглашают стать мастером')
+      expect(isUnread(row(0))).toBe(true)
+      // The mock bumps the badge, so «Прочитать всё» renders.
+      expect(readAllButton()).toBeTruthy()
+    })
+
+    it('tapping it routes to the placeholder page and marks read LOCALLY -- no API call', async () => {
+      seedTelegram(388101199)
+      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+        items: [],
+        next_cursor: null,
+        unread: 0,
+      })
+      mount()
+      await flush()
+
+      row(0).click()
+      await flush()
+
+      expect(push).toHaveBeenCalledWith({ name: 'user-master-invite' })
+      // Client-side mock: no server row exists, so mark-read is local only.
+      expect(notificationsApi.markNotificationRead).not.toHaveBeenCalled()
+      expect(isUnread(row(0))).toBe(false)
+    })
+
+    it('any other telegram id gets no mock row', async () => {
+      seedTelegram(424242)
+      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+        items: [],
+        next_cursor: null,
+        unread: 0,
+      })
+      mount()
+      await flush()
+
+      expect(rows()).toHaveLength(0)
+      expect(host?.textContent).not.toContain('Вас приглашают стать мастером')
+    })
+
+    it('both SCHOOL invitations ride the real routing (join by token, offer by id)', async () => {
+      // School simulations: participant (curator_group.invited -> the join
+      // screen, by the REAL minted token) and master offer
+      // (curator_group.master_offered -> the consent screen, by school id).
+      seedTelegram(388101199)
+      vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+        items: [mineItem({ id: 'g9', name: 'Школа Владимира', relation: 'curator' })],
+      } as never)
+      vi.mocked(cgApi.createCuratorGroupInvite).mockResolvedValue({
+        invite_url: 'https://t.me/velobot?start=curator_group_invite__tok123',
+      } as never)
+      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+        items: [item({ id: 'a' })],
+        next_cursor: null,
+        unread: 1,
+      })
+      mount()
+      await flush()
+      await flush()
+
+      expect(rows()).toHaveLength(4)
+      expect(row(0).textContent).toContain('Вас приглашают вести школу «Школа Владимира»')
+      expect(row(1).textContent).toContain('Вас пригласили в школу «Школа Владимира»')
+      expect(row(2).textContent).toContain('Вас приглашают стать мастером')
+
+      row(0).click()
+      await flush()
+      expect(push).toHaveBeenCalledWith({
+        name: 'curator-group-master-offer',
+        params: { id: 'g9' },
+      })
+
+      row(1).click()
+      await flush()
+      expect(push).toHaveBeenCalledWith({
+        name: 'curator-group-join',
+        params: { token: 'tok123' },
+      })
+      expect(notificationsApi.markNotificationRead).not.toHaveBeenCalled()
     })
   })
 })

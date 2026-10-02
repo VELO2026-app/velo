@@ -203,6 +203,46 @@ describe('schoolsHub store', () => {
       expect(hub.isCuratorAccount).toBe(true)
     })
 
+    // -- Cold-load smoothing (owner 2026-10-01): the PREVIOUS session's
+    //    settled answer is reused while the probe is in flight, so the diary
+    //    surfaces neither flash in (plain masters) nor flash out (right
+    //    holders) on a fresh page load. --
+    it('cold load, cached answer "0": a master-capable account renders the diary surfaces immediately', () => {
+      seedRoles(['user', 'master'])
+      sessionStorage.setItem('schoolsHub.curatorAnswer', '0')
+      vi.mocked(cgApi.getMyCuratorGroups).mockReturnValue(new Promise(() => {}))
+      vi.mocked(cgApi.getCuratorGroups).mockReturnValue(new Promise(() => {}))
+
+      const hub = useSchoolsHubStore()
+      void hub.ensureCurator()
+
+      expect(hub.isCuratorAccount).toBe(false)
+    })
+
+    it('cold load, cached answer "1": the surfaces stay hidden while pending (no flash for a right holder)', () => {
+      seedRoles(['user', 'master'])
+      sessionStorage.setItem('schoolsHub.curatorAnswer', '1')
+      vi.mocked(cgApi.getMyCuratorGroups).mockReturnValue(new Promise(() => {}))
+      vi.mocked(cgApi.getCuratorGroups).mockReturnValue(new Promise(() => {}))
+
+      const hub = useSchoolsHubStore()
+      void hub.ensureCurator()
+
+      expect(hub.isCuratorAccount).toBe(true)
+    })
+
+    it('cold load with NO cached answer stays fail-closed for a master-capable account', () => {
+      seedRoles(['user', 'master'])
+      sessionStorage.removeItem('schoolsHub.curatorAnswer')
+      vi.mocked(cgApi.getMyCuratorGroups).mockReturnValue(new Promise(() => {}))
+      vi.mocked(cgApi.getCuratorGroups).mockReturnValue(new Promise(() => {}))
+
+      const hub = useSchoolsHubStore()
+      void hub.ensureCurator()
+
+      expect(hub.isCuratorAccount).toBe(true)
+    })
+
     it('a plain user is known-non-curator without any network round-trip (no flicker)', () => {
       // No master capability -> the right is unreachable for this token (the
       // same gate that keeps ensureCurator off the master surface), so the

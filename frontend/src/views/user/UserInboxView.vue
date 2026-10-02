@@ -33,6 +33,12 @@
   Route: /user/notifications (name: 'user-inbox') -- deliberately NOT
   'user-notifications': that name is already the preference screen at
   profile/notifications (NotificationsView.vue).
+
+  MASTER INVITE SIMULATION (owner 2026-10-01): the backend does not emit
+  «приглашение стать мастером» yet -- for telegram_id 388101199 the inbox
+  injects a client-side mock row that routes to the placeholder
+  user-master-invite page. Remove the marked block when the real invite
+  ships (search: MASTER_INVITE_SIMULATION).
 -->
 
 <template>
@@ -107,6 +113,8 @@ import NotificationRow from '@/components/shared/NotificationRow.vue'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
 import { useNotificationsStore } from '@/stores/notifications'
+import { useAuthStore } from '@/stores/auth'
+import { getMyCuratorGroups, createCuratorGroupInvite } from '@/api/curatorGroups'
 import {
   listNotifications,
   markAllNotificationsRead,
@@ -120,6 +128,90 @@ const toast = useToast()
 // every server-confirmed badge below keeps it in step with this screen's
 // actions.
 const notifications = useNotificationsStore()
+const auth = useAuthStore()
+
+// -- MASTER INVITE SIMULATION (owner 2026-10-01) ------------------------------
+// The backend does not emit «приглашение стать мастером» yet. For THIS
+// telegram account the inbox injects a client-side mock row (see load) that
+// routes to the placeholder invitation page. Remove the marked block when
+// the real invite notification ships (search: MASTER_INVITE_SIMULATION).
+const MASTER_INVITE_SIMULATION_TELEGRAM_ID = 388101199
+const MASTER_INVITE_MOCK_ID = 'mock-master-invite'
+
+function masterInviteMock(): NotificationItem {
+  const now = new Date().toISOString()
+  return {
+    id: MASTER_INVITE_MOCK_ID,
+    type: 'master.invite',
+    title: 'Приглашение',
+    body: 'Вас приглашают стать мастером',
+    action_data: { action: 'open_master_invite', params: {} },
+    priority: 10,
+    sent_at: now,
+    read_at: null,
+    created_at: now,
+  }
+}
+
+/** SCHOOL INVITATION mocks: both school invitations hang off the account's
+ *  own CURATED school (minting an invite is curator-only), fetched from
+ *  GET /curator-groups/mine:
+ *   - participant: type curator_group.invited, open_curator_group_join with
+ *     the REAL minted token -- the join screen reads the school by it;
+ *   - master offer: type curator_group.master_offered, open_curator_group
+ *     with the school id -- the offer screen loads the school page itself.
+ *  No curated school in /mine -> no school rows (honest). */
+async function injectSchoolInviteMocks(): Promise<void> {
+  try {
+    const mine = (await getMyCuratorGroups()).items
+    const curated = mine.find((s) => s.relation === 'curator')
+    if (!curated) return
+    const now = new Date().toISOString()
+    const rows: NotificationItem[] = [
+      {
+        id: 'mock-master-offer',
+        type: 'curator_group.master_offered',
+        title: 'Приглашение',
+        body: `Вас приглашают вести школу «${curated.name}»`,
+        action_data: {
+          action: 'open_curator_group',
+          params: { group_id: curated.id },
+        },
+        priority: 10,
+        sent_at: now,
+        read_at: null,
+        created_at: now,
+      },
+    ]
+    try {
+      const res = await createCuratorGroupInvite(curated.id)
+      const token = res.invite_url.split('curator_group_invite__')[1]
+      if (token) {
+        rows.push({
+          id: 'mock-school-join',
+          type: 'curator_group.invited',
+          title: 'Приглашение',
+          body: `Вас пригласили в школу «${curated.name}»`,
+          action_data: {
+            action: 'open_curator_group_join',
+            params: { token },
+          },
+          priority: 10,
+          sent_at: now,
+          read_at: null,
+          created_at: now,
+        })
+      }
+    } catch {
+      // mint failed (e.g. bot_url_not_configured) -- the offer row still
+      // simulates; the join row just stays out.
+    }
+    items.value = [...rows, ...items.value]
+    unread.value += rows.length
+  } catch {
+    // simulation only -- a failed probe leaves the feed as the server answered
+  }
+}
 
 const loading = ref(true)
 const error = ref<string | null>(null)
@@ -166,6 +258,18 @@ async function load(): Promise<void> {
     items.value = page.items
     unread.value = page.unread
     notifications.applyUnread(page.unread)
+    // MASTER INVITE SIMULATION (see the block above): the mock rides on top
+    // of the server page and bumps the badge, so the row is impossible to
+    // miss. markOne skips the API for it.
+    if (auth.user?.telegram_id === MASTER_INVITE_SIMULATION_TELEGRAM_ID) {
+      items.value = [masterInviteMock(), ...items.value]
+      // The badge +1 lives in the store (withSimulationBadge) -- the dock
+      // bell lights from the same source, so nothing is added here.
+      unread.value = notifications.unread
+      // The school mocks are async (mine probe + invite mint): they prepend
+      // themselves in front of the invite mock when they answer.
+      void injectSchoolInviteMocks()
+    }
   } catch (e) {
     error.value = extractApiError(e, 'Попробуйте ещё раз')
   } finally {
@@ -178,6 +282,14 @@ onMounted(load)
 // the server did not accept -- same shape as MasterInboxView.vue (T-26).
 async function markOne(item: NotificationItem): Promise<void> {
   if (item.read_at !== null) return // already read -- nothing to mark, no call
+  // MASTER INVITE SIMULATION: mock rows exist client-side only -- no server
+  // rows to mark (the API would 404). Flip locally, keep the badge in step
+  // (the simulation +1 rides the refresh), done.
+  if (item.id.startsWith('mock-')) {
+    item.read_at = new Date().toISOString()
+    void notifications.refreshUnread()
+    return
+  }
   const previousReadAt = item.read_at
   const previousUnread = unread.value
   item.read_at = new Date().toISOString()
@@ -227,6 +339,19 @@ function routeFor(
   const params = item.action_data?.params ?? {}
   const practiceId = typeof params.practice_id === 'string' ? params.practice_id : null
 
+  // BE-59: the master-offer prompt («Вас приглашают вести школу») rides the
+  // generic open_curator_group action like every school event -- the TYPE is
+  // what makes it this screen's. A missing/malformed group_id stays
+  // mark-read-only, same as every narrowed id below.
+  if (
+    item.type === 'curator_group.master_offered' &&
+    action === 'open_curator_group' &&
+    typeof params.group_id === 'string' &&
+    params.group_id
+  ) {
+    return { name: 'curator-group-master-offer', params: { id: params.group_id } }
+  }
+
   switch (action) {
     case 'open_practice':
     case 'confirm_waitlist': // no dedicated confirm screen: the practice page owns the waitlist CTA
@@ -235,6 +360,19 @@ function routeFor(
       return practiceId ? { name: 'user-feedback', params: { practiceId } } : null
     case 'open_wallet':
       return { name: 'user-topup' }
+    case 'open_master_invite': // the simulated invite (see load) -- placeholder page
+      return { name: 'user-master-invite' }
+    case 'open_curator_group_join': {
+      // The participant school invitation: routes by the invite TOKEN -- the
+      // join screen reads the school by it, exactly like the invite link.
+      const token = typeof params.token === 'string' ? params.token : null
+      return token ? { name: 'curator-group-join', params: { token } } : null
+    }
+    case 'open_master_application':
+      // BE-59: the «get verified» half of the master-appointment story --
+      // the verb was named by the backend for exactly this mapping; the
+      // apply wizard (and its applyGuard) owns what happens next.
+      return { name: 'master-apply' }
     case 'open_thread': {
       // A message notification names ITS dialog. The action name/param are the
       // stand-stub contract for now -- the real comms msg.* vocabulary must be
@@ -284,7 +422,10 @@ function onRow(item: NotificationItem): void {
 }
 
 .user-inbox__filter {
-  margin: 0 var(--space-4) var(--space-3);
+  /* Top gap under the floating header island (owner 2026-10-01: «сильно
+     прижат») -- the screen's own negative-margin container leaves the
+     control row flush with the island otherwise. */
+  margin: var(--space-4) var(--space-4) var(--space-3);
 }
 
 .user-inbox__filter-empty {

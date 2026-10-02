@@ -66,20 +66,20 @@ router.replace — no server state, the link keeps working.
         </div>
       </template>
 
-      <!-- The school card behind the link. -->
+      <!-- The school card behind the link: the shared invite card (owner
+           mockups 2026-10-02 -- logo, name, counters, description, heading;
+           no analytics lines, counts only). -->
       <template v-else-if="preview">
-        <VCard class="cg-join__card">
-          <p class="cg-join__kind">Приглашение в школу</p>
-          <h1 class="cg-join__name">{{ preview.group.name }}</h1>
-          <p v-if="curatorName" class="cg-join__curator">Куратор: {{ curatorName }}</p>
-          <p v-if="preview.group.description" class="cg-join__description">
-            {{ preview.group.description }}
-          </p>
-          <p class="cg-join__counts">
-            Мастеров: {{ preview.group.masters_count }} · Учеников:
-            {{ preview.group.students_count }}
-          </p>
-        </VCard>
+        <SchoolInviteCard
+          class="cg-join__card"
+          :name="preview.group.name"
+          :avatar-url="preview.group.avatar_url"
+          :students-count="preview.group.students_count"
+          :masters-count="preview.group.masters_count"
+          :description="preview.group.description"
+          :curator-name="preview.group.curator_name"
+          heading="Вас пригласили в школу!"
+        />
         <div class="cg-join__actions">
           <VButton variant="primary" block :loading="joining" @click="join">Вступить</VButton>
           <VButton variant="outline" block :disabled="joining" @click="decline">
@@ -101,7 +101,8 @@ import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { useSchoolsHubStore } from '@/stores/schoolsHub'
-import { VButton, VCard, VLoader } from '@/components/ui'
+import { VButton, VLoader } from '@/components/ui'
+import SchoolInviteCard from '@/components/shared/SchoolInviteCard.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -114,8 +115,6 @@ const transientError = ref(false)
 const notFound = ref(false)
 const preview = ref<CuratorGroupInvitePreviewResponse | null>(null)
 const joining = ref(false)
-
-const curatorName = computed(() => preview.value?.group.curator_name?.trim() || null)
 
 interface RefusalView {
   title: string
@@ -267,39 +266,10 @@ onMounted(loadPreview)
   margin: 0;
 }
 
+/* The shared invite card owns its internals; the screen owns the width. */
 .cg-join__card {
   width: 100%;
   max-width: var(--velo-content-width-narrow);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.cg-join__kind {
-  font-size: var(--text-xs);
-  color: var(--velo-text-secondary);
-  margin: 0;
-}
-
-.cg-join__name {
-  font-family: var(--font-body);
-  font-size: var(--text-xl);
-  color: var(--velo-text-primary);
-  margin: 0;
-}
-
-.cg-join__curator,
-.cg-join__counts {
-  font-size: var(--text-sm);
-  color: var(--velo-text-secondary);
-  margin: 0;
-}
-
-.cg-join__description {
-  font-size: var(--text-sm);
-  color: var(--velo-text-primary);
-  line-height: 1.5;
-  margin: 0;
 }
 
 .cg-join__hint {
