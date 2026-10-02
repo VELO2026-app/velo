@@ -16,6 +16,7 @@ import type {
   TimeOfDay,
   ExternalActivityType,
 } from '@/api/types'
+import type { MoodScaleKey } from '@/utils/moodScale'
 import type { Component } from 'vue'
 import {
   IconMeditation,
@@ -70,6 +71,24 @@ export const RATING_ICON_COLOR: Record<FeedbackRating, string> = {
   confused: 'var(--velo-rating-confused)',
   good: 'var(--velo-rating-good)',
   fire: 'var(--velo-rating-fire)',
+}
+
+/**
+ * Five-scale mood strip FILL colours (tz-mood-scale palette), keyed by the
+ * moodScale.ts keys. OWNER CANON 2026-10-02 -- the hexes are the standard,
+ * not approximations, and are mirrored by the --velo-analytics-* tokens in
+ * styles/variables.css (the token wins at runtime; the fallback only covers
+ * a context where the stylesheet did not load). Every five-segment
+ * analytics strip (practice «До/После практики», the school feedback
+ * block) reads its segment colors from here, so the surfaces cannot drift
+ * apart.
+ */
+export const MOOD_SCALE_FILLS: Record<MoodScaleKey, string> = {
+  bad: 'var(--velo-analytics-bad, #fe9093)',
+  low: 'var(--velo-analytics-low, #faaa63)',
+  neutral: 'var(--velo-analytics-neutral, #f7cf17)',
+  good: 'var(--velo-analytics-good, #b5eb88)',
+  fire: 'var(--velo-analytics-fire, #5abafd)',
 }
 
 // ---------------------------------------------------------------------------

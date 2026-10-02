@@ -99,6 +99,14 @@ function buildRouter(): Router {
         meta: { hideTabBar: true },
         component: StubChild,
       },
+      // §6 (owner 2026-10-02): the school's analytics screen -- the same
+      // FOG_ROUTES + hideTabBar pair (mirrors router/index.ts).
+      {
+        path: '/user/groups/g1/analytics',
+        name: 'user-curator-group-analytics',
+        meta: { hideTabBar: true },
+        component: StubChild,
+      },
       // Owner 2026-09-30: the master's page in the curator context -- the
       // dock hides there (the CTA takes its place; mirrors router/index.ts).
       {
@@ -307,10 +315,11 @@ describe('UserShell', () => {
       expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Дневник', 'Школы', 'Я'])
     })
 
-    it('a founding-right holder (curator, owner 2026-10-01) gets no «Дневник»; with no schools, no «Школы» either', async () => {
+    it('a founding-right holder (owner 2026-10-02) keeps «Дневник» in the user zone; with no schools, no «Школы» either', async () => {
       // can_create_groups keeps its entrance in the MASTER zone; in the USER
-      // zone the holder IS a curator account: the personal-diary tab is gone
-      // (owner 2026-10-01), and with zero memberships so is «Школы».
+      // zone the diary follows the ACTIVE INTERFACE ROLE (owner 2026-10-02),
+      // so the holder keeps the personal-diary tab, and with zero
+      // memberships «Школы» stays away.
       curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({ items: [] })
       curatorGroupsMock.getCuratorGroups.mockResolvedValue({
         items: [],
@@ -320,19 +329,20 @@ describe('UserShell', () => {
       await flush()
       await flush()
 
-      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Я'])
+      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Дневник', 'Я'])
     })
 
-    it("«Дневник» stays hidden while a master-capable account's probes are unsettled (fail-closed)", async () => {
-      // A possible right holder must never see the tab flash: hidden until
-      // the master probe answers (owner 2026-10-01; both probes stalled).
+    it('«Дневник» renders from the FIRST PAINT for a master-capable account -- the tab never waits on the async curator probe', async () => {
+      // Regression (owner 2026-10-02: the icon appeared, then vanished): the
+      // diary follows the interface role only, so both probes stalling must
+      // not hide the tab -- no async answer can flip it post-paint.
       curatorGroupsMock.getMyCuratorGroups.mockReturnValue(new Promise(() => {}))
       curatorGroupsMock.getCuratorGroups.mockReturnValue(new Promise(() => {}))
       await mount('user-dashboard', {}, seedAccount(['user', 'master']))
       await flush()
       await flush()
 
-      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Я'])
+      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Дневник', 'Я'])
     })
 
     it('a plain user keeps «Дневник» from the first paint (known-non-curator, no flicker)', async () => {
@@ -412,6 +422,13 @@ describe('UserShell', () => {
 
     it('the participants screen (§1.11) is a fog screen like the school page', async () => {
       await mount('user-curator-group-members')
+      await flush()
+
+      expect(mainEl().classList.contains('mobile-layout__main--fog')).toBe(true)
+    })
+
+    it('the analytics screen (§6) is a fog screen like the school page', async () => {
+      await mount('user-curator-group-analytics')
       await flush()
 
       expect(mainEl().classList.contains('mobile-layout__main--fog')).toBe(true)

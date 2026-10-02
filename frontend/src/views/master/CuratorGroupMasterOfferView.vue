@@ -87,8 +87,8 @@ lines — counts only, by the same ruling.
       <template v-else-if="verificationRequired">
         <h2 class="master-offer__title">Нужна верификация мастера</h2>
         <p class="master-offer__subtitle">
-          Ваша верификация мастера истекла. Подайте заявку ещё раз — предложение школы сохранится, и
-          его можно будет принять.
+          Чтобы принять предложение школы, нужно подтверждение мастера платформы. Подайте заявку или
+          дождитесь решения по уже поданной. Предложение школы сохранится.
         </p>
         <div class="master-offer__actions">
           <VButton variant="primary" block @click="router.replace({ name: 'master-apply' })">
@@ -208,7 +208,7 @@ async function accept(): Promise<void> {
         offerGone.value = true
         return
       }
-      if (e.status === 403) {
+      if (e.status === 403 && e.code === 'master_required') {
         // master_required: the offer SURVIVES this refusal — the way out is
         // the apply wizard, not a retry (the backend keeps the row).
         verificationRequired.value = true

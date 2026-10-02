@@ -19,10 +19,14 @@
 //   5. DEEP LINKS (master parity 2026-09-08 -- the T-26 tap=read boundary
 //      is lifted): a tap navigates by action_data.action, same vocabulary
 //      as the user map but into MASTER-zone routes -- open_practice ->
-//      master-practice-detail, open_wallet -> master-finance, open_thread
-//      -> that dialog (master-chat), msg.* (no velo action) -> the master
-//      messages list. Unmapped action / malformed id -> mark-read only,
-//      never a broken route. A READ row still navigates.
+//      master-practice-detail, open_wallet -> master-finance, open_thread ->
+//      that dialog (master-chat), msg.* (no velo action) -> the master
+//      messages list -- plus the BE-59 master-offer prompt
+//      (curator_group.master_offered + open_curator_group): the STANDALONE
+//      school-offer screen, because its recipient is always a verified
+//      master, so this inbox is where the offer is accepted. Unmapped
+//      action / malformed id -> mark-read only, never a broken route.
+//      A READ row still navigates.
 //   6. TYPE SLIDER (Сообщения / Практики / Финансы / Другое): prefix
 //      buckets over the emit vocabulary, «Сообщения» first/default, the
 //      per-filter empty note, and no slider over an empty feed.
@@ -316,6 +320,62 @@ describe('MasterInboxView', () => {
     await flush()
 
     expect(push).toHaveBeenCalledWith({ name: 'master-finance' })
+  })
+
+  it('BE-59: a master-offer row (curator_group.master_offered + open_curator_group) opens the school-offer screen', async () => {
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+      items: [
+        item({
+          id: 'g2',
+          type: 'curator_group.master_offered',
+          action_data: { action: 'open_curator_group', params: { group_id: 'grp_1' } },
+        }),
+      ],
+      next_cursor: null,
+      unread: 1,
+    })
+    vi.mocked(notificationsApi.markNotificationRead).mockResolvedValue({ unread: 0 })
+    mount()
+    await flush()
+
+    // curator_group.* has no bucket of its own -- the row lives in «Другое»
+    segment('Другое')?.click()
+    await flush()
+
+    row(0).click()
+    await flush()
+
+    expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith('g2')
+    expect(push).toHaveBeenCalledWith({
+      name: 'curator-group-master-offer',
+      params: { id: 'grp_1' },
+    })
+  })
+
+  it('BE-59: a master-offer row with a malformed group_id never becomes an undefined route param', async () => {
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+      items: [
+        item({
+          id: 'g3',
+          type: 'curator_group.master_offered',
+          action_data: { action: 'open_curator_group', params: { group_id: 7 } },
+        }),
+      ],
+      next_cursor: null,
+      unread: 1,
+    })
+    vi.mocked(notificationsApi.markNotificationRead).mockResolvedValue({ unread: 0 })
+    mount()
+    await flush()
+
+    segment('Другое')?.click()
+    await flush()
+
+    row(0).click()
+    await flush()
+
+    expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith('g3')
+    expect(push).not.toHaveBeenCalled() // mark-read only -- honest fallback
   })
 
   it('unmapped action and not msg.* -> mark-read only, NO navigation', async () => {

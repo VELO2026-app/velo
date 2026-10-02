@@ -824,3 +824,164 @@ class SchoolStudentProfileResponse(BaseModel):
     master_offer: CuratorMasterOfferStateLiteral | None = None
     recent_checkins: list[SchoolStudentCheckinItem]
     recent_feedbacks: list[SchoolStudentFeedbackItem]
+
+
+# ===========================================================================
+# School analytics (tz-curator.md §6 MVP)
+# ===========================================================================
+#
+# OWNER UNBLOCK 2026-10-02: §6 was gated on PM-2 (the metrics md-spec); the
+# owner lifted the gate and this aggregate is the first cut. The BE-24 rule
+# carries over unchanged -- the school WIDENS reach, not depth: scores are
+# BUCKETS only, there is no per-student row and no raw 1..10 anywhere in
+# the payload. Refinement waits for PM-2.
+
+
+class CuratorGroupPracticeTotals(BaseModel):
+    """The school's practices counted by lifecycle state.
+
+    total = completed + upcoming; drafts, cancelled and deleted sessions are
+    nobody's analytics and are absent from all three numbers.
+    """
+
+    total: int
+    completed: int
+    upcoming: int
+
+
+class CuratorGroupMemberTotals(BaseModel):
+    """Active memberships by kind -- the same rows the roster pages."""
+
+    masters: int
+    students: int
+
+
+class CuratorGroupMoodTotals(BaseModel):
+    """PRE check-in moods, in the anonymous distribution's vocabulary."""
+
+    low: int
+    mid: int
+    high: int
+
+
+class CuratorGroupRatingTotals(BaseModel):
+    """Review ratings on the FIVE scale (tz-mood-scale contract).
+
+    Keys are the frontend moodScale.ts keys -- 1-2 bad («Плохо»), 3-4 low
+    («Не очень»), 5-6 neutral («Нормально»), 7-8 good («Хорошо»), 9-10
+    fire («Огонь») -- so the school strip and the practice mood strips
+    render the same five segments. Owner 2026-10-02 widened the school
+    analytics from the three-chip feedback vocabulary to this scale; the
+    /reviews FEED keeps its confused/good/fire chips (tz-mood-scale §5
+    leaves the unification of the feeds to its own task), so a chip and a
+    strip segment are different answers by design.
+    """
+
+    bad: int
+    low: int
+    neutral: int
+    good: int
+    fire: int
+
+
+class CuratorGroupConductedPracticeItem(BaseModel):
+    """One COMPLETED practice of the window (part 3, owner 2026-10-02).
+
+    The card the client renders: direction (schema-on-read data.taxonomy,
+    for the direction icon), title, master, date, then the practice's own
+    aggregates -- attendees (distinct ATTENDED), check-ins (PRE on
+    non-cancelled bookings) and the feedback pair (distinct reviewers +
+    the five-scale buckets). Same predicates as the totals, so a card
+    reconciles with the cards around it.
+    """
+
+    practice_id: UUID
+    title: str
+    direction: str | None
+    master_name: str
+    scheduled_at: datetime
+    timezone: str
+    attendees_count: int
+    checkins_count: int
+    reviewers_count: int
+    reviews_count: int
+    rating: CuratorGroupRatingTotals
+
+
+class CuratorGroupEngagementTotals(BaseModel):
+    """The period-scoped heart of the screen (owner brief 2026-10-02).
+
+    conducted / attendees / repeat_* / reviewers / rating are scoped to the
+    calendar period the request named, over the curator's own timezone
+    (BE-34 bounds); joined_never_came is LIFETIME by definition -- a member
+    who never came has not come in any period, so the slider does not move
+    it.
+
+    Vocabulary (pinned once in analytics_service): «проведено» counts
+    COMPLETED practices in the window (GT-20 -- the session settled, not
+    the clock passed); «приходило» counts distinct users with an ATTENDED
+    booking on those sessions; «пришли ещё раз» counts the users with >=2.
+    Members counted are STUDENT-kind rows: masters join by appointment and
+    conduct rather than book, so counting them would put structurally
+    non-attending people into every denominator.
+    """
+
+    practices_conducted: int
+    attendees: int
+    repeat_attendees: int
+    # 0 when the period had no attendees at all -- an honest empty, the
+    # same answer master analytics' rate fields give (never a null dash).
+    repeat_pct: int
+    joined_never_came: int
+    # Part 2 (owner brief 2026-10-02), the feedback share under the same
+    # slider: distinct users whose review landed on an in-window practice,
+    # and the in-window rating buckets (same rating_bucket mapping as the
+    # all-time `feedback.rating`, so the two always reconcile). The
+    # «процент фидбеков» denominator is members.students -- the client
+    # divides by the number already in this payload; carrying a second copy
+    # of that count here would put one fact in two fields.
+    reviewers: int
+    rating: CuratorGroupRatingTotals
+    # Part 3 (owner brief 2026-10-02): every COMPLETED practice of the
+    # window, newest first -- the client renders a card per practice with
+    # its own five-scale strip. Empty list on a window without practices.
+    conducted_practices: list[CuratorGroupConductedPracticeItem]
+
+
+class CuratorGroupFeedbackTotals(BaseModel):
+    """How the school's practices landed: counts plus the two distributions."""
+
+    checkins_count: int
+    reviews_count: int
+    mood: CuratorGroupMoodTotals
+    rating: CuratorGroupRatingTotals
+
+
+class CuratorGroupTopPracticeItem(BaseModel):
+    """One completed practice of the school with its engagement counts.
+
+    Ordered by engagement (check-ins + reviews), newest first on ties --
+    "what actually landed", not a second feed, so no comment text and no
+    student names ride along.
+    """
+
+    practice_id: UUID
+    title: str
+    master_name: str
+    scheduled_at: datetime
+    checkins_count: int
+    reviews_count: int
+
+
+class CuratorGroupAnalyticsResponse(BaseModel):
+    """GET /masters/me/curator-groups/{group_id}/analytics (§6).
+
+    `engagement` answers the request's ?period; every other group is the
+    school's all-time shape and does not move with the slider.
+    """
+
+    practices: CuratorGroupPracticeTotals
+    members: CuratorGroupMemberTotals
+    engagement: CuratorGroupEngagementTotals
+    feedback: CuratorGroupFeedbackTotals
+    top_practices: list[CuratorGroupTopPracticeItem]

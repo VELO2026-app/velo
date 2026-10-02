@@ -20,7 +20,15 @@
 -->
 
 <template>
-  <div class="practice-reviews">
+  <PracticeAnalytics
+    v-if="analyticsSimulation"
+    :data="analyticsData"
+    :loading="analyticsSimulation && practice === null"
+    :error="practiceError ? 'Практика недоступна' : null"
+    @back="router.back()"
+    @retry="load"
+  />
+  <div v-else class="practice-reviews">
     <VHeader title="Отзывы о практике" show-back @back="router.back()" />
 
     <!-- Practice header card (shared PracticeHeroCard; titleSize base, meta =
@@ -102,12 +110,65 @@ import { RATING_ICON_COLOR } from '@/utils/displayHelpers'
 import { RATING_ICON } from '@/utils/ratingIcons'
 import { formatShortDate } from '@/utils/format'
 import type { PracticeResponse, ReviewItem } from '@/api/types'
+import PracticeAnalytics from '@/components/shared/practice-analytics/PracticeAnalytics.vue'
+import type {
+  PracticeAnalyticsData,
+  PracticeAnswer,
+} from '@/components/shared/practice-analytics/analytics'
+import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const router = useRouter()
 const diaryStore = useDiaryStore()
 
 const practiceId = computed(() => route.params.id as string)
+
+// ==========================================================================
+// ANALYTICS SIMULATION (owner 2026-10-01): the new practice-analytics
+// contract (tz-practice-analytics.md) needs per-student RAW 1..10 answers,
+// which no backend endpoint serves yet. For telegram 388101199 the screen
+// renders <PracticeAnalytics> over deterministic demo answers so the layout
+// can be reviewed; every other viewer keeps the current screen. Remove with
+// the MASTER_INVITE_SIMULATION batch when the backend contract ships
+// (search: ANALYTICS_SIMULATION).
+// ==========================================================================
+
+const auth = useAuthStore()
+const ANALYTICS_SIMULATION_TELEGRAM_ID = 388101199
+const analyticsSimulation = computed(
+  () => auth.user?.telegram_id === ANALYTICS_SIMULATION_TELEGRAM_ID,
+)
+
+const SIMULATED_ANSWERS: PracticeAnswer[] = [
+  {
+    userId: 'sim-1',
+    name: 'Анна',
+    before: 9,
+    after: 9,
+    comment: 'Очень атмосферно, пришлю друзей',
+  },
+  { userId: 'sim-2', name: 'Пётр', before: 4, after: 7, comment: null },
+  {
+    userId: 'sim-3',
+    name: 'Мария',
+    before: 6,
+    after: 6,
+    comment: 'Полезно, но мало времени на практику',
+  },
+  { userId: 'sim-4', name: 'Игорь', before: 2, after: 5, comment: null },
+  { userId: 'sim-5', name: 'Ольга', before: 8, after: 10, comment: 'Лучшее, что было за месяц' },
+  { userId: 'sim-6', name: 'Дмитрий', before: 5, after: 8, comment: null },
+]
+
+const analyticsData = computed((): PracticeAnalyticsData | null =>
+  practice.value && analyticsSimulation.value
+    ? {
+        practice: practice.value,
+        participants: practice.value.current_participants,
+        answers: SIMULATED_ANSWERS,
+      }
+    : null,
+)
 
 // E1: tap a review → the reviewer's student profile (user_id now on ReviewItem).
 function goStudent(r: ReviewItem): void {
@@ -127,6 +188,24 @@ const insights = computed(() => insightsCache.get(practiceId.value) ?? null)
 // =========================================================================
 
 const practice = ref<PracticeResponse | null>(null)
+const practiceError = ref(false)
+
+async function load(): Promise<void> {
+  // Insights are usually already cached (AnalyticsView eager-loads the page);
+  // loadInsights skips a cached id, otherwise fetches.
+  await diaryStore.loadInsights(practiceId.value)
+  void loadReviews()
+  practiceError.value = false
+  try {
+    practice.value = await getPractice(practiceId.value)
+  } catch {
+    // Practice not found / network -- header card hides, stats show "—".
+    practice.value = null
+    practiceError.value = true
+  }
+}
+
+onMounted(load)
 
 const practiceDate = computed((): string =>
   practice.value ? formatShortDate(practice.value.scheduled_at, practice.value.timezone) : '',
@@ -223,19 +302,6 @@ async function loadMoreReviews(): Promise<void> {
 // =========================================================================
 // Lifecycle
 // =========================================================================
-
-onMounted(async () => {
-  // Insights are usually already cached (AnalyticsView eager-loads the page);
-  // loadInsights skips a cached id, otherwise fetches.
-  await diaryStore.loadInsights(practiceId.value)
-  void loadReviews()
-  try {
-    practice.value = await getPractice(practiceId.value)
-  } catch {
-    // Practice not found / network -- header card hides, stats show "—".
-    practice.value = null
-  }
-})
 </script>
 
 <style scoped>

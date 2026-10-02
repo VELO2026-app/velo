@@ -24,6 +24,7 @@ import {
   masterNoProfileGuard,
   masterStatusGuard,
   masterPendingGuard,
+  masterApplyGuard,
   roleFreshnessGuard,
 } from '@/router/guards'
 import { useAuthStore } from '@/stores/auth'
@@ -315,7 +316,47 @@ describe('router/guards', () => {
     })
   })
 
+  describe('masterApplyGuard', () => {
+    it.each(['pending', 'verified'])(
+      'user with %s application goes to its status, not another form',
+      async (status) => {
+        __setReadyForTest(true)
+        setAuthUser({ role: 'user', master_application: { status } })
+        expect(await call(masterApplyGuard)).toEqual({ path: '/master/pending' })
+      },
+    )
+
+    it.each(['rejected', 'cancelled_by_user', 'suspended'])(
+      'allows reapplication after %s',
+      async (status) => {
+        __setReadyForTest(true)
+        setAuthUser({ role: 'user', master_application: { status } })
+        expect(await call(masterApplyGuard)).toBe(true)
+      },
+    )
+
+    it('lets a first-time applicant fill the form', async () => {
+      __setReadyForTest(true)
+      setAuthUser({ role: 'user' })
+      expect(await call(masterApplyGuard)).toBe(true)
+    })
+
+    it('verified master stays in their cabinet', async () => {
+      __setReadyForTest(true)
+      setAuthUser({ role: 'master' })
+      masterStoreState.profile = { status: 'verified' }
+      expect(await call(masterApplyGuard)).toEqual({ path: '/master/dashboard' })
+    })
+  })
+
   describe('masterPendingGuard', () => {
+    it('pending applicant in a new session can see and withdraw their application', async () => {
+      __setReadyForTest(true)
+      setAuthUser({ role: 'user', master_application: { status: 'pending' } })
+      expect(sessionStorage.getItem(MASTER_APPLIED_KEY)).toBeNull()
+      expect(await call(masterPendingGuard)).toBe(true)
+    })
+
     it('timeout with role still null -> /auth-error', async () => {
       vi.useFakeTimers()
       const promise = call(masterPendingGuard)

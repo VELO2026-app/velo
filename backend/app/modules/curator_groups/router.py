@@ -13,6 +13,7 @@
 #   DELETE /api/v1/masters/me/curator-groups/{group_id}
 #   GET    /api/v1/masters/me/curator-groups/{group_id}/members
 #   DELETE /api/v1/masters/me/curator-groups/{group_id}/members/{user_id}
+#   GET    /api/v1/masters/me/curator-groups/{group_id}/analytics
 #
 # AUTH: get_current_master everywhere. That single dependency covers three
 # of this feature's states at once -- no master profile, an unverified one,
@@ -42,12 +43,16 @@ from app.modules.auth.dependencies import (
     get_current_user,
     get_current_user_write,
 )
+from app.modules.curator_groups.analytics_service import (
+    get_curator_group_analytics,
+)
 from app.modules.curator_groups.feedback_service import (
     list_curator_group_checkins,
     list_curator_group_reviews,
 )
 from app.modules.curator_groups.schemas import (
     CreateCuratorGroupRequest,
+    CuratorGroupAnalyticsResponse,
     CuratorGroupCheckinItem,
     CuratorGroupDeletePreviewResponse,
     CuratorGroupEventActor,
@@ -512,6 +517,32 @@ async def list_curator_group_reviews_endpoint(
         limit=limit,
         offset=offset,
     )
+
+
+@router.get(
+    "/me/curator-groups/{group_id}/analytics",
+    response_model=CuratorGroupAnalyticsResponse,
+)
+async def get_curator_group_analytics_endpoint(
+    group_id: UUID,
+    period: Literal["week", "month", "quarter"] = Query(default="week"),
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_reader),
+) -> CuratorGroupAnalyticsResponse:
+    """The school's analytics aggregate (tz-curator.md §6).
+
+    One read for the whole screen. `period` scopes the engagement group
+    (conducted / came / came again) to the curator's own calendar -- the
+    same Literal + bounds the master dashboard's stats endpoint uses; an
+    unknown value is a 422 from FastAPI. The rest of the payload (the
+    bucketed distributions with the feeds' exact predicates, the top
+    completed practices) stays all-time. Read-only, page-size independent:
+    the cost is a fixed handful of grouped statements, not a scan the
+    client paginates.
+    """
+    user, _profile = master_tuple
+    data = await get_curator_group_analytics(user, group_id, session, period)
+    return CuratorGroupAnalyticsResponse(**data)
 
 
 @router.get(

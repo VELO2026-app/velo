@@ -169,6 +169,25 @@ def rating_bucket(score: int) -> str:
     ]
 
 
+def rating_bucket_five(score: int) -> str:
+    """Map a 1..10 feedback rating to its FIVE-scale key.
+
+    The exact tz-mood-scale numeric contract the frontend's moodScale.ts
+    implements: boundaries 2|3, 4|5, 6|7, 8|9 -- 1-2 «Плохо» (bad), 3-4
+    «Не очень» (low), 5-6 «Нормально» (neutral), 7-8 «Хорошо» (good),
+    9-10 «Огонь» (fire). This is the widening tz-mood-scale §5 reserved
+    for "the separate analytics backend task"; the school analytics
+    aggregate consumes it so its strip reads identically to the practice
+    mood strips. Deliberately NOT a change to rating_bucket: the /reviews
+    feed keeps its three-chip vocabulary until the owner unifies the
+    feeds, so a feed chip and an aggregate segment are different answers
+    by design.
+    """
+    return ("bad", "low", "neutral", "good", "fire")[
+        max(0, min(4, (score - 1) // 2))
+    ]
+
+
 def mood_bucket(score: int) -> str:
     """Map a 1..10 check-in mood to its UI bucket name (low / mid / high).
 

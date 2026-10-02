@@ -72,3 +72,16 @@ describe('SchoolMemberRow', () => {
     expect(row()?.hasAttribute('disabled')).toBe(false)
   })
 })
+
+it.each([
+  ['awaiting_verification', 'Ожидает проверки мастера'],
+  ['awaiting_answer', 'Ожидает ответа участника'],
+] as const)('shows %s without claiming the student is already a master', async (state, label) => {
+  const candidate = member({ master_offer: state })
+  const onOpen = vi.fn()
+  mountRow(candidate, onOpen)
+  await nextTick()
+  expect(host?.textContent).toContain(label)
+  row()?.click()
+  expect(onOpen).toHaveBeenCalledWith(candidate)
+})

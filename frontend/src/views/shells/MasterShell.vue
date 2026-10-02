@@ -130,6 +130,10 @@ const FOG_ROUTES = [
   // tz-curator.md §1.11 (owner 2026-09-22): the participants screen is the
   // school's roster feed, same treatment as the school PAGE above.
   'master-curator-group-members',
+  // tz-curator.md §6 (owner 2026-10-02): the school's analytics screen --
+  // the same scrolling feed under the floating header as the school PAGE
+  // above (without this entry the header floats over raw content).
+  'master-curator-group-analytics',
   'master-curator-group-create',
   'master-profile',
   // Edit-profile + language/timezone: fog so content doesn't smudge under the

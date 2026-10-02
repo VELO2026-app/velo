@@ -106,7 +106,19 @@ beforeEach(() => {
   routeState.userId = 'u9'
   routeState.nameQuery = 'Пётр Сидоров'
   Object.values(cgApi).forEach((fn) => vi.mocked(fn).mockReset())
-  vi.mocked(cgApi.getCuratorGroupPage).mockReset()
+  vi.mocked(cgApi.getCuratorGroupPage).mockResolvedValue({
+    id: 'g1',
+    name: 'Школа',
+    description: null,
+    avatar_url: null,
+    curator: { user_id: 'c1', display_name: 'Куратор', avatar_url: null },
+    masters_count: 1,
+    students_count: 2,
+    viewer: { relation: 'curator' },
+    transfer: null,
+    created_at: '2026-09-01T00:00:00Z',
+  })
+  vi.mocked(cgApi.cancelCuratorGroupMasterOffer).mockResolvedValue(undefined)
   vi.mocked(cgApi.getCuratorGroupStudentProfile).mockResolvedValue(profileFixture())
   vi.mocked(cgApi.offerCuratorGroupMaster).mockResolvedValue(undefined)
   // Default roster lookup: the student is NOT among the masters (the only
@@ -440,5 +452,100 @@ describe('SchoolStudentProfileView', () => {
 
     expect(text()).not.toContain('Секретный чекин')
     expect(text()).not.toContain('Секретный фидбек')
+  })
+})
+
+describe('pending school-master offer', () => {
+  it.each([
+    ['awaiting_verification', 'Ожидает проверки мастера'],
+    ['awaiting_answer', 'Ожидает ответа участника'],
+  ] as const)('shows %s and cancels only on confirmation', async (state, label) => {
+    vi.mocked(cgApi.getCuratorGroupStudentProfile).mockResolvedValue(
+      profileFixture({ master_offer: state }),
+    )
+    mount()
+    await flush()
+    expect(text()).toContain(label)
+    exactButton('Отменить предложение')?.click()
+    await flush()
+    expect(cgApi.cancelCuratorGroupMasterOffer).not.toHaveBeenCalled()
+    vi.mocked(cgApi.getCuratorGroupStudentProfile).mockResolvedValue(
+      profileFixture({ master_offer: null }),
+    )
+    const dialog = document.body.querySelector('.v-modal__overlay')
+    const confirm = Array.from(dialog?.querySelectorAll('button') ?? []).find(
+      (b) => b.textContent?.trim() === 'Отменить предложение',
+    )
+    expect(confirm).toBeTruthy()
+    confirm?.click()
+    confirm?.click()
+    await flush()
+    expect(cgApi.cancelCuratorGroupMasterOffer).toHaveBeenCalledTimes(1)
+    expect(cgApi.cancelCuratorGroupMasterOffer).toHaveBeenCalledWith('g1', 'u9')
+    expect(text()).not.toContain(label)
+    expect(toastSuccess).toHaveBeenCalledWith('Предложение отменено')
+  })
+
+  it('keeps the offer and exposes failure if cancellation fails', async () => {
+    vi.mocked(cgApi.getCuratorGroupStudentProfile).mockResolvedValue(
+      profileFixture({ master_offer: 'awaiting_answer' }),
+    )
+    vi.mocked(cgApi.cancelCuratorGroupMasterOffer).mockRejectedValue(new Error('offline'))
+    mount()
+    await flush()
+    exactButton('Отменить предложение')?.click()
+    await flush()
+    const dialog = document.body.querySelector('.v-modal__overlay')
+    Array.from(dialog?.querySelectorAll('button') ?? [])
+      .find((b) => b.textContent?.trim() === 'Отменить предложение')
+      ?.click()
+    await flush()
+    expect(text()).toContain('Ожидает ответа участника')
+    expect(toastError).toHaveBeenCalled()
+    expect(toastSuccess).not.toHaveBeenCalled()
+  })
+
+  it('shows the state read back from the server after making an offer', async () => {
+    mount()
+    await flush()
+    buttonWith('Действия с учеником')?.click()
+    await flush()
+    buttonWith('Изменить роль')?.click()
+    await flush()
+    exactButton('Мастер')?.click()
+    await flush()
+    vi.mocked(cgApi.getCuratorGroupStudentProfile).mockResolvedValue(
+      profileFixture({ master_offer: 'awaiting_verification' }),
+    )
+    exactButton('Изменить')?.click()
+    await flush()
+    expect(text()).toContain('Ожидает проверки мастера')
+    expect(cgApi.getCuratorGroupStudentProfile).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not allow an offer when the current role lookup fails', async () => {
+    vi.mocked(cgApi.getCuratorGroupMembers).mockRejectedValueOnce(new Error('offline'))
+    mount()
+    await flush()
+    buttonWith('Действия с учеником')?.click()
+    await flush()
+    buttonWith('Изменить роль')?.click()
+    await flush()
+    expect(text()).toContain('Не удалось проверить роль участника')
+    expect(exactButton('Изменить')?.disabled).toBe(true)
+    expect(cgApi.offerCuratorGroupMaster).not.toHaveBeenCalled()
+  })
+
+  it('a school master can read the student but has no curator actions', async () => {
+    const page = await cgApi.getCuratorGroupPage('g1')
+    vi.mocked(cgApi.getCuratorGroupPage).mockResolvedValue({
+      ...page,
+      viewer: { relation: 'master' },
+    })
+    mount()
+    await flush()
+    expect(text()).toContain('Пётр Сидоров')
+    expect(buttonWith('Действия с учеником')).toBeUndefined()
+    expect(exactButton('Отменить предложение')).toBeUndefined()
   })
 })

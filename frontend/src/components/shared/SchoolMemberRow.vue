@@ -24,6 +24,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { CuratorGroupMemberItem } from '@/api/types'
+import { masterOfferLabel } from '@/utils/masterOffers'
 import { VAvatar, VListRow } from '@/components/ui'
 
 const props = defineProps<{
@@ -34,5 +35,9 @@ defineEmits<{
   open: [member: CuratorGroupMemberItem]
 }>()
 
-const subtitle = computed(() => (props.member.is_visible ? undefined : 'Временно недоступен'))
+const subtitle = computed(
+  () =>
+    masterOfferLabel(props.member.master_offer) ??
+    (props.member.is_visible ? undefined : 'Временно недоступен'),
+)
 </script>
