@@ -28,6 +28,7 @@
 # is_global and would be passed through, not limited.
 # =============================================================================
 
+import contextlib
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
@@ -77,6 +78,8 @@ _RATE_KEYS = (
       for address in _ADDRESSES),
     "be66_probe:ttl",
     "be66_probe:93.184.216.34",
+    "be44_probe:cut",
+    "be44_probe:eternal",
 )
 
 
@@ -227,6 +230,73 @@ async def test_ttl_is_set_on_the_first_increment_only() -> None:
     assert await redis.ttl(key) <= 50
 
 
+class _CutAfter:
+    """Lets the first `allowed` Redis round trips through and fails every
+    later one with a connection error -- a connection lost mid-sequence.
+
+    Counted at the client: a plain command is one Redis.execute_command, a
+    whole MULTI/EXEC is one Pipeline.execute (Pipeline overrides
+    execute_command to queue locally, so queued commands are not counted)."""
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch, allowed: int) -> None:
+        from redis.asyncio.client import Pipeline, Redis
+
+        self.trips = 0
+        cut = self
+
+        def wrap(real):
+            async def guarded(self, *args, **kwargs):
+                cut.trips += 1
+                if cut.trips > allowed:
+                    raise RedisConnectionError("connection lost (BE-44 test)")
+                return await real(self, *args, **kwargs)
+            return guarded
+
+        monkeypatch.setattr(Redis, "execute_command", wrap(Redis.execute_command))
+        monkeypatch.setattr(Pipeline, "execute", wrap(Pipeline.execute))
+
+
+@pytest.mark.usefixtures("rate_keys")
+@pytest.mark.asyncio
+@pytest.mark.parametrize("allowed", [0, 1])
+async def test_a_lost_connection_never_leaves_a_counter_without_a_ttl(
+    monkeypatch: pytest.MonkeyPatch, allowed: int,
+) -> None:
+    """BE-44, the eternal limit: INCR and EXPIRE were two round trips, and a
+    connection lost after the first left a counted key with no TTL -- a
+    source limited for ever. Whatever round trip is cut, the key is either
+    absent or carries a TTL; never present without one (TTL -1).
+
+    allowed=0: the cut hits the first round trip -> nothing is written.
+    allowed=1: the cut hits the second one, if there is a second one."""
+    redis = get_redis()
+    key = "be44_probe:cut"
+    with monkeypatch.context() as m:
+        _CutAfter(m, allowed)
+        with contextlib.suppress(RedisConnectionError):
+            await count_in_window(redis, key, 600)
+    ttl = await redis.ttl(key)
+    assert ttl != -1, "counter left without a TTL"
+    if allowed == 0:
+        assert ttl == -2  # key absent: all or nothing
+    else:
+        assert 590 <= ttl <= 600  # the one round trip went through whole
+
+
+@pytest.mark.usefixtures("rate_keys")
+@pytest.mark.asyncio
+async def test_a_counter_left_without_a_ttl_gets_one_on_its_next_hit() -> None:
+    """EXPIRE NX also heals a key the old two-command form left eternal: it
+    has no TTL, so the next hit gives it one. Pair: the count continues --
+    the key is healed, not reset."""
+    redis = get_redis()
+    key = "be44_probe:eternal"
+    await redis.set(key, 5)
+    assert await redis.ttl(key) == -1
+    assert await count_in_window(redis, key, 600) == 6
+    assert 590 <= await redis.ttl(key) <= 600
+
+
 @pytest.mark.usefixtures("rate_keys")
 @pytest.mark.asyncio
 async def test_unlimitable_source_writes_no_key_and_a_public_one_does() -> None:
@@ -354,9 +424,24 @@ async def test_entry_over_the_limit_with_no_shared_link_is_an_honest_page(
     assert zoom.calls == []
 
 
-class _DeadRedis:
-    async def incr(self, key: str) -> int:
+class _DeadPipeline:
+    """A MULTI/EXEC that never reaches the server: queuing is local and
+    succeeds, the round trip is where a dead Redis shows (BE-44: the
+    counter is one pipeline now, not a bare INCR)."""
+
+    def incr(self, key: str) -> "_DeadPipeline":
+        return self
+
+    def expire(self, key: str, seconds: int, **kwargs: object) -> "_DeadPipeline":
+        return self
+
+    async def execute(self) -> list:
         raise RedisConnectionError("connection refused")
+
+
+class _DeadRedis:
+    def pipeline(self, transaction: bool = True) -> _DeadPipeline:
+        return _DeadPipeline()
 
 
 @pytest.mark.asyncio

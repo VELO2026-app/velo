@@ -112,7 +112,9 @@ async def test_issue_success_returns_composed_link(
 ) -> None:
     """Success returns the full server-composed deeplink + issued_at.
 
-    The link is generic (no target); there is deliberately NO expiry field.
+    The link is generic (no target); there is deliberately NO expiry field
+    in the response. The invite itself does expire (BE-44, see
+    test_issued_invite_expires); exposing when is not part of this answer.
     """
     admin_token = await _login_admin(client, db_session)
 
@@ -124,6 +126,32 @@ async def test_issue_success_returns_composed_link(
     assert "expires_at" not in body
     # The plaintext token rides only in the link (never echoed elsewhere).
     assert _token_from_link(body["invite_link"])
+
+
+async def test_issued_invite_expires(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """BE-44: the stored invite carries a TTL of master_invite_ttl_seconds
+    (7 days, owner's decision); before, a leaked link lived for ever. Pair:
+    the key exists -- a TTL check on a missing key would read -2 and say
+    nothing."""
+    import hashlib
+
+    from app.core.redis import get_redis
+    from app.modules.admin.masters.service import MASTER_INVITE_KEY_PREFIX
+
+    token = await _login_admin(client, db_session)
+    resp = await _issue(client, token)
+    assert resp.status_code == 200
+    invite = _token_from_link(resp.json()["invite_link"])
+    key = MASTER_INVITE_KEY_PREFIX + hashlib.sha256(invite.encode()).hexdigest()
+
+    redis = get_redis()
+    assert await redis.exists(key) == 1
+    ttl = await redis.ttl(key)
+    assert settings.master_invite_ttl_seconds - 60 < ttl
+    assert ttl <= settings.master_invite_ttl_seconds
+    assert settings.master_invite_ttl_seconds == 7 * 24 * 3600
 
 
 async def test_issue_503_when_bot_url_unset(

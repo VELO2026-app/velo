@@ -27,8 +27,6 @@
 #       value = await redis.get("my-key")
 # =============================================================================
 
-import redis.asyncio as aioredis
-
 from app.core.config import settings
 
 # Global Redis client instance. Initialized at app startup.
@@ -48,6 +46,18 @@ async def init_redis() -> None:
         # This setting auto-decodes to str, so you get "hello"
         # instead of b"hello". Saves .decode() calls everywhere.
         decode_responses=True,
+        # BE-44: without these a hung connection holds the request for ever,
+        # and the session lookup puts Redis on the path of every
+        # authenticated request. A timeout raises TimeoutError (a
+        # RedisError); what each caller does with it:
+        #   - session lookup / login / logout -> 500 via the global handler
+        #     (NOT 401: nobody is logged out by an outage);
+        #   - login limiters (auth/service.py) -> fail CLOSED, 500, by design;
+        #   - guest-path limiter (practices/router.py) -> fail OPEN, served
+        #     unlimited with a warning;
+        #   - /health -> already bounded by its own 2 s wait_for -> degraded.
+        socket_connect_timeout=settings.redis_socket_connect_timeout_seconds,
+        socket_timeout=settings.redis_socket_timeout_seconds,
     )
 
 

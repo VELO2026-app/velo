@@ -975,12 +975,14 @@ async def reject_method_change(
 
 
 # ---------------------------------------------------------------------------
-# Batch-INVITE: generic one-time master invite link (Redis-backed, no TTL)
+# Batch-INVITE: generic one-time master invite link (Redis-backed, TTL)
 # ---------------------------------------------------------------------------
 # The invite is account-agnostic -- no target user_id. The token's sha256 is
-# stored in Redis under MASTER_INVITE_KEY_PREFIX with NO expiry; it lives until
-# the first claim burns it atomically (masters/service.claim_master_invite), or
-# until a Redis flush drops it (acceptable: the admin regenerates). The prefix
+# stored in Redis under MASTER_INVITE_KEY_PREFIX for
+# settings.master_invite_ttl_seconds (7 days, BE-44); it lives until the first
+# claim burns it atomically (masters/service.claim_master_invite), until it
+# expires, or until a Redis flush drops it (acceptable: the admin
+# regenerates). An expired invite is indistinguishable from a consumed one. The prefix
 # is duplicated in masters/service.py to avoid a cross-module import -- keep the
 # two literals in sync.
 MASTER_INVITE_KEY_PREFIX = "master_invite:"
@@ -990,8 +992,9 @@ async def issue_master_invite(admin: User) -> tuple[str, datetime]:
     """Issue a generic one-time master invite link.
 
     No target: the returned link works for any authenticated opener until it
-    is claimed once. Only the token's sha256 is persisted (in Redis); the
-    plaintext token exists solely inside the returned link.
+    is claimed once or settings.master_invite_ttl_seconds pass. Only the
+    token's sha256 is persisted (in Redis); the plaintext token exists solely
+    inside the returned link.
 
     Raises:
         VeloError 503 (bot_url_not_configured): telegram_bot_url unset.
@@ -1007,13 +1010,15 @@ async def issue_master_invite(admin: User) -> tuple[str, datetime]:
     issued_at = datetime.now(UTC)
     token_hash = hashlib.sha256(token.encode()).hexdigest()
 
-    # No expiry: persist until the first claim burns it (or a Redis flush).
+    # BE-44: expires after master_invite_ttl_seconds. Without ex= a leaked
+    # link stayed claimable for ever.
     redis = get_redis()
     await redis.set(
         f"{MASTER_INVITE_KEY_PREFIX}{token_hash}",
         json.dumps(
             {"issued_by": str(admin.id), "issued_at": issued_at.isoformat()}
         ),
+        ex=settings.master_invite_ttl_seconds,
     )
 
     # Audit trail (the token itself is never logged).

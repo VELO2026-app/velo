@@ -91,6 +91,17 @@ class Settings(BaseSettings):
 
     # -- Redis --
     redis_url: str = "redis://localhost:6379/0"
+    # Socket timeouts of the application's Redis client (BE-44). Redis sits
+    # on the path of every authenticated request (the session lookup), and
+    # without these a hung connection held each of those coroutines for
+    # ever. A timeout surfaces as redis.exceptions.TimeoutError, a RedisError:
+    # each caller then does what it already does on a Redis failure (see
+    # core/redis.py). No command on this client blocks by design, so 2 s cuts
+    # nothing legitimate; it matches the 2 s the health probe already allows.
+    # The comms relay has its own client and its own pair
+    # (comms_relay_socket_*_timeout_seconds).
+    redis_socket_connect_timeout_seconds: float = 2.0
+    redis_socket_timeout_seconds: float = 2.0
 
     # -- CORS --
     # Comma-separated list of allowed origins.
@@ -140,6 +151,13 @@ class Settings(BaseSettings):
     # -- Sessions --
     # How long a session token lives in Redis (days).
     session_ttl_days: int = 30
+
+    # -- Master invites --
+    # How long a generic one-time master invite link stays claimable
+    # (seconds). Owner's decision, BE-44: 7 days. Before it the token had no
+    # expiry, so a leaked link stayed valid until somebody claimed it. An
+    # expired link answers exactly like a consumed one (404 invite_invalid).
+    master_invite_ttl_seconds: int = 604800
 
     # -- Auth security (Phase 1 auth/service.py) --
     # Telegram initData validity window (seconds). Telegram signs initData

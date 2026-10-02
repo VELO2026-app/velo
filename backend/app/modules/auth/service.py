@@ -109,6 +109,14 @@ def validate_telegram_init_data(init_data: str, bot_token: str) -> dict:
     received_hash = parsed.pop("hash", [None])[0]
     if not received_hash:
         raise TelegramValidationError("Missing hash in initData")
+    # BE-44: a real hash is 64 lowercase hex characters, but parse_qs
+    # decodes percent-encoding, so hash=%C3%A9 arrives as "é". A non-ASCII
+    # str used to reach compare_digest and raise TypeError -- a 500, not the
+    # 400 every other bad signature gets. Refused here as what it is: a
+    # signature that cannot match. (Percent-encoded surrogates do not get
+    # this far as surrogates: parse_qs decodes with errors="replace".)
+    if not received_hash.isascii():
+        raise TelegramValidationError("Invalid initData signature")
 
     # Build the data-check-string: sorted key=value pairs joined by \n.
     # Each value is taken as-is (first element of the list from parse_qs).
@@ -123,8 +131,12 @@ def validate_telegram_init_data(init_data: str, bot_token: str) -> dict:
         secret_key, data_check_string.encode(), hashlib.sha256
     ).hexdigest()
 
-    # Compare hashes (constant-time to prevent timing attacks).
-    if not hmac.compare_digest(computed_hash, received_hash):
+    # Compare hashes (constant-time to prevent timing attacks). As bytes:
+    # compare_digest refuses non-ASCII str with TypeError, and received_hash
+    # is ASCII by the check above, so both sides encode losslessly.
+    if not hmac.compare_digest(
+        computed_hash.encode("ascii"), received_hash.encode("ascii")
+    ):
         raise TelegramValidationError("Invalid initData signature")
 
     # Check auth_date is not too old (5 minutes).
@@ -290,8 +302,9 @@ async def check_auth_rate_limit(telegram_id: int) -> None:
     """Rate limit auth attempts per telegram_id.
 
     CRITICAL-4: Max 5 requests per 60 seconds per telegram_id.
-    Uses Redis INCR + EXPIRE pattern (TTL set only on first increment
-    to avoid resetting the window on each request).
+    Uses core/ratelimit.count_in_window: INCR and EXPIRE NX in one
+    MULTI/EXEC (TTL set only on the first increment, so the window is not
+    reset on each request; BE-44 made the pair atomic).
 
     Prevents Redis OOM from session flooding via a replayed valid initData
     within its 5-minute window.

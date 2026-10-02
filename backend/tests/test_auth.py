@@ -6,7 +6,8 @@ import hashlib
 import hmac
 import json
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from collections.abc import AsyncGenerator
+from unittest.mock import AsyncMock, MagicMock, call, patch
 from urllib.parse import urlencode
 
 import pytest
@@ -216,10 +217,18 @@ class TestValidateTelegramInitData:
 async def test_auth_telegram_success_mocked_redis(client: AsyncClient) -> None:
     """Full auth flow with mocked Redis (unit-test style).
 
-    Mocks the two Redis consumers in the auth flow:
-      1. check_auth_rate_limit   — redis.incr()        → AsyncMock → 1
-                                   redis.expire()      → AsyncMock → True
-      2. create_session          — redis.pipeline()    → mock_pipe (MULTI/EXEC)
+    Mocks the two Redis consumers in the auth flow, each with a pipeline of
+    its own (both use MULTI/EXEC since BE-44):
+      1. check_auth_rate_limit   -- pipeline #1: INCR + EXPIRE NX -> [1, True]
+      2. create_session          -- pipeline #2: SET/ZADD/ZREM/EXPIRE
+    The source limiter does not reach Redis: the test client's 127.0.0.1 is
+    not a limitable source.
+
+    BE-44: one shared mock pipeline used to serve both, and its result
+    [True, 1, 0, True] would have reached the limiter as count=True -- green
+    by an accident of bool being an int. Two pipelines, each with its own
+    result, and both asserted executed, so neither consumer is silently
+    skipped.
     """
     user_data = {"id": 99999, "first_name": "Tester", "username": "tester"}
     init_data = build_init_data(user_data)
@@ -242,13 +251,14 @@ async def test_auth_telegram_success_mocked_redis(client: AsyncClient) -> None:
         # execute() returns list of results; [2] is zremrangebyscore count.
         mock_pipe.execute = AsyncMock(return_value=[True, 1, 0, True])
 
-        # -- Direct Redis mock for check_auth_rate_limit -------------------
-        # CRITICAL-4: check_auth_rate_limit calls redis.incr(key) and redis.expire(key, 60).
-        #   incr returns 1 (first request in window, below rate limit of 5).
+        # -- Pipeline mock for check_auth_rate_limit (CRITICAL-4, BE-44) ----
+        # count_in_window: INCR + EXPIRE NX in one MULTI/EXEC; count 1 is the
+        # first request in the window, below the limit of 5.
+        limit_pipe = MagicMock()
+        limit_pipe.execute = AsyncMock(return_value=[1, True])
+
         mock_redis = MagicMock()
-        mock_redis.incr = AsyncMock(return_value=1)
-        mock_redis.expire = AsyncMock(return_value=True)
-        mock_redis.pipeline = MagicMock(return_value=mock_pipe)
+        mock_redis.pipeline = MagicMock(side_effect=[limit_pipe, mock_pipe])
         mock_get_redis.return_value = mock_redis
 
         response = await client.post(
@@ -261,10 +271,71 @@ async def test_auth_telegram_success_mocked_redis(client: AsyncClient) -> None:
     assert "session_token" in data
     assert data["user"]["telegram_id"] == 99999
     assert data["user"]["first_name"] == "Tester"
-    # Verify pipeline was used to store session atomically.
-    mock_redis.pipeline.assert_called_once_with(transaction=True)
+    # Verify both Redis writers went through MULTI/EXEC: the limiter's
+    # counter (BE-44) and the session store (CRITICAL-05). Was "pipeline
+    # called once" -- true while the session was the only pipeline user.
+    assert mock_redis.pipeline.call_args_list == [
+        call(transaction=True),
+        call(transaction=True),
+    ]
+    limit_pipe.execute.assert_awaited_once()
     mock_pipe.set.assert_called_once()
     mock_pipe.execute.assert_awaited_once()
+
+
+def _with_hash(init_data: str, raw_hash: str) -> str:
+    """initData with its hash field replaced by `raw_hash`, verbatim (it may
+    carry percent-encoding)."""
+    return init_data.rsplit("hash=", 1)[0] + f"hash={raw_hash}"
+
+
+class TestNonAsciiInitData:
+    """BE-44: a non-ASCII hash answers 400 like any bad signature, never
+    500. Before, parse_qs decoded hash=%C3%A9 to "é", which reached
+    hmac.compare_digest as a non-ASCII str and raised TypeError."""
+
+    @pytest.mark.parametrize(
+        "raw_hash",
+        [
+            pytest.param("%C3%A9", id="percent-encoded-e-acute"),
+            pytest.param("%D0%B0" * 64, id="64-cyrillic"),
+            pytest.param("%ED%A0%80", id="percent-encoded-surrogate"),
+        ],
+    )
+    def test_non_ascii_hash_is_a_bad_signature(self, raw_hash: str) -> None:
+        init_data = _with_hash(build_init_data({"id": 12345}), raw_hash)
+        with pytest.raises(TelegramValidationError, match="signature"):
+            validate_telegram_init_data(init_data, BOT_TOKEN)
+
+    @pytest.mark.parametrize(
+        "raw_hash",
+        [
+            pytest.param("%C3%A9", id="percent-encoded-e-acute"),
+            pytest.param("%D0%B0" * 64, id="64-cyrillic"),
+        ],
+    )
+    async def test_endpoint_answers_400_not_500(
+        self, client: AsyncClient, raw_hash: str
+    ) -> None:
+        """Through the app: the same 400 as any other bad signature."""
+        init_data = build_init_data({"id": 77001, "first_name": "AuthTest"})
+        with patch.object(settings, "telegram_bot_token", BOT_TOKEN):
+            response = await client.post(
+                "/api/v1/auth/telegram",
+                json={"init_data": _with_hash(init_data, raw_hash)},
+            )
+        assert response.status_code == 400
+
+    async def test_the_same_request_with_its_real_hash_still_logs_in(
+        self, client: AsyncClient
+    ) -> None:
+        """Pair: the guard rejects the malformed hash, not the request."""
+        init_data = build_init_data({"id": 77001, "first_name": "AuthTest"})
+        with patch.object(settings, "telegram_bot_token", BOT_TOKEN):
+            response = await client.post(
+                "/api/v1/auth/telegram", json={"init_data": init_data},
+            )
+        assert response.status_code == 200
 
 
 async def test_auth_telegram_invalid_data(client: AsyncClient) -> None:
@@ -639,33 +710,50 @@ async def test_forged_forwarded_for_does_not_pick_the_login_bucket(
 # ---------------------------------------------------------------------------
 
 
+_SOURCE_LIMIT = (
+    settings.auth_rate_limit_max_requests * _SOURCE_RATE_LIMIT_MULTIPLIER
+)
+# Public addresses only these tests key on. The suite's per-test flush
+# (conftest flush_auth_redis_keys) covers auth_rate:* but not
+# auth_rate_src:*, so the fixture below clears them itself.
+_SRC_PROBES = ("8.8.8.8", "2001:4860:4860::8888")
+
+
+@pytest.fixture
+async def src_keys() -> AsyncGenerator[None, None]:
+    redis = get_redis()
+    keys = [f"auth_rate_src:{a}" for a in _SRC_PROBES]
+    await redis.delete(*keys)
+    yield
+    await redis.delete(*keys)
+
+
 class TestSourceRateLimit:
     """check_source_rate_limit is keyed on the client address and applies
-    before the HMAC verification, so signature guessing costs a counter."""
+    before the HMAC verification, so signature guessing costs a counter.
 
+    BE-44: these ran on a MagicMock and asserted which methods were awaited
+    (incr, then expire). That was right about the rule -- TTL on the first
+    increment -- but it asserted the shape of the old two-command form, and
+    that form was the defect: a connection lost between the commands left a
+    counter with no TTL. The counter is one MULTI/EXEC now, so the tests run
+    on the suite's real Redis (database 15) and assert the RESULT: the key
+    and its TTL, not the calls that produced them."""
+
+    @pytest.mark.usefixtures("src_keys")
     async def test_under_limit_passes(self) -> None:
-        redis = MagicMock()
-        redis.incr = AsyncMock(return_value=1)
-        redis.expire = AsyncMock()
-        with patch(
-            "app.modules.auth.service.get_redis", return_value=redis
-        ):
-            await check_source_rate_limit("8.8.8.8")
-        # TTL is set on the first increment only -- otherwise every request
-        # slides the window and the limit never fires.
-        redis.expire.assert_awaited_once()
+        await check_source_rate_limit("8.8.8.8")
+        redis = get_redis()
+        assert await redis.get("auth_rate_src:8.8.8.8") == "1"
+        # TTL is set on the first increment -- a counter without one would
+        # never reset and limit this source for ever.
+        ttl = await redis.ttl("auth_rate_src:8.8.8.8")
+        assert 0 < ttl <= settings.auth_rate_limit_window_seconds
 
+    @pytest.mark.usefixtures("src_keys")
     async def test_over_limit_raises_429(self) -> None:
-        limit = (
-            settings.auth_rate_limit_max_requests
-            * _SOURCE_RATE_LIMIT_MULTIPLIER
-        )
-        redis = MagicMock()
-        redis.incr = AsyncMock(return_value=limit + 1)
-        redis.expire = AsyncMock()
-        with patch(
-            "app.modules.auth.service.get_redis", return_value=redis
-        ), pytest.raises(TooManyRequestsError) as exc:
+        await get_redis().set("auth_rate_src:8.8.8.8", _SOURCE_LIMIT, ex=60)
+        with pytest.raises(TooManyRequestsError) as exc:
             await check_source_rate_limit("8.8.8.8")
         # 429, not 400: nothing was wrong with the request except its rate,
         # and 429 is the only code a client knows how to back off on.
@@ -679,14 +767,15 @@ class TestSourceRateLimit:
 
     async def test_missing_source_is_not_limited(self) -> None:
         """No address to key on: skipped rather than funnelled into one
-        shared bucket, which would turn a limiter into an outage."""
-        redis = MagicMock()
-        redis.incr = AsyncMock()
+        shared bucket, which would turn a limiter into an outage. Asserted
+        by refusing to hand out a Redis client at all: any Redis access, by
+        any command form, fails the test (BE-44: asserting on incr alone
+        stopped meaning anything once the counter went through a pipeline)."""
         with patch(
-            "app.modules.auth.service.get_redis", return_value=redis
+            "app.modules.auth.service.get_redis",
+            side_effect=AssertionError("Redis was touched"),
         ):
             await check_source_rate_limit(None)
-        redis.incr.assert_not_awaited()
 
     @pytest.mark.parametrize(
         "source",
@@ -704,34 +793,27 @@ class TestSourceRateLimit:
         infrastructure showing through (the test client, a health check, or
         the nginx peer used as fallback when no usable X-Real-IP was present).
         Keying on it bounds nobody and shares one counter between everybody
-        it cannot tell apart. Asserting on incr specifically: the address must
-        be rejected BEFORE the counter, not merely forgiven after it."""
-        redis = MagicMock()
-        redis.incr = AsyncMock(return_value=10**6)
+        it cannot tell apart. The address must be rejected BEFORE the
+        counter, not merely forgiven after it -- so Redis may not be reached
+        at all (same refusal as test_missing_source_is_not_limited)."""
         with patch(
-            "app.modules.auth.service.get_redis", return_value=redis
+            "app.modules.auth.service.get_redis",
+            side_effect=AssertionError("Redis was touched"),
         ):
             await check_source_rate_limit(source)
-        redis.incr.assert_not_awaited()
 
-    @pytest.mark.parametrize(
-        "source", ["8.8.8.8", "2001:4860:4860::8888"]
-    )
+    @pytest.mark.usefixtures("src_keys")
+    @pytest.mark.parametrize("source", _SRC_PROBES)
     async def test_routable_source_is_still_limited(
         self, source: str
     ) -> None:
         """The other half of the same rule: a real remote client, v4 or v6,
         is still counted. The exemption above must not have turned the
-        limiter off for the traffic it exists to bound."""
-        limit = (
-            settings.auth_rate_limit_max_requests
-            * _SOURCE_RATE_LIMIT_MULTIPLIER
-        )
-        redis = MagicMock()
-        redis.incr = AsyncMock(return_value=limit + 1)
-        redis.expire = AsyncMock()
-        with patch(
-            "app.modules.auth.service.get_redis", return_value=redis
-        ), pytest.raises(TooManyRequestsError):
+        limiter off for the traffic it exists to bound. Pair: the hit was
+        counted on that address's own key."""
+        await get_redis().set(f"auth_rate_src:{source}", _SOURCE_LIMIT, ex=60)
+        with pytest.raises(TooManyRequestsError):
             await check_source_rate_limit(source)
-        redis.incr.assert_awaited_once()
+        assert await get_redis().get(f"auth_rate_src:{source}") == str(
+            _SOURCE_LIMIT + 1
+        )

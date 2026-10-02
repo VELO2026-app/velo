@@ -11,8 +11,11 @@
 # Two lessons are encoded here, both paid for:
 #
 # 1. TTL ON THE FIRST INCREMENT ONLY. Setting it on every request slides the
-#    window forward with each hit, and the limit never triggers -- the
-#    "eternal rate limit" BE-44 names.
+#    window forward with each hit, and the limit never triggers. The other
+#    "eternal" limit is the opposite one: a counter with NO TTL, which never
+#    resets. BE-44 found it -- INCR and EXPIRE sent as two commands, a lost
+#    connection between them -- and count_in_window now sends them as one
+#    MULTI/EXEC.
 #
 # 2. A SOURCE THAT IS NOT A ROUTABLE PUBLIC ADDRESS IS NOT LIMITED -- it is
 #    passed, never keyed. Keyed on every address, the first per-source
@@ -43,7 +46,7 @@
 
 import ipaddress
 
-import redis.asyncio as aioredis
+from app.core import redis as aioredis
 
 from app.core.redis import get_redis
 
@@ -72,16 +75,31 @@ async def count_in_window(
     """Increment `key`'s fixed-window counter and return the new count.
 
     The TTL is set on the FIRST increment only (lesson 1): the window is
-    anchored at the first hit and expires whole, never slid forward.
+    anchored at the first hit and expires whole, never slid forward. The
+    increment and the TTL travel in one MULTI/EXEC, so a key can never be
+    left counted but without a TTL (BE-44).
 
     `redis` is passed in rather than looked up so each caller keeps its own
     client lookup (auth's tests patch auth.service.get_redis). Redis errors
     propagate -- fail-open or fail-closed is the caller's call.
     """
-    count = await redis.incr(key)
-    if count == 1:
-        await redis.expire(key, window_seconds)
-    return count
+    # BE-44: ONE round trip, MULTI/EXEC. INCR and EXPIRE used to be two
+    # commands, and a connection lost between them left the key with no
+    # TTL -- a counter that never expires, i.e. a source limited forever.
+    # Queued in one transaction, either both run or neither does.
+    #
+    # NX keeps lesson 1 without a client-side "count == 1" branch: EXPIRE NX
+    # sets a TTL only on a key that has none, which is the key INCR has just
+    # created -- the first hit. Later hits find the TTL already there and
+    # leave it alone, so the window is never slid forward. A key left with
+    # no TTL by the old two-command form also has none, so it gets one on
+    # its next hit instead of staying eternal. NX needs Redis 7.0+
+    # (docker-compose pins redis:7-alpine; the stand reports 7.4.9).
+    pipe = redis.pipeline(transaction=True)
+    pipe.incr(key)
+    pipe.expire(key, window_seconds, nx=True)
+    count, _ = await pipe.execute()
+    return int(count)
 
 
 async def over_source_limit(
