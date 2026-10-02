@@ -88,6 +88,14 @@
 #       practices, before its UPDATE of them;
 #     block_student (masters/groups_service.py): the student's future
 #       practices of the master (BE-99, already in this form).
+#     update_practice changing a series root's audience: the root and its
+#       non-terminal children, before the school (_lock_practice_and_
+#       children); whether to take the children is decided on the
+#       unlocked read and re-decided on the locked root, and a
+#       non-terminal child the lock does not hold -- the read went stale,
+#       or the child was born while the lock waited -- refuses the edit
+#       with 409 series_audience_changed rather than taking a practice
+#       outside the statement (_refuse_unheld_children_or_409).
 #   Second cycle of the same pair, not through practices: block_student's
 #   master_student upsert holds KEY SHARE on the student's users row, and a
 #   cancellation refunding that student locks the row for the balance --
@@ -97,27 +105,6 @@
 #   What comes after the practice rows stays as recorded elsewhere:
 #   practice -> group (curator_groups/service.py, header) and
 #   practice -> booking (masters/groups_service.py, header).
-#
-#   KNOWN CEILING -- update_practice + propagate_audience_to_children.
-#     1. mechanics: an audience change on a series ROOT takes the root FOR
-#        UPDATE, then (a curator) the school as its owner, then UPDATEs the
-#        root's children with no order (series_service.py). Root first and
-#        children after breaks the one-statement rule, and children after
-#        the school breaks practice -> group: it can meet a cascade from a
-#        child, block_student or delete_curator_group in 40P01.
-#     2. status: acknowledged by design (owner, 2026-10-02: split from the
-#        delivery that wrote this order).
-#     3. task: BE-103.
-#     4. trigger: the delivery for update_practice (W4) is rolled out --
-#        it removes this marker.
-#     5. agreed fix: update_practice takes the root and its non-terminal
-#        children in one statement ORDER BY id, before the school, when the
-#        change touches the root's audience; the propagation then writes
-#        rows it already holds.
-#     6. rejected: ordering only the children's UPDATE (the root is still
-#        taken first, outside the order); ordering by scheduled_at (a
-#        rescheduled root is not the minimum of its series, and
-#        block_student's BE-99 order is by id).
 #
 # DELETE vs CANCEL:
 #   DELETE sets status=deleted (only from draft).
@@ -133,7 +120,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import structlog
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -176,7 +163,10 @@ from app.modules.practices.schemas import (
     UpdatePracticeRequest,
     check_school_audience,
 )
-from app.modules.practices.series_service import generate_series_occurrences
+from app.modules.practices.series_service import (
+    _TERMINAL_CHILD_STATUSES,
+    generate_series_occurrences,
+)
 from app.modules.practices.taxonomy_models import TaxonomyDirection, TaxonomyStyle
 from app.modules.users.models import User
 
@@ -596,6 +586,128 @@ async def _relock_school_or_404(
     """
     if not await _lock_group_as_owner(user.id, school_id, session):
         raise NotFoundError(_NOT_FOUND)
+
+
+async def _root_audience_change(
+    practice: Practice, update_data: dict, session: AsyncSession,
+) -> bool:
+    """THE ONE decision of whether a PATCH changes a series ROOT's audience
+    -- the change update_practice pushes down to the children
+    (propagate_audience_to_children). Called twice by update_practice: on
+    the unlocked read, to choose what to lock, and on the locked row, to
+    decide (PRACTICE ROW ORDER: decide on a read, re-check on the lock).
+
+    A change is (a) a sent audience_kind other than the stored one, or (b)
+    a sent group_ids set other than the stored set -- compared as SETS,
+    presence in the payload is not change (EditPracticeView resends both
+    fields on every save). A child is never a root, and its audience
+    fields are refused before anything is applied (S-a), so a child
+    answers False.
+
+    Must run BEFORE update_practice applies anything: it reads the stored
+    kind off the object and the stored set from practice_audience_group.
+    """
+    if practice.parent_practice_id is not None:
+        return False
+    if (
+        "audience_kind" in update_data
+        and update_data["audience_kind"] != practice.audience_kind
+    ):
+        return True
+    if "group_ids" not in update_data:
+        return False
+    stored = set(
+        (
+            await session.execute(
+                select(PracticeAudienceGroup.group_id).where(
+                    PracticeAudienceGroup.practice_id == practice.id,
+                )
+            )
+        ).scalars().all()
+    )
+    return stored != set(update_data["group_ids"] or [])
+
+
+async def _lock_practice_and_children(
+    practice_id: UUID, with_children: bool, session: AsyncSession,
+) -> tuple[Practice | None, list[Practice]]:
+    """Lock the practice -- and, with_children, its non-terminal children
+    -- in ONE statement, ORDER BY id (PRACTICE ROW ORDER, module header).
+
+    Returns (the practice or None, the locked children). The children's
+    status filter is IN the statement on purpose: FOR UPDATE re-checks the
+    predicate on every row it had to wait for, so a child cancelled or
+    deleted by a writer that held it is dropped from the set instead of
+    having its audience rewritten (S-d: history is not rewritten). The
+    parent id is a parameter that cannot go stale: parent_practice_id is
+    set at birth and never written again (C2-b).
+
+    A child born after this statement's snapshot is NOT in the set even if
+    the statement waited for its birth (its INSERT holds KEY SHARE on the
+    root): FOR UPDATE re-checks rows it found, it does not look for new
+    ones. update_practice therefore looks for such children after the
+    lock (_refuse_unheld_children_or_409).
+
+    populate_existing: update_practice's read put the practice into the
+    session, and a lock does not refresh an object already there (BE-85).
+    """
+    wanted = Practice.id == practice_id
+    if with_children:
+        wanted = or_(
+            wanted,
+            and_(
+                Practice.parent_practice_id == practice_id,
+                Practice.status.notin_(_TERMINAL_CHILD_STATUSES),
+            ),
+        )
+    rows = list(
+        (
+            await session.execute(
+                select(Practice)
+                .where(wanted)
+                .order_by(Practice.id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalars().all()
+    )
+    practice = next((p for p in rows if p.id == practice_id), None)
+    return practice, [p for p in rows if p.id != practice_id]
+
+
+async def _refuse_unheld_children_or_409(
+    root: Practice, children: list[Practice], session: AsyncSession,
+) -> None:
+    """409 series_audience_changed if the root has a non-terminal child
+    this transaction does not hold.
+
+    Two ways to get here, one fact -- the set update_practice locked is
+    not the set the propagation must write:
+      - the unlocked read said "no audience change", so no children were
+        taken, and the locked root says otherwise: another audience edit
+        of this root committed in between;
+      - a child was born after the lock statement's snapshot, while that
+        statement waited on the root (_lock_practice_and_children).
+    A plain read: the transaction holds the root FOR UPDATE, so no child
+    can be born from here on (its INSERT needs KEY SHARE on the root), and
+    the answer cannot go stale before the commit. Taking the missing
+    children now would lock practices outside the one statement (PRACTICE
+    ROW ORDER); the request is refused whole instead, before anything is
+    written, and a retry locks the right set.
+    """
+    held = [c.id for c in children]
+    query = select(Practice.id).where(
+        Practice.parent_practice_id == root.id,
+        Practice.status.notin_(_TERMINAL_CHILD_STATUSES),
+    )
+    if held:
+        query = query.where(Practice.id.notin_(held))
+    if (await session.execute(query.limit(1))).first() is not None:
+        raise ConflictError(
+            "The series changed while this edit was being applied; "
+            "reload and try again",
+            code="series_audience_changed",
+        )
 
 
 @dataclass(frozen=True)
@@ -2044,16 +2156,21 @@ async def update_practice(
             managing_school, pre.master_id, session,
         )
 
-    stmt = (
-        select(Practice)
-        .where(Practice.id == practice_id)
-        .with_for_update()
-        # The read above put the row in the identity map; a lock on a row
-        # already there does not refresh it without this (BE-85).
-        .execution_options(populate_existing=True)
+    # PRACTICE ROW ORDER (module header): an audience change of a series
+    # root writes the root AND its children, so all of them are taken in
+    # one statement, by id, before the school. WHETHER to take the
+    # children is decided here, on the unlocked read, and decided again on
+    # the locked root below -- the read can go stale, the lock cannot.
+    # Children are taken only when the read says the audience changes:
+    # EditPracticeView sends the audience on every save, and taking them on
+    # mere presence would queue every booking of the series behind each
+    # title edit of its root.
+    take_children = await _root_audience_change(
+        pre, body.model_dump(exclude_unset=True), session,
     )
-    result = await session.execute(stmt)
-    practice = result.scalar_one_or_none()
+    practice, children = await _lock_practice_and_children(
+        practice_id, take_children, session,
+    )
 
     if not practice:
         raise NotFoundError("Practice not found")
@@ -2088,6 +2205,16 @@ async def update_practice(
             "Audience belongs to the series: edit it on the series root, "
             "not on a single occurrence",
         )
+
+    # The decision again, on the locked root: it is the one the
+    # propagation below acts on. The locked set must be the set it writes;
+    # a non-terminal child outside it refuses the request whole, before
+    # anything is applied (_refuse_unheld_children_or_409).
+    audience_changed = await _root_audience_change(
+        practice, update_data, session,
+    )
+    if audience_changed:
+        await _refuse_unheld_children_or_409(practice, children, session)
 
     # Separate Calendar taxonomy (JSONB) from plain column fields.
     # These are NOT columns: applying them via setattr would create dead
@@ -2307,16 +2434,13 @@ async def update_practice(
     # every child. A KIND change still propagates even when the set is
     # identical (public -> groups with the same rows already stored is a
     # real audience change).
-    audience_changed = (
-        (group_ids_sent and not groups_unchanged)
-        or ("audience_kind" in update_data
-            and old_audience_kind != final_audience_kind)
-    )
-    if audience_changed and practice.parent_practice_id is None:
+    # audience_changed was decided on the locked root before anything was
+    # applied (_root_audience_change); it is False for a child.
+    if audience_changed:
         from app.modules.practices.series_service import (
             propagate_audience_to_children,
         )
-        await propagate_audience_to_children(practice, session)
+        await propagate_audience_to_children(practice, children, session)
 
     # Apply Calendar taxonomy updates into data.taxonomy (JSONB).
     # deepcopy + set_jsonb so SQLAlchemy detects the change. Only the keys

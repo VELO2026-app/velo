@@ -1300,6 +1300,13 @@ async def test_propagation_moves_the_childrens_audience_and_keeps_their_school(
     propagate path copies audience_kind only. The precise statement now:
     after propagation the child is public AND still names the school -- the
     pair, so "the child moved" is not "the child was emptied".
+
+    Until BE-103 W4 the propagation was called alone here, and read the
+    children itself -- right for that code. W4 made it write the set its
+    caller locked (_lock_practice_and_children), so the test locks first,
+    as update_practice does. The child is already in this session's
+    identity map: the lock must refresh it (populate_existing, BE-85), and
+    the asserted set is exactly that child.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     school = await _school(db_session, curator["user"]["id"])
@@ -1322,8 +1329,18 @@ async def test_propagation_moves_the_childrens_audience_and_keeps_their_school(
     from app.modules.practices.series_service import (
         propagate_audience_to_children,
     )
+    from app.modules.practices.service import _lock_practice_and_children
 
-    await propagate_audience_to_children(fresh_root, db_session)
+    # Through the lock, as update_practice calls it (BE-103 W4: the
+    # propagation writes the set its caller holds). The child is already
+    # in this session's identity map -- the lock refreshes it
+    # (populate_existing, BE-85) and the root keeps its flushed kind.
+    locked_root, children = await _lock_practice_and_children(
+        root.id, True, db_session,
+    )
+    assert locked_root is fresh_root
+    assert [c.id for c in children] == [child.id]
+    await propagate_audience_to_children(locked_root, children, db_session)
     await db_session.commit()
 
     row = (

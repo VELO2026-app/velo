@@ -339,10 +339,11 @@ _TERMINAL_CHILD_STATUSES = (
 
 async def propagate_audience_to_children(
     root: Practice,
+    children: list[Practice],
     session: AsyncSession,
 ) -> int:
     """Push a series root's CURRENT audience (audience_kind + its target
-    PracticeAudienceGroup rows) onto every child occurrence.
+    PracticeAudienceGroup rows) onto its non-terminal children.
 
     C1-propagation: _build_child_occurrence copies the audience at
     GENERATION time, but a root published as public and later switched to
@@ -351,10 +352,14 @@ async def propagate_audience_to_children(
     the restricted sessions. update_practice calls this after applying an
     audience change to a ROOT so the children track the root.
 
-    Only meaningful for a root (parent_practice_id is None) that actually
-    has children; callers gate on that. Returns the number of children
-    updated. Idempotent: re-running with the same audience is a no-op in
-    effect (same rows rewritten).
+    children are rows the CALLER already holds: update_practice takes the
+    root and its non-terminal children in one statement ORDER BY id
+    (practices/service.py::_lock_practice_and_children, PRACTICE ROW
+    ORDER), and this function writes exactly those -- it reads no set of
+    its own, so the rows it writes are the rows that were locked, and a
+    child cancelled while the lock waited for it is not among them.
+    Returns the number of children updated. Idempotent: re-running with
+    the same audience is a no-op in effect (same rows rewritten).
     """
     # S-d: NON-TERMINAL children only. A completed session already happened
     # in front of whoever was allowed in at the time, and a cancelled or
@@ -362,22 +367,13 @@ async def propagate_audience_to_children(
     # edits history to match a decision taken afterwards. Only sessions that
     # can still be attended (draft / scheduled / live) track the root.
     #
-    # The SAME filter must gate BOTH writes below. Applied to only one of
-    # them, a terminal child would end up with the old audience_kind and the
-    # new group rows (or the reverse) -- a state worse than either, and one
-    # no read path expects.
-    # Takes the children AFTER the caller took the root, with no order:
-    # the KNOWN CEILING under PRACTICE ROW ORDER in practices/service.py.
-    child_ids = list(
-        (
-            await session.execute(
-                select(Practice.id).where(
-                    Practice.parent_practice_id == root.id,
-                    Practice.status.notin_(_TERMINAL_CHILD_STATUSES),
-                )
-            )
-        ).scalars().all()
-    )
+    # The filter lives in the caller's lock statement (_TERMINAL_CHILD_
+    # STATUSES, re-checked by FOR UPDATE on every row it waited for), and
+    # BOTH writes below act on the one list it produced. Applied to only
+    # one of them, a terminal child would end up with the old audience_kind
+    # and the new group rows (or the reverse) -- a state worse than either,
+    # and one no read path expects.
+    child_ids = [child.id for child in children]
     if not child_ids:
         return 0
 

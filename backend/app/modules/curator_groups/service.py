@@ -28,9 +28,11 @@
 # lock the group as its owner (_lock_group_as_owner) before writing
 # anything. A writer of SEVERAL practices takes them all before the group,
 # in the one order recorded in practices/service.py (PRACTICE ROW ORDER):
-# the series cancellation and this module's delete_curator_group follow
-# it. delete_curator_group clears its practices' owner (an UPDATE of
-# practices) before it deletes the group, so it waits for those writers
+# the series cancellation, update_practice changing a series root's
+# audience (the root and its children, before the school) and this
+# module's delete_curator_group follow it. delete_curator_group clears
+# its practices' owner (an UPDATE of practices) before it deletes the
+# group, so it waits for those writers
 # instead of holding the group they are waiting for. It replaced the
 # "practice audience" table at the same place in the order, for the same
 # reason. Of the module's own rows TWO practice writers take one, and
