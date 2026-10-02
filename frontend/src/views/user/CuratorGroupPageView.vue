@@ -102,7 +102,7 @@
         <!-- FE-21: transfer offer banner (curator sees "sent", addressee
              sees accept/decline). Renders nothing for everyone else. -->
         <CuratorGroupTransferBanner
-          v-if="page.transfer"
+          v-if="page.transfer && (relation === 'master' || isCurator)"
           :transfer="page.transfer"
           :pending="null"
           :relation="relation"

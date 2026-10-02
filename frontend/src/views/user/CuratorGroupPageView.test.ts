@@ -237,8 +237,10 @@ describe('CuratorGroupPageView -- relation matrix', () => {
     }
     expect(buttonWith('Создать практику')).toBeTruthy()
     // §1.6 (owner 2026-09-22): the invite field rides the hero for the
-    // curator (Group 3801 form: the label pill reads «Ссылка-приглашение»).
+    // curator (Group 3801 form: the label pill reads «Ссылка-приглашение»);
+    // the mint fired exactly once on mount (get-or-get by contract).
     expect(text()).toContain('Ссылка-приглашение')
+    expect(cgApi.createCuratorGroupInvite).toHaveBeenCalledTimes(1)
   })
 
   it('«Предстоящие практики» opens the school-scoped calendar (owner 2026-10-01)', async () => {
