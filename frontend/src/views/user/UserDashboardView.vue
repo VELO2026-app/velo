@@ -162,13 +162,16 @@
 
     <!-- ================================================================
          QUICK ACCESS (FE-70)
-         Two one-tap entries into writing: the external-activity form and the
-         diary's note composer. Present regardless of the nearest-practice
-         state above -- it is its own section, never part of a practice card.
-         Owner 2026-10-01: both buttons write into the personal diary, so a
-         curator account (founding-right holder, schoolsHub) gets no section.
+         One-tap entry into writing: the external-activity form. Present
+         regardless of the nearest-practice state above -- it is its own
+         section, never part of a practice card.
+         Owner 2026-10-02: the diary follows the active interface role, so
+         every account in the user zone gets the section -- founding-right
+         holders included. The «Добавить запись» capsule is removed for now
+         (same owner call): its row is gone entirely, so no empty rail
+         remains and the sections below shift up.
          ================================================================ -->
-    <section v-if="!schoolsHub.isCuratorAccount" class="dashboard__section">
+    <section class="dashboard__section">
       <h3 class="dashboard__section-title">Быстрый доступ</h3>
       <div class="dashboard__quick">
         <button
@@ -180,17 +183,6 @@
           <span class="dashboard__quick-label">Внести активность</span>
           <!-- Short chevron of the layout reference (no shaft) -- the long
                IconArrowRight glyph is a different silhouette. -->
-          <svg class="dashboard__quick-chevron" viewBox="0 0 9 14" aria-hidden="true">
-            <path d="M2 2L7 7L2 12" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          class="dashboard__quick-btn dashboard__quick-btn--note"
-          @click="router.push({ name: 'user-diary', query: { compose: 'note' } })"
-        >
-          <IconPen class="dashboard__quick-lead" :size="22" />
-          <span class="dashboard__quick-label">Добавить запись</span>
           <svg class="dashboard__quick-chevron" viewBox="0 0 9 14" aria-hidden="true">
             <path d="M2 2L7 7L2 12" />
           </svg>
@@ -217,12 +209,11 @@ import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useBookingsStore } from '@/stores/bookings'
 import { useNotificationsStore } from '@/stores/notifications'
-import { useSchoolsHubStore } from '@/stores/schoolsHub'
 import { getMyStats } from '@/api/bookings'
 import { useToast } from '@/composables/useToast'
 import { VHeader } from '@/components/layout'
 import { VLoader, VButton, VBadge, VStatCard } from '@/components/ui'
-import { IconClock, IconCheck, IconBellPlain, IconMeditation, IconPen } from '@/components/icons'
+import { IconClock, IconCheck, IconBellPlain, IconMeditation } from '@/components/icons'
 import PracticeListCard from '@/components/shared/PracticeListCard.vue'
 import Banner from '@/components/shared/Banner.vue'
 import { formatDateShort, formatTime, formatDuration } from '@/utils/format'
@@ -246,11 +237,6 @@ const toast = useToast()
 // Header bell's unread presence -- store-shared with the inbox screen,
 // which writes server-confirmed badges after its mark-read calls.
 const notifications = useNotificationsStore()
-// The diary quick actions follow the curator rule (owner 2026-10-01): a
-// founding-right holder is a curator account with no personal-diary surfaces.
-// The probe itself is fired by the parent UserShell on mount; the store
-// answers fail-closed for a possible holder.
-const schoolsHub = useSchoolsHubStore()
 
 // -- Reactive clock: updated every 60s so alert computeds re-evaluate --
 const now = ref(Date.now())
@@ -688,12 +674,14 @@ onUnmounted(() => {
 }
 
 /* ===== Quick access (FE-70) =====
- * Full-rail capsule rows, LOCAL markup by design: VButton centres its
+ * Full-rail capsule row, LOCAL markup by design: VButton centres its
  * content and cannot express "leading icon / growing label / trailing
  * chevron". A shared row component is warranted only once a second screen
  * needs the same anatomy. Geometry: 50px capsule (the composer pill height
- * token), horizontal padding --space-4, icon->label --space-3, one --space-2
- * step between the two capsules -- they never merge into one card. */
+ * token), horizontal padding --space-4, icon->label --space-3. The stack
+ * container keeps its gap for the day a second capsule returns (the
+ * «Добавить запись» row was removed 2026-10-02 -- one child, no extra
+ * height). */
 .dashboard__quick {
   display: flex;
   flex-direction: column;
@@ -728,18 +716,13 @@ onUnmounted(() => {
   outline-offset: 2px;
 }
 
-/* Tone pair: peach for the activity entry, teal for the diary note. Icon,
- * label and chevron all inherit the row's colour (currentColor). */
+/* Peach tone for the activity entry. Icon, label and chevron all inherit
+ * the row's colour (currentColor). The former teal «Добавить запись» twin
+ * is gone with its button (2026-10-02). */
 .dashboard__quick-btn--activity {
   background: var(--velo-glass-peach-40);
   border: 1.5px solid var(--velo-peach-500);
   color: var(--velo-peach-500);
-}
-
-.dashboard__quick-btn--note {
-  background: var(--velo-glass-teal-40);
-  border: 1.5px solid var(--velo-teal-600);
-  color: var(--velo-teal-700);
 }
 
 .dashboard__quick-lead {

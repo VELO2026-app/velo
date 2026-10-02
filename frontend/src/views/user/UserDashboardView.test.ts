@@ -1056,13 +1056,14 @@ describe('UserDashboardView', () => {
       return btn
     }
 
-    it('sits between «Ближайшие практики» and «Ваш прогресс», both buttons present', async () => {
+    it('sits between «Ближайшие практики» and «Ваш прогресс»; the removed «Добавить запись» leaves no empty row (owner 2026-10-02)', async () => {
       mount()
       await flush()
 
       expect(sectionTitles()).toEqual(['Ближайшие практики', 'Быстрый доступ', 'Ваш прогресс'])
+      const quickBtns = host?.querySelectorAll('.dashboard__quick-btn')
+      expect(quickBtns?.length).toBe(1)
       expect(quickBtn('Внести активность')).toBeTruthy()
-      expect(quickBtn('Добавить запись')).toBeTruthy()
     })
 
     it('stays while nearest practices are loading', async () => {
@@ -1072,7 +1073,6 @@ describe('UserDashboardView', () => {
 
       expect(host?.querySelector('.dashboard__loader')).not.toBeNull()
       expect(quickBtn('Внести активность')).toBeTruthy()
-      expect(quickBtn('Добавить запись')).toBeTruthy()
     })
 
     it('stays when the nearest list is empty', async () => {
@@ -1084,16 +1084,17 @@ describe('UserDashboardView', () => {
       expect(sectionTitles()).toContain('Быстрый доступ')
     })
 
-    it('a curator account (founding-right holder, owner 2026-10-01) gets no quick access', async () => {
-      // Both buttons write into the personal diary -- a curator account has
-      // none (schoolsHub.isCuratorAccount). Store state seeded directly: the
-      // probe is the shell's job, this screen only reads the answer.
+    it('a curator account (founding-right holder) keeps the quick access (owner 2026-10-02)', async () => {
+      // The diary follows the ACTIVE INTERFACE ROLE -- in the user zone even
+      // a right holder gets the personal-diary surfaces. Store state seeded
+      // directly: the probe is the shell's job, this screen no longer reads it.
       useAuthStore().user = user()
       useSchoolsHubStore().canCreate = true
       mount()
       await flush()
 
-      expect(sectionTitles()).toEqual(['Ближайшие практики', 'Ваш прогресс'])
+      expect(sectionTitles()).toContain('Быстрый доступ')
+      expect(quickBtn('Внести активность')).toBeTruthy()
     })
 
     it('a plain user keeps the quick access (known-non-curator, no probe needed)', async () => {
@@ -1102,7 +1103,7 @@ describe('UserDashboardView', () => {
       await flush()
 
       expect(sectionTitles()).toContain('Быстрый доступ')
-      expect(quickBtn('Добавить запись')).toBeTruthy()
+      expect(quickBtn('Внести активность')).toBeTruthy()
     })
 
     it('«Внести активность» routes to the external-activity form', async () => {
@@ -1113,16 +1114,6 @@ describe('UserDashboardView', () => {
       await flush()
 
       expect(push).toHaveBeenCalledWith({ name: 'user-diary-activity-new' })
-    })
-
-    it('«Добавить запись» routes to the diary with the one-shot compose=note intent', async () => {
-      mount()
-      await flush()
-
-      quickBtn('Добавить запись').click()
-      await flush()
-
-      expect(push).toHaveBeenCalledWith({ name: 'user-diary', query: { compose: 'note' } })
     })
 
     it('a quick-action tap does not open the practice card beneath it', async () => {
