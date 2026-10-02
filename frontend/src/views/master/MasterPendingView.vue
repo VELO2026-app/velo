@@ -27,11 +27,16 @@
   <div class="pending-view">
     <div
       class="pending-view__content velo-kbd-scroll"
-      :class="{ 'pending-view__content--centered': !masterStore.profileLoading && isPending }"
+      :class="{ 'pending-view__content--centered': !refreshing && !statusError && isPending }"
     >
-      <template v-if="masterStore.profileLoading">
+      <template v-if="refreshing || masterStore.profileLoading">
         <VLoader size="lg" />
       </template>
+      <VCard v-else-if="statusError" class="pending-view__card">
+        <h2 class="pending-view__title">Не удалось обновить статус заявки</h2>
+        <p class="pending-view__subtitle">Проверьте соединение и попробуйте ещё раз.</p>
+        <VButton variant="primary" block @click="refreshStatus">Повторить</VButton>
+      </VCard>
 
       <!-- ================= APPROVED (verified) =================
            White VCard подложка (R1 fix, PROMPT №391 — operator-approved preview
@@ -93,7 +98,13 @@
         <VCard class="pending-view__card">
           <img src="/onboarding/master-verdict-sent.svg" alt="" class="pending-view__illu" />
           <h2 class="pending-view__title">Заявка отправлена!</h2>
-          <p class="pending-view__subtitle">Рассмотрим за 24–48 часов, сообщим в push и на email</p>
+          <p class="pending-view__subtitle">Заявка на проверке у администратора.</p>
+          <div class="pending-view__actions">
+            <VButton variant="outline" block @click="refreshStatus">Обновить статус</VButton>
+            <VButton variant="ghost" block @click="router.push({ name: 'user-dashboard' })">
+              На главную
+            </VButton>
+          </div>
           <button
             type="button"
             class="pending-view__withdraw-link"
@@ -138,6 +149,8 @@ const authStore = useAuthStore()
 const masterStore = useMasterStore()
 
 const switching = ref(false)
+const refreshing = ref(false)
+const statusError = ref(false)
 
 // -- Derived application status --
 // T4: approval no longer flips role — an approved applicant stays role='user'
@@ -183,27 +196,43 @@ const rejectionReason = computed((): string => {
 // On mount: refresh the account so the status-keyed state renders. For a
 // role='master' account load the profile; for role='user' re-fetch /users/me so
 // a just-granted master capability (approval) is reflected in allowedRoles.
-onMounted(async () => {
-  if (authStore.role === 'master') {
-    await masterStore.fetchMyProfile(true)
-  } else {
-    await authStore.fetchMe()
+async function refreshStatus(): Promise<void> {
+  if (refreshing.value) return
+  refreshing.value = true
+  statusError.value = false
+  try {
+    if (authStore.role === 'master') {
+      await masterStore.fetchMyProfile(true)
+      if (masterStore.profileError) {
+        statusError.value = true
+        return
+      }
+    } else if ((await authStore.fetchMe()) === false) {
+      statusError.value = true
+      return
+    }
+    // Bug 1 fix (PROMPT №405): mark the per-user key once the rejection screen
+    // has actually rendered, mirroring masterApprovedSeenKey's placement for
+    // the approved case, so roleRedirect stops routing here on future opens
+    // (operator decision: show the verdict once, then treat as an ordinary user).
+    if (profileStatus.value === 'rejected' && authStore.user?.id) {
+      localStorage.setItem(masterRejectionSeenKey(authStore.user.id), '1')
+    }
+    // F4: a withdrawn application has nothing left to show here -- bounce to
+    // the ordinary user dashboard, same destination masterPendingGuard already
+    // sends a never-applied user to. Covers a stale/second tab that lands on
+    // this route after the withdraw button (below) already navigated away.
+    if (profileStatus.value === 'withdrawn') {
+      void router.replace({ name: 'user-dashboard' })
+    }
+  } catch {
+    statusError.value = true
+  } finally {
+    refreshing.value = false
   }
-  // Bug 1 fix (PROMPT №405): mark the per-user key once the rejection screen
-  // has actually rendered, mirroring masterApprovedSeenKey's placement for
-  // the approved case, so roleRedirect stops routing here on future opens
-  // (operator decision: show the verdict once, then treat as an ordinary user).
-  if (profileStatus.value === 'rejected' && authStore.user?.id) {
-    localStorage.setItem(masterRejectionSeenKey(authStore.user.id), '1')
-  }
-  // F4: a withdrawn application has nothing left to show here -- bounce to
-  // the ordinary user dashboard, same destination masterPendingGuard already
-  // sends a never-applied user to. Covers a stale/second tab that lands on
-  // this route after the withdraw button (below) already navigated away.
-  if (profileStatus.value === 'withdrawn') {
-    void router.replace({ name: 'user-dashboard' })
-  }
-})
+}
+
+onMounted(refreshStatus)
 
 // -- Enter master mode -- (T4: approved applicant self-switches role user->master)
 async function enterMasterMode(): Promise<void> {
@@ -238,6 +267,7 @@ async function onWithdraw(): Promise<void> {
     // Drop the applicant marker so a future load of this route (or the
     // guard) doesn't mistake a stale session for a still-pending applicant.
     sessionStorage.removeItem(MASTER_APPLIED_KEY)
+    await authStore.fetchMe()
     toast.success('Заявка отозвана')
     void router.replace({ name: 'user-dashboard' })
   } catch (e) {

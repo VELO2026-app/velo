@@ -241,6 +241,30 @@ async function noProfileMasterRedirect(): Promise<{ path: string } | null> {
 export const masterNoProfileGuard: NavigationGuardWithThis<undefined> = async () =>
   (await noProfileMasterRedirect()) ?? true
 
+/** Application and invite entry share the same server-backed status gate.
+ * A verified profile grants capability even while the person uses user mode. */
+export const masterApplyGuard: NavigationGuardWithThis<undefined> = async () => {
+  const { timedOut }: ReadyResult = await waitUntilReady()
+  const auth = useAuthStore()
+  if (timedOut && auth.role === null) return { path: '/auth-error' }
+  if (auth.role === 'admin') return { path: '/admin/dashboard' }
+  if (auth.role === 'master') {
+    const master = useMasterStore()
+    await master.fetchMyProfile()
+    if (master.profile?.status === 'verified') return { path: '/master/dashboard' }
+    if (master.profile?.status === 'pending') return { path: '/master/pending' }
+    return true
+  }
+  if (
+    auth.masterApplication?.status === 'pending' ||
+    auth.masterApplication?.status === 'verified' ||
+    auth.allowedRoles.includes('master')
+  ) {
+    return { path: '/master/pending' }
+  }
+  return true
+}
+
 /**
  * Require verified master profile before accessing protected master routes.
  *
@@ -322,6 +346,8 @@ export const masterPendingGuard: NavigationGuardWithThis<undefined> = async () =
 
   if (sessionStorage.getItem(MASTER_APPLIED_KEY) === '1') return true
   if (auth.allowedRoles.includes('master')) return true
+  if (auth.masterApplication?.status === 'pending') return true
+  if (auth.masterApplication?.status === 'verified') return true
   if (auth.masterApplication?.status === 'rejected') return true
 
   return { path: '/user/dashboard' }

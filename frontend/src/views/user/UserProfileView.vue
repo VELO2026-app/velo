@@ -56,6 +56,13 @@
           <VMenuRow label="Мои бронирования" @click="router.push({ name: 'user-bookings' })">
             <template #icon><IconBookings :size="20" /></template>
           </VMenuRow>
+          <VMenuRow
+            v-if="authStore.role === 'user' && authStore.masterApplication"
+            label="Заявка мастера"
+            @click="router.push({ name: applicationRoute })"
+          >
+            <template #icon><IconPen :size="20" /></template>
+          </VMenuRow>
           <VMenuRow label="Сообщения" :dot="hasUnreadMessages" @click="onMessages">
             <template #icon><IconMessages :size="20" /></template>
           </VMenuRow>
@@ -149,6 +156,11 @@ import { getMyStats } from '@/api/bookings'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const applicationRoute = computed(() =>
+  ['cancelled_by_user', 'suspended'].includes(authStore.masterApplication?.status ?? '')
+    ? 'master-apply'
+    : 'master-pending',
+)
 const uiStore = useUiStore()
 const toast = useToast()
 

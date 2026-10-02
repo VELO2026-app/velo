@@ -9,12 +9,12 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
-import { useMasterStore } from '@/stores/master'
 import {
   roleRedirect,
   roleGuard,
   masterStatusGuard,
   masterPendingGuard,
+  masterApplyGuard,
   masterNoProfileGuard,
   roleFreshnessGuard,
 } from '@/router/guards'
@@ -25,27 +25,6 @@ import type { ReadyResult } from '@/composables/useAuth'
 import UserShell from '@/views/shells/UserShell.vue'
 import MasterShell from '@/views/shells/MasterShell.vue'
 import AdminShell from '@/views/shells/AdminShell.vue'
-
-// =============================================================================
-// applyGuard: verified masters don't need to visit the apply form.
-// =============================================================================
-const applyGuard = async () => {
-  const { timedOut }: ReadyResult = await waitUntilReady()
-  const auth = useAuthStore()
-
-  if (timedOut && auth.role === null) {
-    return { path: '/auth-error' }
-  }
-
-  if (auth.role !== 'master') return true
-
-  const masterStore = useMasterStore()
-  await masterStore.fetchMyProfile()
-  if (masterStore.profile?.status === 'verified') {
-    return { path: '/master/dashboard' }
-  }
-  return true
-}
 
 const router = createRouter({
   history: createWebHistory(),
@@ -589,13 +568,13 @@ const router = createRouter({
       // (incl. the invited plain user) reaches the claim.
       path: '/master/invite/:token',
       name: 'master-invite',
-      beforeEnter: applyGuard,
+      beforeEnter: masterApplyGuard,
       component: () => import('@/views/master/MasterInviteClaimView.vue'),
     },
     {
       path: '/master/apply',
       name: 'master-apply',
-      beforeEnter: applyGuard,
+      beforeEnter: masterApplyGuard,
       component: () => import('@/views/master/MasterApplyView.vue'),
     },
     {

@@ -341,7 +341,7 @@ describe('MasterPendingView', () => {
       await flush()
 
       expect(text()).toContain('Заявка отправлена!')
-      expect(text()).toContain('Рассмотрим за 24–48 часов')
+      expect(text()).toContain('Заявка на проверке у администратора.')
       expect(withdrawLink()?.textContent?.trim()).toBe('Отозвать заявку')
     })
 
@@ -867,4 +867,18 @@ describe('MasterPendingView', () => {
   // 3. masterPendingGuard / roleRedirect -- how an account ARRIVES here -- is
   //    guard-layer behaviour and is covered bare in router/guards.test.ts. This
   //    file covers only what the screen does once mounted.
+})
+
+describe('status refresh failures', () => {
+  it('failed account refresh shows retry instead of claiming the application is pending', async () => {
+    fetchMe.mockResolvedValueOnce(false)
+    mount()
+    await flush()
+    expect(text()).toContain('Не удалось обновить статус заявки')
+    expect(text()).not.toContain('Заявка отправлена!')
+    fetchMe.mockResolvedValueOnce(true)
+    button('Повторить')?.click()
+    await flush()
+    expect(text()).toContain('Заявка отправлена!')
+  })
 })
