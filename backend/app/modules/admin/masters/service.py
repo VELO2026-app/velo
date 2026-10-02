@@ -76,6 +76,7 @@ from app.modules.curator_groups.service import (
 from app.modules.masters.models import MasterProfile
 from app.modules.masters.service import (
     emit_master_rejected,
+    emit_master_suspended,
     emit_master_verified,
 )
 from app.modules.practices.models import Practice, PracticeStatus
@@ -353,7 +354,9 @@ async def revoke_master(
 ) -> RevokeMasterAdvisory:
     """Revoke a master's capability, preserving all data (A1, operator Б).
 
-    Mirrors CLI `set_role.py to_user` EXACTLY (one behavior across CLI + admin):
+    Mirrors CLI `set_role.py to_user` EXACTLY (one behavior across CLI + admin)
+    in the data it writes; it alone tells the person (master.suspended,
+    BE-104) -- the CLI is an operator tool and sends nothing (owner ruling):
       - User.role -> user, ONLY if currently master (+ clear the switched-away
         admin round-trip marker, R-1);
       - profile data.account.status -> "suspended",
@@ -391,6 +394,11 @@ async def revoke_master(
     new_data.setdefault("account", {})["status"] = "suspended"
     new_data.setdefault("availability", {})["is_accepting"] = False
     profile.set_jsonb("data", new_data)
+
+    # BE-104: the person is told. verified -> suspended is the transition
+    # (the loader guard admits only verified), whatever the role -- every
+    # holder of a verified profile loses the capability here.
+    await emit_master_suspended(session, user_id)
 
     # Phase 6 / T0: verified -> suspended IS the master-capability drop
     # (the loader guard admits only verified) -> leave group:masters.

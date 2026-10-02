@@ -53,6 +53,7 @@ _TID_B = 70902
 _TID_C = 70903
 _TID_D = 70904
 _TID_E = 70905
+_TID_F = 70906
 _TID_ADMIN = 70990
 _TID_ADMIN_B = 70991
 
@@ -66,7 +67,8 @@ MAKE_MASTER_URL = "/api/v1/admin/users/{user_id}/make-master"
 SUBMITTED = "master.application_submitted"
 VERIFIED = "master.verified"
 REJECTED = "master.rejected"
-STATUS_TYPES = (SUBMITTED, VERIFIED, REJECTED)
+SUSPENDED = "master.suspended"
+STATUS_TYPES = (SUBMITTED, VERIFIED, REJECTED, SUSPENDED)
 
 _PROFILE_CANDIDATES = (
     Path(__file__).resolve().parents[2] / "comms-profile",
@@ -805,6 +807,191 @@ async def test_a_verification_waits_for_make_master_in_flight(
 
 
 # ---------------------------------------------------------------------------
+# revoke_master -> master.suspended (BE-104, delivery 3)
+# ---------------------------------------------------------------------------
+
+
+async def _revoke(client: AsyncClient, admin_token: str, user_id: str):
+    return await client.post(
+        REVOKE_URL.format(user_id=user_id),
+        headers=auth_headers(admin_token),
+    )
+
+
+async def _verified_applicant(
+    client: AsyncClient,
+    admin_token: str,
+    tid: int,
+    name: str = "Applicant",
+) -> str:
+    auth = await _user(client, tid, name=name)
+    assert (await _apply(client, auth)).status_code == 201
+    assert (await _verify(client, admin_token, auth["user"]["id"])).status_code == 200
+    return auth["user"]["id"]
+
+
+@pytest.mark.asyncio
+async def test_a_revoked_master_is_told_once(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """verified + role master -> one suspended; a repeated revoke is 409."""
+    admin_token, _ = await _admin(client, db_session)
+    auth = await _user(client, _TID_A)
+    uid = auth["user"]["id"]
+    assert (await _make_master(client, admin_token, uid)).status_code == 200
+
+    assert (await _revoke(client, admin_token, uid)).status_code == 200
+    rows = await _status_rows(uid, SUSPENDED)
+    assert len(rows) == 1
+    (row,) = rows
+    assert row["idempotency_key"].startswith(f"master-status-suspended:{uid}:")
+    assert row["target_type"] == "user" and row["target_value"] == uid
+    assert row["action_data"] == {"action": "open_support", "params": {}}
+    assert row["title"] == "Статус мастера приостановлен"
+    assert "данные сохранены" in row["body"]
+    user = await fresh_get(User, UUID(uid))
+    assert user is not None and user.role == UserRole.USER.value
+
+    # REPEAT / SHORTAGE: revoking a suspended profile -> 409, nothing new.
+    again = await _revoke(client, admin_token, uid)
+    assert again.status_code == 409, again.text
+    assert len(await _status_rows(uid, SUSPENDED)) == 1
+
+
+@pytest.mark.asyncio
+async def test_revoking_an_approved_applicant_who_never_switched_tells_them(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """role='user' with a verified profile loses the capability too."""
+    admin_token, _ = await _admin(client, db_session)
+    uid = await _verified_applicant(client, admin_token, _TID_A)
+
+    assert (await _revoke(client, admin_token, uid)).status_code == 200
+    assert len(await _status_rows(uid, SUSPENDED)) == 1
+    assert (await _account(uid))["status"] == "suspended"
+
+
+@pytest.mark.asyncio
+async def test_revoking_an_admin_s_verified_profile_tells_them(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """An admin keeps the role but loses the master capability -> told."""
+    admin_token, _ = await _admin(client, db_session)
+    auth = await _user(client, _TID_B)
+    uid = auth["user"]["id"]
+    assert (await _make_master(client, admin_token, uid)).status_code == 200
+    await db_session.execute(
+        update(User).where(User.id == uid).values(role=UserRole.ADMIN.value)
+    )
+    await db_session.commit()
+
+    assert (await _revoke(client, admin_token, uid)).status_code == 200
+    assert len(await _status_rows(uid, SUSPENDED)) == 1
+    user = await fresh_get(User, UUID(uid))
+    assert user is not None and user.role == UserRole.ADMIN.value
+
+
+@pytest.mark.asyncio
+async def test_revoking_what_is_not_verified_queues_nothing(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """SHORTAGE: pending -> 409, no profile -> 404; paired with a live revoke."""
+    admin_token, _ = await _admin(client, db_session)
+    pending = await _user(client, _TID_A)
+    assert (await _apply(client, pending)).status_code == 201
+    plain = await _user(client, _TID_B)
+
+    assert (
+        await _revoke(client, admin_token, pending["user"]["id"])
+    ).status_code == 409
+    assert (await _revoke(client, admin_token, plain["user"]["id"])).status_code == 404
+    assert await _status_rows(pending["user"]["id"], SUSPENDED) == []
+    assert await _status_rows(plain["user"]["id"], SUSPENDED) == []
+    # Pair: the pending applicant's submission is there, and a real revoke
+    # by the same admin does queue one.
+    assert len(await _status_rows(pending["user"]["id"], SUBMITTED)) == 1
+    live = await _verified_applicant(client, admin_token, _TID_C)
+    assert (await _revoke(client, admin_token, live)).status_code == 200
+    assert len(await _status_rows(live, SUSPENDED)) == 1
+
+
+@pytest.mark.asyncio
+async def test_two_revocations_are_two_transitions_two_keys(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """verify -> revoke -> make_master -> revoke: two suspended, own keys."""
+    admin_token, _ = await _admin(client, db_session)
+    uid = await _verified_applicant(client, admin_token, _TID_A)
+    assert (await _revoke(client, admin_token, uid)).status_code == 200
+    assert (await _make_master(client, admin_token, uid)).status_code == 200
+    assert (await _revoke(client, admin_token, uid)).status_code == 200
+
+    rows = await _status_rows(uid, SUSPENDED)
+    assert len(rows) == 2
+    assert rows[0]["idempotency_key"] != rows[1]["idempotency_key"]
+    assert [r["type"] for r in await _status_rows(uid)] == [
+        SUBMITTED,
+        VERIFIED,
+        SUSPENDED,
+        VERIFIED,
+        SUSPENDED,
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_nameless_master_gets_the_same_suspension_letter(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """EMPTINESS: no name -> the same title and body, no 'None'."""
+    admin_token, _ = await _admin(client, db_session)
+    named = await _verified_applicant(client, admin_token, _TID_A, name="Named")
+    bare = await _verified_applicant(client, admin_token, _TID_F, name="Bare")
+    await db_session.execute(
+        update(User).where(User.id == bare).values(first_name="", last_name=None)
+    )
+    await db_session.commit()
+
+    assert (await _revoke(client, admin_token, named)).status_code == 200
+    assert (await _revoke(client, admin_token, bare)).status_code == 200
+    (n,) = await _status_rows(named, SUSPENDED)
+    (b,) = await _status_rows(bare, SUSPENDED)
+    assert (b["title"], b["body"]) == (n["title"], n["body"])
+    assert b["body"] and "None" not in b["body"]
+
+
+@pytest.mark.asyncio
+async def test_a_rolled_back_revoke_leaves_no_notification(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The row lives and dies with the transition (outbox, P-01)."""
+    admin_token, admin_id = await _admin(client, db_session)
+    uid = await _verified_applicant(client, admin_token, _TID_A)
+
+    async def _boom(*_a, **_kw):
+        raise RuntimeError("after the emit")
+
+    monkeypatch.setattr(admin_masters_service, "record_audit", _boom)
+    async with get_session_factory()() as session:
+        admin = await session.get(User, admin_id)
+        with pytest.raises(RuntimeError):
+            await admin_masters_service.revoke_master(UUID(uid), admin, session)
+        await session.rollback()
+
+    assert await _status_rows(uid, SUSPENDED) == []
+    # Pair: still verified, and its verification notice is still there.
+    assert (await _account(uid))["status"] == "verified"
+    assert len(await _status_rows(uid, VERIFIED)) == 1
+
+
+# ---------------------------------------------------------------------------
 # The profile: types and the variables the sheets read
 # ---------------------------------------------------------------------------
 
@@ -842,6 +1029,7 @@ async def test_every_variable_a_sheet_reads_is_sent(
     assert (await _apply(client, b)).status_code == 201
     assert (await _verify(client, admin_token, a["user"]["id"])).status_code == 200
     assert (await _reject(client, admin_token, b["user"]["id"], "r")).status_code == 200
+    assert (await _revoke(client, admin_token, a["user"]["id"])).status_code == 200
 
     sent = {
         r["type"]: r

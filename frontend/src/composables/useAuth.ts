@@ -193,6 +193,20 @@ export function parseStartParam(
     return { name: 'curator-group-master-offer', params: { id: masterOfferMatch[1] } }
   }
 
+  // BE-104 master-status notifications: a bare verb, no params (comms
+  // builds startapp=<action> when params is empty). Exact match only -- the
+  // BE-59 prompt carries a group_id and arrives as
+  // open_master_application__<uuid>, which stays unmapped as before. The
+  // Telegram button does not know the notification TYPE, so a rejection
+  // lands on the apply wizard here (its guard decides) -- the reason is in
+  // the Telegram text itself. open_master_zone goes to the dashboard: its
+  // role guard sends a role='user' account to /user/dashboard (the
+  // switch-offer screen is the bell's route, master-pending, which shows
+  // an «application approved» card that a make_master grant never had).
+  if (startParam === 'open_master_application') return { name: 'master-apply' }
+  if (startParam === 'open_master_zone') return { name: 'master-dashboard' }
+  if (startParam === 'open_support') return { name: 'user-support' }
+
   return null
 }
 

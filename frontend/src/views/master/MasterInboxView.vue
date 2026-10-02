@@ -261,6 +261,13 @@ function routeFor(
       return practiceId ? { name: 'master-practice-detail', params: { id: practiceId } } : null
     case 'open_wallet':
       return { name: 'master-finance' }
+    case 'open_master_zone':
+      // BE-104 master.verified read in master mode (make_master already set
+      // role='master'): the zone is this shell's own dashboard.
+      return { name: 'master-dashboard' }
+    case 'open_support':
+      // BE-104 master.suspended, should it be read before the role refresh.
+      return { name: 'master-support' }
     case 'open_thread': {
       // A message notification names ITS dialog. The action name/param are
       // the stand-stub contract for now -- the real comms msg.* vocabulary

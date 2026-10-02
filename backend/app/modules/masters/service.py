@@ -340,8 +340,12 @@ async def _emit_application_received(
 #       ONLY when the person was not a master before (not had_master): the
 #       notification is on the TRANSITION "not a master -> master", the same
 #       condition announce_pending_master_offers runs on;
-#   master.rejected -- reject_master (pending -> rejected), with the reason.
-# scripts/set_role.py sends none of them (operator tool, owner ruling).
+#   master.rejected -- reject_master (pending -> rejected), with the reason;
+#   master.suspended -- revoke_master (verified -> suspended), at ANY role:
+#       a role='master' holder, an approved applicant who never switched
+#       and an admin with a verified profile each lose the capability.
+# scripts/set_role.py sends none of them, to_user included (operator tool,
+# owner ruling).
 #
 # NO CATEGORY in comms-profile/types.yaml, like every master.* status type
 # (decision A): the person cannot mute news about their own status.
@@ -352,6 +356,9 @@ async def _emit_application_received(
 #   submitted -- account.applied_at, stamped fresh by _build_data on every
 #       application (the same reason _emit_application_received uses it);
 #   rejected  -- account.rejected_at, stamped fresh by every reject_master;
+#   suspended -- a uuid4 minted per call: revoke_master stamps no time of its
+#       own, and the key must name the transition (a re-granted master
+#       revoked again is a second one). Same reasoning as verified below;
 #   verified  -- a uuid4 minted per call, NOT verification.verified_at.
 #       The key has to name the TRANSITION, and a uuid4 per call does that by
 #       construction; a data stamp names it only for as long as every path
@@ -365,15 +372,18 @@ async def _emit_application_received(
 # ACTIONS (the front maps them; an unmapped action is "mark as read"):
 # open_master_application -- the applicant's application screen;
 # open_master_zone -- the master zone, or the offer to switch into it for a
-# role='user' account that holds the capability. No params: the target is
-# the reader's own account.
+# role='user' account that holds the capability; open_support -- the support
+# chat (master.suspended: there is nothing to reapply for, the decision was
+# an admin's). No params: the target is the reader's own account.
 
 MASTER_APPLICATION_SUBMITTED_TYPE = "master.application_submitted"
 MASTER_VERIFIED_TYPE = "master.verified"
 MASTER_REJECTED_TYPE = "master.rejected"
+MASTER_SUSPENDED_TYPE = "master.suspended"
 
 ACTION_OPEN_MASTER_APPLICATION = "open_master_application"
 ACTION_OPEN_MASTER_ZONE = "open_master_zone"
+ACTION_OPEN_SUPPORT = "open_support"
 
 
 async def _emit_master_status(
@@ -468,6 +478,29 @@ async def emit_master_rejected(
         ),
         action=ACTION_OPEN_MASTER_APPLICATION,
         variables={"reason": reason},
+    )
+
+
+async def emit_master_suspended(session: AsyncSession, user_id: UUID) -> None:
+    """master.suspended to the person whose master status was revoked.
+
+    revoke_master's guard admits only verified, so a repeated revoke 409s
+    before reaching this. No reason exists to carry: revoke takes none.
+    "Ваши данные сохранены" is the body of revoke_master: every row is kept.
+    """
+    await _emit_master_status(
+        session,
+        user_id,
+        kind="suspended",
+        discriminator=str(uuid4()),
+        type_=MASTER_SUSPENDED_TYPE,
+        title="Статус мастера приостановлен",
+        body=(
+            "Ваш профиль мастера приостановлен -- создавать практики сейчас "
+            "нельзя. Ваши данные сохранены. Если это ошибка, напишите в "
+            "поддержку."
+        ),
+        action=ACTION_OPEN_SUPPORT,
     )
 
 

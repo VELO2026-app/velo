@@ -322,6 +322,37 @@ describe('MasterInboxView', () => {
     expect(push).toHaveBeenCalledWith({ name: 'master-finance' })
   })
 
+  async function tapOther(type: string, action: string): Promise<void> {
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+      items: [item({ id: 'be104', type, action_data: { action, params: {} } })],
+      next_cursor: null,
+      unread: 1,
+    })
+    vi.mocked(notificationsApi.markNotificationRead).mockResolvedValue({ unread: 0 })
+    mount()
+    await flush()
+    segment('Другое')?.click()
+    await flush()
+    row(0).click()
+    await flush()
+  }
+
+  it('BE-104: open_master_zone -> master-dashboard (make_master read in master mode)', async () => {
+    await tapOther('master.verified', 'open_master_zone')
+    expect(push).toHaveBeenCalledWith({ name: 'master-dashboard' })
+  })
+
+  it('BE-104: open_support -> master-support', async () => {
+    await tapOther('master.suspended', 'open_support')
+    expect(push).toHaveBeenCalledWith({ name: 'master-support' })
+  })
+
+  it("BE-104: open_master_application is not this inbox's verb -> mark-read only", async () => {
+    await tapOther('master.rejected', 'open_master_application')
+    expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith('be104')
+    expect(push).not.toHaveBeenCalled()
+  })
+
   it('BE-59: a master-offer row (curator_group.master_offered + open_curator_group) opens the school-offer screen', async () => {
     vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
       items: [

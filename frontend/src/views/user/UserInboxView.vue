@@ -352,6 +352,15 @@ function routeFor(
     return { name: 'curator-group-master-offer', params: { id: params.group_id } }
   }
 
+  // BE-104: a rejection reads its verdict -- the «Отказ» screen of
+  // master-pending shows the reason and «подать заново» (-> master-apply).
+  // The TYPE decides, as above: the same open_master_application verb from
+  // BE-59 or master.application_submitted keeps the apply route below (its
+  // guard sends a rejected applicant to the wizard, which has no reason).
+  if (item.type === 'master.rejected' && action === 'open_master_application') {
+    return { name: 'master-pending' }
+  }
+
   switch (action) {
     case 'open_practice':
     case 'confirm_waitlist': // no dedicated confirm screen: the practice page owns the waitlist CTA
@@ -373,6 +382,16 @@ function routeFor(
       // the verb was named by the backend for exactly this mapping; the
       // apply wizard (and its applyGuard) owns what happens next.
       return { name: 'master-apply' }
+    case 'open_master_zone':
+      // BE-104 master.verified to a role='user' account: master-pending's
+      // «Ваша заявка одобрена!» screen does the switch («Войти в кабинет»).
+      // Without the capability (revoked before the tap) there is no zone to
+      // open -- mark-read-only.
+      return auth.allowedRoles.includes('master') ? { name: 'master-pending' } : null
+    case 'open_support':
+      // BE-104 master.suspended: the decision was an admin's -- the next step
+      // is a word with support, not a new application.
+      return { name: 'user-support' }
     case 'open_thread': {
       // A message notification names ITS dialog. The action name/param are the
       // stand-stub contract for now -- the real comms msg.* vocabulary must be

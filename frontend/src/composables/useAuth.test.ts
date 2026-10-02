@@ -17,6 +17,17 @@ import { describe, it, expect } from 'vitest'
 import { decodePracticeCode, parseStartParam } from '@/composables/useAuth'
 
 describe('parseStartParam', () => {
+  it('BE-104: the bare master-status verbs map; the BE-59 parameterised form stays unmapped', () => {
+    expect(parseStartParam('open_master_application')).toEqual({ name: 'master-apply' })
+    expect(parseStartParam('open_master_zone')).toEqual({ name: 'master-dashboard' })
+    expect(parseStartParam('open_support')).toEqual({ name: 'user-support' })
+    expect(
+      parseStartParam('open_master_application__00000000-0000-4000-8000-000000000001'),
+    ).toBeNull()
+    expect(parseStartParam('open_master_zone__x')).toBeNull()
+    expect(parseStartParam('xopen_support')).toBeNull()
+  })
+
   it('returns null for an absent param', () => {
     expect(parseStartParam(null)).toBeNull()
   })

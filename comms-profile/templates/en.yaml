@@ -83,6 +83,11 @@ master.application_submitted:
     title: "Application submitted"
     body: "📨 Your master application has been received.\n\nWe will review it and let you know the decision."
 
+master.suspended:
+  telegram:
+    title: "Master status suspended"
+    body: "⏸ Your master profile is suspended -- you cannot create practices right now.\n\nYour data is kept. If this is a mistake, please contact support."
+
 # -- Wallet --
 
 wallet.topup_confirmed:

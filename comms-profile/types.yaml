@@ -158,6 +158,12 @@ types:
   master.application_submitted:
     channels: [in_app, telegram]
 
+  # BE-104: "your master status is revoked" (revoke_master, verified ->
+  # suspended). News about your own status like the three above -- NO
+  # category, so it cannot be muted.
+  master.suspended:
+    channels: [in_app, telegram]
+
   # -- System announcements: NO category on purpose (decision A, same
   #    mechanism as master.* above) --
 

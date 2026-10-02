@@ -396,6 +396,53 @@ describe('UserInboxView', () => {
     expect(push).toHaveBeenCalledWith({ name: 'master-apply' })
   })
 
+  async function tapOne(type: string, action: string): Promise<void> {
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+      items: [item({ id: 'be104', type, action_data: { action, params: {} } })],
+      next_cursor: null,
+      unread: 1,
+    })
+    vi.mocked(notificationsApi.markNotificationRead).mockResolvedValue({ unread: 0 })
+    mount()
+    await flush()
+    row(0).click()
+    await flush()
+  }
+
+  function seedAllowedRoles(roles: string[]): void {
+    useAuthStore().user = { role: 'user', role_switch: { allowed_roles: roles } } as never
+  }
+
+  // BE-104: the master-status vocabulary. The TYPE sends a rejection to its
+  // verdict screen; the same verb from any other type keeps the wizard.
+  it('BE-104: master.rejected + open_master_application -> master-pending (reason + reapply)', async () => {
+    await tapOne('master.rejected', 'open_master_application')
+    expect(push).toHaveBeenCalledWith({ name: 'master-pending' })
+  })
+
+  it('BE-104: master.application_submitted + open_master_application keeps master-apply', async () => {
+    await tapOne('master.application_submitted', 'open_master_application')
+    expect(push).toHaveBeenCalledWith({ name: 'master-apply' })
+  })
+
+  it('BE-104: open_master_zone with the master capability -> master-pending (switch offer)', async () => {
+    seedAllowedRoles(['user', 'master'])
+    await tapOne('master.verified', 'open_master_zone')
+    expect(push).toHaveBeenCalledWith({ name: 'master-pending' })
+  })
+
+  it('BE-104: open_master_zone WITHOUT the capability -> mark-read only, NO navigation', async () => {
+    seedAllowedRoles(['user'])
+    await tapOne('master.verified', 'open_master_zone')
+    expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith('be104')
+    expect(push).not.toHaveBeenCalled()
+  })
+
+  it('BE-104: open_support -> user-support', async () => {
+    await tapOne('master.suspended', 'open_support')
+    expect(push).toHaveBeenCalledWith({ name: 'user-support' })
+  })
+
   it('unmapped action and not msg.* -> mark-read only, NO navigation', async () => {
     vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
       items: [item({ id: 'd', type: 'practice.cancelled', action_data: null })],
