@@ -135,6 +135,9 @@ export const ERROR_MESSAGES: Record<string, string> = {
   // FE-92 follow-up (DRAFT wording): the school refusal now has its own code
   // (practices/service.py, every cause: switched off, inactive, not a member,
   // deleted mid-create).
+  // BE-102 publish (DRAFT wording): for a master a curator creates a
+  // standalone practice or a series root, not an occurrence of a series.
+  curator_cannot_add_occurrence: 'Куратор не может добавить занятие в серию мастера',
   curator_group_not_usable: 'Школа недоступна: она отключена или вы в ней больше не состоите',
   transfer_pending:
     'Предложение уже отправлено. Сначала отмените его, затем предложите другому мастеру.',

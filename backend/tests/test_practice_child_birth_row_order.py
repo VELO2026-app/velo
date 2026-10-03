@@ -1,17 +1,12 @@
 # =============================================================================
 # A series child born by path A (create_practice with parent_practice_id)
-# in the PRACTICE ROW ORDER -- BE-103 W-a and N1.
+# in the PRACTICE ROW ORDER -- BE-103 W-a (and what became of N1).
 # =============================================================================
 #
 #   Wa1  own child of a 'groups' root  x the root switched groups -> public
 #   Wa2  own child of a public root    x the root switched public -> students
-#   N1a  curator's child for a master  x the curator's audience edit of the
-#        root (W4)
-#   N1b  curator's child for a master  x the curator's series cancellation
-#   N1c  curator's child for a master  x the master publishing the root
-#   N1d  curator's child for a master  x deleting the school
-#        N1c and N1d are measurements, not regression tests: no cycle in
-#        either shape (each says why)
+#   N1   a curator cannot add a child for a master at all (owner, 3
+#        October) -- refused before anything is read; no race left to run
 #
 # W-a (Wa1/Wa2) is not a deadlock pair: it measures the missing lock. The
 # child is paused right after its parent is validated
@@ -19,14 +14,16 @@
 # window and the child inherits a mix of two states of its parent -- the
 # kind it read and the group rows it copies after its INSERT.
 #
-# N1 (N1a-d) pauses the curator's creation right after the school's group
-# is locked as its owner (_lock_group_as_owner) -- the seam exists in the
-# fixed code and in the old shape alike. In the fixed code the creation
-# then holds the target's rows, the PARENT and the group; in the old shape
-# (the parent taken after the group) it holds the group WITHOUT the parent:
-# the INCOMPLETE set is the holder's, and a rival holding the root and
-# wanting the group (N1a, N1b) closes the cycle when the holder reaches
-# for the parent. No gate, no heap order: one root, one group.
+# N1 (BE-102 publish, owner 3 October): N1a-d raced a CURATOR'S child for
+# a master against an audience edit, a series cancellation, the root's
+# publication and the school's deletion -- the parent-before-group order of
+# BE-103. That child no longer exists: a curator creates for a master only
+# a standalone practice or a series root (both born published), and
+# parent_practice_id on that path is refused first, before any row is read
+# or locked. N1b showed why: a child born published outlived a series
+# cancellation that was already waiting on its parent. So there is no
+# lock order left to measure here -- the four races are replaced by one
+# test of the refusal.
 # =============================================================================
 
 from collections.abc import AsyncGenerator
@@ -38,8 +35,8 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ConflictError
-from app.modules.curator_groups import service as curator_service
+from app.core.database import get_session_factory
+from app.core.exceptions import BadRequestError, ConflictError
 from app.modules.curator_groups.models import (
     CuratorGroup,
     CuratorGroupMember,
@@ -47,7 +44,6 @@ from app.modules.curator_groups.models import (
 )
 from app.modules.masters.groups_models import MasterGroup
 from app.modules.masters.models import MasterProfile
-from app.modules.practices import cancel_service
 from app.modules.practices import service as practice_service
 from app.modules.practices.models import (
     AudienceKind,
@@ -190,23 +186,6 @@ def _own_child(w: dict, root: UUID):
     return call
 
 
-def _curators_child(w: dict, root: UUID):
-    """The curator attaches an occurrence to the master's school root, for
-    the master (BE-102)."""
-    async def call(session: AsyncSession):
-        user = await session.get(User, w["cid"])
-        practice, deduped = await practice_service.create_practice(
-            user,
-            _child_body(
-                root, master_id=w["mid"], curator_group_id=w["school"],
-            ),
-            session,
-        )
-        assert not deduped
-        return practice.id
-    return call
-
-
 def _edit(user_id: UUID, pid: UUID, **fields):
     async def call(session: AsyncSession):
         user = await session.get(User, user_id)
@@ -241,15 +220,11 @@ def _refused_409(outcome) -> None:
 
 
 _PARENT_LOCK = (practice_service, "_owned_root_parent_or_400")
-_GROUP_LOCK = (practice_service, "_lock_group_as_owner")
 
 _PUBLIC = AudienceKind.PUBLIC.value
 _GROUPS = AudienceKind.GROUPS.value
 _STUDENTS = AudienceKind.STUDENTS.value
 _SCHOOL_AUDIENCE = AudienceKind.CURATOR_GROUPS.value
-_DRAFT = PracticeStatus.DRAFT.value
-_SCHEDULED = PracticeStatus.SCHEDULED.value
-_CANCELLED = PracticeStatus.CANCELLED.value
 
 
 # ===========================================================================
@@ -329,162 +304,52 @@ async def test_wa2_a_child_of_a_public_root_does_not_stay_public_alone(
 
 
 # ===========================================================================
-# N1a-c -- N1: the curator's child takes the parent before the school
+# N1 -- a curator cannot add an occurrence for a master (owner, 3 October)
 # ===========================================================================
 
 
 @pytest.mark.asyncio
-async def test_n1a_curators_child_against_the_curators_audience_edit(
-    client: AsyncClient, db_session: AsyncSession, w: dict,
-    monkeypatch: pytest.MonkeyPatch,
+async def test_n1_a_curator_adding_an_occurrence_for_a_master_is_refused(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    w: dict,
 ) -> None:
-    """The curator attaches an occurrence for the master and, at the same
-    time, moves the root to the school's audience. The edit takes the
-    series and then the school (practice -> group); the creation, in the
-    old shape, held the school and then wanted the parent: 40P01.
+    """parent_practice_id + master_id from a curator -> 400
+    curator_cannot_add_occurrence, and no practice appears.
 
-    The invariant: no deadlock; the creation committed and the edit,
-    which waited on the parent and then found a child it does not hold, is
-    refused with 409; the child carries the root's audience and the school.
+    Replaces N1a-d (curator's child x audience edit / series cancellation /
+    root publication / school deletion): those pinned a child the owner's
+    3 October ruling removed -- the curator creates only a standalone
+    practice or a root for a master, born published, so the races have no
+    holder to run. THE PAIR: the master's own, otherwise identical request
+    for the same root creates the child.
     """
-    root = await _practice(db_session, w, uuid4(), hours=5, school=True)
+    root = await _practice(db_session, w, uuid4(), hours=30, school=True)
 
-    result = await race(
-        monkeypatch,
-        holder=_curators_child(w, root),
-        pause_in=_GROUP_LOCK,
-        pause="after",
-        rival=_edit(w["cid"], root, audience_kind=_SCHOOL_AUDIENCE),
-    )
-    assert_no_deadlock(result)
-    assert result.rival_waited
-    assert result.holder.committed, result.holder.error
-    _refused_409(result.rival)
-    child = result.holder.result
-    rows = await _rows(root, child)
-    assert rows[root][1:] == rows[child][1:] == (_PUBLIC, w["school"])
-
-
-@pytest.mark.asyncio
-async def test_n1b_curators_child_against_the_curators_series_cancellation(
-    client: AsyncClient, db_session: AsyncSession, w: dict,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The curator attaches an occurrence for the master while cancelling
-    the series. The cancellation takes the series by id and then the school
-    as its owner; the creation in the old shape held the school and wanted
-    the parent.
-
-    The invariant: both committed; the series is cancelled -- and the
-    newborn is not in it: a draft, outside the cascade's set
-    (_CANCELLABLE_PRACTICE_STATUSES), left attached to a cancelled root.
-    That last part is asserted as what the code does today, not as what it
-    should do (BE-103, observation "a child of a dead root").
-    """
-    root = await _practice(db_session, w, uuid4(), hours=5, school=True)
-
-    async def cascade(session: AsyncSession):
-        user = await session.get(User, w["cid"])
-        return await cancel_service.cancel_practice(
-            root, user, session, scope="this_and_future",
+    async with get_session_factory()() as session:
+        curator = await session.get(User, w["cid"])
+        with pytest.raises(BadRequestError) as refused:
+            await practice_service.create_practice(
+                curator,
+                _child_body(root, master_id=w["mid"], curator_group_id=w["school"]),
+                session,
+            )
+        await session.rollback()
+    assert refused.value.code == "curator_cannot_add_occurrence"
+    children = (
+        await fresh_execute(
+            select(Practice.id).where(Practice.parent_practice_id == root)
         )
+    ).all()
+    assert children == []
 
-    result = await race(
-        monkeypatch,
-        holder=_curators_child(w, root),
-        pause_in=_GROUP_LOCK,
-        pause="after",
-        rival=cascade,
-    )
-    assert_no_deadlock(result)
-    assert result.rival_waited
-    assert result.holder.committed, result.holder.error
-    assert result.rival.committed, result.rival.error
-    child = result.holder.result
-    rows = await _rows(root, child)
-    assert rows[root][0] == _CANCELLED
-    assert rows[child][0] == _DRAFT
-
-
-@pytest.mark.asyncio
-async def test_n1c_curators_child_against_the_master_publishing_the_root(
-    client: AsyncClient, db_session: AsyncSession, w: dict,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The curator attaches an occurrence for the master to a draft school
-    root while the master publishes it. A MEASUREMENT, like N1d: the gate
-    predicted a cycle here (the publication's journal row takes KEY SHARE
-    on the group the creation holds as its owner), and the old shape
-    refuted it -- KEY SHARE does not conflict with the owner's lock (a
-    no-op UPDATE, FOR NO KEY UPDATE): in the old shape the two never meet
-    and both commit. In the fixed shape they do meet, on the parent (FOR
-    SHARE against the publication's FOR UPDATE), which this asserts.
-
-    The invariant: the publication waited for the creation; both
-    committed; the root is published and the child exists, a draft of the
-    school.
-    """
-    root = await _practice(
-        db_session, w, uuid4(), hours=30, school=True, status=_DRAFT,
-    )
-
-    result = await race(
-        monkeypatch,
-        holder=_curators_child(w, root),
-        pause_in=_GROUP_LOCK,
-        pause="after",
-        rival=_edit(w["mid"], root, status=_SCHEDULED),
-    )
-    assert_no_deadlock(result)
-    assert result.rival_waited
-    assert result.holder.committed, result.holder.error
-    assert result.rival.committed, result.rival.error
-    child = result.holder.result
-    rows = await _rows(root, child)
-    assert rows[root][0] == _SCHEDULED
-    assert rows[child][0] == _DRAFT
-    assert rows[child][2] == w["school"]
-
-
-# ===========================================================================
-# N1d -- a measurement: deleting the school is not a cycle with the creation
-# ===========================================================================
-
-
-@pytest.mark.asyncio
-async def test_n1d_curators_child_against_deleting_the_school(
-    client: AsyncClient, db_session: AsyncSession, w: dict,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The curator attaches an occurrence for the master while deleting the
-    school. delete_curator_group deletes the school's member rows FIRST,
-    and the creation holds the master's member row FOR SHARE: the deletion
-    waits there, holding nothing the creation wants -- in the fixed shape
-    and in the old one alike. Green on both is the point: the W4 report's
-    inference "N1 x delete_curator_group -> 40P01" is refuted by it.
-
-    The invariant: both committed; the deletion, which ran second, left
-    the root and the newborn without a school.
-    """
-    root = await _practice(db_session, w, uuid4(), hours=5, school=True)
-
-    async def delete_school(session: AsyncSession):
-        await curator_service.delete_curator_group(
-            w["cid"], w["school"], session,
+    async with get_session_factory()() as session:
+        master = await session.get(User, w["mid"])
+        child, deduped = await practice_service.create_practice(
+            master,
+            _child_body(root),
+            session,
         )
-
-    result = await race(
-        monkeypatch,
-        holder=_curators_child(w, root),
-        pause_in=_GROUP_LOCK,
-        pause="after",
-        rival=delete_school,
-    )
-    assert_no_deadlock(result)
-    assert result.rival_waited
-    assert result.holder.committed, result.holder.error
-    assert result.rival.committed, result.rival.error
-    child = result.holder.result
-    rows = await _rows(root, child)
-    assert rows[root][2] is None
-    assert rows[child][2] is None
+        await session.commit()
+    assert not deduped
+    assert child.parent_practice_id == root

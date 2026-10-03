@@ -630,29 +630,38 @@ async def test_no_existing_practice_is_handed_over_before_the_checks(
 
 
 @pytest.mark.asyncio
-async def test_a_series_child_attaches_to_the_masters_root(client, s: _S) -> None:
-    """The child of a series gets the same master as its root; the root
-    must be the TARGET's, and the curator's own root is refused."""
+async def test_a_curator_cannot_add_an_occurrence_to_the_masters_series(
+    client, s: _S,
+) -> None:
+    """parent_practice_id for a master -> 400 curator_cannot_add_occurrence,
+    before anything is read; no practice appears.
+
+    BE-102 publish (owner, 3 October): this test used to pin «the child of a
+    series gets the same master as its root» -- right while a curator could
+    add an occurrence for a master. The ruling removed that: for a master a
+    curator creates only a standalone practice or a series root (born
+    published). THE PAIR: the curator's request for a standalone practice
+    for the same master in the same school is created.
+    """
     series = PracticeType.SERIES.value
     root = await _seed_practice(s.id("target"), s.school, practice_type=series)
-    child = await _post(
+    before = len(await _practices_of(s.id("target")))
+    refused = await _post(
         client, s.token("curator"), practice_type=series,
         scheduled_at=(_SLOT + timedelta(days=7)).isoformat(),
         parent_practice_id=str(root),
         master_id=s.id("target"), curator_group_id=str(s.school),
     )
-    assert child.status_code == 201, child.text
-    assert child.json()["master_id"] == s.id("target")
-    assert child.json()["parent_practice_id"] == str(root)
+    assert refused.status_code == 400, refused.text
+    assert refused.json()["error"] == "curator_cannot_add_occurrence"
+    assert len(await _practices_of(s.id("target"))) == before
 
-    own_root = await _seed_practice(s.id("curator"), s.school, practice_type=series)
-    refused = await _post(
-        client, s.token("curator"), practice_type=series,
-        scheduled_at=(_SLOT + timedelta(days=14)).isoformat(),
-        parent_practice_id=str(own_root),
+    standalone = await _post(
+        client, s.token("curator"),
         master_id=s.id("target"), curator_group_id=str(s.school),
     )
-    assert refused.status_code == 400, refused.text
+    assert standalone.status_code == 201, standalone.text
+    assert standalone.json()["parent_practice_id"] is None
 
 
 # ===========================================================================

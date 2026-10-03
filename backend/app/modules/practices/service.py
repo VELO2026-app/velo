@@ -427,11 +427,19 @@ _MASTER_NOT_IN_SCHOOL = "master_id must be a verified master of this school"
 
 async def _effective_master_id_or_4xx(
     user: User, body: CreatePracticeRequest, session: AsyncSession,
-) -> tuple[UUID, Practice | None]:
-    """Return who leads the practice being created (BE-102) -- and, on the
-    path for another master, the locked series parent (BE-103 N1; None
-    without parent_practice_id, and always None on the caller's own path,
-    where create_practice locks the parent itself).
+) -> UUID:
+    """Return who leads the practice being created (BE-102).
+
+    FOR ANOTHER MASTER ONLY A STANDALONE PRACTICE OR A SERIES ROOT (owner,
+    3 October): both are born published. Adding an occurrence to an
+    existing series (parent_practice_id) for a master is refused FIRST,
+    with its own code (curator_cannot_add_occurrence), before anything is
+    read or locked. A child born published could outlive a series
+    cancellation already waiting on its parent, and a child of an
+    unpublished root would be open while its course is not. The
+    occurrences the series generator makes when the root is published are
+    a different path (the root's own lock, W4) and are untouched. With no
+    parent on this path, the BE-103 N1 parent lock that stood here is gone.
 
     The caller, unless body.master_id names somebody else. Somebody else is
     a school curator creating a practice for a master of that school, and
@@ -450,6 +458,8 @@ async def _effective_master_id_or_4xx(
          master profile is verified right now.
 
     Refusals, in this order, and why each code is what it is:
+      - 0 -> 400 curator_cannot_add_occurrence: parent_practice_id names a
+        series to add to (owner, 3 October) -- nothing was read;
       - 1 -> 400 master_id_requires_school: nothing was read, nothing
         about anybody is revealed;
       - 2 -> the existing 400 of _usable_curator_group_or_400: an outsider
@@ -486,7 +496,12 @@ async def _effective_master_id_or_4xx(
     not passed the checks above would hand out another master's practice.
     """
     if body.master_id is None or body.master_id == user.id:
-        return user.id, None
+        return user.id
+    if body.parent_practice_id is not None:
+        raise BadRequestError(
+            _CURATOR_CANNOT_ADD_OCCURRENCE,
+            code="curator_cannot_add_occurrence",
+        )
     target_id = body.master_id
     school_id = body.curator_group_id
     if school_id is None:
@@ -505,29 +520,17 @@ async def _effective_master_id_or_4xx(
     if curator_id != user.id:
         raise ForbiddenError(_CURATOR_ONLY, code="curator_only")
     await _lock_school_master_or_400(school_id, target_id, session)
-    # BE-103 N1: the series parent, in its place in the order -- after the
-    # target's rows, BEFORE the group. A child's INSERT takes KEY SHARE on
-    # its parent (FK), so a new practice row does wait for its parent's
-    # holder: taken after the group, that is group -> practice, against
-    # update_practice and the series cancellation, which hold the series
-    # and then want the group (40P01). It cannot go below the dedup either:
-    # the group re-check below must run first (see above), and the parent
-    # comes before it. Validated against the TARGET master: the child is
-    # theirs.
-    parent = await _owned_root_parent_or_400(
-        target_id, body.parent_practice_id, session,
-    )
     # BE-63: the curator's right, re-checked UNDER THE GROUP LOCK, after the
-    # target's rows and the parent (module order: member -> master profile
-    # -> practice -> group) and before the INSERT. The INSERT's FK checks
-    # are covered by locks already held: the parent's above, this group's
-    # here. The read above is the fast path; the school can change hands
+    # target's rows (module order: member -> master profile -> practice ->
+    # group) and before the INSERT. The INSERT's FK checks are covered by
+    # locks already held: this group's here (no parent on this path). The
+    # read above is the fast path; the school can change hands
     # between it and here (accept of a transfer), and a former curator must
     # not create in the new owner's school. Same 403 as the read: one fact,
     # one code.
     if not await _lock_group_as_owner(user.id, school_id, session):
         raise ForbiddenError(_CURATOR_ONLY, code="curator_only")
-    return target_id, parent
+    return target_id
 
 
 async def _lock_school_master_or_400(
@@ -584,6 +587,10 @@ async def _lock_school_master_or_400(
         )
 
 
+_CURATOR_CANNOT_ADD_OCCURRENCE = (
+    "a curator creates a standalone practice or a series root for a "
+    "master, not an occurrence of an existing series"
+)
 _CURATOR_ONLY = (
     "Only the school's curator may create a practice for another master"
 )
@@ -1808,7 +1815,7 @@ async def create_practice(
     """
     # BE-102: before the dedup, which would otherwise hand the target's
     # existing practice to a caller who has not passed the checks.
-    master_id, parent = await _effective_master_id_or_4xx(user, body, session)
+    master_id = await _effective_master_id_or_4xx(user, body, session)
     for_another_master = master_id != user.id
     duplicate = await _find_recent_duplicate_practice(master_id, body, session)
     if duplicate is not None:
@@ -1841,10 +1848,10 @@ async def create_practice(
             user.id, body.curator_group_id, session,
         )
     # H-R2 (3.4): validate parent_practice_id BEFORE anything is inserted
-    # -- same placement discipline as the group check above. BE-103: the
-    # parent is locked here on the caller's own path; for another master
-    # it already is, in its place before the school's group
-    # (_effective_master_id_or_4xx) -- one lock, not two.
+    # -- same placement discipline as the group check above. Only on the
+    # caller's own path: for another master a parent is refused outright
+    # (_effective_master_id_or_4xx, owner 3 October).
+    parent = None
     if not for_another_master:
         parent = await _owned_root_parent_or_400(
             master_id, body.parent_practice_id, session,
