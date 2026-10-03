@@ -636,17 +636,17 @@ export interface CuratorGroupCheckinItem {
   created_at: string
 }
 
-/** One COMPLETED practice of the window (part 3, owner 2026-10-02). The card the client renders: direction (schema-on-read data.taxonomy, for the direction icon), title, master, date, then the practice's own aggregates -- attendees (distinct ATTENDED), check-ins (PRE on non-cancelled bookings) and the feedback pair (distinct reviewers + the five zone counts). Same predicates as the totals, so a card reconciles with the cards around it. */
+/** One COMPLETED practice of the window (part 3, owner 2026-10-02). The card the client renders: direction (schema-on-read data.taxonomy, for the direction icon), title, master, date, then the practice's own aggregates -- attendees (distinct ATTENDED: everyone who was there, «Ученики» in VELO's vocabulary), check-ins (PRE on non-cancelled bookings) and the reviews with their five zone counts. Same predicates as the totals, so a card reconciles with the cards around it. */
 export interface CuratorGroupConductedPracticeItem {
   practice_id: string
   title: string
   direction: string | null
   master_name: string
+  master_avatar_url: string | null
   scheduled_at: string
   timezone: string
   attendees_count: number
   checkins_count: number
-  reviewers_count: number
   reviews_count: number
   rating: ScoreZoneCounts
 }
@@ -665,14 +665,16 @@ export interface CuratorGroupDeletePreviewResponse {
   upcoming_practices_targeting_group: number
 }
 
-/** The period-scoped heart of the screen (owner brief 2026-10-02). conducted / attendees / repeat_* / reviewers / rating are scoped to the calendar period the request named, over the curator's own timezone (BE-34 bounds); joined_never_came is LIFETIME by definition -- a member who never came has not come in any period, so the slider does not move it. Vocabulary (pinned once in analytics_service): «проведено» counts COMPLETED practices in the window (GT-20 -- the session settled, not the clock passed); «приходило» counts distinct users with an ATTENDED booking on those sessions; «пришли ещё раз» counts the users with >=2. Members counted are STUDENT-kind rows: masters join by appointment and conduct rather than book, so counting them would put structurally non-attending people into every denominator. */
+/** The period-scoped heart of the screen (owner brief 2026-10-02, BE-107 decisions). Everything here is scoped to the calendar period the request named, over the curator's own timezone (BE-34 bounds), and reads ONE set of practices: the school's COMPLETED practices scheduled in the window. The exact vocabulary is pinned once, in analytics_service's header. attendees / repeat_* count STUDENTS OF THE SCHOOL NOW (member rows of kind=student) -- the same population as members.students, the card's «из N». joined_never_came counts students who JOINED IN THE PERIOD and have not attended a school practice since joining (to the window's end). visits / reviews are EVERYONE on the period's practices, guests included -- one population for both, so reviews <= visits. */
 export interface CuratorGroupEngagementTotals {
   practices_conducted: number
   attendees: number
   repeat_attendees: number
   repeat_pct: number
   joined_never_came: number
-  reviewers: number
+  visits: number
+  reviews: number
+  reviews_pct: number
   rating: ScoreZoneCounts
   conducted_practices: CuratorGroupConductedPracticeItem[]
 }
