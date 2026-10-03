@@ -1205,17 +1205,17 @@ async function submit(): Promise<void> {
     // there is nothing left for it to resurrect into) -- same drop as the
     // normal path below, just earlier, since there is no publish step
     // left that could still fail and need the draft preserved for a retry.
-    // FE-92: the master's practice, created by their curator, stays the
-    // master's DRAFT (create_practice: «in draft status»; the master is told
-    // by _tell_master_of_curator_act). No publish step -- it is not the
-    // curator's practice to publish -- and back to the school: the curator
-    // has no screen of another master's practice. A dedup here is that
-    // master's existing practice for the same slot.
+    // FE-92 / BE-102 publish (owner, 3 October): the backend creates the
+    // master's practice ALREADY PUBLISHED, in the same request (Zoom, the
+    // school's announcement, one message to the master). The front sends no
+    // second request -- nothing left to publish -- and goes back to the
+    // school: the curator has no screen of another master's practice. A
+    // dedup here is that master's existing practice for the same slot.
     if (targetsForeignMaster.value) {
       suppressSave = true
       clearDraft()
       if (created.deduplicated) toast.info('Такая практика уже есть у мастера')
-      else toast.success('Черновик создан — мастер получит уведомление')
+      else toast.success('Практика опубликована — мастер получит уведомление')
       void router.replace({ name: 'master-curator-group', params: { id: contextGroupId.value } })
       return
     }

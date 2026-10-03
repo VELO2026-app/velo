@@ -302,6 +302,7 @@ async def _series_keys(
         master_name="Anna",
         scheduled_at=anchor,
         act=act,
+        timezone="UTC",
     )
     await session.commit()
     events = await _synth_events(session)
@@ -357,6 +358,7 @@ class TestReminderIdentities:
             practice_title="Yoga",
             scheduled_at=datetime.now(UTC) + timedelta(days=3),
             act=act,
+            timezone="UTC",
         )
         await db_session.commit()
 

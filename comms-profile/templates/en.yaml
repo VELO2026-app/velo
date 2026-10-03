@@ -265,8 +265,8 @@ curator_group.master_offer_closed:
 
 curator_group.practice_created_for_master:
   telegram:
-    title: "A curator created a practice for you"
-    body: "🏛 <b>{actor_name}</b> created a draft practice <b>{practice_title}</b> ({scheduled_at}) in <b>{group_name}</b> on your behalf.\n\nReview it and publish it."
+    title: "A curator created and published a practice for you"
+    body: "🏛 <b>{actor_name}</b> created and published the practice <b>{practice_title}</b> ({scheduled_at}) in <b>{group_name}</b> on your behalf.\n\nIt is visible in the school."
     button_text: "Open practice"
 
 curator_group.master_practice_published:

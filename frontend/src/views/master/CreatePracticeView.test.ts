@@ -1788,7 +1788,7 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     return practice({ id: 'p_for_master', status: 'draft', ...overrides })
   }
 
-  it('masterId + groupId: the master is fixed; submit sends master_id AND the school, no publish', async () => {
+  it('masterId + groupId: the master is fixed; submit sends master_id AND the school, no second request', async () => {
     routeQuery.masterId = 'm_pub'
     routeQuery.groupId = 'g1'
     vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
@@ -1807,9 +1807,11 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     expect(body.master_id).toBe('m_pub')
     expect(body.curator_group_id).toBe('g1')
     expect(body.audience_kind).toBe('public')
-    // The master's draft stays a draft: the curator does not publish it.
+    // BE-102 publish: the backend published it in the create request (this
+    // pinned «the draft stays a draft», right under the 1 October ruling);
+    // the front sends no second request either way.
     expect(practicesApi.updatePractice).not.toHaveBeenCalled()
-    expect(toastSuccess).toHaveBeenCalledWith('Черновик создан — мастер получит уведомление')
+    expect(toastSuccess).toHaveBeenCalledWith('Практика опубликована — мастер получит уведомление')
     expect(replace).toHaveBeenCalledWith({ name: 'master-curator-group', params: { id: 'g1' } })
   })
 

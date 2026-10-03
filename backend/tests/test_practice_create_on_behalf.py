@@ -297,12 +297,26 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
 
 
 @pytest.mark.asyncio
-async def test_curator_creates_a_draft_led_by_a_master_of_the_school(
-    client, s: _S,
+async def test_curator_creates_a_published_practice_led_by_a_master_of_the_school(
+    client, s: _S, monkeypatch,
 ) -> None:
-    """The practice is the TARGET's, in the school, a draft; the curator is
-    the audit actor; the master is told. Each write is checked present
-    AND non-empty, not just "no error"."""
+    """The practice is the TARGET's, in the school, PUBLISHED at once; the
+    curator is the audit actor; the master is told ONCE.
+
+    BE-102 publish (owner, 3 October): this test used to pin a DRAFT and
+    «check and publish» -- right under the 1 October ruling, which the 3
+    October one replaced: no approval step for the master. What publication
+    gives (the shared _after_publish) is checked here too: the Zoom meeting
+    (stubbed), the school's announcement, the school's practice list. Each
+    write is checked present AND non-empty, not just "no error".
+    """
+    from unittest.mock import AsyncMock
+
+    import app.modules.zoom.service as zoom_service
+
+    zoom = AsyncMock()
+    monkeypatch.setattr(zoom_service, "create_meeting_for_practice", zoom)
+
     resp = await _post(
         client, s.token("curator"),
         master_id=s.id("target"), curator_group_id=str(s.school),
@@ -312,10 +326,30 @@ async def test_curator_creates_a_draft_led_by_a_master_of_the_school(
     assert data["master_id"] == s.id("target")
     assert data["master_name"] == "Тимур"
     assert data["curator_group_id"] == str(s.school)
-    assert data["status"] == PracticeStatus.DRAFT.value
+    assert data["status"] == PracticeStatus.SCHEDULED.value
     assert data["deduplicated"] is False
     assert data["zoom_host_join_url"] is None
     assert await _practices_of(s.id("curator")) == []
+
+    # Publication's effects, through the same function update_practice uses.
+    zoom.assert_awaited_once()
+    assert str(zoom.await_args.args[0].id) == data["id"]
+    announced = (
+        await fresh_execute(
+            select(OutboxEvent).where(
+                OutboxEvent.payload["type"].astext
+                == "curator_group.practice_published",
+                OutboxEvent.payload["target_value"].astext == s.id("student"),
+            )
+        )
+    ).scalars().all()
+    assert len(announced) == 1
+    listed = await client.get(
+        f"/api/v1/curator-groups/{s.school}/practices",
+        headers=auth_headers(s.token("student")),
+    )
+    assert listed.status_code == 200, listed.text
+    assert data["id"] in [p["id"] for p in listed.json()["items"]]
 
     audits = await _audit_rows(data["id"])
     assert len(audits) == 1
@@ -324,10 +358,26 @@ async def test_curator_creates_a_draft_led_by_a_master_of_the_school(
         "group_id": str(s.school), "master_id": s.id("target"),
     }
 
+    # ONE message to the master: «created and published», no «published»
+    # on top, no «check and publish».
     notes = await _notifications_to(s.id("target"))
     assert len(notes) == 1
+    published_too = (
+        await fresh_execute(
+            select(OutboxEvent).where(
+                OutboxEvent.payload["type"].astext
+                == "curator_group.master_practice_published",
+                OutboxEvent.payload["target_value"].astext == s.id("target"),
+            )
+        )
+    ).scalars().all()
+    assert published_too == []
     payload = notes[0].payload
     assert payload["idempotency_key"] == f"practice-created-by-curator:{data['id']}"
+    assert payload["title"] == "Куратор создал и опубликовал практику от вашего имени"
+    assert "опубликовал" in payload["body"]
+    assert "черновик" not in payload["body"]
+    assert "Проверьте" not in payload["body"]
     action = payload["action_data"]
     assert action["action"] == "open_practice"
     assert action["params"] == {"practice_id": data["id"]}
@@ -513,6 +563,41 @@ async def test_dedup_is_by_the_master_and_announces_nothing_new(
     assert await _audit_rows(data["id"]) == []
     assert await _notifications_to(s.id("target")) == []
     assert len(await _practices_of(s.id("target"))) == 1
+
+
+@pytest.mark.asyncio
+async def test_the_same_create_twice_publishes_and_tells_once(
+    client, s: _S, monkeypatch,
+) -> None:
+    """BE-102 publish: a repeated create is the dedup -- no second message
+    to the master and no second announcement to the school."""
+    from unittest.mock import AsyncMock
+
+    import app.modules.zoom.service as zoom_service
+
+    monkeypatch.setattr(zoom_service, "create_meeting_for_practice", AsyncMock())
+    first = await _post(
+        client, s.token("curator"),
+        master_id=s.id("target"), curator_group_id=str(s.school),
+    )
+    again = await _post(
+        client, s.token("curator"),
+        master_id=s.id("target"), curator_group_id=str(s.school),
+    )
+    assert first.status_code == again.status_code == 201, again.text
+    assert again.json()["id"] == first.json()["id"]
+    assert again.json()["deduplicated"] is True
+    assert len(await _notifications_to(s.id("target"))) == 1
+    announced = (
+        await fresh_execute(
+            select(OutboxEvent).where(
+                OutboxEvent.payload["type"].astext
+                == "curator_group.practice_published",
+                OutboxEvent.payload["target_value"].astext == s.id("student"),
+            )
+        )
+    ).scalars().all()
+    assert len(announced) == 1
 
 
 @pytest.mark.asyncio
