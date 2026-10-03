@@ -1351,6 +1351,22 @@ export interface PaginatedParticipantsResponse {
   offset: number
 }
 
+/** GET /practices/{id}/analytics/pairs -- ordered by name, then user_id. */
+export interface PaginatedPracticeAnalyticsPairs {
+  items: PracticeAnalyticsPair[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** GET /practices/{id}/analytics/reviews -- newest first, then id. */
+export interface PaginatedPracticeAnalyticsReviews {
+  items: PracticeAnalyticsReview[]
+  total: number
+  limit: number
+  offset: number
+}
+
 /** GET /api/v1/practices -- paginated public list. */
 export interface PaginatedPracticesResponse {
   items: PracticeResponse[]
@@ -1449,6 +1465,40 @@ export interface PayoutDetails {
 export interface PayoutDetailsUpdate {
   method: string
   details: Record<string, unknown>
+}
+
+/** One attendee with BOTH a PRE check-in and a review, as zones. */
+export interface PracticeAnalyticsPair {
+  user_id: string
+  name: string
+  avatar_url: string | null
+  before_zone: ScoreZone
+  after_zone: ScoreZone
+}
+
+/** GET /practices/{id}/analytics -- the header and both distributions. `attended` is the denominator of every "X of N" on the screen; the "check-ins before" figure is the sum of `before` (PRE check-ins of the attended), so the blocks reconcile. */
+export interface PracticeAnalyticsResponse {
+  practice_id: string
+  title: string
+  direction: string | null
+  scheduled_at: string
+  timezone: string
+  master_name: string
+  master_avatar_url: string | null
+  attended: number
+  before: ScoreZoneCounts
+  after: ScoreZoneCounts
+  pairs_total: number
+  reviews_total: number
+}
+
+/** One attendee's review WITH text (a rating alone is not listed here). */
+export interface PracticeAnalyticsReview {
+  user_id: string
+  name: string
+  avatar_url: string | null
+  comment: string
+  created_at: string
 }
 
 /** GET /api/v1/practices/{id}/insights -- aggregated data. All data is anonymous: no user IDs, names, or comment texts. Only numeric distributions and counts. */
