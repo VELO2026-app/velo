@@ -70,6 +70,7 @@ const FACADE = {
     finance: true,
     msg_participants: true,
     msg_support: true,
+    curator_groups: true,
   },
   schedule: null,
   timezone: null,
@@ -203,6 +204,17 @@ describe('MasterNotificationsView', () => {
       expect(isOn('Новое бронирование')).toBe(false)
       expect(isOn('Отмена бронирования')).toBe(false)
       expect(prefsPut).toHaveBeenCalledWith({ categories: { bookings: false } })
+    })
+
+    it('the Школы row toggles the curator_groups category through the proxy (FE-67)', async () => {
+      mount()
+      await flush()
+
+      switchByRow('События школ').click()
+      await flush()
+
+      expect(isOn('События школ')).toBe(false)
+      expect(prefsPut).toHaveBeenCalledWith({ categories: { curator_groups: false } })
     })
 
     it('reverts the toggle and toasts when the save FAILS', async () => {
