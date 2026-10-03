@@ -39,10 +39,10 @@
       "can_create_groups": true,
       "bio": "Веду медитации: тишина, присутствие, звук и даосские практики. Куратор школы «Тихое утро».",
       "methods": [
-        "meditation — silence",
-        "meditation — presence",
-        "meditation — sound",
-        "meditation — taoist"
+        "Медитация — Медитация молчания",
+        "Медитация — Медитация присутствия",
+        "Медитация — Звуковая медитация",
+        "Медитация — Даосская медитация"
       ],
       "experience_years": 8
     },
@@ -53,12 +53,12 @@
       "can_create_groups": true,
       "bio": "Хатха, инь, виньяса и йога-нидра. Куратор «Тёплого вечера».",
       "methods": [
-        "yoga — nidra",
-        "yoga — yin",
-        "yoga — hatha",
-        "yoga — vinyasa",
-        "yoga — kundalini",
-        "yoga — ashtanga"
+        "Йога — Йога-нидра",
+        "Йога — Инь-йога",
+        "Йога — Хатха-йога",
+        "Йога — Виньяса",
+        "Йога — Кундалини-йога",
+        "Йога — Аштанга-йога"
       ],
       "experience_years": 5
     },
@@ -69,7 +69,7 @@
       "can_create_groups": false,
       "bio": "Соматика: возвращаю контакт с телом и учу отпускать напряжение.",
       "methods": [
-        "somatic"
+        "Соматика"
       ],
       "experience_years": 6
     },
@@ -80,7 +80,7 @@
       "can_create_groups": false,
       "bio": "Дыхательные практики для энергии, сна и спокойствия.",
       "methods": [
-        "breathwork"
+        "Дыхательные практики"
       ],
       "experience_years": 7
     },
@@ -91,7 +91,7 @@
       "can_create_groups": false,
       "bio": "Звуковые ванны: тибетские чаши, гонги, камертоны.",
       "methods": [
-        "sound_healing"
+        "Саундхиллинг"
       ],
       "experience_years": 9
     },
@@ -102,7 +102,7 @@
       "can_create_groups": false,
       "bio": "Терапевтическое письмо: разбираться в себе через текст.",
       "methods": [
-        "narrative"
+        "Нарративные практики"
       ],
       "experience_years": 4
     },
@@ -113,8 +113,8 @@
       "can_create_groups": false,
       "bio": "Веду женские круги и круги шеринга.",
       "methods": [
-        "circles — womens",
-        "circles — sharing"
+        "Круги — Женский круг",
+        "Круги — Круг шеринга"
       ],
       "experience_years": 6
     },
