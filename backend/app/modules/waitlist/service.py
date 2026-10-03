@@ -72,7 +72,10 @@ from app.modules.bookings.service import (
 )
 from app.modules.masters.service import get_master_display_name
 from app.modules.payments.purchase import create_purchase_for_booking
-from app.modules.practices.audience_service import assert_viewer_can_access_practice
+from app.modules.practices.audience_service import (
+    assert_viewer_can_access_practice,
+    lock_school_member_key_share,
+)
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.users.models import User
 from app.modules.waitlist.models import (
@@ -118,6 +121,10 @@ async def join_waitlist(
     - No active waitlist entry (waiting/notified).
     - Rejoinable entry (left/declined/expired) -> re-join with new position.
     """
+    # K2 (BE-79): the viewer's member row in the practice's school, FOR
+    # KEY SHARE, before the practice -- see lock_school_member_key_share.
+    await lock_school_member_key_share(user.id, practice_id, session)
+
     # Lock practice (same strategy as create_booking).
     stmt = (
         select(Practice)
@@ -322,6 +329,11 @@ async def confirm_waitlist(
     practice_id = (await session.execute(peek_stmt)).scalar_one_or_none()
     if practice_id is None:
         raise NotFoundError("Waitlist entry not found")
+
+    # K2 (BE-79): this path creates a booking too -- the member row first,
+    # as in create_booking (lock_school_member_key_share). The peek's
+    # practice_id is the entry's for good: no writer moves an entry.
+    await lock_school_member_key_share(user.id, practice_id, session)
 
     practice_stmt = (
         select(Practice)

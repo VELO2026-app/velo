@@ -12,10 +12,11 @@
 # P-01: nothing here commits. The router flushes; get_db_session commits.
 #
 # LOCK ORDER (BE-95). THE ONE PLACE IT IS WRITTEN; everything below that
-# depends on it points here. The isolation level is READ COMMITTED and there
-# is no SELECT ... FOR UPDATE in this module, so the only row locks are the
-# ones writes take, plus the one FOR SHARE named below -- and every writer
-# takes them in ONE order:
+# depends on it points here. The isolation level is READ COMMITTED. The
+# module's own rows are locked by the writes themselves and by the one FOR
+# SHARE named below; the one SELECT ... FOR UPDATE here is the school
+# block's, on practices and the rows under them (BE-79, below). Every
+# writer takes its locks in ONE order:
 #
 #     member -> master profile -> transfer -> master offer -> invite
 #            -> practice -> group
@@ -24,6 +25,27 @@
 # takes member then block, unblock takes block then member. The two are
 # never held in opposite orders on ONE person, because that person has one
 # of the two rows, never both (CuratorGroupBlock).
+#
+# THE SCHOOL BLOCK REACHES BELOW THE PRACTICE (BE-79 (1b),
+# _close_school_practices_to): after the offer it takes the practices it
+# touches in one statement by id, then the person's bookings and queue
+# entries on them, and the refunds then lock each booked practice's
+# MASTER PROFILE FOR UPDATE (payments/service.py::record_master_ledger) --
+# master profile AFTER practice, the one writer here that takes it on that
+# side. It closes no cycle with the writers that take the profile before a
+# practice (FOR SHARE: a curator publishing a master's draft, creating for
+# a master, offering mastership): to wait on such a writer while holding a
+# practice it wants, the block would have to hold that writer's practice
+# -- a draft or a new practice of the master whose profile it refunds into
+# -- and the block holds only practices with this person's booking or
+# queue entry, which a draft never has, plus this person's own practices,
+# whose master is this person: a publication for HIM takes his member row
+# first and meets the block's DELETE there. Measured, both start orders,
+# block x publication of another draft of the same master
+# (tests/test_be79_school_block_access.py). The bookers' side is K2: a
+# booking or a queue entry in a school takes the viewer's member row FOR
+# KEY SHARE before the practice (member -> practice), so it serialises
+# with the block's DELETE.
 #
 # THE PRACTICE (BE-74) IS THE SECOND ROW HERE THIS MODULE DOES NOT OWN.
 # practices.curator_group_id names the school a practice belongs to, and
@@ -142,6 +164,7 @@ from app.core.exceptions import (
     NotFoundError,
     VeloError,
 )
+from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.curator_groups.models import (
     EVENT_DATA_ACTOR_NAME,
     EVENT_DATA_KIND,
@@ -180,6 +203,7 @@ from app.modules.practices.models import (
 )
 from app.modules.users.helpers import display_name
 from app.modules.users.models import User
+from app.modules.waitlist.models import ACTIVE_STATUSES, Waitlist, WaitlistStatus
 
 _NAME_TAKEN_CODE = "curator_group_name_taken"
 _NO_CREATE_RIGHT_CODE = "group_creation_not_allowed"
@@ -1474,6 +1498,179 @@ def _blocked_in_group_error() -> ForbiddenError:
     )
 
 
+# Live bookings the block cancels (gate ruling B3). PENDING is in the set
+# as the ruling has it; no path creates a PENDING booking today
+# (create_booking and confirm_waitlist both write CONFIRMED), so nothing
+# here is built or tested for it.
+_SCHOOL_BLOCK_CANCELLED_STATUSES = (
+    BookingStatus.CONFIRMED.value,
+    BookingStatus.PENDING.value,
+)
+
+
+async def _close_school_practices_to(
+    group_id: UUID, user_id: UUID, session: AsyncSession,
+) -> None:
+    """The practice side of a school block (BE-79, gate rulings 2 and K3).
+
+    Follows masters/groups_service.py::block_student step for step -- the
+    refund (refund_booking, cancelled_by_master=True: an unconditional
+    100%), the reminders, the Zoom registrant, the participant count, the
+    waitlist entry set to REMOVED and the queue moved on for a held spot --
+    with three differences, each a gate ruling:
+
+      - the scope is the SCHOOL's practices (practices.curator_group_id),
+        not one master's; only FUTURE bookings, the past stays history
+        (B6); CONFIRMED and PENDING (B3);
+      - THE PRACTICES OF THE QUEUE ARE TAKEN TOO (R1). block_student locks
+        waitlist rows on practices it does not hold; every other writer of
+        a waitlist row (join, confirm, leave, process_waitlist under a
+        cancellation) holds the row's practice first. Here the queue's
+        practices go into the one statement with the bookings' ones;
+      - THE BLOCKED PERSON'S OWN PRACTICES IN THE SCHOOL ARE TAKEN TOO (K3)
+        and left untouched: every one he could still write -- anything but
+        'deleted', which is what update_practice refuses. update_practice
+        and the series-child path of create_practice read the block on
+        their own lock of the same row, so an edit either commits before
+        this block or sees it. Cancelling and deleting them stays his
+        (B2); those writers wait here and proceed.
+
+    LOCK ORDER. All practices in ONE statement, ORDER BY id (PRACTICE ROW
+    ORDER, practices/service.py), then bookings, then queue entries, then
+    -- inside refund_booking -- the purchase, the student's users row (FOR
+    NO KEY UPDATE, record_user_ledger) and the MASTER'S PROFILE FOR UPDATE
+    (record_master_ledger), then (the caller) the group. The profile after
+    the practice is the one place this module takes master_profiles later
+    than the header's "member -> master profile -> practice" line; the
+    header says why it closes no cycle, and the race test measures it.
+
+    Peek-then-lock, as block_student: ids read unlocked, the rows
+    re-selected under the lock with the same filters -- a booking cancelled
+    meanwhile, or a practice that lost its school (delete_curator_group),
+    drops out.
+
+    No notification of its own for a cancelled booking (gate ruling R6):
+    block_student sends none either; the block's own notification tells
+    the person the school's practices are closed to them.
+    """
+    now = datetime.now(UTC)
+    booking_filters = (
+        Practice.curator_group_id == group_id,
+        Practice.scheduled_at > now,
+        Booking.user_id == user_id,
+        Booking.status.in_(_SCHOOL_BLOCK_CANCELLED_STATUSES),
+    )
+    waitlist_filters = (
+        Practice.curator_group_id == group_id,
+        Waitlist.user_id == user_id,
+        Waitlist.status.in_(ACTIVE_STATUSES),
+    )
+    own_filters = (
+        Practice.curator_group_id == group_id,
+        Practice.master_id == user_id,
+        Practice.status != PracticeStatus.DELETED.value,
+    )
+    practice_ids = sorted(
+        set(
+            (
+                await session.execute(
+                    select(Booking.practice_id)
+                    .join(Practice, Booking.practice_id == Practice.id)
+                    .where(*booking_filters)
+                )
+            ).scalars().all()
+        )
+        | set(
+            (
+                await session.execute(
+                    select(Waitlist.practice_id)
+                    .join(Practice, Waitlist.practice_id == Practice.id)
+                    .where(*waitlist_filters)
+                )
+            ).scalars().all()
+        )
+        | set(
+            (
+                await session.execute(select(Practice.id).where(*own_filters))
+            ).scalars().all()
+        )
+    )
+    if not practice_ids:
+        return
+
+    await session.execute(
+        select(Practice.id)
+        .where(Practice.id.in_(practice_ids))
+        .order_by(Practice.id)
+        .with_for_update()
+    )
+    booking_rows = (
+        await session.execute(
+            select(Booking, Practice)
+            .join(Practice, Booking.practice_id == Practice.id)
+            .where(Practice.id.in_(practice_ids), *booking_filters)
+            .order_by(Practice.id, Booking.id)
+            .with_for_update(of=Booking)
+            .execution_options(populate_existing=True)
+        )
+    ).all()
+    waitlist_rows = (
+        await session.execute(
+            select(Waitlist)
+            .join(Practice, Waitlist.practice_id == Practice.id)
+            .where(Practice.id.in_(practice_ids), *waitlist_filters)
+            .order_by(Waitlist.id)
+            .with_for_update(of=Waitlist)
+            .execution_options(populate_existing=True)
+        )
+    ).scalars().all()
+
+    # Lazy imports, the shape block_student and cancel_booking use: these
+    # services import back into modules that import this one.
+    from app.core.events.reminders import cancel_booking_reminders
+    from app.modules.bookings.service import recalculate_participants
+    from app.modules.payments.refund import refund_booking
+    from app.modules.zoom.service import cancel_registrant_for_booking
+
+    touched_practice_ids: set[UUID] = set()
+    for booking, practice in booking_rows:
+        booking.status = BookingStatus.CANCELLED.value
+        booking.cancelled_at = now
+        booking.cancellation_reason = "Blocked in school"
+        await refund_booking(
+            booking=booking,
+            practice=practice,
+            session=session,
+            cancelled_by_master=True,
+        )
+        await cancel_booking_reminders(
+            session, booking_id=str(booking.id), user_id=str(user_id),
+        )
+        await cancel_registrant_for_booking(booking, session)
+        touched_practice_ids.add(practice.id)
+    # Id order, as the practices were locked; the rows are already held.
+    for practice_id in sorted(touched_practice_ids):
+        await recalculate_participants(practice_id, session)
+
+    notified_practice_ids = sorted(
+        {
+            row.practice_id
+            for row in waitlist_rows
+            if row.status == WaitlistStatus.NOTIFIED.value
+        }
+    )
+    for row in waitlist_rows:
+        row.status = WaitlistStatus.REMOVED.value
+    await session.flush()
+    # A removed NOTIFIED entry held a spot for this person: the next one in
+    # the queue gets it now, as block_student does.
+    if notified_practice_ids:
+        from app.modules.waitlist.service import process_waitlist
+
+        for practice_id in notified_practice_ids:
+            await process_waitlist(practice_id, session)
+
+
 async def block_curator_group_member(
     curator_user_id: UUID,
     group_id: UUID,
@@ -1509,8 +1706,18 @@ async def block_curator_group_member(
     the first's block row (READ COMMITTED), so it ends in the idempotent 204
     rather than in a 404.
 
+    The school's practices close to this person in the same transaction
+    (_close_school_practices_to, BE-79 (1b)): future bookings cancelled and
+    refunded, queue places removed, his own practices here held against
+    an edit racing the block.
+
     LOCK ORDER (module header): member (the DELETE) -> transfer -> master
-    offer -> group (the owner re-check, then the journal's KEY SHARE). The
+    offer -> practices (one statement, by id) -> bookings -> queue entries
+    -> master profiles (the refunds) -> group (the owner re-check, then the
+    journal's KEY SHARE). A booking or a queue entry racing this block
+    took the member row FOR KEY SHARE first (K2,
+    practices/audience_service.py::lock_school_member_key_share), so the
+    DELETE here and that creation serialise. The
     block row is new; nothing else writes it but unblock, which takes it
     first and the member row after -- the two never wait on each other's
     rows in opposite orders, because a block row and a member row of one
@@ -1558,6 +1765,12 @@ async def block_curator_group_member(
             CuratorGroupMasterOffer.to_user_id == user_id,
         )
     )
+
+    # The school's practices close to this person (gate ruling 2): future
+    # bookings cancelled and refunded, queue places removed, and -- for a
+    # master -- his practices here held until this commits (K3). After the
+    # offer, before the group: the order of the module header.
+    await _close_school_practices_to(group.id, user_id, session)
 
     data = {
         EVENT_DATA_KIND: removed.kind,

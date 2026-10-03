@@ -79,7 +79,10 @@ from app.modules.payments.refund import (
     early_finalize_booking,
     refund_booking,
 )
-from app.modules.practices.audience_service import assert_viewer_can_access_practice
+from app.modules.practices.audience_service import (
+    assert_viewer_can_access_practice,
+    lock_school_member_key_share,
+)
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.promos.models import Promo
 from app.modules.users.models import User
@@ -208,7 +211,14 @@ async def create_booking(
 
     Uses begin_nested() (SAVEPOINT) to catch IntegrityError
     on the partial unique index without killing the outer transaction.
+
+    K2 (BE-79): the viewer's member row in the practice's school is taken
+    FOR KEY SHARE before the practice (lock_school_member_key_share), so
+    a concurrent school block either sees this booking under its own
+    practice lock and cancels it, or commits first and the gate below
+    refuses with blocked_in_group.
     """
+    await lock_school_member_key_share(user.id, practice_id, session)
     stmt = (
         select(Practice)
         .where(Practice.id == practice_id)

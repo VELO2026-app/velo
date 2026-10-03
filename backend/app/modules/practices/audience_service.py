@@ -18,10 +18,11 @@
 # via assert_viewer_can_access_practice below.
 #
 # RULE: viewer is NOT blocked by the practice's master (master_student.
-# blocked_at) AND (audience=public) OR (audience=students AND viewer holds
-# >=1 booking in STUDENT_ENTITLEMENT_STATUSES on that master's practices)
-# OR (audience=groups AND viewer is a member of >=1 of the practice's
-# target groups).
+# blocked_at) AND NOT blocked in the school the practice belongs to
+# (curator_group_block, BE-79) AND (audience=public) OR (audience=students
+# AND viewer holds >=1 booking in STUDENT_ENTITLEMENT_STATUSES on that
+# master's practices) OR (audience=groups AND viewer is a member of >=1 of
+# the practice's target groups).
 #
 # T-20 (owner ruling 2026-08-13): "student" names TWO things and they are
 # SPLIT here, not reconciled. DISPLAY (what a master sees in their students
@@ -55,6 +56,7 @@ from app.modules.bookings.models import Booking, BookingStatus
 # written locally instead.
 from app.modules.curator_groups.models import (
     CuratorGroup,
+    CuratorGroupBlock,
     CuratorGroupMember,
     CuratorMemberKind,
 )
@@ -117,6 +119,30 @@ def _blocked_clause(user_id: UUID) -> ColumnElement[bool]:
             MasterStudent.master_id == Practice.master_id,
             MasterStudent.student_user_id == user_id,
             MasterStudent.blocked_at.is_not(None),
+        )
+        .exists()
+    )
+
+
+def _school_blocked_clause(user_id: UUID) -> ColumnElement[bool]:
+    """True iff `user_id` is blocked in the school the (correlated) Practice
+    belongs to (BE-79, curator_group_block).
+
+    A practice without a school (curator_group_id NULL) matches no block
+    row, so the clause is false there by construction -- no separate
+    branch. The block closes EVERY practice of the school, public ones
+    included (gate ruling 1, 3 October): unlike the audience branches it
+    is not a question of who the practice is for, but of who is shut out
+    of the school.
+
+    The same fact as curator_groups/service.py::_blocked_in_group, written
+    here as a correlated clause because this module imports models only.
+    """
+    return (
+        select(CuratorGroupBlock.id)
+        .where(
+            CuratorGroupBlock.group_id == Practice.curator_group_id,
+            CuratorGroupBlock.user_id == user_id,
         )
         .exists()
     )
@@ -448,7 +474,9 @@ def viewer_audience_clause(user_id: UUID) -> ColumnElement[bool]:
             _is_curator_group_audience_clause(user_id),
         ),
     )
-    return and_(~_blocked_clause(user_id), audience_ok)
+    return and_(
+        ~_blocked_clause(user_id), ~_school_blocked_clause(user_id), audience_ok,
+    )
 
 
 async def _clause_true_for(
@@ -464,17 +492,95 @@ async def _clause_true_for(
     return row is not None
 
 
+async def _refuse_school_blocked(
+    user_id: UUID, practice: Practice, session: AsyncSession,
+) -> None:
+    """403 blocked_in_group if the viewer is blocked in this practice's
+    school (BE-79). Shared by both gates below -- the full one and the
+    check-in one -- so the code and message are one.
+
+    ORDER (gate ruling, 3 October): after the master's own block and before
+    any audience branch. Before the audience on purpose: a blocked person
+    has no member row, so a 'curator_groups' practice would otherwise
+    answer not_in_audience and hide the real reason; the master's block
+    first because it predates this one and its code is the one the
+    frontend already maps.
+
+    Callers that create something (create_booking, join_waitlist,
+    confirm_waitlist) read this under the practice lock and AFTER taking
+    the viewer's member row FOR KEY SHARE (lock_school_member_key_share
+    below) -- that is what makes the read current against a concurrent
+    block (K2).
+    """
+    if practice.curator_group_id is None:
+        return
+    if await _clause_true_for(
+        practice.id, _school_blocked_clause(user_id), session,
+    ):
+        raise ForbiddenError(
+            "You are blocked in this school", code="blocked_in_group",
+        )
+
+
+async def lock_school_member_key_share(
+    user_id: UUID, practice_id: UUID, session: AsyncSession,
+) -> None:
+    """K2 (BE-79): take the viewer's member row in the practice's school
+    FOR KEY SHARE, BEFORE the caller locks the practice.
+
+    Called by every path that creates a booking or a waitlist entry
+    (create_booking, join_waitlist, confirm_waitlist). A school block
+    DELETEs exactly this row first thing (block_curator_group_member), and
+    KEY SHARE conflicts with a DELETE and with nothing else a member row's
+    writers do: a no-op UPDATE of _lock_member (transfers, offers) or a
+    change of kind leaves the key alone. So the two serialise and nobody
+    else queues behind a booking:
+      - the block went first: this waits for it, finds no row, and the
+        caller's gate then reads the committed block row -> 403;
+      - this went first: the block's DELETE waits until the booking
+        commits, and the block then finds that booking in its own re-read
+        under the practice lock and cancels it.
+    Order: member -> practice, the order of curator_groups/service.py's
+    header. A viewer with no member row (not in the school, or the
+    curator) takes nothing -- a person who is not a member cannot be
+    blocked by a concurrent call, the block of a non-member is a 404.
+
+    The school is read off the practice WITHOUT a lock: the lock on the
+    practice comes after this, by the order. curator_group_id has one
+    writer after creation -- delete_curator_group, which NULLs it -- and
+    a practice that lost its school between this read and the caller's
+    lock has no school to be blocked in; the gate reads the locked row.
+    """
+    school_id = (
+        await session.execute(
+            select(Practice.curator_group_id).where(Practice.id == practice_id)
+        )
+    ).scalar_one_or_none()
+    if school_id is None:
+        return
+    await session.execute(
+        select(CuratorGroupMember.id)
+        .where(
+            CuratorGroupMember.group_id == school_id,
+            CuratorGroupMember.user_id == user_id,
+        )
+        .with_for_update(key_share=True, read=True)
+    )
+
+
 async def assert_viewer_can_access_practice(
     user_id: UUID, practice: Practice, session: AsyncSession,
 ) -> None:
     """Raise ForbiddenError if `user_id` is blocked by the practice's master,
-    or outside the practice's configured audience. Same rules as
+    blocked in the practice's school (BE-79), or outside the practice's
+    configured audience. Same rules as
     viewer_audience_clause, evaluated per-case here so the caller (and, via
     the machine code, the frontend) can tell WHICH reason applies.
 
-    Codes: "blocked_by_master", "not_a_student", "not_in_audience" (the
-    groups case, also the fail-closed default for an unrecognized
-    audience_kind -- see below). Frontend maps each to its own Russian
+    Codes: "blocked_by_master", "blocked_in_group" (BE-79, see
+    _refuse_school_blocked for the order), "not_a_student",
+    "not_in_audience" (the groups case, also the fail-closed default for an
+    unrecognized audience_kind -- see below). Frontend maps each to its own Russian
     message -- see diary/checkins_service.py upsert_checkin's docstring for
     the exact strings and where they surface.
 
@@ -513,6 +619,8 @@ async def assert_viewer_can_access_practice(
         raise ForbiddenError(
             "You are blocked by this practice's master", code="blocked_by_master",
         )
+
+    await _refuse_school_blocked(user_id, practice, session)
 
     if practice.audience_kind == AudienceKind.PUBLIC.value:
         return
@@ -577,9 +685,13 @@ async def assert_viewer_can_access_practice(
 async def assert_viewer_not_blocked(
     user_id: UUID, practice: Practice, session: AsyncSession,
 ) -> None:
-    """Raise ForbiddenError ONLY if `user_id` is personally blocked by the
-    practice's master -- the blocked probe of the full predicate above,
-    without the audience branches.
+    """Raise ForbiddenError ONLY if `user_id` is personally blocked -- by the
+    practice's master, or in the practice's school (BE-79) -- the blocked
+    probes of the full predicate above, without the audience branches.
+
+    The school block refuses the check-in of a PAST practice of the school
+    as well (gate ruling R7, 3 October), as the master's block does since
+    BE-92: the booking stays history (B6), the action is refused.
 
     RETROACTIVE POLICY (B) (H-R2-8): the dedicated entry point for
     diary/checkins_service.py upsert_checkin. It runs only for holders of
@@ -631,6 +743,8 @@ async def assert_viewer_not_blocked(
         raise ForbiddenError(
             "You are blocked by this practice's master", code="blocked_by_master",
         )
+
+    await _refuse_school_blocked(user_id, practice, session)
 
 
 async def count_stranded_active_bookings(

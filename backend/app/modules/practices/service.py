@@ -88,6 +88,11 @@
 #       practices, before its UPDATE of them;
 #     block_student (masters/groups_service.py): the student's future
 #       practices of the master (BE-99, already in this form).
+#     block_curator_group_member (curator_groups/service.py,
+#       _close_school_practices_to, BE-79): the school's practices where the
+#       blocked person has a future booking or a queue entry, and his own
+#       practices of the school (K3), in one statement, before their
+#       bookings.
 #     update_practice changing a series root's audience: the root and its
 #       non-terminal children, before the school (_lock_practice_and_
 #       children); whether to take the children is decided on the
@@ -605,6 +610,37 @@ async def _curated_school_of(
         curated_group_id_for_practice,
     )
     return await curated_group_id_for_practice(practice, user.id, session)
+
+
+async def _refuse_blocked_in_school(
+    school_id: UUID | None, user_id: UUID, session: AsyncSession,
+) -> None:
+    """403 blocked_in_group if `user_id` is blocked in `school_id` (BE-79,
+    gate ruling 3, 3 October): a master blocked in a school neither edits
+    nor publishes the school's practices -- his own included -- and does
+    not add a session to his series there. Cancelling his own practice and
+    deleting his own draft (DELETE /practices/{id}) stay open (B2), which
+    is why this is NOT in _manager_of_practice_or_404, the one rule every
+    action shares.
+
+    Callers: update_practice (on the locked practice), preview_audience_
+    change (a read, no lock), create_practice on the series-child path (on
+    the parent it holds FOR SHARE). The two writers read the block AFTER
+    their practice lock: the block takes the blocked master's practices in
+    the school FOR UPDATE (block_curator_group_member, K3), so the read
+    either precedes the block entirely or sees it.
+
+    No school -> nothing to be blocked in. Lazy import: the same shape as
+    _lock_group_as_owner's above.
+    """
+    if school_id is None:
+        return
+    from app.modules.curator_groups.service import (
+        _blocked_in_group,
+        _blocked_in_group_error,
+    )
+    if await _blocked_in_group(school_id, user_id, session):
+        raise _blocked_in_group_error()
 
 
 async def _manager_of_practice_or_404(
@@ -1802,6 +1838,16 @@ async def create_practice(
         parent = await _owned_root_parent_or_400(
             master_id, body.parent_practice_id, session,
         )
+        # BE-79: a new session of a school series is a publication in that
+        # school, and the series inherits the school without naming it --
+        # so _usable_curator_group_or_400 below never sees it. Read on the
+        # parent held FOR SHARE: the block takes it FOR UPDATE (K3). For
+        # another master this path is closed earlier: a blocked master has
+        # no member row, and _effective_master_id_or_4xx refuses him.
+        if parent is not None:
+            await _refuse_blocked_in_school(
+                parent.curator_group_id, user.id, session,
+            )
 
     # T-23 (owner-ruled 2026-08-17): a manually-attached child (this path;
     # the auto-generated recurrence path already does this in
@@ -2247,6 +2293,17 @@ async def update_practice(
 
     if not practice:
         raise NotFoundError("Practice not found")
+
+    # BE-79 (K3): the practice's own master, blocked in its school, may not
+    # edit or publish it -- any PATCH, the move to 'deleted' included
+    # (gate ruling R5: the draft is deleted by DELETE /practices/{id}).
+    # Read on the locked row, see _refuse_blocked_in_school. A curator
+    # acting here is never the blocked one: the curator cannot be blocked
+    # in his own school (block_curator_group_member).
+    if managing_school is None:
+        await _refuse_blocked_in_school(
+            practice.curator_group_id, user.id, session,
+        )
 
     if managing_school is not None:
         await _relock_school_or_404(user, managing_school, session)
@@ -2932,7 +2989,13 @@ async def preview_audience_change(
     if practice is None:
         raise NotFoundError("Practice not found")
     # BE-63: the same rule as the PATCH it previews.
-    await _manager_of_practice_or_404(practice, user, session)
+    managing_school = await _manager_of_practice_or_404(practice, user, session)
+    # BE-79: and the same refusal -- a blocked master gets no number for an
+    # edit he may not save. A read: no lock to take.
+    if managing_school is None:
+        await _refuse_blocked_in_school(
+            practice.curator_group_id, user.id, session,
+        )
 
     if group_ids:
         await _owned_group_ids_or_400(practice.master_id, group_ids, session)
