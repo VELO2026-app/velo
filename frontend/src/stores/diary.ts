@@ -33,6 +33,7 @@ import { mergeJumpWindow } from '@/utils/diaryJumpWindow'
 import {
   upsertCheckin,
   upsertFeedback,
+  createReflection,
   createDiaryEntry,
   getDiaryEntry,
   updateDiaryEntry,
@@ -45,6 +46,7 @@ import {
 import type {
   CheckinRequest,
   FeedbackRequest,
+  ReflectionRequest,
   CreateDiaryEntryRequest,
   CreateExternalActivityRequest,
   UpdateDiaryEntryRequest,
@@ -138,34 +140,35 @@ export const useDiaryStore = defineStore('diary', () => {
   }
 
   // ===========================================================================
-  // Reflection submit (ReflectionView, no-show) -- STUB (TD-REFLECTION)
+  // Reflection submit (ReflectionView, no-show, BE-108)
   // ===========================================================================
 
   const reflectionSubmitting = ref(false)
 
   /**
    * Submit a no-show reflection for a practice.
+   * Returns { ok, error } so the view can show a toast on failure.
    *
-   * STUB (TD-REFLECTION, PROMPT №269): the backend endpoint
-   * `POST /api/v1/practices/{id}/reflection` does not exist yet (see
-   * VELO-Backend-Tasks.md). This resolves ok WITHOUT any network call so the UI
-   * flow completes honestly — nothing is persisted server-side and no "saved"
-   * claim is made. When the endpoint lands, swap the no-op body for an
-   * `upsertReflection(practiceId, body)` call + refreshAfterDiaryMutation(),
-   * exactly like submitFeedback.
+   * The reflection projects nothing into the diary feed, so there is no feed
+   * to refresh here. The booking's has_reflection flag is refreshed by the
+   * view (bookingsStore.refreshBookings), as FeedbackView does for
+   * has_feedback.
    */
-  function submitReflection(
+  async function submitReflection(
     practiceId: string,
-    body: { comment: string | null },
+    body: ReflectionRequest,
   ): Promise<SubmitResult> {
-    if (reflectionSubmitting.value) return Promise.resolve({ ok: false, error: '' })
+    if (reflectionSubmitting.value) return { ok: false, error: '' }
     reflectionSubmitting.value = true
-    // No API yet — intentionally a no-op. `practiceId` / `body` are the shape
-    // the real persist call will take (TD-REFLECTION).
-    void practiceId
-    void body
-    reflectionSubmitting.value = false
-    return Promise.resolve({ ok: true, error: '' })
+    try {
+      await createReflection(practiceId, body)
+      return { ok: true, error: '' }
+    } catch (e) {
+      const message = extractApiError(e, 'Не удалось отправить')
+      return { ok: false, error: message }
+    } finally {
+      reflectionSubmitting.value = false
+    }
   }
 
   // ===========================================================================

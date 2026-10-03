@@ -97,6 +97,7 @@ from app.modules.diary.models import (  # noqa: F401  # Phase 8.1-8.4 + redesign
     Feedback,
     DiaryEntry,
     DiaryEvent,
+    Reflection,
 )
 from app.modules.zoom.models import (  # noqa: F401  # E21 + GT-21
     ZoomMeeting,

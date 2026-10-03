@@ -73,6 +73,7 @@ from app.modules.diary.models import (  # noqa: F401  # Phase 8.1-8.4 + redesign
     DiaryEntry,
     DiaryEvent,
     Feedback,
+    Reflection,
 )
 from app.modules.support.models import SupportThread  # noqa: F401  # B34 / T-38
 from app.modules.masters.groups_models import (  # noqa: F401  # P1

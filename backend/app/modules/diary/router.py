@@ -7,6 +7,7 @@
 #   GET   /api/v1/users/me/checkins         -- list my check-ins
 #   POST  /api/v1/practices/{id}/feedback   -- upsert feedback
 #   GET   /api/v1/users/me/feedbacks        -- list my feedbacks
+#   POST  /api/v1/practices/{id}/reflection -- create no-show reflection
 #   POST  /api/v1/diary                     -- create diary entry
 #   GET   /api/v1/diary                     -- list my diary entries
 #   GET   /api/v1/diary/{id}                -- get single entry
@@ -73,11 +74,14 @@ from app.modules.diary.schemas import (
     PracticeAnalyticsResponse,
     PracticeAnalyticsReview,
     PracticeInsightsResponse,
+    ReflectionRequest,
+    ReflectionResponse,
     ReviewItem,
     UpdateDiaryEntryRequest,
 )
 from app.modules.diary.service import (
     create_diary_entry,
+    create_reflection,
     delete_diary_entry,
     get_diary_entry,
     get_feedback,
@@ -231,6 +235,31 @@ async def upsert_feedback_endpoint(
         comment=body.comment,
     )
     return FeedbackResponse.model_validate(feedback)
+
+
+@practices_feedback_router.post(
+    "/{practice_id}/reflection",
+    response_model=ReflectionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_reflection_endpoint(
+    practice_id: UUID,
+    body: ReflectionRequest,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> ReflectionResponse:
+    """Record a no-show reflection (BE-108, immutable, once only).
+
+    404 reflection_not_available without a no_show booking for this
+    practice; 409 reflection_already_submitted on a repeat.
+    """
+    reflection = await create_reflection(
+        user,
+        practice_id,
+        session,
+        comment=body.comment,
+    )
+    return ReflectionResponse.model_validate(reflection)
 
 
 @feedbacks_router.get(

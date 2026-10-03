@@ -36,11 +36,22 @@
 # longer clock -- READY rows still ship in id order, the deferred one
 # rejoins the ordered tail when its delay lapses.
 #
-# CONCURRENCY: FOR UPDATE SKIP LOCKED -- a second app replica running
-# its own relay claims disjoint rows instead of double-publishing.
-# (Sync events are idempotent anyway; notification_request dedups by
-# idempotency_key -- but not racing at all is cheaper than relying on
-# that.)
+# CONCURRENCY (BE-47): ONE active relay. Every uvicorn worker starts this
+# loop in its lifespan, so each tick first takes a transaction-level
+# advisory lock (pg_try_advisory_xact_lock on _RELAY_ADVISORY_LOCK_KEY);
+# the worker that does not get it skips the tick quietly. Two relays
+# claiming disjoint rows with FOR UPDATE SKIP LOCKED -- the former
+# arrangement -- kept order only INSIDE a pass: at a batch boundary the
+# second worker shipped row 101 before the first had shipped row 100,
+# and a membership change (sync.py emits the identity snapshot first)
+# reached comms before its recipient existed -- retries, then DLQ, the
+# membership lost silently (comms line, measured); deferred rows were
+# also tried twice. The lock lives in the tick's own transaction: commit
+# or rollback releases it, a crashed worker cannot keep it. SKIP LOCKED
+# stays on the batch select; with one relay it no longer separates two
+# passes. Duplicate publication still collapses downstream
+# (notification_request dedups by idempotency_key, sync events are
+# idempotent), but nothing relies on that any more.
 # =============================================================================
 
 import asyncio
@@ -52,7 +63,7 @@ from redis import asyncio as aioredis
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import ResponseError as RedisResponseError
 from redis.exceptions import TimeoutError as RedisTimeoutError
-from sqlalchemy import or_, select, text, update
+from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -119,6 +130,14 @@ _CONNECTION_ERRORS = (RedisConnectionError, RedisTimeoutError, OSError)
 # │     intervening directly against the row.
 # └─────────────────────────────────────────────────────────────────────
 
+# BE-47: the advisory-lock key of the outbox relay. A NAMED constant, not a
+# literal at the call: any other pg_advisory_* lock on the same number in
+# this database would silence the relay for as long as it is held. The
+# number is this relay's alone -- no other advisory lock exists in the
+# VELO or the comms code (checked at BE-47); a new one picks another
+# number and says so here. Advisory locks are scoped to one database.
+_RELAY_ADVISORY_LOCK_KEY = 4_701_047_000_047
+
 # T-13 redaction pass. Its own slow cadence, deliberately unrelated to
 # the publish interval: shipping is what this loop exists for, tidying
 # is a passenger. An hour costs a redacted row up to one extra hour of
@@ -155,7 +174,18 @@ async def _publish_batch(
     transaction, XADDs them in id order, marks published_at / charges
     attempts. Owns NO transaction: the caller commits (production) or
     rolls back (tests). See the module header for the error model.
+
+    BE-47: first the relay's advisory lock, in the same transaction (so
+    the caller's commit or rollback releases it). Not taken -> another
+    worker's relay is mid-tick: return (0, 0) without touching a row --
+    the expected path on every non-leading worker, hence a debug event.
     """
+    taken = await session.scalar(
+        select(func.pg_try_advisory_xact_lock(_RELAY_ADVISORY_LOCK_KEY))
+    )
+    if not taken:
+        logger.debug("outbox_relay_tick_skipped")
+        return (0, 0)
     published = 0
     failed = 0
     # One aware `now` per pass (П-1): readiness filter and every

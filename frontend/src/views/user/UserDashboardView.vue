@@ -27,8 +27,8 @@
   and no-show reflection banners were removed here (not their routes/screens):
   per the task, all other events move to the notification center (FE-12, not
   built yet). Until it exists, feedback stays reachable from PracticeDetailView's
-  own in-window button (F9.1), and reflection is temporarily unreachable from
-  the UI -- a deliberate, owner-accepted gap, not an oversight.
+  own in-window button (F9.1), and the no-show reflection from the same
+  screen's «Поделиться, как вы» button (BE-108).
 
   [FE-11, owner 2026-09-08] The notification bell lives in this screen's
   FLOATING HEADER: VHeader «Главная» carries it in its action slot (right
@@ -280,11 +280,10 @@ const checkinAlertTime = computed((): string => {
 
 // [FE-13] feedbackAlert/reflectionAlert lived here. Removed: the dashboard
 // keeps ONLY the check-in reminder -- feedback and no-show reflection events
-// belong to the notification center (FE-12). Until it exists, feedback is
-// reachable from PracticeDetailView's own button (F9.1); reflection from
-// nowhere (its route/screen stay for the notification center to link to).
-// The store's dismissedCheckins/dismissedReflections sets are untouched --
-// CheckinView/ReflectionView still use them.
+// belong to the notification center (FE-12). Until it exists, feedback and
+// the no-show reflection (BE-108) are reachable from PracticeDetailView's own
+// buttons. The store's dismissedCheckins set is untouched -- CheckinView
+// still uses it.
 
 // =========================================================================
 // Nearest practice

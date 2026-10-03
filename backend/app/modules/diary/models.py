@@ -4,6 +4,7 @@
 #
 # Checkin:    user's mood before a practice session.
 # Feedback:   user's rating after a completed practice.
+# Reflection: what a user shares after a practice he missed (no_show).
 # DiaryEntry: personal journal entry, optionally linked to a practice.
 # DiaryEvent: append-only timeline journal -- the unified feed backbone.
 #
@@ -19,6 +20,12 @@
 #   Condition: booking.status == attended.
 #   Insert-once: one feedback per (practice, user), immutable. Resubmission
 #   rejected.
+#
+# REFLECTION LIFECYCLE (BE-108):
+#   No time window.
+#   Condition: booking.status == no_show at the moment of submission.
+#   Insert-once: one reflection per (practice, user), immutable. The comment
+#   may be empty (stored NULL). Resubmission rejected.
 #
 # DIARY ENTRY:
 #   No time window. User can create/edit/delete anytime.
@@ -349,6 +356,60 @@ class Feedback(UUIDMixin, TimestampMixin, Base):
         return (
             f"<Feedback id={self.id} practice={self.practice_id} "
             f"user={self.user_id} rating={self.rating}>"
+        )
+
+
+# ===================================================================
+# Reflection (BE-108)
+# ===================================================================
+
+
+class Reflection(UUIDMixin, TimestampMixin, Base):
+    """What a user shares after a practice he missed (booking no_show).
+
+    One reflection per user per practice, immutable, no time window. The
+    comment may be empty: a user who does not want to answer still submits,
+    and the row is the record that he was asked and answered (owner ruling).
+    Visible to the user alone -- no master, curator or analytics reader.
+
+    The comment's length is validated in the schema, as for Feedback.
+    """
+
+    __tablename__ = "reflections"
+
+    # -- References --
+    # Declared practice -> user -> booking, the order the migration creates
+    # them in. The writer does not rely on it for its lock order: it takes
+    # the practice row first itself (diary/service.py::create_reflection).
+    practice_id: Mapped[UUID] = mapped_column(
+        ForeignKey("practices.id", ondelete="CASCADE"),
+        index=True,
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
+    booking_id: Mapped[UUID] = mapped_column(
+        ForeignKey("bookings.id", ondelete="CASCADE"),
+        index=True,
+    )
+
+    comment: Mapped[str | None] = mapped_column(
+        Text, default=None,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "practice_id",
+            "user_id",
+            name="uq_reflection_practice_user",
+        ),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<Reflection id={self.id} practice={self.practice_id} "
+            f"user={self.user_id}>"
         )
 
 

@@ -110,6 +110,9 @@ class BookingWithPracticeResponse(BaseModel):
     # check-in" prompt once done (and stops re-submitting via a stale banner).
     has_feedback: bool
     has_checkin: bool
+    # BE-108: the user already left a no-show reflection for THIS booking --
+    # hides the reflection button on the practice screen.
+    has_reflection: bool
     practice: PracticeSummary
     # T21-1: this booking's OWN Zoom registrant link (the personal ?tk= URL),
     # never anyone else's -- these two endpoints (GET /me, GET /me/upcoming)

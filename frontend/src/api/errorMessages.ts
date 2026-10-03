@@ -149,6 +149,10 @@ export const ERROR_MESSAGES: Record<string, string> = {
   transfer_not_found: 'Предложение о передаче не найдено',
   // One code for ученика, постороннего, скрытого мастера и самого куратора.
   transfer_target_not_member: 'Передать школу можно только мастеру из её состава',
+  // BE-108, raised through constants in diary/service.py -- the same blind
+  // spot of the literal-count command named above.
+  reflection_not_available: 'Поделиться можно только по пропущенной практике',
+  reflection_already_submitted: 'Вы уже поделились -- спасибо',
 
   // VeloError base-class defaults (no module-specific code set).
   unauthorized: 'Сессия истекла — войдите заново',

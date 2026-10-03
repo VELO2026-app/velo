@@ -8,11 +8,12 @@
 
   Copy rotates per booking (utils/reflectionVariants, stable by practiceId).
 
-  STUB (TD-REFLECTION, PROMPT №269): submit persists NOTHING — the backend
-  `POST /api/v1/practices/{id}/reflection` endpoint does not exist yet (see
-  VELO-Backend-Tasks.md). The flow completes honestly in the UI (thank-you
-  screen, no "saved" claim) and the dashboard banner is dismissed client-side
-  for the session.
+  Submit (BE-108): POST /api/v1/practices/{id}/reflection, once per practice,
+  an empty comment included. Reached from PracticeDetailView's «Поделиться,
+  как вы» button. After a successful submit the bookings list is refreshed so
+  the booking's server-side has_reflection hides that button; a refusal
+  (no no_show booking, already submitted) is shown as a toast, never as the
+  thank-you screen.
 
   Route: /user/reflection/:practiceId
   Param: practiceId (practice UUID)
@@ -110,10 +111,10 @@ async function onSubmit(): Promise<void> {
     } catch {
       /* silent fallback */
     }
-    // No backend `has_reflection` flag yet (TD-REFLECTION): dismiss client-side
-    // so the dashboard no-show banner hides for this session.
-    bookingsStore.dismissReflection(practiceId)
     submitted.value = true
+    // Refresh bookings so `has_reflection` is up to date this session -- the
+    // practice-detail button reads it.
+    void bookingsStore.refreshBookings()
   } else {
     toast.error(result.error)
   }

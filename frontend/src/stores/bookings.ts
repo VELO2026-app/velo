@@ -82,36 +82,6 @@ export const useBookingsStore = defineStore('bookings', () => {
     }
   }
 
-  // Practices whose no-show reflection the user SUBMITTED — hides the dashboard
-  // reflection banner. STOPGAP (batch O, O1): the dismissal is PERSISTED to
-  // localStorage so a submitted reflection stays dismissed across reloads (the
-  // «Как прошёл ваш день?» card stopped clearing because there is no backend
-  // state). This does NOT fake persistence — the reflection itself is still NOT
-  // saved server-side (honest stub); ONLY the dismissal survives. Swap this gate
-  // to the real backend `has_reflection` flag once TD-REFLECTION lands
-  // (VELO-Backend-Tasks.md), mirroring has_feedback/has_checkin.
-  const DISMISSED_REFLECTIONS_KEY = 'velo:dismissed-reflections'
-  function loadDismissedReflections(): string[] {
-    try {
-      const raw = localStorage.getItem(DISMISSED_REFLECTIONS_KEY)
-      const parsed: unknown = raw ? JSON.parse(raw) : []
-      return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : []
-    } catch {
-      return []
-    }
-  }
-  const dismissedReflections = ref<string[]>(loadDismissedReflections())
-  function dismissReflection(practiceId: string): void {
-    if (!dismissedReflections.value.includes(practiceId)) {
-      dismissedReflections.value.push(practiceId)
-      try {
-        localStorage.setItem(DISMISSED_REFLECTIONS_KEY, JSON.stringify(dismissedReflections.value))
-      } catch {
-        // Storage full / unavailable — the session ref still hides it this session.
-      }
-    }
-  }
-
   /**
    * Fetch a single booking with full practice details (screen 18).
    * Always refetches -- detail data (status, zoom) may change.
@@ -287,9 +257,5 @@ export const useBookingsStore = defineStore('bookings', () => {
     // Session-only check-in skip tracking
     dismissedCheckins,
     dismissCheckin,
-
-    // Session-only no-show reflection dismiss (TD-REFLECTION)
-    dismissedReflections,
-    dismissReflection,
   }
 })

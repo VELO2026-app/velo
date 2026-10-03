@@ -1215,28 +1215,36 @@ async def list_user_bookings(
     status_filter: str | None = None,
     limit: int = 20,
     offset: int = 0,
-) -> tuple[list[tuple[Booking, Practice, bool, bool, str | None, bool]], int]:
+) -> tuple[list[tuple[Booking, Practice, bool, bool, str | None, bool, bool]], int]:
     """List bookings for a user with practice details (paginated).
 
     B-05: count derived from base query subquery instead of maintaining
     a parallel count_base with duplicated filter clauses. Same pattern
     as list_user_checkins in diary/checkins_service.py.
 
-    Each row also carries two diary-state flags for the dashboard banners:
-      - has_feedback: the user already left a feedback for this practice.
-      - has_checkin:  the user already did a PRE check-in for this booking.
-    They let the dashboard hide the "оставьте feedback" / "пора на check-in"
-    prompt once done (and stop re-submitting through a stale banner). Computed
-    with two set-membership queries over the current page -- no N+1.
+    Each row also carries three diary-state flags:
+      - has_feedback:   the user already left a feedback for this practice.
+      - has_checkin:    the user already did a PRE check-in for this booking.
+      - has_reflection: the user already left a no-show reflection for this
+                        booking (BE-108).
+    They let the screens hide the "оставьте feedback" / "пора на check-in" /
+    reflection prompt once done (and stop re-submitting through a stale
+    prompt). Computed with set-membership queries over the current page --
+    no N+1.
 
     Returns:
         Tuple of (list of (Booking, Practice, has_feedback, has_checkin,
-        zoom_registrant_join_url, zoom_registrant_link_unavailable) tuples,
-        total count).
+        zoom_registrant_join_url, zoom_registrant_link_unavailable,
+        has_reflection) tuples, total count).
     """
     # Local import keeps the bookings -> diary dependency one-way and avoids
     # any import-order surprise (diary.projections imports bookings lazily).
-    from app.modules.diary.models import Checkin, CheckType, Feedback
+    from app.modules.diary.models import (
+        Checkin,
+        CheckType,
+        Feedback,
+        Reflection,
+    )
     base = (
         select(Booking, Practice)
         .join(Practice, Booking.practice_id == Practice.id)
@@ -1296,8 +1304,21 @@ async def list_user_bookings(
             ).scalars().all()
         )
 
+    # BE-108: keyed by booking, like has_checkin -- a cancelled earlier
+    # booking of the same practice is a row of its own and stays False.
+    reflection_booking_ids: set[UUID] = set()
+    if booking_ids:
+        reflection_booking_ids = set(
+            (
+                await session.execute(
+                    select(Reflection.booking_id)
+                    .where(Reflection.booking_id.in_(booking_ids))
+                )
+            ).scalars().all()
+        )
+
     # T21-1: this user's own registrant link state per booking (set
-    # membership, same no-N+1 pattern as the two diary flags above). See
+    # membership, same no-N+1 pattern as the diary flags above). See
     # _registrant_link_states for the meeting-state join (PROMPT №563) and
     # the BE-72 "no link will come" flag.
     link_states = await _registrant_link_states(booking_ids, session)
@@ -1309,6 +1330,7 @@ async def list_user_bookings(
             booking.practice_id in feedback_practice_ids,
             booking.id in checkin_booking_ids,
             *link_states.get(booking.id, (None, False)),
+            booking.id in reflection_booking_ids,
         )
         for booking, practice in page
     ]
@@ -1321,7 +1343,7 @@ async def list_upcoming_bookings(
     session: AsyncSession,
     *,
     limit: int = 10,
-) -> list[tuple[Booking, Practice, bool, bool, str | None, bool]]:
+) -> list[tuple[Booking, Practice, bool, bool, str | None, bool, bool]]:
     """Confirmed bookings that are live-or-upcoming, soonest first.
 
     Feeds the dashboard «Ближайшая практика» widget. Unlike list_user_bookings
@@ -1336,8 +1358,9 @@ async def list_upcoming_bookings(
     per-row ``scheduled_at + duration_minutes`` ceiling (nearestBookings.ts).
 
     Returns the same (Booking, Practice, has_feedback, has_checkin,
-    zoom_registrant_join_url, zoom_registrant_link_unavailable) row shape as
-    list_user_bookings so the router reuses one response builder.
+    zoom_registrant_join_url, zoom_registrant_link_unavailable,
+    has_reflection) row shape as list_user_bookings so the router reuses one
+    response builder.
     """
     from app.modules.diary.models import Checkin, CheckType, Feedback
 
@@ -1400,6 +1423,9 @@ async def list_upcoming_bookings(
             booking.practice_id in feedback_practice_ids,
             booking.id in checkin_booking_ids,
             *link_states.get(booking.id, (None, False)),
+            # has_reflection: this list is CONFIRMED only, and a reflection
+            # needs a no_show booking, which never returns to CONFIRMED.
+            False,
         )
         for booking, practice in page
     ]

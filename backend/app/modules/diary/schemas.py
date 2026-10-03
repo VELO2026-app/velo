@@ -135,6 +135,45 @@ class FeedbackResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ReflectionRequest(BaseModel):
+    """POST /api/v1/practices/{id}/reflection body (BE-108).
+
+    An empty answer is a valid answer (owner ruling): absent, null, "" and
+    whitespace all arrive here and are stored as NULL -- no 422 for any
+    client, unlike feedback's min_length=1.
+    """
+
+    comment: str | None = Field(
+        default=None,
+        max_length=settings.diary_comment_max_length,
+    )
+
+    @field_validator("comment")
+    @classmethod
+    def blank_comment_is_none(cls, v: str | None) -> str | None:
+        """Whitespace-only text is absence, and is stored as absence.
+
+        Non-blank text is stored stripped -- the same rule as
+        CreateExternalActivityRequest.thoughts.
+        """
+        if v is None:
+            return None
+        stripped = v.strip()
+        return stripped or None
+
+
+class ReflectionResponse(BaseModel):
+    """A just-created reflection. Returned to its author only."""
+
+    id: UUID
+    practice_id: UUID
+    booking_id: UUID
+    comment: str | None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class PaginatedFeedbacksResponse(BaseModel):
     """GET /api/v1/users/me/feedbacks -- paginated list."""
 

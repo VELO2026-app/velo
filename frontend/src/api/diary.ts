@@ -12,6 +12,9 @@
 //     POST /api/v1/practices/{id}/feedback         -- upsert (attended booking)
 //     GET  /api/v1/users/me/feedbacks              -- paginated list
 //
+//   Reflection (BE-108):
+//     POST /api/v1/practices/{id}/reflection       -- create once (no_show booking)
+//
 //   Diary entries (F9.2):
 //     POST   /api/v1/diary                         -- create entry
 //     GET    /api/v1/diary                         -- paginated list
@@ -32,6 +35,8 @@ import type {
   FeedbackRequest,
   FeedbackResponse,
   PaginatedFeedbacksResponse,
+  ReflectionRequest,
+  ReflectionResponse,
   CreateDiaryEntryRequest,
   UpdateDiaryEntryRequest,
   DiaryEntryResponse,
@@ -105,6 +110,19 @@ export function upsertFeedback(
   body: FeedbackRequest,
 ): Promise<FeedbackResponse> {
   return api.post<FeedbackResponse>(`/api/v1/practices/${practiceId}/feedback`, body)
+}
+
+/**
+ * Record a no-show reflection (BE-108). Once per (practice, user), no time
+ * window; requires booking.status == no_show. An empty comment is valid --
+ * the server stores blank as null. 404 reflection_not_available /
+ * 409 reflection_already_submitted.
+ */
+export function createReflection(
+  practiceId: string,
+  body: ReflectionRequest,
+): Promise<ReflectionResponse> {
+  return api.post<ReflectionResponse>(`/api/v1/practices/${practiceId}/reflection`, body)
 }
 
 export interface ListFeedbacksParams {

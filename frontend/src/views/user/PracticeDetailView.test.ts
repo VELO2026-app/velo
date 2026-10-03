@@ -177,6 +177,7 @@ function booking(
     updated_at: null,
     has_feedback: false,
     has_checkin: false,
+    has_reflection: false,
     ...overrides,
     practice: {
       id: 'p1',
@@ -834,6 +835,121 @@ describe('PracticeDetailView', () => {
 
       expect(getBookingRecording).not.toHaveBeenCalled()
       expect(button('Посмотреть запись')).toBeUndefined()
+    })
+  })
+
+  describe('no-show reflection (BE-108)', () => {
+    const ended = new Date(NOW_MS - 3 * HOUR).toISOString()
+    const LABEL = 'Поделиться, как вы'
+
+    function endedPractice(): void {
+      practicesState.selected = practice({ scheduled_at: ended, duration_minutes: 60 })
+    }
+
+    function allLabels(): string[] {
+      return Array.from(host?.querySelectorAll('button') ?? []).map(
+        (b) => b.textContent?.trim() ?? '',
+      )
+    }
+
+    it('a no_show booking without a reflection is offered «Поделиться, как вы»', async () => {
+      endedPractice()
+      bookingsState.bookings = [
+        booking({ status: 'no_show', has_reflection: false }, { scheduled_at: ended }),
+      ]
+      mount()
+      await flush()
+
+      expect(button(LABEL)).toBeDefined()
+      expect(button(LABEL)?.className).toContain('secondary')
+    })
+
+    it('the server flag hides it -- has_reflection drops the button', async () => {
+      // Positive half first (SC-15): the same booking IS a no_show and the screen
+      // rendered -- the status row says so.
+      endedPractice()
+      bookingsState.bookings = [
+        booking({ status: 'no_show', has_reflection: true }, { scheduled_at: ended }),
+      ]
+      mount()
+      await flush()
+
+      expect(text()).toContain('Вы не пришли')
+      expect(button(LABEL)).toBeUndefined()
+    })
+
+    it.each(['confirmed', 'pending', 'attended', 'cancelled'] as const)(
+      'a %s booking is never offered a reflection',
+      async (status) => {
+        endedPractice()
+        bookingsState.bookings = [
+          booking({ status, has_reflection: false }, { scheduled_at: ended }),
+        ]
+        mount()
+        await flush()
+
+        expect(button(LABEL)).toBeUndefined()
+      },
+    )
+
+    it('no booking at all -- no reflection', async () => {
+      endedPractice()
+      bookingsState.bookings = []
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.detail')).not.toBeNull()
+      expect(button(LABEL)).toBeUndefined()
+    })
+
+    it('reads the no_show booking, not a cancelled earlier one of the same practice', async () => {
+      // `myBooking` is the first in list order -- here the cancelled one. The
+      // button reads `myAnyBooking`, which falls back to the latest.
+      endedPractice()
+      bookingsState.bookings = [
+        booking(
+          { id: 'b0', status: 'cancelled', created_at: '2026-06-01T00:00:00Z' },
+          { scheduled_at: ended },
+        ),
+        booking(
+          { id: 'b1', status: 'no_show', created_at: '2026-07-01T00:00:00Z' },
+          { scheduled_at: ended },
+        ),
+      ]
+      mount()
+      await flush()
+
+      expect(button(LABEL)).toBeDefined()
+    })
+
+    it('with a recording, BOTH buttons show -- the recording first', async () => {
+      getBookingRecording.mockResolvedValue({ status: 'available', url: 'https://zoom.us/rec/x' })
+      endedPractice()
+      bookingsState.bookings = [
+        booking({ id: 'b1', status: 'no_show', has_reflection: false }, { scheduled_at: ended }),
+      ]
+      mount()
+      await flush()
+
+      const labels = allLabels()
+      const rec = labels.indexOf('Посмотреть запись')
+      const refl = labels.indexOf(LABEL)
+      expect(rec).toBeGreaterThanOrEqual(0)
+      expect(refl).toBeGreaterThan(rec)
+    })
+
+    it('navigates to the reflection screen for THIS practice', async () => {
+      practicesState.selected = practice({ id: 'p42', scheduled_at: ended, duration_minutes: 60 })
+      bookingsState.bookings = [
+        booking({ practice_id: 'p42', status: 'no_show' }, { id: 'p42', scheduled_at: ended }),
+      ]
+      mount()
+      await flush()
+
+      button(LABEL)?.click()
+      await flush()
+
+      expect(push).toHaveBeenCalledWith({ name: 'user-reflection', params: { practiceId: 'p42' } })
     })
   })
 
