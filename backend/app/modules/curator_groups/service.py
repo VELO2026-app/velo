@@ -151,6 +151,7 @@ from app.modules.curator_groups.models import (
     CuratorGroupTransfer,
     CuratorMasterOfferState,
     CuratorMemberKind,
+    curator_group_name_key,
 )
 
 # Read, not written: MasterStudent carries the curator's block (I-9), and
@@ -830,11 +831,14 @@ async def create_curator_group(
             code=_NO_CREATE_RIGHT_CODE,
         )
 
+    # BE-48: the same name means the same name KEY (curator_group_name_key)
+    # -- case and whitespace do not make a new school name.
     existing = (
         await session.execute(
             select(CuratorGroup).where(
                 CuratorGroup.curator_user_id == curator_user_id,
-                CuratorGroup.name == name,
+                curator_group_name_key(CuratorGroup.name)
+                == curator_group_name_key(name),
             )
         )
     ).scalar_one_or_none()
@@ -951,11 +955,16 @@ async def update_curator_group(
     old_avatar_url = group.avatar_url
 
     if group.name != name:
+        # BE-48: clashes by name KEY with ANOTHER school of this curator; the
+        # school itself is excluded, so renaming «Школа йоги» to «школа  ЙОГИ»
+        # is allowed and stores the new spelling (BE-49).
         dup = (
             await session.execute(
                 select(CuratorGroup).where(
                     CuratorGroup.curator_user_id == curator_user_id,
-                    CuratorGroup.name == name,
+                    CuratorGroup.id != group.id,
+                    curator_group_name_key(CuratorGroup.name)
+                    == curator_group_name_key(name),
                 )
             )
         ).scalar_one_or_none()
@@ -2974,9 +2983,11 @@ async def accept_curator_group_transfer(
     group_name = group.name
     clash = (
         await session.execute(
+            # BE-48: by name KEY, the rule the unique index enforces.
             select(CuratorGroup.id).where(
                 CuratorGroup.curator_user_id == user_id,
-                CuratorGroup.name == group_name,
+                curator_group_name_key(CuratorGroup.name)
+                == curator_group_name_key(group_name),
             )
         )
     ).scalar_one_or_none()

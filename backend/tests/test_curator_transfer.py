@@ -1124,3 +1124,54 @@ async def test_a_plain_user_cannot_reach_the_curator_side_at_all(
         headers=auth_headers(plain["session_token"]),
     )
     assert cancelled.status_code == 403
+
+
+# ===========================================================================
+# BE-48 / BE-49 -- the name rule on accepting a transfer
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("own_spelling", "expected"),
+    [
+        ("{name}", 409),  # exact
+        ("{upper}", 409),  # another case
+        ("  {spaced}  ", 409),  # doubled inner space + edges (stored stripped)
+        ("{nbsp}", 409),  # a no-break space inside
+        ("{yo}", 200),  # е -> ё is another letter (no owner decision)
+    ],
+)
+async def test_accepting_a_transfer_clashes_by_the_name_rule(
+    client: AsyncClient, db_session: AsyncSession, own_spelling: str, expected: int,
+) -> None:
+    """The heir already curates a school whose name equals the transferred
+    one BY THE RULE -> 409 curator_group_name_taken; ё against е is a
+    different name and goes through."""
+    curator, heir, group = await _group_with_heir(client, db_session)
+    # A name with a space AND an «е», so every row of the grid has something
+    # to change (the helper's default has no «е»).
+    name = "Школа Елены"
+    renamed = await client.patch(
+        GROUP_URL.format(group_id=group["id"]),
+        json={"name": name},
+        headers=auth_headers(curator["session_token"]),
+    )
+    assert renamed.status_code == 200, renamed.text
+    own = own_spelling.format(
+        name=name,
+        upper=name.upper(),
+        spaced=name.replace(" ", "  ") if " " in name else f"{name[:1]}  {name[1:]}",
+        nbsp=name.replace(" ", "\u00a0") if " " in name else name,
+        yo=name.replace("е", "ё").replace("Е", "Ё"),
+    )
+    if expected == 200:
+        # The pair: the probe really differs from the transferred name.
+        assert own != name and "е" in name.lower()
+    await _create_group(client, heir, name=own)
+    await _offer(client, curator, group["id"], heir)
+    resp = await _accept(client, heir, group["id"])
+    assert resp.status_code == expected, resp.text
+    if expected == 409:
+        assert resp.json()["error"] == "curator_group_name_taken"
+

@@ -24,6 +24,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import (
     BigInteger,
+    ColumnElement,
     DateTime,
     ForeignKey,
     Identity,
@@ -114,13 +115,9 @@ class CuratorGroup(UUIDMixin, TimestampMixin, Base):
     """
 
     __tablename__ = "curator_group"
-    __table_args__ = (
-        Index(
-            "uq_curator_group_curator_name",
-            "curator_user_id", "name",
-            unique=True,
-        ),
-    )
+    # The uniqueness of the name is uq_curator_group_curator_name_key, an
+    # EXPRESSION index declared right after this class (it needs the
+    # column objects): see curator_group_name_key.
 
     curator_user_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
@@ -135,6 +132,57 @@ class CuratorGroup(UUIDMixin, TimestampMixin, Base):
             f"<CuratorGroup id={self.id} "
             f"curator_user_id={self.curator_user_id} name={self.name!r}>"
         )
+
+
+# ---------------------------------------------------------------------------
+# The school name's identity (BE-48 / BE-49, owner decisions 2026-10-03)
+# ---------------------------------------------------------------------------
+#
+# Two names of ONE curator are the same school name when they match ignoring
+# case and with whitespace collapsed: «Школа Йоги», «школа йоги» and
+# «Школа  Йоги» are one name. The name is STORED as typed (after the schema's
+# strip); only the comparison is normalised.
+#
+# THE RULE LIVES IN SQL ONLY, in this one builder. Python does not normalise:
+# measured on the stand's locale (en_US.utf8), Python and Postgres disagree on
+# what whitespace is (Python's \s takes U+00A0, Postgres's does not) and on
+# lower('İ'), so a Python copy of the rule would be a second, different rule.
+# The unique index below and the three pre-checks in service.py (create,
+# rename, accepting a transfer) call this builder; the migration that created
+# the index carries its literal as DDL history, and
+# tests/test_curator_group_name_rule.py holds the two to the same answers.
+#
+#   whitespace: Postgres's \s (space, tab, newlines, U+2003, U+3000 ...)
+#               PLUS U+00A0 explicitly -- a no-break space pasted from a
+#               phone must not make a different name;
+#   case:       Postgres lower() under the cluster locale (Cyrillic and Ё
+#               fold; locale guarded by test_custom_activity_names);
+#   ё / е:      different letters (no owner decision says otherwise).
+_NAME_WHITESPACE_RUN = "[\\s\u00a0]+"
+
+
+def curator_group_name_key(value: ColumnElement[str] | str) -> ColumnElement[str]:
+    """SQL expression: the comparison key of a school name.
+
+    lower(btrim(regexp_replace(value, '[\\s<U+00A0>]+', ' ', 'g'))) -- every
+    run of whitespace becomes one space, the edges are trimmed, the case is
+    folded. Accepts the column or a plain string (bound as a parameter), so a
+    pre-check compares key(column) with key(new name) and Postgres normalises
+    BOTH sides with the same expression.
+    """
+    return func.lower(
+        func.btrim(func.regexp_replace(value, _NAME_WHITESPACE_RUN, " ", "g"))
+    )
+
+
+# One curator, one school per name KEY. Replaces the exact-match
+# uq_curator_group_curator_name (BE-48 migration).
+Index(
+    "uq_curator_group_curator_name_key",
+    CuratorGroup.curator_user_id,
+    curator_group_name_key(CuratorGroup.name),
+    unique=True,
+)
 
 
 class CuratorGroupMember(UUIDMixin, Base):
