@@ -753,7 +753,7 @@ export interface CuratorGroupMasterOfferRequest {
   to_user_id: string
 }
 
-/** One row of a curator group's roster. is_visible is ALWAYS true for a student and reflects the live MasterProfile status for a master (I-4). The curator sees a suspended master as a row with is_visible=false -- "in the shadow" -- rather than watching them vanish, because the row is real and comes back by itself when the admin re-verifies. master_offer (BE-59) -- the curator's pending appointment of this member: awaiting_verification while they are not a verified master, awaiting_answer once they are; null when there is none. Live, like is_visible: a verification or a revocation moves it with no write. */
+/** One row of the CURATOR's roster: the member plus the curator's fields. is_visible is ALWAYS true for a student and reflects the live MasterProfile status for a master (I-4). The curator sees a suspended master as a row with is_visible=false -- "in the shadow" -- rather than watching them vanish, because the row is real and comes back by itself when the admin re-verifies. master_offer (BE-59) -- the curator's pending appointment of this member: awaiting_verification while they are not a verified master, awaiting_answer once they are; null when there is none. Live, like is_visible: a verification or a revocation moves it with no write. Neither field reaches the school's masters (BE-76, owner decision 2): their roster omits the suspended masters instead, and an appointment is the curator's business. */
 export interface CuratorGroupMemberItem {
   user_id: string
   name: string
@@ -836,6 +836,15 @@ export interface CuratorGroupReviewItem {
   practice_id: string
   practice_title: string
   created_at: string
+}
+
+/** One member of a school, as anyone allowed to see the roster sees it. The masters of the school read exactly this (GET .../roster, BE-76); the curator reads the same fact plus his own working fields (CuratorGroupMemberItem below). One class describes "a member", the curator's projection only widens it -- there is no second format of the same row. */
+export interface CuratorGroupRosterItem {
+  user_id: string
+  name: string
+  avatar_url: string | null
+  kind: 'master' | 'student'
+  joined_at: string
 }
 
 /** One completed practice of the school with its engagement counts. Ordered by engagement (check-ins + reviews), newest first on ties -- "what actually landed", not a second feed, so no comment text and no student names ride along. */
@@ -1282,6 +1291,14 @@ export interface PaginatedCuratorGroupMembersResponse {
 /** GET /masters/me/curator-groups/{id}/reviews. */
 export interface PaginatedCuratorGroupReviewsResponse {
   items: CuratorGroupReviewItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** GET /masters/me/curator-groups/{id}/roster (BE-76). */
+export interface PaginatedCuratorGroupRosterResponse {
+  items: CuratorGroupRosterItem[]
   total: number
   limit: number
   offset: number
