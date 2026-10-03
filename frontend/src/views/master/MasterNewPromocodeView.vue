@@ -180,9 +180,12 @@ async function onCreate(): Promise<void> {
     await createPromo({
       code: form.code.trim(),
       discount_percent: Number(form.discount),
-      // End of the selected local day, sent as UTC ISO (mirrors untilDisplay's
-      // own noon-anchoring pattern -- avoids day-boundary drift near midnight).
-      valid_until: new Date(`${form.until}T23:59:59`).toISOString(),
+      // FE-78.3: the promo list renders valid_until in UTC, so the chosen
+      // day is anchored to UTC end-of-day EXPLICITLY. The previous local
+      // parse (`new Date('YYYY-MM-DDT23:59:59')`) drifted a full day for a
+      // master west of Greenwich: their local 23:59 is already the next
+      // day in UTC, and the list showed the wrong date.
+      valid_until: new Date(`${form.until}T23:59:59+00:00`).toISOString(),
       max_uses: form.limit ? Number(form.limit) : null,
     })
     toast.success('Промокод создан')

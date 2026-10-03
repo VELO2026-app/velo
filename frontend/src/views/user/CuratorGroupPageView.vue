@@ -374,7 +374,15 @@ async function fetchAllPages<T>(
   return out
 }
 
+// FE-78.4: see load() -- bumps on every load attempt; a stale answer is a no-op.
+let loadEpoch = 0
+
 async function load(): Promise<void> {
+  // FE-78.4: route reuse under the same record -- a slow answer for the
+  // PREVIOUS school must never repaint the current one. Every state write
+  // below is guarded by the epoch; a superseded load becomes a no-op
+  // (same pattern as SchoolStudentProfileView's loadVersion).
+  const epoch = ++loadEpoch
   loading.value = true
   error.value = false
   notFound.value = false
@@ -383,16 +391,18 @@ async function load(): Promise<void> {
       getCuratorGroupPage(groupId.value),
       fetchAllPages((offset) => getCuratorGroupPractices(groupId.value, PAGE, offset)),
     ])
+    if (epoch !== loadEpoch) return
     page.value = pageRes
     practices.value = practicesItems
   } catch (e) {
+    if (epoch !== loadEpoch) return
     if (e instanceof ApiResponseError && e.status === 404) {
       notFound.value = true
     } else {
       error.value = true
     }
   } finally {
-    loading.value = false
+    if (epoch === loadEpoch) loading.value = false
   }
 }
 

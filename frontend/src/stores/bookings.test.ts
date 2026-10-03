@@ -92,9 +92,12 @@ describe('useBookingsStore', () => {
       expect(bookingsApi.getMyBookings).toHaveBeenCalled()
     })
 
-    it('on failure (e.g. 409 already joined): falls back to the generic message (unmapped code)', async () => {
+    it('on failure (e.g. 409 already joined): falls back to the generic message and carries the machine status (FE-78.2)', async () => {
       // B8 (PROMPT №747): 'already_joined' is not a real backend code --
       // unmapped, lands on the call site's own fallback (bookings.ts:202).
+      // FE-78.2: the result also carries the HTTP status, so a caller can
+      // branch on it (the join endpoint's only 409 IS "already joined")
+      // instead of matching the human-readable text.
       vi.mocked(bookingsApi.joinBooking).mockRejectedValue(
         new ApiResponseError(409, 'Already joined', 'already_joined'),
       )
@@ -102,7 +105,11 @@ describe('useBookingsStore', () => {
 
       const result = await store.joinBooking('booking_1')
 
-      expect(result).toEqual({ ok: false, error: 'Не удалось войти в практику' })
+      expect(result).toEqual({
+        ok: false,
+        error: 'Не удалось войти в практику',
+        status: 409,
+      })
     })
   })
 

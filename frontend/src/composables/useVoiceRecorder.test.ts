@@ -302,3 +302,53 @@ describe('useVoiceRecorder -- cancel and edges', () => {
     }
   })
 })
+
+describe('useVoiceRecorder -- cancel during the permission prompt (FE-78.1)', () => {
+  it('a late getUserMedia answer after cancel releases the mic and never records', async () => {
+    // The permission prompt sits open: start()'s getUserMedia promise is
+    // still pending while the person taps «Отмена».
+    let resolveGum!: (stream: MediaStream) => void
+    gumMock.mockReturnValue(
+      new Promise<MediaStream>((resolve) => {
+        resolveGum = resolve
+      }),
+    )
+    const pending = recorder!.start()
+    expect(recorder!.state.value).toBe('requesting')
+
+    recorder!.cancel()
+    expect(recorder!.state.value).toBe('idle')
+
+    // The browser answers long after the cancellation.
+    const stream = fakeStream()
+    resolveGum(stream)
+    await pending
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    // The late stream is released track-by-track, no MediaRecorder is ever
+    // constructed, and the state stays exactly where cancel() left it.
+    expect(stream.getTracks()[0]?.stop).toHaveBeenCalled()
+    expect(FakeMediaRecorder.instances).toHaveLength(0)
+    expect(recorder!.state.value).toBe('idle')
+    expect(recorder!.errorReason.value).toBeNull()
+  })
+
+  it('a late getUserMedia REJECTION after cancel is silent (no fake permission error)', async () => {
+    let rejectGum!: (reason: unknown) => void
+    gumMock.mockReturnValue(
+      new Promise<MediaStream>((_, reject) => {
+        rejectGum = reject
+      }),
+    )
+    const pending = recorder!.start()
+    recorder!.cancel()
+    rejectGum(new Error('NotAllowedError'))
+    await pending
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(recorder!.state.value).toBe('idle')
+    // A stale rejection must not paint the "permission denied" reason onto
+    // an already-cancelled request.
+    expect(recorder!.errorReason.value).toBeNull()
+  })
+})

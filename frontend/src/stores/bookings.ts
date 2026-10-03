@@ -22,6 +22,7 @@ import {
   skipCheckin as apiSkipCheckin,
 } from '@/api/bookings'
 import { usePagination } from '@/composables/usePagination'
+import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
 // One-way dependency: bookings -> diary. Used only inside actions, never at
 // module scope or in the store's setup body -- keep it that way.
@@ -43,6 +44,10 @@ export interface CancelResult {
 export interface ActionResult {
   ok: boolean
   error: string
+  /** HTTP status of an API failure, when one reached the store (FE-78.2:
+   * callers key on this machine value, never on the human-readable text --
+   * the only 409 on join is "already joined"). */
+  status?: number
 }
 
 export const useBookingsStore = defineStore('bookings', () => {
@@ -201,7 +206,11 @@ export const useBookingsStore = defineStore('bookings', () => {
       return { ok: true, error: '' }
     } catch (e) {
       const message = extractApiError(e, 'Не удалось войти в практику')
-      return { ok: false, error: message }
+      return {
+        ok: false,
+        error: message,
+        status: e instanceof ApiResponseError ? e.status : undefined,
+      }
     }
   }
 

@@ -16,7 +16,7 @@
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { createApp, nextTick, type App } from 'vue'
+import { createApp, nextTick, reactive, type App } from 'vue'
 import CuratorGroupPageView from '@/views/user/CuratorGroupPageView.vue'
 import * as cgApi from '@/api/curatorGroups'
 import { ApiResponseError } from '@/api/client'
@@ -26,9 +26,11 @@ vi.mock('@/api/curatorGroups')
 
 const push = vi.fn()
 const replace = vi.fn()
-const routeState = { name: 'user-curator-group', id: 'g1' }
+// Reactive: FE-78.4's race test flips `id` mid-test and the view's
+// computed(watch) chain must react exactly as vue-router's real route would.
+const routeState = reactive({ name: 'user-curator-group', params: { id: 'g1' } })
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: { id: routeState.id }, name: routeState.name }),
+  useRoute: () => routeState,
   useRouter: () => ({ push, replace }),
 }))
 
@@ -162,7 +164,7 @@ function mockHappyLoad(
 
 beforeEach(() => {
   routeState.name = 'user-curator-group'
-  routeState.id = 'g1'
+  routeState.params.id = 'g1'
   Object.values(cgApi).forEach((fn) => vi.mocked(fn).mockReset())
   // §1.6 (owner 2026-09-22): the curator mounts SchoolInviteField under the
   // hero; give it an honest resolved link (the endpoint is get-or-mint).
@@ -693,5 +695,43 @@ describe('CuratorGroupPageView -- §1.6 page body', () => {
     expect(text()).not.toContain('Журнал школы')
     expect(text()).not.toContain('Мастеров пока нет')
     expect(text()).not.toContain('Учеников пока нет')
+  })
+})
+
+// =============================================================================
+// FE-78.4: route reuse under the same record -- a slow answer for the
+// PREVIOUS school must never repaint the current one (loadEpoch guard).
+// =============================================================================
+describe('FE-78.4 -- a superseded load is a no-op', () => {
+  it('a slow answer for the previous school never repaints the current one', async () => {
+    // Navigation #1 resolves slowly; navigation #2 (same instance, id flipped)
+    // resolves fast and wins.
+    let resolveSlow!: (page: CuratorGroupPageResponse) => void
+    vi.mocked(cgApi.getCuratorGroupPage)
+      .mockImplementationOnce(
+        () =>
+          new Promise<CuratorGroupPageResponse>((resolve) => {
+            resolveSlow = resolve
+          }),
+      )
+      .mockImplementationOnce(async () => ({
+        ...pageFixture('curator'),
+        name: 'Вторая школа',
+      }))
+
+    mount()
+    await flush()
+    // Load #1 is still in flight (its page promise hangs).
+    routeState.params.id = 'g2'
+    await flush()
+    expect(text()).toContain('Вторая школа')
+
+    // The stale answer lands AFTER the newer one -- it must be dropped.
+    resolveSlow!({ ...pageFixture('curator'), name: 'Тихая школа' })
+    await flush()
+
+    expect(text()).toContain('Вторая школа')
+    expect(text()).not.toContain('Тихая школа')
+    expect(text()).not.toContain('Упс, что-то пошло не так')
   })
 })

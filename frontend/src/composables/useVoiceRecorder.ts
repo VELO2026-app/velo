@@ -63,6 +63,11 @@ export function useVoiceRecorder(options: VoiceRecorderOptions = {}) {
   let audioContext: AudioContext | null = null
   /** stop() re-returns this while a stop is already unwinding. */
   let stopPromise: Promise<VoiceTake | null> | null = null
+  /** FE-78.1: bumped by cancel()/dispose() so a getUserMedia answer that
+   * arrives after its own request was abandoned (the permission prompt sat
+   * open while the person bailed) is recognized as dead and never turns
+   * into a recording. */
+  let generation = 0
 
   function isSupported(): boolean {
     return (
@@ -111,11 +116,20 @@ export function useVoiceRecorder(options: VoiceRecorderOptions = {}) {
     }
 
     state.value = 'requesting'
+    const requestGeneration = generation
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     } catch {
+      if (requestGeneration !== generation) return
       state.value = 'idle'
       errorReason.value = 'permission'
+      return
+    }
+    // The request was cancelled (or the composable disposed) while the
+    // permission prompt sat open: the late mic stream is released, nothing
+    // records, and the state stays exactly where cancel() left it.
+    if (requestGeneration !== generation) {
+      releaseStream()
       return
     }
 
@@ -200,6 +214,7 @@ export function useVoiceRecorder(options: VoiceRecorderOptions = {}) {
   /** Silent discard: no processing, no result, no error state. */
   function cancel(): void {
     if (state.value === 'idle') return
+    generation += 1
     clearTicker()
     try {
       if (recorder && recorder.state !== 'inactive') recorder.stop()

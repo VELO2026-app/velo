@@ -246,7 +246,11 @@ async function onEnter(): Promise<void> {
     if (booking && booking.joined_at === null) {
       const result = await bookingsStore.joinBooking(booking.id)
       // Ignore "already joined" -- opening Zoom is still the right action.
-      if (!result.ok && !result.error.toLowerCase().includes('already')) {
+      // FE-78.2: the gate keys on the machine status (the join endpoint's
+      // only 409 is "already joined"), never on the human-readable text --
+      // extractApiError speaks Russian and the old includes('already')
+      // could never match anything it said.
+      if (!result.ok && result.status !== 409) {
         toast.error(result.error)
       }
     }

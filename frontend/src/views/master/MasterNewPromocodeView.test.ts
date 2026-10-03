@@ -21,14 +21,12 @@
 // today's month when the field is empty (DatePickerSheet.vue:138-145). Without a
 // frozen instant the calendar under test would be a different month every run.
 //
-// TIMEZONE: deliberately NOT pinned, and the assertions are written so it does
-// not need to be. The product builds valid_until as
-// `new Date('YYYY-MM-DDT23:59:59')` (MasterNewPromocodeView.vue:151) -- no 'Z',
-// so it parses in the RUNNER'S LOCAL ZONE by design ("end of the selected local
-// day"). Asserting a literal UTC ISO string would therefore pass only in the
-// author's timezone and fail in CI. The tests below read the sent instant back
-// through LOCAL getters (getDate/getHours), which is exactly the property the
-// product intends and is stable in every zone.
+// TIMEZONE: deliberately NOT pinned. FE-78.3: valid_until is anchored to
+// UTC end-of-the-selected-day EXPLICITLY (`new Date('YYYY-MM-DDT23:59:59+00:00')`,
+// MasterNewPromocodeView.vue) because the promo list renders it in UTC -- the
+// old local parse drifted a full day for masters west of Greenwich. The sent
+// instant is therefore IDENTICAL in every runner zone, and the tests assert
+// the literal UTC ISO string.
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -303,11 +301,10 @@ describe('MasterNewPromocodeView', () => {
       expect(sentBody().max_uses).toBeNull()
     })
 
-    it('valid_until is the END of the selected local day, not its start', async () => {
-      // MasterNewPromocodeView.vue:151 anchors at 23:59:59 local. If it collapsed
-      // to midnight, a code picked "valid until the 25th" would die a day early.
-      // Read back via LOCAL getters -- the product parses local by design, so a
-      // literal UTC string here would only pass in one timezone.
+    it('valid_until is the END of the selected day, anchored to UTC (FE-78.3)', async () => {
+      // The list renders valid_until in UTC, so the chosen day must arrive as
+      // UTC end-of-day -- a local parse drifted a full day west of Greenwich.
+      // The literal is zone-stable now: the anchor is explicit.
       mount()
       await flush()
       typeCode('SUMMER')
@@ -317,12 +314,7 @@ describe('MasterNewPromocodeView', () => {
       button('Создать промокод')?.click()
       await flush()
 
-      const until = new Date(sentBody().valid_until as string)
-      expect(until.getFullYear()).toBe(2026)
-      expect(until.getMonth()).toBe(6) // July, 0-indexed
-      expect(until.getDate()).toBe(25)
-      expect(until.getHours()).toBe(23)
-      expect(until.getMinutes()).toBe(59)
+      expect(sentBody().valid_until).toBe('2026-07-25T23:59:59.000Z')
     })
 
     it('valid_until is sent as a UTC ISO string, not a local-format string', async () => {
