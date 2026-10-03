@@ -17,15 +17,50 @@ import { describe, it, expect } from 'vitest'
 import { decodePracticeCode, parseStartParam } from '@/composables/useAuth'
 
 describe('parseStartParam', () => {
-  it('BE-104: the bare master-status verbs map; the BE-59 parameterised form stays unmapped', () => {
+  // Links: the BE-59 parameterised form used to stay unmapped -- right while
+  // only bare verbs were parsed; it now lands on the same wizard.
+  it('BE-104 verbs, and the BE-59 parameterised form, map', () => {
     expect(parseStartParam('open_master_application')).toEqual({ name: 'master-apply' })
     expect(parseStartParam('open_master_zone')).toEqual({ name: 'master-dashboard' })
     expect(parseStartParam('open_support')).toEqual({ name: 'user-support' })
     expect(
       parseStartParam('open_master_application__00000000-0000-4000-8000-000000000001'),
-    ).toBeNull()
+    ).toEqual({ name: 'master-apply' })
     expect(parseStartParam('open_master_zone__x')).toBeNull()
     expect(parseStartParam('xopen_support')).toBeNull()
+  })
+
+  // Links (3 October): every notification verb lands where the bell sends it;
+  // the session role picks the zone where the two bells differ.
+  describe('notification verbs (Links)', () => {
+    const id = '00000000-0000-4000-8000-0000000000b2'
+    it.each([
+      [`open_feedback__${id}`, 'user', { name: 'user-feedback', params: { practiceId: id } }],
+      ['open_wallet', 'user', { name: 'user-topup' }],
+      ['open_wallet', 'master', { name: 'master-finance' }],
+      [`open_wallet__${id}`, 'user', { name: 'user-topup' }],
+      [`confirm_waitlist__${id}`, 'user', { name: 'waitlist-confirm', params: { id } }],
+      [`open_curator_group__${id}`, 'user', { name: 'user-curator-group', params: { id } }],
+      [`open_curator_group__${id}`, 'master', { name: 'master-curator-group', params: { id } }],
+      ['open_support', 'master', { name: 'master-support' }],
+      ['open_master_practices', 'master', { name: 'master-practices' }],
+      [`open_practice__${id}`, 'master', { name: 'master-practice-detail', params: { id } }],
+    ] as const)('%s as %s', (param, role, route) => {
+      expect(parseStartParam(param, role)).toEqual(route)
+    })
+
+    it.each(['open_notifications', 'open_admin_masters', 'open_admin_support', 'open_thread__x'])(
+      '%s -> no route (no admin bell; msg.* has no Telegram)',
+      (param) => {
+        expect(parseStartParam(param, 'user')).toBeNull()
+      },
+    )
+
+    it('a verb that needs its id without one is no route', () => {
+      expect(parseStartParam('confirm_waitlist', 'user')).toBeNull()
+      expect(parseStartParam('open_curator_group', 'user')).toBeNull()
+      expect(parseStartParam('open_feedback', 'user')).toBeNull()
+    })
   })
 
   it('returns null for an absent param', () => {
@@ -67,18 +102,23 @@ describe('parseStartParam', () => {
     expect(parseStartParam('group_invite__has spaces not url-safe')).toBeNull()
   })
 
-  it('parses curator_group_invite__{token} (FE-18) -- ONE kind for both link flavours', () => {
+  // Links (3 October): the school kind is `school__` (owner). These pinned
+  // curator_group_invite__, right until it proved 65 characters against
+  // Telegram's 64 -- the old kind is now no route at all (no legacy).
+  it('parses school__{token} -- ONE kind for both link flavours, 51 characters', () => {
     const token = 'z'.repeat(43)
-    expect(parseStartParam(`curator_group_invite__${token}`)).toEqual({
+    expect(`school__${token}`).toHaveLength(51)
+    expect(parseStartParam(`curator_group_invite__${token}`)).toBeNull()
+    expect(parseStartParam(`school__${token}`)).toEqual({
       name: 'curator-group-join',
       params: { token },
     })
   })
 
-  it('rejects a curator_group_invite token outside the 16..128 charset/length bound', () => {
-    expect(parseStartParam('curator_group_invite__tooshort')).toBeNull()
-    expect(parseStartParam(`curator_group_invite__${'c'.repeat(129)}`)).toBeNull()
-    expect(parseStartParam('curator_group_invite__has spaces not url-safe')).toBeNull()
+  it('rejects a school token outside the 16..128 charset/length bound', () => {
+    expect(parseStartParam('school__tooshort')).toBeNull()
+    expect(parseStartParam(`school__${'c'.repeat(129)}`)).toBeNull()
+    expect(parseStartParam('school__has spaces not url-safe')).toBeNull()
   })
 
   it('does not disturb group_invite__{token} -- the two invite prefixes stay separate routes', () => {
@@ -87,27 +127,23 @@ describe('parseStartParam', () => {
       name: 'group-join',
       params: { token },
     })
-    expect(parseStartParam('curator_group_invite__')).toBeNull()
-    expect(parseStartParam('curator_group_invite')).toBeNull()
+    expect(parseStartParam('school__')).toBeNull()
+    expect(parseStartParam('school')).toBeNull()
   })
 
-  // FE-67/BE-29: the master-offer consent deep link. The parameter is a
-  // school UUID (the candidate is the session), not a secret token -- the
-  // same 36-char shape open_practice__ uses, 64 characters total against
-  // the school invite's 65.
-  it('parses curator_group_master_offer__{uuid} (FE-67)', () => {
+  // Links (3 October): the master-offer consent screen has its own verb,
+  // open_master_offer__<group_id> (55 characters), sent by the backend for
+  // curator_group.master_offered. The former curator_group_master_offer__
+  // was built by nothing and is no route any more (no legacy).
+  it('parses open_master_offer__{uuid}; the former kind is gone', () => {
     const groupId = '123e4567-e89b-12d3-a456-426614174000'
-    expect(parseStartParam(`curator_group_master_offer__${groupId}`)).toEqual({
+    expect(parseStartParam(`open_master_offer__${groupId}`)).toEqual({
       name: 'curator-group-master-offer',
       params: { id: groupId },
     })
-  })
-
-  it('rejects a curator_group_master_offer id that is not a 36-char UUID', () => {
-    expect(parseStartParam('curator_group_master_offer__not-a-uuid')).toBeNull()
-    expect(parseStartParam('curator_group_master_offer__short')).toBeNull()
-    expect(parseStartParam(`curator_group_master_offer__${'x'.repeat(37)}`)).toBeNull()
-    expect(parseStartParam('curator_group_master_offer__')).toBeNull()
+    expect(parseStartParam(`curator_group_master_offer__${groupId}`)).toBeNull()
+    expect(parseStartParam('open_master_offer__not-a-uuid')).toBeNull()
+    expect(parseStartParam('open_master_offer')).toBeNull()
   })
   // ===========================================================================
   // T-35: zoom__<22> -- the public practice code as a deep link.

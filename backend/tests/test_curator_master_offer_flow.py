@@ -389,8 +389,12 @@ async def test_verification_turns_the_offer_into_a_question(
     assert {p["action_data"]["actor_name"] for p in offered} == {
         f"M{_TID_CURATOR}", f"M{_TID_SECOND_CURATOR}",
     }
+    # Links (3 October): master_offered has its own verb -- the Telegram
+    # button carries no type, and open_curator_group could only open the
+    # school page. It used to be open_curator_group, right until then.
     for p in offered:
-        assert p["action_data"]["action"] == "open_curator_group"
+        assert p["action_data"]["action"] == "open_master_offer"
+        assert set(p["action_data"]["params"]) == {"group_id"}
     keys = {p["idempotency_key"] for p in offered}
     assert keys == {
         k for k in keys if k.startswith("curator-master-offer-ready:")

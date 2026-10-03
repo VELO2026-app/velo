@@ -24,17 +24,18 @@
 // to /auth-error so the user sees a recoverable error screen instead of
 // landing on /user/dashboard with broken state.
 //
-// TD-F01: roleRedirect consumes pendingDeepLink after auth completes.
-// If a startapp deep link was parsed during initAuth(), the user is
-// redirected there instead of the dashboard -- open_practice__{uuid} to the
-// practice detail, zoom__{code} to practice-live (T-35). pendingDeepLink is
+// TD-F01: roleRedirect consumes pendingStartParam after auth completes.
+// initAuth() stores the raw startapp value; roleRedirect parses it with the
+// session role (parseStartParam, Links) and redirects there instead of the
+// dashboard -- open_practice__{uuid} to the practice, zoom__{code} to
+// practice-live (T-35), a notification verb to the bell's screen. It is
 // cleared after first use to prevent stale redirects.
 // =============================================================================
 
 import type { NavigationGuardWithThis, RouteLocationNormalized } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useMasterStore } from '@/stores/master'
-import { waitUntilReady, pendingDeepLink } from '@/composables/useAuth'
+import { waitUntilReady, pendingStartParam, parseStartParam } from '@/composables/useAuth'
 import type { ReadyResult } from '@/composables/useAuth'
 import { refreshRoleIfStale } from '@/composables/useRoleFreshness'
 import type { UserRole } from '@/api/types'
@@ -47,7 +48,8 @@ import { MASTER_APPLIED_KEY, masterRejectionSeenKey } from '@/utils/constants'
  * Async: awaits auth initialization so role is guaranteed to be set
  * before the switch. Without the await, role is always null on first load.
  *
- * TD-F01: if pendingDeepLink is set, redirect there instead of the dashboard
+ * TD-F01: if pendingStartParam is set and parses to a route for this role,
+ * redirect there instead of the dashboard
  * and clear the pending link so subsequent navigations go normally. A
  * pending deep link is a deliberate user action (e.g. a shared practice
  * link) and wins over the rejection redirect below -- the rejection screen
@@ -71,11 +73,15 @@ export const roleRedirect: NavigationGuardWithThis<undefined> = async () => {
     return { path: '/auth-error' }
   }
 
-  // TD-F01: consume pending deep link from startapp parameter.
-  if (pendingDeepLink.value) {
-    const target = pendingDeepLink.value
-    pendingDeepLink.value = null
-    return target
+  // TD-F01: consume the pending startapp parameter. Links (3 October): it is
+  // parsed HERE, with the session role -- a notification button carries no
+  // viewer, and some verbs land in different zones for user and master. An
+  // unknown parameter falls through to the usual dashboard.
+  if (pendingStartParam.value) {
+    const startParam = pendingStartParam.value
+    pendingStartParam.value = null
+    const target = parseStartParam(startParam, auth.role)
+    if (target) return target
   }
 
   // Bug 1 fix: R2 (batch R, cb6d8bf) added the masterPendingGuard branch that

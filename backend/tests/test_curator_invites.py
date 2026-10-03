@@ -84,7 +84,7 @@ REVOKE_URL = "/api/v1/admin/masters/{user_id}/revoke"
 MAKE_MASTER_URL = "/api/v1/admin/users/{user_id}/make-master"
 
 _BOT_URL = "https://t.me/velo_test_bot"
-_DEEPLINK = "?startapp=curator_group_invite__"
+_DEEPLINK = "?startapp=school__"
 
 _TID_MIN = 66400
 _TID_MAX = 66599

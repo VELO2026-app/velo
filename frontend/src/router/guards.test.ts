@@ -28,7 +28,7 @@ import {
   roleFreshnessGuard,
 } from '@/router/guards'
 import { useAuthStore } from '@/stores/auth'
-import { resetAuthState, __setReadyForTest, pendingDeepLink } from '@/composables/useAuth'
+import { resetAuthState, __setReadyForTest, pendingStartParam } from '@/composables/useAuth'
 import { MASTER_APPLIED_KEY, masterRejectionSeenKey } from '@/utils/constants'
 import type { UserResponse } from '@/api/types'
 
@@ -119,15 +119,40 @@ describe('router/guards', () => {
       expect(await call(roleRedirect)).toEqual({ path: '/user/dashboard' })
     })
 
-    it('a pending deep link is consumed and cleared instead of the role dashboard', async () => {
+    // Links (3 October): this used to set an already-PARSED route. Right while
+    // initAuth parsed without a role; the parse moved here, with the session
+    // role, so the pending value is now the raw startapp string.
+    it('a pending startapp is parsed WITH the role, consumed and cleared', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'master' })
-      pendingDeepLink.value = { name: 'practice-detail', params: { id: 'p1' } }
+      pendingStartParam.value = 'open_practice__00000000-0000-4000-8000-0000000000a1'
 
       const result = await call(roleRedirect)
 
-      expect(result).toEqual({ name: 'practice-detail', params: { id: 'p1' } })
-      expect(pendingDeepLink.value).toBeNull()
+      expect(result).toEqual({
+        name: 'master-practice-detail',
+        params: { id: '00000000-0000-4000-8000-0000000000a1' },
+      })
+      expect(pendingStartParam.value).toBeNull()
+    })
+
+    it('the same verb lands in the zone of the role: open_wallet -> top-up vs finance', async () => {
+      __setReadyForTest(true)
+      setAuthUser({ role: 'user' })
+      pendingStartParam.value = 'open_wallet'
+      expect(await call(roleRedirect)).toEqual({ name: 'user-topup' })
+
+      setAuthUser({ role: 'master' })
+      pendingStartParam.value = 'open_wallet'
+      expect(await call(roleRedirect)).toEqual({ name: 'master-finance' })
+    })
+
+    it('an unknown startapp falls through to the role dashboard, and is cleared', async () => {
+      __setReadyForTest(true)
+      setAuthUser({ role: 'user' })
+      pendingStartParam.value = 'open_admin_masters'
+      expect(await call(roleRedirect)).toEqual({ path: '/user/dashboard' })
+      expect(pendingStartParam.value).toBeNull()
     })
 
     it('timeout with role still null -> /auth-error', async () => {
@@ -163,12 +188,15 @@ describe('router/guards', () => {
     it('rejected applicant with a pending deep link -> the deep link wins', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'user', master_application: { status: 'rejected' } })
-      pendingDeepLink.value = { name: 'practice-detail', params: { id: 'p1' } }
+      pendingStartParam.value = 'open_practice__00000000-0000-4000-8000-0000000000a1'
 
       const result = await call(roleRedirect)
 
-      expect(result).toEqual({ name: 'practice-detail', params: { id: 'p1' } })
-      expect(pendingDeepLink.value).toBeNull()
+      expect(result).toEqual({
+        name: 'practice-detail',
+        params: { id: '00000000-0000-4000-8000-0000000000a1' },
+      })
+      expect(pendingStartParam.value).toBeNull()
     })
 
     it('a plain user with no application is unaffected -> /user/dashboard', async () => {

@@ -87,7 +87,7 @@ DECLINE_URL = "/api/v1/curator-groups/{group_id}/transfer/decline"
 # test_curator_invites.py patches it -- the real settings value is not
 # guaranteed on a test stand, and the token is what we are after.
 _BOT_URL = "https://t.me/velo_test_bot"
-_DEEPLINK = "?startapp=curator_group_invite__"
+_DEEPLINK = "?startapp=school__"
 
 _TID_MIN = 67400
 _TID_MAX = 67599

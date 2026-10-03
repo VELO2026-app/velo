@@ -557,6 +557,7 @@ async def _notify_group_event(
     group_id: UUID,
     group_name: str,
     actor_name: str,
+    action: str | None = None,
 ) -> None:
     """Queue one school notification, in the caller's transaction (BE-25).
 
@@ -600,6 +601,8 @@ async def _notify_group_event(
         body=body,
         group_id=group_id,
         variables={"group_name": group_name, "actor_name": actor_name},
+        # None -> the shared school verb (defined below this function).
+        action=action or _OPEN_CURATOR_GROUP,
     )
 
 
@@ -609,6 +612,9 @@ _OPEN_CURATOR_GROUP = "open_curator_group"
 # inbox, so naming the intent now lets the frontend map it to
 # /master/apply later without touching velo again.
 _OPEN_MASTER_APPLICATION = "open_master_application"
+# curator_group.master_offered (Links, 3 October): the front maps it to the
+# consent screen, curator-group-master-offer, with group_id.
+_OPEN_MASTER_OFFER = "open_master_offer"
 
 
 async def _notify_school(
@@ -2550,7 +2556,11 @@ async def leave_curator_group(
 # ===========================================================================
 
 
-_INVITE_DEEPLINK_KIND = "curator_group_invite__"
+# The startapp kind of a school link (owner, 3 October): Telegram allows 64
+# characters of [A-Za-z0-9_-] in startapp, and token_urlsafe(32) is 43 of
+# them -- "school__" + 43 = 51. The former "curator_group_invite__" made 65
+# and the link did not open. Pinned by tests/test_deeplink_limits.py.
+_INVITE_DEEPLINK_KIND = "school__"
 
 
 async def _has_master_capability(user_id: UUID, session: AsyncSession) -> bool:
@@ -4033,6 +4043,10 @@ async def offer_curator_group_master(
             group_id=group.id,
             group_name=group.name,
             actor_name=actor_name,
+            # Links (3 October): its OWN verb. The Telegram button carries no
+            # notification type, so the shared open_curator_group could only
+            # ever open the school page -- this one opens the offer screen.
+            action=_OPEN_MASTER_OFFER,
         )
         return
     await _notify_school(
@@ -4409,6 +4423,7 @@ async def announce_pending_master_offers(
             body=_master_offered_body(curator_name, group_name),
             group_id=group_id,
             variables={"group_name": group_name, "actor_name": curator_name},
+            action=_OPEN_MASTER_OFFER,  # Links: the offer screen, not the school
         )
     return len(taken)
 

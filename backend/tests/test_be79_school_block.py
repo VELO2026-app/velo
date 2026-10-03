@@ -68,7 +68,7 @@ UNBLOCK_URL = "/api/v1/masters/me/curator-groups/{group_id}/blocks/{user_id}"
 BLOCKS_URL = "/api/v1/masters/me/curator-groups/{group_id}/blocks"
 
 _BOT_URL = "https://t.me/velo_test_bot"
-_DEEPLINK = "?startapp=curator_group_invite__"
+_DEEPLINK = "?startapp=school__"
 
 _TID_MIN = 70800
 _TID_MAX = 70849

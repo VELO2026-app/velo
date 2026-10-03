@@ -384,13 +384,15 @@ describe('MasterInboxView', () => {
     else expect(push).not.toHaveBeenCalled()
   })
 
-  it('BE-59: a master-offer row (curator_group.master_offered + open_curator_group) opens the school-offer screen', async () => {
+  // Links (3 October): was keyed on the TYPE over open_curator_group; the offer
+  // has its own verb now, the same one its Telegram button carries.
+  it('a master-offer row (open_master_offer) opens the school-offer screen', async () => {
     vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
       items: [
         item({
           id: 'g2',
           type: 'curator_group.master_offered',
-          action_data: { action: 'open_curator_group', params: { group_id: 'grp_1' } },
+          action_data: { action: 'open_master_offer', params: { group_id: 'grp_1' } },
         }),
       ],
       next_cursor: null,

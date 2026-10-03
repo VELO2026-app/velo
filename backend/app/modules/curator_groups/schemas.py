@@ -574,7 +574,7 @@ class CuratorGroupInviteResponse(BaseModel):
     are gone rather than kept and ignored.
 
     The url carries the token and nothing else
-    (`curator_group_invite__<token>`): a second copy of any fact in the url
+    (`school__<token>`): a second copy of any fact in the url
     is a copy the sender can edit by hand.
     """
 

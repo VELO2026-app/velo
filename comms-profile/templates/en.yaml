@@ -18,11 +18,13 @@ booking.confirmed:
   telegram:
     title: "Booking confirmed"
     body: "✅ Your booking for <b>{practice_title}</b> is confirmed.\n\n📅 {scheduled_at}\n👤 Master: {master_name}\n💰 Paid: €{paid_amount}"
+    button_text: "Open practice"
 
 booking.cancelled_by_user:
   telegram:
     title: "Booking cancelled by participant"
     body: "❌ A participant has cancelled their booking for <b>{practice_title}</b>.\n\n📅 {scheduled_at}"
+    button_text: "Open practice"
 
 # -- Practices --
 
@@ -30,16 +32,19 @@ practice.cancelled:
   telegram:
     title: "Practice cancelled"
     body: "❌ Practice <b>{practice_title}</b> on {scheduled_at} has been cancelled.\n\n💰 Your payment has been refunded."
+    button_text: "Open wallet"
 
 practice.rescheduled:
   telegram:
     title: "Practice rescheduled"
     body: "📝 Practice <b>{practice_title}</b> has been rescheduled.\n\n📅 New time: {scheduled_at}\n👤 Master: {master_name}"
+    button_text: "Open practice"
 
 practice.cancelled_waitlist:
   telegram:
     title: "Practice cancelled"
     body: "❌ Practice <b>{practice_title}</b> {scheduled_at}, which you were waitlisted for, was cancelled."
+    button_text: "Open practice"
 
 # BE-21: to the practice's OWN master, when a school curator cancelled it.
 # BE-64: ONCE per action, a series cascade included; cancelled_count is
@@ -48,6 +53,7 @@ practice.cancelled_by_curator:
   telegram:
     title: "Your practice was cancelled"
     body: "❌ Practice <b>{practice_title}</b> {scheduled_at} was cancelled by the curator of <b>{group_name}</b>.\nSessions cancelled: {cancelled_count}\n\n💰 Participants have been refunded."
+    button_text: "Open practice"
 
 # -- Waitlist --
 
@@ -55,11 +61,13 @@ waitlist.spot_available:
   telegram:
     title: "Spot available!"
     body: "🎉 A spot opened up for <b>{practice_title}</b>!\n\n📅 {scheduled_at}\n👤 Master: {master_name}\n\n⏳ You have <b>30 minutes</b> to confirm your spot.\nTap the button below to book now."
+    button_text: "Confirm spot"
 
 waitlist.expired:
   telegram:
     title: "Waitlist expired"
     body: "⏳ Your waitlist entry for <b>{practice_title}</b> has expired.\n\n📅 {scheduled_at}"
+    button_text: "Open practice"
 
 # -- Master account status --
 
@@ -67,26 +75,31 @@ master.verified:
   telegram:
     title: "Master profile enabled"
     body: "🎉 Your master profile is now enabled.\n\nYou can now create practices."
+    button_text: "Open master zone"
 
 master.rejected:
   telegram:
     title: "Application rejected"
     body: "Your master application was not approved.\n\nReason: {reason}\n\nYou can submit a new application."
+    button_text: "Open application"
 
 master.application_received:
   telegram:
     title: "New master application"
     body: "📨 A new master application has been submitted.\n\n👤 {applicant_name}"
+    button_text: "Open VELO"
 
 master.application_submitted:
   telegram:
     title: "Application submitted"
     body: "📨 Your master application has been received.\n\nWe will review it and let you know the decision."
+    button_text: "Open application"
 
 master.suspended:
   telegram:
     title: "Master status suspended"
     body: "⏸ Your master profile is suspended -- you cannot create practices right now.\n\nYour data is kept. If this is a mistake, please contact support."
+    button_text: "Contact support"
 
 # -- Wallet --
 
@@ -94,16 +107,19 @@ wallet.topup_confirmed:
   telegram:
     title: "Top-up confirmed"
     body: "💰 Your balance has been topped up by <b>€{amount}</b>.\n\nCurrent balance: €{balance}"
+    button_text: "Open wallet"
 
 wallet.withdrawal_approved:
   telegram:
     title: "Withdrawal approved"
     body: "💸 Your withdrawal of <b>€{amount}</b> has been approved and is being processed."
+    button_text: "Open wallet"
 
 wallet.withdrawal_rejected:
   telegram:
     title: "Withdrawal rejected"
     body: "Your withdrawal request for €{amount} was not approved.\n\nReason: {reason}"
+    button_text: "Open wallet"
 
 
 # -- Booking reminders (T1; donor reminder_* series re-keyed) --
@@ -112,16 +128,19 @@ booking.reminder_24h:
   telegram:
     title: "Practice tomorrow"
     body: "⏰ Reminder: <b>{practice_title}</b> starts in 24 hours.\n\n📅 {scheduled_at}\n👤 Master: {master_name}"
+    button_text: "Open wallet"
 
 booking.reminder_1h:
   telegram:
     title: "Practice in 1 hour"
     body: "⏰ <b>{practice_title}</b> starts in 1 hour!\n\n📅 {scheduled_at}\n👤 Master: {master_name}"
+    button_text: "Open wallet"
 
 booking.reminder_10m:
   telegram:
     title: "Practice starting soon"
     body: "🔔 <b>{practice_title}</b> starts in 10 minutes!\n\n👤 Master: {master_name}"
+    button_text: "Open wallet"
 
 # -- Post-practice prompts --
 
@@ -134,6 +153,7 @@ prompt.leave_feedback:
   telegram:
     title: "Share your feedback"
     body: "📝 How was <b>{practice_title}</b>?\n\nYour feedback helps masters improve their practices."
+    button_text: "Leave feedback"
 
 # -- System --
 
@@ -141,6 +161,7 @@ system.announcement:
   telegram:
     title: "{title}"
     body: "{body}"
+    button_text: "Open VELO"
 
 # -- Chat baseline (pass-through; messaging engine supplies texts) --
 
@@ -165,37 +186,44 @@ curator_group.transfer_offered:
   telegram:
     title: "You have been offered a school"
     body: "🏛 <b>{actor_name}</b> offers you the curatorship of <b>{group_name}</b>.\n\nOpen the app to accept or decline."
+    button_text: "Open school"
 
 curator_group.transfer_accepted:
   telegram:
     title: "School handed over"
     body: "🏛 <b>{actor_name}</b> accepted the school <b>{group_name}</b>. You are no longer its curator."
+    button_text: "Open school"
 
 curator_group.transfer_declined:
   telegram:
     title: "Transfer declined"
     body: "🏛 <b>{actor_name}</b> declined the transfer of <b>{group_name}</b>. The school stays with you."
+    button_text: "Open school"
 
 curator_group.member_removed:
   telegram:
     title: "You are no longer in the school"
     body: "🏛 You have been removed from <b>{group_name}</b>. Its practices are no longer shown to you."
+    button_text: "Open school"
 
 # BE-79: DRAFT TEXT -- the owner rewords it later.
 curator_group.member_blocked:
   telegram:
     title: "You are blocked in the school"
     body: "🏛 The curator blocked you in <b>{group_name}</b>. Its practices are no longer available to you."
+    button_text: "Open VELO"
 
 curator_group.member_unblocked:
   telegram:
     title: "You are unblocked in the school"
     body: "🏛 The curator lifted your block in <b>{group_name}</b>. You are a member again and its practices are available to you."
+    button_text: "Open school"
 
 curator_group.member_joined:
   telegram:
     title: "New school member"
     body: "🏛 <b>{actor_name}</b> joined the school <b>{group_name}</b>."
+    button_text: "Open school"
 
 # GT-27: appointing a school master. The offer goes to the candidate, both
 # outcomes go back to the curator who made it.
@@ -203,51 +231,61 @@ curator_group.master_offered:
   telegram:
     title: "You are invited to teach"
     body: "🏛 <b>{actor_name}</b> invites you to become a master of <b>{group_name}</b>.\n\nOpen the app to accept or decline."
+    button_text: "View offer"
 
 curator_group.member_demoted:
   telegram:
     title: "You are no longer a master of the school"
     body: "🏛 <b>{actor_name}</b> made you a student of <b>{group_name}</b>.\n\nYou stay in the school, but no longer teach in it."
+    button_text: "Open school"
 
 curator_group.master_verification_required:
   telegram:
     title: "Master verification needed"
     body: "🏛 <b>{actor_name}</b> invites you to become a master of <b>{group_name}</b>.\n\nThis needs master verification: apply, or wait for the decision on the application you made. The invitation arrives once you are verified."
+    button_text: "Open application"
 
 curator_group.master_offer_accepted:
   telegram:
     title: "Appointment accepted"
     body: "🏛 <b>{actor_name}</b> accepted the master role in <b>{group_name}</b>."
+    button_text: "Open school"
 
 curator_group.master_offer_declined:
   telegram:
     title: "Appointment declined"
     body: "🏛 <b>{actor_name}</b> declined the master role in <b>{group_name}</b>."
+    button_text: "Open school"
 
 curator_group.master_offer_closed:
   telegram:
     title: "Appointment closed"
     body: "🏛 <b>{target_name}</b> did not pass master verification. The master invitation to <b>{group_name}</b> is closed."
+    button_text: "Open school"
 
 curator_group.practice_created_for_master:
   telegram:
     title: "A curator created a practice for you"
     body: "🏛 <b>{actor_name}</b> created a draft practice <b>{practice_title}</b> ({scheduled_at}) in <b>{group_name}</b> on your behalf.\n\nReview it and publish it."
+    button_text: "Open practice"
 
 curator_group.master_practice_published:
   telegram:
     title: "A curator published your practice"
     body: "🏛 <b>{actor_name}</b> published your practice <b>{practice_title}</b> ({scheduled_at}) in <b>{group_name}</b>.\n\nIt is now visible in the school."
+    button_text: "Open practice"
 
 curator_group.master_practice_edited:
   telegram:
     title: "A curator edited your practice"
     body: "🏛 <b>{actor_name}</b> edited your practice <b>{practice_title}</b> ({scheduled_at}) in <b>{group_name}</b>.\n\nCheck that everything is right."
+    button_text: "Open practice"
 
 curator_group.master_practice_deleted:
   telegram:
     title: "A curator deleted your draft"
     body: "🏛 <b>{actor_name}</b> deleted your draft <b>{practice_title}</b> ({scheduled_at}) in <b>{group_name}</b>.\n\nThe draft is no longer available."
+    button_text: "My practices"
 
 # -- Master-facing (BE-33) --
 #
@@ -258,16 +296,19 @@ practice.master_reminder_1h:
   telegram:
     title: "Your practice in 1 hour"
     body: "⏰ You are teaching <b>{practice_title}</b> in 1 hour.\n\n📅 {scheduled_at}"
+    button_text: "My practices"
 
 practice.checkin_received:
   telegram:
     title: "New check-in"
     body: "{mood} {participant_name} checked in before <b>{practice_title}</b>.\n\n{comment}"
+    button_text: "Open practice"
 
 practice.feedback_received:
   telegram:
     title: "New review"
     body: "{rating} {participant_name} left a review of <b>{practice_title}</b>.\n\n{comment}"
+    button_text: "Open practice"
 
 # -- The school hears about a new practice (BE-30) --
 
@@ -275,3 +316,4 @@ curator_group.practice_published:
   telegram:
     title: "New practice in your school"
     body: "📣 {actor_name} published <b>{practice_title}</b> in «{group_name}»."
+    button_text: "Open practice"

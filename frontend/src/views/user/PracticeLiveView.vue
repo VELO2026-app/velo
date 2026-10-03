@@ -104,6 +104,18 @@
         description="Вход в неё больше не откроется"
       />
 
+      <!-- Links (3 October): 'unavailable' -- the meeting exists and this
+           person holds a live booking, but their personal join link could
+           not be made (resolve_zoom_entry: nothing retries it, so «ask the
+           master to retry» would be a lie). No guest link either: a live
+           booking never falls back to it. No way in -- say so, no «Войти». -->
+      <VEmptyState
+        v-else-if="zoomEntry?.kind === 'unavailable'"
+        icon="warning"
+        title="Ссылка на встречу недоступна"
+        description="Вашу личную ссылку для входа создать не удалось, и повторной попытки не будет. Напишите в поддержку."
+      />
+
       <template v-else>
         <!-- T-35: no live booking -> the guest link. Attendance writes nothing
              for this person either way, so nothing is lost by it -- and

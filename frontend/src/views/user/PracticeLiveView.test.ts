@@ -410,6 +410,19 @@ describe('PracticeLiveView', () => {
       expect(enterBtn()).toBeNull()
     })
 
+    // Links (Д4): 'unavailable' fell into the generic «Войти» branch.
+    it('unavailable: honest state, no «Войти» (a live booking whose link will not come)', async () => {
+      practicesState.selected = practice()
+      bookingsState.bookings = [booking()]
+      resolveZoomEntry.mockResolvedValue({ kind: 'unavailable', url: null })
+      mount()
+      await flush()
+
+      expect(emptyState()?.textContent).toContain('Ссылка на встречу недоступна')
+      expect(emptyState()?.textContent).toContain('поддержку')
+      expect(enterBtn()).toBeNull()
+    })
+
     it('the resolve call 404s (a well-formed deep link naming a deleted practice): an honest error, NEVER an empty screen', async () => {
       practicesState.selected = practice()
       bookingsState.bookings = []

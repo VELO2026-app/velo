@@ -229,31 +229,11 @@ function routeFor(
   const params = item.action_data?.params ?? {}
   const practiceId = typeof params.practice_id === 'string' ? params.practice_id : null
 
-  // BE-79 (2): the school notices of a block carry open_curator_group with
-  // group_id. Unblocked -> the school page. Blocked -> the school is closed
-  // to this person, so it stays mark-read only: open_curator_group has no
-  // generic mapping in this inbox (only the typed branches here), and the
-  // tests pin «blocked -> no navigation» should one ever be added.
-  if (
-    item.type === 'curator_group.member_unblocked' &&
-    action === 'open_curator_group' &&
-    typeof params.group_id === 'string' &&
-    params.group_id
-  ) {
-    return { name: 'user-curator-group', params: { id: params.group_id } }
-  }
-  // BE-59: the master-offer prompt («Вас приглашают вести школу») rides the
-  // generic open_curator_group action like every school event -- the TYPE is
-  // what makes it this screen's. A missing/malformed group_id stays
-  // mark-read-only, same as every narrowed id below.
-  if (
-    item.type === 'curator_group.master_offered' &&
-    action === 'open_curator_group' &&
-    typeof params.group_id === 'string' &&
-    params.group_id
-  ) {
-    return { name: 'curator-group-master-offer', params: { id: params.group_id } }
-  }
+  // Links (3 October): every school notice carries open_curator_group with
+  // group_id and opens the school page -- the Telegram button does the same.
+  // The one exception is the block notice: the school is closed to the
+  // person it is about, so it stays mark-read only (BE-79 (2)).
+  if (item.type === 'curator_group.member_blocked') return null
 
   // BE-104: a rejection reads its verdict -- the «Отказ» screen of
   // master-pending shows the reason and «подать заново» (-> master-apply).
@@ -265,9 +245,23 @@ function routeFor(
   }
 
   switch (action) {
+    case 'open_curator_group':
+      return typeof params.group_id === 'string' && params.group_id
+        ? { name: 'user-curator-group', params: { id: params.group_id } }
+        : null
+    case 'open_master_offer':
+      // Links: curator_group.master_offered has its own verb now -- the
+      // consent screen, by group_id (it was a type check on open_curator_group).
+      return typeof params.group_id === 'string' && params.group_id
+        ? { name: 'curator-group-master-offer', params: { id: params.group_id } }
+        : null
     case 'open_practice':
-    case 'confirm_waitlist': // no dedicated confirm screen: the practice page owns the waitlist CTA
       return practiceId ? { name: 'practice-detail', params: { id: practiceId } } : null
+    case 'confirm_waitlist': {
+      // Links: «Освободилось место» -- its own confirm screen, by waitlist_id.
+      const waitlistId = typeof params.waitlist_id === 'string' ? params.waitlist_id : null
+      return waitlistId ? { name: 'waitlist-confirm', params: { id: waitlistId } } : null
+    }
     case 'open_feedback':
       return practiceId ? { name: 'user-feedback', params: { practiceId } } : null
     case 'open_wallet':

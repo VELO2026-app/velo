@@ -86,7 +86,7 @@ _TID_STUDENT = 65410
 _TID_OUTSIDER = 65430
 
 _BOT_URL = "https://t.me/velo_test_bot"
-_DEEPLINK = "?startapp=curator_group_invite__"
+_DEEPLINK = "?startapp=school__"
 
 _URL = "https://cdn.example.com/school.png"
 _URL_2 = "https://cdn.example.com/school-new.png"

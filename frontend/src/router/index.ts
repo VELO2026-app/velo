@@ -246,6 +246,14 @@ const router = createRouter({
           component: () => import('@/views/user/CheckinView.vue'),
         },
         {
+          // Links (3 October): «Освободилось место» -- the waitlist.spot_available
+          // notification (bell + Telegram confirm_waitlist__<id>) lands here.
+          path: 'waitlist/:id',
+          name: 'waitlist-confirm',
+          meta: { hideTabBar: true },
+          component: () => import('@/views/user/WaitlistConfirmView.vue'),
+        },
+        {
           path: 'feedback/:practiceId',
           name: 'user-feedback',
           component: () => import('@/views/user/FeedbackView.vue'),
@@ -580,7 +588,7 @@ const router = createRouter({
     },
     {
       // FE-18 (GT P3): landing for a SCHOOL's reusable invite deeplink
-      // (startapp=curator_group_invite__<token>). Standalone like group-join,
+      // (startapp=school__<token>). Standalone like group-join,
       // no beforeEnter guard: any authenticated user may open the preview,
       // and the SERVER decides (preview can_join/reason) whether joining is
       // offered, refused, or an upgrade. The token carries no kind -- the
@@ -592,8 +600,8 @@ const router = createRouter({
     {
       // BE-59/GT-27 (owner mockup 2026-10-02): «Приглашение стать мастером
       // школы!» -- the consent screen of the curator's master-role
-      // appointment. Reached from the curator_group.master_offered inbox
-      // notification; standalone like curator-group-join, no guard: the
+      // appointment. Reached from the curator_group.master_offered notification
+      // (open_master_offer, bell + Telegram); standalone like curator-group-join, no guard: the
       // school page and the accept endpoint decide who sees what.
       path: '/curator-groups/:id/master-offer',
       name: 'curator-group-master-offer',

@@ -108,7 +108,7 @@ _TID_OUTSIDER = 65230
 _TID_ADMIN = 65290
 
 _BOT_URL = "https://t.me/velo_test_bot"
-_DEEPLINK = "?startapp=curator_group_invite__"
+_DEEPLINK = "?startapp=school__"
 
 
 # ===========================================================================

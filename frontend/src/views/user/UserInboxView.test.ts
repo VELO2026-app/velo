@@ -17,7 +17,8 @@
 //      and reverts EVERY row (not just the failing one) on failure.
 //   5. DEEP LINKS (FE-11 owner ruling): a tap navigates by action_data.action
 //      -- velo's own action vocabulary -- AND marks the row read:
-//      open_practice / confirm_waitlist -> practice-detail (+ practice_id),
+//      open_practice -> practice-detail (+ practice_id); confirm_waitlist ->
+//      waitlist-confirm (+ waitlist_id, Links),
 //      open_feedback -> user-feedback, open_wallet -> user-topup, msg.* (no
 //      velo action) -> the messages list. Unmapped action / malformed id ->
 //      mark-read only, never a broken route. A READ row still navigates.
@@ -351,7 +352,10 @@ describe('UserInboxView', () => {
     else expect(push).not.toHaveBeenCalled()
   })
 
-  it('curator_group.master_offered rides open_curator_group into the consent screen (BE-59)', async () => {
+  // Links (3 October): master_offered rode open_curator_group and was told
+  // apart by TYPE -- right until the Telegram button (which has no type)
+  // needed its own verb. It carries open_master_offer now.
+  it('curator_group.master_offered (open_master_offer) opens the consent screen', async () => {
     vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
       items: [
         item({
@@ -359,7 +363,7 @@ describe('UserInboxView', () => {
           type: 'curator_group.master_offered',
           title: 'Вас приглашают вести школу',
           body: 'Мария Иванова предлагает вам стать мастером школы «Тихая школа».',
-          action_data: { action: 'open_curator_group', params: { group_id: 'g1' } },
+          action_data: { action: 'open_master_offer', params: { group_id: 'g1' } },
         }),
       ],
       next_cursor: null,
@@ -378,10 +382,33 @@ describe('UserInboxView', () => {
     })
   })
 
-  it('another school event with the same open_curator_group action stays mark-read-only', async () => {
-    // The master-offer mapping keys on the TYPE, not the action: every
-    // curator_group.* event carries open_curator_group, and only the
-    // appointment prompt has a consent screen.
+  // Links (В2): a school event stayed mark-read-only -- right while only the
+  // offer had a screen. Every curator_group.* notice now opens the school page,
+  // like its Telegram button; the block notice is the one exception (pinned in
+  // the BE-79 block above).
+  // Links (Д3): «Освободилось место» carries waitlist_id, not practice_id --
+  // the row went nowhere. It opens its own confirm screen now.
+  it('confirm_waitlist (waitlist_id) opens the waitlist confirm screen', async () => {
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+      items: [
+        item({
+          id: 'wl',
+          type: 'waitlist.spot_available',
+          action_data: { action: 'confirm_waitlist', params: { waitlist_id: 'w1' } },
+        }),
+      ],
+      next_cursor: null,
+      unread: 1,
+    })
+    vi.mocked(notificationsApi.markNotificationRead).mockResolvedValue({ unread: 0 })
+    mount()
+    await flush()
+    row(0).click()
+    await flush()
+    expect(push).toHaveBeenCalledWith({ name: 'waitlist-confirm', params: { id: 'w1' } })
+  })
+
+  it('another school event (open_curator_group) opens the school page', async () => {
     vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
       items: [
         item({
@@ -401,7 +428,7 @@ describe('UserInboxView', () => {
     await flush()
 
     expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith('tr')
-    expect(push).not.toHaveBeenCalled()
+    expect(push).toHaveBeenCalledWith({ name: 'user-curator-group', params: { id: 'g1' } })
   })
 
   it('open_master_application -> the apply wizard (BE-59 verification prompt)', async () => {

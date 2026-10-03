@@ -3,7 +3,7 @@
 VELO Frontend — CuratorGroupJoinView (schools FE-18 / GT P3)
 =============================================================================
 
-Landing for the curator_group_invite__<token> deeplink (route
+Landing for the school__<token> deeplink (route
 /curator-groups/join/:token, standalone — exactly like group-join). Unlike
 that screen's fire-and-forget POST, this one is a TWO-STEP flow: the preview
 (GET /curator-groups/invites/{token}) DESCRIBES the offer, and only «Вступить»
