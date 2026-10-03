@@ -96,6 +96,12 @@ const props = defineProps<{
    *  ученики» LOCALLY; Edit keeps the shared «Все ученики». A narrow seam,
    *  not a second options list -- everything else is identical. */
   studentsLabel?: string
+  /** FE-92: only these audience kinds are offered. A practice a curator
+   *  creates for a school's master belongs to that school, and a school
+   *  practice is for everyone or for the school's students
+   *  (check_school_audience) -- so that flow passes ['public',
+   *  'curator_groups']. Absent -> every kind, as before. */
+  allowedKinds?: PracticeAudienceKind[]
 }>()
 
 const kindModel = defineModel<PracticeAudienceKind>('kind', { required: true })
@@ -103,7 +109,10 @@ const groupIds = defineModel<string[]>('groupIds', { required: true })
 const curatorGroupId = defineModel<string | null>('curatorGroupId', { required: true })
 
 const options = computed(() => {
-  const base = audienceOptions(props.schools.length > 0)
+  const all = audienceOptions(props.schools.length > 0)
+  const base = props.allowedKinds
+    ? all.filter((o) => props.allowedKinds!.includes(o.value))
+    : all
   if (!props.studentsLabel) return base
   return base.map((o) => (o.value === 'students' ? { ...o, label: props.studentsLabel! } : o))
 })

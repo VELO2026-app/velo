@@ -191,8 +191,7 @@
 
     <!-- «Создать практику» (owner 2026-09-30): hangs above the tab bar,
          curator-of-THIS-school only (?groupId=). Same §1.6 hand-off as the
-         school page: the create flow has no audience-preselect contract yet,
-         so this is a plain push to it. -->
+         school page: master AND school go to the create flow (FE-92). -->
     <div v-if="schoolContext" class="master-public__cta">
       <VButton variant="primary" block size="lg" @click="goCreatePractice">
         Создать практику
@@ -430,11 +429,13 @@ function goToCalendar(): void {
 }
 
 // The hanging «Создать практику» CTA: §1.6 hand-off naming the master --
-// the create flow preselects (and locks) this master from the query.
+// the create flow preselects (and locks) this master from the query. FE-92:
+// the school travels too -- the backend creates for another master only IN
+// a school (BE-102), and the CTA exists only in the school context.
 function goCreatePractice(): void {
   void router.push({
     name: 'master-practice-new',
-    query: { masterId: masterId.value },
+    query: { masterId: masterId.value, groupId: groupId.value },
   })
 }
 

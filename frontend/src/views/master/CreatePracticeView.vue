@@ -70,13 +70,12 @@
       -->
 
       <!-- ================================================================
-           Мастер (§1.6 delegation, STUB): whose practice this is. The
+           Мастер (§1.6 delegation, FE-92): whose practice this is. The
            master-card entry preselects one master; the school-page entry
-           picks among that school's visible masters, «Я» first. No context
+           picks among that school's visible masters, «Я» first. Both need
+           the school (?groupId=): the backend creates for another master
+           only IN a school, for a master of that school (BE-102). No school
            -> the caller owns the practice and this section does not render.
-           The backend cannot take a foreign master yet, so a foreign
-           target renders the notice and disables submit -- it must never
-           look like the practice was created for someone else.
            ================================================================ -->
       <div v-if="delegatedMaster || masterOptions.length > 1" class="create-practice__section">
         <h2 class="velo-section-title">Мастер</h2>
@@ -87,13 +86,6 @@
             </div>
             <VRadioGroup v-else v-model="selectedMasterId" :options="masterOptions" />
           </VCard>
-          <Banner
-            v-if="targetsForeignMaster"
-            class="cp-gap-top"
-            variant="warning"
-            title="Создание для другого мастера пока недоступно"
-            body="Практика будет создана, когда бэкенд научится принимать мастера. Сейчас создание доступно только от вашего имени."
-          />
         </div>
       </div>
 
@@ -347,7 +339,8 @@
               v-model:group-ids="form.audience_group_ids"
               v-model:curator-group-id="form.audience_curator_group_id"
               :groups="customGroups"
-              :schools="eligibleSchools"
+              :schools="audienceSchools"
+              :allowed-kinds="targetsForeignMaster ? FOREIGN_AUDIENCE_KINDS : undefined"
               :error="errors.audience_group_ids"
               students-label="Все мои ученики"
             />
@@ -406,15 +399,7 @@
       </div>
 
       <!-- Submit -->
-      <!-- STUB (§1.6): a foreign master target cannot reach the API yet. -->
-      <VButton
-        variant="primary"
-        block
-        size="lg"
-        :loading="submitting"
-        :disabled="targetsForeignMaster"
-        @click="submit"
-      >
+      <VButton variant="primary" block size="lg" :loading="submitting" @click="submit">
         Создать практику
       </VButton>
 
@@ -504,18 +489,42 @@ const toast = useToast()
 // page CTA) offers that school's visible masters with «Я» first. No query
 // context -> the caller owns the practice, the historical behavior.
 //
-// STUB (owner 2026-10-01): the backend cannot create a practice for another
-// master yet (no master_id on POST /practices -- the contract is with the
-// backend task), so while a foreign master is targeted the section renders
-// the honest notice and DISABLES submit. «Я» and no-context flows behave
-// exactly as before.
+// FE-92 (BE-102): a curator creates a practice FOR a master of a school --
+// POST /practices with master_id AND curator_group_id; the backend accepts
+// it only in that school, for a verified master of it, from its curator,
+// and the result is the master's DRAFT (create_practice) with a notice to
+// them. Without the school in the context (?groupId=) another master is
+// never offered: the request would be refused (master_id_requires_school).
+// While a foreign master is targeted the audience is the school's two
+// (public / curator_groups -- check_school_audience) and the school is sent
+// with either of them. «Я» and no-context flows behave exactly as before.
+const contextGroupId = computed(() => queryParam('groupId'))
 const delegatedMaster = ref<{ id: string; name: string } | null>(null)
 const schoolMasterOptions = ref<{ label: string; value: string }[]>([])
 const selectedMasterId = ref('')
 
+const FOREIGN_AUDIENCE_KINDS: PracticeAudienceKind[] = ['public', 'curator_groups']
+
+const targetMasterId = computed(() => delegatedMaster.value?.id ?? (selectedMasterId.value || null))
 const targetsForeignMaster = computed(
-  () => delegatedMaster.value !== null || selectedMasterId.value !== '',
+  () => contextGroupId.value !== '' && targetMasterId.value !== null,
 )
+
+// The school list the picker offers: while targeting a foreign master, ONLY
+// the context school (the practice belongs to it); otherwise every eligible.
+const audienceSchools = computed((): AudienceSchoolOption[] => {
+  if (!targetsForeignMaster.value) return eligibleSchools.value
+  const own = eligibleSchools.value.find((s) => s.id === contextGroupId.value)
+  return [own ?? { id: contextGroupId.value, name: 'Школа' }]
+})
+
+watch(targetsForeignMaster, (foreign) => {
+  if (!foreign) return
+  if (!FOREIGN_AUDIENCE_KINDS.includes(form.audience_kind)) form.audience_kind = 'public'
+  if (form.audience_kind === 'curator_groups') {
+    form.audience_curator_group_id = contextGroupId.value
+  }
+})
 
 const masterOptions = computed(() => [{ label: 'Я', value: '' }, ...schoolMasterOptions.value])
 
@@ -527,7 +536,9 @@ function queryParam(key: string): string {
 async function loadPracticeMasterContext(): Promise<void> {
   const masterId = queryParam('masterId')
   const groupId = queryParam('groupId')
-  if (masterId) {
+  // FE-92: a master named without the school cannot be created for -- no
+  // «Мастер» section, the practice is the caller's own.
+  if (masterId && groupId) {
     try {
       const profile = await getPublicMaster(masterId)
       delegatedMaster.value = {
@@ -1165,8 +1176,14 @@ async function submit(): Promise<void> {
       // other kind; curator_group_id is null for any other kind.
       audience_kind: form.audience_kind,
       group_ids: form.audience_kind === 'groups' ? form.audience_group_ids : [],
-      curator_group_id:
-        form.audience_kind === 'curator_groups' ? form.audience_curator_group_id : null,
+      // FE-92: for another master the school is ALWAYS sent (the practice
+      // belongs to it, with either of its two audiences), plus master_id.
+      curator_group_id: targetsForeignMaster.value
+        ? contextGroupId.value
+        : form.audience_kind === 'curator_groups'
+          ? form.audience_curator_group_id
+          : null,
+      ...(targetsForeignMaster.value ? { master_id: targetMasterId.value } : {}),
     })
 
     // A4 V6 (PROMPT №572): `deduplicated` is the EXPLICIT backend signal that
@@ -1184,6 +1201,21 @@ async function submit(): Promise<void> {
     // there is nothing left for it to resurrect into) -- same drop as the
     // normal path below, just earlier, since there is no publish step
     // left that could still fail and need the draft preserved for a retry.
+    // FE-92: the master's practice, created by their curator, stays the
+    // master's DRAFT (create_practice: «in draft status»; the master is told
+    // by _tell_master_of_curator_act). No publish step -- it is not the
+    // curator's practice to publish -- and back to the school: the curator
+    // has no screen of another master's practice. A dedup here is that
+    // master's existing practice for the same slot.
+    if (targetsForeignMaster.value) {
+      suppressSave = true
+      clearDraft()
+      if (created.deduplicated) toast.info('Такая практика уже есть у мастера')
+      else toast.success('Черновик создан — мастер получит уведомление')
+      void router.replace({ name: 'master-curator-group', params: { id: contextGroupId.value } })
+      return
+    }
+
     if (created.deduplicated) {
       suppressSave = true
       clearDraft()

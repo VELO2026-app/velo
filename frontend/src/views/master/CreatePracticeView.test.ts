@@ -85,6 +85,7 @@ import * as groupsApi from '@/api/groups'
 import * as cgApi from '@/api/curatorGroups'
 import * as mastersApi from '@/api/masters'
 import { ApiResponseError } from '@/api/client'
+import { ERROR_MESSAGES } from '@/api/errorMessages'
 import type {
   CreatePracticeRequest,
   MasterProfileResponse,
@@ -1774,32 +1775,103 @@ describe('CreatePracticeView -- «Школы» audience (FE-24 / GT P5)', () => 
 })
 
 // =============================================================================
-// §1.6 delegation: whose practice is being created (STUB)
+// §1.6 delegation: whose practice is being created (FE-92, BE-102)
 // =============================================================================
-// masterId in the query (the master's public page CTA) and groupId (the
-// school page CTA) surface the master context. The backend cannot take a
-// foreign master yet, so the stub must make that state HONEST: the notice
-// renders and submit is disabled -- a foreign target can never reach the
-// API and silently create a practice for the caller instead. «Я» and the
-// no-context flow behave exactly as the historical form.
-describe('§1.6 delegation: the master context (stub)', () => {
-  it('masterId query: shows the master, warns, and blocks submit', async () => {
+// masterId + groupId (the master's public page CTA) and groupId (the school
+// page CTA) surface the master context. The STUB tests that stood here
+// («warns and blocks submit») pinned the interim -- right until BE-102 let
+// POST /practices take master_id; their property no longer exists. Now: a
+// foreign target sends master_id AND the school (with either school
+// audience), the result is the master's draft, and the curator goes back to
+// the school. Without the school another master is never offered.
+describe('§1.6 delegation: the master context (FE-92)', () => {
+  function created(overrides = {}) {
+    return practice({ id: 'p_for_master', status: 'draft', ...overrides })
+  }
+
+  it('masterId + groupId: the master is fixed; submit sends master_id AND the school, no publish', async () => {
     routeQuery.masterId = 'm_pub'
+    routeQuery.groupId = 'g1'
     vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
       display_name: 'Анна Ли',
     } as MasterPublicResponse)
+    vi.mocked(practicesApi.createPractice).mockResolvedValue(created())
     mount()
     await flush()
-    expect(text()).toContain('Мастер')
     expect(text()).toContain('Анна Ли')
-    expect(text()).toContain('Создание для другого мастера пока недоступно')
 
     await fillMinimalForm()
-    const submitBtn = button('Создать практику')
-    expect(submitBtn?.disabled).toBe(true)
-    submitBtn?.click()
+    submitForm()
     await flush()
-    expect(vi.mocked(practicesApi.createPractice)).not.toHaveBeenCalled()
+
+    const body = vi.mocked(practicesApi.createPractice).mock.calls[0]![0]
+    expect(body.master_id).toBe('m_pub')
+    expect(body.curator_group_id).toBe('g1')
+    expect(body.audience_kind).toBe('public')
+    // The master's draft stays a draft: the curator does not publish it.
+    expect(practicesApi.updatePractice).not.toHaveBeenCalled()
+    expect(toastSuccess).toHaveBeenCalledWith('Черновик создан — мастер получит уведомление')
+    expect(replace).toHaveBeenCalledWith({ name: 'master-curator-group', params: { id: 'g1' } })
+  })
+
+  it("masterId WITHOUT the school: no «Мастер» section, the practice is the caller's own", async () => {
+    routeQuery.masterId = 'm_pub'
+    vi.mocked(practicesApi.createPractice).mockResolvedValue(created({ status: 'draft' }))
+    mount()
+    await flush()
+    expect(text()).not.toContain('Анна Ли')
+    expect(mastersApi.getPublicMaster).not.toHaveBeenCalled()
+
+    await fillMinimalForm()
+    submitForm()
+    await flush()
+    const body = vi.mocked(practicesApi.createPractice).mock.calls[0]![0]
+    expect(body.master_id).toBeUndefined()
+    expect(body.curator_group_id).toBeNull()
+  })
+
+  it('a dedup for the master: «Такая практика уже есть у мастера», back to the school', async () => {
+    routeQuery.masterId = 'm_pub'
+    routeQuery.groupId = 'g1'
+    vi.mocked(practicesApi.createPractice).mockResolvedValue({
+      ...created(),
+      deduplicated: true,
+    } as never)
+    mount()
+    await flush()
+    await fillMinimalForm()
+    submitForm()
+    await flush()
+    expect(toastInfo).toHaveBeenCalledWith('Такая практика уже есть у мастера')
+    expect(replace).toHaveBeenCalledWith({ name: 'master-curator-group', params: { id: 'g1' } })
+  })
+
+  it.each([
+    [400, 'master_not_in_school', 'Этот мастер не состоит в школе или не верифицирован'],
+    [403, 'curator_only', 'Создавать практику за мастера может только куратор школы'],
+    [400, 'master_id_requires_school', 'Выберите школу, в которой создаётся практика'],
+    // The unusable-school 400 carries no code of its own: the generic text.
+    [400, 'bad_request', ERROR_MESSAGES.bad_request ?? 'Не удалось создать практику'],
+  ] as const)('refusal %i %s -> its toast; the form keeps its input', async (status, code, msg) => {
+    routeQuery.masterId = 'm_pub'
+    routeQuery.groupId = 'g1'
+    vi.mocked(practicesApi.createPractice)
+      .mockRejectedValueOnce(new ApiResponseError(status, 'refused', code))
+      .mockResolvedValueOnce(created())
+    mount()
+    await flush()
+    await fillMinimalForm()
+    submitForm()
+    await flush()
+
+    expect(toastError).toHaveBeenCalledWith(msg)
+    expect(replace).not.toHaveBeenCalled()
+    // The input survived: a second submit sends the same form again.
+    const first = vi.mocked(practicesApi.createPractice).mock.calls[0]![0]
+    submitForm()
+    await flush()
+    const second = vi.mocked(practicesApi.createPractice).mock.calls[1]![0]
+    expect(second).toEqual(first)
   })
 
   it('groupId query: lists visible school masters, «Я» stays creatable', async () => {
@@ -1853,7 +1925,7 @@ describe('§1.6 delegation: the master context (stub)', () => {
     expect('master_id' in sentBody()).toBe(false)
   })
 
-  it('groupId query: picking a school master warns and blocks submit', async () => {
+  it("groupId query: picking a school master limits the audience to the school's two and sends the school with «public» too", async () => {
     routeQuery.groupId = 'g1'
     vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue({
       items: [
@@ -1870,23 +1942,29 @@ describe('§1.6 delegation: the master context (stub)', () => {
       limit: 50,
       offset: 0,
     })
+    vi.mocked(practicesApi.createPractice).mockResolvedValue(created())
     mount()
     await flush()
 
     // VRadioGroup options are role="radio" BUTTONS, not labels.
-    const option = Array.from(
-      host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? [],
-    ).find((b) => b.textContent?.includes('Пётр Романов'))
+    const radios = (): HTMLButtonElement[] =>
+      Array.from(host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? [])
+    const option = radios().find((b) => b.textContent?.includes('Пётр Романов'))
     if (!option) throw new Error('school master option not rendered')
     option.click()
     await flush()
 
-    expect(text()).toContain('Создание для другого мастера пока недоступно')
-    const submitBtn = button('Создать практику')
-    expect(submitBtn?.disabled).toBe(true)
-    submitBtn?.click()
+    // Only «для всех» and «ученикам школы» remain on offer.
+    const audienceLabels = radios().map((b) => b.textContent ?? '')
+    expect(audienceLabels.some((l) => l.includes('Все мои ученики'))).toBe(false)
+
+    await fillMinimalForm()
+    submitForm()
     await flush()
-    expect(vi.mocked(practicesApi.createPractice)).not.toHaveBeenCalled()
+    const body = vi.mocked(practicesApi.createPractice).mock.calls[0]![0]
+    expect(body.master_id).toBe('m2')
+    expect(body.curator_group_id).toBe('g1')
+    expect(['public', 'curator_groups']).toContain(body.audience_kind)
   })
 
   it('no context: no master section at all', async () => {
