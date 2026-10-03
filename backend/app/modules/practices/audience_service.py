@@ -64,6 +64,7 @@ from app.modules.practices.models import (
     AudienceKind,
     Practice,
     PracticeAudienceGroup,
+    PracticeStatus,
 )
 
 # T-20: THE GATE's own booking-status set -- the single source for "does
@@ -329,9 +330,13 @@ def practice_in_curator_group_clause(group_id: UUID) -> ColumnElement[bool]:
     THIS ONE ANSWERS "WHAT HAPPENED"; _master_in_curator_group_clause above
     answers "what to show now", and the two are meant to disagree. Owner
     ruling, 2026-09-10: masters can be invited into a school for a season
-    and collaboration between schools is normal, so the feedback a school
-    collected stays its history after the teacher walks out -- the owner
-    of a practice never changes, so neither does this answer.
+    and collaboration between schools is normal, so a practice made in the
+    school stays the school's after the teacher walks out -- the owner of a
+    practice never changes, so neither does this answer.
+
+    BELONGING IS NOT VISIBILITY IN THE SCHOOL'S FEEDBACK. Which of these
+    practices the school's feedback shows is practice_in_school_feedback_
+    clause below (BE-75): of a departed master, the conducted ones only.
 
     EVERY AUDIENCE COUNTS, public included (owner ruling, 2026-10-01, Q4):
     a public practice made in the school is the school's, and so is what
@@ -349,6 +354,77 @@ def practice_in_curator_group_clause(group_id: UUID) -> ColumnElement[bool]:
     flag with a hole in it.
     """
     return Practice.curator_group_id == group_id
+
+
+def practice_in_school_feedback_clause(group_id: UUID) -> ColumnElement[bool]:
+    """True iff the (correlated) Practice counts in this school's FEEDBACK
+    -- the curator's check-in and review feeds, the all-time feedback
+    aggregate of the school's analytics, a student's dossier (BE-75).
+
+    THE SCHOOL'S PRACTICES (practice_in_curator_group_clause), MINUS the
+    practices a DEPARTED master never conducted. Owner ruling, 2026-10-03:
+    what a departed master conducted is the school's history and stays
+    (ruling of 2026-09-10); what they did not -- any status other than
+    COMPLETED: draft, scheduled, live, cancelled, deleted -- leaves the
+    school's feedback with them. One clause for every consumer, so the
+    feeds, the aggregate and the dossier can never disagree on a number.
+
+    DEPARTED = the practice's master is neither the school's curator nor
+    holds a curator_group_member row in it, of ANY kind, RIGHT NOW. That is
+    exactly "left" (leave_curator_group) or "removed by the curator"
+    (remove_curator_group_member) -- both delete the row. Not departed:
+      - the curator, who has no row by design (I-2) -- hence the separate
+        arm; a transfer's new curator lost their row and gained this arm,
+        the previous one gained a kind='master' row;
+      - a demoted master: demote_curator_group_master keeps the row and
+        only sets kind='student';
+      - a master whose status the platform revoked: revoke_master does not
+        touch the school's tables;
+      - a master who left and was let back in: the state is read now, not
+        from the journal.
+    Deliberately NOT _master_in_curator_group_clause: that one requires
+    kind='master' and a verified profile, and would drop the demoted and the
+    revoked -- both of whom the ruling keeps.
+
+    The status arm is a no-op for reviews today, and it stays on them on
+    purpose: a review is written only on a COMPLETED practice
+    (diary/service.py upsert_feedback) and COMPLETED is terminal. The same
+    holds for ATTENDED bookings, which are written only by the
+    finalization that completes the practice. Applying one clause to all
+    of them is what keeps "one rule" from becoming two the day either of
+    those facts changes.
+
+    Correlated to the module-level Practice table, like the clause above:
+    the calling query must select FROM Practice. The membership and curator
+    tests are correlated on the literal group id, not on
+    Practice.curator_group_id -- the first conjunct already pins the two
+    together, and a test against "any school" would let a master who is
+    still in school B keep their unconducted practices of school A.
+    """
+    master_is_curator = (
+        select(CuratorGroup.id)
+        .where(
+            CuratorGroup.id == group_id,
+            CuratorGroup.curator_user_id == Practice.master_id,
+        )
+        .exists()
+    )
+    master_is_member = (
+        select(CuratorGroupMember.id)
+        .where(
+            CuratorGroupMember.group_id == group_id,
+            CuratorGroupMember.user_id == Practice.master_id,
+        )
+        .exists()
+    )
+    return and_(
+        practice_in_curator_group_clause(group_id),
+        or_(
+            Practice.status == PracticeStatus.COMPLETED.value,
+            master_is_curator,
+            master_is_member,
+        ),
+    )
 
 
 def viewer_audience_clause(user_id: UUID) -> ColumnElement[bool]:

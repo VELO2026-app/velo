@@ -78,7 +78,7 @@ from app.modules.curator_groups.service import _get_group_or_404
 from app.modules.diary.insights_service import zone_counts
 from app.modules.diary.models import Checkin, CheckType, Feedback
 from app.modules.practices.audience_service import (
-    practice_in_curator_group_clause,
+    practice_in_school_feedback_clause,
 )
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.users.helpers import display_name
@@ -165,7 +165,7 @@ async def _feedback_and_top(
             .join(Practice, Checkin.practice_id == Practice.id)
             .join(Booking, Checkin.booking_id == Booking.id)
             .where(
-                practice_in_curator_group_clause(group_id),
+                practice_in_school_feedback_clause(group_id),
                 Checkin.check_type == CheckType.PRE.value,
                 Booking.status != BookingStatus.CANCELLED.value,
             )
@@ -181,7 +181,7 @@ async def _feedback_and_top(
         await session.execute(
             select(Feedback.rating, func.count())
             .join(Practice, Feedback.practice_id == Practice.id)
-            .where(practice_in_curator_group_clause(group_id))
+            .where(practice_in_school_feedback_clause(group_id))
             .group_by(Feedback.rating)
         )
     ).all()

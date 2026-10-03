@@ -419,16 +419,31 @@ async def test_the_student_is_named(
 
 
 @pytest.mark.asyncio
-async def test_a_departed_masters_practice_stays_in_the_schools_feedback(
+async def test_a_departed_masters_conducted_practice_stays_in_the_schools_feedback(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """The school keeps what it collected when the teacher walks out.
+    """The school keeps what the teacher CONDUCTED there -- and only that.
 
     Owner ruling, 2026-09-10: masters can be invited for a season and
     collaboration between schools is normal, so a practice belongs to the
-    school it was created in for good (BE-74: the owner column). Before
-    this ruling the school's history would have been rewritten by somebody
-    else's resignation.
+    school it was created in for good (BE-74: the owner column), and what
+    the teacher conducted there stays the school's history.
+
+    WHAT THIS TEST USED TO SAY, AND WHY IT CHANGED. It pinned that a
+    departed master's SCHEDULED practice kept its check-in and its review
+    in the curator's feeds. That was right while "the school's practice"
+    and "the school's feedback" were one predicate. BE-75 (owner ruling,
+    2026-10-03) split them: a departed master's practice that was never
+    conducted leaves the school's feedback with them
+    (practice_in_school_feedback_clause). The unconducted half is now
+    pinned as GONE, the conducted half as KEPT.
+
+    THE REVIEW SITS ON THE COMPLETED PRACTICE ONLY. The old version put a
+    review on a SCHEDULED practice; the product cannot write one there
+    (diary/service.py upsert_feedback refuses anything but COMPLETED, and
+    COMPLETED is terminal), so that half asserted a state that never
+    happens. The check-in on the scheduled practice is reachable -- PRE
+    check-ins are taken before the practice runs.
 
     The BEFORE half is asserted too: without it, a feed that was empty all
     along would pass the AFTER half.
@@ -440,20 +455,30 @@ async def test_a_departed_masters_practice_stays_in_the_schools_feedback(
     membership = await _join_school(
         db_session, school, teacher, CuratorMemberKind.MASTER,
     )
-    practice = await _practice(
-        db_session, teacher, school, title="Практика ушедшего",
+    conducted = await _practice(
+        db_session, teacher, school, title="Проведённая ушедшего",
+        status=PracticeStatus.COMPLETED.value, hours_from_now=-48,
     )
-    await _attended(db_session, practice, student)
+    await _attended(db_session, conducted, student)
+    planned = await _practice(
+        db_session, teacher, school, title="Плановая ушедшего",
+    )
+    booking = await _booking(db_session, planned, student)
+    await _checkin(db_session, planned, student, booking)
 
-    assert len(await _checkins(client, curator, school)) == 1
-    assert len(await _reviews(client, curator, school)) == 1
+    assert sorted(i["practice_title"] for i in
+                  await _checkins(client, curator, school)) == [
+        "Плановая ушедшего", "Проведённая ушедшего",
+    ]
+    assert [i["practice_title"] for i in
+            await _reviews(client, curator, school)] == ["Проведённая ушедшего"]
 
     await _leave_school(db_session, membership)
 
     assert [i["practice_title"] for i in
-            await _checkins(client, curator, school)] == ["Практика ушедшего"]
+            await _checkins(client, curator, school)] == ["Проведённая ушедшего"]
     assert [i["practice_title"] for i in
-            await _reviews(client, curator, school)] == ["Практика ушедшего"]
+            await _reviews(client, curator, school)] == ["Проведённая ушедшего"]
 
 
 @pytest.mark.asyncio
@@ -463,9 +488,11 @@ async def test_the_same_practice_leaves_the_school_feed_and_its_students(
     """...and the OTHER predicate still says no. Existing behaviour, pinned.
 
     _master_in_curator_group_clause is untouched by BE-24, and this test is
-    the proof rather than the claim: the practice that stayed in the
-    curator's feedback above is, at the same moment, gone from a school
-    student's feed and refused at the detail gate.
+    the proof rather than the claim: a departed master's practice is, the
+    moment the membership row goes, gone from a school student's feed and
+    refused at the detail gate. (Until BE-75 the test above kept this same
+    scheduled practice in the curator's feedback; it no longer does -- only
+    a conducted one stays there, see that test.)
 
     THE STUDENT HERE HOLDS NO BOOKING, deliberately. A booking holder is
     grandfathered through audience narrowing (H-R2-8, the retroactive

@@ -20,10 +20,11 @@
 # the relation test below, a student would read their neighbour's profile.
 #
 # WHAT IS COUNTED, and why it cannot double-count:
-#   - a practice belongs to the school by practice_in_curator_group_clause,
-#     an equality on the practice's own owner column (BE-74) -- one practice
-#     is one row, and it belongs to one school at most, public ones
-#     included;
+#   - a practice counts by practice_in_school_feedback_clause: an equality
+#     on the practice's own owner column (BE-74), narrowed by EXISTS tests
+#     on the master's place in the school (BE-75) -- EXISTS filters and
+#     never joins, so one practice is still one row, and it belongs to one
+#     school at most, public ones included;
 #   - a person holds at most one non-cancelled booking per practice
 #     (uq_booking_practice_user_active, a partial unique index WHERE status
 #     != 'cancelled'), and 'attended' is not cancelled -- so at most one
@@ -54,7 +55,7 @@ from app.modules.curator_groups.service import (
 )
 from app.modules.diary.models import Checkin, CheckType, Feedback
 from app.modules.practices.audience_service import (
-    practice_in_curator_group_clause,
+    practice_in_school_feedback_clause,
 )
 from app.modules.practices.models import Practice
 from app.modules.users.helpers import display_name
@@ -158,7 +159,7 @@ async def get_school_student_profile(
             .where(
                 Booking.user_id == student_id,
                 Booking.status == BookingStatus.ATTENDED.value,
-                practice_in_curator_group_clause(group.id),
+                practice_in_school_feedback_clause(group.id),
             )
         )
     ).one()
@@ -172,7 +173,7 @@ async def get_school_student_profile(
                 Checkin.user_id == student_id,
                 Checkin.check_type == CheckType.PRE.value,
                 Booking.status != BookingStatus.CANCELLED.value,
-                practice_in_curator_group_clause(group.id),
+                practice_in_school_feedback_clause(group.id),
             )
             .order_by(Checkin.created_at.desc(), Checkin.id.desc())
             .limit(_RECENT_LIMIT)
@@ -185,7 +186,7 @@ async def get_school_student_profile(
             .join(Practice, Feedback.practice_id == Practice.id)
             .where(
                 Feedback.user_id == student_id,
-                practice_in_curator_group_clause(group.id),
+                practice_in_school_feedback_clause(group.id),
             )
             .order_by(Feedback.created_at.desc(), Feedback.id.desc())
             .limit(_RECENT_LIMIT)

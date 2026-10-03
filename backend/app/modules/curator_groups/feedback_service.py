@@ -27,12 +27,13 @@
 # There is no per-student endpoint here and adding one would not be a
 # bigger version of this feature, it would be a different one.
 #
-# WHICH PRACTICES ARE THE SCHOOL'S is practice_in_curator_group_clause
-# (practices/audience_service.py) -- the practice's owning school
-# (Practice.curator_group_id, BE-74), whatever its audience, public ones
-# included, and nothing else. A practice by a master who has since left the
-# school still counts; see that predicate's docstring for the owner rulings
-# behind both.
+# WHICH PRACTICES COUNT is practice_in_school_feedback_clause
+# (practices/audience_service.py) -- the practices the school owns
+# (Practice.curator_group_id, BE-74), whatever their audience, public ones
+# included, except those of a master who has since left the school that
+# were never conducted (BE-75). The same clause feeds the school's
+# analytics aggregate and the student dossier; see its docstring for the
+# owner rulings behind it.
 #
 # SESSION RULES: read-only -- callers pass get_db_reader. No commit (P-01).
 # =============================================================================
@@ -48,7 +49,7 @@ from app.modules.curator_groups.service import _get_group_or_404
 from app.modules.diary.insights_service import score_zone
 from app.modules.diary.models import Checkin, CheckType, Feedback
 from app.modules.practices.audience_service import (
-    practice_in_curator_group_clause,
+    practice_in_school_feedback_clause,
 )
 from app.modules.practices.models import Practice
 from app.modules.users.helpers import display_name
@@ -111,7 +112,7 @@ async def list_curator_group_checkins(
         .join(Booking, Checkin.booking_id == Booking.id)
         .join(User, Checkin.user_id == User.id)
         .where(
-            practice_in_curator_group_clause(group.id),
+            practice_in_school_feedback_clause(group.id),
             Checkin.check_type == CheckType.PRE.value,
             Booking.status != BookingStatus.CANCELLED.value,
         )
@@ -184,7 +185,7 @@ async def list_curator_group_reviews(
         select(Feedback, User, Practice.title)
         .join(Practice, Feedback.practice_id == Practice.id)
         .join(User, Feedback.user_id == User.id)
-        .where(practice_in_curator_group_clause(group.id))
+        .where(practice_in_school_feedback_clause(group.id))
     )
     if practice_id is not None:
         base = base.where(Feedback.practice_id == practice_id)
