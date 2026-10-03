@@ -496,8 +496,9 @@ const toast = useToast()
 // FE-92 (BE-102): a curator creates a practice FOR a master of a school --
 // POST /practices with master_id AND curator_group_id; the backend accepts
 // it only in that school, for a verified master of it, from its curator,
-// and the result is the master's DRAFT (create_practice) with a notice to
-// them. Without the school in the context (?groupId=) another master is
+// and the practice is born PUBLISHED there (owner, 3 October) -- one
+// «created and published» notice to the master, no second publish step.
+// Without the school in the context (?groupId=) another master is
 // never offered: the request would be refused (master_id_requires_school).
 // While a foreign master is targeted the audience is the school's two
 // (public / curator_groups -- check_school_audience) and the school is sent
