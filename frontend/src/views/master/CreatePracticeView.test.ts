@@ -85,7 +85,6 @@ import * as groupsApi from '@/api/groups'
 import * as cgApi from '@/api/curatorGroups'
 import * as mastersApi from '@/api/masters'
 import { ApiResponseError } from '@/api/client'
-import { ERROR_MESSAGES } from '@/api/errorMessages'
 import type {
   CreatePracticeRequest,
   MasterProfileResponse,
@@ -1850,8 +1849,12 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     [400, 'master_not_in_school', 'Этот мастер не состоит в школе или не верифицирован'],
     [403, 'curator_only', 'Создавать практику за мастера может только куратор школы'],
     [400, 'master_id_requires_school', 'Выберите школу, в которой создаётся практика'],
-    // The unusable-school 400 carries no code of its own: the generic text.
-    [400, 'bad_request', ERROR_MESSAGES.bad_request ?? 'Не удалось создать практику'],
+    // FE-92 follow-up: the unusable school has its own code now.
+    [
+      400,
+      'curator_group_not_usable',
+      'Школа недоступна: она отключена или вы в ней больше не состоите',
+    ],
   ] as const)('refusal %i %s -> its toast; the form keeps its input', async (status, code, msg) => {
     routeQuery.masterId = 'm_pub'
     routeQuery.groupId = 'g1'
@@ -1965,6 +1968,47 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     expect(body.master_id).toBe('m2')
     expect(body.curator_group_id).toBe('g1')
     expect(['public', 'curator_groups']).toContain(body.audience_kind)
+  })
+
+  // FE-92 follow-up: «Использовать шаблон» offers the CALLER's practices --
+  // hidden while another master is targeted, shown for «Я».
+  function templateSection(): boolean {
+    return text().includes('Использовать шаблон')
+  }
+
+  it('templates: hidden for a fixed foreign master (masterId + groupId)', async () => {
+    routeQuery.masterId = 'm_pub'
+    routeQuery.groupId = 'g1'
+    mount()
+    await flush()
+    expect(templateSection()).toBe(false)
+  })
+
+  it('templates: shown for «Я», hidden once a school master is picked', async () => {
+    routeQuery.groupId = 'g1'
+    vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue({
+      items: [
+        {
+          user_id: 'm2',
+          name: 'Пётр Романов',
+          kind: 'master',
+          avatar_url: null,
+          joined_at: '2026-09-01T00:00:00Z',
+          is_visible: true,
+        },
+      ],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    })
+    mount()
+    await flush()
+    expect(templateSection()).toBe(true)
+    Array.from(host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? [])
+      .find((b) => b.textContent?.includes('Пётр Романов'))!
+      .click()
+    await flush()
+    expect(templateSection()).toBe(false)
   })
 
   it('no context: no master section at all', async () => {

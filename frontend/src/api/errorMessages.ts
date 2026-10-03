@@ -128,10 +128,14 @@ export const ERROR_MESSAGES: Record<string, string> = {
   cannot_block_curator: 'Куратора школы нельзя заблокировать',
   // FE-92 / BE-102 (DRAFT wording): a curator creating a practice for a
   // master of the school. The fourth refusal, a school that is not usable,
-  // arrives without a code (_usable_curator_group_or_400) -> the fallback.
+  // is curator_group_not_usable below.
   master_id_requires_school: 'Выберите школу, в которой создаётся практика',
   master_not_in_school: 'Этот мастер не состоит в школе или не верифицирован',
   curator_only: 'Создавать практику за мастера может только куратор школы',
+  // FE-92 follow-up (DRAFT wording): the school refusal now has its own code
+  // (practices/service.py, every cause: switched off, inactive, not a member,
+  // deleted mid-create).
+  curator_group_not_usable: 'Школа недоступна: она отключена или вы в ней больше не состоите',
   transfer_pending:
     'Предложение уже отправлено. Сначала отмените его, затем предложите другому мастеру.',
   // One code for: неизвестный токен, отозванная ссылка, удалённая школа и

@@ -519,6 +519,8 @@ async def test_creating_a_practice_in_a_school_stops_with_the_flag(
             headers=headers,
         )
     assert refused.status_code == 400, refused.text
+    # FE-92 follow-up: the switched-off school is the same refusal, own code.
+    assert refused.json()["error"] == "curator_group_not_usable"
     left = (
         await db_session.execute(
             select(Practice.id).where(Practice.title == "Выключено")

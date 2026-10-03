@@ -90,11 +90,15 @@
       </div>
 
       <!-- ================================================================
+           FE-92 follow-up: hidden while a curator targets ANOTHER master --
+           the templates are the CALLER's practices (masterStore.myPractices),
+           and the curator has no list of the master's. Fields a template
+           filled before the switch stay: they are the curator's input now.
            Использовать шаблон — prefill from one of the master's own past
            practices (newest-first). Reuses PracticeListCard rows. Date/time
            are NOT copied (a template must not schedule in the past).
            ================================================================ -->
-      <div class="create-practice__section">
+      <div v-if="!targetsForeignMaster" class="create-practice__section">
         <h2 class="velo-section-title">Использовать шаблон</h2>
         <!-- Full-width block: no required-seal of its own, so it spans the
              whole rail like every field (owner 2026-10-01 seal canon). -->

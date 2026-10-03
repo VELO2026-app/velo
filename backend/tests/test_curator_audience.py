@@ -1027,6 +1027,8 @@ async def test_a_school_the_master_does_not_belong_to_is_rejected(
             headers=headers,
         )
         assert resp.status_code == 400, school_id
+        # FE-92 follow-up: the refusal has its own code (was bad_request).
+        assert resp.json()["error"] == "curator_group_not_usable", school_id
 
     own = await _school(db_session, outsider["user"]["id"], name="Своя")
     ok = await client.post(

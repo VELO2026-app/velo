@@ -446,6 +446,8 @@ async def test_an_outsider_cannot_tell_the_school_exists(client, s: _S) -> None:
     )
     assert real.status_code == missing.status_code == 400, real.text
     assert real.json() == missing.json()
+    # FE-92 follow-up: one code for both -- still indistinguishable.
+    assert real.json()["error"] == "curator_group_not_usable"
 
 
 @pytest.mark.asyncio
@@ -456,6 +458,7 @@ async def test_the_killswitch_refuses_the_delegation(client, s: _S) -> None:
             master_id=s.id("target"), curator_group_id=str(s.school),
         )
     assert off.status_code == 400, off.text
+    assert off.json()["error"] == "curator_group_not_usable"
     assert await _practices_of(s.id("target")) == []
     on = await _post(
         client, s.token("curator"),

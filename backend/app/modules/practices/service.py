@@ -362,6 +362,11 @@ async def _owned_group_ids_or_400(
 
 
 _SCHOOL_NOT_USABLE = "curator_group_id must be an active school you belong to"
+# FE-92 follow-up: the refusal's own code, so the front can say «the school
+# is unavailable» instead of a generic «bad request». ONE code for every
+# cause (schools switched off, no such / inactive school, not a member of it,
+# the school deleted mid-create) -- the same reason the message is one.
+_SCHOOL_NOT_USABLE_CODE = "curator_group_not_usable"
 
 
 async def _usable_curator_group_or_400(
@@ -387,7 +392,7 @@ async def _usable_curator_group_or_400(
     the INSERT (create_practice), because it is the same fact.
     """
     if not settings.curator_groups_enabled:
-        raise BadRequestError(_SCHOOL_NOT_USABLE)
+        raise BadRequestError(_SCHOOL_NOT_USABLE, code=_SCHOOL_NOT_USABLE_CODE)
     verified = (
         select(MasterProfile.user_id)
         .where(
@@ -414,7 +419,7 @@ async def _usable_curator_group_or_400(
         )
     ).scalar_one_or_none()
     if usable is None:
-        raise BadRequestError(_SCHOOL_NOT_USABLE)
+        raise BadRequestError(_SCHOOL_NOT_USABLE, code=_SCHOOL_NOT_USABLE_CODE)
 
 
 _MASTER_NOT_IN_SCHOOL = "master_id must be a verified master of this school"
@@ -1970,7 +1975,9 @@ async def create_practice(
                 )
             )
         ).scalar_one_or_none() is None:
-            raise BadRequestError(_SCHOOL_NOT_USABLE) from None
+            raise BadRequestError(
+                _SCHOOL_NOT_USABLE, code=_SCHOOL_NOT_USABLE_CODE,
+            ) from None
         # Practically unreachable: uq_practice_master_title_scheduled_
         # recurrence only fires on an exact (master_id, title,
         # scheduled_at, recurrence) collision, so the winner must exist.
