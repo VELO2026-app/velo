@@ -298,10 +298,10 @@ describe('diary store', () => {
       // VInput's fix landing on one render path of three, and EntryView's onSave
       // vs onDelete twenty lines apart. It is a habit of this codebase.
       //
-      // It was INERT when found -- the reflection endpoint is a stub that never
-      // holds the ref across an await -- which is exactly why it was worth one line
-      // now rather than a blind hunt the day TD-REFLECTION lands and a logout
-      // leaves the reflection form permanently wedged.
+      // It was INERT when found -- the reflection submit was then a stub that never
+      // held the ref across an await. Since BE-108 it awaits the real endpoint, so
+      // without this line a logout mid-submit would leave the reflection form
+      // permanently wedged.
       //
       // Asserted by SETTING all three first: reading three falses on a fresh store
       // would pass with $reset deleted entirely.

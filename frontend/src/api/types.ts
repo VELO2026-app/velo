@@ -150,6 +150,8 @@ export type {
   PurchaseResponse,
   PurchaseWithPracticeResponse,
   RecurrenceSpec,
+  ReflectionRequest,
+  ReflectionResponse,
   RejectMasterRequest,
   RejectMethodChangeRequest,
   RejectWithdrawalRequest,

@@ -19,6 +19,8 @@
     - Booked + in feedback window  -> "Оставить feedback"
     - Booked + outside any window  -> "Вы записаны" (disabled)
     - Booked (cancellable)         -> "Отменить бронирование"
+  BE-108: a no_show booking without a reflection also gets «Поделиться, как
+    вы» (secondary), after «Посмотреть запись» when a recording exists.
   DS-sprint: accordions, master methods tags, contraindications banner.
 
   Route: /user/practices/:id
@@ -180,6 +182,14 @@
              our backend does not control when Zoom deletes the file. -->
         <p class="detail__recording-caption">Запись доступна в течение 7 дней после практики</p>
       </template>
+
+      <!-- BE-108: no-show reflection. OUTSIDE the v-if/else-if ladder above
+           on purpose: for a no_show booking the only rung that can fire is
+           the recording, and the owner wants both buttons -- recording
+           first, this one second. -->
+      <VButton v-if="canReflect" variant="secondary" size="lg" block @click="onReflect">
+        Поделиться, как вы
+      </VButton>
 
       <!-- Booked but no active window: NO CTA here. The "записан" state is
            shown in the status row ("Вы записаны"); the old disabled button was
@@ -463,6 +473,18 @@ const inFeedbackWindow = computed((): boolean => {
   return isInFeedbackWindow(scheduledMs, practice.value.duration_minutes, now.value)
 })
 
+/**
+ * BE-108: a no_show booking without a reflection -> «Поделиться, как вы».
+ * Reads `myAnyBooking`, not `myBooking`: the latter is the first booking of
+ * this practice in list order and can be a cancelled earlier one, while
+ * `myAnyBooking` falls back to the latest -- the no_show, since a practice
+ * that has started can no longer be booked. The flag is the server's.
+ */
+const canReflect = computed((): boolean => {
+  const b = myAnyBooking.value
+  return !!b && b.status === 'no_show' && !b.has_reflection
+})
+
 // =========================================================================
 // REC-1 (PROMPT №620): watch-recording
 // =========================================================================
@@ -633,6 +655,11 @@ function onCheckin(): void {
 function onFeedback(): void {
   if (!practice.value) return
   void router.push({ name: 'user-feedback', params: { practiceId: practice.value.id } })
+}
+
+function onReflect(): void {
+  if (!practice.value) return
+  void router.push({ name: 'user-reflection', params: { practiceId: practice.value.id } })
 }
 
 async function onCancelBooking(): Promise<void> {
