@@ -87,13 +87,6 @@
             </div>
             <VRadioGroup v-else v-model="selectedMasterId" :options="masterOptions" />
           </VCard>
-          <Banner
-            v-if="targetsForeignMaster"
-            class="cp-gap-top"
-            variant="warning"
-            title="Создание для другого мастера пока недоступно"
-            body="Практика будет создана, когда бэкенд научится принимать мастера. Сейчас создание доступно только от вашего имени."
-          />
         </div>
       </div>
 
@@ -406,15 +399,9 @@
       </div>
 
       <!-- Submit -->
-      <!-- STUB (§1.6): a foreign master target cannot reach the API yet. -->
-      <VButton
-        variant="primary"
-        block
-        size="lg"
-        :loading="submitting"
-        :disabled="targetsForeignMaster"
-        @click="submit"
-      >
+      <!-- §1.6: a foreign master target ships master_id on the wire (BE-102);
+           the backend re-validates school ownership + verified visibility. -->
+      <VButton variant="primary" block size="lg" :loading="submitting" @click="submit">
         Создать практику
       </VButton>
 
@@ -499,23 +486,16 @@ const router = useRouter()
 const route = useRoute()
 const toast = useToast()
 
-// §1.6 delegation: whose practice is being created. `masterId` in the query
-// (the master's public page CTA) names the master; `groupId` (the school
-// page CTA) offers that school's visible masters with «Я» first. No query
-// context -> the caller owns the practice, the historical behavior.
-//
-// STUB (owner 2026-10-01): the backend cannot create a practice for another
-// master yet (no master_id on POST /practices -- the contract is with the
-// backend task), so while a foreign master is targeted the section renders
-// the honest notice and DISABLES submit. «Я» and no-context flows behave
-// exactly as before.
+// §1.6 delegation (BE-102 landed): whose practice is being created.
+// `masterId` in the query (the master's public page CTA) names the master;
+// `groupId` (the school page CTA) offers that school's visible masters with
+// «Я» first. A foreign target ships master_id on POST /practices; the
+// backend re-validates that the caller owns a school the target is a
+// visible, verified master of (403 otherwise). «Я» and the no-context flow
+// ship no field -- the historical behavior, byte for byte.
 const delegatedMaster = ref<{ id: string; name: string } | null>(null)
 const schoolMasterOptions = ref<{ label: string; value: string }[]>([])
 const selectedMasterId = ref('')
-
-const targetsForeignMaster = computed(
-  () => delegatedMaster.value !== null || selectedMasterId.value !== '',
-)
 
 const masterOptions = computed(() => [{ label: 'Я', value: '' }, ...schoolMasterOptions.value])
 
@@ -1158,6 +1138,10 @@ async function submit(): Promise<void> {
       is_free: form.is_free,
       price_cents: 0,
       currency: 'eur',
+      // §1.6 (BE-102): delegation -- the school owner creates FOR a visible,
+      // verified school master. No context / «Я» sends no field (the caller
+      // owns the practice); the backend re-validates ownership on submit.
+      master_id: delegatedMaster.value?.id ?? (selectedMasterId.value || undefined),
       // E3: when recurring, send the series spec; non-recurring → null.
       recurrence: form.is_recurring ? buildRecurrence() : null,
       // P5 (PROMPT №594) / FE-24 (GT P5) / BE-74: audience_kind + the target
