@@ -131,13 +131,19 @@
               v-for="p in periodPractices"
               :key="p.practice_id"
               class="school-analytics__practice"
+              :clickable="inMasterZone"
+              @click="openPractice(p.practice_id)"
             >
               <div class="school-analytics__practice-head">
                 <component :is="practiceIconFor(p)" :size="40" aria-hidden="true" />
                 <div class="school-analytics__practice-main">
                   <span class="school-analytics__practice-title">{{ p.title }}</span>
                   <span class="school-analytics__practice-meta">
-                    <VAvatar :name="p.master_name" :url="p.master_avatar_url ?? undefined" size="sm" />
+                    <VAvatar
+                      :name="p.master_name"
+                      :url="p.master_avatar_url ?? undefined"
+                      size="sm"
+                    />
                     {{ p.master_name }}
                   </span>
                 </div>
@@ -303,6 +309,14 @@ watch(groupId, () => {
 onMounted(() => {
   void refresh()
 })
+
+// BE-78 (2): in the MASTER zone a practice card opens «Аналитика по
+// практике» (its back is router.back() -> here). The user-zone mount stays
+// inert -- FE-93 removes it: the card is `clickable` only in the master zone,
+// and VCard emits no click otherwise, so this runs in the master zone only.
+function openPractice(practiceId: string): void {
+  void router.push({ name: 'master-practice-reviews', params: { id: practiceId } })
+}
 
 function goBack(): void {
   void router.push({

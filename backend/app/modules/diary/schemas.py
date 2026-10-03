@@ -31,6 +31,7 @@
 #   fields and frontend code doesn't need `?.` guards.
 # =============================================================================
 
+import enum
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -579,6 +580,20 @@ class CustomActivityNamesResponse(BaseModel):
 # contract is one shape for every reader.
 
 
+class PracticeAnalyticsViewerRole(enum.StrEnum):
+    """How the reader of /analytics relates to the practice (BE-78 (2)).
+
+    Decided by the server's one rights check; the screen maps it to what a
+    tap on a person opens (leader -> the student dossier, curator -> the
+    school student profile, school_master -> a direct message). One person
+    holding several: leader > curator > school_master.
+    """
+
+    LEADER = "leader"
+    CURATOR = "curator"
+    SCHOOL_MASTER = "school_master"
+
+
 class PracticeAnalyticsResponse(BaseModel):
     """GET /practices/{id}/analytics -- the header and both distributions.
 
@@ -588,6 +603,10 @@ class PracticeAnalyticsResponse(BaseModel):
     """
 
     practice_id: UUID
+    viewer_role: PracticeAnalyticsViewerRole
+    curator_group_id: UUID | None = Field(
+        description="The practice's school -- for viewer_role=curator only.",
+    )
     title: str
     direction: str | None
     scheduled_at: datetime
@@ -609,6 +628,7 @@ class PracticeAnalyticsPair(BaseModel):
     avatar_url: str | None
     before_zone: ScoreZone
     after_zone: ScoreZone
+    is_school_student: bool
 
 
 class PaginatedPracticeAnalyticsPairs(BaseModel):
@@ -628,6 +648,7 @@ class PracticeAnalyticsReview(BaseModel):
     avatar_url: str | None
     comment: str
     created_at: datetime
+    is_school_student: bool
 
 
 class PaginatedPracticeAnalyticsReviews(BaseModel):

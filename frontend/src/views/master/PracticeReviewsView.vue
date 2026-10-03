@@ -10,6 +10,11 @@
   the leading master; for a school's practice also its curator and its
   verified masters. Anyone else gets 404 (not 403), an entitled reader of a
   practice that is not completed gets 400 -- both shown as the load error.
+  A tap on a person (pairs and reviews) follows the reader's role from the
+  server (BE-78 (2), personTarget): leader -> student dossier, curator ->
+  school student profile (members only), school master -> a direct message.
+  «Назад» is router.back(): the screen returns to wherever it was entered
+  from (master analytics or the school's analytics).
   The demo mode (ANALYTICS_SIMULATION) and the previous insights/reviews
   screen of this route are gone (owner, BE-78). This view owns the requests
   and the paging; PracticeAnalytics renders.
@@ -28,7 +33,9 @@
     @retry="load"
     @more-pairs="loadMorePairs"
     @more-reviews="loadMoreReviews"
+    @person="openPerson"
   />
+  <SendMessageModal :open="msgOpen" :student-id="msgId" :name="msgName" @close="msgOpen = false" />
 </template>
 
 <script setup lang="ts">
@@ -42,6 +49,11 @@ import {
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import PracticeAnalytics from '@/components/shared/practice-analytics/PracticeAnalytics.vue'
+import SendMessageModal from '@/components/shared/SendMessageModal.vue'
+import {
+  personTarget,
+  type AnalyticsPerson,
+} from '@/components/shared/practice-analytics/analytics'
 import type {
   PracticeAnalyticsPair,
   PracticeAnalyticsResponse,
@@ -107,6 +119,23 @@ async function loadMoreReviews(): Promise<void> {
     toast.error(extractApiError(e, 'Не удалось загрузить ещё'))
   } finally {
     loadingMoreReviews.value = false
+  }
+}
+
+// BE-78 (2): a tap on a person -- the owner's table lives in personTarget.
+const msgOpen = ref(false)
+const msgId = ref('')
+const msgName = ref('')
+
+function openPerson(person: AnalyticsPerson): void {
+  if (!summary.value) return
+  const target = personTarget(summary.value, person)
+  if (target?.kind === 'route') {
+    void router.push(target.to)
+  } else if (target?.kind === 'chat') {
+    msgId.value = target.studentId
+    msgName.value = target.name
+    msgOpen.value = true
   }
 }
 

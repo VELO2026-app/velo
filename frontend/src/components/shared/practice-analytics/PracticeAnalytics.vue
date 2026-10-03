@@ -18,7 +18,7 @@ import type {
   PracticeAnalyticsReview,
 } from '@/api/types'
 import PracticeMoodDistribution from './PracticeMoodDistribution.vue'
-import { moodTotal } from './analytics'
+import { moodTotal, personTarget, type AnalyticsPerson } from './analytics'
 
 const props = withDefaults(
   defineProps<{
@@ -40,7 +40,22 @@ const props = withDefaults(
   },
 )
 
-defineEmits<{ back: []; retry: []; morePairs: []; moreReviews: [] }>()
+const emit = defineEmits<{
+  back: []
+  retry: []
+  morePairs: []
+  moreReviews: []
+  person: [person: AnalyticsPerson]
+}>()
+
+// A row is a button only when the owner's table gives it a target for THIS
+// reader (personTarget); otherwise it stays plain text, no dead tap.
+function opens(person: AnalyticsPerson): boolean {
+  return !!props.summary && personTarget(props.summary, person) !== null
+}
+function onPerson(person: AnalyticsPerson): void {
+  if (opens(person)) emit('person', person)
+}
 
 // «Чек-инов до» is the «до» distribution's total: one population (attended).
 const checkedIn = computed(() => (props.summary ? moodTotal(props.summary.before) : 0))
@@ -115,7 +130,16 @@ const hasMoreReviews = computed(
         </div>
         <p v-if="!pairs.length" class="practice-analytics__empty">Пока нет пар для сравнения</p>
         <ul v-else class="practice-analytics__pair-list">
-          <li v-for="pair in pairs" :key="pair.user_id" class="practice-analytics__pair">
+          <li
+            v-for="pair in pairs"
+            :key="pair.user_id"
+            class="practice-analytics__pair"
+            :class="{ 'practice-analytics__person--opens': opens(pair) }"
+            :role="opens(pair) ? 'button' : undefined"
+            :tabindex="opens(pair) ? 0 : undefined"
+            @click="onPerson(pair)"
+            @keydown.enter="onPerson(pair)"
+          >
             <VAvatar :name="pair.name" :url="pair.avatar_url ?? undefined" size="sm" />
             <span class="practice-analytics__name">{{ pair.name }}</span>
             <span class="practice-analytics__faces" aria-hidden="true">
@@ -148,6 +172,12 @@ const hasMoreReviews = computed(
           v-for="review in reviews"
           :key="`${review.user_id}-${review.created_at}`"
           class="practice-analytics__review"
+          :class="{ 'practice-analytics__person--opens': opens(review) }"
+          :clickable="opens(review)"
+          :role="opens(review) ? 'button' : undefined"
+          :tabindex="opens(review) ? 0 : undefined"
+          @click="onPerson(review)"
+          @keydown.enter="onPerson(review)"
         >
           <div class="practice-analytics__review-top">
             <VAvatar :name="review.name" :url="review.avatar_url ?? undefined" size="sm" />
@@ -283,6 +313,9 @@ const hasMoreReviews = computed(
 }
 .practice-analytics__reviews {
   margin-top: var(--space-3);
+}
+.practice-analytics__person--opens {
+  cursor: pointer;
 }
 .practice-analytics__review-top {
   display: flex;

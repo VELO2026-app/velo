@@ -391,4 +391,26 @@ describe('SchoolAnalyticsView', () => {
     await flush()
     expect(push).toHaveBeenCalledWith({ name: 'master-curator-group', params: { id: 'g1' } })
   })
+
+  // BE-78 (2): a practice card opens «Аналитика по практике» -- in the MASTER
+  // zone only; the user-zone mount stays inert (FE-93 removes it).
+  it('master zone: tapping a period practice opens its analytics by id', async () => {
+    routeState.name = 'master-curator-group-analytics'
+    mount()
+    await flush()
+
+    host!.querySelectorAll<HTMLElement>('.school-analytics__practice')[1]!.click()
+    await flush()
+    expect(push).toHaveBeenCalledWith({ name: 'master-practice-reviews', params: { id: 'p1' } })
+  })
+
+  it('user zone: the same card is not a link', async () => {
+    routeState.name = 'user-curator-group-analytics'
+    mount()
+    await flush()
+
+    host!.querySelectorAll<HTMLElement>('.school-analytics__practice')[0]!.click()
+    await flush()
+    expect(push).not.toHaveBeenCalled()
+  })
 })

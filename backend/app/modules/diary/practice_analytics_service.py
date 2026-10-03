@@ -43,9 +43,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BadRequestError, NotFoundError
 from app.modules.bookings.models import Booking, BookingStatus
-from app.modules.curator_groups.models import CuratorGroup
+from app.modules.curator_groups.models import (
+    CuratorGroup,
+    CuratorGroupMember,
+    CuratorMemberKind,
+)
 from app.modules.diary.insights_service import score_zone, zone_counts
 from app.modules.diary.models import Checkin, CheckType, Feedback
+from app.modules.diary.schemas import PracticeAnalyticsViewerRole
 from app.modules.practices.audience_service import (
     master_broadcasts_to_group_clause,
 )
@@ -59,34 +64,65 @@ async def _load_readable_practice(
     user: User,
     practice_id: UUID,
     session: AsyncSession,
-) -> Practice:
-    """The practice, if this user may read its analytics; else masked 404.
+) -> tuple[Practice, PracticeAnalyticsViewerRole]:
+    """The practice and HOW this user reads it; else masked 404.
 
     Rights first, status second (owner, BE-78): only an entitled reader
     learns that the practice is not completed yet.
+
+    The role is decided HERE, in the one rights check (BE-78 (2)), so the
+    screen never derives it: leader > curator > school_master when one
+    person is several (a curator who ran the practice reads it as its
+    leader -- their own CRM). The school branch returns a row only when the
+    audience predicate admitted the user, so "not the school's curator"
+    there means "a verified master of that school".
     """
     practice = await session.get(Practice, practice_id)
     if practice is None:
         raise NotFoundError("Practice not found")
-    allowed = practice.master_id == user.id
-    if not allowed and practice.curator_group_id is not None:
-        allowed = bool(
-            await session.scalar(
-                select(
-                    select(CuratorGroup.id)
-                    .where(
-                        CuratorGroup.id == practice.curator_group_id,
-                        master_broadcasts_to_group_clause(user.id),
-                    )
-                    .exists()
-                )
+    role: PracticeAnalyticsViewerRole | None = None
+    if practice.master_id == user.id:
+        role = PracticeAnalyticsViewerRole.LEADER
+    elif practice.curator_group_id is not None:
+        curator_user_id = await session.scalar(
+            select(CuratorGroup.curator_user_id).where(
+                CuratorGroup.id == practice.curator_group_id,
+                master_broadcasts_to_group_clause(user.id),
             )
         )
-    if not allowed:
+        if curator_user_id is not None:
+            role = (
+                PracticeAnalyticsViewerRole.CURATOR
+                if curator_user_id == user.id
+                else PracticeAnalyticsViewerRole.SCHOOL_MASTER
+            )
+    if role is None:
         raise NotFoundError("Practice not found")
     if practice.status != PracticeStatus.COMPLETED.value:
         raise BadRequestError("Practice is not completed")
-    return practice
+    return practice, role
+
+
+def _school_student_clause(practice_id: UUID):
+    """Correlated EXISTS: the row's person is a STUDENT member of the
+    practice's school right now (BE-78 (2)). One value for every reader --
+    the school roster is no secret to its leader or masters (BE-76); the
+    curator's screen uses it to decide whether the school student profile
+    (which requires that membership) can open. False for a practice outside
+    any school: the scalar subquery is NULL and the EXISTS finds nothing.
+    """
+    return (
+        select(CuratorGroupMember.id)
+        .where(
+            CuratorGroupMember.group_id
+            == select(Practice.curator_group_id)
+            .where(Practice.id == practice_id)
+            .scalar_subquery(),
+            CuratorGroupMember.user_id == Booking.user_id,
+            CuratorGroupMember.kind == CuratorMemberKind.STUDENT.value,
+        )
+        .exists()
+    )
 
 
 def _attended(practice_id: UUID):
@@ -103,7 +139,7 @@ async def get_practice_analytics(
     session: AsyncSession,
 ) -> dict:
     """Header, both zone distributions and the two list totals."""
-    practice = await _load_readable_practice(user, practice_id, session)
+    practice, role = await _load_readable_practice(user, practice_id, session)
     master = await session.get(User, practice.master_id)
 
     attended = await session.scalar(
@@ -131,6 +167,14 @@ async def get_practice_analytics(
 
     return {
         "practice_id": practice.id,
+        "viewer_role": role,
+        # Only the curator's taps need the school (the school student
+        # profile route); nobody else is handed it.
+        "curator_group_id": (
+            practice.curator_group_id
+            if role is PracticeAnalyticsViewerRole.CURATOR
+            else None
+        ),
         "title": practice.title,
         "direction": practice.direction,
         "scheduled_at": practice.scheduled_at,
@@ -154,7 +198,12 @@ async def get_practice_analytics(
 
 def _pairs_query(practice_id: UUID):
     return (
-        select(Checkin.mood, Feedback.rating, User)
+        select(
+            Checkin.mood,
+            Feedback.rating,
+            User,
+            _school_student_clause(practice_id).label("is_school_student"),
+        )
         .select_from(Booking)
         .join(
             Checkin,
@@ -169,7 +218,11 @@ def _pairs_query(practice_id: UUID):
 
 def _reviews_query(practice_id: UUID):
     return (
-        select(Feedback, User)
+        select(
+            Feedback,
+            User,
+            _school_student_clause(practice_id).label("is_school_student"),
+        )
         .join(Booking, Booking.id == Feedback.booking_id)
         .join(User, User.id == Booking.user_id)
         .where(
@@ -210,8 +263,9 @@ async def list_practice_analytics_pairs(
             "avatar_url": person.avatar_url,
             "before_zone": score_zone(mood),
             "after_zone": score_zone(rating),
+            "is_school_student": bool(member),
         }
-        for mood, rating, person in rows
+        for mood, rating, person, member in rows
     ]
     return items, total or 0
 
@@ -242,7 +296,8 @@ async def list_practice_analytics_reviews(
             "avatar_url": person.avatar_url,
             "comment": feedback.comment,
             "created_at": feedback.created_at,
+            "is_school_student": bool(member),
         }
-        for feedback, person in rows
+        for feedback, person, member in rows
     ]
     return items, total or 0

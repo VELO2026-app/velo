@@ -29,6 +29,18 @@ import type {
 
 vi.mock('@/api/practices')
 
+// The DM modal is the BE-76 component; here only WHAT it is opened with.
+vi.mock('@/components/shared/SendMessageModal.vue', async () => {
+  const { defineComponent, h } = await import('vue')
+  return {
+    default: defineComponent({
+      props: { open: Boolean, studentId: String, name: String },
+      setup: (props) => () =>
+        props.open ? h('div', { class: 'dm-stub', 'data-id': props.studentId }, props.name) : null,
+    }),
+  }
+})
+
 const push = vi.fn()
 const back = vi.fn()
 const routeParams: { id: string } = { id: 'p1' }
@@ -56,6 +68,8 @@ function summary(overrides: Partial<PracticeAnalyticsResponse> = {}): PracticeAn
     after: { bad: 0, low: 0, neutral: 1, good: 3, fire: 4 },
     pairs_total: 3,
     reviews_total: 1,
+    viewer_role: 'leader',
+    curator_group_id: null,
     ...overrides,
   }
 }
@@ -66,6 +80,7 @@ const pair = (i: number): PracticeAnalyticsPair => ({
   avatar_url: null,
   before_zone: 'low',
   after_zone: 'good',
+  is_school_student: i === 0,
 })
 
 function pairsPage(items: PracticeAnalyticsPair[], total: number, offset = 0) {
@@ -80,6 +95,7 @@ function reviewsPage(n: number, total: number, offset = 0) {
       avatar_url: null,
       comment: `Текст ${offset + i}`,
       created_at: '2026-08-14T09:00:00Z',
+      is_school_student: true,
     })),
     total,
     limit: 20,
@@ -242,6 +258,44 @@ describe('PracticeReviewsView', () => {
       expect(reviewCount()).toBe(1)
       expect(pager('.practice-analytics__reviews')).not.toBeNull()
       expect(toastError).toHaveBeenCalled()
+    })
+  })
+
+  describe('a tap on a person (BE-78 (2))', () => {
+    it('leader: a pair opens the student dossier', async () => {
+      mount()
+      await flush()
+      host!.querySelector<HTMLElement>('.practice-analytics__pair')!.click()
+      await flush()
+      expect(push).toHaveBeenCalledWith({ name: 'master-student-profile', params: { id: 'u0' } })
+    })
+
+    it("curator: a school student's review opens the school student profile", async () => {
+      vi.mocked(practicesApi.getPracticeAnalytics).mockResolvedValue(
+        summary({ viewer_role: 'curator', curator_group_id: 'g9' }),
+      )
+      mount()
+      await flush()
+      host!.querySelector<HTMLElement>('.practice-analytics__review')!.click()
+      await flush()
+      expect(push).toHaveBeenCalledWith({
+        name: 'master-curator-group-student',
+        params: { groupId: 'g9', userId: 'r0' },
+      })
+    })
+
+    it('school master: a tap opens the direct-message modal for THAT person, no route', async () => {
+      vi.mocked(practicesApi.getPracticeAnalytics).mockResolvedValue(
+        summary({ viewer_role: 'school_master' }),
+      )
+      mount()
+      await flush()
+      host!.querySelector<HTMLElement>('.practice-analytics__pair')!.click()
+      await flush()
+      const dm = host!.querySelector<HTMLElement>('.dm-stub')
+      expect(dm?.dataset.id).toBe('u0')
+      expect(dm?.textContent).toBe('Ученик 0')
+      expect(push).not.toHaveBeenCalled()
     })
   })
 

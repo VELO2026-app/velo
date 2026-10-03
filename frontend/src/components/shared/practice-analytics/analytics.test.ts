@@ -7,7 +7,7 @@ import type {
   PracticeAnalyticsResponse,
   PracticeAnalyticsReview,
 } from '@/api/types'
-import { formatPercent } from './analytics'
+import { formatPercent, personTarget } from './analytics'
 
 describe('practice analytics snippets', () => {
   it('does not round a real response to 0% or an incomplete distribution to 100%', () => {
@@ -82,6 +82,8 @@ function summary(overrides: Partial<PracticeAnalyticsResponse> = {}): PracticeAn
     after: { bad: 0, low: 0, neutral: 0, good: 1, fire: 13 },
     pairs_total: 13,
     reviews_total: 1,
+    viewer_role: 'leader',
+    curator_group_id: null,
     ...overrides,
   }
 }
@@ -91,6 +93,7 @@ const pair = (i: number): PracticeAnalyticsPair => ({
   avatar_url: null,
   before_zone: 'bad',
   after_zone: 'fire',
+  is_school_student: false,
 })
 const review: PracticeAnalyticsReview = {
   user_id: 'u0',
@@ -98,6 +101,7 @@ const review: PracticeAnalyticsReview = {
   avatar_url: null,
   comment: '  Спасибо!  ',
   created_at: '2026-08-14T20:00:00Z',
+  is_school_student: true,
 }
 
 describe('practice screen', () => {
@@ -145,6 +149,53 @@ describe('practice screen', () => {
     const retry = wrapper.findAll('button').find((button) => button.text() === 'Повторить')!
     await retry.trigger('click')
     expect(wrapper.emitted('retry')).toHaveLength(1)
+    wrapper.unmount()
+  })
+})
+
+// BE-78 (2): the owner's tap table, in one pure function.
+describe('personTarget -- what a tap on a person opens', () => {
+  const member = { user_id: 'u1', name: 'Анна', is_school_student: true }
+  const guest = { user_id: 'u2', name: 'Гость', is_school_student: false }
+  it('leader -> the student dossier, member or guest alike', () => {
+    for (const p of [member, guest]) {
+      expect(personTarget({ viewer_role: 'leader', curator_group_id: null }, p)).toEqual({
+        kind: 'route',
+        to: { name: 'master-student-profile', params: { id: p.user_id } },
+      })
+    }
+  })
+  it('curator -> the school student profile for a member, nothing for anyone else', () => {
+    const s = { viewer_role: 'curator' as const, curator_group_id: 'g1' }
+    expect(personTarget(s, member)).toEqual({
+      kind: 'route',
+      to: { name: 'master-curator-group-student', params: { groupId: 'g1', userId: 'u1' } },
+    })
+    expect(personTarget(s, guest)).toBeNull()
+    expect(personTarget({ viewer_role: 'curator', curator_group_id: null }, member)).toBeNull()
+  })
+  it('school master -> a direct message to anyone', () => {
+    const s = { viewer_role: 'school_master' as const, curator_group_id: null }
+    for (const p of [member, guest]) {
+      expect(personTarget(s, p)).toEqual({ kind: 'chat', studentId: p.user_id, name: p.name })
+    }
+  })
+  it('a row with no target is plain text: no button role, a click emits nothing', async () => {
+    const wrapper = mount(Analytics, {
+      props: {
+        summary: summary({ viewer_role: 'curator', curator_group_id: 'g1', pairs_total: 1 }),
+        pairs: [pair(0)], // not a school student
+        reviews: [review], // a school student
+      },
+    })
+    const row = wrapper.get('.practice-analytics__pair')
+    expect(row.attributes('role')).toBeUndefined()
+    await row.trigger('click')
+    expect(wrapper.emitted('person')).toBeUndefined()
+    const rv = wrapper.get('.practice-analytics__review')
+    expect(rv.attributes('role')).toBe('button')
+    await rv.trigger('click')
+    expect(wrapper.emitted('person')?.[0]?.[0]).toMatchObject({ user_id: 'u0' })
     wrapper.unmount()
   })
 })

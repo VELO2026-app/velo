@@ -434,10 +434,24 @@ async def test_no_stored_score_leaves_the_server(
     summary = (await _get(client, SUMMARY_URL, w["curator"], pid)).json()
     assert set(summary["before"]) == ZONES and set(summary["after"]) == ZONES
     (pair,) = (await _get(client, PAIRS_URL, w["curator"], pid)).json()["items"]
-    assert set(pair) == {"user_id", "name", "avatar_url", "before_zone", "after_zone"}
+    assert set(pair) == {
+        "user_id",
+        "name",
+        "avatar_url",
+        "before_zone",
+        "after_zone",
+        "is_school_student",
+    }
     assert pair["before_zone"] in ZONES and pair["after_zone"] in ZONES
     (review,) = (await _get(client, REVIEWS_URL, w["curator"], pid)).json()["items"]
-    assert set(review) == {"user_id", "name", "avatar_url", "comment", "created_at"}
+    assert set(review) == {
+        "user_id",
+        "name",
+        "avatar_url",
+        "comment",
+        "created_at",
+        "is_school_student",
+    }
 
 
 @pytest.mark.asyncio
@@ -507,3 +521,88 @@ async def test_an_empty_practice_and_a_nameless_attendee(
     await _review(db_session, practice, person, bk, 6, "ok")
     (pair,) = (await _get(client, PAIRS_URL, leader, practice.id)).json()["items"]
     assert pair["name"] == "Участник"
+
+
+# ---------------------------------------------------------------------------
+# BE-78 (2): who is reading, and who each person is to the school
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_the_server_names_the_readers_role_and_the_curator_gets_the_school(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    w = await _school_world(client, db_session)
+    pid = w["practice"].id
+    seen = {
+        who: (await _get(client, SUMMARY_URL, w[who], pid)).json()
+        for who in ("leader", "curator", "peer")
+    }
+    assert seen["leader"]["viewer_role"] == "leader"
+    assert seen["curator"]["viewer_role"] == "curator"
+    assert seen["peer"]["viewer_role"] == "school_master"
+    assert seen["curator"]["curator_group_id"] == str(w["school"].id)
+    assert seen["leader"]["curator_group_id"] is None
+    assert seen["peer"]["curator_group_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_a_curator_who_led_the_practice_reads_it_as_its_leader(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """leader > curator: the dossier (own CRM), not the school profile."""
+    curator = await _verified_master(client, db_session, _TID_CURATOR, "Curator")
+    school = await _school(db_session, curator)
+    practice = await _practice(db_session, curator, school)
+    body = (await _get(client, SUMMARY_URL, curator, practice.id)).json()
+    assert body["viewer_role"] == "leader"
+    assert body["curator_group_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_is_school_student_marks_members_only(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """A STUDENT member -> true; a guest and a school master who came -> false.
+
+    One value for every reader (owner, BE-78 (2)); asked on both lists.
+    """
+    w = await _school_world(client, db_session)  # Анна: attended, not a member yet
+    practice, school = w["practice"], w["school"]
+    await _member(db_session, school, w["student"], CuratorMemberKind.STUDENT)
+    guest = await _user(client, _TID_STUDENTS[1], "Гость")
+    bk = await _booking(db_session, practice, guest, BookingStatus.ATTENDED.value)
+    await _pre(db_session, practice, guest, bk, 5)
+    await _review(db_session, practice, guest, bk, 5, "был в гостях")
+    bk = await _booking(db_session, practice, w["peer"], BookingStatus.ATTENDED.value)
+    await _pre(db_session, practice, w["peer"], bk, 5)
+    await _review(db_session, practice, w["peer"], bk, 5, "коллега")
+
+    for url in (PAIRS_URL, REVIEWS_URL):
+        for who in ("leader", "curator", "peer"):
+            items = (await _get(client, url, w[who], practice.id)).json()["items"]
+            flags = {i["name"]: i["is_school_student"] for i in items}
+            assert flags == {"Анна": True, "Гость": False, "Peer": False}, (url, who)
+
+
+@pytest.mark.asyncio
+async def test_outside_any_school_nobody_is_a_school_student(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    w = await _school_world(client, db_session)
+    await _member(db_session, w["school"], w["student"], CuratorMemberKind.STUDENT)
+    own = await _practice(db_session, w["leader"], None)
+    bk = await _booking(db_session, own, w["student"], BookingStatus.ATTENDED.value)
+    await _pre(db_session, own, w["student"], bk, 5)
+    await _review(db_session, own, w["student"], bk, 5, "вне школы")
+    (pair,) = (await _get(client, PAIRS_URL, w["leader"], own.id)).json()["items"]
+    assert pair["is_school_student"] is False
+    # Pair: in the school's practice the same person IS one.
+    (pair,) = (await _get(client, PAIRS_URL, w["leader"], w["practice"].id)).json()[
+        "items"
+    ]
+    assert pair["is_school_student"] is True
