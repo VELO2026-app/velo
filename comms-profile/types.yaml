@@ -277,6 +277,17 @@ types:
   curator_group.member_demoted:
     channels: [in_app, telegram]
 
+  # -- BE-79: member_blocked / member_unblocked go to the PERSON blocked, and
+  #    they are about their own standing in the school -- the school taken
+  #    away by its curator, and given back -- so no category, like
+  #    member_removed: silencing them would lose the only signal. --
+
+  curator_group.member_blocked:
+    channels: [in_app, telegram]
+
+  curator_group.member_unblocked:
+    channels: [in_app, telegram]
+
   curator_group.master_verification_required:
     channels: [in_app, telegram]
 

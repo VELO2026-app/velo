@@ -181,6 +181,17 @@ curator_group.member_removed:
     title: "You are no longer in the school"
     body: "🏛 You have been removed from <b>{group_name}</b>. Its practices are no longer shown to you."
 
+# BE-79: DRAFT TEXT -- the owner rewords it later.
+curator_group.member_blocked:
+  telegram:
+    title: "You are blocked in the school"
+    body: "🏛 The curator blocked you in <b>{group_name}</b>. Its practices are no longer available to you."
+
+curator_group.member_unblocked:
+  telegram:
+    title: "You are unblocked in the school"
+    body: "🏛 The curator lifted your block in <b>{group_name}</b>. You are a member again and its practices are available to you."
+
 curator_group.member_joined:
   telegram:
     title: "New school member"

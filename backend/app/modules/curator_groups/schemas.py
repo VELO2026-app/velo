@@ -326,6 +326,30 @@ class PaginatedCuratorGroupRosterResponse(BaseModel):
     offset: int
 
 
+class CuratorGroupBlockedItem(BaseModel):
+    """One row of the curator's "Блок" tab (BE-79).
+
+    kind and joined_at are the membership the block replaced -- what an
+    unblock will restore -- and blocked_at is when it was replaced.
+    """
+
+    user_id: UUID
+    name: str
+    avatar_url: str | None
+    kind: CuratorMemberKindLiteral
+    joined_at: datetime
+    blocked_at: datetime
+
+
+class PaginatedCuratorGroupBlocksResponse(BaseModel):
+    """GET /masters/me/curator-groups/{id}/blocks (BE-79)."""
+
+    items: list[CuratorGroupBlockedItem]
+    total: int
+    limit: int
+    offset: int
+
+
 # ===========================================================================
 # The school journal (GT-16)
 # ===========================================================================
@@ -531,8 +555,10 @@ class PaginatedCuratorGroupMastersResponse(BaseModel):
 
 
 CuratorInviteReasonLiteral = Literal[
-    "already_member", "own_group", "blocked_by_curator"
+    "already_member", "own_group", "blocked_by_curator", "blocked_in_group"
 ]
+# BE-79: blocked_in_group -- the curator blocked this person in THIS school.
+# Not blocked_by_curator, which is the curator's block as a MASTER.
 # GT-27: "master_required" left this list. It described a link refusing an
 # unverified account, and there is no master link any more; the same code is
 # still raised, but on the appointment path, where it is an error rather

@@ -20,6 +20,11 @@
 #     member -> master profile -> transfer -> master offer -> invite
 #            -> practice -> group
 #
+# THE SCHOOL BLOCK ROW (BE-79) sits with the member row it replaces: block
+# takes member then block, unblock takes block then member. The two are
+# never held in opposite orders on ONE person, because that person has one
+# of the two rows, never both (CuratorGroupBlock).
+#
 # THE PRACTICE (BE-74) IS THE SECOND ROW HERE THIS MODULE DOES NOT OWN.
 # practices.curator_group_id names the school a practice belongs to, and
 # the writers that meet both rows take the practice first: update_practice
@@ -143,6 +148,7 @@ from app.modules.curator_groups.models import (
     EVENT_DATA_TARGET_NAME,
     EVENT_DATA_TARGET_USER_ID,
     CuratorGroup,
+    CuratorGroupBlock,
     CuratorGroupEvent,
     CuratorGroupEventKind,
     CuratorGroupInvite,
@@ -1437,6 +1443,275 @@ async def remove_curator_group_member(
     )
 
 
+async def _blocked_in_group(
+    group_id: UUID, user_id: UUID, session: AsyncSession,
+) -> bool:
+    """True iff this person is blocked in this school (BE-79).
+
+    NOT _blocked_by_curator: that one reads MasterStudent.blocked_at -- the
+    curator blocking somebody as a MASTER, in their own practice, which
+    happens to be checked at the same door. This is the school's own block,
+    written by block_curator_group_member.
+    """
+    return (
+        await session.execute(
+            select(
+                select(CuratorGroupBlock.id)
+                .where(
+                    CuratorGroupBlock.group_id == group_id,
+                    CuratorGroupBlock.user_id == user_id,
+                )
+                .exists()
+            )
+        )
+    ).scalar_one()
+
+
+def _blocked_in_group_error() -> ForbiddenError:
+    """The one refusal for a person blocked in this school (BE-79)."""
+    return ForbiddenError(
+        "You are blocked in this school", code="blocked_in_group",
+    )
+
+
+async def block_curator_group_member(
+    curator_user_id: UUID,
+    group_id: UUID,
+    user_id: UUID,
+    session: AsyncSession,
+    *,
+    actor: User,
+) -> None:
+    """Block a member of either kind in my school (BE-79).
+
+    THE MEMBERSHIP ROW IS SWAPPED FOR A BLOCK ROW (CuratorGroupBlock says
+    why), in this transaction: DELETE ... RETURNING kind, joined_at, then
+    INSERT the block carrying both. Everything else follows remove_curator_
+    group_member step for step and for the same reasons -- the transfer
+    offered to this person and their pending appointment die with the
+    membership, ownership is re-checked under the group lock before the
+    journal row, the person is notified.
+
+    Outcomes (owner ruling via the gate, 3 October):
+      - the curator himself            -> 409 cannot_block_curator;
+      - a member                       -> blocked, journal, notification;
+      - already blocked                -> 204, nothing written: a second
+                                          block is the state the caller
+                                          asked for, and a second message
+                                          would announce nothing new;
+      - neither a member nor blocked   -> 404 -- unlike removal, which is
+                                          idempotent on a miss: a block of
+                                          nobody would answer "done" about
+                                          a person this school never had.
+
+    Two blocks of the same member at once: the second DELETE waits on the
+    first's row lock and then finds nothing; its next statement already sees
+    the first's block row (READ COMMITTED), so it ends in the idempotent 204
+    rather than in a 404.
+
+    LOCK ORDER (module header): member (the DELETE) -> transfer -> master
+    offer -> group (the owner re-check, then the journal's KEY SHARE). The
+    block row is new; nothing else writes it but unblock, which takes it
+    first and the member row after -- the two never wait on each other's
+    rows in opposite orders, because a block row and a member row of one
+    person never both exist.
+    """
+    group = await _get_group_or_404(curator_user_id, group_id, session)
+    if group.curator_user_id == user_id:
+        raise ConflictError(
+            "The curator cannot be blocked in his own school",
+            code="cannot_block_curator",
+        )
+
+    removed = (
+        await session.execute(
+            delete(CuratorGroupMember)
+            .where(
+                CuratorGroupMember.group_id == group.id,
+                CuratorGroupMember.user_id == user_id,
+            )
+            .returning(CuratorGroupMember.kind, CuratorGroupMember.joined_at)
+        )
+    ).first()
+    if removed is None:
+        if await _blocked_in_group(group.id, user_id, session):
+            return
+        raise NotFoundError("Member not found")
+
+    session.add(
+        CuratorGroupBlock(
+            group_id=group.id,
+            user_id=user_id,
+            kind=removed.kind,
+            joined_at=removed.joined_at,
+            blocked_by_user_id=actor.id,
+        )
+    )
+    await session.flush()
+
+    transfer_cancelled = await _drop_pending_transfer_for(
+        group.id, user_id, session,
+    )
+    await session.execute(
+        delete(CuratorGroupMasterOffer).where(
+            CuratorGroupMasterOffer.group_id == group.id,
+            CuratorGroupMasterOffer.to_user_id == user_id,
+        )
+    )
+
+    data = {
+        EVENT_DATA_KIND: removed.kind,
+        **_target_data(user_id, await _frozen_name(user_id, session)),
+    }
+    if transfer_cancelled:
+        data["transfer_cancelled"] = True
+    # The same re-check, at the same place, for the same reason as in
+    # remove_curator_group_member; the rollback of the swap on refusal is
+    # get_db_session's, as there.
+    if not await _lock_group_as_owner(curator_user_id, group.id, session):
+        raise NotFoundError("Curator group not found")
+    journal = _record_group_event(
+        group.id, actor, CuratorGroupEventKind.MEMBER_BLOCKED, session,
+        data=data,
+    )
+    # DRAFT TEXT (owner, 3 October): to be reworded by the owner later.
+    await _notify_group_event(
+        session,
+        journal_event_id=journal.id,
+        type="curator_group.member_blocked",
+        recipient_id=user_id,
+        title="Вас заблокировали в школе",
+        body=(
+            f"Куратор заблокировал вас в школе «{group.name}». Её практики "
+            f"вам больше недоступны."
+        ),
+        group_id=group.id,
+        group_name=group.name,
+        actor_name=display_name(actor.first_name, actor.last_name),
+    )
+
+
+async def unblock_curator_group_member(
+    curator_user_id: UUID,
+    group_id: UUID,
+    user_id: UUID,
+    session: AsyncSession,
+    *,
+    actor: User,
+) -> None:
+    """Lift a block: the membership comes back as it was (BE-79).
+
+    DELETE the block ... RETURNING kind, joined_at, then INSERT the member
+    row with both -- the same relation from the same day, no second join,
+    no second verification (owner, 3 October). A master whose profile was
+    revoked while blocked comes back as kind='master' all the same; whether
+    they are visible is the existing verified rule's business, as for any
+    member.
+
+    404 for somebody who is not blocked here (gate ruling) -- including the
+    loser of two simultaneous unblocks, whose DELETE waits for the winner
+    and then finds nothing.
+
+    Nobody else can have put a member row in between: joining by the link
+    refuses a blocked person and re-reads the block after its INSERT (K1),
+    and the other two writers of member rows -- accepting a transfer and an
+    appointment -- act on offers the block deleted.
+    """
+    group = await _get_group_or_404(curator_user_id, group_id, session)
+    lifted = (
+        await session.execute(
+            delete(CuratorGroupBlock)
+            .where(
+                CuratorGroupBlock.group_id == group.id,
+                CuratorGroupBlock.user_id == user_id,
+            )
+            .returning(CuratorGroupBlock.kind, CuratorGroupBlock.joined_at)
+        )
+    ).first()
+    if lifted is None:
+        raise NotFoundError("Blocked member not found")
+
+    session.add(
+        CuratorGroupMember(
+            group_id=group.id,
+            user_id=user_id,
+            kind=lifted.kind,
+            joined_at=lifted.joined_at,
+        )
+    )
+    await session.flush()
+
+    if not await _lock_group_as_owner(curator_user_id, group.id, session):
+        raise NotFoundError("Curator group not found")
+    journal = _record_group_event(
+        group.id, actor, CuratorGroupEventKind.MEMBER_UNBLOCKED, session,
+        data={
+            EVENT_DATA_KIND: lifted.kind,
+            **_target_data(user_id, await _frozen_name(user_id, session)),
+        },
+    )
+    # DRAFT TEXT (owner, 3 October): to be reworded by the owner later.
+    await _notify_group_event(
+        session,
+        journal_event_id=journal.id,
+        type="curator_group.member_unblocked",
+        recipient_id=user_id,
+        title="Вас разблокировали в школе",
+        body=(
+            f"Куратор снял блокировку в школе «{group.name}». Вы снова "
+            f"участник, её практики вам доступны."
+        ),
+        group_id=group.id,
+        group_name=group.name,
+        actor_name=display_name(actor.first_name, actor.last_name),
+    )
+
+
+async def list_curator_group_blocks(
+    curator_user_id: UUID,
+    group_id: UUID,
+    session: AsyncSession,
+    *,
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[dict], int]:
+    """The curator's "Блок" tab: who is blocked in my school (BE-79).
+
+    Newest block first, User.id as the tiebreak -- the roster's order with
+    blocked_at in place of joined_at. Curator only (_get_group_or_404).
+    """
+    group = await _get_group_or_404(curator_user_id, group_id, session)
+    base = (
+        select(User, CuratorGroupBlock)
+        .join(CuratorGroupBlock, CuratorGroupBlock.user_id == User.id)
+        .where(CuratorGroupBlock.group_id == group.id)
+    )
+    total = (
+        await session.execute(
+            select(func.count()).select_from(base.subquery())
+        )
+    ).scalar_one()
+    rows = (
+        await session.execute(
+            base.order_by(CuratorGroupBlock.blocked_at.desc(), User.id)
+            .limit(limit)
+            .offset(offset)
+        )
+    ).all()
+    items = [
+        {
+            "user_id": user.id,
+            "name": display_name(user.first_name, user.last_name),
+            "avatar_url": user.avatar_url,
+            "kind": block.kind,
+            "joined_at": block.joined_at,
+            "blocked_at": block.blocked_at,
+        }
+        for user, block in rows
+    ]
+    return items, total
+
+
 async def demote_curator_group_master(
     curator_user_id: UUID,
     group_id: UUID,
@@ -2378,6 +2653,11 @@ async def preview_curator_group_invite(
         reason = "own_group"
     elif await _blocked_by_curator(group.curator_user_id, user_id, session):
         reason = "blocked_by_curator"
+    elif await _blocked_in_group(group.id, user_id, session):
+        # BE-79: blocked in THIS school by its curator. A member row and a
+        # block row never coexist (CuratorGroupBlock), so this branch and
+        # already_member below cannot both be true.
+        reason = "blocked_in_group"
     elif member is not None:
         # Already inside, and with one link there is nothing left for it to
         # do. Until GT-27 a student holding a MASTER link fell through with
@@ -2426,7 +2706,9 @@ async def join_curator_group_by_token(
       2. own_group (409)  -- BEFORE the block check, so a curator's answer
          cannot depend on whether a stale master_student row happens to
          exist for them
-      3. blocked (403)    -- a block is about THIS school
+      3. blocked (403)    -- a block is about THIS school: first the
+         curator's block as a master (blocked_by_curator, MasterStudent),
+         then the block in this school (blocked_in_group, BE-79)
       4. membership       -- last: it decides what to write, not whether to
 
     THERE USED TO BE A CAPABILITY STEP between 3 and 4, refusing a master
@@ -2478,6 +2760,9 @@ async def join_curator_group_by_token(
             code="blocked_by_curator",
         )
 
+    if await _blocked_in_group(group.id, user_id, session):
+        raise _blocked_in_group_error()
+
     member = await _membership_row(group.id, user_id, session)
 
     if member is None:
@@ -2490,6 +2775,17 @@ async def join_curator_group_by_token(
             async with session.begin_nested():
                 session.add(row)
                 await session.flush()
+                # BE-79, K1: THE BLOCK IS READ AGAIN, AFTER THE INSERT. The
+                # check above ran on an earlier statement's snapshot; a
+                # block that committed between it and _membership_row made
+                # the row vanish and left no block visible to that check, so
+                # this INSERT would put a blocked person back in. Under READ
+                # COMMITTED this statement sees every block committed before
+                # it -- and the INSERT could only succeed once that block's
+                # DELETE of the old row had committed. Raising inside the
+                # savepoint rolls the row back with it.
+                if await _blocked_in_group(group.id, user_id, session):
+                    raise _blocked_in_group_error()
             relation = CuratorMemberKind.STUDENT.value
             journal = _record_group_event(
                 group.id,

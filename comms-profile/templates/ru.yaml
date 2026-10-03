@@ -195,6 +195,17 @@ curator_group.member_removed:
     title: "Вы больше не в школе"
     body: "🏛 Вас удалили из школы <b>{group_name}</b>. Её практики больше не отображаются."
 
+# BE-79: DRAFT TEXT -- the owner rewords it later.
+curator_group.member_blocked:
+  telegram:
+    title: "Вас заблокировали в школе"
+    body: "🏛 Куратор заблокировал вас в школе <b>{group_name}</b>. Её практики вам больше недоступны."
+
+curator_group.member_unblocked:
+  telegram:
+    title: "Вас разблокировали в школе"
+    body: "🏛 Куратор снял блокировку в школе <b>{group_name}</b>. Вы снова участник, её практики вам доступны."
+
 curator_group.member_joined:
   telegram:
     title: "Новый участник школы"

@@ -229,6 +229,81 @@ class CuratorGroupMember(UUIDMixin, Base):
         )
 
 
+class CuratorGroupBlock(UUIDMixin, Base):
+    """A person the curator blocked in this school (BE-79).
+
+    BLOCKING DELETES THE MEMBERSHIP ROW AND WRITES THIS ONE IN ITS PLACE, in
+    one transaction; unblocking does the reverse. Every rule that asks "is
+    this person in the school" reads curator_group_member, so a blocked
+    person is, to all of them at once, somebody who is not in the school --
+    the roster, the counters, "my schools", the audience, the departed
+    master rule of the school's feedback (BE-75) -- with none of them
+    edited. Only the places that must tell "blocked" from "never was here"
+    read this table: joining by the link and its preview, access to the
+    school's practices, a blocked master editing his school practices, and
+    the curator's "Блок" tab.
+
+    kind and joined_at are COPIED from the deleted membership row, so an
+    unblock restores the same relation from the same day -- "as it was",
+    with no second join and no second verification (owner, 3 October).
+
+    ONE OF THE TWO, NEVER BOTH -- a member row and a block row for the same
+    (group, user). The database cannot say that across two tables; the
+    writers do. Block and unblock swap the rows inside one transaction, and
+    the one path that inserts a member row for a person who may be blocked
+    -- joining by the link -- re-reads this table after its INSERT
+    (join_curator_group_by_token, K1). No trigger: the rule would then live
+    in two places.
+
+    UNIQUE (group_id, user_id), the same pair as the membership's.
+    kind carries no CHECK, exactly like curator_group_member.kind (read from
+    pg_constraint, not assumed): the two columns hold the same values and
+    one must not be stricter than the other.
+
+    ondelete: CASCADE from the group and from the blocked user -- nothing
+    to keep once either is gone. SET NULL from the curator who blocked:
+    the block outlives the account that made it.
+    """
+
+    __tablename__ = "curator_group_block"
+    __table_args__ = (
+        Index(
+            "uq_curator_group_block_group_user",
+            "group_id", "user_id",
+            unique=True,
+        ),
+    )
+
+    group_id: Mapped[UUID] = mapped_column(
+        ForeignKey("curator_group.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    kind: Mapped[str] = mapped_column(String(10), nullable=False)
+    joined_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+    )
+    blocked_by_user_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    blocked_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<CuratorGroupBlock group_id={self.group_id} "
+            f"user_id={self.user_id} kind={self.kind!r}>"
+        )
+
+
 class CuratorGroupInvite(UUIDMixin, Base):
     """A group's ONE reusable join link. Everyone who opens it joins as a
     student.
@@ -422,6 +497,8 @@ class CuratorGroupEventKind(enum.StrEnum):
     MEMBER_DEMOTED = "member_demoted"
     MEMBER_REMOVED = "member_removed"
     MEMBER_LEFT = "member_left"
+    MEMBER_BLOCKED = "member_blocked"
+    MEMBER_UNBLOCKED = "member_unblocked"
     INVITE_CREATED = "invite_created"
     INVITE_REVOKED = "invite_revoked"
     TRANSFER_OFFERED = "transfer_offered"
@@ -552,6 +629,10 @@ class CuratorGroupEvent(Base):
     | member_removed            | actor_name, kind, target_user_id,      |
     |                           | target_name[, transfer_cancelled]      |
     | member_left               | actor_name, kind[, transfer_cancelled] |
+    | member_blocked            | actor_name, kind, target_user_id,      |
+    |                           | target_name[, transfer_cancelled]      |
+    | member_unblocked          | actor_name, kind, target_user_id,      |
+    |                           | target_name                            |
     | invite_created            | actor_name, kind                       |
     | invite_revoked            | actor_name, kind                       |
     | transfer_offered          | actor_name, target_user_id, target_name|

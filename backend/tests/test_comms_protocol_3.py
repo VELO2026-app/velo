@@ -708,13 +708,14 @@ class TestProfileV2:
         doc = self._doc()
         assert set(doc) == {"version", "types"}
         assert doc["version"] == 2
-        # 45 since BE-104 (3) (master.suspended); 44 after BE-104
+        # 47 since BE-79 (1a) (curator_group.member_blocked/_unblocked);
+        # 45 after BE-104 (3) (master.suspended); 44 after BE-104
         # (master.application_submitted); 43 after BE-63
         # (master_practice_published/_edited/_deleted); 40 after BE-102
         # (practice_created_for_master); 39 after BE-59 B1 (member_demoted);
         # 38 after BE-59 A (master_verification_required,
         # master_offer_closed); 36 before.
-        assert len(doc["types"]) == 45
+        assert len(doc["types"]) == 47
 
     def test_every_record_is_closed(self) -> None:
         """An unknown key refuses comms startup; only x-... is tolerated."""
@@ -736,8 +737,9 @@ class TestProfileV2:
         types = self._doc()["types"]
         velo = {k: v for k, v in types.items() if not k.startswith("msg.")}
         comms_own = {k: v for k, v in types.items() if k.startswith("msg.")}
-        # 33 pre-BE-59, +2 A, +1 B1, +1 BE-102, +3 BE-63, +2 BE-104
-        assert len(velo) == 42
+        # 33 pre-BE-59, +2 A, +1 B1, +1 BE-102, +3 BE-63, +2 BE-104,
+        # +2 BE-79 (1a)
+        assert len(velo) == 44
         assert sorted(comms_own) == [
             "msg.participant_message",
             "msg.support_message",

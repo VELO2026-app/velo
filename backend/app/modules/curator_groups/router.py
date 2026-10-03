@@ -53,6 +53,7 @@ from app.modules.curator_groups.feedback_service import (
 from app.modules.curator_groups.schemas import (
     CreateCuratorGroupRequest,
     CuratorGroupAnalyticsResponse,
+    CuratorGroupBlockedItem,
     CuratorGroupCheckinItem,
     CuratorGroupDeletePreviewResponse,
     CuratorGroupEventActor,
@@ -75,6 +76,7 @@ from app.modules.curator_groups.schemas import (
     JoinCuratorGroupRequest,
     JoinCuratorGroupResponse,
     OfferCuratorGroupTransferRequest,
+    PaginatedCuratorGroupBlocksResponse,
     PaginatedCuratorGroupCheckinsResponse,
     PaginatedCuratorGroupEventsResponse,
     PaginatedCuratorGroupMastersResponse,
@@ -87,6 +89,7 @@ from app.modules.curator_groups.schemas import (
 from app.modules.curator_groups.service import (
     accept_curator_group_master_offer,
     accept_curator_group_transfer,
+    block_curator_group_member,
     cancel_curator_group_master_offer,
     cancel_curator_group_transfer,
     create_curator_group,
@@ -102,6 +105,7 @@ from app.modules.curator_groups.service import (
     join_curator_group_by_token,
     leave_curator_group,
     leave_preview,
+    list_curator_group_blocks,
     list_curator_group_events,
     list_curator_group_members,
     list_curator_groups,
@@ -116,6 +120,7 @@ from app.modules.curator_groups.service import (
     remove_curator_group_member,
     remove_member_preview,
     revoke_curator_group_invite,
+    unblock_curator_group_member,
     update_curator_group,
 )
 from app.modules.curator_groups.student_profile_service import (
@@ -645,6 +650,81 @@ async def remove_curator_group_member_endpoint(
         user.id, group_id, user_id, session, actor=user,
     )
     await session.flush()
+
+
+@router.post(
+    "/me/curator-groups/{group_id}/members/{user_id}/block",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def block_curator_group_member_endpoint(
+    group_id: UUID,
+    user_id: UUID,
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Block a member of this school (BE-79): 204; already blocked -> 204
+    with nothing written; the curator -> 409 cannot_block_curator; neither a
+    member nor blocked, or a school that is not yours -> 404."""
+    user, _profile = master_tuple
+    await block_curator_group_member(
+        user.id, group_id, user_id, session, actor=user,
+    )
+    await session.flush()
+    logger.info(
+        "curator_group_member_blocked",
+        group_id=str(group_id),
+        user_id=str(user_id),
+        curator_id=str(user.id),
+    )
+
+
+@router.delete(
+    "/me/curator-groups/{group_id}/blocks/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def unblock_curator_group_member_endpoint(
+    group_id: UUID,
+    user_id: UUID,
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Lift a block (BE-79): the membership comes back as it was. 404 for
+    somebody not blocked here, or a school that is not yours."""
+    user, _profile = master_tuple
+    await unblock_curator_group_member(
+        user.id, group_id, user_id, session, actor=user,
+    )
+    await session.flush()
+    logger.info(
+        "curator_group_member_unblocked",
+        group_id=str(group_id),
+        user_id=str(user_id),
+        curator_id=str(user.id),
+    )
+
+
+@router.get(
+    "/me/curator-groups/{group_id}/blocks",
+    response_model=PaginatedCuratorGroupBlocksResponse,
+)
+async def list_curator_group_blocks_endpoint(
+    group_id: UUID,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_reader),
+) -> PaginatedCuratorGroupBlocksResponse:
+    """The curator's "Блок" tab (BE-79), newest block first."""
+    user, _profile = master_tuple
+    items, total = await list_curator_group_blocks(
+        user.id, group_id, session, limit=limit, offset=offset,
+    )
+    return PaginatedCuratorGroupBlocksResponse(
+        items=[CuratorGroupBlockedItem(**item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post(
