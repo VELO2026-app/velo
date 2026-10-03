@@ -451,6 +451,7 @@ export interface BookingWithPracticeResponse {
   updated_at: string | null
   has_feedback: boolean
   has_checkin: boolean
+  has_reflection: boolean
   practice: PracticeSummary
   zoom_registrant_join_url?: string | null
   zoom_registrant_link_unavailable?: boolean
@@ -1706,6 +1707,20 @@ export interface RecurrenceSpec {
   end: 'never' | 'until_date' | 'after_count'
   count?: number | null
   until_date?: string | null
+}
+
+/** POST /api/v1/practices/{id}/reflection body (BE-108). An empty answer is a valid answer (owner ruling): absent, null, "" and whitespace all arrive here and are stored as NULL -- no 422 for any client, unlike feedback's min_length=1. */
+export interface ReflectionRequest {
+  comment?: string | null
+}
+
+/** A just-created reflection. Returned to its author only. */
+export interface ReflectionResponse {
+  id: string
+  practice_id: string
+  booking_id: string
+  comment: string | null
+  created_at: string
 }
 
 /** POST /admin/masters/{user_id}/reject -- request body. */
