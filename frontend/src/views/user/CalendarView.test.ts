@@ -122,10 +122,14 @@ vi.mock('@/api/curatorGroups')
 const push = vi.fn()
 const back = vi.fn()
 // Master mode (owner 2026-09-30): the stacked route carries :masterId.
-const routeState = { params: {} as Record<string, string> }
+// Owner 2026-10-03: it may also carry ?groupId (the curator's school context).
+const routeState = {
+  params: {} as Record<string, string>,
+  query: {} as Record<string, string | undefined>,
+}
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push, back }),
-  useRoute: () => ({ params: routeState.params }),
+  useRoute: () => ({ params: routeState.params, query: routeState.query }),
 }))
 
 // -----------------------------------------------------------------------------
@@ -201,8 +205,12 @@ let app: App | null = null
 let host: HTMLElement | null = null
 let pinia: Pinia
 
-function mount(routeParams: Record<string, string> = {}): HTMLElement {
+function mount(
+  routeParams: Record<string, string> = {},
+  routeQuery: Record<string, string | undefined> = {},
+): HTMLElement {
   routeState.params = routeParams
+  routeState.query = routeQuery
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(CalendarView)
@@ -308,6 +316,7 @@ beforeEach(() => {
   useAuthStore().user = user()
 
   routeState.params = {}
+  routeState.query = {}
   // The back-control tests key off window.history.state.back (Vue Router's
   // own marker) -- clear it so tests cannot leak state into each other.
   window.history.replaceState(null, '')
@@ -737,6 +746,36 @@ describe('CalendarView', () => {
       host = null
 
       expect(store.masterScope).toBeNull()
+    })
+
+    it('owner 2026-10-03: ?groupId on the master route scopes the feed to THAT school -- scope and school filter both reach the store, and reset together', async () => {
+      mount({ masterId: 'm9' }, { groupId: 'g1' })
+      await flush()
+
+      const store = useCalendarStore()
+      expect(store.masterScope).toBe('m9')
+      expect(store.masterGroupFilter).toBe('g1')
+
+      app?.unmount()
+      host?.remove()
+      app = null
+      host = null
+
+      // The school filter resets WITH the scope -- a leaked filter would keep
+      // hiding practices in the viewer's own tab calendar forever.
+      expect(store.masterScope).toBeNull()
+      expect(store.masterGroupFilter).toBeNull()
+    })
+
+    it('owner 2026-10-03: the school filter is CLIENT-side -- the request is still the plain public master feed', async () => {
+      mount({ masterId: 'm9' }, { groupId: 'g1' })
+      await flush()
+
+      expect(practicesApi.getPractices).toHaveBeenCalledWith(
+        expect.objectContaining({ master_id: 'm9', status: 'scheduled' }),
+        100,
+        0,
+      )
     })
   })
 

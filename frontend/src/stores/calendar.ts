@@ -123,9 +123,16 @@ export const useCalendarStore = defineStore('calendar', () => {
   // of the viewer's own -- the stacked user-calendar-master route. Pinia state
   // is a singleton shared with the tab calendar, so the view resets it to null
   // on unmount; loadWeek folds it into the query.
+  // Owner 2026-10-03: in the curator's school context the route carries
+  // ?groupId and the feed drops the master's practices OUTSIDE that school.
+  // The public endpoint has no school param, so loadWeek filters the response
+  // client-side by the practices' own curator_group_id (null on personal
+  // practices, a foreign school's id otherwise). Cleared with the scope.
   const masterScope = ref<string | null>(null)
-  function setMasterScope(masterId: string | null): void {
+  const masterGroupFilter = ref<string | null>(null)
+  function setMasterScope(masterId: string | null, groupFilter: string | null = null): void {
     masterScope.value = masterId
+    masterGroupFilter.value = groupFilter
   }
 
   // SCHOOL scope (owner 2026-10-01): «Предстоящие практики» on the school page
@@ -332,7 +339,13 @@ export const useCalendarStore = defineStore('calendar', () => {
       // A week (+- 1 day buffer) of practices is small; one page covers it.
       const res = await getPractices(query, 100, 0)
       if (token !== loadToken) return // superseded by a newer load
-      weekPractices.value = res.items
+      // School-context master scope (owner 2026-10-03): keep only the master's
+      // practices in THAT school; personal ones (curator_group_id null) and
+      // other schools' ones are not the curator's business here.
+      weekPractices.value =
+        masterScope.value && masterGroupFilter.value
+          ? res.items.filter((p) => p.curator_group_id === masterGroupFilter.value)
+          : res.items
     } catch (e) {
       if (token !== loadToken) return // superseded -- keep the newer truth
       error.value = extractApiError(e, 'Не удалось загрузить календарь')
@@ -434,6 +447,7 @@ export const useCalendarStore = defineStore('calendar', () => {
     weekPractices,
     filters,
     masterScope,
+    masterGroupFilter,
     schoolScope,
     schoolFeed,
     loading,

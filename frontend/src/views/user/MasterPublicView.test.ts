@@ -675,6 +675,77 @@ describe('MasterPublicView', () => {
       })
     })
 
+    it('school context: the nav row hands ?groupId to the calendar so its feed filters to THAT school (owner 2026-10-03)', async () => {
+      routeQuery.groupId = 'g1'
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      mount()
+      await flush()
+
+      const nav = Array.from(
+        host?.querySelectorAll<HTMLButtonElement>('.master-public__nav') ?? [],
+      ).find((b) => b.textContent?.includes('Предстоящие практики'))
+      nav!.click()
+
+      expect(push).toHaveBeenCalledWith({
+        name: 'user-calendar-master',
+        params: { masterId: 'm1' },
+        query: { groupId: 'g1' },
+      })
+    })
+
+    it('school context: «Ближайшие практики» lists only the practices of the master in THAT school -- a bigger page is fetched and filtered client-side (owner 2026-10-03)', async () => {
+      routeQuery.groupId = 'g1'
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(
+        page([
+          practice('p-school', { curator_group_id: 'g1' }),
+          practice('p-personal', { curator_group_id: null }),
+          practice('p-foreign', { curator_group_id: 'g2' }),
+        ]),
+      )
+      mount()
+      await flush()
+
+      // The school filter runs CLIENT-side (the public feed has no school
+      // param), so the fetch takes a page much larger than the 5-card cap --
+      // filtering a 5-item page would silently under-fill the section.
+      expect(practicesApi.getPractices).toHaveBeenCalledWith(
+        expect.objectContaining({ master_id: 'm1', status: 'scheduled' }),
+        50,
+        0,
+      )
+      const titles = practiceCards()
+        .map((c) => c.textContent ?? '')
+        .join(' ')
+      expect(titles).toContain('Практика p-school')
+      expect(titles).not.toContain('Практика p-personal')
+      expect(titles).not.toContain('Практика p-foreign')
+    })
+
+    it('no ?groupId: the «Ближайшие практики» feed stays whole -- every practice of the master renders on the small page (owner 2026-10-03)', async () => {
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(
+        page([
+          practice('p-school', { curator_group_id: 'g1' }),
+          practice('p-personal', { curator_group_id: null }),
+        ]),
+      )
+      mount()
+      await flush()
+
+      expect(practicesApi.getPractices).toHaveBeenCalledWith(
+        expect.objectContaining({ master_id: 'm1', status: 'scheduled' }),
+        5,
+        0,
+      )
+      const titles = practiceCards()
+        .map((c) => c.textContent ?? '')
+        .join(' ')
+      expect(titles).toContain('Практика p-school')
+      expect(titles).toContain('Практика p-personal')
+    })
+
     it('the «Аналитика» panel is a curator-only placeholder: hidden without ?groupId, shown with it', async () => {
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))

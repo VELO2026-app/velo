@@ -13,7 +13,12 @@
       PLACEHOLDER until the curator-analytics contract exists
     - «Ближайшие практики»: plain heading + up to 5 upcoming-practice cards
       (owner 2026-09-30 -- the collapsed accordion is retired; reuses
-      getPractices with master_id -- no new endpoint, no dedicated store)
+      getPractices with master_id -- no new endpoint, no dedicated store).
+      Owner 2026-10-03: in the curator's school context (?groupId=) only the
+      master's practices in THAT school are listed -- a larger page is fetched
+      and filtered client-side by the practices' curator_group_id (the public
+      feed has no school param); «Предстоящие практики» hands ?groupId to the
+      master calendar for the same filter.
     - «⋯» меню: «Написать сообщение» -> ask-master flow (T2); в школьном
       контексте куратора — ещё «Изменить роль» и «Заблокировать» (владелец,
       2026-09-30; «Изменить роль» — BE-59, «Заблокировать» — BE-79 (2))
@@ -416,11 +421,14 @@ function goToPractice(id: string): void {
   void router.push({ name: 'practice-detail', params: { id } })
 }
 
-// The «Предстоящие практики» row: the stacked MASTER-practice calendar.
+// The «Предстоящие практики» row: the stacked MASTER-practice calendar. The
+// curator's school context travels along (?groupId) -- the calendar then shows
+// only this master's practices in THAT school (owner 2026-10-03).
 function goToCalendar(): void {
   void router.push({
     name: 'user-calendar-master',
     params: { masterId: masterId.value },
+    query: schoolContext.value ? { groupId: groupId.value } : undefined,
   })
 }
 
@@ -442,7 +450,12 @@ async function loadMaster(id: string): Promise<void> {
   try {
     profile.value = await getPublicMaster(id)
     // Upcoming practices by this master: reuse the public feed with a
-    // master_id filter + scheduled status. One small page is enough.
+    // master_id filter + scheduled status. Owner 2026-10-03: in the curator's
+    // school context (?groupId=) only the master's practices in THAT school
+    // are listed -- the public feed has no school param, so the page is
+    // fetched larger and filtered client-side by the practices' own
+    // curator_group_id (null on personal practices, a foreign school's id
+    // otherwise). Outside the school context the plain feed stands.
     try {
       const res = await getPractices(
         {
@@ -451,12 +464,15 @@ async function loadMaster(id: string): Promise<void> {
           sort_by: 'scheduled_at',
           sort_order: 'asc',
         },
-        5,
+        schoolContext.value ? 50 : 5,
         0,
       )
       // The ≤5 cap is also enforced locally: the owner's 2026-09-30 spec is
       // "up to 5 cards", independent of any server limit regression.
-      upcoming.value = res.items.slice(0, 5)
+      const items = schoolContext.value
+        ? res.items.filter((p) => p.curator_group_id === groupId.value)
+        : res.items
+      upcoming.value = items.slice(0, 5)
     } catch {
       // Non-fatal: the profile still renders without the upcoming list.
       upcoming.value = []

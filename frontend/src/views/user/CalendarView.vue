@@ -225,12 +225,15 @@ const viewerTz = useViewerTimezone()
 // facet UI sits out. The scopes MUST reset on unmount -- the store is a
 // singleton the tab calendar shares; a leaked scope would poison the
 // viewer's own week.
+// Owner 2026-10-03: the master route may carry ?groupId (the curator's school
+// context off the profile) -- the feed then keeps only the master's practices
+// in THAT school (the store's client-side filter, see setMasterScope).
 const masterMode = computed(() => String(route.params.masterId ?? '') !== '')
 const schoolMode = computed(() => String(route.params.groupId ?? '') !== '')
 
 onMounted(() => {
   if (masterMode.value) {
-    store.setMasterScope(String(route.params.masterId))
+    store.setMasterScope(String(route.params.masterId), String(route.query.groupId ?? '') || null)
   } else if (schoolMode.value) {
     store.setSchoolScope(String(route.params.groupId))
   }
