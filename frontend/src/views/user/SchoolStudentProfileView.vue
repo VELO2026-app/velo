@@ -26,9 +26,10 @@
       curator ends a school membership now -- «Исключить из школы» is
       REMOVED (an exclusion no longer exists). The confirm popup is built
       (same recipe as the master-zone block dialog; the copy is a DRAFT for
-      the owner's review -- BE-79 owns the final wording). INTERIM (stopper
-      BE-79): the school-block contract does not exist, so confirm is a
-      marked no-op (info toast) -- BE-79 swaps it for the real request.
+      the owner's review -- BE-79 owns the final wording). Confirm sends
+      POST …/members/{user_id}/block (BE-79 (2)); only the server's 204 opens
+      «Пользователь заблокирован», and leaving that dialog returns to the
+      roster -- the blocked person is no longer in it.
 
   All three are curator-of-THIS-school only (viewer.relation, §1.12.1's
   access rule). Masters of the school do NOT land here -- their rows open
@@ -57,9 +58,8 @@
               ariaLabel="Изменить роль"
               @click="onRoleClick(close)"
             />
-            <!-- The lock is live: it opens the block confirm (owner ruling
-                 2026-09-30 -- blocking replaced the removed exclusion).
-                 INTERIM (stopper BE-79): confirm is a marked no-op. -->
+            <!-- The lock opens the block confirm (owner ruling 2026-09-30 --
+                 blocking replaced the removed exclusion); BE-79 (2) wired it. -->
             <VMenuItem
               :icon="IconLock"
               ariaLabel="Заблокировать"
@@ -185,8 +185,8 @@
 
     <!-- Block confirm (owner ruling 2026-09-30): the ONLY membership-ending
          action. Same recipe as the master-zone block dialog (TargetUserCard +
-         warning panel). Confirming steps into the post-block chain -- the UX
-         draft under review (nothing mutates until BE-79). -->
+         warning panel). Confirming sends the block; the post-block chain
+         opens only on the server's 204. -->
     <VConfirmDialog
       :open="blockConfirmOpen"
       title="Заблокировать участника школы?"
@@ -207,12 +207,11 @@
 
     <!-- Post-block report-offer -- mirrors the master-zone dialog verbatim:
          warning panel WITHOUT the icon (the kept difference from the confirm)
-         + compact pills. INTERIM (stopper BE-79): nothing mutated -- this
-         step is the UX draft under review. -->
+         + compact pills. Shown after the server's 204 (BE-79 (2)). -->
     <VConfirmDialog
       :open="blockedDialogOpen"
       title="Пользователь заблокирован"
-      message="Пользователь перемещен в «Удаленные». Если он нарушал правила — например, сорвал практику или вел себя неподобающе, — вы можете сообщить об этом в поддержку."
+      message="Пользователь перемещён во вкладку «Блок» участников школы. Если он нарушал правила — например, сорвал практику или вел себя неподобающе, — вы можете сообщить об этом в поддержку."
       confirm-label="В поддержку"
       cancel-label="Не сейчас"
       compact-actions
@@ -221,7 +220,7 @@
       danger
       cancel-variant="primary"
       @confirm="onReportOfferAccept"
-      @cancel="blockedDialogOpen = false"
+      @cancel="leaveAfterBlock"
     >
       <div class="ssp__block-card">
         <TargetUserCard :name="studentName" :avatar-url="studentAvatar || null" />
@@ -233,7 +232,7 @@
       :student-id="userId"
       :student-name="studentName"
       :student-avatar-url="studentAvatar || null"
-      @close="reportOpen = false"
+      @close="onReportClose"
     />
   </div>
 </template>
@@ -246,6 +245,7 @@ import {
   getCuratorGroupPage,
   getCuratorGroupStudentProfile,
   offerCuratorGroupMaster,
+  blockCuratorGroupMember,
   cancelCuratorGroupMasterOffer,
 } from '@/api/curatorGroups'
 import { ApiResponseError } from '@/api/client'
@@ -485,14 +485,15 @@ async function onCancelOffer(): Promise<void> {
   }
 }
 
-// -- «Заблокировать» (BE-79 stopper) --------------------------------------------
+// -- «Заблокировать» (BE-79 (2)) -------------------------------------------------
 //
 // Owner ruling 2026-09-30: «Исключить из школы» больше не существует --
 // блокировка участника школы (пользователя ИЛИ мастера) заменяет её. The
-// popup chain (confirm -> «Пользователь заблокирован» -> report-offer) is
-// the UX draft for the owner's review. INTERIM: the school-block contract
-// does not exist -- NOTHING mutates server-side; the success step is part
-// of the draft under review, not a claim that anything was written.
+// chain: confirm -> POST …/block -> on 204 «Пользователь заблокирован»
+// (report-offer) -> back to the roster, which no longer lists the person.
+// 404 (not a member any more) -> say so, back to the roster. Anything else
+// (409, 403 in user mode -- the server decides by the CURRENT role, network)
+// -> the error toast, stay. Shown in both zones by `isCurator`.
 
 const blockConfirmOpen = ref(false)
 const blockedDialogOpen = ref(false)
@@ -508,16 +509,42 @@ function onBlockClick(close: () => void): void {
   blockConfirmOpen.value = true
 }
 
-function onBlockConfirm(): void {
-  // INTERIM (stopper BE-79): no school-block contract to call -- stepping
-  // into the success/report-offer chain is the draft under review.
-  blockConfirmOpen.value = false
-  blockedDialogOpen.value = true
+const blocking = ref(false)
+
+async function onBlockConfirm(): Promise<void> {
+  if (blocking.value) return
+  blocking.value = true
+  try {
+    await blockCuratorGroupMember(groupId.value, userId.value)
+    blockConfirmOpen.value = false
+    blockedDialogOpen.value = true
+  } catch (e) {
+    blockConfirmOpen.value = false
+    if (e instanceof ApiResponseError && e.status === 404) {
+      toast.error('Участник уже не в школе')
+      void router.push(rosterRoute.value)
+      return
+    }
+    toast.error(extractApiError(e, 'Не удалось заблокировать участника'))
+  } finally {
+    blocking.value = false
+  }
+}
+
+function leaveAfterBlock(): void {
+  blockedDialogOpen.value = false
+  void router.push(rosterRoute.value)
 }
 
 function onReportOfferAccept(): void {
   blockedDialogOpen.value = false
   reportOpen.value = true
+}
+
+// The report sheet is reached only after a block: closing it leaves too.
+function onReportClose(): void {
+  reportOpen.value = false
+  void router.push(rosterRoute.value)
 }
 </script>
 

@@ -93,12 +93,34 @@
       </VEmptyState>
 
       <template v-else>
-        <SchoolMemberRow
-          v-for="member in items"
-          :key="member.user_id"
-          :member="member"
-          @open="openMember"
-        />
+        <template v-if="kind === 'blocked'">
+          <div v-for="person in blockedItems" :key="person.user_id" class="school-members__blocked">
+            <VAvatar :name="person.name" :url="person.avatar_url ?? undefined" size="sm" />
+            <div class="school-members__blocked-text">
+              <span class="school-members__blocked-name">{{ person.name }}</span>
+              <span class="school-members__blocked-meta">
+                {{ person.kind === 'master' ? 'Мастер' : 'Ученик' }} · заблокирован
+                {{ formatShortDate(person.blocked_at) }}
+              </span>
+            </div>
+            <VButton
+              size="sm"
+              variant="secondary"
+              :loading="unblocking === person.user_id"
+              @click="onUnblock(person)"
+            >
+              Разблокировать
+            </VButton>
+          </div>
+        </template>
+        <template v-else>
+          <SchoolMemberRow
+            v-for="member in rosterItems"
+            :key="member.user_id"
+            :member="member"
+            @open="openMember"
+          />
+        </template>
 
         <!-- §1.11.3: two different empties -- no members at all vs no search
              hits. Different problems, different sentences. -->
@@ -134,29 +156,39 @@
 import { computed, onMounted, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
+  getCuratorGroupBlocks,
   getCuratorGroupMembers,
   getCuratorGroupPage,
   getCuratorGroupRoster,
+  unblockCuratorGroupMember,
   type CuratorGroupMemberKind,
 } from '@/api/curatorGroups'
 import { ApiResponseError } from '@/api/client'
-import type { CuratorGroupRosterItem, CuratorGroupViewer } from '@/api/types'
+import type {
+  CuratorGroupBlockedItem,
+  CuratorGroupRosterItem,
+  CuratorGroupViewer,
+} from '@/api/types'
 import SendMessageModal from '@/components/shared/SendMessageModal.vue'
 import { IconLock } from '@/components/icons'
 import SchoolMemberRow from '@/components/shared/SchoolMemberRow.vue'
 import VShowMore from '@/components/shared/VShowMore.vue'
-import { VButton, VEmptyState, VInput, VLoader, VSegmentTrack } from '@/components/ui'
+import { VAvatar, VButton, VEmptyState, VInput, VLoader, VSegmentTrack } from '@/components/ui'
 import VHeader from '@/components/layout/VHeader.vue'
 import { usePagination } from '@/composables/usePagination'
 import { useToast } from '@/composables/useToast'
+import { extractApiError } from '@/composables/useApiError'
+import { formatShortDate } from '@/utils/format'
 
 // §1.11 (owner 2026-09-22): the active roster rides ?kind= -- server truth
 // in the URL, so a refresh or a deep link reopens the same list. The third
-// tab «Блок» (owner 2026-09-30) is a BE-79 placeholder: no endpoint lists
-// blocked members yet, so the tab never fetches -- it renders the lock
-// empty state and hides the search. It is a view-local MemberTab, NOT
-// CuratorGroupMemberKind, so the API contract stays honest until the
-// backend lands.
+// tab «Блок» (owner 2026-09-30, BE-79 (2)) lists GET …/blocks for the
+// curator, paged like the roster; it has no search (the endpoint takes
+// limit/offset only). «Разблокировать» sends DELETE …/blocks/{user_id} and
+// re-reads the first page -- the person leaves the list and is back in the
+// roster with their role (the other tabs re-read on switch). It is a
+// view-local MemberTab, NOT CuratorGroupMemberKind: «blocked» is no kind of
+// membership in the API.
 type MemberTab = CuratorGroupMemberKind | 'blocked'
 
 const KIND_OPTIONS: ReadonlyArray<{ value: MemberTab; label: string; icon?: Component }> = [
@@ -209,7 +241,7 @@ const isCurator = computed(() => relation.value === 'curator')
 /** A school master reading the roster in the master zone. */
 const asSchoolMaster = computed(() => relation.value === 'master' && inMasterZone.value)
 
-/** «Блок» is the curator's tab only (BE-79 placeholder). */
+/** «Блок» is the curator's tab only (BE-79). */
 const kindOptions = computed(() =>
   isCurator.value ? KIND_OPTIONS : KIND_OPTIONS.filter((option) => option.value !== 'blocked'),
 )
@@ -231,15 +263,16 @@ const emptyTitle = computed(() => {
 })
 const emptyDescription = computed(() => {
   if (kind.value === 'blocked') {
-    return 'Участник появится здесь, когда куратор заблокирует его через меню на странице профиля.'
+    return 'Участник появится здесь, когда вы заблокируете его через меню на странице профиля.'
   }
   return kind.value === 'master'
     ? 'Мастером школы участник становится после принятия предложения куратора.'
     : 'Ученики появляются в школе после вступления по ссылке-приглашению.'
 })
-const errorTitle = computed(() =>
-  kind.value === 'master' ? 'Не удалось загрузить мастеров' : 'Не удалось загрузить учеников',
-)
+const errorTitle = computed(() => {
+  if (kind.value === 'blocked') return 'Не удалось загрузить заблокированных'
+  return kind.value === 'master' ? 'Не удалось загрузить мастеров' : 'Не удалось загрузить учеников'
+})
 
 const pageRoute = computed(() => ({
   name: inMasterZone.value ? 'master-curator-group' : 'user-curator-group',
@@ -260,32 +293,32 @@ const trimmedSearch = computed(() => search.value.trim())
 // only the message string, so the raw error is inspected as it passes by.
 const notFound = ref(false)
 
-const { items, loading, error, loadMoreError, hasMore, loadMore, refresh } =
-  usePagination<CuratorGroupRosterItem>(async (limit, offset) => {
-    try {
-      const viewer = await loadRelation()
-      // BE-79 pending: no endpoint lists blocked members -- the tab is a
-      // placeholder screen, never a fake request. Only the curator has it;
-      // anyone else who lands on ?kind=blocked is moved to the masters tab.
-      if (kind.value === 'blocked') {
-        if (viewer === 'curator') return { items: [], total: 0, limit, offset }
-        kind.value = 'master'
-        void router.replace({ ...route, query: { ...route.query, kind: 'master' } })
-      }
-      const query = {
-        kind: kind.value,
-        search: trimmedSearch.value || undefined,
-        limit,
-        offset,
-      }
-      return viewer === 'master' && inMasterZone.value
-        ? await getCuratorGroupRoster(groupId.value, query)
-        : await getCuratorGroupMembers(groupId.value, query)
-    } catch (e: unknown) {
-      if (e instanceof ApiResponseError && e.status === 404) notFound.value = true
-      throw e
+const { items, loading, error, loadMoreError, hasMore, loadMore, refresh } = usePagination<
+  CuratorGroupRosterItem | CuratorGroupBlockedItem
+>(async (limit, offset) => {
+  try {
+    const viewer = await loadRelation()
+    // «Блок» is the curator's alone; anyone else who lands on ?kind=blocked
+    // is moved to the masters tab.
+    if (kind.value === 'blocked') {
+      if (viewer === 'curator') return await getCuratorGroupBlocks(groupId.value, { limit, offset })
+      kind.value = 'master'
+      void router.replace({ ...route, query: { ...route.query, kind: 'master' } })
     }
-  }, 20)
+    const query = {
+      kind: kind.value,
+      search: trimmedSearch.value || undefined,
+      limit,
+      offset,
+    }
+    return viewer === 'master' && inMasterZone.value
+      ? await getCuratorGroupRoster(groupId.value, query)
+      : await getCuratorGroupMembers(groupId.value, query)
+  } catch (e: unknown) {
+    if (e instanceof ApiResponseError && e.status === 404) notFound.value = true
+    throw e
+  }
+}, 20)
 
 /** Set only when a switch or a query-sync programmatically clears the input;
  *  the watcher only fires on real value changes, so the flag cannot leak. */
@@ -347,6 +380,38 @@ watch(
     void refresh()
   },
 )
+
+// The one list holds either rows of the roster or rows of «Блок» -- the
+// tab decides which; these name it for the template.
+const rosterItems = computed(() =>
+  kind.value === 'blocked' ? [] : (items.value as CuratorGroupRosterItem[]),
+)
+const blockedItems = computed(() =>
+  kind.value === 'blocked' ? (items.value as CuratorGroupBlockedItem[]) : [],
+)
+
+// BE-79 (2): «Разблокировать». 204 -> the first page is re-read, so the row
+// leaves; 404 (already unblocked elsewhere) -> the same re-read, the list
+// was simply stale; anything else -> the error toast, the row stays.
+const unblocking = ref<string | null>(null)
+
+async function onUnblock(person: CuratorGroupBlockedItem): Promise<void> {
+  if (unblocking.value) return
+  unblocking.value = person.user_id
+  try {
+    await unblockCuratorGroupMember(groupId.value, person.user_id)
+    toast.success('Участник разблокирован')
+    await refresh()
+  } catch (e) {
+    if (e instanceof ApiResponseError && e.status === 404) {
+      await refresh()
+      return
+    }
+    toast.error(extractApiError(e, 'Не удалось разблокировать участника'))
+  } finally {
+    unblocking.value = null
+  }
+}
 
 // A later-page failure keeps the list on screen and reports non-destructively.
 watch(loadMoreError, (message) => {
@@ -413,6 +478,25 @@ function openMember(member: CuratorGroupRosterItem): void {
 </script>
 
 <style scoped>
+.school-members__blocked {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+}
+.school-members__blocked-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.school-members__blocked-name {
+  font-weight: 600;
+}
+.school-members__blocked-meta {
+  color: var(--velo-text-secondary);
+  font-size: var(--text-sm);
+}
 .school-members {
   min-height: 100%;
   display: flex;

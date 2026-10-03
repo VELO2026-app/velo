@@ -322,6 +322,35 @@ describe('UserInboxView', () => {
     expect(push).toHaveBeenCalledWith({ name: 'user-topup' })
   })
 
+  // BE-79 (2): the block notices of a school. Blocked -> the school is closed
+  // to the reader: mark-read only. Unblocked -> the school page.
+  it.each([
+    ['curator_group.member_blocked', null],
+    ['curator_group.member_unblocked', { name: 'user-curator-group', params: { id: 'g7' } }],
+  ] as const)('BE-79: %s -> its own target', async (type, target) => {
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+      items: [
+        item({
+          id: 'bl',
+          type,
+          action_data: { action: 'open_curator_group', params: { group_id: 'g7' } },
+        }),
+      ],
+      next_cursor: null,
+      unread: 1,
+    })
+    vi.mocked(notificationsApi.markNotificationRead).mockResolvedValue({ unread: 0 })
+    mount()
+    await flush()
+
+    row(0).click()
+    await flush()
+
+    expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith('bl')
+    if (target) expect(push).toHaveBeenCalledWith(target)
+    else expect(push).not.toHaveBeenCalled()
+  })
+
   it('curator_group.master_offered rides open_curator_group into the consent screen (BE-59)', async () => {
     vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
       items: [

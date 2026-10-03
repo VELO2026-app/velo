@@ -15,7 +15,7 @@
       getPractices with master_id -- no new endpoint, no dedicated store)
     - «⋯» меню: «Написать сообщение» -> ask-master flow (T2); в школьном
       контексте куратора — ещё «Изменить роль» и «Заблокировать» (владелец,
-      2026-09-30; интерим — ноопы до BE-59/BE-79)
+      2026-09-30; «Изменить роль» — BE-59, «Заблокировать» — BE-79 (2))
 
   Backend: GET /api/v1/masters/:id (MasterPublicResponse). Only verified
   masters resolve; 404 otherwise -> "Мастер не найден" (no retry, nothing to
@@ -33,8 +33,7 @@
            2026-09-30 -- replaced the «Задать вопрос» button). In the
            curator's school context (the roster's master rows navigate here
            with ?groupId=) it also carries the curator's actions: «Изменить
-           роль» and «Заблокировать» (INTERIM: marked no-ops until their
-           contracts land -- BE-59 demote extension / BE-79). -->
+           роль» (BE-59 demote) and «Заблокировать» (BE-79 (2) block). -->
       <template #action>
         <VMenu aria-label="Действия с мастером">
           <template #default="{ close }">
@@ -237,9 +236,8 @@
     </VModal>
 
     <!-- Block confirm (owner ruling 2026-09-30: blocking covers masters too).
-         INTERIM (stopper BE-79): the school-block contract does not exist, so
-         confirm is a marked no-op (info toast); the copy is a DRAFT for the
-         owner's review. -->
+         Confirm sends POST …/members/{id}/block (BE-79 (2)); the copy is a
+         DRAFT for the owner's review. -->
     <VConfirmDialog
       :open="blockConfirmOpen"
       title="Заблокировать участника школы?"
@@ -281,7 +279,7 @@ import SendMessageModal from '@/components/shared/SendMessageModal.vue'
 import TargetUserCard from '@/components/shared/TargetUserCard.vue'
 import { getPublicMaster } from '@/api/masters'
 import { getPractices } from '@/api/practices'
-import { demoteCuratorGroupMaster } from '@/api/curatorGroups'
+import { blockCuratorGroupMember, demoteCuratorGroupMaster } from '@/api/curatorGroups'
 import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
@@ -316,7 +314,7 @@ const TAG_VARIANTS = ['blue', 'pink', 'sand'] as const
 // The roster's master rows navigate here with ?groupId= -- that marker turns
 // on the action menu for the curator of THAT school. The plain public profile
 // (any other entry) renders no menu. «Изменить роль» is the BE-59 demote
-// (wired); block (BE-79) confirm remains a marked no-op (info toast).
+// (wired); «Заблокировать» sends the BE-79 block (wired, BE-79 (2)).
 
 const groupId = computed(() => String(route.query.groupId ?? ''))
 const schoolContext = computed(() => groupId.value !== '')
@@ -371,11 +369,31 @@ function onBlockClick(close: () => void): void {
   blockConfirmOpen.value = true
 }
 
-function onBlockConfirm(): void {
-  // INTERIM (stopper BE-79): no school-block contract to call -- the no-op
-  // states itself rather than reading as success.
-  toast.info('Блокировка участника школы появится позже (BE-79)')
-  blockConfirmOpen.value = false
+// BE-79 (2): 204 -> say so and go back where the curator came from (the
+// school roster: its master rows open this screen). 404 -> not a member any
+// more -> the same way back. Anything else (409, 403 in user mode -- the
+// server decides by the CURRENT role, network) -> the error toast, stay.
+const blocking = ref(false)
+
+async function onBlockConfirm(): Promise<void> {
+  if (blocking.value) return
+  blocking.value = true
+  try {
+    await blockCuratorGroupMember(groupId.value, masterId.value)
+    blockConfirmOpen.value = false
+    toast.success('Участник заблокирован')
+    router.back()
+  } catch (e) {
+    blockConfirmOpen.value = false
+    if (e instanceof ApiResponseError && e.status === 404) {
+      toast.error('Участник уже не в школе')
+      router.back()
+      return
+    }
+    toast.error(extractApiError(e, 'Не удалось заблокировать участника'))
+  } finally {
+    blocking.value = false
+  }
 }
 
 function onMessageClick(close: () => void): void {

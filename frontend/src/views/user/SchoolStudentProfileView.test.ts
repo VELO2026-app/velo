@@ -215,7 +215,10 @@ describe('SchoolStudentProfileView', () => {
     expect(cgApi.offerCuratorGroupMaster).not.toHaveBeenCalled()
   })
 
-  it('block confirm: «Заблокировать» steps into the success chain (draft -- nothing mutates until BE-79)', async () => {
+  // BE-79 (2): this used to pin the INTERIM -- «nothing mutates, the chain is
+  // a draft». Right then; the block endpoint (BE-79 (1а)) replaced it: confirm
+  // now SENDS the block, and the chain opens on the server's 204 only.
+  it('block confirm: «Заблокировать» sends the block; on 204 the success chain opens', async () => {
     mount()
     await flush()
 
@@ -230,11 +233,58 @@ describe('SchoolStudentProfileView', () => {
     // The post-block step rides the same dialog canon: title, who-card, the
     // warning panel WITHOUT the icon, compact «Не сейчас» / «В поддержку».
     expect(text()).toContain('Пользователь заблокирован')
-    expect(text()).toContain('Пользователь перемещен в «Удаленные».')
+    expect(text()).toContain('Пользователь перемещён во вкладку «Блок» участников школы.')
     expect(exactButton('Не сейчас')).toBeTruthy()
     expect(exactButton('В поддержку')).toBeTruthy()
-    // INTERIM honesty: no school-block contract, so no other API may fire.
+    expect(cgApi.blockCuratorGroupMember).toHaveBeenCalledTimes(1)
+    expect(cgApi.blockCuratorGroupMember).toHaveBeenCalledWith('g1', 'u9')
     expect(cgApi.offerCuratorGroupMaster).not.toHaveBeenCalled()
+  })
+
+  async function confirmBlock(): Promise<void> {
+    buttonWith('Действия с учеником')?.click()
+    await flush()
+    buttonWith('Заблокировать')?.click()
+    await flush()
+    exactButton('Заблокировать')?.click()
+    await flush()
+  }
+
+  it('after the block, «Не сейчас» returns to the roster the person left', async () => {
+    mount()
+    await flush()
+    await confirmBlock()
+    exactButton('Не сейчас')?.click()
+    await flush()
+    expect(push).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'user-curator-group-members', params: { id: 'g1' } }),
+    )
+  })
+
+  it('block 404 (not a member any more): says so, back to the roster, no success chain', async () => {
+    vi.mocked(cgApi.blockCuratorGroupMember).mockRejectedValueOnce(
+      new ApiResponseError(404, 'not found', 'not_found'),
+    )
+    mount()
+    await flush()
+    await confirmBlock()
+    expect(toastError).toHaveBeenCalledWith('Участник уже не в школе')
+    expect(push).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'user-curator-group-members' }),
+    )
+    expect(text()).not.toContain('Пользователь заблокирован')
+  })
+
+  it('block refused (409 / 403 / network): the error toast, no success chain, no navigation', async () => {
+    vi.mocked(cgApi.blockCuratorGroupMember).mockRejectedValueOnce(
+      new ApiResponseError(409, 'cannot block the curator', 'cannot_block_curator'),
+    )
+    mount()
+    await flush()
+    await confirmBlock()
+    expect(toastError).toHaveBeenCalled()
+    expect(push).not.toHaveBeenCalled()
+    expect(text()).not.toContain('Пользователь заблокирован')
   })
 
   it('«В поддержку» opens the report form; «Не сейчас» just dismisses the chain', async () => {

@@ -353,6 +353,37 @@ describe('MasterInboxView', () => {
     expect(push).not.toHaveBeenCalled()
   })
 
+  // BE-79 (2): the block notices of a school. Blocked -> the school is closed
+  // to the reader: mark-read only. Unblocked -> the school page.
+  it.each([
+    ['curator_group.member_blocked', null],
+    ['curator_group.member_unblocked', { name: 'master-curator-group', params: { id: 'g7' } }],
+  ] as const)('BE-79: %s -> its own target', async (type, target) => {
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+      items: [
+        item({
+          id: 'bl',
+          type,
+          action_data: { action: 'open_curator_group', params: { group_id: 'g7' } },
+        }),
+      ],
+      next_cursor: null,
+      unread: 1,
+    })
+    vi.mocked(notificationsApi.markNotificationRead).mockResolvedValue({ unread: 0 })
+    mount()
+    await flush()
+    segment('Другое')?.click()
+    await flush()
+
+    row(0).click()
+    await flush()
+
+    expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith('bl')
+    if (target) expect(push).toHaveBeenCalledWith(target)
+    else expect(push).not.toHaveBeenCalled()
+  })
+
   it('BE-59: a master-offer row (curator_group.master_offered + open_curator_group) opens the school-offer screen', async () => {
     vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
       items: [

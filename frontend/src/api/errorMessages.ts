@@ -100,7 +100,8 @@ export const ERROR_MESSAGES: Record<string, string> = {
   checkin_window_closed: 'Check-in закрыт — практика уже началась',
   checkin_window_not_open: 'Check-in ещё не открыт — он откроется ближе к началу практики',
 
-  // Curator groups (schools). Ten codes; six were already reachable before
+  // Curator groups (schools). Ten codes before BE-79 added two more
+  // (blocked_in_group, cannot_block_curator); of the ten, six were reachable before
   // this table knew about them, three were added to their raise sites so the
   // 404s stopped arriving as the generic `not_found`, and the tenth
   // (group_creation_not_allowed, GT-15) arrives with its raise site. Three of
@@ -120,6 +121,11 @@ export const ERROR_MESSAGES: Record<string, string> = {
   // master, so the phrase had to stop talking about a link.
   master_required: 'Назначить мастером школы можно только верифицированного мастера',
   blocked_by_curator: 'Вступление в эту школу недоступно',
+  // BE-79 (DRAFT wording, owner reviews): the person is blocked in THIS
+  // school (join by link refused, 403) / the curator tried to block
+  // themselves (409).
+  blocked_in_group: 'Вы заблокированы в этой школе',
+  cannot_block_curator: 'Куратора школы нельзя заблокировать',
   transfer_pending:
     'Предложение уже отправлено. Сначала отмените его, затем предложите другому мастеру.',
   // One code for: неизвестный токен, отозванная ссылка, удалённая школа и

@@ -83,6 +83,7 @@ import type {
   PaginatedCuratorGroupMembersResponse,
   PaginatedCuratorGroupReviewsResponse,
   PaginatedCuratorGroupRosterResponse,
+  PaginatedCuratorGroupBlocksResponse,
   PaginatedPracticesResponse,
   SchoolStudentProfileResponse,
   UpdateCuratorGroupRequest,
@@ -241,6 +242,32 @@ export function removeCuratorGroupMember(id: string, userId: string): Promise<vo
  *  caller's (P-08). */
 export function demoteCuratorGroupMaster(id: string, userId: string): Promise<void> {
   return api.post(`${CURATOR_BASE}/${id}/members/${userId}/demote`)
+}
+
+/** POST /masters/me/curator-groups/{id}/members/{user_id}/block (BE-79) --
+ *  the curator blocks a member (student OR master): they leave the roster,
+ *  appear in /blocks, can no longer see the school or join it by link.
+ *  204, repeat included. 409 `cannot_block_curator`; 404 for a non-member or
+ *  a school that is not the caller's (P-08). The server decides by the
+ *  caller's CURRENT role: in user mode it answers 403. */
+export function blockCuratorGroupMember(id: string, userId: string): Promise<void> {
+  return api.post(`${CURATOR_BASE}/${id}/members/${userId}/block`)
+}
+
+/** DELETE /masters/me/curator-groups/{id}/blocks/{user_id} (BE-79) -- back to
+ *  the roster with the role they had. 204; 404 when not blocked. */
+export function unblockCuratorGroupMember(id: string, userId: string): Promise<void> {
+  return api.delete(`${CURATOR_BASE}/${id}/blocks/${userId}`)
+}
+
+/** GET /masters/me/curator-groups/{id}/blocks (BE-79) -- the «Блок» tab.
+ *  limit/offset only: the endpoint has no search. */
+export function getCuratorGroupBlocks(
+  id: string,
+  query: { limit?: number; offset?: number } = {},
+): Promise<PaginatedCuratorGroupBlocksResponse> {
+  const qs = buildQuery({ limit: query.limit, offset: query.offset })
+  return api.get<PaginatedCuratorGroupBlocksResponse>(`${CURATOR_BASE}/${id}/blocks${qs}`)
 }
 
 /** POST /masters/me/curator-groups/{id}/master-offers (GT-27) -- offer a

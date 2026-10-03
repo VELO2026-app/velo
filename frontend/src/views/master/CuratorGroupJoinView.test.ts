@@ -195,6 +195,19 @@ describe('CuratorGroupJoinView -- preview states', () => {
   // GT-27: master_required left this table. It was the master link refusing
   // an unverified account; there is no master link, and the code now comes
   // from the appointment path, which is a different screen.
+  // BE-79 (2): blocked_in_group joins with its own description.
+  it('blocked_in_group renders its own copy and no Join button', async () => {
+    vi.mocked(cgApi.getCuratorGroupInvitePreview).mockResolvedValue(
+      previewResponse({ can_join: false, reason: 'blocked_in_group' }),
+    )
+    mount()
+    await flush()
+
+    expect(text()).toContain('Вступление недоступно')
+    expect(text()).toContain('Вы заблокированы в этой школе.')
+    expect(buttonWith('Вступить')).toBeFalsy()
+  })
+
   it.each([['blocked_by_curator', 'Вступление недоступно']] as const)(
     'described refusal %s renders its own copy and no Join button',
     async (reason, title) => {

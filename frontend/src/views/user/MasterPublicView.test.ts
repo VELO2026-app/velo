@@ -380,7 +380,9 @@ describe('MasterPublicView', () => {
       expect(liveModal()).not.toBeNull()
     })
 
-    it('«Заблокировать»: draft confirm; confirm is a marked no-op until BE-79', async () => {
+    // BE-79 (2): this pinned the INTERIM no-op (an info toast) -- right until
+    // the block endpoint landed. Confirm now sends it and goes back.
+    it('«Заблокировать»: confirm sends the block for THIS master in THIS school, then back', async () => {
       routeQuery.groupId = 'g1'
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
@@ -399,7 +401,30 @@ describe('MasterPublicView', () => {
       modalButton('Заблокировать')?.click()
       await flush()
 
-      expect(toastInfo).toHaveBeenCalledWith('Блокировка участника школы появится позже (BE-79)')
+      expect(cgApi.blockCuratorGroupMember).toHaveBeenCalledWith('g1', 'm1')
+      expect(toastSuccess).toHaveBeenCalledWith('Участник заблокирован')
+      expect(back).toHaveBeenCalledTimes(1)
+      expect(toastInfo).not.toHaveBeenCalled()
+    })
+
+    it('«Заблокировать» refused (409): the error toast, stay on the profile', async () => {
+      routeQuery.groupId = 'g1'
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
+      vi.mocked(cgApi.blockCuratorGroupMember).mockRejectedValueOnce(
+        new ApiResponseError(409, 'cannot block the curator', 'cannot_block_curator'),
+      )
+      mount()
+      await flush()
+      await openMenu()
+      menuItem('Заблокировать')?.click()
+      await flush()
+      modalButton('Заблокировать')?.click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalled()
+      expect(toastSuccess).not.toHaveBeenCalled()
+      expect(back).not.toHaveBeenCalled()
     })
   })
 

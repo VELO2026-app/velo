@@ -145,6 +145,14 @@ const blocked = computed<RefusalView | null>(() => {
         description: 'Куратор ограничил вам доступ в эту школу.',
         open: false,
       }
+    // BE-79 (DRAFT wording): blocked by the curator IN this school -- the
+    // preview says so, and a join refused 403 re-reads the preview (below).
+    case 'blocked_in_group':
+      return {
+        title: 'Вступление недоступно',
+        description: 'Вы заблокированы в этой школе.',
+        open: false,
+      }
     default:
       // can_join=false with no reason is not a contract shape; stay honest
       // rather than guessing — same title as blocked, no invented details.

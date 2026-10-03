@@ -132,6 +132,8 @@ beforeEach(() => {
   routeState.query = {}
   vi.mocked(cgApi.getCuratorGroupMembers).mockReset().mockResolvedValue(page([]))
   vi.mocked(cgApi.getCuratorGroupRoster).mockReset().mockResolvedValue(page([]))
+  vi.mocked(cgApi.getCuratorGroupBlocks).mockReset()
+  vi.mocked(cgApi.unblockCuratorGroupMember).mockReset()
   // BE-76: the screen asks the server who is looking before the first page.
   // Every test above the BE-76 block is the CURATOR's screen, as before.
   viewerIs('curator')
@@ -382,33 +384,104 @@ describe('SchoolMembersView', () => {
 
   // -- The Блок tab (owner 2026-09-30, BE-79 placeholder) ----------------------
 
-  it('the Блок tab carries the lock glyph and switching to it never calls the API', async () => {
+  // BE-79 (2): these two pinned the PLACEHOLDER («Блок» never fetches) --
+  // right while no endpoint listed blocked members. GET …/blocks replaced it:
+  // the tab now reads it, paged like the roster, and has no search (the
+  // endpoint takes limit/offset only).
+  function blocked(i: number, kind: 'master' | 'student' = 'student') {
+    return {
+      user_id: `b${i}`,
+      name: `Заблокированный ${i}`,
+      avatar_url: null,
+      kind,
+      joined_at: '2026-09-01T10:00:00Z',
+      blocked_at: '2026-10-02T10:00:00Z',
+    }
+  }
+  function blocksPage(items: ReturnType<typeof blocked>[]) {
+    return { items, total: items.length, limit: 20, offset: 0 }
+  }
+  function unblockButtons(): HTMLButtonElement[] {
+    return Array.from(document.body.querySelectorAll('button')).filter((b) =>
+      b.textContent?.includes('Разблокировать'),
+    )
+  }
+
+  it('the Блок tab carries the lock glyph; switching reads GET …/blocks, not the roster', async () => {
+    vi.mocked(cgApi.getCuratorGroupBlocks).mockResolvedValue(blocksPage([blocked(1, 'master')]))
     mountWith()
     await flush()
 
     const blockTab = rosterTab('Блок')
-    expect(blockTab).not.toBeNull()
     expect(blockTab?.querySelector('svg')).not.toBeNull()
-
-    // The master tab's mount fetch already happened; the Блок switch must
-    // not add a single call on top of it.
-    const callsBefore = vi.mocked(cgApi.getCuratorGroupMembers).mock.calls.length
+    const rosterCalls = vi.mocked(cgApi.getCuratorGroupMembers).mock.calls.length
     blockTab!.click()
     await flush()
 
-    expect(vi.mocked(cgApi.getCuratorGroupMembers).mock.calls.length).toBe(callsBefore)
+    expect(cgApi.getCuratorGroupBlocks).toHaveBeenCalledWith('g1', { limit: 20, offset: 0 })
+    expect(vi.mocked(cgApi.getCuratorGroupMembers).mock.calls.length).toBe(rosterCalls)
     expect(replace).toHaveBeenCalledWith(expect.objectContaining({ query: { kind: 'blocked' } }))
-    expect(text()).toContain('Пока нет заблокированных')
+    expect(text()).toContain('Заблокированный 1')
+    expect(text()).toContain('Мастер')
     expect(inputEl()).toBeNull()
   })
 
-  it('?kind=blocked deep link opens the placeholder without a fetch', async () => {
+  it('?kind=blocked deep link reads the blocks; an empty list says so', async () => {
+    vi.mocked(cgApi.getCuratorGroupBlocks).mockResolvedValue(blocksPage([]))
     mountWith({ kind: 'blocked' })
     await flush()
 
+    expect(cgApi.getCuratorGroupBlocks).toHaveBeenCalledTimes(1)
     expect(vi.mocked(cgApi.getCuratorGroupMembers)).not.toHaveBeenCalled()
     expect(rosterTab('Блок')?.getAttribute('aria-selected')).toBe('true')
     expect(text()).toContain('Пока нет заблокированных')
+  })
+
+  it('«Разблокировать»: DELETE for THAT person, then the re-read list no longer has them', async () => {
+    vi.mocked(cgApi.getCuratorGroupBlocks)
+      .mockResolvedValueOnce(blocksPage([blocked(1), blocked(2)]))
+      .mockResolvedValueOnce(blocksPage([blocked(2)]))
+    mountWith({ kind: 'blocked' })
+    await flush()
+
+    unblockButtons()[0]!.click()
+    await flush()
+
+    expect(cgApi.unblockCuratorGroupMember).toHaveBeenCalledWith('g1', 'b1')
+    expect(toastSuccess).toHaveBeenCalledWith('Участник разблокирован')
+    expect(text()).not.toContain('Заблокированный 1')
+    expect(text()).toContain('Заблокированный 2')
+  })
+
+  it('«Разблокировать» 404 (already unblocked): the list is re-read, no error toast', async () => {
+    vi.mocked(cgApi.getCuratorGroupBlocks)
+      .mockResolvedValueOnce(blocksPage([blocked(1)]))
+      .mockResolvedValueOnce(blocksPage([]))
+    vi.mocked(cgApi.unblockCuratorGroupMember).mockRejectedValueOnce(
+      new ApiResponseError(404, 'not blocked', 'not_found'),
+    )
+    mountWith({ kind: 'blocked' })
+    await flush()
+
+    unblockButtons()[0]!.click()
+    await flush()
+
+    expect(cgApi.getCuratorGroupBlocks).toHaveBeenCalledTimes(2)
+    expect(toastError).not.toHaveBeenCalled()
+    expect(text()).toContain('Пока нет заблокированных')
+  })
+
+  it('«Разблокировать» failing otherwise: the error toast, the row stays', async () => {
+    vi.mocked(cgApi.getCuratorGroupBlocks).mockResolvedValue(blocksPage([blocked(1)]))
+    vi.mocked(cgApi.unblockCuratorGroupMember).mockRejectedValueOnce(new TypeError('net'))
+    mountWith({ kind: 'blocked' })
+    await flush()
+
+    unblockButtons()[0]!.click()
+    await flush()
+
+    expect(toastError).toHaveBeenCalled()
+    expect(text()).toContain('Заблокированный 1')
   })
 
   it('switching back to Мастера fetches with kind=master again', async () => {
@@ -477,7 +550,10 @@ describe('SchoolMembersView -- a master of the school (BE-76)', () => {
     expect(rosterTab('Мастера')).toBeTruthy()
     expect(rosterTab('Ученики')).toBeTruthy()
     expect(rosterTab('Блок')).toBeNull()
-    expect(cgApi.getCuratorGroupRoster).toHaveBeenCalledWith('g1', expect.objectContaining({ kind: 'master' }))
+    expect(cgApi.getCuratorGroupRoster).toHaveBeenCalledWith(
+      'g1',
+      expect.objectContaining({ kind: 'master' }),
+    )
     expect(replace).toHaveBeenCalledWith(expect.objectContaining({ query: { kind: 'master' } }))
   })
 
@@ -539,4 +615,3 @@ describe('SchoolMembersView -- a master of the school (BE-76)', () => {
     expect(cgApi.getCuratorGroupRoster).not.toHaveBeenCalled()
   })
 })
-
