@@ -137,9 +137,10 @@
                scoped calendar (owner 2026-10-01; was a scroll to the feed
                below); «Аналитика» is the honest stub until §6 ships a page. -->
           <!-- BE-76: the roster is the curator's and, in the master zone only,
-               the school's masters' (the user zone is FE-93's to remove). -->
+               the school's masters' -- FE-93 removed the user-zone screens, so
+               a curator reading the page in user mode is an ordinary member. -->
           <VMenuRow
-            v-if="canOpenRoster"
+            v-if="inMasterZone && canOpenRoster"
             class="cgp__nav-row"
             label="Участники"
             @click="openRoster"
@@ -150,7 +151,7 @@
             @click="openPracticesCalendar"
           />
           <VMenuRow
-            v-if="isCurator"
+            v-if="inMasterZone && isCurator"
             class="cgp__nav-row"
             label="Аналитика"
             @click="openAnalytics"
@@ -335,20 +336,20 @@ function openPracticesCalendar(): void {
 // API contract is untouched); the cap is presentation-only.
 const upcomingPractices = computed(() => practices.value.slice(0, 5))
 
-// §6 MVP (owner 2026-10-02, PM-2 refinement pending): the school's analytics
-// screen. Same zone pick as the roster rows -- one screen, two mounts.
+// §6 MVP (owner 2026-10-02): the school's analytics screen. FE-93: it mounts
+// in the master zone only -- the user zone has no route for it anymore.
 function openAnalytics(): void {
   void router.push({
-    name: inMasterZone.value ? 'master-curator-group-analytics' : 'user-curator-group-analytics',
+    name: 'master-curator-group-analytics',
     params: { id: groupId.value },
   })
 }
 
-// §1.11 (owner 2026-09-22): the merged participants screen; the zone picks
-// the route family exactly like the back target above.
+// §1.11 (owner 2026-09-22): the merged participants screen; FE-93: master
+// zone only, same as the analytics row above.
 function openRoster(): void {
   void router.push({
-    name: inMasterZone.value ? 'master-curator-group-members' : 'user-curator-group-members',
+    name: 'master-curator-group-members',
     params: { id: groupId.value },
   })
 }

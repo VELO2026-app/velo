@@ -226,24 +226,50 @@ describe('CuratorGroupPageView -- relation matrix', () => {
     expect(text()).not.toContain('Ученики')
   })
 
-  it('CURATOR: the full row set, no leave', async () => {
+  it('CURATOR in the USER zone: the school page reads like an ordinary member (FE-93)', async () => {
     mockHappyLoad('curator')
     mount()
     await flush()
 
     expect(buttonWith('Покинуть школу')).toBeFalsy()
-    // Owner 2026-09-19: the page is hero + these rows + CTA + feed. The nav
-    // rows carry no icons; «Участники» (§1.11, merged rosters) is the
-    // curator's privilege.
-    for (const row of ['Редактировать школу', 'Участники', 'Предстоящие практики', 'Аналитика']) {
-      expect(rowWith(row)).toBeTruthy()
-    }
+    // Owner 2026-09-19: the page is hero + these rows + CTA + feed. FE-93:
+    // the management rows («Участники», «Аналитика») mount in the master
+    // zone only -- the user-mode curator sees the member's page.
+    expect(rowWith('Редактировать школу')).toBeTruthy()
+    expect(rowWith('Предстоящие практики')).toBeTruthy()
+    expect(rowWith('Участники')).toBeUndefined()
+    expect(rowWith('Аналитика')).toBeUndefined()
     expect(buttonWith('Создать практику')).toBeTruthy()
     // §1.6 (owner 2026-09-22): the invite field rides the hero for the
     // curator (Group 3801 form: the label pill reads «Ссылка-приглашение»);
     // the mint fired exactly once on mount (get-or-get by contract).
     expect(text()).toContain('Ссылка-приглашение')
     expect(cgApi.createCuratorGroupInvite).toHaveBeenCalledTimes(1)
+  })
+
+  it('CURATOR in the MASTER zone: management rows open the master-zone screens', async () => {
+    routeState.name = 'master-curator-group'
+    mockHappyLoad('curator')
+    mount()
+    await flush()
+
+    const roster = rowWith('Участники')
+    expect(roster).toBeTruthy()
+    ;(roster as HTMLElement).click()
+    await flush()
+    expect(push).toHaveBeenCalledWith({
+      name: 'master-curator-group-members',
+      params: { id: 'g1' },
+    })
+
+    const analytics = rowWith('Аналитика')
+    expect(analytics).toBeTruthy()
+    ;(analytics as HTMLElement).click()
+    await flush()
+    expect(push).toHaveBeenCalledWith({
+      name: 'master-curator-group-analytics',
+      params: { id: 'g1' },
+    })
   })
 
   it('«Предстоящие практики» opens the school-scoped calendar (owner 2026-10-01)', async () => {
@@ -590,14 +616,13 @@ describe('CuratorGroupPageView -- §1.6 page body', () => {
 
     // VMenuRow renders a div, so these are text-level assertions.
     expect(text()).toContain('Редактировать школу')
-    // §1.11 (owner 2026-09-22): one merged «Участники» row replaces the two
-    // roster rows.
-    expect(text()).toContain('Участники')
+    // FE-93: «Участники» and «Аналитика» mount in the master zone only --
+    // the user-mode curator reads the page like an ordinary member.
+    expect(text()).not.toContain('Участники')
     expect(text()).not.toContain('Список мастеров')
     expect(text()).not.toContain('Список учеников')
     expect(text()).toContain('Предстоящие практики')
-    // The analytics row is always surfaced now (owner 2026-09-19).
-    expect(text()).toContain('Аналитика')
+    expect(text()).not.toContain('Аналитика')
 
     buttonWith('Создать практику')?.click()
     await flush()
@@ -625,14 +650,18 @@ describe('CuratorGroupPageView -- §1.6 page body', () => {
     expect(text()).toContain('Предстоящие практики')
   })
 
-  it('§1.11: the participants row opens the merged roster screen (user zone)', async () => {
+  it('§1.11: the participants row opens the merged roster screen (master zone, FE-93)', async () => {
+    routeState.name = 'master-curator-group'
     mockHappyLoad('curator')
     mount()
     await flush()
 
     rowWith('Участники')?.click()
     await flush()
-    expect(push).toHaveBeenCalledWith({ name: 'user-curator-group-members', params: { id: 'g1' } })
+    expect(push).toHaveBeenCalledWith({
+      name: 'master-curator-group-members',
+      params: { id: 'g1' },
+    })
   })
 
   it('§1.11: the zone picks the participants route family (master zone)', async () => {
@@ -649,20 +678,7 @@ describe('CuratorGroupPageView -- §1.6 page body', () => {
     })
   })
 
-  it('§6 MVP: the analytics row opens the school analytics screen (user zone)', async () => {
-    mockHappyLoad('curator')
-    mount()
-    await flush()
-
-    rowWith('Аналитика')?.click()
-    await flush()
-    expect(push).toHaveBeenCalledWith({
-      name: 'user-curator-group-analytics',
-      params: { id: 'g1' },
-    })
-  })
-
-  it('§6 MVP: the analytics row follows the zone (master zone)', async () => {
+  it('§6 MVP: the analytics row opens the school analytics screen (master zone, FE-93)', async () => {
     routeState.name = 'master-curator-group'
     mockHappyLoad('curator')
     mount()

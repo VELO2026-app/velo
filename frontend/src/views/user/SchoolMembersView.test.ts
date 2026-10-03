@@ -30,7 +30,7 @@ vi.mock('@/api/chats')
 const push = vi.fn()
 const replace = vi.fn()
 const routeState = {
-  name: 'user-curator-group-members',
+  name: 'master-curator-group-members',
   id: 'g1',
   query: {} as Record<string, string>,
 }
@@ -127,7 +127,7 @@ function showMore(): HTMLElement | null {
 }
 
 beforeEach(() => {
-  routeState.name = 'user-curator-group-members'
+  routeState.name = 'master-curator-group-members'
   routeState.id = 'g1'
   routeState.query = {}
   vi.mocked(cgApi.getCuratorGroupMembers).mockReset().mockResolvedValue(page([]))
@@ -225,7 +225,7 @@ describe('SchoolMembersView', () => {
       })
       // The tab is server truth in the URL -- replace, not history push.
       expect(replace).toHaveBeenCalledWith({
-        name: 'user-curator-group-members',
+        name: 'master-curator-group-members',
         params: { id: 'g1' },
         query: { kind: 'master' },
       })
@@ -305,7 +305,7 @@ describe('SchoolMembersView', () => {
     ) ?? null) as HTMLButtonElement | null
     back?.click()
     await flush()
-    expect(push).toHaveBeenCalledWith({ name: 'user-curator-group', params: { id: 'g1' } })
+    expect(push).toHaveBeenCalledWith({ name: 'master-curator-group', params: { id: 'g1' } })
   })
 
   it('student rows push the school-context profile with the row data in query', async () => {
@@ -319,7 +319,7 @@ describe('SchoolMembersView', () => {
     rows[0]?.click()
     await flush()
     expect(push).toHaveBeenCalledWith({
-      name: 'user-curator-group-student',
+      name: 'master-curator-group-student',
       params: { groupId: 'g1', userId: 's9' },
       query: { name: 'Пётр Сидоров', avatar: 'https://x/y.png' },
     })
@@ -604,14 +604,5 @@ describe('SchoolMembersView -- a master of the school (BE-76)', () => {
       params: { id: 'm9' },
       query: { name: 'Борис', avatar: '' },
     })
-  })
-
-  it('the user zone is untouched: a master there still goes through the curator /members', async () => {
-    routeState.name = 'user-curator-group-members'
-    mountWith()
-    await flush()
-
-    expect(cgApi.getCuratorGroupMembers).toHaveBeenCalled()
-    expect(cgApi.getCuratorGroupRoster).not.toHaveBeenCalled()
   })
 })

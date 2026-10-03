@@ -376,7 +376,9 @@ describe('SchoolAnalyticsView', () => {
     expect(text()).toContain('Школа недоступна')
     buttonWith('К школе')?.click()
     await flush()
-    expect(push).toHaveBeenCalledWith({ name: 'user-curator-group', params: { id: 'g1' } })
+    // FE-93: the analytics screen mounts in the master zone only -- the back
+    // target is the master school page unconditionally.
+    expect(push).toHaveBeenCalledWith({ name: 'master-curator-group', params: { id: 'g1' } })
   })
 
   it('the master zone backs into the master school page', async () => {

@@ -23,7 +23,7 @@ vi.mock('@/api/curatorGroups')
 const push = vi.fn()
 const replace = vi.fn()
 const routeState = {
-  name: 'user-curator-group-student',
+  name: 'master-curator-group-student',
   groupId: 'g1',
   userId: 'u9',
   nameQuery: 'Пётр Сидоров',
@@ -101,7 +101,7 @@ function profileFixture(
 }
 
 beforeEach(() => {
-  routeState.name = 'user-curator-group-student'
+  routeState.name = 'master-curator-group-student'
   routeState.groupId = 'g1'
   routeState.userId = 'u9'
   routeState.nameQuery = 'Пётр Сидоров'
@@ -257,7 +257,7 @@ describe('SchoolStudentProfileView', () => {
     exactButton('Не сейчас')?.click()
     await flush()
     expect(push).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'user-curator-group-members', params: { id: 'g1' } }),
+      expect.objectContaining({ name: 'master-curator-group-members', params: { id: 'g1' } }),
     )
   })
 
@@ -270,7 +270,7 @@ describe('SchoolStudentProfileView', () => {
     await confirmBlock()
     expect(toastError).toHaveBeenCalledWith('Участник уже не в школе')
     expect(push).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'user-curator-group-members' }),
+      expect.objectContaining({ name: 'master-curator-group-members' }),
     )
     expect(text()).not.toContain('Пользователь заблокирован')
   })

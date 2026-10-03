@@ -320,7 +320,7 @@ function openPractice(practiceId: string): void {
 
 function goBack(): void {
   void router.push({
-    name: inMasterZone.value ? 'master-curator-group' : 'user-curator-group',
+    name: 'master-curator-group',
     params: { id: groupId.value },
   })
 }

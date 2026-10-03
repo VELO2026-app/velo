@@ -274,8 +274,9 @@ const errorTitle = computed(() => {
   return kind.value === 'master' ? 'Не удалось загрузить мастеров' : 'Не удалось загрузить учеников'
 })
 
+// FE-93: this screen mounts in the master zone only.
 const pageRoute = computed(() => ({
-  name: inMasterZone.value ? 'master-curator-group' : 'user-curator-group',
+  name: 'master-curator-group',
   params: { id: groupId.value },
 }))
 
@@ -355,7 +356,7 @@ async function switchKind(next: MemberTab): Promise<void> {
     search.value = ''
   }
   void router.replace({
-    name: inMasterZone.value ? 'master-curator-group-members' : 'user-curator-group-members',
+    name: 'master-curator-group-members',
     params: { id: groupId.value },
     query: { kind: next },
   })
@@ -466,9 +467,8 @@ function openMember(member: CuratorGroupRosterItem): void {
     messageTo.value = member
     return
   }
-  const zone = inMasterZone.value ? 'master' : 'user'
   void router.push({
-    name: `${zone}-curator-group-student`,
+    name: 'master-curator-group-student',
     params: { groupId: groupId.value, userId: member.user_id },
     // The profile renders instantly from the roster row's own data while its
     // real fetches run (the MasterGroupDetailView query canon).

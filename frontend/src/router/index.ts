@@ -210,37 +210,11 @@ const router = createRouter({
           component: () => import('@/views/user/CuratorGroupPageView.vue'),
         },
         {
-          // tz-curator.md §1.11 (owner 2026-09-22): the school's participants
-          // on ONE screen -- the Мастера/Ученики glass switcher (VSegmentTrack)
-          // lives on it, and the active roster rides ?kind= (default master)
-          // so a refresh or a deep link reopens the same list. Curator-only
-          // surface: the server answers everyone else with the same P-08 404
-          // it always did, and the page's nav row is the curator's too.
-          path: 'groups/:id/members',
-          name: 'user-curator-group-members',
-          meta: { hideTabBar: true },
-          component: () => import('@/views/user/SchoolMembersView.vue'),
-        },
-        {
-          // tz-curator.md §6 MVP (owner unblocked 2026-10-02): the school's
-          // analytics screen, curator-only like the roster -- the server
-          // answers everyone else with the same masked 404.
-          path: 'groups/:id/analytics',
-          name: 'user-curator-group-analytics',
-          meta: { hideTabBar: true },
-          component: () => import('@/views/user/SchoolAnalyticsView.vue'),
-        },
-        {
-          // tz-curator.md §1.11.4 (owner 2026-09-22): the school-context
-          // student profile -- there is no public student page, and the CRM
-          // profile 404s for school-only students, so the curator actions
-          // (offer the master role / remove) live here.
-          path: 'groups/:groupId/students/:userId',
-          name: 'user-curator-group-student',
-          meta: { hideTabBar: true },
-          component: () => import('@/views/user/SchoolStudentProfileView.vue'),
-        },
-        {
+          // FE-93 (owner 2026-10-03): the curator-management screens
+          // (participants / analytics / student profile) exist ONLY in the
+          // master zone -- in user mode a curator reads the school page as
+          // an ordinary member. The user zone keeps the school list and
+          // this page for the school's students.
           path: 'checkin/:practiceId',
           name: 'user-checkin',
           component: () => import('@/views/user/CheckinView.vue'),

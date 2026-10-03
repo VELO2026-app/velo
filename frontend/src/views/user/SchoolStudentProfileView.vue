@@ -295,10 +295,9 @@ function formatHours(hours: number): string {
 const practicesLabel = computed(() => String(profile.value?.practices_count ?? ''))
 const hoursLabel = computed(() => (profile.value ? formatHours(profile.value.hours) : ''))
 
-const inMasterZone = computed(() => String(route.name ?? '').startsWith('master'))
-
 const rosterRoute = computed(() => ({
-  name: inMasterZone.value ? 'master-curator-group-members' : 'user-curator-group-members',
+  // FE-93: this screen mounts in the master zone only.
+  name: 'master-curator-group-members',
   params: { id: groupId.value },
   // Back lands on the roster the row came from (the §1.11 switcher tab).
   query: { kind: 'student' },

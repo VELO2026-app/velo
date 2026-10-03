@@ -91,24 +91,9 @@ function buildRouter(): Router {
       { path: '/user/notifications', name: 'user-inbox', component: StubChild },
       { path: '/user/checkin/:practiceId', name: 'user-checkin', component: StubChild },
       { path: '/user/practice/:id', name: 'practice-detail', component: StubChild },
-      // §1.11 (owner 2026-09-22): the participants screen -- a FOG_ROUTES
-      // member and a hideTabBar route (mirrors router/index.ts).
-      {
-        path: '/user/groups/g1/members',
-        name: 'user-curator-group-members',
-        meta: { hideTabBar: true },
-        component: StubChild,
-      },
-      // §6 (owner 2026-10-02): the school's analytics screen -- the same
-      // FOG_ROUTES + hideTabBar pair (mirrors router/index.ts).
-      {
-        path: '/user/groups/g1/analytics',
-        name: 'user-curator-group-analytics',
-        meta: { hideTabBar: true },
-        component: StubChild,
-      },
-      // Owner 2026-09-30: the master's page in the curator context -- the
-      // dock hides there (the CTA takes its place; mirrors router/index.ts).
+      // FE-93 (owner 2026-10-03): the participants / analytics / student
+      // profile screens exist ONLY in the master zone -- their user-zone
+      // routes and stubs are gone from here and from router/index.ts.
       {
         path: '/user/masters/:id',
         name: 'user-master-public',
@@ -420,19 +405,8 @@ describe('UserShell', () => {
       expect(mainEl().classList.contains('mobile-layout__main--fog')).toBe(true)
     })
 
-    it('the participants screen (§1.11) is a fog screen like the school page', async () => {
-      await mount('user-curator-group-members')
-      await flush()
-
-      expect(mainEl().classList.contains('mobile-layout__main--fog')).toBe(true)
-    })
-
-    it('the analytics screen (§6) is a fog screen like the school page', async () => {
-      await mount('user-curator-group-analytics')
-      await flush()
-
-      expect(mainEl().classList.contains('mobile-layout__main--fog')).toBe(true)
-    })
+    // FE-93: the participants / analytics screens left the user zone -- their
+    // fog behavior (if any) belongs to the master shell now.
 
     it('the diary (fill mode, owns its own fog) renders with NO shared fog mask', async () => {
       await mount('user-diary')
