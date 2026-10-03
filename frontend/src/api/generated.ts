@@ -734,7 +734,7 @@ export interface CuratorGroupInvitePreviewResponse {
   relation: 'master' | 'student' | null
 }
 
-/** The group's ONE reusable link. THERE USED TO BE A REQUEST BODY, CreateCuratorGroupInviteRequest, whose only field was the link's kind, and this response echoed it back. GT-27 left schools with a single link, so both the field and the request model are gone rather than kept and ignored. The url carries the token and nothing else (`curator_group_invite__<token>`): a second copy of any fact in the url is a copy the sender can edit by hand. */
+/** The group's ONE reusable link. THERE USED TO BE A REQUEST BODY, CreateCuratorGroupInviteRequest, whose only field was the link's kind, and this response echoed it back. GT-27 left schools with a single link, so both the field and the request model are gone rather than kept and ignored. The url carries the token and nothing else (`school__<token>`): a second copy of any fact in the url is a copy the sender can edit by hand. */
 export interface CuratorGroupInviteResponse {
   invite_url: string
 }
