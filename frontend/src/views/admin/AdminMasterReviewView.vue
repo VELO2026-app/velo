@@ -555,7 +555,7 @@
          same never-blocks contract). -->
     <VConfirmDialog
       :open="showPromote"
-      :message="`Метода «${promoteLabel}» нет в каталоге — добавить для всех мастеров?`"
+      :message="promoteMessage"
       confirm-label="Добавить в каталог"
       cancel-label="Только этому мастеру"
       :loading="verifying"
@@ -959,7 +959,16 @@ function closeReject(): void {
 // dismiss can never fail to verify, by construction, not by a separate
 // guard. No custom text -> straight to doVerify(), unchanged from before.
 const showPromote = ref(false)
-const promoteLabel = ref('')
+/** FE-89: one entry per unmatched method -- promoted/scoped separately, so
+ *  an application with several own methods never becomes one glued label. */
+const promoteLabels = ref<string[]>([])
+const promoteMessage = computed((): string => {
+  const labels = promoteLabels.value
+  if (labels.length <= 1) {
+    return `Метода «${labels[0] ?? ''}» нет в каталоге — добавить для всех мастеров?`
+  }
+  return `Методов ${labels.map((l) => `«${l}»`).join(', ')} нет в каталоге — добавить для всех мастеров?`
+})
 
 /** BE-18: the verify-dialog tick for the school-founding right.
  *  Defaults to NO -- absent/false writes nothing on the backend, and the
@@ -990,8 +999,10 @@ async function onToggleRight(): Promise<void> {
 function onVerify(): void {
   if (anyLoading.value) return
   const parsed = parseMethods(methods.value)
-  if (parsed.customEnabled && parsed.customText) {
-    promoteLabel.value = parsed.customText
+  if (parsed.customEnabled && parsed.custom.length) {
+    // FE-89: each unmatched method travels as its own label -- the old
+    // joined customText scoped ONE direction named «A, B».
+    promoteLabels.value = parsed.custom
     showPromote.value = true
     return
   }
@@ -1013,16 +1024,17 @@ async function doVerify(promote?: string[], masterOnly?: string[]): Promise<void
   }
 }
 
-/** «Добавить в каталог» -- verify AND promote the custom label. */
+/** «Добавить в каталог» -- verify AND promote the custom labels (each its
+ *  own catalog row). */
 function onPromoteConfirm(): void {
-  void doVerify([promoteLabel.value])
+  void doVerify([...promoteLabels.value])
 }
 
 /** «Только этому мастеру» (or the dialog dismissed) -- verify, scoped to this
- *  master only (T22-6, PROMPT №561): a real taxonomy row, just not a shared
- *  one -- was silently nothing before this. */
+ *  master only (T22-6, PROMPT №561): a real taxonomy row per label, just not
+ *  a shared one -- was silently nothing before this. FE-89: per-label. */
 function onPromoteCancel(): void {
-  void doVerify(undefined, [promoteLabel.value])
+  void doVerify(undefined, [...promoteLabels.value])
 }
 
 async function onReject(): Promise<void> {

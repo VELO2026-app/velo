@@ -60,6 +60,9 @@ describe('parseMethods', () => {
     const parsed = parseMethods(['терапия', 'пилатес'])
     expect(parsed.customEnabled).toBe(true)
     expect(parsed.customText).toBe('терапия, пилатес')
+    // FE-89: the labels also survive SEPARATELY -- admin approval scopes or
+    // promotes each as its own direction; the joined string is display-only.
+    expect(parsed.custom).toEqual(['терапия', 'пилатес'])
   })
 
   it('ignores blank entries', () => {
@@ -224,6 +227,7 @@ describe('flattenMethods against a catalog-only style (bug 5 leak 2)', () => {
       styles: {},
       customEnabled: false,
       customText: '',
+      custom: [],
     })
 
     expect(flattened).toEqual(['Гвоздестояние'])
@@ -259,6 +263,7 @@ describe('flattenMethods against a catalog-only style (bug 5 leak 2)', () => {
       styles: { custom_abcxyz01: ['custom_l40lb6fj'] },
       customEnabled: false,
       customText: '',
+      custom: [],
     })
 
     expect(flattened).toEqual(['Йога тест — Продвинутый'])
@@ -270,6 +275,7 @@ describe('flattenMethods against a catalog-only style (bug 5 leak 2)', () => {
       styles: { yoga: ['hatha'] },
       customEnabled: false,
       customText: '',
+      custom: [],
     })
 
     expect(flattened).toEqual(['Йога — Хатха-йога'])
@@ -281,6 +287,7 @@ describe('flattenMethods against a catalog-only style (bug 5 leak 2)', () => {
       styles: { yoga: ['totally_unknown_style'] },
       customEnabled: false,
       customText: '',
+      custom: [],
     })
 
     expect(flattened).toEqual(['Йога — totally_unknown_style'])

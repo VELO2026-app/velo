@@ -49,6 +49,11 @@ export interface MethodSelection {
   styles: Record<string, string[]>
   customEnabled: boolean
   customText: string
+  /** FE-89: the unmatched labels ONE PER METHOD -- the array customText was
+   *  built from. Admin approval must scope/promote them as separate
+   *  directions; the joined customText as a single label is what glued a
+   *  master's second own method into the first one. */
+  custom: string[]
 }
 
 /** « — » = space + U+2014 (em dash) + space. MUST match the wizard's flatten
@@ -316,5 +321,6 @@ export function parseMethods(methods: string[]): MethodSelection {
     styles,
     customEnabled: unmatched.length > 0,
     customText: unmatched.join(', '),
+    custom: [...unmatched],
   }
 }

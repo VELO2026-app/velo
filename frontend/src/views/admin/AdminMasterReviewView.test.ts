@@ -812,6 +812,35 @@ describe('AdminMasterReviewView', () => {
       expect(push).toHaveBeenCalledWith({ name: 'admin-masters' })
     })
 
+    it('FE-89: TWO own methods travel as two separate labels, never one glued «А, Б» direction', async () => {
+      // The reported bug: a master adds a second own method in their profile;
+      // the admin approves; the old code glued both unmatched labels into ONE
+      // master_only entry «Сказкотерапия, Гвоздестояние» -- one direction,
+      // neither usable. Each label must travel separately (the earlier
+      // private method re-scopes idempotently, the new one is born alone).
+      vi.mocked(adminApi.getMasterById).mockResolvedValue(
+        master({ methods: ['Сказкотерапия', 'Гвоздестояние'] }),
+      )
+      vi.mocked(adminApi.verifyMaster).mockResolvedValue({ user_id: 'm_pending', status: 'ok' })
+      mount('m_pending')
+      await flush()
+
+      footBtn('Одобрить')?.click()
+      await flush()
+      expect(modalIsOpen()).toBe(true)
+      expect(modalOverlay()?.textContent).toContain('Сказкотерапия')
+      expect(modalOverlay()?.textContent).toContain('Гвоздестояние')
+      modalBtn('Только этому мастеру')?.click()
+      await flush()
+
+      expect(adminApi.verifyMaster).toHaveBeenCalledWith(
+        'm_pending',
+        undefined,
+        ['Сказкотерапия', 'Гвоздестояние'],
+        false,
+      )
+    })
+
     it('dismiss (overlay tap, NOT the cancel button): STILL verifies, scoped to this master only', async () => {
       vi.mocked(adminApi.getMasterById).mockResolvedValue(
         master({ methods: ['Нестандартный метод'] }),

@@ -115,7 +115,7 @@
     <!-- Custom method not in the catalog (R5 stage 4, operator decision 3=Б) -->
     <VConfirmDialog
       :open="!!promoteTarget"
-      :message="`Метода «${promoteLabel}» нет в каталоге — добавить для всех мастеров?`"
+      :message="promoteMessage"
       confirm-label="Добавить в каталог"
       cancel-label="Только этому мастеру"
       :loading="!!promoteTarget && busyId === promoteTarget.user_id"
@@ -174,7 +174,16 @@ const rejectError = ref('')
 // tap) is treated the same as "this master only" -- it always still
 // approves, it just never fails to act on an accidental dismiss.
 const promoteTarget = ref<AdminMethodChangeItem | null>(null)
-const promoteLabel = ref('')
+/** FE-89: one entry per unmatched method -- scoped/promoted separately, so a
+ *  master's already-approved private method is never glued to the new one. */
+const promoteLabels = ref<string[]>([])
+const promoteMessage = computed((): string => {
+  const labels = promoteLabels.value
+  if (labels.length <= 1) {
+    return `Метода «${labels[0] ?? ''}» нет в каталоге — добавить для всех мастеров?`
+  }
+  return `Методов ${labels.map((l) => `«${l}»`).join(', ')} нет в каталоге — добавить для всех мастеров?`
+})
 
 const headerCount = computed<string>(() => (total.value ? String(total.value) : '—'))
 
@@ -227,13 +236,16 @@ function removeItem(userId: string): void {
 }
 
 /** Tap "Одобрить": pause on a confirm if any proposed method doesn't match
- *  the taxonomy (custom/unmatched), else approve immediately (unchanged). */
+ *  the taxonomy (custom/unmatched), else approve immediately (unchanged).
+ *  FE-89: the unmatched labels travel SEPARATELY (parsed.custom) -- the old
+ *  joined customText string scoped ONE direction named «A, B» and glued the
+ *  master's second own method into the first. */
 function onApprove(item: AdminMethodChangeItem): void {
   if (busyId.value) return
   const parsed = parseMethods(item.proposed_methods ?? [])
-  if (parsed.customEnabled && parsed.customText) {
+  if (parsed.customEnabled && parsed.custom.length) {
     promoteTarget.value = item
-    promoteLabel.value = parsed.customText
+    promoteLabels.value = parsed.custom
     return
   }
   void doApprove(item)
@@ -258,20 +270,23 @@ async function doApprove(
   }
 }
 
-/** «Добавить в каталог» -- approve AND promote the custom label. */
+/** «Добавить в каталог» -- approve AND promote the custom labels (each its
+ *  own catalog row). */
 function onPromoteConfirm(): void {
   const item = promoteTarget.value
   if (!item) return
-  void doApprove(item, [promoteLabel.value])
+  void doApprove(item, [...promoteLabels.value])
 }
 
 /** «Только этому мастеру» (or dialog dismissed) -- approve, scoped to this
- *  master only (T22-6, PROMPT №561): a real taxonomy row, just not a shared
- *  one -- was silently nothing before this. */
+ *  master only (T22-6, PROMPT №561): a real taxonomy row per label, just not
+ *  a shared one -- was silently nothing before this. FE-89: per-label, so
+ *  the master's earlier private direction is re-scoped idempotently and the
+ *  new one is born standalone, never glued together. */
 function onPromoteCancel(): void {
   const item = promoteTarget.value
   if (!item) return
-  void doApprove(item, undefined, [promoteLabel.value])
+  void doApprove(item, undefined, [...promoteLabels.value])
 }
 
 function openReject(item: AdminMethodChangeItem): void {

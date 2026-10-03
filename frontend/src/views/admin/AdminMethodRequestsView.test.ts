@@ -108,6 +108,13 @@ const ITEM_CUSTOM = item({
   display_name: 'Мастер Кастомный',
   proposed_methods: ['Мой уникальный метод'],
 })
+// FE-89: TWO own methods, both unmatched -- the second was added later in
+// the profile while the first is already an approved private direction.
+const ITEM_TWO_OWN = item({
+  user_id: 'm_two',
+  display_name: 'Мастер Два своих',
+  proposed_methods: ['Сказкотерапия', 'Гвоздестояние'],
+})
 
 function paginated(items: AdminMethodChangeItem[], total?: number) {
   return { items, total: total ?? items.length, limit: 20, offset: 0 }
@@ -417,6 +424,33 @@ describe('AdminMethodRequestsView', () => {
 
       expect(adminApi.approveMethodChange).toHaveBeenCalledWith('m_custom', undefined, [
         'Мой уникальный метод',
+      ])
+    })
+
+    it('FE-89: TWO own methods travel as two separate labels, never one glued «Сказкотерапия, Гвоздестояние» entry', async () => {
+      // The reported bug: the master's already-approved private method rode
+      // along inside proposed_methods, and the old glue scoped ONE direction
+      // named «Сказкотерапия, Гвоздестояние» -- dead for both practices.
+      vi.mocked(adminApi.approveMethodChange).mockResolvedValue({
+        user_id: 'm_two',
+        status: 'approved',
+      })
+      // The mounted feed carries THIS request, not the default seed's.
+      vi.mocked(adminApi.getMethodChangeRequests).mockResolvedValue(paginated([ITEM_TWO_OWN]))
+      mount()
+      await flush()
+
+      btnByText(cardByName('Мастер Два своих'), 'Одобрить')?.click()
+      await flush()
+      expect(modalIsOpen()).toBe(true)
+      expect(modalOverlay()?.textContent).toContain('Сказкотерапия')
+      expect(modalOverlay()?.textContent).toContain('Гвоздестояние')
+      btnByText(document.body, 'Только этому мастеру')?.click()
+      await flush()
+
+      expect(adminApi.approveMethodChange).toHaveBeenCalledWith('m_two', undefined, [
+        'Сказкотерапия',
+        'Гвоздестояние',
       ])
     })
   })
