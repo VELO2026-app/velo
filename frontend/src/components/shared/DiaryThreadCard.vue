@@ -87,7 +87,7 @@
     </span>
     <span class="tcard__prac-head">
       <span class="tcard__prac-title">{{ practiceTitle }}</span>
-      <span v-if="masterName || masterVerified" class="tcard__prac-master">
+      <span v-if="masterName" class="tcard__prac-master">
         <span class="tcard__prac-avatar" aria-hidden="true">
           <img
             v-if="masterAvatarUrl"
@@ -97,7 +97,6 @@
           />
         </span>
         <span v-if="masterName" class="tcard__prac-master-name">{{ masterName }}</span>
-        <IconCheck v-if="masterVerified" :size="10" class="tcard__prac-verified" />
       </span>
     </span>
     <span class="tcard__prac-meta">
@@ -186,7 +185,6 @@ const {
   practiceTitle,
   masterName,
   masterAvatarUrl,
-  masterVerified,
   practiceTime,
   practiceDuration,
   outcomeStatus,
@@ -456,10 +454,6 @@ function onTap(): void {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.tcard__prac-verified {
-  flex: 0 0 auto;
-  color: var(--velo-teal-400);
 }
 .tcard__prac-meta {
   position: absolute;

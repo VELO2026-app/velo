@@ -3,7 +3,8 @@
 
   Public master profile shown to users who tap "Подробнее" on a practice's
   master card (frame 4). Figma node 541:2065:
-    - Hero card: avatar with a verified check badge on its corner, name, "N лет опыта" pill, bio
+    - Hero card: avatar, name, "N лет опыта" pill, bio (the verified check
+      badge is hidden product-wide, owner 2026-10-03)
     - Two stat cards: practices_count "Практик" / reviews_count "Отзывов"
     - "Методы" accordion (method chips)
     - «Предстоящие практики» nav row (owner 2026-09-30) -> the stacked
@@ -94,14 +95,9 @@
     >
       <!-- Hero -->
       <VCard class="master-public__hero" padding="none">
-        <!-- The verified check rides the avatar's bottom-right corner (owner
-             2026-09-30): 22px disc, card-colored ring, no text badge. -->
-        <div class="master-public__avatar">
-          <VAvatar :url="profile.avatar_url ?? ''" :name="displayName" size="xl" />
-          <span class="master-public__verified" role="img" aria-label="Верифицирован">
-            <IconCheck :size="14" />
-          </span>
-        </div>
+        <!-- No verification checkmark on the avatar: hidden product-wide
+             (owner 2026-10-03). -->
+        <VAvatar :url="profile.avatar_url ?? ''" :name="displayName" size="xl" />
 
         <h1 class="master-public__name">{{ displayName }}</h1>
 
@@ -272,7 +268,7 @@ import {
   VRadioGroup,
 } from '@/components/ui'
 import { VHeader } from '@/components/layout'
-import { IconCheck, IconChevronRight, IconLock, IconMessages, IconPen } from '@/components/icons'
+import { IconChevronRight, IconLock, IconMessages, IconPen } from '@/components/icons'
 import CalendarPracticeCard from '@/components/shared/CalendarPracticeCard.vue'
 import SendMessageModal from '@/components/shared/SendMessageModal.vue'
 import TargetUserCard from '@/components/shared/TargetUserCard.vue'
@@ -526,30 +522,6 @@ watch(masterId, (id) => {
   font-weight: 400;
   color: var(--velo-text-primary);
   margin: 0;
-}
-
-/* The verified check rides the avatar's corner (owner 2026-09-30) -- the
-   ring is the card's own surface, so the disc reads as punched through.
-   Same glass-teal recipe as MasterCard's disc (the solid teal-600 fill read
-   too bright over the avatar). */
-.master-public__avatar {
-  position: relative;
-  flex-shrink: 0;
-}
-
-.master-public__verified {
-  position: absolute;
-  right: -2px;
-  bottom: -2px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border: 2px solid var(--velo-bg-card-solid);
-  border-radius: var(--radius-full);
-  background: var(--velo-glass-teal-30);
-  color: var(--velo-teal-600);
 }
 
 .master-public__pills {

@@ -10,10 +10,9 @@
       diaryStore.fetchEntry(id) -> GET /diary/{id};
     - the optional practice header (screen 56) is built from a separate
       GET /practices/{practice_id} when the entry is linked to one; entries
-      with no practice link render without the header (screen 57). The
-      verified badge is intentionally omitted here -- it lives on the feed's
-      own practice cards (snapshot-sourced), and PracticeResponse carries no
-      verified flag.
+      with no practice link render without the header (screen 57). No
+      verification checkmark anywhere: it is hidden product-wide (owner
+      2026-10-03), and PracticeResponse carries no verified flag.
 
   Modes:
     view  -- header "<- Запись ⋯", optional practice header, date, title,
@@ -91,7 +90,6 @@
           :when="practiceTime"
           :duration="practiceDuration"
           :clickable="false"
-          :show-verified="false"
         />
 
         <!-- The entry card -->

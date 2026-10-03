@@ -24,7 +24,6 @@
     title?       -- override title (e.g. cleaned of "(эфир)").
     when         -- pre-formatted date OR time string shown under the icon.
     duration?    -- pre-formatted duration ("45 мин"); omitted = no duration cell.
-    showVerified -- show the teal verified check next to the master (default true).
     clickable    -- whole card is a button emitting @click (default true).
 
   Slot:
@@ -51,9 +50,6 @@
           <p class="practice-list-card__master">
             <span class="practice-list-card__master-avatar">{{ masterInitial }}</span>
             <span class="practice-list-card__master-name">{{ masterName }}</span>
-            <span v-if="showVerified" class="practice-list-card__verified">
-              <IconCheck :size="11" />
-            </span>
           </p>
         </slot>
       </div>
@@ -82,7 +78,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { IconCheck, IconClock } from '@/components/icons'
+import { IconClock } from '@/components/icons'
 import { practiceIconFor } from '@/utils/displayHelpers'
 
 interface PracticeLike {
@@ -103,8 +99,6 @@ const props = withDefaults(
     when?: string
     /** Pre-formatted duration ("45 мин"); omitted = no duration cell. */
     duration?: string
-    /** Show the teal-circle "verified" check next to the master name. Default true. */
-    showVerified?: boolean
     /** Optional second line shown UNDER `when` (e.g. the time on the dashboard
      *  nearest-practice card, so date + time are both visible). Omit = single line. */
     whenTime?: string
@@ -116,7 +110,6 @@ const props = withDefaults(
     when: '',
     duration: undefined,
     whenTime: undefined,
-    showVerified: true,
     clickable: true,
   },
 )
@@ -224,18 +217,6 @@ const masterInitial = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.practice-list-card__verified {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: var(--radius-full);
-  background: var(--velo-glass-teal-30);
-  color: var(--velo-teal-600);
-  flex-shrink: 0;
 }
 
 /* Bottom meta line: when (under icon) · duration (under title) · badge (right).

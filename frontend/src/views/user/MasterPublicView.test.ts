@@ -503,9 +503,9 @@ describe('MasterPublicView', () => {
       expect(emptyState()).toBeNull()
       expect(content()).not.toBeNull()
       expect(content()?.textContent).toContain('Анна Соколова')
-      // Verified check is the small MasterCard-style disc now (icon-only --
-      // the text badge is gone; owner 2026-09-30).
-      expect(content()?.querySelector('.master-public__verified svg')).not.toBeNull()
+      // The verified check is hidden product-wide (owner 2026-10-03): no disc
+      // on the avatar, no «Верифицирован» text anywhere.
+      expect(content()?.querySelector('.master-public__verified')).toBeNull()
       expect(content()?.textContent).not.toContain('Верифицирован')
     })
 

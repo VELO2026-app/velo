@@ -5,7 +5,7 @@
   Calendar frame 4):
     - Avatar: VAvatar (real photo when master_avatar_url is set, initials
       from the name otherwise -- the project-wide avatar pattern).
-    - Name + verified check
+    - Name
     - Method tags (VTag, cycling blue / pink / sand)
 
   The WHOLE card is the tap target -> master public profile (/user/masters/:id).
@@ -21,9 +21,6 @@
     <div class="master-card__info">
       <div class="master-card__name">
         {{ masterName ?? 'Мастер' }}
-        <span class="master-card__verified">
-          <IconCheck :size="14" />
-        </span>
       </div>
       <div v-if="methods?.length" class="master-card__tags">
         <VTag
@@ -43,7 +40,6 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { VTag, VAvatar } from '@/components/ui'
-import { IconCheck } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { methodChipFor } from '@/utils/methodChips'
 
@@ -123,26 +119,10 @@ function onMore(): void {
 }
 
 .master-card__name {
-  display: flex;
-  align-items: center;
-  /* Figma: gap name->verified ≈ 12 (233-221). Round до space-2=8. */
-  gap: var(--space-2);
   font-family: var(--font-body);
   font-size: var(--text-base);
   color: var(--velo-text-primary);
   margin-bottom: var(--space-1);
-}
-
-.master-card__verified {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  /* Figma: verified circle r=13 -> 26×26 (был 18). */
-  width: 26px;
-  height: 26px;
-  border-radius: var(--radius-full);
-  background: var(--velo-glass-teal-30);
-  color: var(--velo-teal-600);
 }
 
 .master-card__tags {

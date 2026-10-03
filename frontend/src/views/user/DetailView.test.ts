@@ -654,11 +654,10 @@ describe('DetailView', () => {
       expect(text()).not.toContain('14:00') // the runner's Asia/Tbilisi
     })
 
-    it('the verified badge is deliberately omitted -- PracticeResponse carries no such flag', async () => {
-      // `:show-verified="false"` (.vue:60), and the .vue:15-16 header comment says
-      // why. PracticeListCard defaults showVerified to TRUE
-      // (PracticeListCard.vue:76), so the prop is load-bearing: drop it and the
-      // card paints a teal check this screen has no data to justify.
+    it('the verified badge is retired -- no teal check renders on this screen', async () => {
+      // Owner 2026-10-03: the verification checkmark is hidden product-wide --
+      // PracticeListCard no longer renders one at all (the showVerified prop is
+      // gone), and PracticeResponse never carried a verified flag to justify it.
       mount()
       await flush()
 
@@ -818,7 +817,7 @@ describe('DetailView', () => {
 // - PracticeListCard's own internals (the direction icon via practiceIconFor, the
 //   master initial, the meta layout). Component-level behaviour of a shared DS
 //   card, identical on the six screens that mount it. What belongs to DetailView
-//   is WHICH props it passes -- the when/duration derivations, show-verified and
+//   is WHICH props it passes -- the when/duration derivations and
 //   clickable -- and those ARE covered above.
 // - formatFeedDateTime / formatTime / formatDuration themselves. Pure functions
 //   covered at the util layer; this file asserts that the screen feeds them the

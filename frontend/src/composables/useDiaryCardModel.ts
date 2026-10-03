@@ -23,11 +23,7 @@ import {
   practiceIconFor,
 } from '@/utils/displayHelpers'
 import { EXTERNAL_ACTIVITY_MOOD_HIDDEN } from '@/utils/constants'
-import {
-  MOOD_SCALE_DEFAULT_SCORE,
-  moodKeyFromScore,
-  moodLabelFromScore,
-} from '@/utils/moodScale'
+import { MOOD_SCALE_DEFAULT_SCORE, moodKeyFromScore, moodLabelFromScore } from '@/utils/moodScale'
 import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
 import { formatTime, formatDate, formatDuration } from '@/utils/format'
 import type { DiaryFeedItem, DiaryEventKind, ExternalActivityType } from '@/api/types'
@@ -59,7 +55,6 @@ export interface DiaryCardModel {
   practiceTitle: ComputedRef<string>
   masterName: ComputedRef<string>
   masterAvatarUrl: ComputedRef<string | null>
-  masterVerified: ComputedRef<boolean>
   practiceTime: ComputedRef<string>
   practiceDuration: ComputedRef<string>
   outcomeStatus: ComputedRef<string>
@@ -177,7 +172,6 @@ export function useDiaryCardModel(
   const practiceTitle = computed(() => snapStr('practice_title') ?? 'Практика')
   const masterName = computed(() => snapStr('master_name') ?? '')
   const masterAvatarUrl = computed(() => snapStr('master_avatar_url'))
-  const masterVerified = computed(() => snap.value['master_verified'] === true)
   // Practice card shows time + duration (not the full date — the day is in the
   // timeline's day separator). Duration comes from the snapshot (backend).
   const practiceTime = computed(() => {
@@ -254,7 +248,6 @@ export function useDiaryCardModel(
     practiceTitle,
     masterName,
     masterAvatarUrl,
-    masterVerified,
     practiceTime,
     practiceDuration,
     outcomeStatus,

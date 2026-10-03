@@ -48,7 +48,6 @@
         <img v-if="masterAvatarUrl" :src="masterAvatarUrl" alt="" class="feed-card__avatar-img" />
       </span>
       <span class="feed-card__master-name">{{ masterName }}</span>
-      <IconCheck v-if="masterVerified" :size="14" class="feed-card__verified" />
     </div>
 
     <div class="feed-card__practice-bottom">
@@ -119,7 +118,6 @@ const {
   practiceTitle,
   masterName,
   masterAvatarUrl,
-  masterVerified,
   practiceTime,
   practiceDuration,
   outcomeStatus,
@@ -250,10 +248,6 @@ function onTap(): void {
 .feed-card__master-name {
   font-size: var(--text-12);
   color: var(--velo-text-secondary);
-}
-
-.feed-card__verified {
-  color: var(--velo-teal-400);
 }
 
 /* Bottom meta — unified with PracticeListCard: time centred UNDER the icon (its

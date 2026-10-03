@@ -12,8 +12,9 @@
     - the row itself (mood/rating, full comment, created_at, practice_id)
       comes from getCheckin(id) / getFeedback(id);
     - the optional practice header is built from GET /practices/{practice_id}
-      when the row is linked to a practice. The verified badge is omitted
-      (PracticeResponse carries no verified flag -- same call as EntryView).
+      when the row is linked to a practice. No verification checkmark anywhere:
+      it is hidden product-wide (owner 2026-10-03), and PracticeResponse carries
+      no verified flag anyway (same call as EntryView).
 
   No store: this is a one-shot read with no caching or mutations, loaded
   directly via the api wrappers (like getPractice).
@@ -57,7 +58,6 @@
           :when="practiceTime"
           :duration="practiceDuration"
           :clickable="false"
-          :show-verified="false"
         />
 
         <!-- The check-in / feedback pill -->
@@ -90,11 +90,7 @@ import { extractApiError } from '@/composables/useApiError'
 import { getCheckin, getFeedback } from '@/api/diary'
 import { getPractice } from '@/api/practices'
 import { formatFeedDateTime, formatDuration, formatTime } from '@/utils/format'
-import {
-  MOOD_SCALE_DEFAULT_SCORE,
-  moodKeyFromScore,
-  moodLabelFromScore,
-} from '@/utils/moodScale'
+import { MOOD_SCALE_DEFAULT_SCORE, moodKeyFromScore, moodLabelFromScore } from '@/utils/moodScale'
 import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
 import type { CheckinResponse, FeedbackResponse, PracticeResponse } from '@/api/types'
 
@@ -123,8 +119,7 @@ const loaded = computed(() => checkin.value !== null || feedback.value !== null)
 //    (tz-mood-scale §1); the key -> face binding lives in ratingIcons.
 
 const leadIcon = computed<Component>(() => {
-  const score =
-    detailType.value === 'checkin' ? checkin.value?.mood : feedback.value?.rating
+  const score = detailType.value === 'checkin' ? checkin.value?.mood : feedback.value?.rating
   return MOOD_SCALE_ICON[moodKeyFromScore(score ?? MOOD_SCALE_DEFAULT_SCORE)]
 })
 
