@@ -38,7 +38,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events.models import OutboxEvent
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
 from app.modules.curator_groups import service as curator_service
 from app.modules.curator_groups.models import (
     CuratorGroup,
@@ -57,7 +57,10 @@ from app.modules.practices.models import (
     PracticeStatus,
     PracticeType,
 )
-from app.modules.practices.schemas import UpdatePracticeRequest
+from app.modules.practices.schemas import (
+    CreatePracticeRequest,
+    UpdatePracticeRequest,
+)
 from app.modules.users.models import User, UserRole
 from tests.curator_race_harness import assert_no_deadlock, race
 from tests.helpers import full_cleanup_range, login_user
@@ -415,6 +418,53 @@ async def test_publishing_into_a_school_being_deleted(
     ).all()
     assert told == []
     assert await _group(db_session, s) is None
+
+
+@pytest.mark.asyncio
+async def test_creating_a_practice_in_a_school_being_deleted(
+    client, db_session, monkeypatch,
+) -> None:
+    """FE-92 follow-up: the create-vs-delete path answers the school's code.
+
+    create_practice validated the school before the delete committed; its
+    INSERT then waits on the school row (the FK takes KEY SHARE) and fails
+    the FK once the delete commits. BE-74 turned that from a 500 into the
+    same refusal as the validation -- and since FE-92 follow-up it carries
+    the same code, curator_group_not_usable, not the generic bad_request.
+
+    THE PAIR: the delete went through (the school is gone) and no practice
+    of the master was born.
+    """
+    s = await _school(client, db_session)
+
+    async def create(session):
+        await practices_service.create_practice(
+            await _actor(session, s.third),
+            CreatePracticeRequest(
+                practice_type="live",
+                title="В удаляемой школе",
+                direction="meditation",
+                difficulty="beginner",
+                scheduled_at=datetime.now(UTC) + timedelta(days=3),
+                duration_minutes=60,
+                timezone="UTC",
+                audience_kind=AudienceKind.CURATOR_GROUPS.value,
+                curator_group_id=s.id,
+            ),
+            session,
+        )
+
+    result = await _against_delete(monkeypatch, s, create)
+    assert not result.rival.committed
+    assert isinstance(result.rival.error, BadRequestError), result.rival.error
+    assert result.rival.error.code == "curator_group_not_usable"
+    assert await _group(db_session, s) is None
+    born = (
+        await db_session.execute(
+            select(Practice.id).where(Practice.master_id == s.third)
+        )
+    ).all()
+    assert born == []
 
 
 @pytest.mark.asyncio

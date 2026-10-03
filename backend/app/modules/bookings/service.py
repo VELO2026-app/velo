@@ -332,7 +332,7 @@ async def create_booking(
         format_event_time,
         schedule_booking_reminders,
     )
-    when_text = format_event_time(practice.scheduled_at)
+    when_text = format_event_time(practice.scheduled_at, user.timezone)
     await emit_notification(
         session,
         idempotency_key=f"booking-confirmed:{booking.id}",
@@ -362,6 +362,7 @@ async def create_booking(
         master_name=master_name,
         scheduled_at=practice.scheduled_at,
         act=BOOKED_ACT,
+        timezone=user.timezone,
     )
 
     # E21 step E: create the Zoom registrant for this booking. Best-effort,
@@ -597,7 +598,7 @@ async def cancel_booking(
         body=(
             f"Участник отменил бронирование на практику "
             f"«{practice.title}» "
-            f"({format_event_time(practice.scheduled_at)})."
+            f"({format_event_time(practice.scheduled_at, practice.timezone)})."
             if practice.scheduled_at is not None
             else f"Участник отменил бронирование на практику "
                  f"«{practice.title}»."
@@ -607,7 +608,7 @@ async def cancel_booking(
             "params": {"practice_id": str(booking.practice_id)},
             "practice_title": practice.title,
             "scheduled_at": (
-                format_event_time(practice.scheduled_at)
+                format_event_time(practice.scheduled_at, practice.timezone)
                 if practice.scheduled_at is not None
                 else ""
             ),

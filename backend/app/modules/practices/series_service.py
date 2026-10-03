@@ -314,6 +314,7 @@ async def generate_series_occurrences(
             practice_title=child.title,
             scheduled_at=start_utc,
             act=PUBLISHED_ACT,
+            timezone=child.timezone,  # the master reads the practice's zone
         )
 
     logger.info(

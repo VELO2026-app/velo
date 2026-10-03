@@ -126,6 +126,19 @@ export const ERROR_MESSAGES: Record<string, string> = {
   // themselves (409).
   blocked_in_group: 'Вы заблокированы в этой школе',
   cannot_block_curator: 'Куратора школы нельзя заблокировать',
+  // FE-92 / BE-102 (DRAFT wording): a curator creating a practice for a
+  // master of the school. The fourth refusal, a school that is not usable,
+  // is curator_group_not_usable below.
+  master_id_requires_school: 'Выберите школу, в которой создаётся практика',
+  master_not_in_school: 'Этот мастер не состоит в школе или не верифицирован',
+  curator_only: 'Создавать практику за мастера может только куратор школы',
+  // FE-92 follow-up (DRAFT wording): the school refusal now has its own code
+  // (practices/service.py, every cause: switched off, inactive, not a member,
+  // deleted mid-create).
+  // BE-102 publish (DRAFT wording): for a master a curator creates a
+  // standalone practice or a series root, not an occurrence of a series.
+  curator_cannot_add_occurrence: 'Куратор не может добавить занятие в серию мастера',
+  curator_group_not_usable: 'Школа недоступна: она отключена или вы в ней больше не состоите',
   transfer_pending:
     'Предложение уже отправлено. Сначала отмените его, затем предложите другому мастеру.',
   // One code for: неизвестный токен, отозванная ссылка, удалённая школа и

@@ -362,6 +362,11 @@ async def _owned_group_ids_or_400(
 
 
 _SCHOOL_NOT_USABLE = "curator_group_id must be an active school you belong to"
+# FE-92 follow-up: the refusal's own code, so the front can say «the school
+# is unavailable» instead of a generic «bad request». ONE code for every
+# cause (schools switched off, no such / inactive school, not a member of it,
+# the school deleted mid-create) -- the same reason the message is one.
+_SCHOOL_NOT_USABLE_CODE = "curator_group_not_usable"
 
 
 async def _usable_curator_group_or_400(
@@ -387,7 +392,7 @@ async def _usable_curator_group_or_400(
     the INSERT (create_practice), because it is the same fact.
     """
     if not settings.curator_groups_enabled:
-        raise BadRequestError(_SCHOOL_NOT_USABLE)
+        raise BadRequestError(_SCHOOL_NOT_USABLE, code=_SCHOOL_NOT_USABLE_CODE)
     verified = (
         select(MasterProfile.user_id)
         .where(
@@ -414,7 +419,7 @@ async def _usable_curator_group_or_400(
         )
     ).scalar_one_or_none()
     if usable is None:
-        raise BadRequestError(_SCHOOL_NOT_USABLE)
+        raise BadRequestError(_SCHOOL_NOT_USABLE, code=_SCHOOL_NOT_USABLE_CODE)
 
 
 _MASTER_NOT_IN_SCHOOL = "master_id must be a verified master of this school"
@@ -422,11 +427,19 @@ _MASTER_NOT_IN_SCHOOL = "master_id must be a verified master of this school"
 
 async def _effective_master_id_or_4xx(
     user: User, body: CreatePracticeRequest, session: AsyncSession,
-) -> tuple[UUID, Practice | None]:
-    """Return who leads the practice being created (BE-102) -- and, on the
-    path for another master, the locked series parent (BE-103 N1; None
-    without parent_practice_id, and always None on the caller's own path,
-    where create_practice locks the parent itself).
+) -> UUID:
+    """Return who leads the practice being created (BE-102).
+
+    FOR ANOTHER MASTER ONLY A STANDALONE PRACTICE OR A SERIES ROOT (owner,
+    3 October): both are born published. Adding an occurrence to an
+    existing series (parent_practice_id) for a master is refused FIRST,
+    with its own code (curator_cannot_add_occurrence), before anything is
+    read or locked. A child born published could outlive a series
+    cancellation already waiting on its parent, and a child of an
+    unpublished root would be open while its course is not. The
+    occurrences the series generator makes when the root is published are
+    a different path (the root's own lock, W4) and are untouched. With no
+    parent on this path, the BE-103 N1 parent lock that stood here is gone.
 
     The caller, unless body.master_id names somebody else. Somebody else is
     a school curator creating a practice for a master of that school, and
@@ -445,6 +458,8 @@ async def _effective_master_id_or_4xx(
          master profile is verified right now.
 
     Refusals, in this order, and why each code is what it is:
+      - 0 -> 400 curator_cannot_add_occurrence: parent_practice_id names a
+        series to add to (owner, 3 October) -- nothing was read;
       - 1 -> 400 master_id_requires_school: nothing was read, nothing
         about anybody is revealed;
       - 2 -> the existing 400 of _usable_curator_group_or_400: an outsider
@@ -481,7 +496,12 @@ async def _effective_master_id_or_4xx(
     not passed the checks above would hand out another master's practice.
     """
     if body.master_id is None or body.master_id == user.id:
-        return user.id, None
+        return user.id
+    if body.parent_practice_id is not None:
+        raise BadRequestError(
+            _CURATOR_CANNOT_ADD_OCCURRENCE,
+            code="curator_cannot_add_occurrence",
+        )
     target_id = body.master_id
     school_id = body.curator_group_id
     if school_id is None:
@@ -500,29 +520,17 @@ async def _effective_master_id_or_4xx(
     if curator_id != user.id:
         raise ForbiddenError(_CURATOR_ONLY, code="curator_only")
     await _lock_school_master_or_400(school_id, target_id, session)
-    # BE-103 N1: the series parent, in its place in the order -- after the
-    # target's rows, BEFORE the group. A child's INSERT takes KEY SHARE on
-    # its parent (FK), so a new practice row does wait for its parent's
-    # holder: taken after the group, that is group -> practice, against
-    # update_practice and the series cancellation, which hold the series
-    # and then want the group (40P01). It cannot go below the dedup either:
-    # the group re-check below must run first (see above), and the parent
-    # comes before it. Validated against the TARGET master: the child is
-    # theirs.
-    parent = await _owned_root_parent_or_400(
-        target_id, body.parent_practice_id, session,
-    )
     # BE-63: the curator's right, re-checked UNDER THE GROUP LOCK, after the
-    # target's rows and the parent (module order: member -> master profile
-    # -> practice -> group) and before the INSERT. The INSERT's FK checks
-    # are covered by locks already held: the parent's above, this group's
-    # here. The read above is the fast path; the school can change hands
+    # target's rows (module order: member -> master profile -> practice ->
+    # group) and before the INSERT. The INSERT's FK checks are covered by
+    # locks already held: this group's here (no parent on this path). The
+    # read above is the fast path; the school can change hands
     # between it and here (accept of a transfer), and a former curator must
     # not create in the new owner's school. Same 403 as the read: one fact,
     # one code.
     if not await _lock_group_as_owner(user.id, school_id, session):
         raise ForbiddenError(_CURATOR_ONLY, code="curator_only")
-    return target_id, parent
+    return target_id
 
 
 async def _lock_school_master_or_400(
@@ -579,6 +587,10 @@ async def _lock_school_master_or_400(
         )
 
 
+_CURATOR_CANNOT_ADD_OCCURRENCE = (
+    "a curator creates a standalone practice or a series root for a "
+    "master, not an occurrence of an existing series"
+)
 _CURATOR_ONLY = (
     "Only the school's curator may create a practice for another master"
 )
@@ -824,14 +836,19 @@ class _CuratorAct:
 # so the practice is the whole key. An edit can happen many times, each a
 # new fact: it is keyed on a fresh act id minted when the edit WROTE
 # something -- a resent request that changes nothing never reaches here.
+# BE-102 publish (owner, 3 October): the practice a curator creates for a
+# master is born published -- the message says so, once ("created and
+# published"), with no «check and publish» left for the master to do. The
+# type keeps its name; master_practice_published stays the curator's
+# publication of a master's own draft by edit.
 _CURATOR_CREATED = _CuratorAct(
     event="practice_created_by_curator",
     type="curator_group.practice_created_for_master",
     key="practice-created-by-curator",
     per_act=False,
-    title="Куратор создал практику от вашего имени",
-    verb="создал от вашего имени черновик практики",
-    tail="Проверьте его и опубликуйте.",
+    title="Куратор создал и опубликовал практику от вашего имени",
+    verb="создал и опубликовал от вашего имени практику",
+    tail="Она видна в школе.",
 )
 _CURATOR_PUBLISHED = _CuratorAct(
     event="practice_published_by_curator",
@@ -917,7 +934,8 @@ async def _tell_master_of_curator_act(
         )
     ).scalar_one()
     actor_name = display_name(curator.first_name, curator.last_name)
-    when_text = format_event_time(practice.scheduled_at)
+    # The reader is the master -> the practice's zone (BE-102 notification time).
+    when_text = format_event_time(practice.scheduled_at, practice.timezone)
     key = f"{act.key}:{practice.id}"
     if act.per_act:
         key = f"{key}:{uuid4()}"
@@ -1797,7 +1815,7 @@ async def create_practice(
     """
     # BE-102: before the dedup, which would otherwise hand the target's
     # existing practice to a caller who has not passed the checks.
-    master_id, parent = await _effective_master_id_or_4xx(user, body, session)
+    master_id = await _effective_master_id_or_4xx(user, body, session)
     for_another_master = master_id != user.id
     duplicate = await _find_recent_duplicate_practice(master_id, body, session)
     if duplicate is not None:
@@ -1830,10 +1848,10 @@ async def create_practice(
             user.id, body.curator_group_id, session,
         )
     # H-R2 (3.4): validate parent_practice_id BEFORE anything is inserted
-    # -- same placement discipline as the group check above. BE-103: the
-    # parent is locked here on the caller's own path; for another master
-    # it already is, in its place before the school's group
-    # (_effective_master_id_or_4xx) -- one lock, not two.
+    # -- same placement discipline as the group check above. Only on the
+    # caller's own path: for another master a parent is refused outright
+    # (_effective_master_id_or_4xx, owner 3 October).
+    parent = None
     if not for_another_master:
         parent = await _owned_root_parent_or_400(
             master_id, body.parent_practice_id, session,
@@ -1910,6 +1928,14 @@ async def create_practice(
         currency=body.currency,
         audience_kind=effective_audience_kind,
         curator_group_id=effective_curator_group_id,
+        # BE-102 publish (owner, 3 October): a practice a school's curator
+        # creates for one of its masters is born PUBLISHED -- there is no
+        # approval step for the master. Everything else starts a draft.
+        status=(
+            PracticeStatus.SCHEDULED.value
+            if for_another_master
+            else PracticeStatus.DRAFT.value
+        ),
     )
 
     # Calendar taxonomy -> data.taxonomy (JSONB sandbox).
@@ -1970,7 +1996,9 @@ async def create_practice(
                 )
             )
         ).scalar_one_or_none() is None:
-            raise BadRequestError(_SCHOOL_NOT_USABLE) from None
+            raise BadRequestError(
+                _SCHOOL_NOT_USABLE, code=_SCHOOL_NOT_USABLE_CODE,
+            ) from None
         # Practically unreachable: uq_practice_master_title_scheduled_
         # recurrence only fires on an exact (master_id, title,
         # scheduled_at, recurrence) collision, so the winner must exist.
@@ -2008,6 +2036,17 @@ async def create_practice(
         await _set_practice_audience_groups(practice.id, body.group_ids, session)
 
     if for_another_master:
+        # BE-102 publish: born scheduled, so the publication's effects run
+        # here -- the SAME function update_practice runs on draft ->
+        # scheduled (_after_publish), under the rows _effective_master_id_
+        # or_4xx took (member, profile, group) with the INSERT behind them.
+        # The school hears it from the master (BE-63), not the curator.
+        await _after_publish(
+            practice, await session.get(User, master_id), session,
+        )
+        # ONE message to the master for the act -- «created and published»,
+        # not a «created» plus a «published» (owner). A dedup returned
+        # above, before the INSERT: a repeat sends nothing.
         await _tell_master_of_curator_act(
             user, practice, _CURATOR_CREATED, session,
         )
@@ -2217,6 +2256,104 @@ async def get_practice_detail(
         **series_meta_kwargs(series_meta.get(practice.id)),
         **attendance_counts_kwargs(attendance.get(practice.id)),
     )
+
+
+async def _after_publish(
+    practice: Practice, author: User | None, session: AsyncSession,
+) -> None:
+    """Everything a practice's PUBLICATION does, in one place (BE-102 publish).
+
+    Called for the draft -> scheduled transition of update_practice AND for
+    a practice a school's curator creates for one of its masters, which is
+    born scheduled (owner, 3 October: no approval step for the master). One
+    body, so the two can never drift: series occurrences for a series root,
+    the Zoom meeting, the master's one-hour reminder, the school's
+    announcement. The CALLER decides that a publication happened and holds
+    the locks it needs: update_practice the practice FOR UPDATE (and the
+    school's master rows, _lock_school_master_or_400), create_practice the
+    target's member and profile rows and the school's group row
+    (_effective_master_id_or_4xx) with the INSERT behind them -- the same
+    rows, so the announcement's journal insert and the Zoom row meet no new
+    lock order.
+
+    author: who the school hears it from -- the MASTER, also when the
+    curator pressed the button (BE-63, owner ruling); the master is the one
+    the fan-out skips.
+
+    What it does NOT do: tell the master of a curator's act. That message
+    is the caller's (one per act: «published» on update, «created and
+    published» on create).
+    """
+    # E3: materialize series occurrences when a series ROOT is published
+    # (draft -> scheduled). Gated inside the helper on the recurrence spec's
+    # presence, so a series practice without a spec (seed demo) is a no-op. Only
+    # roots generate (parent_practice_id is None); generated children are
+    # created already-scheduled and never re-enter this path.
+    if (
+        practice.practice_type == PracticeType.SERIES.value
+        and practice.parent_practice_id is None
+    ):
+        await generate_series_occurrences(practice, session)
+
+    # E21: create the practice's Zoom meeting on publish (draft -> scheduled),
+    # for ANY practice type -- not gated on series, unlike the block above.
+    # Best-effort: create_meeting_for_practice never raises, so publish
+    # always succeeds regardless of Zoom's outcome (PROMPT №519 amendment 2 --
+    # confirmed as the intended reading). KNOWN GAP: series CHILDREN are
+    # created directly inside generate_series_occurrences() with
+    # status=scheduled and never pass through this branch, so they do not
+    # get a Zoom meeting from this step -- out of scope for this prompt
+    # (would touch series_service.py), flagged rather than silently patched.
+    from app.modules.zoom.service import create_meeting_for_practice
+    await create_meeting_for_practice(practice, session)
+
+    # BE-33: the master's own one-hour reminder, scheduled at publication.
+    # Gated on the SAME transition as the Zoom block above and it inherits
+    # that block's KNOWN GAP by construction -- series children never reach
+    # here -- so generate_series_occurrences schedules its own, per child.
+    # A practice published less than an hour before it starts gets none:
+    # schedule_master_practice_reminder returns False rather than emitting
+    # into the past.
+    if practice.scheduled_at is not None:
+        from app.core.events.reminders import PUBLISHED_ACT
+        from app.core.events.reminders import (
+            schedule_master_practice_reminder as _schedule_master_reminder,
+        )
+        await _schedule_master_reminder(
+            session,
+            practice_id=str(practice.id),
+            master_user_id=str(practice.master_id),
+            practice_title=practice.title,
+            scheduled_at=practice.scheduled_at,
+            act=PUBLISHED_ACT,
+            timezone=practice.timezone,  # the master reads the practice's zone
+        )
+
+    # BE-30: tell the school its teacher opened something.
+    #
+    # BE-74: EVERY practice of a school, public ones included -- the
+    # trigger is ownership, not audience. A public practice made in a
+    # school is shown on its page, and its students hear about it like
+    # about any other.
+    #
+    # HOOKED HERE AND NOWHERE ELSE (this one function, whichever path
+    # published -- BE-102 publish), and that is the opposite of the block
+    # above on purpose. The master reminder is also scheduled inside
+    # generate_series_occurrences, because forty occurrences are forty
+    # sessions to be reminded of; this is one decision to open a course,
+    # and a second hook there would turn two hundred members times forty
+    # occurrences into eight thousand messages from one press of publish.
+    # Series children never pass this branch (born scheduled), so the
+    # single hook gives exactly one announcement per publication.
+    #
+    # Lazy import: curator_groups/service.py imports practices/models.py,
+    # so a module-level import here closes a cycle -- the same reason
+    # cancel_service.py imports _record_group_event lazily.
+    if practice.curator_group_id is not None:
+        from app.modules.curator_groups.service import (
+            announce_published_practice,
+        )
+        await announce_published_practice(practice, author, session)
 
 
 async def update_practice(
@@ -2695,6 +2832,7 @@ async def update_practice(
             new_reschedule_act,
             schedule_booking_reminders,
             schedule_master_practice_reminder,
+            user_timezones,
         )
         act = new_reschedule_act()
         from app.modules.bookings.models import Booking, BookingStatus
@@ -2708,8 +2846,15 @@ async def update_practice(
         booked = (
             await session.execute(booked_stmt)
         ).scalars().all()
-        when_text = format_event_time(new_scheduled_at)
+        # BE-102 notification time: each student reads THEIR zone -- one
+        # query for the whole list, not one per reader.
+        reader_tz = await user_timezones(
+            session, [booking.user_id for booking in booked],
+        )
         for booking in booked:
+            when_text = format_event_time(
+                new_scheduled_at, reader_tz.get(str(booking.user_id), "UTC"),
+            )
             await emit_notification(
                 session,
                 idempotency_key=(
@@ -2751,6 +2896,7 @@ async def update_practice(
                 master_name=master_name,
                 scheduled_at=new_scheduled_at,
                 act=act,
+                timezone=reader_tz.get(str(booking.user_id), "UTC"),
             )
         # BE-33: the master's own reminder rides the same cancel above
         # ("practice:<id>" correlation, MASTER_REMINDER_TYPES) and has to be
@@ -2764,6 +2910,7 @@ async def update_practice(
             practice_title=practice.title,
             scheduled_at=new_scheduled_at,
             act=act,
+            timezone=practice.timezone,  # the master reads the practice's zone
         )
 
         # E21: keep the Zoom meeting's start time in sync, then re-fetch and
@@ -2773,87 +2920,12 @@ async def update_practice(
         from app.modules.zoom.service import sync_meeting_reschedule
         await sync_meeting_reschedule(practice, session)
 
-    # E3: materialize series occurrences when a series ROOT is published
-    # (draft -> scheduled). Gated inside the helper on the recurrence spec's
-    # presence, so a series practice without a spec (seed demo) is a no-op. Only
-    # roots generate (parent_practice_id is None); generated children are
-    # created already-scheduled and never re-enter this path.
-    if (
-        old_status == PracticeStatus.DRAFT.value
-        and practice.status == PracticeStatus.SCHEDULED.value
-        and practice.practice_type == PracticeType.SERIES.value
-        and practice.parent_practice_id is None
-    ):
-        await generate_series_occurrences(practice, session)
-
-    # E21: create the practice's Zoom meeting on publish (draft -> scheduled),
-    # for ANY practice type -- not gated on series, unlike the block above.
-    # Best-effort: create_meeting_for_practice never raises, so publish
-    # always succeeds regardless of Zoom's outcome (PROMPT №519 amendment 2 --
-    # confirmed as the intended reading). KNOWN GAP: series CHILDREN are
-    # created directly inside generate_series_occurrences() with
-    # status=scheduled and never pass through this branch, so they do not
-    # get a Zoom meeting from this step -- out of scope for this prompt
-    # (would touch series_service.py), flagged rather than silently patched.
+    # BE-102 publish: the publication's effects live in _after_publish, shared
+    # with a practice a curator creates for a master (born scheduled).
     if (
         old_status == PracticeStatus.DRAFT.value
         and practice.status == PracticeStatus.SCHEDULED.value
     ):
-        from app.modules.zoom.service import create_meeting_for_practice
-        await create_meeting_for_practice(practice, session)
-
-    # BE-33: the master's own one-hour reminder, scheduled at publication.
-    # Gated on the SAME transition as the Zoom block above and it inherits
-    # that block's KNOWN GAP by construction -- series children never reach
-    # here -- so generate_series_occurrences schedules its own, per child.
-    # A practice published less than an hour before it starts gets none:
-    # schedule_master_practice_reminder returns False rather than emitting
-    # into the past.
-    if (
-        old_status == PracticeStatus.DRAFT.value
-        and practice.status == PracticeStatus.SCHEDULED.value
-        and practice.scheduled_at is not None
-    ):
-        from app.core.events.reminders import PUBLISHED_ACT
-        from app.core.events.reminders import (
-            schedule_master_practice_reminder as _schedule_master_reminder,
-        )
-        await _schedule_master_reminder(
-            session,
-            practice_id=str(practice.id),
-            master_user_id=str(practice.master_id),
-            practice_title=practice.title,
-            scheduled_at=practice.scheduled_at,
-            act=PUBLISHED_ACT,
-        )
-
-    # BE-30: tell the school its teacher opened something.
-    #
-    # BE-74: EVERY practice of a school, public ones included -- the
-    # trigger is ownership, not audience. A public practice made in a
-    # school is shown on its page, and its students hear about it like
-    # about any other.
-    #
-    # HOOKED HERE AND NOWHERE ELSE, and that is the opposite of the block
-    # above on purpose. The master reminder is also scheduled inside
-    # generate_series_occurrences, because forty occurrences are forty
-    # sessions to be reminded of; this is one decision to open a course,
-    # and a second hook there would turn two hundred members times forty
-    # occurrences into eight thousand messages from one press of publish.
-    # Series children never pass this branch (born scheduled), so the
-    # single hook gives exactly one announcement per publication.
-    #
-    # Lazy import: curator_groups/service.py imports practices/models.py,
-    # so a module-level import here closes a cycle -- the same reason
-    # cancel_service.py imports _record_group_event lazily.
-    if (
-        old_status == PracticeStatus.DRAFT.value
-        and practice.status == PracticeStatus.SCHEDULED.value
-        and practice.curator_group_id is not None
-    ):
-        from app.modules.curator_groups.service import (
-            announce_published_practice,
-        )
         # BE-63 (owner ruling): the fan-out's author is the MASTER, also
         # when the curator pressed publish -- the school hears its teacher
         # opened something, and the master is the one it skips.
@@ -2861,7 +2933,7 @@ async def update_practice(
             user if not acting_for_master
             else await session.get(User, practice.master_id)
         )
-        await announce_published_practice(practice, author, session)
+        await _after_publish(practice, author, session)
 
     # H-R2 (3.3): a capacity RELAXATION frees seats -- hand them to the
     # waitlist NOW instead of leaving the queue to wait for someone

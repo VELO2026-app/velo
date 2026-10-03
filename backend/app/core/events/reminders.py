@@ -60,13 +60,15 @@
 # exactly when the booking / cancellation / outcome commits.
 # =============================================================================
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, NamedTuple
-from uuid import uuid4
+from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import structlog
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -152,12 +154,42 @@ MASTER_REMINDER_TYPES = [MASTER_REMINDER_TYPE]
 PROMPT_FEEDBACK_TYPE = "prompt.leave_feedback"
 
 
-def format_event_time(dt: datetime) -> str:
+def format_event_time(dt: datetime, tz: str) -> str:
     """Pre-format a timestamp for the wire (arch §2.3: datetime does
-    not survive action_data -- dates travel as finished strings). Same
-    value the donor exposed (no timezone conversion), readable form.
+    not survive action_data -- dates travel as finished strings), in the
+    READER's zone (BE-102 notification time, owner 3 October).
+
+    The zone is the one the app shows the same practice in, so Telegram and
+    the screen never disagree: a STUDENT reads users.timezone (the student
+    zone formats in the viewer's zone, useViewerTimezone), a MASTER reads
+    practice.timezone (the master zone formats in the practice's own
+    zone). `tz` is required -- there is no zone-less copy of this function,
+    the 16:00-vs-19:00 defect was exactly that. No zone label in the text:
+    it is the reader's own clock. An unknown zone name reads as UTC rather
+    than failing a notification.
     """
-    return dt.strftime("%d.%m.%Y %H:%M")
+    try:
+        zone = ZoneInfo(tz)
+    except (ZoneInfoNotFoundError, ValueError):
+        zone = ZoneInfo("UTC")
+    aware = dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
+    return aware.astimezone(zone).strftime("%d.%m.%Y %H:%M")
+
+
+async def user_timezones(
+    session: AsyncSession, user_ids: Iterable[UUID | str],
+) -> dict[str, str]:
+    """users.timezone for many readers in ONE query, keyed by str(user id)
+    -- for the fan-outs (reschedule, cancellation) that tell a list."""
+    ids = {UUID(str(u)) for u in user_ids}
+    if not ids:
+        return {}
+    from app.modules.users.models import User
+
+    rows = await session.execute(
+        select(User.id, User.timezone).where(User.id.in_(ids))
+    )
+    return {str(uid): tz for uid, tz in rows.all()}
 
 
 async def schedule_booking_reminders(
@@ -170,6 +202,7 @@ async def schedule_booking_reminders(
     master_name: str,
     scheduled_at: datetime,
     act: str,
+    timezone: str,
 ) -> int:
     """Schedule the reminder series for one booking (anchor =
     practice.scheduled_at). Returns the number of reminders emitted
@@ -183,7 +216,7 @@ async def schedule_booking_reminders(
         seconds=settings.booking_reminder_min_lead_seconds,
     )
     emitted = 0
-    when_text = format_event_time(scheduled_at)
+    when_text = format_event_time(scheduled_at, timezone)
 
     for spec in BOOKING_REMINDER_SPECS:
         send_at = scheduled_at - spec.lead
@@ -296,6 +329,7 @@ async def schedule_master_practice_reminder(
     practice_title: str,
     scheduled_at: datetime,
     act: str,
+    timezone: str,
 ) -> bool:
     """Schedule the master's own one-hour reminder for one practice.
 
@@ -321,7 +355,7 @@ async def schedule_master_practice_reminder(
     if send_at < cutoff:
         return False
 
-    when_text = format_event_time(scheduled_at)
+    when_text = format_event_time(scheduled_at, timezone)
     await emit_notification(
         session,
         idempotency_key=f"master-reminder:{practice_id}:{act}",

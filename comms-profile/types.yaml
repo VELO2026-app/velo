@@ -304,10 +304,11 @@ types:
     channels: [in_app, telegram]
 
   # -- BE-102: practice_created_for_master goes to the MASTER a school's
-  #    curator created a practice for -- a draft in their name that only they
-  #    can publish. No category, like member_demoted: it is about their own
-  #    standing (something now exists under their name), and silencing it
-  #    would leave a draft nobody knows to publish. --
+  #    curator created a practice for -- since 3 October (owner) born
+  #    PUBLISHED in their name, so students can already book it. No
+  #    category, like member_demoted: it is about their own standing
+  #    (something now runs under their name), and silencing it would leave
+  #    a published practice its own master does not know about. --
 
   curator_group.practice_created_for_master:
     channels: [in_app, telegram]

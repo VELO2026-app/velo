@@ -223,6 +223,7 @@ class TestReminderOrchestration:
             master_name="Anna",
             scheduled_at=anchor,
             act=BOOKED_ACT,
+            timezone="UTC",
         )
         await db_session.commit()
 
@@ -267,6 +268,7 @@ class TestReminderOrchestration:
             master_name="Anna",
             scheduled_at=anchor,
             act=BOOKED_ACT,
+            timezone="UTC",
         )
         await db_session.commit()
 

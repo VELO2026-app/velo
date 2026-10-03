@@ -536,7 +536,7 @@ async def confirm_waitlist(
     master_name = await get_master_display_name(
         practice.master_id, session,
     )
-    when_text = format_event_time(practice.scheduled_at)
+    when_text = format_event_time(practice.scheduled_at, user.timezone)
     await emit_notification(
         session,
         idempotency_key=f"booking-confirmed:{booking.id}",
@@ -565,6 +565,7 @@ async def confirm_waitlist(
         master_name=master_name,
         scheduled_at=practice.scheduled_at,
         act=BOOKED_ACT,
+        timezone=user.timezone,
     )
 
     # Update cached participant count (Frontend Backlog A-03).
@@ -631,7 +632,7 @@ async def process_waitlist(
     # waitlist.spot_available -> the head of the queue; velo picks the
     # holder, ID-4). Lazy import mirrors the old pattern.
     from app.core.events.notify import emit_notification
-    from app.core.events.reminders import format_event_time
+    from app.core.events.reminders import format_event_time, user_timezones
 
     # Load practice for template variables.
     practice = await session.get(Practice, practice_id)
@@ -639,8 +640,12 @@ async def process_waitlist(
         practice.master_id, session,
     )
 
-    when_text = format_event_time(practice.scheduled_at)
-    expires_text = format_event_time(entry.expires_at)
+    # BE-102 notification time: the reader is the student -> their zone.
+    reader_tz = (await user_timezones(session, [entry.user_id])).get(
+        str(entry.user_id), "UTC",
+    )
+    when_text = format_event_time(practice.scheduled_at, reader_tz)
+    expires_text = format_event_time(entry.expires_at, reader_tz)
     await emit_notification(
         session,
         # One HOLD, not one entry: the row is reused across holds (re-join,

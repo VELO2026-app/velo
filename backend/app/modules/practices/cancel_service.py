@@ -211,9 +211,21 @@ async def _cancel_one(
         BookingRef,
         cancel_practice_reminders,
         format_event_time,
+        user_timezones,
     )
-    when_text = format_event_time(practice.scheduled_at)
+    # BE-102 notification time: each reader (booked AND queued) reads THEIR
+    # zone -- one query for both lists.
+    reader_tz = await user_timezones(
+        session, [*affected_user_ids, *waitlisted_user_ids],
+    )
+
+    def when_text_for(uid) -> str:
+        return format_event_time(
+            practice.scheduled_at, reader_tz.get(str(uid), "UTC"),
+        )
+
     for uid in affected_user_ids:
+        when_text = when_text_for(uid)
         await emit_notification(
             session,
             idempotency_key=f"practice-cancelled:{practice.id}:{uid}",
@@ -233,6 +245,7 @@ async def _cancel_one(
             },
         )
     for uid in waitlisted_user_ids:
+        when_text = when_text_for(uid)
         await emit_notification(
             session,
             idempotency_key=f"practice-cancelled-waitlist:{practice.id}:{uid}",
@@ -342,7 +355,8 @@ async def _tell_master_cancelled_by_curator(
     from app.modules.curator_groups.models import CuratorGroup
 
     group = await session.get(CuratorGroup, group_id)
-    when_text = format_event_time(primary.scheduled_at)
+    # The reader is the master -> the practice's zone (BE-102 notification time).
+    when_text = format_event_time(primary.scheduled_at, primary.timezone)
     await emit_notification(
         session,
         idempotency_key=f"practice-cancelled-by-curator:{primary.id}",

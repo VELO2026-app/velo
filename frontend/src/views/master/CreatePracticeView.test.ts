@@ -1774,30 +1774,109 @@ describe('CreatePracticeView -- «Школы» audience (FE-24 / GT P5)', () => 
 })
 
 // =============================================================================
-// §1.6 delegation: whose practice is being created (SHIPPED, BE-102 landed)
+// §1.6 delegation: whose practice is being created (FE-92, BE-102)
 // =============================================================================
-// masterId in the query (the master's public page CTA) and groupId (the
-// school page CTA) surface the master context. A foreign master target
-// ships master_id on POST /practices; the backend re-validates that the
-// caller owns a school the target is a visible, verified master of (403
-// otherwise). «Я» and the no-context flow ship no field -- the historical
-// behavior, byte for byte.
-describe('§1.6 delegation: the master context (shipped)', () => {
-  it('masterId query: shows the master and ships its id on submit', async () => {
+// masterId + groupId (the master's public page CTA) and groupId (the school
+// page CTA) surface the master context. The STUB tests that stood here
+// («warns and blocks submit») pinned the interim -- right until BE-102 let
+// POST /practices take master_id; their property no longer exists. Now: a
+// foreign target sends master_id AND the school (with either school
+// audience), the result is the master's draft, and the curator goes back to
+// the school. Without the school another master is never offered.
+describe('§1.6 delegation: the master context (FE-92)', () => {
+  function created(overrides = {}) {
+    return practice({ id: 'p_for_master', status: 'draft', ...overrides })
+  }
+
+  it('masterId + groupId: the master is fixed; submit sends master_id AND the school, no second request', async () => {
     routeQuery.masterId = 'm_pub'
+    routeQuery.groupId = 'g1'
     vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
       display_name: 'Анна Ли',
     } as MasterPublicResponse)
+    vi.mocked(practicesApi.createPractice).mockResolvedValue(created())
     mount()
     await flush()
-    expect(text()).toContain('Мастер')
     expect(text()).toContain('Анна Ли')
 
     await fillMinimalForm()
     submitForm()
     await flush()
-    expect(vi.mocked(practicesApi.createPractice)).toHaveBeenCalled()
-    expect(sentBody().master_id).toBe('m_pub')
+
+    const body = vi.mocked(practicesApi.createPractice).mock.calls[0]![0]
+    expect(body.master_id).toBe('m_pub')
+    expect(body.curator_group_id).toBe('g1')
+    expect(body.audience_kind).toBe('public')
+    // BE-102 publish: the backend published it in the create request (this
+    // pinned «the draft stays a draft», right under the 1 October ruling);
+    // the front sends no second request either way.
+    expect(practicesApi.updatePractice).not.toHaveBeenCalled()
+    expect(toastSuccess).toHaveBeenCalledWith('Практика опубликована — мастер получит уведомление')
+    expect(replace).toHaveBeenCalledWith({ name: 'master-curator-group', params: { id: 'g1' } })
+  })
+
+  it("masterId WITHOUT the school: no «Мастер» section, the practice is the caller's own", async () => {
+    routeQuery.masterId = 'm_pub'
+    vi.mocked(practicesApi.createPractice).mockResolvedValue(created({ status: 'draft' }))
+    mount()
+    await flush()
+    expect(text()).not.toContain('Анна Ли')
+    expect(mastersApi.getPublicMaster).not.toHaveBeenCalled()
+
+    await fillMinimalForm()
+    submitForm()
+    await flush()
+    const body = vi.mocked(practicesApi.createPractice).mock.calls[0]![0]
+    expect(body.master_id).toBeUndefined()
+    expect(body.curator_group_id).toBeNull()
+  })
+
+  it('a dedup for the master: «Такая практика уже есть у мастера», back to the school', async () => {
+    routeQuery.masterId = 'm_pub'
+    routeQuery.groupId = 'g1'
+    vi.mocked(practicesApi.createPractice).mockResolvedValue({
+      ...created(),
+      deduplicated: true,
+    } as never)
+    mount()
+    await flush()
+    await fillMinimalForm()
+    submitForm()
+    await flush()
+    expect(toastInfo).toHaveBeenCalledWith('Такая практика уже есть у мастера')
+    expect(replace).toHaveBeenCalledWith({ name: 'master-curator-group', params: { id: 'g1' } })
+  })
+
+  it.each([
+    [400, 'master_not_in_school', 'Этот мастер не состоит в школе или не верифицирован'],
+    [403, 'curator_only', 'Создавать практику за мастера может только куратор школы'],
+    [400, 'master_id_requires_school', 'Выберите школу, в которой создаётся практика'],
+    // FE-92 follow-up: the unusable school has its own code now.
+    [
+      400,
+      'curator_group_not_usable',
+      'Школа недоступна: она отключена или вы в ней больше не состоите',
+    ],
+  ] as const)('refusal %i %s -> its toast; the form keeps its input', async (status, code, msg) => {
+    routeQuery.masterId = 'm_pub'
+    routeQuery.groupId = 'g1'
+    vi.mocked(practicesApi.createPractice)
+      .mockRejectedValueOnce(new ApiResponseError(status, 'refused', code))
+      .mockResolvedValueOnce(created())
+    mount()
+    await flush()
+    await fillMinimalForm()
+    submitForm()
+    await flush()
+
+    expect(toastError).toHaveBeenCalledWith(msg)
+    expect(replace).not.toHaveBeenCalled()
+    // The input survived: a second submit sends the same form again.
+    const first = vi.mocked(practicesApi.createPractice).mock.calls[0]![0]
+    submitForm()
+    await flush()
+    const second = vi.mocked(practicesApi.createPractice).mock.calls[1]![0]
+    expect(second).toEqual(first)
   })
 
   it('groupId query: lists visible school masters, «Я» stays creatable', async () => {
@@ -1838,19 +1917,20 @@ describe('§1.6 delegation: the master context (shipped)', () => {
     expect(text()).toContain('Пётр Романов')
     // An invisible (suspended) master is not offered.
     expect(text()).not.toContain('Заморожен')
-    // Default «Я»: submit enabled -- the historical flow.
+    // Default «Я»: no warning, submit enabled -- the historical flow.
+    expect(text()).not.toContain('Создание для другого мастера пока недоступно')
     expect(button('Создать практику')?.disabled).toBe(false)
 
     await fillMinimalForm()
     submitForm()
     await flush()
     expect(vi.mocked(practicesApi.createPractice)).toHaveBeenCalled()
-    // «Я» ships NO master_id field -- the caller owns the practice (BE-102:
-    // absent field == caller, byte-for-byte the historical wire body).
-    expect(sentBody().master_id).toBeUndefined()
+    // No master_id in the body, ever: the field does not exist on the wire
+    // until the backend task lands.
+    expect('master_id' in sentBody()).toBe(false)
   })
 
-  it('groupId query: picking a school master ships its id on submit', async () => {
+  it("groupId query: picking a school master limits the audience to the school's two and sends the school with «public» too", async () => {
     routeQuery.groupId = 'g1'
     vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue({
       items: [
@@ -1867,25 +1947,46 @@ describe('§1.6 delegation: the master context (shipped)', () => {
       limit: 50,
       offset: 0,
     })
+    vi.mocked(practicesApi.createPractice).mockResolvedValue(created())
     mount()
     await flush()
 
     // VRadioGroup options are role="radio" BUTTONS, not labels.
-    const option = Array.from(
-      host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? [],
-    ).find((b) => b.textContent?.includes('Пётр Романов'))
+    const radios = (): HTMLButtonElement[] =>
+      Array.from(host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? [])
+    const option = radios().find((b) => b.textContent?.includes('Пётр Романов'))
     if (!option) throw new Error('school master option not rendered')
     option.click()
     await flush()
 
+    // Only «для всех» and «ученикам школы» remain on offer.
+    const audienceLabels = radios().map((b) => b.textContent ?? '')
+    expect(audienceLabels.some((l) => l.includes('Все мои ученики'))).toBe(false)
+
     await fillMinimalForm()
     submitForm()
     await flush()
-    expect(vi.mocked(practicesApi.createPractice)).toHaveBeenCalled()
-    expect(sentBody().master_id).toBe('m2')
+    const body = vi.mocked(practicesApi.createPractice).mock.calls[0]![0]
+    expect(body.master_id).toBe('m2')
+    expect(body.curator_group_id).toBe('g1')
+    expect(['public', 'curator_groups']).toContain(body.audience_kind)
   })
 
-  it('a 403 from the backend (not a visible/verified school master) toasts and leaves the form intact', async () => {
+  // FE-92 follow-up: «Использовать шаблон» offers the CALLER's practices --
+  // hidden while another master is targeted, shown for «Я».
+  function templateSection(): boolean {
+    return text().includes('Использовать шаблон')
+  }
+
+  it('templates: hidden for a fixed foreign master (masterId + groupId)', async () => {
+    routeQuery.masterId = 'm_pub'
+    routeQuery.groupId = 'g1'
+    mount()
+    await flush()
+    expect(templateSection()).toBe(false)
+  })
+
+  it('templates: shown for «Я», hidden once a school master is picked', async () => {
     routeQuery.groupId = 'g1'
     vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue({
       items: [
@@ -1902,27 +2003,14 @@ describe('§1.6 delegation: the master context (shipped)', () => {
       limit: 50,
       offset: 0,
     })
-    vi.mocked(practicesApi.createPractice).mockRejectedValue(
-      new ApiResponseError(403, 'Недостаточно прав', 'forbidden'),
-    )
     mount()
     await flush()
-
-    const option = Array.from(
-      host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? [],
-    ).find((b) => b.textContent?.includes('Пётр Романов'))
-    if (!option) throw new Error('school master option not rendered')
-    option.click()
+    expect(templateSection()).toBe(true)
+    Array.from(host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? [])
+      .find((b) => b.textContent?.includes('Пётр Романов'))!
+      .click()
     await flush()
-
-    await fillMinimalForm()
-    submitForm()
-    await flush()
-
-    // The refusal surfaces as a toast; the form stays on screen for a retry
-    // (no navigation, no crash).
-    expect(toastError).toHaveBeenCalled()
-    expect(button('Создать практику')).toBeTruthy()
+    expect(templateSection()).toBe(false)
   })
 
   it('no context: no master section at all', async () => {

@@ -721,7 +721,8 @@ describe('MasterPublicView', () => {
       cta!.click()
       expect(push).toHaveBeenCalledWith({
         name: 'master-practice-new',
-        query: { masterId: 'm1' },
+        // FE-92: the school travels with the master (BE-102 needs it).
+        query: { masterId: 'm1', groupId: 'g1' },
       })
     })
   })
