@@ -18,6 +18,9 @@ export type BookingStatus = 'pending' | 'confirmed' | 'attended' | 'no_show' | '
 /** What the person did outside velo. A CLOSED ENUM AND NOT A CONFIG LIST, unlike DiaryEntryType and PracticePhase next door (config.py:476 -- "Validated via @field_validator -- no Literal in schemas"). The divergence is deliberate and buys something those two do not need. A config list exists so a value can change without touching code. Here that is a false promise: a type the frontend cannot draw is useless, so a new activity always ships with a frontend change anyway. Adding one through env would produce a feed card with no icon and no caption -- not flexibility, a quiet break. Typed as an enum, the closed set crosses into generated.ts as a union, and adding a value without the frontend breaks the build instead of the card. */
 export type ExternalActivityType = 'vocal' | 'nail_standing' | 'meditation' | 'massage' | 'yoga' | 'dance' | 'custom'
 
+/** How the reader of /analytics relates to the practice (BE-78 (2)). Decided by the server's one rights check; the screen maps it to what a tap on a person opens (leader -> the student dossier, curator -> the school student profile, school_master -> a direct message). One person holding several: leader > curator > school_master. */
+export type PracticeAnalyticsViewerRole = 'leader' | 'curator' | 'school_master'
+
 /** Practice lifecycle statuses. */
 export type PracticeStatus = 'draft' | 'scheduled' | 'live' | 'completed' | 'cancelled' | 'deleted'
 
@@ -1491,11 +1494,14 @@ export interface PracticeAnalyticsPair {
   avatar_url: string | null
   before_zone: ScoreZone
   after_zone: ScoreZone
+  is_school_student: boolean
 }
 
 /** GET /practices/{id}/analytics -- the header and both distributions. `attended` is the denominator of every "X of N" on the screen; the "check-ins before" figure is the sum of `before` (PRE check-ins of the attended), so the blocks reconcile. */
 export interface PracticeAnalyticsResponse {
   practice_id: string
+  viewer_role: PracticeAnalyticsViewerRole
+  curator_group_id: string | null
   title: string
   direction: string | null
   scheduled_at: string
@@ -1516,6 +1522,7 @@ export interface PracticeAnalyticsReview {
   avatar_url: string | null
   comment: string
   created_at: string
+  is_school_student: boolean
 }
 
 /** GET /api/v1/practices/{id}/insights -- aggregated data. All data is anonymous: no user IDs, names, or comment texts. Only numeric distributions and counts. */
