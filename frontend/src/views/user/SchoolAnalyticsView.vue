@@ -5,8 +5,9 @@
   2026-10-02. Part 1: a period slider (Неделя / Месяц / Квартал) over four
   white metric cards -- practices conducted, people who came out of the
   school's members, came-again rate, joined-but-never-came. Part 2: the
-  «Процент фидбеков» block under the cards -- reviewers (users who left a
-  review in the period) out of the school's students on the heading line,
+  «Процент фидбеков» block under the cards -- the period's reviews out of
+  its visits (BE-107: the server computes reviews_pct and sends both
+  numbers; the screen does no arithmetic) on the heading line,
   the FIVE-scale feedback strip (Плохо .. Огонь, tz-mood-scale) below, via
   the shared DistributionCard. The slider refetches in place, and the last
   requested period wins (an earlier response never lands under a newer
@@ -109,8 +110,8 @@
         </div>
 
         <!-- Part 2: the feedback share. Heading line + the colored strip,
-             one server aggregate per selected period; the percent divides
-             reviewers by members.students (the roster number, card 2). -->
+             one server aggregate per selected period; the percent and both
+             numbers (reviews из visits) come ready from the server. -->
         <DistributionCard
           class="school-analytics__feedback"
           title="Процент фидбеков"
@@ -135,7 +136,10 @@
                 <component :is="practiceIconFor(p)" :size="40" aria-hidden="true" />
                 <div class="school-analytics__practice-main">
                   <span class="school-analytics__practice-title">{{ p.title }}</span>
-                  <span class="school-analytics__practice-meta">{{ p.master_name }}</span>
+                  <span class="school-analytics__practice-meta">
+                    <VAvatar :name="p.master_name" :url="p.master_avatar_url ?? undefined" size="sm" />
+                    {{ p.master_name }}
+                  </span>
                 </div>
               </div>
               <div class="school-analytics__practice-counts">
@@ -175,7 +179,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ApiResponseError } from '@/api/client'
 import { getCuratorGroupAnalytics, type SchoolAnalyticsPeriod } from '@/api/curatorGroups'
 import type { CuratorGroupAnalyticsResponse } from '@/api/types'
-import { VButton, VCard, VEmptyState, VLoader, VSegmentTrack } from '@/components/ui'
+import { VAvatar, VButton, VCard, VEmptyState, VLoader, VSegmentTrack } from '@/components/ui'
 import DistributionCard from '@/components/shared/DistributionCard.vue'
 import VHeader from '@/components/layout/VHeader.vue'
 import { MOOD_SCALE_KEYS, MOOD_SCALE_LABELS, type MoodScaleKey } from '@/utils/moodScale'
@@ -201,28 +205,19 @@ const PERIOD_OPTIONS: ReadonlyArray<{ value: SchoolAnalyticsPeriod; label: strin
   { value: 'quarter', label: 'Квартал' },
 ]
 
-// -- The feedback block (part 2). «Процент фидбеков» = reviewers (users who
-//    left a review in the period) out of the school's USERS -- the same
-//    students count card 2 shows; the denominator rides the payload, so the
-//    percent is derived, never a second server copy of one number. The
+// -- The feedback block (part 2). «Процент фидбеков» = the period's reviews
+//    out of its visits, everyone who came (BE-107, owner decision 3). The
+//    SERVER computes reviews_pct and sends reviews and visits beside it; the
+//    screen renders them as they come and divides nothing. reviews is the
+//    sum of the strip's zones, so the line and the strip agree. The
 //    strip is the FIVE mood-scale gradations («Плохо» .. «Огонь») with the
 //    shared mood palette + faces -- visually the same segments the practice
 //    strips render, and since BE-77 the same five zones every feed and
-//    distribution carries. Every read is fault-tolerant: an older
-//    payload (no rating / reviewers yet) degrades to the empty scaffold,
-//    never a crash -- the «бек доедет» ruling. --
-const feedbackReviewPct = computed((): number => {
-  const students = data.value?.members.students ?? 0
-  const reviewers = data.value?.engagement?.reviewers ?? 0
-  if (students <= 0) return 0
-  return Math.round((reviewers / students) * 100)
+//    distribution carries. --
+const feedbackCountLabel = computed((): string => {
+  const e = data.value?.engagement
+  return `${e?.reviews_pct ?? 0}% · ${e?.reviews ?? 0} из ${e?.visits ?? 0}`
 })
-const feedbackCountLabel = computed(
-  (): string =>
-    `${feedbackReviewPct.value}% · ${data.value?.engagement?.reviewers ?? 0} из ${
-      data.value?.members.students ?? 0
-    }`,
-)
 const feedbackBars = computed(() => moodStripBars(data.value?.engagement?.rating))
 
 // -- Part 3: the period's conducted practices, newest first. Every card
@@ -417,6 +412,9 @@ function goBack(): void {
 }
 
 .school-analytics__practice-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   font-size: var(--text-xs);
   color: var(--velo-text-secondary);
 }

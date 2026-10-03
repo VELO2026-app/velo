@@ -123,12 +123,17 @@ async def _join_school(
     school: CuratorGroup,
     auth: dict,
     kind: CuratorMemberKind,
+    *,
+    joined_at: datetime | None = None,
 ) -> CuratorGroupMember:
+    """A membership row; joined_at defaults to the server's now()."""
     row = CuratorGroupMember(
         group_id=school.id,
         user_id=UUID(auth["user"]["id"]),
         kind=kind.value,
     )
+    if joined_at is not None:
+        row.joined_at = joined_at
     db_session.add(row)
     await db_session.flush()
     await db_session.commit()
@@ -320,9 +325,13 @@ async def _seed_lively_school(
     return curator, curator_b, school
 
 
-async def test_aggregate_reconciles_with_the_feed_predicates(
+async def test_all_time_groups_on_a_seeded_history(
     client: AsyncClient, db_session: AsyncSession,
 ):
+    # BE-107: renamed from test_aggregate_reconciles_with_the_feed_predicates
+    # -- this test never called a feed; it pins hand-computed numbers on a
+    # seeded history. The real reconciliation with the two feeds is
+    # test_aggregate_reconciles_with_the_real_feeds below.
     curator, _curator_b, school = await _seed_lively_school(client, db_session)
     resp = await client.get(
         ANALYTICS_URL.format(group_id=school.id),
@@ -394,7 +403,9 @@ async def test_empty_school_is_zeros_not_404(client: AsyncClient, db_session: As
             "repeat_attendees": 0,
             "repeat_pct": 0,
             "joined_never_came": 0,
-            "reviewers": 0,
+            "visits": 0,
+            "reviews": 0,
+            "reviews_pct": 0,
             "rating": {"bad": 0, "low": 0, "neutral": 0, "good": 0, "fire": 0},
             "conducted_practices": [],
         },
@@ -449,13 +460,16 @@ async def _seed_engagement_school(
     is still inside the current week.) s1 attended both in-window
     sessions (came again); s2 attended one in-window and the out-of-window
     one -- so if the window filter ever leaked, s2 would flip «пришли ещё
-    раз» and this seed catches it. s3 joined and never came; the teacher
-    is a MASTER-kind member (never counted as never-came).
+    раз» and this seed catches it. s1 and s2 joined BEFORE every window
+    (BE-107: «вступили, не пришли» counts only students who joined in the
+    period); s3 joined now -- inside every window -- and never came; the
+    teacher is a MASTER-kind member (never counted as never-came).
 
     The feedback pair rides the same history: s1 left an in-window review
     (fire) AND one on the out-of-window practice (confused) -- so a
     leaking window would flip s1's review into the buckets too; s2 left
-    one in-window review (good). Reviewers in-window = {s1, s2}.
+    one in-window review (neutral). In-window visits = 3 (s1 x2, s2 x1),
+    in-window reviews = 2.
     """
     curator = await _make_verified_master(client, db_session, _TID_CURATOR, first_name="Vera")
     teacher = await _make_verified_master(client, db_session, _TID_TEACHER, first_name="Teacher")
@@ -465,13 +479,17 @@ async def _seed_engagement_school(
 
     school = await _school(db_session, curator, "Вовлечённая")
     await _join_school(db_session, school, teacher, CuratorMemberKind.MASTER)
-    for student in (s1, s2, s3):
-        await _join_school(db_session, school, student, CuratorMemberKind.STUDENT)
-
     now = datetime.now(UTC)
     starts = [
         calendar_period_bounds(kind, now)[0] for kind in ("week", "month", "quarter")
     ]
+    before_every_window = min(starts) - timedelta(days=2)
+    for student in (s1, s2):
+        await _join_school(
+            db_session, school, student, CuratorMemberKind.STUDENT,
+            joined_at=before_every_window,
+        )
+    await _join_school(db_session, school, s3, CuratorMemberKind.STUDENT)
     before_every_window_hours = (
         (min(starts) - timedelta(days=1)) - now
     ).total_seconds() / 3600
@@ -536,7 +554,9 @@ async def test_engagement_is_scoped_to_the_requested_period(
     assert eng["repeat_attendees"] == 1
     assert eng["repeat_pct"] == 50
     assert eng["joined_never_came"] == 1
-    assert eng["reviewers"] == 2
+    # BE-107 decision 3 (was `reviewers == 2`, distinct authors divided by
+    # the roster on the client): reviews out of visits, computed here.
+    assert (eng["reviews"], eng["visits"], eng["reviews_pct"]) == (2, 3, 67)
     assert eng["rating"] == {"bad": 0, "low": 0, "neutral": 1, "good": 0, "fire": 1}
 
     # Part 3: every in-window practice, newest first, each with its own
@@ -553,16 +573,15 @@ async def test_engagement_is_scoped_to_the_requested_period(
     # «Сейчас А»: s1 + s2 came, s1 + s2 reviewed (6 -> neutral, 10 -> fire).
     assert a["direction"] == "yoga"
     assert a["master_name"] == "Teacher"
+    assert a["master_avatar_url"] is None  # the seeded teacher has none
     assert a["attendees_count"] == 2
     assert a["checkins_count"] == 0
-    assert a["reviewers_count"] == 2
     assert a["reviews_count"] == 2
     assert a["rating"] == {"bad": 0, "low": 0, "neutral": 1, "good": 0, "fire": 1}
     # «Сейчас Б»: s1 came, nobody reviewed.
     assert b["direction"] is None
     assert b["attendees_count"] == 1
     assert b["checkins_count"] == 0
-    assert b["reviewers_count"] == 0
     assert b["reviews_count"] == 0
     assert b["rating"] == {"bad": 0, "low": 0, "neutral": 0, "good": 0, "fire": 0}
     assert UUID(a["practice_id"]) and UUID(b["practice_id"])
@@ -589,3 +608,368 @@ async def test_unknown_period_is_a_422(client: AsyncClient, db_session: AsyncSes
         headers=auth_headers(curator["session_token"]),
     )
     assert resp.status_code == 422, resp.text
+
+# =============================================================================
+# BE-107: the owner's decisions 1-4, pinned on purpose-built histories
+# =============================================================================
+#
+# Every history below is REACHABLE: a review always sits on an ATTENDED
+# booking of a COMPLETED practice in the past (diary/service.py demands it),
+# and joined_at is set explicitly where the decision turns on it. Each test
+# owns its own telegram_ids inside the file band.
+
+FEED_CHECKINS_URL = "/api/v1/masters/me/curator-groups/{group_id}/checkins"
+FEED_REVIEWS_URL = "/api/v1/masters/me/curator-groups/{group_id}/reviews"
+
+
+def _hours_until(moment: datetime) -> float:
+    """`moment` as the hours_from_now _practice takes."""
+    return (moment - datetime.now(UTC)).total_seconds() / 3600
+
+
+async def _set_user(db_session: AsyncSession, auth: dict, **fields: object) -> None:
+    user = await db_session.get(User, UUID(auth["user"]["id"]))
+    for name, value in fields.items():
+        setattr(user, name, value)
+    await db_session.commit()
+
+
+async def _analytics(
+    client: AsyncClient, curator: dict, school: CuratorGroup, period: str = "week"
+) -> dict:
+    resp = await client.get(
+        ANALYTICS_URL.format(group_id=school.id) + f"?period={period}",
+        headers=auth_headers(curator["session_token"]),
+    )
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+async def _attended(
+    db_session: AsyncSession,
+    practice: Practice,
+    who: dict,
+    *,
+    rating: int | None = None,
+) -> None:
+    booking = await _booking(
+        db_session, practice, who, status=BookingStatus.ATTENDED.value
+    )
+    if rating is not None:
+        await _feedback(db_session, practice, who, booking, rating=rating)
+
+
+async def _week_school(
+    client: AsyncClient, db_session: AsyncSession, base: int, name: str
+):
+    """A curator, a teacher (master member) and a school; ids from `base`."""
+    curator = await _make_verified_master(client, db_session, base, first_name="Vera")
+    teacher = await _make_verified_master(
+        client, db_session, base + 1, first_name="Teacher"
+    )
+    school = await _school(db_session, curator, name)
+    await _join_school(db_session, school, teacher, CuratorMemberKind.MASTER)
+    return curator, teacher, school
+
+
+def _week_start_and_now() -> tuple[datetime, datetime]:
+    """The curator's (UTC) week start and now -- every past moment of the
+    current week is [start, now)."""
+    now = datetime.now(UTC)
+    return calendar_period_bounds("week", now)[0], now
+
+
+async def test_aggregate_reconciles_with_the_real_feeds(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    """The all-time counts ARE the two BE-24 feeds' totals, read through the
+    feeds themselves; the period's reviews are exactly the /reviews items
+    that sit on the period's practices."""
+    curator, _curator_b, school = await _seed_lively_school(client, db_session)
+    headers = auth_headers(curator["session_token"])
+    data = await _analytics(client, curator, school, "quarter")
+
+    checkins = await client.get(
+        FEED_CHECKINS_URL.format(group_id=school.id),
+        params={"limit": 100},
+        headers=headers,
+    )
+    reviews = await client.get(
+        FEED_REVIEWS_URL.format(group_id=school.id),
+        params={"limit": 100},
+        headers=headers,
+    )
+    assert checkins.status_code == 200 and reviews.status_code == 200
+    # The pair: the feeds are not empty, so equality is not 0 == 0.
+    assert checkins.json()["total"] > 0 and reviews.json()["total"] > 0
+    assert data["feedback"]["checkins_count"] == checkins.json()["total"]
+    assert data["feedback"]["reviews_count"] == reviews.json()["total"]
+
+    period_ids = {p["practice_id"] for p in data["engagement"]["conducted_practices"]}
+    assert period_ids  # the period does hold practices
+    in_period = [r for r in reviews.json()["items"] if r["practice_id"] in period_ids]
+    assert data["engagement"]["reviews"] == len(in_period)
+    assert data["engagement"]["reviews"] == sum(data["engagement"]["rating"].values())
+
+
+async def test_periods_differ_on_a_practice_in_one_window_only(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    """A practice inside one period's window and outside another's moves
+    every period number of the first and none of the second.
+
+    The two windows are found at run time: whichever of week/month/quarter
+    starts earlier, the stretch between the two starts is in the past, in
+    the earlier-starting window and outside the other one.
+    """
+    curator, teacher, school = await _week_school(client, db_session, 89300, "Периоды")
+    student = await _make_student(client, 89303)
+    now = datetime.now(UTC)
+    starts = {
+        k: calendar_period_bounds(k, now)[0] for k in ("week", "month", "quarter")
+    }
+    wide, narrow = next(
+        (a, b)
+        for a, b in (
+            ("month", "week"),
+            ("week", "month"),
+            ("quarter", "week"),
+            ("week", "quarter"),
+            ("quarter", "month"),
+        )
+        if starts[a] < starts[b]
+    )
+    await _join_school(
+        db_session,
+        school,
+        student,
+        CuratorMemberKind.STUDENT,
+        joined_at=min(starts.values()) - timedelta(days=1),
+    )
+    moment = starts[wide] + (starts[narrow] - starts[wide]) / 2
+    only_wide = await _practice(
+        db_session,
+        teacher,
+        school,
+        title="Только шире",
+        status=PracticeStatus.COMPLETED.value,
+        hours_from_now=_hours_until(moment),
+    )
+    await _attended(db_session, only_wide, student, rating=8)
+
+    wide_eng = (await _analytics(client, curator, school, wide))["engagement"]
+    narrow_eng = (await _analytics(client, curator, school, narrow))["engagement"]
+    assert (wide_eng["practices_conducted"], wide_eng["attendees"]) == (1, 1)
+    assert (wide_eng["visits"], wide_eng["reviews"]) == (1, 1)
+    assert [p["title"] for p in wide_eng["conducted_practices"]] == ["Только шире"]
+    assert (narrow_eng["practices_conducted"], narrow_eng["attendees"]) == (0, 0)
+    assert (narrow_eng["visits"], narrow_eng["reviews"]) == (0, 0)
+    assert narrow_eng["conducted_practices"] == []
+
+
+async def test_window_is_the_curators_own_calendar(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    """The week is the curator's local week (Pacific/Kiritimati, UTC+14),
+    not the UTC one: a practice in the stretch where the two weeks differ
+    counts exactly when it is inside the LOCAL week."""
+    from app.core.periods import calendar_period_bounds_in_tz
+
+    curator, teacher, school = await _week_school(client, db_session, 89310, "Пояс")
+    await _set_user(db_session, curator, timezone="Pacific/Kiritimati")
+    now = datetime.now(UTC)
+    local_start = calendar_period_bounds_in_tz("week", now, "Pacific/Kiritimati")[0]
+    utc_start = calendar_period_bounds("week", now)[0]
+    assert local_start != utc_start
+    # [earlier start, later start) is past and inside exactly one of the two
+    # weeks; its midpoint is the probe.
+    early, late = sorted((local_start, utc_start))
+    moment = early + (late - early) / 2
+    in_local = local_start <= moment
+    in_utc = utc_start <= moment
+    assert in_local != in_utc  # the pair: the probe separates the two calendars
+    await _practice(
+        db_session,
+        teacher,
+        school,
+        title="На границе поясов",
+        status=PracticeStatus.COMPLETED.value,
+        hours_from_now=_hours_until(moment),
+    )
+
+    eng = (await _analytics(client, curator, school, "week"))["engagement"]
+    assert eng["practices_conducted"] == (1 if in_local else 0)
+
+
+async def test_came_counts_students_of_the_school_only(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    """Decision 1: «человек приходило» / «пришли ещё раз» are students of the
+    school now. Decision 3: visits and reviews are EVERYONE on the period's
+    practices. One history answers both.
+
+    s (student) attended P1 and P2 and reviewed both; g (a guest of the
+    public P1, no membership) attended and reviewed P1; m (a master member
+    of the school) attended P1. -> came 1, came again 1; visits 4 (s x2, g,
+    m), reviews 3 (s x2, g) -- reviews counts rows, not authors (2).
+    """
+    curator, teacher, school = await _week_school(
+        client, db_session, 89320, "Кто пришёл"
+    )
+    s = await _make_student(client, 89323)
+    g = await _make_student(client, 89324)
+    m = await _make_verified_master(client, db_session, 89325, first_name="Colleague")
+    week_start, now = _week_start_and_now()
+    await _join_school(
+        db_session,
+        school,
+        s,
+        CuratorMemberKind.STUDENT,
+        joined_at=week_start - timedelta(days=1),
+    )
+    await _join_school(db_session, school, m, CuratorMemberKind.MASTER)
+    p1 = await _practice(
+        db_session,
+        teacher,
+        school,
+        title="Открытая",
+        status=PracticeStatus.COMPLETED.value,
+        hours_from_now=_hours_until(week_start + (now - week_start) / 3),
+    )
+    p1.audience_kind = AudienceKind.PUBLIC.value
+    await db_session.commit()
+    p2 = await _practice(
+        db_session,
+        teacher,
+        school,
+        title="Вторая",
+        status=PracticeStatus.COMPLETED.value,
+        hours_from_now=_hours_until(week_start + (now - week_start) * 2 / 3),
+    )
+    await _attended(db_session, p1, s, rating=9)
+    await _attended(db_session, p2, s, rating=7)
+    await _attended(db_session, p1, g, rating=3)
+    await _attended(db_session, p1, m)
+
+    data = await _analytics(client, curator, school)
+    eng = data["engagement"]
+    assert data["members"]["students"] == 1
+    assert (eng["attendees"], eng["repeat_attendees"], eng["repeat_pct"]) == (1, 1, 100)
+    assert (eng["reviews"], eng["visits"], eng["reviews_pct"]) == (3, 4, 75)
+    assert eng["reviews"] == sum(eng["rating"].values())
+    # The per-practice «Ученики» is everyone who was there (VELO vocabulary).
+    by_title = {p["title"]: p for p in eng["conducted_practices"]}
+    assert (
+        by_title["Открытая"]["attendees_count"],
+        by_title["Открытая"]["reviews_count"],
+    ) == (3, 2)
+    assert (
+        by_title["Вторая"]["attendees_count"],
+        by_title["Вторая"]["reviews_count"],
+    ) == (1, 1)
+
+
+async def test_joined_in_period_and_never_came(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    """Decision 2, every row of the grid:
+
+    early   joined BEFORE the window, never came          -> not counted
+    came    joined in the window, came AFTER joining      -> not counted
+    before  joined in the window, came only BEFORE joining -> counted
+    none    joined in the window, never came              -> counted
+    left    joined in the window, never came, then LEFT   -> not counted
+    """
+    curator, teacher, school = await _week_school(
+        client, db_session, 89330, "Вступившие"
+    )
+    early = await _make_student(client, 89333)
+    came = await _make_student(client, 89334)
+    before = await _make_student(client, 89335)
+    none = await _make_student(client, 89336)
+    left = await _make_student(client, 89337)
+    week_start, now = _week_start_and_now()
+    span = now - week_start
+    at = lambda share: week_start + span * share  # noqa: E731 -- a local ruler
+
+    await _join_school(
+        db_session,
+        school,
+        early,
+        CuratorMemberKind.STUDENT,
+        joined_at=week_start - timedelta(days=1),
+    )
+    for who in (came, before, none):
+        await _join_school(
+            db_session, school, who, CuratorMemberKind.STUDENT, joined_at=at(0.4)
+        )
+    left_row = await _join_school(
+        db_session,
+        school,
+        left,
+        CuratorMemberKind.STUDENT,
+        joined_at=at(0.4),
+    )
+    await db_session.delete(left_row)
+    await db_session.commit()
+
+    earlier = await _practice(
+        db_session,
+        teacher,
+        school,
+        title="До вступления",
+        status=PracticeStatus.COMPLETED.value,
+        hours_from_now=_hours_until(at(0.2)),
+    )
+    later = await _practice(
+        db_session,
+        teacher,
+        school,
+        title="После вступления",
+        status=PracticeStatus.COMPLETED.value,
+        hours_from_now=_hours_until(at(0.7)),
+    )
+    await _attended(db_session, earlier, before)
+    await _attended(db_session, later, came)
+
+    eng = (await _analytics(client, curator, school))["engagement"]
+    assert eng["joined_never_came"] == 2  # before + none
+    # The pair: the population is real -- four students now, two of whom
+    # came in the window.
+    data = await _analytics(client, curator, school)
+    assert data["members"]["students"] == 4
+    assert eng["attendees"] == 2
+
+
+async def test_period_list_is_every_practice_with_the_master_avatar(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    """Decision 4: ALL the period's practices (six -- past the old top-5
+    habit), newest first, each carrying its master's avatar."""
+    curator, teacher, school = await _week_school(client, db_session, 89340, "Список")
+    await _set_user(db_session, teacher, avatar_url="https://cdn.example/teacher.png")
+    week_start, now = _week_start_and_now()
+    titles = [f"Практика {n}" for n in range(1, 7)]
+    for n, title in enumerate(titles, start=1):
+        await _practice(
+            db_session,
+            teacher,
+            school,
+            title=title,
+            status=PracticeStatus.COMPLETED.value,
+            hours_from_now=_hours_until(week_start + (now - week_start) * n / 7),
+        )
+
+    listed = (await _analytics(client, curator, school))["engagement"][
+        "conducted_practices"
+    ]
+    assert [p["title"] for p in listed] == list(reversed(titles))
+    assert {p["master_avatar_url"] for p in listed} == {
+        "https://cdn.example/teacher.png"
+    }

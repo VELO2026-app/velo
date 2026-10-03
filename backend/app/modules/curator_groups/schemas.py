@@ -862,9 +862,10 @@ class CuratorGroupConductedPracticeItem(BaseModel):
 
     The card the client renders: direction (schema-on-read data.taxonomy,
     for the direction icon), title, master, date, then the practice's own
-    aggregates -- attendees (distinct ATTENDED), check-ins (PRE on
-    non-cancelled bookings) and the feedback pair (distinct reviewers +
-    the five zone counts). Same predicates as the totals, so a card
+    aggregates -- attendees (distinct ATTENDED: everyone who was there,
+    «Ученики» in VELO's vocabulary), check-ins (PRE on non-cancelled
+    bookings) and the reviews with their five zone counts. Same predicates
+    as the totals, so a card
     reconciles with the cards around it.
     """
 
@@ -872,31 +873,32 @@ class CuratorGroupConductedPracticeItem(BaseModel):
     title: str
     direction: str | None
     master_name: str
+    # The master's avatar for the card (BE-107, owner decision 4); null
+    # when the master has none.
+    master_avatar_url: str | None
     scheduled_at: datetime
     timezone: str
     attendees_count: int
     checkins_count: int
-    reviewers_count: int
     reviews_count: int
     rating: ScoreZoneCounts
 
 
 class CuratorGroupEngagementTotals(BaseModel):
-    """The period-scoped heart of the screen (owner brief 2026-10-02).
+    """The period-scoped heart of the screen (owner brief 2026-10-02,
+    BE-107 decisions).
 
-    conducted / attendees / repeat_* / reviewers / rating are scoped to the
-    calendar period the request named, over the curator's own timezone
-    (BE-34 bounds); joined_never_came is LIFETIME by definition -- a member
-    who never came has not come in any period, so the slider does not move
-    it.
+    Everything here is scoped to the calendar period the request named,
+    over the curator's own timezone (BE-34 bounds), and reads ONE set of
+    practices: the school's COMPLETED practices scheduled in the window.
+    The exact vocabulary is pinned once, in analytics_service's header.
 
-    Vocabulary (pinned once in analytics_service): «проведено» counts
-    COMPLETED practices in the window (GT-20 -- the session settled, not
-    the clock passed); «приходило» counts distinct users with an ATTENDED
-    booking on those sessions; «пришли ещё раз» counts the users with >=2.
-    Members counted are STUDENT-kind rows: masters join by appointment and
-    conduct rather than book, so counting them would put structurally
-    non-attending people into every denominator.
+    attendees / repeat_* count STUDENTS OF THE SCHOOL NOW (member rows of
+    kind=student) -- the same population as members.students, the card's
+    «из N». joined_never_came counts students who JOINED IN THE PERIOD and
+    have not attended a school practice since joining (to the window's
+    end). visits / reviews are EVERYONE on the period's practices, guests
+    included -- one population for both, so reviews <= visits.
     """
 
     practices_conducted: int
@@ -906,18 +908,18 @@ class CuratorGroupEngagementTotals(BaseModel):
     # same answer master analytics' rate fields give (never a null dash).
     repeat_pct: int
     joined_never_came: int
-    # Part 2 (owner brief 2026-10-02), the feedback share under the same
-    # slider: distinct users whose review landed on an in-window practice,
-    # and the in-window rating zones (same zone_counts mapping as the
-    # all-time `feedback.rating`, so the two always reconcile). The
-    # «процент фидбеков» denominator is members.students -- the client
-    # divides by the number already in this payload; carrying a second copy
-    # of that count here would put one fact in two fields.
-    reviewers: int
+    # The feedback share («Процент фидбеков», BE-107 decision 3): reviews
+    # out of visits on the period's practices, computed by the SERVER --
+    # the client renders reviews_pct and «reviews из visits» as they come.
+    # reviews is the sum of `rating` below, so the share and the strip
+    # cannot disagree.
+    visits: int
+    reviews: int
+    reviews_pct: int
     rating: ScoreZoneCounts
-    # Part 3 (owner brief 2026-10-02): every COMPLETED practice of the
-    # window, newest first -- the client renders a card per practice with
-    # its own five-scale strip. Empty list on a window without practices.
+    # Every COMPLETED practice of the window, newest first, no limit -- the
+    # client renders a card per practice with its own five-zone strip.
+    # Empty list on a window without practices.
     conducted_practices: list[CuratorGroupConductedPracticeItem]
 
 

@@ -19,34 +19,40 @@
 #                    came from, or the curator sees two truths);
 #   top_practices -- completed practices ranked by check-ins + reviews.
 #
-# ENGAGEMENT VOCABULARY (pinned here once; the cards' labels paraphrase it):
-#   conducted = the practice's status is COMPLETED (the platform settled the
-#     session, GT-20) and its scheduled_at is inside the window -- the same
-#     anchor as the master dashboard's practices_count;
-#   came = an ATTENDED booking on a school practice scheduled in the window.
-#     ATTENDED is written only at or after finalization, so such a booking
-#     always sits on a COMPLETED practice (the master-stats reasoning) and
-#     the pair cannot disagree;
-#   came again = >=2 attended bookings in the window;
-#   joined and never came = a STUDENT-kind member with zero attended
-#     bookings on this school's practices EVER (lifetime -- the slider does
-#     not move it). Masters are appointed, not joined, and conduct rather
-#     than book, so their rows stay out of every denominator;
-#   left a review = a distinct user whose Feedback landed on a school
-#     practice scheduled in the window (the reviews feed has no booking
-#     filter, and neither does this -- same anchor, same buckets as the
-#     all-time rating group, so the two distributions reconcile). The
-#     «процент фидбеков» divides reviewers by members.students on the
-#     client: the denominator already rides the payload, and one fact in
-#     one field cannot disagree with itself;
-#   conducted practices (part 3, owner 2026-10-02) = EVERY completed
-#     practice in the window, newest first, each carrying its own
-#     attendance (distinct ATTENDED), check-ins (PRE on non-cancelled
-#     bookings -- the /checkins feed predicate) and feedback aggregates
-#     (distinct reviewers + the five-scale buckets). The client renders a
-#     card per practice with its own strip, so the per-practice numbers
-#     use the same predicates as the totals -- a card's attendees sum into
-#     «человек приходило» up to double-attendance overlap.
+# ENGAGEMENT VOCABULARY (BE-107, owner decisions 2026-10-02/03; pinned here
+# once, the cards' labels paraphrase it). Every period metric reads ONE set
+# of practices -- THE PERIOD'S PRACTICES: the school's (curator_group_id),
+# COMPLETED (the platform settled the session, GT-20), scheduled_at inside
+# the window [start, end) of the CURATOR'S OWN calendar (BE-34 bounds).
+#   conducted = the number of the period's practices;
+#   came («человек приходило») = distinct users with an ATTENDED booking on
+#     the period's practices WHO ARE STUDENTS OF THE SCHOOL NOW (a member
+#     row of kind=student). Guests of a public school practice, the school's
+#     masters and people who left (their row is deleted on leave) do not
+#     count. The denominator is members.students -- the same population;
+#   came again = those students with ATTENDED bookings on >= 2 DISTINCT
+#     practices of the period;
+#   joined and never came = students who JOINED IN THE PERIOD
+#     (joined_at in the window) with no ATTENDED booking on a school
+#     practice scheduled from their joining to the window's end. A practice
+#     attended BEFORE joining does not count as coming. joined_at is the
+#     moment of joining the school: a master demoted to student keeps the
+#     joined_at of his joining (owner ruling, BE-107 gate);
+#   visits / reviews (the feedback share, «X из Y») = ATTENDED bookings and
+#     Feedback rows on the period's practices, EVERYONE who came (guests
+#     included -- one population for both, owner ruling). A review needs an
+#     ATTENDED booking (diary/service.py) and no writer ever moves a booking
+#     off ATTENDED, so reviews <= visits by construction; reviews is the sum
+#     of the period's rating zones (one statement), so the share reconciles
+#     with the strip and with the /reviews feed. The SERVER computes
+#     reviews_pct (the _pct rule, as repeat_pct);
+#   the period's practices list = ALL of them, newest first, no limit, each
+#     with its master's name and avatar and its own aggregates: attendees
+#     (everyone ATTENDED -- «Ученики» on the card means everyone who was
+#     there, VELO's own vocabulary), check-ins (the /checkins feed
+#     predicate), reviews and the five-zone strip.
+#
+# EVERYTHING IS COUNTED IN SQL: no statement here returns a row per person.
 #
 # THE BE-24 RULE STANDS: reach, not depth. Bucketed scores only, no
 # per-student rows, no raw 1..10, no comment text -- the feeds already show
@@ -59,7 +65,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 import structlog
-from sqlalchemy import distinct, func, select
+from sqlalchemy import and_, distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.periods import calendar_period_bounds_in_tz
@@ -184,10 +190,19 @@ async def _feedback_and_top(
     # -- The completed practices ranked by engagement. The per-practice
     #    counts reuse the same predicates as the two aggregates above, so a
     #    row's numbers sum into the screens' totals (up to the limit-5 cut).
+    #    Both subqueries are narrowed to THIS school's completed practices
+    #    (BE-107): grouping the whole Checkin / Feedback tables to keep five
+    #    rows would read every school's history.
+    school_completed = (
+        Practice.curator_group_id == group_id,
+        Practice.status == PracticeStatus.COMPLETED.value,
+    )
     checkin_counts = (
         select(Checkin.practice_id, func.count().label("checkins"))
         .join(Booking, Checkin.booking_id == Booking.id)
+        .join(Practice, Checkin.practice_id == Practice.id)
         .where(
+            *school_completed,
             Checkin.check_type == CheckType.PRE.value,
             Booking.status != BookingStatus.CANCELLED.value,
         )
@@ -196,6 +211,8 @@ async def _feedback_and_top(
     )
     feedback_counts = (
         select(Feedback.practice_id, func.count().label("reviews"))
+        .join(Practice, Feedback.practice_id == Practice.id)
+        .where(*school_completed)
         .group_by(Feedback.practice_id)
         .subquery()
     )
@@ -213,10 +230,7 @@ async def _feedback_and_top(
             .join(User, Practice.master_id == User.id)
             .outerjoin(checkin_counts, checkin_counts.c.practice_id == Practice.id)
             .outerjoin(feedback_counts, feedback_counts.c.practice_id == Practice.id)
-            .where(
-                Practice.curator_group_id == group_id,
-                Practice.status == PracticeStatus.COMPLETED.value,
-            )
+            .where(*school_completed)
             .order_by(engagement.desc(), Practice.scheduled_at.desc())
             .limit(TOP_PRACTICES_LIMIT)
         )
@@ -258,63 +272,72 @@ async def _engagement(
     window_end: datetime,
     session: AsyncSession,
 ) -> dict:
-    """The period-scoped cards (owner brief 2026-10-02, parts 1-2).
+    """The period-scoped cards (owner brief 2026-10-02; BE-107 decisions).
 
-    See the module header for the exact vocabulary. Grouped statements:
-    one count for conducted, one per-user grouping that answers «came» and
-    «came again» off the same rows (so the pair cannot disagree), the
-    lifetime never-came count, and the feedback pair (distinct reviewers +
-    the rating buckets, both window-anchored on the practice).
+    See the module header for the exact vocabulary. A fixed number of
+    statements, every one an aggregate: conducted, students who came (and
+    came again) in one row, joined-in-period-and-never-came, the period's
+    visits, the rating zones (whose sum is the reviews), then the practices
+    list and its per-practice aggregates as IN-queries.
     """
-    # -- Conducted: COMPLETED practices scheduled inside the window. The
-    #    practice-status filter is what keeps a cancelled session that
-    #    happened to sit inside the window out of «проведено».
+    # THE PERIOD'S PRACTICES -- one predicate for every period metric.
+    period_practices = (
+        Practice.curator_group_id == group_id,
+        Practice.status == PracticeStatus.COMPLETED.value,
+        Practice.scheduled_at >= window_start,
+        Practice.scheduled_at < window_end,
+    )
+
     conducted_count = (
         await session.execute(
-            select(func.count())
-            .select_from(Practice)
-            .where(
-                Practice.curator_group_id == group_id,
-                Practice.status == PracticeStatus.COMPLETED.value,
-                Practice.scheduled_at >= window_start,
-                Practice.scheduled_at < window_end,
-            )
+            select(func.count()).select_from(Practice).where(*period_practices)
         )
     ).scalar_one()
 
-    # -- Who came, grouped per user: the row count is «человек приходило»
-    #    and the >=2 rows are «пришли ещё раз». Anchored on the practice's
-    #    scheduled_at, so attendance lands in the period the session
-    #    happened in, not the day somebody's booking was finalized.
-    per_user_rows = (
-        await session.execute(
-            select(Booking.user_id, func.count())
-            .join(Practice, Booking.practice_id == Practice.id)
-            .where(
-                Practice.curator_group_id == group_id,
-                Practice.scheduled_at >= window_start,
-                Practice.scheduled_at < window_end,
-                Booking.status == BookingStatus.ATTENDED.value,
-            )
-            .group_by(Booking.user_id)
+    # -- Students who came, and came again: one grouped subquery (one row
+    #    per student, inside the database) folded into ONE result row. The
+    #    member join is the decision-1 population: students of the school
+    #    now; a guest, a master or a leaver has no student row here.
+    per_student = (
+        select(
+            Booking.user_id,
+            func.count(distinct(Booking.practice_id)).label("practices"),
         )
-    ).all()
-    attendees = len(per_user_rows)
-    repeat_attendees = sum(1 for _user_id, count in per_user_rows if count >= 2)
+        .join(Practice, Booking.practice_id == Practice.id)
+        .join(
+            CuratorGroupMember,
+            and_(
+                CuratorGroupMember.group_id == group_id,
+                CuratorGroupMember.user_id == Booking.user_id,
+                CuratorGroupMember.kind == CuratorMemberKind.STUDENT.value,
+            ),
+        )
+        .where(*period_practices, Booking.status == BookingStatus.ATTENDED.value)
+        .group_by(Booking.user_id)
+        .subquery()
+    )
+    attendees, repeat_attendees = (
+        await session.execute(
+            select(
+                func.count(),
+                func.count().filter(per_student.c.practices >= 2),
+            ).select_from(per_student)
+        )
+    ).one()
 
-    # -- Joined and never came: LIFETIME (every window contains every
-    #    never-came member equally), student rows only. NOT IN over the
-    #    school's all-time attendees; user_id is never NULL, so the empty
-    #    subquery case degrades to «everyone never came» -- correct for a
-    #    school that has never held a practice.
-    ever_attended = (
-        select(Booking.user_id)
+    # -- Joined in the period and never came: correlated on the member row,
+    #    so "came" means AFTER joining and before the window's end.
+    came_since_joining = (
+        select(Booking.id)
         .join(Practice, Booking.practice_id == Practice.id)
         .where(
-            Practice.curator_group_id == group_id,
+            Booking.user_id == CuratorGroupMember.user_id,
             Booking.status == BookingStatus.ATTENDED.value,
+            Practice.curator_group_id == group_id,
+            Practice.scheduled_at >= CuratorGroupMember.joined_at,
+            Practice.scheduled_at < window_end,
         )
-        .scalar_subquery()
+        .exists()
     )
     never_came = (
         await session.execute(
@@ -323,70 +346,50 @@ async def _engagement(
             .where(
                 CuratorGroupMember.group_id == group_id,
                 CuratorGroupMember.kind == CuratorMemberKind.STUDENT.value,
-                CuratorGroupMember.user_id.not_in(ever_attended),
+                CuratorGroupMember.joined_at >= window_start,
+                CuratorGroupMember.joined_at < window_end,
+                ~came_since_joining,
             )
         )
     ).scalar_one()
 
-    # -- The feedback share («Процент фидбеков», owner 2026-10-02): distinct
-    #    users whose review landed on an in-window practice, plus the
-    #    in-window rating zones (zone_counts -- the same mapping as the
-    #    all-time group above and every feed, so the two always
-    #    reconcile).
-    #    SAME anchor as attendance (the practice's scheduled_at).
-    #    The denominator is NOT computed here: it is members.students, which
-    #    already rides the payload -- one fact, one field.
-    reviewer_rows = (
+    # -- The feedback share: visits = everyone ATTENDED on the period's
+    #    practices; reviews = the period's Feedback rows, read as the sum of
+    #    their rating zones (one statement for both the strip and the count).
+    visits = (
         await session.execute(
-            select(Feedback.user_id, func.count())
-            .join(Practice, Feedback.practice_id == Practice.id)
-            .where(
-                Practice.curator_group_id == group_id,
-                Practice.scheduled_at >= window_start,
-                Practice.scheduled_at < window_end,
-            )
-            .group_by(Feedback.user_id)
+            select(func.count())
+            .select_from(Booking)
+            .join(Practice, Booking.practice_id == Practice.id)
+            .where(*period_practices, Booking.status == BookingStatus.ATTENDED.value)
         )
-    ).all()
-
-    window_rating_rows = (
-        await session.execute(
-            select(Feedback.rating, func.count())
-            .join(Practice, Feedback.practice_id == Practice.id)
-            .where(
-                Practice.curator_group_id == group_id,
-                Practice.scheduled_at >= window_start,
-                Practice.scheduled_at < window_end,
+    ).scalar_one()
+    window_rating = zone_counts(
+        (
+            await session.execute(
+                select(Feedback.rating, func.count())
+                .join(Practice, Feedback.practice_id == Practice.id)
+                .where(*period_practices)
+                .group_by(Feedback.rating)
             )
-            .group_by(Feedback.rating)
-        )
-    ).all()
-    window_rating = zone_counts(window_rating_rows)
+        ).all()
+    )
+    reviews = sum(window_rating.values())
 
-    # -- The period's conducted practices (part 3, owner 2026-10-02): every
-    #    COMPLETED practice of the window, newest first. The practices are
-    #    fetched first (a bounded set -- the window), then the per-practice
-    #    aggregates run as IN-queries over their ids with the SAME
-    #    predicates the totals above use, so a card's numbers reconcile
-    #    with the cards and totals around it.
+    # -- The period's practices list: ALL of them, newest first (decision
+    #    4), then the per-practice aggregates as IN-queries over their ids
+    #    with the same predicates the totals use.
     practice_rows = (
         await session.execute(
             select(Practice, User)
             .join(User, Practice.master_id == User.id)
-            .where(
-                Practice.curator_group_id == group_id,
-                Practice.status == PracticeStatus.COMPLETED.value,
-                Practice.scheduled_at >= window_start,
-                Practice.scheduled_at < window_end,
-            )
+            .where(*period_practices)
             .order_by(Practice.scheduled_at.desc())
         )
     ).all()
-
     conducted: list[dict] = []
     if practice_rows:
         practice_ids = [practice.id for practice, _master in practice_rows]
-
         attendee_counts = dict(
             (
                 await session.execute(
@@ -413,24 +416,6 @@ async def _engagement(
                 )
             ).all()
         )
-        reviewer_counts = dict(
-            (
-                await session.execute(
-                    select(Feedback.practice_id, func.count(distinct(Feedback.user_id)))
-                    .where(Feedback.practice_id.in_(practice_ids))
-                    .group_by(Feedback.practice_id)
-                )
-            ).all()
-        )
-        reviews_counts = dict(
-            (
-                await session.execute(
-                    select(Feedback.practice_id, func.count())
-                    .where(Feedback.practice_id.in_(practice_ids))
-                    .group_by(Feedback.practice_id)
-                )
-            ).all()
-        )
         practice_rating_rows = (
             await session.execute(
                 select(Feedback.practice_id, Feedback.rating, func.count())
@@ -447,7 +432,6 @@ async def _engagement(
             practice_id: zone_counts(rows)
             for practice_id, rows in rows_by_practice.items()
         }
-
         for practice, master in practice_rows:
             conducted.append(
                 {
@@ -456,12 +440,13 @@ async def _engagement(
                     # Icon facet, schema-on-read JSONB (data.taxonomy.direction).
                     "direction": (practice.data or {}).get("taxonomy", {}).get("direction"),
                     "master_name": display_name(master.first_name, master.last_name),
+                    "master_avatar_url": master.avatar_url,
                     "scheduled_at": practice.scheduled_at,
                     "timezone": practice.timezone,
                     "attendees_count": attendee_counts.get(practice.id, 0),
                     "checkins_count": checkin_counts.get(practice.id, 0),
-                    "reviewers_count": reviewer_counts.get(practice.id, 0),
-                    "reviews_count": reviews_counts.get(practice.id, 0),
+                    # The practice's reviews ARE its zone counts' sum.
+                    "reviews_count": sum(ratings[practice.id].values()),
                     "rating": ratings[practice.id],
                 }
             )
@@ -472,7 +457,9 @@ async def _engagement(
         "repeat_attendees": repeat_attendees,
         "repeat_pct": _pct(repeat_attendees, attendees),
         "joined_never_came": never_came,
-        "reviewers": len(reviewer_rows),
+        "visits": visits,
+        "reviews": reviews,
+        "reviews_pct": _pct(reviews, visits),
         "rating": window_rating,
         "conducted_practices": conducted,
     }

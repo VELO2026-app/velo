@@ -71,7 +71,13 @@ function analyticsFixture(): CuratorGroupAnalyticsResponse {
       repeat_attendees: 2,
       repeat_pct: 50,
       joined_never_came: 3,
-      reviewers: 1,
+      // BE-107: the share is reviews out of visits, computed by the server
+      // (was reviewers / members.students on the client). reviews is the
+      // strip's sum (1 + 3 + 1); visits (8) differs from the roster (7) on
+      // purpose, so a client still dividing by students would show «из 7».
+      visits: 8,
+      reviews: 5,
+      reviews_pct: 63,
       rating: { bad: 1, low: 0, neutral: 0, good: 3, fire: 1 },
       conducted_practices: [
         {
@@ -83,7 +89,7 @@ function analyticsFixture(): CuratorGroupAnalyticsResponse {
           timezone: 'UTC',
           attendees_count: 2,
           checkins_count: 1,
-          reviewers_count: 1,
+          master_avatar_url: null,
           reviews_count: 1,
           rating: { bad: 0, low: 0, neutral: 0, good: 0, fire: 1 },
         },
@@ -96,7 +102,7 @@ function analyticsFixture(): CuratorGroupAnalyticsResponse {
           timezone: 'UTC',
           attendees_count: 3,
           checkins_count: 2,
-          reviewers_count: 1,
+          master_avatar_url: null,
           reviews_count: 1,
           rating: { bad: 1, low: 0, neutral: 0, good: 0, fire: 0 },
         },
@@ -167,7 +173,9 @@ describe('SchoolAnalyticsView', () => {
         repeat_attendees: 7,
         repeat_pct: 60,
         joined_never_came: 5,
-        reviewers: 4,
+        visits: 12,
+        reviews: 9,
+        reviews_pct: 75,
         rating: { bad: 1, low: 1, neutral: 2, good: 2, fire: 3 },
       },
       // Deliberately WITHOUT conducted_practices: this fixture stands for
@@ -202,7 +210,9 @@ describe('SchoolAnalyticsView', () => {
         repeat_attendees: 7,
         repeat_pct: 60,
         joined_never_came: 5,
-        reviewers: 4,
+        visits: 12,
+        reviews: 9,
+        reviews_pct: 75,
         rating: { bad: 1, low: 1, neutral: 2, good: 2, fire: 3 },
         conducted_practices: [],
       },
@@ -217,7 +227,7 @@ describe('SchoolAnalyticsView', () => {
     })
     mount()
     await flush()
-    expect(text()).toContain('14% · 1 из 7')
+    expect(text()).toContain('63% · 5 из 8')
 
     // Tap Месяц, then Квартал before Месяц answers; the late month
     // response must not overwrite the quarter numbers.
@@ -226,12 +236,12 @@ describe('SchoolAnalyticsView', () => {
     buttonWith('Квартал')?.click()
     await flush()
     expect(text()).toContain('60%')
-    expect(text()).toContain('57% · 4 из 7')
+    expect(text()).toContain('75% · 9 из 12')
 
     resolveMonth(analyticsFixture())
     await flush()
-    expect(text()).toContain('57% · 4 из 7')
-    expect(text()).not.toContain('14% · 1 из 7')
+    expect(text()).toContain('75% · 9 из 12')
+    expect(text()).not.toContain('63% · 5 из 8')
   })
 
   it('a failed switch is the honest retry state; retry recovers', async () => {
@@ -262,7 +272,9 @@ describe('SchoolAnalyticsView', () => {
         repeat_attendees: 0,
         repeat_pct: 0,
         joined_never_came: 0,
-        reviewers: 0,
+        visits: 0,
+        reviews: 0,
+        reviews_pct: 0,
         rating: { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 },
         conducted_practices: [],
       },
@@ -281,8 +293,9 @@ describe('SchoolAnalyticsView', () => {
     await flush()
 
     expect(text()).toContain('Процент фидбеков')
-    // 1 reviewer out of 7 students.
-    expect(text()).toContain('14% · 1 из 7')
+    // 5 reviews out of 8 visits, the server's numbers verbatim -- not the
+    // 7 students of the roster (BE-107).
+    expect(text()).toContain('63% · 5 из 8')
     // bad 1 + good 3 + fire 1 -> 20% / 60% / 20% segments (60% is unique
     // on the screen, unlike 50% which card 3 also carries).
     expect(text()).toContain('60%')
@@ -308,7 +321,8 @@ describe('SchoolAnalyticsView', () => {
       ...analyticsFixture(),
       engagement: {
         ...analyticsFixture().engagement,
-        reviewers: 0,
+        reviews: 0,
+        reviews_pct: 0,
         rating: { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 },
       },
     })
@@ -316,7 +330,7 @@ describe('SchoolAnalyticsView', () => {
     await flush()
 
     expect(text()).toContain('Пока нет отзывов')
-    expect(text()).toContain('0% · 0 из 7')
+    expect(text()).toContain('0% · 0 из 8')
     // The main block (no reviews) shows its empty text; the practice cards'
     // bare strips never carry a «Расшифровка» button at all.
     const showMoreButtons = () =>
@@ -346,7 +360,9 @@ describe('SchoolAnalyticsView', () => {
 
     expect(text()).toContain('Практик проведено')
     expect(text()).toContain('Человек приходило из 7 в школе')
-    expect(text()).toContain('0% · 0 из 7')
+    // No engagement in the payload: the share reads 0 of 0 (the
+    // denominator is visits, which the payload does not carry).
+    expect(text()).toContain('0% · 0 из 0')
     expect(text()).toContain('Пока нет отзывов')
   })
 
