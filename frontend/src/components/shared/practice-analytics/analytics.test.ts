@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import Distribution from './PracticeMoodDistribution.vue'
 import Analytics from './PracticeAnalytics.vue'
-import type { PracticeAnalyticsData } from './analytics'
-import { countMoods, formatPercent } from './analytics'
+import type {
+  PracticeAnalyticsPair,
+  PracticeAnalyticsResponse,
+  PracticeAnalyticsReview,
+} from '@/api/types'
+import { formatPercent } from './analytics'
 
 describe('practice analytics snippets', () => {
   it('does not round a real response to 0% or an incomplete distribution to 100%', () => {
@@ -11,17 +15,6 @@ describe('practice analytics snippets', () => {
     expect(formatPercent(0.001)).toBe('<1%')
     expect(formatPercent(99.999)).toBe('>99%')
     expect(formatPercent(100)).toBe('100%')
-  })
-  it('excludes missing and invalid responses from the denominator', () => {
-    const answers = [null, 0, 1, 2, 3, 10, 11, NaN, Infinity].map((score, i) => ({
-      userId: String(i),
-      name: 'Ученик',
-      before: score,
-      after: null,
-      comment: null,
-    }))
-    expect(countMoods(answers, 'before')).toEqual({ bad: 2, low: 1, neutral: 0, good: 0, fire: 1 })
-    expect(countMoods(answers, 'after')).toEqual({ bad: 0, low: 0, neutral: 0, good: 0, fire: 0 })
   })
   it('always keeps tiny and large percentages inside their segments', async () => {
     const wrapper = mount(Distribution, {
@@ -71,45 +64,81 @@ describe('practice analytics snippets', () => {
   })
 })
 
+// BE-78: the screen renders the SERVER's numbers -- zones arrive as
+// ScoreZone, distributions as ScoreZoneCounts, and every "X из N" divides by
+// `attended`. The former client-side zone counting (countMoods over raw
+// 1..10 answers) is gone together with the raw answers.
+function summary(overrides: Partial<PracticeAnalyticsResponse> = {}): PracticeAnalyticsResponse {
+  return {
+    practice_id: 'p1',
+    title: 'Вечерний холотроп',
+    direction: 'breathwork',
+    scheduled_at: '2026-08-14T18:00:00Z',
+    timezone: 'Europe/Berlin',
+    master_name: 'Alex Mindful',
+    master_avatar_url: null,
+    attended: 22,
+    before: { bad: 13, low: 0, neutral: 2, good: 0, fire: 0 },
+    after: { bad: 0, low: 0, neutral: 0, good: 1, fire: 13 },
+    pairs_total: 13,
+    reviews_total: 1,
+    ...overrides,
+  }
+}
+const pair = (i: number): PracticeAnalyticsPair => ({
+  user_id: `u${i}`,
+  name: `Ученик ${i}`,
+  avatar_url: null,
+  before_zone: 'bad',
+  after_zone: 'fire',
+})
+const review: PracticeAnalyticsReview = {
+  user_id: 'u0',
+  name: 'Ученик 0',
+  avatar_url: null,
+  comment: '  Спасибо!  ',
+  created_at: '2026-08-14T20:00:00Z',
+}
+
 describe('practice screen', () => {
-  it('counts only complete pairs, displays comments, reveals and resets the list', async () => {
-    const practice = {
-      id: 'p1',
-      title: 'Вечерний холотроп',
-      direction: 'breathwork',
-      scheduled_at: '2026-08-14T18:00:00Z',
-      timezone: 'Europe/Berlin',
-      master_name: 'Alex Mindful',
-      checkin_count: null,
-    } as PracticeAnalyticsData['practice']
-    const answers = Array.from({ length: 13 }, (_, i) => ({
-      userId: String(i),
-      name: `Ученик ${i}`,
-      before: 2,
-      after: 10,
-      comment: i === 0 ? 'Спасибо!' : null,
-    }))
-    const data: PracticeAnalyticsData = {
-      practice,
-      participants: 22,
-      answers: [
-        ...answers,
-        { userId: 'missing', name: 'Без пары', before: 2, after: null, comment: '   ' },
-      ],
-    }
-    const wrapper = mount(Analytics, { props: { data } })
-    expect(wrapper.findAll('.practice-analytics__pair')).toHaveLength(4)
-    expect(wrapper.findAll('.practice-analytics__review')).toHaveLength(1)
+  it('renders the server zones, divides by attended and pages on request', async () => {
+    const wrapper = mount(Analytics, {
+      props: {
+        summary: summary(),
+        pairs: Array.from({ length: 4 }, (_, i) => pair(i)),
+        reviews: [review],
+      },
+    })
+    // «Чек-ины» is the «до» total (15), «Пришли» the attended (22).
+    const meta = wrapper.get('.practice-analytics__meta').text()
+    expect(meta).toContain('Пришли: 22')
+    expect(meta).toContain('Чек-ины: 15')
     expect(wrapper.get('.practice-analytics__pairs').text()).toContain('13 из 22')
-    expect(wrapper.get('.practice-analytics__meta').text()).not.toContain('Чек-ины:')
+    expect(wrapper.get('.practice-analytics__reviews').text()).toContain('1 из 22')
+    const pairs = wrapper.findAll('.practice-analytics__pair')
+    expect(pairs).toHaveLength(4)
+    expect(pairs[0]!.text()).toContain('Плохо')
+    expect(pairs[0]!.text()).toContain('Огонь')
+    const rv = wrapper.get('.practice-analytics__review')
+    expect(rv.text()).toContain('«Спасибо!»')
+    expect(rv.find('time').attributes('datetime')).toBe('2026-08-14T20:00:00Z')
+    // 4 loaded of 13 -> a «Показать ещё» that asks the container for a page.
     await wrapper.get('.practice-analytics__pairs button').trigger('click')
-    expect(wrapper.findAll('.practice-analytics__pair')).toHaveLength(13)
-    await wrapper.setProps({ data: { ...data, practice: { ...practice, id: 'p2' } } })
-    expect(wrapper.findAll('.practice-analytics__pair')).toHaveLength(4)
+    expect(wrapper.emitted('morePairs')).toHaveLength(1)
+    // All reviews loaded (1 of 1) -> no reviews pager.
+    expect(wrapper.get('.practice-analytics__reviews').find('button').exists()).toBe(false)
+    wrapper.unmount()
+  })
+  it('a pager does not re-ask while its page is in flight', async () => {
+    const wrapper = mount(Analytics, {
+      props: { summary: summary(), pairs: [pair(0)], loadingMorePairs: true },
+    })
+    await wrapper.get('.practice-analytics__pairs button').trigger('click')
+    expect(wrapper.emitted('morePairs')).toBeUndefined()
     wrapper.unmount()
   })
   it('renders loading and recoverable error without fabricating empty statistics', async () => {
-    const wrapper = mount(Analytics, { props: { data: null, loading: true } })
+    const wrapper = mount(Analytics, { props: { summary: null, loading: true } })
     expect(wrapper.get('[role="status"]').text()).toContain('Загружаем')
     expect(wrapper.find('.distribution').exists()).toBe(false)
     await wrapper.setProps({ loading: false, error: 'Сеть недоступна' })

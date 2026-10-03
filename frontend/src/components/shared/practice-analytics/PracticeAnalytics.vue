@@ -1,56 +1,54 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+// BE-78: presentational. The container (PracticeReviewsView) owns the three
+// requests and the paging; every number here is the server's -- zones
+// included (ScoreZone, BE-24: never a raw 1..10). Every "X из N" uses
+// N = summary.attended.
+import { computed } from 'vue'
 import { VAvatar, VButton, VCard, VEmptyState, VLoader } from '@/components/ui'
 import { VHeader } from '@/components/layout'
 import { IconCalendar, IconCheckin, IconGroup } from '@/components/icons'
 import VShowMore from '@/components/shared/VShowMore.vue'
-import MoodAvatar from '@/components/shared/MoodAvatar.vue'
 import { formatShortDate } from '@/utils/format'
 import { practiceIconFor } from '@/utils/displayHelpers'
-import { moodLabelFromScore } from '@/utils/moodScale'
+import { MOOD_SCALE_LABELS } from '@/utils/moodScale'
+import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
+import type {
+  PracticeAnalyticsPair,
+  PracticeAnalyticsResponse,
+  PracticeAnalyticsReview,
+} from '@/api/types'
 import PracticeMoodDistribution from './PracticeMoodDistribution.vue'
-import { countMoods, isScore, type PracticeAnalyticsData } from './analytics'
+import { moodTotal } from './analytics'
 
 const props = withDefaults(
   defineProps<{
-    data: PracticeAnalyticsData | null
+    summary: PracticeAnalyticsResponse | null
+    pairs?: PracticeAnalyticsPair[]
+    reviews?: PracticeAnalyticsReview[]
     loading?: boolean
     error?: string | null
+    loadingMorePairs?: boolean
+    loadingMoreReviews?: boolean
   }>(),
-  { loading: false, error: null },
+  {
+    pairs: () => [],
+    reviews: () => [],
+    loading: false,
+    error: null,
+    loadingMorePairs: false,
+    loadingMoreReviews: false,
+  },
 )
 
-defineEmits<{ back: []; retry: [] }>()
-const expandedPairs = ref(false)
-const answers = computed(() => props.data?.answers ?? [])
-const before = computed(() => countMoods(answers.value, 'before'))
-const after = computed(() => countMoods(answers.value, 'after'))
-const pairs = computed(() =>
-  answers.value.flatMap((answer) => {
-    if (!isScore(answer.before) || !isScore(answer.after)) return []
-    return [{ ...answer, before: answer.before, after: answer.after }]
-  }),
+defineEmits<{ back: []; retry: []; morePairs: []; moreReviews: [] }>()
+
+// «Чек-инов до» is the «до» distribution's total: one population (attended).
+const checkedIn = computed(() => (props.summary ? moodTotal(props.summary.before) : 0))
+const hasMorePairs = computed(
+  () => !!props.summary && props.pairs.length < props.summary.pairs_total,
 )
-const visiblePairs = computed(() => (expandedPairs.value ? pairs.value : pairs.value.slice(0, 4)))
-const remainingPairs = computed(() => Math.max(0, pairs.value.length - 4))
-const morePairsLabel = computed(() => {
-  const n = remainingPairs.value
-  const noun =
-    n % 100 >= 11 && n % 100 <= 14
-      ? 'пар'
-      : n % 10 === 1
-        ? 'пару'
-        : n % 10 >= 2 && n % 10 <= 4
-          ? 'пары'
-          : 'пар'
-  return `+ еще ${n} ${noun}`
-})
-const reviews = computed(() => answers.value.filter((answer) => answer.comment?.trim()))
-watch(
-  () => props.data?.practice.id,
-  () => {
-    expandedPairs.value = false
-  },
+const hasMoreReviews = computed(
+  () => !!props.summary && props.reviews.length < props.summary.reviews_total,
 )
 </script>
 
@@ -61,51 +59,49 @@ watch(
     <div v-if="loading" class="practice-analytics__loading" role="status">
       <VLoader /> <span>Загружаем аналитику…</span>
     </div>
+
     <VEmptyState v-else-if="error" icon="warning" title="Не удалось загрузить аналитику">
       <p>{{ error }}</p>
       <VButton type="button" size="sm" @click="$emit('retry')">Повторить</VButton>
     </VEmptyState>
 
-    <template v-else-if="data">
+    <template v-else-if="summary">
       <VCard class="practice-analytics__hero">
         <div class="practice-analytics__identity">
-          <component :is="practiceIconFor(data.practice)" :size="46" aria-hidden="true" />
+          <component :is="practiceIconFor(summary)" :size="46" aria-hidden="true" />
           <div class="practice-analytics__identity-text">
-            <h2>{{ data.practice.title }}</h2>
-            <div v-if="data.practice.master_name" class="practice-analytics__author">
+            <h2>{{ summary.title }}</h2>
+            <div class="practice-analytics__author">
               <VAvatar
-                :name="data.practice.master_name"
-                :url="data.practice.master_avatar_url ?? undefined"
+                :name="summary.master_name"
+                :url="summary.master_avatar_url ?? undefined"
                 size="sm"
               />
-              <span>{{ data.practice.master_name }}</span>
+              <span>{{ summary.master_name }}</span>
             </div>
           </div>
         </div>
         <div class="practice-analytics__meta">
           <span
             ><IconCalendar :size="16" aria-hidden="true" />
-            {{ formatShortDate(data.practice.scheduled_at, data.practice.timezone) }}
+            {{ formatShortDate(summary.scheduled_at, summary.timezone) }}
           </span>
-          <span><IconGroup :size="16" aria-hidden="true" />Ученики: {{ data.participants }}</span>
-          <span v-if="data.practice.checkin_count != null">
-            <IconCheckin :size="16" aria-hidden="true" />Чек-ины:
-            {{ data.practice.checkin_count }}
-          </span>
+          <span><IconGroup :size="16" aria-hidden="true" />Пришли: {{ summary.attended }}</span>
+          <span><IconCheckin :size="16" aria-hidden="true" />Чек-ины: {{ checkedIn }}</span>
         </div>
       </VCard>
 
       <PracticeMoodDistribution
-        :key="`${data.practice.id}-before`"
+        :key="`${summary.practice_id}-before`"
         title="До практики"
-        :counts="before"
-        :participants="data.participants"
+        :counts="summary.before"
+        :participants="summary.attended"
       />
       <PracticeMoodDistribution
-        :key="`${data.practice.id}-after`"
+        :key="`${summary.practice_id}-after`"
         title="После практики"
-        :counts="after"
-        :participants="data.participants"
+        :counts="summary.after"
+        :participants="summary.attended"
         initially-expanded
       />
 
@@ -113,30 +109,30 @@ watch(
         <div class="practice-analytics__heading">
           <h2>Пришел → ушел</h2>
           <span
-            ><IconGroup :size="18" aria-hidden="true" />{{ pairs.length }} из
-            {{ data.participants }}</span
+            ><IconGroup :size="18" aria-hidden="true" />{{ summary.pairs_total }} из
+            {{ summary.attended }}</span
           >
         </div>
         <p v-if="!pairs.length" class="practice-analytics__empty">Пока нет пар для сравнения</p>
         <ul v-else class="practice-analytics__pair-list">
-          <li v-for="pair in visiblePairs" :key="pair.userId" class="practice-analytics__pair">
-            <div class="practice-analytics__faces" aria-hidden="true">
-              <MoodAvatar :mood="pair.before" :size="22" />
-              <span>→</span>
-              <MoodAvatar :mood="pair.after" :size="22" />
-            </div>
+          <li v-for="pair in pairs" :key="pair.user_id" class="practice-analytics__pair">
+            <VAvatar :name="pair.name" :url="pair.avatar_url ?? undefined" size="sm" />
             <span class="practice-analytics__name">{{ pair.name }}</span>
+            <span class="practice-analytics__faces" aria-hidden="true">
+              <component :is="MOOD_SCALE_ICON[pair.before_zone]" :size="22" />
+              <span>→</span>
+              <component :is="MOOD_SCALE_ICON[pair.after_zone]" :size="22" />
+            </span>
             <span class="practice-analytics__transition">
-              {{ moodLabelFromScore(pair.before) }} →
-              {{ moodLabelFromScore(pair.after) }}
+              {{ MOOD_SCALE_LABELS[pair.before_zone] }} →
+              {{ MOOD_SCALE_LABELS[pair.after_zone] }}
             </span>
           </li>
         </ul>
         <VShowMore
-          v-if="remainingPairs > 0"
-          :label="expandedPairs ? 'Скрыть' : morePairsLabel"
-          :aria-expanded="expandedPairs"
-          @click="expandedPairs = !expandedPairs"
+          v-if="hasMorePairs"
+          :label="loadingMorePairs ? 'Загружаем…' : 'Показать ещё'"
+          @click="!loadingMorePairs && $emit('morePairs')"
         />
       </VCard>
 
@@ -144,19 +140,35 @@ watch(
         <div class="practice-analytics__heading">
           <h2>Отзывы</h2>
           <span
-            ><IconGroup :size="18" aria-hidden="true" />{{ reviews.length }} из
-            {{ data.participants }}</span
+            ><IconGroup :size="18" aria-hidden="true" />{{ summary.reviews_total }} из
+            {{ summary.attended }}</span
           >
         </div>
-        <VCard v-for="review in reviews" :key="review.userId" class="practice-analytics__review">
-          <h3>{{ review.name }}</h3>
-          <p>«{{ review.comment?.trim() }}»</p>
+        <VCard
+          v-for="review in reviews"
+          :key="`${review.user_id}-${review.created_at}`"
+          class="practice-analytics__review"
+        >
+          <div class="practice-analytics__review-top">
+            <VAvatar :name="review.name" :url="review.avatar_url ?? undefined" size="sm" />
+            <h3>{{ review.name }}</h3>
+            <time class="practice-analytics__review-date" :datetime="review.created_at">
+              {{ formatShortDate(review.created_at, summary.timezone) }}
+            </time>
+          </div>
+          <p>«{{ review.comment.trim() }}»</p>
         </VCard>
         <VCard v-if="!reviews.length"
           ><p class="practice-analytics__empty">Отзывов пока нет</p></VCard
         >
+        <VShowMore
+          v-if="hasMoreReviews"
+          :label="loadingMoreReviews ? 'Загружаем…' : 'Показать ещё'"
+          @click="!loadingMoreReviews && $emit('moreReviews')"
+        />
       </section>
     </template>
+
     <VEmptyState v-else variant="note" title="Данные аналитики недоступны" />
   </div>
 </template>
@@ -271,6 +283,16 @@ watch(
 }
 .practice-analytics__reviews {
   margin-top: var(--space-3);
+}
+.practice-analytics__review-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.practice-analytics__review-date {
+  margin-left: auto;
+  color: var(--velo-text-secondary);
+  font-size: var(--text-sm);
 }
 .practice-analytics__review h3 {
   font-weight: 400;

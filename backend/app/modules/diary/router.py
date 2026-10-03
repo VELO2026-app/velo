@@ -46,6 +46,11 @@ from app.modules.diary.insights_service import (
     get_practice_insights,
     list_practice_reviews,
 )
+from app.modules.diary.practice_analytics_service import (
+    get_practice_analytics,
+    list_practice_analytics_pairs,
+    list_practice_analytics_reviews,
+)
 from app.modules.diary.schemas import (
     CheckinRequest,
     CheckinResponse,
@@ -61,7 +66,12 @@ from app.modules.diary.schemas import (
     PaginatedCheckinsResponse,
     PaginatedDiaryEntriesResponse,
     PaginatedFeedbacksResponse,
+    PaginatedPracticeAnalyticsPairs,
+    PaginatedPracticeAnalyticsReviews,
     PaginatedReviewsResponse,
+    PracticeAnalyticsPair,
+    PracticeAnalyticsResponse,
+    PracticeAnalyticsReview,
     PracticeInsightsResponse,
     ReviewItem,
     UpdateDiaryEntryRequest,
@@ -623,6 +633,82 @@ async def list_practice_reviews_endpoint(
 
     return PaginatedReviewsResponse(
         items=[ReviewItem(**row) for row in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+# ===================================================================
+# Practice analytics (BE-78): the «Аналитика по практике» screen
+# ===================================================================
+#
+# get_current_user, not get_current_master: a school's curator may hold
+# role='user'. So a reader who is not entitled gets the masked 404 (P-08),
+# never the 403 /insights gives a non-master. Who is entitled, the one
+# population and the zones-only rule: practice_analytics_service.py header.
+
+
+@practices_insights_router.get(
+    "/{practice_id}/analytics",
+    response_model=PracticeAnalyticsResponse,
+)
+async def get_practice_analytics_endpoint(
+    practice_id: UUID,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_reader),
+) -> PracticeAnalyticsResponse:
+    """Header + PRE / review zone distributions over the ATTENDED bookings.
+
+    Readers: the leading master; for a school's practice also its curator and
+    its verified masters. Anyone else -> 404; entitled but not completed ->
+    400.
+    """
+    return PracticeAnalyticsResponse(
+        **await get_practice_analytics(user, practice_id, session)
+    )
+
+
+@practices_insights_router.get(
+    "/{practice_id}/analytics/pairs",
+    response_model=PaginatedPracticeAnalyticsPairs,
+)
+async def list_practice_analytics_pairs_endpoint(
+    practice_id: UUID,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_reader),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> PaginatedPracticeAnalyticsPairs:
+    """«Пришёл -> ушёл»: attendees with a PRE check-in AND a review, as zones."""
+    items, total = await list_practice_analytics_pairs(
+        user, practice_id, session, limit=limit, offset=offset,
+    )
+    return PaginatedPracticeAnalyticsPairs(
+        items=[PracticeAnalyticsPair(**row) for row in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@practices_insights_router.get(
+    "/{practice_id}/analytics/reviews",
+    response_model=PaginatedPracticeAnalyticsReviews,
+)
+async def list_practice_analytics_reviews_endpoint(
+    practice_id: UUID,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_reader),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> PaginatedPracticeAnalyticsReviews:
+    """Reviews with text from attendees, newest first."""
+    items, total = await list_practice_analytics_reviews(
+        user, practice_id, session, limit=limit, offset=offset,
+    )
+    return PaginatedPracticeAnalyticsReviews(
+        items=[PracticeAnalyticsReview(**row) for row in items],
         total=total,
         limit=limit,
         offset=offset,

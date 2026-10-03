@@ -568,3 +568,72 @@ class CustomActivityNamesResponse(BaseModel):
     """
 
     items: list[str]
+
+
+# ---------------------------------------------------------------------------
+# Practice analytics (BE-78): GET /practices/{id}/analytics[/pairs|/reviews]
+# ---------------------------------------------------------------------------
+#
+# One population for every block: the practice's ATTENDED bookings. Scores
+# leave the server as ZONES only (BE-24) -- to the leading master too, so the
+# contract is one shape for every reader.
+
+
+class PracticeAnalyticsResponse(BaseModel):
+    """GET /practices/{id}/analytics -- the header and both distributions.
+
+    `attended` is the denominator of every "X of N" on the screen; the
+    "check-ins before" figure is the sum of `before` (PRE check-ins of the
+    attended), so the blocks reconcile.
+    """
+
+    practice_id: UUID
+    title: str
+    direction: str | None
+    scheduled_at: datetime
+    timezone: str
+    master_name: str
+    master_avatar_url: str | None
+    attended: int
+    before: ScoreZoneCounts
+    after: ScoreZoneCounts
+    pairs_total: int
+    reviews_total: int
+
+
+class PracticeAnalyticsPair(BaseModel):
+    """One attendee with BOTH a PRE check-in and a review, as zones."""
+
+    user_id: UUID
+    name: str
+    avatar_url: str | None
+    before_zone: ScoreZone
+    after_zone: ScoreZone
+
+
+class PaginatedPracticeAnalyticsPairs(BaseModel):
+    """GET /practices/{id}/analytics/pairs -- ordered by name, then user_id."""
+
+    items: list[PracticeAnalyticsPair]
+    total: int
+    limit: int
+    offset: int
+
+
+class PracticeAnalyticsReview(BaseModel):
+    """One attendee's review WITH text (a rating alone is not listed here)."""
+
+    user_id: UUID
+    name: str
+    avatar_url: str | None
+    comment: str
+    created_at: datetime
+
+
+class PaginatedPracticeAnalyticsReviews(BaseModel):
+    """GET /practices/{id}/analytics/reviews -- newest first, then id."""
+
+    items: list[PracticeAnalyticsReview]
+    total: int
+    limit: int
+    offset: int

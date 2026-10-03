@@ -31,6 +31,9 @@ import type {
   UpdatePracticeRequest,
   AttendanceResponse,
   PaginatedReviewsResponse,
+  PaginatedPracticeAnalyticsPairs,
+  PaginatedPracticeAnalyticsReviews,
+  PracticeAnalyticsResponse,
   AudiencePreviewRequest,
   AudiencePreviewResponse,
   ZoomEntryResolveResponse,
@@ -249,4 +252,41 @@ export function getPracticeReviews(
 ): Promise<PaginatedReviewsResponse> {
   const query = buildQuery({ limit, offset })
   return api.get<PaginatedReviewsResponse>(`/api/v1/practices/${id}/reviews${query}`)
+}
+
+// ============================================================================
+// BE-78: «Аналитика по практике»
+// ============================================================================
+//
+// Readers: the leading master; for a school's practice also its curator and
+// its verified masters. Anyone else gets 404 -- not 403: the endpoints take
+// any signed-in user (a curator may hold role='user') and mask the practice.
+// An entitled reader of a practice that is not completed gets 400. Scores
+// arrive as zones (ScoreZone) only; every "X из N" uses N = `attended`.
+
+/** Header + both zone distributions + the two list totals. */
+export function getPracticeAnalytics(id: string): Promise<PracticeAnalyticsResponse> {
+  return api.get<PracticeAnalyticsResponse>(`/api/v1/practices/${id}/analytics`)
+}
+
+/** «Пришёл -> ушёл»: attendees with a PRE check-in AND a review, by name. */
+export function getPracticeAnalyticsPairs(
+  id: string,
+  limit = 20,
+  offset = 0,
+): Promise<PaginatedPracticeAnalyticsPairs> {
+  const query = buildQuery({ limit, offset })
+  return api.get<PaginatedPracticeAnalyticsPairs>(`/api/v1/practices/${id}/analytics/pairs${query}`)
+}
+
+/** Reviews with text, newest first. */
+export function getPracticeAnalyticsReviews(
+  id: string,
+  limit = 20,
+  offset = 0,
+): Promise<PaginatedPracticeAnalyticsReviews> {
+  const query = buildQuery({ limit, offset })
+  return api.get<PaginatedPracticeAnalyticsReviews>(
+    `/api/v1/practices/${id}/analytics/reviews${query}`,
+  )
 }
