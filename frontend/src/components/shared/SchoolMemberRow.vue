@@ -12,6 +12,12 @@
   «Временно недоступен» subtitle instead of dropping the row: the
   membership is real and returns by itself when the admin re-verifies.
   For students the flag is always true (they have no MasterProfile).
+
+  TWO ROW TYPES, one component (BE-76): the curator's roster rows carry
+  is_visible / master_offer (CuratorGroupMemberItem); a school master's rows
+  are the plain CuratorGroupRosterItem without them -- the server leaves
+  suspended masters out of that list instead. The row tells the two apart by
+  the PRESENCE of the curator's fields and renders no subtitle without them.
 -->
 <template>
   <VListRow :title="member.name" :subtitle="subtitle" clickable @click="$emit('open', member)">
@@ -23,21 +29,25 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { CuratorGroupMemberItem } from '@/api/types'
+import type { CuratorGroupMemberItem, CuratorGroupRosterItem } from '@/api/types'
 import { masterOfferLabel } from '@/utils/masterOffers'
 import { VAvatar, VListRow } from '@/components/ui'
 
 const props = defineProps<{
-  member: CuratorGroupMemberItem
+  member: CuratorGroupRosterItem | CuratorGroupMemberItem
 }>()
 
 defineEmits<{
-  open: [member: CuratorGroupMemberItem]
+  open: [member: CuratorGroupRosterItem]
 }>()
 
-const subtitle = computed(
-  () =>
-    masterOfferLabel(props.member.master_offer) ??
-    (props.member.is_visible ? undefined : 'Временно недоступен'),
-)
+const subtitle = computed((): string | undefined => {
+  const member = props.member
+  // A school master's row has no curator fields: nothing to say under it.
+  if (!('is_visible' in member)) return undefined
+  return (
+    masterOfferLabel(member.master_offer) ??
+    (member.is_visible ? undefined : 'Временно недоступен')
+  )
+})
 </script>

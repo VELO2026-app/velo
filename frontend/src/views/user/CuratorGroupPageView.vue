@@ -136,7 +136,14 @@
                counters in the hero. «Предстоящие практики» opens the school-
                scoped calendar (owner 2026-10-01; was a scroll to the feed
                below); «Аналитика» is the honest stub until §6 ships a page. -->
-          <VMenuRow v-if="isCurator" class="cgp__nav-row" label="Участники" @click="openRoster" />
+          <!-- BE-76: the roster is the curator's and, in the master zone only,
+               the school's masters' (the user zone is FE-93's to remove). -->
+          <VMenuRow
+            v-if="canOpenRoster"
+            class="cgp__nav-row"
+            label="Участники"
+            @click="openRoster"
+          />
           <VMenuRow
             class="cgp__nav-row"
             label="Предстоящие практики"
@@ -285,6 +292,11 @@ const practices = ref<PracticeResponse[]>([])
 
 const relation = computed(() => page.value?.viewer.relation ?? null)
 const isCurator = computed(() => relation.value === 'curator')
+/** Who sees «Участники» (BE-76): the curator, and a master of the school in
+ *  the master zone. The server enforces the same split on GET .../roster. */
+const canOpenRoster = computed(
+  () => isCurator.value || (relation.value === 'master' && inMasterZone.value),
+)
 
 // §1.6/§1.10: the header reads «Школа «{name}»», per the mockup.
 const pageTitle = computed(() => (page.value ? `Школа «${page.value.name}»` : 'Школа'))

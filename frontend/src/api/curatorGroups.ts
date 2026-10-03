@@ -82,6 +82,7 @@ import type {
   PaginatedCuratorGroupMastersResponse,
   PaginatedCuratorGroupMembersResponse,
   PaginatedCuratorGroupReviewsResponse,
+  PaginatedCuratorGroupRosterResponse,
   PaginatedPracticesResponse,
   SchoolStudentProfileResponse,
   UpdateCuratorGroupRequest,
@@ -188,6 +189,25 @@ export function getCuratorGroupMembers(
     offset: query.offset,
   })
   return api.get<PaginatedCuratorGroupMembersResponse>(`${CURATOR_BASE}/${id}/members${qs}`)
+}
+
+/** GET /masters/me/curator-groups/{id}/roster -- the school's roster for ITS
+ *  MASTERS (BE-76): everyone in the school, name / avatar / role, without the
+ *  curator's working fields (is_visible, master_offer) and without the
+ *  masters suspended right now. The same kind / search / paging as
+ *  getCuratorGroupMembers (one query type). A master outside the school ->
+ *  masked 404. */
+export function getCuratorGroupRoster(
+  id: string,
+  query: CuratorGroupMembersQuery = {},
+): Promise<PaginatedCuratorGroupRosterResponse> {
+  const qs = buildQuery({
+    kind: query.kind,
+    search: query.search,
+    limit: query.limit,
+    offset: query.offset,
+  })
+  return api.get<PaginatedCuratorGroupRosterResponse>(`${CURATOR_BASE}/${id}/roster${qs}`)
 }
 
 /** GET /masters/me/curator-groups/{id}/students/{user_id} -- the SCHOOL-scoped

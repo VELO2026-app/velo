@@ -70,6 +70,7 @@ from app.modules.curator_groups.schemas import (
     CuratorGroupRemovePreviewResponse,
     CuratorGroupResponse,
     CuratorGroupReviewItem,
+    CuratorGroupRosterItem,
     CuratorGroupTransferRef,
     JoinCuratorGroupRequest,
     JoinCuratorGroupResponse,
@@ -79,6 +80,7 @@ from app.modules.curator_groups.schemas import (
     PaginatedCuratorGroupMastersResponse,
     PaginatedCuratorGroupMembersResponse,
     PaginatedCuratorGroupReviewsResponse,
+    PaginatedCuratorGroupRosterResponse,
     SchoolStudentProfileResponse,
     UpdateCuratorGroupRequest,
 )
@@ -106,6 +108,7 @@ from app.modules.curator_groups.service import (
     list_group_masters,
     list_group_practice_master_ids,
     list_my_curator_groups,
+    list_school_roster,
     master_can_create_groups,
     offer_curator_group_master,
     offer_curator_group_transfer,
@@ -358,6 +361,46 @@ async def list_curator_group_members_endpoint(
     )
     return PaginatedCuratorGroupMembersResponse(
         items=[CuratorGroupMemberItem(**item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
+    "/me/curator-groups/{group_id}/roster",
+    response_model=PaginatedCuratorGroupRosterResponse,
+)
+async def list_school_roster_endpoint(
+    group_id: UUID,
+    kind: Literal["master", "student"] | None = Query(default=None),
+    search: str | None = Query(default=None, min_length=1, max_length=100),
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_reader),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> PaginatedCuratorGroupRosterResponse:
+    """The school's roster for ITS MASTERS (BE-76): everyone in the school,
+    name, avatar, role -- without the curator's working fields and without
+    the masters who are suspended right now.
+
+    The same filters, search, paging and order as the curator's /members
+    (one helper). A master outside the school, another school's curator, a
+    master who is a student here and a school whose curator is suspended
+    all get the same 404 (P-08); a non-master is a 403 from the dependency.
+    """
+    user, _profile = master_tuple
+    items, total = await list_school_roster(
+        user.id,
+        group_id,
+        session,
+        kind=kind,
+        search=search,
+        limit=limit,
+        offset=offset,
+    )
+    return PaginatedCuratorGroupRosterResponse(
+        items=[CuratorGroupRosterItem(**item) for item in items],
         total=total,
         limit=limit,
         offset=offset,

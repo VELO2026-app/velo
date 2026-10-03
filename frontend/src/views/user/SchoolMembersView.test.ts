@@ -16,10 +16,16 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import SchoolMembersView from '@/views/user/SchoolMembersView.vue'
 import * as cgApi from '@/api/curatorGroups'
+import * as chatsApi from '@/api/chats'
 import { ApiResponseError } from '@/api/client'
-import type { CuratorGroupMemberItem, PaginatedCuratorGroupMembersResponse } from '@/api/types'
+import type {
+  CuratorGroupMemberItem,
+  CuratorGroupPageResponse,
+  PaginatedCuratorGroupMembersResponse,
+} from '@/api/types'
 
 vi.mock('@/api/curatorGroups')
+vi.mock('@/api/chats')
 
 const push = vi.fn()
 const replace = vi.fn()
@@ -98,6 +104,12 @@ function member(
   }
 }
 
+function viewerIs(relation: 'curator' | 'master' | 'student'): void {
+  vi.mocked(cgApi.getCuratorGroupPage)
+    .mockReset()
+    .mockResolvedValue({ viewer: { relation } } as unknown as CuratorGroupPageResponse)
+}
+
 function membersOf(kind: 'master' | 'student', ids: string[]): CuratorGroupMemberItem[] {
   return ids.map((id) => member(id, { kind }))
 }
@@ -119,6 +131,10 @@ beforeEach(() => {
   routeState.id = 'g1'
   routeState.query = {}
   vi.mocked(cgApi.getCuratorGroupMembers).mockReset().mockResolvedValue(page([]))
+  vi.mocked(cgApi.getCuratorGroupRoster).mockReset().mockResolvedValue(page([]))
+  // BE-76: the screen asks the server who is looking before the first page.
+  // Every test above the BE-76 block is the CURATOR's screen, as before.
+  viewerIs('curator')
   push.mockReset()
   replace.mockReset()
   toastError.mockReset()
@@ -413,3 +429,114 @@ describe('SchoolMembersView', () => {
     expect(text()).toContain('Участник m1')
   })
 })
+
+// =============================================================================
+// BE-76: the roster for a MASTER of the school (master zone)
+// =============================================================================
+//
+// The viewer is the server's answer (getCuratorGroupPage -> viewer.relation).
+// A school master in the master zone reads /roster (no curator fields), sees
+// no «Блок» tab, messages a student straight away and opens a master's public
+// page WITHOUT the curator's ?groupId= marker. The user zone is untouched.
+
+function rosterRow(id: string, kind: 'master' | 'student', name: string) {
+  return { user_id: id, name, avatar_url: null, kind, joined_at: '2026-09-01T00:00:00Z' }
+}
+
+describe('SchoolMembersView -- a master of the school (BE-76)', () => {
+  beforeEach(() => {
+    routeState.name = 'master-curator-group-members'
+    viewerIs('master')
+  })
+
+  it('reads /roster (not the curator /members) with the same kind / search / paging', async () => {
+    vi.mocked(cgApi.getCuratorGroupRoster).mockResolvedValue({
+      items: [rosterRow('m1', 'master', 'Борис')],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    })
+    mountWith()
+    await flush()
+
+    expect(cgApi.getCuratorGroupPage).toHaveBeenCalledWith('g1')
+    expect(cgApi.getCuratorGroupRoster).toHaveBeenCalledWith('g1', {
+      kind: 'master',
+      search: undefined,
+      limit: 20,
+      offset: 0,
+    })
+    expect(cgApi.getCuratorGroupMembers).not.toHaveBeenCalled()
+    expect(text()).toContain('Борис')
+  })
+
+  it('has no «Блок» tab, and ?kind=blocked lands on the masters tab', async () => {
+    mountWith({ kind: 'blocked' })
+    await flush()
+
+    expect(rosterTab('Мастера')).toBeTruthy()
+    expect(rosterTab('Ученики')).toBeTruthy()
+    expect(rosterTab('Блок')).toBeNull()
+    expect(cgApi.getCuratorGroupRoster).toHaveBeenCalledWith('g1', expect.objectContaining({ kind: 'master' }))
+    expect(replace).toHaveBeenCalledWith(expect.objectContaining({ query: { kind: 'master' } }))
+  })
+
+  it('a tap on a student opens the message sheet and writes through openStudentChat -- no navigation', async () => {
+    vi.mocked(cgApi.getCuratorGroupRoster).mockResolvedValue({
+      items: [rosterRow('s9', 'student', 'Пётр Сидоров')],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    })
+    vi.mocked(chatsApi.openStudentChat).mockResolvedValue({ id: 't1' } as never)
+    vi.mocked(chatsApi.sendChatMessage).mockResolvedValue({} as never)
+    mountWith({ kind: 'student' })
+    await flush()
+
+    host!.querySelector<HTMLButtonElement>('.v-list-row')?.click()
+    await flush()
+    expect(push).not.toHaveBeenCalled()
+    expect(document.body.querySelector('.send-msg__name')?.textContent).toContain('Пётр Сидоров')
+
+    const area = document.body.querySelector<HTMLTextAreaElement>('.send-msg textarea')!
+    area.value = 'Здравствуйте'
+    area.dispatchEvent(new Event('input'))
+    await flush()
+    const send = Array.from(document.body.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === 'Отправить',
+    )
+    send?.click()
+    await flush()
+    expect(chatsApi.openStudentChat).toHaveBeenCalledWith('s9')
+    expect(chatsApi.openChat).not.toHaveBeenCalled()
+  })
+
+  it('a tap on a master opens his public page WITHOUT the curator marker', async () => {
+    vi.mocked(cgApi.getCuratorGroupRoster).mockResolvedValue({
+      items: [rosterRow('m9', 'master', 'Борис')],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    })
+    mountWith()
+    await flush()
+
+    host!.querySelector<HTMLButtonElement>('.v-list-row')?.click()
+    await flush()
+    expect(push).toHaveBeenCalledWith({
+      name: 'user-master-public',
+      params: { id: 'm9' },
+      query: { name: 'Борис', avatar: '' },
+    })
+  })
+
+  it('the user zone is untouched: a master there still goes through the curator /members', async () => {
+    routeState.name = 'user-curator-group-members'
+    mountWith()
+    await flush()
+
+    expect(cgApi.getCuratorGroupMembers).toHaveBeenCalled()
+    expect(cgApi.getCuratorGroupRoster).not.toHaveBeenCalled()
+  })
+})
+

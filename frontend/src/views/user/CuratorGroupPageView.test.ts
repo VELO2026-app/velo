@@ -217,8 +217,9 @@ describe('CuratorGroupPageView -- relation matrix', () => {
     expect(buttonWith('Покинуть школу')).toBeTruthy()
     expect(rowWith('Удалить школу')).toBeUndefined()
     expect(rowWith('Создать практику')).toBeUndefined()
-    // §1.11 (owner 2026-09-22): a master of the school is not the curator --
-    // no participants row (the server masks the roster handle anyway).
+    // §1.11 / BE-76: in the USER zone the participants row stays the
+    // curator's (FE-93 removes these screens); a school master gets it in
+    // the master zone only -- see the BE-76 test below.
     expect(rowWith('Участники')).toBeUndefined()
     expect(text()).not.toContain('Ученики')
   })
@@ -278,6 +279,31 @@ describe('CuratorGroupPageView -- relation matrix', () => {
     buttonWith('Повторить')?.click()
     await flush()
     expect(text()).toContain('Тихая школа')
+  })
+
+  it('BE-76: a MASTER in the master zone sees «Участники» and opens the master-zone roster', async () => {
+    routeState.name = 'master-curator-group'
+    mockHappyLoad('master')
+    mount()
+    await flush()
+
+    const row = rowWith('Участники')
+    expect(row).toBeTruthy()
+    ;(row as HTMLElement).click()
+    await flush()
+    expect(push).toHaveBeenCalledWith({
+      name: 'master-curator-group-members',
+      params: { id: 'g1' },
+    })
+  })
+
+  it('BE-76: a STUDENT in the master zone still has no «Участники»', async () => {
+    routeState.name = 'master-curator-group'
+    mockHappyLoad('student')
+    mount()
+    await flush()
+
+    expect(rowWith('Участники')).toBeUndefined()
   })
 
   it('zone picks only the back target: master route backs into the master list', async () => {

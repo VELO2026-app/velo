@@ -122,6 +122,7 @@ from sqlalchemy import (
     delete,
     func,
     null,
+    or_,
     select,
     update,
 )
@@ -1130,9 +1131,9 @@ def _member_base_query(group_id: UUID) -> Select:
     place least likely to be noticed.
 
     master_offer (BE-59) is the state of a pending appointment of this
-    member, computed the same way, in SQL (_master_offer_state_expr). The
-    roster is the curator's alone (_get_group_or_404), so nobody else
-    reads it here.
+    member, computed the same way, in SQL (_master_offer_state_expr). This
+    is the CURATOR's query (_get_group_or_404 in front of it); the school's
+    masters read _roster_base_query, which carries neither column.
     """
     return (
         select(
@@ -1155,26 +1156,22 @@ def _member_base_query(group_id: UUID) -> Select:
     )
 
 
-async def list_curator_group_members(
-    curator_user_id: UUID,
-    group_id: UUID,
+async def _roster_page(
+    base: Select,
     session: AsyncSession,
     *,
-    kind: str | None = None,
-    search: str | None = None,
-    limit: int = 20,
-    offset: int = 0,
-) -> tuple[list[dict], int]:
-    """Paginated roster of one of my groups.
+    kind: str | None,
+    search: str | None,
+    limit: int,
+    offset: int,
+) -> tuple[list, int]:
+    """Filter, count and page a roster query -- ONE copy for both viewers.
 
-    A suspended master is a row with is_visible=false, NOT an omission: the
-    curator needs to see that the person is still in the school but
-    currently in the shadow, and re-verification brings them back without
-    anyone touching a row (I-4).
+    `base` selects FROM curator_group_member joined to users (either
+    _member_base_query or _roster_base_query). kind is an exact match,
+    search an ilike over "first last", order newest membership first with
+    User.id as the tiebreak, total counted over the same filtered query.
     """
-    group = await _get_group_or_404(curator_user_id, group_id, session)
-
-    base = _member_base_query(group.id)
     if kind is not None:
         base = base.where(CuratorGroupMember.kind == kind)
     if search:
@@ -1198,7 +1195,35 @@ async def list_curator_group_members(
             .offset(offset)
         )
     ).all()
+    return rows, total
 
+
+async def list_curator_group_members(
+    curator_user_id: UUID,
+    group_id: UUID,
+    session: AsyncSession,
+    *,
+    kind: str | None = None,
+    search: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[dict], int]:
+    """Paginated roster of one of my groups.
+
+    A suspended master is a row with is_visible=false, NOT an omission: the
+    curator needs to see that the person is still in the school but
+    currently in the shadow, and re-verification brings them back without
+    anyone touching a row (I-4).
+    """
+    group = await _get_group_or_404(curator_user_id, group_id, session)
+    rows, total = await _roster_page(
+        _member_base_query(group.id),
+        session,
+        kind=kind,
+        search=search,
+        limit=limit,
+        offset=offset,
+    )
     items = [
         {
             "user_id": user.id,
@@ -1210,6 +1235,85 @@ async def list_curator_group_members(
             "master_offer": master_offer,
         }
         for user, kind_value, joined_at, is_visible, master_offer in rows
+    ]
+    return items, total
+
+
+def _roster_base_query(group_id: UUID) -> Select:
+    """The school's roster as its MASTERS see it (BE-76).
+
+    The same rows as _member_base_query minus the masters who are not
+    verified right now -- the predicate _visible_master_ids and the page's
+    master list use (_verified_profile_exists), so the roster, the school
+    page and the counters cannot disagree about who is in the shadow
+    (owner decision 2). No is_visible, no master_offer: both are the
+    curator's working fields.
+    """
+    return (
+        select(User, CuratorGroupMember.kind, CuratorGroupMember.joined_at)
+        .join(CuratorGroupMember, CuratorGroupMember.user_id == User.id)
+        .where(
+            CuratorGroupMember.group_id == group_id,
+            or_(
+                CuratorGroupMember.kind == CuratorMemberKind.STUDENT.value,
+                _verified_profile_exists(CuratorGroupMember.user_id),
+            ),
+        )
+    )
+
+
+async def list_school_roster(
+    viewer_id: UUID,
+    group_id: UUID,
+    session: AsyncSession,
+    *,
+    kind: str | None = None,
+    search: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[dict], int]:
+    """Paginated roster of a school, for a MASTER OF THAT SCHOOL (BE-76).
+
+    Who may read it (owner decision 1): the school is active
+    (_active_group_clause -- its curator is verified now) AND the viewer
+    belongs to it as a master -- master_broadcasts_to_group_clause, the
+    public form of the audience rule (curator, or a kind='master' member
+    with a verified profile). Everything else is the same NotFoundError
+    (P-08): a master outside the school, another school's curator, a
+    verified master who is a STUDENT here, a school whose curator was
+    suspended. The verified-master gate itself is the endpoint's
+    dependency (get_current_master: a suspended master, a student and a
+    plain user are a 403 before this runs).
+    """
+    group = (
+        await session.execute(
+            select(CuratorGroup).where(
+                CuratorGroup.id == group_id,
+                _active_group_clause(),
+                master_broadcasts_to_group_clause(viewer_id),
+            )
+        )
+    ).scalar_one_or_none()
+    if group is None:
+        raise NotFoundError("Curator group not found")
+
+    rows, total = await _roster_page(
+        _roster_base_query(group.id),
+        session,
+        kind=kind,
+        search=search,
+        limit=limit,
+        offset=offset,
+    )
+    items = [
+        {
+            "user_id": user.id,
+            "name": display_name(user.first_name, user.last_name),
+            "avatar_url": user.avatar_url,
+            "kind": kind_value,
+            "joined_at": joined_at,
+        }
+        for user, kind_value, joined_at in rows
     ]
     return items, total
 

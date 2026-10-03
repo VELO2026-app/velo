@@ -268,8 +268,25 @@ class CuratorGroupListResponse(BaseModel):
     can_create_groups: bool = False
 
 
-class CuratorGroupMemberItem(BaseModel):
-    """One row of a curator group's roster.
+class CuratorGroupRosterItem(BaseModel):
+    """One member of a school, as anyone allowed to see the roster sees it.
+
+    The masters of the school read exactly this (GET .../roster, BE-76);
+    the curator reads the same fact plus his own working fields
+    (CuratorGroupMemberItem below). One class describes "a member", the
+    curator's projection only widens it -- there is no second format of
+    the same row.
+    """
+
+    user_id: UUID
+    name: str
+    avatar_url: str | None
+    kind: CuratorMemberKindLiteral
+    joined_at: datetime
+
+
+class CuratorGroupMemberItem(CuratorGroupRosterItem):
+    """One row of the CURATOR's roster: the member plus the curator's fields.
 
     is_visible is ALWAYS true for a student and reflects the live
     MasterProfile status for a master (I-4). The curator sees a suspended
@@ -281,13 +298,12 @@ class CuratorGroupMemberItem(BaseModel):
     member: awaiting_verification while they are not a verified master,
     awaiting_answer once they are; null when there is none. Live, like
     is_visible: a verification or a revocation moves it with no write.
+
+    Neither field reaches the school's masters (BE-76, owner decision 2):
+    their roster omits the suspended masters instead, and an appointment
+    is the curator's business.
     """
 
-    user_id: UUID
-    name: str
-    avatar_url: str | None
-    kind: CuratorMemberKindLiteral
-    joined_at: datetime
     is_visible: bool
     master_offer: CuratorMasterOfferStateLiteral | None = None
 
@@ -296,6 +312,15 @@ class PaginatedCuratorGroupMembersResponse(BaseModel):
     """GET /masters/me/curator-groups/{id}/members."""
 
     items: list[CuratorGroupMemberItem]
+    total: int
+    limit: int
+    offset: int
+
+
+class PaginatedCuratorGroupRosterResponse(BaseModel):
+    """GET /masters/me/curator-groups/{id}/roster (BE-76)."""
+
+    items: list[CuratorGroupRosterItem]
     total: int
     limit: int
     offset: int

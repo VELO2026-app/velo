@@ -44,7 +44,7 @@
       <VSegmentTrack
         v-if="!notFound"
         :model-value="kind"
-        :options="KIND_OPTIONS"
+        :options="kindOptions"
         variant="tabs"
         aria-label="Вкладки списка участников"
         @update:model-value="switchKind"
@@ -117,15 +117,31 @@
         <VShowMore v-if="hasMore && !loading" label="Показать ещё" @click="loadMore" />
       </template>
     </div>
+
+    <!-- BE-76: a school master's tap on a student opens a DM right away (the
+         existing composer, POST /chats/students). The curator's tap opens the
+         school-context profile instead and never reaches this sheet. -->
+    <SendMessageModal
+      :open="messageTo !== null"
+      :student-id="messageTo?.user_id ?? ''"
+      :name="messageTo?.name ?? ''"
+      @close="messageTo = null"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getCuratorGroupMembers, type CuratorGroupMemberKind } from '@/api/curatorGroups'
+import {
+  getCuratorGroupMembers,
+  getCuratorGroupPage,
+  getCuratorGroupRoster,
+  type CuratorGroupMemberKind,
+} from '@/api/curatorGroups'
 import { ApiResponseError } from '@/api/client'
-import type { CuratorGroupMemberItem } from '@/api/types'
+import type { CuratorGroupRosterItem, CuratorGroupViewer } from '@/api/types'
+import SendMessageModal from '@/components/shared/SendMessageModal.vue'
 import { IconLock } from '@/components/icons'
 import SchoolMemberRow from '@/components/shared/SchoolMemberRow.vue'
 import VShowMore from '@/components/shared/VShowMore.vue'
@@ -158,6 +174,45 @@ const groupId = computed(() => String(route.params.id ?? ''))
 /** The zone decides only navigation targets -- the data and the row set come
  *  from the server, exactly like on CuratorGroupPageView. */
 const inMasterZone = computed(() => String(route.name ?? '').startsWith('master'))
+
+// -- Who is looking (BE-76) -----------------------------------------------------
+//
+// The viewer's tie to the school is the SERVER's answer (GET /curator-groups/
+// {id} -> viewer.relation), never a URL marker: it picks the endpoint and
+// what a tap does. The curator reads /members (with his working fields) and
+// opens the school-context profiles; a school MASTER, in the master zone only
+// (owner decision; the user zone is FE-93's), reads /roster and messages a
+// student directly. Fetched once per school, before the first roster page --
+// the roster fetcher awaits it, so a 404 here is the same masked rung.
+const relation = ref<CuratorGroupViewer['relation'] | null>(null)
+let relationFor: { id: string; promise: Promise<CuratorGroupViewer['relation']> } | null = null
+
+function loadRelation(): Promise<CuratorGroupViewer['relation']> {
+  if (relationFor?.id !== groupId.value) {
+    const id = groupId.value
+    relationFor = {
+      id,
+      promise: getCuratorGroupPage(id).then((page) => {
+        if (id === groupId.value) relation.value = page.viewer.relation
+        return page.viewer.relation
+      }),
+    }
+    // A failed lookup must be retried on the next fetch, not cached.
+    relationFor.promise.catch(() => {
+      if (relationFor?.id === id) relationFor = null
+    })
+  }
+  return relationFor.promise
+}
+
+const isCurator = computed(() => relation.value === 'curator')
+/** A school master reading the roster in the master zone. */
+const asSchoolMaster = computed(() => relation.value === 'master' && inMasterZone.value)
+
+/** «Блок» is the curator's tab only (BE-79 placeholder). */
+const kindOptions = computed(() =>
+  isCurator.value ? KIND_OPTIONS : KIND_OPTIONS.filter((option) => option.value !== 'blocked'),
+)
 
 function kindFromQuery(): MemberTab {
   if (route.query.kind === 'student') return 'student'
@@ -206,21 +261,30 @@ const trimmedSearch = computed(() => search.value.trim())
 const notFound = ref(false)
 
 const { items, loading, error, loadMoreError, hasMore, loadMore, refresh } =
-  usePagination<CuratorGroupMemberItem>((limit, offset) => {
-    // BE-79 pending: no endpoint lists blocked members -- the tab is a
-    // placeholder screen, never a fake request.
-    if (kind.value === 'blocked') {
-      return Promise.resolve({ items: [], total: 0, limit, offset })
-    }
-    return getCuratorGroupMembers(groupId.value, {
-      kind: kind.value,
-      search: trimmedSearch.value || undefined,
-      limit,
-      offset,
-    }).catch((e: unknown) => {
+  usePagination<CuratorGroupRosterItem>(async (limit, offset) => {
+    try {
+      const viewer = await loadRelation()
+      // BE-79 pending: no endpoint lists blocked members -- the tab is a
+      // placeholder screen, never a fake request. Only the curator has it;
+      // anyone else who lands on ?kind=blocked is moved to the masters tab.
+      if (kind.value === 'blocked') {
+        if (viewer === 'curator') return { items: [], total: 0, limit, offset }
+        kind.value = 'master'
+        void router.replace({ ...route, query: { ...route.query, kind: 'master' } })
+      }
+      const query = {
+        kind: kind.value,
+        search: trimmedSearch.value || undefined,
+        limit,
+        offset,
+      }
+      return viewer === 'master' && inMasterZone.value
+        ? await getCuratorGroupRoster(groupId.value, query)
+        : await getCuratorGroupMembers(groupId.value, query)
+    } catch (e: unknown) {
       if (e instanceof ApiResponseError && e.status === 404) notFound.value = true
       throw e
-    })
+    }
   }, 20)
 
 /** Set only when a switch or a query-sync programmatically clears the input;
@@ -309,7 +373,10 @@ watch(groupId, () => {
 
 // -- Navigation: rows open the member's profile -------------------------------
 
-function openMember(member: CuratorGroupMemberItem): void {
+/** The student a school master is writing to; null when the sheet is shut. */
+const messageTo = ref<CuratorGroupRosterItem | null>(null)
+
+function openMember(member: CuratorGroupRosterItem): void {
   // A master opens the EXISTING public profile (any zone can render it --
   // no guard on /user/masters/:id). A student has no public page, so their
   // school-context profile carries the curator actions instead.
@@ -317,11 +384,21 @@ function openMember(member: CuratorGroupMemberItem): void {
     // Owner ruling 2026-09-30: the master's page carries the curator's action
     // menu when opened from the school context -- the roster passes the
     // ?groupId= marker that turns the menu on (no new route, no new screen).
+    // That marker is the CURATOR's: a school master opens the same public
+    // page WITHOUT it, so no curator action shows up for him (BE-76).
     void router.push({
       name: 'user-master-public',
       params: { id: member.user_id },
-      query: { groupId: groupId.value, name: member.name, avatar: member.avatar_url ?? '' },
+      query: asSchoolMaster.value
+        ? { name: member.name, avatar: member.avatar_url ?? '' }
+        : { groupId: groupId.value, name: member.name, avatar: member.avatar_url ?? '' },
     })
+    return
+  }
+  // BE-76: a school master writes to the student straight away; the
+  // school-context student profile stays the curator's (owner decision 3).
+  if (asSchoolMaster.value) {
+    messageTo.value = member
     return
   }
   const zone = inMasterZone.value ? 'master' : 'user'

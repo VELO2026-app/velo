@@ -12,7 +12,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { createApp, h, nextTick, type App } from 'vue'
 import SchoolMemberRow from '@/components/shared/SchoolMemberRow.vue'
-import type { CuratorGroupMemberItem } from '@/api/types'
+import type { CuratorGroupMemberItem, CuratorGroupRosterItem } from '@/api/types'
 
 function member(overrides: Partial<CuratorGroupMemberItem> = {}): CuratorGroupMemberItem {
   return {
@@ -29,7 +29,12 @@ function member(overrides: Partial<CuratorGroupMemberItem> = {}): CuratorGroupMe
 let app: App | null = null
 let host: HTMLElement | null = null
 
-function mountRow(m: CuratorGroupMemberItem, onOpen: (m: CuratorGroupMemberItem) => void): void {
+// The row emits the base CuratorGroupRosterItem (BE-76: it renders both the
+// curator's and a school master's rows), so the listener takes the base type.
+function mountRow(
+  m: CuratorGroupMemberItem | CuratorGroupRosterItem,
+  onOpen: (m: CuratorGroupRosterItem) => void,
+): void {
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp({ render: () => h(SchoolMemberRow, { member: m, onOpen }) })
@@ -85,3 +90,21 @@ it.each([
   row()?.click()
   expect(onOpen).toHaveBeenCalledWith(candidate)
 })
+
+describe("SchoolMemberRow -- a school master's row (BE-76)", () => {
+  it('a row WITHOUT the curator fields renders no subtitle, even for a master', () => {
+    const plain: CuratorGroupRosterItem = {
+      user_id: 'm1',
+      name: 'Борис Ветров',
+      avatar_url: null,
+      kind: 'master',
+      joined_at: '2026-09-01T00:00:00Z',
+    }
+    mountRow(plain, () => {})
+    // The pair: the row is there and named; only the subtitle is absent.
+    expect(row()?.textContent).toContain('Борис Ветров')
+    expect(host?.textContent).not.toContain('Временно недоступен')
+    expect(host?.querySelector('.v-list-row__sub')).toBeNull()
+  })
+})
+
