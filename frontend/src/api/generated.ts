@@ -627,6 +627,16 @@ export interface CuratorGroupAnalyticsResponse {
   top_practices: CuratorGroupTopPracticeItem[]
 }
 
+/** One row of the curator's "Блок" tab (BE-79). kind and joined_at are the membership the block replaced -- what an unblock will restore -- and blocked_at is when it was replaced. */
+export interface CuratorGroupBlockedItem {
+  user_id: string
+  name: string
+  avatar_url: string | null
+  kind: 'master' | 'student'
+  joined_at: string
+  blocked_at: string
+}
+
 /** One PRE check-in left on a practice of this school. `mood` is the stored 1..10 score mapped to its zone (ScoreZone, BE-77) -- the same five keys every distribution and feed uses. POST check-ins never appear here, and neither do check-ins whose booking was later cancelled: both are absent from the master's own roster for this practice, and the school widens a curator's reach without deepening it. user_id identifies the participant so that two students of the same name stay distinct; it opens no screen a curator would otherwise be refused. */
 export interface CuratorGroupCheckinItem {
   user_id: string
@@ -720,7 +730,7 @@ export interface CuratorGroupInvitePreviewGroup {
 export interface CuratorGroupInvitePreviewResponse {
   group: CuratorGroupInvitePreviewGroup
   can_join: boolean
-  reason: 'already_member' | 'own_group' | 'blocked_by_curator' | null
+  reason: 'already_member' | 'own_group' | 'blocked_by_curator' | 'blocked_in_group' | null
   relation: 'master' | 'student' | null
 }
 
@@ -1254,6 +1264,14 @@ export interface PaginatedBookingsResponse {
 /** GET /api/v1/users/me/checkins -- paginated list. */
 export interface PaginatedCheckinsResponse {
   items: CheckinResponse[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** GET /masters/me/curator-groups/{id}/blocks (BE-79). */
+export interface PaginatedCuratorGroupBlocksResponse {
+  items: CuratorGroupBlockedItem[]
   total: number
   limit: number
   offset: number
