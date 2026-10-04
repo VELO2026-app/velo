@@ -45,8 +45,29 @@
 
   <!-- Content -->
   <div v-else-if="practice" class="detail">
-    <!-- Back button header (contextual: catalog vs booked) -->
-    <VHeader :title="hasAnyBooking ? 'Моя практика' : 'Практика'" show-back @back="router.back()" />
+    <!-- Back button header (contextual: catalog vs booked). The «…» kebab
+         (BE-63) is shown to the practice's master OR the curator of the school
+         it belongs to -- the two managers the backend accepts on PATCH -- and
+         routes them straight to the master-zone edit screen. Editable statuses
+         only, mirroring the master hub; see canManage below. -->
+    <VHeader :title="hasAnyBooking ? 'Моя практика' : 'Практика'" show-back @back="router.back()">
+      <template v-if="canManage" #action>
+        <VMenu aria-label="Меню">
+          <template #default="{ close }">
+            <VMenuItem
+              :icon="IconPen"
+              ariaLabel="Редактировать"
+              @click="
+                () => {
+                  goEdit()
+                  close()
+                }
+              "
+            />
+          </template>
+        </VMenu>
+      </template>
+    </VHeader>
 
     <!-- Single unified scroll: the whole screen scrolls in MobileLayout's
          __main (no nested scroll/pinned footer). Hero + body + actions flow. -->
@@ -246,9 +267,19 @@ import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'
 import { useBookingsStore } from '@/stores/bookings'
-import { VLoader, VEmptyState, VButton, VBadge, VAccordion, VCard } from '@/components/ui'
+import {
+  VLoader,
+  VEmptyState,
+  VButton,
+  VBadge,
+  VAccordion,
+  VCard,
+  VMenu,
+  VMenuItem,
+} from '@/components/ui'
 import { VHeader } from '@/components/layout'
 import { useAuthStore } from '@/stores/auth'
+import { useSchoolsHubStore } from '@/stores/schoolsHub'
 import { useToast } from '@/composables/useToast'
 import BookingPopup from '@/components/shared/BookingPopup.vue'
 import PracticeSoldOut from '@/components/shared/PracticeSoldOut.vue'
@@ -256,7 +287,7 @@ import PracticeHeroCard from '@/components/shared/PracticeHeroCard.vue'
 import MasterCard from '@/components/shared/MasterCard.vue'
 import Banner from '@/components/shared/Banner.vue'
 import { formatDate, formatDuration, formatMoney, formatParticipants, isFull } from '@/utils/format'
-import { IconCheck, IconClose, IconWarning } from '@/components/icons'
+import { IconCheck, IconClose, IconWarning, IconPen } from '@/components/icons'
 import { DIFFICULTY_DOTS, DIFFICULTY_LABEL } from '@/utils/displayHelpers'
 import { hasEnded } from '@/utils/bookingStatus'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
@@ -292,6 +323,44 @@ const toast = useToast()
 // Prevent master from booking their own practice (backend also enforces this,
 // but we hide the button entirely to avoid a pointless UX dead-end).
 const isMaster = computed(() => !!practice.value && practice.value.master_id === authStore.user?.id)
+
+// =========================================================================
+// BE-63 on this screen: the practice's master OR the curator of the school it
+// belongs to manages it. School-surface taps (school page feed, calendar,
+// the general feed) land here for BOTH of them, and neither had an edit entry
+// on this read-only user-zone screen. The kebab routes them straight to the
+// master-zone edit screen -- never to the master hub, whose attendance fetch
+// is owner-only and would 404 a curator.
+//
+// Visibility mirrors the master hub: editable statuses only. The session must
+// already be in the master role -- roleGuard('master') on the /master shell
+// silently bounces any other role to /user/dashboard, and auth.switchRole is
+// a tester-only tool, never a navigation step. `schoolsHub.mine` (relation
+// per school) is warmed by both shells' ensureCurator(); a probe still in
+// flight keeps the kebab hidden and lets it appear once the data lands --
+// fail-closed, the same contract the «Школы» tab follows.
+// =========================================================================
+const schoolsHub = useSchoolsHubStore()
+const isCuratorOfSchool = computed((): boolean => {
+  const schoolId = practice.value?.curator_group_id
+  if (!schoolId) return false
+  return schoolsHub.mine.some((g) => g.relation === 'curator' && g.id === schoolId)
+})
+const isEditableStatus = computed((): boolean => {
+  const status = practice.value?.status
+  return status === 'draft' || status === 'scheduled' || status === 'live'
+})
+const canManage = computed(
+  (): boolean =>
+    authStore.role === 'master' &&
+    isEditableStatus.value &&
+    (isMaster.value || isCuratorOfSchool.value),
+)
+function goEdit(): void {
+  const id = practice.value?.id
+  if (!id) return
+  void router.push({ name: 'master-practice-edit', params: { id } })
+}
 
 // W-21: Derive booked state from bookingsStore (survives navigation).
 // Falls back to local flag for immediate feedback after purchase.

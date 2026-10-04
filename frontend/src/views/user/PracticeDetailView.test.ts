@@ -35,7 +35,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import PracticeDetailView from '@/views/user/PracticeDetailView.vue'
-import type { BookingWithPracticeResponse, PracticeResponse } from '@/api/types'
+import type {
+  BookingWithPracticeResponse,
+  CuratorGroupMineItem,
+  PracticeResponse,
+} from '@/api/types'
 
 const push = vi.fn()
 const back = vi.fn()
@@ -98,12 +102,32 @@ vi.mock('@/stores/bookings', () => ({
   }),
 }))
 
-// -- auth store (dependency): only user.id matters, for the isMaster check --
-const authState: { user: { id: string } | null } = { user: { id: 'user_1' } }
+// -- auth store (dependency): user.id drives isMaster; role gates the manage
+//    kebab (the /master shell's roleGuard would bounce any other role, so the
+//    kebab must not show outside the master role) --
+const authState: {
+  user: { id: string } | null
+  role: 'user' | 'master' | 'admin' | null
+} = { user: { id: 'user_1' }, role: 'user' }
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({
     get user() {
       return authState.user
+    },
+    get role() {
+      return authState.role
+    },
+  }),
+}))
+
+// -- schools hub store (dependency): the BE-63 curator check reads my schools
+//    (relation + id are all the screen consumes; items are cast per fixture
+//    like the PracticeResponse one) --
+const schoolsHubState: { mine: CuratorGroupMineItem[] } = { mine: [] }
+vi.mock('@/stores/schoolsHub', () => ({
+  useSchoolsHubStore: () => ({
+    get mine() {
+      return schoolsHubState.mine
     },
   }),
 }))
@@ -234,6 +258,25 @@ function button(label: string): HTMLButtonElement | undefined {
   )
 }
 
+// Icon-only controls (VMenu trigger, VMenuItem) carry no text -- match by
+// their aria-label, same as the master-zone detail tests.
+function byAria(label: string): HTMLButtonElement | null {
+  return host?.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`) ?? null
+}
+
+/** One row of GET /curator-groups/mine, narrowed to what the screen reads. */
+function school(id: string, relation: CuratorGroupMineItem['relation']): CuratorGroupMineItem {
+  return {
+    id,
+    name: 'Школа',
+    description: null,
+    curator: { user_id: 'u1', display_name: 'Куратор', avatar_url: null },
+    masters_count: 1,
+    students_count: 1,
+    relation,
+  } as CuratorGroupMineItem
+}
+
 beforeEach(() => {
   vi.setSystemTime(NOW)
   pinia = createPinia()
@@ -244,6 +287,8 @@ beforeEach(() => {
   practicesState.selectedError = null
   bookingsState.bookings = []
   authState.user = { id: 'user_1' }
+  authState.role = 'user'
+  schoolsHubState.mine = []
   fetchPractice.mockReset()
   clearSelected.mockReset()
   fetchMyBookings.mockReset()
@@ -835,6 +880,104 @@ describe('PracticeDetailView', () => {
 
       expect(getBookingRecording).not.toHaveBeenCalled()
       expect(button('Посмотреть запись')).toBeUndefined()
+    })
+  })
+
+  describe('manage kebab (BE-63: the master or the school curator)', () => {
+    async function openAndEdit(): Promise<void> {
+      byAria('Меню')?.click()
+      await flush()
+      byAria('Редактировать')?.click()
+      await flush()
+    }
+
+    it('the practice OWNER in the master role gets «Редактировать» -> the master edit screen', async () => {
+      authState.user = { id: 'master_1' }
+      authState.role = 'master'
+      practicesState.selected = practice({ master_id: 'master_1' })
+      mount()
+      await flush()
+
+      await openAndEdit()
+
+      expect(push).toHaveBeenCalledWith({
+        name: 'master-practice-edit',
+        params: { id: 'p1' },
+      })
+    })
+
+    it("the CURATOR of the practice's school gets it too (BE-63)", async () => {
+      // A curator-created practice (master_id is the school's master, the
+      // school rides curator_group_id) seen by its curator: the manager rule
+      // is master OR curator-of-school, so the kebab shows for both.
+      practicesState.selected = practice({ curator_group_id: 'sc1' })
+      authState.user = { id: 'curator_1' }
+      authState.role = 'master'
+      schoolsHubState.mine = [school('sc1', 'curator')]
+      mount()
+      await flush()
+
+      await openAndEdit()
+
+      expect(push).toHaveBeenCalledWith({
+        name: 'master-practice-edit',
+        params: { id: 'p1' },
+      })
+    })
+
+    it('a MASTER MEMBER of the school is not its curator -- no kebab', async () => {
+      practicesState.selected = practice({ curator_group_id: 'sc1' })
+      authState.user = { id: 'member_1' }
+      authState.role = 'master'
+      schoolsHubState.mine = [school('sc1', 'master')]
+      mount()
+      await flush()
+
+      expect(byAria('Меню')).toBeNull()
+      expect(push).not.toHaveBeenCalled()
+    })
+
+    it('a curator of ANOTHER school gets no kebab', async () => {
+      practicesState.selected = practice({ curator_group_id: 'sc1' })
+      authState.user = { id: 'curator_1' }
+      authState.role = 'master'
+      schoolsHubState.mine = [school('sc2', 'curator')]
+      mount()
+      await flush()
+
+      expect(byAria('Меню')).toBeNull()
+    })
+
+    it('no kebab on a finished practice (editable statuses only)', async () => {
+      authState.user = { id: 'master_1' }
+      authState.role = 'master'
+      practicesState.selected = practice({ master_id: 'master_1', status: 'completed' })
+      mount()
+      await flush()
+
+      expect(byAria('Меню')).toBeNull()
+    })
+
+    it('no kebab outside the master role (roleGuard would bounce silently)', async () => {
+      // The owner IS this practice's master, but the session browses in the
+      // user role: pushing to a /master route answers with a redirect to
+      // /user/dashboard, so the entry must not dangle.
+      authState.user = { id: 'master_1' }
+      practicesState.selected = practice({ master_id: 'master_1' })
+      mount()
+      await flush()
+
+      expect(byAria('Меню')).toBeNull()
+    })
+
+    it('a stranger on a school practice: no kebab, the booking ladder intact', async () => {
+      practicesState.selected = practice({ curator_group_id: 'sc1' })
+      schoolsHubState.mine = [school('sc1', 'student')]
+      mount()
+      await flush()
+
+      expect(byAria('Меню')).toBeNull()
+      expect(button('Забронировать')).toBeDefined()
     })
   })
 
