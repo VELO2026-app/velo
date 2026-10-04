@@ -172,8 +172,116 @@ describe('schoolsHub store', () => {
     expect(cgApi.getMyCuratorGroups).toHaveBeenCalledTimes(2)
   })
 
-  // NOTE (owner 2026-10-02): the former isCuratorAccount gate -- the user
-  // zone hiding the personal-diary surfaces from founding-right holders --
-  // is GONE. The diary follows the active interface role (see UserShell /
-  // tabs.ts); this store answers only the «Школы» tab question.
+  // ===========================================================================
+  // The personal-diary answer (owner 2026-10-04, restoring 2026-10-01's rule
+  // e494abb6): a CURATOR account -- a founding-right holder OR a school's
+  // curator by membership -- gets no personal diary surfaces in the user zone.
+  // The 2026-10-02 removal (77a98d04) was about the flash, not the rule; the
+  // flash now dies on the shell side (the dock's first paint is held on
+  // curatorAnswerPending), so the store answers the question again.
+  // ===========================================================================
+  describe('the personal-diary answer (owner 2026-10-04)', () => {
+    it('a founding-right holder is a curator account -- the diary hides', async () => {
+      seedRoles(['user', 'master'])
+      vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({ items: [] })
+      vi.mocked(cgApi.getCuratorGroups).mockResolvedValue({ items: [], can_create_groups: true })
+
+      const hub = useSchoolsHubStore()
+      await hub.ensureCurator()
+
+      expect(hub.isCuratorAccount).toBe(true)
+      expect(hub.diaryVisible).toBe(false)
+      expect(hub.curatorAnswerPending).toBe(false)
+    })
+
+    it('a school CURATOR by membership hides it too -- even without the founding right', async () => {
+      // A transfer can hand a school to a master who holds no
+      // can_create_groups: curatorship rides the membership all the same.
+      seedRoles(['user'])
+      vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+        items: [mineItem({ relation: 'curator' })],
+      })
+
+      const hub = useSchoolsHubStore()
+      await hub.ensureCurator()
+
+      expect(hub.isCuratorAccount).toBe(true)
+      expect(hub.diaryVisible).toBe(false)
+    })
+
+    it('a plain user keeps the diary once the mine probe settles', async () => {
+      seedRoles(['user'])
+      vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({ items: [] })
+
+      const hub = useSchoolsHubStore()
+      await hub.ensureCurator()
+
+      expect(hub.isCuratorAccount).toBe(false)
+      expect(hub.diaryVisible).toBe(true)
+      expect(hub.curatorAnswerPending).toBe(false)
+    })
+
+    it('the answer stays PENDING while the mine probe is in flight (the dock holds)', async () => {
+      seedRoles(['user'])
+      vi.mocked(cgApi.getMyCuratorGroups).mockReturnValue(new Promise(() => {}))
+
+      const hub = useSchoolsHubStore()
+
+      expect(hub.curatorAnswerPending).toBe(true)
+      // Fail-closed: the unresolved answer never shows the diary.
+      expect(hub.diaryVisible).toBe(false)
+    })
+
+    it('a master-capable account waits for BOTH probes (a settled mine is not enough)', async () => {
+      seedRoles(['user', 'master'])
+      let resolveMaster!: (value: Awaited<ReturnType<typeof cgApi.getCuratorGroups>>) => void
+      vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({ items: [] })
+      vi.mocked(cgApi.getCuratorGroups).mockReturnValue(
+        new Promise((resolve) => {
+          resolveMaster = resolve
+        }),
+      )
+
+      const hub = useSchoolsHubStore()
+      const ensured = hub.ensureCurator()
+      // Let the mine probe's microtasks settle, then assert the hold.
+      await Promise.resolve()
+      await Promise.resolve()
+
+      expect(hub.mineSettled).toBe(true)
+      expect(hub.curatorAnswerPending).toBe(true)
+      expect(hub.diaryVisible).toBe(false)
+
+      resolveMaster({ items: [], can_create_groups: false })
+      await ensured
+      expect(hub.curatorAnswerPending).toBe(false)
+      expect(hub.diaryVisible).toBe(true)
+    })
+
+    it('a FAILED probe resolves the answer (fail-open) instead of holding the dock forever', async () => {
+      seedRoles(['user'])
+      vi.mocked(cgApi.getMyCuratorGroups).mockRejectedValue(new Error('offline'))
+
+      const hub = useSchoolsHubStore()
+      await hub.ensureCurator()
+
+      expect(hub.curatorAnswerPending).toBe(false)
+      expect(hub.diaryVisible).toBe(true)
+      // The «Школы» retry contract is untouched: still unsettled, still hidden.
+      expect(hub.hasSchools).toBe(false)
+    })
+
+    it('$reset clears the diary answer with everything else', async () => {
+      seedRoles(['user'])
+      vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({ items: [] })
+
+      const hub = useSchoolsHubStore()
+      await hub.ensureCurator()
+      expect(hub.diaryVisible).toBe(true)
+
+      hub.$reset()
+      expect(hub.curatorAnswerPending).toBe(true)
+      expect(hub.diaryVisible).toBe(false)
+    })
+  })
 })

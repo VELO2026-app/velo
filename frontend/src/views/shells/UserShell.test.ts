@@ -72,6 +72,16 @@ function buildRouter(): Router {
       },
       { path: '/user/calendar', name: 'user-calendar', component: StubChild },
       {
+        // The «Предстоящие практики» target on the school page (owner
+        // 2026-10-01): the school-scoped week grid, stacked but dock-visible
+        // (no hideTabBar meta) -- the exact surface the curator diary report
+        // named.
+        path: '/user/calendar/school/:groupId',
+        name: 'user-calendar-school',
+        component: StubChild,
+      },
+      { path: '/user/schools', name: 'user-schools', component: StubChild },
+      {
         path: '/user/booking-confirmed/:practiceId',
         name: 'user-booking-confirmed',
         // Same meta as router/index.ts: headerless is declared on the ROUTE.
@@ -300,11 +310,10 @@ describe('UserShell', () => {
       expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Дневник', 'Школы', 'Я'])
     })
 
-    it('a founding-right holder (owner 2026-10-02) keeps «Дневник» in the user zone; with no schools, no «Школы» either', async () => {
-      // can_create_groups keeps its entrance in the MASTER zone; in the USER
-      // zone the diary follows the ACTIVE INTERFACE ROLE (owner 2026-10-02),
-      // so the holder keeps the personal-diary tab, and with zero
-      // memberships «Школы» stays away.
+    it('a founding-right holder loses «Дневник» in the user zone; with no schools, no «Школы» either', async () => {
+      // Owner 2026-10-04 (restores 2026-10-01): a can_create_groups holder IS
+      // a curator account -- no personal-diary tab. The dock's first paint is
+      // held while the probes run, so the answer lands without a flash.
       curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({ items: [] })
       curatorGroupsMock.getCuratorGroups.mockResolvedValue({
         items: [],
@@ -314,30 +323,74 @@ describe('UserShell', () => {
       await flush()
       await flush()
 
-      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Дневник', 'Я'])
+      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Я'])
     })
 
-    it('«Дневник» renders from the FIRST PAINT for a master-capable account -- the tab never waits on the async curator probe', async () => {
-      // Regression (owner 2026-10-02: the icon appeared, then vanished): the
-      // diary follows the interface role only, so both probes stalling must
-      // not hide the tab -- no async answer can flip it post-paint.
+    it('a school CURATOR (relation=curator) never gets «Дневник» (owner 2026-10-04)', async () => {
+      // Curatorship also rides the membership: a transfer hands a school to a
+      // master who need not hold the founding right -- still a curator.
+      curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({
+        items: [{ id: 'g1', name: 'Тихая школа', relation: 'curator' }],
+      })
+      await mount('user-dashboard', {}, seedAccount(['user']))
+      await flush()
+      await flush()
+
+      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Школы', 'Я'])
+    })
+
+    it('the reported repro: curator -> Школы -> a school -> «Предстоящие практики» has no «Дневник»', async () => {
+      // The exact surface the report named: the school-scoped calendar
+      // (user-calendar-school, the «Предстоящие практики» row's target). The
+      // dock is the SHELL's -- one answer for the whole zone -- so the diary
+      // follows the account (a curator), not the screen.
+      curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({
+        items: [{ id: 'g1', name: 'Тихая школа', relation: 'curator' }],
+      })
+      await mount('user-calendar-school', { groupId: 'g1' }, seedAccount(['user']))
+      await flush()
+      await flush()
+
+      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Школы', 'Я'])
+    })
+
+    it('the dock HOLDS its first paint while the curator answer is in flight', async () => {
+      // The 2026-10-02 regression (icon painted, then vanished) is dead the
+      // other way now: nothing tab-shaped is visible until the answer is in,
+      // so whatever appears is final. The held bar is invisible + inert
+      // (v-tabbar--pending); the fail-closed diary never reaches the DOM.
       curatorGroupsMock.getMyCuratorGroups.mockReturnValue(new Promise(() => {}))
       curatorGroupsMock.getCuratorGroups.mockReturnValue(new Promise(() => {}))
       await mount('user-dashboard', {}, seedAccount(['user', 'master']))
       await flush()
       await flush()
 
-      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Дневник', 'Я'])
+      expect(host?.querySelector('.v-tabbar')?.classList.contains('v-tabbar--pending')).toBe(true)
+      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Я'])
     })
 
-    it('a plain user keeps «Дневник» from the first paint (known-non-curator, no flicker)', async () => {
-      // No master capability -> curatorship resolves with zero network
-      // round-trips, so the majority case never sees the tab flicker.
-      curatorGroupsMock.getMyCuratorGroups.mockReturnValue(new Promise(() => {}))
+    it('a plain user waits for the mine probe with the dock held, then gets «Дневник»', async () => {
+      // Curatorship can ride the membership (a transferred school), so even
+      // an account without master capability holds the dock until /mine
+      // answers -- one round-trip, then the complete dock paints at once.
+      let resolveMine: (value: { items: unknown[] }) => void = () => {}
+      curatorGroupsMock.getMyCuratorGroups.mockReturnValue(
+        new Promise((resolve) => {
+          resolveMine = resolve
+        }),
+      )
       await mount('user-dashboard', {}, seedAccount(['user']))
       await flush()
       await flush()
 
+      expect(host?.querySelector('.v-tabbar')?.classList.contains('v-tabbar--pending')).toBe(true)
+      expect(tabLabels()).not.toContain('Дневник')
+
+      resolveMine({ items: [] })
+      await flush()
+      await flush()
+
+      expect(host?.querySelector('.v-tabbar')?.classList.contains('v-tabbar--pending')).toBe(false)
       expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Дневник', 'Я'])
     })
 

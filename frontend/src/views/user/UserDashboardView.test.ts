@@ -407,6 +407,15 @@ beforeEach(() => {
 
   useAuthStore().user = user()
 
+  // The diary quick access rides the curator answer (owner 2026-10-04); the
+  // probes are the SHELL's job and this file mounts the screen alone, so the
+  // default fixture settles the store by hand: a plain, known non-curator
+  // account. The curator/pending branches reseed over this.
+  const hub = useSchoolsHubStore()
+  hub.mine = []
+  hub.mineSettled = true
+  hub.masterSettled = true
+
   push.mockReset()
   back.mockReset()
   toastError.mockReset()
@@ -1085,20 +1094,38 @@ describe('UserDashboardView', () => {
       expect(sectionTitles()).toContain('Быстрый доступ')
     })
 
-    it('a curator account (founding-right holder) keeps the quick access (owner 2026-10-02)', async () => {
-      // The diary follows the ACTIVE INTERFACE ROLE -- in the user zone even
-      // a right holder gets the personal-diary surfaces. Store state seeded
-      // directly: the probe is the shell's job, this screen no longer reads it.
+    it('a curator account (founding-right holder) loses the quick access (owner 2026-10-04)', async () => {
+      // Restores 2026-10-01: a curator account gets no personal-diary
+      // surfaces. Store state seeded directly: the probe is the shell's job,
+      // this screen reads the settled answer reactively.
       useAuthStore().user = user()
-      useSchoolsHubStore().canCreate = true
+      const hub = useSchoolsHubStore()
+      hub.mine = []
+      hub.mineSettled = true
+      hub.masterSettled = true
+      hub.canCreate = true
       mount()
       await flush()
 
-      expect(sectionTitles()).toContain('Быстрый доступ')
-      expect(quickBtn('Внести активность')).toBeTruthy()
+      expect(sectionTitles()).not.toContain('Быстрый доступ')
+      expect(host?.querySelector('.dashboard__quick-btn')).toBeNull()
     })
 
-    it('a plain user keeps the quick access (known-non-curator, no probe needed)', async () => {
+    it('while the curator answer is in flight the section is held back (fail-closed)', async () => {
+      // The same first-paint contract the dock follows: the section must not
+      // flash in and out -- it appears only once the answer is resolved.
+      useAuthStore().user = user()
+      const hub = useSchoolsHubStore()
+      hub.mineSettled = false
+      hub.masterSettled = false
+      mount()
+      await flush()
+
+      expect(sectionTitles()).not.toContain('Быстрый доступ')
+    })
+
+    it('a plain user keeps the quick access (resolved, known-non-curator)', async () => {
+      // beforeEach settles the store to a plain non-curator account.
       useAuthStore().user = user()
       mount()
       await flush()

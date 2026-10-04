@@ -44,6 +44,11 @@ export const useSchoolsHubStore = defineStore('schoolsHub', () => {
    *  alone, the master-zone tab on either probe (see the shells). */
   const mineSettled = ref(false)
   const masterSettled = ref(false)
+  /** The probe DIED (2026-10-04): still unsettled -- the «Школы» tab stays
+   *  hidden and the next ensure retries -- but the curator ANSWER below is
+   *  resolved, so a dead network cannot hold the dock's first paint forever. */
+  const mineFailed = ref(false)
+  const masterFailed = ref(false)
 
   /** The USER-zone tab condition. Fail-closed: an unsettled (or failed)
    *  mine probe reads as "no schools". */
@@ -52,6 +57,7 @@ export const useSchoolsHubStore = defineStore('schoolsHub', () => {
   async function ensureCurator(): Promise<void> {
     const probes: Array<Promise<void>> = []
     if (!mineSettled.value) {
+      mineFailed.value = false
       probes.push(
         getMyCuratorGroups()
           .then((res) => {
@@ -61,7 +67,9 @@ export const useSchoolsHubStore = defineStore('schoolsHub', () => {
           .catch(() => {
             // Leave unsettled: the next shell mount retries. The tab stays
             // hidden meanwhile (fail-closed); the hub screen owns visible
-            // errors.
+            // errors. mineFailed releases the tab bar's first-paint hold
+            // (curatorAnswerPending) -- a dead network must not eat the dock.
+            mineFailed.value = true
           }),
       )
     }
@@ -69,6 +77,7 @@ export const useSchoolsHubStore = defineStore('schoolsHub', () => {
     // applicant) can never hold the founding right, so no call, no error
     // round-trip.
     if (!masterSettled.value && authStore.allowedRoles.includes('master')) {
+      masterFailed.value = false
       probes.push(
         getCuratorGroups()
           .then((res) => {
@@ -77,12 +86,46 @@ export const useSchoolsHubStore = defineStore('schoolsHub', () => {
           })
           .catch(() => {
             // Same retry contract; the master-zone tab then still answers
-            // honestly through membership.
+            // honestly through membership. Releases the dock hold as above.
+            masterFailed.value = true
           }),
       )
     }
     await Promise.all(probes)
   }
+
+  // ===========================================================================
+  // The personal-diary answer (owner 2026-10-04, restoring 2026-10-01's rule):
+  // a CURATOR ACCOUNT gets no personal diary surfaces in the user zone -- no
+  // «Дневник» tab, no dashboard quick access. A curator account is a
+  // founding-right holder (can_create_groups) OR the curator of >= 1 school
+  // (mine relation='curator') -- a transfer hands a school to a master who
+  // need not hold the founding right, and both are curators all the same.
+  //
+  // The 2026-10-02 removal was about the FLASH, not the rule: the old gate
+  // let the tab paint, then vanish when the async probe answered. The flash
+  // now dies on the SHELL side -- the user zone holds the tab bar's first
+  // paint on curatorAnswerPending, so whatever paints is final. While
+  // pending, diaryVisible reads false (fail-closed): the unresolved answer
+  // never becomes visible, the same contract the «Школы» tab follows.
+  // ===========================================================================
+  const isCuratorAccount = computed(
+    () => canCreate.value || mine.value.some((g) => g.relation === 'curator'),
+  )
+
+  /** True while the probes that decide the curator answer are still in
+   *  flight. A failed probe is an ANSWER (fail-open for the diary: it shows,
+   *  and the next mount may correct it) -- only a live wait holds the dock. */
+  const curatorAnswerPending = computed(() => {
+    if (!mineSettled.value && !mineFailed.value) return true
+    if (authStore.allowedRoles.includes('master') && !masterSettled.value && !masterFailed.value) {
+      return true
+    }
+    return false
+  })
+
+  /** The user zone's diary-surface gate: resolved AND not a curator. */
+  const diaryVisible = computed(() => !curatorAnswerPending.value && !isCuratorAccount.value)
 
   /** Fresh read -- a membership-adjacent action (join/transfer/delete) calls
    *  this so the tab follows the server without a full reload. */
@@ -99,12 +142,22 @@ export const useSchoolsHubStore = defineStore('schoolsHub', () => {
     mine.value = []
     mineSettled.value = false
     masterSettled.value = false
+    mineFailed.value = false
+    masterFailed.value = false
   }
 
   return {
     canCreate,
     mine,
+    /** Probe outcomes -- the «Школы»/diary answers are only as fresh as
+     *  these; exposed so membership-adjacent screens can tell a settled
+     *  "no" from an in-flight one (the diary gates read them too). */
+    mineSettled,
+    masterSettled,
     hasSchools,
+    isCuratorAccount,
+    curatorAnswerPending,
+    diaryVisible,
     ensureCurator,
     refreshCurator,
     $reset,

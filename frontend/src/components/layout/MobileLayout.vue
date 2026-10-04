@@ -41,6 +41,7 @@
       v-if="!hideTabBar"
       :items="tabs"
       :active="activeTab"
+      :pending="tabsPending"
       @navigate="$emit('navigate', $event)"
     />
   </div>
@@ -111,6 +112,11 @@ const props = defineProps<{
   /** Hide the bottom tab bar (e.g. the diary is an immersive full-screen mode
    *  that has its own exit in the "..." menu instead of tab navigation). */
   hideTabBar?: boolean
+  /** Hold the dock's first paint (owner 2026-10-04): while the user zone's
+   *  curator answer is in flight the bar stays invisible and inert, so no
+   *  conditional tab (the diary's) can flash and then vanish. Floating
+   *  chrome -- hiding it shifts no layout. */
+  tabsPending?: boolean
   /** Edge-to-edge fog mask: content dissolves at the top/bottom edges. ONLY for
    *  long scrolling lists/feeds (dashboard, calendar, bookings, ...). Detail
    *  screens, forms and the profile opt OUT — their footers/actions must stay

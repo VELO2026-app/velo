@@ -11,6 +11,7 @@
     :tabs="visibleTabs"
     :active-tab="activeTab"
     :fill="isFillRoute"
+    :tabs-pending="schoolsHub.curatorAnswerPending"
     :hide-tab-bar="
       isDiaryRoute ||
       isFormRoute ||
@@ -44,9 +45,14 @@ const router = useRouter()
 // unless the schoolsHub store sees the account in at least one school (any
 // relation). The probe starts on mount; until it settles the tab is simply
 // absent (fail-closed), then appears without a reload.
-// Owner 2026-10-02: «Дневник» is unconditional in the user zone -- the diary
-// follows the ACTIVE INTERFACE ROLE, not the async curator capability, so a
-// founding-right holder keeps it too and nothing can flash post-probe.
+// Owner 2026-10-04 (restores 2026-10-01, supersedes 2026-10-02): «Дневник»
+// (`requires: 'diary'`) is hidden from CURATOR accounts -- a founding-right
+// holder or a school's curator. The 2026-10-02 unconditionality existed only
+// because the async probe let the icon paint and then vanish; instead of
+// re-accepting the flash, the dock's FIRST PAINT is held on
+// schoolsHub.curatorAnswerPending (tabs-pending below): nothing tab-shaped
+// shows until the answer is in, so whatever appears is final. While pending
+// diaryVisible reads false (fail-closed), the same contract as «Школы».
 const schoolsHub = useSchoolsHubStore()
 onMounted(() => {
   void schoolsHub.ensureCurator()
@@ -55,6 +61,7 @@ onMounted(() => {
 const visibleTabs = computed<TabItem[]>(() =>
   USER_TABS.filter((tab) => {
     if (tab.requires === 'schools') return schoolsHub.hasSchools
+    if (tab.requires === 'diary') return schoolsHub.diaryVisible
     return true
   }),
 )

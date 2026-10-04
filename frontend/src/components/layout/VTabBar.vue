@@ -22,7 +22,7 @@
 -->
 
 <template>
-  <nav class="v-tabbar">
+  <nav class="v-tabbar" :class="{ 'v-tabbar--pending': pending }">
     <button
       v-for="item in items"
       :key="item.to"
@@ -47,6 +47,11 @@ import type { TabItem } from '@/router/tabs'
 defineProps<{
   items: TabItem[]
   active?: string
+  /** Hold the first paint (owner 2026-10-04): invisible + inert until the
+   *  caller's conditional-tab answer is in -- no icon flashes then vanishes.
+   *  visibility (not opacity:0) also keeps the held bar out of the a11y tree;
+   *  the dock is floating chrome, so hiding it shifts no layout. */
+  pending?: boolean
 }>()
 
 defineEmits<{
@@ -105,6 +110,16 @@ defineEmits<{
     inset 0 -1px 0 rgba(255, 255, 255, 0.15),
     0 8px 24px rgba(0, 0, 0, 0.08);
   z-index: var(--z-sticky);
+}
+
+/* First-paint hold (owner 2026-10-04): while the caller's conditional-tab
+   answer is in flight the dock stays invisible and inert -- no tab icon (the
+   diary's, specifically) can flash and then vanish. visibility, not opacity,
+   also keeps the held bar out of the accessibility tree; the dock is floating
+   chrome, so hiding it shifts no layout. */
+.v-tabbar--pending {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* The frost layer: white 12% surface over blur(18) saturate(180), on its own
