@@ -1,0 +1,5 @@
+# pnpm settings (pnpm >= 10 reads config from this file, not package.json).
+# Dependency build-script allowlist; packages not listed stay unexecuted.
+allowBuilds:
+  esbuild: true
+  vue-demi: true

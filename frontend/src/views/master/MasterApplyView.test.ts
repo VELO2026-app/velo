@@ -341,7 +341,7 @@ describe('MasterApplyView', () => {
       await flush()
 
       expect(inputErrorText('Имя')).toBe('Пожалуйста, введите имя')
-      expect(stepTitle()).toBe('Шаг 1: Профиль')
+      expect(stepTitle()).toBe('Шаг 1: Профиль *')
     })
 
     it('whitespace-only display_name is ALSO rejected (trim check)', async () => {
@@ -366,7 +366,7 @@ describe('MasterApplyView', () => {
       await flush()
 
       expect(fieldErrorText('Необходимо принять условия')).toBeDefined()
-      expect(stepTitle()).toBe('Шаг 1: Профиль')
+      expect(stepTitle()).toBe('Шаг 1: Профиль *')
     })
 
     it('VALIDATION ORDER: both invalid at once shows ONLY the display_name error (early return)', async () => {
@@ -403,7 +403,7 @@ describe('MasterApplyView', () => {
 
       await fillStep1()
 
-      expect(stepTitle()).toBe('Шаг 2: Опыт')
+      expect(stepTitle()).toBe('Шаг 2: Опыт *')
     })
   })
 
@@ -418,7 +418,7 @@ describe('MasterApplyView', () => {
       await flush()
 
       expect(fieldErrorText('Выберите хотя бы одно направление')).toBeDefined()
-      expect(stepTitle()).toBe('Шаг 2: Опыт')
+      expect(stepTitle()).toBe('Шаг 2: Опыт *')
     })
 
     it('methods chosen but no experience: blocks with the experience error', async () => {
@@ -461,7 +461,7 @@ describe('MasterApplyView', () => {
       await fillStep1()
       await fillStep2()
 
-      expect(stepTitle()).toBe('Шаг 3: Документы')
+      expect(stepTitle()).toBe('Шаг 3: Документы *')
     })
   })
 
@@ -471,12 +471,12 @@ describe('MasterApplyView', () => {
       mount()
       await flush()
       await fillStep1('Борис Кузнецов')
-      expect(stepTitle()).toBe('Шаг 2: Опыт')
+      expect(stepTitle()).toBe('Шаг 2: Опыт *')
 
       headerBackBtn().click()
       await flush()
 
-      expect(stepTitle()).toBe('Шаг 1: Профиль')
+      expect(stepTitle()).toBe('Шаг 1: Профиль *')
       expect(inputByLabel('Имя').value).toBe('Борис Кузнецов')
     })
 
@@ -488,7 +488,7 @@ describe('MasterApplyView', () => {
       await flush()
 
       expect(back).toHaveBeenCalledTimes(1)
-      expect(stepTitle()).toBe('Шаг 1: Профиль')
+      expect(stepTitle()).toBe('Шаг 1: Профиль *')
     })
 
     it('going back from step 3 to step 2 keeps the already-selected method chip active', async () => {
@@ -496,12 +496,12 @@ describe('MasterApplyView', () => {
       await flush()
       await fillStep1()
       await fillStep2()
-      expect(stepTitle()).toBe('Шаг 3: Документы')
+      expect(stepTitle()).toBe('Шаг 3: Документы *')
 
       headerBackBtn().click()
       await flush()
 
-      expect(stepTitle()).toBe('Шаг 2: Опыт')
+      expect(stepTitle()).toBe('Шаг 2: Опыт *')
       expect(chipByText('Медитация')?.getAttribute('aria-pressed')).not.toBe('false')
       expect(bioField().value).toBe('Практикую 5 лет, веду группы для начинающих.') // bio also preserved
     })
@@ -530,7 +530,7 @@ describe('MasterApplyView', () => {
 
       await fillStep1()
 
-      expect(stepTitle()).toBe('Шаг 2: Опыт')
+      expect(stepTitle()).toBe('Шаг 2: Опыт *')
       expect(contentEl().scrollTop).toBe(0)
     })
 
@@ -542,7 +542,7 @@ describe('MasterApplyView', () => {
 
       await fillStep2()
 
-      expect(stepTitle()).toBe('Шаг 3: Документы')
+      expect(stepTitle()).toBe('Шаг 3: Документы *')
       expect(contentEl().scrollTop).toBe(0)
     })
 
@@ -555,7 +555,7 @@ describe('MasterApplyView', () => {
       headerBackBtn().click()
       await flush()
 
-      expect(stepTitle()).toBe('Шаг 1: Профиль')
+      expect(stepTitle()).toBe('Шаг 1: Профиль *')
       expect(contentEl().scrollTop).toBe(0)
     })
 
@@ -569,7 +569,7 @@ describe('MasterApplyView', () => {
       headerBackBtn().click()
       await flush()
 
-      expect(stepTitle()).toBe('Шаг 2: Опыт')
+      expect(stepTitle()).toBe('Шаг 2: Опыт *')
       expect(contentEl().scrollTop).toBe(0)
     })
   })
@@ -796,7 +796,7 @@ describe('MasterApplyView', () => {
       expect(sessionStorage.getItem(MASTER_APPLIED_KEY)).toBeNull()
       expect(localStorage.getItem(masterRejectionSeenKey('user_1'))).toBe('1') // untouched, not removed
       expect(push).not.toHaveBeenCalled()
-      expect(stepTitle()).toBe('Шаг 3: Документы') // still here, not navigated away
+      expect(stepTitle()).toBe('Шаг 3: Документы *') // still here, not navigated away
     })
 
     it('failure (ApiResponseError): toasts the generic fallback (unmapped code)', async () => {

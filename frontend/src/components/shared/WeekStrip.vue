@@ -288,7 +288,7 @@ onBeforeUnmount(() => {
 })
 
 function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+  return new Promise((resolve) => setTimeout(() => resolve(), ms))
 }
 
 function onPointerDown(e: PointerEvent): void {

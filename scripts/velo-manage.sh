@@ -134,7 +134,7 @@ case "$VELO_ROLE" in
     test|prod) ;;
     "")
         echo -e "${RED}FATAL: VELO_ROLE missing in $CONF_FILE.${NC}" >&2
-        echo -e "${RED}  Refusing to guess: this role gates pytest against the live DB${NC}" >&2
+        echo -e "${RED}  Refusing to guess: this role gates the backend suite on this box${NC}" >&2
         echo -e "${RED}  and TRUNCATE CASCADE in the comms DB. Set it explicitly:${NC}" >&2
         echo -e "${RED}  echo \"VELO_ROLE=test\" >> $CONF_FILE   # or prod${NC}" >&2
         exit 1
@@ -415,19 +415,21 @@ svc_report_incomplete() {
 }
 
 # -- Comms projection resync (TEST CONTOUR ONLY -- Phase 6 / T0 finding #2) ---
-# The pytest suite runs against the live DB while the server's outbox relay
-# keeps shipping: every login/verify a test performs becomes a REAL
-# user_upserted / group_changed event in comms, and the raw test cleanups
-# emit nothing back -- after each suite run the comms projection holds
-# phantom recipients/memberships (measured: 1075 and 1189 recipients vs 426
-# real users on 27.07). The cure is the projection's own design: it is
-# rebuildable from velo. Drop it, backfill it, done (~10s for 426 users).
+# The comms projection drifts from velo when velo deletes users without an
+# event -- the comms protocol has no deletion event. The one source left on
+# the test contour is `velo seed --reset` (it says so itself, and names
+# this command). The suite USED to be the main source -- it ran against the
+# live DB while the live outbox relay shipped its events (measured: 1075
+# and 1189 recipients vs 426 real users on 27.07); since BE-82/BE-86 it
+# runs in its own databases (Postgres velo_test, Redis 15) and touches
+# neither the live DB nor the projection. The cure is the projection's own
+# design: it is rebuildable from velo. Drop it, backfill it, done.
 #
-# DO NOT port this into any prod path. Prod has no phantom source (no suite
-# runs against the prod DB -- see the role gate in `update`), so prod never
-# truncates: the transactional outbox + snapshot-on-login self-healing +
-# the idempotent backfill (as a reconciliation tool, WITHOUT truncate)
-# keep the projection converged.
+# DO NOT port this into any prod path. Prod has no deletion source (no
+# seed, no suite against the prod DB), so prod never truncates: the
+# transactional outbox + snapshot-on-login self-healing + the idempotent
+# backfill (as a reconciliation tool, WITHOUT truncate) keep the projection
+# converged.
 # WARNING -- THIS DESTROYS DATA. The TRUNCATE below cascades far past the
 # two tables it names: recipients is referenced by the messaging side, so
 # threads, messages and thread_read_states go with it. On a stand with live
@@ -1502,10 +1504,11 @@ update_product() {
             echo -e "${GREEN}✓ Migrations applied${NC}"
 
             # Run backend tests (unless --skip-tests) -- TEST ROLE ONLY.
-            # The suite runs against the LIVE DB and (Phase 6 / T0) its
-            # domain writes emit real comms sync events; on prod that is
-            # forbidden by definition -- prod's deploy gate is a green
-            # TEST server, not a local suite run against prod data.
+            # The suite runs in its own databases (BE-82/BE-86) and no
+            # longer writes the live DB, but it still DROPs and CREATEs a
+            # database and runs a full load on the box's own Postgres and
+            # Redis -- not something to do on prod. Prod's deploy gate is a
+            # green TEST server.
             if [ "$VELO_ROLE" != "test" ]; then
                 echo ""
                 echo -e "${YELLOW}⊘ Backend tests skipped on role '$VELO_ROLE' (deploy gate is the test server)${NC}"
@@ -1528,21 +1531,13 @@ update_product() {
                 fi
                 echo -e "${GREEN}✓ All backend tests passed${NC}"
 
-                # The suite pollutes the comms projection with phantom
-                # events (T0 finding #2), and this used to resync it right
-                # here. It no longer does: the resync TRUNCATEs recipients
-                # CASCADE, and once chats existed that cascade started
-                # taking threads / messages / read-states with it -- every
-                # update wiped the stand's conversations. A cleanup that
-                # destroys real data is not something to run automatically
-                # behind somebody's back; the phantom recipients it fixes
-                # are harmless by comparison (they resolve to nobody).
-                # Manual now, on purpose. Backlog: a reconcile-style resync
-                # that converges without touching messaging.
-                echo ""
-                echo -e "${YELLOW}ℹ The suite left phantom rows in the comms projection.${NC}"
-                echo "  Projection resync is MANUAL now: velo resync-comms"
-                echo "  (it truncates -- it would wipe this stand's chats)"
+                # The suite runs in its own databases (BE-82: Redis 15,
+                # tests/redis_isolation.py; BE-86: Postgres velo_test,
+                # tests/pg_isolation.py) and touches neither the live DB nor
+                # the comms projection -- so there is nothing to resync
+                # after it. (It used to leave phantom rows, and this spot
+                # used to say so.)
+                echo -e "${GREEN}ℹ Suite ran in velo_test + Redis 15; the live database was not touched${NC}"
             else
                 echo ""
                 echo -e "${YELLOW}⊘ Backend tests skipped (--skip-tests)${NC}"
@@ -2022,15 +2017,78 @@ case "${1:-}" in
         esac
         ;;
 
+    # A service's own diagnostic/repair verb, run on ONE named service.
+    #
+    # `velo drain <service> [--apply]` -- the protocol-window verb of a
+    # service (comms 3.0.0: count the rows a migration refuses on; with
+    # --apply, stop, dump and delete them). Modelled on `velo logs
+    # <service>`, NOT walked over the registry like start/stop: the service
+    # has to be NAMED, because --apply deletes data and a destructive
+    # command should be hard to type by accident.
+    #
+    # THE SERVICE'S EXIT CODE IS OURS, UNCHANGED. comms speaks 0 = clean,
+    # 1 = rows to delete, 2 = cannot check (and for --apply: 0 = clean now,
+    # 2 = not started). svc_run_verb would fold every non-zero into 1 and
+    # print "failed" -- right for start/stop under their aggregate, wrong
+    # here, where 1 is an answer and not a failure. So this path calls the
+    # CLI itself, and velo's OWN refusals use sysexits codes that cannot be
+    # mistaken for the service's: 64 = usage (no or unknown service),
+    # 69 = unavailable (not installed, no such verb, dispatcher unreadable).
+    #
+    # THE TERMINAL IS THE SERVICE'S: `bash` inherits our stdin, so the
+    # service's own confirmation (comms asks for `yes`) is typed by the
+    # person. velo feeds nothing and has no non-interactive bypass.
+    drain)
+        target="${2:-}"
+        svc_match=""
+        for record in "${VELO_SERVICES[@]}"; do
+            [ "$(svc_field "$record" 5)" = "internal" ] && continue
+            if [ "$(svc_field "$record" 1)" = "$target" ]; then
+                svc_match="$record"
+                break
+            fi
+        done
+        if [ -z "$svc_match" ]; then
+            echo "Usage: velo drain <service> [--apply]   (service: $(
+                for record in "${VELO_SERVICES[@]}"; do
+                    [ "$(svc_field "$record" 5)" = "internal" ] && continue
+                    printf '%s ' "$(svc_field "$record" 1)"
+                done
+            ))"
+            exit 64
+        fi
+        drain_dir=$(svc_field "$svc_match" 3)
+        drain_cli=$(svc_field "$svc_match" 5)
+        if ! svc_installed "$svc_match"; then
+            echo -e "${YELLOW}⊘ $target: not installed on this box${NC}"
+            exit 69
+        fi
+        verb_supported "$svc_match" drain; drain_rc=$?
+        if [ "$drain_rc" -eq 3 ]; then
+            echo -e "${YELLOW}⚠ $target: could not read the lifecycle verbs from${NC}"
+            echo -e "${YELLOW}  $drain_dir/$drain_cli (see svc_verbs)${NC}"
+            exit 69
+        fi
+        if [ "$drain_rc" -ne 0 ]; then
+            echo -e "${YELLOW}⊘ $target: no 'drain' verb${NC}"
+            echo "  $target implements: $(svc_verbs "$drain_dir/$drain_cli" | tr '\n' ' ')"
+            exit 69
+        fi
+        shift 2
+        bash "$drain_dir/$drain_cli" drain "$@"
+        exit $?
+        ;;
+
     # === Testing & Linting ===
 
     test)
-        # Backend pytest runs against the LIVE DB (and since T0 emits real
-        # comms sync events) -- an explicit `velo test` on prod is as
-        # forbidden as the update-time run. Frontend tests are container-
-        # local, but the command keeps one rule for simplicity.
+        # The backend suite DROPs and CREATEs its own database (velo_test,
+        # BE-86) and loads the box's Postgres and Redis -- an explicit
+        # `velo test` on prod is as forbidden as the update-time run.
+        # Frontend tests are container-local, but the command keeps one
+        # rule for simplicity.
         if [ "$VELO_ROLE" != "test" ]; then
-            echo -e "${RED}✗ 'velo test' is refused on role '$VELO_ROLE': the suite runs against the live DB.${NC}"
+            echo -e "${RED}✗ 'velo test' is refused on role '$VELO_ROLE': the suite drops and recreates a database on this box's Postgres.${NC}"
             echo "The deploy gate for prod is a green TEST server."
             exit 1
         fi
@@ -2545,9 +2603,54 @@ case "${1:-}" in
         #   velo seed                      -- default profile
         #   velo seed --profile 15082026   -- a named profile
         #   velo seed --reset              -- wipe seeded data first
+        #   velo seed --reset-all          -- wipe EVERY profile's data, stop
+        #   velo seed --reset-all --resync-comms [--yes]
+        #                                  -- the same, then resync comms
         #   velo seed --list               -- show available profiles
+        # --resync-comms and --yes are THIS script's flags (BE-106): they are
+        # taken off here and never reach seed.py, which knows nothing about
+        # comms. The resync runs only after seed.py exited 0, and only after
+        # the operator confirmed -- it truncates the projection, and the
+        # CASCADE takes every chat on the stand with it.
         shift  # drop "seed"
-        $COMPOSE_CMD exec -T app python scripts/seed.py "$@"
+        seed_resync=0
+        seed_yes=0
+        seed_reset_all=0
+        seed_args=()
+        for seed_arg in "$@"; do
+            case "$seed_arg" in
+                --resync-comms) seed_resync=1 ;;
+                --yes) seed_yes=1 ;;
+                --reset-all) seed_reset_all=1; seed_args+=("$seed_arg") ;;
+                *) seed_args+=("$seed_arg") ;;
+            esac
+        done
+        if [ "$seed_resync" = 1 ] && [ "$seed_reset_all" != 1 ]; then
+            echo -e "${RED}✗ --resync-comms goes only with --reset-all; to resync alone: velo resync-comms${NC}"
+            exit 1
+        fi
+        if [ "$seed_resync" = 1 ]; then
+            echo -e "${YELLOW}This will:${NC}"
+            echo "  1. remove the seeded data of EVERY profile in seed_profiles/ (live accounts survive)"
+            echo "  2. resync the comms projection (truncate + backfill) -- this DELETES ALL CHATS ON THE STAND"
+            if [ "$seed_yes" != 1 ]; then
+                read -r -p "Continue? (y/n): " seed_reply
+                if [ "$seed_reply" != "y" ] && [ "$seed_reply" != "Y" ]; then
+                    echo "Cancelled -- nothing was removed."
+                    exit 1
+                fi
+            fi
+        fi
+        if ! $COMPOSE_CMD exec -T app python scripts/seed.py ${seed_args[@]+"${seed_args[@]}"}; then
+            if [ "$seed_resync" = 1 ]; then
+                echo -e "${RED}✗ seed.py failed -- comms NOT resynced${NC}"
+            fi
+            exit 1
+        fi
+        if [ "$seed_resync" = 1 ]; then
+            echo "--resync-comms: resyncing comms now (the warning above is what this fixes)"
+            resync_comms_projection || exit 1
+        fi
         ;;
 
     # === Roles ===
@@ -2649,6 +2752,13 @@ case "${1:-}" in
         echo "Logs:"
         echo "  logs [app|db|redis|frontend|<service>] — View logs (default: app)"
         echo "                        Product names first; then any registry service."
+        echo "  drain <service> [--apply] — The service's protocol-window check."
+        echo "                        Without --apply it only counts; with --apply the"
+        echo "                        service asks for 'yes', dumps and deletes."
+        echo "                        Exit code is the service's own (comms: 0 clean,"
+        echo "                        1 rows to delete, 2 cannot check); velo's own:"
+        echo "                        64 = no/unknown service, 69 = not installed or"
+        echo "                        no such verb."
         echo ""
         echo "Keys:"
         echo "  rotate-key <service> — Replace a compromised GitHub deploy key."
@@ -2673,8 +2783,8 @@ case "${1:-}" in
         echo "                        DESTRUCTIVE: truncates recipients CASCADE, which"
         echo "                        takes threads/messages/read-states with it. MANUAL"
         echo "                        since H-D2 -- update no longer runs it. Use after"
-        echo "                        'velo seed' (seeds bypass the emits) or after the"
-        echo "                        suite leaves phantom rows."
+        echo "                        'velo seed' (seeds bypass the emits) or after"
+        echo "                        'velo seed --reset' (it names this command)."
         echo "  comms-outbox        — Outbox dead-letter queue: list-dead |"
         echo "                        requeue <id> [...] | requeue --all"
         echo ""
@@ -2687,6 +2797,8 @@ case "${1:-}" in
         echo "  seed --profile <name> — Use a named profile (default: default)"
         echo "  seed --list         — List available profiles"
         echo "  seed --reset        — Wipe seeded data, then re-seed"
+        echo "  seed --reset-all    — Wipe the seeded data of EVERY profile, stop (comms untouched)"
+        echo "  seed --reset-all --resync-comms [--yes] — The same, then resync comms (DELETES ALL CHATS; asks first)"
         echo ""
         echo "Roles:"
         echo "  setrole <tg> <A|M|U>  — Set a user's role (admin/master/user)"

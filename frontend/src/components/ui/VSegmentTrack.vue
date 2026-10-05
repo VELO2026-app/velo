@@ -22,11 +22,16 @@
   Usage:
     <VSegmentTrack v-model="period" :options="PERIOD_OPTIONS" variant="toggle" />
     <VSegmentTrack v-model="activeTab" :options="TAB_OPTIONS" variant="tabs" />
+    <VSegmentTrack v-model="filter" :options="OPTIONS" variant="tabs" scrollable />
+
+  An option may carry an `icon` (a DS icon component) rendered before the
+  label (SchoolMembersView's «Блок» lock). Iconless options -- every
+  pre-existing caller -- render exactly as before.
 -->
 <template>
   <div
     class="v-segment-track"
-    :class="`v-segment-track--${variant}`"
+    :class="[`v-segment-track--${variant}`, { 'v-segment-track--scrollable': scrollable }]"
     role="tablist"
     :aria-label="ariaLabel || undefined"
   >
@@ -40,15 +45,23 @@
       :class="{ 'v-segment-track__btn--active': modelValue === opt.value }"
       @click="emit('update:modelValue', opt.value)"
     >
-      {{ opt.label }}
+      <span v-if="opt.icon" class="v-segment-track__opt">
+        <component :is="opt.icon" :size="12" />
+        {{ opt.label }}
+      </span>
+      <template v-else>{{ opt.label }}</template>
     </button>
   </div>
 </template>
 
 <script setup lang="ts" generic="T extends string">
+import type { Component } from 'vue'
+
 interface SegOption {
   value: T
   label: string
+  /** Optional leading glyph (SchoolMembersView's «Блок» lock). */
+  icon?: Component
 }
 
 withDefaults(
@@ -59,10 +72,14 @@ withDefaults(
     options: ReadonlyArray<SegOption>
     /** Shape: compact auto-width pills ('toggle') or full-width segments ('tabs'). */
     variant?: 'toggle' | 'tabs'
+    /** Many tabs on one line: content-sized buttons + horizontal swipe scroll
+     *  (VSegment's --scrollable recipe) instead of squeezed equal segments. */
+    scrollable?: boolean
     ariaLabel?: string
   }>(),
   {
     variant: 'toggle',
+    scrollable: false,
     ariaLabel: '',
   },
 )
@@ -129,5 +146,30 @@ const emit = defineEmits<{
 .v-segment-track--toggle .v-segment-track__btn--active,
 .v-segment-track--tabs .v-segment-track__btn--active {
   color: var(--velo-white);
+}
+
+/* -- Scrollable (VSegment's --scrollable recipe, mirrored): many tabs on one
+   line -- content-sized buttons + horizontal swipe scroll, scrollbar hidden
+   (the overflowing pills themselves hint the overflow). Composes with --tabs,
+   whose flex:1 equal segments are overridden to flex-basis auto here. */
+.v-segment-track--scrollable {
+  overflow-x: auto;
+  scrollbar-width: none; /* Firefox */
+}
+
+.v-segment-track--scrollable::-webkit-scrollbar {
+  display: none; /* WebKit */
+}
+
+.v-segment-track--scrollable .v-segment-track__btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* Optional icon+label composition (the «Блок» lock). */
+.v-segment-track__opt {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 </style>

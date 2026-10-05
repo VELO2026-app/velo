@@ -5,23 +5,28 @@
   month / scroll). Rendered inside MasterShell (fog + tab bar from the shell).
 
   Structure (DS-first — every value is a --velo-* token / DS component):
-    - Greeting + notification bell: badge = the real unread count (T-26,
-      PROMPT №704), fetched alongside the stats row; tap -> 'master-inbox'
-      (MasterInboxView.vue). No feed on the dashboard itself.
-    - Stats: label + period toggle (Неделя / Месяц) + 3 VStatCard with optional
-      delta trend. Period toggle = the user-dashboard pattern (NOT VSegment).
+    - Top row (owner ask 2026-09-08): period slider (Неделя/Месяц) left +
+      notification bell right, ONE line -- the «Статистика» heading is gone.
+      The bell is the USER dashboard's recipe reused verbatim -- 36px disc +
+      presence-only dot (FE-11 ruling: never a number; supersedes the T-26
+      count badge). Unread fetched alongside the stats row; tap ->
+      'master-inbox' (MasterInboxView.vue). No feed on the dashboard itself.
+    - Stats: period toggle (Неделя / Месяц / Квартал) in the top row +
+      2 VStatCard with optional delta trend (E7: the toggle refetches
+      GET /masters/me/stats?period=...). «Квартал» went live with the
+      backend's third calendar period (BE-28; FE-66).
     - "Мои группы" row (VMenuRow) -> master-groups (P2, PROMPT №591; was
       "Мои ученики" -> master-students).
     - Zero state only: "Создать первую практику" (VButton) -> create.
     - "Ближайшие практики": up to 2 upcoming practice cards, each with
       "Изменить" -> edit and "Check-ins" -> attendance.
 
-  STUBS (no backend yet -> roadmap for Zod; non-working taps show a toast):
-    - Stats: only the practices total is real; participants/income + all deltas
-      and the Неделя/Месяц period scoping have no API -> "—", toggle visual-only.
-    - AI summary "Подробнее" (no master-AI), practice checkin-count +
-      recurrence meta (no fields) -> rendered only when the data exists
-      (v-if), absent for now. The bell is NOT in this list any more (T-26).
+  No stubs left on this screen. The stats grid is real (E7 -- GET
+  /masters/me/stats, week|month|quarter, the toggle refetches it); the
+  practice-card meta -- check-ins (checkin_count), recurrence
+  (recurrence_days) and «Осталось N из M» (total_sessions) -- is real
+  (practiceCardMeta.ts) and rendered when the practice carries it (v-if);
+  the AI summary is gone (owner pass below); the bell is real (T-26).
 
   [owner pass] The "Саммари недели" section (heading + VCard teaser ->
   master-summary) is REMOVED from the dashboard entirely -- no master-AI
@@ -41,31 +46,37 @@
 
     <template v-else>
       <!-- ================================================================
-           NOTIFICATION BELL (greeting removed — operator tester-fix
-           2026-06-17, mirroring the user dashboard). Bell stays top-right.
+           TOP ROW (owner ask 2026-09-08): the period slider (Неделя/Месяц/Квартал)
+           on the left, the notification bell on the right -- ONE line. The
+           «Статистика» heading is gone with it. The bell is the USER
+           dashboard's recipe, reused verbatim: 36px primary disc, 17px glyph
+           in a wrapper box, and the PRESENCE-ONLY coral dot -- the FE-11
+           "never a number" ruling now governs the master bell too,
+           replacing the T-26 count badge.
            ================================================================ -->
-      <div class="master-dashboard__bell-row">
-        <button class="master-dashboard__bell" aria-label="Уведомления" @click="onBell">
-          <IconBellPlain :size="21" />
-          <span v-if="unreadCount > 0" class="master-dashboard__bell-badge">{{ unreadCount }}</span>
-        </button>
-      </div>
-
-      <!-- ================================================================
-           STATS (period toggle + 3 cards)
-           ================================================================ -->
-      <div class="master-dashboard__section-header">
-        <span class="master-dashboard__stats-title">
-          {{ isNewMaster ? 'Моя статистика' : 'Статистика' }}
-        </span>
+      <div class="master-dashboard__top-row">
         <VSegmentTrack
           v-model="period"
           :options="PERIOD_OPTIONS"
           variant="toggle"
           aria-label="Период статистики"
         />
+        <button
+          class="master-dashboard__bell"
+          type="button"
+          aria-label="Уведомления"
+          @click="onBell"
+        >
+          <span class="master-dashboard__bell-icon">
+            <IconBellPlain :size="17" />
+            <span v-if="unreadCount > 0" class="master-dashboard__bell-dot" aria-hidden="true" />
+          </span>
+        </button>
       </div>
 
+      <!-- ================================================================
+           STATS (2 cards; the period toggle lives in the top row above)
+           ================================================================ -->
       <!-- Income card removed from the dashboard (operator tester-fix 2026-06-17). -->
       <div class="master-dashboard__stats-grid">
         <VStatCard
@@ -290,11 +301,15 @@ const authStore = useAuthStore()
 const { contentSafeTop } = useSafeArea()
 const toast = useToast()
 
-// -- Period toggle. Drives the period-scoped stats row (E7). --
-const period = ref<'week' | 'month'>('week')
-const PERIOD_OPTIONS: ReadonlyArray<{ value: 'week' | 'month'; label: string }> = [
+// -- Period toggle. Drives the period-scoped stats row (E7). `quarter` went
+//    live with the backend's third calendar period (BE-28; FE-66 unblocked the
+//    segment -- before that the endpoint would 422 it, and a failed refetch
+//    would silently keep the WEEK figures under a «Квартал» label). --
+const period = ref<'week' | 'month' | 'quarter'>('week')
+const PERIOD_OPTIONS: ReadonlyArray<{ value: 'week' | 'month' | 'quarter'; label: string }> = [
   { value: 'week', label: 'Неделя' },
   { value: 'month', label: 'Месяц' },
+  { value: 'quarter', label: 'Квартал' },
 ]
 
 // True for a brand-new master with no practices at all (zero state).
@@ -327,14 +342,29 @@ function deltaStr(pct: number | null | undefined): string {
   if (r === 0) return '0%'
   return `${r > 0 ? '+' : '−'}${Math.abs(r)}%`
 }
+
+// Owner 2026-10-01 (the fix stays client-side; the backend contract is
+// untouched): on day 1 of a month/quarter the calendar grid honestly reads 0
+// against a fully elapsed previous period and the chip shows "-100%" --
+// arithmetic truth with zero information that reads as a broken dashboard.
+// A zero current value can only be -100 (non-empty base) or null (empty one),
+// so the chip is withheld until there is something to trend. Mirrors the
+// backend's own S-1 "no baseline -> no percentage" rule on the display side.
+function deltaChip(value: number, pct: number | null | undefined): string {
+  return value === 0 ? '' : deltaStr(pct)
+}
 /** Tone: positive → up (teal), negative → down (rose, D5), zero/null → muted. */
 function deltaTone(pct: number | null | undefined): 'up' | 'down' | 'muted' {
   if (pct == null || Math.round(pct) === 0) return 'muted'
   return pct > 0 ? 'up' : 'down'
 }
 
-const practicesDelta = computed((): string => deltaStr(stats.value?.practices_delta_pct))
-const participantsDelta = computed((): string => deltaStr(stats.value?.participants_delta_pct))
+const practicesDelta = computed((): string =>
+  stats.value ? deltaChip(stats.value.practices_count, stats.value.practices_delta_pct) : '',
+)
+const participantsDelta = computed((): string =>
+  stats.value ? deltaChip(stats.value.participants_count, stats.value.participants_delta_pct) : '',
+)
 const practicesDeltaTone = computed(() => deltaTone(stats.value?.practices_delta_pct))
 const participantsDeltaTone = computed(() => deltaTone(stats.value?.participants_delta_pct))
 
@@ -391,15 +421,15 @@ function practiceWhen(p: PracticeResponse): string {
 
 // T-26 (PROMPT №704): the bell is no longer a stub -- it opens the real feed.
 function onBell(): void {
-  router.push({ name: 'master-inbox' })
+  void router.push({ name: 'master-inbox' })
 }
-// -- Stub actions (no backend) --
+// -- Navigation (real routes) --
 function onGroups(): void {
-  router.push({ name: 'master-groups' })
+  void router.push({ name: 'master-groups' })
 }
 // Tap the card → the practice screen (edit/cancel/delete live there via «…»).
 function openPractice(p: PracticeResponse): void {
-  router.push({ name: 'master-practice-detail', params: { id: p.id } })
+  void router.push({ name: 'master-practice-detail', params: { id: p.id } })
 }
 // Zoom state for one card. T-35: the manual rung is gone (Practice.zoom_link
 // no longer exists), so this no longer CHOOSES between links -- it names the
@@ -536,9 +566,18 @@ onMounted(async () => {
   void loadUnreadCount().catch(() => {
     /* leave the badge at 0 if the fetch fails */
   })
-  // Both calls are lazy -- skip if already populated by guard / prior navigation.
+  // Profile stays lazy -- skip if already populated by guard / prior navigation.
   await masterStore.fetchMyProfile()
-  await masterStore.fetchMyPractices()
+  // FE-53: the practice cards are the one section whose numbers move by
+  // ANOTHER actor's hand (a student's booking bumps current_participants,
+  // their PRE check-in bumps checkin_count) and no push exists, so the lazy
+  // fetchMyPractices() froze the cards at the session's first load. The
+  // upcoming bucket is force-refreshed on every mount -- the same per-mount
+  // contract loadStats() / loadUnreadCount() above already follow, and with
+  // the same failure disposition: refreshInPlace keeps the previous cards
+  // when the check fails. Past stays lazy: only the zero-state reads its
+  // total.
+  await Promise.all([masterStore.fetchPastPractices(), masterStore.refreshUpcomingPractices()])
   // E12 swap (PROMPT №419): the check-in meta now reads checkin_count straight
   // off the practice (already on masterStore.practices) -- the insights
   // eager-load that used to feed it is gone, one fewer network round-trip.
@@ -600,69 +639,75 @@ onUnmounted(() => {
   padding: var(--space-10) 0;
 }
 
-/* -- Bell row (greeting removed — bell stays top-right) -- */
-.master-dashboard__bell-row {
+/* -- Top row: period slider left, bell right (owner ask 2026-09-08; the
+      «Статистика» heading is gone). min-height keeps the operator-tuned 44px
+      top band the lone bell row used to reserve. -- */
+.master-dashboard__top-row {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
   min-height: var(--velo-size-44);
 }
 
+/* The USER dashboard's bell recipe, reused verbatim (owner ask 2026-09-08):
+   a 36px primary disc with a white 17px glyph, presence dot instead of the
+   old T-26 number badge. */
 .master-dashboard__bell {
   position: relative;
-  width: var(--velo-size-44);
-  height: var(--velo-size-44);
+  width: var(--velo-size-36);
+  height: var(--velo-size-36);
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   border-radius: var(--radius-full);
   background: var(--velo-primary);
   color: var(--velo-white);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   cursor: pointer;
   transition: opacity var(--transition-fast);
+}
+
+/* FE-26 touch skirt (same as the user bell): the 36px disc sits below the
+   44px touch standard -- an invisible -4px ring grows the TAPPABLE circle
+   back to 44px without painting anything. */
+.master-dashboard__bell::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: var(--radius-full);
 }
 
 .master-dashboard__bell:active {
   opacity: 0.85;
 }
 
-.master-dashboard__bell-badge {
+.master-dashboard__bell:focus-visible {
+  outline: 2px solid var(--velo-primary);
+  outline-offset: 2px;
+}
+
+/* The dot anchors to the GLYPH box (not the 44px target), so it hugs the
+   icon corner. */
+.master-dashboard__bell-icon {
+  position: relative;
+  display: inline-flex;
+  line-height: 0;
+}
+
+/* Presence-only unread dot (the user bell's recipe, FE-11 ruling): coral
+   10px with a 1px white ring, anchored -0.7px into the glyph's top-right
+   corner. No number, ever. */
+.master-dashboard__bell-dot {
   position: absolute;
-  /* top/right stay LITERAL, not tokenized (PROMPT №704 judgement, argued not
-     assumed): this is a positional nudge tying the badge's corner to the
-     EXACT geometry of THIS 44px circle + 21px icon, not a reusable design
-     magnitude -- there is no other corner-overlay badge anywhere in this
-     codebase (checked: `top: -`/`right: -` on a badge occurs nowhere else),
-     so there is no role to name it after and no second site that would ever
-     read var(--velo-something-minus-1) and know what it means. */
-  top: -1px;
-  right: -1px;
-  min-width: var(--velo-size-18);
-  height: var(--velo-size-18);
-  padding: 0 var(--velo-inset-5);
-  border-radius: var(--radius-xl);
+  top: -0.7px;
+  right: -0.7px;
+  width: var(--velo-size-10);
+  height: var(--velo-size-10);
+  border: 1px solid var(--velo-white);
+  border-radius: var(--radius-full);
   background: var(--velo-pink-300);
-  color: var(--velo-white);
-  font-size: var(--text-10);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* -- Stats header + period toggle (user-dashboard pattern) -- */
-.master-dashboard__section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.master-dashboard__stats-title {
-  font-family: var(--font-body);
-  font-size: var(--text-base);
-  color: var(--velo-text-primary);
-  letter-spacing: 0.02em;
 }
 
 /* -- Stats grid (2 cards — income removed) -- */

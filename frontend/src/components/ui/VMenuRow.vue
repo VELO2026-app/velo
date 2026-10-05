@@ -6,7 +6,7 @@
 
   Usage:
     <VMenuRow label="Редактировать профиль" @click="onEdit">
-      <template #icon><IconEdit :size="20" /></template>
+      <template #icon><IconPen :size="20" /></template>
     </VMenuRow>
     <VMenuRow label="Выйти" variant="danger" :show-arrow="false" @click="onLogout">
       <template #icon><IconLogout :size="20" /></template>

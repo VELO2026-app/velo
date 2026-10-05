@@ -1,0 +1,359 @@
+// =============================================================================
+// VELO Frontend -- CuratorGroupJoinView Screen Tests (schools FE-18 / GT P3)
+// =============================================================================
+//
+// Same idiom as GroupJoinView.test.ts (createApp/mount, real ApiResponseError
+// for status-based branching, mocked vue-router + useToast), extended for the
+// two-step preview->join contract this screen adds: the preview DESCRIBES a
+// refusal instead of raising it, join re-validates everything, and the
+// student-upgrade nuance (can_join=true + relation="student") must keep the
+// Join button alive.
+// =============================================================================
+
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { createApp, nextTick, type App } from 'vue'
+import CuratorGroupJoinView from '@/views/master/CuratorGroupJoinView.vue'
+import * as cgApi from '@/api/curatorGroups'
+import { ApiResponseError } from '@/api/client'
+import type { CuratorGroupInvitePreviewResponse } from '@/api/types'
+
+vi.mock('@/api/curatorGroups')
+
+const push = vi.fn()
+const replace = vi.fn()
+const routeParams: { token: string } = { token: 'a'.repeat(43) }
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ params: routeParams }),
+  useRouter: () => ({ push, replace }),
+}))
+
+const toastSuccess = vi.fn()
+const toastError = vi.fn()
+vi.mock('@/composables/useToast', () => ({
+  useToast: () => ({ success: toastSuccess, error: toastError, info: vi.fn() }),
+}))
+
+// The school page route depends on the viewer's role -- the store mock is
+// mutable per test via mockRole.
+let mockRole: 'user' | 'master' | 'admin' = 'user'
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => ({ role: mockRole }),
+}))
+
+// FE-88: a successful join must refresh the dock's «Школы» tab probe (the
+// account may have just gained its first school). Mocked wholesale: this
+// app mounts without pinia, and the refresh is the only hub seam used here.
+const hubRefresh = vi.fn()
+vi.mock('@/stores/schoolsHub', () => ({
+  useSchoolsHubStore: () => ({ refreshCurator: hubRefresh }),
+}))
+
+let app: App | null = null
+let host: HTMLElement | null = null
+
+function mount(): HTMLElement {
+  host = document.createElement('div')
+  document.body.appendChild(host)
+  app = createApp(CuratorGroupJoinView)
+  app.mount(host)
+  return host
+}
+
+async function flush(): Promise<void> {
+  await nextTick()
+  await nextTick()
+  await nextTick()
+}
+
+function text(): string {
+  return host?.textContent ?? ''
+}
+
+function buttonWith(label: string): HTMLElement | undefined {
+  return Array.from(host?.querySelectorAll<HTMLElement>('button') ?? []).find((b) =>
+    b.textContent?.trim().includes(label),
+  )
+}
+
+/** A green preview: a school, viewer not yet a member. */
+function previewResponse(
+  overrides: Partial<CuratorGroupInvitePreviewResponse> = {},
+): CuratorGroupInvitePreviewResponse {
+  return {
+    group: {
+      id: 'g1',
+      name: 'Тихая школа',
+      description: 'Практики тишины',
+      curator_name: 'Мария Иванова',
+      masters_count: 3,
+      students_count: 12,
+    },
+    can_join: true,
+    reason: null,
+    relation: null,
+    ...overrides,
+  }
+}
+
+beforeEach(() => {
+  routeParams.token = 'a'.repeat(43)
+  mockRole = 'user'
+  vi.mocked(cgApi.getCuratorGroupInvitePreview).mockReset()
+  vi.mocked(cgApi.joinCuratorGroup).mockReset()
+  push.mockReset()
+  replace.mockReset()
+  toastSuccess.mockReset()
+  toastError.mockReset()
+  hubRefresh.mockReset()
+})
+
+afterEach(() => {
+  app?.unmount()
+  host?.remove()
+  app = null
+  host = null
+  vi.clearAllMocks()
+})
+
+describe('CuratorGroupJoinView -- preview states', () => {
+  it('shows the loading state while the preview is in flight', async () => {
+    vi.mocked(cgApi.getCuratorGroupInvitePreview).mockReturnValue(new Promise(() => {}))
+    mount()
+    await flush()
+
+    expect(text()).toContain('Проверяем приглашение…')
+  })
+
+  it('renders the invite card for a green preview: name, counts, description, heading', async () => {
+    vi.mocked(cgApi.getCuratorGroupInvitePreview).mockResolvedValue(previewResponse())
+    mount()
+    await flush()
+
+    expect(text()).toContain('Тихая школа')
+    expect(text()).toContain('Куратор: Мария Иванова')
+    expect(text()).toContain('Практики тишины')
+    expect(text()).toContain('12 учеников')
+    expect(text()).toContain('3 мастера')
+    expect(text()).toContain('Вас пригласили в школу!')
+    expect(buttonWith('Вступить')).toBeTruthy()
+    expect(buttonWith('Отказаться')).toBeTruthy()
+  })
+
+  it('omits a blank description and spells honest zeroes (honest empties)', async () => {
+    vi.mocked(cgApi.getCuratorGroupInvitePreview).mockResolvedValue(
+      previewResponse({
+        group: {
+          id: 'g1',
+          name: 'Тихая школа',
+          description: null,
+          curator_name: null,
+          masters_count: 0,
+          students_count: 0,
+        },
+      }),
+    )
+    mount()
+    await flush()
+
+    expect(text()).toContain('0 учеников')
+    expect(text()).toContain('0 мастеров')
+    expect(text()).toContain('Вас пригласили в школу!')
+    expect(buttonWith('Вступить')).toBeTruthy()
+  })
+
+  it('a member opening the link is told nothing would happen', async () => {
+    // NEW TEST, NOT A REWRITE OF THE ONE THAT STOOD HERE. Until GT-27 a
+    // school had a second, master-flavoured invite link that promoted an
+    // existing student to master of the school on join; the removed test
+    // pinned that nuance -- a student opening it got can_join=true and a
+    // hint, because joining still did something. The path was cancelled by
+    // owner ruling: masters are appointed by the curator and the
+    // appointment takes effect on the appointee's confirmation. The old
+    // scenario cannot be built any more, so it was deleted rather than
+    // reformulated; this asserts the new truth about the same screen.
+    vi.mocked(cgApi.getCuratorGroupInvitePreview).mockResolvedValue(
+      previewResponse({ can_join: false, reason: 'already_member', relation: 'student' }),
+    )
+    mount()
+    await flush()
+
+    expect(text()).toContain('Вы уже в школе')
+    expect(buttonWith('Вступить')).toBeFalsy()
+  })
+
+  it('on 404: the one honest answer for unknown/revoked/frozen/deleted links', async () => {
+    vi.mocked(cgApi.getCuratorGroupInvitePreview).mockRejectedValue(
+      new ApiResponseError(404, 'invite_not_found', 'not found'),
+    )
+    mount()
+    await flush()
+
+    expect(text()).toContain('Приглашение недействительно')
+    expect(text()).not.toContain('Вступить')
+  })
+
+  // GT-27: master_required left this table. It was the master link refusing
+  // an unverified account; there is no master link, and the code now comes
+  // from the appointment path, which is a different screen.
+  // BE-79 (2): blocked_in_group joins with its own description.
+  it('blocked_in_group renders its own copy and no Join button', async () => {
+    vi.mocked(cgApi.getCuratorGroupInvitePreview).mockResolvedValue(
+      previewResponse({ can_join: false, reason: 'blocked_in_group' }),
+    )
+    mount()
+    await flush()
+
+    expect(text()).toContain('Вступление недоступно')
+    expect(text()).toContain('Вы заблокированы в этой школе.')
+    expect(buttonWith('Вступить')).toBeFalsy()
+  })
+
+  it.each([['blocked_by_curator', 'Вступление недоступно']] as const)(
+    'described refusal %s renders its own copy and no Join button',
+    async (reason, title) => {
+      vi.mocked(cgApi.getCuratorGroupInvitePreview).mockResolvedValue(
+        previewResponse({ can_join: false, reason }),
+      )
+      mount()
+      await flush()
+
+      expect(text()).toContain(title)
+      expect(buttonWith('Вступить')).toBeFalsy()
+    },
+  )
+
+  it.each([
+    ['own_group', 'Это ваша школа'],
+    ['already_member', 'Вы уже в школе'],
+  ] as const)(
+    'described refusal %s offers «Открыть» into the school page',
+    async (reason, title) => {
+      vi.mocked(cgApi.getCuratorGroupInvitePreview).mockResolvedValue(
+        previewResponse({ can_join: false, reason, relation: 'master' }),
+      )
+      mount()
+      await flush()
+
+      expect(text()).toContain(title)
+      const open = buttonWith('Открыть')
+      expect(open).toBeTruthy()
+      open?.click()
+      await flush()
+      expect(replace).toHaveBeenCalledWith({ name: 'user-curator-group', params: { id: 'g1' } })
+    },
+  )
+
+  it('transient preview error offers a retry, not a dead-link verdict (W11)', async () => {
+    vi.mocked(cgApi.getCuratorGroupInvitePreview).mockRejectedValueOnce(new Error('network blip'))
+    mount()
+    await flush()
+
+    expect(text()).toContain('Не удалось проверить приглашение')
+    expect(text()).not.toContain('Приглашение недействительно')
+
+    vi.mocked(cgApi.getCuratorGroupInvitePreview).mockResolvedValueOnce(previewResponse())
+    buttonWith('Повторить')?.click()
+    await flush()
+
+    expect(text()).toContain('Тихая школа')
+  })
+})
+
+describe('CuratorGroupJoinView -- the join gate', () => {
+  it('on success: joins with the route token, toasts, and lands on the school page in the USER zone', async () => {
+    vi.mocked(cgApi.getCuratorGroupInvitePreview).mockResolvedValue(previewResponse())
+    vi.mocked(cgApi.joinCuratorGroup).mockResolvedValue({
+      group_id: 'g1',
+      relation: 'student',
+      already_member: false,
+    })
+    mount()
+    await flush()
+
+    buttonWith('Вступить')?.click()
+    await flush()
+
+    expect(cgApi.joinCuratorGroup).toHaveBeenCalledWith('a'.repeat(43))
+    expect(toastSuccess).toHaveBeenCalledWith('Вы вступили в школу «Тихая школа»')
+    // FE-88: the join may have created the account's FIRST school -- the
+    // dock's tab probe must be refreshed before landing in the shell.
+    expect(hubRefresh).toHaveBeenCalledTimes(1)
+    expect(replace).toHaveBeenCalledWith({ name: 'user-curator-group', params: { id: 'g1' } })
+  })
+
+  it('a MASTER lands on the master zone school page after joining', async () => {
+    mockRole = 'master'
+    vi.mocked(cgApi.getCuratorGroupInvitePreview).mockResolvedValue(previewResponse())
+    vi.mocked(cgApi.joinCuratorGroup).mockResolvedValue({
+      group_id: 'g1',
+      relation: 'master',
+      already_member: false,
+    })
+    mount()
+    await flush()
+
+    buttonWith('Вступить')?.click()
+    await flush()
+
+    expect(replace).toHaveBeenCalledWith({ name: 'master-curator-group', params: { id: 'g1' } })
+  })
+
+  it('join 404 after a green preview: the link died in between -- switch to the invalid-link state', async () => {
+    vi.mocked(cgApi.getCuratorGroupInvitePreview).mockResolvedValue(previewResponse())
+    vi.mocked(cgApi.joinCuratorGroup).mockRejectedValue(
+      new ApiResponseError(404, 'invite_not_found', 'not found'),
+    )
+    mount()
+    await flush()
+
+    buttonWith('Вступить')?.click()
+    await flush()
+
+    expect(text()).toContain('Приглашение недействительно')
+    expect(toastSuccess).not.toHaveBeenCalled()
+    expect(hubRefresh).not.toHaveBeenCalled()
+  })
+
+  it('join 403/409 after a green preview: re-read the preview and render ITS described reason', async () => {
+    vi.mocked(cgApi.getCuratorGroupInvitePreview)
+      .mockResolvedValueOnce(previewResponse())
+      .mockResolvedValueOnce(previewResponse({ can_join: false, reason: 'own_group' }))
+    vi.mocked(cgApi.joinCuratorGroup).mockRejectedValue(
+      new ApiResponseError(409, 'own_group', 'conflict'),
+    )
+    mount()
+    await flush()
+
+    buttonWith('Вступить')?.click()
+    await flush()
+
+    expect(text()).toContain('Это ваша школа')
+    expect(buttonWith('Открыть')).toBeTruthy()
+  })
+
+  it('a transient join failure toasts and stays on the card (the gate can be retried)', async () => {
+    vi.mocked(cgApi.getCuratorGroupInvitePreview).mockResolvedValue(previewResponse())
+    vi.mocked(cgApi.joinCuratorGroup).mockRejectedValueOnce(new Error('timeout'))
+    mount()
+    await flush()
+
+    buttonWith('Вступить')?.click()
+    await flush()
+
+    expect(toastError).toHaveBeenCalled()
+    expect(text()).toContain('Тихая школа')
+  })
+
+  it('«Отказаться» is a pure navigation -- no server state, the link keeps working', async () => {
+    vi.mocked(cgApi.getCuratorGroupInvitePreview).mockResolvedValue(previewResponse())
+    mount()
+    await flush()
+
+    buttonWith('Отказаться')?.click()
+    await flush()
+
+    expect(cgApi.joinCuratorGroup).not.toHaveBeenCalled()
+    expect(replace).toHaveBeenCalledWith({ name: 'root' })
+    expect(hubRefresh).not.toHaveBeenCalled()
+  })
+})

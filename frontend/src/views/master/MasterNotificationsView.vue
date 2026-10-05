@@ -108,6 +108,7 @@ type ToggleKey =
   | 'new_feedback'
   | 'msg_participants'
   | 'msg_support'
+  | 'curator_groups'
   | 'ai_summary'
   | 'monthly_report'
 
@@ -139,6 +140,14 @@ const GROUPS: Group[] = [
         sub: 'Участник отметился о состоянии перед практикой',
       },
       { key: 'new_feedback', label: 'Новый feedback', sub: 'Участник оставил отзыв' },
+    ],
+  },
+  {
+    title: 'Школы',
+    // FE-67 (BE-25): the curator_groups comms category -- member_joined plus
+    // both school-master appointment outcomes (comms-profile/types.yaml).
+    rows: [
+      { key: 'curator_groups', label: 'События школ', sub: 'Вступления и назначения мастеров' },
     ],
   },
   {
@@ -181,6 +190,7 @@ const CATEGORY_BY_KEY: Partial<Record<ToggleKey, string>> = {
   reminder: 'reminders',
   msg_participants: 'msg_participants',
   msg_support: 'msg_support',
+  curator_groups: 'curator_groups',
 }
 
 // Owner ruling 2026-08-16 (PROMPT №746): a stub row -- no comms category yet
@@ -201,6 +211,7 @@ const toggles = reactive<Record<ToggleKey, boolean>>({
   new_feedback: true,
   msg_participants: true,
   msg_support: true,
+  curator_groups: true,
   ai_summary: true,
   monthly_report: false,
 })

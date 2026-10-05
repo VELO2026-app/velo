@@ -37,7 +37,7 @@
         <div class="master-profile__menu-title">Аккаунт</div>
         <div class="master-profile__menu-list">
           <VMenuRow label="Редактировать профиль" @click="onEditProfile">
-            <template #icon><IconEdit :size="20" /></template>
+            <template #icon><IconPen :size="20" /></template>
           </VMenuRow>
           <VMenuRow label="Сообщения" :badge="messagesCount || undefined" @click="onMessages">
             <template #icon><IconMessages :size="20" /></template>
@@ -58,7 +58,7 @@
           <VMenuRow label="Уведомления" @click="onNotifications">
             <template #icon><IconBell :size="20" /></template>
           </VMenuRow>
-          <VMenuRow label="Язык/Часовой пояс" @click="onLanguageTimezone">
+          <VMenuRow label="Часовой пояс" @click="onTimezoneSettings">
             <template #icon><IconGlobe :size="20" /></template>
           </VMenuRow>
         </div>
@@ -115,7 +115,7 @@ import { useRouter } from 'vue-router'
 import { VAvatar, VCard, VMenuRow, VModal } from '@/components/ui'
 import RoleSwitchSection from '@/components/shared/RoleSwitchSection.vue'
 import {
-  IconEdit,
+  IconPen,
   IconMessages,
   IconPromo,
   IconFinance,
@@ -175,31 +175,31 @@ async function loadMessagesCount(): Promise<void> {
 
 // -- Menu actions --
 function onEditProfile(): void {
-  router.push({ name: 'master-edit-profile' })
+  void router.push({ name: 'master-edit-profile' })
 }
 function onMessages(): void {
-  router.push({ name: 'master-messages' })
+  void router.push({ name: 'master-messages' })
 }
 function onPromocodes(): void {
-  router.push({ name: 'master-promocodes' })
+  void router.push({ name: 'master-promocodes' })
 }
 function onWithdraw(): void {
-  router.push({ name: 'master-finance' })
+  void router.push({ name: 'master-finance' })
 }
 function onNotifications(): void {
-  router.push({ name: 'master-notifications' })
+  void router.push({ name: 'master-notifications' })
 }
-function onLanguageTimezone(): void {
-  router.push({ name: 'master-language-timezone' })
+function onTimezoneSettings(): void {
+  void router.push({ name: 'master-timezone' })
 }
 function onSupport(): void {
-  router.push({ name: 'master-support' })
+  void router.push({ name: 'master-support' })
 }
 const showLogoutModal = ref(false)
 
 async function onLogout(): Promise<void> {
   await authStore.logout()
-  router.replace({ path: '/' })
+  void router.replace({ path: '/' })
 }
 
 // -- Lifecycle: load the master profile (display_name) for verified masters. --

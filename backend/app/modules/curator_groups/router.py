@@ -13,6 +13,7 @@
 #   DELETE /api/v1/masters/me/curator-groups/{group_id}
 #   GET    /api/v1/masters/me/curator-groups/{group_id}/members
 #   DELETE /api/v1/masters/me/curator-groups/{group_id}/members/{user_id}
+#   GET    /api/v1/masters/me/curator-groups/{group_id}/analytics
 #
 # AUTH: get_current_master everywhere. That single dependency covers three
 # of this feature's states at once -- no master profile, an unverified one,
@@ -42,9 +43,18 @@ from app.modules.auth.dependencies import (
     get_current_user,
     get_current_user_write,
 )
+from app.modules.curator_groups.analytics_service import (
+    get_curator_group_analytics,
+)
+from app.modules.curator_groups.feedback_service import (
+    list_curator_group_checkins,
+    list_curator_group_reviews,
+)
 from app.modules.curator_groups.schemas import (
-    CreateCuratorGroupInviteRequest,
     CreateCuratorGroupRequest,
+    CuratorGroupAnalyticsResponse,
+    CuratorGroupBlockedItem,
+    CuratorGroupCheckinItem,
     CuratorGroupDeletePreviewResponse,
     CuratorGroupEventActor,
     CuratorGroupEventItem,
@@ -53,29 +63,41 @@ from app.modules.curator_groups.schemas import (
     CuratorGroupLeavePreviewResponse,
     CuratorGroupListResponse,
     CuratorGroupMasterItem,
+    CuratorGroupMasterOfferRequest,
     CuratorGroupMemberItem,
     CuratorGroupMineItem,
     CuratorGroupMineResponse,
     CuratorGroupPageResponse,
     CuratorGroupRemovePreviewResponse,
     CuratorGroupResponse,
+    CuratorGroupReviewItem,
+    CuratorGroupRosterItem,
     CuratorGroupTransferRef,
-    CuratorMemberKindLiteral,
     JoinCuratorGroupRequest,
     JoinCuratorGroupResponse,
     OfferCuratorGroupTransferRequest,
+    PaginatedCuratorGroupBlocksResponse,
+    PaginatedCuratorGroupCheckinsResponse,
     PaginatedCuratorGroupEventsResponse,
     PaginatedCuratorGroupMastersResponse,
     PaginatedCuratorGroupMembersResponse,
+    PaginatedCuratorGroupReviewsResponse,
+    PaginatedCuratorGroupRosterResponse,
+    SchoolStudentProfileResponse,
     UpdateCuratorGroupRequest,
 )
 from app.modules.curator_groups.service import (
+    accept_curator_group_master_offer,
     accept_curator_group_transfer,
+    block_curator_group_member,
+    cancel_curator_group_master_offer,
     cancel_curator_group_transfer,
     create_curator_group,
+    decline_curator_group_master_offer,
     decline_curator_group_transfer,
     delete_curator_group,
     delete_group_preview,
+    demote_curator_group_master,
     get_curator_group_page,
     get_group_counts,
     get_group_transfer_ref,
@@ -83,22 +105,33 @@ from app.modules.curator_groups.service import (
     join_curator_group_by_token,
     leave_curator_group,
     leave_preview,
+    list_curator_group_blocks,
     list_curator_group_events,
     list_curator_group_members,
     list_curator_groups,
     list_group_masters,
     list_group_practice_master_ids,
     list_my_curator_groups,
+    list_school_roster,
     master_can_create_groups,
+    offer_curator_group_master,
     offer_curator_group_transfer,
     preview_curator_group_invite,
     remove_curator_group_member,
     remove_member_preview,
     revoke_curator_group_invite,
+    unblock_curator_group_member,
     update_curator_group,
 )
+from app.modules.curator_groups.student_profile_service import (
+    get_school_student_profile,
+)
 from app.modules.masters.models import MasterProfile
-from app.modules.practices.listing_service import list_public_practices
+from app.modules.practices.listing_service import (
+    SchoolPracticeStatus,
+    list_public_practices,
+    list_school_practices_for_curator,
+)
 from app.modules.practices.schemas import PaginatedPracticesResponse
 from app.modules.users.models import User
 
@@ -109,12 +142,21 @@ def _require_curator_groups_enabled() -> None:
     """The schools killswitch, checked ONCE PER ROUTER (GT-19).
 
     Mounted as a router-level dependency on both routers in this module,
-    which is 23 of the feature's 24 operations in two lines. The
-    alternative -- the same `if` copied into 23 endpoints -- is 23 places
-    to forget one, and a forgotten one does not fail any test that only
-    checks the endpoints somebody remembered. The 24th operation, the
-    admin list of schools, stays available deliberately; see the flag's
-    own comment in core/config.py.
+    which is EVERY operation of the feature except one, in two lines. The
+    alternative -- the same `if` copied into each endpoint -- is one place
+    per endpoint to forget, and a forgotten one does not fail any test that
+    only checks the endpoints somebody remembered. The exception, the admin
+    list of schools, stays available deliberately; see the flag's own
+    comment in core/config.py.
+
+    NO COUNT HERE ON PURPOSE (BE-35). This paragraph used to say "23 of 24"
+    and "23 places to forget". It was true when written; five endpoints
+    arrived over two deliveries, the dependency picked up all five -- the
+    mechanism worked exactly as argued -- and only the illustration went
+    stale. A number maintained by hand beside a list maintained by the
+    framework is the part that rots, so there is no longer one to maintain.
+    The tests count instead, by deriving the list:
+    tests/test_curator_groups_killswitch.py.
 
     404, NOT 503, AND NO MACHINE CODE. A 503 announces that the feature
     exists and is broken, which invites retries during the incident the
@@ -331,6 +373,67 @@ async def list_curator_group_members_endpoint(
 
 
 @router.get(
+    "/me/curator-groups/{group_id}/roster",
+    response_model=PaginatedCuratorGroupRosterResponse,
+)
+async def list_school_roster_endpoint(
+    group_id: UUID,
+    kind: Literal["master", "student"] | None = Query(default=None),
+    search: str | None = Query(default=None, min_length=1, max_length=100),
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_reader),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> PaginatedCuratorGroupRosterResponse:
+    """The school's roster for ITS MASTERS (BE-76): everyone in the school,
+    name, avatar, role -- without the curator's working fields and without
+    the masters who are suspended right now.
+
+    The same filters, search, paging and order as the curator's /members
+    (one helper). A master outside the school, another school's curator, a
+    master who is a student here and a school whose curator is suspended
+    all get the same 404 (P-08); a non-master is a 403 from the dependency.
+    """
+    user, _profile = master_tuple
+    items, total = await list_school_roster(
+        user.id,
+        group_id,
+        session,
+        kind=kind,
+        search=search,
+        limit=limit,
+        offset=offset,
+    )
+    return PaginatedCuratorGroupRosterResponse(
+        items=[CuratorGroupRosterItem(**item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
+    "/me/curator-groups/{group_id}/practices/manage",
+    response_model=PaginatedPracticesResponse,
+)
+async def list_curator_group_manage_practices_endpoint(
+    group_id: UUID,
+    status: SchoolPracticeStatus | None = Query(default=None),
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_reader),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> PaginatedPracticesResponse:
+    """The school's practices for its curator to manage, drafts included
+    (BE-63) -- see list_school_practices_for_curator. 404 for a school
+    that is not the caller's."""
+    user, _profile = master_tuple
+    return await list_school_practices_for_curator(
+        session, user, group_id, status=status, limit=limit, offset=offset,
+    )
+
+
+@router.get(
     "/me/curator-groups/{group_id}/journal",
     response_model=PaginatedCuratorGroupEventsResponse,
 )
@@ -377,6 +480,156 @@ async def list_curator_group_events_endpoint(
     )
 
 
+# ===========================================================================
+# School feedback (BE-24 / GT-28)
+#
+# Two feeds over the school's practices -- the ones its masters ran,
+# including the ones this curator did not. THE CURATOR ONLY: both resolve
+# ownership in the service and answer 404 to everybody else, the journal's
+# rule and for the journal's reason.
+#
+# The killswitch is not mentioned in either handler because it is already
+# on the router (_require_curator_groups_enabled) -- with the flag off both
+# paths are 404 before authentication is even attempted.
+# ===========================================================================
+
+
+@router.get(
+    "/me/curator-groups/{group_id}/checkins",
+    response_model=PaginatedCuratorGroupCheckinsResponse,
+)
+async def list_curator_group_checkins_endpoint(
+    group_id: UUID,
+    practice_id: UUID | None = Query(default=None),
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_reader),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> PaginatedCuratorGroupCheckinsResponse:
+    """PRE check-ins across my school's practices, newest first.
+
+    The page size is bounded like every other list in this router, and the
+    query is bounded by it: a school with tens of practices and thousands
+    of participants costs the same two statements as an empty one.
+
+    `practice_id` narrows to one practice and grants nothing -- a practice
+    outside the school simply matches no rows.
+    """
+    user, _profile = master_tuple
+    items, total = await list_curator_group_checkins(
+        user.id,
+        group_id,
+        session,
+        practice_id=practice_id,
+        limit=limit,
+        offset=offset,
+    )
+    return PaginatedCuratorGroupCheckinsResponse(
+        items=[CuratorGroupCheckinItem(**item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
+    "/me/curator-groups/{group_id}/reviews",
+    response_model=PaginatedCuratorGroupReviewsResponse,
+)
+async def list_curator_group_reviews_endpoint(
+    group_id: UUID,
+    practice_id: UUID | None = Query(default=None),
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_reader),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> PaginatedCuratorGroupReviewsResponse:
+    """Named reviews across my school's practices, newest first.
+
+    Separate from /checkins rather than one feed with a kind field: the two
+    rows share no score, and a union type is a cost the frontend would pay
+    on every read to save one route here.
+    """
+    user, _profile = master_tuple
+    items, total = await list_curator_group_reviews(
+        user.id,
+        group_id,
+        session,
+        practice_id=practice_id,
+        limit=limit,
+        offset=offset,
+    )
+    return PaginatedCuratorGroupReviewsResponse(
+        items=[CuratorGroupReviewItem(**item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
+    "/me/curator-groups/{group_id}/analytics",
+    response_model=CuratorGroupAnalyticsResponse,
+)
+async def get_curator_group_analytics_endpoint(
+    group_id: UUID,
+    period: Literal["week", "month", "quarter"] = Query(default="week"),
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_reader),
+) -> CuratorGroupAnalyticsResponse:
+    """The school's analytics aggregate (tz-curator.md §6).
+
+    One read for the whole screen. `period` scopes the engagement group
+    (conducted / came / came again) to the curator's own calendar -- the
+    same Literal + bounds the master dashboard's stats endpoint uses; an
+    unknown value is a 422 from FastAPI. The rest of the payload (the
+    bucketed distributions with the feeds' exact predicates, the top
+    completed practices) stays all-time. Read-only, page-size independent:
+    the cost is a fixed handful of grouped statements, not a scan the
+    client paginates.
+    """
+    user, _profile = master_tuple
+    data = await get_curator_group_analytics(user, group_id, session, period)
+    return CuratorGroupAnalyticsResponse(**data)
+
+
+@router.get(
+    "/me/curator-groups/{group_id}/students/{user_id}",
+    response_model=SchoolStudentProfileResponse,
+)
+async def get_school_student_profile_endpoint(
+    group_id: UUID,
+    user_id: UUID,
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_reader),
+) -> SchoolStudentProfileResponse:
+    """One student of this school, as the school sees them.
+
+    Declared beside the two BE-24 feeds rather than at the end of the
+    module: they read the same practices through the same audience clause,
+    and a reader looking for what a school knows about its people should
+    find the three together. No path ambiguity either way --
+    `/students/{user_id}` shares no prefix with `/members/{user_id}`.
+
+    THE KILLSWITCH IS NOT MENTIONED HERE BECAUSE IT IS ALREADY ON THE
+    ROUTER. BE-43 added early returns inside two service functions, and
+    the reason was that both were reached from OUTSIDE the two school
+    routers; this endpoint is on one of them, so
+    _require_curator_groups_enabled answers first and a second check would
+    be a second place to keep true.
+
+    Curator and every master of the school, same content for both (owner
+    ruling, 24 September). Everyone else meets the same 404 -- except a
+    master whose own verification was revoked, who is refused by
+    get_current_master with a 403 before this runs.
+    """
+    user, _profile = master_tuple
+    profile = await get_school_student_profile(
+        user.id, group_id, user_id, session,
+    )
+    return SchoolStudentProfileResponse(**profile)
+
+
 @router.delete(
     "/me/curator-groups/{group_id}/members/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -400,16 +653,125 @@ async def remove_curator_group_member_endpoint(
 
 
 @router.post(
+    "/me/curator-groups/{group_id}/members/{user_id}/block",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def block_curator_group_member_endpoint(
+    group_id: UUID,
+    user_id: UUID,
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Block a member of this school (BE-79): 204; already blocked -> 204
+    with nothing written; the curator -> 409 cannot_block_curator; neither a
+    member nor blocked, or a school that is not yours -> 404."""
+    user, _profile = master_tuple
+    await block_curator_group_member(
+        user.id, group_id, user_id, session, actor=user,
+    )
+    await session.flush()
+    logger.info(
+        "curator_group_member_blocked",
+        group_id=str(group_id),
+        user_id=str(user_id),
+        curator_id=str(user.id),
+    )
+
+
+@router.delete(
+    "/me/curator-groups/{group_id}/blocks/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def unblock_curator_group_member_endpoint(
+    group_id: UUID,
+    user_id: UUID,
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Lift a block (BE-79): the membership comes back as it was. 404 for
+    somebody not blocked here, or a school that is not yours."""
+    user, _profile = master_tuple
+    await unblock_curator_group_member(
+        user.id, group_id, user_id, session, actor=user,
+    )
+    await session.flush()
+    logger.info(
+        "curator_group_member_unblocked",
+        group_id=str(group_id),
+        user_id=str(user_id),
+        curator_id=str(user.id),
+    )
+
+
+@router.get(
+    "/me/curator-groups/{group_id}/blocks",
+    response_model=PaginatedCuratorGroupBlocksResponse,
+)
+async def list_curator_group_blocks_endpoint(
+    group_id: UUID,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_reader),
+) -> PaginatedCuratorGroupBlocksResponse:
+    """The curator's "Блок" tab (BE-79), newest block first."""
+    user, _profile = master_tuple
+    items, total = await list_curator_group_blocks(
+        user.id, group_id, session, limit=limit, offset=offset,
+    )
+    return PaginatedCuratorGroupBlocksResponse(
+        items=[CuratorGroupBlockedItem(**item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.post(
+    "/me/curator-groups/{group_id}/members/{user_id}/demote",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def demote_curator_group_master_endpoint(
+    group_id: UUID,
+    user_id: UUID,
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Make a master of this school a student of it again (BE-59 B1).
+
+    No consent asked; the person stays a member and is notified. Idempotent:
+    somebody who is not a master of this school -- already a student, or not
+    a member -- is a 204 with nothing written. 404 only for a school that is
+    not yours (P-08).
+    """
+    user, _profile = master_tuple
+    await demote_curator_group_master(
+        user.id, group_id, user_id, session, actor=user,
+    )
+    await session.flush()
+    logger.info(
+        "curator_group_master_demoted",
+        group_id=str(group_id),
+        user_id=str(user_id),
+        curator_id=str(user.id),
+    )
+
+
+@router.post(
     "/me/curator-groups/{group_id}/invites",
     response_model=CuratorGroupInviteResponse,
 )
 async def create_curator_group_invite_endpoint(
     group_id: UUID,
-    body: CreateCuratorGroupInviteRequest,
     master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
     session: AsyncSession = Depends(get_db_session),
 ) -> CuratorGroupInviteResponse:
-    """Get (or mint) this group's reusable link for one kind.
+    """Get (or mint) this group's reusable link. Everyone joins as a student.
+
+    IT USED TO TAKE A BODY, {kind}, and a school had two links -- the master
+    one promoting a student on join. GT-27 cancelled that path, so the body
+    is gone rather than accepted and ignored: an endpoint that swallows a
+    field it no longer honours is the second way in, still open.
 
     Repeat calls return the SAME url -- the curator expects the link they
     already shared to keep working. Rotation is revoke + create, on purpose.
@@ -419,45 +781,116 @@ async def create_curator_group_invite_endpoint(
     """
     user, _profile = master_tuple
     invite = await get_or_create_curator_group_invite(
-        user.id, group_id, body.kind, session, actor=user,
+        user.id, group_id, session, actor=user,
     )
     await session.flush()
     logger.info(
         "curator_group_invite_issued",
         group_id=str(group_id),
-        kind=body.kind,
         curator_id=str(user.id),
     )
     return CuratorGroupInviteResponse(**invite)
 
 
 @router.delete(
-    "/me/curator-groups/{group_id}/invites/{kind}",
+    "/me/curator-groups/{group_id}/invites",
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def revoke_curator_group_invite_endpoint(
     group_id: UUID,
-    kind: CuratorMemberKindLiteral,
     master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
     session: AsyncSession = Depends(get_db_session),
 ) -> None:
-    """Revoke one kind of link. The other kind keeps working.
+    """Revoke the group's link.
+
+    THE PATH USED TO END IN /{kind} and revoked one of two links, leaving
+    the other working. GT-27 left one link, so there is nothing to choose
+    between and no path parameter to choose it with. The P-11 note that
+    used to live here -- `kind` as a Literal so an unknown value is a 422
+    rather than a 500 -- went with the parameter.
 
     Idempotent. Afterwards the old token resolves nowhere -- preview and
     join both read the same row, so there is no revocation list to keep.
-
-    P-11: `kind` is a Literal in the path, so an unknown value is a 422 from
-    FastAPI rather than a hand-rolled Enum() lookup raising into a 500.
     """
     user, _profile = master_tuple
     await revoke_curator_group_invite(
-        user.id, group_id, kind, session, actor=user,
+        user.id, group_id, session, actor=user,
     )
     await session.flush()
     logger.info(
         "curator_group_invite_revoked",
         group_id=str(group_id),
-        kind=kind,
+        curator_id=str(user.id),
+    )
+
+
+@router.post(
+    "/me/curator-groups/{group_id}/master-offers",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def offer_curator_group_master_endpoint(
+    group_id: UUID,
+    body: CuratorGroupMasterOfferRequest,
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Offer a member of this school the role of its master (GT-27).
+
+    THE APPOINTMENT DOES NOT TAKE EFFECT HERE. It creates an offer; the
+    roster changes only when the appointee accepts. Appointing somebody who
+    never answers leaves the school exactly as it was.
+
+    Idempotent per candidate: pressing the button twice on one person is
+    the curator re-sending, not a conflict, and produces neither a second
+    journal line nor a second notification. Several appointments may be
+    outstanding at once -- unlike a transfer, which is one per school.
+
+    A candidate who is not a verified master is NOT refused (BE-59): the
+    offer is kept, awaiting their verification, and they are asked to get
+    verified; the admin's verification then asks them to answer, and a
+    rejection closes the offer and tells the curator.
+
+    Error codes: 404 not_found (not your school, or the candidate is not in
+    it -- one answer, P-08); 409 already_master.
+    """
+    user, _profile = master_tuple
+    await offer_curator_group_master(
+        user.id, group_id, body.to_user_id, session, actor=user,
+    )
+    await session.flush()
+    logger.info(
+        "curator_group_master_offered",
+        group_id=str(group_id),
+        to_user_id=str(body.to_user_id),
+        curator_id=str(user.id),
+    )
+
+
+@router.delete(
+    "/me/curator-groups/{group_id}/master-offers/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def cancel_curator_group_master_offer_endpoint(
+    group_id: UUID,
+    user_id: UUID,
+    master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Withdraw an appointment (BE-59), in either state.
+
+    Idempotent: no offer to this person here is still 204. The candidate is
+    not notified; the journal records master_offer_cancelled. 404 only for
+    a school that is not yours (P-08).
+    """
+    user, _profile = master_tuple
+    await cancel_curator_group_master_offer(
+        user.id, group_id, user_id, session, actor=user,
+    )
+    await session.flush()
+    logger.info(
+        "curator_group_master_offer_cancelled",
+        group_id=str(group_id),
+        to_user_id=str(user_id),
         curator_id=str(user.id),
     )
 
@@ -703,6 +1136,52 @@ async def decline_curator_group_transfer_endpoint(
     await session.flush()
 
 
+@member_router.post(
+    "/{group_id}/master-offer/accept",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def accept_curator_group_master_offer_endpoint(
+    group_id: UUID,
+    user: User = Depends(get_current_user_write),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Consent to becoming a master of this school (GT-27).
+
+    This is where the appointment takes effect: member.kind becomes master
+    and member_promoted goes into the journal, by the fact of consent.
+
+    Error codes: 404 master_offer_not_found (no offer for you here, the
+    school is dark, or it is gone -- one answer); 403 master_required, when
+    your master verification lapsed since the offer. The offer SURVIVES
+    that refusal: re-verify and it is still there to accept.
+    """
+    await accept_curator_group_master_offer(
+        group_id, user.id, session, actor=user,
+    )
+    await session.flush()
+
+
+@member_router.post(
+    "/{group_id}/master-offer/decline",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def decline_curator_group_master_offer_endpoint(
+    group_id: UUID,
+    user: User = Depends(get_current_user_write),
+    session: AsyncSession = Depends(get_db_session),
+) -> None:
+    """Refuse the appointment. Idempotent, and 204 even if it was not yours.
+
+    Same asymmetry as the transfer pair: accept answers 404 to a
+    non-addressee because it changes the roster, decline answers 204
+    because it changes nothing and so reveals nothing.
+    """
+    await decline_curator_group_master_offer(
+        group_id, user.id, session, actor=user,
+    )
+    await session.flush()
+
+
 @member_router.get(
     "/{group_id}/leave-preview",
     response_model=CuratorGroupLeavePreviewResponse,
@@ -778,9 +1257,18 @@ async def list_group_practices_endpoint(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> PaginatedPracticesResponse:
-    """Upcoming practices by the school's masters.
+    """Upcoming practices that BELONG TO the school, by its present masters.
 
-    This is the PUBLIC FEED narrowed to a set of masters, not a new query:
+    BE-74: two narrowings, both required. The practice belongs to this
+    school (Practice.curator_group_id) -- so a master's public practice
+    from the general section and his practice of another school stay off
+    this page -- and its master is still in the school (curator + visible
+    masters, the roster's set) -- so a master who left, was demoted or lost
+    verification takes his practices off the page with him. Either audience
+    of a school practice appears: a public one to every viewer of the page,
+    one for the school's students to those of them who may see it.
+
+    This is the PUBLIC FEED narrowed, not a new query:
     the status/time gate, the audience clause with its owner-bypass, the
     block clause and the per-user is_booked/is_paid flags all come from
     list_public_practices unchanged. A master who blocked this viewer
@@ -789,7 +1277,12 @@ async def list_group_practices_endpoint(
     """
     master_ids = await list_group_practice_master_ids(group_id, user.id, session)
     return await list_public_practices(
-        session, user=user, limit=limit, offset=offset, master_ids=master_ids,
+        session,
+        user=user,
+        limit=limit,
+        offset=offset,
+        master_ids=master_ids,
+        curator_group_id=group_id,
     )
 
 

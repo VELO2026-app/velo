@@ -72,7 +72,10 @@ from app.modules.bookings.service import (
 )
 from app.modules.masters.service import get_master_display_name
 from app.modules.payments.purchase import create_purchase_for_booking
-from app.modules.practices.audience_service import assert_viewer_can_access_practice
+from app.modules.practices.audience_service import (
+    assert_viewer_can_access_practice,
+    lock_school_member_key_share,
+)
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.users.models import User
 from app.modules.waitlist.models import (
@@ -118,6 +121,10 @@ async def join_waitlist(
     - No active waitlist entry (waiting/notified).
     - Rejoinable entry (left/declined/expired) -> re-join with new position.
     """
+    # K2 (BE-79): the viewer's member row in the practice's school, FOR
+    # KEY SHARE, before the practice -- see lock_school_member_key_share.
+    await lock_school_member_key_share(user.id, practice_id, session)
+
     # Lock practice (same strategy as create_booking).
     stmt = (
         select(Practice)
@@ -323,6 +330,11 @@ async def confirm_waitlist(
     if practice_id is None:
         raise NotFoundError("Waitlist entry not found")
 
+    # K2 (BE-79): this path creates a booking too -- the member row first,
+    # as in create_booking (lock_school_member_key_share). The peek's
+    # practice_id is the entry's for good: no writer moves an entry.
+    await lock_school_member_key_share(user.id, practice_id, session)
+
     practice_stmt = (
         select(Practice)
         .where(Practice.id == practice_id)
@@ -370,6 +382,12 @@ async def confirm_waitlist(
         from app.core.events.notify import emit_notification
         await emit_notification(
             session,
+            # A waitlist row is REUSED (re-join, spot taken -> back to
+            # WAITING), so the entry id alone is not the fact: one HOLD
+            # is, and its deadline identifies it.
+            idempotency_key=(
+                f"waitlist-expired:{entry.id}:{entry.expires_at.isoformat()}"
+            ),
             type="waitlist.expired",
             target_type="user",
             target_value=str(entry.user_id),
@@ -511,15 +529,17 @@ async def confirm_waitlist(
     # reminder series in the same transaction (dictionary §2, ID-2).
     from app.core.events.notify import emit_notification
     from app.core.events.reminders import (
+        BOOKED_ACT,
         format_event_time,
         schedule_booking_reminders,
     )
     master_name = await get_master_display_name(
         practice.master_id, session,
     )
-    when_text = format_event_time(practice.scheduled_at)
+    when_text = format_event_time(practice.scheduled_at, user.timezone)
     await emit_notification(
         session,
+        idempotency_key=f"booking-confirmed:{booking.id}",
         type="booking.confirmed",
         target_type="user",
         target_value=str(user.id),
@@ -544,6 +564,8 @@ async def confirm_waitlist(
         practice_title=practice.title,
         master_name=master_name,
         scheduled_at=practice.scheduled_at,
+        act=BOOKED_ACT,
+        timezone=user.timezone,
     )
 
     # Update cached participant count (Frontend Backlog A-03).
@@ -610,7 +632,7 @@ async def process_waitlist(
     # waitlist.spot_available -> the head of the queue; velo picks the
     # holder, ID-4). Lazy import mirrors the old pattern.
     from app.core.events.notify import emit_notification
-    from app.core.events.reminders import format_event_time
+    from app.core.events.reminders import format_event_time, user_timezones
 
     # Load practice for template variables.
     practice = await session.get(Practice, practice_id)
@@ -618,10 +640,20 @@ async def process_waitlist(
         practice.master_id, session,
     )
 
-    when_text = format_event_time(practice.scheduled_at)
-    expires_text = format_event_time(entry.expires_at)
+    # BE-102 notification time: the reader is the student -> their zone.
+    reader_tz = (await user_timezones(session, [entry.user_id])).get(
+        str(entry.user_id), "UTC",
+    )
+    when_text = format_event_time(practice.scheduled_at, reader_tz)
+    expires_text = format_event_time(entry.expires_at, reader_tz)
     await emit_notification(
         session,
+        # One HOLD, not one entry: the row is reused across holds (re-join,
+        # spot taken -> back to WAITING), and each hold's deadline is set
+        # just above.
+        idempotency_key=(
+            f"waitlist-spot:{entry.id}:{entry.expires_at.isoformat()}"
+        ),
         type="waitlist.spot_available",
         target_type="user",
         target_value=str(entry.user_id),
@@ -640,7 +672,6 @@ async def process_waitlist(
             "master_name": master_name,
             "expires_at": expires_text,
         },
-        priority=2,
         expiry_at=entry.expires_at,
     )
 

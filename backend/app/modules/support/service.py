@@ -39,7 +39,12 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.comms import comms_request
+from app.core.comms import (
+    comms_request,
+    message_key,
+    new_request_key,
+    read_comms_page,
+)
 from app.core.exceptions import NotFoundError
 from app.modules.support.models import SupportThread
 from app.modules.users.models import User
@@ -104,6 +109,19 @@ async def open_support_thread(
     """
     section_id = await get_support_section_id()
 
+    # KEY PER REQUEST, NEVER A STABLE ONE (comms 3.0.0 requires the header
+    # here). A replay of a key answers `"created": True` whatever the
+    # thread's age -- comms' create_thread, the flag belongs to the
+    # creating request -- so a key derived from the pair would make every
+    # later open of the same conversation a "conversation started" and
+    # signal a new support thread again. The pair itself is deduplicated by comms
+    # (create-or-get), which is what makes a fresh key per request safe.
+    #
+    # TWO KEY RULES IN THIS MODULE, ON PURPOSE: opening takes a key per
+    # request (above), a message takes the CLIENT's key when it sends one
+    # (send_support_message). They answer different questions -- `created`
+    # must stay truthful, and "one intent, one message" lives in the
+    # client. Making them one rule breaks one of the two.
     payload = await comms_request(
         "POST",
         "/api/v1/threads",
@@ -114,6 +132,7 @@ async def open_support_thread(
             "kind": "dm",
             "title": topic,
         },
+        idempotency_key=new_request_key("support-open"),
     )
     comms_thread_id = UUID(str(payload["id"]))
     created = bool(payload.get("created"))
@@ -172,13 +191,20 @@ async def open_support_thread(
     # creation, not per message" -- a plain re-open of an existing thread
     # never re-notifies.
     if created:
-        await _emit_support_thread_created(session, user, topic=topic)
+        await _emit_support_thread_created(
+            session, user, thread_id=comms_thread_id, topic=topic,
+        )
 
     return {k: v for k, v in payload.items() if k != "created"}
 
 
 async def send_support_message(
-    session: AsyncSession, *, user: User, topic: str | None, body: str,
+    session: AsyncSession,
+    *,
+    user: User,
+    topic: str | None,
+    body: str,
+    idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     """Deliver one message into the caller's OWN support thread.
 
@@ -209,6 +235,7 @@ async def send_support_message(
         "POST",
         f"/api/v1/threads/{pointer.comms_thread_id}/messages",
         json={"sender": str(user.id), "body": text},
+        idempotency_key=message_key(user.id, idempotency_key),
     )
 
 
@@ -248,9 +275,13 @@ async def list_admin_support_threads(
         params["cursor"] = cursor
 
     payload = await comms_request("GET", "/api/v1/threads", params=params)
-    threads = payload.get("threads") if isinstance(payload, dict) else None
-    if not isinstance(threads, list):
-        return payload
+    # is_supervisor=True above means this page is EVERY thread on the
+    # installation -- private DMs included -- so an unknown shape must not
+    # be forwarded: it used to be (`return payload` when a `threads` key
+    # was missing, and comms 3.0.0 names it `items`), and the admin list
+    # carried every conversation of every master. read_comms_page refuses
+    # instead (502), logging the shape and never the rows.
+    threads, next_cursor = read_comms_page(payload, path="/api/v1/threads")
 
     # SECTION-only scoping (unchanged from №711): comms' list has no
     # operator_kind filter, so the DM/section split happens on the page
@@ -281,7 +312,9 @@ async def list_admin_support_threads(
     for thread in section_threads:
         thread["opener"] = _peer_payload(users.get(_client_uuid(thread)))
 
-    return {**payload, "threads": section_threads}
+    # Built, not spread: `{**payload, ...}` would carry comms' own `items`
+    # -- the unfiltered page -- out next to the filtered one.
+    return {"threads": section_threads, "next_cursor": next_cursor}
 
 
 async def _require_support_thread(
@@ -327,13 +360,25 @@ async def get_admin_support_messages(
     params: dict[str, Any] = {"limit": limit}
     if cursor is not None:
         params["cursor"] = cursor
-    return await comms_request(
+    payload = await comms_request(
         "GET", f"/api/v1/threads/{thread_id}/messages", params=params,
     )
+    # READ, not forwarded -- see chats/router.py list_messages: comms pages
+    # as {"items", ...}, the frontend reads {"messages", ...}
+    # (frontend/src/api/support.ts); an unknown shape is a 502.
+    messages, next_cursor = read_comms_page(
+        payload, path="/api/v1/threads/{thread_id}/messages",
+    )
+    return {"messages": messages, "next_cursor": next_cursor}
 
 
 async def send_admin_support_message(
-    session: AsyncSession, *, admin: User, thread_id: UUID, body: str,
+    session: AsyncSession,
+    *,
+    admin: User,
+    thread_id: UUID,
+    body: str,
+    idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     """Reply as this admin. Unlike reading, WRITE-authz is not ours to
     grant: comms' can_post_message admits only the thread's client or its
@@ -349,6 +394,7 @@ async def send_admin_support_message(
         f"/api/v1/threads/{thread_id}/messages",
         json={"sender": str(admin.id), "body": body},
         forward_403=True,
+        idempotency_key=message_key(admin.id, idempotency_key),
     )
 
 
@@ -357,8 +403,14 @@ async def claim_admin_support_thread(
 ) -> dict[str, Any]:
     """Claim an unclaimed thread -- the act that grants the right to
     reply (comms' can_post_message admits the assignee; claiming is how
-    an admin becomes it). Returns comms' own {claimed, thread} verbatim:
-    `claimed=False` means someone else won the race, not an error.
+    an admin becomes it). Returns comms' own {claimed, thread} verbatim.
+
+    comms 3.0.0 claims IDEMPOTENTLY BY OUTCOME (its messaging.py claim):
+    `claimed` is always true and means "the thread is yours now" -- a
+    repeated claim of your own thread is true again, not an error. A
+    thread held by ANOTHER operator is a 409, class `conflict`, which
+    core/comms.py forwards with comms' message as the detail. There is no
+    `claimed: false` any more; nothing here branches on one.
     """
     await _require_support_thread(session, thread_id)
     return await comms_request(
@@ -369,7 +421,11 @@ async def claim_admin_support_thread(
 
 
 async def _emit_support_thread_created(
-    session: AsyncSession, user: User, *, topic: str | None = None,
+    session: AsyncSession,
+    user: User,
+    *,
+    thread_id: UUID,
+    topic: str | None = None,
 ) -> None:
     """Comms (T-38 support build): support.thread_created to group:admins.
 
@@ -383,6 +439,9 @@ async def _emit_support_thread_created(
     `topic`, when given, is the immediate half of "the topic survives into
     something an operator can see" (PROMPT №712) -- the notification text
     itself, before anyone has even opened the thread.
+
+    `thread_id` is the comms thread whose creation this reports -- the
+    fact the idempotency key names (one thread, one signal).
     """
     from app.core.events.notify import (
         TARGET_GROUP_ADMINS,
@@ -396,6 +455,7 @@ async def _emit_support_thread_created(
     target_type, target_value = TARGET_GROUP_ADMINS
     await emit_notification(
         session,
+        idempotency_key=f"support-thread-created:{thread_id}",
         type="support.thread_created",
         target_type=target_type,
         target_value=target_value,

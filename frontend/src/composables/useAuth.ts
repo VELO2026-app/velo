@@ -18,13 +18,15 @@
 //
 // TD-F01: Deep link handling.
 // After auth, read platform.getStartParam() and parse open_practice__{uuid}.
-// Store the target route in pendingDeepLink so roleRedirect can consume it.
-// pendingDeepLink is cleared after first use to prevent stale redirects.
+// Store the RAW start parameter in pendingStartParam; roleRedirect parses it
+// once auth knows the role (Links: a notification button carries no viewer)
+// and clears it after first use to prevent stale redirects.
 // =============================================================================
 
 import { ref, computed, watch } from 'vue'
 import { platform } from '@/platform'
 import { useAuthStore } from '@/stores/auth'
+import type { UserRole } from '@/api/types'
 
 /** Whether auth initialization has completed. */
 const isReady = ref(false)
@@ -53,7 +55,7 @@ export function beginLogout(): void {
  * Consumed once by roleRedirect, then cleared.
  * Format: { name: string, params?: Record<string, string> }
  */
-export const pendingDeepLink = ref<{ name: string; params?: Record<string, string> } | null>(null)
+export const pendingStartParam = ref<string | null>(null)
 
 /** Timeout for waitUntilReady() in milliseconds (P-3). */
 const READY_TIMEOUT_MS = 10_000
@@ -116,10 +118,13 @@ export function decodePracticeCode(code: string): string | null {
  * Returns null if the parameter is absent or unrecognized.
  *
  * Supported formats:
- *   open_practice__{uuid}       -> { name: 'practice-detail', params: { id } }
+ *   open_practice__{uuid}       -> practice-detail (master: master-practice-detail)
  *   zoom__{code}                -> { name: 'practice-live', params: { practiceId } } (T-35)
  *   master_onboarding__{token}  -> { name: 'master-invite', params: { token } }
  *   group_invite__{token}       -> { name: 'group-join', params: { token } } (P4, PROMPT №593)
+ *   school__{token}             -> { name: 'curator-group-join', params: { token } } (FE-18, Links)
+ *   <action>[__{uuid}]          -> the bell's screen for that notification verb (Links);
+ *                                  the session `role` picks the zone where bells differ
  *
  * T-35: zoom__ is ADDED, open_practice__ is NOT replaced. They are two
  * different actions, not two formats for one: open_practice__ means "show me
@@ -131,12 +136,19 @@ export function decodePracticeCode(code: string): string | null {
  */
 export function parseStartParam(
   startParam: string | null,
+  role: UserRole | null = null,
 ): { name: string; params?: Record<string, string> } | null {
   if (!startParam) return null
+  // Links (3 October): a notification button carries no notification TYPE
+  // and no viewer -- so roleRedirect parses it AFTER auth, with the session's
+  // role, and the same verb lands where the matching bell would send it.
+  const asMaster = role === 'master'
 
   const practiceMatch = startParam.match(/^open_practice__([0-9a-f-]{36})$/)
   if (practiceMatch?.[1]) {
-    return { name: 'practice-detail', params: { id: practiceMatch[1] } }
+    return asMaster
+      ? { name: 'master-practice-detail', params: { id: practiceMatch[1] } }
+      : { name: 'practice-detail', params: { id: practiceMatch[1] } }
   }
 
   // T-35: the public practice code, the same 22 characters that appear in
@@ -170,7 +182,55 @@ export function parseStartParam(
     return { name: 'group-join', params: { token: groupInviteMatch[1] } }
   }
 
-  return null
+  // Curator-group (school) invite (FE-18): a school's reusable link. ONE kind
+  // for BOTH flavours -- master and student links differ only in the token's
+  // row, and which one this is comes from the SERVER's preview
+  // (GET /curator-groups/invites/{token}), never from anything parseable
+  // here. Links (3 October): the kind is `school__` (owner) -- 8 + 43 = 51
+  // characters; the former curator_group_invite__ made 65 against
+  // Telegram's 64 and the link did not open.
+  const curatorInviteMatch = startParam.match(/^school__([A-Za-z0-9_-]{16,128})$/)
+  if (curatorInviteMatch?.[1]) {
+    return { name: 'curator-group-join', params: { token: curatorInviteMatch[1] } }
+  }
+
+  // Notification buttons (Links, 3 October): comms builds startapp as
+  // `<action>` or `<action>__<one param>`. Each verb lands where the bell
+  // sends it; where the bells differ by zone, the session role decides.
+  // open_thread is not here: msg.* types have no Telegram channel.
+  const verb = startParam.match(/^([a-z_]+?)(?:__([0-9a-f-]{36}))?$/)
+  const action = verb?.[1]
+  const id = verb?.[2]
+  switch (action) {
+    case 'open_feedback':
+      return id ? { name: 'user-feedback', params: { practiceId: id } } : null
+    case 'open_wallet': // bare (payouts, top-ups) or __<practice_id> (refunds)
+      return { name: asMaster ? 'master-finance' : 'user-topup' }
+    case 'confirm_waitlist':
+      return id ? { name: 'waitlist-confirm', params: { id } } : null
+    case 'open_curator_group':
+      return id
+        ? { name: asMaster ? 'master-curator-group' : 'user-curator-group', params: { id } }
+        : null
+    case 'open_master_offer':
+      return id ? { name: 'curator-group-master-offer', params: { id } } : null
+    case 'open_master_application': // bare (BE-104) or __<group_id> (BE-59)
+      // The Telegram button does not know the type, so a rejection lands on
+      // the apply wizard (its guard decides) -- the reason is in the text.
+      return { name: 'master-apply' }
+    case 'open_master_zone':
+      // Its role guard sends a role='user' account to /user/dashboard; the
+      // switch-offer screen is the bell's route (master-pending).
+      return id ? null : { name: 'master-dashboard' }
+    case 'open_support':
+      return id ? null : { name: asMaster ? 'master-support' : 'user-support' }
+    case 'open_master_practices':
+      return id ? null : { name: 'master-practices' }
+    default:
+      // open_notifications / open_admin_*: there is no admin bell -- the
+      // app opens as usual. Anything else is not a route.
+      return null
+  }
 }
 
 /**
@@ -180,7 +240,7 @@ export function resetAuthState(): void {
   isReady.value = false
   isStandalone.value = false
   isLoggingOut.value = false
-  pendingDeepLink.value = null
+  pendingStartParam.value = null
 }
 
 /**
@@ -251,7 +311,7 @@ async function initAuth(): Promise<void> {
   // TD-F01: read startapp param before auth so it's available regardless
   // of whether we restore a session or do a fresh login.
   const startParam = platform.getStartParam()
-  pendingDeepLink.value = parseStartParam(startParam)
+  pendingStartParam.value = startParam
 
   // Step 1: try to restore existing session (page reload).
   const restored = await authStore.restoreSession()

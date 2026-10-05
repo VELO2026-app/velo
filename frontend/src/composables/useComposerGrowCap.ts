@@ -1,3 +1,4 @@
+import { host } from '@/platform/host'
 import { computed, type ComputedRef, type Ref } from 'vue'
 import { visibleHeight } from './useViewportGeometry'
 
@@ -43,7 +44,7 @@ export function composerGrowCap(composing: boolean, viewportHeight: number): num
  *  `watch(visibleHeight, ...)` did. */
 export function useComposerGrowCap(composing: Ref<boolean>): ComputedRef<number> {
   return computed(() => {
-    const vh = visibleHeight.value || window.innerHeight
+    const vh = visibleHeight.value || host.innerHeight
     return composerGrowCap(composing.value, vh)
   })
 }

@@ -4,6 +4,7 @@
 #
 # Checkin:    user's mood before a practice session.
 # Feedback:   user's rating after a completed practice.
+# Reflection: what a user shares after a practice he missed (no_show).
 # DiaryEntry: personal journal entry, optionally linked to a practice.
 # DiaryEvent: append-only timeline journal -- the unified feed backbone.
 #
@@ -19,6 +20,12 @@
 #   Condition: booking.status == attended.
 #   Insert-once: one feedback per (practice, user), immutable. Resubmission
 #   rejected.
+#
+# REFLECTION LIFECYCLE (BE-108):
+#   No time window.
+#   Condition: booking.status == no_show at the moment of submission.
+#   Insert-once: one reflection per (practice, user), immutable. The comment
+#   may be empty (stored NULL). Resubmission rejected.
 #
 # DIARY ENTRY:
 #   No time window. User can create/edit/delete anytime.
@@ -101,6 +108,23 @@ from app.core.database import Base
 from app.core.mixins import JSONBMixin, TimestampMixin, UUIDMixin
 
 
+class ScoreZone(enum.StrEnum):
+    """The five zones of a 1..10 mood / rating score (BE-77).
+
+    Not stored -- Checkin.mood and Feedback.rating keep the raw score; the
+    zone is derived on read by diary.insights_service.score_zone, which
+    owns the boundaries. A StrEnum rather than a Literal so the OpenAPI
+    document carries ONE named component the frontend's moodScale.ts keys
+    are type-checked against. Member order is the scale order, low to high.
+    """
+
+    BAD = "bad"
+    LOW = "low"
+    NEUTRAL = "neutral"
+    GOOD = "good"
+    FIRE = "fire"
+
+
 class CheckType(enum.StrEnum):
     """Check-in timing relative to practice.
 
@@ -158,6 +182,10 @@ class DiaryEventKind(enum.StrEnum):
                    (one row per thread), written by the chat proxy from the
                    `created` flag comms returns on create-or-get. Never
                    refreshed: a conversation starts once.
+      EXTERNAL_ACTIVITY -- something the person did OUTSIDE velo and entered
+                   by hand (BE-27). Append-once: editing and deleting an
+                   external activity are out of scope, so the source is
+                   immutable in practice and the event is never refreshed.
     """
 
     BOOKING_CONFIRMED = "booking_confirmed"
@@ -170,6 +198,16 @@ class DiaryEventKind(enum.StrEnum):
     NOTE = "note"
     DREAM = "dream"
     THREAD_STARTED = "thread_started"
+    # BE-27. A NEW KIND, where BE-21 deliberately refused one -- and the
+    # difference is the event, not the appetite. BE-21 was adding a DETAIL
+    # (who cancelled) to practice_cancelled_by_master, an event that already
+    # existed and already rendered correctly, so a kind would have bought a
+    # migration, two config lists and five frontend files for a nuance. Here
+    # there is no event to attach to: nothing in the diary today comes from
+    # outside velo, and no existing kind describes it without lying about
+    # where it happened. See upsert_practice_cancelled_events in
+    # projections.py for the BE-21 side of this pair.
+    EXTERNAL_ACTIVITY = "external_activity"
 
 
 class DiaryEventSourceType(enum.StrEnum):
@@ -184,6 +222,10 @@ class DiaryEventSourceType(enum.StrEnum):
     # thread id. velo keeps its own pointer to it (chats.ChatThread) --
     # this column stays the diary's uniform "what produced me" axis.
     THREAD = "thread"
+    # BE-27: the external_activity table. Its own value rather than a reuse
+    # of DIARY_ENTRY -- source_id has to point at the row it came from, and
+    # a pointer that lands in the wrong table is worse than no pointer.
+    EXTERNAL_ACTIVITY = "external_activity"
 
 
 # ===================================================================
@@ -216,9 +258,9 @@ class Checkin(UUIDMixin, TimestampMixin, Base):
     )
 
     # -- Check-in data --
-    # mood is a 1..10 score (slider). The icon/label shown in the UI is
-    # derived from the range: 1-3 / 4-7 / 8-10. Range enforced by
-    # ck_checkin_mood below.
+    # mood is a 1..10 score (slider). The zone shown in the UI is derived
+    # on read (ScoreZone, boundaries in diary.insights_service.score_zone).
+    # Range enforced by ck_checkin_mood below.
     mood: Mapped[int] = mapped_column(
         Integer, nullable=False,
     )
@@ -288,9 +330,9 @@ class Feedback(UUIDMixin, TimestampMixin, Base):
     )
 
     # -- Feedback data --
-    # rating is a 1..10 score (slider). The icon/label shown in the UI is
-    # derived from the range: 1-3 / 4-7 / 8-10. Range enforced by
-    # ck_feedback_rating below.
+    # rating is a 1..10 score (slider). The zone shown in the UI is derived
+    # on read (ScoreZone, boundaries in diary.insights_service.score_zone).
+    # Range enforced by ck_feedback_rating below.
     rating: Mapped[int] = mapped_column(
         Integer, nullable=False,
     )
@@ -314,6 +356,60 @@ class Feedback(UUIDMixin, TimestampMixin, Base):
         return (
             f"<Feedback id={self.id} practice={self.practice_id} "
             f"user={self.user_id} rating={self.rating}>"
+        )
+
+
+# ===================================================================
+# Reflection (BE-108)
+# ===================================================================
+
+
+class Reflection(UUIDMixin, TimestampMixin, Base):
+    """What a user shares after a practice he missed (booking no_show).
+
+    One reflection per user per practice, immutable, no time window. The
+    comment may be empty: a user who does not want to answer still submits,
+    and the row is the record that he was asked and answered (owner ruling).
+    Visible to the user alone -- no master, curator or analytics reader.
+
+    The comment's length is validated in the schema, as for Feedback.
+    """
+
+    __tablename__ = "reflections"
+
+    # -- References --
+    # Declared practice -> user -> booking, the order the migration creates
+    # them in. The writer does not rely on it for its lock order: it takes
+    # the practice row first itself (diary/service.py::create_reflection).
+    practice_id: Mapped[UUID] = mapped_column(
+        ForeignKey("practices.id", ondelete="CASCADE"),
+        index=True,
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
+    booking_id: Mapped[UUID] = mapped_column(
+        ForeignKey("bookings.id", ondelete="CASCADE"),
+        index=True,
+    )
+
+    comment: Mapped[str | None] = mapped_column(
+        Text, default=None,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "practice_id",
+            "user_id",
+            name="uq_reflection_practice_user",
+        ),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<Reflection id={self.id} practice={self.practice_id} "
+            f"user={self.user_id}>"
         )
 
 
@@ -477,13 +573,13 @@ class DiaryEvent(JSONBMixin, UUIDMixin, TimestampMixin, Base):
             "'booking_confirmed', 'booking_cancelled_by_user', "
             "'practice_rescheduled', 'practice_cancelled_by_master', "
             "'practice_outcome', 'checkin', 'feedback', 'note', 'dream', "
-            "'thread_started')",
+            "'thread_started', 'external_activity')",
             name="ck_diary_event_kind",
         ),
         CheckConstraint(
             "source_type IN ("
             "'booking', 'practice', 'checkin', 'feedback', 'diary_entry', "
-            "'thread')",
+            "'thread', 'external_activity')",
             name="ck_diary_event_source_type",
         ),
         # Primary feed query: WHERE user_id=? [AND ...] ORDER BY occurred_at
@@ -508,4 +604,117 @@ class DiaryEvent(JSONBMixin, UUIDMixin, TimestampMixin, Base):
             f"<DiaryEvent id={self.id} user={self.user_id} "
             f"kind={self.kind} occurred_at={self.occurred_at} "
             f"hidden={self.is_hidden}>"
+        )
+
+
+# ===================================================================
+# External activity (BE-27)
+# ===================================================================
+
+
+class ExternalActivityType(enum.StrEnum):
+    """What the person did outside velo.
+
+    A CLOSED ENUM AND NOT A CONFIG LIST, unlike DiaryEntryType and
+    PracticePhase next door (config.py:476 -- "Validated via
+    @field_validator -- no Literal in schemas"). The divergence is
+    deliberate and buys something those two do not need.
+
+    A config list exists so a value can change without touching code. Here
+    that is a false promise: a type the frontend cannot draw is useless, so
+    a new activity always ships with a frontend change anyway. Adding one
+    through env would produce a feed card with no icon and no caption --
+    not flexibility, a quiet break. Typed as an enum, the closed set
+    crosses into generated.ts as a union, and adding a value without the
+    frontend breaks the build instead of the card.
+    """
+
+    VOCAL = "vocal"
+    NAIL_STANDING = "nail_standing"
+    MEDITATION = "meditation"
+    MASSAGE = "massage"
+    YOGA = "yoga"
+    DANCE = "dance"
+    CUSTOM = "custom"
+
+
+class ExternalActivity(UUIDMixin, TimestampMixin, Base):
+    """Something the person did outside velo, entered by hand.
+
+    The only record in the diary the person creates on their own
+    initiative about the world outside the product. Not a DiaryEntry, not
+    a Checkin: those hang off a practice or a mood prompt inside velo,
+    while this one carries its own activity vocabulary and its own feed
+    card.
+
+    IMMUTABLE IN PRACTICE, not by constraint: editing and deleting are out
+    of BE-27's scope, so nothing writes this row twice. The diary
+    projection is append-once for the same reason -- see
+    DiaryEventKind.EXTERNAL_ACTIVITY.
+
+    occurred_at IS THE EVENT'S TIME, not the entry's. A massage on Sunday
+    entered on Tuesday sorts into Sunday; created_at keeps the write time
+    separately. Stored in UTC like every other timestamp here -- the diary
+    orders by this column and period boundaries are UTC by decision
+    (core/periods.py), which BE-34 revisits.
+    """
+
+    __tablename__ = "external_activities"
+
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    activity_type: Mapped[str] = mapped_column(String(30), nullable=False)
+
+    # Set for activity_type='custom' and NULL for every other type -- the
+    # two directions are enforced together by ck_external_activity_custom
+    # below, so neither "custom with no name" nor "yoga called something"
+    # can reach the table through a non-API path.
+    custom_activity_name: Mapped[str | None] = mapped_column(
+        String(120), default=None,
+    )
+
+    mood: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    thoughts: Mapped[str | None] = mapped_column(Text, default=None)
+
+    __table_args__ = (
+        CheckConstraint(
+            "activity_type IN ("
+            "'vocal', 'nail_standing', 'meditation', 'massage', "
+            "'yoga', 'dance', 'custom')",
+            name="ck_external_activity_type",
+        ),
+        CheckConstraint(
+            "mood BETWEEN 1 AND 10",
+            name="ck_external_activity_mood",
+        ),
+        # BOTH DIRECTIONS IN ONE EXPRESSION. Written as an equality of two
+        # booleans rather than two separate constraints: the rule is that
+        # the name is present exactly when the type is custom, and split in
+        # two it reads as two independent rules that could be relaxed one
+        # at a time.
+        CheckConstraint(
+            "(activity_type = 'custom') = (custom_activity_name IS NOT NULL)",
+            name="ck_external_activity_custom",
+        ),
+        # The person's own chronology: WHERE user_id=? ORDER BY occurred_at.
+        Index(
+            "ix_external_activities_user_occurred",
+            "user_id",
+            "occurred_at",
+        ),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<ExternalActivity id={self.id} user={self.user_id} "
+            f"type={self.activity_type} occurred_at={self.occurred_at}>"
         )

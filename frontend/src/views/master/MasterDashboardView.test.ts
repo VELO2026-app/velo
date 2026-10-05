@@ -175,8 +175,9 @@ const EMPTY_NEW = `Данных пока нет ${DASH} создайте пер�
 // carries an explicit timezone (see the banner).
 // -----------------------------------------------------------------------------
 
-// T-26 (PROMPT №704): the bell badge's only input. Items are irrelevant to
-// this screen (it only reads `.unread`) -- MasterInboxView.test.ts covers items.
+// T-26 (PROMPT №704) -> FE-11 recipe (owner ask 2026-09-08): the bell dot's
+// only input. Items are irrelevant to this screen (it only reads `.unread`)
+// -- MasterInboxView.test.ts covers items.
 function notificationPage(overrides: Partial<NotificationList> = {}): NotificationList {
   return { items: [], next_cursor: null, unread: 0, ...overrides }
 }
@@ -313,6 +314,28 @@ const STATS_MONTH: MasterStatsResponse = {
   participants_count: 500,
   participants_delta_pct: null,
   income_cents: 900000,
+  income_delta_pct: null,
+}
+// FE-66: quarter joins the toggle (BE-28). Same rule as the pair above: every
+// figure differs from both week and month, so a toggle that refetches nothing
+// cannot pass. All deltas positive this time -- a growing quarter reads upward.
+const STATS_QUARTER: MasterStatsResponse = {
+  practices_count: 131,
+  practices_delta_pct: 12.5,
+  participants_count: 1421,
+  participants_delta_pct: 5.4,
+  income_cents: 3456000,
+  income_delta_pct: 7.7,
+}
+// Owner 2026-10-01: day 1 of a month/quarter -- the backend's honest calendar
+// answer when nothing has completed yet. The -100 deltas ride along to prove
+// the screen withholds the chip for a zero value instead of showing them.
+const STATS_ZERO_DAY: MasterStatsResponse = {
+  practices_count: 0,
+  practices_delta_pct: -100,
+  participants_count: 0,
+  participants_delta_pct: -100,
+  income_cents: 0,
   income_delta_pct: null,
 }
 
@@ -518,7 +541,9 @@ beforeEach(() => {
   mockBucketedPractices([P_LATER, P_SOON, P_THIRD])
   vi.mocked(mastersApi.getMasterStats)
     .mockReset()
-    .mockImplementation(async (period) => (period === 'month' ? STATS_MONTH : STATS_WEEK))
+    .mockImplementation(async (period) =>
+      period === 'quarter' ? STATS_QUARTER : period === 'month' ? STATS_MONTH : STATS_WEEK,
+    )
   vi.mocked(usersApi.updateMe)
     .mockReset()
     .mockImplementation(async () => user({ master_onboarding_completed: true }))
@@ -617,6 +642,60 @@ describe('MasterDashboardView', () => {
       // formatParticipants -> «5/20»; checkinLabel -> «3/20» (checkin_count /
       // max_participants, utils/practiceCardMeta.ts:32-36).
       expect(metaOf(blocks()[0]!)).toEqual(['5/20', '3/20'])
+    })
+
+    it('FE-53: a remount re-reads the upcoming bucket, so student-side numbers are not frozen', async () => {
+      // The repro: a student books and checks in while the master's app is
+      // open. A tab switch remounts this screen over the SAME warm Pinia, and
+      // the old mount path (lazy fetchMyPractices) skipped the network on
+      // every load after the first -- the card kept rendering the session's
+      // first snapshot forever. Asserted on the VALUES (SC-02): only a real
+      // refetch can change what the card shows.
+      mount()
+      await flush()
+      expect(metaOf(blocks()[0]!)).toEqual(['5/20', '3/20'])
+
+      app?.unmount()
+      host?.remove()
+      app = null
+      host = null
+
+      // The student acted: one more booking, one more PRE check-in.
+      mockBucketedPractices([
+        { ...P_SOON, current_participants: 6, checkin_count: 4 },
+        P_LATER,
+        P_THIRD,
+      ])
+      mount()
+      await flush()
+
+      expect(titles()).toEqual(['Утренняя практика', 'Вечерняя практика'])
+      expect(metaOf(blocks()[0]!)).toEqual(['6/20', '4/20'])
+    })
+
+    it('FE-53: a FAILED remount refresh keeps the previous cards (no zero-state wipe)', async () => {
+      // The other half of the fix: refreshInPlace, not refresh. refresh()
+      // reset()s the bucket, so a transient failure while RE-entering the
+      // dashboard would have wiped cards already on screen into «Нет
+      // предстоящих практик» + the create CTA -- worse than the stale figures
+      // it replaced. The freshness check is passive: on failure the old page
+      // stays, exactly like loadStats keeps its previous values.
+      mount()
+      await flush()
+      expect(metaOf(blocks()[0]!)).toEqual(['5/20', '3/20'])
+
+      app?.unmount()
+      host?.remove()
+      app = null
+      host = null
+
+      vi.mocked(mastersApi.getMyPractices).mockRejectedValue(new TypeError('network down'))
+      mount()
+      await flush()
+
+      expect(titles()).toEqual(['Утренняя практика', 'Вечерняя практика'])
+      expect(metaOf(blocks()[0]!)).toEqual(['5/20', '3/20'])
+      expect(createCta()).toBeUndefined()
     })
 
     it('content: omits the check-in badge entirely when the count is null', async () => {
@@ -783,15 +862,17 @@ describe('MasterDashboardView', () => {
 
   // ===========================================================================
   describe('isNewMaster -- the zero state is about PRACTICES EVER, not upcoming', () => {
-    it('a master with only past practices is NOT new: real headings, real empty card', async () => {
+    it('a master with only past practices is NOT new: the plain empty card, not the new-master one', async () => {
       // practicesTotal is 3 even though nothing is upcoming (.vue:247-249).
+      // The «Статистика»/«Моя статистика» heading is GONE from the screen
+      // (owner ask 2026-09-08) -- asserted absent for everyone below.
       vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
         page([P_COMPLETED, P_JUST_ENDED, P_CANCELLED]),
       )
       mount()
       await flush()
 
-      expect(text()).toContain('Статистика')
+      expect(text()).not.toContain('Статистика')
       expect(text()).not.toContain('Моя статистика')
       // ...and the empty card says «нет предстоящих», not «нет данных».
       expect(norm(nearestEmptyCard()?.textContent).trim()).toBe('Нет предстоящих практик')
@@ -808,12 +889,12 @@ describe('MasterDashboardView', () => {
       expect(text()).not.toContain('Создать первую практику')
     })
 
-    it('a brand-new master gets «Моя статистика» and the new-master empty card', async () => {
+    it('a brand-new master gets the new-master empty card (the heading is gone for everyone)', async () => {
       mockBucketedPractices([])
       mount()
       await flush()
 
-      expect(text()).toContain('Моя статистика')
+      expect(text()).not.toContain('Моя статистика')
       expect(norm(nearestEmptyCard()?.textContent).trim()).toBe(EMPTY_NEW)
     })
 
@@ -867,6 +948,25 @@ describe('MasterDashboardView', () => {
       expect(periodButton('Неделя')?.getAttribute('aria-selected')).toBe('false')
     })
 
+    it('«Квартал» refetches and every figure moves', async () => {
+      // FE-66: the third segment went live with the backend's quarter period
+      // (BE-28). toHaveBeenLastCalledWith is the second call-shape assertion in
+      // this file: the payload swap is invisible in the segment labels alone.
+      mount()
+      await flush()
+      expect(statValue('Практик')).toBe('12')
+
+      periodButton('Квартал')?.click()
+      await flush()
+
+      expect(mastersApi.getMasterStats).toHaveBeenLastCalledWith('quarter')
+      expect(statValue('Практик')).toBe('131')
+      expect(statValue('Участников')).toBe('1421')
+      expect(periodButton('Квартал')?.getAttribute('aria-selected')).toBe('true')
+      expect(periodButton('Месяц')?.getAttribute('aria-selected')).toBe('false')
+      expect(periodButton('Неделя')?.getAttribute('aria-selected')).toBe('false')
+    })
+
     it('a flat period reads «0%» and is toned muted, not up', async () => {
       // deltaTone (.vue:277-280) returns 'muted' for a rounded zero: a teal «0%»
       // would read as growth. STATS_MONTH.practices_delta_pct is 0.
@@ -888,6 +988,26 @@ describe('MasterDashboardView', () => {
       await flush()
 
       expect(statValue('Участников')).toBe('500')
+      expect(statDelta('Участников')).toBeNull()
+    })
+
+    it('a zero value carries no delta chip: a day-1 month reads «0», not «-100%»', async () => {
+      // Owner 2026-10-01: day 1 of a month/quarter the backend's honest
+      // calendar math is 0 against a fully elapsed previous period -> -100%,
+      // which a healthy master reads as a broken dashboard. The screen
+      // withholds the chip for a zero value (deltaChip); the -100 deltas in
+      // the fixture prove the suppression, not a missing field.
+      vi.mocked(mastersApi.getMasterStats)
+        .mockResolvedValueOnce(STATS_WEEK)
+        .mockResolvedValueOnce(STATS_ZERO_DAY)
+      mount()
+      await flush()
+      periodButton('Месяц')?.click()
+      await flush()
+
+      expect(statValue('Практик')).toBe('0')
+      expect(statDelta('Практик')).toBeNull()
+      expect(statValue('Участников')).toBe('0')
       expect(statDelta('Участников')).toBeNull()
     })
 
@@ -997,33 +1117,35 @@ describe('MasterDashboardView', () => {
   // The 'stub actions (SC-09)' describe used to live here with exactly one
   // test (the bell). T-26 (PROMPT №704) retired the stub; the block had no
   // other occupant, so it is gone rather than left holding nothing.
-  describe('the bell (T-26, PROMPT №704)', () => {
-    it('the badge shows the real unread count from the list response', async () => {
+  describe('the bell (presence dot, the user dashboard recipe -- owner ask 2026-09-08)', () => {
+    it('unread > 0 shows the DOT and never a number (FE-11 ruling, both zones)', async () => {
       vi.mocked(notificationsApi.listNotifications).mockResolvedValue(
         notificationPage({ unread: 3 }),
       )
       mount()
       await flush()
 
-      expect(host?.querySelector('.master-dashboard__bell-badge')?.textContent?.trim()).toBe('3')
+      expect(host?.querySelector('.master-dashboard__bell-dot')).not.toBeNull()
+      // never a number: the button's own text stays empty (the dot is aria-hidden)
+      expect(host?.querySelector('.master-dashboard__bell')?.textContent?.trim()).toBe('')
     })
 
-    it('unread=0 renders no badge at all (v-if, not a hidden zero)', async () => {
+    it('unread=0 renders no dot at all (v-if, not a hidden zero)', async () => {
       vi.mocked(notificationsApi.listNotifications).mockResolvedValue(
         notificationPage({ unread: 0 }),
       )
       mount()
       await flush()
 
-      expect(host?.querySelector('.master-dashboard__bell-badge')).toBeNull()
+      expect(host?.querySelector('.master-dashboard__bell-dot')).toBeNull()
     })
 
-    it('a failed fetch leaves the badge at 0 -- a courtesy, not a break', async () => {
+    it('a failed fetch leaves the dot off -- a courtesy, not a break', async () => {
       vi.mocked(notificationsApi.listNotifications).mockRejectedValue(new Error('down'))
       mount()
       await flush()
 
-      expect(host?.querySelector('.master-dashboard__bell-badge')).toBeNull()
+      expect(host?.querySelector('.master-dashboard__bell-dot')).toBeNull()
       expect(host?.querySelector('.master-dashboard__bell')).not.toBeNull() // the dashboard itself lives
     })
 

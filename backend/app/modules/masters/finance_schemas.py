@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict
 
 
 class IncomeResponse(BaseModel):
-    """GET /api/v1/masters/me/income?period=week|month.
+    """GET /api/v1/masters/me/income?period=week|month|quarter.
 
     income_cents       -- gross booked turnover for the current calendar period:
                           signed sum of title-tagged sale (+) / commission (-) /

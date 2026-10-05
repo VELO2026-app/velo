@@ -39,7 +39,7 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { VButton } from '@/components/ui'
-import VeloLogo from '@/components/ui/VeloLogo.vue'
+import { VeloLogo } from '@/components/ui'
 import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
@@ -68,7 +68,7 @@ function apply(): void {
   toast.info('Подача заявки появится в веб-версии')
 }
 function goLogin(): void {
-  router.push({ name: 'auth-login' })
+  void router.push({ name: 'auth-login' })
 }
 </script>
 

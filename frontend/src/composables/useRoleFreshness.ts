@@ -27,6 +27,7 @@
 // mechanism to be thrown away later.
 // =============================================================================
 
+import { onDocumentEvent, offDocumentEvent, isDocumentHidden } from '@/platform/dom'
 import { useAuthStore } from '@/stores/auth'
 
 /** Minimum time between navigation-triggered refetches. Chosen as "fast
@@ -85,7 +86,7 @@ function clearPoll(): void {
 }
 
 function startPollIfForeground(): void {
-  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+  if (isDocumentHidden()) return
   if (pollHandle !== null) return
   pollHandle = setInterval(() => {
     void pollTick()
@@ -101,9 +102,9 @@ function startPollIfForeground(): void {
 export function startRoleFreshnessPoll(): void {
   startPollIfForeground()
 
-  if (visibilityHandler || typeof document === 'undefined') return
+  if (visibilityHandler) return
   visibilityHandler = () => {
-    if (document.visibilityState === 'hidden') {
+    if (isDocumentHidden()) {
       clearPoll()
     } else {
       // Coming back to the foreground is itself a good moment to check --
@@ -113,7 +114,7 @@ export function startRoleFreshnessPoll(): void {
       startPollIfForeground()
     }
   }
-  document.addEventListener('visibilitychange', visibilityHandler)
+  onDocumentEvent('visibilitychange', visibilityHandler)
 }
 
 /** Stop the poll and detach nothing else -- used by logout() so a cleared
@@ -132,8 +133,8 @@ export function stopRoleFreshnessPoll(): void {
 export function __resetRoleFreshnessForTest(): void {
   lastFetchAt = 0
   clearPoll()
-  if (visibilityHandler && typeof document !== 'undefined') {
-    document.removeEventListener('visibilitychange', visibilityHandler)
+  if (visibilityHandler) {
+    offDocumentEvent('visibilitychange', visibilityHandler)
   }
   visibilityHandler = null
 }

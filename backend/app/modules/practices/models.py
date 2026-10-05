@@ -27,13 +27,13 @@ from uuid import UUID
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
     Integer,
     String,
     Text,
-    UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -112,14 +112,15 @@ class AudienceKind(enum.StrEnum):
               already uses).
     GROUPS:   members of at least one of the practice's target CUSTOM groups
               (practice_audience_group).
-    CURATOR_GROUPS: the curator and every member of at least one of the
-              practice's target SCHOOLS (practice_audience_curator_group,
-              P5/GT-11) -- AND only while the master still belongs to that
-              school. That second half has no counterpart in the three
-              kinds above and is the point of this one: a school's
-              audience is lent to a teacher, not given. A master who leaves
-              or is removed stops broadcasting to a room that is no longer
-              theirs, without anyone editing the practice.
+    CURATOR_GROUPS: the curator and every member of the school the
+              practice BELONGS TO (Practice.curator_group_id, BE-74) -- AND
+              only while the master still belongs to that school. That
+              second half has no counterpart in the three kinds above and
+              is the point of this one: a school's audience is lent to a
+              teacher, not given. A master who leaves or is removed stops
+              broadcasting to a room that is no longer theirs, without
+              anyone editing the practice. Requires an owning school: a
+              practice without one cannot carry this kind.
 
     A blocked student is EXCLUDED from all four -- see
     practices/audience_service.py, the single shared predicate every
@@ -157,6 +158,15 @@ class Practice(JSONBMixin, UUIDMixin, TimestampMixin, Base):
             text("(COALESCE(data -> 'recurrence', 'null'::jsonb))"),
             unique=True,
             postgresql_where=text("status != 'deleted'"),
+        ),
+        # BE-74: "for the school's students" needs a school. The rule that
+        # keeps this true when a practice loses its school lives in ONE
+        # place, the trigger of migration be74a1b2c3d4 (see curator_group_id
+        # below); this CHECK is the state it rules out, declared by the same
+        # name so compare_metadata has nothing to report on it.
+        CheckConstraint(
+            "audience_kind <> 'curator_groups' OR curator_group_id IS NOT NULL",
+            name="ck_practices_school_audience_has_school",
         ),
     )
 
@@ -231,6 +241,38 @@ class Practice(JSONBMixin, UUIDMixin, TimestampMixin, Base):
         server_default=AudienceKind.PUBLIC.value,
     )
 
+    # -- Owning school (BE-74) --
+    # The school this practice BELONGS TO, or NULL for a practice created
+    # outside any school. THE ONE RECORD OF THE FACT: audience_kind
+    # 'curator_groups' ("students of the school") reads this column, and
+    # there is no second table naming the school (practice_audience_
+    # curator_group is gone, BE-74 -- one practice, exactly one school,
+    # owner ruling 2026-10-01).
+    #
+    # SET ONCE, AT CREATION, NEVER REWRITTEN BY A USER. update_practice
+    # refuses any other value (practice_school_immutable); series children
+    # copy it from their root at birth. The only writer after creation is
+    # the school's own deletion, which sets it NULL (delete_curator_group,
+    # explicitly and under the module's lock order; ondelete="SET NULL" is
+    # the backstop for a row that reaches the column without passing
+    # through that function). What NULL then means (owner ruling,
+    # 2026-10-01): the practice becomes, or stays, an ordinary public
+    # practice of its master -- a 'curator_groups' one is turned 'public' by
+    # the trigger of migration be74a1b2c3d4 on whichever path clears the
+    # column, and the CHECK above forbids the other outcome.
+    #
+    # The FK is NAMED so the migration and the model carry the same name
+    # and compare_metadata has nothing to report on it.
+    curator_group_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey(
+            "curator_group.id",
+            ondelete="SET NULL",
+            name="fk_practices_curator_group_id_curator_group",
+        ),
+        default=None,
+        index=True,
+    )
+
     # -- Zoom --
     # T-35: the hand-typed zoom_link is GONE, column and all. Attendance was
     # never written for anyone who joined through it, so it was a second hole
@@ -291,9 +333,10 @@ class PracticeAudienceGroup(UUIDMixin, Base):
 
     __tablename__ = "practice_audience_group"
     __table_args__ = (
-        UniqueConstraint(
+        Index(
+            "uq_practice_audience_group_practice_group",
             "practice_id", "group_id",
-            name="uq_practice_audience_group_practice_group",
+            unique=True,
         ),
     )
 
@@ -309,51 +352,5 @@ class PracticeAudienceGroup(UUIDMixin, Base):
     def __repr__(self) -> str:
         return (
             f"<PracticeAudienceGroup practice_id={self.practice_id} "
-            f"group_id={self.group_id}>"
-        )
-
-
-class PracticeAudienceCuratorGroup(UUIDMixin, Base):
-    """One of a practice's target SCHOOLS (audience_kind='curator_groups').
-
-    Strict mirror of PracticeAudienceGroup above -- same UNIQUE, same
-    CASCADE-both-ways, same FK-by-table-name. Kept as a SEPARATE table
-    rather than a `kind` column on the existing one: the two point at
-    different tables (master_group vs curator_group), and a single table
-    with two nullable FKs would need a check constraint to say "exactly one
-    of these" and would let a row exist with neither.
-
-    group_id references curator_groups/models.py's CuratorGroup by table
-    name only (no Python import) -- the same cross-module pattern
-    PracticeAudienceGroup uses for master_group, and for the same reason: a
-    practices -> curator_groups import here would meet the audience
-    predicate's need to read curator_group and close a cycle.
-
-    ondelete=CASCADE on group_id is load-bearing, not tidiness: when a
-    school is deleted its rows go, the audience predicate finds no target
-    schools, and the practice becomes invisible to everyone but its master.
-    That is the intended fail-closed outcome, not an accident of FK setup.
-    """
-
-    __tablename__ = "practice_audience_curator_group"
-    __table_args__ = (
-        UniqueConstraint(
-            "practice_id", "group_id",
-            name="uq_practice_audience_curator_group",
-        ),
-    )
-
-    practice_id: Mapped[UUID] = mapped_column(
-        ForeignKey("practices.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    group_id: Mapped[UUID] = mapped_column(
-        ForeignKey("curator_group.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-
-    def __repr__(self) -> str:
-        return (
-            f"<PracticeAudienceCuratorGroup practice_id={self.practice_id} "
             f"group_id={self.group_id}>"
         )

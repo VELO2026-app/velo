@@ -121,7 +121,7 @@ import {
   VSegment,
   VConfirmDialog,
 } from '@/components/ui'
-import type { SegmentOption } from '@/components/ui/VSegment.vue'
+import type { SegmentOption } from '@/components/ui'
 import { IconPromo } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { getAdminPromos, deactivateAdminPromo } from '@/api/admin'

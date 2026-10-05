@@ -11,6 +11,11 @@
 #   Find attended booking -> validate completed + window -> insert (once,
 #   immutable). Same one-and-only-once rule as check-in.
 #
+# CREATE REFLECTION (BE-108):
+#   Take the practice row -> find no_show booking -> insert (once, immutable).
+#   No window, no rating, no diary projection, no master notification: the
+#   reflection is the user's alone.
+#
 # DIARY ENTRY CRUD (8.3):
 #   Create / get / update / delete / list.
 #   If practice_id provided: validate practice exists + user has booking.
@@ -41,7 +46,13 @@ from app.core.audit import record_audit
 from app.core.config import settings
 from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
 from app.modules.bookings.models import Booking, BookingStatus
-from app.modules.diary.models import DiaryEntry, DiaryEntryType, Feedback
+from app.modules.diary.models import (
+    DiaryEntry,
+    DiaryEntryType,
+    Feedback,
+    Reflection,
+)
+from app.modules.diary.notify_master import notify_master_of_feedback
 from app.modules.diary.projections import (
     hide_entry_event,
     upsert_entry_event,
@@ -189,7 +200,116 @@ async def upsert_feedback(
         practice=practice,
         master_name=master_name,
     )
+
+    # BE-33 item 6: tell the practice's master, one message per review, in
+    # the same transaction as the row.
+    await notify_master_of_feedback(
+        session, feedback=feedback, practice=practice, author=user,
+    )
     return feedback, True
+
+
+# ===================================================================
+# Create reflection (BE-108)
+# ===================================================================
+
+_REFLECTION_NOT_AVAILABLE = "reflection_not_available"
+_REFLECTION_ALREADY_SUBMITTED = "reflection_already_submitted"
+
+
+async def create_reflection(
+    user: User,
+    practice_id: UUID,
+    session: AsyncSession,
+    *,
+    comment: str | None,
+) -> Reflection:
+    """Record what a user shares after a practice he missed (once only).
+
+    Allowed while the user's booking for this practice is no_show at the
+    moment of submission; no time window. `comment` arrives already
+    normalized (blank -> None, ReflectionRequest).
+
+    Raises:
+        NotFoundError (reflection_not_available): the practice does not
+            exist, or the user holds no no_show booking for it.
+        ConflictError (reflection_already_submitted): a reflection for this
+            (practice, user) already exists.
+    """
+    # Lock order: the practice row first, FOR KEY SHARE, before the INSERT
+    # whose foreign keys take the booking row too -- the practice-then-booking
+    # order of cancel_booking (bookings/service.py), which locks a no_show
+    # booking FOR UPDATE before refusing it, and of PRACTICE ROW ORDER in
+    # practices/service.py's header. A practice that does not exist locks
+    # nothing and has no booking: the lookup below answers it with the same
+    # 404.
+    await session.execute(
+        select(Practice.id)
+        .where(Practice.id == practice_id)
+        .with_for_update(read=True, key_share=True)
+    )
+
+    # no_show is terminal (bookings/models.py STATE MACHINE): the status read
+    # here cannot change before commit, so the booking needs no lock of its
+    # own. At most one non-cancelled booking per (practice, user)
+    # (uq_booking_practice_user_active), so this finds at most one row.
+    booking = (
+        await session.execute(
+            select(Booking).where(
+                Booking.practice_id == practice_id,
+                Booking.user_id == user.id,
+                Booking.status == BookingStatus.NO_SHOW.value,
+            )
+        )
+    ).scalar_one_or_none()
+    if booking is None:
+        raise NotFoundError(
+            "No no_show booking found for this practice",
+            code=_REFLECTION_NOT_AVAILABLE,
+        )
+
+    reflection = Reflection(
+        practice_id=practice_id,
+        user_id=user.id,
+        booking_id=booking.id,
+        comment=comment,
+    )
+
+    # A repeat and a concurrent first submission take the same path: the
+    # unique constraint uq_reflection_practice_user rejects the second row.
+    # The other constraints cannot fail here -- the practice is held, the
+    # booking was just read and bookings are never deleted. try/except
+    # OUTSIDE begin_nested (ERR-05) so the savepoint rolls back cleanly and
+    # the outer transaction survives.
+    try:
+        async with session.begin_nested():
+            session.add(reflection)
+            await session.flush()
+    except IntegrityError:
+        raise ConflictError(
+            "Reflection already submitted and cannot be changed",
+            code=_REFLECTION_ALREADY_SUBMITTED,
+        ) from None
+
+    # No comment text in the audit row: the reflection is the user's alone,
+    # and audit_logs is read by admins.
+    await record_audit(
+        event="reflection_created",
+        actor_id=user.id,
+        actor_type="user",
+        target_type="reflection",
+        target_id=reflection.id,
+        data={"practice_id": str(practice_id)},
+        session=session,
+    )
+
+    logger.info(
+        "reflection_created",
+        reflection_id=str(reflection.id),
+        user_id=str(user.id),
+        practice_id=str(practice_id),
+    )
+    return reflection
 
 
 # ===================================================================

@@ -148,7 +148,7 @@
 
     <!-- ===================== WITHDRAW AMOUNT (always visible) ===================== -->
     <section class="finance-view__section">
-      <h2 class="finance-view__title">Сумма вывода</h2>
+      <h2 class="finance-view__title">Сумма вывода <span class="finance-view__req">*</span></h2>
       <p class="finance-view__hint">
         Срок зачисления: 1-3 рабочих дня. Комиссия платёжного провайдера будет удержана из суммы
         вывода.
@@ -163,10 +163,13 @@
             step="0.01"
             placeholder="0.00"
           />
-          <IconRequired :size="22" class="finance-view__amount-seal" />
         </div>
-        <p v-if="amountError" class="finance-view__error">{{ amountError }}</p>
-        <p v-else-if="amountCents > 0" class="finance-view__hint">
+        <!-- Constant-height slot (owner 2026-10-01): the message fades in
+             without growing its block. -->
+        <p class="finance-view__error" :class="{ 'finance-view__error--show': !!amountError }">
+          {{ amountError }}
+        </p>
+        <p v-if="!amountError && amountCents > 0" class="finance-view__hint">
           Минимум {{ formatMoney(MIN_WITHDRAWAL_EUROS * 100, 'EUR', 'ru', true) }} · Комиссия
           {{ formatMoney(WITHDRAWAL_FEE_EUROS * 100, 'EUR', 'ru', true) }} · Вы получите
           {{ formattedNetAmount }}
@@ -244,11 +247,16 @@ import { ref, computed, reactive, onMounted, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import { VButton, VLoader, VInput, VSelect } from '@/components/ui'
-import { IconCheck, IconClose, IconPending, IconRequired } from '@/components/icons'
+import { IconCheck, IconClose, IconPending } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import { useMasterStore } from '@/stores/master'
-import { getMyWithdrawals, createWithdrawal, updatePayoutDetails, deletePayout } from '@/api/masters'
+import {
+  getMyWithdrawals,
+  createWithdrawal,
+  updatePayoutDetails,
+  deletePayout,
+} from '@/api/masters'
 import { extractApiError } from '@/composables/useApiError'
 import { formatMoney, formatDateShort } from '@/utils/format'
 import { eurStringToCents, centsToEurString } from '@/utils/currency'
@@ -738,15 +746,23 @@ onMounted(async () => {
   margin-bottom: 0;
 }
 
-.finance-view__amount-seal {
-  flex-shrink: 0;
+.finance-view__req {
   color: var(--velo-error);
 }
 
+/* Constant-height error slot (owner 2026-10-01): the message fades in
+   without growing its block. */
 .finance-view__error {
   font-size: var(--text-xs);
   color: var(--velo-error);
   margin: 0;
+  min-height: 17px;
+  line-height: 1.2;
+  opacity: 0;
+}
+
+.finance-view__error--show {
+  opacity: 1;
 }
 
 .finance-view__all {

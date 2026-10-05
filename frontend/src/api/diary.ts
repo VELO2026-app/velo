@@ -12,6 +12,9 @@
 //     POST /api/v1/practices/{id}/feedback         -- upsert (attended booking)
 //     GET  /api/v1/users/me/feedbacks              -- paginated list
 //
+//   Reflection (BE-108):
+//     POST /api/v1/practices/{id}/reflection       -- create once (no_show booking)
+//
 //   Diary entries (F9.2):
 //     POST   /api/v1/diary                         -- create entry
 //     GET    /api/v1/diary                         -- paginated list
@@ -32,15 +35,17 @@ import type {
   FeedbackRequest,
   FeedbackResponse,
   PaginatedFeedbacksResponse,
+  ReflectionRequest,
+  ReflectionResponse,
   CreateDiaryEntryRequest,
   UpdateDiaryEntryRequest,
   DiaryEntryResponse,
   PaginatedDiaryEntriesResponse,
   DiaryFeedResponse,
   DiaryFeedFilters,
+  CreateExternalActivityRequest,
+  ExternalActivityResponse,
   PracticeInsightsResponse,
-  Mood,
-  FeedbackRating,
 } from '@/api/types'
 
 // ============================================================================
@@ -107,9 +112,23 @@ export function upsertFeedback(
   return api.post<FeedbackResponse>(`/api/v1/practices/${practiceId}/feedback`, body)
 }
 
+/**
+ * Record a no-show reflection (BE-108). Once per (practice, user), no time
+ * window; requires booking.status == no_show. An empty comment is valid --
+ * the server stores blank as null. 404 reflection_not_available /
+ * 409 reflection_already_submitted.
+ */
+export function createReflection(
+  practiceId: string,
+  body: ReflectionRequest,
+): Promise<ReflectionResponse> {
+  return api.post<ReflectionResponse>(`/api/v1/practices/${practiceId}/reflection`, body)
+}
+
 export interface ListFeedbacksParams {
   practice_id?: string
-  rating?: FeedbackRating
+  /** Raw 1..10 score (the endpoint's `rating` query is an int). */
+  rating?: number
   date_from?: string
   date_to?: string
   limit?: number
@@ -156,7 +175,8 @@ export function createDiaryEntry(body: CreateDiaryEntryRequest): Promise<DiaryEn
 
 export interface ListDiaryEntriesParams {
   practice_id?: string
-  mood?: Mood
+  /** Raw 1..10 score (the endpoint's `mood` query is an int). */
+  mood?: number
   date_from?: string
   date_to?: string
   limit?: number
@@ -248,6 +268,27 @@ export function deleteDiaryEntry(id: string): Promise<void> {
  */
 export function restoreDiaryEntry(id: string): Promise<DiaryEntryResponse> {
   return api.post<DiaryEntryResponse>(`/api/v1/diary/${id}/restore`)
+}
+
+// ============================================================================
+// External activity (FE-70 / BE-27)
+// ============================================================================
+
+/**
+ * Record an activity that happened OUTSIDE velo (a home meditation, a massage).
+ *
+ * 201 with the created activity. The backend writes the activity AND its diary
+ * event in one transaction, so a successful response means the NEXT
+ * GET /api/v1/diary/feed already includes it -- callers refresh the feed
+ * afterwards instead of inserting anything by hand.
+ *
+ * Field-level 422s (future occurred_at, custom-name rules, length caps) arrive
+ * as FastAPI loc arrays; api/client.ts keeps them on ApiResponseError.validation.
+ */
+export function createExternalActivity(
+  body: CreateExternalActivityRequest,
+): Promise<ExternalActivityResponse> {
+  return api.post<ExternalActivityResponse>('/api/v1/diary/external-activities', body)
 }
 
 // ============================================================================

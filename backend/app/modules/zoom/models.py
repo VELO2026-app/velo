@@ -2,8 +2,10 @@
 # VELO Backend -- Zoom Integration Models (E21 step A)
 # =============================================================================
 #
-# Three tables, one purpose: turn "booked" into "actually present, for how
-# long" via Zoom, without trusting Zoom to tell us who the host is.
+# Four tables. Three turn "booked" into "actually present, for how long"
+# via Zoom, without trusting Zoom to tell us who the host is. The fourth
+# (ZoomGuestName, GT-21) is deliberately outside that purpose -- see its
+# own docstring.
 #
 # ZoomMeeting      -- 1:1 with Practice. Zoom's own meeting identity + our
 #                     view of whether creation/sync last succeeded.
@@ -13,6 +15,10 @@
 #                     students specifically so host-exclusion is OUR OWN
 #                     explicit fact, not something we infer from any
 #                     Zoom-provided field (there isn't one -- E21 research).
+# ZoomGuestName    -- GT-21. 1 row per GENERATED display name issued to a
+#                     guest on a practice. Written by the claim path in
+#                     zoom/service.py (step B) when /z/{code}/guest shows a
+#                     name; names a guest types are not written here.
 # ZoomAttendanceSegment -- append-only, RAW report rows. Zoom returns
 #                     MULTIPLE rows per person on rejoin and does not sum
 #                     them; we do, in the attendance-decision step that
@@ -26,12 +32,15 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
     Integer,
     String,
     Text,
+    false,
     func,
     text,
 )
@@ -56,8 +65,10 @@ class ZoomMeetingStatus(enum.StrEnum):
                           create_failed (retry_poller.py claims both).
     create_failed     -- creation (or a retry) failed; retry_count / last_sync_error
                           record why. The retry poller keeps trying until the cap.
-    deleted           -- we deleted the Zoom-side meeting (practice cancelled
-                          before it happened).
+    deleted           -- the practice was cancelled before it happened: our
+                          row is dead from that moment, whatever Zoom says;
+                          the Zoom-side DELETE is queued (zoom_delete_pending)
+                          and made by the retry poller after commit.
     """
 
     ACTIVE = "active"
@@ -133,6 +144,20 @@ class ZoomMeeting(UUIDMixin, TimestampMixin, Base):
         Integer, default=0, server_default="0",
     )
     last_sync_error: Mapped[str | None] = mapped_column(Text, default=None)
+
+    # Zoom-side DELETE queue. delete_meeting_for_practice sets
+    # status=deleted AND zoom_delete_pending=True on an ACTIVE meeting in
+    # the practice cancel's transaction; zoom/retry_poller.py makes the
+    # call after commit and clears the flag. zoom_delete_attempts counts
+    # failed Zoom DELETE calls, capped by
+    # settings.zoom_meeting_delete_max_retries; at the cap the row stays
+    # VISIBLY pending, last_sync_error saying so.
+    zoom_delete_pending: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(),
+    )
+    zoom_delete_attempts: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0",
+    )
 
     # E21 step F: set the moment the report poller successfully pulls this
     # meeting's report, regardless of whether any rows came back -- a
@@ -231,6 +256,24 @@ class ZoomRegistrant(UUIDMixin, TimestampMixin, Base):
     )
     last_sync_error: Mapped[str | None] = mapped_column(Text, default=None)
 
+    # Zoom-side cancel queue (BE-96). cancel_registrant_for_booking sets
+    # status=cancelled AND zoom_cancel_pending=True in the caller's
+    # transaction -- always, whether or not a zoom_registrant_id is visible
+    # to it (a retry-poller create racing the cancel may write the id under
+    # its own row lock; the flag is what makes that id get cancelled too).
+    # zoom/retry_poller.py makes the Zoom call after commit and clears the
+    # flag. A flag, not a status: the partial unique index below counts
+    # every non-'cancelled' status as active. zoom_cancel_attempts counts
+    # failed Zoom cancel calls, capped by
+    # settings.zoom_registrant_cancel_max_retries; at the cap the row stays
+    # VISIBLY pending, last_sync_error saying so.
+    zoom_cancel_pending: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(),
+    )
+    zoom_cancel_attempts: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0",
+    )
+
     __table_args__ = (
         # One ACTIVE registrant per (meeting, user) -- same partial-unique
         # shape as uq_booking_practice_user_active in bookings/models.py.
@@ -249,6 +292,86 @@ class ZoomRegistrant(UUIDMixin, TimestampMixin, Base):
         return (
             f"<ZoomRegistrant id={self.id} meeting={self.zoom_meeting_id} "
             f"user={self.user_id} role={self.role} status={self.status}>"
+        )
+
+
+class ZoomGuestName(UUIDMixin, TimestampMixin, Base):
+    """One generated display name issued to one guest on one practice (GT-21).
+
+    Written by claim_guest_name (zoom/service.py, step B) when the public
+    guest page shows a name -- claimed on DISPLAY, so the name shown is the
+    one the guest gets; zoom_registrant_id/join_url are filled in when he
+    presses "Войти". A name the guest TYPES is never written here:
+    uniqueness exists for generated names only, and namesakes are allowed
+    (owner ruling, 2026-09-23).
+
+    A row means "this name is taken here" -- what the generator needs and
+    what a counter column cannot answer. Scoped to the practice, not
+    globally (owner ruling).
+
+    NOT a ZoomRegistrant row, and zoom_registrant_id/join_url live here for
+    that reason: ingest_report_for_meeting selects EVERY registrant of the
+    meeting unconditionally, so a guest there would match by registrant_id.
+    No user_id -- the guest is anonymous by construction.
+    """
+
+    __tablename__ = "zoom_guest_names"
+
+    practice_id: Mapped[UUID] = mapped_column(
+        ForeignKey("practices.id", ondelete="CASCADE"),
+    )
+    # Whatever the claim path sends to Zoom. String(64) is the upper bound;
+    # the lower one is the CheckConstraint below, because when the writer
+    # arrives an empty name must be IMPOSSIBLE, not merely un-issued.
+    display_name: Mapped[str] = mapped_column(String(64))
+    # NULL is an expected end state, not an unfinished one: the row claims
+    # the name, and the guest may never press "Войти" (he asked for another
+    # name, or left), or Zoom may refuse. Such a row keeps its name reserved
+    # on purpose -- there is no release path (owner ruling).
+    zoom_registrant_id: Mapped[str | None] = mapped_column(
+        String(64), default=None,
+    )
+    join_url: Mapped[str | None] = mapped_column(Text, default=None)
+
+    __table_args__ = (
+        # Blank and whitespace-only names rejected by the DATABASE, not left
+        # to the caller (GT-21b item 4). The expression is a
+        # regex, not length(btrim(...)): btrim's default trim set is the SPACE
+        # character alone, so a name of tabs or newlines passed it (found by
+        # the suite, fixed in gt21cd3e4f5a). First regex CHECK in this tree.
+        CheckConstraint(
+            "display_name ~ '[^[:space:]]'",
+            name="ck_zoom_guest_names_display_name_not_blank",
+        ),
+        # Leads with practice_id, so no separate index on it -- same rule as
+        # the former practice_audience_curator_group (2026-08-26; dropped
+        # by BE-74).
+        #
+        # KNOWN CEILING -- byte-exact uniqueness admits case-variant twins.
+        # Mechanics: "Аня" and "аня" are two rows a human reads as one name.
+        # Status: acknowledged by design.
+        # Task: none -- nothing passes a human-typed name today, and
+        #   generated names will be canonically cased.
+        # Thaw trigger: the first commit that lets a human supply a name.
+        # Fix: unique index on (practice_id, lower(display_name)) plus a
+        #   lowercased claim path; this tree's first expression index.
+        # Rejected: CI collation (changes every comparison here), lower() on
+        #   write (destroys the guest's case), app-side check (races).
+        # Step B (2026-09-23) added a surface where a human types a name, but
+        #   that name is never written to this table, so the trigger has not
+        #   fired: the state above is still unreachable.
+        Index(
+            "uq_zoom_guest_names_practice_name",
+            "practice_id",
+            "display_name",
+            unique=True,
+        ),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<ZoomGuestName id={self.id} practice={self.practice_id} "
+            f"name={self.display_name!r}>"
         )
 
 

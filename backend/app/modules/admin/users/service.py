@@ -50,8 +50,12 @@ from app.modules.curator_groups.models import CuratorGroup
 # absent key and an explicit false are the same state has to be stated in
 # ONE body, or the admin list will one day disagree with the gate about
 # who may found a school.
-from app.modules.curator_groups.service import master_can_create_groups
+from app.modules.curator_groups.service import (
+    announce_pending_master_offers,
+    master_can_create_groups,
+)
 from app.modules.masters.models import MasterProfile
+from app.modules.masters.service import emit_master_verified
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.users.models import User, UserRole
 from app.modules.users.schemas import (
@@ -59,6 +63,7 @@ from app.modules.users.schemas import (
     credentials_without_admin_home,
     has_admin_home,
 )
+from app.modules.users.service import lock_user_row
 
 logger = structlog.get_logger()
 
@@ -357,23 +362,36 @@ async def get_master_by_id(
 _MAKE_MASTER_EDIT = "Отредактировать"
 
 
-def _admin_make_master_data(user: User) -> dict:
+def _make_master_verification(admin: User, notes: str) -> dict:
+    """A FRESH verification block for a make-master grant (BE-104, 2).
+
+    The same shape verify_master writes: verified_by is the granting admin's
+    id, and which make-master path it was goes into notes -- verified_by
+    names a person, not a code path.
+    """
+    return {
+        "verified_at": datetime.now(UTC).isoformat(),
+        "verified_by": str(admin.id),
+        "notes": notes,
+    }
+
+
+def _admin_make_master_data(user: User, admin: User) -> dict:
     """Verified MasterProfile.data for an explicit admin make-master grant.
 
     Mirrors scripts/set_role.py `_build_verified_data` (which mirrors
     masters/service._build_data) with account.status pre-set to 'verified'.
     Blank profile fields are stubbed; the master/admin edits them later.
+    The verification block names the granting admin (_make_master_verification).
     """
     now_iso = datetime.now(UTC).isoformat()
     return {
         "account": {
             "status": "verified",
             "applied_at": now_iso,
-            "verification": {
-                "verified_at": now_iso,
-                "verified_by": "admin_make_master",
-                "notes": "master granted via admin make-master",
-            },
+            "verification": _make_master_verification(
+                admin, "master granted via admin make-master",
+            ),
             "rejections": [],
         },
         "profile": {
@@ -415,8 +433,30 @@ async def make_master(
 
     Idempotent-reject: a user who is already a master -> 409 (already_master).
     Write session (get_db_session); the caller flushes (P-01, no commit here).
+
+    BE-85: the users row is taken FOR NO KEY UPDATE first and the
+    already_master check reads it under that lock; the profile comes
+    after it -- the users -> master_profiles order written in
+    users/service.py (ROW LOCK ON users).
+
+    BE-104: the profile is taken FOR UPDATE, not read. It used to be a
+    plain session.get: verify_master / reject_master / apply_for_master
+    hold the PROFILE (not the users row), so each of them and this
+    function passed its own guard on one pending profile -- the person
+    got master.verified twice (or master.rejected and master.verified for
+    one application), and this function's stale copy overwrote what the
+    other had written (verify_master's verification block and
+    can_create_groups). Under the lock it waits, then reads the committed
+    status: had_master is true after a verify that won the race, and the
+    notification goes once. populate_existing: a locking SELECT does not
+    refresh an instance the identity map already holds. No caller loads
+    this profile into the session first today, so it is a belt for the
+    next one, not a property the suite can turn red.
+
+    master.verified (BE-104) goes ONLY when not had_master -- the same
+    transition condition as announce_pending_master_offers below.
     """
-    user = await session.get(User, user_id)
+    user = await lock_user_row(session, user_id)
     if user is None:
         raise NotFoundError("User not found")
 
@@ -425,7 +465,14 @@ async def make_master(
             message="User is already a master", code="already_master"
         )
 
-    profile = await session.get(MasterProfile, user_id)
+    profile = (
+        await session.execute(
+            select(MasterProfile)
+            .where(MasterProfile.user_id == user_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
     # Phase 6 / T0: master capability BEFORE this grant -- an approved
     # applicant who never self-switched arrives here already verified
     # (capability held, no delta); everyone else gains it below.
@@ -435,23 +482,24 @@ async def make_master(
     )
     if profile is None:
         profile = MasterProfile(
-            user_id=user_id, data=_admin_make_master_data(user)
+            user_id=user_id, data=_admin_make_master_data(user, admin)
         )
         session.add(profile)
     else:
         status = (profile.data or {}).get("account", {}).get("status")
         if status != "verified":
-            # Re-verify an existing pending/rejected/suspended profile in place.
+            # Re-verify an existing pending/rejected/cancelled_by_user/
+            # suspended profile in place. The verification block is ASSIGNED,
+            # not setdefault-ed (BE-104, 2): a pending/rejected profile carries
+            # an explicit "verification": None (_build_data), which setdefault
+            # kept, and a suspended one carries the block of an EARLIER
+            # verification, which setdefault kept too -- another admin, another
+            # date. No verification history is kept: the old block goes.
             data = copy.deepcopy(profile.data or {})
             acct = data.setdefault("account", {})
             acct["status"] = "verified"
-            acct.setdefault(
-                "verification",
-                {
-                    "verified_at": datetime.now(UTC).isoformat(),
-                    "verified_by": "admin_make_master",
-                    "notes": "re-verified via admin make-master",
-                },
+            acct["verification"] = _make_master_verification(
+                admin, "re-verified via admin make-master",
             )
             data.setdefault("availability", {})["is_accepting"] = True
             profile.set_jsonb("data", data)
@@ -479,6 +527,19 @@ async def make_master(
     await sync_membership_delta(
         session, user, group_key=GROUP_ADMINS, had=had_admin, has=False
     )
+
+    # BE-59: master capability gained HERE (not held before -- had_master)
+    # is a verification like verify_master's, so every school waiting for
+    # it asks "yes / no". An approved applicant who never self-switched
+    # arrives verified already and was announced (and told, BE-104) by
+    # verify_master then. The profile is held FOR UPDATE since it was
+    # loaded (or, freshly created, by its INSERT, flushed by the autoflush
+    # in front of the call) -- profile before offers, the order of
+    # curator_groups/service.py's header. BE-104: the person is told
+    # before the schools ask.
+    if not had_master:
+        await emit_master_verified(session, user_id)
+        await announce_pending_master_offers(user_id, session)
 
     logger.info(
         "admin_make_master",

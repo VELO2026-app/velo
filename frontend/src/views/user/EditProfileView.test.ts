@@ -52,7 +52,7 @@
 // MONEY (NBSP, velo-idiom §11): formattedBalance (.vue:459) is the ONLY
 // money on this screen, shown in the delete modal when a master has a
 // forfeitable balance. Asserted through norm() with the ESCAPES from the
-// skill ( / / ), and the fixture/expected string were typed
+// skill (\u00A0/\u202F/\u2009), and the fixture/expected string were typed
 // directly into this file via the Write tool -- never through a shell
 // heredoc, which eats the NBSP before the test ever sees it (the trap has
 // already bitten four agents per the skill's own history).
@@ -209,7 +209,7 @@ async function flush(): Promise<void> {
 }
 
 function norm(s: string | null | undefined): string {
-  return (s ?? '').replace(/[   ]/g, ' ')
+  return (s ?? '').replace(/[\u00A0\u202F\u2009]/g, ' ')
 }
 function text(): string {
   return norm(host?.textContent)

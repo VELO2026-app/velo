@@ -1,1 +1,9 @@
-cd frontend && npx lint-staged
+cd frontend || exit 1
+npx lint-staged
+
+# Total gate at commit: every commit touching frontend/ runs the full stack
+# (lint budget, typecheck, all tests). Commits outside frontend/ skip --
+# there is nothing frontend to verify. Bypass via --no-verify closes at CI.
+if git diff --cached --name-only --diff-filter=ACMR | grep -q '^frontend/'; then
+  pnpm verify
+fi

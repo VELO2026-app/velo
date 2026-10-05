@@ -36,6 +36,7 @@ from app.core.config import settings
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.users.models import User, UserRole
+from app.modules.zoom import retry_poller
 from app.modules.zoom.models import (
     ZoomMeeting,
     ZoomMeetingStatus,
@@ -240,6 +241,14 @@ async def test_cancel_does_not_break_when_zoom_meeting_create_failed(
 
     Catches: delete_meeting_for_practice assuming an active meeting exists
     and raising / blocking cancellation when it doesn't.
+
+    WHAT CHANGED. This test used to patch the Zoom DELETE as zoom.service
+    saw it and assert it was never called -- right while
+    delete_meeting_for_practice made the call itself. Now no Zoom DELETE is
+    made from the request at all (the retry poller makes it after commit),
+    and that name is gone from zoom.service. The precise claim: no DELETE
+    from the request, and a non-active meeting is left exactly as it was --
+    not marked deleted, not queued.
     """
     master = await _make_verified_master(client, db_session, telegram_id=79003)
     practice_id = await _create_draft_practice(client, master)
@@ -254,17 +263,19 @@ async def test_cancel_does_not_break_when_zoom_meeting_create_failed(
     zoom_meeting = await _get_zoom_meeting(db_session, practice_id)
     assert zoom_meeting.status == ZoomMeetingStatus.CREATE_FAILED.value
 
-    with patch("app.modules.zoom.service.delete_meeting") as mock_delete:
+    with patch.object(retry_poller, "delete_meeting") as mock_delete:
         resp = await client.post(
             f"{PRACTICES_URL}/{practice_id}/cancel",
             json={},
             headers=auth_headers(master["session_token"]),
         )
-        # delete_meeting must never be called for a non-active meeting.
-        mock_delete.assert_not_called()
+        assert mock_delete.await_count == 0  # nothing sent from the request
 
     assert resp.status_code == 200
     assert resp.json()["status"] == PracticeStatus.CANCELLED.value
+    await db_session.refresh(zoom_meeting)
+    assert zoom_meeting.status == ZoomMeetingStatus.CREATE_FAILED.value
+    assert zoom_meeting.zoom_delete_pending is False
 
 
 # ===================================================================

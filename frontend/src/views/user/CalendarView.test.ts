@@ -103,6 +103,7 @@ import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import CalendarView from '@/views/user/CalendarView.vue'
 import * as practicesApi from '@/api/practices'
+import * as cgApi from '@/api/curatorGroups'
 import * as taxonomyApi from '@/api/taxonomy'
 import { useAuthStore } from '@/stores/auth'
 import { useCalendarStore } from '@/stores/calendar'
@@ -114,10 +115,21 @@ vi.mock('@/api/practices')
 // screen's own directionLabel() calls fall back to the identical hardcoded
 // taxonomy on a failed fetch (see banner).
 vi.mock('@/api/taxonomy')
+// School mode (owner 2026-10-01): the stacked school calendar feeds off the
+// school's own practices endpoint, not @/api/practices.
+vi.mock('@/api/curatorGroups')
 
 const push = vi.fn()
+const back = vi.fn()
+// Master mode (owner 2026-09-30): the stacked route carries :masterId.
+// Owner 2026-10-03: it may also carry ?groupId (the curator's school context).
+const routeState = {
+  params: {} as Record<string, string>,
+  query: {} as Record<string, string | undefined>,
+}
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push }),
+  useRouter: () => ({ push, back }),
+  useRoute: () => ({ params: routeState.params, query: routeState.query }),
 }))
 
 // -----------------------------------------------------------------------------
@@ -193,7 +205,12 @@ let app: App | null = null
 let host: HTMLElement | null = null
 let pinia: Pinia
 
-function mount(): HTMLElement {
+function mount(
+  routeParams: Record<string, string> = {},
+  routeQuery: Record<string, string | undefined> = {},
+): HTMLElement {
+  routeState.params = routeParams
+  routeState.query = routeQuery
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(CalendarView)
@@ -212,7 +229,7 @@ async function flush(): Promise<void> {
 }
 
 function norm(s: string | null | undefined): string {
-  return (s ?? '').replace(/[   ]/g, ' ')
+  return (s ?? '').replace(/[\u00A0\u202F\u2009]/g, ' ')
 }
 function text(): string {
   return norm(host?.textContent)
@@ -289,13 +306,22 @@ beforeEach(() => {
   vi.mocked(practicesApi.getPractices)
     .mockReset()
     .mockResolvedValue(page([practice('p1')]))
+  vi.mocked(cgApi.getCuratorGroupPractices)
+    .mockReset()
+    .mockResolvedValue({ items: [], total: 0, limit: 100, offset: 0 })
   vi.mocked(taxonomyApi.getActiveTaxonomy)
     .mockReset()
     .mockRejectedValue(new Error('offline in test'))
 
   useAuthStore().user = user()
 
+  routeState.params = {}
+  routeState.query = {}
+  // The back-control tests key off window.history.state.back (Vue Router's
+  // own marker) -- clear it so tests cannot leak state into each other.
+  window.history.replaceState(null, '')
   push.mockReset()
+  back.mockReset()
 })
 
 afterEach(() => {
@@ -666,6 +692,157 @@ describe('CalendarView', () => {
       await flush()
 
       expect(cardBadge(practiceCards()[0]!)).toContain('1 523,50')
+    })
+  })
+
+  // ===========================================================================
+  describe('master mode (user-calendar-master, owner 2026-09-30)', () => {
+    it("mounts with :masterId and fetches THAT master's scheduled practices; the viewer filter UI sits out", async () => {
+      mount({ masterId: 'm9' })
+      await flush()
+
+      expect(practicesApi.getPractices).toHaveBeenCalledWith(
+        expect.objectContaining({ master_id: 'm9', status: 'scheduled' }),
+        100,
+        0,
+      )
+      expect(text()).toContain('Практики мастера')
+      expect(text()).not.toContain('Выбрать практики')
+    })
+
+    it('the back control is a true RETURN: history-back when the profile is behind (keeps its ?groupId), profile-push on a deep link', async () => {
+      mount({ masterId: 'm9' })
+      await flush()
+
+      const backBtn = host?.querySelector<HTMLButtonElement>('.calendar__back')
+      expect(backBtn).not.toBeNull()
+
+      // Arrived from the profile (Vue Router marked the in-app origin): true
+      // back -- the profile re-enters WITH its query, curator context intact.
+      window.history.replaceState({ back: '/user/masters/m9?groupId=g1' }, '')
+      backBtn!.click()
+      expect(back).toHaveBeenCalledTimes(1)
+      expect(push).not.toHaveBeenCalled()
+
+      // Deep link (no in-app history): deterministic landing on the profile.
+      window.history.replaceState(null, '')
+      backBtn!.click()
+      expect(push).toHaveBeenCalledWith({
+        name: 'user-master-public',
+        params: { id: 'm9' },
+      })
+    })
+
+    it('leaving the screen resets the master scope -- the shared store must not poison the tab calendar', async () => {
+      mount({ masterId: 'm9' })
+      await flush()
+
+      const store = useCalendarStore()
+      expect(store.masterScope).toBe('m9')
+
+      app?.unmount()
+      host?.remove()
+      app = null
+      host = null
+
+      expect(store.masterScope).toBeNull()
+    })
+
+    it('owner 2026-10-03: ?groupId on the master route scopes the feed to THAT school -- scope and school filter both reach the store, and reset together', async () => {
+      mount({ masterId: 'm9' }, { groupId: 'g1' })
+      await flush()
+
+      const store = useCalendarStore()
+      expect(store.masterScope).toBe('m9')
+      expect(store.masterGroupFilter).toBe('g1')
+
+      app?.unmount()
+      host?.remove()
+      app = null
+      host = null
+
+      // The school filter resets WITH the scope -- a leaked filter would keep
+      // hiding practices in the viewer's own tab calendar forever.
+      expect(store.masterScope).toBeNull()
+      expect(store.masterGroupFilter).toBeNull()
+    })
+
+    it('owner 2026-10-03: the school filter is CLIENT-side -- the request is still the plain public master feed', async () => {
+      mount({ masterId: 'm9' }, { groupId: 'g1' })
+      await flush()
+
+      expect(practicesApi.getPractices).toHaveBeenCalledWith(
+        expect.objectContaining({ master_id: 'm9', status: 'scheduled' }),
+        100,
+        0,
+      )
+    })
+  })
+
+  describe('school mode (user-calendar-school, owner 2026-10-01)', () => {
+    it('mounts with :groupId, feeds off the school endpoint, and sits the personal filter UI out', async () => {
+      vi.mocked(cgApi.getCuratorGroupPractices).mockResolvedValue({
+        items: [practice('sp1')],
+        total: 1,
+        limit: 100,
+        offset: 0,
+      })
+      mount({ groupId: 'g7' })
+      await flush()
+
+      // The feed comes from the school's own endpoint, never the personal
+      // week feed -- the two answer different questions.
+      expect(cgApi.getCuratorGroupPractices).toHaveBeenCalledWith('g7', 100, 0)
+      expect(practicesApi.getPractices).not.toHaveBeenCalled()
+      expect(text()).toContain('Практики школы')
+      expect(text()).not.toContain('Выбрать практики')
+      expect(practiceCards()).toHaveLength(1)
+      expect(cardTitle(practiceCards()[0]!)).toBe('Практика sp1')
+    })
+
+    it('the back control returns to the school page on a deep link', async () => {
+      mount({ groupId: 'g7' })
+      await flush()
+
+      const backBtn = host?.querySelector<HTMLButtonElement>('.calendar__back')
+      expect(backBtn).not.toBeNull()
+
+      // Arrived in-app: true back -- the school page re-enters as it was.
+      window.history.replaceState({ back: '/user/schools/g7' }, '')
+      backBtn!.click()
+      expect(back).toHaveBeenCalledTimes(1)
+      expect(push).not.toHaveBeenCalled()
+
+      // Deep link (no in-app history): deterministic landing on the school.
+      window.history.replaceState(null, '')
+      backBtn!.click()
+      expect(push).toHaveBeenCalledWith({
+        name: 'user-curator-group',
+        params: { id: 'g7' },
+      })
+    })
+
+    it('leaving the screen resets the school scope and feed -- the shared store must not poison the tab calendar', async () => {
+      vi.mocked(cgApi.getCuratorGroupPractices).mockResolvedValue({
+        items: [practice('sp1')],
+        total: 1,
+        limit: 100,
+        offset: 0,
+      })
+      mount({ groupId: 'g7' })
+      await flush()
+
+      const store = useCalendarStore()
+      expect(store.schoolScope).toBe('g7')
+      expect(store.schoolFeed).not.toBeNull()
+
+      app?.unmount()
+      host?.remove()
+      app = null
+      host = null
+
+      expect(store.schoolScope).toBeNull()
+      expect(store.schoolFeed).toBeNull()
     })
   })
 })

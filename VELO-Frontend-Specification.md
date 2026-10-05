@@ -330,7 +330,7 @@ frontend/
 ├── eslint.config.js
 ├── .prettierrc
 ├── package.json
-├── package-lock.json          ← Для детерминированных билдов (npm ci)
+├── pnpm-lock.yaml             ← Для детерминированных билдов (pnpm install --frozen-lockfile)
 ├── env.d.ts                   ← TypeScript декларации для .vue и Vite env
 ├── .env.example
 ├── .gitignore
@@ -339,13 +339,13 @@ frontend/
 
 **Решения, принятые при реализации:**
 
-- `package-lock.json` коммитится в репо — без него `npm ci` в Docker не работает
+- `pnpm-lock.yaml` коммитится в репо — без него `pnpm install --frozen-lockfile` в Docker не работает
 - `env.d.ts` — декларации для TypeScript: `.vue` файлы как модули, `ImportMetaEnv` для `VITE_*`
 - `.gitkeep` в пустых папках — Git не трекает пустые директории
 - Telegram SDK через CDN `<script>` в index.html (рекомендация Telegram для актуальной версии)
 - `vue-tsc --noEmit` перед `vite build` в скрипте build — type-check как gate
 
-**Критерий готовности:** `npm run build` проходит, `npm run lint` без ошибок. ✅
+**Критерий готовности:** `pnpm run build` проходит, `pnpm lint` без ошибок. ✅
 
 ---
 
@@ -1340,6 +1340,20 @@ credentials на релогине. См. Технический Кодекс Bac
 
 **Code review:** 2 раунда. Исправлено: двойной клик (CRITICAL), null-сброс флага,
 COALESCE в merge, +5 бэкенд-тестов на инвариант релогина, try/finally на `advancing`.
+
+**Амдендум FE-39 (2026-09-17):** «Welcome при каждом открытии» отменено. `App.vue`
+теперь выбирает стартовый stage после `initAuth()`: `onboarding_completed === true` —
+сразу `app` (splash -> дашборд роли через `roleRedirect`), `false` — Welcome. Welcome
+остался входом для новых юзеров; актуальное описание шлюза — VELO-Frontend.md §2.3.
+
+**Амдендум 2026-09-17 (шаг таймзоны убран):** карусель — 3 интро-слайда. Таймзона
+берётся с устройства (`Intl`-автодетект, валидный IANA, фолбэк `UTC`) и сохраняется
+вместе с `onboarding_completed` на «Готово»/«Пропустить» (пропуск = сразу финиш).
+Ручной выбор пояса остался в `TimezoneSettingsView` (Профиль). Там же убран
+языковой раздел («Русский»-заглушка): i18n в проекте нет и не планируется,
+вернётся вместе с vue-i18n. Экран переименован LanguageTimezoneView ->
+TimezoneSettingsView, роуты user/master-language-timezone -> user/master-timezone
+(имена обязаны отражать функцию экрана).
 
 **Критерий готовности:** Новый юзер видит Welcome -> онбординг -> подтверждает таймзону ->
 попадает в приложение; флаг переживает релогин. ✅

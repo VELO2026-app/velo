@@ -342,7 +342,12 @@ async def test_feedback_metric_basic_and_distribution(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """rate = left_review / visited; distribution buckets by rating."""
+    """rate = left_review / visited; distribution counts ratings per zone.
+
+    BE-77: 9 and 2 are fire and bad (they used to read fire and confused
+    under the 1-3 / 4-7 / 8-10 split). The delta is asserted over the WHOLE
+    five-key dict, so a stray count in any other zone fails too.
+    """
     token = await _make_admin(client, db_session)
     await db_session.commit()  # admin must be visible to the endpoint
 
@@ -361,7 +366,7 @@ async def test_feedback_metric_basic_and_distribution(
     _u1, b1 = await _attend(client, db_session, practice, 92020)
     await _add_feedback(db_session, practice, _u1, b1, rating=9)   # fire
     _u2, b2 = await _attend(client, db_session, practice, 92021)
-    await _add_feedback(db_session, practice, _u2, b2, rating=2)   # confused
+    await _add_feedback(db_session, practice, _u2, b2, rating=2)   # bad
     await _attend(client, db_session, practice, 92022)            # no feedback
     await db_session.commit()
 
@@ -370,21 +375,26 @@ async def test_feedback_metric_basic_and_distribution(
     data = resp.json()
     # New formula (per distinct PAST practice): +1 past practice (visited), and
     # it has >=1 feedback -> left_review +1 (was +3/+2 per-booking). Distribution
-    # counts both feedbacks on the practice (1 fire, 1 confused).
+    # counts both feedbacks on the practice (1 fire, 1 bad).
     assert data["visited"] - base["visited"] == 1
     assert data["left_review"] - base["left_review"] == 1
     dist, bdist = data["distribution"], base["distribution"]
-    assert dist["fire"] - bdist["fire"] == 1
-    assert dist["good"] - bdist["good"] == 0
-    assert dist["confused"] - bdist["confused"] == 1
+    assert {k: dist[k] - bdist[k] for k in dist} == {
+        "bad": 1, "low": 0, "neutral": 0, "good": 0, "fire": 1,
+    }
 
 
 @pytest.mark.asyncio
-async def test_feedback_metric_good_bucket(
+async def test_feedback_metric_neutral_zone(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """A mid rating (4-7) lands in the good bucket."""
+    """A 6 lands in the neutral zone (5-6).
+
+    BE-77: this was "a mid rating (4-7) lands in the good bucket" -- true
+    for the three-bucket split; under the five zones the same 6 is neutral,
+    and good is 7-8.
+    """
     token = await _make_admin(client, db_session)
     await db_session.commit()  # admin must be visible to the endpoint
 
@@ -405,13 +415,13 @@ async def test_feedback_metric_good_bucket(
 
     resp = await client.get(FEEDBACK_URL, headers=auth_headers(token))
     assert resp.status_code == 200
-    # Our single rating-6 feedback lands in the good bucket. Assert the DELTA
+    # Our single rating-6 feedback lands in the neutral zone. Assert the DELTA
     # over the baseline (not an absolute distribution), since seed practices
     # may carry other in-period feedbacks the platform-wide metric also counts.
     dist, bdist = resp.json()["distribution"], base["distribution"]
-    assert dist["good"] - bdist["good"] == 1
-    assert dist["fire"] - bdist["fire"] == 0
-    assert dist["confused"] - bdist["confused"] == 0
+    assert {k: dist[k] - bdist[k] for k in dist} == {
+        "bad": 0, "low": 0, "neutral": 1, "good": 0, "fire": 0,
+    }
 
 
 @pytest.mark.asyncio
@@ -442,7 +452,7 @@ async def test_feedback_metric_rate_capped_per_practice(
         client, db_session, practice, 92041,
         status=BookingStatus.NO_SHOW.value,
     )
-    await _add_feedback(db_session, practice, u2, b2, rating=8)   # fire
+    await _add_feedback(db_session, practice, u2, b2, rating=8)   # good
     await db_session.commit()
 
     resp = await client.get(FEEDBACK_URL, headers=auth_headers(token))
@@ -451,13 +461,14 @@ async def test_feedback_metric_rate_capped_per_practice(
     # New formula is per DISTINCT PAST practice: +1 practice (visited), and it
     # has >=1 feedback -> left_review +1 (so rate is <=100% structurally, the
     # old W-3 concern is now inherent). Distribution counts BOTH feedbacks on the
-    # practice -> fire +2 (no longer booking-status-gated).
+    # practice -> fire +1, good +1 (no longer booking-status-gated).
     assert data["visited"] - base["visited"] == 1
     assert data["left_review"] - base["left_review"] == 1
     dist, bdist = data["distribution"], base["distribution"]
-    assert dist["fire"] - bdist["fire"] == 2
-    assert dist["good"] - bdist["good"] == 0
-    assert dist["confused"] - bdist["confused"] == 0
+    # BE-77: 9 is fire and 8 is good (both read fire under the old split).
+    assert {k: dist[k] - bdist[k] for k in dist} == {
+        "bad": 0, "low": 0, "neutral": 0, "good": 1, "fire": 1,
+    }
 
 
 # ===================================================================

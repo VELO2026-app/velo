@@ -8,10 +8,19 @@
 
 <template>
   <MobileLayout
-    :tabs="USER_TABS"
+    :tabs="visibleTabs"
     :active-tab="activeTab"
     :fill="isFillRoute"
-    :hide-tab-bar="isDiaryRoute || isFormRoute || isChatRoute || keyboardOpen"
+    :tabs-pending="schoolsHub.curatorAnswerPending"
+    :hide-tab-bar="
+      isDiaryRoute ||
+      isFormRoute ||
+      isChatRoute ||
+      isInboxRoute ||
+      isDetailRoute ||
+      isMasterCuratorRoute ||
+      keyboardOpen
+    "
     :fog="isFogRoute"
     v-bind="fogTuning"
     @navigate="router.push($event)"
@@ -21,14 +30,42 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { rootComputedStyle } from '@/platform/dom'
+import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { MobileLayout } from '@/components/layout'
-import { USER_TABS } from '@/router/tabs'
+import { USER_TABS, type TabItem } from '@/router/tabs'
 import { useKeyboardOpen } from '@/composables/useKeyboardOpen'
+import { useSchoolsHubStore } from '@/stores/schoolsHub'
 
 const route = useRoute()
 const router = useRouter()
+
+// tz-curator.md §1.2 (owner 2026-09-22): the «Школы» tab follows SCHOOL
+// MEMBERSHIP -- the shell (not VTabBar) drops `requires: 'schools'` tabs
+// unless the schoolsHub store sees the account in at least one school (any
+// relation). The probe starts on mount; until it settles the tab is simply
+// absent (fail-closed), then appears without a reload.
+// Owner 2026-10-04 (restores 2026-10-01, supersedes 2026-10-02): «Дневник»
+// (`requires: 'diary'`) is hidden from CURATOR accounts -- a founding-right
+// holder or a school's curator. The 2026-10-02 unconditionality existed only
+// because the async probe let the icon paint and then vanish; instead of
+// re-accepting the flash, the dock's FIRST PAINT is held on
+// schoolsHub.curatorAnswerPending (tabs-pending below): nothing tab-shaped
+// shows until the answer is in, so whatever appears is final. While pending
+// diaryVisible reads false (fail-closed), the same contract as «Школы».
+const schoolsHub = useSchoolsHubStore()
+onMounted(() => {
+  void schoolsHub.ensureCurator()
+})
+
+const visibleTabs = computed<TabItem[]>(() =>
+  USER_TABS.filter((tab) => {
+    if (tab.requires === 'schools') return schoolsHub.hasSchools
+    if (tab.requires === 'diary') return schoolsHub.diaryVisible
+    return true
+  }),
+)
 
 // Hide the floating tab bar while the soft keyboard is open, so it does not ride
 // up over a focused input (e.g. the "запрос мастеру" field on booking-confirmed).
@@ -47,9 +84,16 @@ const activeTab = computed(() => {
 
 // The diary is an immersive full-screen mode: no bottom tab bar (the feed,
 // the entry view and the check-in/feedback detail all hide it). Exit is via
-// the "..." menu inside the diary, not tab navigation. These same three routes
+// the "..." menu inside the diary, not tab navigation. These same routes
 // are also the fill-mode routes (see isFillRoute below) — keep the two in sync.
-const DIARY_ROUTES = ['user-diary', 'user-diary-entry', 'user-diary-detail']
+// FE-70: the external-activity form joins the same contract (own header +
+// scroll body + footer), so it hides the tab bar and renders in fill too.
+const DIARY_ROUTES = [
+  'user-diary',
+  'user-diary-entry',
+  'user-diary-detail',
+  'user-diary-activity-new',
+]
 const isDiaryRoute = computed(() => DIARY_ROUTES.includes(route.name as string))
 
 // All three diary screens render in the layout's fill mode: each owns its
@@ -77,6 +121,29 @@ const isFillRoute = computed(() => DIARY_ROUTES.includes(route.name as string) |
 const FORM_ROUTES = ['user-checkin', 'user-feedback', 'user-reflection']
 const isFormRoute = computed(() => FORM_ROUTES.includes(route.name as string))
 
+// FE-11: the bell feed is a detail list screen -- no tab bar. The master
+// inbox gets the same via meta.hideTabBar (MasterShell reads meta); UserShell
+// lists route names explicitly, so 'user-inbox' joins the lists here and the
+// route meta stays as documentation parity.
+const INBOX_ROUTES = ['user-inbox']
+const isInboxRoute = computed(() => INBOX_ROUTES.includes(route.name as string))
+
+// Owner 2026-09-30: the master's public page in the CURATOR context (the
+// roster's ?groupId= marker) hides the dock -- its place is taken by the
+// hanging «Создать практику» CTA (MasterPublicView renders it on the same
+// condition, so the shell and the view can never disagree).
+const isMasterCuratorRoute = computed(
+  () => route.name === 'user-master-public' && String(route.query.groupId ?? '') !== '',
+)
+
+// Owner 2026-10-05: the stacked school calendar and the practice detail are
+// DETAIL screens — a back control / own footer replaces the dock, exactly the
+// contract master-practice-detail already has via meta.hideTabBar in
+// MasterShell. The shell lists route names explicitly (see FE-11 above), so
+// these join a list here instead of route meta.
+const DETAIL_ROUTES = ['user-calendar-school', 'practice-detail']
+const isDetailRoute = computed(() => DETAIL_ROUTES.includes(route.name as string))
+
 // Edge-to-edge fog mask: the long scrolling lists/feeds + the practice-detail
 // screen (operator 2026-06-09: dissolve its hero under the header and its CTA
 // over the tabbar instead of a hard collision). Forms and the profile still
@@ -88,7 +155,20 @@ const isFormRoute = computed(() => FORM_ROUTES.includes(route.name as string))
 const FOG_ROUTES = [
   'user-dashboard',
   'user-calendar',
+  // Owner 2026-10-05: the stacked school calendar («Практики школы») is the
+  // same scrolling week feed as the tab one — content dissolves under the
+  // floating island instead of scrolling sharply through it.
+  'user-calendar-school',
   'user-bookings',
+  // tz-curator.md §1.4: the schools hub is a scrolling list feed like
+  // bookings -- dissolves under the floating header, CTA stays above the fade.
+  'user-schools',
+  // tz-curator.md §1.6 (owner 2026-09-19): the school PAGE is a fog screen
+  // like every other detail feed -- content dissolves under the header.
+  'user-curator-group',
+  // FE-11: the bell feed -- a scrolling list like bookings, dissolves under
+  // the floating header; «Прочитать всё» sits in the header, not in-flow.
+  'user-inbox',
   'user-master-public',
   'practice-detail',
   // Edit-profile (operator PE-2a, 2026-07-01): parity with the fogged master
@@ -121,7 +201,7 @@ let pdFogCache: {
 } | null = null
 function practiceDetailFog() {
   if (pdFogCache) return pdFogCache
-  const cs = getComputedStyle(document.documentElement)
+  const cs = rootComputedStyle()
   const tok = (name: string, fallback: number): number => {
     const n = parseInt(cs.getPropertyValue(`--velo-fog-pd-${name}`), 10)
     return Number.isFinite(n) ? n : fallback

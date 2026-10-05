@@ -32,28 +32,42 @@ booking.confirmed:
   telegram:
     title: "Бронирование подтверждено"
     body: "✅ Ваше бронирование на <b>{practice_title}</b> подтверждено.\n\n📅 {scheduled_at}\n👤 Мастер: {master_name}\n💰 Оплачено: €{paid_amount}"
+    button_text: "Открыть практику"
 
 booking.cancelled_by_user:
   telegram:
     title: "Участник отменил бронирование"
     body: "❌ Участник отменил бронирование на <b>{practice_title}</b>.\n\n📅 {scheduled_at}"
+    button_text: "Открыть практику"
 
 # -- Practices --
 
 practice.cancelled:
   telegram:
     title: "Практика отменена"
-    body: "❌ Практика <b>{practice_title}</b> {scheduled_at} была отменена мастером.\n\n💰 Оплата возвращена на ваш баланс."
+    body: "❌ Практика <b>{practice_title}</b> {scheduled_at} отменена.\n\n💰 Оплата возвращена на ваш баланс."
+    button_text: "Открыть кошелёк"
 
 practice.rescheduled:
   telegram:
     title: "Практика перенесена"
     body: "📝 Практика <b>{practice_title}</b> перенесена.\n\n📅 Новое время: {scheduled_at}\n👤 Мастер: {master_name}"
+    button_text: "Открыть практику"
 
 practice.cancelled_waitlist:
   telegram:
     title: "Практика отменена"
-    body: "❌ Практика <b>{practice_title}</b> {scheduled_at}, на которую вы стояли в листе ожидания, была отменена мастером."
+    body: "❌ Практика <b>{practice_title}</b> {scheduled_at}, на которую вы стояли в листе ожидания, отменена."
+    button_text: "Открыть практику"
+
+# BE-21: to the practice's OWN master, when a school curator cancelled it.
+# BE-64: ONCE per action, a series cascade included; cancelled_count is
+# every occurrence the action cancelled (the addressed one too, >= 1).
+practice.cancelled_by_curator:
+  telegram:
+    title: "Вашу практику отменили"
+    body: "❌ Практику <b>{practice_title}</b> {scheduled_at} отменил куратор школы <b>{group_name}</b>.\nОтменено занятий: {cancelled_count}\n\n💰 Участникам возвращена оплата."
+    button_text: "Открыть практику"
 
 # -- Waitlist --
 
@@ -61,28 +75,45 @@ waitlist.spot_available:
   telegram:
     title: "Место освободилось!"
     body: "🎉 Освободилось место на <b>{practice_title}</b>!\n\n📅 {scheduled_at}\n👤 Мастер: {master_name}\n\n⏳ У вас <b>30 минут</b> на подтверждение.\nНажмите кнопку, чтобы забронировать."
+    button_text: "Подтвердить место"
 
 waitlist.expired:
   telegram:
     title: "Лист ожидания истёк"
     body: "⏳ Ваша запись в листе ожидания на <b>{practice_title}</b> истекла.\n\n📅 {scheduled_at}"
+    button_text: "Открыть практику"
 
 # -- Master account status --
 
 master.verified:
   telegram:
-    title: "Заявка одобрена"
-    body: "🎉 Поздравляем! Ваша заявка мастера одобрена.\n\nТеперь вы можете создавать и управлять практиками."
+    title: "Профиль мастера открыт"
+    body: "🎉 Вам открыт профиль мастера.\n\nТеперь вы можете создавать практики."
+    button_text: "Перейти в кабинет мастера"
 
 master.rejected:
   telegram:
     title: "Заявка отклонена"
-    body: "Ваша заявка мастера была рассмотрена и, к сожалению, не была одобрена.\n\nВы можете подать новую заявку."
+    body: "Ваша заявка на профиль мастера не одобрена.\n\nПричина: {reason}\n\nВы можете подать новую заявку."
+    button_text: "Открыть заявку"
 
 master.application_received:
   telegram:
     title: "Новая заявка мастера"
     body: "📨 Поступила новая заявка на статус мастера.\n\n👤 {applicant_name}"
+    button_text: "Открыть VELO"
+
+master.application_submitted:
+  telegram:
+    title: "Заявка отправлена"
+    body: "📨 Ваша заявка на профиль мастера получена.\n\nМы проверим её и сообщим о решении."
+    button_text: "Открыть заявку"
+
+master.suspended:
+  telegram:
+    title: "Статус мастера приостановлен"
+    body: "⏸ Ваш профиль мастера приостановлен -- создавать практики сейчас нельзя.\n\nВаши данные сохранены. Если это ошибка, напишите в поддержку."
+    button_text: "Написать в поддержку"
 
 # -- Wallet --
 
@@ -90,16 +121,19 @@ wallet.topup_confirmed:
   telegram:
     title: "Пополнение подтверждено"
     body: "💰 Ваш баланс пополнен на <b>€{amount}</b>.\n\nТекущий баланс: €{balance}"
+    button_text: "Открыть кошелёк"
 
 wallet.withdrawal_approved:
   telegram:
     title: "Вывод средств одобрен"
     body: "💸 Ваш вывод <b>€{amount}</b> одобрен и обрабатывается."
+    button_text: "Открыть кошелёк"
 
 wallet.withdrawal_rejected:
   telegram:
     title: "Вывод средств отклонён"
     body: "Ваш запрос на вывод €{amount} не был одобрен.\n\nПричина: {reason}"
+    button_text: "Открыть кошелёк"
 
 
 # -- Booking reminders (T1; donor reminder_* series re-keyed) --
@@ -108,16 +142,19 @@ booking.reminder_24h:
   telegram:
     title: "Практика завтра"
     body: "⏰ Напоминание: <b>{practice_title}</b> начнётся через 24 часа.\n\n📅 {scheduled_at}\n👤 Мастер: {master_name}"
+    button_text: "Открыть кошелёк"
 
 booking.reminder_1h:
   telegram:
     title: "Практика через 1 час"
     body: "⏰ <b>{practice_title}</b> начнётся через 1 час!\n\n📅 {scheduled_at}\n👤 Мастер: {master_name}"
+    button_text: "Открыть кошелёк"
 
 booking.reminder_10m:
   telegram:
     title: "Практика скоро начнётся"
     body: "🔔 <b>{practice_title}</b> начнётся через 10 минут!\n\n👤 Мастер: {master_name}"
+    button_text: "Открыть кошелёк"
 
 # -- Post-practice prompts --
 
@@ -130,6 +167,7 @@ prompt.leave_feedback:
   telegram:
     title: "Поделитесь впечатлениями"
     body: "📝 Как вам <b>{practice_title}</b>?\n\nВаши впечатления помогают мастерам делать практики лучше."
+    button_text: "Оставить отзыв"
 
 # -- System --
 
@@ -137,6 +175,7 @@ system.announcement:
   telegram:
     title: "{title}"
     body: "{body}"
+    button_text: "Открыть VELO"
 
 # -- Chat baseline (pass-through; messaging engine supplies texts) --
 
@@ -154,3 +193,143 @@ msg.thread_closed:
   telegram:
     title: "{title}"
     body: "{body}"
+
+# BE-25: school notifications. Every one is addressed to a single person who
+# is a party to the event itself -- nobody learns a school exists from these.
+curator_group.transfer_offered:
+  telegram:
+    title: "Вам предлагают школу"
+    body: "🏛 <b>{actor_name}</b> предлагает вам стать куратором школы <b>{group_name}</b>.\n\nОткройте приложение, чтобы принять или отклонить."
+    button_text: "Открыть школу"
+
+curator_group.transfer_accepted:
+  telegram:
+    title: "Школа передана"
+    body: "🏛 <b>{actor_name}</b> принял школу <b>{group_name}</b>. Вы больше не её куратор."
+    button_text: "Открыть школу"
+
+curator_group.transfer_declined:
+  telegram:
+    title: "Передача отклонена"
+    body: "🏛 <b>{actor_name}</b> отклонил передачу школы <b>{group_name}</b>. Школа осталась за вами."
+    button_text: "Открыть школу"
+
+curator_group.member_removed:
+  telegram:
+    title: "Вы больше не в школе"
+    body: "🏛 Вас удалили из школы <b>{group_name}</b>. Её практики больше не отображаются."
+    button_text: "Открыть школу"
+
+# BE-79: DRAFT TEXT -- the owner rewords it later.
+curator_group.member_blocked:
+  telegram:
+    title: "Вас заблокировали в школе"
+    body: "🏛 Куратор заблокировал вас в школе <b>{group_name}</b>. Её практики вам больше недоступны."
+    button_text: "Открыть VELO"
+
+curator_group.member_unblocked:
+  telegram:
+    title: "Вас разблокировали в школе"
+    body: "🏛 Куратор снял блокировку в школе <b>{group_name}</b>. Вы снова участник, её практики вам доступны."
+    button_text: "Открыть школу"
+
+curator_group.member_joined:
+  telegram:
+    title: "Новый участник школы"
+    body: "🏛 <b>{actor_name}</b> вступил в школу <b>{group_name}</b>."
+    button_text: "Открыть школу"
+
+# GT-27: appointing a school master. The offer goes to the candidate, both
+# outcomes go back to the curator who made it.
+curator_group.master_offered:
+  telegram:
+    title: "Вас приглашают вести школу"
+    body: "🏛 <b>{actor_name}</b> предлагает вам стать мастером школы <b>{group_name}</b>.\n\nОткройте приложение, чтобы принять или отклонить."
+    button_text: "Посмотреть предложение"
+
+curator_group.member_demoted:
+  telegram:
+    title: "Вы больше не мастер школы"
+    body: "🏛 <b>{actor_name}</b> перевёл вас в ученики школы <b>{group_name}</b>.\n\nВы остаётесь в школе, но больше не ведёте в ней практики."
+    button_text: "Открыть школу"
+
+curator_group.master_verification_required:
+  telegram:
+    title: "Нужна верификация мастера"
+    body: "🏛 <b>{actor_name}</b> предлагает вам стать мастером школы <b>{group_name}</b>.\n\nДля этого нужна верификация мастера: подайте заявку или дождитесь решения по уже поданной. Приглашение придёт после верификации."
+    button_text: "Открыть заявку"
+
+curator_group.master_offer_accepted:
+  telegram:
+    title: "Назначение принято"
+    body: "🏛 <b>{actor_name}</b> принял назначение мастером школы <b>{group_name}</b>."
+    button_text: "Открыть школу"
+
+curator_group.master_offer_declined:
+  telegram:
+    title: "Назначение отклонено"
+    body: "🏛 <b>{actor_name}</b> отклонил назначение мастером школы <b>{group_name}</b>."
+    button_text: "Открыть школу"
+
+curator_group.master_offer_closed:
+  telegram:
+    title: "Назначение закрыто"
+    body: "🏛 <b>{target_name}</b> не прошёл верификацию мастера. Приглашение мастером школы <b>{group_name}</b> закрыто."
+    button_text: "Открыть школу"
+
+curator_group.practice_created_for_master:
+  telegram:
+    title: "Куратор создал и опубликовал практику от вашего имени"
+    body: "🏛 <b>{actor_name}</b> создал и опубликовал от вашего имени практику <b>{practice_title}</b> ({scheduled_at}) в школе <b>{group_name}</b>.\n\nОна видна в школе."
+    button_text: "Открыть практику"
+
+curator_group.master_practice_published:
+  telegram:
+    title: "Куратор опубликовал вашу практику"
+    body: "🏛 <b>{actor_name}</b> опубликовал вашу практику <b>{practice_title}</b> ({scheduled_at}) в школе <b>{group_name}</b>.\n\nОна видна в школе."
+    button_text: "Открыть практику"
+
+curator_group.master_practice_edited:
+  telegram:
+    title: "Куратор изменил вашу практику"
+    body: "🏛 <b>{actor_name}</b> изменил вашу практику <b>{practice_title}</b> ({scheduled_at}) в школе <b>{group_name}</b>.\n\nПроверьте, всё ли верно."
+    button_text: "Открыть практику"
+
+curator_group.master_practice_deleted:
+  telegram:
+    title: "Куратор удалил ваш черновик"
+    body: "🏛 <b>{actor_name}</b> удалил ваш черновик <b>{practice_title}</b> ({scheduled_at}) в школе <b>{group_name}</b>.\n\nЧерновик больше недоступен."
+    button_text: "Мои практики"
+
+# -- Master-facing (BE-33) --
+#
+# {mood} and {rating} arrive as an EMOJI, never as the stored 1..10 score
+# (diary/notify_master.py). A bucket token would read as an English
+# word inside a Russian sheet; the emoji is the same in both locales and is
+# the vocabulary these sheets already speak.
+
+practice.master_reminder_1h:
+  telegram:
+    title: "Ваша практика через 1 час"
+    body: "⏰ Вы ведёте <b>{practice_title}</b> через 1 час.\n\n📅 {scheduled_at}"
+    button_text: "Мои практики"
+
+practice.checkin_received:
+  telegram:
+    title: "Новый чек-ин"
+    body: "{mood} {participant_name} отметился перед практикой <b>{practice_title}</b>.\n\n{comment}"
+    button_text: "Открыть практику"
+
+practice.feedback_received:
+  telegram:
+    title: "Новый отзыв"
+    body: "{rating} {participant_name} оставил отзыв о практике <b>{practice_title}</b>.\n\n{comment}"
+    button_text: "Открыть практику"
+
+# -- The school hears about a new practice (BE-30) --
+
+curator_group.practice_published:
+  telegram:
+    title: "Новая практика в школе"
+    body: "📣 {actor_name} опубликовал практику <b>{practice_title}</b> в школе «{group_name}»."
+    button_text: "Открыть практику"

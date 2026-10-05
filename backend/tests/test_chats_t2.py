@@ -47,6 +47,23 @@ THREAD_ID = "bbbbbbbb-8972-4000-8000-000000000001"
 THREAD_CREATED_AT = "2026-08-01T10:30:00+00:00"
 
 
+def _sent_message() -> dict:
+    """POST /threads/{id}/messages as comms 3.0.0 answers it (_message_out).
+
+    BE-89: the send mocks here used to answer {"id": ...} alone -- enough
+    while every test asserted only the request, since velo forwards the
+    send's body unread; but not a shape comms has ever sent, so a test that
+    one day reads the body would pass on a message that cannot exist.
+    """
+    return {
+        "id": str(uuid4()),
+        "thread_id": str(uuid4()),
+        "sender": str(uuid4()),
+        "body": "hello",
+        "created_at": "2026-09-30T10:00:00+00:00",
+    }
+
+
 def _thread_payload(created: bool = True, thread_id: str = THREAD_ID) -> dict:
     """The frozen 3b create response, plus the additive `created` flag."""
     return {
@@ -364,7 +381,7 @@ class TestRepointing:
             CHATS_URL, json={"master_id": master["user"]["id"]}, headers=headers,
         )
 
-        fake = AsyncMock(return_value={"id": str(uuid4())})
+        fake = AsyncMock(return_value=_sent_message())
         monkeypatch.setattr(_SEAM, fake)
         posted = await client.post(
             f"{CHATS_URL}/{new_id}/messages",
@@ -457,7 +474,7 @@ class TestMembership:
         student, master = await self._chat(
             client, db_session, monkeypatch, BAND_MIN + 12,
         )
-        fake = AsyncMock(return_value={"id": str(uuid4())})
+        fake = AsyncMock(return_value=_sent_message())
         monkeypatch.setattr(_SEAM, fake)
 
         for actor in (student, master):
@@ -507,7 +524,13 @@ class TestMembership:
         student = await login_user(
             client, telegram_id=BAND_MIN + 17, first_name="Student",
         )
-        monkeypatch.setattr(_SEAM, AsyncMock(return_value={}))
+        # BE-89: a feed page of comms 3.0.0, not {} -- the refusal happens
+        # before the seam; should it ever not, a real page answers 200 and
+        # the 404 below still fails, but no longer as a 502 from a mock
+        # that has no shape at all.
+        monkeypatch.setattr(
+            _SEAM, AsyncMock(return_value={"items": [], "next_cursor": None}),
+        )
         resp = await client.get(
             f"{CHATS_URL}/{uuid4()}/messages",
             headers=auth_headers(student["session_token"]),
@@ -548,7 +571,7 @@ class TestListing:
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch
     ) -> None:
         master = await _make_master(client, db_session, BAND_MIN + 20)
-        fake = AsyncMock(return_value={"threads": [], "next_cursor": None})
+        fake = AsyncMock(return_value={"items": [], "next_cursor": None})
         monkeypatch.setattr(_SEAM, fake)
 
         resp = await client.get(
@@ -589,7 +612,7 @@ class TestListing:
             client, telegram_id=BAND_MIN + 21, first_name="Admin",
         )
 
-        fake = AsyncMock(return_value={"threads": ["EVERY THREAD ON THE BOX"]})
+        fake = AsyncMock(return_value={"items": ["EVERY THREAD ON THE BOX"]})
         monkeypatch.setattr(_SEAM, fake)
         resp = await client.get(
             CHATS_URL, headers=auth_headers(admin["session_token"]),
@@ -626,7 +649,7 @@ class TestListing:
         fake = AsyncMock(
             return_value={
                 "counts": {THREAD_ID: 4},
-                "threads": ["SHOULD NOT BE USED"],
+                "items": ["SHOULD NOT BE USED"],
             }
         )
         monkeypatch.setattr(_SEAM, fake)
@@ -783,7 +806,7 @@ class TestPeerEnrichment:
         )
         stray["client"] = str(uuid4())  # no such velo user
         fake = AsyncMock(
-            return_value={"threads": [known, stray], "next_cursor": None}
+            return_value={"items": [known, stray], "next_cursor": None}
         )
         monkeypatch.setattr(_SEAM, fake)
 

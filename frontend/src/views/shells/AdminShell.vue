@@ -26,7 +26,7 @@ import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { AdminLayout } from '@/components/layout'
 import { ADMIN_TABS } from '@/router/tabs'
-import type { TabItem } from '@/components/layout/VTabBar.vue'
+import type { TabItem } from '@/router/tabs'
 import { useAdminStore } from '@/stores/admin'
 import { useToast } from '@/composables/useToast'
 

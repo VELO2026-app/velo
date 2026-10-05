@@ -44,8 +44,9 @@ vi.mock('@/composables/useKeyboardFieldScroll', () => ({
 const openSupportThread = vi.fn()
 const sendSupportMessage = vi.fn()
 vi.mock('@/api/support', () => ({
-  openSupportThread: (...args: unknown[]) => openSupportThread(...args),
-  sendSupportMessage: (...args: unknown[]) => sendSupportMessage(...args),
+  openSupportThread: (...args: Parameters<typeof openSupportThread>) => openSupportThread(...args),
+  sendSupportMessage: (...args: Parameters<typeof sendSupportMessage>) =>
+    sendSupportMessage(...args),
 }))
 
 const toastError = vi.fn()

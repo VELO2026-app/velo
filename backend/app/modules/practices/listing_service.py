@@ -158,6 +158,87 @@ async def list_master_practices(
     )
 
 
+SchoolPracticeStatus = Literal[
+    "draft", "scheduled", "live", "completed", "cancelled",
+]
+
+
+async def list_school_practices_for_curator(
+    session: AsyncSession,
+    user: User,
+    group_id: UUID,
+    *,
+    status: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> PaginatedPracticesResponse:
+    """Every practice of a school, for its curator to manage (BE-63).
+
+    NOT the school page (list_group_practices_endpoint): that one is the
+    public feed narrowed to the school, for members, upcoming and published
+    only, by the school's PRESENT masters. This is the curator's working
+    list (owner ruling Q6): every non-deleted practice that BELONGS to the
+    school (Practice.curator_group_id), drafts included, whether or not its
+    master is still in the school -- a draft of a master who left is still
+    the curator's to fix or throw away. Ordered by scheduled_at ascending,
+    id as the tie-break so a page boundary is stable.
+
+    The school must be the caller's (404 otherwise, the same answer as for
+    a school that does not exist). The owner-only Zoom fields stay the
+    masters' (as on every curator-facing response): no host link, no
+    public link -- unless the curator is the practice's own master.
+    """
+    from app.modules.curator_groups.service import _get_group_or_404
+
+    await _get_group_or_404(user.id, group_id, session)
+    base_filter = (
+        Practice.curator_group_id == group_id,
+        Practice.status != PracticeStatus.DELETED.value,
+    )
+    if status is not None:
+        base_filter = (*base_filter, Practice.status == status)
+    total = (
+        await session.execute(select(func.count(Practice.id)).where(*base_filter))
+    ).scalar_one()
+    rows = (
+        await session.execute(
+            select(Practice, User.first_name, User.last_name)
+            .join(User, Practice.master_id == User.id)
+            .where(*base_filter)
+            .order_by(Practice.scheduled_at.asc(), Practice.id.asc())
+            .limit(limit)
+            .offset(offset)
+        )
+    ).all()
+    page_practices = [p for p, _first, _last in rows]
+    series_meta = await series_meta_for_practices(page_practices, session)
+    from app.modules.zoom.service import (
+        get_host_join_urls,
+        get_zoom_meeting_statuses,
+    )
+    own_ids = [p.id for p in page_practices if p.master_id == user.id]
+    host_join_urls = await get_host_join_urls(own_ids, session)
+    zoom_meeting_statuses = await get_zoom_meeting_statuses(
+        [p.id for p in page_practices], session,
+    )
+    return PaginatedPracticesResponse(
+        items=[
+            practice_to_response(
+                p,
+                master_full_name(first, last),
+                zoom_host_join_url=host_join_urls.get(p.id),
+                zoom_public_link_visible=p.master_id == user.id,
+                zoom_meeting_status=zoom_meeting_statuses.get(p.id),
+                **series_meta_kwargs(series_meta.get(p.id)),
+            )
+            for p, first, last in rows
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
 def _local_hour(column_tz, column_ts):
     """Local hour (0-23) of a timestamp in a given timezone.
 
@@ -212,6 +293,7 @@ async def list_public_practices(
     offset: int = 0,
     master_id: UUID | None = None,
     master_ids: list[UUID] | None = None,
+    curator_group_id: UUID | None = None,
     practice_type: list[str] | None = None,
     direction: list[str] | None = None,
     difficulty: list[str] | None = None,
@@ -241,7 +323,9 @@ async def list_public_practices(
     master_id filters to ONE master; master_ids to a SET of them (internal
     parameter, not exposed by the public route). An empty master_ids list
     means "nobody", not "everybody" -- it yields an empty page. Passing both
-    ANDs them.
+    ANDs them. curator_group_id (internal too, BE-74) keeps only the
+    practices that BELONG TO that school; ANDed with the rest like any
+    other filter.
 
     Multi-value semantics (Calendar "Выбрать практики"):
       - Within one facet, values are OR-ed (.in_()).
@@ -299,6 +383,16 @@ async def list_public_practices(
     # behaviour is stated so nobody has to guess later.
     if master_ids is not None:
         filters.append(Practice.master_id.in_(master_ids))
+
+    # curator_group_id (BE-74): the school's page shows the practices that
+    # belong to the school, not every practice of its masters -- a public
+    # practice a master of the school made in the general section is not
+    # the school's, and neither is one of another school. The caller also
+    # passes master_ids, and the two answer different questions: this one
+    # "is it the school's", that one "is its master still in the school".
+    # Not exposed by the public route, for master_ids' reason.
+    if curator_group_id is not None:
+        filters.append(Practice.curator_group_id == curator_group_id)
 
     # practice_type: multi-select (OR within facet).
     if practice_type:

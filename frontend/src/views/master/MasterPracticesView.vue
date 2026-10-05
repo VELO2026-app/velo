@@ -22,10 +22,12 @@
              insights.checkins mood tally, now distinct PRE check-ins, see
              practiceCardMeta.ts) + rating distribution (insights.feedbacks,
              reused from diaryStore cache like AnalyticsView, PAST tab only).
-    STUB  -- attended/no-show counts (no aggregate field) → «—»; recurrence days
-             («Регулярная» shown for series, exact days TBD); «осталось N из M»
-             omitted (no series-session field). All recorded in
-             master-ds-zod-roadmap.md.
+             Also REAL (practiceCardMeta.ts): recurrence days from
+             recurrence_days («Регулярная» only for a series without a day
+             list) and «Осталось N из M занятий» from total_sessions /
+             completed_sessions.
+    NOT SHOWN -- attended/no-show counts: no aggregate field, so the card
+             renders nothing for them (no placeholder).
 -->
 
 <template>
@@ -99,6 +101,18 @@
                 ><IconHourglass :size="16" /> {{ remainingSessionsLabel(p) }}</span
               >
             </div>
+            <!-- Review P2 / GT P5: the list card marks an unreachable school
+                 audience too -- not only the detail view the master may never
+                 open. BE-74: a statement, not a control. A flagged practice
+                 always belongs to a school, whose audience is read-only on
+                 the edit screen, so there is no edit to jump into; a tap on
+                 the mark is a tap on the card. -->
+            <div v-if="p.audience_unavailable" class="mp-card__meta mp-card__meta--row2">
+              <span class="mp-stat mp-stat--warn">
+                <IconWarning :size="16" /> Школа недоступна — практику не видит никто, кроме вас и
+                уже записавшихся
+              </span>
+            </div>
           </article>
         </template>
         <VEmptyState
@@ -137,9 +151,7 @@
             <VRatingBadges
               v-if="hasRating(p.id)"
               class="mp-card__rbadges"
-              :fire="ratingPct(p.id, 'fire')"
-              :good="ratingPct(p.id, 'good')"
-              :confused="ratingPct(p.id, 'confused')"
+              :pcts="ratingPcts(p.id)"
             />
           </article>
         </template>
@@ -166,11 +178,19 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import { VButton, VLoader, VEmptyState, VSegmentTrack, VRatingBadges } from '@/components/ui'
-import { IconPlus, IconGroup, IconCheckin, IconRepeat, IconHourglass } from '@/components/icons'
+import {
+  IconPlus,
+  IconGroup,
+  IconCheckin,
+  IconRepeat,
+  IconHourglass,
+  IconWarning,
+} from '@/components/icons'
 import { useMasterStore } from '@/stores/master'
 import { useDiaryStore } from '@/stores/diary'
 import { useToast } from '@/composables/useToast'
 import { practiceIconFor } from '@/utils/displayHelpers'
+import { zonePercents, zoneTotal, type MoodScaleKey } from '@/utils/moodScale'
 import { checkinLabel, recurrenceLabel, remainingSessionsLabel } from '@/utils/practiceCardMeta'
 import { formatDateShort, formatShortDate, formatTime } from '@/utils/format'
 import { practiceHasEnded } from '@/utils/practiceStatus'
@@ -269,7 +289,7 @@ function participantsCount(p: PracticeResponse): string {
 
 function totalFeedbacks(id: string): number {
   const i = insightsCache.get(id)
-  return i ? i.feedbacks.fire + i.feedbacks.good + i.feedbacks.confused : 0
+  return i ? zoneTotal(i.feedbacks) : 0
 }
 
 // checkinLabel / recurrenceLabel / remainingSessionsLabel moved to
@@ -279,11 +299,9 @@ function hasRating(id: string): boolean {
   return insightsCache.has(id) && totalFeedbacks(id) > 0
 }
 
-function ratingPct(id: string, key: 'fire' | 'good' | 'confused'): number {
-  const i = insightsCache.get(id)
-  if (!i) return 0
-  const total = totalFeedbacks(id)
-  return total > 0 ? Math.round((i.feedbacks[key] / total) * 100) : 0
+// Rendered only under hasRating, so the insights are cached there.
+function ratingPcts(id: string): Record<MoodScaleKey, number> {
+  return zonePercents(insightsCache.get(id)!.feedbacks)
 }
 
 /** Eager-load insights for the visible tab (idempotent: cached ids are skipped).
@@ -305,10 +323,10 @@ async function loadTabData(): Promise<void> {
 // -- Navigation -------------------------------------------------------------
 
 function goNew(): void {
-  router.push({ name: 'master-practice-new' })
+  void router.push({ name: 'master-practice-new' })
 }
 function goDetail(id: string): void {
-  router.push({ name: 'master-practice-detail', params: { id } })
+  void router.push({ name: 'master-practice-detail', params: { id } })
 }
 
 /** Lazily fetch the bucket a tab needs -- each tab paginates independently
@@ -341,7 +359,7 @@ async function onLoadMore(): Promise<void> {
 watch(activeTab, async (tab) => {
   // Persist the tab in the URL so a back-navigation from detail restores it.
   if (route.query.tab !== tab) {
-    router.replace({ query: { ...route.query, tab } })
+    void router.replace({ query: { ...route.query, tab } })
   }
   await ensureBucketLoaded(tab)
   await loadTabData()
@@ -481,13 +499,19 @@ onUnmounted(() => {
   gap: var(--velo-gap-6);
 }
 
+/* Review P2: the unreachable-school-audience warning inside a list card --
+   peach attention pair (the same tokens the detail screen's banner uses).
+   BE-74: a statement, not a control -- no pointer cursor of its own. */
+.mp-stat--warn {
+  color: var(--velo-peach-700);
+}
+
 .mp-stat :deep(svg) {
   opacity: 0.8;
 }
 
-/* Rating-distribution badges (sand/pink/blue-100 tints; confused = blue-400
-   per operator SVG 2026-06-11). */
-/* Margin only — the trio itself is the shared VRatingBadges component. */
+/* Margin only — the five-zone badge row itself is the shared VRatingBadges
+   component. */
 .mp-card__rbadges {
   margin-top: 13px;
 }

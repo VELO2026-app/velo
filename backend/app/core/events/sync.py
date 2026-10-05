@@ -3,11 +3,21 @@
 # =============================================================================
 #
 # Thin helpers over emit_event for the two sync-projection events of
-# the frozen comms contract:
+# the comms protocol (3.0.0):
 #
 #   user_upserted  -- full identity SNAPSHOT (contract discipline: ALL
-#                     keys present, "no value" is an explicit null);
+#                     keys present, "no value" is an explicit null), with
+#                     its VERSION;
 #   group_changed  -- contact-book membership delta.
+#
+# THE SNAPSHOT VERSION is users.snapshot_version, raised by a database
+# trigger whenever a snapshot field changes (migration cm21a1b2c3d4 says
+# why a trigger). comms applies a snapshot only when its version is higher
+# than the stored one; an equal version with the same content is a replay,
+# with other content a conflict. So emit_user_upserted never trusts the ORM
+# object: it flushes, then re-reads the version AND the snapshot's fields
+# from the row in one SELECT -- the pair always comes from one state of the
+# row, and callers never pass (or know) the version.
 #
 # GROUP SEMANTICS (locked in the T0 plan review):
 #   masters = MASTER CAPABILITY (a verified MasterProfile), NOT the
@@ -31,7 +41,7 @@
 # that was never backfilled).
 #
 # The `user` parameter is duck-typed (id / telegram_id / credentials /
-# language / timezone / is_active) -- core does not import
+# language / timezone / is_active / snapshot_version) -- core does not import
 # app.modules.users to stay cycle-free; every caller passes the ORM
 # User.
 # =============================================================================
@@ -39,6 +49,7 @@
 from typing import Any, Protocol
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events.service import (
@@ -57,15 +68,30 @@ class SyncedUser(Protocol):
     language: str
     timezone: str
     is_active: bool
+    snapshot_version: int
+
+
+def _present(value: Any) -> str | None:
+    """A string field of the snapshot, or None where comms wants null.
+
+    comms refuses a blank string on the wire (its check is `not
+    value.strip()`), so empty and whitespace-only map to an explicit null
+    here -- the one exit every snapshot passes. A non-string is not an
+    address either.
+    """
+    if isinstance(value, str) and value.strip():
+        return value
+    return None
 
 
 def user_snapshot(user: SyncedUser) -> dict[str, Any]:
     """Build the user_upserted data document (without "v").
 
-    Snapshot discipline of the frozen contract: every key present,
-    explicit nulls. Field sources:
+    Snapshot discipline of comms 3.0.0: every key present, "no value"
+    is an explicit null -- never a blank string. Field sources:
       recipient_id <- User.id (product user id IS the comms
                       recipient id -- no surrogate, arch decision);
+      version      <- User.snapshot_version (database-maintained);
       telegram_id  <- User.telegram_id;
       email        <- credentials["email"] (JSONB; velo has no email
                       column) -- empty string means "cleared" in the
@@ -73,22 +99,48 @@ def user_snapshot(user: SyncedUser) -> dict[str, Any]:
       locale       <- User.language;
       timezone     <- User.timezone (IANA name);
       active       <- User.is_active.
+    email, locale and timezone pass _present: blank -> null.
+
+    Pure: it reads what the object holds. Only emit_user_upserted
+    guarantees the object holds the row's current state.
     """
-    raw_email = (user.credentials or {}).get("email")
-    email = raw_email if isinstance(raw_email, str) and raw_email else None
     return {
         "recipient_id": str(user.id),
+        "version": user.snapshot_version,
         "telegram_id": user.telegram_id,
-        "email": email,
-        "locale": user.language,
-        "timezone": user.timezone,
+        "email": _present((user.credentials or {}).get("email")),
+        "locale": _present(user.language),
+        "timezone": _present(user.timezone),
         "active": user.is_active,
     }
 
 
 async def emit_user_upserted(session: AsyncSession, user: SyncedUser) -> None:
-    """Emit an identity snapshot for the user into the outbox."""
-    await emit_event(session, EVENT_USER_UPSERTED, user_snapshot(user))
+    """Emit an identity snapshot for the user into the outbox.
+
+    Flushes this session's pending changes -- the trigger raises the
+    version only when the UPDATE reaches the row -- and re-reads the row
+    by id IN THIS SESSION, version and snapshot fields in one SELECT,
+    before building the document.
+
+    By id, not by refreshing `user`: callers do not all hand in an object
+    of this session. POST /masters/apply loads the user through the READ
+    session (get_current_user) and emits through the write session; the
+    object is not persistent here, so it cannot be refreshed, and its
+    attributes are not the row this transaction sees. populate_existing
+    makes an instance this session already holds (the usual case) take
+    the row's current values too.
+    """
+    await session.flush()
+    model = type(user)
+    row = (
+        await session.execute(
+            select(model)
+            .where(model.id == user.id)
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one()
+    await emit_event(session, EVENT_USER_UPSERTED, user_snapshot(row))
 
 
 async def emit_group_changed(

@@ -32,7 +32,7 @@
 </template>
 
 <script setup lang="ts">
-import VeloLogo from '@/components/ui/VeloLogo.vue'
+import { VeloLogo } from '@/components/ui'
 
 const botUrl = import.meta.env.VITE_TELEGRAM_BOT_URL || 'https://telegram.me/veloappbot'
 </script>

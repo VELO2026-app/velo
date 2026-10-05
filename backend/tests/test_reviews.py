@@ -5,11 +5,12 @@
 # telegram_id range: 89000-89999
 #
 # Coverage:
-#   - GET /practices/{id}/reviews (happy path: names, comments, buckets)
-#   - rating -> bucket mapping (1-3 confused / 4-7 good / 8-10 fire)
+#   - GET /practices/{id}/reviews (happy path: names, comments, zones)
+#   - rating -> zone mapping (BE-77: bad 1-2 / low 3-4 / neutral 5-6 /
+#     good 7-8 / fire 9-10)
 #   - feedbacks without a comment are still listed
 #   - newest-first ordering
-#   - attention=true narrows to the negative bucket (rating 1-3)
+#   - attention=true narrows to the attention zones (rating 1-4, bad + low)
 #   - offset/limit pagination + total
 #   - empty practice (no feedback -> empty list, total 0)
 #   - master ownership check (not owner -> 404, P-08)
@@ -258,7 +259,12 @@ async def test_reviews_happy_path(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """Master sees named reviews with comment text and bucketed ratings."""
+    """Master sees named reviews with comment text and zoned ratings.
+
+    BE-77: 9 / 6 / 2 used to read fire / good / confused (the 1-3 / 4-7 /
+    8-10 split); under the owner's five zones the same scores are fire /
+    neutral / bad.
+    """
     master_auth = await _make_verified_master(
         client, db_session, telegram_id=89900,
     )
@@ -297,10 +303,10 @@ async def test_reviews_happy_path(
     by_name = {item["reviewer_name"]: item for item in data["items"]}
     assert set(by_name) == {"Alice", "Bob", "Carol"}
 
-    # rating -> bucket mapping (8-10 fire / 4-7 good / 1-3 confused).
+    # rating -> zone mapping (9 fire / 6 neutral / 2 bad).
     assert by_name["Alice"]["rating"] == "fire"
-    assert by_name["Bob"]["rating"] == "good"
-    assert by_name["Carol"]["rating"] == "confused"
+    assert by_name["Bob"]["rating"] == "neutral"
+    assert by_name["Carol"]["rating"] == "bad"
 
     # Comment text is exposed (de-anonymised, unlike insights).
     assert by_name["Alice"]["comment"] == "Loved it!"
@@ -353,7 +359,8 @@ async def test_reviews_include_feedback_without_comment(
     assert data["total"] == 1
     assert data["items"][0]["reviewer_name"] == "Dave"
     assert data["items"][0]["comment"] is None
-    assert data["items"][0]["rating"] == "fire"
+    # BE-77: 8 is the top of "good" (7-8); under the old split it was fire.
+    assert data["items"][0]["rating"] == "good"
 
 
 # ===================================================================
@@ -413,7 +420,13 @@ async def test_reviews_attention_filter(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """attention=true returns only rating 1-3 (the confused bucket)."""
+    """attention=true returns only ratings 1-4 (zones bad and low).
+
+    BE-77 moved the threshold from <= 3 to <= 4. The inputs used to be
+    9 / 5 / 3 / 1, which cannot tell the two thresholds apart (no 4); the
+    9 is now a 4, so the boundary 4|5 is pinned on both sides: the 4 is
+    IN, the 5 is OUT. The zone of each returned item is asserted exactly.
+    """
     master_auth = await _make_verified_master(
         client, db_session, telegram_id=89903,
     )
@@ -421,8 +434,8 @@ async def test_reviews_attention_filter(
         db_session, master_auth["user"]["id"],
     )
 
-    # fire (9), good (5), confused (3), confused (1).
-    await _add_review(client, db_session, practice, 89008, rating=9, first_name="F")
+    # low (4), neutral (5), low (3), bad (1).
+    await _add_review(client, db_session, practice, 89008, rating=4, first_name="L4")
     await _add_review(client, db_session, practice, 89009, rating=5, first_name="G")
     await _add_review(client, db_session, practice, 89010, rating=3, first_name="C1")
     await _add_review(client, db_session, practice, 89011, rating=1, first_name="C2")
@@ -438,7 +451,7 @@ async def test_reviews_attention_filter(
     assert resp_all.status_code == 200
     assert resp_all.json()["total"] == 4
 
-    # With attention: only the two confused (rating <= 3).
+    # With attention: the three with rating <= 4.
     resp_att = await client.get(
         url,
         params={"attention": "true"},
@@ -446,9 +459,10 @@ async def test_reviews_attention_filter(
     )
     assert resp_att.status_code == 200
     data = resp_att.json()
-    assert data["total"] == 2
-    assert {item["reviewer_name"] for item in data["items"]} == {"C1", "C2"}
-    assert all(item["rating"] == "confused" for item in data["items"])
+    assert data["total"] == 3
+    assert {
+        item["reviewer_name"]: item["rating"] for item in data["items"]
+    } == {"L4": "low", "C1": "low", "C2": "bad"}
 
 
 # ===================================================================

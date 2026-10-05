@@ -104,6 +104,18 @@
         description="Вход в неё больше не откроется"
       />
 
+      <!-- Links (3 October): 'unavailable' -- the meeting exists and this
+           person holds a live booking, but their personal join link could
+           not be made (resolve_zoom_entry: nothing retries it, so «ask the
+           master to retry» would be a lie). No guest link either: a live
+           booking never falls back to it. No way in -- say so, no «Войти». -->
+      <VEmptyState
+        v-else-if="zoomEntry?.kind === 'unavailable'"
+        icon="warning"
+        title="Ссылка на встречу недоступна"
+        description="Вашу личную ссылку для входа создать не удалось, и повторной попытки не будет. Напишите в поддержку."
+      />
+
       <template v-else>
         <!-- T-35: no live booking -> the guest link. Attendance writes nothing
              for this person either way, so nothing is lost by it -- and
@@ -234,7 +246,11 @@ async function onEnter(): Promise<void> {
     if (booking && booking.joined_at === null) {
       const result = await bookingsStore.joinBooking(booking.id)
       // Ignore "already joined" -- opening Zoom is still the right action.
-      if (!result.ok && !result.error.toLowerCase().includes('already')) {
+      // FE-78.2: the gate keys on the machine status (the join endpoint's
+      // only 409 is "already joined"), never on the human-readable text --
+      // extractApiError speaks Russian and the old includes('already')
+      // could never match anything it said.
+      if (!result.ok && result.status !== 409) {
         toast.error(result.error)
       }
     }
@@ -253,12 +269,12 @@ async function onEnter(): Promise<void> {
 
 function onCheckin(): void {
   if (alreadyCheckedIn.value) return
-  router.push({ name: 'user-checkin', params: { practiceId } })
+  void router.push({ name: 'user-checkin', params: { practiceId } })
 }
 
 /** Back arrow -> dashboard (breaks the check-in <-> live loop). */
 function goBack(): void {
-  router.push({ name: 'user-dashboard' })
+  void router.push({ name: 'user-dashboard' })
 }
 
 /**
@@ -278,16 +294,16 @@ async function onLeave(): Promise<void> {
     }
   } finally {
     leaving.value = false
-    router.push({ name: 'user-dashboard' })
+    void router.push({ name: 'user-dashboard' })
   }
 }
 
 onMounted(async () => {
   if (practicesStore.selected?.id !== practiceId) {
-    practicesStore.fetchPractice(practiceId)
+    void practicesStore.fetchPractice(practiceId)
   }
   // Needed to resolve the user's booking id for join/leave.
-  bookingsStore.fetchMyBookings()
+  void bookingsStore.fetchMyBookings()
   // T-35: how THIS user enters. Failure here is not a toast -- this screen's
   // whole purpose is entering the practice, so it becomes the screen's state.
   try {

@@ -19,10 +19,11 @@ let lockCount = 0
 
 export function lockBodyScroll(): void {
   lockCount += 1
-  if (lockCount === 1) document.body.style.overflow = 'hidden'
+  if (lockCount === 1) setBodyOverflow('hidden')
 }
 
 export function unlockBodyScroll(): void {
   lockCount = Math.max(0, lockCount - 1)
-  if (lockCount === 0) document.body.style.overflow = ''
+  if (lockCount === 0) setBodyOverflow('')
 }
+import { setBodyOverflow } from '@/platform/dom'

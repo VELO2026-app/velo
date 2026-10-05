@@ -24,10 +24,11 @@ import {
   masterNoProfileGuard,
   masterStatusGuard,
   masterPendingGuard,
+  masterApplyGuard,
   roleFreshnessGuard,
 } from '@/router/guards'
 import { useAuthStore } from '@/stores/auth'
-import { resetAuthState, __setReadyForTest, pendingDeepLink } from '@/composables/useAuth'
+import { resetAuthState, __setReadyForTest, pendingStartParam } from '@/composables/useAuth'
 import { MASTER_APPLIED_KEY, masterRejectionSeenKey } from '@/utils/constants'
 import type { UserResponse } from '@/api/types'
 
@@ -40,7 +41,8 @@ import type { UserResponse } from '@/api/types'
 // primeMethodTaxonomyCatalog mock.
 const refreshRoleIfStale = vi.fn().mockResolvedValue(undefined)
 vi.mock('@/composables/useRoleFreshness', () => ({
-  refreshRoleIfStale: (...args: unknown[]) => refreshRoleIfStale(...args),
+  refreshRoleIfStale: (...args: Parameters<typeof refreshRoleIfStale>) =>
+    refreshRoleIfStale(...args),
 }))
 
 // Guards ignore (to, from, next) entirely at runtime -- call bare, matching
@@ -117,15 +119,40 @@ describe('router/guards', () => {
       expect(await call(roleRedirect)).toEqual({ path: '/user/dashboard' })
     })
 
-    it('a pending deep link is consumed and cleared instead of the role dashboard', async () => {
+    // Links (3 October): this used to set an already-PARSED route. Right while
+    // initAuth parsed without a role; the parse moved here, with the session
+    // role, so the pending value is now the raw startapp string.
+    it('a pending startapp is parsed WITH the role, consumed and cleared', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'master' })
-      pendingDeepLink.value = { name: 'practice-detail', params: { id: 'p1' } }
+      pendingStartParam.value = 'open_practice__00000000-0000-4000-8000-0000000000a1'
 
       const result = await call(roleRedirect)
 
-      expect(result).toEqual({ name: 'practice-detail', params: { id: 'p1' } })
-      expect(pendingDeepLink.value).toBeNull()
+      expect(result).toEqual({
+        name: 'master-practice-detail',
+        params: { id: '00000000-0000-4000-8000-0000000000a1' },
+      })
+      expect(pendingStartParam.value).toBeNull()
+    })
+
+    it('the same verb lands in the zone of the role: open_wallet -> top-up vs finance', async () => {
+      __setReadyForTest(true)
+      setAuthUser({ role: 'user' })
+      pendingStartParam.value = 'open_wallet'
+      expect(await call(roleRedirect)).toEqual({ name: 'user-topup' })
+
+      setAuthUser({ role: 'master' })
+      pendingStartParam.value = 'open_wallet'
+      expect(await call(roleRedirect)).toEqual({ name: 'master-finance' })
+    })
+
+    it('an unknown startapp falls through to the role dashboard, and is cleared', async () => {
+      __setReadyForTest(true)
+      setAuthUser({ role: 'user' })
+      pendingStartParam.value = 'open_admin_masters'
+      expect(await call(roleRedirect)).toEqual({ path: '/user/dashboard' })
+      expect(pendingStartParam.value).toBeNull()
     })
 
     it('timeout with role still null -> /auth-error', async () => {
@@ -161,12 +188,15 @@ describe('router/guards', () => {
     it('rejected applicant with a pending deep link -> the deep link wins', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'user', master_application: { status: 'rejected' } })
-      pendingDeepLink.value = { name: 'practice-detail', params: { id: 'p1' } }
+      pendingStartParam.value = 'open_practice__00000000-0000-4000-8000-0000000000a1'
 
       const result = await call(roleRedirect)
 
-      expect(result).toEqual({ name: 'practice-detail', params: { id: 'p1' } })
-      expect(pendingDeepLink.value).toBeNull()
+      expect(result).toEqual({
+        name: 'practice-detail',
+        params: { id: '00000000-0000-4000-8000-0000000000a1' },
+      })
+      expect(pendingStartParam.value).toBeNull()
     })
 
     it('a plain user with no application is unaffected -> /user/dashboard', async () => {
@@ -314,7 +344,47 @@ describe('router/guards', () => {
     })
   })
 
+  describe('masterApplyGuard', () => {
+    it.each(['pending', 'verified'])(
+      'user with %s application goes to its status, not another form',
+      async (status) => {
+        __setReadyForTest(true)
+        setAuthUser({ role: 'user', master_application: { status } })
+        expect(await call(masterApplyGuard)).toEqual({ path: '/master/pending' })
+      },
+    )
+
+    it.each(['rejected', 'cancelled_by_user', 'suspended'])(
+      'allows reapplication after %s',
+      async (status) => {
+        __setReadyForTest(true)
+        setAuthUser({ role: 'user', master_application: { status } })
+        expect(await call(masterApplyGuard)).toBe(true)
+      },
+    )
+
+    it('lets a first-time applicant fill the form', async () => {
+      __setReadyForTest(true)
+      setAuthUser({ role: 'user' })
+      expect(await call(masterApplyGuard)).toBe(true)
+    })
+
+    it('verified master stays in their cabinet', async () => {
+      __setReadyForTest(true)
+      setAuthUser({ role: 'master' })
+      masterStoreState.profile = { status: 'verified' }
+      expect(await call(masterApplyGuard)).toEqual({ path: '/master/dashboard' })
+    })
+  })
+
   describe('masterPendingGuard', () => {
+    it('pending applicant in a new session can see and withdraw their application', async () => {
+      __setReadyForTest(true)
+      setAuthUser({ role: 'user', master_application: { status: 'pending' } })
+      expect(sessionStorage.getItem(MASTER_APPLIED_KEY)).toBeNull()
+      expect(await call(masterPendingGuard)).toBe(true)
+    })
+
     it('timeout with role still null -> /auth-error', async () => {
       vi.useFakeTimers()
       const promise = call(masterPendingGuard)
@@ -371,14 +441,14 @@ describe('router/guards', () => {
     it('always calls refreshRoleIfStale before checking anything', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'user' })
-      await roleFreshnessGuard({ name: 'user-dashboard' })
+      roleFreshnessGuard({ name: 'user-dashboard' })
       expect(refreshRoleIfStale).toHaveBeenCalledTimes(1)
     })
 
     it('rejected applicant, not yet seen, navigating anywhere else -> routed to /master/pending', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'user', master_application: { status: 'rejected' } })
-      expect(await roleFreshnessGuard({ name: 'user-calendar' })).toEqual({
+      expect(roleFreshnessGuard({ name: 'user-calendar' })).toEqual({
         path: '/master/pending',
       })
     })
@@ -386,26 +456,26 @@ describe('router/guards', () => {
     it('does not redirect a navigation already headed to master-pending (avoids a loop)', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'user', master_application: { status: 'rejected' } })
-      expect(await roleFreshnessGuard({ name: 'master-pending' })).toBe(true)
+      expect(roleFreshnessGuard({ name: 'master-pending' })).toBe(true)
     })
 
     it("rejected applicant, already seen -> allowed through (matches roleRedirect's own rule)", async () => {
       __setReadyForTest(true)
       setAuthUser({ id: 'user_1', role: 'user', master_application: { status: 'rejected' } })
       localStorage.setItem(masterRejectionSeenKey('user_1'), '1')
-      expect(await roleFreshnessGuard({ name: 'user-profile' })).toBe(true)
+      expect(roleFreshnessGuard({ name: 'user-profile' })).toBe(true)
     })
 
     it('non-rejected user navigating around -> allowed through', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'user' })
-      expect(await roleFreshnessGuard({ name: 'user-dashboard' })).toBe(true)
+      expect(roleFreshnessGuard({ name: 'user-dashboard' })).toBe(true)
     })
 
     it('master/admin roles -> allowed through (the rejection condition requires role=user)', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'master' })
-      expect(await roleFreshnessGuard({ name: 'master-dashboard' })).toBe(true)
+      expect(roleFreshnessGuard({ name: 'master-dashboard' })).toBe(true)
     })
 
     // -- PROMPT №550: guard cost fix -- refreshRoleIfStale is fire-and-forget,
@@ -413,7 +483,7 @@ describe('router/guards', () => {
     it('still refreshes for a master role, not only role=user -- a revoked master must keep learning about it', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'master' })
-      await roleFreshnessGuard({ name: 'master-dashboard' })
+      roleFreshnessGuard({ name: 'master-dashboard' })
       expect(refreshRoleIfStale).toHaveBeenCalledTimes(1)
     })
 
@@ -437,7 +507,7 @@ describe('router/guards', () => {
           }),
       )
 
-      const result = await roleFreshnessGuard({ name: 'user-dashboard' })
+      const result = roleFreshnessGuard({ name: 'user-dashboard' })
 
       expect(result).toBe(true)
       expect(refreshSettled).toBe(false)

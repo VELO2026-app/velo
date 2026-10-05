@@ -3,7 +3,7 @@
 **Версия:** 2.0
 **Дата:** 20 июня 2026
 **Статус:** Active
-**Тесты:** 615 passed, 12 skipped  
+**Тесты:** 615 passed, 12 skipped 
 
 > **Freshness (PROMPT №510, 2026-07-19, verified against `8d4948f` on `test`):** graded
 > STALE-BUT-HARMLESS overall — NOT rewritten this round; the test count in the header above
@@ -1350,9 +1350,13 @@ velo lint          # ruff check
 
 ```python
 # из backend/
-python3 -c "
-import sys; sys.path.insert(0,'.')
+python3 - c
+"
+import sys;
+
+sys.path.insert(0, 'tmp/BE-40')
 from tests.telegram_id_bands import declared_bands, find_overlaps, free_windows
+
 for b in sorted(declared_bands(), key=lambda x: x.low):
     print(f'{b.low}-{b.high}  {b.file}')
 print('overlaps:', len(find_overlaps()))
@@ -1410,7 +1414,7 @@ print('free in 65000-65999:', free_windows(space=(65000, 65999)))
 | **CAL-W1** 🔴🚀 | `core/config.py` | **Проверить, не затёрт ли startup-`model_validator` Stripe-ключей при правках config в Calendar iteration.** Если валидатор пропал — production может стартовать с пустыми Stripe-ключами и упасть только при первой оплате | Сверить текущий `config.py` с дореитерационным; восстановить `model_validator`, проверяющий наличие ключей в `APP_ENV=production`. Найдено аудитом Calendar (W-1), принято в техдолг |
 | TD-025 | Все роутеры | Нет rate limiting на masters endpoints. **(подтверждено аудитом 2026-05-20: распространить и на топап `POST /payments/topup` и покупку `POST /practices/{id}/purchase`)** | `slowapi` или Redis-based custom limiter |
 | TD-026 | `docker-compose.yml` | Redis без пароля | `requirepass` + `REDIS_PASSWORD` в .env |
-| **AUDIT-0520-03** 🟡🚀 | `core/middleware.py` | `_extract_client_ip` берёт первый элемент `X-Forwarded-For` без проверки trusted proxy -> клиент может подделать IP в audit log финансовых операций | Доверять XFF только от известного прокси (Nginx); или брать N-й справа hop; список trusted proxies в config |
+| ~~**AUDIT-0520-03**~~ 🟡🚀 | `core/middleware.py` | **Закрыто BE-40.** Было: `_extract_client_ip` брал первый элемент `X-Forwarded-For` -> клиент подделывал IP в audit log и ключ лимитеров | Сделано иначе, чем предлагалось: адрес -- `X-Real-IP` от доверенного соседа (nginx перезаписывает его `$remote_addr`), XFF не читается ни в какой форме; uvicorn `--no-proxy-headers`. Прокси перед nginx настраивается модулем `real_ip` в nginx, не в config -- см. докстринг `_extract_client_ip` |
 
 ### Открытые находки
 
@@ -1438,7 +1442,7 @@ print('free in 65000-65999:', free_windows(space=(65000, 65999)))
 | **CAL-FLAKE** | ✅ | `tests/test_notifications.py`, `core/config.py`, `main.py`, `tests/conftest.py` | Флак `TestStageDeliver::test_failed_delivery_retries` (attempts 0 вместо 1): фоновый `run_processor()` под `ASGITransport` lifespan гонялся с ручными `_stage_*` через `FOR UPDATE SKIP LOCKED` | ЗАКРЫТО (24 мая): флаг `notification_processor_enabled` (safe default True); тесты выключают его в session-autouse `setup_infrastructure`. Детали — §5.2 |
 | **TD-TGID-56XXX** | ✅ | `tests/test_master_public.py` | Диапазон `telegram_id` 56xxx пересекался между master_public (был 56000-56999) и admin_masters (56001-56010, 56900-56907); оба чистили весь 56xxx — зелено только из-за cleanup между модулями, хрупко | ЗАКРЫТО (24 мая): master_public перенесён в 56500-56599 (мастер 56501, вьюеры 565xx, админ 56590) и чистит только свой поддиапазон. admin_masters не тронут |
 | **TD-NOTIF-RACE** | 🧪 | `tests/test_notifications.py`, `notifications/processor.py` | Рецидив `CAL-FLAKE` после ввода второго live-воркера (авто-финализатор, см. блок-цитату ниже). Постоянный `app`-контейнер крутит lifespan-`run_processor`; тесты `exec`-аются в ТОТ ЖЕ контейнер. Стейдж-тесты зовут ГЛОБАЛЬНЫЕ `_stage_resolve/_stage_deliver/_stage_rollup` (без scope — селектят по всей таблице через `FOR UPDATE SKIP LOCKED`), live-процессор гоняется с ними → нотификация застревает в `processing` или `resolved=0`. Флаг `notification_processor_enabled` НЕ помогает: conftest гасит воркер в pytest-процессе, а не в live-uvicorn того же контейнера. Изолированный прогон `pytest tests/test_notifications.py` всегда зелёный | Временно: 3 класса под `@pytest.mark.skip` — `TestStageResolve`, `TestStageDeliver`, `TestRollup` (единственные, кто зовёт глобальные `_stage_*`). Постоянно: опциональный параметр `scope` стадиям (трогает `processor.py`) — тест дёргает стадию только по своему диапазону; ЛИБО одноразовый тест-контейнер без live-воркеров. Прочие классы нотификаций (`TestCreateNotification/TestTargetResolution/TestTemplateEngine/TestTelegramFormatter`) не тронуты |
-| **TD-LOCK-AUTOGEN** | 🧪 | Инфра, `install_velo.sh` (секция `update`) | `package-lock.json` синхронизируется с `package.json` вручную. Сервер эфемерный (сносится по плану), `npm ci` в `frontend/Dockerfile` требует синхронный lock из репозитория — рассинхрон валит сборку фронта при пересоздании сервера | Автогенерировать и пушить `package-lock.json` в репозиторий при смене зависимостей — ровно как `generated.ts` (`velo update` его регенерирует и коммитит, «Types are in sync»). Хук — рядом с генерацией типов в секции `update`: при изменении `package.json` → `npm install --package-lock-only` → commit/push lock |
+| **TD-LOCK-AUTOGEN** | 🧪 | Инфра, `install_velo.sh` (секция `update`) | `package-lock.json` заменён на `pnpm-lock.yaml` (FE-73, 2026-09-16): синхронизируется с `package.json` через `pnpm install`. Сервер эфемерный (сносится по плану), `pnpm install --frozen-lockfile` в `frontend/Dockerfile` требует синхронный lock из репозитория — рассинхрон валит сборку фронта при пересоздании сервера | Держать `pnpm-lock.yaml` закоммиченным при смене зависимостей — ровно как `generated.ts` (`velo update` его регенерирует и коммитит, «Types are in sync»). Хук — рядом с генерацией типов в секции `update`: при изменении `package.json` → `pnpm install --lockfile-only` → commit/push lock |
 | **TD-CONFIG-FE-MIRROR** | 🧪 | `core/config.py`, `frontend/src/utils/constants.ts` | Числовые настройки, нужные и бэку, и фронту (`checkin_window_hours`/`CHECKIN_WINDOW_H`, `feedback_window_hours`/`FEEDBACK_WINDOW_H`, лимиты вывода), зеркалируются во фронт ВРУЧНУЮ — фронт собирается в статику и не читает `settings` в рантайме. При смене значения легко забыть обновить вторую сторону → расхождение окон UI vs бэк. Значения меняются крайне редко (окно чек-ина 3→24 за всё время — единственная смена), поэтому ручное зеркало пока приемлемо | Устранимо только инфраструктурой, не уборкой: либо рантайм-эндпоинт `GET /api/v1/config` (фронт тянет значения на старте; +сетевой запрос на крит. пути загрузки, +состояние «ещё не загружено»), либо расширить кодогенерацию (`generate_ts_types.py`) на числовые константы из конфига в `generated.ts` (правка генератора; значения уедут в автоген, который «MUST NOT edit by hand»). Делать как отдельную задачу с проектированием, НЕ заодно. Низкий приоритет (значения статичны) |
 
 > **Источник AUDIT-0520-*:** полный аудит ветки main от 2026-05-20.

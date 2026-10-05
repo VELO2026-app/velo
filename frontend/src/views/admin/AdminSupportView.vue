@@ -89,6 +89,7 @@
 </template>
 
 <script setup lang="ts">
+import { toHistoryState } from '@/utils/historySnapshot'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { VBackButton, VButton, VLoader, VEmptyState, VCard, VBadge } from '@/components/ui'
@@ -159,10 +160,10 @@ async function loadMore(): Promise<void> {
 }
 
 function openDetail(item: SupportThread): void {
-  router.push({
+  void router.push({
     name: 'admin-support-detail',
     params: { id: item.id },
-    state: { thread: JSON.parse(JSON.stringify(item)) },
+    state: { thread: toHistoryState(item) },
   })
 }
 

@@ -10,13 +10,13 @@
 
 <template>
   <FormShell
+    v-model:comment="comment"
     back-label="Check-in"
     :practice="practice"
     :practice-loading="practiceLoading"
     :load-error="practiceLoadError"
     question-title="Как вы себя чувствуете?"
     question-subtitle="Оцените своё состояние перед практикой"
-    v-model:comment="comment"
     :submitting="diaryStore.checkinSubmitting"
     :submit-disabled="windowClosed"
     :disabled-hint="practice && windowClosed ? 'Check-in закрыт — практика уже началась' : ''"
@@ -40,15 +40,14 @@
       </span>
     </template>
 
-    <!-- Mood selector: selected face grows to center, others shrink/dim.
-         The track + dot below is a decorative indicator of the discrete
-         choice (low/mid/high) -- not a real range slider. -->
+    <!-- Mood selector: the FE-85 unified 1..10 scale (five faces + exact
+         range). Inert while the form submits, like the rest of the shell. -->
     <template #selection>
       <div class="checkin__mood">
         <MoodSlider
           v-model="moodScore"
-          :zones="MOOD_ZONES"
           aria-label="Оценка состояния от 1 до 10"
+          :disabled="diaryStore.checkinSubmitting"
         />
       </div>
     </template>
@@ -81,18 +80,10 @@ import { platform } from '@/platform'
 import { VButton } from '@/components/ui'
 import FormShell from '@/components/shared/FormShell.vue'
 import MoodSlider from '@/components/shared/MoodSlider.vue'
-import { IconCalendar, IconCheck, IconMoodLow, IconMoodMid, IconMoodHigh } from '@/components/icons'
+import { IconCalendar, IconCheck } from '@/components/icons'
 import { formatDate } from '@/utils/format'
+import { MOOD_SCALE_DEFAULT_SCORE } from '@/utils/moodScale'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
-
-// Three slider zones (low -> high), passed to MoodSlider. Icons are .vue
-// components, so this stays in the view (not in the utils layer). Labels
-// mirror the old discrete buttons (Не очень / Нормально / Хорошо).
-const MOOD_ZONES = [
-  { icon: IconMoodLow, label: 'Не очень' },
-  { icon: IconMoodMid, label: 'Нормально' },
-  { icon: IconMoodHigh, label: 'Хорошо' },
-]
 
 const route = useRoute()
 const router = useRouter()
@@ -108,9 +99,9 @@ const practice = computed(() => practicesStore.selected)
 const practiceLoading = computed(() => practicesStore.selectedLoading)
 const practiceLoadError = computed(() => practicesStore.selectedError)
 
-// Slider score 1..10. Default 6 = middle "Нормально" zone, so the slider
-// opens in a neutral position (the user can still submit immediately).
-const moodScore = ref<number>(6)
+// Slider score 1..10. Default is the EXACT 5 «Нормально» (tz-mood-scale §2.4):
+// submitting without touching the scale sends 5, not a zone's click value (6).
+const moodScore = ref<number>(MOOD_SCALE_DEFAULT_SCORE)
 const comment = ref('')
 const submitted = ref(false)
 
@@ -218,23 +209,23 @@ function onSkip(): void {
     void bookingsStore.skipCheckin(booking.id)
   }
   toast.info('Check-in пропущен')
-  router.push({ name: 'user-dashboard' })
+  void router.push({ name: 'user-dashboard' })
 }
 
 function onBack(): void {
   // Always return to the dashboard. Using router.back() here sent the user
   // back into the practice detail card (which itself uses router.back()),
   // creating a check-in <-> detail loop.
-  router.push({ name: 'user-dashboard' })
+  void router.push({ name: 'user-dashboard' })
 }
 
 function goToDashboard(): void {
-  router.push({ name: 'user-dashboard' })
+  void router.push({ name: 'user-dashboard' })
 }
 
 // Navigate to the live practice screen (route exists, see router/index.ts).
 function goToPracticeLive(): void {
-  router.push({ name: 'practice-live', params: { practiceId } })
+  void router.push({ name: 'practice-live', params: { practiceId } })
 }
 
 // If the user has already checked in for this booking, show the success

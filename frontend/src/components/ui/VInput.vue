@@ -38,10 +38,10 @@
         :class="{ 'v-input__float--filled': !!modelValue }"
       >
         <input
+          :id="fieldId"
           ref="inputEl"
           class="v-input__field v-input__field--float"
           :type="type"
-          :id="fieldId"
           :value="modelValue"
           :disabled="disabled"
           v-bind="$attrs"
@@ -56,10 +56,10 @@
       <div v-else-if="$slots.prefix || $slots.suffix" class="v-input__box">
         <span v-if="$slots.prefix" class="v-input__affix"><slot name="prefix" /></span>
         <input
+          :id="fieldId"
           ref="inputEl"
           class="v-input__field v-input__field--bare"
           :type="type"
-          :id="fieldId"
           :value="modelValue"
           :placeholder="placeholder"
           :disabled="disabled"
@@ -73,10 +73,10 @@
       <!-- Plain path (default) — unchanged for every existing usage. -->
       <input
         v-else
+        :id="fieldId"
         ref="inputEl"
         class="v-input__field"
         :type="type"
-        :id="fieldId"
         :value="modelValue"
         :placeholder="placeholder"
         :disabled="disabled"
@@ -194,7 +194,7 @@ defineExpose({ focus: () => inputEl.value?.focus() })
  */
 function onInput(e: Event): void {
   emit('update:modelValue', (e.target as HTMLInputElement).value)
-  nextTick(() => {
+  void nextTick(() => {
     const el = inputEl.value
     if (el && el.value !== props.modelValue) el.value = props.modelValue
   })

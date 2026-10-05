@@ -59,22 +59,49 @@
         </template>
       </Banner>
 
-      <!-- Required-fields legend (DS banner, Phase-3). -->
+      <!-- Required-fields legend: HIDDEN for now (owner 2026-10-01) -- the
+           section-title asterisk reads without an explanation. Restore the
+           block below when an explanation is needed again. -->
+      <!--
       <div class="create-practice__legend">
-        <IconRequired class="create-practice__legend-seal" :size="22" />
-        <span>— поля, обязательные для заполнения</span>
+        <span class="cp-req">*</span>
+        <span>— разделы с обязательными полями</span>
+      </div>
+      -->
+
+      <!-- ================================================================
+           Мастер (§1.6 delegation, FE-92): whose practice this is. The
+           master-card entry preselects one master; the school-page entry
+           picks among that school's visible masters, «Я» first. Both need
+           the school (?groupId=): the backend creates for another master
+           only IN a school, for a master of that school (BE-102). No school
+           -> the caller owns the practice and this section does not render.
+           ================================================================ -->
+      <div v-if="delegatedMaster || masterOptions.length > 1" class="create-practice__section">
+        <h2 class="velo-section-title">Мастер</h2>
+        <div>
+          <VCard class="create-practice__repeat" padding="none">
+            <div v-if="delegatedMaster" class="create-practice__repeat-title">
+              {{ delegatedMaster.name }}
+            </div>
+            <VRadioGroup v-else v-model="selectedMasterId" :options="masterOptions" />
+          </VCard>
+        </div>
       </div>
 
       <!-- ================================================================
+           FE-92 follow-up: hidden while a curator targets ANOTHER master --
+           the templates are the CALLER's practices (masterStore.myPractices),
+           and the curator has no list of the master's. Fields a template
+           filled before the switch stay: they are the curator's input now.
            Использовать шаблон — prefill from one of the master's own past
            practices (newest-first). Reuses PracticeListCard rows. Date/time
            are NOT copied (a template must not schedule in the past).
            ================================================================ -->
-      <div class="create-practice__section">
+      <div v-if="!targetsForeignMaster" class="create-practice__section">
         <h2 class="velo-section-title">Использовать шаблон</h2>
-        <!-- Full width (NOT railed): the block carries no required-seal of its
-             own, so it spans the whole rail — as wide as a field PLUS its seal
-             indicator (operator PROMPT №233). -->
+        <!-- Full-width block: no required-seal of its own, so it spans the
+             whole rail like every field (owner 2026-10-01 seal canon). -->
         <UseTemplateBlock :practices="templatePractices" @select="applyTemplate" />
       </div>
 
@@ -83,9 +110,14 @@
            practice_type не показываем, выводим из «Повторения»)
            ================================================================ -->
       <div class="create-practice__section">
-        <h2 class="velo-section-title">Основное</h2>
+        <h2 class="velo-section-title">Основное <span class="cp-req">*</span></h2>
 
-        <VInput v-model="form.title" placeholder="Название" :error="errors.title" required />
+        <VInput v-model="form.title" placeholder="Название" :error="errors.title" />
+        <span
+          class="create-practice__field-error"
+          :class="{ 'create-practice__field-error--show': !!errors.title }"
+          >{{ errors.title }}</span
+        >
 
         <!-- Направление = дисциплина (meditation/yoga/…). Подпись = плейсхолдер.
              Options catalog-first (T2 stage 2) -- see directionOptions. -->
@@ -94,14 +126,24 @@
           placeholder="Направление практики"
           :options="directionOptions"
           :error="errors.direction"
-          required
           @update:modelValue="onDirectionChange"
         />
+        <span
+          class="create-practice__field-error"
+          :class="{ 'create-practice__field-error--show': !!errors.direction }"
+          >{{ errors.direction }}</span
+        >
 
         <!-- Вид практики = style. Показываем только если у направления есть виды
              (Q4=А: без явного «Без вида», не выбрано = null, необязательное). -->
-        <div v-if="styleOptionsForForm.length > 0" class="create-practice__railed">
+        <div v-if="styleOptionsForForm.length > 0">
           <VSelect v-model="form.style" placeholder="Вид практики" :options="styleOptionsForForm" />
+          <!-- Rhythm reserve (owner 2026-10-05): style never errors (optional),
+               but every other plate in a section is followed by the constant
+               17px error slot — without it «Вид практики» sat 2px off
+               «Уровень сложности» while all other input-to-input gaps were
+               slot + 2px. -->
+          <span class="create-practice__field-error" aria-hidden="true"></span>
         </div>
 
         <!-- Уровень сложности = difficulty (локальные мужские лейблы, Q1=Б). -->
@@ -110,15 +152,19 @@
           placeholder="Уровень сложности"
           :options="DIFFICULTY_OPTIONS_CREATE"
           :error="errors.difficulty"
-          required
         />
+        <span
+          class="create-practice__field-error"
+          :class="{ 'create-practice__field-error--show': !!errors.difficulty }"
+          >{{ errors.difficulty }}</span
+        >
       </div>
 
       <!-- ================================================================
            Расписание
            ================================================================ -->
       <div class="create-practice__section">
-        <h2 class="velo-section-title">Расписание</h2>
+        <h2 class="velo-section-title">Расписание <span class="cp-req">*</span></h2>
 
         <!-- Дата: открывает DatePickerSheet. Подпись = плейсхолдер внутри поля. -->
         <div class="create-practice__field">
@@ -134,15 +180,12 @@
             >
               {{ form.date ? dateDisplay : 'Дата' }}
             </button>
-            <span
-              class="create-practice__seal"
-              :class="{ 'create-practice__seal--done': !!form.date }"
-            >
-              <IconRequired v-if="!form.date" :size="22" />
-              <IconRequiredDone v-else :size="22" />
-            </span>
           </div>
-          <span v-if="errors.date" class="create-practice__field-error">{{ errors.date }}</span>
+          <span
+            class="create-practice__field-error"
+            :class="{ 'create-practice__field-error--show': !!errors.date }"
+            >{{ errors.date }}</span
+          >
         </div>
 
         <!-- Время: открывает TimePickerSheet (24ч). Подпись = плейсхолдер. -->
@@ -159,15 +202,12 @@
             >
               {{ form.time || 'Время' }}
             </button>
-            <span
-              class="create-practice__seal"
-              :class="{ 'create-practice__seal--done': !!form.time }"
-            >
-              <IconRequired v-if="!form.time" :size="22" />
-              <IconRequiredDone v-else :size="22" />
-            </span>
           </div>
-          <span v-if="errors.time" class="create-practice__field-error">{{ errors.time }}</span>
+          <span
+            class="create-practice__field-error"
+            :class="{ 'create-practice__field-error--show': !!errors.time }"
+            >{{ errors.time }}</span
+          >
         </div>
 
         <VSelect
@@ -175,8 +215,12 @@
           placeholder="Длительность"
           :options="DURATION_OPTIONS"
           :error="errors.duration_minutes"
-          required
         />
+        <span
+          class="create-practice__field-error"
+          :class="{ 'create-practice__field-error--show': !!errors.duration_minutes }"
+          >{{ errors.duration_minutes }}</span
+        >
         <!-- Часовой пояс убран: берётся из профиля мастера (form.timezone),
              расписание задаётся в его часовом поясе (operator 2026-06-18). -->
       </div>
@@ -190,7 +234,7 @@
       <div class="create-practice__section">
         <h2 class="velo-section-title">Повторение</h2>
 
-        <div class="create-practice__railed">
+        <div>
           <VCard class="create-practice__repeat" padding="none">
             <VCheckbox v-model="form.is_recurring" label="Сделать регулярной" />
           </VCard>
@@ -203,34 +247,22 @@
               <div class="create-practice__repeat-title">Повтор:</div>
               <VRadioGroup v-model="form.recurrence" :options="RECURRENCE_OPTIONS" />
             </VCard>
-            <span
-              class="create-practice__seal-card"
-              :class="{ 'create-practice__seal-card--done': !!form.recurrence }"
-            >
-              <IconRequired v-if="!form.recurrence" :size="22" />
-              <IconRequiredDone v-else :size="22" />
-            </span>
           </div>
 
           <!-- Дни недели — ТОЛЬКО для weekly/biweekly. «Каждый день» (daily) не
-               использует дни недели, поэтому пикер и его печать обязательности не
-               рендерятся вовсе (operator NP-10). Валидация уже пропускает daily. -->
+               использует дни недели, поэтому пикер не рендерится вовсе
+               (operator NP-10). Валидация уже пропускает daily. -->
           <template v-if="form.recurrence !== 'daily'">
             <div class="create-practice__seal-row">
               <div class="create-practice__days create-practice__grow">
                 <VDayPicker v-model="form.recurrence_days" aria-label="Дни недели для повтора" />
               </div>
-              <span
-                class="create-practice__seal-card"
-                :class="{ 'create-practice__seal-card--done': form.recurrence_days.length > 0 }"
-              >
-                <IconRequired v-if="!form.recurrence_days.length" :size="22" />
-                <IconRequiredDone v-else :size="22" />
-              </span>
             </div>
-            <span v-if="errors.recurrence_days" class="create-practice__field-error">{{
-              errors.recurrence_days
-            }}</span>
+            <span
+              class="create-practice__field-error"
+              :class="{ 'create-practice__field-error--show': !!errors.recurrence_days }"
+              >{{ errors.recurrence_days }}</span
+            >
           </template>
 
           <!-- Завершить -->
@@ -263,20 +295,20 @@
                 @focus="onFieldFocus"
               />
             </VCard>
-            <span
-              class="create-practice__seal-card"
-              :class="{ 'create-practice__seal-card--done': !!form.recurrence_end }"
-            >
-              <IconRequired v-if="!form.recurrence_end" :size="22" />
-              <IconRequiredDone v-else :size="22" />
-            </span>
           </div>
-          <span v-if="errors.recurrence_end_date" class="create-practice__field-error">{{
-            errors.recurrence_end_date
-          }}</span>
-          <span v-if="errors.recurrence_count" class="create-practice__field-error">{{
-            errors.recurrence_count
-          }}</span>
+          <!-- Only the ACTIVE completion mode reserves an error line. -->
+          <span
+            v-if="form.recurrence_end === 'until_date'"
+            class="create-practice__field-error"
+            :class="{ 'create-practice__field-error--show': !!errors.recurrence_end_date }"
+            >{{ errors.recurrence_end_date }}</span
+          >
+          <span
+            v-else-if="form.recurrence_end === 'after_count'"
+            class="create-practice__field-error"
+            :class="{ 'create-practice__field-error--show': !!errors.recurrence_count }"
+            >{{ errors.recurrence_count }}</span
+          >
         </template>
       </div>
 
@@ -286,49 +318,43 @@
       <div class="create-practice__section">
         <h2 class="velo-section-title">Участники</h2>
 
-        <div class="create-practice__railed">
+        <div>
           <VInput
             v-model="form.max_participants_raw"
             type="number"
             placeholder="Максимум мест"
             :error="errors.max_participants"
           />
+          <span
+            class="create-practice__field-error"
+            :class="{ 'create-practice__field-error--show': !!errors.max_participants }"
+            >{{ errors.max_participants }}</span
+          >
         </div>
       </div>
 
       <!-- ================================================================
-           Для кого практика  (P5, PROMPT №594): audience_kind single-select,
-           + a multi-select of the master's own custom groups when 'groups'
-           is chosen. No SVG mock exists -- MINIMAL DS-language design.
+           Для кого практика  (P5, PROMPT №594; FE-24: the shared
+           PracticeAudiencePicker -- kinds radio + target chips for BOTH
+           targeted kinds): student groups and schools. No SVG mock exists --
+           MINIMAL DS-language design.
            ================================================================ -->
       <div class="create-practice__section">
         <h2 class="velo-section-title">Для кого практика</h2>
 
-        <div class="create-practice__railed">
+        <div>
           <VCard class="create-practice__repeat" padding="none">
-            <VRadioGroup v-model="form.audience_kind" :options="createAudienceOptions" />
+            <PracticeAudiencePicker
+              v-model:kind="form.audience_kind"
+              v-model:group-ids="form.audience_group_ids"
+              v-model:curator-group-id="form.audience_curator_group_id"
+              :groups="customGroups"
+              :schools="audienceSchools"
+              :allowed-kinds="contextGroupId ? SCHOOL_AUDIENCE_KINDS : undefined"
+              :error="errors.audience_group_ids"
+              students-label="Все мои ученики"
+            />
           </VCard>
-
-          <template v-if="form.audience_kind === 'groups'">
-            <div v-if="customGroups.length" class="create-practice__audience-chips">
-              <VChip
-                v-for="g in customGroups"
-                :key="g.id"
-                size="md"
-                clickable
-                :active="form.audience_group_ids.includes(g.id)"
-                @click="onAudienceGroupChipClick(g.id)"
-              >
-                {{ g.name }}
-              </VChip>
-            </div>
-            <p v-else class="create-practice__audience-empty">
-              Пока нет ни одной группы. Создайте группу на экране «Мои группы».
-            </p>
-            <span v-if="errors.audience_group_ids" class="create-practice__field-error">{{
-              errors.audience_group_ids
-            }}</span>
-          </template>
         </div>
       </div>
 
@@ -339,7 +365,7 @@
       <div class="create-practice__section">
         <h2 class="velo-section-title">Оплата</h2>
 
-        <div class="create-practice__railed">
+        <div>
           <VCard class="create-practice__repeat" padding="none">
             <VRadioGroup :model-value="'free'" :options="PAYMENT_OPTIONS" />
           </VCard>
@@ -352,7 +378,7 @@
       <div class="create-practice__section create-practice__section--desc">
         <h2 class="velo-section-title">Описание</h2>
 
-        <div class="create-practice__railed">
+        <div>
           <VTextarea
             v-model="form.description"
             placeholder="Расскажите подробее о вашей практике"
@@ -363,7 +389,7 @@
 
         <!-- 1-row start (rows=1) = the VInput height these were before; auto-grow
              past one line per the «Новая практика» SVG (operator Q1=А). -->
-        <div class="create-practice__railed">
+        <div>
           <VTextarea
             v-model="form.contraindications"
             placeholder="Противопоказания"
@@ -372,7 +398,7 @@
           />
         </div>
 
-        <div class="create-practice__railed">
+        <div>
           <VTextarea
             v-model="form.what_to_prepare"
             placeholder="Что подготовить"
@@ -415,9 +441,11 @@
 </template>
 
 <script setup lang="ts">
+import { historyHasBack } from '@/platform/history'
+import { queryDocument } from '@/platform/dom'
 import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { DateTime } from 'luxon'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import {
   VButton,
@@ -428,15 +456,18 @@ import {
   VCheckbox,
   VRadioGroup,
   VDayPicker,
-  VChip,
 } from '@/components/ui'
-import { IconRequired, IconRequiredDone } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { useMasterStore } from '@/stores/master'
 import { createPractice, updatePractice } from '@/api/practices'
 import { getGroups } from '@/api/groups'
+import { getMyCuratorGroups, getCuratorGroupMembers } from '@/api/curatorGroups'
+import { getPublicMaster } from '@/api/masters'
 import type { GroupListItem } from '@/api/groups'
+import type { CuratorGroupMemberItem } from '@/api/types'
+import PracticeAudiencePicker from '@/components/shared/PracticeAudiencePicker.vue'
+import type { AudienceSchoolOption } from '@/components/shared/practiceAudience'
 import { formatShortDate, todayLocalISO } from '@/utils/format'
 import DatePickerSheet from '@/components/shared/DatePickerSheet.vue'
 import TimePickerSheet from '@/components/shared/TimePickerSheet.vue'
@@ -446,7 +477,6 @@ import { ApiResponseError } from '@/api/client'
 import { errorMessage, extractApiError } from '@/composables/useApiError'
 import {
   DURATION_OPTIONS,
-  AUDIENCE_OPTIONS,
   catalogDirectionOptions,
   catalogStylesForDirection,
 } from '@/utils/practiceOptions'
@@ -461,19 +491,145 @@ import type {
 } from '@/api/types'
 
 const router = useRouter()
+const route = useRoute()
 const toast = useToast()
 
-// T24-24 (PROMPT №639): "Все ученики" -> "Все мои ученики", on THIS screen
-// ONLY. AUDIENCE_OPTIONS is shared with EditPracticeView.vue (practiceOptions.ts
-// says so explicitly) -- editing the label there would have silently changed
-// BOTH screens, exactly the "one-word edit made by search-and-replace" trap
-// the instruction warned about (the same string is also byte-scanned as a
-// substring of MasterSummaryView's unrelated "Все ученики в порядке", not
-// touched -- a different sentence, not this label). A local mapped copy
-// keeps Edit byte-identical.
-const createAudienceOptions = AUDIENCE_OPTIONS.map((o) =>
-  o.value === 'students' ? { ...o, label: 'Все мои ученики' } : o,
+// §1.6 delegation: whose practice is being created. `masterId` in the query
+// (the master's public page CTA) names the master; `groupId` (the school
+// page CTA) offers that school's visible masters with «Я» first. No query
+// context -> the caller owns the practice, the historical behavior.
+//
+// FE-92 (BE-102): a curator creates a practice FOR a master of a school --
+// POST /practices with master_id AND curator_group_id; the backend accepts
+// it only in that school, for a verified master of it, from its curator,
+// and the practice is born PUBLISHED there (owner, 3 October) -- one
+// «created and published» notice to the master, no second publish step.
+// Without the school in the context (?groupId=) another master is
+// never offered: the request would be refused (master_id_requires_school).
+// The audience kinds are the school's two (public / curator_groups --
+// check_school_audience) for the WHOLE school entry, «Я» included (owner
+// 2026-10-05) — the personal kinds («Все мои ученики» / «Конкретные
+// группы») are offered only by a no-context create.
+const contextGroupId = computed(() => queryParam('groupId'))
+const delegatedMaster = ref<{ id: string; name: string } | null>(null)
+const schoolMasterOptions = ref<{ label: string; value: string }[]>([])
+const selectedMasterId = ref('')
+
+// The TARGET master's confirmed methods (BE-102): the direction/style pickers
+// must offer what the MASTER holds, not the caller's -- the backend validates
+// direction/style against the practice's master (_assert_master_confirmed_
+// taxonomy, own=False), so offering a method the caller holds but the master
+// does not is exactly the late 400 (direction_not_confirmed) this delegation
+// used to produce. Source: GET /masters/{id}'s public methods. The fixed
+// delegation (?masterId) rides the name lookup this screen already makes; the
+// school-picker flow fetches on selection. null = not loaded (or the load
+// failed) -- confirmedMethods then fails CLOSED (no options), never the full
+// catalogue: the same posture as a not-yet-loaded own profile.
+const delegatedMethods = ref<string[] | null>(null)
+const delegatedMethodsLoadId = ref(0)
+
+// Owner 2026-10-05 (renamed from FOREIGN_AUDIENCE_KINDS): the set is the
+// SCHOOL's, offered on the school entry regardless of the master picked.
+const SCHOOL_AUDIENCE_KINDS: PracticeAudienceKind[] = ['public', 'curator_groups']
+
+const targetMasterId = computed(() => delegatedMaster.value?.id ?? (selectedMasterId.value || null))
+const targetsForeignMaster = computed(
+  () => contextGroupId.value !== '' && targetMasterId.value !== null,
 )
+
+// The school list the picker offers: while targeting a foreign master, ONLY
+// the context school (the practice belongs to it); otherwise every eligible.
+const audienceSchools = computed((): AudienceSchoolOption[] => {
+  if (!targetsForeignMaster.value) return eligibleSchools.value
+  const own = eligibleSchools.value.find((s) => s.id === contextGroupId.value)
+  return [own ?? { id: contextGroupId.value, name: 'Школа' }]
+})
+
+watch(targetsForeignMaster, (foreign) => {
+  if (!foreign) return
+  if (!SCHOOL_AUDIENCE_KINDS.includes(form.audience_kind)) form.audience_kind = 'public'
+  if (form.audience_kind === 'curator_groups') {
+    form.audience_curator_group_id = contextGroupId.value
+  }
+})
+
+const masterOptions = computed(() => [{ label: 'Я', value: '' }, ...schoolMasterOptions.value])
+
+function queryParam(key: string): string {
+  const value = route.query[key]
+  return typeof value === 'string' ? value : ''
+}
+
+async function loadPracticeMasterContext(): Promise<void> {
+  const masterId = queryParam('masterId')
+  const groupId = queryParam('groupId')
+  // FE-92: a master named without the school cannot be created for -- no
+  // «Мастер» section, the practice is the caller's own.
+  if (masterId && groupId) {
+    try {
+      const profile = await getPublicMaster(masterId)
+      delegatedMaster.value = {
+        id: masterId,
+        name: profile.display_name ?? 'Мастер',
+      }
+      // The same lookup feeds the pickers: without it they would filter by
+      // the CALLER's confirmed set while the backend validates the master's.
+      delegatedMethods.value = profile.methods ?? null
+    } catch {
+      // Keep the id: the backend re-validates the delegation on submit, so
+      // a cosmetic name lookup failure must not silently drop the target.
+      delegatedMaster.value = { id: masterId, name: 'Мастер' }
+      // The methods half is not cosmetic: without it the direction picker
+      // stays empty (fail-closed), so say why instead of a silent dead form.
+      toast.error('Не удалось загрузить методы мастера')
+    }
+    return
+  }
+  if (groupId) {
+    try {
+      const page = await getCuratorGroupMembers(groupId, { kind: 'master' })
+      schoolMasterOptions.value = page.items
+        .filter((m: CuratorGroupMemberItem) => m.is_visible && m.user_id !== authStore.user?.id)
+        .map((m: CuratorGroupMemberItem) => ({
+          label: m.name,
+          value: m.user_id,
+        }))
+    } catch {
+      // Picker falls back to «Я» alone -- the caller can still create.
+      schoolMasterOptions.value = []
+    }
+  }
+}
+
+// The school-picker flow: a foreign master's methods arrive when he is
+// picked, drop when the caller returns to «Я». The loadId makes an
+// out-of-order pair of replies land only if they belong to the CURRENTLY
+// selected master (the same race discipline as the screen's list fetches).
+async function loadDelegatedMethods(masterId: string): Promise<void> {
+  const loadId = ++delegatedMethodsLoadId.value
+  try {
+    const profile = await getPublicMaster(masterId)
+    if (loadId === delegatedMethodsLoadId.value) delegatedMethods.value = profile.methods ?? null
+  } catch {
+    if (loadId === delegatedMethodsLoadId.value) {
+      delegatedMethods.value = null
+      // Fail-closed: the direction picker stays empty until a re-pick
+      // reloads it.
+      toast.error('Не удалось загрузить методы мастера')
+    }
+  }
+}
+
+watch(selectedMasterId, (id) => {
+  delegatedMethods.value = null
+  if (id) void loadDelegatedMethods(id)
+  else delegatedMethodsLoadId.value += 1 // drop any in-flight reply
+})
+
+// T24-24 (PROMPT №639): "Все ученики" -> "Все мои ученики", on THIS screen
+// ONLY -- passed to the shared PracticeAudiencePicker as `students-label`.
+// practiceOptions.ts's shared label stays byte-identical for Edit (the
+// mapped copy that used to live here is the picker's concern now).
 
 // Lift the focused field above the soft keyboard once it settles (shared M5
 // composable — replaces the bespoke 300ms scrollFieldIntoView, K3).
@@ -485,8 +641,8 @@ const { onFieldFocus } = useKeyboardFieldScroll()
 // Deep-link / no history → fall back to the practices list. Submit-success
 // navigation (→ master-practices) is unchanged; only this Back button differs.
 function onBack(): void {
-  if (window.history.state?.back) router.back()
-  else router.push({ name: 'master-practices' })
+  if (historyHasBack()) router.back()
+  else void router.push({ name: 'master-practices' })
 }
 
 const authStore = useAuthStore()
@@ -502,8 +658,14 @@ const masterStore = useMasterStore()
 const catalog = ref<TaxonomyListResponse | null>(null)
 // P5 (PROMPT №594): the master's own custom groups (loaded in onMounted below).
 const customGroups = ref<GroupListItem[]>([])
+// FE-24 (GT P5): schools this master may target (relation curator or master
+// -- the two the backend validates curator_group_id against). Loaded from
+// /curator-groups/mine; empty for a master in no school, which simply keeps
+// the fourth audience option out of the radio.
+const eligibleSchools = ref<AudienceSchoolOption[]>([])
 onMounted(() => {
   void masterStore.fetchMyPractices()
+  void loadPracticeMasterContext()
   void ensureTaxonomyCatalog().then((c) => {
     catalog.value = c
   })
@@ -526,6 +688,19 @@ onMounted(() => {
       // path for a master who actually has groups. (Also avoids an
       // unhandled promise rejection.)
       toast.error('Не удалось загрузить группы')
+    })
+  // FE-24 (GT P5): the eligible schools. A failure here degrades to "no
+  // schools" (the fourth option stays hidden) -- honest, same discipline as
+  // the groups catch above but quieter: there is no screen to point at from
+  // a practice form, and the toast would claim a list the user never opened.
+  void getMyCuratorGroups()
+    .then((res) => {
+      eligibleSchools.value = res.items
+        .filter((g) => g.relation === 'curator' || g.relation === 'master')
+        .map((g) => ({ id: g.id, name: g.name }))
+    })
+    .catch(() => {
+      eligibleSchools.value = []
     })
 })
 
@@ -562,15 +737,6 @@ const RECURRENCE_END_OPTIONS = [
 // «Платно» убрано (operator 2026-06-18 Q2=А) — пока только бесплатные практики.
 const PAYMENT_OPTIONS = [{ value: 'free', label: 'Бесплатно' }]
 
-// Named wrapper (B7-hook edge: an inline multi-statement @click handler can
-// be reformatted across lines by the pre-commit hook's prettier pass and
-// lose its semicolon, breaking the Vue template compiler).
-function onAudienceGroupChipClick(groupId: string): void {
-  const idx = form.audience_group_ids.indexOf(groupId)
-  if (idx === -1) form.audience_group_ids.push(groupId)
-  else form.audience_group_ids.splice(idx, 1)
-}
-
 // Уровень сложности — локальные мужские лейблы под слово «уровень» (Q1=Б);
 // глобальный DIFFICULTY_LABEL (женский род, под «практика») не трогаем.
 const DIFFICULTY_OPTIONS_CREATE = [
@@ -594,8 +760,12 @@ const form = reactive({
   // period/days/end-condition/count are sent as a RecurrenceSpec (E3 series
   // engine). recurrence_days holds VDayPicker codes ('mon'..'sun').
   is_recurring: false,
+  // Load-bearing assertions: without them reactive widens the literals to
+  // string and the typed consumers below (payload/guards) stop compiling.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
   recurrence: 'weekly' as RecurrenceSpec['period'],
-  recurrence_days: [] as string[],
+  recurrence_days: [],
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
   recurrence_end: 'never' as RecurrenceSpec['end'],
   // Empty until the master types a count (NP-11) — no auto-filled 40.
   recurrence_count: null as number | null,
@@ -617,8 +787,16 @@ const form = reactive({
   // build the day the backend added the fourth value ('curator_groups') --
   // AUDIENCE_OPTIONS (practiceOptions.ts) still lists three until FE-24
   // ports the selector, but the TYPE no longer lies about what can come back.
+  // Load-bearing assertion (see recurrence above).
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
   audience_kind: 'public' as PracticeAudienceKind,
-  audience_group_ids: [] as string[],
+  audience_group_ids: [],
+  // BE-74: the ONE school the practice will belong to (a practice belongs to
+  // exactly one school, and it cannot be changed after creation) -- sent
+  // ONLY when audience_kind === 'curator_groups'; null otherwise. The
+  // backend refuses a school next to 'students'/'groups' (400), and this
+  // screen offers no "public practice of a school" (owner Q2).
+  audience_curator_group_id: null as string | null,
   description: '',
   what_to_prepare: '',
   contraindications: '',
@@ -687,8 +865,19 @@ const templatePractices = computed((): PracticeResponse[] => {
 // method_change_request.proposed_methods -- a pending, unapproved request
 // must not unlock a direction before the "up to 3 working days" review the
 // profile screen itself advertises. null while the profile hasn't loaded.
+//
+// FE-92/BE-102 delegation: while a foreign master is targeted the practice
+// is HIS -- the backend validates direction/style against the TARGET
+// master's confirmed set (_assert_master_confirmed_taxonomy, own=False), so
+// the pickers must offer HIS methods, not the caller's: offering a method
+// the caller holds but the master does not is exactly the submit-time 400
+// (direction_not_confirmed / style_not_confirmed) this filter exists to
+// prevent, and hiding a direction the master himself holds would block a
+// create the backend would accept. delegatedMethods null until loaded ->
+// confirmedMethods null -> the options below fail CLOSED, never open into
+// the full catalogue.
 const confirmedMethods = computed(() => {
-  const methods = masterStore.profile?.methods
+  const methods = targetsForeignMaster.value ? delegatedMethods.value : masterStore.profile?.methods
   if (!methods) return null
   return parseMethods(methods)
 })
@@ -725,8 +914,25 @@ const styleOptionsForForm = computed(() => {
   const confirmed = confirmedMethods.value
   if (!confirmed) return []
   const all = catalogStylesForDirection(catalog.value, form.direction)
-  const confirmedStyleValues = confirmed.styles[form.direction as string] ?? []
+  const confirmedStyleValues = confirmed.styles[form.direction] ?? []
   return all.filter((opt) => confirmedStyleValues.includes(opt.value))
+})
+
+// A change of whose methods the pickers offer must not silently keep a pick
+// the new set refuses -- the backend would reject exactly that on submit
+// (the refusal the filter exists to prevent). Same rule as applyTemplate's
+// template copy (PROMPT №556): a still-confirmed pick survives, anything
+// else is cleared so the caller re-picks from the live, filtered list. The
+// watcher also fires on the curator's own profile load, where the form is
+// still empty and this is a no-op.
+watch(confirmedMethods, (confirmed) => {
+  if (!confirmed) return
+  if (form.direction && !confirmed.directions.includes(form.direction as PracticeDirection)) {
+    form.direction = ''
+    form.style = ''
+  } else if (form.style && !(confirmed.styles[form.direction] ?? []).includes(form.style)) {
+    form.style = ''
+  }
 })
 
 /** Reset style when direction changes — the previous value is likely
@@ -960,6 +1166,12 @@ function validate(): boolean {
     errors.audience_group_ids = 'Выберите хотя бы одну группу'
     ok = false
   }
+  // FE-24 (GT P5) / BE-74: the mirror check for schools -- curator_group_id
+  // is required when the kind is 'curator_groups' (same backend rule).
+  if (form.audience_kind === 'curator_groups' && form.audience_curator_group_id === null) {
+    errors.audience_group_ids = 'Выберите школу'
+    ok = false
+  }
   return ok
 }
 
@@ -998,7 +1210,15 @@ function buildRecurrence(): RecurrenceSpec {
 // parallel clicks both pass validate() before guard fires.
 async function submit(): Promise<void> {
   if (submitting.value) return
-  if (!validate()) return
+  if (!validate()) {
+    // The first invalid field may sit far above the submit button on this
+    // long form -- bring it into view instead of a silent dead click.
+    await nextTick()
+    queryDocument(
+      '.v-input--error, .v-select--error, .create-practice__picker--error, .create-practice__field-error--show',
+    )?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    return
+  }
   submitting.value = true
 
   try {
@@ -1037,10 +1257,19 @@ async function submit(): Promise<void> {
       currency: 'eur',
       // E3: when recurring, send the series spec; non-recurring → null.
       recurrence: form.is_recurring ? buildRecurrence() : null,
-      // P5 (PROMPT №594): audience_kind + group_ids (only meaningful --
-      // and only sent -- for 'groups').
+      // P5 (PROMPT №594) / FE-24 (GT P5) / BE-74: audience_kind + the target
+      // the chosen kind reads. group_ids is sent as an empty array for any
+      // other kind; curator_group_id is null for any other kind.
       audience_kind: form.audience_kind,
       group_ids: form.audience_kind === 'groups' ? form.audience_group_ids : [],
+      // FE-92: for another master the school is ALWAYS sent (the practice
+      // belongs to it, with either of its two audiences), plus master_id.
+      curator_group_id: targetsForeignMaster.value
+        ? contextGroupId.value
+        : form.audience_kind === 'curator_groups'
+          ? form.audience_curator_group_id
+          : null,
+      ...(targetsForeignMaster.value ? { master_id: targetMasterId.value } : {}),
     })
 
     // A4 V6 (PROMPT №572): `deduplicated` is the EXPLICIT backend signal that
@@ -1058,11 +1287,26 @@ async function submit(): Promise<void> {
     // there is nothing left for it to resurrect into) -- same drop as the
     // normal path below, just earlier, since there is no publish step
     // left that could still fail and need the draft preserved for a retry.
+    // FE-92 / BE-102 publish (owner, 3 October): the backend creates the
+    // master's practice ALREADY PUBLISHED, in the same request (Zoom, the
+    // school's announcement, one message to the master). The front sends no
+    // second request -- nothing left to publish -- and goes back to the
+    // school: the curator has no screen of another master's practice. A
+    // dedup here is that master's existing practice for the same slot.
+    if (targetsForeignMaster.value) {
+      suppressSave = true
+      clearDraft()
+      if (created.deduplicated) toast.info('Такая практика уже есть у мастера')
+      else toast.success('Практика опубликована — мастер получит уведомление')
+      void router.replace({ name: 'master-curator-group', params: { id: contextGroupId.value } })
+      return
+    }
+
     if (created.deduplicated) {
       suppressSave = true
       clearDraft()
       toast.info('Вы уже создавали эту практику — открываем существующую')
-      router.replace({ name: 'master-practice-detail', params: { id: created.id } })
+      void router.replace({ name: 'master-practice-detail', params: { id: created.id } })
       void masterStore.refreshMyPractices().catch(() => {})
       return
     }
@@ -1090,7 +1334,7 @@ async function submit(): Promise<void> {
     // (practices / dashboard), not back onto this filled form (#1). Navigate
     // BEFORE the refresh so a failing refresh can never divert to catch and strand
     // the user on the form still showing «Практика создана!» (G1).
-    router.replace({ name: 'master-practices' })
+    void router.replace({ name: 'master-practices' })
     // Invalidate the cached list so it reloads with the new practice. Fire-and-
     // forget + swallow: master-practices loads its own list on mount, so a missed
     // refresh is harmless and must not turn a successful create into an error path.
@@ -1120,12 +1364,10 @@ async function submit(): Promise<void> {
   background: transparent;
   display: flex;
   flex-direction: column;
-  /* Seal-gutter = the reserved right column that VInput/VSelect `required`, the
-     date/time pickers and the recurrence seal-rows already inset their field by
-     (gap --space-2 + the 22px IconRequired). No-seal blocks reserve the SAME
-     gutter (.create-practice__railed) so every form block aligns to one rail
-     width — sealed and no-seal identical (NP-12/NP-3b). */
-  --cp-seal-gutter: calc(var(--space-2) + 22px);
+  /* Required canon (owner 2026-10-01): fields span the FULL rail width;
+     the required marker is the red * on the section headings (.cp-req).
+     VInput/VSelect keep their global margin/gutter rhythm disabled on this
+     screen via :deep below. */
 }
 
 /* [FE-43] Same recipe as MasterGroupCreateView (FE-45 follow-up): while
@@ -1141,12 +1383,21 @@ html.is-keyboard-open .create-practice {
   min-height: var(--velo-frozen-vh, 100lvh);
 }
 
-/* No-seal blocks (use-template / make-recurring / participants / payment /
-   description / contraindications / what-to-prepare / connection / вид практики)
-   inset their right edge by the seal gutter so their width matches the sealed
-   fields above (operator NP-12/NP-3b: seal & no-seal blocks identical width). */
-.create-practice__railed {
-  margin-right: var(--cp-seal-gutter);
+/* Section-title required marker (owner 2026-10-01): sections holding
+   required fields carry a red * in their heading; the per-field rosettes
+   are gone from this screen (the DS components keep them elsewhere). */
+.cp-req {
+  color: var(--velo-error);
+}
+
+/* DS components carry margin-bottom: 16px on their roots (their own form
+   rhythm). This screen spaces fields through the 2px section gap + the
+   error slot, so the hint sits right under the plate like the date/time
+   pickers. The desc section re-adds 8px for its stacked textareas below. */
+.create-practice :deep(.v-input),
+.create-practice :deep(.v-select),
+.create-practice :deep(.v-textarea) {
+  margin-bottom: 0;
 }
 
 .create-practice__content {
@@ -1157,21 +1408,37 @@ html.is-keyboard-open .create-practice {
   padding: var(--space-2) 0 var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  /* Minimal acceptable section rhythm (owner 2026-10-01: «расстояния
+     огромные») -- 16px between sections. */
+  gap: var(--space-4);
 }
 
 /* -- Section -- */
 .create-practice__section {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  /* Minimal input-to-input distance (owner 2026-10-01): the error slot
+     (17px) + 2px IS the whole gap between consecutive inputs. Everything
+     that is not an input (headings, banners, card stacks) compensates with
+     its own margin below. */
+  gap: 2px;
+}
+
+.create-practice__section > .velo-section-title {
+  margin-bottom: 6px;
+}
+
+/* Non-input blocks after a plate need the breathing the 2px input gap
+   cannot give (master-section warning banner, ...). */
+.cp-gap-top {
+  margin-top: 6px;
 }
 
 /* «Описание» section: the textareas are spaced by the section gap alone — drop
    their own margin-bottom so Описание / Противопоказания / Что подготовить sit
    tight (one step, not the doubled gap + margin) (operator CP-A1). */
 .create-practice__section--desc :deep(.v-textarea) {
-  margin-bottom: 0;
+  margin-bottom: 8px;
 }
 
 /* T21-1 (PROMPT №541): honest caption for the now-fallback Zoom field. */
@@ -1196,11 +1463,6 @@ html.is-keyboard-open .create-practice {
   color: var(--velo-pink-700);
 }
 
-.create-practice__legend-seal {
-  flex-shrink: 0;
-  color: var(--velo-rating-good);
-}
-
 /* -- Draft-restore banner (B2) -- */
 .create-practice__draft-text {
   margin: 0;
@@ -1220,7 +1482,7 @@ html.is-keyboard-open .create-practice {
   padding: var(--space-3) var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 .create-practice__repeat-title {
@@ -1231,7 +1493,7 @@ html.is-keyboard-open .create-practice {
 
 /* -- Date/time picker trigger field (mirrors the white VInput plate) -- */
 .create-practice__field {
-  margin-bottom: var(--space-4);
+  margin-bottom: 0;
 }
 
 .create-practice__field-row {
@@ -1263,21 +1525,29 @@ html.is-keyboard-open .create-practice {
   border-color: var(--velo-error);
 }
 
-.create-practice__seal {
-  flex-shrink: 0;
-  display: flex;
-  color: var(--velo-error);
-}
-
-.create-practice__seal--done {
-  color: var(--velo-required-done);
-}
-
+/* Error slots are CONSTANT-height (owner 2026-10-01): the message fades in
+   without growing its block -- activating an error must never shift the
+   layout below. The DS components' own error lines are hidden (their red
+   borders still mark the field); this screen renders the message in the
+   reserved slot instead. 14px x 1.2 = 16.8px fits the 17px reserve: the
+   shown state is pixel-identical to the empty one. */
 .create-practice__field-error {
   display: block;
+  min-height: 17px;
+  margin-top: 0;
   font-size: var(--text-xs);
+  line-height: 1.2;
   color: var(--velo-error);
-  margin-top: var(--space-1);
+  opacity: 0;
+}
+
+.create-practice__field-error--show {
+  opacity: 1;
+}
+
+.create-practice :deep(.v-input__error),
+.create-practice :deep(.v-select__error) {
+  display: none;
 }
 
 /* -- Для кого практика (P5, PROMPT №594): group multi-select chips, same
@@ -1296,27 +1566,21 @@ html.is-keyboard-open .create-practice {
   margin: var(--space-3) 0 0;
 }
 
-/* -- Повторение: карточка повтора (grow) + печать обязательности справа (Q2=В). -- */
+/* -- Повторение: ряды карточек (карточка/дни занимают всю ширину). -- */
 .create-practice__seal-row {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-2);
+}
+
+/* Stacked plates (repeat card / days / end) need breathing the 2px section
+   gap cannot give them. */
+.create-practice__seal-row + .create-practice__seal-row {
+  margin-top: 6px;
 }
 
 .create-practice__grow {
   flex: 1;
   min-width: 0;
-}
-
-.create-practice__seal-card {
-  flex-shrink: 0;
-  display: flex;
-  color: var(--velo-error);
-  margin-top: var(--space-2);
-}
-
-.create-practice__seal-card--done {
-  color: var(--velo-required-done);
 }
 
 /* -- Дни недели: карточка-обёртка для DS-примитива VDayPicker. -- */

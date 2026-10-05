@@ -172,7 +172,7 @@ async function load(reset: boolean): Promise<void> {
 }
 
 function loadMore(): void {
-  load(false)
+  void load(false)
 }
 
 // -- Make-master confirm flow --

@@ -105,8 +105,10 @@ import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import UserDashboardView from '@/views/user/UserDashboardView.vue'
 import * as bookingsApi from '@/api/bookings'
+import * as notificationsApi from '@/api/notifications'
 import { useAuthStore } from '@/stores/auth'
 import { useBookingsStore } from '@/stores/bookings'
+import { useSchoolsHubStore } from '@/stores/schoolsHub'
 import { ApiResponseError } from '@/api/client'
 import type {
   BookingWithPracticeResponse,
@@ -120,6 +122,10 @@ import type {
 // is set per-test. No non-function export needs preserving here (ApiResponseError
 // lives in @/api/client, untouched -- imported directly below, real class).
 vi.mock('@/api/bookings')
+
+// The floating-header bell reads the notifications store, which calls
+// listNotifications on this screen's mount -- seam it like every API boundary.
+vi.mock('@/api/notifications')
 
 const push = vi.fn()
 const back = vi.fn()
@@ -220,6 +226,7 @@ function booking(
     updated_at: null,
     has_feedback: false,
     has_checkin: false,
+    has_reflection: false,
     ...overrides,
     practice: practice(`pr_${id}`, practiceOverrides),
   }
@@ -320,7 +327,7 @@ async function flush(): Promise<void> {
 // Intl can emit U+00A0/U+202F/U+2009 depending on ICU build (velo-idiom §11) --
 // flattened defensively even though no money is formatted on this screen.
 function norm(s: string | null | undefined): string {
-  return (s ?? '').replace(/[   ]/g, ' ')
+  return (s ?? '').replace(/[\u00A0\u202F\u2009]/g, ' ')
 }
 function text(): string {
   return norm(host?.textContent)
@@ -394,8 +401,20 @@ beforeEach(() => {
   vi.mocked(bookingsApi.getMyBookings).mockReset().mockResolvedValue(page([]))
   vi.mocked(bookingsApi.getUpcomingBookings).mockReset().mockResolvedValue([])
   vi.mocked(bookingsApi.getMyStats).mockReset().mockResolvedValue(stats())
+  vi.mocked(notificationsApi.listNotifications)
+    .mockReset()
+    .mockResolvedValue({ items: [], next_cursor: null, unread: 0 })
 
   useAuthStore().user = user()
+
+  // The diary quick access rides the curator answer (owner 2026-10-04); the
+  // probes are the SHELL's job and this file mounts the screen alone, so the
+  // default fixture settles the store by hand: a plain, known non-curator
+  // account. The curator/pending branches reseed over this.
+  const hub = useSchoolsHubStore()
+  hub.mine = []
+  hub.mineSettled = true
+  hub.masterSettled = true
 
   push.mockReset()
   back.mockReset()
@@ -876,6 +895,265 @@ describe('UserDashboardView', () => {
 
       expect(durOf(nearestBlocks()[0]!)).toContain('14:50')
       expect(durOf(nearestBlocks()[0]!)).not.toContain('11:50')
+    })
+  })
+
+  // ===========================================================================
+  describe('notification bell (floating header)', () => {
+    // No MobileLayout hosts this mount, so VHeader renders INLINE (its
+    // teleport is disabled without the island) -- the header, its title and
+    // the action-slot bell are all in the host DOM. Queried INSIDE
+    // .v-header__right -- pins the bell to the header's action side, not
+    // merely somewhere on the screen.
+    function bellButton(): HTMLButtonElement | undefined {
+      return (
+        host?.querySelector<HTMLButtonElement>('.v-header__right .dashboard__bell') ?? undefined
+      )
+    }
+
+    it('rides the header: «Главная» left, bell right; mount refreshes unread once', async () => {
+      mount()
+      await flush()
+
+      const header = host?.querySelector('.v-header')
+      expect(header?.querySelector('.v-header__title')?.textContent).toContain('Главная')
+      expect(bellButton()?.getAttribute('aria-label')).toBe('Уведомления')
+      expect(notificationsApi.listNotifications).toHaveBeenCalledTimes(1)
+    })
+
+    it('no dot while nothing is unread', async () => {
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.dashboard__bell-dot')).toBeNull()
+    })
+
+    it('presence dot when the feed reports unread > 0 -- decorative, no number', async () => {
+      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+        items: [],
+        next_cursor: null,
+        unread: 2,
+      })
+      mount()
+      await flush()
+
+      const dot = host?.querySelector('.dashboard__bell-dot')
+      expect(dot).not.toBeNull()
+      expect(dot?.getAttribute('aria-hidden')).toBe('true')
+      expect(dot?.textContent).toBe('') // presence only -- never a count
+    })
+
+    it('tap opens the inbox route', async () => {
+      mount()
+      await flush()
+
+      bellButton()?.click()
+      await flush()
+
+      expect(push).toHaveBeenCalledWith({ name: 'user-inbox' })
+    })
+  })
+
+  // ===========================================================================
+  describe('bell freshness (foreground poll)', () => {
+    // happy-dom ships visibilityState as an overridable property -- the
+    // established useRoleFreshness.test.ts seam: redefine + dispatch.
+    function setVisibility(state: 'visible' | 'hidden'): void {
+      Object.defineProperty(document, 'visibilityState', {
+        value: state,
+        configurable: true,
+      })
+      Object.defineProperty(document, 'hidden', {
+        value: state === 'hidden',
+        configurable: true,
+      })
+      document.dispatchEvent(new Event('visibilitychange'))
+    }
+
+    afterEach(() => {
+      // Restore SILENTLY (no dispatch): this hook runs before the file-level
+      // afterEach unmounts the app, so a dispatched event would still find
+      // live listeners.
+      Object.defineProperty(document, 'visibilityState', {
+        value: 'visible',
+        configurable: true,
+      })
+      Object.defineProperty(document, 'hidden', {
+        value: false,
+        configurable: true,
+      })
+    })
+
+    it('a 60s foreground tick refetches -- the dot appears when unread arrives late', async () => {
+      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+        items: [],
+        next_cursor: null,
+        unread: 0,
+      })
+      mount()
+      await flush()
+      expect(host?.querySelector('.dashboard__bell-dot')).toBeNull()
+
+      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+        items: [],
+        next_cursor: null,
+        unread: 3,
+      })
+      await vi.advanceTimersByTimeAsync(60_000)
+      await flush()
+
+      expect(notificationsApi.listNotifications).toHaveBeenCalledTimes(2)
+      expect(host?.querySelector('.dashboard__bell-dot')).not.toBeNull()
+    })
+
+    it('hidden pauses the poll (zero background requests); visible refetches immediately, then resumes ticking', async () => {
+      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+        items: [],
+        next_cursor: null,
+        unread: 0,
+      })
+      mount()
+      await flush()
+      expect(notificationsApi.listNotifications).toHaveBeenCalledTimes(1)
+
+      setVisibility('hidden')
+      await vi.advanceTimersByTimeAsync(180_000)
+      // Well past several would-be intervals -- the count must stay flat.
+      expect(notificationsApi.listNotifications).toHaveBeenCalledTimes(1)
+
+      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
+        items: [],
+        next_cursor: null,
+        unread: 1,
+      })
+      setVisibility('visible')
+      await flush()
+      expect(notificationsApi.listNotifications).toHaveBeenCalledTimes(2) // the resume-check itself
+      expect(host?.querySelector('.dashboard__bell-dot')).not.toBeNull()
+
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(notificationsApi.listNotifications).toHaveBeenCalledTimes(3) // the interval resumed
+    })
+
+    it('unmount tears the poll down -- no leaked ticks', async () => {
+      mount()
+      await flush()
+      expect(notificationsApi.listNotifications).toHaveBeenCalledTimes(1)
+
+      app?.unmount()
+      await vi.advanceTimersByTimeAsync(180_000)
+      await flush()
+
+      expect(notificationsApi.listNotifications).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  // ===========================================================================
+  // FE-70: «Быстрый доступ» -- two one-tap entries into writing, placed
+  // between the nearest practices and the progress stats.
+  // ===========================================================================
+  describe('quick access (FE-70)', () => {
+    function sectionTitles(): string[] {
+      return Array.from(host?.querySelectorAll('.dashboard__section-title') ?? []).map((t) =>
+        norm(t.textContent).trim(),
+      )
+    }
+    function quickBtn(label: string): HTMLButtonElement {
+      const btn = Array.from(
+        host?.querySelectorAll<HTMLButtonElement>('.dashboard__quick-btn') ?? [],
+      ).find((b) => norm(b.textContent).trim() === label)
+      if (!btn) throw new Error(`quick-action «${label}» did not render`)
+      return btn
+    }
+
+    it('sits between «Ближайшие практики» and «Ваш прогресс»; the removed «Добавить запись» leaves no empty row (owner 2026-10-02)', async () => {
+      mount()
+      await flush()
+
+      expect(sectionTitles()).toEqual(['Ближайшие практики', 'Быстрый доступ', 'Ваш прогресс'])
+      const quickBtns = host?.querySelectorAll('.dashboard__quick-btn')
+      expect(quickBtns?.length).toBe(1)
+      expect(quickBtn('Внести активность')).toBeTruthy()
+    })
+
+    it('stays while nearest practices are loading', async () => {
+      vi.mocked(bookingsApi.getUpcomingBookings).mockReturnValue(new Promise(() => {}))
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.dashboard__loader')).not.toBeNull()
+      expect(quickBtn('Внести активность')).toBeTruthy()
+    })
+
+    it('stays when the nearest list is empty', async () => {
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([])
+      mount()
+      await flush()
+
+      expect(emptyState()).not.toBeNull()
+      expect(sectionTitles()).toContain('Быстрый доступ')
+    })
+
+    it('a curator account (founding-right holder) loses the quick access (owner 2026-10-04)', async () => {
+      // Restores 2026-10-01: a curator account gets no personal-diary
+      // surfaces. Store state seeded directly: the probe is the shell's job,
+      // this screen reads the settled answer reactively.
+      useAuthStore().user = user()
+      const hub = useSchoolsHubStore()
+      hub.mine = []
+      hub.mineSettled = true
+      hub.masterSettled = true
+      hub.canCreate = true
+      mount()
+      await flush()
+
+      expect(sectionTitles()).not.toContain('Быстрый доступ')
+      expect(host?.querySelector('.dashboard__quick-btn')).toBeNull()
+    })
+
+    it('while the curator answer is in flight the section is held back (fail-closed)', async () => {
+      // The same first-paint contract the dock follows: the section must not
+      // flash in and out -- it appears only once the answer is resolved.
+      useAuthStore().user = user()
+      const hub = useSchoolsHubStore()
+      hub.mineSettled = false
+      hub.masterSettled = false
+      mount()
+      await flush()
+
+      expect(sectionTitles()).not.toContain('Быстрый доступ')
+    })
+
+    it('a plain user keeps the quick access (resolved, known-non-curator)', async () => {
+      // beforeEach settles the store to a plain non-curator account.
+      useAuthStore().user = user()
+      mount()
+      await flush()
+
+      expect(sectionTitles()).toContain('Быстрый доступ')
+      expect(quickBtn('Внести активность')).toBeTruthy()
+    })
+
+    it('«Внести активность» routes to the external-activity form', async () => {
+      mount()
+      await flush()
+
+      quickBtn('Внести активность').click()
+      await flush()
+
+      expect(push).toHaveBeenCalledWith({ name: 'user-diary-activity-new' })
+    })
+
+    it('a quick-action tap does not open the practice card beneath it', async () => {
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([UP_SOON])
+      mount()
+      await flush()
+
+      quickBtn('Внести активность').click()
+      await flush()
+
+      expect(push).toHaveBeenCalledTimes(1)
+      expect(push).toHaveBeenCalledWith({ name: 'user-diary-activity-new' })
     })
   })
 })

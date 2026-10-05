@@ -44,23 +44,27 @@
 import base64
 import binascii
 import enum
+import random
 import secrets
 from dataclasses import dataclass
 from datetime import UTC
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.database import get_session_factory
 from app.core.redis import get_redis
 from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.users.models import User
+from app.modules.zoom.guest_names import generate as generate_guest_name
 from app.modules.zoom.models import (
     ZoomAttendanceSegment,
+    ZoomGuestName,
     ZoomMeeting,
     ZoomMeetingStatus,
     ZoomRegistrant,
@@ -71,12 +75,10 @@ from app.modules.zoom.zoom_client import (
     ZoomAPIError,
     create_meeting,
     create_registrant,
-    delete_meeting,
     get_meeting,
     get_meeting_recordings,
     list_registrants,
     patch_meeting,
-    update_registrant_status,
 )
 
 logger = structlog.get_logger()
@@ -91,6 +93,82 @@ def _registration_email_for(user: User) -> str:
     if real_email:
         return real_email
     return f"user-{user.id}@users.velo.invalid"
+
+
+# ---------------------------------------------------------------------------
+# BE-72: "this registrant will not get a link"
+# ---------------------------------------------------------------------------
+#
+# ONE predicate, read by every surface that tells a person whether a link is
+# coming: the entry resolver (resolve_zoom_entry, UNAVAILABLE), the booking
+# lists (bookings/service.py, zoom_registrant_link_unavailable) and the
+# transition log below. Three copies of the condition would drift apart on
+# the first edit; this is why there is one.
+#
+# Nothing retries a registered row: the retry poller claims only pending and
+# create_failed rows, and the only other writer of join_url is the reschedule
+# re-fetch (sync_meeting_reschedule), which a practice may never have. So a
+# registered row without a link stays that way, and so does a create_failed
+# row at the cap (owner ruling, BE-72: five attempts, no more -- a link that
+# has not arrived by then arrives too late to matter).
+#
+# "No link" is a FALSY join_url, not a NULL one: an empty string opens
+# nothing either.
+
+LINK_UNAVAILABLE_RETRY_CAP = "retry_cap"
+LINK_UNAVAILABLE_REGISTERED_WITHOUT_JOIN_URL = "registered_without_join_url"
+
+
+def link_unavailable_reason(row: ZoomRegistrant) -> str | None:
+    """Why this registrant will not get a join link, or None if it has one
+    or one may still come.
+
+    None for: a row with a link; a pending row (the meeting is not active
+    yet, or the first attempt is queued); a create_failed row still under
+    settings.zoom_registrant_create_max_retries (the poller will try again);
+    a cancelled row (nobody is waiting for its link).
+    """
+    if row.join_url:
+        return None
+    if row.status == ZoomRegistrantStatus.REGISTERED.value:
+        return LINK_UNAVAILABLE_REGISTERED_WITHOUT_JOIN_URL
+    if (
+        row.status == ZoomRegistrantStatus.CREATE_FAILED.value
+        and row.retry_count >= settings.zoom_registrant_create_max_retries
+    ):
+        return LINK_UNAVAILABLE_RETRY_CAP
+    return None
+
+
+def log_if_link_unavailable(row: ZoomRegistrant) -> None:
+    """Emit zoom_registrant_link_unavailable when `row` has just been left
+    without a link -- the countable record of every such registrant.
+
+    Called by the writers of a registrant's creation outcome, right after
+    they write it (create_registrant_for_booking, ensure_host_registrant,
+    retry_poller._retry_registrant_one), and never by a reader: the resolver
+    runs on every screen view, so an event there would count views, not
+    registrants. Each writer reaches a row's terminal state once -- a
+    registered row is never rewritten by them, and a row at the cap is no
+    longer claimed by the poller -- so the event fires once per registrant.
+
+    The two booking/publish-time writers run inside their caller's
+    transaction and log before it commits (P-01: no commit here). If that
+    transaction rolls back, the event names a row that never landed; the
+    poller logs after its own commit and has no such gap.
+    """
+    reason = link_unavailable_reason(row)
+    if reason is None:
+        return
+    logger.warning(
+        "zoom_registrant_link_unavailable",
+        registrant_id=str(row.id),
+        zoom_meeting_id=str(row.zoom_meeting_id),
+        booking_id=str(row.booking_id) if row.booking_id else None,
+        role=row.role,
+        reason=reason,
+        retry_count=row.retry_count,
+    )
 
 
 async def create_meeting_for_practice(
@@ -272,6 +350,8 @@ async def ensure_host_registrant(
             "zoom_host_registrant_unexpected_error",
             practice_id=str(practice.id),
         )
+
+    log_if_link_unavailable(row)
 
 
 def _shared_registration_email_for(zoom_meeting: ZoomMeeting) -> str:
@@ -486,6 +566,7 @@ async def create_registrant_for_booking(
             "zoom_registrant_unexpected_error", booking_id=str(booking.id),
         )
 
+    log_if_link_unavailable(row)
     return row
 
 
@@ -493,14 +574,29 @@ async def cancel_registrant_for_booking(
     booking: Booking,
     session: AsyncSession,
 ) -> None:
-    """Best-effort Zoom-side registrant cancel; mark our own row cancelled
-    REGARDLESS of whether the Zoom call succeeds.
+    """Mark our registrant row cancelled and QUEUE the Zoom-side cancel.
 
     Our row's status is the sole authority downstream (E21 research: it was
     never confirmed whether Zoom actually invalidates a cancelled
     registrant's join link -- nothing here may depend on Zoom cooperating).
     No-op if there's no registrant row for this booking. Never raises --
     booking cancellation must proceed regardless.
+
+    No HTTP here (BE-96). The Zoom call used to be made right here, inside
+    the caller's transaction: block_student held its practices and bookings
+    FOR UPDATE through N sequential calls, cancel_booking held its practice
+    through one, and a process dying between commit and a call made after
+    it would have lost the cancel silently. Now the flag commits with the
+    cancel itself and zoom/retry_poller.py makes the call after commit, in
+    its own transaction.
+
+    The flag is set ALWAYS, also when no zoom_registrant_id is visible
+    here: a retry-poller create may be holding this row FOR UPDATE through
+    its own Zoom call right now. Our UPDATE then waits for it and lands on
+    the committed row (READ COMMITTED re-reads it), writing only status and
+    the flag -- the id the poller just wrote survives, and the flag is what
+    gets that freshly created registrant cancelled in Zoom. Setting the
+    flag only for an id seen here would leave exactly that one alive.
     """
     row = (
         await session.execute(
@@ -510,25 +606,38 @@ async def cancel_registrant_for_booking(
     if row is None:
         return
 
-    if row.zoom_registrant_id:
-        zoom_meeting = await session.get(ZoomMeeting, row.zoom_meeting_id)
-        if zoom_meeting is not None and zoom_meeting.zoom_meeting_id:
-            try:
-                await update_registrant_status(
-                    zoom_meeting_id=zoom_meeting.zoom_meeting_id,
-                    zoom_registrant_id=row.zoom_registrant_id,
-                    email=row.registration_email,
-                    action="cancel",
-                )
-            except ZoomAPIError as exc:
-                logger.warning(
-                    "zoom_registrant_cancel_call_failed",
-                    booking_id=str(booking.id),
-                    status_code=exc.status_code,
-                    error=str(exc),
-                )
-
+    # KNOWN CEILING (BE-96):
+    # 1. mechanics: when a retry-poller create holds this row FOR UPDATE
+    #    through its own Zoom create call (_attempt_registrant_create:
+    #    _request 15 s, OAuth 10 s uncached), the UPDATE below waits for it
+    #    -- and the caller is holding its locks meanwhile: block_student its
+    #    practices and bookings (BE-99 order), cancel_booking its practice
+    #    (T-13), the master's practice cancel (payments/refund.py
+    #    refund_all_bookings_for_practice, BE-100) its practice -- every
+    #    occurrence of a series scope cancel at once -- and all their
+    #    bookings. Every other create_booking / cancel_booking /
+    #    confirm_waitlist on those practices waits too. Only in that race:
+    #    a pending / create_failed row being created at the very moment its
+    #    booking is cancelled. Worst case one create call, ~25 s, per raced
+    #    row.
+    # 2. status: acknowledged by design.
+    # 3. task: none -- the owner accepted this residue at the BE-96 gate in
+    #    place of the wide ceiling BE-96 removed; it reopens only on the
+    #    trigger below.
+    # 4. unfreeze trigger: a cancel_booking, block_student or practice
+    #    cancel request observed waiting on a zoom_registrants row lock
+    #    (pg_stat_activity wait_event_type = 'Lock' on this UPDATE), or the
+    #    poller's create calls observed slower than a few seconds.
+    # 5. agreed fix shape: none agreed yet; the direction would be a create
+    #    phase that does not hold the row lock through its HTTP call.
+    # 6. rejected: NOWAIT / SKIP LOCKED on this row -- a skipped row stays
+    #    NOT cancelled under a cancelled booking, a live link our own pages
+    #    would keep serving and a registrant the rebook would reuse (the
+    #    BE-71 hole); waiting is the lesser cost. Setting the flag only for
+    #    an id seen here -- see the docstring: it leaves exactly the raced
+    #    registrant alive in Zoom.
     row.status = ZoomRegistrantStatus.CANCELLED.value
+    row.zoom_cancel_pending = True
     logger.info("zoom_registrant_cancelled", booking_id=str(booking.id))
 
 
@@ -635,13 +744,29 @@ async def delete_meeting_for_practice(
     practice: Practice,
     session: AsyncSession,
 ) -> None:
-    """Best-effort deletion of a practice's Zoom meeting on cancel.
+    """Mark a cancelled practice's active Zoom meeting deleted and QUEUE
+    the Zoom-side DELETE.
 
-    Skips meetings that already have attendance segments (nothing left to
-    protect a cancelled-after-the-fact meeting from -- the report already
-    happened). No-op if there's no active meeting, or if the Zoom call
-    fails (logged, never raised -- refunds/cancellation must proceed
-    regardless, E21 plan sec 2).
+    Our row's status is the authority: from this commit on, every reader
+    that serves a link (they all check status == active) treats the
+    meeting as gone, whatever Zoom later answers. No HTTP here -- the
+    DELETE used to be made right here, inside the practice cancel's
+    transaction, with the practice and its bookings held FOR UPDATE, once
+    per occurrence of a series scope cancel; and `deleted` was set only
+    when Zoom answered, so a refused DELETE left the master's host link
+    alive on our pages. Now zoom/retry_poller.py makes the call after
+    commit, in its own transaction.
+
+    Only an ACTIVE meeting is marked. A meeting still pending_creation /
+    create_failed is left alone, as before -- and the retry poller, which
+    checks the meeting's status and not the practice's, can then still
+    create a Zoom meeting for the cancelled practice. That hole is known
+    and open: marking such a row here races the poller's create, which
+    holds the row FOR UPDATE through its HTTP call, and that race was
+    measured into 40P01; closing it is a separate delivery.
+
+    Skips meetings that already have attendance segments (the report
+    already happened -- nothing to protect by deleting). Never raises.
     """
     zoom_meeting = (
         await session.execute(
@@ -666,19 +791,9 @@ async def delete_meeting_for_practice(
         )
         return
 
-    try:
-        await delete_meeting(zoom_meeting_id=zoom_meeting.zoom_meeting_id)
-        zoom_meeting.status = ZoomMeetingStatus.DELETED.value
-        logger.info("zoom_meeting_deleted", practice_id=str(practice.id))
-    except ZoomAPIError as exc:
-        zoom_meeting.last_sync_error = (
-            f"delete_meeting failed: status={exc.status_code} body={exc.body}"
-        )
-        logger.warning(
-            "zoom_meeting_delete_failed",
-            practice_id=str(practice.id),
-            status_code=exc.status_code,
-        )
+    zoom_meeting.status = ZoomMeetingStatus.DELETED.value
+    zoom_meeting.zoom_delete_pending = True
+    logger.info("zoom_meeting_marked_deleted", practice_id=str(practice.id))
 
 
 # ---------------------------------------------------------------------------
@@ -742,54 +857,6 @@ async def get_host_join_urls(
                 ZoomRegistrant.role == ZoomRegistrantRole.HOST.value,
                 ZoomRegistrant.status != ZoomRegistrantStatus.CANCELLED.value,
                 ZoomRegistrant.join_url.is_not(None),
-            )
-        )
-    ).all()
-    return {row[0]: row[1] for row in rows}
-
-
-# ---------------------------------------------------------------------------
-# T24-38 (PROMPT №642): read-only shared-link lookups for the master-only
-# PracticeResponse.zoom_shared_join_url. Same owner-only posture as
-# get_host_join_url[s] above -- callers gate the call itself on is_owner,
-# not this function (mirrors that pair exactly, see practices/service.py).
-# Unlike get_host_join_url[s], no join to zoom_registrants: the value lives
-# directly on ZoomMeeting (see that model's shared_registrant_id/
-# shared_join_url docstring for why).
-# ---------------------------------------------------------------------------
-
-
-async def get_shared_join_url(
-    practice_id: UUID,
-    session: AsyncSession,
-) -> str | None:
-    """This practice's shared registrant join_url, or None if there is no
-    USABLE one -- meeting not active, or Zoom hasn't returned one yet."""
-    return (
-        await session.execute(
-            select(ZoomMeeting.shared_join_url).where(
-                ZoomMeeting.practice_id == practice_id,
-                ZoomMeeting.status == ZoomMeetingStatus.ACTIVE.value,
-            )
-        )
-    ).scalar_one_or_none()
-
-
-async def get_shared_join_urls(
-    practice_ids: list[UUID],
-    session: AsyncSession,
-) -> dict[UUID, str]:
-    """Batched form of get_shared_join_url for a list endpoint (master's own
-    practice list) -- one query, no N+1, same pattern as get_host_join_urls
-    above."""
-    if not practice_ids:
-        return {}
-    rows = (
-        await session.execute(
-            select(ZoomMeeting.practice_id, ZoomMeeting.shared_join_url).where(
-                ZoomMeeting.practice_id.in_(practice_ids),
-                ZoomMeeting.status == ZoomMeetingStatus.ACTIVE.value,
-                ZoomMeeting.shared_join_url.is_not(None),
             )
         )
     ).all()
@@ -1133,6 +1200,12 @@ class ZoomEntryKind(enum.StrEnum):
     PENDING  -- honest "being prepared".
     FAILED   -- meeting creation is permanently failed; waiting is pointless
                 until someone acts.
+    UNAVAILABLE -- the meeting exists and the person holds a live booking,
+                but their own registrant will not get a link
+                (link_unavailable_reason). Not FAILED: there IS a meeting,
+                and "ask the master to retry" would be a lie -- nothing
+                retries a registrant past this point. Not PENDING: nothing
+                is being prepared any more (BE-72).
     CANCELLED -- the practice itself is cancelled.
     """
 
@@ -1141,6 +1214,7 @@ class ZoomEntryKind(enum.StrEnum):
     GUEST = "guest"
     PENDING = "pending"
     FAILED = "failed"
+    UNAVAILABLE = "unavailable"
     CANCELLED = "cancelled"
 
 
@@ -1222,11 +1296,13 @@ async def resolve_zoom_entry(
              retry poller claims those alongside create_failed).
       4. the owner -> HOST. Reached only with an ACTIVE meeting, so the
          "Начать" button cannot land on nothing BY CONSTRUCTION.
-      5. a live booking -> PERSONAL when the registrant link exists,
-         PENDING when it does not (Zoom does not always return a tokenized
-         join_url on create -- see ZoomRegistrant.join_url; the retry
-         poller fills it in later). PENDING bookings resolve to PENDING
-         too, see _LIVE_BOOKING_STATUSES.
+      5. a live booking -> PERSONAL when the registrant link exists;
+         UNAVAILABLE when link_unavailable_reason says none will come (Zoom
+         does not always return a tokenized join_url on create -- see
+         ZoomRegistrant.join_url -- and the retry poller never revisits a
+         registered row; or the poller gave up at its cap); PENDING
+         otherwise, while a link may still come. PENDING bookings resolve
+         to PENDING too, see _LIVE_BOOKING_STATUSES.
       6. no live booking -> GUEST.
 
     AUDIENCE IS DELIBERATELY NOT CHECKED HERE, and two code reviews have
@@ -1294,22 +1370,25 @@ async def resolve_zoom_entry(
             from app.modules.practices.service import (
                 ZOOM_VISIBLE_BOOKING_STATUSES,
             )
-            join_url = None
+            registrant = None
             if booking.status in ZOOM_VISIBLE_BOOKING_STATUSES:
-                join_url = (
+                registrant = (
                     await session.execute(
-                        select(ZoomRegistrant.join_url).where(
+                        select(ZoomRegistrant).where(
                             ZoomRegistrant.zoom_meeting_id == meeting.id,
                             ZoomRegistrant.booking_id == booking.id,
                             ZoomRegistrant.status
                             != ZoomRegistrantStatus.CANCELLED.value,
-                            ZoomRegistrant.join_url.is_not(None),
                         )
                     )
                 ).scalars().first()
-            if join_url:
+            if registrant is not None and registrant.join_url:
                 return ZoomEntryResolution(
-                    kind=ZoomEntryKind.PERSONAL, url=join_url,
+                    kind=ZoomEntryKind.PERSONAL, url=registrant.join_url,
+                )
+            if registrant is not None and link_unavailable_reason(registrant):
+                return ZoomEntryResolution(
+                    kind=ZoomEntryKind.UNAVAILABLE, url=None,
                 )
             return ZoomEntryResolution(kind=ZoomEntryKind.PENDING, url=None)
 
@@ -1317,3 +1396,375 @@ async def resolve_zoom_entry(
     return ZoomEntryResolution(
         kind=ZoomEntryKind.GUEST, url=meeting.shared_join_url,
     )
+
+
+# ---------------------------------------------------------------------------
+# GT-21 step B -- named guests
+# ---------------------------------------------------------------------------
+#
+# A guest on the public page is shown a generated name, may ask for another
+# or type his own, and enters Zoom under it. Two moments, deliberately apart
+# (owner ruling):
+#
+#   CLAIM on display -- claim_guest_name writes a ZoomGuestName row, so the
+#     name on the screen is guaranteed to be the one this guest gets.
+#   MINT on "Войти", once -- enter_as_guest creates the Zoom registrant.
+#     Zoom answers x-ratelimit-limit: 3 on registrant creation (measured), so
+#     minting on display would burn a registrant per "Другое" click.
+#
+# A row with zoom_registrant_id NULL means "name issued, entry not made":
+# regenerating leaves the earlier names taken, and there is no release path
+# (owner ruling -- releasing is more code and a new race).
+#
+# NEVER A ZoomRegistrant ROW, in any branch: the attendance ingest selects
+# every registrant of a meeting, so a guest there would be judged against a
+# booking that does not exist. A name the guest TYPES is not written anywhere
+# at all -- uniqueness exists for generated names only, and namesakes are
+# allowed (owner ruling, 2026-09-23); its join_url lives only in the Location
+# header of one response.
+#
+# THE FALLBACK IS A NORMAL PATH, NOT AN EMERGENCY. With three registrant
+# creations per rate-limit window, a crowd will routinely be refused, and
+# every refusal hands out the meeting's shared registrant: an unnamed entry
+# is better than none.
+
+# Retry budget for losing the insert race on the unique index. Each attempt
+# re-reads the names in use, so a loss is only possible against an insert
+# that committed after that read.
+GUEST_NAME_MAX_ATTEMPTS = 5
+
+# The longest name this system sends Zoom as a guest -- the width of
+# ZoomGuestName.display_name, applied to typed names as well so both kinds
+# obey one bound.
+GUEST_NAME_MAX_LENGTH = 64
+
+# Zoom rejects an empty last_name; a typed one-word name ("Марина") gets
+# this, the same convention as "or 'Master'" / "or 'User'" above. Cyrillic
+# because the guest's own name is: a Latin tail on a Cyrillic name reads as
+# a glitch. The page tells the guest before he submits.
+GUEST_LAST_NAME_STUB = "Гость"
+
+# A practice still worth entering. Zoom accepts a registrant on a meeting
+# that ended hours ago (probe: HTTP 201 twelve and a half hours after the
+# end), so the boundary has to be ours -- without it a long-finished
+# practice's public page would claim names and mint registrants forever.
+_GUEST_NAMING_STATUSES = frozenset({
+    PracticeStatus.SCHEDULED.value,
+    PracticeStatus.LIVE.value,
+})
+
+# Production randomness for the generator; tests pass a seeded Random.
+_GUEST_NAME_RNG = random.SystemRandom()
+
+
+def guest_naming_open(practice: Practice) -> bool:
+    """Whether this practice still hands out named guest entries."""
+    return practice.status in _GUEST_NAMING_STATUSES
+
+
+class GuestEntryKind(enum.Enum):
+    """What the public guest path can give, in one place (BE-66)."""
+
+    NAMED = "named"    # the name page: claim a name, mint a personal registrant
+    SHARED = "shared"  # the shared registrant, nothing written
+    NONE = "none"      # no guest entry in this state
+
+
+@dataclass(frozen=True)
+class GuestEntry:
+    kind: GuestEntryKind
+    # The shared registrant's URL, already checked to be https:// -- set for
+    # SHARED always, and for NAMED when one exists (its fallback).
+    shared_url: str | None = None
+
+
+def guest_entry(
+    practice: Practice, resolution: ZoomEntryResolution,
+) -> GuestEntry:
+    """THE rule for "is there a guest entry, and which" (BE-66).
+
+    The landing's guest button and /z/{code}/guest both ask this and only
+    this. They used to hold two copies of the rule, and the copies differed:
+    the guest page took the shared URL only if it started with https://,
+    the landing only asked that it exist -- a non-https shared URL would
+    have shown a button leading to "unavailable". With one function there
+    is no such cell to reach.
+
+    Anonymous by construction: `resolution` is resolve_zoom_entry's answer
+    for user=None, so only GUEST can lead anywhere.
+    """
+    if resolution.kind != ZoomEntryKind.GUEST:
+        return GuestEntry(GuestEntryKind.NONE)
+    shared = _https_or_none(resolution.url)
+    if guest_naming_open(practice):
+        return GuestEntry(GuestEntryKind.NAMED, shared_url=shared)
+    if shared is not None:
+        return GuestEntry(GuestEntryKind.SHARED, shared_url=shared)
+    return GuestEntry(GuestEntryKind.NONE)
+
+
+def normalize_typed_guest_name(raw: str | None) -> str | None:
+    """A typed guest name as it will be sent, or None for "not given".
+
+    Every whitespace run collapses to one space (a name of "\\t\\n" is not a
+    name, and a newline inside one is not a separator Zoom understands),
+    then the result is cut to GUEST_NAME_MAX_LENGTH and re-trimmed so the
+    cut cannot leave a trailing space. A string with no printable
+    non-space character -- a lone zero-width space survives str.split() --
+    counts as not given.
+    """
+    if raw is None:
+        return None
+    name = " ".join(raw.split())[:GUEST_NAME_MAX_LENGTH].rstrip()
+    if not any(ch.isprintable() and not ch.isspace() for ch in name):
+        return None
+    return name
+
+
+def split_guest_name(name: str) -> tuple[str, str]:
+    """first_name / last_name for Zoom: the first word, then the rest.
+
+    A generated name always has two parts ("Пылающий" / "Шива 12"); a typed
+    single word gets GUEST_LAST_NAME_STUB.
+    """
+    first, _, rest = name.partition(" ")
+    return first, (rest or GUEST_LAST_NAME_STUB)
+
+
+def _meeting_display_name(user: User, role: str) -> str:
+    """The name a registrant of this meeting carries in Zoom -- the same
+    fallbacks ensure_host_registrant and create_registrant_for_booking send,
+    so the comparison is against what the master actually sees."""
+    last_fallback = "Master" if role == ZoomRegistrantRole.HOST.value else "User"
+    return f"{user.first_name or 'VELO'} {user.last_name or last_fallback}"
+
+
+async def _guest_name_exclusions(
+    practice: Practice, meeting: ZoomMeeting, session: AsyncSession,
+) -> list[str]:
+    """Names a generated guest name must not repeat on this practice.
+
+    The guest names already issued here, plus every registrant of the
+    meeting -- in any status, which costs nothing and spares a comparison
+    rule -- plus the master himself, composed as his host registrant is,
+    even when that registrant was never minted. ZoomRegistrant has no name
+    column, so the names are rebuilt from users the way minting builds them.
+    """
+    issued = (
+        await session.execute(
+            select(ZoomGuestName.display_name).where(
+                ZoomGuestName.practice_id == practice.id,
+            )
+        )
+    ).scalars().all()
+    registrants = (
+        await session.execute(
+            select(User, ZoomRegistrant.role)
+            .join(ZoomRegistrant, ZoomRegistrant.user_id == User.id)
+            .where(ZoomRegistrant.zoom_meeting_id == meeting.id)
+        )
+    ).all()
+    names = list(issued)
+    names.extend(_meeting_display_name(user, role) for user, role in registrants)
+    master = await session.get(User, practice.master_id)
+    if master is not None:
+        names.append(_meeting_display_name(master, ZoomRegistrantRole.HOST.value))
+    return names
+
+
+async def claim_guest_name(
+    practice: Practice,
+    meeting: ZoomMeeting,
+    session: AsyncSession,
+    *,
+    rng: random.Random | None = None,
+    max_attempts: int = GUEST_NAME_MAX_ATTEMPTS,
+) -> ZoomGuestName | None:
+    """Generate a name and make it this guest's by inserting its row.
+
+    The insert runs in a SAVEPOINT: without it the first IntegrityError
+    would doom the caller's whole transaction and the retry could not run.
+    Losing the race on uq_zoom_guest_names_practice_name means another guest
+    committed the same name after this attempt read the names in use; the
+    next attempt reads again and draws again.
+
+    None when every attempt lost, or when the practice already holds
+    settings.zoom_guest_names_max_per_practice names (BE-66: regenerating
+    keeps names taken, so without a ceiling a GET loop grows the table and
+    the cost of each next claim without bound). Either way the caller shows
+    the page without a proposed name, and entry still works through a
+    typed name or the shared registrant. The ceiling is soft: the count and
+    the insert are not atomic, so concurrent guests may overshoot it by
+    their number -- the aim is a finite table, not an exact one.
+    """
+    issued = (
+        await session.execute(
+            select(func.count()).select_from(ZoomGuestName).where(
+                ZoomGuestName.practice_id == practice.id,
+            )
+        )
+    ).scalar_one()
+    if issued >= settings.zoom_guest_names_max_per_practice:
+        logger.info(
+            "guest_name_cap_reached",
+            practice_id=str(practice.id),
+            issued=issued,
+            cap=settings.zoom_guest_names_max_per_practice,
+        )
+        return None
+    rng = rng or _GUEST_NAME_RNG
+    for _ in range(max_attempts):
+        exclude = await _guest_name_exclusions(practice, meeting, session)
+        candidate = generate_guest_name(exclude, rng)
+        row = ZoomGuestName(
+            practice_id=practice.id, display_name=candidate.display,
+        )
+        try:
+            async with session.begin_nested():
+                session.add(row)
+                await session.flush()
+        except IntegrityError:
+            logger.info(
+                "zoom_guest_name_race_lost",
+                practice_id=str(practice.id),
+                display_name=candidate.display,
+            )
+            continue
+        return row
+    logger.warning(
+        "zoom_guest_name_attempts_exhausted",
+        practice_id=str(practice.id),
+        attempts=max_attempts,
+    )
+    return None
+
+
+def _https_or_none(url: str | None) -> str | None:
+    """A stored Zoom URL fit to redirect to -- same guard as the guest route
+    and the two URL-handing siblings in this module."""
+    if isinstance(url, str) and url.startswith("https://"):
+        return url
+    return None
+
+
+async def enter_as_guest(
+    practice: Practice,
+    meeting: ZoomMeeting,
+    session: AsyncSession,
+    *,
+    typed_name: str | None,
+    guest_name_id: UUID | None,
+) -> str | None:
+    """Mint this guest's registrant and return the URL to send him to.
+
+    The name, in order of precedence:
+      1. typed_name (already normalized) -- sent as typed, written nowhere;
+      2. the shown name, the ZoomGuestName row guest_name_id names ON THIS
+         PRACTICE. The id arrives in a hidden form field and is not a
+         secret: a forged or foreign id simply finds no row here;
+      3. otherwise a freshly claimed name -- a forged id gains nothing a
+         fresh page load would not give.
+    With no name at all (every claim lost) the guest takes the shared
+    registrant.
+
+    Every mint uses a new address. Zoom is idempotent on a duplicate
+    registrant email -- same email, same registrant (recon, PROMPT №641) --
+    so a reused address would fold two guests, or two typed names, into one
+    registrant under whichever name came first.
+
+    A double submit mints twice. The row keeps the FIRST registrant (the
+    UPDATE is guarded on zoom_registrant_id IS NULL); the second one lives
+    only in its response's Location header.
+
+    NO DATABASE CONNECTION DURING THE ZOOM CALL (BE-66). The name is settled
+    first and the caller's session is COMMITTED before create_registrant --
+    so a claimed name is durable, and the pooled connection goes back to
+    the pool (pool_size 10 + overflow 20, shared by the whole app) instead
+    of being held through a Zoom call of up to 15 seconds while a crowd
+    enters. The result is then written by a separate short session. This
+    function therefore ends the caller's transaction; everything it read
+    stays usable because the session factory sets expire_on_commit=False.
+    A failure of that last UPDATE is logged and does not undo the entry:
+    the guest still gets his personal link, the row stays "issued, not
+    entered".
+
+    Returns the personal join_url; the shared one when Zoom refused, did
+    not answer, or answered without a join_url; None when neither exists --
+    the one state in which a guest cannot enter.
+    """
+    row: ZoomGuestName | None = None
+    name = typed_name
+    if name is None:
+        if guest_name_id is not None:
+            row = (
+                await session.execute(
+                    select(ZoomGuestName).where(
+                        ZoomGuestName.id == guest_name_id,
+                        ZoomGuestName.practice_id == practice.id,
+                    )
+                )
+            ).scalar_one_or_none()
+        if row is None:
+            row = await claim_guest_name(practice, meeting, session)
+        if row is None:
+            await session.commit()
+            return _https_or_none(meeting.shared_join_url)
+        name = row.display_name
+
+    row_id = row.id if row is not None else None
+    await session.commit()
+
+    first_name, last_name = split_guest_name(name)
+    try:
+        response = await create_registrant(
+            zoom_meeting_id=meeting.zoom_meeting_id,
+            email=f"guest-{uuid4()}@meetings.velo.invalid",
+            first_name=first_name,
+            last_name=last_name,
+        )
+    except ZoomAPIError as exc:
+        logger.warning(
+            "zoom_guest_registrant_create_failed",
+            practice_id=str(practice.id),
+            status_code=exc.status_code,
+        )
+        return _https_or_none(meeting.shared_join_url)
+    except Exception:
+        logger.exception(
+            "zoom_guest_registrant_unexpected_error",
+            practice_id=str(practice.id),
+        )
+        return _https_or_none(meeting.shared_join_url)
+
+    registrant_id = response.get("registrant_id") or response.get("id")
+    join_url = _https_or_none(response.get("join_url"))
+    if row_id is not None and registrant_id:
+        await _record_guest_registrant(
+            row_id, str(registrant_id), join_url, practice_id=practice.id,
+        )
+    return join_url or _https_or_none(meeting.shared_join_url)
+
+
+async def _record_guest_registrant(
+    row_id: UUID, registrant_id: str, join_url: str | None, *, practice_id: UUID,
+) -> None:
+    """Write a minted registrant into its ZoomGuestName row, in its own
+    short transaction -- the caller's was committed before the Zoom call.
+    Guarded on zoom_registrant_id IS NULL, so a double submit keeps the
+    first. Never raises: the entry already happened."""
+    try:
+        async with get_session_factory()() as session:
+            await session.execute(
+                update(ZoomGuestName)
+                .where(
+                    ZoomGuestName.id == row_id,
+                    ZoomGuestName.zoom_registrant_id.is_(None),
+                )
+                .values(zoom_registrant_id=registrant_id, join_url=join_url)
+            )
+            await session.commit()
+    except Exception:
+        logger.exception(
+            "zoom_guest_registrant_record_failed",
+            practice_id=str(practice_id),
+        )

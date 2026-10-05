@@ -51,13 +51,25 @@
         <div class="profile__menu-title">Аккаунт</div>
         <div class="profile__menu-list">
           <VMenuRow label="Редактировать профиль" @click="onEditProfile">
-            <template #icon><IconEdit :size="20" /></template>
+            <template #icon><IconPen :size="20" /></template>
           </VMenuRow>
           <VMenuRow label="Мои бронирования" @click="router.push({ name: 'user-bookings' })">
             <template #icon><IconBookings :size="20" /></template>
           </VMenuRow>
+          <VMenuRow
+            v-if="authStore.role === 'user' && authStore.masterApplication"
+            label="Заявка мастера"
+            @click="router.push({ name: applicationRoute })"
+          >
+            <template #icon><IconPen :size="20" /></template>
+          </VMenuRow>
           <VMenuRow label="Сообщения" :dot="hasUnreadMessages" @click="onMessages">
             <template #icon><IconMessages :size="20" /></template>
+          </VMenuRow>
+          <!-- FE-19 (GT P3): schools. The only "groups" concept a plain user
+               meets -- the master's student groups are invisible to them. -->
+          <VMenuRow label="Мои группы" @click="router.push({ name: 'user-curator-groups' })">
+            <template #icon><IconGroup :size="20" /></template>
           </VMenuRow>
         </div>
       </div>
@@ -69,7 +81,7 @@
           <VMenuRow label="Уведомления" @click="onNotifications">
             <template #icon><IconBell :size="20" /></template>
           </VMenuRow>
-          <VMenuRow label="Язык / Часовой пояс" @click="onLanguageTimezone">
+          <VMenuRow label="Часовой пояс" @click="onTimezoneSettings">
             <template #icon><IconGlobe :size="20" /></template>
           </VMenuRow>
         </div>
@@ -129,7 +141,7 @@ import { useUiStore } from '@/stores/ui'
 import { VAvatar, VStatCard, VCard, VMenuRow } from '@/components/ui'
 import RoleSwitchSection from '@/components/shared/RoleSwitchSection.vue'
 import {
-  IconEdit,
+  IconPen,
   IconBookings,
   IconMessages,
   IconBell,
@@ -137,12 +149,18 @@ import {
   IconSupport,
   IconShare,
   IconLogout,
+  IconGroup,
 } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { getMyStats } from '@/api/bookings'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const applicationRoute = computed(() =>
+  ['cancelled_by_user', 'suspended'].includes(authStore.masterApplication?.status ?? '')
+    ? 'master-apply'
+    : 'master-pending',
+)
 const uiStore = useUiStore()
 const toast = useToast()
 
@@ -172,25 +190,25 @@ const hoursLabel = computed(() => {
 // -- Menu actions --
 
 function onEditProfile(): void {
-  router.push({ name: 'user-edit-profile' })
+  void router.push({ name: 'user-edit-profile' })
 }
 
 function onMessages(): void {
-  router.push({ name: 'user-messages' })
+  void router.push({ name: 'user-messages' })
 }
 
 function onNotifications(): void {
-  router.push({ name: 'user-notifications' })
+  void router.push({ name: 'user-notifications' })
 }
 
-function onLanguageTimezone(): void {
-  router.push({ name: 'user-language-timezone' })
+function onTimezoneSettings(): void {
+  void router.push({ name: 'user-timezone' })
 }
 
 function onSupport(): void {
   // User support screen (batch I): topic picker + message + honest stub submit
   // (no support backend yet — see SupportView / VELO-Backend-Tasks.md).
-  router.push({ name: 'user-support' })
+  void router.push({ name: 'user-support' })
 }
 
 function onShare(): void {
@@ -199,16 +217,16 @@ function onShare(): void {
 
 async function onLogout(): Promise<void> {
   await authStore.logout()
-  router.replace({ path: '/' })
+  void router.replace({ path: '/' })
 }
 
 /** Return to native role dashboard and reset uiMode (TD-FE-ROLE-SWITCH). */
 function returnToNativeMode(): void {
   uiStore.setUiMode('default')
   if (authStore.role === 'admin') {
-    router.push({ name: 'admin-dashboard' })
+    void router.push({ name: 'admin-dashboard' })
   } else {
-    router.push({ name: 'master-dashboard' })
+    void router.push({ name: 'master-dashboard' })
   }
 }
 

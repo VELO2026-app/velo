@@ -83,6 +83,48 @@ from app.modules.practices.models import (
 )
 
 
+# BE-74: the two audiences a school practice may carry. Named once: the
+# create schema checks it here, update_practice checks it against the
+# STORED school (a PATCH may send only one of the two fields), and the two
+# must not drift into two lists.
+SCHOOL_PRACTICE_AUDIENCES = frozenset({
+    AudienceKind.PUBLIC.value,
+    AudienceKind.CURATOR_GROUPS.value,
+})
+
+
+def check_school_audience(
+    audience_kind: str, curator_group_id: UUID | None,
+) -> None:
+    """Raise ValueError when audience_kind and the owning school disagree.
+
+    Two refusals, no third:
+      - 'curator_groups' without a school -- "the school's students" of no
+        school is an audience nobody is in;
+      - a school with 'students' or 'groups' -- a school practice is for
+        everyone or for the school's students; the master's own students
+        and custom groups are the general section's audiences.
+
+    Raises ValueError (not BadRequestError) because the schema validator
+    turns it into a 422; update_practice wraps it into a 400 itself.
+    """
+    if (
+        audience_kind == AudienceKind.CURATOR_GROUPS.value
+        and curator_group_id is None
+    ):
+        raise ValueError(
+            "audience_kind='curator_groups' requires curator_group_id"
+        )
+    if (
+        curator_group_id is not None
+        and audience_kind not in SCHOOL_PRACTICE_AUDIENCES
+    ):
+        raise ValueError(
+            "a school practice's audience_kind must be 'public' or "
+            "'curator_groups'"
+        )
+
+
 # -- Recurrence spec (E3, series only) --
 # Lives on the series ROOT in Practice.data.recurrence (schema-on-read, the
 # same JSONB sandbox as taxonomy) and drives child-occurrence generation when
@@ -210,11 +252,29 @@ class CreatePracticeRequest(BaseModel):
     # another master's group / a system slug with a 400).
     audience_kind: AudienceKind = AudienceKind.PUBLIC
     group_ids: list[UUID] = Field(default_factory=list)
-    # P5/GT-11: the same field for the fourth audience, pointed at the
-    # master's SCHOOLS instead of their own custom groups. Separate field
-    # rather than a shared one because the ids come from different tables
-    # and the service validates them against different ownership rules.
-    curator_group_ids: list[UUID] = Field(default_factory=list)
+    # BE-74: the school this practice is created IN -- the frontend sends
+    # it when the practice is made from a school's section, and the
+    # practice then belongs to that school for good (Practice.
+    # curator_group_id). ONE id, not a list: a practice belongs to exactly
+    # one school (owner ruling, 2026-10-01), so a second school is not a
+    # wider audience to validate but a shape this field cannot hold -- a
+    # list is refused with 422 by the type itself.
+    #
+    # A school practice is for everyone ('public') or for the school's
+    # students ('curator_groups'); 'curator_groups' without a school is
+    # nobody's audience. Both checked below; whether the master may use
+    # this school is the service's question (_usable_curator_group_or_400).
+    curator_group_id: UUID | None = None
+
+    # BE-102: who LEADS this practice. Absent, null, or the caller's own
+    # id -> the caller, the behaviour before this field existed. Another
+    # master's id is a school curator creating a practice for a master of
+    # that school, and is accepted only when a school is named here, the
+    # caller is its curator, and the target is a verified master of it
+    # (owner ruling, 2026-10-01). Every condition but "a school is named"
+    # needs the database and the caller's id, so all of them live in the
+    # service (_effective_master_id_or_4xx), not in a validator here.
+    master_id: UUID | None = None
 
     @field_validator("audience_kind")
     @classmethod
@@ -233,15 +293,6 @@ class CreatePracticeRequest(BaseModel):
         ='groups' -- reject a contradiction (group_ids sent with a
         different kind, or 'groups' with an empty list) at the schema
         level, same posture as _check_recurrence_requires_series above."""
-        if self.group_ids and self.curator_group_ids:
-            # NEW in GT-11: the previous validator had no such case to
-            # reject. Two audience target sets at once is not a narrower
-            # audience, it is an ambiguous one -- audience_kind can only
-            # name one of them, so the other would be stored and silently
-            # ignored until somebody switched kinds and resurrected it.
-            raise ValueError(
-                "group_ids and curator_group_ids cannot be used together"
-            )
         if self.audience_kind == AudienceKind.GROUPS.value:
             if not self.group_ids:
                 raise ValueError(
@@ -251,17 +302,7 @@ class CreatePracticeRequest(BaseModel):
             raise ValueError(
                 "group_ids is only allowed when audience_kind='groups'"
             )
-        if self.audience_kind == AudienceKind.CURATOR_GROUPS.value:
-            if not self.curator_group_ids:
-                raise ValueError(
-                    "curator_group_ids must be non-empty when "
-                    "audience_kind='curator_groups'"
-                )
-        elif self.curator_group_ids:
-            raise ValueError(
-                "curator_group_ids is only allowed when "
-                "audience_kind='curator_groups'"
-            )
+        check_school_audience(self.audience_kind, self.curator_group_id)
         return self
 
     @field_validator("practice_type")
@@ -424,9 +465,15 @@ class UpdatePracticeRequest(BaseModel):
     # style's own W-1 note below).
     audience_kind: AudienceKind | None = None
     group_ids: list[UUID] | None = None
-    # P5/GT-11: same PATCH semantics as group_ids above -- omitted means
-    # unchanged, sent replaces the whole set, an empty list clears it.
-    curator_group_ids: list[UUID] | None = None
+    # BE-74: NOT an edit. The owning school is set at creation and never
+    # changes; the field is here so a form that resends the whole practice
+    # does not have to strip it. The service accepts the stored value as a
+    # no-op and refuses anything else -- another school, or null on a
+    # school practice, or a school on a practice that has none -- with 400
+    # practice_school_immutable. Declared rather than left to the model's
+    # extra="ignore", because ignoring it would answer 200 to "move this
+    # practice to another school" and leave it where it was.
+    curator_group_id: UUID | None = None
 
     @field_validator("audience_kind")
     @classmethod
@@ -451,10 +498,6 @@ class UpdatePracticeRequest(BaseModel):
         with an empty group_ids. See the fields' own docstring for why a
         one-sided send (only audience_kind, or only group_ids) is left to
         the service instead."""
-        if self.group_ids and self.curator_group_ids:
-            raise ValueError(
-                "group_ids and curator_group_ids cannot be used together"
-            )
         if self.audience_kind is not None and self.group_ids is not None:
             if self.audience_kind == AudienceKind.GROUPS.value and not self.group_ids:
                 raise ValueError(
@@ -463,26 +506,6 @@ class UpdatePracticeRequest(BaseModel):
             if self.audience_kind != AudienceKind.GROUPS.value and self.group_ids:
                 raise ValueError(
                     "group_ids is only allowed when audience_kind='groups'"
-                )
-        if (
-            self.audience_kind is not None
-            and self.curator_group_ids is not None
-        ):
-            if (
-                self.audience_kind == AudienceKind.CURATOR_GROUPS.value
-                and not self.curator_group_ids
-            ):
-                raise ValueError(
-                    "curator_group_ids must be non-empty when "
-                    "audience_kind='curator_groups'"
-                )
-            if (
-                self.audience_kind != AudienceKind.CURATOR_GROUPS.value
-                and self.curator_group_ids
-            ):
-                raise ValueError(
-                    "curator_group_ids is only allowed when "
-                    "audience_kind='curator_groups'"
                 )
         return self
 
@@ -621,14 +644,12 @@ class AudiencePreviewRequest(BaseModel):
 
     audience_kind: AudienceKind
     group_ids: list[UUID] = []
-    curator_group_ids: list[UUID] = []
 
     @model_validator(mode="after")
     def _check_group_ids_match_audience_kind(self) -> "AudiencePreviewRequest":
-        if self.group_ids and self.curator_group_ids:
-            raise ValueError(
-                "group_ids and curator_group_ids cannot be used together"
-            )
+        # BE-74: no school field. The school a 'curator_groups' audience
+        # means is the practice's own, which a preview cannot change any
+        # more than a PATCH can; the service reads it off the practice.
         if self.audience_kind == AudienceKind.GROUPS.value and not self.group_ids:
             raise ValueError(
                 "group_ids must be non-empty when audience_kind='groups'"
@@ -636,22 +657,6 @@ class AudiencePreviewRequest(BaseModel):
         if self.audience_kind != AudienceKind.GROUPS.value and self.group_ids:
             raise ValueError(
                 "group_ids is only allowed when audience_kind='groups'"
-            )
-        if (
-            self.audience_kind == AudienceKind.CURATOR_GROUPS.value
-            and not self.curator_group_ids
-        ):
-            raise ValueError(
-                "curator_group_ids must be non-empty when "
-                "audience_kind='curator_groups'"
-            )
-        if (
-            self.audience_kind != AudienceKind.CURATOR_GROUPS.value
-            and self.curator_group_ids
-        ):
-            raise ValueError(
-                "curator_group_ids is only allowed when "
-                "audience_kind='curator_groups'"
             )
         return self
 
@@ -736,29 +741,32 @@ class PracticeResponse(BaseModel):
     # to compose the "Вы не состоите в группе «...»" check-in error message
     # without a second round-trip.
     #
-    # P5/GT-12, the two curator-group fields. Neither is auto-populated,
-    # same as audience_group_names above.
+    # The owning school (BE-74) and the dark-audience flag (P5/GT-12).
     #
-    # audience_curator_group_names: the target SCHOOLS' names, filled at the
-    # same three call sites and therefore seen by the same circle -- see
-    # curator_group_names_for_practice's docstring for why that circle
-    # includes a booked non-owner and why it is wider here than for
-    # 'groups'.
+    # curator_group_id: the school the practice belongs to, or null.
+    # Auto-populated from the column (from_attributes), for every audience
+    # -- a public practice of a school is still that school's.
+    #
+    # curator_group_name: that school's name, or null. NOT auto-populated:
+    # filled at the same three call sites as audience_group_names, see
+    # curator_group_name_for_practice. Seen by everyone who can read the
+    # practice, public ones included (owner ruling, 2026-10-01).
     #
     # audience_unavailable: TRUE when this practice reaches nobody through
-    # its schools -- the master left them, they were frozen, or they were
-    # deleted. It is a fact about the PRACTICE, not about the viewer asking:
+    # its school -- the master left it, it was frozen, or it was deleted.
+    # It is a fact about the PRACTICE, not about the viewer asking:
     # the same value goes to everyone who can read the response, because
     # "this practice is dark" is not a per-person answer. Always false for
     # the other three kinds; never null, so no consumer has to handle a
     # state that cannot occur.
     #
     # The two are independent on purpose: a frozen school leaves the flag
-    # true AND the names full. Without the names the master learns that
+    # true AND the name set. Without the name the master learns that
     # something is wrong and not what.
     audience_kind: AudienceKind = AudienceKind.PUBLIC
     audience_group_names: list[str] = []
-    audience_curator_group_names: list[str] = []
+    curator_group_id: UUID | None = None
+    curator_group_name: str | None = None
     audience_unavailable: bool = False
 
     # -- Series meta (E3 batch 2; computed by the service for series roots) --
@@ -968,5 +976,6 @@ class ZoomEntryResolveResponse(BaseModel):
 
     kind: Literal[
         "personal", "host", "guest", "pending", "failed", "cancelled",
+        "unavailable",
     ]
     url: str | None = None

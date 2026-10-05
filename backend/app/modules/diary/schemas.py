@@ -13,7 +13,7 @@
 #   DiaryEntryResponse / PaginatedDiaryEntriesResponse
 #
 # INSIGHTS (master-facing):
-#   MoodDistribution / RatingDistribution / PracticeInsightsResponse
+#   ScoreZoneCounts / PracticeInsightsResponse
 #
 # SUGGESTION-6 fix: ConfigDict(from_attributes=True) instead of dict style.
 # NO-LITERALS: field limits sourced from config.py:
@@ -21,23 +21,30 @@
 #   settings.diary_entry_content_max_length
 #   settings.diary_entry_title_max_length
 # mood / rating are 1..10 integer scores (slider); validated by range,
-#   not by a config list. UI derives the icon/label from the range
-#   (1-3 / 4-7 / 8-10).
+#   not by a config list. Read surfaces that publish a zone instead of the
+#   number use ScoreZone (diary.insights_service.score_zone, BE-77).
 #
-# CR-01: MoodDistribution / RatingDistribution fields changed from
+# CR-01: distribution fields (now ScoreZoneCounts) changed from
 #   optional (default=0) to required. These are response-only schemas --
 #   the service always provides concrete values. Removing defaults makes
 #   OpenAPI mark them as required, so the TS generator emits non-optional
 #   fields and frontend code doesn't need `?.` guards.
 # =============================================================================
 
-from datetime import datetime
-from typing import Literal
+import enum
+from datetime import UTC, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    field_validator,
+)
 
 from app.core.config import settings
+from app.modules.diary.models import ExternalActivityType, ScoreZone
 
 
 # ===================================================================
@@ -124,6 +131,45 @@ class FeedbackResponse(BaseModel):
     comment: str | None
     created_at: datetime
     updated_at: datetime | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ReflectionRequest(BaseModel):
+    """POST /api/v1/practices/{id}/reflection body (BE-108).
+
+    An empty answer is a valid answer (owner ruling): absent, null, "" and
+    whitespace all arrive here and are stored as NULL -- no 422 for any
+    client, unlike feedback's min_length=1.
+    """
+
+    comment: str | None = Field(
+        default=None,
+        max_length=settings.diary_comment_max_length,
+    )
+
+    @field_validator("comment")
+    @classmethod
+    def blank_comment_is_none(cls, v: str | None) -> str | None:
+        """Whitespace-only text is absence, and is stored as absence.
+
+        Non-blank text is stored stripped -- the same rule as
+        CreateExternalActivityRequest.thoughts.
+        """
+        if v is None:
+            return None
+        stripped = v.strip()
+        return stripped or None
+
+
+class ReflectionResponse(BaseModel):
+    """A just-created reflection. Returned to its author only."""
+
+    id: UUID
+    practice_id: UUID
+    booking_id: UUID
+    comment: str | None
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -289,38 +335,26 @@ class PaginatedDiaryEntriesResponse(BaseModel):
 # ===================================================================
 
 
-class MoodDistribution(BaseModel):
-    """Check-in mood counts for a practice, bucketed by score range.
+class ScoreZoneCounts(BaseModel):
+    """Counts of 1..10 scores per zone (BE-77) -- THE distribution shape.
 
-    mood is a 1..10 score; counts are grouped into three buckets:
-      low  = scores 1-3
-      mid  = scores 4-7
-      high = scores 8-10
+    One class for every server distribution, check-in moods and feedback
+    ratings alike: the practice insights, the master's analytics, the admin
+    feedback metric and the school aggregate. The keys are ScoreZone, the
+    boundaries live in diary.insights_service.score_zone: bad 1-2, low 3-4,
+    neutral 5-6, good 7-8, fire 9-10 -- the frontend's moodScale.ts keys.
+    One class is also one OpenAPI component, so there is no module-qualified
+    name collision to dodge.
 
     CR-01: fields are required (no default=0). This is a response-only
-    schema -- the service always provides concrete values.
+    schema -- the service always provides all five (zone_counts).
     """
 
-    high: int
-    mid: int
+    bad: int
     low: int
-
-
-class RatingDistribution(BaseModel):
-    """Feedback rating counts for a practice, bucketed by score range.
-
-    rating is a 1..10 score; counts are grouped into three buckets:
-      confused = scores 1-3
-      good     = scores 4-7
-      fire     = scores 8-10
-
-    CR-01: fields are required (no default=0). Same rationale as
-    MoodDistribution above.
-    """
-
-    fire: int
+    neutral: int
     good: int
-    confused: int
+    fire: int
 
 
 class PracticeInsightsResponse(BaseModel):
@@ -332,8 +366,8 @@ class PracticeInsightsResponse(BaseModel):
 
     practice_id: UUID
     participants: int
-    checkins: MoodDistribution
-    feedbacks: RatingDistribution
+    checkins: ScoreZoneCounts
+    feedbacks: ScoreZoneCounts
     comments_count: int
 
 
@@ -345,11 +379,11 @@ class PracticeInsightsResponse(BaseModel):
 class ReviewItem(BaseModel):
     """One named review (GET /api/v1/practices/{id}/reviews).
 
-    The de-anonymised counterpart to RatingDistribution: where insights expose
-    only numeric buckets, this carries the reviewer's name, avatar and comment
-    text. `rating` is the stored 1..10 score mapped to the three UI buckets
-    (1-3 confused / 4-7 good / 8-10 fire) so the frontend reuses the same
-    rating icons it already renders for the anonymous distribution.
+    The de-anonymised counterpart to the insights' feedbacks distribution:
+    where insights expose only counts, this carries the reviewer's name,
+    avatar and comment text. `rating` is the stored 1..10 score mapped to
+    its zone (ScoreZone, BE-77) -- the same five keys the distribution
+    counts.
 
     user_id is the reviewer's User.id (E1 remainder) -- it lets the frontend
     navigate from a review to that student's profile. The author User is
@@ -359,7 +393,7 @@ class ReviewItem(BaseModel):
     user_id: UUID
     reviewer_name: str
     avatar_url: str | None
-    rating: Literal["fire", "good", "confused"]
+    rating: ScoreZone
     comment: str | None
     created_at: datetime
 
@@ -419,3 +453,247 @@ class DiaryFeedResponse(BaseModel):
 
     items: list[DiaryFeedItem]
     next_cursor: str | None
+
+
+# ===================================================================
+# External activity schemas (BE-27)
+# ===================================================================
+
+
+class CreateExternalActivityRequest(BaseModel):
+    """POST /api/v1/diary/external-activities body.
+
+    `activity_type` is typed as the ENUM, not as a str validated against a
+    config list the way entry_type is: the closed set then reaches the
+    frontend as a union in generated.ts, and a value added without a card
+    to draw it breaks the build instead of the feed. See
+    ExternalActivityType's own docstring.
+
+    `occurred_at` must be timezone-aware and must not be in the future --
+    a diary of what happened cannot hold what has not. Both are checked
+    here so the answer is a field-attributed 422 rather than a 500 from a
+    naive/aware comparison further down.
+    """
+
+    occurred_at: datetime
+    activity_type: ExternalActivityType
+    custom_activity_name: str | None = Field(
+        default=None,
+        max_length=settings.external_activity_name_max_length,
+        # validate_default IS THE WHOLE FIX, not a flag beside it. A
+        # field_validator does NOT run when the key is absent from the
+        # body, so without this the commonest mistake of the two -- type
+        # 'custom' and no name at all -- would stop being refused and
+        # return 201. Measured, not assumed: the prototype without it
+        # turned that case from a 422 into a created row.
+        validate_default=True,
+    )
+    mood: int
+    thoughts: str | None = Field(
+        default=None,
+        max_length=settings.diary_entry_content_max_length,
+    )
+
+    @field_validator("occurred_at")
+    @classmethod
+    def occurred_at_must_be_aware_and_past(cls, v: datetime) -> datetime:
+        """Reject a naive timestamp and a future one; normalize to UTC.
+
+        Normalizing HERE and not in the service is what makes "same instant,
+        different offset" one stored value: +03:00 and Z arrive as the same
+        UTC point, and the feed's ordering never sees an offset.
+        """
+        if v.tzinfo is None or v.tzinfo.utcoffset(v) is None:
+            raise ValueError(
+                "occurred_at must include a timezone offset"
+            )
+        v = v.astimezone(UTC)
+        if v > datetime.now(UTC):
+            raise ValueError("occurred_at cannot be in the future")
+        return v
+
+    @field_validator("mood")
+    @classmethod
+    def mood_must_be_valid(cls, v: int) -> int:
+        """Validate mood is a 1..10 score (required here, unlike a note)."""
+        if not 1 <= v <= 10:
+            raise ValueError(f"mood must be between 1 and 10, got {v}")
+        return v
+
+    @field_validator("thoughts")
+    @classmethod
+    def blank_thoughts_is_none(cls, v: str | None) -> str | None:
+        """Whitespace-only text is absence, and is stored as absence.
+
+        Without this a body of spaces would land in text_search and in the
+        snapshot preview as a blank line the feed cannot render and the
+        search cannot match.
+        """
+        if v is None:
+            return None
+        stripped = v.strip()
+        return stripped or None
+
+    @field_validator("custom_activity_name")
+    @classmethod
+    def custom_name_matches_type(
+        cls, v: str | None, info: ValidationInfo,
+    ) -> str | None:
+        """The name is required exactly when the type is custom.
+
+        A FIELD validator on the SECOND of the two fields, not a model
+        validator, and the difference is the error's address: pydantic
+        gives a model validator no `loc`, so both refusals used to arrive
+        at body level and the frontend could not put them under the input
+        they belong to. Contract 4.1 asks for 422 precisely so it can.
+
+        Reading a sibling works because `activity_type` is DECLARED ABOVE
+        this field: info.data holds the fields already validated, in
+        declaration order. It holds only the ones that PASSED -- an
+        unknown activity_type is absent from it entirely, hence .get()
+        and the early return: that request already has its 422 on
+        activity_type, and a second refusal about the name would only
+        send the person looking in the wrong place.
+
+        Both directions stay here together. Split across two checks in
+        two places they would be two rules that can be relaxed one at a
+        time, and the DB constraint they mirror
+        (ck_external_activity_custom) is deliberately one expression for
+        the same reason.
+        """
+        name = (v or "").strip()
+        activity_type = info.data.get("activity_type")
+        if activity_type is None:
+            return name or None
+        if activity_type is ExternalActivityType.CUSTOM and not name:
+            raise ValueError(
+                "custom_activity_name is required when "
+                "activity_type is 'custom'"
+            )
+        if activity_type is not ExternalActivityType.CUSTOM and v is not None:
+            raise ValueError(
+                "custom_activity_name is only allowed when "
+                "activity_type is 'custom'"
+            )
+        return name or None
+
+
+class ExternalActivityResponse(BaseModel):
+    """POST /api/v1/diary/external-activities -- the created activity.
+
+    `occurred_at` comes back normalized to UTC, which is the value the
+    diary orders by; `created_at` is the write time and the two differ
+    whenever somebody enters yesterday's massage today.
+    """
+
+    id: UUID
+    occurred_at: datetime
+    activity_type: ExternalActivityType
+    custom_activity_name: str | None
+    mood: int
+    thoughts: str | None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CustomActivityNamesResponse(BaseModel):
+    """GET /api/v1/diary/external-activities/custom-names.
+
+    The person's own custom activity names, most recently used first, at
+    most settings.external_activity_name_suggestions of them. Spellings
+    that differ only in case are one name here, shown as it was typed the
+    last time; an empty list means they have never used a custom type, not
+    that something went wrong.
+    """
+
+    items: list[str]
+
+
+# ---------------------------------------------------------------------------
+# Practice analytics (BE-78): GET /practices/{id}/analytics[/pairs|/reviews]
+# ---------------------------------------------------------------------------
+#
+# One population for every block: the practice's ATTENDED bookings. Scores
+# leave the server as ZONES only (BE-24) -- to the leading master too, so the
+# contract is one shape for every reader.
+
+
+class PracticeAnalyticsViewerRole(enum.StrEnum):
+    """How the reader of /analytics relates to the practice (BE-78 (2)).
+
+    Decided by the server's one rights check; the screen maps it to what a
+    tap on a person opens (leader -> the student dossier, curator -> the
+    school student profile, school_master -> a direct message). One person
+    holding several: leader > curator > school_master.
+    """
+
+    LEADER = "leader"
+    CURATOR = "curator"
+    SCHOOL_MASTER = "school_master"
+
+
+class PracticeAnalyticsResponse(BaseModel):
+    """GET /practices/{id}/analytics -- the header and both distributions.
+
+    `attended` is the denominator of every "X of N" on the screen; the
+    "check-ins before" figure is the sum of `before` (PRE check-ins of the
+    attended), so the blocks reconcile.
+    """
+
+    practice_id: UUID
+    viewer_role: PracticeAnalyticsViewerRole
+    curator_group_id: UUID | None = Field(
+        description="The practice's school -- for viewer_role=curator only.",
+    )
+    title: str
+    direction: str | None
+    scheduled_at: datetime
+    timezone: str
+    master_name: str
+    master_avatar_url: str | None
+    attended: int
+    before: ScoreZoneCounts
+    after: ScoreZoneCounts
+    pairs_total: int
+    reviews_total: int
+
+
+class PracticeAnalyticsPair(BaseModel):
+    """One attendee with BOTH a PRE check-in and a review, as zones."""
+
+    user_id: UUID
+    name: str
+    avatar_url: str | None
+    before_zone: ScoreZone
+    after_zone: ScoreZone
+    is_school_student: bool
+
+
+class PaginatedPracticeAnalyticsPairs(BaseModel):
+    """GET /practices/{id}/analytics/pairs -- ordered by name, then user_id."""
+
+    items: list[PracticeAnalyticsPair]
+    total: int
+    limit: int
+    offset: int
+
+
+class PracticeAnalyticsReview(BaseModel):
+    """One attendee's review WITH text (a rating alone is not listed here)."""
+
+    user_id: UUID
+    name: str
+    avatar_url: str | None
+    comment: str
+    created_at: datetime
+    is_school_student: bool
+
+
+class PaginatedPracticeAnalyticsReviews(BaseModel):
+    """GET /practices/{id}/analytics/reviews -- newest first, then id."""
+
+    items: list[PracticeAnalyticsReview]
+    total: int
+    limit: int
+    offset: int

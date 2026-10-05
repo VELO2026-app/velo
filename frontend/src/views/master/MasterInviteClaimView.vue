@@ -56,8 +56,7 @@ import { claimMasterInvite } from '@/api/masters'
 import { ApiResponseError } from '@/api/client'
 import { errorMessage } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
-import VButton from '@/components/ui/VButton.vue'
-import VLoader from '@/components/ui/VLoader.vue'
+import { VButton, VLoader } from '@/components/ui'
 
 const route = useRoute()
 const router = useRouter()

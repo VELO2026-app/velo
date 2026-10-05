@@ -71,12 +71,14 @@ import MasterStudentProfileView from '@/views/master/MasterStudentProfileView.vu
 import * as mastersApi from '@/api/masters'
 import * as groupsApi from '@/api/groups'
 import * as reportsApi from '@/api/reports'
+import * as chatsApi from '@/api/chats'
 import type { StudentDetailResponseWithBlocked } from '@/api/masters'
 import type { StudentCheckinItem, StudentFeedbackItem } from '@/api/types'
 
 vi.mock('@/api/masters')
 vi.mock('@/api/groups')
 vi.mock('@/api/reports')
+vi.mock('@/api/chats')
 
 const push = vi.fn()
 const back = vi.fn()
@@ -94,11 +96,10 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push, back }),
 }))
 
-const info = vi.fn()
 const success = vi.fn()
 const error = vi.fn()
 vi.mock('@/composables/useToast', () => ({
-  useToast: () => ({ info, success, error, dismiss: vi.fn() }),
+  useToast: () => ({ info: vi.fn(), success, error, dismiss: vi.fn() }),
 }))
 
 // -- fixtures ---------------------------------------------------------------
@@ -182,21 +183,19 @@ function sheetOverlay(): HTMLElement | null {
 }
 
 /**
- * Which IconRating* component ICON_BY_ZONE picked. The three glyphs are
- * otherwise identical <svg fill="currentColor"> nodes with no class or id; their
- * viewBox is the only marker in the rendered DOM that tells them apart
- * (IconRatingFire.vue:6, IconRatingGood.vue:6, IconRatingConfused.vue:6).
+ * Which of the five mood-scale faces the row rendered. They share one viewBox,
+ * so artwork tells them apart: low/good carry a <linearGradient> (the first
+ * gradient stop separates them), the rest a flat circle fill
+ * (bad #BDECF1 / neutral #F9CBD1 / fire #FDDFC4).
  */
-const RATING_ICON_VIEWBOX = {
-  fire: '-26.76 -26.76 468.52 499.52',
-  good: '-26.84 -26.84 501.01 494.91',
-  confused: '13.18 -26.82 500.64 500.69',
-} as const
-
-function fbIconZone(row: HTMLElement): string {
-  const vb = row.querySelector('svg')?.getAttribute('viewBox') ?? ''
-  const hit = Object.entries(RATING_ICON_VIEWBOX).find(([, v]) => v === vb)
-  return hit ? hit[0] : `unknown(${vb})`
+function fbFace(row: HTMLElement): string {
+  const art = (row.querySelector('svg')?.innerHTML ?? '').toLowerCase()
+  if (art.includes('lineargradient')) {
+    return art.includes('#bdecf1') ? 'low' : 'good'
+  }
+  if (art.includes('#f9cbd1')) return 'neutral'
+  if (art.includes('#fddfc4')) return 'fire'
+  return 'bad'
 }
 
 beforeEach(() => {
@@ -206,9 +205,18 @@ beforeEach(() => {
   vi.mocked(groupsApi.getStudentGroups).mockReset().mockResolvedValue({ groups: [] })
   vi.mocked(groupsApi.blockStudent).mockReset()
   vi.mocked(reportsApi.createReport).mockReset()
+  vi.mocked(chatsApi.openStudentChat)
+    .mockReset()
+    .mockResolvedValue({ id: 'thread-1', created_at: '2026-08-07T09:00:00+00:00' })
+  vi.mocked(chatsApi.sendChatMessage).mockReset().mockResolvedValue({
+    id: 'm-1',
+    thread_id: 'thread-1',
+    sender: 's1',
+    body: '',
+    created_at: '2026-08-07T09:00:01+00:00',
+  })
   push.mockReset()
   back.mockReset()
-  info.mockReset()
   success.mockReset()
   error.mockReset()
 })
@@ -232,9 +240,7 @@ afterEach(() => {
 describe('MasterStudentProfileView', () => {
   describe('state ladder', () => {
     it('shows the loader — and NOT the hero — while the fetch is in flight', async () => {
-      vi.mocked(mastersApi.getStudent).mockReturnValue(
-        new Promise(() => {}) as Promise<StudentDetailResponseWithBlocked>,
-      )
+      vi.mocked(mastersApi.getStudent).mockReturnValue(new Promise(() => {}))
       routeState.query = { name: 'Анна из списка' }
       mount()
       await flush()
@@ -457,13 +463,14 @@ describe('MasterStudentProfileView', () => {
       mount()
       await flush()
 
-      // moodZoneFromScore: 1-3 low / 4-7 mid / 8-10 high (displayHelpers.ts:69-73).
-      // Scoped to .profile__ci-text: «Хорошо» is ALSO the `good` rating label, so
-      // a host-wide toContain here would not prove which row said it.
+      // moodKeyFromScore: 1-2 bad / 3-4 low / 5-6 neutral / 7-8 good / 9-10
+      // fire (moodScale.ts). Scoped to .profile__ci-text: «Хорошо» is ALSO the
+      // good rating label, so a host-wide toContain here would not prove which
+      // row said it.
       expect(ciRows().map((r) => r.querySelector('.profile__ci-text')?.textContent)).toEqual([
-        'Не очень',
+        'Плохо',
         'Нормально',
-        'Хорошо',
+        'Огонь',
       ])
     })
 
@@ -474,7 +481,7 @@ describe('MasterStudentProfileView', () => {
       mount()
       await flush()
 
-      expect(ciRows()[0]?.querySelector('.profile__ci-text')?.textContent).toBe('Хорошо')
+      expect(ciRows()[0]?.querySelector('.profile__ci-text')?.textContent).toBe('Огонь')
     })
 
     it('each row gets its OWN mood face — the score is forwarded per row, not once', async () => {
@@ -490,17 +497,20 @@ describe('MasterStudentProfileView', () => {
       mount()
       await flush()
 
-      // MoodAvatar picks IconMoodLow/Mid/High off moodZoneFromScore. The three
-      // assets are told apart in the DOM by: low's offset viewBox
-      // (IconMoodLow.vue:10), and mid's <circle> eyes vs high's all-<path> face
-      // (IconMoodMid.vue:12-13 / IconMoodHigh.vue) — they share "0 0 40 40".
+      // MoodAvatar picks the face off moodKeyFromScore. The five FE-85 faces
+      // share one viewBox, so artwork tells them apart: low/good carry a
+      // <linearGradient> (the first gradient stop separates them), the rest a
+      // flat circle fill (bad #BDECF1 / neutral #F9CBD1 / fire #FDDFC4).
       const faces = ciRows().map((r) => {
-        const svg = r.querySelector('svg')!
-        const vb = svg.getAttribute('viewBox') ?? ''
-        if (vb.startsWith('4.85156')) return 'low'
-        return svg.querySelector('circle') ? 'mid' : 'high'
+        const art = (r.querySelector('svg')?.innerHTML ?? '').toLowerCase()
+        if (art.includes('lineargradient')) {
+          return art.includes('#bdecf1') ? 'low' : 'good'
+        }
+        if (art.includes('#f9cbd1')) return 'neutral'
+        if (art.includes('#fddfc4')) return 'fire'
+        return 'bad'
       })
-      expect(faces).toEqual(['low', 'mid', 'high'])
+      expect(faces).toEqual(['bad', 'neutral', 'fire'])
       // ...and the comments still line up with their own rows.
       expect(ciRows().map((r) => r.querySelector('.profile__ci-text')?.textContent)).toEqual([
         'a',
@@ -526,23 +536,24 @@ describe('MasterStudentProfileView', () => {
       await flush()
 
       // Four boundary cases exceed PREVIEW_CAP=3, so the fourth is behind the
-      // pill -- expand before asserting, or `8 -> Огонь!` is never rendered and
+      // pill -- expand before asserting, or `8 -> Хорошо` is never rendered and
       // the case that matters most silently goes untested.
       showMorePills()[0]?.click()
       await flush()
       expect(fbRows()).toHaveLength(4)
 
-      // ratingZoneFromScore: 1-3 confused / 4-7 good / 8-10 fire (displayHelpers.ts:76-80).
+      // moodKeyFromScore: 3-4 low / 7-8 good (moodScale.ts) -- both scores of a
+      // pair share one emotion, so only the pair borders can drift silently.
       expect(fbRows().map((r) => r.querySelector('.profile__fb-title')?.textContent)).toEqual([
-        'Есть вопросы',
+        'Не очень',
+        'Не очень',
         'Хорошо',
         'Хорошо',
-        'Огонь!',
       ])
-      expect(fbRows().map(fbIconZone)).toEqual(['confused', 'good', 'good', 'fire'])
+      expect(fbRows().map(fbFace)).toEqual(['low', 'low', 'good', 'good'])
     })
 
-    it('paints each icon with its zone colour token (RATING_ICON_COLOR, not RATING_COLOR)', async () => {
+    it('renders each row with its OWN face off its own score (2 / 5 / 9)', async () => {
       vi.mocked(mastersApi.getStudent).mockResolvedValue(
         detail({
           feedbacks: [feedback({ rating: 2 }), feedback({ rating: 5 }), feedback({ rating: 9 })],
@@ -551,17 +562,10 @@ describe('MasterStudentProfileView', () => {
       mount()
       await flush()
 
-      // displayHelpers.ts:110-114. The OTHER map (RATING_COLOR, :98-102) is the
-      // analytics BAR palette -- peach/pink/blue -- and picking it here would be
-      // a real regression that a label-only assertion would not catch.
-      const colors = fbRows().map((r) =>
-        r.querySelector<HTMLElement>('.profile__fb-ic')?.getAttribute('style'),
-      )
-      expect(colors).toEqual([
-        'color: var(--velo-rating-confused);',
-        'color: var(--velo-rating-good);',
-        'color: var(--velo-rating-fire);',
-      ])
+      // FE-85: the faces are full-colour artwork (tz §3), so the old per-zone
+      // tint is gone -- what must hold instead is that every row renders the
+      // emotion its own score maps to, not a shared default glyph.
+      expect(fbRows().map(fbFace)).toEqual(['bad', 'neutral', 'fire'])
     })
 
     it('renders the comment when there is one and omits the text node entirely when there is not', async () => {
@@ -714,7 +718,7 @@ describe('MasterStudentProfileView', () => {
     })
   })
 
-  describe('the «Написать сообщение» CTA (E4 stub)', () => {
+  describe('the «Написать сообщение» CTA (REAL DM)', () => {
     it('opens the message sheet on document.body, addressed to THIS student', async () => {
       vi.mocked(mastersApi.getStudent).mockResolvedValue(detail({ name: 'Анна Кузнецова' }))
       mount()
@@ -754,12 +758,18 @@ describe('MasterStudentProfileView', () => {
       expect(modalDismissed()).toBe(true)
     })
 
-    it('the CTA can never reach an API — messaging has no backend, so «Отправить» only toasts', async () => {
+    it("«Отправить» opens THIS student's DM -- the sheet receives the route's own id", async () => {
       mount()
       await flush()
       const callsAfterLoad = vi.mocked(mastersApi.getStudent).mock.calls.length
 
       buttonWith('Написать сообщение')?.click()
+      await flush()
+      const field = liveModal()?.querySelector<HTMLTextAreaElement>('textarea')
+      if (field) {
+        field.value = 'Проверьте домашку'
+        field.dispatchEvent(new Event('input'))
+      }
       await flush()
       const send = Array.from(liveModal()?.querySelectorAll<HTMLElement>('button') ?? []).find(
         (b) => b.textContent?.includes('Отправить'),
@@ -767,8 +777,12 @@ describe('MasterStudentProfileView', () => {
       send?.click()
       await flush()
 
-      // Verified at the source, not from the button's copy: SendMessageModal.vue:45-48.
-      expect(info).toHaveBeenCalledWith('Сообщения пока недоступны')
+      // THIS screen's one job in the send flow: hand the modal the ROUTE's
+      // student id, so the master's message opens the DM with the student on
+      // screen (the send mechanics are SendMessageModal.test.ts's ground).
+      expect(chatsApi.openStudentChat).toHaveBeenCalledWith('s1')
+      expect(chatsApi.sendChatMessage).toHaveBeenCalledTimes(1)
+      expect(success).toHaveBeenCalledWith('Сообщение отправлено')
       expect(vi.mocked(mastersApi.getStudent).mock.calls).toHaveLength(callsAfterLoad)
       expect(push).not.toHaveBeenCalled()
     })
@@ -1200,7 +1214,7 @@ describe('MasterStudentProfileView', () => {
       return Array.from(host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? [])
     }
 
-    it('renders exactly 3 items -- tag / add-to-group / remove-from-group, trash tinted danger', async () => {
+    it('renders exactly 4 items -- tag / add-to-group / remove-from-group / block, trash + lock tinted danger', async () => {
       mount()
       await flush()
 
@@ -1208,11 +1222,15 @@ describe('MasterStudentProfileView', () => {
       await flush()
 
       const items = menuItems()
-      expect(items).toHaveLength(3)
+      expect(items).toHaveLength(4)
       expect(items[0]?.getAttribute('aria-label')).toBe('Добавить тег')
       expect(items[1]?.getAttribute('aria-label')).toBe('Добавить в группу')
       expect(items[2]?.getAttribute('aria-label')).toBe('Удалить из группы')
       expect(items[2]?.classList.contains('v-menu-item--danger')).toBe(true)
+      // The lock (owner art, 2026-09-30): blocking earned its own entry --
+      // the trash keeps meaning remove-from-group.
+      expect(items[3]?.getAttribute('aria-label')).toBe('Заблокировать')
+      expect(items[3]?.classList.contains('v-menu-item--danger')).toBe(true)
     })
 
     it('T24-9: the trigger dots are horizontal at rest and rotate open', async () => {
@@ -1274,6 +1292,39 @@ describe('MasterStudentProfileView', () => {
       await flush()
 
       expect(groupsApi.addGroupMember).toHaveBeenCalledWith('g2', 's1')
+    })
+
+    it('the lock item opens the SAME destructive block confirm; confirming calls blockStudent', async () => {
+      vi.mocked(groupsApi.blockStudent).mockResolvedValue({
+        student_user_id: 's1',
+        blocked_at: '2026-07-24T00:00:00Z',
+        cancelled_bookings_count: 0,
+      })
+      mount()
+      await flush()
+
+      menuTrigger()?.click()
+      await flush()
+      menuItems()[3]?.click()
+      await flush()
+
+      // Identical copy to the bottom CTA's confirm -- one block flow, two
+      // entries (menu lock + bottom button).
+      const containers = Array.from(
+        document.body.querySelectorAll<HTMLElement>('.v-modal__container'),
+      )
+      const modal = containers[containers.length - 1]
+      expect(modal?.textContent).toContain('Заблокировать пользователя?')
+      expect(modal?.textContent).toContain('Пользователь переместится в группу «Удаленные».')
+
+      const confirm = Array.from(modal?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(
+        (b) => b.textContent?.trim() === 'Заблокировать',
+      )
+      confirm?.click()
+      await flush()
+
+      expect(groupsApi.blockStudent).toHaveBeenCalledWith('s1')
+      expect(success).toHaveBeenCalledWith('Пользователь заблокирован')
     })
 
     it('"Удалить из группы" opens RemoveFromGroupSheet WITHOUT a "current group" option (T24-10 widened RemoveFromGroupSheet.vue for exactly this) -- only "selected" / "all"', async () => {

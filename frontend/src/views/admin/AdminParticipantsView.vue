@@ -75,7 +75,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { VBackButton, VSegment, VButton, VCard, VEmptyState } from '@/components/ui'
-import type { SegmentOption } from '@/components/ui/VSegment.vue'
+import type { SegmentOption } from '@/components/ui'
 import { IconProfile, IconMessages } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { useAdminStore } from '@/stores/admin'
@@ -138,7 +138,7 @@ onMounted(() => load(true))
 watch(filter, () => load(true))
 
 function loadMore(): void {
-  load(false)
+  void load(false)
 }
 
 // "Дек 2025" — registration month, from created_at (UTC).

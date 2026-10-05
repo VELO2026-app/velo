@@ -24,17 +24,18 @@
 // to /auth-error so the user sees a recoverable error screen instead of
 // landing on /user/dashboard with broken state.
 //
-// TD-F01: roleRedirect consumes pendingDeepLink after auth completes.
-// If a startapp deep link was parsed during initAuth(), the user is
-// redirected there instead of the dashboard -- open_practice__{uuid} to the
-// practice detail, zoom__{code} to practice-live (T-35). pendingDeepLink is
+// TD-F01: roleRedirect consumes pendingStartParam after auth completes.
+// initAuth() stores the raw startapp value; roleRedirect parses it with the
+// session role (parseStartParam, Links) and redirects there instead of the
+// dashboard -- open_practice__{uuid} to the practice, zoom__{code} to
+// practice-live (T-35), a notification verb to the bell's screen. It is
 // cleared after first use to prevent stale redirects.
 // =============================================================================
 
 import type { NavigationGuardWithThis, RouteLocationNormalized } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useMasterStore } from '@/stores/master'
-import { waitUntilReady, pendingDeepLink } from '@/composables/useAuth'
+import { waitUntilReady, pendingStartParam, parseStartParam } from '@/composables/useAuth'
 import type { ReadyResult } from '@/composables/useAuth'
 import { refreshRoleIfStale } from '@/composables/useRoleFreshness'
 import type { UserRole } from '@/api/types'
@@ -47,7 +48,8 @@ import { MASTER_APPLIED_KEY, masterRejectionSeenKey } from '@/utils/constants'
  * Async: awaits auth initialization so role is guaranteed to be set
  * before the switch. Without the await, role is always null on first load.
  *
- * TD-F01: if pendingDeepLink is set, redirect there instead of the dashboard
+ * TD-F01: if pendingStartParam is set and parses to a route for this role,
+ * redirect there instead of the dashboard
  * and clear the pending link so subsequent navigations go normally. A
  * pending deep link is a deliberate user action (e.g. a shared practice
  * link) and wins over the rejection redirect below -- the rejection screen
@@ -71,11 +73,15 @@ export const roleRedirect: NavigationGuardWithThis<undefined> = async () => {
     return { path: '/auth-error' }
   }
 
-  // TD-F01: consume pending deep link from startapp parameter.
-  if (pendingDeepLink.value) {
-    const target = pendingDeepLink.value
-    pendingDeepLink.value = null
-    return target
+  // TD-F01: consume the pending startapp parameter. Links (3 October): it is
+  // parsed HERE, with the session role -- a notification button carries no
+  // viewer, and some verbs land in different zones for user and master. An
+  // unknown parameter falls through to the usual dashboard.
+  if (pendingStartParam.value) {
+    const startParam = pendingStartParam.value
+    pendingStartParam.value = null
+    const target = parseStartParam(startParam, auth.role)
+    if (target) return target
   }
 
   // Bug 1 fix: R2 (batch R, cb6d8bf) added the masterPendingGuard branch that
@@ -162,9 +168,9 @@ export const roleRedirect: NavigationGuardWithThis<undefined> = async () => {
  * (router/index.ts), which passes just `to`. That type's call signature
  * requires (to, from, next), which a direct 1-arg call does not satisfy.
  */
-export async function roleFreshnessGuard(
+export function roleFreshnessGuard(
   to: Pick<RouteLocationNormalized, 'name'>,
-): Promise<true | { path: string }> {
+): true | { path: string } {
   void refreshRoleIfStale()
 
   const auth = useAuthStore()
@@ -240,6 +246,30 @@ async function noProfileMasterRedirect(): Promise<{ path: string } | null> {
  */
 export const masterNoProfileGuard: NavigationGuardWithThis<undefined> = async () =>
   (await noProfileMasterRedirect()) ?? true
+
+/** Application and invite entry share the same server-backed status gate.
+ * A verified profile grants capability even while the person uses user mode. */
+export const masterApplyGuard: NavigationGuardWithThis<undefined> = async () => {
+  const { timedOut }: ReadyResult = await waitUntilReady()
+  const auth = useAuthStore()
+  if (timedOut && auth.role === null) return { path: '/auth-error' }
+  if (auth.role === 'admin') return { path: '/admin/dashboard' }
+  if (auth.role === 'master') {
+    const master = useMasterStore()
+    await master.fetchMyProfile()
+    if (master.profile?.status === 'verified') return { path: '/master/dashboard' }
+    if (master.profile?.status === 'pending') return { path: '/master/pending' }
+    return true
+  }
+  if (
+    auth.masterApplication?.status === 'pending' ||
+    auth.masterApplication?.status === 'verified' ||
+    auth.allowedRoles.includes('master')
+  ) {
+    return { path: '/master/pending' }
+  }
+  return true
+}
 
 /**
  * Require verified master profile before accessing protected master routes.
@@ -322,6 +352,8 @@ export const masterPendingGuard: NavigationGuardWithThis<undefined> = async () =
 
   if (sessionStorage.getItem(MASTER_APPLIED_KEY) === '1') return true
   if (auth.allowedRoles.includes('master')) return true
+  if (auth.masterApplication?.status === 'pending') return true
+  if (auth.masterApplication?.status === 'verified') return true
   if (auth.masterApplication?.status === 'rejected') return true
 
   return { path: '/user/dashboard' }

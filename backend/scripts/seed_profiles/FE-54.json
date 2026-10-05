@@ -1,0 +1,183 @@
+{
+  "description": "FE-54: верстка карточки «Мои бронирования → Прошедшие». Проверяющие — реальные аккаунты Вова (388101199) и Саша (231944851); все брони Вовы, у Саши пара для контраста.",
+  "title_prefix": "[FE-54]",
+  "_notes": [
+    "Профиль под проверку фикса PracticeListCard.vue (мета-строка: атомарные ячейки,",
+    "nowrap на времени/длительности, бейдж уходит целиком на отдельную строку).",
+    "ЧАС 14 и длительность 30 мин у первой практики повторяют репро со скриншота.",
+    "Все практики УЖЕ прошедшие (day_offset < 0): история пишется booking-строками",
+    "напрямую (ensure_booking), что seed.py делает намеренно для прошлого.",
+    "ПРОВЕРЯЮЩИЕ — ЖИВЫЕ АККАНТЫ (вне синтетического диапазона, --reset их не трогает):",
+    "  vova = 388101199 (Вова) — основной зритель, все брони его;",
+    "  sasha = 231944851 (Саша) — контрастные брони.",
+    "Мастер синтетический (600301): удаляется reset'ом вместе с практиками.",
+    "ЛОКАЛЬНЫЕ ПРАВКИ против версии с карточки: прошедшим практикам (day_offset < 0)",
+    "стоит state=completed (seed.py отвергает scheduled в прошлом), а mood чекина —",
+    "целое 8 (checkins.mood INTEGER, строка падает на INSERT)."
+  ],
+  "masters": [
+    {
+      "key": "main",
+      "telegram_id": 600301,
+      "display_name": "Мастер FE-54",
+      "can_create_groups": false,
+      "bio": "Тестовый мастер для проверки верстки карточек бронирований.",
+      "methods": [
+        "yoga — hatha",
+        "meditation — presence",
+        "breathwork",
+        "circles — sharing"
+      ],
+      "experience_years": 6
+    }
+  ],
+  "students": [
+    {
+      "key": "vova",
+      "telegram_id": 388101199,
+      "first_name": "Вова"
+    },
+    {
+      "key": "sasha",
+      "telegram_id": 231944851,
+      "first_name": "Саша"
+    }
+  ],
+  "practices": [
+    {
+      "title": "Йога",
+      "master": "main",
+      "state": "completed",
+      "day_offset": -6,
+      "hour": 14,
+      "duration_minutes": 30,
+      "practice_type": "live",
+      "direction": "yoga",
+      "style": "hatha",
+      "difficulty": "beginner",
+      "max_participants": 15,
+      "description": "Репро-карточка со скриншота: 14:00 · 30 мин.",
+      "attendees": [
+        {
+          "student": "vova",
+          "booking_status": "confirmed"
+        },
+        {
+          "student": "sasha",
+          "booking_status": "attended"
+        }
+      ]
+    },
+    {
+      "title": "Утренняя медитация",
+      "master": "main",
+      "state": "completed",
+      "day_offset": -5,
+      "hour": 9,
+      "duration_minutes": 45,
+      "practice_type": "live",
+      "direction": "meditation",
+      "style": "presence",
+      "difficulty": "beginner",
+      "max_participants": 20,
+      "description": "Посещённая практика с чекином и фидбеком.",
+      "attendees": [
+        {
+          "student": "vova",
+          "booking_status": "attended",
+          "checkins": [
+            {
+              "mood": 8,
+              "comment": "Хорошо зашла",
+              "type": "pre"
+            }
+          ],
+          "feedback": {
+            "rating": 5,
+            "comment": "Очень спокойно"
+          }
+        }
+      ]
+    },
+    {
+      "title": "Дыхательная сессия длинное название для проверки переноса",
+      "master": "main",
+      "state": "completed",
+      "day_offset": -3,
+      "hour": 19,
+      "duration_minutes": 90,
+      "practice_type": "live",
+      "direction": "breathwork",
+      "difficulty": "beginner",
+      "max_participants": 12,
+      "description": "Длинный заголовок + 90 мин: тяжёлая карточка.",
+      "attendees": [
+        {
+          "student": "vova",
+          "booking_status": "no_show"
+        }
+      ]
+    },
+    {
+      "title": "Вечерний круг",
+      "master": "main",
+      "state": "completed",
+      "day_offset": -2,
+      "hour": 20,
+      "duration_minutes": 60,
+      "practice_type": "live",
+      "direction": "circles",
+      "style": "sharing",
+      "difficulty": "beginner",
+      "max_participants": 10,
+      "description": "Отменённая бронь: в «Прошедших» быть не должна.",
+      "attendees": [
+        {
+          "student": "vova",
+          "booking_status": "cancelled"
+        }
+      ]
+    },
+    {
+      "title": "Йога для спины",
+      "master": "main",
+      "state": "completed",
+      "day_offset": -1,
+      "hour": 8,
+      "duration_minutes": 30,
+      "practice_type": "live",
+      "direction": "yoga",
+      "style": "hatha",
+      "difficulty": "beginner",
+      "max_participants": 15,
+      "description": "Подтверждённая вчерашняя: бейдж «Подсчитывается».",
+      "attendees": [
+        {
+          "student": "vova",
+          "booking_status": "confirmed"
+        }
+      ]
+    },
+    {
+      "title": "Утренняя медитация: предстоящая",
+      "master": "main",
+      "state": "scheduled",
+      "day_offset": 2,
+      "hour": 9,
+      "duration_minutes": 30,
+      "practice_type": "live",
+      "direction": "meditation",
+      "style": "presence",
+      "difficulty": "beginner",
+      "max_participants": 20,
+      "description": "Контраст: раздел «Предстоящие» не должен пострадать от фикса.",
+      "attendees": [
+        {
+          "student": "vova",
+          "booking_status": "confirmed"
+        }
+      ]
+    }
+  ],
+  "curator_groups": []
+}

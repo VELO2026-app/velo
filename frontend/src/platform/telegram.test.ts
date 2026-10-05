@@ -30,10 +30,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { telegramPlatform } from '@/platform/telegram'
 
 // The fallback literals telegram.ts ships. They MUST mirror --velo-tg-header /
-// --velo-tg-bg in variables.css. See the honesty note in the banner above: this
-// pair is held in sync by a comment, not by a machine.
+// --velo-tg-bg / --velo-tg-bg-kbd in variables.css. See the honesty note in the
+// banner above: this set is held in sync by a comment, not by a machine.
 const FALLBACK_HEADER = '#334d6e'
 const FALLBACK_BG = '#ffffff'
+const FALLBACK_BG_KBD = '#727678'
 
 const setHeaderColor = vi.fn()
 const setBackgroundColor = vi.fn()
@@ -58,6 +59,7 @@ beforeEach(() => {
 afterEach(() => {
   document.documentElement.style.removeProperty('--velo-tg-header')
   document.documentElement.style.removeProperty('--velo-tg-bg')
+  document.documentElement.style.removeProperty('--velo-tg-bg-kbd')
   delete (window as unknown as { Telegram?: unknown }).Telegram
 })
 
@@ -126,5 +128,26 @@ describe('telegramPlatform.init -- app chrome', () => {
 
     expect(ready).toHaveBeenCalled()
     expect(expand).toHaveBeenCalled()
+  })
+})
+
+describe('setKeyboardSurface -- [TG-SURFACE]', () => {
+  it('dark reads the KEYBOARD token; light restores the REST token', () => {
+    setToken('--velo-tg-bg', '#ffffff')
+    setToken('--velo-tg-bg-kbd', '#727678')
+
+    telegramPlatform.setKeyboardSurface(true)
+    expect(setBackgroundColor).toHaveBeenLastCalledWith('#727678')
+
+    telegramPlatform.setKeyboardSurface(false)
+    expect(setBackgroundColor).toHaveBeenLastCalledWith('#ffffff')
+  })
+
+  it('falls back to the literals (mirroring variables.css) when tokens are unset', () => {
+    telegramPlatform.setKeyboardSurface(true)
+    expect(setBackgroundColor).toHaveBeenLastCalledWith(FALLBACK_BG_KBD)
+
+    telegramPlatform.setKeyboardSurface(false)
+    expect(setBackgroundColor).toHaveBeenLastCalledWith(FALLBACK_BG)
   })
 })

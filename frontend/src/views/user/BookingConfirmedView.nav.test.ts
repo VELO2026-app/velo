@@ -207,13 +207,13 @@ describe('BookingConfirmedView back-navigation [FE-2]', () => {
     // that replaced the request screen. The first back lands on that ORIGINAL
     // practice entry; in the browser the back-branch collapses it into one
     // hop. Either way the loop request -> messages -> request is gone.
-    await router.back()
+    router.back()
     await settle()
     expect(router.currentRoute.value.path).not.toBe('/user/booking-confirmed/p1')
     expect(router.currentRoute.value.path).toBe('/user/practices/p1')
 
     // And the hop behind the practice screen is untouched by the whole flow.
-    await router.back()
+    router.back()
     await settle()
     expect(router.currentRoute.value.path).toBe('/user/calendar')
   })
@@ -232,7 +232,7 @@ describe('BookingConfirmedView back-navigation [FE-2]', () => {
     expect(router.currentRoute.value.path).toBe('/user/practices/p1')
 
     // One hop back -- to what preceded the request screen, never to it again.
-    await router.back()
+    router.back()
     await settle()
     expect(router.currentRoute.value.path).not.toBe('/user/booking-confirmed/p1')
     expect(router.currentRoute.value.path).toBe('/user/calendar')

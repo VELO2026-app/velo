@@ -81,7 +81,7 @@ import {
   VEmptyState,
   VButton,
 } from '@/components/ui'
-import type { SegmentOption } from '@/components/ui/VSegment.vue'
+import type { SegmentOption } from '@/components/ui'
 import { IconFinance } from '@/components/icons'
 import { getAdminRevenue } from '@/api/admin'
 import { extractApiError } from '@/composables/useApiError'

@@ -7,10 +7,15 @@
 #   velo seed                        -- seed from the default profile
 #   velo seed --profile 15082026     -- seed from a named profile
 #   velo seed --reset                -- wipe seeded data, then seed
+#   velo seed --reset-all            -- wipe the data of EVERY profile, stop
+#   velo seed --reset-all --resync-comms
+#                                    -- the same, then velo-manage.sh resyncs
+#                                       comms (deletes every chat; asks first)
 #   velo seed --list                 -- list available profiles
 #
 # DIRECTLY (inside the app container):
 #   python scripts/seed.py [--profile NAME] [--reset] [--list] [--dry-run]
+#   python scripts/seed.py --reset-all
 #
 # -----------------------------------------------------------------------------
 # WHY THIS REPLACED THREE SCRIPTS
@@ -121,6 +126,7 @@ from app.modules.practices.service import (  # noqa: E402
     update_practice,
 )
 from app.modules.users.models import User, UserRole  # noqa: E402
+from app.modules.users.service import lock_user_row  # noqa: E402
 
 PROFILES_DIR = _SCRIPTS_DIR / "seed_profiles"
 
@@ -297,6 +303,10 @@ async def ensure_master(
         session, spec["telegram_id"], spec["display_name"]
     )
     await session.flush()
+    # BE-85: take the users row FOR NO KEY UPDATE (and refresh it) before
+    # the profile and before _set_role_master rewrites credentials -- the
+    # users -> master_profiles order of users/service.py (ROW LOCK ON users).
+    await lock_user_row(session, user.id)
 
     profile = await session.get(MasterProfile, user.id)
     had_master = _master_capability(profile)
@@ -336,14 +346,15 @@ async def ensure_master(
         acct = data.setdefault("account", {})
         if not had_master:
             acct["status"] = "verified"
-            acct.setdefault(
-                "verification",
-                {
-                    "verified_at": datetime.now(UTC).isoformat(),
-                    "verified_by": "cli_seed",
-                    "notes": "re-verified via velo seed",
-                },
-            )
+            # ASSIGNED, not setdefault-ed: a pending/rejected/withdrawn
+            # profile carries an explicit "verification": None and a
+            # suspended one the block of an EARLIER verification -- setdefault
+            # kept both. The same fix as make_master (BE-104 delivery 2).
+            acct["verification"] = {
+                "verified_at": datetime.now(UTC).isoformat(),
+                "verified_by": "cli_seed",
+                "notes": "re-verified via velo seed",
+            }
             data.setdefault("availability", {})["is_accepting"] = True
 
         if spec.get(_PROFILE_FIELD_CAN_CREATE_GROUPS) and not acct.get(
@@ -458,13 +469,19 @@ async def ensure_practice(
         school = (schools or {})[school_name]
         audience_kwargs = {
             "audience_kind": AudienceKind.CURATOR_GROUPS,
-            "curator_group_ids": [school.id],
+            # BE-74: the practice is created IN the school and belongs to
+            # it; 'curator_groups' then means that school's students.
+            "curator_group_id": school.id,
         }
 
     body = CreatePracticeRequest(
         practice_type=spec.get("practice_type", "live"),
         title=title,
         description=spec.get("description"),
+        # BE-106: the two practice blocks the demo profiles carry; a profile
+        # without them leaves None, the same as a master who skips them.
+        what_to_prepare=spec.get("what_to_prepare"),
+        contraindications=spec.get("contraindications"),
         scheduled_at=create_at,
         duration_minutes=spec["duration_minutes"],
         timezone=spec.get("timezone", "Europe/Moscow"),
@@ -576,8 +593,9 @@ async def ensure_feedback(
     """One review. Unique per (practice, user).
 
     Only feedback on the master's COMPLETED practices reaches «Отзывы» and
-    «Ключевые отзывы» (masters/reviews_service.py), and only a rating <= 3
-    puts a student into «Требуют внимания» (students_service.py). A profile
+    «Ключевые отзывы» (masters/reviews_service.py), and only a rating <= 4
+    (ATTENTION_RATING_MAX, BE-77) puts a student into «Требуют внимания»
+    (students_service.py). A profile
     that wants both blocks populated must therefore seed both high and low
     ratings on completed practices -- there is no other way to light them up.
     """
@@ -923,6 +941,46 @@ async def seed_profile(
     return stats
 
 
+def _warn_comms_projection_diverged(removed_users: int) -> None:
+    """Said after --reset, never acted on (BE-86).
+
+    --reset deletes seeded users and the comms protocol has no deletion
+    event, so comms' address book still holds them: the projection has
+    diverged. The fix is a full resync, and it is destructive -- so this
+    only NAMES it, and never runs it. Silent when the reset removed no user:
+    then nothing diverged, and a warning would be a false alarm.
+    """
+    if removed_users <= 0:
+        return
+    warn(
+        f"comms: the reset removed {removed_users} users that comms still "
+        "lists -- its "
+        "projection now diverges from velo."
+    )
+    warn(
+        "  To realign it: velo resync-comms -- WARNING: it truncates the "
+        "projection and DELETES EVERY CHAT on this stand. Not run "
+        "automatically."
+    )
+
+
+async def reset_all_profiles(session: AsyncSession) -> dict[str, dict]:
+    """--reset-all: reset_seed_data for EVERY profile, in one transaction.
+
+    No second cleanup logic -- each profile's own reset_seed_data, in
+    list_profiles() order, so the rule "live accounts survive" is the one
+    already written there. Profiles that share a school (the same curator +
+    name pair) are fine in one transaction: the first reset deletes the
+    school, the second finds nothing and counts 0. Synthetic students are
+    matched by id range, not by profile, so they too go on the first
+    profile and count 0 after it. The caller commits.
+    """
+    return {
+        name: await reset_seed_data(session, load_profile(name))
+        for name in list_profiles()
+    }
+
+
 async def main_async(args: argparse.Namespace) -> int:
     if args.list:
         names = list_profiles()
@@ -935,14 +993,45 @@ async def main_async(args: argparse.Namespace) -> int:
             print(f"  {n:12}  {data.get('description', '')}")
         return 0
 
+    if args.reset_all:
+        # BE-106 item 3: wipe what every profile seeded and stop. comms is
+        # NOT touched here -- velo-manage.sh runs the resync after this
+        # exits 0, and only when the operator asked for --resync-comms.
+        session_factory = get_session_factory()
+        try:
+            async with session_factory() as session:
+                per_profile = await reset_all_profiles(session)
+                await session.commit()
+        finally:
+            await dispose_engine()
+        totals = {"practices": 0, "curator_groups": 0, "students": 0}
+        for name, counts in per_profile.items():
+            info(
+                f"  {name}: {counts['practices']} practices, "
+                f"{counts['curator_groups']} schools, "
+                f"{counts['students']} synthetic students"
+            )
+            for key in totals:
+                totals[key] += counts[key]
+        warn(
+            f"reset-all ({len(per_profile)} profiles): removed "
+            f"{totals['practices']} practices, {totals['curator_groups']} "
+            f"schools, {totals['students']} synthetic students "
+            f"(live accounts untouched)"
+        )
+        _warn_comms_projection_diverged(totals["students"])
+        return 0
+
     profile = load_profile(args.profile)
     info(f"Profile: {args.profile} -- {profile.get('description', '')}")
 
     session_factory = get_session_factory()
     try:
         async with session_factory() as session:
+            removed_users = 0
             if args.reset:
                 counts = await reset_seed_data(session, profile)
+                removed_users = counts["students"]
                 warn(
                     f"reset: removed {counts['practices']} practices, "
                     f"{counts['curator_groups']} schools, "
@@ -952,6 +1041,7 @@ async def main_async(args: argparse.Namespace) -> int:
                 await session.commit()
 
             if args.reset_only:
+                _warn_comms_projection_diverged(removed_users)
                 return 0
 
             async with session_factory() as session2:
@@ -966,6 +1056,8 @@ async def main_async(args: argparse.Namespace) -> int:
                 "seeded: "
                 + ", ".join(f"{v} {k}" for k, v in stats.items() if v)
             )
+        if args.reset:
+            _warn_comms_projection_diverged(removed_users)
         return 0
     finally:
         await dispose_engine()
@@ -991,6 +1083,14 @@ def main() -> int:
         help="remove seeded data and stop, without seeding again",
     )
     parser.add_argument(
+        "--reset-all",
+        action="store_true",
+        help=(
+            "remove the data of EVERY profile in seed_profiles/ and stop "
+            "(live accounts survive; comms is not touched)"
+        ),
+    )
+    parser.add_argument(
         "--list", action="store_true", help="list available profiles"
     )
     parser.add_argument(
@@ -999,6 +1099,10 @@ def main() -> int:
         help="print the plan without writing anything",
     )
     args = parser.parse_args()
+    if args.reset_all and (args.reset or args.reset_only or args.dry_run):
+        # --dry-run must never reach a delete; --reset/--reset-only name one
+        # profile and would make "all" ambiguous.
+        parser.error("--reset-all stands alone (no --reset, --reset-only, --dry-run)")
     if args.reset_only:
         args.reset = True
     return asyncio.run(main_async(args))

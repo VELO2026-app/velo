@@ -22,6 +22,9 @@ from pydantic import (
     UrlConstraints,
 )
 
+from app.modules.diary.models import ScoreZone
+from app.modules.diary.schemas import ScoreZoneCounts
+
 # strip_whitespace=True is a DELIBERATE divergence from GroupNameStr
 # (masters/groups_schemas.py), which has min_length=1 without stripping.
 # There, a name of a single space passes validation and is stored as " ".
@@ -41,6 +44,11 @@ CuratorGroupNameStr = Annotated[
 CuratorGroupDescriptionStr = Annotated[str, StringConstraints(max_length=500)]
 
 CuratorMemberKindLiteral = Literal["master", "student"]
+
+# BE-59: models.py::CuratorMasterOfferState, as the response spells it.
+CuratorMasterOfferStateLiteral = Literal[
+    "awaiting_verification", "awaiting_answer",
+]
 
 # ===========================================================================
 # The school's avatar url (GT-17)
@@ -260,14 +268,14 @@ class CuratorGroupListResponse(BaseModel):
     can_create_groups: bool = False
 
 
-class CuratorGroupMemberItem(BaseModel):
-    """One row of a curator group's roster.
+class CuratorGroupRosterItem(BaseModel):
+    """One member of a school, as anyone allowed to see the roster sees it.
 
-    is_visible is ALWAYS true for a student and reflects the live
-    MasterProfile status for a master (I-4). The curator sees a suspended
-    master as a row with is_visible=false -- "in the shadow" -- rather than
-    watching them vanish, because the row is real and comes back by itself
-    when the admin re-verifies.
+    The masters of the school read exactly this (GET .../roster, BE-76);
+    the curator reads the same fact plus his own working fields
+    (CuratorGroupMemberItem below). One class describes "a member", the
+    curator's projection only widens it -- there is no second format of
+    the same row.
     """
 
     user_id: UUID
@@ -275,13 +283,68 @@ class CuratorGroupMemberItem(BaseModel):
     avatar_url: str | None
     kind: CuratorMemberKindLiteral
     joined_at: datetime
+
+
+class CuratorGroupMemberItem(CuratorGroupRosterItem):
+    """One row of the CURATOR's roster: the member plus the curator's fields.
+
+    is_visible is ALWAYS true for a student and reflects the live
+    MasterProfile status for a master (I-4). The curator sees a suspended
+    master as a row with is_visible=false -- "in the shadow" -- rather than
+    watching them vanish, because the row is real and comes back by itself
+    when the admin re-verifies.
+
+    master_offer (BE-59) -- the curator's pending appointment of this
+    member: awaiting_verification while they are not a verified master,
+    awaiting_answer once they are; null when there is none. Live, like
+    is_visible: a verification or a revocation moves it with no write.
+
+    Neither field reaches the school's masters (BE-76, owner decision 2):
+    their roster omits the suspended masters instead, and an appointment
+    is the curator's business.
+    """
+
     is_visible: bool
+    master_offer: CuratorMasterOfferStateLiteral | None = None
 
 
 class PaginatedCuratorGroupMembersResponse(BaseModel):
     """GET /masters/me/curator-groups/{id}/members."""
 
     items: list[CuratorGroupMemberItem]
+    total: int
+    limit: int
+    offset: int
+
+
+class PaginatedCuratorGroupRosterResponse(BaseModel):
+    """GET /masters/me/curator-groups/{id}/roster (BE-76)."""
+
+    items: list[CuratorGroupRosterItem]
+    total: int
+    limit: int
+    offset: int
+
+
+class CuratorGroupBlockedItem(BaseModel):
+    """One row of the curator's "Блок" tab (BE-79).
+
+    kind and joined_at are the membership the block replaced -- what an
+    unblock will restore -- and blocked_at is when it was replaced.
+    """
+
+    user_id: UUID
+    name: str
+    avatar_url: str | None
+    kind: CuratorMemberKindLiteral
+    joined_at: datetime
+    blocked_at: datetime
+
+
+class PaginatedCuratorGroupBlocksResponse(BaseModel):
+    """GET /masters/me/curator-groups/{id}/blocks (BE-79)."""
+
+    items: list[CuratorGroupBlockedItem]
     total: int
     limit: int
     offset: int
@@ -492,27 +555,29 @@ class PaginatedCuratorGroupMastersResponse(BaseModel):
 
 
 CuratorInviteReasonLiteral = Literal[
-    "already_member", "own_group", "master_required", "blocked_by_curator"
+    "already_member", "own_group", "blocked_by_curator", "blocked_in_group"
 ]
-
-
-class CreateCuratorGroupInviteRequest(BaseModel):
-    """POST /masters/me/curator-groups/{id}/invites."""
-
-    kind: CuratorMemberKindLiteral
+# BE-79: blocked_in_group -- the curator blocked this person in THIS school.
+# Not blocked_by_curator, which is the curator's block as a MASTER.
+# GT-27: "master_required" left this list. It described a link refusing an
+# unverified account, and there is no master link any more; the same code is
+# still raised, but on the appointment path, where it is an error rather
+# than a described refusal.
 
 
 class CuratorGroupInviteResponse(BaseModel):
-    """The group's reusable link for ONE kind.
+    """The group's ONE reusable link.
 
-    The kind is NOT encoded in the url: the deep link carries a single kind
-    (`curator_group_invite__<token>`) for both flavours and the server
-    resolves which one it is from the token (TZ 6.1). Putting it in the url
-    too would be a second copy of the same fact, and the copy a sender could
-    edit by hand.
+    THERE USED TO BE A REQUEST BODY, CreateCuratorGroupInviteRequest, whose
+    only field was the link's kind, and this response echoed it back. GT-27
+    left schools with a single link, so both the field and the request model
+    are gone rather than kept and ignored.
+
+    The url carries the token and nothing else
+    (`school__<token>`): a second copy of any fact in the url
+    is a copy the sender can edit by hand.
     """
 
-    kind: CuratorMemberKindLiteral
     invite_url: str
 
 
@@ -543,17 +608,17 @@ class CuratorGroupInvitePreviewResponse(BaseModel):
     are one answer (P-08), here as everywhere else.
 
     can_join answers "would joining CHANGE anything", not "are you allowed
-    in the door". A student member opening a master link gets can_join=true
-    with relation="student": they are already inside, and the link still has
-    an effect (the upgrade). A master member opening either link gets
-    can_join=false, reason=already_member -- nothing would happen.
+    in the door". Any member gets can_join=false, reason=already_member --
+    nothing would happen. Until GT-27 a STUDENT opening a MASTER link was
+    the exception, getting can_join=true because the link would still
+    promote them; with one link there is nothing left for it to do, and the
+    `kind` field this model used to carry went with the second link.
 
     relation is the viewer's tie RIGHT NOW, before anything is done: null
     for someone who is not in the group yet.
     """
 
     group: CuratorGroupInvitePreviewGroup
-    kind: CuratorMemberKindLiteral
     can_join: bool
     reason: CuratorInviteReasonLiteral | None
     relation: CuratorMemberKindLiteral | None
@@ -569,14 +634,17 @@ class JoinCuratorGroupResponse(BaseModel):
     """The outcome of joining.
 
     already_member answers exactly one question -- WAS THERE A ROW when this
-    request looked -- and nothing else. It is not "nothing happened": a
-    student who gets upgraded to master reports already_member=true with
-    relation="master", because they were in the school before and still are,
-    with a new kind. Reading it as "no-op" would make the field lie about
-    someone who has been a member for months, which is why the definition
-    lives here rather than in a caller's head. The nuance between "you were
-    already a master" and "you were a student and just became a master"
-    belongs to the preview, which distinguishes them; join reports facts.
+    request looked -- and nothing else. Reading it as "nothing happened"
+    would make the field lie about someone who has been a member for months,
+    which is why the definition lives here rather than in a caller's head.
+
+    THE PARAGRAPH THAT USED TO FOLLOW described the one case where
+    already_member=true and something DID change: a student opening the
+    master link reported already_member=true with relation="master", having
+    just been promoted by the join. GT-27 cancelled that link -- school
+    masters are appointed with the appointee's confirmation -- so a member
+    joining now changes nothing at all, and the field's two readings have
+    stopped being distinguishable on this endpoint.
 
     relation is the tie AFTER the call.
     """
@@ -634,3 +702,313 @@ class CuratorGroupDeletePreviewResponse(BaseModel):
     masters_count: int
     students_count: int
     upcoming_practices_targeting_group: int
+
+
+class CuratorGroupMasterOfferRequest(BaseModel):
+    """POST /masters/me/curator-groups/{id}/master-offers (GT-27).
+
+    The candidate, by id. Nothing else: a school master is appointed from
+    the roster the curator is already looking at, so there is no name, no
+    kind and no message to carry.
+    """
+
+    to_user_id: UUID
+
+
+# ===========================================================================
+# School feedback -- check-ins and reviews across the school's practices
+# (BE-24 / GT-28)
+# ===========================================================================
+#
+# THE SCORES ARE BUCKETS IN BOTH ITEMS BELOW, and that is the contract, not
+# a rendering convenience: the stored 1..10 mood and rating are read by the
+# practice's own master and by nobody else.
+#
+# user_id IS CARRIED, and it is not the thing that keeps a curator out of a
+# student's dossier -- GET /masters/me/students/{id} does that itself, with
+# is_master_audience_member and a 404 (masters/students_service.py). Leaving
+# the id out would have bought no protection and cost the curator the
+# ability to tell two students of the same name apart, which is most of the
+# reason names are shown at all.
+
+
+class CuratorGroupCheckinItem(BaseModel):
+    """One PRE check-in left on a practice of this school.
+
+    `mood` is the stored 1..10 score mapped to its zone (ScoreZone, BE-77)
+    -- the same five keys every distribution and feed uses.
+
+    POST check-ins never appear here, and neither do check-ins whose
+    booking was later cancelled: both are absent from the master's own
+    roster for this practice, and the school widens a curator's reach
+    without deepening it.
+
+    user_id identifies the participant so that two students of the same
+    name stay distinct; it opens no screen a curator would otherwise be
+    refused.
+    """
+
+    user_id: UUID
+    student_name: str
+    avatar_url: str | None
+    mood: ScoreZone
+    comment: str | None
+    practice_id: UUID
+    practice_title: str
+    created_at: datetime
+
+
+class PaginatedCuratorGroupCheckinsResponse(BaseModel):
+    """GET /masters/me/curator-groups/{id}/checkins."""
+
+    items: list[CuratorGroupCheckinItem]
+    total: int
+    limit: int
+    offset: int
+
+
+class CuratorGroupReviewItem(BaseModel):
+    """One named review left on a practice of this school.
+
+    `rating` is the stored 1..10 score mapped to its zone (ScoreZone,
+    BE-77), identical to what the practice's master reads in their own
+    per-practice and cross-practice review feeds.
+
+    user_id identifies the reviewer, as it does in the master's own review
+    items; the screens behind it enforce their own access.
+    """
+
+    user_id: UUID
+    student_name: str
+    avatar_url: str | None
+    rating: ScoreZone
+    comment: str | None
+    practice_id: UUID
+    practice_title: str
+    created_at: datetime
+
+
+class PaginatedCuratorGroupReviewsResponse(BaseModel):
+    """GET /masters/me/curator-groups/{id}/reviews."""
+
+    items: list[CuratorGroupReviewItem]
+    total: int
+    limit: int
+    offset: int
+
+
+# ===========================================================================
+# School student profile (BE-54)
+# ===========================================================================
+#
+# THE SCORES ARE RAW 1..10 IN BOTH ITEMS, and that is the contract. BE-24's
+# two school feeds bucket them, because a notification and a feed card are
+# read at a glance; this screen is a dossier, and turning a number into a
+# face is the frontend's single responsibility here. The field names are the
+# ones the writing forms use -- `mood` on a check-in, `rating` on a review --
+# so nobody has to translate between what was typed and what is shown.
+#
+# `practice_id` and `practice_title` ride along because a school's practices
+# belong to several masters: without the title the reader cannot tell which
+# class a remark is about. The master's own CRM dossier
+# (masters/students_schemas.py) carries neither, and correctly -- there
+# every practice is his.
+
+
+class SchoolStudentCheckinItem(BaseModel):
+    """One PRE check-in the student left on a practice of this school.
+
+    POST check-ins never appear, and neither do check-ins whose booking was
+    cancelled: both are absent from the practice's own master's roster, and
+    the school does not see deeper than the person who taught.
+    """
+
+    mood: int
+    comment: str | None
+    practice_id: UUID
+    practice_title: str
+    created_at: datetime
+
+
+class SchoolStudentFeedbackItem(BaseModel):
+    """One review the student left on a practice of this school.
+
+    Unlike the check-ins above this list carries NO booking-status filter,
+    and the asymmetry is deliberate: a review the practice's master reads is
+    a review the school may read, and the master's own review feeds do not
+    filter by booking either (BE-24).
+    """
+
+    rating: int
+    comment: str | None
+    practice_id: UUID
+    practice_title: str
+    created_at: datetime
+
+
+class SchoolStudentProfileResponse(BaseModel):
+    """GET /masters/me/curator-groups/{group_id}/students/{user_id}.
+
+    What the school knows about one of its students, across every practice
+    of the school -- including practices taught by other masters, and
+    including practices whose master has since left. Belonging is a fact
+    about the practice, not about anybody's current membership (owner
+    ruling, 10 September).
+
+    practices_count -- practices of this school the student ATTENDED.
+    hours           -- their duration summed, in hours, one decimal,
+                       rounded on the server: the client does not compute
+                       this (TZ 1.13.3).
+    Both are zero, and the arrays empty, for a student who has attended
+    nothing -- a 200, never a 404.
+
+    master_offer (BE-59) -- the state of the curator's pending appointment
+    of this student, as on the roster. Filled for the CURATOR only; a
+    master of the school reads null whatever the state, as a member
+    outside a transfer reads null for it.
+    """
+
+    user_id: UUID
+    display_name: str
+    avatar_url: str | None
+    practices_count: int
+    hours: float
+    master_offer: CuratorMasterOfferStateLiteral | None = None
+    recent_checkins: list[SchoolStudentCheckinItem]
+    recent_feedbacks: list[SchoolStudentFeedbackItem]
+
+
+# ===========================================================================
+# School analytics (tz-curator.md §6 MVP)
+# ===========================================================================
+#
+# OWNER UNBLOCK 2026-10-02: §6 was gated on PM-2 (the metrics md-spec); the
+# owner lifted the gate and this aggregate is the first cut. The BE-24 rule
+# carries over unchanged -- the school WIDENS reach, not depth: scores are
+# BUCKETS only, there is no per-student row and no raw 1..10 anywhere in
+# the payload. Refinement waits for PM-2.
+
+
+class CuratorGroupPracticeTotals(BaseModel):
+    """The school's practices counted by lifecycle state.
+
+    total = completed + upcoming; drafts, cancelled and deleted sessions are
+    nobody's analytics and are absent from all three numbers.
+    """
+
+    total: int
+    completed: int
+    upcoming: int
+
+
+class CuratorGroupMemberTotals(BaseModel):
+    """Active memberships by kind -- the same rows the roster pages."""
+
+    masters: int
+    students: int
+
+
+class CuratorGroupConductedPracticeItem(BaseModel):
+    """One COMPLETED practice of the window (part 3, owner 2026-10-02).
+
+    The card the client renders: direction (schema-on-read data.taxonomy,
+    for the direction icon), title, master, date, then the practice's own
+    aggregates -- attendees (distinct ATTENDED: everyone who was there,
+    «Ученики» in VELO's vocabulary), check-ins (PRE on non-cancelled
+    bookings) and the reviews with their five zone counts. Same predicates
+    as the totals, so a card
+    reconciles with the cards around it.
+    """
+
+    practice_id: UUID
+    title: str
+    direction: str | None
+    master_name: str
+    # The master's avatar for the card (BE-107, owner decision 4); null
+    # when the master has none.
+    master_avatar_url: str | None
+    scheduled_at: datetime
+    timezone: str
+    attendees_count: int
+    checkins_count: int
+    reviews_count: int
+    rating: ScoreZoneCounts
+
+
+class CuratorGroupEngagementTotals(BaseModel):
+    """The period-scoped heart of the screen (owner brief 2026-10-02,
+    BE-107 decisions).
+
+    Everything here is scoped to the calendar period the request named,
+    over the curator's own timezone (BE-34 bounds), and reads ONE set of
+    practices: the school's COMPLETED practices scheduled in the window.
+    The exact vocabulary is pinned once, in analytics_service's header.
+
+    attendees / repeat_* count STUDENTS OF THE SCHOOL NOW (member rows of
+    kind=student) -- the same population as members.students, the card's
+    «из N». joined_never_came counts students who JOINED IN THE PERIOD and
+    have not attended a school practice since joining (to the window's
+    end). visits / reviews are EVERYONE on the period's practices, guests
+    included -- one population for both, so reviews <= visits.
+    """
+
+    practices_conducted: int
+    attendees: int
+    repeat_attendees: int
+    # 0 when the period had no attendees at all -- an honest empty, the
+    # same answer master analytics' rate fields give (never a null dash).
+    repeat_pct: int
+    joined_never_came: int
+    # The feedback share («Процент фидбеков», BE-107 decision 3): reviews
+    # out of visits on the period's practices, computed by the SERVER --
+    # the client renders reviews_pct and «reviews из visits» as they come.
+    # reviews is the sum of `rating` below, so the share and the strip
+    # cannot disagree.
+    visits: int
+    reviews: int
+    reviews_pct: int
+    rating: ScoreZoneCounts
+    # Every COMPLETED practice of the window, newest first, no limit -- the
+    # client renders a card per practice with its own five-zone strip.
+    # Empty list on a window without practices.
+    conducted_practices: list[CuratorGroupConductedPracticeItem]
+
+
+class CuratorGroupFeedbackTotals(BaseModel):
+    """How the school's practices landed: counts plus the two distributions
+    (five-zone ScoreZoneCounts, BE-77)."""
+
+    checkins_count: int
+    reviews_count: int
+    mood: ScoreZoneCounts
+    rating: ScoreZoneCounts
+
+
+class CuratorGroupTopPracticeItem(BaseModel):
+    """One completed practice of the school with its engagement counts.
+
+    Ordered by engagement (check-ins + reviews), newest first on ties --
+    "what actually landed", not a second feed, so no comment text and no
+    student names ride along.
+    """
+
+    practice_id: UUID
+    title: str
+    master_name: str
+    scheduled_at: datetime
+    checkins_count: int
+    reviews_count: int
+
+
+class CuratorGroupAnalyticsResponse(BaseModel):
+    """GET /masters/me/curator-groups/{group_id}/analytics (§6).
+
+    `engagement` answers the request's ?period; every other group is the
+    school's all-time shape and does not move with the slider.
+    """
+
+    practices: CuratorGroupPracticeTotals
+    members: CuratorGroupMemberTotals
+    engagement: CuratorGroupEngagementTotals
+    feedback: CuratorGroupFeedbackTotals
+    top_practices: list[CuratorGroupTopPracticeItem]

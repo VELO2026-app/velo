@@ -19,36 +19,37 @@
 //     banner: independently re-verified against THIS file's .vue:99-138.
 //   - THE ONE STRUCTURAL DIVERGENCE: unlike Checkin/Return, THIS screen has
 //     NO client-side list with its own empty-state branch -- its content is
-//     three VRatingBar rows that always render (their null-vs-number
+//     five VRatingBar rows (one per zone, BE-77) that always render (their null-vs-number
 //     handling lives inside VRatingBar itself, not as a template branch
 //     here). A legitimate content difference, not a missed guard.
 //   - NO v-else-if="data": same as the siblings, the content template
 //     renders unconditionally past loading/error even if data.value stays
 //     null -- every computed already guards with '—' for exactly that case.
 //
-// THE THREE-BUCKET DISTRIBUTION (.vue:113-124) -- the real assignment on
-// this screen. `distributionTotal = fire + good + confused` (0 if no
-// distribution at all). `bucketPct(count)`:
+// THE FIVE-ZONE DISTRIBUTION -- the real assignment on this screen.
+// BE-77: this was three buckets (fire / good / confused under «Огонь!» /
+// «Хорошо» / «Есть вопросы»); the owner's five zones replaced it, so every
+// assertion below now names all five rows (moodScale labels). Rows are read
+// as ONE label -> value map, so a missing, extra or crossed row fails.
+// `distributionTotal = zoneTotal(distribution)` (0 if no distribution at
+// all). `bucketPct(count)`:
 //   if (count == null || distributionTotal.value === 0) return null
 //   return Math.round((count / distributionTotal.value) * 100)
 // TWO DISTINCT falsy-ish outcomes, not one, both asserted below:
 //   - NO reviews at all (distributionTotal === 0, even if a count is
-//     literally 0): bucketPct returns null for ALL three buckets -> VRatingBar
+//     literally 0): bucketPct returns null for ALL five zones -> VRatingBar
 //     renders "—" (its own hasValue check, read from VRatingBar.vue).
 //   - a bucket that IS 0 but the total is NOT zero (some reviews exist, this
 //     bucket just got none of them): count=0 is NOT `== null`, so bucketPct
 //     returns the real number 0 -> VRatingBar renders "0%", a real value, not
 //     a dash. These are semantically different ("no data yet" vs "measured,
 //     zero share") and the guard is written to tell them apart on purpose.
-// THE FIELD-NAME MAPPING (explicitly checked, not assumed): the THIRD
-// bucket's API field is `confused` (FeedbackRatingDistribution.confused,
-// generated.ts:539) but the computed is named `questionRate` (.vue:124,
-// `bucketPct(data.value?.distribution.confused)`) and rendered under the
-// "Есть вопросы" label (.vue:58-65) -- fire->fireRate/"Огонь!",
-// good->goodRate/"Хорошо", confused->questionRate/"Есть вопросы". Asserted
-// below with three DIFFERENT counts so a mis-wired mapping would actually
-// show up as a wrong percentage on a specific bar, not just "some numbers
-// somewhere."
+// THE FIELD-NAME MAPPING (explicitly checked, not assumed): each zone key
+// of ScoreZoneCounts (bad / low / neutral / good / fire) is rendered under
+// its moodScale label (Плохо / Не очень / Нормально / Хорошо / Огонь).
+// Asserted below with five DIFFERENT counts so a mis-wired mapping would
+// actually show up as a wrong percentage on a specific bar, not just "some
+// numbers somewhere."
 //
 // Cyrillic fixtures/expected strings below were typed via the Write tool,
 // never a shell heredoc.
@@ -80,7 +81,7 @@ function feedbackMetric(overrides: Partial<FeedbackMetricResponse> = {}): Feedba
     rate_pct: 61.3,
     visited: 200,
     left_review: 123,
-    distribution: { fire: 5, good: 3, confused: 2 },
+    distribution: { bad: 1, low: 2, neutral: 3, good: 4, fire: 10 },
     ...overrides,
   }
 }
@@ -127,13 +128,23 @@ function statValue(label: string): string {
 }
 
 /** VRatingBar's own rendered value text, found by its label (.v-rating-bar__label). */
-function ratingValue(label: string): string {
-  const bars = Array.from(host?.querySelectorAll<HTMLElement>('.v-rating-bar') ?? [])
-  const bar = bars.find(
-    (b) => b.querySelector('.v-rating-bar__label')?.textContent?.trim() === label,
+function ratingBars(): HTMLElement[] {
+  return Array.from(host?.querySelectorAll<HTMLElement>('.v-rating-bar') ?? [])
+}
+
+/** The rating rows' labels, in render order. */
+function ratingLabels(): string[] {
+  return ratingBars().map((b) => b.querySelector('.v-rating-bar__label')?.textContent?.trim() ?? '')
+}
+
+/** Every rating row as label -> rendered value: a missing/extra row fails toEqual. */
+function ratingValues(): Record<string, string> {
+  return Object.fromEntries(
+    ratingBars().map((b) => [
+      b.querySelector('.v-rating-bar__label')?.textContent?.trim() ?? '',
+      b.querySelector('.v-rating-bar__value')?.textContent?.trim() ?? '',
+    ]),
   )
-  if (!bar) throw new Error(`no rating bar labelled «${label}»`)
-  return bar.querySelector('.v-rating-bar__value')?.textContent?.trim() ?? ''
 }
 
 // -----------------------------------------------------------------------------
@@ -257,48 +268,54 @@ describe('AdminFeedbackRateView', () => {
       expect(heroValue()).toBe('—')
       expect(statValue('Посетили')).toBe('—')
       expect(statValue('Оставили отзыв')).toBe('—')
-      expect(ratingValue('Огонь!')).toBe('—')
-      expect(ratingValue('Хорошо')).toBe('—')
-      expect(ratingValue('Есть вопросы')).toBe('—')
+      expect(ratingValues()).toEqual({ Огонь: '—', Хорошо: '—', Нормально: '—', 'Не очень': '—', Плохо: '—' })
     })
   })
 
   // ===========================================================================
-  describe('the three-bucket distribution (.vue:113-124) -- mapping + bucketPct edge behaviour (see banner)', () => {
-    it('THE FIELD-NAME MAPPING: three DIFFERENT counts land on the right bars -- confused -> "Есть вопросы"/questionRate, not crossed with fire/good', async () => {
+  describe('the five-zone distribution -- mapping + bucketPct edge behaviour (see banner)', () => {
+    it('THE FIELD-NAME MAPPING: five DIFFERENT counts land on the right bars, best zone first', async () => {
       vi.mocked(adminApi.getFeedbackMetric).mockResolvedValue(
-        feedbackMetric({ distribution: { fire: 5, good: 3, confused: 2 } }), // total 10
+        feedbackMetric({ distribution: { bad: 1, low: 2, neutral: 3, good: 4, fire: 10 } }), // total 20
       )
       mount()
       await flush()
 
-      expect(ratingValue('Огонь!')).toBe('50%') // fire
-      expect(ratingValue('Хорошо')).toBe('30%') // good
-      expect(ratingValue('Есть вопросы')).toBe('20%') // confused -> questionRate
+      expect(ratingLabels()).toEqual(['Огонь', 'Хорошо', 'Нормально', 'Не очень', 'Плохо'])
+      expect(ratingValues()).toEqual({
+        Огонь: '50%',
+        Хорошо: '20%',
+        Нормально: '15%',
+        'Не очень': '10%',
+        Плохо: '5%',
+      })
     })
 
-    it('NO reviews at all (distributionTotal === 0): all three bars show "—", not "0%"', async () => {
+    it('NO reviews at all (distributionTotal === 0): all five bars show "—", not "0%"', async () => {
       vi.mocked(adminApi.getFeedbackMetric).mockResolvedValue(
-        feedbackMetric({ distribution: { fire: 0, good: 0, confused: 0 } }),
+        feedbackMetric({ distribution: { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 } }),
       )
       mount()
       await flush()
 
-      expect(ratingValue('Огонь!')).toBe('—')
-      expect(ratingValue('Хорошо')).toBe('—')
-      expect(ratingValue('Есть вопросы')).toBe('—')
+      expect(ratingValues()).toEqual({ Огонь: '—', Хорошо: '—', Нормально: '—', 'Не очень': '—', Плохо: '—' })
     })
 
     it('a bucket that IS zero while the total is NOT zero shows "0%", a real measured value, not "—"', async () => {
       vi.mocked(adminApi.getFeedbackMetric).mockResolvedValue(
-        feedbackMetric({ distribution: { fire: 6, good: 4, confused: 0 } }), // total 10, confused=0
+        feedbackMetric({ distribution: { bad: 0, low: 0, neutral: 0, good: 4, fire: 6 } }), // total 10
       )
       mount()
       await flush()
 
-      expect(ratingValue('Есть вопросы')).toBe('0%') // real zero share, not "no data"
-      expect(ratingValue('Огонь!')).toBe('60%')
-      expect(ratingValue('Хорошо')).toBe('40%')
+      // The three empty zones are real zero shares, not "no data".
+      expect(ratingValues()).toEqual({
+        Огонь: '60%',
+        Хорошо: '40%',
+        Нормально: '0%',
+        'Не очень': '0%',
+        Плохо: '0%',
+      })
     })
   })
 })

@@ -46,7 +46,7 @@ function tokenColor(name: string, fallback: string): string {
 export const telegramPlatform: Platform = {
   name: 'telegram',
 
-  async init(): Promise<void> {
+  init(): Promise<void> {
     const webApp = getWebApp()
     webApp.ready()
     webApp.expand()
@@ -54,6 +54,7 @@ export const telegramPlatform: Platform = {
     // fails if these two drift from it -- do not edit one without the other.
     webApp.setHeaderColor(tokenColor('--velo-tg-header', '#334d6e'))
     webApp.setBackgroundColor(tokenColor('--velo-tg-bg', '#ffffff'))
+    return Promise.resolve()
   },
 
   getInitData(): string | null {
@@ -70,9 +71,36 @@ export const telegramPlatform: Platform = {
     return getWebApp().colorScheme || 'light'
   },
 
+  /**
+   * [TG-SURFACE 2026-09-07] The keyboard's rounded corners expose Telegram's
+   * NATIVE backdrop (outside the shrunk WebView -- device-confirmed; no
+   * in-page layer paints there). This repaints it via the same by-name token
+   * idiom as init(): dark = --velo-tg-bg-kbd (the dimmed backdrop color,
+   * sampled from the actual background photo), light = --velo-tg-bg.
+   * Guarded like hapticFeedback -- a repaint failure on an older client must
+   * never break the flow that called it.
+   */
+  setKeyboardSurface(dark: boolean): void {
+    try {
+      const token = dark ? '--velo-tg-bg-kbd' : '--velo-tg-bg'
+      const fallback = dark ? '#727678' : '#ffffff'
+      getWebApp().setBackgroundColor(tokenColor(token, fallback))
+    } catch {
+      // Silently ignore -- older clients or missing SDK.
+    }
+  },
+
   hapticFeedback(style: 'light' | 'medium' | 'heavy'): void {
     try {
       getWebApp().HapticFeedback.impactOccurred(style)
+    } catch {
+      // Silently ignore -- older clients or missing SDK.
+    }
+  },
+
+  hapticNotification(type: 'error' | 'success' | 'warning'): void {
+    try {
+      getWebApp().HapticFeedback.notificationOccurred(type)
     } catch {
       // Silently ignore -- older clients or missing SDK.
     }

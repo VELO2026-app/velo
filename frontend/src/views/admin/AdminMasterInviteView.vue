@@ -26,7 +26,7 @@
       <span class="invite__section-title">ОДНОРАЗОВАЯ ССЫЛКА</span>
       <p class="invite__desc">
         Создайте ссылку и отправьте её будущему мастеру. Она одноразовая: сработает у первого, кто
-        её откроет, — после этого погашается.
+        её откроет, — после этого погашается. Срок действия — 7 дней.
       </p>
 
       <VButton variant="primary" block :loading="creating" @click="onCreate">
@@ -39,7 +39,7 @@
       <span class="invite__section-title">ССЫЛКА ГОТОВА</span>
       <p class="invite__link">{{ inviteLink }}</p>
       <VButton variant="secondary" block @click="onCopy">Скопировать</VButton>
-      <p class="invite__caption">одноразовая · действует до погашения</p>
+      <p class="invite__caption">Одноразовая · 7 дней с момента создания</p>
     </VCard>
   </div>
 </template>

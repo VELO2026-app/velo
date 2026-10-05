@@ -31,6 +31,9 @@ import type {
   UpdatePracticeRequest,
   AttendanceResponse,
   PaginatedReviewsResponse,
+  PaginatedPracticeAnalyticsPairs,
+  PaginatedPracticeAnalyticsReviews,
+  PracticeAnalyticsResponse,
   AudiencePreviewRequest,
   AudiencePreviewResponse,
   ZoomEntryResolveResponse,
@@ -208,9 +211,7 @@ export function retryZoomMeeting(practiceId: string): Promise<PracticeResponse> 
  * render an honest error rather than an empty screen.
  */
 export function resolveZoomEntry(practiceId: string): Promise<ZoomEntryResolveResponse> {
-  return api.get<ZoomEntryResolveResponse>(
-    `/api/v1/practices/${practiceId}/zoom/resolve`,
-  )
+  return api.get<ZoomEntryResolveResponse>(`/api/v1/practices/${practiceId}/zoom/resolve`)
 }
 
 /**
@@ -241,9 +242,8 @@ export function zoomStartRedirectUrl(ticket: string): string | null {
  *
  * The de-anonymised counterpart to the anonymous rating distribution: each
  * item carries the reviewer's name, avatar and comment. `rating` arrives
- * pre-mapped to the three UI buckets ('fire' | 'good' | 'confused') by the
- * backend, so the frontend reuses the same rating icons/labels it already
- * renders for the anonymous distribution.
+ * pre-mapped to its zone (ScoreZone, BE-77) by the backend -- the same five
+ * moodScale.ts keys the anonymous distribution counts.
  */
 export function getPracticeReviews(
   id: string,
@@ -252,4 +252,41 @@ export function getPracticeReviews(
 ): Promise<PaginatedReviewsResponse> {
   const query = buildQuery({ limit, offset })
   return api.get<PaginatedReviewsResponse>(`/api/v1/practices/${id}/reviews${query}`)
+}
+
+// ============================================================================
+// BE-78: «Аналитика по практике»
+// ============================================================================
+//
+// Readers: the leading master; for a school's practice also its curator and
+// its verified masters. Anyone else gets 404 -- not 403: the endpoints take
+// any signed-in user (a curator may hold role='user') and mask the practice.
+// An entitled reader of a practice that is not completed gets 400. Scores
+// arrive as zones (ScoreZone) only; every "X из N" uses N = `attended`.
+
+/** Header + both zone distributions + the two list totals. */
+export function getPracticeAnalytics(id: string): Promise<PracticeAnalyticsResponse> {
+  return api.get<PracticeAnalyticsResponse>(`/api/v1/practices/${id}/analytics`)
+}
+
+/** «Пришёл -> ушёл»: attendees with a PRE check-in AND a review, by name. */
+export function getPracticeAnalyticsPairs(
+  id: string,
+  limit = 20,
+  offset = 0,
+): Promise<PaginatedPracticeAnalyticsPairs> {
+  const query = buildQuery({ limit, offset })
+  return api.get<PaginatedPracticeAnalyticsPairs>(`/api/v1/practices/${id}/analytics/pairs${query}`)
+}
+
+/** Reviews with text, newest first. */
+export function getPracticeAnalyticsReviews(
+  id: string,
+  limit = 20,
+  offset = 0,
+): Promise<PaginatedPracticeAnalyticsReviews> {
+  const query = buildQuery({ limit, offset })
+  return api.get<PaginatedPracticeAnalyticsReviews>(
+    `/api/v1/practices/${id}/analytics/reviews${query}`,
+  )
 }

@@ -95,7 +95,8 @@ import { createApp, nextTick, type App } from 'vue'
 import MasterSummaryView from '@/views/master/MasterSummaryView.vue'
 import * as mastersApi from '@/api/masters'
 import { ApiResponseError } from '@/api/client'
-import type { StudentListItem, MasterReviewItem } from '@/api/types'
+import type { StudentListItem, MasterReviewItem, ScoreZone } from '@/api/types'
+import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
 
 // Both ladders' seam. Auto-mocked: nothing in this module needs preserving --
 // ApiResponseError lives in @/api/client, which stays REAL so the
@@ -148,9 +149,10 @@ const RV_FIRE = review(1, {
   practice_title: 'Утренняя йога',
 })
 const RV_GOOD = review(2, { reviewer_name: 'Борис', rating: 'good', comment: null })
-const RV_CONFUSED = review(3, {
+// BE-77: was RV_CONFUSED ('confused'); the attention zone is now 'low'.
+const RV_LOW = review(3, {
   reviewer_name: 'Вера',
-  rating: 'confused',
+  rating: 'low',
   comment: 'Было сложно успевать',
   practice_title: 'Вечерняя медитация',
 })
@@ -271,20 +273,32 @@ function feedbackQuotes(): (string | null)[] {
   )
 }
 
-/** The inline colour the screen stamped on each review's rating icon (.vue:60-64). */
-function feedbackIconColors(): string[] {
-  return feedbackCards().map((c) => c.querySelector('svg')?.getAttribute('style')?.trim() ?? '')
+/** Each review's rendered face, as markup. */
+function feedbackFaces(): string[] {
+  return feedbackCards().map((c) => normFace(c.querySelector('svg')?.outerHTML ?? ''))
 }
 
 /**
- * Each rating icon's viewBox -- the only thing that tells the three IconRating*
- * components apart from the DOM. Asserted for DISTINCTNESS, not for literal
- * values: the claim is that RATING_ICON (.vue:159-163) maps each bucket to a
- * DIFFERENT component, and pinning viewBoxes would fail on an icon redesign that
- * broke nothing.
+ * Face markup with the per-mount noise removed: the parent's scoped-style
+ * attribute and the useId suffix of the gradient ids. What is left is the
+ * artwork itself, which is what tells one zone's face from another's.
  */
-function feedbackIconShapes(): string[] {
-  return feedbackCards().map((c) => c.querySelector('svg')?.getAttribute('viewBox')?.trim() ?? '')
+function normFace(html: string): string {
+  return html.replace(/ data-v-[0-9a-f]+=""/g, '').replace(/-v-\d+/g, '-v-')
+}
+/**
+ * The markup of a zone's approved face rendered on its own at the screen's
+ * size -- the reference a review's face is compared against. BE-77: the
+ * faces are full-colour artwork, so the zone is told apart by the face
+ * itself, not by an accent colour (the three-key RATING_ICON_COLOR is gone).
+ */
+function faceOf(zone: ScoreZone): string {
+  const el = document.createElement('div')
+  const app = createApp(MOOD_SCALE_ICON[zone], { size: 36 })
+  app.mount(el)
+  const html = normFace(el.querySelector('svg')?.outerHTML ?? '')
+  app.unmount()
+  return html
 }
 
 // -- «Требуют внимания» -------------------------------------------------------
@@ -322,8 +336,8 @@ function modalDismissed(): boolean {
 }
 
 function modalButton(label: string): HTMLButtonElement | undefined {
-  return Array.from(liveModal()?.querySelectorAll<HTMLButtonElement>('button') ?? []).find((b) =>
-    b.textContent?.trim() === label,
+  return Array.from(liveModal()?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(
+    (b) => b.textContent?.trim() === label,
   )
 }
 
@@ -416,16 +430,16 @@ describe('MasterSummaryView', () => {
       mount()
       await flush()
 
-      expect(
-        sectionQuery<HTMLElement>(FEEDBACKS, '.v-empty-note')[0]?.textContent?.trim(),
-      ).toBe('Отзывы появятся здесь, когда будут собраны')
+      expect(sectionQuery<HTMLElement>(FEEDBACKS, '.v-empty-note')[0]?.textContent?.trim()).toBe(
+        'Отзывы появятся здесь, когда будут собраны',
+      )
       expect(errored(FEEDBACKS)).toBe(false)
       expect(feedbackCards()).toHaveLength(0)
     })
 
     it('content: renders every reviewer with their practice, in the order the backend returned', async () => {
       vi.mocked(mastersApi.getMasterReviews).mockResolvedValue(
-        reviewsPage([RV_FIRE, RV_GOOD, RV_CONFUSED]),
+        reviewsPage([RV_FIRE, RV_GOOD, RV_LOW]),
       )
       mount()
       await flush()
@@ -441,7 +455,7 @@ describe('MasterSummaryView', () => {
       // reads as a reviewer who said nothing out loud -- a different fact from a
       // reviewer who left no comment at all.
       vi.mocked(mastersApi.getMasterReviews).mockResolvedValue(
-        reviewsPage([RV_FIRE, RV_GOOD, RV_CONFUSED]),
+        reviewsPage([RV_FIRE, RV_GOOD, RV_LOW]),
       )
       mount()
       await flush()
@@ -453,25 +467,21 @@ describe('MasterSummaryView', () => {
       ])
     })
 
-    it("content: each review carries ITS rating's icon and accent colour", async () => {
-      // RATING_ICON (.vue:159-163) picks the component; RATING_ICON_COLOR
-      // (displayHelpers.ts:110-114) the accent. Both are Record<FeedbackRating,…>
-      // literals -- a transposed key paints a confused review as fire, which is
-      // exactly the review a master must not miss.
+    it("content: each review carries ITS zone's face", async () => {
+      // MOOD_SCALE_ICON picks the face by the server's zone key (BE-77; was
+      // RATING_ICON + RATING_ICON_COLOR on three buckets). A transposed key
+      // paints a low review as fire, which is exactly the review a master
+      // must not miss -- so each card's face is compared to ITS zone's face.
       vi.mocked(mastersApi.getMasterReviews).mockResolvedValue(
-        reviewsPage([RV_FIRE, RV_GOOD, RV_CONFUSED]),
+        reviewsPage([RV_FIRE, RV_GOOD, RV_LOW]),
       )
       mount()
       await flush()
 
-      expect(feedbackIconColors()).toEqual([
-        'color: var(--velo-rating-fire);',
-        'color: var(--velo-rating-good);',
-        'color: var(--velo-rating-confused);',
-      ])
-      // Three ratings must resolve to three DIFFERENT components -- a constant
-      // icon would satisfy the colour assertion above on its own.
-      expect(new Set(feedbackIconShapes()).size).toBe(3)
+      expect(feedbackFaces()).toEqual([faceOf('fire'), faceOf('good'), faceOf('low')])
+      // The pair: the three references really are three different faces, so
+      // the equality above cannot pass on a constant icon.
+      expect(new Set([faceOf('fire'), faceOf('good'), faceOf('low')]).size).toBe(3)
     })
 
     it('«Повторить» re-runs the fetch and recovers into real content', async () => {
@@ -759,7 +769,7 @@ describe('MasterSummaryView', () => {
       // user_id -- E1's remainder is what makes these cards navigable at all --
       // and the name rides in the query because the detail endpoint carries none.
       vi.mocked(mastersApi.getMasterReviews).mockResolvedValue(
-        reviewsPage([RV_FIRE, RV_GOOD, RV_CONFUSED]),
+        reviewsPage([RV_FIRE, RV_GOOD, RV_LOW]),
       )
       mount()
       await flush()
@@ -914,26 +924,22 @@ describe('MasterSummaryView', () => {
   // ===========================================================================
   // NOT COVERED, deliberately
   //
-  // - «Отправить» inside SendMessageModal. It is that COMPONENT's stub (it fires
-  //   `toast.info('Сообщения пока недоступны')`, SendMessageModal.vue:45-48) and
-  //   is shared with MasterStudentsView / MasterStudentProfileView. This screen
-  //   only opens the sheet and names the recipient; asserting the toast here
-  //   would test the child's roadmap placeholder from three different files.
+  // - «Отправить» inside SendMessageModal. It is that COMPONENT's own behaviour
+  //   (open-or-get the DM, post, toast -- SendMessageModal.test.ts) and is
+  //   shared with MasterStudentsView / MasterStudentProfileView. This screen
+  //   only opens the sheet and names the recipient; asserting the send here
+  //   would test the child from three different files.
   //   What THIS screen owns -- which name reaches the sheet -- is asserted above.
   // - Keyboard activation (`@keydown.enter.space.prevent`, .vue:58,101). Both
   //   handlers are the same goStudentFromReview / openProfile already driven
   //   through the click path; a second test would assert Vue's event modifier,
   //   not this screen.
-  // - A rating outside the three buckets. `MasterReviewItem.rating` is typed
-  //   `string` in generated.ts:688 and the screen casts it (`item.rating as
-  //   FeedbackRating`, .vue:61-63), so an unknown value would resolve RATING_ICON
-  //   to undefined and render a card with no glyph. Not tested because it is NOT
-  //   REACHABLE: the backend projects the rating through rating_bucket()
-  //   (masters/reviews_service.py:99), a closed 1-3/4-7/8-10 -> confused/good/fire
-  //   mapping. A test would have to fabricate a response the server cannot send,
-  //   and would then pin the cast's failure mode as if it were a contract.
-  //   Recorded as the latent trap it is: the day a fourth bucket is added
-  //   backend-side, this screen degrades silently and needs a fallback + a test.
+  // - A rating outside the five zones. Not REACHABLE and no longer a latent
+  //   trap: since BE-77 `MasterReviewItem.rating` is the generated ScoreZone
+  //   (no cast on the screen), the backend projects it through score_zone()
+  //   over a closed table, and moodScale.ts type-checks MoodScaleKey against
+  //   ScoreZone -- a zone added on either side fails vue-tsc instead of
+  //   rendering a card with no face.
   // - VEmptyState / VLoader / VCard / VAvatar / VHeader internals: DS primitives
   //   with their own homes. Exercised here only through the values this screen
   //   feeds them.

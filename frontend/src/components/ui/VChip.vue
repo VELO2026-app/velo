@@ -33,6 +33,7 @@
       'v-chip--active': active && !existing,
       'v-chip--existing': existing,
     }"
+    :aria-pressed="clickable ? ariaPressed : undefined"
     @click="clickable && $emit('click', $event)"
   >
     <slot />
@@ -47,12 +48,21 @@ withDefaults(
     clickable?: boolean
     /** "Already a member" darker state (T24-35) -- see the file header. */
     existing?: boolean
+    /**
+     * Optional aria-pressed for single/multi-select chips rendered as buttons
+     * (FE-70): a `clickable` chip is a <button>, and toggle semantics belong
+     * on the control itself -- screen readers announce "pressed"/"not pressed"
+     * instead of a bare "button". Undefined = attribute omitted (every
+     * existing caller is byte-identical).
+     */
+    ariaPressed?: boolean
   }>(),
   {
     size: 'sm',
     active: false,
     clickable: false,
     existing: false,
+    ariaPressed: undefined,
   },
 )
 

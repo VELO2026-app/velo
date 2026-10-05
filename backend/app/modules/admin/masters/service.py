@@ -10,7 +10,8 @@
 #   3. Update JSONB: status -> "verified", add verification info
 #   4. Change User.role -> MASTER
 #   5. Record audit event (M-01)
-#   6. Return updated profile (caller does flush + refresh)
+#   6. Notify the applicant: master.verified (BE-104)
+#   7. Return updated profile (caller does flush + refresh)
 #
 # REJECT FLOW:
 #   1. Load MasterProfile by user_id with FOR UPDATE (P-07)
@@ -18,7 +19,13 @@
 #   3. Update JSONB: status -> "rejected", store reason
 #   4. Do NOT change User.role
 #   5. Record audit event (M-01)
-#   6. Return updated profile
+#   6. Notify the applicant: master.rejected with the reason (BE-104)
+#   7. Return updated profile
+#
+# REVOKE FLOW (lock order, BE-85):
+#   users FOR NO KEY UPDATE first, then MasterProfile FOR UPDATE
+#   (_load_verified_master) -- the order is written once, in
+#   users/service.py (ROW LOCK ON users).
 #
 # JSONB SAFETY:
 #   All mutations use copy.deepcopy() + set_jsonb() (P-03).
@@ -61,8 +68,17 @@ from app.modules.admin.masters.schemas import (
 # model behind it, so a typo in a writer would not fail -- it would write a
 # key nobody reads, and the master would be told they had a right they do
 # not have. curator_groups owns the spelling because it owns the gate.
-from app.modules.curator_groups.service import CAN_CREATE_GROUPS_KEY
+from app.modules.curator_groups.service import (
+    CAN_CREATE_GROUPS_KEY,
+    announce_pending_master_offers,
+    close_pending_master_offers,
+)
 from app.modules.masters.models import MasterProfile
+from app.modules.masters.service import (
+    emit_master_rejected,
+    emit_master_suspended,
+    emit_master_verified,
+)
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.practices.taxonomy_models import TaxonomyDirection
 from app.modules.users.models import User, UserRole
@@ -70,6 +86,7 @@ from app.modules.users.schemas import (
     credentials_without_admin_home,
     has_admin_home,
 )
+from app.modules.users.service import lock_user_row
 from app.modules.withdrawals.models import Withdrawal, WithdrawalStatus
 
 logger = structlog.get_logger()
@@ -153,6 +170,9 @@ async def verify_master(
     anything. Later grants and revocations go through
     set_master_group_right, not through here -- this path is reachable
     only while the application is still pending.
+
+    BE-59: announces every school-master offer waiting for this
+    verification (curator_groups announce_pending_master_offers).
     """
     profile = await _load_pending_profile(user_id, session)
 
@@ -182,6 +202,18 @@ async def verify_master(
             had=False,
             has=True,
         )
+
+    # BE-104: the person is told first, then the waiting schools ask --
+    # publication order follows emission order inside a transaction.
+    # pending -> verified is the transition (the guard admits only pending),
+    # so a repeated call 409s before reaching this.
+    await emit_master_verified(session, user_id)
+
+    # BE-59: every school that offered this person a master role while
+    # they were not verified now asks them "yes / no". Here, while the
+    # profile is held FOR UPDATE (_load_pending_profile) -- the order of
+    # curator_groups/service.py's header, profile before offers.
+    await announce_pending_master_offers(user_id, session)
 
     promoted = await _promote_custom_methods(promote or [], session)
     scoped = await _scope_custom_methods_to_master(master_only or [], user_id, session)
@@ -220,10 +252,22 @@ async def _load_verified_master(
 ) -> tuple[User, MasterProfile]:
     """Load a VERIFIED master's (User, MasterProfile) for revoke/preview (A1).
 
-    for_update takes SELECT FOR UPDATE on the mutating path (P-07). Raises
-    NotFoundError if profile/user missing, ConflictError if not verified (revoke
-    only makes sense on a live capability — status=="verified").
+    for_update is the mutating path (P-07): the users row is taken FOR NO
+    KEY UPDATE FIRST, the profile FOR UPDATE after it -- the users ->
+    master_profiles order written in users/service.py (ROW LOCK ON users,
+    BE-85). It used to be the other way round, against make_master, which
+    takes the user and then writes the profile. Raises NotFoundError if
+    profile/user missing, ConflictError if not verified (revoke only makes
+    sense on a live capability — status=="verified").
     """
+    user: User | None = None
+    if for_update:
+        user = await lock_user_row(session, user_id)
+        if user is None:
+            # The profile's FK to users is ON DELETE CASCADE: without a
+            # users row there is no profile either, and that is the answer
+            # this path has always given for it.
+            raise NotFoundError("Master profile not found")
     stmt = select(MasterProfile).where(MasterProfile.user_id == user_id)
     if for_update:
         stmt = stmt.with_for_update()
@@ -233,7 +277,8 @@ async def _load_verified_master(
     status = (profile.data or {}).get("account", {}).get("status")
     if status != "verified":
         raise ConflictError("Master is not verified")
-    user = await session.get(User, user_id)
+    if user is None:
+        user = await session.get(User, user_id)
     if not user:
         raise NotFoundError("User not found")
     return user, profile
@@ -309,7 +354,9 @@ async def revoke_master(
 ) -> RevokeMasterAdvisory:
     """Revoke a master's capability, preserving all data (A1, operator Б).
 
-    Mirrors CLI `set_role.py to_user` EXACTLY (one behavior across CLI + admin):
+    Mirrors CLI `set_role.py to_user` EXACTLY (one behavior across CLI + admin)
+    in the data it writes; it alone tells the person (master.suspended,
+    BE-104) -- the CLI is an operator tool and sends nothing (owner ruling):
       - User.role -> user, ONLY if currently master (+ clear the switched-away
         admin round-trip marker, R-1);
       - profile data.account.status -> "suspended",
@@ -317,8 +364,11 @@ async def revoke_master(
     Capability keys on status=="verified" (users/service.user_has_master_
     capability), so suspending drops it -> the account logs in user-only. Every
     row is kept: re-grant via the existing make_master re-verify branch restores
-    status="verified" + role=master. The CLI-style guard signals are computed
-    and returned as advisory but NEVER block (operator Б).
+    status="verified" + role=master. That includes school-master offers
+    (BE-59, owner ruling): they stay, silently, and read awaiting
+    verification again until the next verification re-announces them.
+    The CLI-style guard signals are computed and returned as advisory but
+    NEVER block (operator Б).
     """
     user, profile = await _load_verified_master(
         user_id, session, for_update=True
@@ -344,6 +394,11 @@ async def revoke_master(
     new_data.setdefault("account", {})["status"] = "suspended"
     new_data.setdefault("availability", {})["is_accepting"] = False
     profile.set_jsonb("data", new_data)
+
+    # BE-104: the person is told. verified -> suspended is the transition
+    # (the loader guard admits only verified), whatever the role -- every
+    # holder of a verified profile loses the capability here.
+    await emit_master_suspended(session, user_id)
 
     # Phase 6 / T0: verified -> suspended IS the master-capability drop
     # (the loader guard admits only verified) -> leave group:masters.
@@ -455,16 +510,32 @@ async def reject_master(
 
     Stores rejection reason and archives it in rejection history.
     Does NOT change User.role -- user stays as USER and can reapply.
+
+    BE-59: closes every school-master offer waiting for this verification
+    and tells each curator (curator_groups close_pending_master_offers).
+    A later reapplication does not revive them.
     """
     profile = await _load_pending_profile(user_id, session)
 
     # -- Update JSONB (P-03: deepcopy + set_jsonb) --
     new_data = copy.deepcopy(profile.data)
+    rejected_at = datetime.now(UTC).isoformat()
     new_data["account"]["status"] = "rejected"
-    new_data["account"]["rejected_at"] = datetime.now(UTC).isoformat()
+    new_data["account"]["rejected_at"] = rejected_at
     new_data["account"]["rejection_reason"] = reason
     new_data["account"]["rejected_by"] = str(admin.id)
     profile.set_jsonb("data", new_data)
+
+    # BE-104: the applicant hears the decision and its reason. rejected_at
+    # names this rejection -- a reapplication rejected again gets its own.
+    await emit_master_rejected(
+        session, user_id, rejected_at=rejected_at, reason=reason,
+    )
+
+    # BE-59: the appointments waiting for this verification are closed, and
+    # each school's curator is told. Under the same FOR UPDATE as the
+    # status write -- profile before offers, curator_groups' order.
+    await close_pending_master_offers(user_id, session)
 
     # M-01: audit trail for master rejection.
     await record_audit(
@@ -931,12 +1002,14 @@ async def reject_method_change(
 
 
 # ---------------------------------------------------------------------------
-# Batch-INVITE: generic one-time master invite link (Redis-backed, no TTL)
+# Batch-INVITE: generic one-time master invite link (Redis-backed, TTL)
 # ---------------------------------------------------------------------------
 # The invite is account-agnostic -- no target user_id. The token's sha256 is
-# stored in Redis under MASTER_INVITE_KEY_PREFIX with NO expiry; it lives until
-# the first claim burns it atomically (masters/service.claim_master_invite), or
-# until a Redis flush drops it (acceptable: the admin regenerates). The prefix
+# stored in Redis under MASTER_INVITE_KEY_PREFIX for
+# settings.master_invite_ttl_seconds (7 days, BE-44); it lives until the first
+# claim burns it atomically (masters/service.claim_master_invite), until it
+# expires, or until a Redis flush drops it (acceptable: the admin
+# regenerates). An expired invite is indistinguishable from a consumed one. The prefix
 # is duplicated in masters/service.py to avoid a cross-module import -- keep the
 # two literals in sync.
 MASTER_INVITE_KEY_PREFIX = "master_invite:"
@@ -946,8 +1019,9 @@ async def issue_master_invite(admin: User) -> tuple[str, datetime]:
     """Issue a generic one-time master invite link.
 
     No target: the returned link works for any authenticated opener until it
-    is claimed once. Only the token's sha256 is persisted (in Redis); the
-    plaintext token exists solely inside the returned link.
+    is claimed once or settings.master_invite_ttl_seconds pass. Only the
+    token's sha256 is persisted (in Redis); the plaintext token exists solely
+    inside the returned link.
 
     Raises:
         VeloError 503 (bot_url_not_configured): telegram_bot_url unset.
@@ -963,13 +1037,15 @@ async def issue_master_invite(admin: User) -> tuple[str, datetime]:
     issued_at = datetime.now(UTC)
     token_hash = hashlib.sha256(token.encode()).hexdigest()
 
-    # No expiry: persist until the first claim burns it (or a Redis flush).
+    # BE-44: expires after master_invite_ttl_seconds. Without ex= a leaked
+    # link stayed claimable for ever.
     redis = get_redis()
     await redis.set(
         f"{MASTER_INVITE_KEY_PREFIX}{token_hash}",
         json.dumps(
             {"issued_by": str(admin.id), "issued_at": issued_at.isoformat()}
         ),
+        ex=settings.master_invite_ttl_seconds,
     )
 
     # Audit trail (the token itself is never logged).

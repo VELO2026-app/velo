@@ -507,9 +507,9 @@ async def test_landing_never_contains_a_raw_zoom_url(
 ) -> None:
     """THE POINT OF THE WHOLE FEATURE, asserted on the anonymous surface: no
     zoom.us anywhere in the page body. The guest button points at our own
-    /guest route, which redirects -- the raw URL exists only as one
-    Location header, never as something a person can copy out of the page
-    and repost."""
+    /guest route, whose "Войти" answers with a redirect -- the raw URL
+    exists only as one Location header, never as something a person can
+    copy out of the page and repost."""
     master = await _make_verified_master(client, db_session, telegram_id=89842)
     practice_id = await _create_and_publish_practice(client, master)
 
@@ -546,27 +546,55 @@ async def test_cancelled_practice_page_is_200_and_its_og_says_cancelled(
     assert "отменена" in resp.text
 
 
+@pytest.mark.parametrize(
+    ("naming_open", "shared", "button"),
+    [
+        (True, True, True),
+        (True, False, True),
+        (False, True, True),
+        (False, False, False),
+    ],
+    ids=["open+shared", "open+no-shared", "closed+shared", "closed+no-shared"],
+)
 @pytest.mark.asyncio
-async def test_landing_says_so_honestly_when_the_guest_seat_was_never_minted(
+async def test_landing_guest_button_follows_the_guest_pages_decision(
     client: AsyncClient, db_session: AsyncSession,
+    naming_open: bool, shared: bool, button: bool,
 ) -> None:
-    """ensure_shared_registrant is best-effort and the retry poller does not
-    cover it (a known gap this feature deliberately does not fix). The
-    wrapper turns what used to be an invisible nothing into an honest line:
-    no guest button, but the app button still works."""
+    """The guest button is shown exactly when /z/{code}/guest has an entry
+    to give -- the grid of _guest_meeting, cell by cell.
+
+    WHAT CHANGED (BE-60), AND WHY THIS IS NOT A WEAKER TEST. This used to be
+    test_landing_says_so_honestly_when_the_guest_seat_was_never_minted, and
+    it asserted: no shared registrant -> no guest button, the honest line
+    instead. That was right before GT-21 step B -- without the shared
+    registrant a guest had nowhere to go. Step B made the guest page mint a
+    PERSONAL registrant inside the naming window, so for a scheduled
+    practice the old assertion became false (the button hid a working
+    entry). The honest line is still right, but only in the one cell where
+    the page itself has nothing to give: outside the naming window, with no
+    shared registrant. Each cell is asserted both ways -- the button and the
+    sentence -- so a landing that always or never shows the button fails.
+    """
     master = await _make_verified_master(client, db_session, telegram_id=89844)
     practice_id = await _create_and_publish_practice(client, master)
     meeting = await _meeting(db_session, practice_id)
-    meeting.shared_join_url = None
-    meeting.shared_registrant_id = None
+    if not shared:
+        # ensure_shared_registrant is best-effort and the retry poller does
+        # not cover it: this state is the minting miss, observed live.
+        meeting.shared_join_url = None
+        meeting.shared_registrant_id = None
+    if not naming_open:
+        practice = await db_session.get(Practice, UUID(practice_id))
+        practice.status = PracticeStatus.COMPLETED.value
     await db_session.commit()
     code = encode_practice_code(UUID(practice_id))
 
     resp = await client.get(f"/z/{code}", follow_redirects=False)
 
     assert resp.status_code == 200
-    assert f"/z/{code}/guest" not in resp.text
-    assert "Гостевой вход сейчас недоступен" in resp.text
+    assert (f"/z/{code}/guest" in resp.text) is button
+    assert ("Гостевой вход сейчас недоступен" in resp.text) is (not button)
     assert f"startapp=zoom__{code}" in resp.text
 
 
@@ -576,21 +604,54 @@ async def test_guest_route_redirects_307_with_no_referrer(
 ) -> None:
     """The one place a raw Zoom URL is allowed to exist: a Location header.
     Referrer-Policy mirrors zoom_start_redirect_endpoint so zoom.us is not
-    handed the shape of our route."""
+    handed the shape of our route.
+
+    WHAT CHANGED IN GT-21 STEP B, AND WHY THIS IS NOT A WEAKER TEST. The old
+    version asserted that GET /guest on a published practice is a 307 to
+    the shared link. That was right while the route was a plain redirect;
+    step B turned GET into the page that names the guest, so for a
+    scheduled practice the claim is now false. The property itself did not
+    move, only its place, and both places are asserted here:
+      - a practice past the naming window (completed) keeps the old answer
+        exactly -- GET is a 307 to the shared link, with no-referrer;
+      - a scheduled practice answers GET with the page, whose body carries
+        no Zoom URL, and "Войти" answers with a 303 whose Location is the
+        only Zoom URL anywhere, again with no-referrer.
+    """
     master = await _make_verified_master(client, db_session, telegram_id=89845)
     practice_id = await _create_and_publish_practice(client, master)
     meeting = await _meeting(db_session, practice_id)
     meeting.shared_join_url = "https://zoom.us/w/shared?tk=guest"
     await db_session.commit()
+    code = encode_practice_code(UUID(practice_id))
 
-    resp = await client.get(
-        f"/z/{encode_practice_code(UUID(practice_id))}/guest",
-        follow_redirects=False,
+    page = await client.get(f"/z/{code}/guest", follow_redirects=False)
+    enter = await client.post(
+        f"/z/{code}/guest", data={"name": "Марина"}, follow_redirects=False,
     )
 
-    assert resp.status_code == 307
-    assert resp.headers["location"] == "https://zoom.us/w/shared?tk=guest"
-    assert resp.headers["Referrer-Policy"] == "no-referrer"
+    assert page.status_code == 200
+    assert "location" not in {k.lower() for k in page.headers}
+    assert "zoom.us/w/" not in page.text
+    assert "zoom.us/j/" not in page.text
+    assert enter.status_code == 303
+    assert enter.headers["location"].startswith("https://zoom.us/")
+    assert enter.headers["location"] not in page.text
+    assert enter.headers["Referrer-Policy"] == "no-referrer"
+
+    practice = (
+        await db_session.execute(
+            select(Practice).where(Practice.id == UUID(practice_id))
+        )
+    ).scalar_one()
+    practice.status = PracticeStatus.COMPLETED.value
+    await db_session.commit()
+
+    past = await client.get(f"/z/{code}/guest", follow_redirects=False)
+
+    assert past.status_code == 307
+    assert past.headers["location"] == "https://zoom.us/w/shared?tk=guest"
+    assert past.headers["Referrer-Policy"] == "no-referrer"
 
 
 @pytest.mark.asyncio
@@ -670,10 +731,18 @@ async def test_anonymous_page_never_leaks_a_booked_students_personal_link(
 
     page = await client.get(f"/z/{code}", follow_redirects=False)
     guest = await client.get(f"/z/{code}/guest", follow_redirects=False)
+    # GT-21 step B: GET /guest is now a page and "Войти" is its POST, so the
+    # old `guest.headers["location"] != personal` moved to the POST -- and
+    # the page body itself joins the landing in the no-leak assertion.
+    enter = await client.post(f"/z/{code}/guest", follow_redirects=False)
 
     assert "SECRET" not in page.text
     assert personal not in page.text
-    assert guest.headers["location"] != personal
+    assert guest.status_code == 200
+    assert "SECRET" not in guest.text
+    assert enter.status_code == 303
+    assert enter.headers["location"] != personal
+    assert "SECRET" not in enter.headers["location"]
 
 
 # ===========================================================================
@@ -706,19 +775,23 @@ async def test_booked_student_gets_their_own_personal_link(
 
 
 @pytest.mark.asyncio
-async def test_confirmed_booking_without_a_join_url_is_pending_not_guest(
+async def test_confirmed_booking_without_a_join_url_is_unavailable_not_guest(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     """⭐ THE DEFECT THIS FEATURE WOULD OTHERWISE RECREATE INSIDE ITSELF.
 
     Zoom does not always return a tokenized join_url when the registrant is
-    created (documented on ZoomRegistrant.join_url; the retry poller fills it
-    in later). A naive "no personal link -> hand out the guest link" would
-    send this CONFIRMED student in as an unmatchable guest -- and
-    attendance_service writes NO_SHOW for exactly this shape: a CONFIRMED
-    booking whose registrant collected zero seconds.
+    created (documented on ZoomRegistrant.join_url). A naive "no personal
+    link -> hand out the guest link" would send this CONFIRMED student in as
+    an unmatchable guest -- the shape the attendance ingest used to write
+    NO_SHOW for (BE-72 now hands it to the proxy instead).
 
-    Honest waiting is the only correct answer here.
+    Renamed and tightened by BE-72. The old assertion, kind == "pending",
+    was right about what matters most -- NOT guest, NO url -- and wrong about
+    the reason it gave: "the retry poller fills it in later". The poller
+    claims only pending and create_failed rows and never revisits a
+    registered one, so "being prepared" promised a link nothing was going to
+    produce. The state is now named for what it is.
     """
     master = await _make_verified_master(client, db_session, telegram_id=89852)
     student = await login_user(client, telegram_id=89853, first_name="Ученик")
@@ -736,7 +809,7 @@ async def test_confirmed_booking_without_a_join_url_is_pending_not_guest(
 
     body = await _resolve(client, practice_id, student["session_token"])
 
-    assert body["kind"] == "pending"
+    assert body["kind"] == "unavailable"
     assert body["url"] is None
 
 

@@ -339,3 +339,17 @@ export function isFull(current: number, max: number | null): boolean {
 export function cleanPracticeTitle(title: string): string {
   return title.replace(/\s*\(эфир\)\s*$/i, '')
 }
+
+/**
+ * Format a percentage share for the analytics distribution strips
+ * (practice mood / school feedback). The TZ rule (tz-practice-analytics.md):
+ * a share strictly between 0 and 1 reads «<1%», between 99 and 100 reads
+ * «>99%», everything else rounds to a whole percent — so a real minority
+ * share never renders as a flat 0% and an incomplete distribution never
+ * reads as a full 100%.
+ */
+export function formatPercent(percent: number): string {
+  if (percent > 0 && percent < 1) return '<1%'
+  if (percent > 99 && percent < 100) return '>99%'
+  return `${Math.round(percent)}%`
+}

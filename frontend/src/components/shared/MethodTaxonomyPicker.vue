@@ -149,6 +149,7 @@ const selection = reactive<MethodSelection>({
   styles: {},
   customEnabled: false,
   customText: '',
+  custom: [],
 })
 
 // Order-insensitive set equality (flatten output has no duplicates).

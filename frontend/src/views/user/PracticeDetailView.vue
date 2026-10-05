@@ -19,6 +19,8 @@
     - Booked + in feedback window  -> "Оставить feedback"
     - Booked + outside any window  -> "Вы записаны" (disabled)
     - Booked (cancellable)         -> "Отменить бронирование"
+  BE-108: a no_show booking without a reflection also gets «Поделиться, как
+    вы» (secondary), after «Посмотреть запись» when a recording exists.
   DS-sprint: accordions, master methods tags, contraindications banner.
 
   Route: /user/practices/:id
@@ -43,8 +45,29 @@
 
   <!-- Content -->
   <div v-else-if="practice" class="detail">
-    <!-- Back button header (contextual: catalog vs booked) -->
-    <VHeader :title="hasAnyBooking ? 'Моя практика' : 'Практика'" show-back @back="router.back()" />
+    <!-- Back button header (contextual: catalog vs booked). The «…» kebab
+         (BE-63) is shown to the practice's master OR the curator of the school
+         it belongs to -- the two managers the backend accepts on PATCH -- and
+         routes them straight to the master-zone edit screen. Editable statuses
+         only, mirroring the master hub; see canManage below. -->
+    <VHeader :title="hasAnyBooking ? 'Моя практика' : 'Практика'" show-back @back="router.back()">
+      <template v-if="canManage" #action>
+        <VMenu aria-label="Меню">
+          <template #default="{ close }">
+            <VMenuItem
+              :icon="IconPen"
+              ariaLabel="Редактировать"
+              @click="
+                () => {
+                  goEdit()
+                  close()
+                }
+              "
+            />
+          </template>
+        </VMenu>
+      </template>
+    </VHeader>
 
     <!-- Single unified scroll: the whole screen scrolls in MobileLayout's
          __main (no nested scroll/pinned footer). Hero + body + actions flow. -->
@@ -181,6 +204,14 @@
         <p class="detail__recording-caption">Запись доступна в течение 7 дней после практики</p>
       </template>
 
+      <!-- BE-108: no-show reflection. OUTSIDE the v-if/else-if ladder above
+           on purpose: for a no_show booking the only rung that can fire is
+           the recording, and the owner wants both buttons -- recording
+           first, this one second. -->
+      <VButton v-if="canReflect" variant="secondary" size="lg" block @click="onReflect">
+        Поделиться, как вы
+      </VButton>
+
       <!-- Booked but no active window: NO CTA here. The "записан" state is
            shown in the status row ("Вы записаны"); the old disabled button was
            dead weight and ate vertical space (operator, 2026-06-04). -->
@@ -236,9 +267,19 @@ import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'
 import { useBookingsStore } from '@/stores/bookings'
-import { VLoader, VEmptyState, VButton, VBadge, VAccordion, VCard } from '@/components/ui'
+import {
+  VLoader,
+  VEmptyState,
+  VButton,
+  VBadge,
+  VAccordion,
+  VCard,
+  VMenu,
+  VMenuItem,
+} from '@/components/ui'
 import { VHeader } from '@/components/layout'
 import { useAuthStore } from '@/stores/auth'
+import { useSchoolsHubStore } from '@/stores/schoolsHub'
 import { useToast } from '@/composables/useToast'
 import BookingPopup from '@/components/shared/BookingPopup.vue'
 import PracticeSoldOut from '@/components/shared/PracticeSoldOut.vue'
@@ -246,7 +287,7 @@ import PracticeHeroCard from '@/components/shared/PracticeHeroCard.vue'
 import MasterCard from '@/components/shared/MasterCard.vue'
 import Banner from '@/components/shared/Banner.vue'
 import { formatDate, formatDuration, formatMoney, formatParticipants, isFull } from '@/utils/format'
-import { IconCheck, IconClose, IconWarning } from '@/components/icons'
+import { IconCheck, IconClose, IconWarning, IconPen } from '@/components/icons'
 import { DIFFICULTY_DOTS, DIFFICULTY_LABEL } from '@/utils/displayHelpers'
 import { hasEnded } from '@/utils/bookingStatus'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
@@ -282,6 +323,44 @@ const toast = useToast()
 // Prevent master from booking their own practice (backend also enforces this,
 // but we hide the button entirely to avoid a pointless UX dead-end).
 const isMaster = computed(() => !!practice.value && practice.value.master_id === authStore.user?.id)
+
+// =========================================================================
+// BE-63 on this screen: the practice's master OR the curator of the school it
+// belongs to manages it. School-surface taps (school page feed, calendar,
+// the general feed) land here for BOTH of them, and neither had an edit entry
+// on this read-only user-zone screen. The kebab routes them straight to the
+// master-zone edit screen -- never to the master hub, whose attendance fetch
+// is owner-only and would 404 a curator.
+//
+// Visibility mirrors the master hub: editable statuses only. The session must
+// already be in the master role -- roleGuard('master') on the /master shell
+// silently bounces any other role to /user/dashboard, and auth.switchRole is
+// a tester-only tool, never a navigation step. `schoolsHub.mine` (relation
+// per school) is warmed by both shells' ensureCurator(); a probe still in
+// flight keeps the kebab hidden and lets it appear once the data lands --
+// fail-closed, the same contract the «Школы» tab follows.
+// =========================================================================
+const schoolsHub = useSchoolsHubStore()
+const isCuratorOfSchool = computed((): boolean => {
+  const schoolId = practice.value?.curator_group_id
+  if (!schoolId) return false
+  return schoolsHub.mine.some((g) => g.relation === 'curator' && g.id === schoolId)
+})
+const isEditableStatus = computed((): boolean => {
+  const status = practice.value?.status
+  return status === 'draft' || status === 'scheduled' || status === 'live'
+})
+const canManage = computed(
+  (): boolean =>
+    authStore.role === 'master' &&
+    isEditableStatus.value &&
+    (isMaster.value || isCuratorOfSchool.value),
+)
+function goEdit(): void {
+  const id = practice.value?.id
+  if (!id) return
+  void router.push({ name: 'master-practice-edit', params: { id } })
+}
 
 // W-21: Derive booked state from bookingsStore (survives navigation).
 // Falls back to local flag for immediate feedback after purchase.
@@ -463,6 +542,18 @@ const inFeedbackWindow = computed((): boolean => {
   return isInFeedbackWindow(scheduledMs, practice.value.duration_minutes, now.value)
 })
 
+/**
+ * BE-108: a no_show booking without a reflection -> «Поделиться, как вы».
+ * Reads `myAnyBooking`, not `myBooking`: the latter is the first booking of
+ * this practice in list order and can be a cancelled earlier one, while
+ * `myAnyBooking` falls back to the latest -- the no_show, since a practice
+ * that has started can no longer be booked. The flag is the server's.
+ */
+const canReflect = computed((): boolean => {
+  const b = myAnyBooking.value
+  return !!b && b.status === 'no_show' && !b.has_reflection
+})
+
 // =========================================================================
 // REC-1 (PROMPT №620): watch-recording
 // =========================================================================
@@ -518,7 +609,7 @@ async function refreshRecording(): Promise<void> {
 watch(
   myAnyBooking,
   () => {
-    refreshRecording()
+    void refreshRecording()
   },
   { immediate: true },
 )
@@ -603,9 +694,9 @@ function onPurchased(): void {
   // and this detail view reloads via its own onMounted when the user returns
   // (routes are not kept alive). Refreshing bookings keeps the global store
   // in sync so the booked state is correct on return.
-  bookingsStore.refreshBookings()
+  void bookingsStore.refreshBookings()
   // Frame 5: go to the dedicated booking-confirmed screen.
-  router.push({ name: 'user-booking-confirmed', params: { practiceId: id } })
+  void router.push({ name: 'user-booking-confirmed', params: { practiceId: id } })
 }
 
 /**
@@ -615,24 +706,29 @@ function onPurchased(): void {
  */
 function onSoldOut(): void {
   soldOut.value = true
-  store.fetchPractice(route.params.id as string)
-  bookingsStore.refreshBookings()
+  void store.fetchPractice(route.params.id as string)
+  void bookingsStore.refreshBookings()
 }
 
 /** «Найти другую практику» -> в Календарь (витрина записи). */
 function onFindOther(): void {
   soldOut.value = false
-  router.push({ name: 'user-calendar' })
+  void router.push({ name: 'user-calendar' })
 }
 
 function onCheckin(): void {
   if (!practice.value) return
-  router.push({ name: 'user-checkin', params: { practiceId: practice.value.id } })
+  void router.push({ name: 'user-checkin', params: { practiceId: practice.value.id } })
 }
 
 function onFeedback(): void {
   if (!practice.value) return
-  router.push({ name: 'user-feedback', params: { practiceId: practice.value.id } })
+  void router.push({ name: 'user-feedback', params: { practiceId: practice.value.id } })
+}
+
+function onReflect(): void {
+  if (!practice.value) return
+  void router.push({ name: 'user-reflection', params: { practiceId: practice.value.id } })
 }
 
 async function onCancelBooking(): Promise<void> {
@@ -659,13 +755,13 @@ let clockInterval: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
   const id = route.params.id as string
-  store.fetchPractice(id)
+  void store.fetchPractice(id)
   // B30: refreshMyBookings() (not fetchMyBookings()) -- the list may already
   // be cached from a screen visited earlier in the session, taken BEFORE this
   // practice ended; fetchMyBookings() would then no-op and the attendance
   // badge below (attendancePending) would never clear. refreshMyBookings()
   // always re-fetches, without flashing the status row/Zoom card empty.
-  bookingsStore.refreshMyBookings()
+  void bookingsStore.refreshMyBookings()
   // Refresh window checks every 60s.
   clockInterval = setInterval(() => {
     now.value = Date.now()
@@ -680,7 +776,7 @@ watch(
   (newId, oldId) => {
     if (newId && newId !== oldId) {
       store.clearSelected()
-      store.fetchPractice(newId)
+      void store.fetchPractice(newId)
       justPurchased.value = false
       // REC-1: drop the previous practice's recording link immediately --
       // myAnyBooking's watch will refetch for the new one, but that resolves

@@ -393,16 +393,38 @@ async def project_practice_cancelled(
     master_name: str | None,
     user_ids: list[UUID],
     occurred_at: datetime,
+    cancelled_by: str = "master",
 ) -> int:
-    """Fan out "master cancelled the practice" to the given booked users.
+    """Fan out "the practice was cancelled" to the given booked users.
 
     The caller (cancel_practice) collects the affected user ids BEFORE the
     refund flow mutates booking statuses, then passes them here. Returns the
     number of events written.
+
+    cancelled_by (BE-21) is "master" or "curator" and goes into the snapshot.
+    The EVENT KIND stays practice_cancelled_by_master for both, and that is a
+    weighed decision rather than laziness: diary_events.kind is fenced by the
+    ck_diary_event_kind CHECK constraint, so a new kind costs a migration,
+    plus both lists in config.py (diary_feed_allowed_kinds and
+    diary_feed_categories), plus five frontend files -- and the frontend is
+    out of BE-21's scope. Nothing the student sees is wrong without it: the
+    card renders "Практика отменена" with the practice title, and
+    master_name is not rendered for this kind at all. The lie was in the
+    notification text, which BE-21 fixes at the source.
+
+    THE OPPOSITE CALL WAS MADE IN BE-27: DiaryEventKind.EXTERNAL_ACTIVITY
+    is a new kind, because there the event did not exist at all rather than
+    needing a nuance. The full comparison lives on that enum value.
+
+    NOTE FOR WHOEVER READS THIS NEXT: cancelled_by has NO READER TODAY. It is
+    written and stored and nothing consumes it -- deliberately, as a record,
+    so that the day the card wants to say who cancelled, the history is
+    already there instead of starting from the day someone adds the field.
     """
     snapshot = await _practice_snapshot(
         session, practice, master_name=master_name,
     )
+    snapshot["cancelled_by"] = cancelled_by
     for user_id in user_ids:
         await _add_event(
             session,
@@ -636,4 +658,49 @@ async def upsert_thread_started_event(
         source_id=thread_id,
         snapshot=snapshot,
         text_search=master_name,
+    )
+
+
+async def add_external_activity_event(
+    session: AsyncSession,
+    *,
+    activity,  # noqa: ANN001 -- ORM ExternalActivity
+) -> DiaryEvent:
+    """Project a hand-entered external activity onto the timeline (BE-27).
+
+    ADD, NOT UPSERT, and the name says so: editing and deleting an external
+    activity are out of scope, so there is no second write to reconcile.
+    The upsert shape next door exists for note/dream, whose sources are
+    editable; borrowing it here would build a refresh path that nothing can
+    reach and that the next reader would have to disprove.
+
+    occurred_at IS THE ACTIVITY'S OWN TIME, not created_at. That is the
+    whole point of the feature: Sunday's massage entered on Tuesday sorts
+    into Sunday. Every other projection here passes a created_at because
+    for them the event and the record coincide.
+
+    text_search joins the custom name and the thoughts so the feed's ilike
+    finds an activity by either; _add_event lowercases it. The snapshot
+    carries a PREVIEW of the thoughts rather than the whole text -- same
+    rule as check-in comments, same helper.
+    """
+    snapshot = {
+        "activity_type": activity.activity_type,
+        "custom_activity_name": activity.custom_activity_name,
+        "mood": activity.mood,
+        "thoughts_preview": _preview(activity.thoughts),
+    }
+    searchable = " ".join(
+        part for part in (activity.custom_activity_name, activity.thoughts)
+        if part
+    )
+    return await _add_event(
+        session,
+        user_id=activity.user_id,
+        kind=DiaryEventKind.EXTERNAL_ACTIVITY.value,
+        occurred_at=activity.occurred_at,
+        source_type=DiaryEventSourceType.EXTERNAL_ACTIVITY.value,
+        source_id=activity.id,
+        snapshot=snapshot,
+        text_search=searchable or None,
     )

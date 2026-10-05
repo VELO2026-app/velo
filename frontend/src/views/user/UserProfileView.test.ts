@@ -21,7 +21,7 @@
 // (r => r !== authStore.role)` and `allowedRoles` reads
 // `user.role_switch?.allowed_roles ?? []` (auth.ts:48-51). Every fixture below
 // sets `role_switch: null` (matching this repo's existing fixture convention,
-// e.g. EditProfileView.test.ts/LanguageTimezoneView.test.ts), so
+// e.g. EditProfileView.test.ts/TimezoneSettingsView.test.ts), so
 // `allowedRoles` is always `[]`, `targets` is always `[]`, and the section
 // renders NOTHING in every test here -- confirmed by asserting zero
 // `.role-switch` elements in the master/admin role tests below, where a
@@ -347,7 +347,7 @@ describe('UserProfileView', () => {
       ['Редактировать профиль', 'user-edit-profile'],
       ['Сообщения', 'user-messages'],
       ['Уведомления', 'user-notifications'],
-      ['Язык / Часовой пояс', 'user-language-timezone'],
+      ['Часовой пояс', 'user-timezone'],
       ['Поддержка', 'user-support'],
     ]
 
@@ -406,4 +406,19 @@ describe('UserProfileView', () => {
       expect(replace).toHaveBeenCalledWith({ path: '/' })
     })
   })
+})
+
+it.each([
+  ['pending', 'master-pending'],
+  ['rejected', 'master-pending'],
+  ['verified', 'master-pending'],
+  ['cancelled_by_user', 'master-apply'],
+] as const)('profile reopens the %s application after a fresh session', async (status, name) => {
+  useAuthStore().user = user({ master_application: { status, rejection_reason: null } })
+  mount()
+  await flush()
+  const entry = menuRowByLabel('Заявка мастера')
+  expect(entry).toBeTruthy()
+  entry?.click()
+  expect(push).toHaveBeenCalledWith({ name })
 })

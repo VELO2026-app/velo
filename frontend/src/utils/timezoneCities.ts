@@ -175,9 +175,8 @@ const ALIASES: TimezoneCity[] = [
 // RU entries above win for the popular cities. Computed once at module load;
 // no-ops where Intl.supportedValuesOf is unavailable (older webviews).
 function generatedZones(): TimezoneCity[] {
-  const supportedValuesOf = (
-    Intl as unknown as { supportedValuesOf?: (key: string) => string[] }
-  ).supportedValuesOf
+  const supportedValuesOf = (Intl as unknown as { supportedValuesOf?: (key: string) => string[] })
+    .supportedValuesOf
   if (typeof supportedValuesOf !== 'function') return []
   const covered = new Set([...CURATED, ...ALIASES].map((c) => c.iana))
   const out: TimezoneCity[] = []

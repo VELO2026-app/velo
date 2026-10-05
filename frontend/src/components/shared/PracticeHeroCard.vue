@@ -33,7 +33,9 @@
       <slot name="meta">
         <span class="hero-card__meta-item"> <IconCalendar :size="14" /> {{ date }} </span>
         <!-- duration optional: master review heads omit it (date + participants only). -->
-        <span v-if="duration" class="hero-card__meta-item"> <IconClock :size="14" /> {{ duration }} </span>
+        <span v-if="duration" class="hero-card__meta-item">
+          <IconClock :size="14" /> {{ duration }}
+        </span>
         <span v-if="participants" class="hero-card__meta-item">
           <IconGroup :size="14" /> {{ participants }}
         </span>
@@ -85,8 +87,9 @@ const props = withDefaults(
     participants?: string | null
     /** Optional recurrence label («Пн, Ср, Пт» / «Ежедневно» / «Регулярная»). Omit to hide. */
     recurrence?: string | null
-    /** Content direction (taxonomy) -- picks the hero glyph. */
-    direction?: PracticeDirection | string | null
+    /** Content direction (taxonomy) -- taxonomy values (PracticeDirection)
+     *  pick the dedicated hero glyph; unknown/absent falls back to default. */
+    direction?: string | null
     /** Filled-dot count for difficulty (0 hides the block). */
     difficultyDots?: number
     /** Human difficulty label -- used for aria only (not rendered as text). */

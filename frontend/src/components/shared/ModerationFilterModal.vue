@@ -106,13 +106,7 @@ import { VModal, VChip, VButton } from '@/components/ui'
 import { IconFilter } from '@/components/icons'
 import DatePickerSheet from '@/components/shared/DatePickerSheet.vue'
 import { formatRelative } from '@/utils/adminHelpers'
-
-export interface ModerationFilter {
-  categories: string[]
-  priorities: string[]
-  statuses: string[]
-  date: string
-}
+import type { ModerationFilter } from './moderationFilter'
 
 const props = defineProps<{
   open: boolean

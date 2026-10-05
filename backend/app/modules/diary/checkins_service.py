@@ -22,6 +22,7 @@ from app.core.config import settings
 from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
 from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.diary.models import Checkin, CheckType
+from app.modules.diary.notify_master import notify_master_of_checkin
 from app.modules.diary.projections import upsert_checkin_event
 from app.modules.masters.service import get_master_full_name
 from app.modules.practices.audience_service import assert_viewer_not_blocked
@@ -62,38 +63,57 @@ async def upsert_checkin(
         the tuple shape is kept for backward compatibility with callers.
 
     Raises:
-        NotFoundError: No confirmed booking for this practice.
-        BadRequestError: Outside check-in window.
+        NotFoundError("no_active_booking"): no live booking for this
+            practice, or a live booking that is not CONFIRMED while the
+            window has not closed.
+        ForbiddenError("blocked_by_master"): the master blocked this viewer.
+        BadRequestError("checkin_window_closed"): the practice has started.
+        BadRequestError("checkin_window_not_open"): too early.
         ConflictError: A check-in already exists (resubmission is forbidden).
     """
-    # 1. Find confirmed booking for this user + practice.
-    booking_stmt = (
-        select(Booking)
-        .where(
-            Booking.practice_id == practice_id,
-            Booking.user_id == user.id,
-            Booking.status == BookingStatus.CONFIRMED.value,
+    # 1. Find this user's LIVE booking for the practice, with the practice.
+    #
+    # Any status but cancelled (BE-92): a booking that left CONFIRMED when
+    # the practice started (attendance decided -> attended / no_show) must
+    # still reach the window check below and get the honest "window
+    # closed", not a 404. Cancelled is "no booking": the person gave it up,
+    # and there can be any number of cancelled rows per pair -- the partial
+    # unique index uq_booking_practice_user_active (practice_id, user_id)
+    # WHERE status <> 'cancelled' is what makes this at most one row.
+    #
+    # The practice comes in the same row: bookings.practice_id is
+    # ON DELETE CASCADE, so a found booking always has its practice.
+    #
+    # No existence oracle: a stranger -- no booking, or only a cancelled
+    # one -- gets the same no_active_booking for a practice that exists and
+    # for one that does not; only someone holding a live booking (who knows
+    # the practice exists) gets the 403 / 400 answers below.
+    row = (
+        await session.execute(
+            select(Booking, Practice)
+            .join(Practice, Practice.id == Booking.practice_id)
+            .where(
+                Booking.practice_id == practice_id,
+                Booking.user_id == user.id,
+                Booking.status != BookingStatus.CANCELLED.value,
+            )
         )
-    )
-    result = await session.execute(booking_stmt)
-    booking = result.scalar_one_or_none()
+    ).one_or_none()
 
-    if booking is None:
+    if row is None:
         raise NotFoundError(
-            "No confirmed booking found for this practice"
+            "No active booking found for this practice",
+            code="no_active_booking",
         )
-
-    # 2. Load practice to check time window.
-    practice = await session.get(Practice, practice_id)
-    if practice is None:
-        raise NotFoundError("Practice not found")
+    booking, practice = row
 
     # RETROACTIVE POLICY (B) (H-R2-8, was P5 ПРОМТ №594): of the two
     # retroactive cases create_booking's own gate cannot cover -- a
     # booking made BEFORE the master narrowed the audience, or BEFORE the
     # master blocked this viewer -- only the BLOCK still refuses check-in.
     # Audience narrowing is an impersonal reconfiguration and is
-    # grandfathered by the CONFIRMED booking found above (paid access is
+    # grandfathered by the booking found above (CONFIRMED is required
+    # below, after the window-closed check; paid access is
     # not retroactively stripped -- the R2 symmetry); a block is targeted
     # moderation and revokes the ACTION (this check-in), though not the
     # record (get_practice_detail keeps the practice readable for a
@@ -116,13 +136,24 @@ async def upsert_checkin(
         hours=settings.checkin_window_hours,
     )
 
+    # Closed BEFORE the status check: past the start, any live booking --
+    # still confirmed, or already attended / no_show -- hears that the
+    # window closed.
+    if now >= practice.scheduled_at:
+        raise BadRequestError(
+            "Check-in window has closed", code="checkin_window_closed"
+        )
+    if booking.status != BookingStatus.CONFIRMED.value:
+        raise NotFoundError(
+            "No active booking found for this practice",
+            code="no_active_booking",
+        )
     if now < window_open:
         raise BadRequestError(
             f"Check-in window opens "
-            f"{settings.checkin_window_hours}h before the practice"
+            f"{settings.checkin_window_hours}h before the practice",
+            code="checkin_window_not_open",
         )
-    if now >= practice.scheduled_at:
-        raise BadRequestError("Check-in window has closed")
 
     # 3. Reject resubmission -- a check-in is immutable once recorded.
     existing_stmt = (
@@ -190,6 +221,13 @@ async def upsert_checkin(
         checkin=checkin,
         practice=practice,
         master_name=master_name,
+    )
+
+    # BE-33 item 5: tell the practice's master, one message per check-in.
+    # Same transaction as the row (transactional outbox), so a rolled-back
+    # check-in leaves no notification behind.
+    await notify_master_of_checkin(
+        session, checkin=checkin, practice=practice, author=user,
     )
     return checkin, True
 

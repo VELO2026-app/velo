@@ -242,8 +242,8 @@ async function loadZoomAttendance(): Promise<void> {
 }
 
 onMounted(() => {
-  load()
-  loadZoomAttendance()
+  void load()
+  void loadZoomAttendance()
 })
 </script>
 

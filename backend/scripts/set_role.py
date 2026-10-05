@@ -67,6 +67,9 @@ from app.core.events import (  # noqa: E402  # Phase 6 / T0
     GROUP_MASTERS,
     sync_membership_delta,
 )
+from app.modules.curator_groups.service import (  # noqa: E402  # BE-59
+    announce_pending_master_offers,
+)
 from app.modules.masters.models import MasterProfile  # noqa: E402
 from app.modules.practices.models import Practice, PracticeStatus  # noqa: E402
 from app.modules.users.models import User, UserRole  # noqa: E402
@@ -141,7 +144,19 @@ def _full_name(user: User) -> str:
 
 
 async def _find_user(session: AsyncSession, telegram_id: int) -> User | None:
-    stmt = select(User).where(User.telegram_id == telegram_id)
+    """The user to change, taken FOR NO KEY UPDATE (BE-85).
+
+    Every handler rewrites role and credentials (_set_role), to_master and
+    to_user then the profile, so the users row is locked first and held to
+    the CLI's single commit -- the users -> master_profiles order written in
+    app/modules/users/service.py (ROW LOCK ON users). This is the row's
+    first load in the session, so the lock reads its committed values.
+    """
+    stmt = (
+        select(User)
+        .where(User.telegram_id == telegram_id)
+        .with_for_update(key_share=True)
+    )
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
@@ -400,6 +415,12 @@ async def to_master(session: AsyncSession, user: User, assume_yes: bool) -> bool
             had=had_admin,
             has=_admin_capability(user),
         )
+        # BE-59: capability gained here is a verification, as in the admin
+        # make_master this mirrors -- every school waiting for it asks
+        # "yes / no". A profile that was verified already was announced
+        # when it became so.
+        if not had_master:
+            await announce_pending_master_offers(user.id, session)
 
     if profile is not None:
         status = (profile.data or {}).get("account", {}).get("status")
@@ -428,14 +449,16 @@ async def to_master(session: AsyncSession, user: User, assume_yes: bool) -> bool
         data = copy.deepcopy(profile.data or {})
         acct = data.setdefault("account", {})
         acct["status"] = "verified"
-        acct.setdefault(
-            "verification",
-            {
-                "verified_at": datetime.now(UTC).isoformat(),
-                "verified_by": "cli_setrole",
-                "notes": "re-verified via velo setrole",
-            },
-        )
+        # ASSIGNED, not setdefault-ed: an explicit "verification": None
+        # (pending/rejected/withdrawn) and an EARLIER verification's block
+        # (suspended) both survived setdefault. Same fix as make_master
+        # (BE-104 delivery 2). verified_by stays the tool's name: the CLI has
+        # no admin user behind it.
+        acct["verification"] = {
+            "verified_at": datetime.now(UTC).isoformat(),
+            "verified_by": "cli_setrole",
+            "notes": "re-verified via velo setrole",
+        }
         data.setdefault("availability", {})["is_accepting"] = True
         profile.set_jsonb("data", data)
         _set_role(user, UserRole.MASTER)

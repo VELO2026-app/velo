@@ -161,7 +161,7 @@ function liveDialog(): HTMLElement | null {
 function dialogButton(label: string): HTMLButtonElement | undefined {
   return Array.from(liveDialog()?.querySelectorAll('button') ?? []).find(
     (b) => b.textContent?.trim() === label,
-  ) as HTMLButtonElement | undefined
+  )
 }
 
 /** SC-13b: the overlay is never REMOVED in happy-dom -- it parks mid-leave. */
@@ -337,7 +337,7 @@ describe('MasterProfileView', () => {
       ['Мои промокоды', { name: 'master-promocodes' }],
       ['Вывод средств', { name: 'master-finance' }],
       ['Уведомления', { name: 'master-notifications' }],
-      ['Язык/Часовой пояс', { name: 'master-language-timezone' }],
+      ['Часовой пояс', { name: 'master-timezone' }],
       ['Поддержка', { name: 'master-support' }],
     ] as const)('%s pushes %o', async (label, target) => {
       mount()

@@ -236,7 +236,14 @@ async def test_insights_full_data(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """Master sees correct distributions and counts."""
+    """Master sees correct distributions and counts.
+
+    BE-77: the scores 9, 9, 6, 2 used to read as three buckets (high/fire 2,
+    mid/good 1, low/confused 1). That was right for the 1-3 / 4-7 / 8-10
+    split; the owner's five-zone decision replaced it, so the same scores
+    are asserted as the WHOLE five-key dict -- fire 2, neutral 1, bad 1, and
+    an explicit 0 for low and good, which the three-key form could not say.
+    """
     master_auth = await _make_verified_master(
         client, db_session, telegram_id=89510,
     )
@@ -278,13 +285,9 @@ async def test_insights_full_data(
     assert data["practice_id"] == str(practice.id)
     assert data["participants"] == 5
 
-    assert data["checkins"]["high"] == 2
-    assert data["checkins"]["mid"] == 1
-    assert data["checkins"]["low"] == 1
-
-    assert data["feedbacks"]["fire"] == 2
-    assert data["feedbacks"]["good"] == 1
-    assert data["feedbacks"]["confused"] == 1
+    five = {"bad": 1, "low": 0, "neutral": 1, "good": 0, "fire": 2}
+    assert data["checkins"] == five
+    assert data["feedbacks"] == five
 
     # Only 2 feedback comments (non-null).
     assert data["comments_count"] == 2
@@ -318,8 +321,10 @@ async def test_insights_empty_data(
     assert resp.status_code == 200
     data = resp.json()
     assert data["participants"] == 0
-    assert data["checkins"] == {"high": 0, "mid": 0, "low": 0}
-    assert data["feedbacks"] == {"fire": 0, "good": 0, "confused": 0}
+    # BE-77: the empty answer is all FIVE zones at 0 (was three keys).
+    empty = {"bad": 0, "low": 0, "neutral": 0, "good": 0, "fire": 0}
+    assert data["checkins"] == empty
+    assert data["feedbacks"] == empty
     assert data["comments_count"] == 0
 
 

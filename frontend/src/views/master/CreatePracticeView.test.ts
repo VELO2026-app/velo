@@ -82,10 +82,13 @@ import { createApp, nextTick, type App } from 'vue'
 import CreatePracticeView from '@/views/master/CreatePracticeView.vue'
 import * as practicesApi from '@/api/practices'
 import * as groupsApi from '@/api/groups'
+import * as cgApi from '@/api/curatorGroups'
+import * as mastersApi from '@/api/masters'
 import { ApiResponseError } from '@/api/client'
 import type {
   CreatePracticeRequest,
   MasterProfileResponse,
+  MasterPublicResponse,
   PracticeResponse,
   UserResponse,
 } from '@/api/types'
@@ -96,6 +99,14 @@ vi.mock('@/api/practices')
 // above) -- an unmocked call here would hit the real network in EVERY test
 // in this file, not just the audience-specific ones below.
 vi.mock('@/api/groups')
+
+// FE-24 (GT P5): the fourth option fetches the master's eligible schools on
+// mount -- mocked wholesale for the same reason as groups above.
+vi.mock('@/api/curatorGroups')
+
+// §1.6 delegation: the masterId query resolves the target's display name on
+// mount -- mocked wholesale like the other api modules.
+vi.mock('@/api/masters')
 
 // Seamed at the helper, not at @/api/taxonomy: the real one caches for the whole
 // file (see the banner). Resolving null = catalog cold -> hardcoded fallback.
@@ -109,8 +120,13 @@ import { ensureTaxonomyCatalog } from '@/utils/methodTaxonomy'
 const push = vi.fn()
 const back = vi.fn()
 const replace = vi.fn()
+// §1.6 delegation: the entry points arrive as query params (masterId from the
+// master's public page, groupId from the school page). Mutable so a test
+// mounts WITH its query context.
+const routeQuery: Record<string, string> = {}
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push, back, replace }),
+  useRoute: () => ({ query: routeQuery }),
 }))
 
 const toastError = vi.fn()
@@ -229,7 +245,7 @@ function text(): string {
 function button(label: string): HTMLButtonElement | undefined {
   return Array.from(host?.querySelectorAll('button') ?? []).find((b) =>
     b.textContent?.includes(label),
-  ) as HTMLButtonElement | undefined
+  )
 }
 
 function inputByPlaceholder(placeholder: string): HTMLInputElement | null {
@@ -400,6 +416,16 @@ beforeEach(() => {
   fetchMyPractices.mockReset().mockResolvedValue(undefined)
   refreshMyPractices.mockReset().mockResolvedValue(undefined)
   vi.mocked(groupsApi.getGroups).mockReset().mockResolvedValue({ items: [] })
+  vi.mocked(cgApi.getMyCuratorGroups).mockReset().mockResolvedValue({ items: [] })
+  // §1.6 delegation: no query context and empty lookups by default -- the
+  // master section must not render, and the body must carry no master_id.
+  for (const key of Object.keys(routeQuery)) delete routeQuery[key]
+  vi.mocked(cgApi.getCuratorGroupMembers)
+    .mockReset()
+    .mockResolvedValue({ items: [], total: 0, limit: 50, offset: 0 })
+  vi.mocked(mastersApi.getPublicMaster)
+    .mockReset()
+    .mockRejectedValue(new Error('getPublicMaster not stubbed in this test'))
   push.mockReset()
   back.mockReset()
   replace.mockReset()
@@ -670,8 +696,12 @@ describe('CreatePracticeView', () => {
         currency: 'eur',
         recurrence: null,
         // P5 (PROMPT №594): untouched «Для кого практика» -> the default.
+        // BE-74: curator_group_id always ships too -- null for every
+        // non-school kind (it was an empty curator_group_ids array until a
+        // practice came to belong to exactly one school).
         audience_kind: 'public',
         group_ids: [],
+        curator_group_id: null,
       })
     })
 
@@ -1646,4 +1676,614 @@ describe('CreatePracticeView', () => {
   //    message, a retry of the PATCH alone, or a rollback is a product decision,
   //    not a defect this file may invent an assertion for. Flagged, not fixed.
   // ==========================================================================
+})
+
+// -- «Школы» audience (FE-24 / GT P5) ------------------------------------------
+
+describe('CreatePracticeView -- «Школы» audience (FE-24 / GT P5)', () => {
+  const school = (id: string, name: string, relation: 'curator' | 'master' | 'student') => ({
+    id,
+    name,
+    description: null,
+    curator: { user_id: 'u1', display_name: 'Мария Иванова', avatar_url: null },
+    masters_count: 2,
+    students_count: 3,
+    relation,
+  })
+
+  it('no eligible schools: the fourth option stays out of the radio entirely', async () => {
+    mount()
+    await flush()
+
+    expect(button('Школы')).toBeUndefined()
+  })
+
+  it('with eligible schools: option appears, student-relation schools are filtered out, and the picked chip ships curator_group_id', async () => {
+    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+      items: [
+        school('sc1', 'Тихая школа', 'curator'),
+        school('sc2', 'Утренняя школа', 'master'),
+        school('sc3', 'Ученическая', 'student'),
+      ],
+    })
+    mount()
+    await flush()
+    await fillMinimalForm()
+
+    button('Школы')?.click()
+    await flush()
+
+    // Only curator|master relations are targetable -- the student one is out.
+    const chips = Array.from(host?.querySelectorAll<HTMLElement>('.v-chip') ?? [])
+    expect(chips.map((c) => c.textContent?.trim())).toEqual(['Тихая школа', 'Утренняя школа'])
+
+    // BE-74: two taps on two schools leave ONE school -- the second
+    // replaces the first (it used to ship both, ['sc1', 'sc2'] was a valid
+    // body while a practice could target several schools).
+    chips[0]?.click()
+    await flush()
+    chips[1]?.click()
+    await flush()
+    submitForm()
+    await flush()
+
+    expect(sentBody().audience_kind).toBe('curator_groups')
+    expect(sentBody().curator_group_id).toBe('sc2')
+    // The unused target ships empty.
+    expect(sentBody().group_ids).toEqual([])
+  })
+
+  it('a school picked and then abandoned for «Публичная» does not ship (curator_group_id is null)', async () => {
+    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+      items: [school('sc1', 'Тихая школа', 'curator')],
+    })
+    mount()
+    await flush()
+    await fillMinimalForm()
+
+    button('Школы')?.click()
+    await flush()
+    host?.querySelector<HTMLElement>('.v-chip')?.click()
+    await flush()
+    button('Публичная')?.click()
+    await flush()
+    submitForm()
+    await flush()
+
+    expect(vi.mocked(practicesApi.createPractice)).toHaveBeenCalledTimes(1)
+    expect(sentBody().audience_kind).toBe('public')
+    expect(sentBody().curator_group_id).toBeNull()
+  })
+
+  it('«Школы» with nothing picked blocks submit with the field error', async () => {
+    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+      items: [school('sc1', 'Тихая школа', 'curator')],
+    })
+    mount()
+    await flush()
+    await fillMinimalForm()
+
+    button('Школы')?.click()
+    await flush()
+    submitForm()
+    await flush()
+
+    expect(vi.mocked(practicesApi.createPractice)).not.toHaveBeenCalled()
+    expect(text()).toContain('Выберите школу')
+  })
+})
+
+// =============================================================================
+// §1.6 delegation: whose practice is being created (FE-92, BE-102)
+// =============================================================================
+// masterId + groupId (the master's public page CTA) and groupId (the school
+// page CTA) surface the master context. The STUB tests that stood here
+// («warns and blocks submit») pinned the interim -- right until BE-102 let
+// POST /practices take master_id; their property no longer exists. Now: a
+// foreign target sends master_id AND the school (with either school
+// audience), the result is the master's draft, and the curator goes back to
+// the school. Without the school another master is never offered.
+describe('§1.6 delegation: the master context (FE-92)', () => {
+  function created(overrides = {}) {
+    return practice({ id: 'p_for_master', status: 'draft', ...overrides })
+  }
+
+  it('masterId + groupId: the master is fixed; submit sends master_id AND the school, no second request', async () => {
+    routeQuery.masterId = 'm_pub'
+    routeQuery.groupId = 'g1'
+    // The target master confirms «Йога» — fillMinimalForm picks exactly that;
+    // the master-vs-caller divergence is exercised by the picker tests below.
+    vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
+      display_name: 'Анна Ли',
+      methods: ['Йога', 'Йога — Хатха-йога'],
+    } as MasterPublicResponse)
+    vi.mocked(practicesApi.createPractice).mockResolvedValue(created())
+    mount()
+    await flush()
+    expect(text()).toContain('Анна Ли')
+
+    await fillMinimalForm()
+    submitForm()
+    await flush()
+
+    const body = vi.mocked(practicesApi.createPractice).mock.calls[0]![0]
+    expect(body.master_id).toBe('m_pub')
+    expect(body.curator_group_id).toBe('g1')
+    expect(body.audience_kind).toBe('public')
+    // BE-102 publish: the backend published it in the create request (this
+    // pinned «the draft stays a draft», right under the 1 October ruling);
+    // the front sends no second request either way.
+    expect(practicesApi.updatePractice).not.toHaveBeenCalled()
+    expect(toastSuccess).toHaveBeenCalledWith('Практика опубликована — мастер получит уведомление')
+    expect(replace).toHaveBeenCalledWith({ name: 'master-curator-group', params: { id: 'g1' } })
+  })
+
+  it("masterId WITHOUT the school: no «Мастер» section, the practice is the caller's own", async () => {
+    routeQuery.masterId = 'm_pub'
+    vi.mocked(practicesApi.createPractice).mockResolvedValue(created({ status: 'draft' }))
+    mount()
+    await flush()
+    expect(text()).not.toContain('Анна Ли')
+    expect(mastersApi.getPublicMaster).not.toHaveBeenCalled()
+
+    await fillMinimalForm()
+    submitForm()
+    await flush()
+    const body = vi.mocked(practicesApi.createPractice).mock.calls[0]![0]
+    expect(body.master_id).toBeUndefined()
+    expect(body.curator_group_id).toBeNull()
+  })
+
+  it('a dedup for the master: «Такая практика уже есть у мастера», back to the school', async () => {
+    routeQuery.masterId = 'm_pub'
+    routeQuery.groupId = 'g1'
+    // fillMinimalForm needs the master's confirmed set to offer «Йога».
+    vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
+      display_name: 'Анна Ли',
+      methods: ['Йога', 'Йога — Хатха-йога'],
+    } as MasterPublicResponse)
+    vi.mocked(practicesApi.createPractice).mockResolvedValue({
+      ...created(),
+      deduplicated: true,
+    } as never)
+    mount()
+    await flush()
+    await fillMinimalForm()
+    submitForm()
+    await flush()
+    expect(toastInfo).toHaveBeenCalledWith('Такая практика уже есть у мастера')
+    expect(replace).toHaveBeenCalledWith({ name: 'master-curator-group', params: { id: 'g1' } })
+  })
+
+  it.each([
+    [400, 'master_not_in_school', 'Этот мастер не состоит в школе или не верифицирован'],
+    [403, 'curator_only', 'Создавать практику за мастера может только куратор школы'],
+    [400, 'master_id_requires_school', 'Выберите школу, в которой создаётся практика'],
+    // FE-92 follow-up: the unusable school has its own code now.
+    [
+      400,
+      'curator_group_not_usable',
+      'Школа недоступна: она отключена или вы в ней больше не состоите',
+    ],
+  ] as const)('refusal %i %s -> its toast; the form keeps its input', async (status, code, msg) => {
+    routeQuery.masterId = 'm_pub'
+    routeQuery.groupId = 'g1'
+    // fillMinimalForm needs the master's confirmed set to offer «Йога».
+    vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
+      display_name: 'Анна Ли',
+      methods: ['Йога', 'Йога — Хатха-йога'],
+    } as MasterPublicResponse)
+    vi.mocked(practicesApi.createPractice)
+      .mockRejectedValueOnce(new ApiResponseError(status, 'refused', code))
+      .mockResolvedValueOnce(created())
+    mount()
+    await flush()
+    await fillMinimalForm()
+    submitForm()
+    await flush()
+
+    expect(toastError).toHaveBeenCalledWith(msg)
+    expect(replace).not.toHaveBeenCalled()
+    // The input survived: a second submit sends the same form again.
+    const first = vi.mocked(practicesApi.createPractice).mock.calls[0]![0]
+    submitForm()
+    await flush()
+    const second = vi.mocked(practicesApi.createPractice).mock.calls[1]![0]
+    expect(second).toEqual(first)
+  })
+
+  it('groupId query: lists visible school masters, «Я» stays creatable', async () => {
+    routeQuery.groupId = 'g1'
+    vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue({
+      items: [
+        {
+          user_id: 'u1',
+          name: 'Сама куратор',
+          kind: 'master',
+          avatar_url: null,
+          joined_at: '2026-09-01T00:00:00Z',
+          is_visible: true,
+        },
+        {
+          user_id: 'm2',
+          name: 'Пётр Романов',
+          kind: 'master',
+          avatar_url: null,
+          joined_at: '2026-09-01T00:00:00Z',
+          is_visible: true,
+        },
+        {
+          user_id: 'm3',
+          name: 'Заморожен',
+          kind: 'master',
+          avatar_url: null,
+          joined_at: '2026-09-01T00:00:00Z',
+          is_visible: false,
+        },
+      ],
+      total: 3,
+      limit: 50,
+      offset: 0,
+    })
+    mount()
+    await flush()
+    expect(text()).toContain('Пётр Романов')
+    // An invisible (suspended) master is not offered.
+    expect(text()).not.toContain('Заморожен')
+    // Default «Я»: no warning, submit enabled -- the historical flow.
+    expect(text()).not.toContain('Создание для другого мастера пока недоступно')
+    expect(button('Создать практику')?.disabled).toBe(false)
+
+    await fillMinimalForm()
+    submitForm()
+    await flush()
+    expect(vi.mocked(practicesApi.createPractice)).toHaveBeenCalled()
+    // No master_id in the body, ever: the field does not exist on the wire
+    // until the backend task lands.
+    expect('master_id' in sentBody()).toBe(false)
+  })
+
+  it("groupId query: «Я» alone already sees only the school's two audience kinds (owner 2026-10-05)", async () => {
+    routeQuery.groupId = 'g1'
+    mount()
+    await flush()
+
+    // The restriction rides the SCHOOL ENTRY, not the master pick: with the
+    // default «Я» the audience radio still renders («Публичная» is on) but
+    // neither personal kind is offered.
+    const radios = (): HTMLButtonElement[] =>
+      Array.from(host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? [])
+    const labels = radios().map((b) => b.textContent ?? '')
+    expect(labels.some((l) => l.includes('Публичная'))).toBe(true)
+    expect(labels.some((l) => l.includes('Все мои ученики'))).toBe(false)
+    expect(labels.some((l) => l.includes('Конкретные группы'))).toBe(false)
+  })
+
+  it("groupId query: picking a school master limits the audience to the school's two and sends the school with «public» too", async () => {
+    routeQuery.groupId = 'g1'
+    vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue({
+      items: [
+        {
+          user_id: 'm2',
+          name: 'Пётр Романов',
+          kind: 'master',
+          avatar_url: null,
+          joined_at: '2026-09-01T00:00:00Z',
+          is_visible: true,
+        },
+      ],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    })
+    // The picked master confirms «Йога» — fillMinimalForm picks exactly that.
+    vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
+      display_name: 'Пётр Романов',
+      methods: ['Йога', 'Йога — Хатха-йога'],
+    } as MasterPublicResponse)
+    vi.mocked(practicesApi.createPractice).mockResolvedValue(created())
+    mount()
+    await flush()
+
+    // VRadioGroup options are role="radio" BUTTONS, not labels.
+    const radios = (): HTMLButtonElement[] =>
+      Array.from(host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? [])
+    const option = radios().find((b) => b.textContent?.includes('Пётр Романов'))
+    if (!option) throw new Error('school master option not rendered')
+    option.click()
+    await flush()
+
+    // Only «для всех» and «ученикам школы» remain on offer.
+    const audienceLabels = radios().map((b) => b.textContent ?? '')
+    expect(audienceLabels.some((l) => l.includes('Все мои ученики'))).toBe(false)
+
+    await fillMinimalForm()
+    submitForm()
+    await flush()
+    const body = vi.mocked(practicesApi.createPractice).mock.calls[0]![0]
+    expect(body.master_id).toBe('m2')
+    expect(body.curator_group_id).toBe('g1')
+    expect(['public', 'curator_groups']).toContain(body.audience_kind)
+  })
+
+  // FE-92 follow-up: «Использовать шаблон» offers the CALLER's practices --
+  // hidden while another master is targeted, shown for «Я».
+  function templateSection(): boolean {
+    return text().includes('Использовать шаблон')
+  }
+
+  it('templates: hidden for a fixed foreign master (masterId + groupId)', async () => {
+    routeQuery.masterId = 'm_pub'
+    routeQuery.groupId = 'g1'
+    mount()
+    await flush()
+    expect(templateSection()).toBe(false)
+  })
+
+  it('templates: shown for «Я», hidden once a school master is picked', async () => {
+    routeQuery.groupId = 'g1'
+    vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue({
+      items: [
+        {
+          user_id: 'm2',
+          name: 'Пётр Романов',
+          kind: 'master',
+          avatar_url: null,
+          joined_at: '2026-09-01T00:00:00Z',
+          is_visible: true,
+        },
+      ],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    })
+    mount()
+    await flush()
+    expect(templateSection()).toBe(true)
+    Array.from(host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? [])
+      .find((b) => b.textContent?.includes('Пётр Романов'))!
+      .click()
+    await flush()
+    expect(templateSection()).toBe(false)
+  })
+
+  // -- The pickers offer the TARGET master's confirmed methods (BE-102): the
+  //    backend validates direction/style against the practice's master, so a
+  //    picker fed with the caller's own methods produced the submit-time
+  //    direction_not_confirmed / style_not_confirmed this suite now
+  //    prevents at the source. --
+
+  function directionOptions(): string[] {
+    return Array.from(selectByPlaceholder('Направление практики')?.options ?? []).map(
+      (o) => o.textContent?.trim() ?? '',
+    )
+  }
+
+  it("masterId + groupId: the pickers offer the MASTER's methods — a direction only he holds is creatable", async () => {
+    routeQuery.masterId = 'm_pub'
+    routeQuery.groupId = 'g1'
+    // The caller (beforeEach) is confirmed for Йога but NOT Медитация; the
+    // target master is the reverse. Exactly the asymmetry that used to 400
+    // on submit.
+    vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
+      display_name: 'Анна Ли',
+      methods: ['Медитация'],
+    } as MasterPublicResponse)
+    vi.mocked(practicesApi.createPractice).mockResolvedValue(created())
+    mount()
+    await flush()
+
+    const opts = directionOptions()
+    expect(opts).toContain('Медитация')
+    expect(opts).not.toContain('Йога')
+
+    typeInto(inputByPlaceholder('Название'), 'Утренняя практика')
+    choose(selectByPlaceholder('Направление практики'), 'meditation')
+    await flush()
+    choose(selectByPlaceholder('Уровень сложности'), 'beginner')
+    choose(selectByPlaceholder('Длительность'), '60')
+    await flush()
+    await pickDate(25)
+    await pickDefaultTime()
+    submitForm()
+    await flush()
+
+    const body = vi.mocked(practicesApi.createPractice).mock.calls[0]![0]
+    expect(body.direction).toBe('meditation')
+    expect(body.master_id).toBe('m_pub')
+  })
+
+  it("groupId query: picking a school master swaps the direction filter to HIS methods; «Я» restores the caller's", async () => {
+    routeQuery.groupId = 'g1'
+    vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue({
+      items: [
+        {
+          user_id: 'm2',
+          name: 'Пётр Романов',
+          kind: 'master',
+          avatar_url: null,
+          joined_at: '2026-09-01T00:00:00Z',
+          is_visible: true,
+        },
+      ],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    })
+    // Per-id: the caller confirms Йога, the school master Медитация.
+    vi.mocked(mastersApi.getPublicMaster).mockImplementation(async (id: string) =>
+      id === 'm2'
+        ? ({ methods: ['Медитация'] } as MasterPublicResponse)
+        : ({ methods: ['Йога'] } as MasterPublicResponse),
+    )
+    mount()
+    await flush()
+
+    // «Я» by default: the caller's own set, no master lookup yet.
+    let opts = directionOptions()
+    expect(opts).toContain('Йога')
+    expect(opts).not.toContain('Медитация')
+    expect(mastersApi.getPublicMaster).not.toHaveBeenCalled()
+
+    Array.from(host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? [])
+      .find((b) => b.textContent?.includes('Пётр Романов'))!
+      .click()
+    await flush()
+    expect(mastersApi.getPublicMaster).toHaveBeenCalledWith('m2')
+    opts = directionOptions()
+    expect(opts).toContain('Медитация')
+    expect(opts).not.toContain('Йога')
+
+    Array.from(host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? [])
+      .find((b) => b.textContent?.includes('Я'))!
+      .click()
+    await flush()
+    opts = directionOptions()
+    expect(opts).toContain('Йога')
+    expect(opts).not.toContain('Медитация')
+  })
+
+  it('groupId query: a direction the newly picked master does not confirm is cleared from the form', async () => {
+    routeQuery.groupId = 'g1'
+    vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue({
+      items: [
+        {
+          user_id: 'm2',
+          name: 'Пётр Романов',
+          kind: 'master',
+          avatar_url: null,
+          joined_at: '2026-09-01T00:00:00Z',
+          is_visible: true,
+        },
+      ],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    })
+    vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
+      methods: ['Медитация'],
+    } as MasterPublicResponse)
+    mount()
+    await flush()
+
+    // Picked while «Я» (the caller confirms Йога).
+    choose(selectByPlaceholder('Направление практики'), 'yoga')
+    await flush()
+
+    Array.from(host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? [])
+      .find((b) => b.textContent?.includes('Пётр Романов'))!
+      .click()
+    await flush()
+
+    // The stale pick is gone: the select is back on its placeholder -- the
+    // value the backend would have refused on submit cannot ride along.
+    expect(selectByPlaceholder('Направление практики')?.value).toBe('')
+  })
+
+  it("masterId + groupId: the master's methods failing to load keeps the pickers empty and says why", async () => {
+    routeQuery.masterId = 'm_pub'
+    routeQuery.groupId = 'g1'
+    vi.mocked(mastersApi.getPublicMaster).mockRejectedValue(new Error('offline'))
+    mount()
+    await flush()
+
+    // Fail-CLOSED: only the placeholder option, never the full catalogue.
+    expect(directionOptions()).toEqual(['Направление практики'])
+    expect(toastError).toHaveBeenCalledWith('Не удалось загрузить методы мастера')
+
+    // And no direction can ride along to the API: the title is filled, so
+    // «Выберите направление» is what blocks the submit.
+    typeInto(inputByPlaceholder('Название'), 'Утренняя практика')
+    submitForm()
+    await flush()
+    expect(vi.mocked(practicesApi.createPractice)).not.toHaveBeenCalled()
+    expect(text()).toContain('Выберите направление')
+  })
+
+  it('no context: no master section at all', async () => {
+    mount()
+    await flush()
+    expect(text()).not.toContain('Мастер')
+
+    await fillMinimalForm()
+    submitForm()
+    await flush()
+    expect(vi.mocked(practicesApi.createPractice)).toHaveBeenCalled()
+  })
+
+  it('required sections carry the red * marker; optional ones do not', async () => {
+    mount()
+    await flush()
+    const starred = (title: string): boolean => {
+      const h2 = Array.from(host?.querySelectorAll('h2') ?? []).find((x) =>
+        x.textContent?.includes(title),
+      )
+      return h2?.querySelector('.cp-req') != null
+    }
+    expect(starred('Основное')).toBe(true)
+    expect(starred('Расписание')).toBe(true)
+    expect(starred('Повторение')).toBe(false)
+    expect(starred('Описание')).toBe(false)
+  })
+
+  it('a failed submit scrolls the first invalid field into view', async () => {
+    if (!('scrollIntoView' in Element.prototype)) {
+      Object.defineProperty(Element.prototype, 'scrollIntoView', {
+        value: vi.fn(),
+        configurable: true,
+        writable: true,
+      })
+    }
+    const scrollSpy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {})
+    mount()
+    await flush()
+    // Nothing filled: validate() fails on the title (the first required).
+    submitForm()
+    await flush()
+    expect(vi.mocked(practicesApi.createPractice)).not.toHaveBeenCalled()
+    expect(scrollSpy).toHaveBeenCalledTimes(1)
+    // The scroll lands ON the first unfilled required field, not elsewhere.
+    const scrolled = scrollSpy.mock.instances[0] as Element | undefined
+    expect(scrolled).toBe(host?.querySelector('.v-input--error'))
+    expect(scrolled?.querySelector('input')?.placeholder).toBe('Название')
+    expect(text()).toContain('Введите название')
+    scrollSpy.mockRestore()
+  })
+
+  it('with the title filled, the scroll targets the NEXT unfilled field', async () => {
+    if (!('scrollIntoView' in Element.prototype)) {
+      Object.defineProperty(Element.prototype, 'scrollIntoView', {
+        value: vi.fn(),
+        configurable: true,
+        writable: true,
+      })
+    }
+    const scrollSpy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {})
+    mount()
+    await flush()
+    typeInto(inputByPlaceholder('Название'), 'Утренняя практика')
+    submitForm()
+    await flush()
+    expect(vi.mocked(practicesApi.createPractice)).not.toHaveBeenCalled()
+    // The first unfilled required field is now the direction select.
+    const scrolled = scrollSpy.mock.instances[0] as Element | undefined
+    expect(scrolled).toBe(host?.querySelector('.v-select--error'))
+    expect(scrolled?.textContent).toContain('Выберите направление')
+    scrollSpy.mockRestore()
+  })
+
+  it('error slots are constant-height: a failed submit inserts no new nodes', async () => {
+    // The zero-shift contract (owner 2026-10-01): every error-capable field
+    // owns a permanent reserved slot -- the failed submit only toggles
+    // --show inside existing nodes, so nothing below can jump.
+    mount()
+    await flush()
+    const slots = (): number => host?.querySelectorAll('.create-practice__field-error').length ?? 0
+    const before = slots()
+    expect(before).toBeGreaterThan(0)
+    submitForm()
+    await flush()
+    expect(slots()).toBe(before)
+    expect(host?.querySelectorAll('.create-practice__field-error--show').length).toBeGreaterThan(0)
+  })
 })

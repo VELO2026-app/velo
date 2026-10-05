@@ -34,17 +34,28 @@
 // RE-MEASURED (GT-15). The paragraph above is a snapshot of the №747
 // reconciliation and has drifted twice since -- GT-14 added nine curator
 // codes and GT-15 adds a tenth, neither round updating the totals. Today,
-// re-running that same command: 34 codes raised as a literal, 30 of them
-// here, 4 deliberately absent (practice_full and zoom_meeting_not_failed
-// for the reasons above, plus invalid_cursor and too_many_requests, which
-// no screen shows a phrase for). Total table size: 34.
+// re-running that same command at GT-15: 34 codes raised as a literal, 30
+// of them here, 4 deliberately absent (practice_full and
+// zoom_meeting_not_failed for the reasons above, plus invalid_cursor and
+// too_many_requests, which no screen shows a phrase for). Total table size
+// then: 34.
+//
+// RE-MEASURED AGAIN (BE-92), same command, with BE-92's three check-in
+// codes in: 47 codes raised as a literal, 34 of them here, 13 absent -- the
+// 4 above plus 9 that arrived after GT-15 without a phrase (audio_invalid,
+// audio_too_large, curator_cannot_cancel_series, delivery_window_empty,
+// recipient_override_not_allowed, speech_not_recognized,
+// transcription_failed, transcription_not_configured,
+// transcription_unavailable -- recorded in the BE-92 report, not added
+// here). Total table size: 38 (34 + the 2 constant-raised codes below +
+// practice_not_found + validation_error).
 //
 // AND THAT COMMAND HAS A BLIND SPOT worth naming rather than repeating: it
 // matches a STRING LITERAL after `code=`, so a code raised through a
 // constant is invisible to it. Two are: curator_group_name_taken
 // (_NAME_TAKEN_CODE) and group_creation_not_allowed (_NO_CREATE_RIGHT_CODE),
 // both in curator_groups/service.py. Counting raise sites rather than
-// literals puts the real number at 36.
+// literals put the real number at 36 at GT-15, and puts it at 49 at BE-92.
 //
 // SEEDED from the 7 call sites that already carried a hand-written Russian
 // phrase for a specific code (verbatim, not re-worded -- those were written
@@ -66,6 +77,7 @@ export const ERROR_MESSAGES: Record<string, string> = {
 
   // New -- written from each raise site's own English message.
   already_master: 'Вы уже мастер',
+  master_offer_not_found: 'Назначение недействительно или уже отменено',
   blocked_by_master: 'Мастер этой практики закрыл вам доступ',
   master_profile_not_found: 'Профиль мастера не найден',
   master_profile_not_verified: 'Профиль мастера ещё не подтверждён',
@@ -79,7 +91,17 @@ export const ERROR_MESSAGES: Record<string, string> = {
   practice_not_found: 'Практика не найдена',
   role_not_allowed: 'Эта роль недоступна для вашего аккаунта',
 
-  // Curator groups (schools). Ten codes; six were already reachable before
+  // Check-in (BE-92): the two 404s and the two window 400s of
+  // diary/checkins_service.py upsert_checkin used to arrive as the generic
+  // not_found / bad_request. no_active_booking is ONE code for «брони нет»,
+  // «бронь отменена», «бронь не подтверждена» and «такой практики нет» on
+  // purpose: telling them apart would make the endpoint an existence oracle.
+  no_active_booking: 'У вас нет подтверждённой брони на эту практику',
+  checkin_window_closed: 'Check-in закрыт — практика уже началась',
+  checkin_window_not_open: 'Check-in ещё не открыт — он откроется ближе к началу практики',
+
+  // Curator groups (schools). Ten codes before BE-79 added two more
+  // (blocked_in_group, cannot_block_curator); of the ten, six were reachable before
   // this table knew about them, three were added to their raise sites so the
   // 404s stopped arriving as the generic `not_found`, and the tenth
   // (group_creation_not_allowed, GT-15) arrives with its raise site. Three of
@@ -89,13 +111,34 @@ export const ERROR_MESSAGES: Record<string, string> = {
   // telling them their profile is unconfirmed would send them to the wrong
   // screen to fix a thing that is not broken. Founding a school is a right
   // an admin grants, and only an admin can grant it.
-  group_creation_not_allowed:
-    'Заводить школы может мастер, которому администратор выдал это право',
+  group_creation_not_allowed: 'Заводить школы может мастер, которому администратор выдал это право',
   curator_cannot_leave:
     'Куратор не может покинуть свою школу. Передайте её другому мастеру или удалите.',
   own_group: 'Это ваша школа',
-  master_required: 'Ссылка предназначена для верифицированных мастеров',
+  // GT-27: it used to say «Ссылка предназначена для верифицированных
+  // мастеров» -- the master invite link refusing an unverified account.
+  // That link is gone; the code now comes from appointing a school
+  // master, so the phrase had to stop talking about a link.
+  master_required: 'Назначить мастером школы можно только верифицированного мастера',
   blocked_by_curator: 'Вступление в эту школу недоступно',
+  // BE-79 (DRAFT wording, owner reviews): the person is blocked in THIS
+  // school (join by link refused, 403) / the curator tried to block
+  // themselves (409).
+  blocked_in_group: 'Вы заблокированы в этой школе',
+  cannot_block_curator: 'Куратора школы нельзя заблокировать',
+  // FE-92 / BE-102 (DRAFT wording): a curator creating a practice for a
+  // master of the school. The fourth refusal, a school that is not usable,
+  // is curator_group_not_usable below.
+  master_id_requires_school: 'Выберите школу, в которой создаётся практика',
+  master_not_in_school: 'Этот мастер не состоит в школе или не верифицирован',
+  curator_only: 'Создавать практику за мастера может только куратор школы',
+  // FE-92 follow-up (DRAFT wording): the school refusal now has its own code
+  // (practices/service.py, every cause: switched off, inactive, not a member,
+  // deleted mid-create).
+  // BE-102 publish (DRAFT wording): for a master a curator creates a
+  // standalone practice or a series root, not an occurrence of a series.
+  curator_cannot_add_occurrence: 'Куратор не может добавить занятие в серию мастера',
+  curator_group_not_usable: 'Школа недоступна: она отключена или вы в ней больше не состоите',
   transfer_pending:
     'Предложение уже отправлено. Сначала отмените его, затем предложите другому мастеру.',
   // One code for: неизвестный токен, отозванная ссылка, удалённая школа и
@@ -106,6 +149,10 @@ export const ERROR_MESSAGES: Record<string, string> = {
   transfer_not_found: 'Предложение о передаче не найдено',
   // One code for ученика, постороннего, скрытого мастера и самого куратора.
   transfer_target_not_member: 'Передать школу можно только мастеру из её состава',
+  // BE-108, raised through constants in diary/service.py -- the same blind
+  // spot of the literal-count command named above.
+  reflection_not_available: 'Поделиться можно только по пропущенной практике',
+  reflection_already_submitted: 'Вы уже поделились -- спасибо',
 
   // VeloError base-class defaults (no module-specific code set).
   unauthorized: 'Сессия истекла — войдите заново',

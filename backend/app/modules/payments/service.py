@@ -84,9 +84,16 @@ async def record_user_ledger(
     session.add(entry)
     await session.flush()
 
-    # Recalculate cached balance with row lock (P-07).
+    # Recalculate cached balance with row lock (P-07). FOR NO KEY UPDATE,
+    # not FOR UPDATE (§0 §8: the strength follows what is written, and
+    # balance_cents is not a key column). It still excludes every other
+    # balance writer (NKU x NKU, NKU x purchase's FOR UPDATE), but no longer
+    # the KEY SHARE an FK check takes -- which closed a cycle with
+    # block_student (its master_student upsert holds KEY SHARE on the
+    # student's row while it waits for a practice a refunding cancellation
+    # holds): see PRACTICE ROW ORDER in practices/service.py.
     user = await session.get(
-        User, user_id, with_for_update=True,
+        User, user_id, with_for_update={"key_share": True},
     )
     balance = await _sum_user_balance(user_id, session)
     # Set via normal assignment so SQLAlchemy tracks the change.

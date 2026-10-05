@@ -6,15 +6,16 @@
 # master's COMPLETED practices -- the cross-practice counterpart to E1's
 # per-practice list_practice_reviews.
 #
-# REUSE (consolidate, do not duplicate): the rating-bucket mapping (1-3
-# confused / 4-7 good / 8-10 fire) and the attention threshold come from
+# REUSE (consolidate, do not duplicate): the score -> zone mapping
+# (score_zone, BE-77) and the attention threshold come from
 # diary.insights_service; the reviewer's display name comes from the shared
 # users.display_name formatter (S-1c). Neither import forms a cycle
 # (users.helpers is import-free; diary.insights_service does not import
 # masters reviews).
 #
-# attention=True narrows the feed to the negative (confused) bucket for the
-# dashboard "Требуют внимания" block; attention=False returns the full feed.
+# attention=True narrows the feed to ratings 1-4 (zones bad and low,
+# ATTENTION_RATING_MAX) for the dashboard "Требуют внимания" block;
+# attention=False returns the full feed.
 # Newest-first, paginated. SESSION RULES: read-only, no commit (P-01).
 # =============================================================================
 
@@ -26,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.diary.insights_service import (
     ATTENTION_RATING_MAX,
-    rating_bucket,
+    score_zone,
 )
 from app.modules.diary.models import Feedback
 from app.modules.practices.models import Practice, PracticeStatus
@@ -49,13 +50,15 @@ async def list_master_reviews(
     Each feedback is joined to its author (name + avatar) and its practice
     (title). Scope is the master's own COMPLETED practices only -- a feedback
     on another master's practice, or on a not-yet-completed one, never appears.
-    When attention=True the page is narrowed to the negative bucket
-    (rating 1-3) for the dashboard "needs attention" feed.
+    When attention=True the page is narrowed to the reviews that need
+    attention (rating 1-4, ATTENTION_RATING_MAX) for the dashboard
+    "needs attention" feed.
 
     Args:
         master_id: The authenticated master's user id (ownership scope).
         session: Read session.
-        attention: When True, return only negative reviews (rating 1-3).
+        attention: When True, return only reviews that need attention
+            (rating <= ATTENTION_RATING_MAX, i.e. 1-4).
         limit: Page size.
         offset: Page offset.
 
@@ -97,7 +100,7 @@ async def list_master_reviews(
             "user_id": author.id,
             "reviewer_name": display_name(author.first_name, author.last_name),
             "avatar_url": author.avatar_url,
-            "rating": rating_bucket(feedback.rating),
+            "rating": score_zone(feedback.rating),
             "comment": feedback.comment,
             "practice_title": practice_title,
             "created_at": feedback.created_at,

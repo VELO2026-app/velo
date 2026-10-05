@@ -2,31 +2,24 @@
 // VELO Frontend -- ReflectionView Screen Tests
 // =============================================================================
 //
-// WHY: this is the third and last FormShell consumer, and the only one still
-// UNWIRED after №444. Its sibling CheckinView had a real gap -- a deep link
-// whose practice fetch FAILED rendered a live form for a POST the backend would
-// refuse, because the screen never read `practicesStore.selectedError` and
-// FormShell had no error rung. FormShell now HAS `loadError` + a `retry` emit.
-// ReflectionView passes NEITHER and reads `selectedError` nowhere, so it carries
-// the identical shape. This file PINS that shape as it is today (see THE GAP
-// below) rather than fixing it -- coverage only.
+// WHY: this is the third and last FormShell consumer. Its sibling CheckinView
+// had a real gap -- a deep link whose practice fetch FAILED rendered a live form
+// for a POST the backend would refuse. FormShell grew `loadError` + a `retry`
+// emit in №444 and this screen was wired to them in №445; the error-rung tests
+// below hold that wiring.
 //
-// The screen is also a STUB by design (TD-REFLECTION, .vue:11): submitReflection
-// persists NOTHING because `POST /practices/{id}/reflection` does not exist yet
-// (diary.ts:130-145). That is not a defect to report -- it is the documented
-// contract, and this file's job is to hold the UI honest to it: the flow
-// completes, the dashboard banner is dismissed client-side, and NOT ONE byte
-// reaches the diary API. The last part is asserted at the network (see
-// "the stub is honest") and is the tripwire that fires the day the endpoint
-// lands.
+// SUBMIT (BE-108): submitReflection POSTs `/practices/{id}/reflection` through
+// `createReflection`, and on success the view refreshes the bookings list so the
+// server's `has_reflection` hides PracticeDetailView's button. Until BE-108 the
+// screen was a stub that sent nothing and remembered the submit in
+// localStorage; that stub, its tripwires and its persisted dismissal are gone,
+// and the tests that pinned them now assert the call, its body and the refresh.
 //
-// PATTERN A (store-backed), all three stores REAL. The seam is @/api/practices
-// (the only wrapper any of this actually calls). @/api/diary is auto-mocked NOT
-// because anything calls it, but so the "nothing was sent" assertion is made
-// against the whole module rather than a hand-picked export. @/api/bookings is
-// left REAL and unmocked on purpose: ReflectionView never fetches bookings, it
-// only calls the local `dismissReflection` mutator, so there is no network
-// boundary there to fake. One pinia instance goes to both setActivePinia and
+// PATTERN A (store-backed), all three stores REAL. Seams: @/api/practices
+// (getPractice), @/api/bookings (getMyBookings -- the refresh after a submit is
+// a real network boundary now), and @/api/diary auto-mocked wholesale, so "only
+// createReflection was called" is asserted against the whole module rather than
+// a hand-picked export. One pinia instance goes to both setActivePinia and
 // app.use (SC-03).
 //
 // Real stores, not mocks, for the same reason CheckinView.test.ts gives: the
@@ -34,42 +27,16 @@
 // store flips. A mocked diary store freezes it at `false` and the double-click
 // test would pass for the wrong reason.
 //
-// TICKS = 6. Counted, not copied (SC-08). Both chains here are SHALLOW -- far
-// shallower than CheckinView's 10, which is why that number is not reused:
-//   mount:  onMounted -> fetchPractice (DETACHED, .vue:134 is not awaited) ->
+// TICKS = 6. Counted, not copied (SC-08):
+//   mount:  onMounted -> fetchPractice (DETACHED, not awaited) ->
 //           await getPractice (1) -> assign selected + finally (2) -> re-render (3)
-//   submit: onSubmit -> submitReflection (NO await inside it -- the stub's whole
-//           body is synchronous, diary.ts:136-144) -> the `await` at .vue:98
-//           resumes (1) -> dismissReflection + submitted=true -> re-render (2)
-// 6 is double the deeper of the two. An over-count is harmless (velo-idiom §3);
-// an under-count would fail loudly on the toEqual/text assertions.
-//
-// THE GAP, pinned deliberately (the deliverable of this file):
-//   `a FAILED practice load renders the error rung, not a form` (wired №445)
-//   and its two neighbours below. Today `practicesStore.selectedError` holds the
-//   real backend message and the screen ignores it: no error rung, no «Повторить»,
-//   submit fully enabled, and the submit "succeeds" onto the thank-you screen for
-//   a practice that never loaded. Those tests assert TODAY'S behaviour, including
-//   `expect(text()).not.toContain('Не удалось загрузить практику')`, so wiring
-//   `:load-error="practicesStore.selectedError"` + `@retry` turns them RED. That
-//   is the point: they are not approving the gap, they are a bell on it. When the
-//   bell rings, invert them against CheckinView.test.ts:484-520, which is the
-//   already-written shape of the answer.
-//
-// WHY the gap is NOT reported as a live bug: unlike CheckinView, this screen's
-// submit reaches no endpoint at all (the stub), so a form offered over a failed
-// load cannot currently produce a rejected POST -- only a thank-you screen for a
-// practice nobody loaded, which is cosmetic. It becomes CheckinView's bug exactly
-// when TD-REFLECTION lands. Latent, not live. Said precisely rather than loudly.
+//   submit: onSubmit -> submitReflection -> await createReflection (1) ->
+//           finally + return (2) -> the view's `await` resumes (3) ->
+//           submitted=true -> re-render (4)
+// 6 covers the deeper chain with room. An over-count is harmless (velo-idiom
+// §3); an under-count would fail loudly on the toEqual/text assertions.
 //
 // TRAPS PRESENT:
-//  - localStorage, and it CROSSES TESTS. `dismissReflection` PERSISTS to
-//    'velo:dismissed-reflections' (bookings.ts:99-108, batch O stopgap) and
-//    `dismissedReflections` is seeded FROM localStorage at store setup
-//    (bookings.ts:98). A fresh pinia per test does NOT save you: the new store
-//    re-reads the same surviving key, so test N's dismiss pre-dismisses test N+1.
-//    Cleared in beforeEach. This is the SC-13 lesson in a different costume --
-//    state that outlives the app that made it.
 //  - window.history.state, read at CLICK time inside onBack (.vue:120), NOT at
 //    setup -- so it is seeded per-test with replaceState before the tap, not
 //    before the mount (SKILL.md's two history.state rows; this screen is
@@ -80,16 +47,15 @@
 //    SUBTITLE and also variant p1's... no -- but the three variants share
 //    vocabulary, so every copy assertion is read off the scoped .form-shell__question
 //    h3/p, never off the host.
-//  - SC-15: the "nothing was sent" and "no error rung" assertions are all
+//  - SC-15: the "no error rung" and "no other diary call" assertions are all
 //    satisfied by a mount that rendered nothing. Every one of them pins the
 //    positive FIRST -- the question is up, the button exists, the button is
 //    enabled -- so the exclusion is real.
 //  - SC-18: the fixture defaults ('Утренняя практика' / 'Мастер Аня') differ from
 //    every value any test overrides, so a dropped `...overrides` fails loudly
 //    instead of silently agreeing.
-//  - SC-17, inverted: see "re-entry" below. The usual double-click test cannot be
-//    written here because there is no guard left to catch -- and that is itself
-//    pinned rather than papered over.
+//  - SC-17: see "re-entry" below -- the double tap is caught by the ref the
+//    real store holds across the await.
 //
 // TRAPS ABSENT (grepped the whole tree -- ReflectionView, FormShell, ResultScreen,
 // PracticeHeroCard, VHeader, VBackButton, VTextarea, VButton, VEmptyState,
@@ -127,13 +93,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import ReflectionView from '@/views/user/ReflectionView.vue'
-import { useBookingsStore } from '@/stores/bookings'
 import { useDiaryStore } from '@/stores/diary'
 import { usePracticesStore } from '@/stores/practices'
 import { ApiResponseError } from '@/api/client'
 import { getPractice } from '@/api/practices'
+import { getMyBookings } from '@/api/bookings'
 import * as diaryApi from '@/api/diary'
-import type { PracticeResponse } from '@/api/types'
+import type { PracticeResponse, ReflectionResponse } from '@/api/types'
 
 // -- the only live seam: the practices store's wrapper (velo-idiom §4).
 vi.mock('@/api/practices', async () => {
@@ -141,11 +107,15 @@ vi.mock('@/api/practices', async () => {
   return { ...actual, getPractice: vi.fn() }
 })
 
-// -- @/api/diary is auto-mocked wholesale (velo-idiom §4, the bare form) so the
-// "the stub sends NOTHING" assertion can sweep EVERY export instead of a list I
+// -- the refresh after a submit (bookings store -> getMyBookings).
+vi.mock('@/api/bookings', async () => {
+  const actual = await vi.importActual<typeof import('@/api/bookings')>('@/api/bookings')
+  return { ...actual, getMyBookings: vi.fn() }
+})
+
+// -- @/api/diary is auto-mocked wholesale (velo-idiom §4, the bare form) so
+// "only createReflection was called" sweeps EVERY export instead of a list I
 // chose. No real export needs preserving: ApiResponseError lives in @/api/client.
-// The day `upsertReflection` is added and called, the sweep goes red on a name
-// this file never had to know.
 vi.mock('@/api/diary')
 
 const push = vi.fn()
@@ -162,8 +132,18 @@ vi.mock('@/composables/useToast', () => ({
 }))
 
 const getPracticeMock = vi.mocked(getPractice)
+const getMyBookingsMock = vi.mocked(getMyBookings)
+const createReflectionMock = vi.mocked(diaryApi.createReflection)
 
-const DISMISSED_KEY = 'velo:dismissed-reflections'
+function reflectionResponse(): ReflectionResponse {
+  return {
+    id: 'r1',
+    practice_id: 'p1',
+    booking_id: 'b1',
+    comment: null,
+    created_at: '2026-07-20T15:00:00Z',
+  }
+}
 
 /**
  * SC-18: every default here DIFFERS from every value any test overrides, so a
@@ -217,7 +197,7 @@ function text(): string {
 function button(label: string): HTMLButtonElement | undefined {
   return Array.from(host?.querySelectorAll('button') ?? []).find((b) =>
     b.textContent?.includes(label),
-  ) as HTMLButtonElement | undefined
+  )
 }
 
 /** The primary submit. Only rendered on the FORM half of FormShell's v-if. */
@@ -250,16 +230,12 @@ function typeComment(value: string): void {
   ta.dispatchEvent(new Event('input'))
 }
 
-/**
- * Every export of @/api/diary, asserted untouched. Swept rather than listed so a
- * future `upsertReflection` is covered without this file being edited.
- */
-function expectDiaryApiSilent(): void {
-  const called = Object.entries(diaryApi)
+/** Every export of @/api/diary that was called. Swept, not listed. */
+function calledDiaryApi(): string[] {
+  return Object.entries(diaryApi)
     .filter(([, fn]) => vi.isMockFunction(fn))
     .filter(([, fn]) => (fn as ReturnType<typeof vi.fn>).mock.calls.length > 0)
     .map(([name]) => name)
-  expect(called).toEqual([])
 }
 
 beforeEach(() => {
@@ -267,14 +243,13 @@ beforeEach(() => {
   setActivePinia(pinia)
   routeParams.practiceId = 'p1'
 
-  // The dismiss is PERSISTED (bookings.ts:103) and the store re-seeds from it at
-  // setup (bookings.ts:98), so a surviving key would pre-dismiss the next test.
-  localStorage.removeItem(DISMISSED_KEY)
   // onBack reads this at CLICK time (.vue:120). Reset so a seeded test cannot
   // leak `back` into the no-history fallback test.
   window.history.replaceState({}, '')
 
   getPracticeMock.mockReset().mockResolvedValue(practice())
+  getMyBookingsMock.mockReset().mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0 })
+  createReflectionMock.mockReset().mockResolvedValue(reflectionResponse())
   push.mockReset()
   back.mockReset()
   toastError.mockReset()
@@ -285,7 +260,6 @@ afterEach(() => {
   host?.remove()
   app = null
   host = null
-  localStorage.removeItem(DISMISSED_KEY)
   window.history.replaceState({}, '')
   vi.clearAllMocks()
   // No overlay purge: nothing in this tree teleports to document.body. See the
@@ -508,10 +482,9 @@ describe('ReflectionView', () => {
   })
 
   // ===========================================================================
-  // THE GAP -- the deliverable. FormShell gained `loadError` + `retry` in №444;
-  // ReflectionView passes neither and reads `selectedError` nowhere. These three
-  // tests assert TODAY'S behaviour and are BUILT TO GO RED when the wiring lands.
-  // Invert them against CheckinView.test.ts:484-520 when they do.
+  // The error rung (wired in №445). Since BE-108 the submit reaches a real
+  // endpoint, so a form offered over a failed load would fire a POST into a
+  // refusal -- CheckinView's №444 bug. These hold the rung in place.
   // ===========================================================================
   describe('a FAILED practice load renders the error rung, not a form (№445)', () => {
     it('surfaces the generic fallback the store holds (no code set)', async () => {
@@ -533,10 +506,8 @@ describe('ReflectionView', () => {
     })
 
     it('replaces the form entirely -- no context-free reflection form is offered', async () => {
-      // This screen's gap was LATENT, not reachable: its submit is a stub with no
-      // endpoint, so nothing was ever fired into a refusal. It is fixed anyway,
-      // because the day TD-REFLECTION lands it becomes CheckinView's №444 bug
-      // verbatim -- and by then nobody would remember to look.
+      // With the real endpoint behind the submit, a form here would fire a POST
+      // for a practice that never loaded -- CheckinView's №444 bug verbatim.
       getPracticeMock.mockRejectedValue(new ApiResponseError(404, 'Практика не найдена'))
       mount()
       await flush()
@@ -574,10 +545,9 @@ describe('ReflectionView', () => {
   })
 
   // ===========================================================================
-  // The submit. There is no network to assert against (the stub), so the values
-  // asserted are the screen's OWN transformation of its input -- captured off
-  // $onAction, which sees exactly what .vue:98 built -- plus the store state it
-  // moves. Never "the mock was called" (SC-02).
+  // The submit. The body the VIEW builds is captured off $onAction (exactly what
+  // onSubmit hands the store); what reaches the network is read off the
+  // createReflection seam, and the refresh off getMyBookings.
   // ===========================================================================
   describe('submitting the reflection', () => {
     /** Captures the (practiceId, body) the VIEW hands the store at .vue:98-100. */
@@ -607,8 +577,8 @@ describe('ReflectionView', () => {
     })
 
     it('an untouched form sends a null comment, not an empty string', async () => {
-      // `comment.value.trim() || null` (.vue:99). A bare '' would be a row of
-      // nothing the day this actually persists.
+      // `comment.value.trim() || null`. The server normalizes blank to null as
+      // well (ReflectionRequest); the client does not lean on that.
       mount()
       await flush()
       const calls = captureSubmits()
@@ -646,7 +616,8 @@ describe('ReflectionView', () => {
       await flush()
 
       expect(calls).toEqual([['p42', { comment: null }]])
-      expect(useBookingsStore().dismissedReflections).toEqual(['p42'])
+      // The route's practice is also what reaches the network.
+      expect(createReflectionMock).toHaveBeenCalledWith('p42', { comment: null })
     })
 
     it('the success screen swaps the form out entirely and shows the heart', async () => {
@@ -664,43 +635,46 @@ describe('ReflectionView', () => {
       expect(host?.querySelector('textarea')).toBeNull()
     })
 
-    it('the dashboard banner is dismissed for this practice', async () => {
-      // .vue:110. There is no backend `has_reflection` flag (TD-REFLECTION), so
-      // this client-side set is the ONLY thing that stops the dashboard re-asking
-      // (UserDashboardView.vue:287 reads it). Asserted as store state, which is
-      // what the dashboard actually consumes.
+    it('a successful submit refreshes the bookings list -- has_reflection comes from the server', async () => {
+      // Replaces "the dashboard banner is dismissed for this practice". That test
+      // was right for the stub: with no backend flag, a client-side set of
+      // dismissed practices was the only thing that stopped the screen
+      // re-asking. BE-108 removed the set; the server's has_reflection is the
+      // one source now, and the view's part in it is to refetch the list.
       mount()
       await flush()
-      expect(useBookingsStore().dismissedReflections).toEqual([])
+      // SC-15: nothing fetched the list before the submit -- the screen itself
+      // never loads bookings, so the call below is the refresh and nothing else.
+      expect(getMyBookingsMock).not.toHaveBeenCalled()
 
       submitBtn()?.click()
       await flush()
 
-      expect(useBookingsStore().dismissedReflections).toEqual(['p1'])
+      expect(successTitle()).toBe('Спасибо, что поделились')
+      expect(getMyBookingsMock).toHaveBeenCalledTimes(1)
     })
 
-    it('the dismissal SURVIVES a reload -- it is persisted, not session-only', async () => {
-      // bookings.ts:99-108 (batch O stopgap). Its sibling `dismissCheckin`
-      // (bookings.ts:74-78) is deliberately session-only and writes nothing -- the
-      // two mutators sit four lines apart and differ, so the persistence half is
-      // pinned here rather than assumed from the neighbour.
+    it('the "sent" state is not kept in the browser', async () => {
+      // Replaces "the dismissal SURVIVES a reload -- it is persisted". That test
+      // was right for the batch O stopgap, which persisted the dismissal to
+      // localStorage because nothing else remembered the submit. BE-108 deleted
+      // that stopgap whole: the submit is remembered by the server alone.
+      // Positive half first (SC-15): the reflection DID go to the server.
+      localStorage.clear()
       mount()
       await flush()
 
       submitBtn()?.click()
       await flush()
 
-      expect(JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? 'null')).toEqual(['p1'])
+      expect(createReflectionMock).toHaveBeenCalledWith('p1', { comment: null })
+      expect(localStorage.length).toBe(0)
     })
 
-    it('the stub is HONEST: submitting sends NOTHING to the diary API', async () => {
-      // The contract at .vue:11-15 / diary.ts:122-129, held at the network. The UI
-      // completes and claims nothing was "saved" -- and nothing was.
-      //
-      // TRIPWIRE (the good kind): when TD-REFLECTION lands and submitReflection
-      // starts calling `upsertReflection`, this sweep goes red without naming it.
-      // At that point this test inverts to assert the call and its body -- and the
-      // GAP tests above stop being cosmetic on the same day.
+    it('submitting POSTs the reflection -- the body the view built, and nothing else', async () => {
+      // Replaces "the stub is HONEST: submitting sends NOTHING". That test was
+      // right while no endpoint existed; it was built as the tripwire for this
+      // day and is inverted as it asked: the call and its body are asserted.
       mount()
       await flush()
 
@@ -709,11 +683,43 @@ describe('ReflectionView', () => {
       submitBtn()?.click()
       await flush()
 
-      // SC-15: pin the positive first -- the submit DID run end-to-end.
       expect(successTitle()).toBe('Спасибо, что поделились')
-      expect(useBookingsStore().dismissedReflections).toEqual(['p1'])
+      expect(createReflectionMock).toHaveBeenCalledTimes(1)
+      expect(createReflectionMock).toHaveBeenCalledWith('p1', { comment: 'Что-то важное' })
+      expect(calledDiaryApi()).toEqual(['createReflection'])
+    })
 
-      expectDiaryApiSilent()
+    it('a refusal is a toast, never the thank-you screen', async () => {
+      // Direct entry onto a reflection already sent: the server says 409 and the
+      // phrase for its code is what the user reads; the form stays.
+      createReflectionMock.mockRejectedValue(
+        new ApiResponseError(409, 'Reflection already submitted', 'reflection_already_submitted'),
+      )
+      mount()
+      await flush()
+
+      submitBtn()?.click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Вы уже поделились -- спасибо')
+      expect(successTitle()).toBe('')
+      expect(submitBtn()).toBeDefined()
+      // A refused submit changed nothing on the server -- no refresh either.
+      expect(getMyBookingsMock).not.toHaveBeenCalled()
+    })
+
+    it('a booking that is not no_show reads the not-available phrase', async () => {
+      createReflectionMock.mockRejectedValue(
+        new ApiResponseError(404, 'No no_show booking', 'reflection_not_available'),
+      )
+      mount()
+      await flush()
+
+      submitBtn()?.click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Поделиться можно только по пропущенной практике')
+      expect(successTitle()).toBe('')
     })
   })
 
@@ -722,24 +728,15 @@ describe('ReflectionView', () => {
   // difference is the finding.
   // ===========================================================================
   describe('re-entry', () => {
-    it('PINNED: two taps with no repaint run the submit TWICE -- both guards are unreachable today', async () => {
-      // The canonical SC-17 test cannot be written here, and pretending otherwise
-      // would be the exact lie SC-17 warns about. There are TWO guards on this
-      // path -- the view's (.vue:96) and the store's (diary.ts:134) -- and today
-      // NEITHER can fire, because `submitReflection`'s body has NO await
-      // (diary.ts:136-144): it flips reflectionSubmitting true, returns, and the
-      // `finally` flips it back, all in ONE synchronous frame. So by the time the
-      // second tap reads the ref it is already false again.
-      //
-      // This is NOT a bug and is NOT reported as one: the guards are correct FOR
-      // THE REAL IMPLEMENTATION. The day `await upsertReflection(...)` lands, the
-      // ref stays true across the await, the view's guard fires, and this test
-      // goes RED at `toBe(2)`. That is the tripwire -- and the red is the SIGNAL
-      // that the guard finally works. Change the 2 to a 1 then, not before.
-      //
-      // Harmless today for two reasons worth stating, since they are what makes
-      // this pinnable rather than reportable: nothing is sent (no API), and
-      // `dismissReflection` is idempotent (bookings.ts:100).
+    it('two taps with no repaint send ONE reflection -- the in-flight ref catches the second', async () => {
+      // Replaces "PINNED: two taps with no repaint run the submit TWICE -- both
+      // guards are unreachable today". That test was right for the stub: its
+      // submitReflection had no await, so the ref flipped true and back within
+      // one synchronous frame and neither guard could fire. It was built to go
+      // red at `toBe(2)` the day the real call landed, and asked for a 1 then.
+      // BE-108 is that day: the ref now stays true across `await
+      // createReflection`, the view's guard returns on the second tap, and the
+      // server sees one POST.
       mount()
       await flush()
       const diary = useDiaryStore()
@@ -751,28 +748,23 @@ describe('ReflectionView', () => {
       const btn = submitBtn()
       expect(btn).toBeDefined()
       // No await between the clicks (SC-17): with one, VButton's
-      // `:disabled="disabled || loading"` (VButton.vue:27) would swallow the second
-      // and this would be crediting a ref for the DOM's work. Not that it could --
-      // see above; the ref is false by now either way.
+      // `:disabled="disabled || loading"` would swallow the second and this would
+      // be crediting the ref for the DOM's work.
       btn?.click()
       btn?.click()
       await flush()
 
-      expect(viewCalls).toBe(2)
-      // The user still lands somewhere honest, and the dismiss did not double up.
+      expect(viewCalls).toBe(1)
+      expect(createReflectionMock).toHaveBeenCalledTimes(1)
       expect(successTitle()).toBe('Спасибо, что поделились')
-      expect(useBookingsStore().dismissedReflections).toEqual(['p1'])
-      expectDiaryApiSilent()
     })
 
     it('the DOM rung is wired independently: an in-flight submit disables the button', async () => {
       // SC-17's other half, asserted separately and attributed to the right
       // mechanism. FormShell binds `:submitting` -> VButton `:loading` -> disabled
-      // (.vue:29, FormShell.vue:127, VButton.vue:27). The stub never holds the ref
-      // long enough for a repaint to see it (above), so the ref is driven DIRECTLY
+      // (.vue:29, FormShell.vue:127, VButton.vue:27). The ref is driven DIRECTLY
       // here -- which proves the BINDING, the only part of this rung that is this
-      // screen's to get wrong. When the endpoint lands, the ref will hold itself
-      // and this rung starts working for real; the binding is already correct.
+      // screen's to get wrong; the re-entry test above proves the ref holds.
       mount()
       await flush()
       expect(submitBtn()?.disabled).toBe(false)
@@ -838,21 +830,6 @@ describe('ReflectionView', () => {
   //    mock (SC-02) -- there is no product behaviour behind it to assert instead.
   //    Same call, same reasoning, same verdict as CheckinView.test.ts.
   //
-  // 2. The FAILURE branch of onSubmit -- `toast.error(result.error)` (.vue:113).
-  //    It is UNREACHABLE today, and not for want of trying: `submitReflection`
-  //    returns ok:false on exactly one path (its own re-entry guard, diary.ts:134),
-  //    the view's identical guard (.vue:96) sits in front of it and would return
-  //    first, and neither can fire anyway because the stub never awaits (see the
-  //    re-entry test). The try block cannot throw -- it is `void practiceId; void
-  //    body; return { ok: true }`. So there is no input, from any seam this file
-  //    has, that reaches that line. Reaching it would mean mocking the diary store
-  //    wholesale, which would then be asserting my own fixture rather than the
-  //    screen (SC-02) and would cost the real-ref re-entry test above. It becomes
-  //    reachable, and testable, the day the endpoint lands -- alongside the
-  //    toast.error('') an empty `error` string would produce, which is worth a look
-  //    at that point.
-  //
-  // 3. That the reflection is PERSISTED. It is not, by design (TD-REFLECTION), and
-  //    the honest assertion is the inverse -- "the stub is HONEST" above, which
-  //    holds the whole diary API silent.
+  // The FAILURE branch of onSubmit and the call that reaches the network are
+  // covered above ("a refusal is a toast", "submitting POSTs the reflection").
 })

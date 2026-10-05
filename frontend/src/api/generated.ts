@@ -9,17 +9,26 @@
 
 // -- Enums --------------------------------------------------------------------
 
-/** Who can see/book a practice (Master GROUPS P5, PROMPT №594). PUBLIC: everyone (default -- matches every practice's behavior before this column existed, see the migration's backfill). STUDENTS: anyone with >= 1 non-cancelled booking on this master's practices (the same "derived «Ученики»" rule groups_service.py already uses). GROUPS: members of at least one of the practice's target CUSTOM groups (practice_audience_group). CURATOR_GROUPS: the curator and every member of at least one of the practice's target SCHOOLS (practice_audience_curator_group, P5/GT-11) -- AND only while the master still belongs to that school. That second half has no counterpart in the three kinds above and is the point of this one: a school's audience is lent to a teacher, not given. A master who leaves or is removed stops broadcasting to a room that is no longer theirs, without anyone editing the practice. A blocked student is EXCLUDED from all four -- see practices/audience_service.py, the single shared predicate every enforcement point reuses. */
+/** Who can see/book a practice (Master GROUPS P5, PROMPT №594). PUBLIC: everyone (default -- matches every practice's behavior before this column existed, see the migration's backfill). STUDENTS: anyone with >= 1 non-cancelled booking on this master's practices (the same "derived «Ученики»" rule groups_service.py already uses). GROUPS: members of at least one of the practice's target CUSTOM groups (practice_audience_group). CURATOR_GROUPS: the curator and every member of the school the practice BELONGS TO (Practice.curator_group_id, BE-74) -- AND only while the master still belongs to that school. That second half has no counterpart in the three kinds above and is the point of this one: a school's audience is lent to a teacher, not given. A master who leaves or is removed stops broadcasting to a room that is no longer theirs, without anyone editing the practice. Requires an owning school: a practice without one cannot carry this kind. A blocked student is EXCLUDED from all four -- see practices/audience_service.py, the single shared predicate every enforcement point reuses. */
 export type AudienceKind = 'public' | 'students' | 'groups' | 'curator_groups'
 
 /** Booking lifecycle statuses. */
 export type BookingStatus = 'pending' | 'confirmed' | 'attended' | 'no_show' | 'cancelled'
+
+/** What the person did outside velo. A CLOSED ENUM AND NOT A CONFIG LIST, unlike DiaryEntryType and PracticePhase next door (config.py:476 -- "Validated via @field_validator -- no Literal in schemas"). The divergence is deliberate and buys something those two do not need. A config list exists so a value can change without touching code. Here that is a false promise: a type the frontend cannot draw is useless, so a new activity always ships with a frontend change anyway. Adding one through env would produce a feed card with no icon and no caption -- not flexibility, a quiet break. Typed as an enum, the closed set crosses into generated.ts as a union, and adding a value without the frontend breaks the build instead of the card. */
+export type ExternalActivityType = 'vocal' | 'nail_standing' | 'meditation' | 'massage' | 'yoga' | 'dance' | 'custom'
+
+/** How the reader of /analytics relates to the practice (BE-78 (2)). Decided by the server's one rights check; the screen maps it to what a tap on a person opens (leader -> the student dossier, curator -> the school student profile, school_master -> a direct message). One person holding several: leader > curator > school_master. */
+export type PracticeAnalyticsViewerRole = 'leader' | 'curator' | 'school_master'
 
 /** Practice lifecycle statuses. */
 export type PracticeStatus = 'draft' | 'scheduled' | 'live' | 'completed' | 'cancelled' | 'deleted'
 
 /** Format of a practice session. NOTE: this is the *format*, not the content direction. The content direction (meditation / yoga / breathwork) lives in data.taxonomy. */
 export type PracticeType = 'live' | 'series' | 'one_on_one' | 'replay'
+
+/** The five zones of a 1..10 mood / rating score (BE-77). Not stored -- Checkin.mood and Feedback.rating keep the raw score; the zone is derived on read by diary.insights_service.score_zone, which owns the boundaries. A StrEnum rather than a Literal so the OpenAPI document carries ONE named component the frontend's moodScale.ts keys are type-checked against. Member order is the scale order, low to high. */
+export type ScoreZone = 'bad' | 'low' | 'neutral' | 'good' | 'fire'
 
 /** User roles in the platform. USER: default role, can browse and book practices. MASTER: verified facilitator, can create and host practices. ADMIN: platform operator, can manage users and content. */
 export type UserRole = 'user' | 'master' | 'admin'
@@ -363,7 +372,6 @@ export interface AttendanceResponse {
 export interface AudiencePreviewRequest {
   audience_kind: AudienceKind
   group_ids?: string[]
-  curator_group_ids?: string[]
 }
 
 /** POST /api/v1/practices/{id}/audience-preview -- read-only, never persists anything. `stranded_count` is how many of this practice's ACTIVE (pending/confirmed) bookers would fall OUTSIDE the proposed audience -- the frontend warns and requires confirmation when this is above zero, saves silently when it's zero (owner-ruled). */
@@ -382,6 +390,11 @@ export interface BlockStudentResponse {
   student_user_id: string
   blocked_at: string
   cancelled_bookings_count: number
+}
+
+export interface Body_public_practice_guest_enter_endpoint_z__code__guest_post {
+  name?: string | null
+  guest_name_id?: string | null
 }
 
 /** Booking with full practice details for single-booking view. Used by GET /api/v1/bookings/{id}. Returns the complete PracticeResponse so the frontend can render a full detail page (deep link from notification, master dashboard, etc.). */
@@ -438,8 +451,10 @@ export interface BookingWithPracticeResponse {
   updated_at: string | null
   has_feedback: boolean
   has_checkin: boolean
+  has_reflection: boolean
   practice: PracticeSummary
   zoom_registrant_join_url?: string | null
+  zoom_registrant_link_unavailable?: boolean
 }
 
 /** DELETE /api/v1/bookings/{id} -- optional body. */
@@ -511,11 +526,6 @@ export interface CreateCompanyPromoRequest {
   first_purchase_only?: boolean
 }
 
-/** POST /masters/me/curator-groups/{id}/invites. */
-export interface CreateCuratorGroupInviteRequest {
-  kind: 'master' | 'student'
-}
-
 /** POST /masters/me/curator-groups. */
 export interface CreateCuratorGroupRequest {
   name: string
@@ -537,6 +547,15 @@ export interface CreateDirectionRequest {
   value: string
   label: string
   display_order?: number
+}
+
+/** POST /api/v1/diary/external-activities body. `activity_type` is typed as the ENUM, not as a str validated against a config list the way entry_type is: the closed set then reaches the frontend as a union in generated.ts, and a value added without a card to draw it breaks the build instead of the feed. See ExternalActivityType's own docstring. `occurred_at` must be timezone-aware and must not be in the future -- a diary of what happened cannot hold what has not. Both are checked here so the answer is a field-attributed 422 rather than a 500 from a naive/aware comparison further down. */
+export interface CreateExternalActivityRequest {
+  occurred_at: string
+  activity_type: ExternalActivityType
+  custom_activity_name?: string | null
+  mood: number
+  thoughts?: string | null
 }
 
 /** POST /masters/me/groups. */
@@ -577,7 +596,8 @@ export interface CreatePracticeRequest {
   recurrence?: RecurrenceSpec | null
   audience_kind?: AudienceKind
   group_ids?: string[]
-  curator_group_ids?: string[]
+  curator_group_id?: string | null
+  master_id?: string | null
 }
 
 /** User submits a new report. */
@@ -599,6 +619,52 @@ export interface CreateWithdrawalRequest {
   amount_cents: number
 }
 
+/** GET /masters/me/curator-groups/{group_id}/analytics (§6). `engagement` answers the request's ?period; every other group is the school's all-time shape and does not move with the slider. */
+export interface CuratorGroupAnalyticsResponse {
+  practices: CuratorGroupPracticeTotals
+  members: CuratorGroupMemberTotals
+  engagement: CuratorGroupEngagementTotals
+  feedback: CuratorGroupFeedbackTotals
+  top_practices: CuratorGroupTopPracticeItem[]
+}
+
+/** One row of the curator's "Блок" tab (BE-79). kind and joined_at are the membership the block replaced -- what an unblock will restore -- and blocked_at is when it was replaced. */
+export interface CuratorGroupBlockedItem {
+  user_id: string
+  name: string
+  avatar_url: string | null
+  kind: 'master' | 'student'
+  joined_at: string
+  blocked_at: string
+}
+
+/** One PRE check-in left on a practice of this school. `mood` is the stored 1..10 score mapped to its zone (ScoreZone, BE-77) -- the same five keys every distribution and feed uses. POST check-ins never appear here, and neither do check-ins whose booking was later cancelled: both are absent from the master's own roster for this practice, and the school widens a curator's reach without deepening it. user_id identifies the participant so that two students of the same name stay distinct; it opens no screen a curator would otherwise be refused. */
+export interface CuratorGroupCheckinItem {
+  user_id: string
+  student_name: string
+  avatar_url: string | null
+  mood: ScoreZone
+  comment: string | null
+  practice_id: string
+  practice_title: string
+  created_at: string
+}
+
+/** One COMPLETED practice of the window (part 3, owner 2026-10-02). The card the client renders: direction (schema-on-read data.taxonomy, for the direction icon), title, master, date, then the practice's own aggregates -- attendees (distinct ATTENDED: everyone who was there, «Ученики» in VELO's vocabulary), check-ins (PRE on non-cancelled bookings) and the reviews with their five zone counts. Same predicates as the totals, so a card reconciles with the cards around it. */
+export interface CuratorGroupConductedPracticeItem {
+  practice_id: string
+  title: string
+  direction: string | null
+  master_name: string
+  master_avatar_url: string | null
+  scheduled_at: string
+  timezone: string
+  attendees_count: number
+  checkins_count: number
+  reviews_count: number
+  rating: ScoreZoneCounts
+}
+
 /** The group's owner, as anyone in the group may see them. A strict subset of MasterPublicResponse -- the declared isolation boundary in masters/schemas.py. Nothing financial, nothing contact-like, and no status: a group is only ever visible while its curator is verified (I-6), so exposing the status would only ever print one value. */
 export interface CuratorGroupCuratorRef {
   user_id: string
@@ -611,6 +677,20 @@ export interface CuratorGroupDeletePreviewResponse {
   masters_count: number
   students_count: number
   upcoming_practices_targeting_group: number
+}
+
+/** The period-scoped heart of the screen (owner brief 2026-10-02, BE-107 decisions). Everything here is scoped to the calendar period the request named, over the curator's own timezone (BE-34 bounds), and reads ONE set of practices: the school's COMPLETED practices scheduled in the window. The exact vocabulary is pinned once, in analytics_service's header. attendees / repeat_* count STUDENTS OF THE SCHOOL NOW (member rows of kind=student) -- the same population as members.students, the card's «из N». joined_never_came counts students who JOINED IN THE PERIOD and have not attended a school practice since joining (to the window's end). visits / reviews are EVERYONE on the period's practices, guests included -- one population for both, so reviews <= visits. */
+export interface CuratorGroupEngagementTotals {
+  practices_conducted: number
+  attendees: number
+  repeat_attendees: number
+  repeat_pct: number
+  joined_never_came: number
+  visits: number
+  reviews: number
+  reviews_pct: number
+  rating: ScoreZoneCounts
+  conducted_practices: CuratorGroupConductedPracticeItem[]
 }
 
 /** Who did the thing, as the journal recorded them at the time. NOT NULLABLE, and that is a consequence of how the row is built rather than an optimism about the data. All thirteen event kinds are somebody's action, actor_id is NOT NULL, and the name is frozen INTO the row when the event is written -- so there is no state in which the journal knows an event happened but cannot say who did it. A `| None` here would be a branch the frontend has to handle and the backend cannot produce. display_name IS A SNAPSHOT, NOT A LOOKUP. It is whatever the person was called when they acted, and it does not follow later renames -- deliberately: "Мария удалила Петра" is a record of the past and must keep saying Мария. See CuratorGroupEvent's docstring for the full argument, and do not replace this with a join to users. user_id is still the live handle: whoever reads the feed can go look the person up if they are still around. */
@@ -628,6 +708,14 @@ export interface CuratorGroupEventItem {
   created_at: string
 }
 
+/** How the school's practices landed: counts plus the two distributions (five-zone ScoreZoneCounts, BE-77). */
+export interface CuratorGroupFeedbackTotals {
+  checkins_count: number
+  reviews_count: number
+  mood: ScoreZoneCounts
+  rating: ScoreZoneCounts
+}
+
 /** The card shown to someone who opened an invite link. curator_name is a STRING here, not the {user_id, display_name, avatar_url} object the group page returns: whoever is looking has no relation to the group yet, so they get the school's name and its curator's name, not a handle to go look the curator up with. */
 export interface CuratorGroupInvitePreviewGroup {
   id: string
@@ -639,18 +727,16 @@ export interface CuratorGroupInvitePreviewGroup {
   students_count: number
 }
 
-/** GET /curator-groups/invites/{token}. This endpoint DESCRIBES a refusal instead of raising it: can_join=False plus a reason, so the screen can say why. The one exception is 404 -- an unknown token, a revoked one, an inactive group and a deleted group are one answer (P-08), here as everywhere else. can_join answers "would joining CHANGE anything", not "are you allowed in the door". A student member opening a master link gets can_join=true with relation="student": they are already inside, and the link still has an effect (the upgrade). A master member opening either link gets can_join=false, reason=already_member -- nothing would happen. relation is the viewer's tie RIGHT NOW, before anything is done: null for someone who is not in the group yet. */
+/** GET /curator-groups/invites/{token}. This endpoint DESCRIBES a refusal instead of raising it: can_join=False plus a reason, so the screen can say why. The one exception is 404 -- an unknown token, a revoked one, an inactive group and a deleted group are one answer (P-08), here as everywhere else. can_join answers "would joining CHANGE anything", not "are you allowed in the door". Any member gets can_join=false, reason=already_member -- nothing would happen. Until GT-27 a STUDENT opening a MASTER link was the exception, getting can_join=true because the link would still promote them; with one link there is nothing left for it to do, and the `kind` field this model used to carry went with the second link. relation is the viewer's tie RIGHT NOW, before anything is done: null for someone who is not in the group yet. */
 export interface CuratorGroupInvitePreviewResponse {
   group: CuratorGroupInvitePreviewGroup
-  kind: 'master' | 'student'
   can_join: boolean
-  reason: 'already_member' | 'own_group' | 'master_required' | 'blocked_by_curator' | null
+  reason: 'already_member' | 'own_group' | 'blocked_by_curator' | 'blocked_in_group' | null
   relation: 'master' | 'student' | null
 }
 
-/** The group's reusable link for ONE kind. The kind is NOT encoded in the url: the deep link carries a single kind (`curator_group_invite__<token>`) for both flavours and the server resolves which one it is from the token (TZ 6.1). Putting it in the url too would be a second copy of the same fact, and the copy a sender could edit by hand. */
+/** The group's ONE reusable link. THERE USED TO BE A REQUEST BODY, CreateCuratorGroupInviteRequest, whose only field was the link's kind, and this response echoed it back. GT-27 left schools with a single link, so both the field and the request model are gone rather than kept and ignored. The url carries the token and nothing else (`school__<token>`): a second copy of any fact in the url is a copy the sender can edit by hand. */
 export interface CuratorGroupInviteResponse {
-  kind: 'master' | 'student'
   invite_url: string
 }
 
@@ -676,7 +762,12 @@ export interface CuratorGroupMasterItem {
   is_curator: boolean
 }
 
-/** One row of a curator group's roster. is_visible is ALWAYS true for a student and reflects the live MasterProfile status for a master (I-4). The curator sees a suspended master as a row with is_visible=false -- "in the shadow" -- rather than watching them vanish, because the row is real and comes back by itself when the admin re-verifies. */
+/** POST /masters/me/curator-groups/{id}/master-offers (GT-27). The candidate, by id. Nothing else: a school master is appointed from the roster the curator is already looking at, so there is no name, no kind and no message to carry. */
+export interface CuratorGroupMasterOfferRequest {
+  to_user_id: string
+}
+
+/** One row of the CURATOR's roster: the member plus the curator's fields. is_visible is ALWAYS true for a student and reflects the live MasterProfile status for a master (I-4). The curator sees a suspended master as a row with is_visible=false -- "in the shadow" -- rather than watching them vanish, because the row is real and comes back by itself when the admin re-verifies. master_offer (BE-59) -- the curator's pending appointment of this member: awaiting_verification while they are not a verified master, awaiting_answer once they are; null when there is none. Live, like is_visible: a verification or a revocation moves it with no write. Neither field reaches the school's masters (BE-76, owner decision 2): their roster omits the suspended masters instead, and an appointment is the curator's business. */
 export interface CuratorGroupMemberItem {
   user_id: string
   name: string
@@ -684,6 +775,13 @@ export interface CuratorGroupMemberItem {
   kind: 'master' | 'student'
   joined_at: string
   is_visible: boolean
+  master_offer?: 'awaiting_verification' | 'awaiting_answer' | null
+}
+
+/** Active memberships by kind -- the same rows the roster pages. */
+export interface CuratorGroupMemberTotals {
+  masters: number
+  students: number
 }
 
 /** One row of GET /curator-groups/mine. `relation` is the viewer's own tie to this group and is what the frontend keys the row's chip off. `transfer_offered` is true ONLY for the person being offered the group, and it is a bool rather than the full ref on purpose: this is a list row, and everything the offer contains is already known to whoever it was made to. The curator sees false here even for their own pending offer -- the list says "somebody is waiting on YOU", and nobody is. Until GT-4 the field was absent because a field that is always false is a promise with no writer behind it. */
@@ -718,6 +816,13 @@ export interface CuratorGroupPageResponse {
   created_at: string
 }
 
+/** The school's practices counted by lifecycle state. total = completed + upcoming; drafts, cancelled and deleted sessions are nobody's analytics and are absent from all three numbers. */
+export interface CuratorGroupPracticeTotals {
+  total: number
+  completed: number
+  upcoming: number
+}
+
 /** GET /masters/me/curator-groups/{id}/members/{user_id}/remove-preview. The same number for the member the curator is about to remove. Zero for a student, and zero -- not 404 -- for somebody who is not in the group at all: the removal itself is idempotent and answers 204 on that same target, so the advisory must not be stricter than the action it describes. */
 export interface CuratorGroupRemovePreviewResponse {
   upcoming_practices_targeting_group: number
@@ -735,6 +840,37 @@ export interface CuratorGroupResponse {
   created_at: string
 }
 
+/** One named review left on a practice of this school. `rating` is the stored 1..10 score mapped to its zone (ScoreZone, BE-77), identical to what the practice's master reads in their own per-practice and cross-practice review feeds. user_id identifies the reviewer, as it does in the master's own review items; the screens behind it enforce their own access. */
+export interface CuratorGroupReviewItem {
+  user_id: string
+  student_name: string
+  avatar_url: string | null
+  rating: ScoreZone
+  comment: string | null
+  practice_id: string
+  practice_title: string
+  created_at: string
+}
+
+/** One member of a school, as anyone allowed to see the roster sees it. The masters of the school read exactly this (GET .../roster, BE-76); the curator reads the same fact plus his own working fields (CuratorGroupMemberItem below). One class describes "a member", the curator's projection only widens it -- there is no second format of the same row. */
+export interface CuratorGroupRosterItem {
+  user_id: string
+  name: string
+  avatar_url: string | null
+  kind: 'master' | 'student'
+  joined_at: string
+}
+
+/** One completed practice of the school with its engagement counts. Ordered by engagement (check-ins + reviews), newest first on ties -- "what actually landed", not a second feed, so no comment text and no student names ride along. */
+export interface CuratorGroupTopPracticeItem {
+  practice_id: string
+  title: string
+  master_name: string
+  scheduled_at: string
+  checkins_count: number
+  reviews_count: number
+}
+
 /** A pending offer to hand the group over. ONE schema for all three places that report an offer (the curator's own row, that row after a PATCH, and the group page). Three flat triples of the same fields would drift the first time one of them gained a fourth. to_display_name uses display_name(first_name, last_name) from users/helpers.py, NOT the master-profile lookup _curator_display_name uses. The tree holds two different naming rules and this is a deliberate pick between them: the addressee here is a PERSON being offered something, not a public master card, and the profile-based rule may return None -- which would leave the confirm dialog reading "offer sent to —". display_name always yields something, falling back to the neutral «Участник». */
 export interface CuratorGroupTransferRef {
   to_user_id: string
@@ -745,6 +881,11 @@ export interface CuratorGroupTransferRef {
 /** The requesting user's own tie to the group being viewed. */
 export interface CuratorGroupViewer {
   relation: 'curator' | 'master' | 'student'
+}
+
+/** GET /api/v1/diary/external-activities/custom-names. The person's own custom activity names, most recently used first, at most settings.external_activity_name_suggestions of them. Spellings that differ only in case are one name here, shown as it was typed the last time; an empty list means they have never used a custom type, not that something went wrong. */
+export interface CustomActivityNamesResponse {
+  items: string[]
 }
 
 /** Single diary entry in API responses. */
@@ -800,19 +941,23 @@ export interface ExistingReportResponse {
   report: ReportResponse
 }
 
+/** POST /api/v1/diary/external-activities -- the created activity. `occurred_at` comes back normalized to UTC, which is the value the diary orders by; `created_at` is the write time and the two differ whenever somebody enters yesterday's massage today. */
+export interface ExternalActivityResponse {
+  id: string
+  occurred_at: string
+  activity_type: ExternalActivityType
+  custom_activity_name: string | null
+  mood: number
+  thoughts: string | null
+  created_at: string
+}
+
 /** GET /api/v1/admin/metrics/feedback. */
 export interface FeedbackMetricResponse {
   rate_pct: number
   visited: number
   left_review: number
-  distribution: FeedbackRatingDistribution
-}
-
-/** Feedback counts by bucket (confused 1-3 / good 4-7 / fire 8-10). Named distinctly from diary.schemas.RatingDistribution to avoid an OpenAPI component-name collision (both would otherwise be emitted under module-qualified names, breaking the frontend's flat re-export). */
-export interface FeedbackRatingDistribution {
-  fire: number
-  good: number
-  confused: number
+  distribution: ScoreZoneCounts
 }
 
 /** POST /api/v1/practices/{id}/feedback body. */
@@ -878,7 +1023,7 @@ export interface GroupSearchMemberItem {
   group_name: string
 }
 
-/** GET /api/v1/masters/me/income?period=week|month. income_cents -- gross booked turnover for the current calendar period: signed sum of title-tagged sale (+) / commission (-) / refund (-) movements, frozen sales included. Matches the transaction feed, not realized/available earnings. prev_income_cents -- same sum for the previous calendar period. delta_pct -- signed percent change vs the previous period, or null when the previous period had no net-positive turnover. */
+/** GET /api/v1/masters/me/income?period=week|month|quarter. income_cents -- gross booked turnover for the current calendar period: signed sum of title-tagged sale (+) / commission (-) / refund (-) movements, frozen sales included. Matches the transaction feed, not realized/available earnings. prev_income_cents -- same sum for the previous calendar period. delta_pct -- signed percent change vs the previous period, or null when the previous period had no net-positive turnover. */
 export interface IncomeResponse {
   income_cents: number
   prev_income_cents: number
@@ -896,7 +1041,7 @@ export interface JoinCuratorGroupRequest {
   token: string
 }
 
-/** The outcome of joining. already_member answers exactly one question -- WAS THERE A ROW when this request looked -- and nothing else. It is not "nothing happened": a student who gets upgraded to master reports already_member=true with relation="master", because they were in the school before and still are, with a new kind. Reading it as "no-op" would make the field lie about someone who has been a member for months, which is why the definition lives here rather than in a caller's head. The nuance between "you were already a master" and "you were a student and just became a master" belongs to the preview, which distinguishes them; join reports facts. relation is the tie AFTER the call. */
+/** The outcome of joining. already_member answers exactly one question -- WAS THERE A ROW when this request looked -- and nothing else. Reading it as "nothing happened" would make the field lie about someone who has been a member for months, which is why the definition lives here rather than in a caller's head. THE PARAGRAPH THAT USED TO FOLLOW described the one case where already_member=true and something DID change: a student opening the master link reported already_member=true with relation="master", having just been promoted by the join. GT-27 cancelled that link -- school masters are appointed with the appointee's confirmation -- so a member joining now changes nothing at all, and the field's two readings have stopped being distinguishable on this endpoint. relation is the tie AFTER the call. */
 export interface JoinCuratorGroupResponse {
   group_id: string
   relation: 'master' | 'student'
@@ -921,6 +1066,24 @@ export interface LowCheckinPractice {
   title: string
   checkin_rate_pct: number
   total: number
+}
+
+/** GET /api/v1/masters/me/analytics?period=week|month|quarter. Everything the master's analytics screen shows, for one calendar period in the MASTER'S OWN timezone -- unlike the dashboard grid above, whose bounds are UTC. bookings_count is the rate denominator: bookings on the period's completed practices that were not cancelled. Counted in bookings rather than distinct people because a check-in is unique per booking. Deltas carry the two conventions from core/periods.py: counts use a signed percent change (null when the previous period had no base), rates use a spread in percentage POINTS (null when the previous period had no denominator). The client renders "--" for either null. rate fields are 0 when the period has no bookings -- an honest empty, the same answer the admin dashboards give. */
+export interface MasterAnalyticsResponse {
+  practices_count: number
+  practices_delta_pct: number | null
+  bookings_count: number
+  bookings_delta_pct: number | null
+  checkins_count: number
+  checkins_delta_pct: number | null
+  feedbacks_count: number
+  feedbacks_delta_pct: number | null
+  checkin_rate_pct: number
+  checkin_rate_delta_pp: number | null
+  feedback_rate_pct: number
+  feedback_rate_delta_pp: number | null
+  checkins: ScoreZoneCounts
+  feedbacks: ScoreZoneCounts
 }
 
 /** The user's master-application state, read from MasterProfile.data.account. Surfaced on UserResponse (T5) so a role='user' applicant can see the verdict of their application (pending / verified / rejected + the rejection reason) without the master-only GET /masters/me endpoint. Set by the GET /users/me router from the same MasterProfile load used for master capability. */
@@ -1008,13 +1171,13 @@ export interface MasterReviewItem {
   user_id: string
   reviewer_name: string
   avatar_url: string | null
-  rating: string
+  rating: ScoreZone
   comment: string | null
   practice_title: string
   created_at: string
 }
 
-/** GET /api/v1/masters/me/stats?period=week|month. practices_count -- master's COMPLETED practices scheduled in the period. Completed only (GT-20): a practice that is still ahead, running, cancelled, draft or deleted does not count, so a period with nothing finished yet reads 0. The grid answers "what happened", not "what is scheduled". participants_count -- distinct users with an ATTENDED booking across those practices. An ATTENDED booking only ever exists on a completed practice, so this count and practices_count are always about the same sessions. income_cents -- gross booked turnover for the period, reused verbatim from the E2 finance projection. The dashboard renders practices/participants; the finance screen renders income. Each *_delta_pct is the signed percent change vs the previous period, or null when the previous period was non-positive (S-1). */
+/** GET /api/v1/masters/me/stats?period=week|month|quarter. practices_count -- master's COMPLETED practices scheduled in the period. Completed only (GT-20): a practice that is still ahead, running, cancelled, draft or deleted does not count, so a period with nothing finished yet reads 0. The grid answers "what happened", not "what is scheduled". participants_count -- distinct users with an ATTENDED booking across those practices. An ATTENDED booking only ever exists on a completed practice, so this count and practices_count are always about the same sessions. income_cents -- gross booked turnover for the period, reused verbatim from the E2 finance projection. The dashboard renders practices/participants; the finance screen renders income. Each *_delta_pct is the signed percent change vs the previous period, or null when the previous period was non-positive (S-1). */
 export interface MasterStatsResponse {
   practices_count: number
   practices_delta_pct: number | null
@@ -1056,13 +1219,6 @@ export interface MethodChangeRequest {
 /** POST /masters/me/method-change-request -- proposed flat method set. M3 ships FLAT: the request carries a plain list of method strings (same shape/limits as MasterApplyExperience.methods). The two-level direction->kind taxonomy (E19) is deferred / out of scope. */
 export interface MethodChangeRequestSubmit {
   proposed_methods: string[]
-}
-
-/** Check-in mood counts for a practice, bucketed by score range. mood is a 1..10 score; counts are grouped into three buckets: low = scores 1-3 mid = scores 4-7 high = scores 8-10 CR-01: fields are required (no default=0). This is a response-only schema -- the service always provides concrete values. */
-export interface MoodDistribution {
-  high: number
-  mid: number
-  low: number
 }
 
 /** POST /masters/me/curator-groups/{id}/transfer. to_user_id only: the eligible set is the group's visible masters, and the service checks membership against exactly the roster it shows, so there is nothing else for the caller to state. */
@@ -1114,6 +1270,22 @@ export interface PaginatedCheckinsResponse {
   offset: number
 }
 
+/** GET /masters/me/curator-groups/{id}/blocks (BE-79). */
+export interface PaginatedCuratorGroupBlocksResponse {
+  items: CuratorGroupBlockedItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** GET /masters/me/curator-groups/{id}/checkins. */
+export interface PaginatedCuratorGroupCheckinsResponse {
+  items: CuratorGroupCheckinItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
 /** GET /masters/me/curator-groups/{id}/journal. */
 export interface PaginatedCuratorGroupEventsResponse {
   items: CuratorGroupEventItem[]
@@ -1133,6 +1305,22 @@ export interface PaginatedCuratorGroupMastersResponse {
 /** GET /masters/me/curator-groups/{id}/members. */
 export interface PaginatedCuratorGroupMembersResponse {
   items: CuratorGroupMemberItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** GET /masters/me/curator-groups/{id}/reviews. */
+export interface PaginatedCuratorGroupReviewsResponse {
+  items: CuratorGroupReviewItem[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** GET /masters/me/curator-groups/{id}/roster (BE-76). */
+export interface PaginatedCuratorGroupRosterResponse {
+  items: CuratorGroupRosterItem[]
   total: number
   limit: number
   offset: number
@@ -1197,6 +1385,22 @@ export interface PaginatedMethodChangeRequestsResponse {
 /** GET /api/v1/admin/participants -- paginated participant list. */
 export interface PaginatedParticipantsResponse {
   items: AdminParticipant[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** GET /practices/{id}/analytics/pairs -- ordered by name, then user_id. */
+export interface PaginatedPracticeAnalyticsPairs {
+  items: PracticeAnalyticsPair[]
+  total: number
+  limit: number
+  offset: number
+}
+
+/** GET /practices/{id}/analytics/reviews -- newest first, then id. */
+export interface PaginatedPracticeAnalyticsReviews {
+  items: PracticeAnalyticsReview[]
   total: number
   limit: number
   offset: number
@@ -1302,12 +1506,50 @@ export interface PayoutDetailsUpdate {
   details: Record<string, unknown>
 }
 
+/** One attendee with BOTH a PRE check-in and a review, as zones. */
+export interface PracticeAnalyticsPair {
+  user_id: string
+  name: string
+  avatar_url: string | null
+  before_zone: ScoreZone
+  after_zone: ScoreZone
+  is_school_student: boolean
+}
+
+/** GET /practices/{id}/analytics -- the header and both distributions. `attended` is the denominator of every "X of N" on the screen; the "check-ins before" figure is the sum of `before` (PRE check-ins of the attended), so the blocks reconcile. */
+export interface PracticeAnalyticsResponse {
+  practice_id: string
+  viewer_role: PracticeAnalyticsViewerRole
+  curator_group_id: string | null
+  title: string
+  direction: string | null
+  scheduled_at: string
+  timezone: string
+  master_name: string
+  master_avatar_url: string | null
+  attended: number
+  before: ScoreZoneCounts
+  after: ScoreZoneCounts
+  pairs_total: number
+  reviews_total: number
+}
+
+/** One attendee's review WITH text (a rating alone is not listed here). */
+export interface PracticeAnalyticsReview {
+  user_id: string
+  name: string
+  avatar_url: string | null
+  comment: string
+  created_at: string
+  is_school_student: boolean
+}
+
 /** GET /api/v1/practices/{id}/insights -- aggregated data. All data is anonymous: no user IDs, names, or comment texts. Only numeric distributions and counts. */
 export interface PracticeInsightsResponse {
   practice_id: string
   participants: number
-  checkins: MoodDistribution
-  feedbacks: RatingDistribution
+  checkins: ScoreZoneCounts
+  feedbacks: ScoreZoneCounts
   comments_count: number
 }
 
@@ -1338,7 +1580,8 @@ export interface PracticeResponse {
   difficulty?: string | null
   audience_kind?: AudienceKind
   audience_group_names?: string[]
-  audience_curator_group_names?: string[]
+  curator_group_id?: string | null
+  curator_group_name?: string | null
   audience_unavailable?: boolean
   recurrence_days?: number[] | null
   total_sessions?: number | null
@@ -1457,13 +1700,6 @@ export interface PurchaseWithPracticeResponse {
   practice: PracticeSummary
 }
 
-/** Feedback rating counts for a practice, bucketed by score range. rating is a 1..10 score; counts are grouped into three buckets: confused = scores 1-3 good = scores 4-7 fire = scores 8-10 CR-01: fields are required (no default=0). Same rationale as MoodDistribution above. */
-export interface RatingDistribution {
-  fire: number
-  good: number
-  confused: number
-}
-
 /** Recurrence rule for a series practice. Fields: period -- daily: every calendar day after the root; weekly: on `days`, every week; biweekly: on `days`, every other week. days -- ISO weekday ints (1=Mon .. 7=Sun) the series recurs on. REQUIRED and non-empty for weekly/biweekly; ignored for daily (generation does not read it). end -- never: generate up to the cap; until_date: occurrences through `until_date` (inclusive, local date); after_count: exactly `count` occurrences. count -- TOTAL occurrences INCLUDING the root (so count=40 yields the root + 39 children). Required for after_count; 1..cap. An explicit count above the cap is a 422 (the user named the number -- we do not silently truncate it; until_date / never are truncated silently instead). until_date -- local calendar date of the last allowed occurrence; required for until_date. */
 export interface RecurrenceSpec {
   period: 'daily' | 'weekly' | 'biweekly'
@@ -1471,6 +1707,20 @@ export interface RecurrenceSpec {
   end: 'never' | 'until_date' | 'after_count'
   count?: number | null
   until_date?: string | null
+}
+
+/** POST /api/v1/practices/{id}/reflection body (BE-108). An empty answer is a valid answer (owner ruling): absent, null, "" and whitespace all arrive here and are stored as NULL -- no 422 for any client, unlike feedback's min_length=1. */
+export interface ReflectionRequest {
+  comment?: string | null
+}
+
+/** A just-created reflection. Returned to its author only. */
+export interface ReflectionResponse {
+  id: string
+  practice_id: string
+  booking_id: string
+  comment: string | null
+  created_at: string
 }
 
 /** POST /admin/masters/{user_id}/reject -- request body. */
@@ -1522,12 +1772,12 @@ export interface ReturnMetricResponse {
   top_users: TopUser[]
 }
 
-/** One named review (GET /api/v1/practices/{id}/reviews). The de-anonymised counterpart to RatingDistribution: where insights expose only numeric buckets, this carries the reviewer's name, avatar and comment text. `rating` is the stored 1..10 score mapped to the three UI buckets (1-3 confused / 4-7 good / 8-10 fire) so the frontend reuses the same rating icons it already renders for the anonymous distribution. user_id is the reviewer's User.id (E1 remainder) -- it lets the frontend navigate from a review to that student's profile. The author User is already joined in list_practice_reviews, so this adds no query. */
+/** One named review (GET /api/v1/practices/{id}/reviews). The de-anonymised counterpart to the insights' feedbacks distribution: where insights expose only counts, this carries the reviewer's name, avatar and comment text. `rating` is the stored 1..10 score mapped to its zone (ScoreZone, BE-77) -- the same five keys the distribution counts. user_id is the reviewer's User.id (E1 remainder) -- it lets the frontend navigate from a review to that student's profile. The author User is already joined in list_practice_reviews, so this adds no query. */
 export interface ReviewItem {
   user_id: string
   reviewer_name: string
   avatar_url: string | null
-  rating: 'fire' | 'good' | 'confused'
+  rating: ScoreZone
   comment: string | null
   created_at: string
 }
@@ -1556,6 +1806,45 @@ export interface ScheduleIn {
   from: string
   to: string
   days: string[]
+}
+
+/** One PRE check-in the student left on a practice of this school. POST check-ins never appear, and neither do check-ins whose booking was cancelled: both are absent from the practice's own master's roster, and the school does not see deeper than the person who taught. */
+export interface SchoolStudentCheckinItem {
+  mood: number
+  comment: string | null
+  practice_id: string
+  practice_title: string
+  created_at: string
+}
+
+/** One review the student left on a practice of this school. Unlike the check-ins above this list carries NO booking-status filter, and the asymmetry is deliberate: a review the practice's master reads is a review the school may read, and the master's own review feeds do not filter by booking either (BE-24). */
+export interface SchoolStudentFeedbackItem {
+  rating: number
+  comment: string | null
+  practice_id: string
+  practice_title: string
+  created_at: string
+}
+
+/** GET /masters/me/curator-groups/{group_id}/students/{user_id}. What the school knows about one of its students, across every practice of the school -- including practices taught by other masters, and including practices whose master has since left. Belonging is a fact about the practice, not about anybody's current membership (owner ruling, 10 September). practices_count -- practices of this school the student ATTENDED. hours -- their duration summed, in hours, one decimal, rounded on the server: the client does not compute this (TZ 1.13.3). Both are zero, and the arrays empty, for a student who has attended nothing -- a 200, never a 404. master_offer (BE-59) -- the state of the curator's pending appointment of this student, as on the roster. Filled for the CURATOR only; a master of the school reads null whatever the state, as a member outside a transfer reads null for it. */
+export interface SchoolStudentProfileResponse {
+  user_id: string
+  display_name: string
+  avatar_url: string | null
+  practices_count: number
+  hours: number
+  master_offer?: 'awaiting_verification' | 'awaiting_answer' | null
+  recent_checkins: SchoolStudentCheckinItem[]
+  recent_feedbacks: SchoolStudentFeedbackItem[]
+}
+
+/** Counts of 1..10 scores per zone (BE-77) -- THE distribution shape. One class for every server distribution, check-in moods and feedback ratings alike: the practice insights, the master's analytics, the admin feedback metric and the school aggregate. The keys are ScoreZone, the boundaries live in diary.insights_service.score_zone: bad 1-2, low 3-4, neutral 5-6, good 7-8, fire 9-10 -- the frontend's moodScale.ts keys. One class is also one OpenAPI component, so there is no module-qualified name collision to dodge. CR-01: fields are required (no default=0). This is a response-only schema -- the service always provides all five (zone_counts). */
+export interface ScoreZoneCounts {
+  bad: number
+  low: number
+  neutral: number
+  good: number
+  fire: number
 }
 
 export interface SendMessageIn {
@@ -1621,7 +1910,7 @@ export interface StudentGroupsResponse {
   groups: StudentGroupItem[]
 }
 
-/** One student in the master's students list. needs_attention is True when the student's MOST RECENT feedback on this master's practices is in the negative bucket (rating 1-3) -- the same signal that feeds the dashboard "needs attention" block (consistent with the reviews projection). */
+/** One student in the master's students list. needs_attention is True when the student's MOST RECENT feedback on this master's practices needs attention (rating 1-4, zones bad and low -- BE-77) -- the same signal that feeds the dashboard "needs attention" block (consistent with the reviews projection). */
 export interface StudentListItem {
   id: string
   name: string
@@ -1688,6 +1977,16 @@ export interface TopupResponse {
   currency: string
 }
 
+/** POST /api/v1/ai/transcribe -- request body. audio_base64: one WAV recording, base64-encoded. Base64 rather than multipart because the frontend's shared client serialises every body as JSON, and a second transport would have to be built and kept in step for one endpoint. The size ceiling is enforced on the DECODED bytes (transcription.MAX_AUDIO_BYTES), not on this string: base64 is a third larger than what the recorder produced and a third larger than what the provider receives. */
+export interface TranscribeRequest {
+  audio_base64: string
+}
+
+/** POST /api/v1/ai/transcribe -- response body. Success only: every failure leaves through a VeloError with a machine code, so this model never has to carry an "ok" flag or an error field. text is never empty -- an empty transcript is speech_not_recognized. */
+export interface TranscribeResponse {
+  text: string
+}
+
 /** PATCH /masters/me/curator-groups/{id}. `name` is always required -- a group always has one. `description` is a PARTIAL update. The router computes `"description" in body.model_dump(exclude_unset=True)` and passes it as description_provided, which is the only way to tell "the key was absent" (leave the column alone) from "the key was sent as null/empty" (write NULL). A bare `str | None = None` cannot distinguish the two and would wipe an existing description on every plain rename -- the exact bug RenameGroupRequest was rewritten to prevent. avatar_url (GT-17) is a PARTIAL update by the same mechanism and for the same reason -- the router computes avatar_url_provided the same way. Absent key: the column is untouched. Present and null (or blank): the avatar is removed. Present and a url: it is replaced. CREATION DOES NOT TAKE AN AVATAR, only this update does. A school is founded with a name and a description; the picture is attached afterwards. Not an omission -- widening CreateCuratorGroupRequest would touch a schema five test files exercise, for a field the create screen has no input for. */
 export interface UpdateCuratorGroupRequest {
   name: string
@@ -1729,7 +2028,7 @@ export interface UpdatePracticeRequest {
   style?: string | null
   audience_kind?: AudienceKind | null
   group_ids?: string[] | null
-  curator_group_ids?: string[] | null
+  curator_group_id?: string | null
 }
 
 /** User edits their own pending report (reason only). */
@@ -1849,7 +2148,7 @@ export interface WithdrawalResponse {
 
 /** GET /api/v1/practices/{id}/zoom/resolve (T-35) -- the SERVER's answer to "how does this person enter this practice right now". The choice itself lives on the server (zoom/service.py's resolve_zoom_entry) and this schema only transports it: the client renders `kind` and never decides between two links. That is the point of the endpoint -- the old ladder lived in frontend/src/utils/zoomLink.ts, where it was a rule every entry point had to remember, and a rule cannot be enforced by construction. url is deliberately nullable on TWO kinds, and a caller must handle both without collapsing either into 'failed': - 'host' -- by design; the master starts his own meeting through the existing start-ticket flow, never through a stored URL. - 'guest' -- when ensure_shared_registrant never succeeded. The meeting exists; only the guest seat in it does not. */
 export interface ZoomEntryResolveResponse {
-  kind: 'personal' | 'host' | 'guest' | 'pending' | 'failed' | 'cancelled'
+  kind: 'personal' | 'host' | 'guest' | 'pending' | 'failed' | 'cancelled' | 'unavailable'
   url?: string | null
 }
 

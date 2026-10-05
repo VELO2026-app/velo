@@ -46,6 +46,7 @@
 </template>
 
 <script setup lang="ts">
+import { onDocumentEvent, offDocumentEvent } from '@/platform/dom'
 import { ref, onBeforeUnmount, watch } from 'vue'
 import { IconDots } from '@/components/icons'
 
@@ -81,17 +82,17 @@ function onDocKeydown(event: KeyboardEvent): void {
 
 watch(open, (isOpen) => {
   if (isOpen) {
-    document.addEventListener('pointerdown', onDocPointerDown)
-    document.addEventListener('keydown', onDocKeydown)
+    onDocumentEvent('pointerdown', onDocPointerDown)
+    onDocumentEvent('keydown', onDocKeydown)
   } else {
-    document.removeEventListener('pointerdown', onDocPointerDown)
-    document.removeEventListener('keydown', onDocKeydown)
+    offDocumentEvent('pointerdown', onDocPointerDown)
+    offDocumentEvent('keydown', onDocKeydown)
   }
 })
 
 onBeforeUnmount(() => {
-  document.removeEventListener('pointerdown', onDocPointerDown)
-  document.removeEventListener('keydown', onDocKeydown)
+  offDocumentEvent('pointerdown', onDocPointerDown)
+  offDocumentEvent('keydown', onDocKeydown)
 })
 
 // Allow the parent to close the menu programmatically if needed.

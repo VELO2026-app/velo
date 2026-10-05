@@ -105,7 +105,7 @@ function codes(): string[] {
 function buttonIn(root: HTMLElement | undefined, label: string): HTMLButtonElement | undefined {
   return Array.from(root?.querySelectorAll('button') ?? []).find((b) =>
     b.textContent?.includes(label),
-  ) as HTMLButtonElement | undefined
+  )
 }
 
 function button(label: string): HTMLButtonElement | undefined {
@@ -139,9 +139,7 @@ afterEach(() => {
 describe('MasterPromocodesView', () => {
   describe('state ladder', () => {
     it('shows the loader while the first fetch is in flight', async () => {
-      vi.mocked(promosApi.getMyPromos).mockReturnValue(
-        new Promise(() => {}) as Promise<ReturnType<typeof page>>,
-      )
+      vi.mocked(promosApi.getMyPromos).mockReturnValue(new Promise(() => {}))
       mount()
       await flush()
 

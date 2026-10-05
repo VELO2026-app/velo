@@ -34,7 +34,7 @@
     >
       <span v-if="item.badge" class="v-admin-tabbar__badge">{{ item.badge }}</span>
       <span class="v-admin-tabbar__icon">
-        <component v-if="typeof item.icon !== 'string'" :is="item.icon" :size="27" />
+        <component :is="item.icon" v-if="typeof item.icon !== 'string'" :size="27" />
         <template v-else>{{ item.icon }}</template>
       </span>
     </button>
@@ -42,7 +42,7 @@
 </template>
 
 <script setup lang="ts">
-import type { TabItem } from '@/components/layout/VTabBar.vue'
+import type { TabItem } from '@/router/tabs'
 
 defineProps<{
   items: TabItem[]

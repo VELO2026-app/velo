@@ -38,6 +38,21 @@ import type { DiaryEntryResponse, DiaryFeedResponse } from '@/api/types'
 
 vi.mock('@/api/diary')
 
+// Voice input MVP: DiaryComposer passes COMPOSER_VOICE_INPUT into the shared
+// Composer. The flag is read through a getter over this holder so the
+// kill-switch test can flip it (false = mic never renders) without remount
+// tricks -- the velo-idiom §5 pattern from useDiaryCardModel.test.ts.
+const voiceFlag = vi.hoisted(() => ({ enabled: true }))
+vi.mock('@/utils/constants', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/utils/constants')>()
+  return {
+    ...actual,
+    get COMPOSER_VOICE_INPUT() {
+      return voiceFlag.enabled
+    },
+  }
+})
+
 const toastError = vi.fn()
 vi.mock('@/composables/useToast', () => ({
   useToast: () => ({ error: toastError, success: vi.fn(), info: vi.fn() }),
@@ -68,6 +83,9 @@ let host: HTMLElement | null = null
 let pinia: Pinia
 let createdCount = 0
 let composingEvents: boolean[] = []
+// The mounted root instance -- DiaryComposer's public surface (defineExpose
+// { focus }, FE-70). app.mount() returns it.
+let root: InstanceType<typeof DiaryComposer> | null = null
 
 function mount(props: { entryType?: 'note' | 'dream' } = {}): HTMLElement {
   host = document.createElement('div')
@@ -82,7 +100,7 @@ function mount(props: { entryType?: 'note' | 'dream' } = {}): HTMLElement {
     },
   })
   app.use(pinia)
-  app.mount(host)
+  root = app.mount(host) as unknown as InstanceType<typeof DiaryComposer>
   return host
 }
 
@@ -113,9 +131,9 @@ function textarea(): HTMLTextAreaElement {
 }
 
 function slotBtn(): HTMLButtonElement {
-  // [voice stub] The send control is the disc INSIDE the slot -- the mic
-  // stub (flag-gated, see COMPOSER_VOICE_STUB) is also a .composer__btn but
-  // lives OUTSIDE the slot as its sibling.
+  // The send control is the disc INSIDE the slot -- the mic (voice input MVP,
+  // flag-gated, see COMPOSER_VOICE_INPUT) is also a .composer__btn but lives
+  // OUTSIDE the slot as its sibling.
   const btns = host?.querySelectorAll('.composer__slot .composer__btn') ?? []
   if (btns.length !== 1)
     throw new Error(`expected exactly 1 slot .composer__btn, found ${btns.length}`)
@@ -129,12 +147,10 @@ function slotButtonCount(): number {
   return host?.querySelectorAll('.composer__slot .composer__btn').length ?? 0
 }
 
-// [voice stub / FE-42] The mic disc -- a VISUAL placeholder (no
-// functionality, tap inert). Lives OUTSIDE the field, a sibling on the same
-// line. DiaryComposer no longer renders it at all ([FE-42]: voice-stub not
-// passed -> v-if unmounts, zero reserved space); the flag-on behaviour is
-// pinned against the shared Composer directly (see the FE-42 chat-path
-// regression test below).
+// [voice input MVP / FE-42 resolved] The mic disc -- now the REAL recorder's
+// entry point. Lives OUTSIDE the field, a sibling on the same line.
+// DiaryComposer passes COMPOSER_VOICE_INPUT (kill-switch: the holder above
+// can turn it off); empty field only, so any typed character unmounts it.
 function micBtn(): HTMLButtonElement | null {
   return (host?.querySelector('.composer__btn--side') as HTMLButtonElement) ?? null
 }
@@ -162,7 +178,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('DiaryComposer -- idle state (1: no chevron, one slot; T24-3: no mic placeholder; [FE-42] mic hidden)', () => {
+describe('DiaryComposer -- idle state (1: no chevron, one slot; T24-3: no disabled placeholder; voice mic on empty field)', () => {
   it('renders the send button even while empty (owner pass: always-present), no kb-collapse button', () => {
     mount()
     // [owner pass] Supersedes B48's empty-absence: the disc is permanent,
@@ -172,10 +188,29 @@ describe('DiaryComposer -- idle state (1: no chevron, one slot; T24-3: no mic pl
     expect(host!.querySelector('.composer__slot')).not.toBeNull()
   })
 
-  it('[FE-42] mic hidden in the diary: no mic disc in ANY state -- empty, with text, whitespace-only', async () => {
-    // DiaryComposer no longer passes voice-stub; the shared Composer's mic
-    // is a v-if on that prop, so off = fully unmounted, ZERO reserved space
-    // (the field spans the whole line in every state).
+  it('[FE-42 resolved] the mic renders on an empty field and unmounts on the first character (even a space), returns on clear', async () => {
+    // DiaryComposer now passes COMPOSER_VOICE_INPUT: the mic is the REAL
+    // recorder's entry point, still empty-field-only. A lone space counts --
+    // the spec pins text.length === 0, not the trimmed canSend.
+    mount()
+    expect(micBtn()).not.toBeNull()
+    expect(micBtn()!.getAttribute('aria-label')).toBe('Голосовой ввод')
+
+    typeText('hello')
+    await nextTick()
+    expect(micBtn()).toBeNull()
+
+    typeText(' ') // whitespace-only: still enough to hide the mic
+    await nextTick()
+    expect(micBtn()).toBeNull()
+
+    typeText('')
+    await nextTick()
+    expect(micBtn()).not.toBeNull()
+  })
+
+  it('the kill-switch (COMPOSER_VOICE_INPUT = false) hides the mic in EVERY state with no call-site changes', async () => {
+    voiceFlag.enabled = false
     mount()
     expect(micBtn()).toBeNull()
 
@@ -186,26 +221,27 @@ describe('DiaryComposer -- idle state (1: no chevron, one slot; T24-3: no mic pl
     typeText('')
     await nextTick()
     expect(micBtn()).toBeNull()
+    voiceFlag.enabled = true
   })
 
-  it('[FE-42] chat path regression (voiceStub on, against the shared Composer directly): mic renders outside the field and unmounts on the first character', async () => {
-    // ChatThreadScreen still passes COMPOSER_VOICE_STUB -- the mic stub's
-    // behaviour must survive the diary hiding it. Exercised against
-    // Composer.vue directly (same pattern as the growCap test at the bottom
-    // of this file); DiaryComposer itself must NOT render it.
+  it('[FE-42] chat path regression (voiceInput on, against the shared Composer directly): mic renders outside the field and unmounts on the first character', async () => {
+    // ChatThreadScreen passes COMPOSER_VOICE_INPUT the same way -- the mic's
+    // placement contract (OUTSIDE the field) is pinned against Composer.vue
+    // directly (same pattern as the growCap test at the bottom of this file);
+    // DiaryComposer's own mounting is covered by the tests above.
     const ComposerMod = await import('./Composer.vue')
     const host2 = document.createElement('div')
     document.body.appendChild(host2)
     const app2 = createApp(ComposerMod.default, {
       placeholder: 'x',
-      voiceStub: true,
+      voiceInput: true,
       send: async () => ({ ok: true }),
     })
     app2.mount(host2)
 
-    const mic = host2.querySelector('.composer__btn--side') as HTMLButtonElement | null
+    const mic = host2.querySelector('.composer__btn--side')
     expect(mic).not.toBeNull()
-    expect(mic!.getAttribute('aria-label')).toBe('Голосовое сообщение')
+    expect(mic!.getAttribute('aria-label')).toBe('Голосовой ввод')
     // OUTSIDE the field -- a sibling of .composer__field in the root row,
     // not a child of it: it is what narrows the input from the right.
     expect(mic!.closest('.composer__field')).toBeNull()
@@ -481,5 +517,35 @@ describe('DiaryComposer -- autogrow (PROMPT №741: viewport-aware growCap resto
     expect(ta.style.maxHeight).toBe('111px')
     app2.unmount()
     host2.remove()
+  })
+})
+
+describe('DiaryComposer -- public focus() (FE-70: the dashboard «Добавить запись» one-tap entry)', () => {
+  it('focus() focuses the REAL textarea and enters composing (one call, no re-tap)', async () => {
+    mount()
+
+    root?.focus()
+    await flush()
+
+    expect(document.activeElement).toBe(textarea())
+    expect(composingEvents).toContain(true)
+  })
+
+  it('focus() with an existing draft: un-hides the collapsed preview, keeps the draft, sends nothing', async () => {
+    mount()
+    typeText('черновик записи')
+    // Blur first: the unsent text collapses behind the preview span (a
+    // display:none textarea is where a naive .focus() silently dies -- the
+    // exact bug focusField's optimistic composing order prevents).
+    textarea().blur()
+    await flush()
+    expect(host!.querySelector('.composer__preview')).not.toBeNull()
+
+    root?.focus()
+    await flush()
+
+    expect(document.activeElement).toBe(textarea())
+    expect(textarea().value).toBe('черновик записи')
+    expect(diaryApi.createDiaryEntry).not.toHaveBeenCalled()
   })
 })

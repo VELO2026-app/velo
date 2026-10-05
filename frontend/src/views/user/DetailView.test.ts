@@ -285,20 +285,24 @@ function button(label: string): HTMLButtonElement | undefined {
 /**
  * Which face the pill actually rendered. The six Icon* assets carry no class and
  * no data attribute -- they are bare <svg> -- so they are told apart the way
- * MasterStudentProfileView.test.ts:470-479 does it: by viewBox, plus mid's
- * <circle> eyes vs high's all-<path> face (the two moods share "0 0 40 40").
- * Scoped to .detail__pill-icon because PracticeListCard renders svgs of its own.
+ * MasterStudentProfileView.test.ts:470-479 does it for the avatars. The five
+ * FE-85 faces share one viewBox (0 0 356 356), so they are told apart by their
+ * artwork: low/good carry a <linearGradient> (told apart by the first gradient
+ * stop), the other three carry a flat fill on the circle background
+ * (bad #BDECF1 / neutral #F9CBD1 / fire #FDDFC4). Scoped to .detail__pill-icon
+ * because PracticeListCard renders svgs of its own.
  */
 function leadFace(): string {
   const svg = host?.querySelector('.detail__pill-icon svg')
   if (!svg) throw new Error('the pill lead icon did not render')
-  const vb = svg.getAttribute('viewBox') ?? ''
-  if (vb.startsWith('4.85156')) return 'mood-low'
-  if (vb === '0 0 40 40') return svg.querySelector('circle') ? 'mood-mid' : 'mood-high'
-  if (vb.startsWith('-26.76')) return 'rating-fire'
-  if (vb.startsWith('-26.84')) return 'rating-good'
-  if (vb.startsWith('13.18')) return 'rating-confused'
-  return `unrecognised viewBox: ${vb}`
+  // happy-dom may serialise SVG tags lowercased -- match case-insensitively.
+  const art = (svg.innerHTML ?? '').toLowerCase()
+  if (art.includes('lineargradient')) {
+    return art.includes('#bdecf1') ? 'mood-low' : 'mood-good'
+  }
+  if (art.includes('#f9cbd1')) return 'mood-neutral'
+  if (art.includes('#fddfc4')) return 'mood-fire'
+  return 'mood-bad'
 }
 
 function pillTitle(): string | undefined {
@@ -422,43 +426,42 @@ describe('DetailView', () => {
   })
 
   describe('the pill: the score reaches the screen as its zone (see the banner)', () => {
-    it('a check-in pill carries the mood label -- «Check-in: Хорошо» + the high face', async () => {
-      // mood 9 -> high (displayHelpers.ts:69-73, 8-10 -> high) -> «Хорошо».
-      // The `not.toBe` lines pin the OLD BUG's exact output -- the bare kind over
-      // the mid face, which is what MOOD_LABEL[9] / MOOD_ICON[9] returning
-      // undefined used to produce. Revert .vue:144,152 to a raw-score index and
-      // this test names the regression instead of merely failing.
+    it('a check-in pill carries the mood label -- «Check-in: Хорошо» + the good face', async () => {
+      // mood 7 -> good (moodScale.ts: 7-8 -> good) -> «Хорошо». The `not.toBe`
+      // lines pin the OLD BUG's exact output -- the bare kind over the neutral
+      // face, which is what an unlabelled score used to produce. Revert the
+      // pill's leadIcon to a raw-score index and this test names the regression
+      // instead of merely failing.
       routeParams.type = 'checkin'
-      vi.mocked(diaryApi.getCheckin).mockResolvedValue(checkin({ mood: 9 }))
+      vi.mocked(diaryApi.getCheckin).mockResolvedValue(checkin({ mood: 7 }))
       mount()
       await flush()
 
       expect(pillTitle()).toBe('Check-in: Хорошо')
       expect(pillTitle()).not.toBe('Check-in')
-      expect(leadFace()).toBe('mood-high')
-      expect(leadFace()).not.toBe('mood-mid')
+      expect(leadFace()).toBe('mood-good')
+      expect(leadFace()).not.toBe('mood-neutral')
     })
 
-    it('a feedback pill carries the rating label -- «Feedback: Огонь!» + the fire glyph', async () => {
-      // rating 10 -> fire (displayHelpers.ts:76-80, 8-10 -> fire) -> «Огонь!».
-      // Same mechanism, the other half of the branch -- which is exactly why both
+    it('a feedback pill carries the rating label -- «Feedback: Огонь» + the fire face', async () => {
+      // rating 10 -> fire (moodScale.ts: 9-10 -> fire) -> «Огонь». Same
+      // mechanism, the other half of the branch -- which is exactly why both
       // kinds are driven: one test would prove nothing about the other, and the
-      // bug was duplicated across both maps, so the fix had to be too
-      // (.vue:146,156).
+      // bug was duplicated across both maps, so the fix had to be too.
       routeParams.type = 'feedback'
       vi.mocked(diaryApi.getFeedback).mockResolvedValue(feedback({ rating: 10 }))
       mount()
       await flush()
 
-      expect(pillTitle()).toBe('Feedback: Огонь!')
+      expect(pillTitle()).toBe('Feedback: Огонь')
       expect(pillTitle()).not.toBe('Feedback')
-      expect(leadFace()).toBe('rating-fire')
-      expect(leadFace()).not.toBe('rating-good')
+      expect(leadFace()).toBe('mood-fire')
+      expect(leadFace()).not.toBe('mood-good')
     })
 
-    it('sharpest form: the check-in pill MOVES with the mood zone -- low / mid / high all differ', async () => {
+    it('sharpest form: the check-in pill MOVES with the mood pair -- bad / neutral / fire all differ', async () => {
       // The two tests above could each be read as one lucky fixture. This one
-      // cannot: it walks all three zones (1 -> low, 5 -> mid, 10 -> high) and the
+      // cannot: it walks three pairs (1 -> bad, 5 -> neutral, 10 -> fire) and the
       // pill must move on EVERY one. This is the assertion that was inverted while
       // the bug stood -- the user's worst morning and their best rendered the same
       // shrug over the same word. Now they render three different answers.
@@ -476,16 +479,18 @@ describe('DetailView', () => {
       }
 
       expect(seen).toEqual([
-        { mood: 1, title: 'Check-in: Не очень', face: 'mood-low' },
-        { mood: 5, title: 'Check-in: Нормально', face: 'mood-mid' },
-        { mood: 10, title: 'Check-in: Хорошо', face: 'mood-high' },
+        { mood: 1, title: 'Check-in: Плохо', face: 'mood-bad' },
+        { mood: 5, title: 'Check-in: Нормально', face: 'mood-neutral' },
+        { mood: 10, title: 'Check-in: Огонь', face: 'mood-fire' },
       ])
       // The constant the screen used to render, in one line: three identical
       // shrugs. A regression collapses straight back to this.
-      expect(seen.map((s) => s.face)).not.toEqual(['mood-mid', 'mood-mid', 'mood-mid'])
+      expect(seen.map((s) => s.face)).not.toEqual(['mood-neutral', 'mood-neutral', 'mood-neutral'])
     })
 
-    it('sharpest form: the feedback pill MOVES with the rating zone -- confused / good / fire all differ', async () => {
+    it('sharpest form: the feedback pill MOVES with the rating pair -- bad / neutral / fire all differ', async () => {
+      // The same walk on the FEEDBACK kind: the unified scale means a saved
+      // rating is named by the same five emotions it was picked from (tz §1).
       routeParams.type = 'feedback'
       const seen: Array<{ rating: number; title: string | undefined; face: string }> = []
       for (const rating of [2, 5, 9]) {
@@ -500,11 +505,11 @@ describe('DetailView', () => {
       }
 
       expect(seen).toEqual([
-        { rating: 2, title: 'Feedback: Есть вопросы', face: 'rating-confused' },
-        { rating: 5, title: 'Feedback: Хорошо', face: 'rating-good' },
-        { rating: 9, title: 'Feedback: Огонь!', face: 'rating-fire' },
+        { rating: 2, title: 'Feedback: Плохо', face: 'mood-bad' },
+        { rating: 5, title: 'Feedback: Нормально', face: 'mood-neutral' },
+        { rating: 9, title: 'Feedback: Огонь', face: 'mood-fire' },
       ])
-      expect(seen.map((s) => s.face)).not.toEqual(['rating-good', 'rating-good', 'rating-good'])
+      expect(seen.map((s) => s.face)).not.toEqual(['mood-neutral', 'mood-neutral', 'mood-neutral'])
     })
 
     it('the pill renders at all, and only on the content rung', async () => {
@@ -649,11 +654,10 @@ describe('DetailView', () => {
       expect(text()).not.toContain('14:00') // the runner's Asia/Tbilisi
     })
 
-    it('the verified badge is deliberately omitted -- PracticeResponse carries no such flag', async () => {
-      // `:show-verified="false"` (.vue:60), and the .vue:15-16 header comment says
-      // why. PracticeListCard defaults showVerified to TRUE
-      // (PracticeListCard.vue:76), so the prop is load-bearing: drop it and the
-      // card paints a teal check this screen has no data to justify.
+    it('the verified badge is retired -- no teal check renders on this screen', async () => {
+      // Owner 2026-10-03: the verification checkmark is hidden product-wide --
+      // PracticeListCard no longer renders one at all (the showVerified prop is
+      // gone), and PracticeResponse never carried a verified flag to justify it.
       mount()
       await flush()
 
@@ -813,7 +817,7 @@ describe('DetailView', () => {
 // - PracticeListCard's own internals (the direction icon via practiceIconFor, the
 //   master initial, the meta layout). Component-level behaviour of a shared DS
 //   card, identical on the six screens that mount it. What belongs to DetailView
-//   is WHICH props it passes -- the when/duration derivations, show-verified and
+//   is WHICH props it passes -- the when/duration derivations and
 //   clickable -- and those ARE covered above.
 // - formatFeedDateTime / formatTime / formatDuration themselves. Pure functions
 //   covered at the util layer; this file asserts that the screen feeds them the

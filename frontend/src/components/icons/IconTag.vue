@@ -4,7 +4,7 @@
        stroke-based family -- viewBox 0 0 24 24, stroke-width 2, round
        cap/join, currentColor. A classic price-tag silhouette (pointed corner
        + a punched hole) rather than the huge-viewBox traced-path family
-       (IconTrash/IconEdit) -- those are a separate, older style this new
+       (IconTrash) -- those are a separate, older style this new
        icon does not follow. -->
   <svg
     xmlns="http://www.w3.org/2000/svg"

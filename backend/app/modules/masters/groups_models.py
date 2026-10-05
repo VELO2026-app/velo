@@ -19,7 +19,14 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -37,7 +44,7 @@ class MasterGroup(UUIDMixin, Base):
 
     __tablename__ = "master_group"
     __table_args__ = (
-        UniqueConstraint("master_id", "name", name="uq_master_group_master_name"),
+        Index("uq_master_group_master_name", "master_id", "name", unique=True),
     )
 
     master_id: Mapped[UUID] = mapped_column(
@@ -76,9 +83,10 @@ class MasterGroupMembership(UUIDMixin, Base):
 
     __tablename__ = "master_group_membership"
     __table_args__ = (
-        UniqueConstraint(
+        Index(
+            "uq_master_group_membership_group_student",
             "group_id", "student_user_id",
-            name="uq_master_group_membership_group_student",
+            unique=True,
         ),
     )
 
@@ -143,15 +151,22 @@ class MasterStudent(UUIDMixin, Base):
     A row exists ONLY when the master has tagged OR blocked this student --
     a plain derived "Ученик" with neither has no row. ONE tag per student
     (owner Q1=A): a second PUT .../tag overwrites, it does not append.
-    UNIQUE (master_id, student_user_id) enforces "one row per pair" and is
-    the upsert target (PUT .../tag creates-or-updates against it).
+    A unique INDEX on (master_id, student_user_id) enforces "one row per
+    pair" and is the upsert target (groups_service._take_master_student,
+    ON CONFLICT inferred from those two columns).
+
+    Declared here as an Index, not a UniqueConstraint, because that is what
+    the schema has: the migration (2026_07_24_5e6a7b8c9d0e) builds it with
+    op.create_index(..., unique=True), so pg_indexes lists it and
+    pg_constraint does not. ON CONFLICT ON CONSTRAINT cannot name it.
     """
 
     __tablename__ = "master_student"
     __table_args__ = (
-        UniqueConstraint(
+        Index(
+            "uq_master_student_master_student",
             "master_id", "student_user_id",
-            name="uq_master_student_master_student",
+            unique=True,
         ),
     )
 

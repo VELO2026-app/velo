@@ -72,7 +72,7 @@ const displayName = computed(() => {
 // -- Switch to user mode --
 function switchToUserMode(): void {
   uiStore.setUiMode('user')
-  router.push({ name: 'user-profile' })
+  void router.push({ name: 'user-profile' })
 }
 
 // -- Logout --
@@ -81,7 +81,7 @@ async function onLogout(): Promise<void> {
   loggingOut.value = true
   try {
     await authStore.logout()
-    router.replace({ path: '/' })
+    void router.replace({ path: '/' })
   } finally {
     loggingOut.value = false
   }

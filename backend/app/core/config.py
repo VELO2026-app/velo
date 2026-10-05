@@ -91,6 +91,17 @@ class Settings(BaseSettings):
 
     # -- Redis --
     redis_url: str = "redis://localhost:6379/0"
+    # Socket timeouts of the application's Redis client (BE-44). Redis sits
+    # on the path of every authenticated request (the session lookup), and
+    # without these a hung connection held each of those coroutines for
+    # ever. A timeout surfaces as redis.exceptions.TimeoutError, a RedisError:
+    # each caller then does what it already does on a Redis failure (see
+    # core/redis.py). No command on this client blocks by design, so 2 s cuts
+    # nothing legitimate; it matches the 2 s the health probe already allows.
+    # The comms relay has its own client and its own pair
+    # (comms_relay_socket_*_timeout_seconds).
+    redis_socket_connect_timeout_seconds: float = 2.0
+    redis_socket_timeout_seconds: float = 2.0
 
     # -- CORS --
     # Comma-separated list of allowed origins.
@@ -140,6 +151,13 @@ class Settings(BaseSettings):
     # -- Sessions --
     # How long a session token lives in Redis (days).
     session_ttl_days: int = 30
+
+    # -- Master invites --
+    # How long a generic one-time master invite link stays claimable
+    # (seconds). Owner's decision, BE-44: 7 days. Before it the token had no
+    # expiry, so a leaked link stayed valid until somebody claimed it. An
+    # expired link answers exactly like a consumed one (404 invite_invalid).
+    master_invite_ttl_seconds: int = 604800
 
     # -- Auth security (Phase 1 auth/service.py) --
     # Telegram initData validity window (seconds). Telegram signs initData
@@ -398,6 +416,23 @@ class Settings(BaseSettings):
     # the bell, never crash velo (T1 handoff constraint).
     comms_http_timeout_seconds: float = 5.0
 
+    # -- Voice transcription (GT-41) --
+    # The key lives HERE, on the server, and nowhere else. Voice input used
+    # to call OpenRouter straight from the browser with a VITE_ key compiled
+    # into the bundle: anyone who opened the page could read it and spend our
+    # budget on any model, and per-person limits, audit and revocation were
+    # all impossible by construction. Empty key = the feature is off and says
+    # so with a machine code; it is never a 500 and never a silent nothing.
+    openrouter_api_key: str = ""
+    # OpenRouter RENAMED the OpenAI audio models in 2026 -- the old
+    # openai/gpt-4o-audio-preview slug 400s. Overridable without a redeploy
+    # precisely because that can happen again.
+    openrouter_transcribe_model: str = "openai/gpt-audio-mini"
+    # Shorter than the browser's own 30s abort on purpose: if the browser
+    # gave up first, the completion would keep running and we would pay for
+    # an answer nobody receives.
+    openrouter_http_timeout_seconds: float = 25.0
+
     # -- Comms integration: reminder orchestration (Phase 6 / T1) --
     # Booking reminders (ID-6): velo schedules the series product-side
     # (comms engine/reminders.py left the domain orchestration to the
@@ -469,6 +504,15 @@ class Settings(BaseSettings):
 
     # Diary entry field limits.
     diary_entry_content_max_length: int = 10000
+    # BE-27: the free-text name a person gives a 'custom' external
+    # activity. Its own limit rather than a reuse of the title limit --
+    # this is a label on a chip-sized card, not a heading over a body.
+    external_activity_name_max_length: int = 120
+    # BE-37: how many of the person's own custom activity names the
+    # composer offers back. Owner decision, 16 September. NO-LITERALS:
+    # tunable here, not inline -- eight is a screenful of chips, and the
+    # number is the kind that gets argued about later.
+    external_activity_name_suggestions: int = 8
     diary_entry_title_max_length: int = 200
 
     # Allowed diary entry types (Дневник / Сонник). dream is wired on the
@@ -493,6 +537,13 @@ class Settings(BaseSettings):
     diary_feed_preview_length: int = 140
     # Event kinds that exist in the journal (mirrors DiaryEventKind). Used to
     # validate the feed `kind` filter -- no Literal in the router.
+    # NOTE FOR WHOEVER READS THIS NEXT (BE-27): THIS LIST GATES NOTHING.
+    # Two occurrences in the whole tree -- this definition and a comment in
+    # diary/projections.py naming it as something to keep updated. The feed
+    # filters on is_hidden, the unconditional thread_started exclusion and
+    # diary_feed_categories, never on this. It is kept in step with
+    # DiaryEventKind anyway, because a list that has drifted from the enum
+    # lies to the next reader; it is not a visibility switch.
     diary_feed_allowed_kinds: list[str] = [
         "booking_confirmed",
         "booking_cancelled_by_user",
@@ -503,16 +554,27 @@ class Settings(BaseSettings):
         "feedback",
         "note",
         "dream",
+        "external_activity",
     ]
-    # Filter chips on the feed map onto groups of kinds (Все / Дневник /
-    # Сонник / Feedbacks / Check-ins). "all" is represented by passing no
+    # Filter chips on the feed map onto groups of kinds (Дневник / Сонник /
+    # Feedbacks / Check-ins / Практики). "all" is represented by passing no
     # category. Each category resolves to the kinds it includes.
+    #
+    # The chip list above used to omit "практики" while the mapping below
+    # carried it -- corrected here rather than left, because BE-27 adds a
+    # kind to exactly that chip and a stale enumeration next to the thing
+    # it enumerates is the comment most likely to be believed.
     diary_feed_categories: dict[str, list[str]] = {
         "entries": ["note"],
         "dreams": ["dream"],
         "feedbacks": ["feedback"],
         "checkins": ["checkin"],
+        # BE-27: external_activity joins this chip by contract. Worth
+        # knowing when reading the feed: "Практики" now also answers with
+        # things that happened OUTSIDE velo (a massage, a dance). Raised
+        # with the owner separately; the mapping here follows the contract.
         "practices": [
+            "external_activity",
             "booking_confirmed",
             "booking_cancelled_by_user",
             "practice_rescheduled",
@@ -525,18 +587,6 @@ class Settings(BaseSettings):
     zoom_account_id: str = ""
     zoom_client_id: str = ""
     zoom_client_secret: str = ""
-    # VESTIGIAL (PROMPT №585) -- no longer decides anything. The attendance
-    # decision is now 50% of EACH PRACTICE'S OWN duration_minutes (owner
-    # decision), computed in zoom/attendance_service.py's
-    # attendance_threshold_seconds(), not read from here. This field is kept
-    # -- not deleted -- because pydantic-settings' default extra='forbid'
-    # (measured against the pinned pydantic-settings==2.14.2) means a live
-    # .env that still defines ZOOM_ATTENDANCE_THRESHOLD_MINUTES would refuse
-    # to start if the field vanished, and the deployed server's .env content
-    # is not something this change can verify (no VPS access). Safe to
-    # delete later once a measurement of the live .env confirms the key is
-    # gone from it too.
-    zoom_attendance_threshold_minutes: int = 10
     # Meeting-creation retry poller (mirrors practice_autofinalize_* above).
     # Background worker toggle -- same rationale as
     # practice_autofinalize_enabled and the other worker toggles: tests
@@ -552,6 +602,15 @@ class Settings(BaseSettings):
     zoom_meeting_create_max_retries: int = 5
     # Same cap convention, for ZoomRegistrant.retry_count (E21 step E).
     zoom_registrant_create_max_retries: int = 5
+    # Same cap convention, for ZoomRegistrant.zoom_cancel_attempts (BE-96):
+    # failed Zoom-side cancel calls the retry poller makes before it stops
+    # and leaves the row visibly pending. Its own number -- a cancel is a
+    # different action from a create.
+    zoom_registrant_cancel_max_retries: int = 5
+    # Same cap convention, for ZoomMeeting.zoom_delete_attempts: failed
+    # Zoom-side meeting DELETE calls the retry poller makes before it stops
+    # and leaves the row visibly pending.
+    zoom_meeting_delete_max_retries: int = 5
 
     # -- Zoom report ingestion (E21 step F, PROMPT №521) --
     # Background worker toggle, same rationale as the other three loops:
@@ -573,6 +632,39 @@ class Settings(BaseSettings):
     # clear -- generous enough that a normal delay never trips it, bounded
     # enough that feedback eligibility and hours can never hang indefinitely.
     zoom_attendance_decision_deadline_minutes: int = 120
+    # Page cap for the participants report (BE-41). Zoom returns at most 300
+    # rows per page and a next_page_token for the rest; the client follows
+    # it up to this many pages. Reaching the cap with a token still pending
+    # is a FAILURE (no ingest, the poller retries, the deadline fallback
+    # bounds it) -- never a truncated report, which would record everyone
+    # past the cap as a no-show. 200 pages = 60 000 rows, about twice the
+    # ~27 000 estimated for 18 000 participants with rejoins; the estimate
+    # may be off, hence a setting rather than a constant.
+    zoom_report_max_pages: int = 200
+
+    # -- Anonymous guest path, /z/{code}/guest (BE-66) --
+    # Ceiling on generated guest names per practice. Regenerating keeps the
+    # earlier names taken (owner ruling, no release path), so without a
+    # ceiling a loop of GETs grows zoom_guest_names -- and the cost of every
+    # next claim -- without bound. A few hundred people with regenerations
+    # stay under 1000; a curl loop stops there as it would at 300. Reaching
+    # it shows the page without a proposed name. Soft: count and insert are
+    # not atomic, so concurrent guests may overshoot by their number. An
+    # estimate, hence a setting.
+    zoom_guest_names_max_per_practice: int = 1000
+    # Per-source limits on the two guest endpoints, fixed window. Over the
+    # limit the path DEGRADES instead of refusing -- a public address may be
+    # a whole NAT (office, cafe, mobile carrier): GET shows the page without
+    # a proposed name and writes nothing, POST sends the guest to the shared
+    # registrant without calling Zoom. GET is generous: row growth is
+    # bounded by the ceiling above, so this limit is about load, not
+    # correctness. POST guards the Zoom registrant quota -- against ONE
+    # abusive source only; a legitimate crowd from many addresses can still
+    # exhaust the account-wide quota, and only the shared-registrant
+    # fallback covers that.
+    guest_view_rate_limit: int = 300
+    guest_enter_rate_limit: int = 20
+    guest_rate_limit_window_seconds: int = 600
 
     # -- Curator groups / schools killswitch (GT-19) --
     # AN EMERGENCY BRAKE, NOT A ROLLOUT TOGGLE. Default True: the feature
@@ -583,7 +675,7 @@ class Settings(BaseSettings):
     # WHY SCHOOLS NEED A BRAKE AT ALL, unlike the four worker toggles above:
     # they change what OTHER PEOPLE see. A practice with
     # audience_kind='curator_groups' is hidden from anyone outside the
-    # target school, so a fault in school membership or in a curator's
+    # school it belongs to, so a fault in school membership or in a curator's
     # verification state removes practices from the calendars of people who
     # have never heard of schools. That is the blast radius this flag is
     # sized for.
@@ -944,9 +1036,7 @@ class Settings(BaseSettings):
         the app simply fails to connect to Redis -- a loud failure at
         startup, not a silent one. A redis_password field is deliberately
         NOT added to close this gap: it would be Settings surface with no
-        runtime consumer, the exact kind of dead field this file already
-        warns against elsewhere (see zoom_attendance_threshold_minutes
-        above).
+        runtime consumer, a dead field.
         """
         offenders: list[str] = []
         if self.secret_key == _PLACEHOLDER_SECRET_KEY:

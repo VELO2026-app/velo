@@ -74,20 +74,42 @@ describe('MasterGroupCreateView', () => {
   it('G17 (PROMPT №609): shows the «Основное» section heading', () => {
     mount()
 
-    expect(host?.querySelector('.velo-section-title')?.textContent).toBe('Основное')
+    expect(host?.querySelector('.velo-section-title')?.textContent?.trim()).toBe('Основное *')
   })
 
-  it('owner Q6 (PROMPT №610): shows the required-fields legend', () => {
+  it('owner 2026-10-01: the legend is hidden -- the section star replaces it', () => {
     mount()
 
-    expect(host?.textContent).toContain('— поля, обязательные для заполнения')
+    expect(host?.querySelector('.new-group__legend')).toBeNull()
+    expect(host?.querySelector('.new-group__req')).not.toBeNull()
+    expect(host?.querySelector('.cp-req')).toBeNull()
   })
 
-  it('owner Q6/Q4 (PROMPT №610): «Название» carries the required seal, «Описание» does not', () => {
+  it('owner 2026-10-01: «Название» carries no rosette -- the canon is the section star', () => {
     mount()
 
-    expect(host?.querySelector('.v-input__seal')).not.toBeNull()
+    expect(host?.querySelector('.v-input__seal')).toBeNull()
     expect(host?.querySelector('.v-textarea__seal')).toBeNull()
+  })
+
+  it('owner 2026-10-01: an empty submit shows the inline slot error and scrolls to it', async () => {
+    if (!('scrollIntoView' in Element.prototype)) {
+      Object.defineProperty(Element.prototype, 'scrollIntoView', {
+        value: vi.fn(),
+        configurable: true,
+        writable: true,
+      })
+    }
+    const scrollSpy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {})
+    mount()
+    await flush()
+    submitBtn()?.click()
+    await flush()
+    expect(vi.mocked(groupsApi.createGroup)).not.toHaveBeenCalled()
+    const slot = host?.querySelector('.new-group__field-error--show')
+    expect(slot?.textContent).toBe('Введите название группы')
+    expect(scrollSpy).toHaveBeenCalled()
+    scrollSpy.mockRestore()
   })
 
   it('owner Q4 (PROMPT №610): renders an optional «Описание» textarea', () => {

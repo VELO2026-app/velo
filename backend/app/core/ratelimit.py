@@ -1,0 +1,118 @@
+# =============================================================================
+# VELO Backend -- Shared rate-limit primitives (BE-66)
+# =============================================================================
+#
+# ONE implementation of the fixed-window counter and of "which sources may be
+# limited at all", shared by auth (auth/service.py) and the anonymous guest
+# path (practices/router.py). Before BE-66 the counter lived inline in auth
+# twice; a second hand-rolled copy for the guest path would have been the
+# third, and BE-44 is the fourth caller waiting.
+#
+# Two lessons are encoded here, both paid for:
+#
+# 1. TTL ON THE FIRST INCREMENT ONLY. Setting it on every request slides the
+#    window forward with each hit, and the limit never triggers. The other
+#    "eternal" limit is the opposite one: a counter with NO TTL, which never
+#    resets. BE-44 found it -- INCR and EXPIRE sent as two commands, a lost
+#    connection between them -- and count_in_window now sends them as one
+#    MULTI/EXEC.
+#
+# 2. A SOURCE THAT IS NOT A ROUTABLE PUBLIC ADDRESS IS NOT LIMITED -- it is
+#    passed, never keyed. Keyed on every address, the first per-source
+#    limiter put the whole backend suite (644 logins from 127.0.0.1) into one
+#    bucket and turned it red. Loopback and private addresses are our own
+#    infrastructure showing through: the test client, a health check, the
+#    nginx peer used when X-Real-IP is absent or unusable. Limiting on them
+#    bounds no attacker; it shares one counter between everybody it cannot
+#    tell apart.
+#
+#    Named honestly, the failure mode this leaves: if nginx stopped setting
+#    X-Real-IP, every request would resolve to the proxy's private address
+#    and every per-source limit would silently stop applying. That
+#    is a degradation to OFF, chosen deliberately over a degradation to
+#    OUTAGE (one shared bucket for every client at once). Between a control
+#    that stops helping and a control that takes the service down, these may
+#    only do the former.
+#
+# WHERE THE SOURCE COMES FROM. core/middleware.py resolves it: X-Real-IP,
+# which nginx overwrites with the connection address, and only from our own
+# proxy; X-Forwarded-For is not read (BE-40). A sender cannot pick its
+# bucket by writing a header.
+#
+# REDIS FAILURES ARE NOT SWALLOWED HERE. Whether a limiter fails open or
+# closed is the caller's decision -- auth and the guest path decide
+# differently, for different reasons, each documented at its call site.
+# =============================================================================
+
+import ipaddress
+
+import redis.asyncio as aioredis
+
+from app.core.redis import get_redis
+
+
+def limitable_source(source: str | None) -> bool:
+    """True only for a routable public address -- the one kind of source a
+    per-source limit may key on (lesson 2 above).
+
+    None (no client in scope), a value that is not an address at all, and
+    every non-global address -- loopback, private, link-local, and the
+    documentation ranges such as 203.0.113.0/24 -- are passed, not limited.
+    """
+    if not source:
+        return False
+    try:
+        return ipaddress.ip_address(source).is_global
+    except ValueError:
+        # Not an address -- the middleware should never produce this, and
+        # guessing at a key for it is exactly what lesson 2 forbids.
+        return False
+
+
+async def count_in_window(
+    redis: aioredis.Redis, key: str, window_seconds: int,
+) -> int:
+    """Increment `key`'s fixed-window counter and return the new count.
+
+    The TTL is set on the FIRST increment only (lesson 1): the window is
+    anchored at the first hit and expires whole, never slid forward. The
+    increment and the TTL travel in one MULTI/EXEC, so a key can never be
+    left counted but without a TTL (BE-44).
+
+    `redis` is passed in rather than looked up so each caller keeps its own
+    client lookup (auth's tests patch auth.service.get_redis). Redis errors
+    propagate -- fail-open or fail-closed is the caller's call.
+    """
+    # BE-44: ONE round trip, MULTI/EXEC. INCR and EXPIRE used to be two
+    # commands, and a connection lost between them left the key with no
+    # TTL -- a counter that never expires, i.e. a source limited forever.
+    # Queued in one transaction, either both run or neither does.
+    #
+    # NX keeps lesson 1 without a client-side "count == 1" branch: EXPIRE NX
+    # sets a TTL only on a key that has none, which is the key INCR has just
+    # created -- the first hit. Later hits find the TTL already there and
+    # leave it alone, so the window is never slid forward. A key left with
+    # no TTL by the old two-command form also has none, so it gets one on
+    # its next hit instead of staying eternal. NX needs Redis 7.0+
+    # (docker-compose pins redis:7-alpine; the stand reports 7.4.9).
+    pipe = redis.pipeline(transaction=True)
+    pipe.incr(key)
+    pipe.expire(key, window_seconds, nx=True)
+    count, _ = await pipe.execute()
+    return int(count)
+
+
+async def over_source_limit(
+    bucket: str, source: str | None, *, limit: int, window_seconds: int,
+) -> tuple[bool, int]:
+    """Count one hit for `source` in `bucket`; (over the limit?, count).
+
+    A source that is not limitable_source() is never counted and never
+    over: (False, 0), and no key is written. Redis errors propagate.
+    """
+    if not limitable_source(source):
+        return False, 0
+    count = await count_in_window(
+        get_redis(), f"{bucket}:{source}", window_seconds,
+    )
+    return count > limit, count

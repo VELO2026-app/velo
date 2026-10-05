@@ -19,12 +19,7 @@
       </div>
 
       <!-- Error (SW8): distinct from "not found" -- retry, not a dead end. -->
-      <VEmptyState
-        v-else-if="error"
-        icon="warning"
-        title="Ошибка загрузки"
-        :description="error"
-      >
+      <VEmptyState v-else-if="error" icon="warning" title="Ошибка загрузки" :description="error">
         <VButton size="sm" variant="outline" @click="loadReport">Повторить</VButton>
       </VEmptyState>
 
@@ -239,7 +234,7 @@ async function onResolve(): Promise<void> {
     await resolveReport(reportId, resolveNote.value.trim())
     toast.success('Жалоба решена')
     // S-1/S-2: push to list instead of back() -- guarantees fresh loadInitial().
-    router.push({ name: 'admin-reports' })
+    void router.push({ name: 'admin-reports' })
   } catch (e) {
     toast.error(extractApiError(e, 'Ошибка при обработке'))
   } finally {
@@ -254,7 +249,7 @@ async function onDismiss(): Promise<void> {
     await dismissReport(reportId, dismissNote.value.trim() || undefined)
     toast.success('Жалоба отклонена')
     // S-1/S-2: push to list instead of back() -- guarantees fresh loadInitial().
-    router.push({ name: 'admin-reports' })
+    void router.push({ name: 'admin-reports' })
   } catch (e) {
     toast.error(extractApiError(e, 'Ошибка при обработке'))
   } finally {

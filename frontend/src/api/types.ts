@@ -15,6 +15,8 @@
 
 export type {
   AISummaryResponse,
+  AdminCuratorGroupCuratorRef,
+  AdminCuratorGroupListItem,
   AdminMasterActionResponse,
   AdminMasterDetail,
   AdminMasterListItem,
@@ -44,26 +46,56 @@ export type {
   ClaimMasterInviteResponse,
   CreateBookingRequest,
   CreateCompanyPromoRequest,
+  CreateCuratorGroupRequest,
   CreateDiaryEntryRequest,
+  CreateExternalActivityRequest,
   CreateMasterPromoRequest,
   CreateReportRequest,
   CreateWithdrawalRequest,
+  CuratorGroupAnalyticsResponse,
+  CuratorGroupCheckinItem,
+  CuratorGroupCuratorRef,
+  CuratorGroupDeletePreviewResponse,
+  CuratorGroupEventActor,
+  CuratorGroupEventItem,
+  CuratorGroupInvitePreviewGroup,
+  CuratorGroupInvitePreviewResponse,
+  CuratorGroupInviteResponse,
+  CuratorGroupLeavePreviewResponse,
+  CuratorGroupListResponse,
+  CuratorGroupMasterItem,
+  CuratorGroupMasterOfferRequest,
+  CuratorGroupMemberItem,
+  CuratorGroupMineItem,
+  CuratorGroupMineResponse,
+  CuratorGroupPageResponse,
+  CuratorGroupRemovePreviewResponse,
+  CuratorGroupResponse,
+  CuratorGroupRosterItem,
+  CuratorGroupBlockedItem,
+  CuratorGroupReviewItem,
+  CuratorGroupTransferRef,
+  CuratorGroupViewer,
   DiaryEntryResponse,
   DiaryFeedItem,
   DiaryFeedResponse,
   DismissReportRequest,
   ExistingReportResponse,
+  ExternalActivityResponse,
+  ExternalActivityType,
   FeedbackMetricResponse,
-  FeedbackRatingDistribution,
   FeedbackRequest,
   FeedbackResponse,
   IncomeResponse,
   InviteMasterResponse,
+  JoinCuratorGroupRequest,
+  JoinCuratorGroupResponse,
   LowCheckinPractice,
   MasterApplyExperience,
   MasterApplyProfile,
   MasterApplyRequest,
   MasterApplyResponse,
+  MasterGroupRightResponse,
   MasterProfileResponse,
   MasterPublicResponse,
   MasterReviewItem,
@@ -72,11 +104,19 @@ export type {
   MethodChangeActionResponse,
   MethodChangeRequest,
   MethodChangeRequestSubmit,
-  MoodDistribution,
+  OfferCuratorGroupTransferRequest,
+  PaginatedAdminCuratorGroupsResponse,
   PaginatedAdminPracticesResponse,
   PaginatedAdminWithdrawalsResponse,
   PaginatedBookingsResponse,
   PaginatedCheckinsResponse,
+  PaginatedCuratorGroupCheckinsResponse,
+  PaginatedCuratorGroupEventsResponse,
+  PaginatedCuratorGroupMastersResponse,
+  PaginatedCuratorGroupMembersResponse,
+  PaginatedCuratorGroupReviewsResponse,
+  PaginatedCuratorGroupRosterResponse,
+  PaginatedCuratorGroupBlocksResponse,
   PaginatedDiaryEntriesResponse,
   PaginatedFeedbacksResponse,
   PaginatedMasterReviewsResponse,
@@ -88,7 +128,12 @@ export type {
   PaginatedPromosResponse,
   PaginatedPurchasesResponse,
   PaginatedReportsResponse,
+  PaginatedPracticeAnalyticsPairs,
+  PaginatedPracticeAnalyticsReviews,
   PaginatedReviewsResponse,
+  PracticeAnalyticsPair,
+  PracticeAnalyticsResponse,
+  PracticeAnalyticsReview,
   PaginatedStudentsResponse,
   PaginatedTransactionsResponse,
   PaginatedUserReportsResponse,
@@ -104,8 +149,9 @@ export type {
   PurchaseRequest,
   PurchaseResponse,
   PurchaseWithPracticeResponse,
-  RatingDistribution,
   RecurrenceSpec,
+  ReflectionRequest,
+  ReflectionResponse,
   RejectMasterRequest,
   RejectMethodChangeRequest,
   RejectWithdrawalRequest,
@@ -114,6 +160,11 @@ export type {
   ResolveReportRequest,
   ReturnMetricResponse,
   ReviewItem,
+  SchoolStudentCheckinItem,
+  SchoolStudentFeedbackItem,
+  SchoolStudentProfileResponse,
+  ScoreZone,
+  ScoreZoneCounts,
   SeriesPoint,
   StudentCheckinItem,
   StudentDetailResponse,
@@ -123,6 +174,7 @@ export type {
   TopUser,
   TopupRequest,
   TopupResponse,
+  UpdateCuratorGroupRequest,
   UpdateDiaryEntryRequest,
   UpdateReportRequest,
   MasterApplicationInfo,
@@ -236,11 +288,10 @@ export interface PracticeResponse extends GeneratedPracticeResponse {
   audience_group_names?: string[]
 }
 
-export interface PracticeSummary extends GeneratedPracticeSummary {
-  /* T-35: zoom_meeting_status is native in generated.ts now; this alias is
-   * kept so the many existing imports of PracticeSummary from '@/api/types'
-   * keep resolving to one name. */
-}
+/* T-35: zoom_meeting_status is native in generated.ts now; this alias is
+ * kept so the many existing imports of PracticeSummary from '@/api/types'
+ * keep resolving to one name. */
+export type PracticeSummary = GeneratedPracticeSummary
 
 export interface BookingWithPracticeResponse extends GeneratedBookingWithPracticeResponse {
   /** This booking's own Zoom registrant link (the personal ?tk= URL), or
@@ -380,13 +431,9 @@ export type { WithdrawalStatus } from './generated'
 // 'confirmed' instead of 'converted' -- removed to avoid shadowing the
 // generated type.
 //
-// Mood / FeedbackRating are UI BUCKETS, not the raw backend value. On the
-// backend a check-in mood and a feedback rating are each a 1..10 score; the
-// frontend groups that score into three labelled buckets for the faces / glyphs
-// (see MOOD_OPTIONS / RATING_OPTIONS in displayHelpers.ts, where each bucket
-// carries its numeric `score`). These are intentionally frontend-only.
-export type Mood = 'low' | 'mid' | 'high'
-export type FeedbackRating = 'fire' | 'good' | 'confused'
+// Zones of a 1..10 mood / rating (BE-77) are ScoreZone, re-exported above from
+// generated.ts; utils/moodScale.ts holds the matching keys + labels and
+// type-checks MoodScaleKey against ScoreZone. No hand-written zone type here.
 
 // -- Diary feed (unified timeline) --
 // Event kinds are a closed vocabulary on the backend (DiaryEventKind). We
@@ -406,6 +453,11 @@ export type DiaryEventKind =
   // A conversation with a master began (one row per thread, written by the
   // chat proxy on create-or-get). Snapshot: {thread_id, master_id, master_name}.
   | 'thread_started'
+  // BE-27 (FE-70): an activity the person did OUTSIDE velo, entered by hand.
+  // Snapshot: {activity_type, custom_activity_name, mood, thoughts_preview}
+  // -- the caption/icon come from activity_type (custom -> the raw name);
+  // occurred_at is the activity's OWN time, not the write time.
+  | 'external_activity'
 
 // Filter chips on the feed. Map 1:1 onto backend \`category\` query values
 // (settings.diary_feed_categories). Omitting category = "Все". Query-param

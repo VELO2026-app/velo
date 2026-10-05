@@ -31,7 +31,7 @@ from app.core.config import settings
 from app.core.database import get_session_factory
 from app.core.events.models import OutboxEvent
 from app.modules.bookings.models import Booking
-from app.modules.diary.models import Checkin, DiaryEvent, Feedback
+from app.modules.diary.models import Checkin, DiaryEvent, Feedback, Reflection
 from app.modules.masters.groups_models import (
     GroupInvite,
     MasterGroup,
@@ -275,6 +275,7 @@ async def full_cleanup_range(
     # -----------------------------------------------------------------------
     # 3. checkins   FK -> users.id (CASCADE), practices.id (SET NULL)
     # 4. feedbacks  FK -> users.id (CASCADE), practices.id (SET NULL)
+    # 4a. reflections  FK -> users.id, practices.id, bookings.id (CASCADE)
     # 4b. diary_events  FK -> users.id (CASCADE). Append-only feed journal
     #     (Diary redesign). No table references it yet (relations socket is
     #     future), so it can be deleted here with the other diary tables.
@@ -285,6 +286,9 @@ async def full_cleanup_range(
     )
     await session.execute(
         delete(Feedback).where(Feedback.user_id.in_(user_ids_subq))
+    )
+    await session.execute(
+        delete(Reflection).where(Reflection.user_id.in_(user_ids_subq))
     )
     await session.execute(
         delete(DiaryEvent).where(DiaryEvent.user_id.in_(user_ids_subq))

@@ -8,7 +8,8 @@
 #   GET /masters/me/students
 #     - lists users with >= 1 attended booking; non-attended excluded
 #     - practices_count = attended practices
-#     - needs_attention = latest feedback in confused bucket (<= 3); latest wins
+#     - needs_attention = latest feedback rating <= 4 (zones bad + low,
+#       BE-77); latest wins
 #     - name search; offset/limit pagination
 #     - requires verified master (403) / no auth (401)
 #   GET /masters/me/students/{id}
@@ -284,14 +285,19 @@ async def test_students_needs_attention(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """needs_attention reflects each student's latest feedback bucket."""
+    """needs_attention reflects each student's latest feedback rating.
+
+    BE-77 moved the threshold from <= 3 to <= 4. The inputs used to be 2 and
+    9, which both thresholds classify alike; they are now 4 and 5, the two
+    sides of the new boundary -- the 4 is flagged, the 5 is not.
+    """
     master = await _make_verified_master(client, db_session, telegram_id=91903)
     practice = await _create_completed_practice(db_session, master["user"]["id"])
 
     _u1, b1 = await _attend(client, db_session, practice, 91030, first_name="Sad")
-    await _add_feedback(db_session, practice, _u1, b1, rating=2)
+    await _add_feedback(db_session, practice, _u1, b1, rating=4)
     _u2, b2 = await _attend(client, db_session, practice, 91031, first_name="Happy")
-    await _add_feedback(db_session, practice, _u2, b2, rating=9)
+    await _add_feedback(db_session, practice, _u2, b2, rating=5)
     # No feedback at all -> not flagged.
     await _attend(client, db_session, practice, 91032, first_name="Quiet")
     await db_session.commit()
@@ -309,7 +315,7 @@ async def test_students_needs_attention_latest_wins(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """An old confused feedback is overridden by a newer positive one."""
+    """An old attention feedback is overridden by a newer positive one."""
     master = await _make_verified_master(client, db_session, telegram_id=91904)
     mid = master["user"]["id"]
     p1 = await _create_completed_practice(db_session, mid)

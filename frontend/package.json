@@ -3,15 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@12.4.2",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
+    "build": "vue-tsc --noEmit --incremental && vite build",
     "preview": "vite preview",
-    "lint": "eslint src/",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test",
+    "verify:quick": "node scripts/verify-quick.mjs",
+    "lint": "node scripts/lint-budget.mjs",
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write src/",
     "format:check": "prettier --check src/",
-    "typecheck": "vue-tsc --noEmit",
+    "typecheck": "vue-tsc --noEmit --incremental",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -36,7 +39,7 @@
     "eslint": "^9.20.0",
     "eslint-plugin-vue": "^9.32.0",
     "globals": "^15.15.0",
-    "happy-dom": "^17.0.0",
+    "happy-dom": "^20.14.5",
     "husky": "^9.1.7",
     "lint-staged": "^17.2.0",
     "prettier": "^3.5.0",
@@ -44,7 +47,10 @@
     "typescript-eslint": "^8.24.0",
     "vite": "^6.1.0",
     "vite-plugin-pwa": "^0.21.0",
-    "vitest": "^3.0.0",
+    "vitest": "^4.1.11",
     "vue-tsc": "^2.2.0"
+  },
+  "engines": {
+    "node": ">=24"
   }
 }

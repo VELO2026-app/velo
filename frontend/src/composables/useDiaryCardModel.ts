@@ -14,26 +14,19 @@
 // Inputs are getters so callers pass `() => props.item` and stay reactive.
 
 import { computed, type ComputedRef, type Component } from 'vue'
-import {
-  IconPen,
-  IconDreamBook,
-  IconDiaryBook,
-  IconMessages,
-  IconMoodMid,
-  IconRatingGood,
-} from '@/components/icons'
+import { IconPen, IconDreamBook, IconDiaryBook, IconMessages } from '@/components/icons'
 import {
   FEED_KIND_TITLE,
   OUTCOME_LABEL,
-  moodZoneFromScore,
-  ratingZoneFromScore,
-  moodLabelFromScore,
-  ratingLabelFromScore,
+  EXTERNAL_ACTIVITY_LABEL,
+  EXTERNAL_ACTIVITY_ICON,
   practiceIconFor,
 } from '@/utils/displayHelpers'
-import { MOOD_ICON, RATING_ICON } from '@/utils/ratingIcons'
+import { EXTERNAL_ACTIVITY_MOOD_HIDDEN } from '@/utils/constants'
+import { MOOD_SCALE_DEFAULT_SCORE, moodKeyFromScore, moodLabelFromScore } from '@/utils/moodScale'
+import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
 import { formatTime, formatDate, formatDuration } from '@/utils/format'
-import type { DiaryFeedItem, DiaryEventKind } from '@/api/types'
+import type { DiaryFeedItem, DiaryEventKind, ExternalActivityType } from '@/api/types'
 
 const BANNER_KINDS: DiaryEventKind[] = [
   'booking_confirmed',
@@ -62,13 +55,14 @@ export interface DiaryCardModel {
   practiceTitle: ComputedRef<string>
   masterName: ComputedRef<string>
   masterAvatarUrl: ComputedRef<string | null>
-  masterVerified: ComputedRef<boolean>
   practiceTime: ComputedRef<string>
   practiceDuration: ComputedRef<string>
   outcomeStatus: ComputedRef<string>
   outcomeLabel: ComputedRef<string>
-  /** Rating label alone (for the thread side-card tag). */
+  /** Rating label alone (score -> zone label; the thread bubble's no-comment fallback). */
   ratingLabel: ComputedRef<string>
+  /** Mood label alone (score -> zone label; the check-in bubble's no-comment fallback). */
+  moodLabel: ComputedRef<string>
   /** note / dream are editable (open the entry screen). */
   editable: ComputedRef<boolean>
 }
@@ -98,7 +92,27 @@ export function useDiaryCardModel(
     return typeof v === 'number' ? v : null
   }
 
-  const baseTitle = computed(() => FEED_KIND_TITLE[kind.value] ?? '')
+  // external_activity: the snapshot's activity_type narrowed to the closed
+  // union (an unknown value degrades to null -> empty caption + fallback
+  // glyph, never a raw key on the card).
+  const activityType = computed<ExternalActivityType | null>(() => {
+    if (kind.value !== 'external_activity') return null
+    const raw = snapStr('activity_type')
+    return raw !== null && raw in EXTERNAL_ACTIVITY_LABEL ? (raw as ExternalActivityType) : null
+  })
+
+  const baseTitle = computed(() => {
+    if (kind.value === 'external_activity') {
+      // The caption IS the activity: dictionary label by type, the user's own
+      // name for custom (verbatim, no dictionary), like practice_outcome
+      // reads its title from the snapshot.
+      if (activityType.value === 'custom') {
+        return snapStr('custom_activity_name') ?? 'Свой вариант'
+      }
+      return activityType.value !== null ? EXTERNAL_ACTIVITY_LABEL[activityType.value] : ''
+    }
+    return FEED_KIND_TITLE[kind.value] ?? ''
+  })
 
   const title = computed(() => {
     const base = baseTitle.value
@@ -108,7 +122,20 @@ export function useDiaryCardModel(
     }
     if (kind.value === 'feedback') {
       const rating = snapNum('rating')
-      return rating !== null ? `${base}: ${ratingLabelFromScore(rating)}`.trim() : base
+      // The unified scale names BOTH kinds with the same five labels --
+      // a saved rating is never re-labelled a different emotion (tz §1).
+      return rating !== null ? `${base}: ${moodLabelFromScore(rating)}`.trim() : base
+    }
+    if (kind.value === 'external_activity') {
+      // The mood is the NUMBER 1..10 (FE-70 ruling: in the app, unlike the
+      // Telegram notifications' basket) -- a zone label would blur three
+      // different scores into one caption. WHILE the create form's mood block
+      // is hidden (EXTERNAL_ACTIVITY_MOOD_HIDDEN) every event carries the
+      // neutral centre (6) -- a fabricated score must not read as the
+      // person's answer, so the suffix stays off until the flag flips.
+      const mood = snapNum('mood')
+      if (mood === null || EXTERNAL_ACTIVITY_MOOD_HIDDEN) return base
+      return `${base} · ${mood}/10`
     }
     return base
   })
@@ -120,6 +147,7 @@ export function useDiaryCardModel(
     // line here is WHO the conversation is with -- the only consumer of
     // master_name for this kind.
     if (kind.value === 'thread_started') return snapStr('master_name')
+    if (kind.value === 'external_activity') return snapStr('thoughts_preview')
     return snapStr('content_preview') ?? snapStr('comment_preview') ?? snapStr('comment')
   })
 
@@ -144,7 +172,6 @@ export function useDiaryCardModel(
   const practiceTitle = computed(() => snapStr('practice_title') ?? 'Практика')
   const masterName = computed(() => snapStr('master_name') ?? '')
   const masterAvatarUrl = computed(() => snapStr('master_avatar_url'))
-  const masterVerified = computed(() => snap.value['master_verified'] === true)
   // Practice card shows time + duration (not the full date — the day is in the
   // timeline's day separator). Duration comes from the snapshot (backend).
   const practiceTime = computed(() => {
@@ -168,15 +195,20 @@ export function useDiaryCardModel(
   const standardIcon = computed<Component>(() => {
     switch (kind.value) {
       case 'checkin':
-        return MOOD_ICON[moodZoneFromScore(snapNum('mood') ?? 6)] ?? IconMoodMid
+        return MOOD_SCALE_ICON[moodKeyFromScore(snapNum('mood') ?? MOOD_SCALE_DEFAULT_SCORE)]
       case 'feedback':
-        return RATING_ICON[ratingZoneFromScore(snapNum('rating') ?? 6)] ?? IconRatingGood
+        // The same five faces as the check-in -- one scale everywhere (tz §1).
+        return MOOD_SCALE_ICON[moodKeyFromScore(snapNum('rating') ?? MOOD_SCALE_DEFAULT_SCORE)]
       case 'note':
         return IconDiaryBook
       case 'dream':
         return IconDreamBook
       case 'thread_started':
         return IconMessages
+      case 'external_activity':
+        // One owner artwork for every activity type -- the label carries the
+        // type (dictionary label or the custom name).
+        return EXTERNAL_ACTIVITY_ICON
       default:
         return IconPen
     }
@@ -187,7 +219,12 @@ export function useDiaryCardModel(
 
   const ratingLabel = computed(() => {
     const rating = snapNum('rating')
-    return rating !== null ? ratingLabelFromScore(rating) : ''
+    return rating !== null ? moodLabelFromScore(rating) : ''
+  })
+
+  const moodLabel = computed(() => {
+    const mood = snapNum('mood')
+    return mood !== null ? moodLabelFromScore(mood) : ''
   })
 
   // Time only ("23:07"): the day + weekday live in the timeline's day
@@ -211,12 +248,12 @@ export function useDiaryCardModel(
     practiceTitle,
     masterName,
     masterAvatarUrl,
-    masterVerified,
     practiceTime,
     practiceDuration,
     outcomeStatus,
     outcomeLabel,
     ratingLabel,
+    moodLabel,
     editable,
   }
 }

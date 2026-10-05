@@ -28,10 +28,11 @@
 
 import math
 from datetime import UTC, datetime, timedelta
+from collections.abc import Sequence
 from uuid import UUID
 
 import structlog
-from sqlalchemy import func, select
+from sqlalchemy import Row, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.periods import calendar_period_bounds, shift_anchor
@@ -39,22 +40,18 @@ from app.modules.admin.metrics.schemas import (
     CheckinMetricResponse,
     FeedbackMetricResponse,
     LowCheckinPractice,
-    FeedbackRatingDistribution,
     ReturnMetricResponse,
     SeriesPoint,
     TopUser,
 )
 from app.modules.bookings.models import Booking, BookingStatus
+from app.modules.diary.insights_service import zone_counts
 from app.modules.diary.models import Checkin, Feedback
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.users.helpers import display_name
 from app.modules.users.models import User
 
 logger = structlog.get_logger()
-
-# Rating buckets (mirror E1 / diary insights): confused 1-3, good 4-7, fire 8+.
-_CONFUSED_MAX = 3
-_GOOD_MAX = 7
 
 # How many practices / users to surface in the low / top sections.
 _LOW_LIMIT = 5
@@ -227,13 +224,12 @@ async def get_feedback_metric(
     past_ids = [r.id for r in past]
     visited = len(past)  # total PAST practices in the period
 
-    # All feedbacks on those past practices: bucket ratings + which practices
+    # All feedbacks on those past practices: zone counts + which practices
     # have >=1 feedback (numerator). Per-practice denominator makes the rate
     # <= 100% structurally (former W-3 concern is now inherent).
     left_review = 0
-    fire = good = confused = 0
+    rows: Sequence[Row[tuple[UUID, int]]] = ()
     if past_ids:
-        feedback_practice_ids: set[UUID] = set()
         rows = (
             await session.execute(
                 select(Feedback.practice_id, Feedback.rating).where(
@@ -241,23 +237,14 @@ async def get_feedback_metric(
                 )
             )
         ).all()
-        for pid, rating in rows:
-            feedback_practice_ids.add(pid)
-            if rating <= _CONFUSED_MAX:
-                confused += 1
-            elif rating <= _GOOD_MAX:
-                good += 1
-            else:
-                fire += 1
-        left_review = len(feedback_practice_ids)
+        left_review = len({pid for pid, _ in rows})
 
     return FeedbackMetricResponse(
         rate_pct=_pct(left_review, visited),
         visited=visited,
         left_review=left_review,
-        distribution=FeedbackRatingDistribution(
-            fire=fire, good=good, confused=confused,
-        ),
+        # One row per feedback -> a count of 1 per score.
+        distribution=zone_counts((rating, 1) for _, rating in rows),
     )
 
 

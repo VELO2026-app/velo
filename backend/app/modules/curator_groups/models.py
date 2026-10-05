@@ -24,13 +24,13 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import (
     BigInteger,
+    ColumnElement,
     DateTime,
     ForeignKey,
     Identity,
     Index,
     String,
     Text,
-    UniqueConstraint,
     func,
 )
 from sqlalchemy import text as sa_text
@@ -45,11 +45,11 @@ from app.core.mixins import TimestampMixin, UUIDMixin
 class CuratorMemberKind(enum.StrEnum):
     """What kind of relation one membership row describes.
 
-    ONE enum serves both curator_group_member.kind and
-    curator_group_invite.kind (GT-3): the value sets are identical
-    ('master' | 'student') and a second enum spelling the same two strings
-    would be a copy -- the first edit to one of them would leave the other
-    lying.
+    Types curator_group_member.kind and nothing else. Until GT-27 this enum
+    also served curator_group_invite.kind -- one enum for two columns, since
+    the value sets were identical and a second spelling would have been a
+    copy. That column is gone with the second invite link: everyone joins as
+    a student and a curator appoints masters by offer.
 
     Stored as String(10), never a PG ENUM -- same choice as
     Practice.audience_kind (practices/models.py): a PG ENUM needs a migration
@@ -58,6 +58,22 @@ class CuratorMemberKind(enum.StrEnum):
 
     MASTER = "master"
     STUDENT = "student"
+
+
+class CuratorMasterOfferState(enum.StrEnum):
+    """Where a pending school-master offer stands, as its curator sees it.
+
+    NOT A COLUMN (BE-59). CuratorGroupMasterOffer stays "a row is the
+    offer", and this is computed from the candidate's live verification
+    (curator_groups/service.py::_master_offer_state_expr): a verification
+    or a revocation moves every offer of the person without a write here,
+    and a stored copy would be one more thing to keep in step with
+    master_profiles. "No offer" is the absence of a value, not a third
+    member -- there is nothing pending to describe.
+    """
+
+    AWAITING_VERIFICATION = "awaiting_verification"
+    AWAITING_ANSWER = "awaiting_answer"
 
 
 class CuratorGroup(UUIDMixin, TimestampMixin, Base):
@@ -99,11 +115,9 @@ class CuratorGroup(UUIDMixin, TimestampMixin, Base):
     """
 
     __tablename__ = "curator_group"
-    __table_args__ = (
-        UniqueConstraint(
-            "curator_user_id", "name", name="uq_curator_group_curator_name",
-        ),
-    )
+    # The uniqueness of the name is uq_curator_group_curator_name_key, an
+    # EXPRESSION index declared right after this class (it needs the
+    # column objects): see curator_group_name_key.
 
     curator_user_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
@@ -118,6 +132,57 @@ class CuratorGroup(UUIDMixin, TimestampMixin, Base):
             f"<CuratorGroup id={self.id} "
             f"curator_user_id={self.curator_user_id} name={self.name!r}>"
         )
+
+
+# ---------------------------------------------------------------------------
+# The school name's identity (BE-48 / BE-49, owner decisions 2026-10-03)
+# ---------------------------------------------------------------------------
+#
+# Two names of ONE curator are the same school name when they match ignoring
+# case and with whitespace collapsed: «Школа Йоги», «школа йоги» and
+# «Школа  Йоги» are one name. The name is STORED as typed (after the schema's
+# strip); only the comparison is normalised.
+#
+# THE RULE LIVES IN SQL ONLY, in this one builder. Python does not normalise:
+# measured on the stand's locale (en_US.utf8), Python and Postgres disagree on
+# what whitespace is (Python's \s takes U+00A0, Postgres's does not) and on
+# lower('İ'), so a Python copy of the rule would be a second, different rule.
+# The unique index below and the three pre-checks in service.py (create,
+# rename, accepting a transfer) call this builder; the migration that created
+# the index carries its literal as DDL history, and
+# tests/test_curator_group_name_rule.py holds the two to the same answers.
+#
+#   whitespace: Postgres's \s (space, tab, newlines, U+2003, U+3000 ...)
+#               PLUS U+00A0 explicitly -- a no-break space pasted from a
+#               phone must not make a different name;
+#   case:       Postgres lower() under the cluster locale (Cyrillic and Ё
+#               fold; locale guarded by test_custom_activity_names);
+#   ё / е:      different letters (no owner decision says otherwise).
+_NAME_WHITESPACE_RUN = "[\\s\u00a0]+"
+
+
+def curator_group_name_key(value: ColumnElement[str] | str) -> ColumnElement[str]:
+    """SQL expression: the comparison key of a school name.
+
+    lower(btrim(regexp_replace(value, '[\\s<U+00A0>]+', ' ', 'g'))) -- every
+    run of whitespace becomes one space, the edges are trimmed, the case is
+    folded. Accepts the column or a plain string (bound as a parameter), so a
+    pre-check compares key(column) with key(new name) and Postgres normalises
+    BOTH sides with the same expression.
+    """
+    return func.lower(
+        func.btrim(func.regexp_replace(value, _NAME_WHITESPACE_RUN, " ", "g"))
+    )
+
+
+# One curator, one school per name KEY. Replaces the exact-match
+# uq_curator_group_curator_name (BE-48 migration).
+Index(
+    "uq_curator_group_curator_name_key",
+    CuratorGroup.curator_user_id,
+    curator_group_name_key(CuratorGroup.name),
+    unique=True,
+)
 
 
 class CuratorGroupMember(UUIDMixin, Base):
@@ -136,8 +201,10 @@ class CuratorGroupMember(UUIDMixin, Base):
 
     __tablename__ = "curator_group_member"
     __table_args__ = (
-        UniqueConstraint(
-            "group_id", "user_id", name="uq_curator_group_member_group_user",
+        Index(
+            "uq_curator_group_member_group_user",
+            "group_id", "user_id",
+            unique=True,
         ),
     )
 
@@ -162,35 +229,113 @@ class CuratorGroupMember(UUIDMixin, Base):
         )
 
 
-class CuratorGroupInvite(UUIDMixin, Base):
-    """A group's reusable join link, one per kind (GT-3 writes it).
+class CuratorGroupBlock(UUIDMixin, Base):
+    """A person the curator blocked in this school (BE-79).
 
-    UNIQUE (group_id, kind) -- one live link per kind, so create-or-return is
-    a plain select-then-insert against the constraint (the shape
-    get_or_create_group_invite already proved for master_group).
-    UNIQUE (token) -- the join-time lookup key.
+    BLOCKING DELETES THE MEMBERSHIP ROW AND WRITES THIS ONE IN ITS PLACE, in
+    one transaction; unblocking does the reverse. Every rule that asks "is
+    this person in the school" reads curator_group_member, so a blocked
+    person is, to all of them at once, somebody who is not in the school --
+    the roster, the counters, "my schools", the audience, the departed
+    master rule of the school's feedback (BE-75) -- with none of them
+    edited. Only the places that must tell "blocked" from "never was here"
+    read this table: joining by the link and its preview, access to the
+    school's practices, a blocked master editing his school practices, and
+    the curator's "Блок" tab.
 
-    Raw token, not a hash: mirrors group_invite's own reasoning -- the link
-    only grants "join this group", is revocable by the curator at any time,
-    and must keep resolving for whoever opens it days later.
+    kind and joined_at are COPIED from the deleted membership row, so an
+    unblock restores the same relation from the same day -- "as it was",
+    with no second join and no second verification (owner, 3 October).
 
-    NO WRITER IN THIS DELIVERY. The table is created now so that GT-3 ships
-    code only; the writer is named, not hypothetical.
+    ONE OF THE TWO, NEVER BOTH -- a member row and a block row for the same
+    (group, user). The database cannot say that across two tables; the
+    writers do. Block and unblock swap the rows inside one transaction, and
+    the one path that inserts a member row for a person who may be blocked
+    -- joining by the link -- re-reads this table after its INSERT
+    (join_curator_group_by_token, K1). No trigger: the rule would then live
+    in two places.
+
+    UNIQUE (group_id, user_id), the same pair as the membership's.
+    kind carries no CHECK, exactly like curator_group_member.kind (read from
+    pg_constraint, not assumed): the two columns hold the same values and
+    one must not be stricter than the other.
+
+    ondelete: CASCADE from the group and from the blocked user -- nothing
+    to keep once either is gone. SET NULL from the curator who blocked:
+    the block outlives the account that made it.
     """
 
-    __tablename__ = "curator_group_invite"
+    __tablename__ = "curator_group_block"
     __table_args__ = (
-        UniqueConstraint(
-            "group_id", "kind", name="uq_curator_group_invite_group_kind",
+        Index(
+            "uq_curator_group_block_group_user",
+            "group_id", "user_id",
+            unique=True,
         ),
-        UniqueConstraint("token", name="uq_curator_group_invite_token"),
     )
 
     group_id: Mapped[UUID] = mapped_column(
         ForeignKey("curator_group.id", ondelete="CASCADE"),
         nullable=False,
     )
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     kind: Mapped[str] = mapped_column(String(10), nullable=False)
+    joined_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+    )
+    blocked_by_user_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    blocked_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<CuratorGroupBlock group_id={self.group_id} "
+            f"user_id={self.user_id} kind={self.kind!r}>"
+        )
+
+
+class CuratorGroupInvite(UUIDMixin, Base):
+    """A group's ONE reusable join link. Everyone who opens it joins as a
+    student.
+
+    UNIQUE (group_id) -- one live link per school, so create-or-return is a
+    plain select-then-insert against the constraint.
+    UNIQUE (token) -- the join-time lookup key.
+
+    THERE USED TO BE TWO LINKS, one per kind, and the constraint used to be
+    UNIQUE (group_id, kind): a master link promoted an existing student to
+    kind='master' on join. That path was cancelled by owner ruling (GT-27) --
+    a school master is now APPOINTED by the curator and the appointment only
+    takes effect once the appointee confirms it (CuratorGroupMasterOffer
+    below). Removed rather than left as a second way in: two ways to become a
+    school master is exactly the shape "no legacy" forbids. Migration
+    gt27a1b2c3d4 dropped the column and the master rows with it.
+
+    Raw token, not a hash: mirrors group_invite's own reasoning -- the link
+    only grants "join this group", is revocable by the curator at any time,
+    and must keep resolving for whoever opens it days later.
+    """
+
+    __tablename__ = "curator_group_invite"
+    __table_args__ = (
+        Index("uq_curator_group_invite_group", "group_id", unique=True),
+        Index("uq_curator_group_invite_token", "token", unique=True),
+    )
+
+    group_id: Mapped[UUID] = mapped_column(
+        ForeignKey("curator_group.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     token: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -198,9 +343,7 @@ class CuratorGroupInvite(UUIDMixin, Base):
     )
 
     def __repr__(self) -> str:
-        return (
-            f"<CuratorGroupInvite group_id={self.group_id} kind={self.kind!r}>"
-        )
+        return f"<CuratorGroupInvite group_id={self.group_id}>"
 
 
 class CuratorGroupTransfer(UUIDMixin, Base):
@@ -215,7 +358,7 @@ class CuratorGroupTransfer(UUIDMixin, Base):
 
     __tablename__ = "curator_group_transfer"
     __table_args__ = (
-        UniqueConstraint("group_id", name="uq_curator_group_transfer_group"),
+        Index("uq_curator_group_transfer_group", "group_id", unique=True),
     )
 
     group_id: Mapped[UUID] = mapped_column(
@@ -238,6 +381,64 @@ class CuratorGroupTransfer(UUIDMixin, Base):
         )
 
 
+class CuratorGroupMasterOffer(UUIDMixin, Base):
+    """A pending offer to make a school member a MASTER of that school (GT-27).
+
+    A ROW IS THE OFFER, same shape as CuratorGroupTransfer above: accepting
+    and declining both DELETE it, so there is no status column to interpret
+    and no half-NULL pair on the membership row. It is a separate table and
+    not a `pending_master` flag on curator_group_member for the reason that
+    flag would blur: the candidate ALREADY has a membership row, and putting
+    the offer on it would mix "what this person is now" with "what they were
+    offered".
+
+    UNIQUE (group_id, to_user_id), NOT UNIQUE (group_id) -- and that is the
+    one place this differs from the transfer it mirrors. A school hands
+    itself over once, so a transfer is one per school; appointments are
+    normal and several can be outstanding at the same time. Repeating an
+    offer to the SAME person is therefore idempotent rather than a 409.
+
+    NOTHING HERE CHANGES member.kind. The promotion happens on confirmation,
+    in accept_curator_group_master_offer, and the member_promoted journal
+    line is written by the FACT OF CONSENT rather than by the appointment --
+    which is why appointing somebody who never answers leaves no trace in
+    the roster.
+
+    The candidate's master capability is checked twice, at offer and at
+    consent, because verification can be revoked in between; see the accept
+    path for why a lapsed candidate is refused WITHOUT the offer being
+    deleted.
+    """
+
+    __tablename__ = "curator_group_master_offer"
+    __table_args__ = (
+        Index(
+            "uq_curator_group_master_offer_group_user",
+            "group_id", "to_user_id",
+            unique=True,
+        ),
+    )
+
+    group_id: Mapped[UUID] = mapped_column(
+        ForeignKey("curator_group.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    to_user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    offered_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<CuratorGroupMasterOffer group_id={self.group_id} "
+            f"to_user_id={self.to_user_id}>"
+        )
+
+
 class CuratorGroupEventKind(enum.StrEnum):
     """What happened in a school. The vocabulary of its journal (GT-16).
 
@@ -245,6 +446,41 @@ class CuratorGroupEventKind(enum.StrEnum):
     CuratorMemberKind above and Practice.audience_kind: this set is
     EXPECTED to grow (notifications land on it next, practice publication
     after that), and a varchar gains a value without a migration.
+
+    GT-27 adds master_offered and master_offer_declined -- and deliberately
+    NOT master_offer_accepted. A taken appointment already has a line:
+    member_promoted, which until GT-27 was written by the join path when a
+    master link upgraded a student and is now written by the fact of
+    consent. Two lines for one outcome would make the roster's history
+    depend on which one a reader trusted.
+
+    PRACTICE_CANCELLED (BE-21) is the first arrival on that promise, and it
+    is deliberately NOT "practice_cancelled_by_curator": _record_group_event
+    stamps actor_name into every row, so naming the actor in the value too
+    would say it twice and would read wrong the day a second kind of actor
+    can cancel. It also sits in the pair the paragraph above predicts, next
+    to a future practice_published.
+
+    PRACTICE_PUBLISHED (BE-30) is the second half of the pair predicted
+    above, and it is written ONLY where the practice's audience still
+    accepts its master: a teacher who left the school stops broadcasting
+    into it (_master_in_curator_group_clause), so a line here about a
+    practice the school can no longer see would be a journal entry with
+    nothing behind it. A SERIES leaves ONE line, on the root -- forty
+    occurrences are one decision to open a course, not forty arrivals.
+
+    MASTER_OFFER_CANCELLED (BE-59) is the curator withdrawing an
+    appointment -- an offer has no expiry, it waits until the curator
+    takes it back. The admin's side of the same offer is NOT here: a
+    verification announcing it and a rejection closing it are decisions
+    about a person, made by somebody outside the school, and a journal row
+    would stamp an admin's name into it. Those reach the school as
+    notifications only.
+
+    MEMBER_DEMOTED (BE-59 B1) is member_promoted's reverse: the curator
+    made a master of the school a student of it again. Written by the fact
+    of the demotion and only when there was a master to demote -- a second
+    demotion of the same person writes nothing.
 
     A DELETED SCHOOL HAS NO "school deleted" EVENT and never will. The
     journal cascades with the group, so the row would be written and
@@ -258,14 +494,22 @@ class CuratorGroupEventKind(enum.StrEnum):
     GROUP_AVATAR_CHANGED = "group_avatar_changed"
     MEMBER_JOINED = "member_joined"
     MEMBER_PROMOTED = "member_promoted"
+    MEMBER_DEMOTED = "member_demoted"
     MEMBER_REMOVED = "member_removed"
     MEMBER_LEFT = "member_left"
+    MEMBER_BLOCKED = "member_blocked"
+    MEMBER_UNBLOCKED = "member_unblocked"
     INVITE_CREATED = "invite_created"
     INVITE_REVOKED = "invite_revoked"
     TRANSFER_OFFERED = "transfer_offered"
     TRANSFER_ACCEPTED = "transfer_accepted"
     TRANSFER_DECLINED = "transfer_declined"
     TRANSFER_CANCELLED = "transfer_cancelled"
+    PRACTICE_CANCELLED = "practice_cancelled"
+    PRACTICE_PUBLISHED = "practice_published"
+    MASTER_OFFERED = "master_offered"
+    MASTER_OFFER_DECLINED = "master_offer_declined"
+    MASTER_OFFER_CANCELLED = "master_offer_cancelled"
 
 
 # The keys of CuratorGroupEvent.data, spelled ONCE. JSONB has no model
@@ -273,10 +517,14 @@ class CuratorGroupEventKind(enum.StrEnum):
 # reads and the journal quietly loses the half of the sentence it was
 # supposed to carry. Only the keys written from MORE THAN ONE place are
 # named here; a key with a single writer cannot drift from itself.
+# GT-27: invite_created / invite_revoked used to carry it too, back when
+# a link had a kind. One link now, so the key would always say the same
+# word and was dropped from both rather than frozen at "student".
 EVENT_DATA_KIND = "kind"                  # join, promote, remove, leave
 EVENT_DATA_ACTOR_NAME = "actor_name"      # all twelve
-EVENT_DATA_TARGET_USER_ID = "target_user_id"   # remove, offer, accept, decline
-EVENT_DATA_TARGET_NAME = "target_name"         # remove, offer, accept, decline
+# target_user_id / target_name: remove, offer, accept, decline, cancel, demote
+EVENT_DATA_TARGET_USER_ID = "target_user_id"
+EVENT_DATA_TARGET_NAME = "target_name"
 
 
 class CuratorGroupEvent(Base):
@@ -381,6 +629,10 @@ class CuratorGroupEvent(Base):
     | member_removed            | actor_name, kind, target_user_id,      |
     |                           | target_name[, transfer_cancelled]      |
     | member_left               | actor_name, kind[, transfer_cancelled] |
+    | member_blocked            | actor_name, kind, target_user_id,      |
+    |                           | target_name[, transfer_cancelled]      |
+    | member_unblocked          | actor_name, kind, target_user_id,      |
+    |                           | target_name                            |
     | invite_created            | actor_name, kind                       |
     | invite_revoked            | actor_name, kind                       |
     | transfer_offered          | actor_name, target_user_id, target_name|

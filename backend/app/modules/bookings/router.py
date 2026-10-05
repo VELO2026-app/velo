@@ -210,6 +210,7 @@ async def list_my_bookings_endpoint(
                 updated_at=booking.updated_at,
                 has_feedback=has_feedback,
                 has_checkin=has_checkin,
+                has_reflection=has_reflection,
                 # T-35: the summary carries no Zoom URL at all any more --
                 # the zoom_link column and its fail-closed gate are gone. The
                 # only link on this response is the personal one below.
@@ -226,8 +227,16 @@ async def list_my_bookings_endpoint(
                     if booking.status in ZOOM_VISIBLE_BOOKING_STATUSES
                     else None
                 ),
+                # BE-72: behind the same M-3 gate as the link it explains.
+                zoom_registrant_link_unavailable=(
+                    link_unavailable
+                    and booking.status in ZOOM_VISIBLE_BOOKING_STATUSES
+                ),
             )
-            for booking, practice, has_feedback, has_checkin, zoom_join_url in items
+            for (
+                booking, practice, has_feedback, has_checkin, zoom_join_url,
+                link_unavailable, has_reflection,
+            ) in items
         ],
         total=total,
         limit=limit,
@@ -289,6 +298,7 @@ async def list_my_upcoming_bookings_endpoint(
             updated_at=booking.updated_at,
             has_feedback=has_feedback,
             has_checkin=has_checkin,
+            has_reflection=has_reflection,
             practice=PracticeSummary.from_practice(
                 practice,
                 master_name=master_names[practice.master_id],
@@ -299,8 +309,15 @@ async def list_my_upcoming_bookings_endpoint(
                 if booking.status in ZOOM_VISIBLE_BOOKING_STATUSES
                 else None
             ),
+            zoom_registrant_link_unavailable=(
+                link_unavailable
+                and booking.status in ZOOM_VISIBLE_BOOKING_STATUSES
+            ),
         )
-        for booking, practice, has_feedback, has_checkin, zoom_join_url in items
+        for (
+            booking, practice, has_feedback, has_checkin, zoom_join_url,
+            link_unavailable, has_reflection,
+        ) in items
     ]
 
 

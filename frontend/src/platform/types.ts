@@ -46,11 +46,33 @@ export interface Platform {
   getTheme(): 'light' | 'dark'
 
   /**
+   * [TG-SURFACE 2026-09-07] Repaint Telegram's NATIVE under-webview surface.
+   *
+   * When the keyboard opens, Telegram resizes/moves the WKWebView itself, so
+   * the strips under the keyboard's rounded top corners fall OUTSIDE the
+   * WebView -- no in-page layer can paint there (device-confirmed); only this
+   * native surface shows. `true` switches it to the keyboard variant token
+   * (--velo-tg-bg-kbd), `false` restores the rest token (--velo-tg-bg).
+   *
+   * Telegram: WebApp.setBackgroundColor(token).
+   * Standalone: no-op (a browser tab owns its whole surface).
+   */
+  setKeyboardSurface(dark: boolean): void
+
+  /**
    * Trigger haptic feedback.
    * Telegram: WebApp.HapticFeedback.impactOccurred(style).
    * Standalone: no-op (browser has no haptics).
    */
   hapticFeedback(style: 'light' | 'medium' | 'heavy'): void
+
+  /**
+   * Trigger a result haptic (voice input uses success/error on transcription
+   * outcomes).
+   * Telegram: WebApp.HapticFeedback.notificationOccurred(type).
+   * Standalone: no-op (browser has no haptics).
+   */
+  hapticNotification(type: 'error' | 'success' | 'warning'): void
 
   /**
    * Open an external URL (e.g. a Zoom meeting link).

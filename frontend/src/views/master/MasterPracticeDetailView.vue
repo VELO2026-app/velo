@@ -48,7 +48,7 @@
                  openDestructive контекстный: черновик удаляет, запланированную
                  отменяет, с подтверждением). -->
             <VMenuItem
-              :icon="IconEdit"
+              :icon="IconPen"
               ariaLabel="Редактировать"
               @click="
                 () => {
@@ -88,6 +88,22 @@
     <template v-else-if="practice">
       <!-- ===================== UPCOMING hub (WI-B) ===================== -->
       <div v-if="isUpcoming" class="practice-detail__content">
+        <!-- FE-24 (GT P5): the school audience stopped matching this master
+             (they left or were removed from the practice's school, the school
+             froze, or schools are switched off). Nobody but the master and the
+             already-booked can see the practice; existing bookings stay valid.
+             The school's name still arrives filled -- on purpose, so the master
+             knows WHAT went dark. BE-74: the banner offers no action. A flagged
+             practice always belongs to a school (the flag is set only for
+             'curator_groups', and the CHECK forbids that audience without a
+             school), and a school practice's audience and school are read-only
+             on the edit screen -- so there is nothing there to change. -->
+        <div v-if="practice.audience_unavailable" class="pd-audience-warn">
+          <span class="pd-audience-warn__text">
+            Школа недоступна — практику не видит никто, кроме вас и уже записавшихся.
+          </span>
+        </div>
+
         <!-- Hero (shared PracticeHeroCard — FORK4). Recurrence-days line is
              intentionally NOT shown (FORK2: no recurrence model). -->
         <PracticeHeroCard
@@ -240,9 +256,7 @@
           <template v-if="hasRating" #extra>
             <VRatingBadges
               size="lg"
-              :fire="ratingPct('fire')"
-              :good="ratingPct('good')"
-              :confused="ratingPct('confused')"
+              :pcts="ratingPcts"
             />
           </template>
         </PracticeHeroCard>
@@ -262,11 +276,8 @@
           <template v-else-if="reviews.length > 0">
             <div v-for="(r, i) in visibleReviews" :key="i" class="practice-detail__review">
               <div class="practice-detail__review-top">
-                <span
-                  class="practice-detail__review-ic"
-                  :style="{ color: RATING_ICON_COLOR[r.rating] }"
-                >
-                  <component :is="RATING_ICON[r.rating]" :size="28" />
+                <span class="practice-detail__review-ic">
+                  <component :is="MOOD_SCALE_ICON[r.rating]" :size="28" />
                 </span>
                 <span class="practice-detail__review-name">{{ r.reviewer_name }}</span>
               </div>
@@ -341,13 +352,13 @@ import { VHeader } from '@/components/layout'
 import PracticeHeroCard from '@/components/shared/PracticeHeroCard.vue'
 import VShowMore from '@/components/shared/VShowMore.vue'
 import CancelPracticeDialog from '@/components/shared/CancelPracticeDialog.vue'
-import { IconEdit } from '@/components/icons'
-import { RATING_ICON } from '@/utils/ratingIcons'
+import { IconPen } from '@/components/icons'
+import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
+import { zonePercents, zoneTotal, type MoodScaleKey } from '@/utils/moodScale'
 // IconTrash is not re-exported from the icons barrel; import the component
 // directly (same as EntryView).
-import IconTrash from '@/components/icons/IconTrash.vue'
+import { IconTrash } from '@/components/icons'
 import {
-  RATING_ICON_COLOR,
   DIFFICULTY_DOTS,
   DIFFICULTY_LABEL,
   recurrenceDaysLabel,
@@ -414,9 +425,7 @@ const recurrenceLabel = computed((): string | null => {
 // PracticeWithSharedLink interface that used to stand here is gone -- the
 // field is native in generated.ts after the T-35 regen, exactly as that
 // interface's own comment asked of the first person to touch this file.
-const publicLink = computed(
-  (): string | null => practice.value?.zoom_public_link ?? null,
-)
+const publicLink = computed((): string | null => practice.value?.zoom_public_link ?? null)
 const copyingShared = ref(false)
 async function onCopySharedLink(): Promise<void> {
   if (copyingShared.value || !publicLink.value) return
@@ -486,15 +495,13 @@ const brokenAvatars = ref(new Set<string>())
 // -- Past: rating distribution badges (REAL, anonymous insights) --
 const totalFeedbacks = computed((): number => {
   const f = insights.value?.feedbacks
-  return f ? f.fire + f.good + f.confused : 0
+  return f ? zoneTotal(f) : 0
 })
 const hasRating = computed((): boolean => insights.value != null && totalFeedbacks.value > 0)
-function ratingPct(key: 'fire' | 'good' | 'confused'): number {
-  const f = insights.value?.feedbacks
-  if (!f) return 0
-  const total = totalFeedbacks.value
-  return total > 0 ? Math.round((f[key] / total) * 100) : 0
-}
+// Rendered only under hasRating, so the insights are loaded there.
+const ratingPcts = computed((): Record<MoodScaleKey, number> =>
+  zonePercents(insights.value!.feedbacks),
+)
 
 // -- Past: stats (REAL via getAttendance; "—" until loaded) --
 const attendedValue = computed((): string | number =>
@@ -520,7 +527,7 @@ const visibleReviews = computed((): ReviewItem[] =>
 const hiddenReviewsCount = computed((): number => Math.max(0, reviewsTotal.value - REVIEWS_PREVIEW))
 function expandReviews(): void {
   reviewsExpanded.value = true
-  if (hasMoreReviews.value) loadMoreReviews()
+  if (hasMoreReviews.value) void loadMoreReviews()
 }
 
 async function loadReviews(): Promise<void> {
@@ -552,13 +559,13 @@ async function loadMoreReviews(): Promise<void> {
 
 // -- Navigation --
 function goCheckins(): void {
-  router.push({ name: 'master-attendance', params: { id: practiceId } })
+  void router.push({ name: 'master-attendance', params: { id: practiceId } })
 }
 function goRoster(): void {
-  router.push({ name: 'master-attendance-roster', params: { id: practiceId } })
+  void router.push({ name: 'master-attendance-roster', params: { id: practiceId } })
 }
 function goEdit(): void {
-  router.push({ name: 'master-practice-edit', params: { id: practiceId } })
+  void router.push({ name: 'master-practice-edit', params: { id: practiceId } })
 }
 
 // -- «…» destructive: cancel (scheduled/live) or delete (draft) --
@@ -665,6 +672,25 @@ onMounted(load)
 /* See the template block's own comment (above the markup) for the full
    liftability note -- this rule + its sibling below are part of that same
    removable unit. */
+/* FE-24: the audience-unavailable warning -- the same white card plate as
+   the shared-link row above, but the peach attention pair of tokens (a
+   "something needs a decision" tone, not an error red). */
+.pd-audience-warn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--velo-bg-card-solid);
+  border: 1px solid var(--velo-border-card);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.pd-audience-warn__text {
+  font-size: var(--text-sm);
+  color: var(--velo-peach-700);
+  line-height: 1.5;
+}
+
 .pd-shared-link {
   display: flex;
   align-items: center;

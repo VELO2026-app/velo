@@ -2,7 +2,8 @@
   VELO Frontend -- AdminFeedbackRateView (Admin DS, 2026-06-14, operator SVG "3 Feedback rate")
 
   Drill-in from the dashboard Engagement "Feedback rate" row. Hero rate + totals +
-  rating distribution (Огонь / Хорошо / Есть вопросы).
+  rating distribution, one row per zone of the shared 1..10 scale (Огонь ..
+  Плохо, BE-77).
 
   WIRED (E9, 2026-06-16): GET /admin/metrics/feedback — leave-rate, visited/left
   totals, rating distribution (counts → bucket percentages). Loading/error states;
@@ -40,28 +41,13 @@
       <h3 class="admin-detail__section">Распределение оценок</h3>
       <VCard class="admin-detail__rating">
         <VRatingBar
-          label="Огонь!"
-          :value="fireRate"
-          bar-color="var(--velo-peach-300)"
-          icon-color="var(--velo-peach-500)"
+          v-for="row in ratingRows"
+          :key="row.key"
+          :label="row.label"
+          :value="row.rate"
+          :bar-color="row.barColor"
         >
-          <template #icon><IconRatingFire :size="22" /></template>
-        </VRatingBar>
-        <VRatingBar
-          label="Хорошо"
-          :value="goodRate"
-          bar-color="var(--velo-pink-300)"
-          icon-color="var(--velo-pink-500)"
-        >
-          <template #icon><IconRatingGood :size="22" /></template>
-        </VRatingBar>
-        <VRatingBar
-          label="Есть вопросы"
-          :value="questionRate"
-          bar-color="var(--velo-blue-400)"
-          icon-color="var(--velo-blue-400)"
-        >
-          <template #icon><IconRatingConfused :size="22" /></template>
+          <template #icon><component :is="row.icon" :size="22" /></template>
         </VRatingBar>
       </VCard>
     </template>
@@ -81,16 +67,14 @@ import {
   VEmptyState,
   VButton,
 } from '@/components/ui'
-import {
-  IconFeedback,
-  IconRatingFire,
-  IconRatingGood,
-  IconRatingConfused,
-} from '@/components/icons'
+import { IconFeedback } from '@/components/icons'
 import { getFeedbackMetric } from '@/api/admin'
 import { extractApiError } from '@/composables/useApiError'
 import { formatPeriodRange } from '@/utils/periodRange'
 import type { FeedbackMetricResponse } from '@/api/types'
+import { MOOD_SCALE_FILLS } from '@/utils/displayHelpers'
+import { MOOD_SCALE_KEYS, MOOD_SCALE_LABELS, zoneTotal, type MoodScaleKey } from '@/utils/moodScale'
+import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
 
 const router = useRouter()
 
@@ -113,15 +97,22 @@ const leftReview = computed((): string | number => data.value?.left_review ?? '�
 // Distribution: counts → percentage of the reviews left, for the bar widths.
 const distributionTotal = computed((): number => {
   const d = data.value?.distribution
-  return d ? d.fire + d.good + d.confused : 0
+  return d ? zoneTotal(d) : 0
 })
 function bucketPct(count: number | undefined): number | null {
   if (count == null || distributionTotal.value === 0) return null
   return Math.round((count / distributionTotal.value) * 100)
 }
-const fireRate = computed((): number | null => bucketPct(data.value?.distribution.fire))
-const goodRate = computed((): number | null => bucketPct(data.value?.distribution.good))
-const questionRate = computed((): number | null => bucketPct(data.value?.distribution.confused))
+// Best zone first, as the three-row version read (Огонь on top).
+const ratingRows = computed(() =>
+  [...MOOD_SCALE_KEYS].reverse().map((key: MoodScaleKey) => ({
+    key,
+    label: MOOD_SCALE_LABELS[key],
+    icon: MOOD_SCALE_ICON[key],
+    barColor: MOOD_SCALE_FILLS[key],
+    rate: bucketPct(data.value?.distribution[key]),
+  })),
+)
 
 async function load(): Promise<void> {
   loading.value = true

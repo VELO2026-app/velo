@@ -230,7 +230,9 @@ watch(search, (value) => {
     searchError.value = ''
     return
   }
-  searchTimer = setTimeout(loadSearch, 300)
+  searchTimer = setTimeout(() => {
+    void loadSearch()
+  }, 300)
 })
 
 // Show the first 5 (owner Q7, PROMPT №610 -- was 10); the rest hide behind
@@ -252,7 +254,7 @@ function openDetail(group: GroupListItem): void {
   // mechanism `name` already uses -- no new "get one group" endpoint for a
   // value the caller already has in hand. `undefined` (not null) so vue-
   // router omits the query key entirely rather than serializing "null".
-  router.push({
+  void router.push({
     name: 'master-group-detail',
     params: { id: group.id },
     query: { name: group.name, description: group.description ?? undefined },
@@ -260,7 +262,7 @@ function openDetail(group: GroupListItem): void {
 }
 
 function onCreate(): void {
-  router.push({ name: 'master-group-create' })
+  void router.push({ name: 'master-group-create' })
 }
 
 // G1 (PROMPT №609): group-NAME matches -- instant, client-side over the

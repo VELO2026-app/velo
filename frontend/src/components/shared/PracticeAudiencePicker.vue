@@ -1,0 +1,169 @@
+<!--
+  VELO Frontend -- PracticeAudiencePicker (FE-24 / GT P5)
+
+  The «Для кого практика» selector, extracted from the audience block that
+  used to live (twice, drifting) in CreatePracticeView and EditPracticeView:
+  a VRadioGroup of kinds plus, for the two targeted kinds, VChips of this
+  master's own targets: a multi-select of groups, a SINGLE select of schools.
+  A practice belongs to exactly one school (BE-74, owner ruling 2026-10-01),
+  so the school chips behave as a radio: picking one replaces the previous
+  pick, and picking the picked one again clears it.
+
+  The fourth kind appears in the radio ONLY when `schools` is non-empty
+  (audienceOptions, practiceOptions.ts) -- a master who belongs to no school
+  sees the exact three options they always saw. Selecting groups A and B
+  means "anyone in at least one of them"; there is no such union for schools.
+
+  Layout-neutral on purpose: the caller owns headings and wrappers (Create
+  wraps this in its VCard section, Edit renders it flat under a field label)
+  -- this component owns only the audience MECHANICS: kind, the group ids,
+  the school id, their empty states, and the single validation-error line.
+
+  BE-74 edit seam: `schoolLocked` suppresses the school chips -- the school
+  of an EXISTING practice can never change (practice_school_immutable), so
+  Edit passes the practice's own school plus this flag and shows the fixed
+  school itself; only the KIND stays selectable there (the FE-92 pair).
+
+  v-model:kind / v-model:groupIds / v-model:curatorGroupId -- the group array
+  is replaced immutably (a fresh array per toggle), never mutated in place, so
+  the caller's reactivity and its own change-detection stay honest; the school
+  is one id or null.
+-->
+
+<template>
+  <div class="pap">
+    <VRadioGroup v-model="kindModel" :options="options" />
+
+    <template v-if="kindModel === 'groups'">
+      <div v-if="groups.length" class="pap__chips">
+        <VChip
+          v-for="g in groups"
+          :key="g.id"
+          size="md"
+          clickable
+          :active="groupIds.includes(g.id)"
+          @click="toggleGroup(g.id)"
+        >
+          {{ g.name }}
+        </VChip>
+      </div>
+      <p v-else class="pap__empty">
+        Пока нет ни одной группы. Создайте группу на экране «Мои группы».
+      </p>
+    </template>
+
+    <template v-else-if="kindModel === 'curator_groups' && !schoolLocked">
+      <div v-if="schools.length" class="pap__chips">
+        <VChip
+          v-for="s in schools"
+          :key="s.id"
+          size="md"
+          clickable
+          :active="curatorGroupId === s.id"
+          @click="toggleSchool(s.id)"
+        >
+          {{ s.name }}
+        </VChip>
+      </div>
+      <!-- Defensive: the option is only offered when schools exist, so this
+           is reachable only if the list emptied AFTER the kind was chosen
+           (left the school in another tab). Honest text, no invented targets.
+           (schoolLocked never reaches this branch -- see the props below.) -->
+      <p v-else class="pap__empty">Нет школ, доступных для выбора.</p>
+    </template>
+
+    <!-- Review fix: the error belongs to the ACTIVE targeted kind only --
+         after «Выберите хотя бы одну группу» a switch to «Публичная» clears
+         the message instead of lying until the next submit. -->
+    <span
+      v-if="error && (kindModel === 'groups' || kindModel === 'curator_groups')"
+      class="pap__error"
+      >{{ error }}</span
+    >
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed } from 'vue'
+import type { GroupListItem } from '@/api/groups'
+import type { PracticeAudienceKind } from '@/api/types'
+import { audienceOptions } from '@/utils/practiceOptions'
+import { VChip, VRadioGroup } from '@/components/ui'
+import type { AudienceSchoolOption } from './practiceAudience'
+
+const props = defineProps<{
+  /** The master's own custom student groups (kind === 'groups' targets). */
+  groups: GroupListItem[]
+  /** Eligible schools (kind === 'curator_groups' targets). */
+  schools: AudienceSchoolOption[]
+  /** Single validation-error line, shown for whichever kind is active. */
+  error?: string
+  /** T24-24 (PROMPT №639): Create relabels the 'students' option to «Все мои
+   *  ученики» LOCALLY; Edit keeps the shared «Все ученики». A narrow seam,
+   *  not a second options list -- everything else is identical. */
+  studentsLabel?: string
+  /** FE-92: only these audience kinds are offered. A practice a curator
+   *  creates for a school's master belongs to that school, and a school
+   *  practice is for everyone or for the school's students
+   *  (check_school_audience) -- so that flow passes ['public',
+   *  'curator_groups']. Absent -> every kind, as before. */
+  allowedKinds?: PracticeAudienceKind[]
+  /** BE-74 edit seam: the school of an EXISTING practice never changes
+   *  (practice_school_immutable). Edit passes the practice's own school in
+   *  `schools` -- so the school pair of kinds is offered -- plus this flag,
+   *  and the school chips (a select) are suppressed: the caller shows the
+   *  fixed school itself. */
+  schoolLocked?: boolean
+}>()
+
+const kindModel = defineModel<PracticeAudienceKind>('kind', { required: true })
+const groupIds = defineModel<string[]>('groupIds', { required: true })
+const curatorGroupId = defineModel<string | null>('curatorGroupId', { required: true })
+
+const options = computed(() => {
+  const all = audienceOptions(props.schools.length > 0)
+  const base = props.allowedKinds ? all.filter((o) => props.allowedKinds!.includes(o.value)) : all
+  if (!props.studentsLabel) return base
+  return base.map((o) => (o.value === 'students' ? { ...o, label: props.studentsLabel! } : o))
+})
+
+function toggleGroup(id: string): void {
+  groupIds.value = groupIds.value.includes(id)
+    ? groupIds.value.filter((x) => x !== id)
+    : [...groupIds.value, id]
+}
+
+function toggleSchool(id: string): void {
+  curatorGroupId.value = curatorGroupId.value === id ? null : id
+}
+</script>
+
+<style scoped>
+.pap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Inside Create's padding="none" VCard the radio brings its own padding;
+   the chips below need the rail's horizontal inset to line up with it. */
+.pap__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: 0 var(--space-3) var(--space-1);
+}
+
+.pap__empty {
+  font-size: var(--text-sm);
+  color: var(--velo-text-secondary);
+  margin: 0;
+  padding: 0 var(--space-3) var(--space-1);
+}
+
+.pap__error {
+  font-size: var(--text-xs);
+  color: var(--velo-error);
+  padding: 0 var(--space-3);
+}
+</style>

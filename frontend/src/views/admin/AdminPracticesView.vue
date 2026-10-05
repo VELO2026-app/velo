@@ -7,9 +7,9 @@
   admin practice detail (admin-practice-detail), handing the practice via router state.
 
   Card = the canonical PracticeListCard (operator reconciliation п.1=А): direction
-  icon + title + master (+verified) + bottom meta (date under the icon · duration ·
+  icon + title + master + bottom meta (date under the icon · duration ·
   capacity in the #badge slot, rose when full). No status badge — capacity took its
-  slot in the newer SVGs.
+  slot in the newer SVGs; the verified check is hidden product-wide (2026-10-03).
 
   WIRED (E9, 2026-06-16): GET /api/v1/admin/practices?scope=all|upcoming|past drives
   the list (loading/error/empty states). Header count = the fetched scope total; the
@@ -46,7 +46,6 @@
         :when="whenLabel(p)"
         :when-time="whenTime(p)"
         :duration="durationLabel(p)"
-        :show-verified="p.master_verified"
         @click="openDetail(p)"
       >
         <template #badge>
@@ -67,7 +66,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { VBackButton, VSegment, VCard, VLoader, VEmptyState, VButton } from '@/components/ui'
-import type { SegmentOption } from '@/components/ui/VSegment.vue'
+import type { SegmentOption } from '@/components/ui'
 import PracticeListCard from '@/components/shared/PracticeListCard.vue'
 import { IconGroup } from '@/components/icons'
 import { useAdminStore } from '@/stores/admin'
@@ -133,7 +132,7 @@ async function load(): Promise<void> {
 
 // Tap a card -> admin practice detail; it re-fetches by id (GET /admin/practices/:id).
 function openDetail(p: AdminPracticeListItem): void {
-  router.push({ name: 'admin-practice-detail', params: { id: p.id } })
+  void router.push({ name: 'admin-practice-detail', params: { id: p.id } })
 }
 
 watch(filter, load)

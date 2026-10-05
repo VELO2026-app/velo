@@ -198,7 +198,10 @@ async def _create_practice(
     title: str = "Group Practice",
     status: str = PracticeStatus.SCHEDULED.value,
     hours_from_now: float = 48,
+    school_id: str | None = None,
 ) -> Practice:
+    """A public practice; with school_id, one that BELONGS to that school
+    (BE-74) -- the only kind the school's page lists."""
     practice = Practice(
         master_id=UUID(master_id),
         title=title,
@@ -214,6 +217,7 @@ async def _create_practice(
         price_cents=0,
         currency="eur",
         audience_kind=AudienceKind.PUBLIC.value,
+        curator_group_id=UUID(school_id) if school_id else None,
     )
     db_session.add(practice)
     await db_session.flush()
@@ -808,8 +812,16 @@ async def test_roster_practices_count_matches_the_public_master_profile(
 async def test_feed_shows_the_schools_masters_and_nobody_else(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """Curator's and members' practices in; an outsider's practice out, even
-    though it is a perfectly public practice."""
+    """Curator's and members' practices of the school in; an outsider's
+    practice out, even though it is a perfectly public practice.
+
+    Before BE-74 the page listed every visible upcoming practice of the
+    school's people, so practices made in the general section stood for
+    "the school's practices" here. BE-74 made the page list only practices
+    that BELONG to the school; the precise statement now carries both
+    halves. The outsider's practice carries the school (a master who left
+    keeps his practices' owner), so it is the master filter that keeps it
+    out; the teacher's general-section practice, the ownership filter."""
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     teacher = await _make_verified_master(
         client, db_session, _TID_MASTER_A, first_name="Teacher",
@@ -826,9 +838,21 @@ async def test_feed_shows_the_schools_masters_and_nobody_else(
         db_session, group["id"], student["user"]["id"],
         CuratorMemberKind.STUDENT,
     )
-    await _create_practice(db_session, curator["user"]["id"], title="By curator")
-    await _create_practice(db_session, teacher["user"]["id"], title="By teacher")
-    await _create_practice(db_session, outsider["user"]["id"], title="Outside")
+    await _create_practice(
+        db_session, curator["user"]["id"], title="By curator",
+        school_id=group["id"],
+    )
+    await _create_practice(
+        db_session, teacher["user"]["id"], title="By teacher",
+        school_id=group["id"],
+    )
+    await _create_practice(
+        db_session, teacher["user"]["id"], title="Teacher, general section",
+    )
+    await _create_practice(
+        db_session, outsider["user"]["id"], title="Outside",
+        school_id=group["id"],
+    )
 
     body = (
         await client.get(
@@ -849,13 +873,19 @@ async def test_feed_hides_drafts_and_past_practices(
     author, who sees neither their draft nor their finished practice here."""
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     group = await _create_group(client, curator)
-    await _create_practice(db_session, curator["user"]["id"], title="Upcoming")
+    # All three belong to the school (BE-74: only those are listed at all),
+    # so it is the status/time gate alone that leaves two of them out.
+    await _create_practice(
+        db_session, curator["user"]["id"], title="Upcoming",
+        school_id=group["id"],
+    )
     await _create_practice(
         db_session, curator["user"]["id"], title="Draft",
-        status=PracticeStatus.DRAFT.value,
+        status=PracticeStatus.DRAFT.value, school_id=group["id"],
     )
     await _create_practice(
         db_session, curator["user"]["id"], title="Past", hours_from_now=-48,
+        school_id=group["id"],
     )
 
     body = (
@@ -893,7 +923,10 @@ async def test_a_master_who_blocked_the_viewer_gives_no_practices(
             db_session, group["id"], who["user"]["id"],
             CuratorMemberKind.STUDENT,
         )
-    await _create_practice(db_session, teacher["user"]["id"], title="By teacher")
+    await _create_practice(
+        db_session, teacher["user"]["id"], title="By teacher",
+        school_id=group["id"],
+    )
     await _block(db_session, teacher["user"]["id"], blocked["user"]["id"])
 
     url = PRACTICES_URL.format(group_id=group["id"])
@@ -921,7 +954,12 @@ async def test_group_with_no_visible_masters_yields_an_empty_feed(
 ) -> None:
     """The empty-set case: an empty master_ids list must mean "nobody", not
     "everybody". A public practice by an outsider proves the difference --
-    with the wrong branch it would appear here."""
+    with the wrong branch it would appear here.
+
+    Both practices belong to the school (BE-74). Without that this test
+    turned green for the wrong reason the day the page started listing
+    only the school's own practices: neither would appear whatever the
+    master filter did."""
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     teacher = await _make_verified_master(
         client, db_session, _TID_MASTER_A, first_name="Teacher",
@@ -939,8 +977,14 @@ async def test_group_with_no_visible_masters_yields_an_empty_feed(
         db_session, group["id"], student["user"]["id"],
         CuratorMemberKind.STUDENT,
     )
-    await _create_practice(db_session, teacher["user"]["id"], title="By teacher")
-    await _create_practice(db_session, outsider["user"]["id"], title="Outside")
+    await _create_practice(
+        db_session, teacher["user"]["id"], title="By teacher",
+        school_id=group["id"],
+    )
+    await _create_practice(
+        db_session, outsider["user"]["id"], title="Outside",
+        school_id=group["id"],
+    )
 
     await _revoke(client, admin_token, teacher["user"]["id"])
 

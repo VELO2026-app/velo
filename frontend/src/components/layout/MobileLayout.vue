@@ -41,15 +41,18 @@
       v-if="!hideTabBar"
       :items="tabs"
       :active="activeTab"
+      :pending="tabsPending"
       @navigate="$emit('navigate', $event)"
     />
   </div>
 </template>
 
 <script setup lang="ts">
+import { rootComputedStyle } from '@/platform/dom'
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import VTabBar, { type TabItem } from '@/components/layout/VTabBar.vue'
+import VTabBar from '@/components/layout/VTabBar.vue'
+import type { TabItem } from '@/router/tabs'
 import { provideFloatingHeader } from '@/components/layout/useFloatingHeader'
 
 // Host the floating-header island; headers teleport into it (see useFloatingHeader).
@@ -109,6 +112,11 @@ const props = defineProps<{
   /** Hide the bottom tab bar (e.g. the diary is an immersive full-screen mode
    *  that has its own exit in the "..." menu instead of tab navigation). */
   hideTabBar?: boolean
+  /** Hold the dock's first paint (owner 2026-10-04): while the user zone's
+   *  curator answer is in flight the bar stays invisible and inert, so no
+   *  conditional tab (the diary's) can flash and then vanish. Floating
+   *  chrome -- hiding it shifts no layout. */
+  tabsPending?: boolean
   /** Edge-to-edge fog mask: content dissolves at the top/bottom edges. ONLY for
    *  long scrolling lists/feeds (dashboard, calendar, bookings, ...). Detail
    *  screens, forms and the profile opt OUT — their footers/actions must stay
@@ -151,13 +159,13 @@ let fogDefaultsCache: {
 } | null = null
 function fogDefaults() {
   if (fogDefaultsCache) return fogDefaultsCache
-  const cs = getComputedStyle(document.documentElement)
+  const cs = rootComputedStyle()
   const tok = (name: string, fallback: number): number => {
     const v = parseInt(cs.getPropertyValue(name), 10)
     return Number.isFinite(v) ? v : fallback
   }
   fogDefaultsCache = {
-    topGap: tok('--velo-fog-z1', 16),
+    topGap: tok('--velo-fog-z1', 8),
     topHard: tok('--velo-fog-z2', 40),
     botFade: tok('--velo-fog-z3', 70),
     botHard: tok('--velo-fog-z4', 90),
@@ -180,10 +188,11 @@ function fogDefaults() {
 // Pre-measurement fallback (islandH===0 race): clear the floating VHeader's REAL
 // rendered height instead of a too-small base, so a back-button screen («Отзывы о
 // практике» / «Вывод средств») doesn't underlap its header before the island is
-// measured. Derived from VHeader.vue: padding-top calc(--space-3 + 20px)=34 +
-// the 40px back button + padding-bottom --space-3=14 ≈ 88px. The measured
-// islandH>0 path stays unchanged. (operator PROMPT №164)
-const HEADER_FALLBACK = 88
+// measured. Derived from VHeader.vue (floating): --velo-fog-headerless-top=20 +
+// the 40px back row + padding-bottom --space-2=8 ≈ 68px. The measured
+// islandH>0 path stays unchanged. (operator PROMPT №164; retuned 2026-09-30
+// when the header's bottom pad moved to --space-2.)
+const HEADER_FALLBACK = 68
 const mainStyle = computed(() => {
   const d = fogDefaults()
   const topGap = props.topGap ?? d.topGap
@@ -281,29 +290,28 @@ defineEmits<{
   display: none; /* WebKit / Blink (Telegram webview) */
 }
 
-/* Edge-to-edge fog: top/bottom fade mask for long scrolling lists ONLY. Opt-in
-   via the `fog` prop. The fade zones (--fog-*) are set by mainStyle and aligned
-   to the clearance padding, so content dissolves exactly at the padded edges.
-   Detail screens, forms and the profile do NOT get this class -- their footers
-   and actions stay fully opaque. */
+/* Edge-to-edge fog: TOP-ONLY fade mask for long scrolling lists. Opt-in via
+   the `fog` prop. The top fade zone (--fog-top-*) is set by mainStyle and
+   aligned to the clearance padding, so content dissolves exactly at the
+   padded edge under the floating header island.
+   [LOOK-TEST, owner pass 2026-09-06] The BOTTOM fade is REMOVED for the
+   liquid-glass dock pill experiment: content runs crisp to the bottom edge
+   and scrolls under the hanging pill, which frosts it. The --fog-bot-* vars
+   mainStyle still publishes are temporarily unused. Detail screens, forms
+   and the profile do NOT get this class -- their footers and actions stay
+   fully opaque. */
 .mobile-layout__main--fog {
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0,
     transparent var(--fog-top-hard),
-    #000 calc(var(--fog-top-hard) + var(--fog-top-fade)),
-    #000 calc(100% - var(--fog-bot-fade) - var(--fog-bot-hard)),
-    transparent calc(100% - var(--fog-bot-hard)),
-    transparent 100%
+    #000 calc(var(--fog-top-hard) + var(--fog-top-fade))
   );
   mask-image: linear-gradient(
     to bottom,
     transparent 0,
     transparent var(--fog-top-hard),
-    #000 calc(var(--fog-top-hard) + var(--fog-top-fade)),
-    #000 calc(100% - var(--fog-bot-fade) - var(--fog-bot-hard)),
-    transparent calc(100% - var(--fog-bot-hard)),
-    transparent 100%
+    #000 calc(var(--fog-top-hard) + var(--fog-top-fade))
   );
 }
 

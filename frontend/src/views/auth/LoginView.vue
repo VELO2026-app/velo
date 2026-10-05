@@ -47,7 +47,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VInput, VButton } from '@/components/ui'
-import VeloLogo from '@/components/ui/VeloLogo.vue'
+import { VeloLogo } from '@/components/ui'
 import { IconArrowRight } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 
@@ -66,7 +66,7 @@ function socialUnavailable(): void {
   toast.info('Вход через соцсети появится в веб-версии')
 }
 function goRecover(): void {
-  router.push({ name: 'auth-recover' })
+  void router.push({ name: 'auth-recover' })
 }
 function goBack(): void {
   router.back()

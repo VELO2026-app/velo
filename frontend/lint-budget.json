@@ -1,0 +1,4 @@
+{
+  "maxWarnings": 0,
+  "policy": "Нулевая терпимость (FE-73): type-aware линт полностью на error, варнингов нет. Файл остаётся страховкой: любой новый варнинг валит pnpm lint. 2026-09-16: 366 -> 0 (unsafe/floating/misused/redundant/unbound устранены и правила переведены на error; 111 no-restricted-globals закрыты seam'ом @/platform и правило на error)."
+}

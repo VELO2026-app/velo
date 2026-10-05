@@ -79,7 +79,10 @@ from app.modules.payments.refund import (
     early_finalize_booking,
     refund_booking,
 )
-from app.modules.practices.audience_service import assert_viewer_can_access_practice
+from app.modules.practices.audience_service import (
+    assert_viewer_can_access_practice,
+    lock_school_member_key_share,
+)
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.promos.models import Promo
 from app.modules.users.models import User
@@ -208,7 +211,14 @@ async def create_booking(
 
     Uses begin_nested() (SAVEPOINT) to catch IntegrityError
     on the partial unique index without killing the outer transaction.
+
+    K2 (BE-79): the viewer's member row in the practice's school is taken
+    FOR KEY SHARE before the practice (lock_school_member_key_share), so
+    a concurrent school block either sees this booking under its own
+    practice lock and cancels it, or commits first and the gate below
+    refuses with blocked_in_group.
     """
+    await lock_school_member_key_share(user.id, practice_id, session)
     stmt = (
         select(Practice)
         .where(Practice.id == practice_id)
@@ -318,12 +328,14 @@ async def create_booking(
     # booker is right here in the transaction context.
     from app.core.events.notify import emit_notification
     from app.core.events.reminders import (
+        BOOKED_ACT,
         format_event_time,
         schedule_booking_reminders,
     )
-    when_text = format_event_time(practice.scheduled_at)
+    when_text = format_event_time(practice.scheduled_at, user.timezone)
     await emit_notification(
         session,
+        idempotency_key=f"booking-confirmed:{booking.id}",
         type="booking.confirmed",
         target_type="user",
         target_value=str(user.id),
@@ -349,6 +361,8 @@ async def create_booking(
         practice_title=practice.title,
         master_name=master_name,
         scheduled_at=practice.scheduled_at,
+        act=BOOKED_ACT,
+        timezone=user.timezone,
     )
 
     # E21 step E: create the Zoom registrant for this booking. Best-effort,
@@ -566,8 +580,9 @@ async def cancel_booking(
 
     # Comms (T1, dictionary §2): booking.cancelled_by_user is
     # addressed to the MASTER (velo expands the audience, ID-4), and
-    # the booker's pending reminder series is expired by booking_id
-    # correlation -- both in the cancellation's own transaction.
+    # the booker's pending reminder series is cancelled by its
+    # "booking:<id>" envelope correlation -- both in the cancellation's
+    # own transaction.
     from app.core.events.notify import emit_notification
     from app.core.events.reminders import (
         cancel_booking_reminders,
@@ -575,6 +590,7 @@ async def cancel_booking(
     )
     await emit_notification(
         session,
+        idempotency_key=f"booking-cancelled:{booking.id}",
         type="booking.cancelled_by_user",
         target_type="user",
         target_value=str(practice.master_id),
@@ -582,7 +598,7 @@ async def cancel_booking(
         body=(
             f"Участник отменил бронирование на практику "
             f"«{practice.title}» "
-            f"({format_event_time(practice.scheduled_at)})."
+            f"({format_event_time(practice.scheduled_at, practice.timezone)})."
             if practice.scheduled_at is not None
             else f"Участник отменил бронирование на практику "
                  f"«{practice.title}»."
@@ -592,7 +608,7 @@ async def cancel_booking(
             "params": {"practice_id": str(booking.practice_id)},
             "practice_title": practice.title,
             "scheduled_at": (
-                format_event_time(practice.scheduled_at)
+                format_event_time(practice.scheduled_at, practice.timezone)
                 if practice.scheduled_at is not None
                 else ""
             ),
@@ -604,9 +620,11 @@ async def cancel_booking(
         user_id=str(booking.user_id),
     )
 
-    # E21 step E: best-effort Zoom-side registrant cancel. Our own row's
-    # status is the authority regardless of Zoom's outcome -- see
-    # cancel_registrant_for_booking's docstring.
+    # E21 step E: registrant cancel. Our own row's status is the authority
+    # regardless of Zoom's outcome; since BE-96 no Zoom HTTP happens here --
+    # the Zoom-side cancel is queued and made by the retry poller after
+    # commit (see cancel_registrant_for_booking, and its KNOWN CEILING for
+    # the one race in which this transaction still waits on a Zoom call).
     from app.modules.zoom.service import cancel_registrant_for_booking
     await cancel_registrant_for_booking(booking, session)
 
@@ -1132,6 +1150,64 @@ async def get_attendance(
 # ===================================================================
 
 
+async def _registrant_link_states(
+    booking_ids: list[UUID],
+    session: AsyncSession,
+) -> dict[UUID, tuple[str | None, bool]]:
+    """Per booking: (its own registrant's join_url or None, True when no link
+    will come). One query for the page -- the no-N+1 pattern of the diary
+    flags in list_user_bookings. Shared by list_user_bookings and
+    list_upcoming_bookings so the two dashboard lists cannot disagree.
+
+    role='student' is implicit -- booking_id is NULL for the master's own
+    host row (see ZoomRegistrant model docstring).
+
+    PROMPT №563: joined to ZoomMeeting.status == ACTIVE, same posture as the
+    host path (zoom/service.py's get_host_join_url[s]). Without this, a
+    registrant row whose join_url was set while the meeting was active keeps
+    being handed out after the meeting is deleted outside the normal cancel
+    flow (get_host_join_url's own docstring: the registrant row is not
+    touched on delete, only the meeting -- status must be checked here). A
+    booking whose meeting is not active is absent from the result and reads
+    (None, False): the meeting's own state is on PracticeSummary.
+    zoom_meeting_status, and that is what tells the participant why.
+
+    BE-72: the flag is zoom/service.py's link_unavailable_reason, the same
+    predicate resolve_zoom_entry answers UNAVAILABLE from, so a list row and
+    the practice screen say the same thing about the same registrant. A
+    falsy join_url is no link: an empty string comes back as None.
+    """
+    # Runtime-local imports keep the bookings -> zoom dependency one-way.
+    from app.modules.zoom.models import (
+        ZoomMeeting,
+        ZoomMeetingStatus,
+        ZoomRegistrant,
+        ZoomRegistrantStatus,
+    )
+    from app.modules.zoom.service import link_unavailable_reason
+
+    if not booking_ids:
+        return {}
+    registrants = (
+        await session.execute(
+            select(ZoomRegistrant)
+            .join(ZoomMeeting, ZoomRegistrant.zoom_meeting_id == ZoomMeeting.id)
+            .where(
+                ZoomRegistrant.booking_id.in_(booking_ids),
+                ZoomRegistrant.status != ZoomRegistrantStatus.CANCELLED.value,
+                ZoomMeeting.status == ZoomMeetingStatus.ACTIVE.value,
+            )
+        )
+    ).scalars().all()
+    return {
+        r.booking_id: (
+            r.join_url or None,
+            link_unavailable_reason(r) is not None,
+        )
+        for r in registrants
+    }
+
+
 async def list_user_bookings(
     user: User,
     session: AsyncSession,
@@ -1139,34 +1215,36 @@ async def list_user_bookings(
     status_filter: str | None = None,
     limit: int = 20,
     offset: int = 0,
-) -> tuple[list[tuple[Booking, Practice, bool, bool, str | None]], int]:
+) -> tuple[list[tuple[Booking, Practice, bool, bool, str | None, bool, bool]], int]:
     """List bookings for a user with practice details (paginated).
 
     B-05: count derived from base query subquery instead of maintaining
     a parallel count_base with duplicated filter clauses. Same pattern
     as list_user_checkins in diary/checkins_service.py.
 
-    Each row also carries two diary-state flags for the dashboard banners:
-      - has_feedback: the user already left a feedback for this practice.
-      - has_checkin:  the user already did a PRE check-in for this booking.
-    They let the dashboard hide the "оставьте feedback" / "пора на check-in"
-    prompt once done (and stop re-submitting through a stale banner). Computed
-    with two set-membership queries over the current page -- no N+1.
+    Each row also carries three diary-state flags:
+      - has_feedback:   the user already left a feedback for this practice.
+      - has_checkin:    the user already did a PRE check-in for this booking.
+      - has_reflection: the user already left a no-show reflection for this
+                        booking (BE-108).
+    They let the screens hide the "оставьте feedback" / "пора на check-in" /
+    reflection prompt once done (and stop re-submitting through a stale
+    prompt). Computed with set-membership queries over the current page --
+    no N+1.
 
     Returns:
         Tuple of (list of (Booking, Practice, has_feedback, has_checkin,
-        zoom_registrant_join_url) tuples, total count).
+        zoom_registrant_join_url, zoom_registrant_link_unavailable,
+        has_reflection) tuples, total count).
     """
     # Local import keeps the bookings -> diary dependency one-way and avoids
     # any import-order surprise (diary.projections imports bookings lazily).
-    from app.modules.diary.models import Checkin, CheckType, Feedback
-    from app.modules.zoom.models import (
-        ZoomMeeting,
-        ZoomMeetingStatus,
-        ZoomRegistrant,
-        ZoomRegistrantStatus,
+    from app.modules.diary.models import (
+        Checkin,
+        CheckType,
+        Feedback,
+        Reflection,
     )
-
     base = (
         select(Booking, Practice)
         .join(Practice, Booking.practice_id == Practice.id)
@@ -1226,38 +1304,24 @@ async def list_user_bookings(
             ).scalars().all()
         )
 
-    # T21-1: this user's own registrant join_url per booking (set membership,
-    # same no-N+1 pattern as the two diary flags above). role='student' is
-    # implicit -- booking_id is NULL for the master's own host row (see
-    # ZoomRegistrant model docstring).
-    #
-    # PROMPT №563: joined to ZoomMeeting.status == ACTIVE, same posture as the
-    # host path (zoom/service.py's get_host_join_url[s]). Without this, a
-    # registrant row whose join_url was set while the meeting was active
-    # keeps being handed out after the meeting is deleted outside the normal
-    # cancel flow (get_host_join_url's own docstring: the registrant row is
-    # not touched on delete, only the meeting -- status must be checked
-    # here). A PENDING_CREATION series child is unaffected either way: its
-    # registrant row (if any) has join_url IS NULL until the poller actually
-    # succeeds (zoom/service.py's create_registrant_for_booking queues it as
-    # PENDING with no join_url), so it was already excluded by the
-    # `join_url.is_not(None)` filter and still reads as the honest "ссылка
-    # готовится" empty state, not broken by this join.
-    join_urls: dict[UUID, str] = {}
+    # BE-108: keyed by booking, like has_checkin -- a cancelled earlier
+    # booking of the same practice is a row of its own and stays False.
+    reflection_booking_ids: set[UUID] = set()
     if booking_ids:
-        rows = (
-            await session.execute(
-                select(ZoomRegistrant.booking_id, ZoomRegistrant.join_url)
-                .join(ZoomMeeting, ZoomRegistrant.zoom_meeting_id == ZoomMeeting.id)
-                .where(
-                    ZoomRegistrant.booking_id.in_(booking_ids),
-                    ZoomRegistrant.status != ZoomRegistrantStatus.CANCELLED.value,
-                    ZoomRegistrant.join_url.is_not(None),
-                    ZoomMeeting.status == ZoomMeetingStatus.ACTIVE.value,
+        reflection_booking_ids = set(
+            (
+                await session.execute(
+                    select(Reflection.booking_id)
+                    .where(Reflection.booking_id.in_(booking_ids))
                 )
-            )
-        ).all()
-        join_urls = {row[0]: row[1] for row in rows}
+            ).scalars().all()
+        )
+
+    # T21-1: this user's own registrant link state per booking (set
+    # membership, same no-N+1 pattern as the diary flags above). See
+    # _registrant_link_states for the meeting-state join (PROMPT №563) and
+    # the BE-72 "no link will come" flag.
+    link_states = await _registrant_link_states(booking_ids, session)
 
     items = [
         (
@@ -1265,7 +1329,8 @@ async def list_user_bookings(
             practice,
             booking.practice_id in feedback_practice_ids,
             booking.id in checkin_booking_ids,
-            join_urls.get(booking.id),
+            *link_states.get(booking.id, (None, False)),
+            booking.id in reflection_booking_ids,
         )
         for booking, practice in page
     ]
@@ -1278,7 +1343,7 @@ async def list_upcoming_bookings(
     session: AsyncSession,
     *,
     limit: int = 10,
-) -> list[tuple[Booking, Practice, bool, bool, str | None]]:
+) -> list[tuple[Booking, Practice, bool, bool, str | None, bool, bool]]:
     """Confirmed bookings that are live-or-upcoming, soonest first.
 
     Feeds the dashboard «Ближайшая практика» widget. Unlike list_user_bookings
@@ -1293,16 +1358,11 @@ async def list_upcoming_bookings(
     per-row ``scheduled_at + duration_minutes`` ceiling (nearestBookings.ts).
 
     Returns the same (Booking, Practice, has_feedback, has_checkin,
-    zoom_registrant_join_url) row shape as list_user_bookings so the router
-    reuses one response builder.
+    zoom_registrant_join_url, zoom_registrant_link_unavailable,
+    has_reflection) row shape as list_user_bookings so the router reuses one
+    response builder.
     """
     from app.modules.diary.models import Checkin, CheckType, Feedback
-    from app.modules.zoom.models import (
-        ZoomMeeting,
-        ZoomMeetingStatus,
-        ZoomRegistrant,
-        ZoomRegistrantStatus,
-    )
 
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(minutes=settings.practice_max_duration_minutes)
@@ -1354,23 +1414,7 @@ async def list_upcoming_bookings(
             ).scalars().all()
         )
 
-    # PROMPT №563: same meeting-state join as list_user_bookings above -- see
-    # that function's comment for the full reasoning.
-    join_urls: dict[UUID, str] = {}
-    if booking_ids:
-        rows = (
-            await session.execute(
-                select(ZoomRegistrant.booking_id, ZoomRegistrant.join_url)
-                .join(ZoomMeeting, ZoomRegistrant.zoom_meeting_id == ZoomMeeting.id)
-                .where(
-                    ZoomRegistrant.booking_id.in_(booking_ids),
-                    ZoomRegistrant.status != ZoomRegistrantStatus.CANCELLED.value,
-                    ZoomRegistrant.join_url.is_not(None),
-                    ZoomMeeting.status == ZoomMeetingStatus.ACTIVE.value,
-                )
-            )
-        ).all()
-        join_urls = {row[0]: row[1] for row in rows}
+    link_states = await _registrant_link_states(booking_ids, session)
 
     return [
         (
@@ -1378,7 +1422,10 @@ async def list_upcoming_bookings(
             practice,
             booking.practice_id in feedback_practice_ids,
             booking.id in checkin_booking_ids,
-            join_urls.get(booking.id),
+            *link_states.get(booking.id, (None, False)),
+            # has_reflection: this list is CONFIRMED only, and a reflection
+            # needs a no_show booking, which never returns to CONFIRMED.
+            False,
         )
         for booking, practice in page
     ]

@@ -285,7 +285,7 @@ class TestMasterListBranch:
         master = await _make_master(client, db_session, BAND_MIN + 6)
         fake = AsyncMock(
             return_value={
-                "threads": [
+                "items": [
                     _comms_thread(str(uuid4()), unread=3),
                     _comms_thread(str(uuid4()), unread=0),
                 ],
@@ -336,7 +336,7 @@ class TestMasterListBranch:
             _CHATS_SEAM,
             AsyncMock(
                 return_value={
-                    "threads": [
+                    "items": [
                         _comms_thread(str(uuid4()), unread=4),
                         _comms_thread(str(uuid4()), unread=0),
                     ],
@@ -592,20 +592,33 @@ class TestPeerEnrichmentGuardsItself:
 
         assert payload == first
 
-    async def test_empty_and_shapeless_payloads_are_survived(
+    async def test_an_empty_page_is_survived_and_a_shapeless_one_raises(
         self, client: AsyncClient, db_session: AsyncSession
     ) -> None:
-        """Nothing to enrich is not an error, and nothing to warn about
-        either."""
+        """Nothing to enrich is not an error; a page of the wrong SHAPE is.
+
+        This test used to assert that shapeless payloads were survived in
+        silence too. That was right while the function was handed comms'
+        response and the response kept its shape; it was also exactly the
+        open door: when comms renamed `threads` to `items`, both filters
+        returned early and the unfiltered page went out. The function now
+        takes velo's own page (list_chats builds it from what
+        read_comms_page accepted), so a wrong shape here is a programming
+        error, and it raises instead of passing everything.
+        """
+        with patch("app.modules.chats.router.logger") as mock_logger:
+            await _attach_peers_from_comms(
+                {"threads": [], "next_cursor": None}, db_session,
+            )
+        mock_logger.warning.assert_not_called()
         for payload in (
-            {"threads": [], "next_cursor": None},
             {"threads": "not-a-list"},
             {},
+            {"items": [], "next_cursor": None},
             "not-a-dict",
         ):
-            with patch("app.modules.chats.router.logger") as mock_logger:
+            with pytest.raises(TypeError):
                 await _attach_peers_from_comms(payload, db_session)
-            mock_logger.warning.assert_not_called()
 
 
 class TestMasterListPrivacyFilter:
@@ -632,7 +645,7 @@ class TestMasterListPrivacyFilter:
         monkeypatch.setattr(
             _CHATS_SEAM,
             AsyncMock(
-                return_value={"threads": [pool, mine], "next_cursor": None}
+                return_value={"items": [pool, mine], "next_cursor": None}
             ),
         )
 
@@ -672,7 +685,7 @@ class TestMasterListPrivacyFilter:
             _CHATS_SEAM,
             AsyncMock(
                 return_value={
-                    "threads": [pool, _comms_thread(str(uuid4()), unread=0)],
+                    "items": [pool, _comms_thread(str(uuid4()), unread=0)],
                     "next_cursor": None,
                 }
             ),
@@ -706,7 +719,7 @@ class TestMasterListPrivacyFilter:
         monkeypatch.setattr(
             _CHATS_SEAM,
             AsyncMock(
-                return_value={"threads": [own_support], "next_cursor": None}
+                return_value={"items": [own_support], "next_cursor": None}
             ),
         )
 
@@ -741,7 +754,7 @@ class TestMasterListPrivacyFilter:
         monkeypatch.setattr(
             _CHATS_SEAM,
             AsyncMock(
-                return_value={"threads": [claimed], "next_cursor": None}
+                return_value={"items": [claimed], "next_cursor": None}
             ),
         )
 
@@ -769,7 +782,7 @@ class TestMasterListPrivacyFilter:
             _CHATS_SEAM,
             AsyncMock(
                 return_value={
-                    "threads": [future_form, keyless, mine],
+                    "items": [future_form, keyless, mine],
                     "next_cursor": None,
                 }
             ),
@@ -792,7 +805,7 @@ class TestMasterListPrivacyFilter:
             _CHATS_SEAM,
             AsyncMock(
                 return_value={
-                    "threads": [
+                    "items": [
                         _comms_thread(str(uuid4()), operator_kind="section"),
                         _comms_thread(str(uuid4()), operator_kind="section"),
                     ],
@@ -819,7 +832,7 @@ class TestMasterListPrivacyFilter:
         # call, and rebuilding per request would compare the fixture's
         # randomness instead of the filter's determinism.
         page = {
-            "threads": [
+            "items": [
                 _comms_thread(
                     "11111111-1111-4111-8111-111111111111",
                     operator_kind="section",
@@ -841,23 +854,47 @@ class TestMasterListPrivacyFilter:
         assert first.json() == second.json()
         assert len(first.json()["threads"]) == 1
 
-    async def test_malformed_payloads_do_not_take_the_list_down(
+    async def test_junk_rows_are_dropped_and_an_unknown_shape_is_a_502(
         self, client: AsyncClient, db_session: AsyncSession, monkeypatch
     ) -> None:
-        """Missing pieces are survived, not asserted away: the filter is as
-        defensive as the enrichment it guards."""
+        """Junk ROWS are survived; a page of an unknown SHAPE is refused.
+
+        This test used to assert 200 for every malformed payload, the
+        unknown shape included -- "survived, not asserted away". Surviving
+        a shape meant forwarding it unfiltered: comms 3.0.0 renamed the
+        list key, the filter found no `threads`, returned early, and the
+        unclaimed support queue went out whole. An unknown shape is now the
+        list being unavailable (core/comms.py read_comms_page): 502, and
+        nothing of the payload in the body. Junk inside a well-shaped page
+        still costs nothing -- the allowlist drops it.
+        """
         master = await _make_master(client, db_session, BAND_MIN + 36)
         for payload in (
-            {"threads": [], "next_cursor": None},
-            {"threads": "not-a-list"},
-            {"threads": [None, "junk"], "next_cursor": None},
-            {},
+            {"items": [], "next_cursor": None},
+            {"items": [None, "junk"], "next_cursor": None},
         ):
             monkeypatch.setattr(_CHATS_SEAM, AsyncMock(return_value=payload))
             resp = await client.get(
                 CHATS_URL, headers=auth_headers(master["session_token"]),
             )
             assert resp.status_code == 200, payload
+            assert resp.json() == {"threads": [], "next_cursor": None}
+
+        leaked = str(uuid4())
+        for payload in (
+            {"threads": [{"client": leaked}], "next_cursor": None},
+            {"items": "not-a-list", "next_cursor": None},
+            {"items": [{"client": leaked}]},
+            {"items": [], "next_cursor": 7},
+            {},
+            ["not", "a", "dict", leaked],
+        ):
+            monkeypatch.setattr(_CHATS_SEAM, AsyncMock(return_value=payload))
+            resp = await client.get(
+                CHATS_URL, headers=auth_headers(master["session_token"]),
+            )
+            assert resp.status_code == 502, payload
+            assert leaked not in resp.text
 
 
 class TestLocalListBranches:

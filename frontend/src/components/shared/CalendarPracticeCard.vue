@@ -23,6 +23,9 @@
         {{ badge.label }}
       </VBadge>
     </template>
+    <!-- No school-audience marker here: school practices are listed like any
+         other practice (owner 2026-10-02 retired the FE-24 «Для школы» badge);
+         the master zone keeps its audience_unavailable warning instead. -->
   </PracticeListCard>
 </template>
 

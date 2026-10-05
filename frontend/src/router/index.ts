@@ -9,12 +9,12 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
-import { useMasterStore } from '@/stores/master'
 import {
   roleRedirect,
   roleGuard,
   masterStatusGuard,
   masterPendingGuard,
+  masterApplyGuard,
   masterNoProfileGuard,
   roleFreshnessGuard,
 } from '@/router/guards'
@@ -25,27 +25,6 @@ import type { ReadyResult } from '@/composables/useAuth'
 import UserShell from '@/views/shells/UserShell.vue'
 import MasterShell from '@/views/shells/MasterShell.vue'
 import AdminShell from '@/views/shells/AdminShell.vue'
-
-// =============================================================================
-// applyGuard: verified masters don't need to visit the apply form.
-// =============================================================================
-const applyGuard = async () => {
-  const { timedOut }: ReadyResult = await waitUntilReady()
-  const auth = useAuthStore()
-
-  if (timedOut && auth.role === null) {
-    return { path: '/auth-error' }
-  }
-
-  if (auth.role !== 'master') return true
-
-  const masterStore = useMasterStore()
-  await masterStore.fetchMyProfile()
-  if (masterStore.profile?.status === 'verified') {
-    return { path: '/master/dashboard' }
-  }
-  return true
-}
 
 const router = createRouter({
   history: createWebHistory(),
@@ -67,19 +46,35 @@ const router = createRouter({
         {
           path: 'dashboard',
           name: 'user-dashboard',
-          // [FE-3] Headerless top clearance, follow-up: the dashboard's only
-          // floating header was the GREETING, removed 2026-06-04 -- since then
-          // nothing teleports into the island, but MobileLayout cannot tell
-          // "not yet" from "never" and reserved HEADER_FALLBACK+gap = 104px of
-          // phantom band above «Ближайшие практики» forever. Declaring the
-          // route headerless pads by the token exactly (34px). If this screen
-          // ever gains a floating header again, drop this meta.
-          meta: { headerless: true },
+          // [FE-3] Headerless top clearance RETIRED (owner, 2026-09-08): the
+          // screen has a floating header again -- VHeader «Главная» with the
+          // notification bell in its action slot teleports into the island,
+          // so the route must NOT declare headerless (per the [FE-3] contract
+          // in MobileLayout's mainStyle) or the feed would underlap the
+          // header. The fog (user-dashboard sits in UserShell's FOG_ROUTES)
+          // dissolves scrolling content under the island.
           component: () => import('@/views/user/UserDashboardView.vue'),
         },
         {
           path: 'calendar',
           name: 'user-calendar',
+          component: () => import('@/views/user/CalendarView.vue'),
+        },
+        {
+          // The MASTER's practice calendar (owner 2026-09-30): the «Предстоящие
+          // практики» row on the master's public profile lands here. Stacked
+          // (not the tab hub) so the floating island's back control is honest.
+          path: 'calendar/master/:masterId',
+          name: 'user-calendar-master',
+          component: () => import('@/views/user/CalendarView.vue'),
+        },
+        {
+          // Owner 2026-10-01: «Предстоящие практики» on the school page opens
+          // the calendar scoped to that school. Stacked (not the tab hub) so
+          // the floating island's back control is honest; mirrors
+          // user-calendar-master above.
+          path: 'calendar/school/:groupId',
+          name: 'user-calendar-school',
           component: () => import('@/views/user/CalendarView.vue'),
         },
         {
@@ -98,6 +93,16 @@ const router = createRouter({
           component: () => import('@/views/user/DetailView.vue'),
         },
         {
+          // FE-70: hand-entered activity that happened outside velo. A diary
+          // route by shell contract (no tab bar, fill layout) but NOT a feed
+          // citizen -- it owns its header/scroll/footer like the other diary
+          // screens. Static segment sits above the dynamic :type sibling in
+          // matching rank, so no declaration-order hazard.
+          path: 'diary/activity/new',
+          name: 'user-diary-activity-new',
+          component: () => import('@/views/user/ExternalActivityCreateView.vue'),
+        },
+        {
           path: 'profile',
           name: 'user-profile',
           // [FE-3] Headerless hub, same contract as the dashboard ([FE-3]
@@ -111,9 +116,9 @@ const router = createRouter({
           component: () => import('@/views/user/UserProfileView.vue'),
         },
         {
-          path: 'profile/language-timezone',
-          name: 'user-language-timezone',
-          component: () => import('@/views/user/LanguageTimezoneView.vue'),
+          path: 'profile/timezone',
+          name: 'user-timezone',
+          component: () => import('@/views/user/TimezoneSettingsView.vue'),
         },
         {
           path: 'profile/edit',
@@ -167,9 +172,60 @@ const router = createRouter({
           component: () => import('@/views/user/MyBookingsView.vue'),
         },
         {
+          // FE-11: the bell feed (user-zone mirror of the master's T-26
+          // inbox). Top-level, NOT under `profile/` -- deliberately named
+          // 'user-inbox', not 'user-notifications': that name is already the
+          // preference screen at profile/notifications (NotificationsView).
+          path: 'notifications',
+          name: 'user-inbox',
+          meta: { hideTabBar: true },
+          component: () => import('@/views/user/UserInboxView.vue'),
+        },
+        {
+          // FE-19 (GT P3): "Мои группы" in the user zone means SCHOOLS
+          // (curator groups) -- the master's student groups are a master-zone
+          // concept a plain user never sees. Entry row: UserProfileView,
+          // «Аккаунт» section.
+          path: 'groups',
+          name: 'user-curator-groups',
+          meta: { hideTabBar: true },
+          component: () => import('@/views/user/UserCuratorGroupsView.vue'),
+        },
+        {
+          // tz-curator.md §1.2-1.4: the «Школы» TAB HUB (curator flow) --
+          // the tab bar's own screen: empty state with «Создать школу» or the
+          // flat schools list. Reached from the dock tab and nowhere else;
+          // tab visibility itself is the schoolsHub store's decision.
+          path: 'schools',
+          name: 'user-schools',
+          component: () => import('@/views/user/SchoolsView.vue'),
+        },
+        {
+          path: 'groups/:id',
+          name: 'user-curator-group',
+          meta: { hideTabBar: true },
+          // ONE page for both zones (TZ 6.3) -- the master zone mounts this
+          // same view below; the action set keys off viewer.relation and the
+          // zone only picks the back target.
+          component: () => import('@/views/user/CuratorGroupPageView.vue'),
+        },
+        {
+          // FE-93 (owner 2026-10-03): the curator-management screens
+          // (participants / analytics / student profile) exist ONLY in the
+          // master zone -- in user mode a curator reads the school page as
+          // an ordinary member. The user zone keeps the school list and
+          // this page for the school's students.
           path: 'checkin/:practiceId',
           name: 'user-checkin',
           component: () => import('@/views/user/CheckinView.vue'),
+        },
+        {
+          // Links (3 October): «Освободилось место» -- the waitlist.spot_available
+          // notification (bell + Telegram confirm_waitlist__<id>) lands here.
+          path: 'waitlist/:id',
+          name: 'waitlist-confirm',
+          meta: { hideTabBar: true },
+          component: () => import('@/views/user/WaitlistConfirmView.vue'),
         },
         {
           path: 'feedback/:practiceId',
@@ -314,7 +370,7 @@ const router = createRouter({
           component: () => import('@/views/master/MasterProfileView.vue'),
         },
         // Master profile sub-screens reached from the master profile hub; back-nav
-        // uses router.back() so it returns here. Edit + language-timezone reuse the
+        // uses router.back() so it returns here. Edit + timezone reuse the
         // role-agnostic user settings views; notifications has its own master view
         // (richer master-only design, operator В1=Б 2026-06-13).
         {
@@ -330,10 +386,10 @@ const router = createRouter({
           component: () => import('@/views/master/MasterNotificationsView.vue'),
         },
         {
-          path: 'profile/language-timezone',
-          name: 'master-language-timezone',
+          path: 'profile/timezone',
+          name: 'master-timezone',
           meta: { hideTabBar: true },
-          component: () => import('@/views/user/LanguageTimezoneView.vue'),
+          component: () => import('@/views/user/TimezoneSettingsView.vue'),
         },
         {
           path: 'support',
@@ -408,6 +464,62 @@ const router = createRouter({
           component: () => import('@/views/master/MasterGroupDetailView.vue'),
         },
         {
+          // FE-20 (GT P3): SCHOOLS, deliberately named «Группы мастеров» --
+          // «Мои группы» one row above means the master's own STUDENT groups
+          // (master_group), a different entity. Entry row: MasterDashboardView,
+          // under that «Мои группы» row.
+          path: 'curator-groups',
+          name: 'master-curator-groups',
+          beforeEnter: masterStatusGuard,
+          meta: { hideTabBar: true },
+          component: () => import('@/views/master/MasterCuratorGroupsView.vue'),
+        },
+        {
+          path: 'curator-groups/new',
+          name: 'master-curator-group-create',
+          beforeEnter: masterStatusGuard,
+          meta: { hideTabBar: true },
+          component: () => import('@/views/master/MasterCuratorGroupCreateView.vue'),
+        },
+        {
+          path: 'curator-groups/:id',
+          name: 'master-curator-group',
+          beforeEnter: masterStatusGuard,
+          meta: { hideTabBar: true },
+          // The SAME page component the user zone mounts (TZ 6.3) -- the
+          // server's viewer.relation drives the action set; this route's
+          // name prefix is all the view reads to pick its back target.
+          component: () => import('@/views/user/CuratorGroupPageView.vue'),
+        },
+        {
+          // tz-curator.md §1.11 (owner 2026-09-22): the same participants
+          // screen the user zone mounts; the zone only picks navigation
+          // targets.
+          path: 'curator-groups/:id/members',
+          name: 'master-curator-group-members',
+          beforeEnter: masterStatusGuard,
+          meta: { hideTabBar: true },
+          component: () => import('@/views/user/SchoolMembersView.vue'),
+        },
+        {
+          // tz-curator.md §6 MVP: the same analytics screen the user zone
+          // mounts; the zone only picks the back target.
+          path: 'curator-groups/:id/analytics',
+          name: 'master-curator-group-analytics',
+          beforeEnter: masterStatusGuard,
+          meta: { hideTabBar: true },
+          component: () => import('@/views/user/SchoolAnalyticsView.vue'),
+        },
+        {
+          // tz-curator.md §1.11.4 (owner 2026-09-22): same student profile
+          // component as the user zone; the zone picks the back target.
+          path: 'curator-groups/:groupId/students/:userId',
+          name: 'master-curator-group-student',
+          beforeEnter: masterStatusGuard,
+          meta: { hideTabBar: true },
+          component: () => import('@/views/user/SchoolStudentProfileView.vue'),
+        },
+        {
           path: 'summary',
           name: 'master-summary',
           beforeEnter: masterStatusGuard,
@@ -428,13 +540,13 @@ const router = createRouter({
       // (incl. the invited plain user) reaches the claim.
       path: '/master/invite/:token',
       name: 'master-invite',
-      beforeEnter: applyGuard,
+      beforeEnter: masterApplyGuard,
       component: () => import('@/views/master/MasterInviteClaimView.vue'),
     },
     {
       path: '/master/apply',
       name: 'master-apply',
-      beforeEnter: applyGuard,
+      beforeEnter: masterApplyGuard,
       component: () => import('@/views/master/MasterApplyView.vue'),
     },
     {
@@ -447,6 +559,27 @@ const router = createRouter({
       path: '/groups/join/:token',
       name: 'group-join',
       component: () => import('@/views/master/GroupJoinView.vue'),
+    },
+    {
+      // FE-18 (GT P3): landing for a SCHOOL's reusable invite deeplink
+      // (startapp=school__<token>). Standalone like group-join,
+      // no beforeEnter guard: any authenticated user may open the preview,
+      // and the SERVER decides (preview can_join/reason) whether joining is
+      // offered, refused, or an upgrade. The token carries no kind -- the
+      // master/student flavour is resolved by GET /curator-groups/invites/{token}.
+      path: '/curator-groups/join/:token',
+      name: 'curator-group-join',
+      component: () => import('@/views/master/CuratorGroupJoinView.vue'),
+    },
+    {
+      // BE-59/GT-27 (owner mockup 2026-10-02): «Приглашение стать мастером
+      // школы!» -- the consent screen of the curator's master-role
+      // appointment. Reached from the curator_group.master_offered notification
+      // (open_master_offer, bell + Telegram); standalone like curator-group-join, no guard: the
+      // school page and the accept endpoint decide who sees what.
+      path: '/curator-groups/:id/master-offer',
+      name: 'curator-group-master-offer',
+      component: () => import('@/views/master/CuratorGroupMasterOfferView.vue'),
     },
     {
       path: '/master/pending',
@@ -490,6 +623,15 @@ const router = createRouter({
           path: 'masters/:id',
           name: 'admin-master-review',
           component: () => import('@/views/admin/AdminMasterReviewView.vue'),
+        },
+        {
+          // FE-23 (GT P4): read-only list of ALL schools incl. frozen -- the
+          // only place an inactive school is visible. Entered from
+          // AdminMastersView; a tap opens the curator's review page (the
+          // existing revoke lever is the one moderation action for schools).
+          path: 'curator-groups',
+          name: 'admin-curator-groups',
+          component: () => import('@/views/admin/AdminCuratorGroupsView.vue'),
         },
         {
           // M3: master methods change-request moderation queue.
@@ -656,7 +798,7 @@ router.beforeEach(async (to) => {
   // '/', which is all roleRedirect's own rejection branch ever covered.
   // See guards.ts for the full reasoning; kept as a separate exported guard
   // (like every other guard here) so it's directly testable.
-  const freshnessResult = await roleFreshnessGuard(to)
+  const freshnessResult = roleFreshnessGuard(to)
   if (freshnessResult !== true) return freshnessResult
 
   const auth = useAuthStore()

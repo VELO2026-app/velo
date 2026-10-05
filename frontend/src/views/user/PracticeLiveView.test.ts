@@ -48,14 +48,11 @@
 //       longer stonewalled -- they are offered the guest entry, which is what
 //       the wrapper is for. The honest "не засчитается" mark took its place.
 //
-// ⚠ FINDING (not fixed, not asserted as "correct" -- flagged to the navigator
-// in the report): onEnter (.vue:125-154) documents ONLY the 409
-// "already joined" case as a no-op that still opens Zoom, but the code's
-// actual gate (`!result.ok && !error.includes('already')`) treats EVERY
-// join failure identically -- toast fires, Zoom opens regardless. The tests
-// below assert the CURRENT behavior (both the documented 409 case and the
-// undocumented generic-failure case reach platform.openLink) as a faithful
-// record of what the code does today, not as a claim that it is correct.
+// ⚠ FINDING RESOLVED (FE-78.2, 2026-10-03): the gate now keys on the machine
+// status (`result.status !== 409`) instead of matching the word "already" in
+// the human-readable error. The 409 case is suppressed, a real failure toasts.
+// NOTE: a real failure still opens Zoom afterwards -- the ticket scoped the fix
+// to the toast gate only; if that is wrong too, it is a separate decision.
 //
 // vue-router: mocked, never built. `platform`: mocked via the
 // `get platform()` trick (stores/auth.test.ts:52-55) -- required because
@@ -90,7 +87,7 @@ vi.mock('@/composables/useToast', () => ({
 // resolve_zoom_entry and is proved by its own doubles).
 const resolveZoomEntry = vi.fn()
 vi.mock('@/api/practices', () => ({
-  resolveZoomEntry: (...args: unknown[]) => resolveZoomEntry(...args),
+  resolveZoomEntry: (...args: Parameters<typeof resolveZoomEntry>) => resolveZoomEntry(...args),
 }))
 
 const openLink = vi.fn()
@@ -172,6 +169,7 @@ function booking(
     updated_at: null,
     has_feedback: false,
     has_checkin: false,
+    has_reflection: false,
     practice: {
       id: 'p1',
       title: 'Утренняя медитация',
@@ -319,7 +317,10 @@ describe('PracticeLiveView', () => {
     it('personal: Войти is enabled and opens the personal link -- the outcome the whole feature exists for', async () => {
       practicesState.selected = practice()
       bookingsState.bookings = [booking({ joined_at: '2026-07-20T10:00:00Z' })]
-      resolveZoomEntry.mockResolvedValue({ kind: 'personal', url: 'https://zoom.us/j/personal?tk=x' })
+      resolveZoomEntry.mockResolvedValue({
+        kind: 'personal',
+        url: 'https://zoom.us/j/personal?tk=x',
+      })
       mount()
       await flush()
 
@@ -407,6 +408,19 @@ describe('PracticeLiveView', () => {
       expect(enterBtn()).toBeNull()
     })
 
+    // Links (Д4): 'unavailable' fell into the generic «Войти» branch.
+    it('unavailable: honest state, no «Войти» (a live booking whose link will not come)', async () => {
+      practicesState.selected = practice()
+      bookingsState.bookings = [booking()]
+      resolveZoomEntry.mockResolvedValue({ kind: 'unavailable', url: null })
+      mount()
+      await flush()
+
+      expect(emptyState()?.textContent).toContain('Ссылка на встречу недоступна')
+      expect(emptyState()?.textContent).toContain('поддержку')
+      expect(enterBtn()).toBeNull()
+    })
+
     it('the resolve call 404s (a well-formed deep link naming a deleted practice): an honest error, NEVER an empty screen', async () => {
       practicesState.selected = practice()
       bookingsState.bookings = []
@@ -426,7 +440,6 @@ describe('PracticeLiveView', () => {
       expect(resolveZoomEntry).toHaveBeenCalledWith('p1')
     })
   })
-
 
   // ===========================================================================
   describe('join flow', () => {
@@ -482,10 +495,10 @@ describe('PracticeLiveView', () => {
       expect(openLink).toHaveBeenCalledWith('https://zoom.us/j/123456')
     })
 
-    it('the documented 409 "already joined" case: joinBooking rejects with an "already"-worded error -- toast is suppressed, Zoom still opens', async () => {
+    it('the documented 409 "already joined" case (keyed on the machine status, FE-78.2): toast is suppressed, Zoom still opens', async () => {
       practicesState.selected = practice()
       bookingsState.bookings = [booking({ id: 'b1', joined_at: null })]
-      joinBooking.mockResolvedValue({ ok: false, error: 'Booking already joined' })
+      joinBooking.mockResolvedValue({ ok: false, error: 'Вы уже записаны', status: 409 })
       mount()
       // T-35: the button is disabled until the server's resolution arrives --
       // it can no longer be pressed on a screen that has not been told what
@@ -499,10 +512,10 @@ describe('PracticeLiveView', () => {
       expect(openLink).toHaveBeenCalledWith('https://zoom.us/j/123456')
     })
 
-    it('⚠ FINDING (documented, not fixed): a REAL join failure (not "already") shows the toast, but current code still opens Zoom -- the docstring only carves out the 409 case, the guard treats every failure alike', async () => {
+    it('a REAL join failure (non-409) still toasts; Zoom still opens -- FE-78.2 scoped the fix to the toast gate only', async () => {
       practicesState.selected = practice()
       bookingsState.bookings = [booking({ id: 'b1', joined_at: null })]
-      joinBooking.mockResolvedValue({ ok: false, error: 'Practice is full' })
+      joinBooking.mockResolvedValue({ ok: false, error: 'Practice is full', status: 400 })
       mount()
       // T-35: the button is disabled until the server's resolution arrives --
       // it can no longer be pressed on a screen that has not been told what

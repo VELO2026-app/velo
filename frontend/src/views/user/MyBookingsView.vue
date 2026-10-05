@@ -90,7 +90,8 @@ import { VLoader, VEmptyState, VButton } from '@/components/ui'
 import { VHeader } from '@/components/layout'
 import { useBookingsStore } from '@/stores/bookings'
 import { useToast } from '@/composables/useToast'
-import BookingCard, { type BookingBadge } from '@/components/shared/BookingCard.vue'
+import BookingCard from '@/components/shared/BookingCard.vue'
+import type { BookingBadge } from '@/components/shared/bookingBadge'
 import { isLiveNow, hasEnded as endedByClock } from '@/utils/bookingStatus'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import type { BookingWithPracticeResponse } from '@/api/types'
@@ -219,7 +220,7 @@ function badgeFor(b: BookingWithPracticeResponse): BookingBadge | null {
   // this from silence so it never reads as indistinguishable from a no-show
   // at a glance -- an honest "still being decided" badge instead.
   if (b.status === 'confirmed' && hasEnded(b)) {
-    return { label: 'Подсчитывается', variant: 'calculating' }
+    return { label: 'Подсчет', variant: 'calculating' }
   }
   // Pending but the practice is already over (awaiting backend finalize):
   // it sits in "Прошедшие" with NO upcoming badge — no misleading
@@ -241,16 +242,16 @@ function badgeFor(b: BookingWithPracticeResponse): BookingBadge | null {
 // booking-detail screen is gone; the practice detail now carries the status
 // row + ZOOM and handles past/cancelled bookings. Navigate by practice_id. --
 function openDetail(b: BookingWithPracticeResponse): void {
-  router.push({ name: 'practice-detail', params: { id: b.practice_id } })
+  void router.push({ name: 'practice-detail', params: { id: b.practice_id } })
 }
 
 onMounted(() => {
   // B30: refreshMyBookings() (not fetchMyBookings()) -- badgeFor() below reads
-  // a "Подсчитывается" (attendance-pending) state off a cached list that may
+  // a "Подсчет" (attendance-pending) state off a cached list that may
   // have been fetched before the practice ended; fetchMyBookings() would
   // no-op and the badge would never advance to its real verdict.
   // refreshMyBookings() always re-fetches, without flashing the list empty.
-  store.refreshMyBookings()
+  void store.refreshMyBookings()
 })
 </script>
 

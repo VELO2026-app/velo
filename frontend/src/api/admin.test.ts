@@ -25,7 +25,7 @@
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { verifyMaster, approveMethodChange } from '@/api/admin'
+import { verifyMaster, approveMethodChange, setMasterGroupRight } from '@/api/admin'
 import { api } from '@/api/client'
 
 vi.mock('@/api/client', async (importOriginal) => {
@@ -43,6 +43,7 @@ vi.mock('@/api/client', async (importOriginal) => {
 
 beforeEach(() => {
   vi.mocked(api.post).mockReset().mockResolvedValue({ user_id: 'm_1', status: 'ok' })
+  vi.mocked(api.patch).mockReset().mockResolvedValue({ user_id: 'm_1', can_create_groups: true })
 })
 
 describe.each([
@@ -95,5 +96,55 @@ describe.each([
     vi.mocked(api.post).mockResolvedValue(response)
 
     await expect(fn('m_1', ['X'])).resolves.toEqual(response)
+  })
+})
+
+// -- BE-18: the school-founding right seam ------------------------------
+
+describe('verifyMaster -- can_create_groups body construction (BE-18)', () => {
+  it('absent/false: the key is NOT sent (backend default no -- nothing written)', async () => {
+    await verifyMaster('m_1')
+    await verifyMaster('m_1', undefined, undefined, false)
+
+    for (const call of vi.mocked(api.post).mock.calls) {
+      expect(Object.keys(call[1] as object)).not.toContain('can_create_groups')
+    }
+  })
+
+  it('true: sent as can_create_groups alongside the promote keys', async () => {
+    await verifyMaster('m_1', ['Новое направление'], undefined, true)
+
+    expect(api.post).toHaveBeenCalledWith('/api/v1/admin/masters/m_1/verify', {
+      promote: ['Новое направление'],
+      can_create_groups: true,
+    })
+  })
+
+  it('true alone: a bare { can_create_groups: true } body', async () => {
+    await verifyMaster('m_1', undefined, undefined, true)
+
+    expect(api.post).toHaveBeenCalledWith('/api/v1/admin/masters/m_1/verify', {
+      can_create_groups: true,
+    })
+  })
+})
+
+describe('setMasterGroupRight (BE-18) -- PATCH /admin/masters/{id}/can-create-groups', () => {
+  it('PATCHes the boolean as { can_create_groups } and resolves the right, after', async () => {
+    const response = { user_id: 'm_1', can_create_groups: false }
+    vi.mocked(api.patch).mockResolvedValue(response)
+
+    await expect(setMasterGroupRight('m_1', false)).resolves.toEqual(response)
+    expect(api.patch).toHaveBeenCalledWith('/api/v1/admin/masters/m_1/can-create-groups', {
+      can_create_groups: false,
+    })
+  })
+
+  it('the grant direction is the same one write', async () => {
+    await setMasterGroupRight('m_1', true)
+
+    expect(api.patch).toHaveBeenCalledWith('/api/v1/admin/masters/m_1/can-create-groups', {
+      can_create_groups: true,
+    })
   })
 })

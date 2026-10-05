@@ -46,12 +46,25 @@ class TaxonomyDirection(UUIDMixin, TimestampMixin, Base):
     promoted row (unchanged meaning -- visible to every master's catalog
     fetch). A value scopes the row to exactly one master: it never appears
     in another master's or a non-owner's `GET /taxonomy` response, only in
-    the owning master's own. Existence-checks (_validate_taxonomy) and
-    value->label lookups (_label_for_direction_value) are deliberately
-    master-agnostic -- the per-master boundary is enforced at the catalog
-    READ (list_active_taxonomy) and, independently, by
-    _assert_master_confirmed_taxonomy already only ever matching against the
-    REQUESTING master's own MasterProfile.methods. Styles are never scoped
+    the owning master's own. EXISTENCE-checks (_validate_taxonomy) stay
+    deliberately master-agnostic -- master onboarding's picker needs the
+    unfiltered catalog and must never route through a confirmation check
+    (T21-6). VALUE->LABEL LOOKUPS (_label_for_direction_value) USED TO BE
+    master-agnostic for the same reason and ARE NOT SINCE BE-38.
+
+    The old reasoning was that the per-master boundary is held twice
+    elsewhere: at the catalog READ (list_active_taxonomy) and, separately,
+    by _assert_master_confirmed_taxonomy only ever matching against the
+    REQUESTING master's own MasterProfile.methods. THE SECOND HALF WAS
+    FALSE. That match is by LABEL, and labels are not unique across
+    masters: _scope_custom_methods_to_master deduplicates a new private row
+    against global rows and this master's own and deliberately not against
+    other masters' private ones. Two masters who both write "Сказкотерапия"
+    own two rows with one label, and each could name the other's value --
+    a practice pointing at a row its own master cannot see, and one that
+    dies when the other master's row is deactivated. The label lookup is
+    scoped now, and the gate tells "no row for you" apart from "no row at
+    all"; see practices/service.py. Styles are never scoped
     (see the migration docstring): the "Свой вариант" picker only ever
     produces a bare custom direction, never a direction+style pair.
     """

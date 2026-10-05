@@ -77,6 +77,7 @@ import { createApp, nextTick, type App } from 'vue'
 import EditPracticeView from '@/views/master/EditPracticeView.vue'
 import * as practicesApi from '@/api/practices'
 import * as groupsApi from '@/api/groups'
+import * as cgApi from '@/api/curatorGroups'
 import { ApiResponseError } from '@/api/client'
 import type { MasterProfileResponse, PracticeResponse, UpdatePracticeRequest } from '@/api/types'
 
@@ -86,6 +87,9 @@ vi.mock('@/api/practices')
 // Mocked wholesale -- an unmocked call here would hit the real network in
 // EVERY test in this file, not just the audience-specific ones below.
 vi.mock('@/api/groups')
+
+// FE-24 (GT P5): the schools fetch for the fourth option -- same reason.
+vi.mock('@/api/curatorGroups')
 
 // Seamed at the helper, not at @/api/taxonomy: the real one caches for the whole
 // file (see the banner). Resolving null = catalog cold -> hardcoded fallback.
@@ -207,7 +211,7 @@ function text(): string {
 function button(label: string): HTMLButtonElement | undefined {
   return Array.from(host?.querySelectorAll('button') ?? []).find((b) =>
     b.textContent?.includes(label),
-  ) as HTMLButtonElement | undefined
+  )
 }
 
 function titleField(): HTMLInputElement | null {
@@ -253,7 +257,7 @@ function cancelModalConfirm(): HTMLButtonElement | undefined {
   const actions = document.body.querySelector('.cpd__actions')
   return Array.from(actions?.querySelectorAll('button') ?? []).find(
     (b) => b.textContent?.trim() === 'Отменить',
-  ) as HTMLButtonElement | undefined
+  )
 }
 
 /** The branded cancel modal's «Не отменять». */
@@ -261,7 +265,7 @@ function cancelModalDismiss(): HTMLButtonElement | undefined {
   const actions = document.body.querySelector('.cpd__actions')
   return Array.from(actions?.querySelectorAll('button') ?? []).find(
     (b) => b.textContent?.trim() === 'Не отменять',
-  ) as HTMLButtonElement | undefined
+  )
 }
 
 /** The generic VConfirmDialog's confirm button (VConfirmDialog.vue:27-33). */
@@ -269,7 +273,7 @@ function confirmDialogConfirm(label: string): HTMLButtonElement | undefined {
   const actions = document.body.querySelector('.v-confirm__actions')
   return Array.from(actions?.querySelectorAll('button') ?? []).find(
     (b) => b.textContent?.trim() === label,
-  ) as HTMLButtonElement | undefined
+  )
 }
 
 /** Drive the REAL teleported DatePickerSheet: open it, tap `day`, save. */
@@ -321,6 +325,7 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue(practice({ status: 'cancelled' }))
   vi.mocked(groupsApi.getGroups).mockReset().mockResolvedValue({ items: [] })
+  vi.mocked(cgApi.getMyCuratorGroups).mockReset().mockResolvedValue({ items: [] })
   refreshMyPractices.mockReset().mockResolvedValue(undefined)
   push.mockReset()
   back.mockReset()
@@ -357,9 +362,7 @@ afterEach(() => {
 describe('EditPracticeView', () => {
   describe('the state ladder', () => {
     it('shows the loader while the practice is in flight', async () => {
-      vi.mocked(practicesApi.getPractice).mockReturnValue(
-        new Promise(() => {}) as Promise<PracticeResponse>,
-      )
+      vi.mocked(practicesApi.getPractice).mockReturnValue(new Promise(() => {}))
       mount()
       await flush()
 
@@ -450,9 +453,7 @@ describe('EditPracticeView', () => {
       mountCached(practice())
       await flush()
 
-      const pickers = Array.from(
-        host?.querySelectorAll('.edit-practice__picker') ?? [],
-      ) as HTMLElement[]
+      const pickers = Array.from(host?.querySelectorAll('.edit-practice__picker') ?? [])
       expect(pickers[0]?.textContent?.trim()).toBe('22 июля 2026')
       expect(pickers[1]?.textContent?.trim()).toBe('13:00')
     })
@@ -471,7 +472,7 @@ describe('EditPracticeView', () => {
       await flush()
 
       const areas = Array.from(host?.querySelectorAll('textarea') ?? [])
-      expect(areas.map((a) => (a as HTMLTextAreaElement).value)).toContain('Травмы спины')
+      expect(areas.map((a) => a.value)).toContain('Травмы спины')
       // T-35: the Zoom URL input is gone from this form with its column. Its
       // absence is asserted, not merely un-asserted -- a re-added field would
       // fail here rather than pass silently.
@@ -544,6 +545,38 @@ describe('EditPracticeView', () => {
 
       expect(sentBody().direction).toBe('meditation')
       expect(sentBody().style).toBeNull()
+    })
+
+    it("a curator editing a school practice is filtered by the OWNER's methods (practice.master_methods), not his own", async () => {
+      // BE-63: the curator is the backend's other PATCH manager, and it
+      // validates direction/style against the practice's OWNER. The detail
+      // response carries the owner's confirmed set (master_methods), so the
+      // picker must read it -- filtering by the editor's own profile was
+      // exactly CreatePracticeView's late-400 bug, on this screen too.
+      // Cache miss (a foreign practice is never in /masters/me/practices),
+      // so the screen fetches the detail response below.
+      masterState.profile = { methods: ['Йога', 'Йога — Хатха-йога'] } as MasterProfileResponse
+      vi.mocked(practicesApi.getPractice).mockResolvedValue(
+        practice({
+          master_id: 'm2',
+          master_name: 'Пётр Романов',
+          master_methods: ['Медитация', 'Медитация — Медитация молчания'],
+        }),
+      )
+      mount()
+      await flush()
+
+      const opts = Array.from(selectByLabel('Направление')?.options ?? []).map((o) =>
+        o.textContent?.trim(),
+      )
+      expect(opts).toContain('Медитация')
+      // The editor's own confirmed direction is NOT offered: the backend
+      // would refuse it on save (it is not the owner's).
+      expect(opts).not.toContain('Йога')
+      // The saved direction (the practice fixture's 'yoga') is not the
+      // owner's either, so the dependent style select offers nothing and
+      // stays hidden -- the same posture a narrowed own profile produces.
+      expect(selectByLabel('Вид практики')).toBeUndefined()
     })
   })
 
@@ -1527,4 +1560,141 @@ describe('EditPracticeView', () => {
   // A test for it would have to poke `deleting` directly, which is the form-half
   // mocking Pattern C exists to forbid (velo-idiom Step 3). The guard's three
   // LIVE flags are each proven by the re-entry tests above.
+})
+
+// -- «Школы» audience (FE-24 / GT P5; BE-74, FE-92) --------------------------------
+//
+// The rulings here evolved. Before BE-74 this block asserted that Edit
+// resolves a school practice's chips from NAMES (PracticeResponse carried no
+// ids) and saves the ids. BE-74 made the practice belong to exactly ONE
+// school, fixed at creation (practice_school_immutable), and put its id on
+// the wire. While no public practice of a school existed in this UI (owner
+// Q2), its audience was therefore shown as read-only text. FE-92 then put
+// the school pair into the CREATE UI (curator-on-behalf), and the PATCH and
+// the audience-preview have always accepted exactly that pair
+// (check_school_audience's SCHOOL_PRACTICE_AUDIENCES) -- so the KIND of a
+// school practice is now EDITABLE here too. What stays fixed: the SCHOOL.
+// The picker receives the practice's own school with schoolLocked (no chips),
+// the school is shown as text, and the PATCH never carries a school -- a
+// second school can never be added, by name or otherwise.
+
+describe('EditPracticeView -- «Школы» audience (FE-24 / GT P5; BE-74, FE-92)', () => {
+  const school = (id: string, name: string, curatorId: string) => ({
+    id,
+    name,
+    description: null,
+    curator: { user_id: curatorId, display_name: 'Куратор', avatar_url: null },
+    masters_count: 1,
+    students_count: 0,
+    relation: 'master' as const,
+  })
+
+  it('a school practice offers the pair of radios, preselected to the saved kind; the school itself is not shown', async () => {
+    mountCached(
+      practice({
+        audience_kind: 'curator_groups',
+        curator_group_id: 'sc1',
+        curator_group_name: 'Тихая школа',
+      }),
+    )
+    await flush()
+
+    expect(button('Публичная')).toBeTruthy()
+    expect(button('Школы')?.getAttribute('aria-checked')).toBe('true')
+    // Owner 2026-10-05: no read-only school line in the block at all -- the
+    // name renders nowhere, the chips stay suppressed.
+    expect(text()).not.toContain('Тихая школа')
+    expect(text()).not.toContain('Школа «')
+    expect(host?.querySelectorAll('.v-chip').length).toBe(0)
+
+    // Kind unchanged -> no stranded-bookers preview (owner Q15 runs on change).
+    button('Сохранить')?.click()
+    await flush()
+
+    expect(practicesApi.previewAudienceChange).not.toHaveBeenCalled()
+    expect(sentBody().audience_kind).toBe('curator_groups')
+    expect(sentBody().group_ids).toEqual([])
+    expect(sentBody()).not.toHaveProperty('curator_group_id')
+    expect(sentBody()).not.toHaveProperty('curator_group_ids')
+  })
+
+  it('switching a school practice to «Публичная» previews the change and PATCHes public', async () => {
+    mountCached(
+      practice({
+        audience_kind: 'curator_groups',
+        curator_group_id: 'sc1',
+        curator_group_name: 'Тихая школа',
+      }),
+    )
+    await flush()
+
+    button('Публичная')?.click()
+    await flush()
+    button('Сохранить')?.click()
+    await flush()
+
+    expect(practicesApi.previewAudienceChange).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(practicesApi.previewAudienceChange).mock.calls[0]?.[1]).toEqual({
+      audience_kind: 'public',
+      group_ids: [],
+    })
+    expect(sentBody().audience_kind).toBe('public')
+    expect(sentBody()).not.toHaveProperty('curator_group_id')
+  })
+
+  it('a PUBLIC practice of a school preselects «Публичная» and stays public when saved untouched', async () => {
+    mountCached(
+      practice({
+        audience_kind: 'public',
+        curator_group_id: 'sc1',
+        curator_group_name: 'Тихая школа',
+      }),
+    )
+    await flush()
+
+    expect(button('Публичная')?.getAttribute('aria-checked')).toBe('true')
+    expect(text()).not.toContain('Тихая школа')
+
+    button('Сохранить')?.click()
+    await flush()
+
+    expect(practicesApi.previewAudienceChange).not.toHaveBeenCalled()
+    expect(sentBody().audience_kind).toBe('public')
+    expect(sentBody()).not.toHaveProperty('curator_group_id')
+  })
+
+  it('same-named schools of the master cannot widen a school practice: Edit never asks for schools', async () => {
+    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+      items: [school('sc_a', 'Дубль', 'u1'), school('sc_b', 'Дубль', 'u2')],
+    })
+    mountCached(
+      practice({
+        audience_kind: 'curator_groups',
+        curator_group_id: 'sc_a',
+        curator_group_name: 'Дубль',
+      }),
+    )
+    await flush()
+
+    expect(cgApi.getMyCuratorGroups).not.toHaveBeenCalled()
+    expect(host?.querySelectorAll('.v-chip').length).toBe(0)
+
+    button('Сохранить')?.click()
+    await flush()
+
+    const call = vi.mocked(practicesApi.updatePractice).mock.calls[0]
+    expect(call?.[1]?.audience_kind).toBe('curator_groups')
+    expect(call?.[1]).not.toHaveProperty('curator_group_id')
+  })
+
+  it('a practice without a school is not offered «Школы», even to a master who has schools', async () => {
+    vi.mocked(cgApi.getMyCuratorGroups).mockResolvedValue({
+      items: [school('sc1', 'Тихая школа', 'u1')],
+    })
+    mountCached(practice({ audience_kind: 'public' }))
+    await flush()
+
+    expect(button('Публичная')).toBeTruthy()
+    expect(button('Школы')).toBeUndefined()
+  })
 })

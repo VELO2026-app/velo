@@ -77,6 +77,7 @@ import type {
   AttendanceResponse,
   AttendanceItemResponse,
   PracticeInsightsResponse,
+  ScoreZoneCounts,
   ReviewItem,
 } from '@/api/types'
 
@@ -188,14 +189,24 @@ function attendance(overrides: Partial<AttendanceResponse> = {}): AttendanceResp
   }
 }
 
-function insights(fire: number, good: number, confused: number): PracticeInsightsResponse {
+// BE-77: feedbacks are the five zones (was fire / good / confused);
+// unnamed zones are 0.
+function insights(feedbacks: Partial<ScoreZoneCounts>): PracticeInsightsResponse {
+  const five: ScoreZoneCounts = { bad: 0, low: 0, neutral: 0, good: 0, fire: 0, ...feedbacks }
   return {
     practice_id: 'p1',
-    participants: fire + good + confused,
-    checkins: { high: 0, mid: 0, low: 0 },
-    feedbacks: { fire, good, confused },
+    participants: five.bad + five.low + five.neutral + five.good + five.fire,
+    checkins: { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 },
+    feedbacks: five,
     comments_count: 0,
   }
+}
+
+/** The hero badges, best zone first (fire, good, neutral, low, bad). */
+function badgeTexts(): string[] {
+  return Array.from(host?.querySelectorAll('.v-rating-badges__badge') ?? []).map((b) =>
+    norm(b.textContent).trim(),
+  )
 }
 
 function review(n: number, overrides: Partial<ReviewItem> = {}): ReviewItem {
@@ -942,34 +953,31 @@ describe('MasterPracticeDetailView', () => {
     })
 
     it('loads insights for the PAST branch and renders the distribution as PERCENTAGES', async () => {
-      // ratingPct (.vue:450-455) turns raw counts into percents. 6/3/1 of 10 ->
-      // 60/30/10. Rendering the raw counts as "%" would be a silent lie about
-      // how the practice landed.
-      insightsFixture = insights(6, 3, 1)
+      // zonePercents turns raw counts into percents. fire 6 / good 3 / bad 1
+      // of 10 -> 60/30/0/0/10 (all five zones, BE-77). Rendering the raw counts
+      // as "%" would be a silent lie about how the practice landed.
+      insightsFixture = insights({ fire: 6, good: 3, bad: 1 })
       vi.mocked(practicesApi.getPractice).mockResolvedValue(practice({ status: 'completed' }))
       mount()
       await flush()
 
       expect(loadInsights).toHaveBeenCalledWith('p1')
-      const badges = norm(host?.querySelector('.v-rating-badges')?.textContent)
-      expect(badges).toContain('60%')
-      expect(badges).toContain('30%')
-      expect(badges).toContain('10%')
+      expect(badgeTexts()).toEqual(['60%', '30%', '0%', '0%', '10%'])
     })
 
     it('rounds rather than truncates (1/3 -> 33/33/33)', async () => {
-      insightsFixture = insights(1, 1, 1)
+      insightsFixture = insights({ fire: 1, neutral: 1, bad: 1 })
       vi.mocked(practicesApi.getPractice).mockResolvedValue(practice({ status: 'completed' }))
       mount()
       await flush()
 
-      expect(norm(host?.querySelector('.v-rating-badges')?.textContent)).toContain('33%')
+      expect(badgeTexts()).toEqual(['33%', '0%', '33%', '0%', '33%'])
     })
 
     it('ZERO feedbacks hides the badges -- it does not render 0/0/0', async () => {
       // hasRating gates on totalFeedbacks > 0 (.vue:449). 0/0/0 would read as a
       // practice everyone hated rather than one nobody rated.
-      insightsFixture = insights(0, 0, 0)
+      insightsFixture = insights({})
       vi.mocked(practicesApi.getPractice).mockResolvedValue(practice({ status: 'completed' }))
       mount()
       await flush()
@@ -1103,7 +1111,7 @@ describe('MasterPracticeDetailView', () => {
         .mockReturnValueOnce(
           new Promise((r) => {
             resolveSecond = r as (v: unknown) => void
-          }) as ReturnType<typeof practicesApi.getPracticeReviews>,
+          }),
         )
       mount()
       await flush()
@@ -1519,4 +1527,51 @@ describe('MasterPracticeDetailView', () => {
   // 2. The insights cache's LRU eviction and its already-loading skip
   //    (stores/diary.ts:363-374) belong to the store's own tests. The mock here
   //    reproduces only the write, which is all this screen observes.
+})
+
+// -- Audience-unavailable warning (FE-24 / GT P5) ------------------------------
+
+describe('MasterPracticeDetailView -- audience_unavailable (FE-24 / GT P5)', () => {
+  it('flag true: the warning renders and offers no way into the editor (BE-74)', async () => {
+    // Before BE-74 the banner said «Смените аудиторию» and its button opened
+    // the edit screen -- right while a school audience could be swapped there.
+    // BE-74 made a school practice's audience and school read-only on that
+    // screen, and every flagged practice belongs to a school (the flag is set
+    // only for 'curator_groups', which the CHECK forbids without one). So the
+    // jump led to a screen with nothing to change: the advice and the button
+    // are gone, the statement stays.
+    vi.mocked(practicesApi.getPractice).mockResolvedValue(
+      practice({
+        audience_kind: 'curator_groups',
+        curator_group_id: 'sc1',
+        curator_group_name: 'Тихая школа',
+        audience_unavailable: true,
+      }),
+    )
+    mount()
+    await flush()
+
+    // THE PAIR: the warning is there and says what it means ...
+    const warn = host?.querySelector<HTMLElement>('.pd-audience-warn')
+    expect(warn).toBeTruthy()
+    expect(warn?.textContent).toContain('Школа недоступна')
+    expect(warn?.textContent).toContain('кроме вас и уже записавшихся')
+    // ... and carries neither the advice nor any control.
+    expect(text()).not.toContain('Смените аудиторию')
+    expect(text()).not.toContain('Изменить аудиторию')
+    expect(warn?.querySelectorAll('button')).toHaveLength(0)
+    warn?.click()
+    await flush()
+    expect(push).not.toHaveBeenCalledWith({
+      name: 'master-practice-edit',
+      params: { id: 'p1' },
+    })
+  })
+
+  it('flag absent/false: no warning at all', async () => {
+    mount()
+    await flush()
+
+    expect(text()).not.toContain('Школа недоступна')
+  })
 })

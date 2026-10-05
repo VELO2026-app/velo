@@ -1,9 +1,13 @@
 <!--
   VELO Frontend -- ConfirmPaymentModal (Admin DS, 2026-06-14, operator SVG «Confirm payment»)
 
-  Confirmation step before 2FA in the admin payout-approval flow. Recap box (amount /
-  fee / net / bank / master) + «Подтвердить 2FA». Pure presentational: the parent
-  (AdminWithdrawalDetailView) passes pre-formatted strings and owns the approve call.
+  The confirmation step of the admin payout approval -- the only one: the 2FA window
+  that used to follow it was removed (owner 2026-10-02) because the approve endpoint
+  never took a code, so it gated nothing. Recap box (amount / fee / net / bank /
+  master) + «Одобрить выплату». Pure presentational: the parent
+  (AdminWithdrawalDetailView) passes pre-formatted strings and owns the approve call;
+  `loading` keeps a second tap from firing a second approve while the first is in
+  flight.
 -->
 
 <template>
@@ -30,7 +34,9 @@
         </div>
       </div>
 
-      <VButton variant="primary" block @click="$emit('confirm')">Подтвердить 2FA</VButton>
+      <VButton variant="primary" block :loading="loading" @click="$emit('confirm')">
+        Одобрить выплату
+      </VButton>
     </div>
   </VModal>
 </template>
@@ -45,6 +51,7 @@ defineProps<{
   net: string
   bank: string
   master: string
+  loading?: boolean
 }>()
 
 defineEmits<{

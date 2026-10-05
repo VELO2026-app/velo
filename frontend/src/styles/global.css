@@ -124,6 +124,57 @@ html.is-keyboard-open .app-frame {
   min-height: 0;
 }
 
+/* ============================================================================
+   [VV-PAN 2026-09-07] Visual-viewport PAN compensation
+   ----------------------------------------------------------------------------
+   On current iOS WKWebView the focus pan can leave scrollY === 0 while the
+   document IS visually panned (WebKit 311821) -- useViewportGeometry's
+   scrollTo(0,0) undo is a no-op exactly there, and the panned visual
+   viewport shows a shifted crop of every fixed layer: the background "rides
+   away", the app column's bottom hangs above the keyboard by offsetTop, and
+   body-white peeks through at the rounded keyboard corners. The pan IS
+   measured (--velo-vv-offset, published from visualViewport.offsetTop) --
+   this block finally USES it: while the keyboard is open, the three
+   independent planes each translate DOWN by the pan, which is the exact
+   equivalent of the tested computeKeyboardBottomOffset formula
+   (frozenVh - (offsetTop + visibleHeight)) expressed as one transform:
+
+     - #app             the foreground root: its (vvh-sized, see above) box
+                        lands exactly in the visible window
+                        [offsetTop, offsetTop + vvh]; everything inside --
+                        headers, scrollers, composers, and #app's OWN
+                        position:fixed descendants (the transform makes #app
+                        their containing block, which is the desired
+                        behaviour: they ride the compensation too) --
+                        moves with it. At offset 0 the transform is inert,
+                        so Android/shrink-model devices are unaffected.
+     - #app-bg           the background plane: size and cover-crop unchanged,
+                        only the pan is followed (its static FE-44 layer
+                        promotion translateZ(0) is carried along -- losing it
+                        would resurrect the stale-raster bug it exists for).
+     - .v-modal__overlay / .v-sheet__overlay / .v-toast-container
+                        the Teleport-to-body siblings: fixed to the layout
+                        viewport, so WITHOUT this they stay panned while #app
+                        is compensated -- now all planes agree.
+
+   transform, never top/margin: compositor-only, and nothing reflows. Never
+   on body/html (a transformed body would become the containing block for
+   every fixed descendant and break the teleports differently).
+
+   REVERT: this whole block is one unit -- delete it plus the [VV-PAN]
+   additions in useViewportGeometry.ts; nothing else reads --velo-vv-offset.
+   ============================================================================ */
+html.is-keyboard-open #app,
+html.is-keyboard-open .v-modal__overlay,
+html.is-keyboard-open .v-sheet__overlay,
+html.is-keyboard-open .v-toast-container {
+  transform: translateY(var(--velo-vv-offset, 0px));
+}
+
+html.is-keyboard-open #app-bg {
+  transform: translateZ(0) translateY(var(--velo-vv-offset, 0px));
+}
+
 /* [FE-7 follow-up, HUD-verified -> SUPERSEDED by FE-43] This layer used to
    shrink (FE-7) and then clip (FE-45 follow-up 2) to --velo-vvh while
    typing. Both left a band below the live bottom that painted NOTHING: the

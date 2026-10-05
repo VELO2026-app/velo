@@ -202,6 +202,11 @@ export const useAuthStore = defineStore('auth', () => {
     const { useMasterStore } = await import('@/stores/master')
     useMasterStore().$reset()
 
+    // Same W-1 reasoning for the schools hub (tz-curator.md §1.2): the
+    // tab decision and curated list must not outlive the account.
+    const { useSchoolsHubStore } = await import('@/stores/schoolsHub')
+    useSchoolsHubStore().$reset()
+
     // T21-4/T21-5 (PROMPT №546): stop the foreground role-freshness poll so it
     // doesn't keep ticking a fetchMe() against a session that's about to be
     // cleared. Dynamic import, same circular-dep reasoning as above.

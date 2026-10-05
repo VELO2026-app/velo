@@ -3,8 +3,8 @@
  *
  * SVG icons from Design_prototype/assets/icons/ as Vue components.
  * Most icons use currentColor fill and accept a `size` prop (default 24).
- * Exception: the mood faces (IconMoodLow/Mid/High) are illustrative assets
- * that keep their own pastel gradients (default size 40), like VeloLogo.
+ * Exception: the mood-scale faces (IconMoodScale*) are illustrative assets
+ * that keep their own pastel fills (default size 40), like VeloLogo.
  *
  * Usage:
  *   import { IconHome, IconCalendar } from '@/components/icons'
@@ -12,6 +12,7 @@
 
 export { default as IconHome } from './IconHome.vue'
 export { default as IconCalendar } from './IconCalendar.vue'
+export { default as IconCalendarStar } from './IconCalendarStar.vue'
 export { default as IconDiary } from './IconDiary.vue'
 export { default as IconDiaryBook } from './IconDiaryBook.vue'
 export { default as IconProfile } from './IconProfile.vue'
@@ -20,6 +21,8 @@ export { default as IconGroup } from './IconGroup.vue'
 export { default as IconWarning } from './IconWarning.vue'
 export { default as IconBrain } from './IconBrain.vue'
 export { default as IconClock } from './IconClock.vue'
+export { default as IconLock } from './IconLock.vue'
+export { default as IconChevronRight } from './IconChevronRight.vue'
 export { default as IconMeditation } from './IconMeditation.vue'
 export { default as IconBreathwork } from './IconBreathwork.vue'
 export { default as IconYoga } from './IconYoga.vue'
@@ -44,10 +47,16 @@ export { default as IconCheck } from './IconCheck.vue'
 export { default as IconArrowRight } from './IconArrowRight.vue'
 export { default as IconClose } from './IconClose.vue'
 
-// -- Mood faces: colored illustrative assets (own gradients, default size 40) --
-export { default as IconMoodLow } from './IconMoodLow.vue'
-export { default as IconMoodMid } from './IconMoodMid.vue'
-export { default as IconMoodHigh } from './IconMoodHigh.vue'
+// -- Mood scale (FE-85, tz-mood-scale.md §6): five approved illustrative
+//    faces for the unified Check-in/Feedback scale, embedded 1:1 from the
+//    approved source art -- these components are the in-repo source of truth
+//    (raw svg sources are not kept; default size 40, own gradients -- unique
+//    ids per instance via useId) --
+export { default as IconMoodScaleBad } from './IconMoodScaleBad.vue'
+export { default as IconMoodScaleLow } from './IconMoodScaleLow.vue'
+export { default as IconMoodScaleNeutral } from './IconMoodScaleNeutral.vue'
+export { default as IconMoodScaleGood } from './IconMoodScaleGood.vue'
+export { default as IconMoodScaleFire } from './IconMoodScaleFire.vue'
 
 // -- Diary feed (Diary redesign): monochrome glyphs (currentColor) --
 export { default as IconPen } from './IconPen.vue'
@@ -55,11 +64,13 @@ export { default as IconDreamBook } from './IconDreamBook.vue'
 export { default as IconDots } from './IconDots.vue'
 export { default as IconMic } from './IconMic.vue'
 export { default as IconSend } from './IconSend.vue'
+export { default as IconStop } from './IconStop.vue'
 // IconDateOrnament / IconAxisConnector / IconAxisDot removed 2026-06-08:
 // superseded by IconDecor (part) / IconDecor2 (part) in DiaryTimeline.
 
 // -- Profile menu (Screen A): monochrome glyphs (currentColor) --
-export { default as IconEdit } from './IconEdit.vue'
+// IconEdit removed 2026-09-30: its edit affordances were consolidated into
+// IconPen (owner-supplied stylus redraw), so there is one pen glyph.
 export { default as IconBookings } from './IconBookings.vue'
 export { default as IconBell } from './IconBell.vue'
 export { default as IconBellPlain } from './IconBellPlain.vue'
@@ -93,9 +104,16 @@ export { default as IconRepeat } from './IconRepeat.vue'
 export { default as IconRequired } from './IconRequired.vue'
 export { default as IconRequiredDone } from './IconRequiredDone.vue'
 export { default as IconSearch } from './IconSearch.vue'
-export { default as IconShield2FA } from './IconShield2FA.vue'
+export { default as IconSchool } from './IconSchool.vue'
+export { default as IconCamera } from './IconCamera.vue'
 export { default as IconSupportChat } from './IconSupportChat.vue'
 export { default as IconTag } from './IconTag.vue'
+export { default as IconTrash } from './IconTrash.vue'
 export { default as IconThanks } from './IconThanks.vue'
+export { default as IconUser } from './IconUser.vue'
 export { default as IconUserMode } from './IconUserMode.vue'
+export { default as IconUsers } from './IconUsers.vue'
 export { default as IconView } from './IconView.vue'
+export { default as IconCopy } from './IconCopy.vue'
+export { default as IconLink } from './IconLink.vue'
+export { default as IconRefresh } from './IconRefresh.vue'

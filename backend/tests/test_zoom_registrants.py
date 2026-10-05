@@ -14,7 +14,7 @@
 
 from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta, timezone
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 from uuid import UUID
 
 import pytest
@@ -28,6 +28,7 @@ from app.modules.diary.models import DiaryEvent, DiaryEventKind
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import Practice
 from app.modules.users.models import User, UserRole
+from app.modules.zoom import retry_poller
 from app.modules.zoom.models import (
     ZoomMeeting,
     ZoomMeetingStatus,
@@ -516,6 +517,17 @@ async def test_cancel_booking_marks_registrant_cancelled_even_when_zoom_fails(
     Zoom registrant-status-update call raises, cancelling the booking still
     marks our ZoomRegistrant row cancelled and the booking cancel itself
     still succeeds.
+
+    WHAT CHANGED (BE-96). This test used to patch the Zoom call inside
+    cancel_booking and make it raise; it was right while the call was made
+    there. BE-96 moved the call out of the request: cancel_booking only
+    marks the row cancelled and queues the Zoom-side cancel, the retry
+    poller makes the call after commit. Patching the old place would now
+    pass without checking anything (the patched name is gone from
+    zoom.service). So the precise claim: the request makes NO Zoom call and
+    leaves the row cancelled + queued; the failing Zoom call happens in the
+    poller's cancel phase, after the cancel committed, and leaves our row
+    cancelled, still queued, one attempt counted.
     """
     master = await _make_verified_master(client, db_session, telegram_id=79204)
     practice_id = await _create_and_publish_practice(client, master)
@@ -529,19 +541,31 @@ async def test_cancel_booking_marks_registrant_cancelled_even_when_zoom_fails(
     assert registrant is not None
     assert registrant.status == ZoomRegistrantStatus.REGISTERED.value
     assert registrant.zoom_registrant_id is not None
+    registrant_id = registrant.id
 
-    with patch(
-        "app.modules.zoom.service.update_registrant_status",
+    zoom_cancel = AsyncMock(
         side_effect=ZoomAPIError("simulated failure", status_code=500, body="down"),
-    ):
+    )
+    with patch.object(retry_poller, "update_registrant_status", zoom_cancel):
         cancel_resp = await client.delete(
             f"{BOOKINGS_URL}/{booking_id}",
             headers=auth_headers(student["session_token"]),
         )
-    assert cancel_resp.status_code == 200, cancel_resp.text
+        assert cancel_resp.status_code == 200, cancel_resp.text
+        assert zoom_cancel.await_count == 0  # nothing sent from the request
+
+        await db_session.refresh(registrant)
+        assert registrant.status == ZoomRegistrantStatus.CANCELLED.value
+        assert registrant.zoom_cancel_pending is True
+
+        await db_session.commit()
+        assert await retry_poller._cancel_registrant_one(registrant_id) is True
+        assert zoom_cancel.await_count == 1
 
     await db_session.refresh(registrant)
     assert registrant.status == ZoomRegistrantStatus.CANCELLED.value
+    assert registrant.zoom_cancel_pending is True
+    assert registrant.zoom_cancel_attempts == 1
 
 
 # ===================================================================

@@ -10,13 +10,13 @@
 
 <template>
   <FormShell
+    v-model:comment="comment"
     back-label="Feedback"
     :practice="practice"
     :practice-loading="practiceLoading"
     :load-error="practiceLoadError"
     question-title="Как прошла практика?"
     question-subtitle="Оцените своё состояние после"
-    v-model:comment="comment"
     :submitting="diaryStore.feedbackSubmitting"
     :submit-disabled="false"
     submit-label="Отправить feedback"
@@ -36,13 +36,14 @@
       <span class="form-shell__practice-meta-cell"> <IconCalendar :size="14" /> Завершена </span>
     </template>
 
-    <!-- Rating slider -->
+    <!-- Rating: the same FE-85 unified scale as Check-in (one component, one
+         contract). Inert while the form submits. -->
     <template #selection>
       <div class="feedback__rating">
         <MoodSlider
           v-model="ratingScore"
-          :zones="RATING_ZONES"
           aria-label="Оценка практики от 1 до 10"
+          :disabled="diaryStore.feedbackSubmitting"
         />
       </div>
     </template>
@@ -65,6 +66,7 @@
 </template>
 
 <script setup lang="ts">
+import { historyHasBack } from '@/platform/history'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'
@@ -73,25 +75,10 @@ import { useDiaryStore } from '@/stores/diary'
 import { useToast } from '@/composables/useToast'
 import { platform } from '@/platform'
 import { VButton } from '@/components/ui'
-import {
-  IconRatingConfused,
-  IconRatingGood,
-  IconRatingFire,
-  IconHeart,
-  IconCalendar,
-} from '@/components/icons'
+import { IconHeart, IconCalendar } from '@/components/icons'
 import FormShell from '@/components/shared/FormShell.vue'
 import MoodSlider from '@/components/shared/MoodSlider.vue'
-import { RATING_ICON_COLOR } from '@/utils/displayHelpers'
-
-// Three slider zones (low -> high), passed to MoodSlider. Icons are .vue
-// components so they stay in the view. Per-zone color keeps the Figma tint
-// (confused = brand blue, good = rose, fire = peach) via --velo-rating-*.
-const RATING_ZONES = [
-  { icon: IconRatingConfused, label: 'Есть вопросы', color: RATING_ICON_COLOR.confused },
-  { icon: IconRatingGood, label: 'Хорошо', color: RATING_ICON_COLOR.good },
-  { icon: IconRatingFire, label: 'Огонь!', color: RATING_ICON_COLOR.fire },
-]
+import { MOOD_SCALE_DEFAULT_SCORE } from '@/utils/moodScale'
 
 const route = useRoute()
 const router = useRouter()
@@ -106,7 +93,9 @@ const practice = computed(() => practicesStore.selected)
 const practiceLoading = computed(() => practicesStore.selectedLoading)
 const practiceLoadError = computed(() => practicesStore.selectedError)
 
-const ratingScore = ref<number>(6)
+// Rating score 1..10. Default is the EXACT 5 «Нормально» (tz-mood-scale §2.4):
+// both forms open identically and an untouched submit sends 5, not 6.
+const ratingScore = ref<number>(MOOD_SCALE_DEFAULT_SCORE)
 const comment = ref('')
 const submitted = ref(false)
 
@@ -156,20 +145,20 @@ function onBack(): void {
   // Возврат на тот экран, с которого пришёл пользователь (дашборд, детали
   // практики, ...). Fallback на дашборд, если истории нет — например, после
   // релоада или прямой ссылки в Telegram.
-  const hasHistory = window.history.state?.back != null
+  const hasHistory = historyHasBack()
   if (hasHistory) {
     router.back()
   } else {
-    router.push({ name: 'user-dashboard' })
+    void router.push({ name: 'user-dashboard' })
   }
 }
 
 function goToDiary(): void {
-  router.push({ name: 'user-diary' })
+  void router.push({ name: 'user-diary' })
 }
 
 function goToDashboard(): void {
-  router.push({ name: 'user-dashboard' })
+  void router.push({ name: 'user-dashboard' })
 }
 
 // Named so the error rung's «Повторить» can re-run exactly what onMounted ran.

@@ -9,12 +9,13 @@
 // =============================================================================
 
 import type {
-  FeedbackRating,
   PracticeDirection,
   PracticeDifficulty,
   DurationBucket,
   TimeOfDay,
+  ExternalActivityType,
 } from '@/api/types'
+import type { MoodScaleKey } from '@/utils/moodScale'
 import type { Component } from 'vue'
 import {
   IconMeditation,
@@ -28,6 +29,7 @@ import {
   IconNarrative,
   IconMovement,
   IconDots,
+  IconCalendarStar,
 } from '@/components/icons'
 
 // ---------------------------------------------------------------------------
@@ -36,81 +38,32 @@ import {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// Mood (check-in)
-// ---------------------------------------------------------------------------
-
-/** Mood label by zone. Mood buttons render via vector IconMood* (CheckinView). */
-export const MOOD_LABEL: Record<string, string> = {
-  low: 'Не очень',
-  mid: 'Нормально',
-  high: 'Хорошо',
-}
-
-// ---------------------------------------------------------------------------
-// Feedback rating
-// ---------------------------------------------------------------------------
-
-/** Rating label by zone. Rating buttons render via vector IconRating* (FeedbackView). */
-export const RATING_LABEL: Record<string, string> = {
-  fire: 'Огонь!',
-  good: 'Хорошо',
-  confused: 'Есть вопросы',
-}
-
-// ---------------------------------------------------------------------------
-// Score (1..10) -> zone / label
+// Mood / rating (check-in & feedback)
 // ---------------------------------------------------------------------------
 //
-// mood and rating are stored as a 1..10 score now. The UI derives the icon
-// and label from the range: 1-3 / 4-7 / 8-10. The diary feed cards (and any
-// other read surface) use these helpers so the bucketing lives in one place.
-
-/** mood score (1..10) -> mood key. 1-3 low / 4-7 mid / 8-10 high. */
-export function moodZoneFromScore(score: number): 'low' | 'mid' | 'high' {
-  if (score <= 3) return 'low'
-  if (score <= 7) return 'mid'
-  return 'high'
-}
-
-/** rating score (1..10) -> rating key. 1-3 confused / 4-7 good / 8-10 fire. */
-export function ratingZoneFromScore(score: number): 'confused' | 'good' | 'fire' {
-  if (score <= 3) return 'confused'
-  if (score <= 7) return 'good'
-  return 'fire'
-}
-
-/** mood score -> Russian label ("Не очень" / "Нормально" / "Хорошо"). */
-export function moodLabelFromScore(score: number): string {
-  return MOOD_LABEL[moodZoneFromScore(score)] ?? ''
-}
-
-/** rating score -> Russian label ("Есть вопросы" / "Хорошо" / "Огонь!"). */
-export function ratingLabelFromScore(score: number): string {
-  return RATING_LABEL[ratingZoneFromScore(score)] ?? ''
-}
+// mood and rating are stored as a RAW 1..10 score. Since FE-85 the shared
+// five-emotion scale (keys + labels + index math) lives in utils/moodScale.ts,
+// and raw-score read surfaces import it from there -- one module so a saved
+// score is never named a different emotion on some other screen (tz §1, §4).
+// The fill map below stays here (a color map, like the rest of this file);
+// it keys on the same moodScale.ts keys the server's zones use (BE-77).
 
 /**
- * Rating progress-bar FILL colours (analytics / per-practice reviews).
- * Canon from the operator SVGs (2026-06-11): fire = peach, good = pink/rose,
- * confused = blue. A DIFFERENT palette from RATING_ICON_COLOR (the icon accents)
- * on purpose -- bars are the lighter fills, icons are the saturated accents.
+ * Five-scale mood strip FILL colours (tz-mood-scale palette), keyed by the
+ * moodScale.ts keys. OWNER CANON 2026-10-02 -- the hexes are the standard,
+ * not approximations, and are mirrored by the --velo-analytics-* tokens in
+ * styles/variables.css (the token wins at runtime; the fallback only covers
+ * a context where the stylesheet did not load). Every five-segment
+ * analytics strip (practice «До/После практики», the school feedback
+ * block, the rating bars and the feeds' distributions since BE-77) reads
+ * its segment colors from here, so the surfaces cannot drift apart.
  */
-export const RATING_COLOR: Record<FeedbackRating, string> = {
-  fire: 'var(--velo-peach-300)', // #fbc088
-  good: 'var(--velo-pink-300)', // #f795a2
-  confused: 'var(--velo-blue-400)', // #619cd2
-}
-
-/**
- * Accent color per rating ICON on the feedback form (Figma feedback design):
- * confused = brand blue, good = rose, fire = peach/orange. Separate from
- * RATING_COLOR (analytics bar fills) on purpose -- different surfaces,
- * different palettes. Values reference --velo-rating-* tokens (variables.css).
- */
-export const RATING_ICON_COLOR: Record<FeedbackRating, string> = {
-  confused: 'var(--velo-rating-confused)',
-  good: 'var(--velo-rating-good)',
-  fire: 'var(--velo-rating-fire)',
+export const MOOD_SCALE_FILLS: Record<MoodScaleKey, string> = {
+  bad: 'var(--velo-analytics-bad, #fe9093)',
+  low: 'var(--velo-analytics-low, #faaa63)',
+  neutral: 'var(--velo-analytics-neutral, #f7cf17)',
+  good: 'var(--velo-analytics-good, #b5eb88)',
+  fire: 'var(--velo-analytics-fire, #5abafd)',
 }
 
 // ---------------------------------------------------------------------------
@@ -184,7 +137,7 @@ export function practiceIconFor(p: {
 }): Component {
   const dir = p.direction as PracticeDirection | undefined
   if (dir && DIRECTION_ICON[dir]) {
-    return DIRECTION_ICON[dir]!
+    return DIRECTION_ICON[dir]
   }
   return DIRECTION_ICON_FALLBACK
 }
@@ -244,7 +197,34 @@ export const FEED_KIND_TITLE: Record<DiaryEventKind, string> = {
   // about the conversation starting, not about writing. The master's name is
   // the card's preview line (useDiaryCardModel.preview).
   thread_started: 'Вы начали диалог',
+  // FE-70: the caption is NOT kind-level -- it comes from the snapshot's
+  // activity_type (custom -> the user's own custom_activity_name). Derived in
+  // useDiaryCardModel.baseTitle, like practice_outcome reads practice_title.
+  external_activity: '',
 }
+
+// -- External activity (FE-70 / BE-27) ----------------------------------------
+//
+// The backend snapshot deliberately carries NO localized names: the caption is
+// drawn by the frontend from this key table. `custom` has no dictionary label
+// -- its caption is the user's own custom_activity_name, verbatim.
+
+export const EXTERNAL_ACTIVITY_LABEL: Record<ExternalActivityType, string> = {
+  vocal: 'Вокал',
+  nail_standing: 'Гвоздестояние',
+  meditation: 'Медитация',
+  massage: 'Массаж',
+  yoga: 'Йога',
+  dance: 'Танцы',
+  custom: '',
+}
+
+// Icon for external activity events (FE-70): the owner's own artwork -- a
+// calendar with a star in the circle badge (IconCalendarStar). One glyph for
+// every activity_type: the event is "something that happened outside velo",
+// and the LABEL carries the type (dictionary label or the custom name), so
+// per-type artwork would repeat what the caption already says.
+export const EXTERNAL_ACTIVITY_ICON: Component = IconCalendarStar
 
 /**
  * Outcome badge label for a practice_outcome card.

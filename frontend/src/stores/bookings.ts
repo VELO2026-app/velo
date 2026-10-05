@@ -22,6 +22,7 @@ import {
   skipCheckin as apiSkipCheckin,
 } from '@/api/bookings'
 import { usePagination } from '@/composables/usePagination'
+import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
 // One-way dependency: bookings -> diary. Used only inside actions, never at
 // module scope or in the store's setup body -- keep it that way.
@@ -43,6 +44,10 @@ export interface CancelResult {
 export interface ActionResult {
   ok: boolean
   error: string
+  /** HTTP status of an API failure, when one reached the store (FE-78.2:
+   * callers key on this machine value, never on the human-readable text --
+   * the only 409 on join is "already joined"). */
+  status?: number
 }
 
 export const useBookingsStore = defineStore('bookings', () => {
@@ -74,36 +79,6 @@ export const useBookingsStore = defineStore('bookings', () => {
   function dismissCheckin(practiceId: string): void {
     if (!dismissedCheckins.value.includes(practiceId)) {
       dismissedCheckins.value.push(practiceId)
-    }
-  }
-
-  // Practices whose no-show reflection the user SUBMITTED — hides the dashboard
-  // reflection banner. STOPGAP (batch O, O1): the dismissal is PERSISTED to
-  // localStorage so a submitted reflection stays dismissed across reloads (the
-  // «Как прошёл ваш день?» card stopped clearing because there is no backend
-  // state). This does NOT fake persistence — the reflection itself is still NOT
-  // saved server-side (honest stub); ONLY the dismissal survives. Swap this gate
-  // to the real backend `has_reflection` flag once TD-REFLECTION lands
-  // (VELO-Backend-Tasks.md), mirroring has_feedback/has_checkin.
-  const DISMISSED_REFLECTIONS_KEY = 'velo:dismissed-reflections'
-  function loadDismissedReflections(): string[] {
-    try {
-      const raw = localStorage.getItem(DISMISSED_REFLECTIONS_KEY)
-      const parsed: unknown = raw ? JSON.parse(raw) : []
-      return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : []
-    } catch {
-      return []
-    }
-  }
-  const dismissedReflections = ref<string[]>(loadDismissedReflections())
-  function dismissReflection(practiceId: string): void {
-    if (!dismissedReflections.value.includes(practiceId)) {
-      dismissedReflections.value.push(practiceId)
-      try {
-        localStorage.setItem(DISMISSED_REFLECTIONS_KEY, JSON.stringify(dismissedReflections.value))
-      } catch {
-        // Storage full / unavailable — the session ref still hides it this session.
-      }
     }
   }
 
@@ -162,7 +137,8 @@ export const useBookingsStore = defineStore('bookings', () => {
 
   // Auto-refresh when status filter changes.
   watch(statusFilter, () => {
-    pagination.refresh()
+    // Fire-and-forget: refresh manages its own loading/error state.
+    void pagination.refresh()
   })
 
   /**
@@ -200,7 +176,11 @@ export const useBookingsStore = defineStore('bookings', () => {
       return { ok: true, error: '' }
     } catch (e) {
       const message = extractApiError(e, 'Не удалось войти в практику')
-      return { ok: false, error: message }
+      return {
+        ok: false,
+        error: message,
+        status: e instanceof ApiResponseError ? e.status : undefined,
+      }
     }
   }
 
@@ -277,9 +257,5 @@ export const useBookingsStore = defineStore('bookings', () => {
     // Session-only check-in skip tracking
     dismissedCheckins,
     dismissCheckin,
-
-    // Session-only no-show reflection dismiss (TD-REFLECTION)
-    dismissedReflections,
-    dismissReflection,
   }
 })

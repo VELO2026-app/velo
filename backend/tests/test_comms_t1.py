@@ -6,17 +6,20 @@
 # consumed by the 88xxx band migration of this same delivery).
 #
 # Covers:
-#   1. emit_notification -- notification_request document per the frozen
-#      3c contract mirror: v stamped, idempotency_key minted, channels
-#      default ["in_app", "telegram"], scheduled_at/expiry_at as tz-aware
-#      iso strings.
+#   1. emit_notification -- notification_request document per comms
+#      protocol 3.0.0: v stamped, the caller's idempotency_key carried
+#      verbatim, no channels / priority (the profile routes), correlation
+#      only when given, scheduled_at/expiry_at as tz-aware iso strings.
 #   2. Reminder orchestration (core/events/reminders.py):
 #      - the 24h/1h/10m series anchored at practice.scheduled_at with
-#        expiry_at = anchor and both correlation keys stored;
+#        expiry_at = anchor and the "booking:<id>" envelope correlation;
 #      - the min-lead cutoff skips leads already (almost) due;
-#      - cancel emits: per-booking (booking_id + user target) and
-#        per-practice (practice_id, no target); half-target rejected;
+#      - cancel emits: per-booking ("booking:<id>" + user target) and
+#        the practice fan-out (one per booking + the master's
+#        "practice:<id>", no target); half-target rejected;
 #      - the feedback prompt: future scheduled_at + expiry window.
+#   The 3.0.0 axes (duplicates, empties, shortfalls) of the same seam are
+#   in test_comms_protocol_3.py.
 #   3. The notifications proxy (app/modules/comms_proxy/router.py):
 #      - recipient_id is stamped server-side from the session (the comms
 #        path carries the AUTHENTICATED user's id, whatever the client
@@ -48,14 +51,18 @@ from sqlalchemy import delete, or_, select
 from app.core.config import settings
 from app.core.events.models import OutboxEvent
 from app.core.events.notify import (
-    DEFAULT_CHANNELS,
     emit_notification,
     emit_reminder_cancel,
 )
 from app.core.events.reminders import (
+    BOOKED_ACT,
     BOOKING_REMINDER_TYPES,
+    MASTER_REMINDER_TYPES,
+    BookingRef,
+    booking_correlation,
     cancel_booking_reminders,
     cancel_practice_reminders,
+    practice_correlation,
     schedule_booking_reminders,
     schedule_feedback_prompt,
 )
@@ -84,6 +91,11 @@ SYNTH_USER = "aaaaaaaa-89520000-4000-8000-000000000001"
 SYNTH_BOOKING = "aaaaaaaa-89520000-4000-8000-000000000002"
 SYNTH_PRACTICE = "aaaaaaaa-89520000-4000-8000-000000000003"
 _SYNTH_IDS = {SYNTH_USER, SYNTH_BOOKING, SYNTH_PRACTICE}
+# A cancel with no target (the master's) is ours only by its correlation.
+_SYNTH_CORRELATIONS = {
+    booking_correlation(SYNTH_BOOKING),
+    practice_correlation(SYNTH_PRACTICE),
+}
 
 
 @pytest.fixture(autouse=True)
@@ -99,10 +111,10 @@ async def _clean_band(db_session):
         band_ids = [str(uid) for uid in result.scalars().all()]
         await cleanup_range(db_session, BAND_MIN, BAND_MAX)
         target = OutboxEvent.payload["target_value"].astext
-        corr_b = OutboxEvent.payload["correlation_value"].astext
+        corr = OutboxEvent.payload["correlation"].astext
         conditions = [
             target.in_(_SYNTH_IDS | set(band_ids)),
-            corr_b.in_(_SYNTH_IDS),
+            corr.in_(_SYNTH_CORRELATIONS),
         ]
         await db_session.execute(
             delete(OutboxEvent).where(or_(*conditions))
@@ -116,10 +128,10 @@ async def _clean_band(db_session):
 
 async def _my_events(session) -> list[OutboxEvent]:
     target = OutboxEvent.payload["target_value"].astext
-    corr = OutboxEvent.payload["correlation_value"].astext
+    corr = OutboxEvent.payload["correlation"].astext
     result = await session.execute(
         select(OutboxEvent)
-        .where(or_(target.in_(_SYNTH_IDS), corr.in_(_SYNTH_IDS)))
+        .where(or_(target.in_(_SYNTH_IDS), corr.in_(_SYNTH_CORRELATIONS)))
         .order_by(OutboxEvent.id)
     )
     return list(result.scalars().all())
@@ -134,6 +146,7 @@ class TestEmitNotification:
     async def test_document_form(self, db_session) -> None:
         await emit_notification(
             db_session,
+            idempotency_key="t1-document-form",
             type="booking.confirmed",
             target_type="user",
             target_value=SYNTH_USER,
@@ -148,19 +161,36 @@ class TestEmitNotification:
         p = event.payload
         assert p["v"] == 1
         assert p["type"] == "booking.confirmed"
-        assert p["idempotency_key"]
-        assert p["channels"] == DEFAULT_CHANNELS
-        assert p["priority"] == 5
+        assert p["idempotency_key"] == "t1-document-form"
+        # 3.0.0: the profile routes, the request's field set is closed.
+        # This test used to pin channels == DEFAULT_CHANNELS and
+        # priority == 5 -- right for protocol 2.0.0, where the request
+        # carried both; 3.0.0 refuses a request that still does.
+        assert "channels" not in p
+        assert "priority" not in p
+        # No correlation passed -> none on the wire (not a null).
+        assert "correlation" not in p
         assert p["action_data"]["practice_title"] == "Yoga"
         # The document is wire-clean (relay json.dumps must not choke).
         json.dumps(p)
 
-    async def test_idempotency_keys_unique_per_emit(
+    async def test_idempotency_key_is_the_callers_verbatim(
         self, db_session,
     ) -> None:
+        """The key is the domain fact's, carried as given -- twice.
+
+        This test used to assert the OPPOSITE: two emits, two distinct
+        keys, because the emitter minted uuid4().hex per call. That was a
+        true statement about the old seam and it was the defect -- comms
+        dedups by key, so a minted key protected only relay replays, and
+        a domain repeat created a second job. 3.0.0 makes the key the
+        caller's; the same fact emitted twice must now carry ONE key
+        (comms keeps one job for it -- that half lives in comms).
+        """
         for _ in range(2):
             await emit_notification(
                 db_session,
+                idempotency_key=f"booking-confirmed:{SYNTH_BOOKING}",
                 type="booking.confirmed",
                 target_type="user",
                 target_value=SYNTH_USER,
@@ -169,8 +199,9 @@ class TestEmitNotification:
             )
         await db_session.commit()
         events = await _my_events(db_session)
+        assert len(events) == 2
         keys = {e.payload["idempotency_key"] for e in events}
-        assert len(keys) == 2
+        assert keys == {f"booking-confirmed:{SYNTH_BOOKING}"}
 
 
 # ===========================================================================
@@ -191,6 +222,8 @@ class TestReminderOrchestration:
             practice_title="Yoga",
             master_name="Anna",
             scheduled_at=anchor,
+            act=BOOKED_ACT,
+            timezone="UTC",
         )
         await db_session.commit()
 
@@ -206,9 +239,21 @@ class TestReminderOrchestration:
             sent_at = datetime.fromisoformat(p["scheduled_at"])
             assert sent_at == anchor - lead
             assert datetime.fromisoformat(p["expiry_at"]) == anchor
-            assert p["action_data"]["booking_id"] == SYNTH_BOOKING
-            assert p["action_data"]["practice_id"] == SYNTH_PRACTICE
-            assert p["priority"] == 2
+            # 3.0.0: cancellation keys travel in the ENVELOPE, never in
+            # the letter. This used to assert booking_id / practice_id in
+            # action_data and priority == 2 -- true while comms cancelled
+            # by letter fields and queued by priority; it now does
+            # neither, so the letter carries no correlation at all.
+            assert p["correlation"] == booking_correlation(SYNTH_BOOKING)
+            assert "booking_id" not in p["action_data"]
+            assert "practice_id" not in p["action_data"]
+            assert p["action_data"]["params"] == {
+                "practice_id": SYNTH_PRACTICE,
+            }
+            assert "priority" not in p
+            assert p["idempotency_key"] == (
+                f"reminder:{SYNTH_BOOKING}:{p['type']}:{BOOKED_ACT}"
+            )
 
     async def test_min_lead_skips_near_reminders(self, db_session) -> None:
         """Anchor in 30 minutes: 24h and 1h sends are in the past,
@@ -222,6 +267,8 @@ class TestReminderOrchestration:
             practice_title="Yoga",
             master_name="Anna",
             scheduled_at=anchor,
+            act=BOOKED_ACT,
+            timezone="UTC",
         )
         await db_session.commit()
 
@@ -235,23 +282,36 @@ class TestReminderOrchestration:
             booking_id=SYNTH_BOOKING,
             user_id=SYNTH_USER,
         )
-        await cancel_practice_reminders(
-            db_session, practice_id=SYNTH_PRACTICE,
+        queued = await cancel_practice_reminders(
+            db_session,
+            practice_id=SYNTH_PRACTICE,
+            bookings=[
+                BookingRef(booking_id=SYNTH_BOOKING, user_id=SYNTH_USER),
+            ],
         )
         await db_session.commit()
 
-        per_booking, per_practice = await _my_events(db_session)
-        assert per_booking.event_type == EVENT_REMINDER_CANCEL
-        p = per_booking.payload
-        assert p["types"] == BOOKING_REMINDER_TYPES
-        assert p["correlation_key"] == "booking_id"
-        assert p["correlation_value"] == SYNTH_BOOKING
-        assert p["target_type"] == "user"
-        assert p["target_value"] == SYNTH_USER
+        # The practice cancel is a FAN-OUT now: one per-booking cancel per
+        # booking, plus the master's. It used to be ONE event matching
+        # practice_id across both series -- right while comms read the
+        # letter; 3.0.0 matches the job's one envelope correlation, so a
+        # participant's series is reachable only by its booking's.
+        assert queued == 2
+        per_booking, fanned, master = await _my_events(db_session)
+        for event in (per_booking, fanned):
+            assert event.event_type == EVENT_REMINDER_CANCEL
+            p = event.payload
+            assert p["types"] == BOOKING_REMINDER_TYPES
+            assert p["correlation"] == booking_correlation(SYNTH_BOOKING)
+            assert p["target_type"] == "user"
+            assert p["target_value"] == SYNTH_USER
+            assert "correlation_key" not in p
+            assert "correlation_value" not in p
 
-        q = per_practice.payload
-        assert q["correlation_key"] == "practice_id"
-        assert q["correlation_value"] == SYNTH_PRACTICE
+        q = master.payload
+        assert master.event_type == EVENT_REMINDER_CANCEL
+        assert q["types"] == MASTER_REMINDER_TYPES
+        assert q["correlation"] == practice_correlation(SYNTH_PRACTICE)
         assert "target_type" not in q and "target_value" not in q
 
     async def test_half_target_rejected(self, db_session) -> None:
@@ -259,8 +319,7 @@ class TestReminderOrchestration:
             await emit_reminder_cancel(
                 db_session,
                 types=["booking.reminder_1h"],
-                correlation_key="booking_id",
-                correlation_value=SYNTH_BOOKING,
+                correlation=booking_correlation(SYNTH_BOOKING),
                 target_type="user",
             )
 
@@ -277,6 +336,11 @@ class TestReminderOrchestration:
         (event,) = await _my_events(db_session)
         p = event.payload
         assert p["type"] == "prompt.leave_feedback"
+        assert p["idempotency_key"] == (
+            f"feedback-prompt:{SYNTH_PRACTICE}:{SYNTH_USER}"
+        )
+        # Never cancelled -> no correlation on the wire.
+        assert "correlation" not in p
         sent_at = datetime.fromisoformat(p["scheduled_at"])
         expiry = datetime.fromisoformat(p["expiry_at"])
         delay = timedelta(seconds=settings.prompt_feedback_delay_seconds)
@@ -295,10 +359,17 @@ class TestReminderOrchestration:
 
 _PROXY_SEAM = "app.modules.comms_proxy.router.comms_request"
 
-_QUIET_PREFS = {
+# comms 2.0.0 speaks a LIST OF ALLOWED PERIODS, each owned by its day and
+# never crossing midnight. It used to speak one QUIET window, and this
+# fixture used to hold {"from": "22:00", "to": "09:00", "days": [...]} --
+# the same minutes read from the opposite end, which is why the proxy
+# inverted them. There is nothing left to invert.
+_PERIOD_PREFS = {
     "categories": {"bookings": True, "reminders": False},
-    # comms speaks the QUIET window: silence 22:00 -> 09:00.
-    "schedule": {"from": "22:00", "to": "09:00", "days": ["mon", "fri"]},
+    "schedule": [
+        {"day": "mon", "from": "09:00", "to": "22:00"},
+        {"day": "fri", "from": "09:00", "to": "22:00"},
+    ],
     "timezone": "Europe/Berlin",
 }
 
@@ -327,21 +398,54 @@ class TestNotificationsProxy:
     async def test_client_supplied_recipient_id_rejected(
         self, client,
     ) -> None:
+        """A recipient_id in the query is refused here, with its own code.
+
+        One door of six. `_reject_recipient_override` guards every proxied
+        endpoint in this router and raises from a single place, so all six
+        answer the same code on purpose -- this test picks the inbox
+        because it is the one a wrong client reaches first.
+
+        The status assertion was right that the refusal is never forwarded
+        and stays. It could not tell this 400 from the schedule's 400 while
+        both carried the default bad_request; the code assertion can, and
+        it is also what the frontend needs to keep this apart from an error
+        a person could have caused.
+        """
         login = await login_user(client, telegram_id=TID_PROXY)
-        seam = AsyncMock()
+        # BE-89: a guard with comms 3.0.0's shape, not a bare AsyncMock --
+        # if it ever fires, the status assertion below fails on a real
+        # answer instead of on whatever a MagicMock body turns into.
+        seam = AsyncMock(
+            return_value={"items": [], "next_cursor": None, "unread": 0},
+        )
         with patch(_PROXY_SEAM, seam):
             response = await client.get(
                 "/api/v1/notifications?recipient_id=someone-else",
                 headers=auth_headers(login["session_token"]),
             )
         assert response.status_code == 400
+        assert response.json()["error"] == "recipient_override_not_allowed"
         seam.assert_not_awaited()
 
-    async def test_prefs_get_converts_quiet_to_delivery(
+    async def test_prefs_get_collapses_periods_into_the_screen_window(
         self, client,
     ) -> None:
+        """Their list of periods -> the screen's one window plus days.
+
+        The old form of this test asserted an INVERSION -- quiet
+        22:00->09:00 came back as deliver 09:00->22:00 -- and it was right
+        about the model it was written for: comms stored silence, the
+        screen states delivery, and the same minutes read from either end
+        are each other's complement. comms 2.0.0 stores the delivery
+        periods themselves, so there is nothing to turn over, and an
+        inversion left in place would now return the exact opposite
+        schedule without any error at all.
+
+        The hours are asserted by VALUE, not by presence, for the same
+        reason: an inverted answer is still a well-formed answer.
+        """
         login = await login_user(client, telegram_id=TID_PREFS)
-        seam = AsyncMock(return_value=dict(_QUIET_PREFS))
+        seam = AsyncMock(return_value=dict(_PERIOD_PREFS))
         with patch(_PROXY_SEAM, seam):
             response = await client.get(
                 "/api/v1/notifications/prefs",
@@ -349,19 +453,31 @@ class TestNotificationsProxy:
             )
         assert response.status_code == 200
         body = response.json()
-        # Quiet 22:00->09:00 == deliver 09:00->22:00; days pass through.
         assert body["schedule"] == {
             "from": "09:00", "to": "22:00", "days": ["mon", "fri"],
         }
         # Categories and timezone are NOT re-assembled.
-        assert body["categories"] == _QUIET_PREFS["categories"]
+        assert body["categories"] == _PERIOD_PREFS["categories"]
         assert body["timezone"] == "Europe/Berlin"
 
-    async def test_prefs_put_converts_delivery_to_quiet(
+    async def test_prefs_put_expands_the_screen_window_into_periods(
         self, client,
     ) -> None:
+        """The screen's window plus days -> one period per marked day.
+
+        WHAT IS ASSERTED IS WHICH HOURS WENT, not that a schedule went.
+        The old assertion checked for the inverted pair and was correct
+        for the quiet-window model; under the period model the inverse is
+        still syntactically valid, comms would accept it with a 200, the
+        build would be green, and the person would be notified exactly
+        when they asked for silence. This is the one place in the feature
+        where a mistake makes no noise, so the test names the values.
+
+        Days come back in mon..sun order regardless of the order the
+        screen sent them in.
+        """
         login = await login_user(client, telegram_id=TID_PREFS)
-        seam = AsyncMock(return_value=dict(_QUIET_PREFS))
+        seam = AsyncMock(return_value=dict(_PERIOD_PREFS))
         with patch(_PROXY_SEAM, seam):
             response = await client.put(
                 "/api/v1/notifications/prefs",
@@ -370,16 +486,218 @@ class TestNotificationsProxy:
                     "categories": {"reminders": False},
                     "schedule": {
                         "from": "09:00", "to": "22:00",
-                        "days": ["mon", "fri"],
+                        "days": ["fri", "mon"],
                     },
                 },
             )
         assert response.status_code == 200
         sent = seam.await_args.kwargs["json"]
         assert sent["categories"] == {"reminders": False}
-        assert sent["schedule"] == {
-            "from": "22:00", "to": "09:00", "days": ["mon", "fri"],
-        }
+        assert sent["schedule"] == [
+            {"day": "mon", "from": "09:00", "to": "22:00"},
+            {"day": "fri", "from": "09:00", "to": "22:00"},
+        ]
+
+    async def test_midnight_is_normalised_before_the_overnight_branch(
+        self, client,
+    ) -> None:
+        """"Deliver 09:00 to midnight" is ONE period, not two broken ones.
+
+        THE ORDER OF TWO RULES IS THE SUBJECT OF THIS TEST, which is why
+        it is an assertion and not a comment. The picker offers hours
+        00..23, so "until midnight" arrives as to="00:00"; comms spells
+        the end of a day "24:00". And numerically "09:00" > "00:00", so
+        without the rename happening FIRST this input falls into the
+        overnight branch and is split into a zero-length period plus a
+        second one -- the first refused, the second wrong, for the most
+        ordinary choice on the screen.
+        """
+        login = await login_user(client, telegram_id=TID_PREFS)
+        seam = AsyncMock(return_value=dict(_PERIOD_PREFS))
+        with patch(_PROXY_SEAM, seam):
+            response = await client.put(
+                "/api/v1/notifications/prefs",
+                headers=auth_headers(login["session_token"]),
+                json={"schedule": {
+                    "from": "09:00", "to": "00:00", "days": ["mon"],
+                }},
+            )
+        assert response.status_code == 200
+        assert seam.await_args.kwargs["json"]["schedule"] == [
+            {"day": "mon", "from": "09:00", "to": "24:00"},
+        ]
+
+    async def test_an_overnight_window_stays_inside_the_marked_day(
+        self, client,
+    ) -> None:
+        """"Deliver 21:00 to 09:00 on Monday" is two periods, both Monday.
+
+        NOT Monday evening plus Tuesday morning: an unmarked day is
+        silent for its whole length (owner ruling, 16 September), so
+        spilling into Tuesday would deliver on a day nobody ticked. Read
+        forward, the setting means "on Monday, notify outside 09:00-21:00"
+        -- do not disturb during working hours.
+
+        The two periods cannot touch or overlap, which is why the proxy
+        carries no branch for it: they are [00:00, 09:00) and
+        [21:00, 24:00), and touching would require the two times to be
+        equal, which is refused before this point.
+        """
+        login = await login_user(client, telegram_id=TID_PREFS)
+        seam = AsyncMock(return_value=dict(_PERIOD_PREFS))
+        with patch(_PROXY_SEAM, seam):
+            response = await client.put(
+                "/api/v1/notifications/prefs",
+                headers=auth_headers(login["session_token"]),
+                json={"schedule": {
+                    "from": "21:00", "to": "09:00", "days": ["mon"],
+                }},
+            )
+        assert response.status_code == 200
+        assert seam.await_args.kwargs["json"]["schedule"] == [
+            {"day": "mon", "from": "00:00", "to": "09:00"},
+            {"day": "mon", "from": "21:00", "to": "24:00"},
+        ]
+
+    async def test_equal_times_are_refused_here_and_never_forwarded(
+        self, client,
+    ) -> None:
+        """The proxy answers with its own code, comms is never asked.
+
+        Their refusal speaks of minutes and an ISO weekday number; this is
+        the last place that still knows the request came from a screen
+        with two time fields. The seam is asserted un-awaited so that
+        "refused" cannot quietly mean "forwarded and refused there".
+
+        The status assertion was right about WHERE the refusal happens and
+        stays. What it could not do is tell this refusal apart from the
+        other 400 this router raises: both used to carry the default
+        bad_request, so a swap of the two branches would have kept this
+        test green. The code assertion is what closes that.
+        """
+        login = await login_user(client, telegram_id=TID_PREFS)
+        # BE-89: a guard with comms 3.0.0's shape, not a bare AsyncMock --
+        # if it ever fires, the status assertion below fails on a real
+        # answer instead of on whatever a MagicMock body turns into.
+        seam = AsyncMock(return_value={
+            "categories": {}, "schedule": None, "timezone": None,
+        })
+        with patch(_PROXY_SEAM, seam):
+            response = await client.put(
+                "/api/v1/notifications/prefs",
+                headers=auth_headers(login["session_token"]),
+                json={"schedule": {
+                    "from": "09:00", "to": "09:00", "days": ["mon"],
+                }},
+            )
+        assert response.status_code == 400
+        assert response.json()["error"] == "delivery_window_empty"
+        seam.assert_not_awaited()
+
+    async def test_no_day_ticked_is_null_and_not_an_empty_list(
+        self, client,
+    ) -> None:
+        """comms refuses [] with a 422: "never" is not a schedule.
+
+        null is their spelling for "no restriction", and it is what the
+        screen's own empty state has to become -- otherwise the most
+        obvious way to clear the days answers with somebody else's
+        validation error.
+        """
+        login = await login_user(client, telegram_id=TID_PREFS)
+        seam = AsyncMock(return_value={
+            "categories": {}, "schedule": None, "timezone": None,
+        })
+        with patch(_PROXY_SEAM, seam):
+            response = await client.put(
+                "/api/v1/notifications/prefs",
+                headers=auth_headers(login["session_token"]),
+                json={"schedule": {
+                    "from": "09:00", "to": "21:00", "days": [],
+                }},
+            )
+        assert response.status_code == 200
+        assert seam.await_args.kwargs["json"] == {"schedule": None}
+
+    async def test_saving_then_reading_gives_back_the_same_window(
+        self, client,
+    ) -> None:
+        """Reversibility, measured end to end rather than argued.
+
+        Each case is PUT, and the periods the proxy sent are then fed back
+        as if they were the GET response -- which is exactly what comms
+        does, since a PATCH answers with the full form. What the person
+        saved is what the screen shows next time, including the two
+        shapes that are not plain: midnight as an end, and an overnight
+        window.
+        """
+        login = await login_user(client, telegram_id=TID_PREFS)
+        for window in (
+            {"from": "09:00", "to": "21:00", "days": ["mon", "fri"]},
+            {"from": "09:00", "to": "00:00", "days": ["mon"]},
+            {"from": "21:00", "to": "09:00", "days": ["mon", "tue"]},
+            {"from": "00:00", "to": "09:00", "days": ["sun"]},
+        ):
+            seam = AsyncMock(return_value=dict(_PERIOD_PREFS))
+            with patch(_PROXY_SEAM, seam):
+                await client.put(
+                    "/api/v1/notifications/prefs",
+                    headers=auth_headers(login["session_token"]),
+                    json={"schedule": window},
+                )
+            periods = seam.await_args.kwargs["json"]["schedule"]
+
+            echo = AsyncMock(return_value={
+                "categories": {}, "schedule": periods, "timezone": None,
+            })
+            with patch(_PROXY_SEAM, echo):
+                read = await client.get(
+                    "/api/v1/notifications/prefs",
+                    headers=auth_headers(login["session_token"]),
+                )
+            assert read.json()["schedule"] == window, window
+
+    async def test_a_schedule_the_screen_cannot_show_reads_as_null(
+        self, client,
+    ) -> None:
+        """KNOWN CEILING, asserted rather than described.
+
+        Their contract allows different hours on different days; this
+        screen has one pair for every ticked day. Collapsing is defined
+        only while every day carries the same hours, which holds because
+        the only writer is this proxy -- an invariant of our code, not a
+        promise of theirs.
+
+        null here means "not representable by this screen", not "not
+        configured": the two look the same to the screen and are told
+        apart only in the log. The whole-day period is in the same
+        bucket for a subtler reason -- it would collapse to from == to,
+        which the write path refuses, so showing it would leave the
+        screen in a state it cannot save.
+        """
+        login = await login_user(client, telegram_id=TID_PREFS)
+        for schedule in (
+            [
+                {"day": "mon", "from": "09:00", "to": "21:00"},
+                {"day": "tue", "from": "10:00", "to": "20:00"},
+            ],
+            [
+                {"day": "mon", "from": "01:00", "to": "02:00"},
+                {"day": "mon", "from": "03:00", "to": "04:00"},
+                {"day": "mon", "from": "05:00", "to": "06:00"},
+            ],
+            [{"day": "mon", "from": "00:00", "to": "24:00"}],
+        ):
+            seam = AsyncMock(return_value={
+                "categories": {}, "schedule": schedule, "timezone": None,
+            })
+            with patch(_PROXY_SEAM, seam):
+                response = await client.get(
+                    "/api/v1/notifications/prefs",
+                    headers=auth_headers(login["session_token"]),
+                )
+            assert response.status_code == 200
+            assert response.json()["schedule"] is None, schedule
 
     async def test_prefs_put_null_schedule_clears(self, client) -> None:
         login = await login_user(client, telegram_id=TID_PREFS)
@@ -415,7 +733,7 @@ class TestNotificationsProxy:
            is the same defect as one that silences nothing.
         """
         login = await login_user(client, telegram_id=TID_PREFS)
-        seam = AsyncMock(return_value=dict(_QUIET_PREFS))
+        seam = AsyncMock(return_value=dict(_PERIOD_PREFS))
         shown = {
             "reminders": False,
             "msg_participants": False,
@@ -438,7 +756,12 @@ class TestNotificationsProxy:
 
     async def test_prefs_unknown_key_rejected(self, client) -> None:
         login = await login_user(client, telegram_id=TID_PREFS)
-        seam = AsyncMock()
+        # BE-89: a guard with comms 3.0.0's shape, not a bare AsyncMock --
+        # if it ever fires, the status assertion below fails on a real
+        # answer instead of on whatever a MagicMock body turns into.
+        seam = AsyncMock(return_value={
+            "categories": {}, "schedule": None, "timezone": None,
+        })
         with patch(_PROXY_SEAM, seam):
             response = await client.put(
                 "/api/v1/notifications/prefs",
@@ -518,7 +841,20 @@ class TestNotificationsProxy:
         self, client, comms_status: int, expected: int,
     ) -> None:
         """core/comms.py must map comms auth/undefined statuses to 502
-        and only forward the client-meaningful 3b statuses."""
+        and only forward the client-meaningful ones.
+
+        The refusal body is comms 3.0.0's ONE form, {"error": {"class",
+        "message"}}, with the class that travels with each status. This
+        test used to send {"detail": ...} -- comms 2.0.0's body, right
+        while core/comms.py decided by status alone; 3.0.0 decides by the
+        CLASS and cross-checks the status, so a body without `error` is
+        itself a refusal we cannot read (502, pinned in
+        test_comms_refusals.py). 418 has no class and stays a 502.
+        """
+        refusal_class = {
+            401: "unauthorized", 403: "forbidden", 404: "not_found",
+            409: "conflict", 422: "validation", 500: "internal",
+        }.get(comms_status)
         login = await login_user(client, telegram_id=TID_PROXY)
 
         class _StatusClient:
@@ -532,9 +868,12 @@ class TestNotificationsProxy:
                 return None
 
             async def request(self, *args: object, **kwargs: object):
-                return httpx.Response(
-                    comms_status, json={"detail": "comms internal detail"},
+                body = (
+                    {"error": {"class": refusal_class, "message": "comms text"}}
+                    if refusal_class is not None
+                    else {"error": {"message": "no class"}}
                 )
+                return httpx.Response(comms_status, json=body)
 
         with (
             patch.object(
@@ -548,8 +887,11 @@ class TestNotificationsProxy:
             )
         assert response.status_code == expected
         if expected == 502:
-            # The internal service's auth detail never leaks out.
-            assert "comms internal detail" not in response.text
+            # The internal service's refusal text never leaks out.
+            assert "comms text" not in response.text
+        else:
+            # Forwarded: comms' message becomes the detail.
+            assert response.json()["detail"] == "comms text"
 
 
 # ===========================================================================

@@ -20,6 +20,15 @@
 # then it stays in the HTTP renderer, serving plain HTTP rather than
 # pointing nginx at a .pem that is not there -- which would fail
 # `nginx -t` and cost the whole config its reload.
+#
+# CLIENT ADDRESS (BE-40). The backend takes the client address from the
+# `X-Real-IP $remote_addr` line of the API blocks below and from nothing
+# else; X-Forwarded-For is set for completeness but the application does
+# not read it. A proxy in front of nginx (Cloudflare, CDN, balancer) is
+# configured HERE with the real_ip module, not in the application. The
+# full reasoning and the directives: _extract_client_ip in
+# backend/app/core/middleware.py. This comment is shell, outside every
+# heredoc, so it changes no rendered byte.
 
 render_nginx_http() {
     local domain_frontend="$1" domain_api="$2" domain_public="${3:-}"
@@ -50,6 +59,18 @@ server {
 server {
     listen 80;
     server_name __DOMAIN_API__;
+
+    # Voice transcription (GT-41) posts one WAV as base64 JSON. The recorder
+    # caps a take at 60s of 16 kHz mono PCM16 -- 1.92 MB -- and the backend
+    # refuses anything over MAX_AUDIO_BYTES (2 MB, app/modules/ai/
+    # transcription.py) with a machine code. base64 adds a third on top, so
+    # this must clear ~2.8 MB or nginx answers 413 in HTML first and that
+    # coded refusal becomes unreachable. The two numbers are meant to be read
+    # together: raise one without the other and the honest error disappears.
+    #
+    # nginx's own default is 1m, which would have cut every take at ~23
+    # seconds. It was never chosen -- it was simply never written down.
+    client_max_body_size 4m;
 
     location /.well-known/acme-challenge/ {
         root /var/www/certbot;
@@ -178,6 +199,18 @@ server {
 server {
     listen 443 ssl http2;
     server_name __DOMAIN_API__;
+
+    # Voice transcription (GT-41) posts one WAV as base64 JSON. The recorder
+    # caps a take at 60s of 16 kHz mono PCM16 -- 1.92 MB -- and the backend
+    # refuses anything over MAX_AUDIO_BYTES (2 MB, app/modules/ai/
+    # transcription.py) with a machine code. base64 adds a third on top, so
+    # this must clear ~2.8 MB or nginx answers 413 in HTML first and that
+    # coded refusal becomes unreachable. The two numbers are meant to be read
+    # together: raise one without the other and the honest error disappears.
+    #
+    # nginx's own default is 1m, which would have cut every take at ~23
+    # seconds. It was never chosen -- it was simply never written down.
+    client_max_body_size 4m;
 
     ssl_certificate /etc/letsencrypt/live/__DOMAIN_FRONTEND__/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/__DOMAIN_FRONTEND__/privkey.pem;

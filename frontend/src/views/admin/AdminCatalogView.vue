@@ -66,8 +66,8 @@
     </VEmptyState>
 
     <VCard
-      v-else
       v-for="dir in directions"
+      v-else
       :key="dir.id"
       class="admin-catalog__dir"
       :class="{ 'admin-catalog__dir--inactive': !dir.is_active }"
@@ -102,7 +102,7 @@
             aria-label="Редактировать"
             @click="startEditDirection(dir)"
           >
-            <IconEdit :size="18" />
+            <IconPen :size="18" />
           </button>
           <VButton
             v-if="dir.is_active"
@@ -177,7 +177,7 @@ import {
   VLoader,
   VEmptyState,
 } from '@/components/ui'
-import { IconEdit, IconClose, IconCheck } from '@/components/icons'
+import { IconPen, IconClose, IconCheck } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
 import {

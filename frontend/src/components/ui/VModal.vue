@@ -4,10 +4,13 @@
   Reusable modal dialog with overlay, close on Escape/overlay click,
   enter/leave transitions. Content via default slot.
 
-  Mobile: bottom sheet (slides up from bottom).
-  Desktop (>640px): centered dialog.
+  Centered DIALOG at every width, over a frosted scrim (owner ask 2026-09-30:
+  «попапы по центру экрана и немного блюрить задний фон»). Form-style sheets
+  that dock to the bottom remain VBottomSheet's job -- the two components
+  split the DS: VModal = dialog, VBottomSheet = sheet.
 
-  Used by: BookingPopup, CancelBookingPopup, and future modals.
+  Used by: BookingPopup, CancelBookingPopup, VConfirmDialog, SendMessageModal,
+  the FE-87 role popup, and the filter modals.
 
   Usage:
     <VModal :open="showModal" @close="showModal = false">
@@ -39,6 +42,7 @@
 </template>
 
 <script setup lang="ts">
+import { onDocumentEvent, offDocumentEvent } from '@/platform/dom'
 import { onMounted, onUnmounted, watch } from 'vue'
 import { IconClose } from '@/components/icons'
 import { lockBodyScroll, unlockBodyScroll } from '@/composables/useBodyScrollLock'
@@ -91,11 +95,11 @@ watch(
 )
 
 onMounted(() => {
-  document.addEventListener('keydown', onKeydown)
+  onDocumentEvent('keydown', onKeydown)
 })
 
 onUnmounted(() => {
-  document.removeEventListener('keydown', onKeydown)
+  offDocumentEvent('keydown', onKeydown)
   // Ensure the lock is released if the component unmounts while open.
   if (locked) {
     locked = false
@@ -110,9 +114,16 @@ onUnmounted(() => {
   inset: 0;
   z-index: var(--z-modal);
   display: flex;
-  align-items: flex-end;
+  /* Centered at EVERY width (owner ask 2026-09-30) -- the bottom-sheet
+     posture moved entirely to VBottomSheet. */
+  align-items: center;
   justify-content: center;
   background: var(--velo-scrim);
+  /* Light frosted glass over the page (owner ask 2026-09-30, «немного
+     блюрить»). -webkit- prefix for the Telegram webviews; a browser without
+     backdrop-filter simply keeps the plain scrim. */
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   padding: var(--space-4);
 }
 
@@ -178,6 +189,8 @@ onUnmounted(() => {
 }
 
 /* -- Transitions -- */
+/* A centred dialog scales/fades in place; the old bottom-sheet slide-up is
+   gone with the sheet posture. */
 .v-modal-enter-active,
 .v-modal-leave-active {
   transition: opacity var(--transition-slow);
@@ -194,29 +207,10 @@ onUnmounted(() => {
 }
 
 .v-modal-enter-from .v-modal__container {
-  transform: translateY(100%);
+  transform: translateY(20px) scale(0.98);
 }
 
 .v-modal-leave-to .v-modal__container {
-  transform: translateY(100%);
-}
-
-/* Desktop: centered modal instead of bottom sheet */
-@media (min-width: 640px) {
-  .v-modal__overlay {
-    align-items: center;
-  }
-
-  .v-modal__container {
-    border-radius: var(--radius-md);
-  }
-
-  .v-modal-enter-from .v-modal__container {
-    transform: translateY(20px);
-  }
-
-  .v-modal-leave-to .v-modal__container {
-    transform: translateY(20px);
-  }
+  transform: translateY(20px) scale(0.98);
 }
 </style>

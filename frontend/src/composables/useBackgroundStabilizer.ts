@@ -1,3 +1,5 @@
+import { host } from '@/platform/host'
+import { setRootStyleProperty } from '@/platform/dom'
 import { onMounted, onBeforeUnmount } from 'vue'
 import { viewport } from '@tma.js/sdk-vue'
 import { platform } from '@/platform'
@@ -77,9 +79,9 @@ const EXPAND_SETTLE_POLL_MS = 50
  * see below) and orientationchange (a genuine size change) ONLY.
  */
 function freezeAppHeight(): void {
-  if (typeof window === 'undefined') return
-  const h = window.visualViewport?.height ?? window.innerHeight
-  document.documentElement.style.setProperty('--velo-frozen-vh', `${h}px`)
+  if (typeof host === 'undefined') return
+  const h = host.visualViewport?.height ?? host.innerHeight
+  setRootStyleProperty('--velo-frozen-vh', `${h}px`)
 }
 
 /**
@@ -112,7 +114,7 @@ function scheduleInitialFreeze(): void {
       freezeAppHeight()
       return
     }
-    window.setTimeout(tick, EXPAND_SETTLE_POLL_MS)
+    host.setTimeout(tick, EXPAND_SETTLE_POLL_MS)
   }
   tick()
 }
@@ -121,8 +123,8 @@ export function useBackgroundStabilizer(): void {
   let orientationSettleId = 0
 
   function onOrientationChange(): void {
-    window.clearTimeout(orientationSettleId)
-    orientationSettleId = window.setTimeout(freezeAppHeight, ORIENTATION_SETTLE_MS)
+    host.clearTimeout(orientationSettleId)
+    orientationSettleId = host.setTimeout(freezeAppHeight, ORIENTATION_SETTLE_MS)
   }
 
   onMounted(() => {
@@ -130,11 +132,11 @@ export function useBackgroundStabilizer(): void {
     // scheduleInitialFreeze's own docstring for why (waits for the
     // viewport to genuinely settle, not just for expand() to be called).
     scheduleInitialFreeze()
-    window.addEventListener('orientationchange', onOrientationChange)
+    host.addEventListener('orientationchange', onOrientationChange)
   })
 
   onBeforeUnmount(() => {
-    window.clearTimeout(orientationSettleId)
-    window.removeEventListener('orientationchange', onOrientationChange)
+    host.clearTimeout(orientationSettleId)
+    host.removeEventListener('orientationchange', onOrientationChange)
   })
 }

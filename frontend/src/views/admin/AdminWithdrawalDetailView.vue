@@ -3,16 +3,17 @@
   «Withdrawal request» + «Confirm payment» + «Confirm payment 2»)
 
   Admin reviews a single payout request: hero (amount + master) + breakdown (bank /
-  provider fee / net) + Отклонить / Подтвердить. Подтвердить → ConfirmPaymentModal →
-  TwoFactorModal → approve.
+  provider fee / net) + Отклонить / Подтвердить. Подтвердить -> ConfirmPaymentModal
+  (the recap the admin checks before an irreversible payout) -> approve. There is no
+  2FA step: the approve endpoint takes no code, so the window that asked for one was
+  removed (owner 2026-10-02).
 
   DATA is REAL: the withdrawal is handed via router state; approve/reject hit the live
   admin endpoints (POST /admin/withdrawals/:id/approve|reject). Amount / fee / net /
   currency / payout method come from AdminWithdrawalResponse.
   STUB (build-full-design-now): the master display name is NOT in the payload (only
-  user_id + payout account_holder) → shows the bank holder or «—»; the 2FA code has no
-  backend (approve takes only an optional note) → the OTP is a UI gate, approve fires on
-  submit. Roadmap (Zod): master name on the withdrawal payload + a real 2FA verify step.
+  user_id + payout account_holder) -> shows the bank holder or «—». Roadmap (Zod):
+  master name on the withdrawal payload.
 -->
 
 <template>
@@ -76,7 +77,7 @@
       />
     </VBottomSheet>
 
-    <!-- Confirm → 2FA flow -->
+    <!-- Confirm -> approve -->
     <ConfirmPaymentModal
       :open="showConfirm"
       :amount="grossLabel"
@@ -84,26 +85,19 @@
       :net="netLabel"
       :bank="bankLabel"
       :master="masterName"
-      @confirm="onConfirm"
-      @close="showConfirm = false"
-    />
-    <TwoFactorModal
-      :open="showTwoFa"
-      :amount="grossLabel"
-      :master="masterName"
       :loading="approving"
-      @submit="onApprove"
-      @close="showTwoFa = false"
+      @confirm="onApprove"
+      @close="showConfirm = false"
     />
   </div>
 </template>
 
 <script setup lang="ts">
+import { host } from '@/platform/host'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { VBackButton, VCard, VButton, VTextarea, VBottomSheet } from '@/components/ui'
 import ConfirmPaymentModal from '@/components/shared/ConfirmPaymentModal.vue'
-import TwoFactorModal from '@/components/shared/TwoFactorModal.vue'
 import { useToast } from '@/composables/useToast'
 import { approveWithdrawal, rejectWithdrawal } from '@/api/admin'
 import type { AdminWithdrawalResponse } from '@/api/admin'
@@ -115,7 +109,7 @@ const toast = useToast()
 
 // Handed via router state by the originating list (no GET-by-id endpoint).
 const w = ref<AdminWithdrawalResponse | null>(
-  (window.history.state as { withdrawal?: AdminWithdrawalResponse }).withdrawal ?? null,
+  (host.history.state as { withdrawal?: AdminWithdrawalResponse }).withdrawal ?? null,
 )
 
 // W-5: the withdrawal arrives ONLY via router state, so a deep-link or a page
@@ -123,14 +117,15 @@ const w = ref<AdminWithdrawalResponse | null>(
 // that runs router.back() out of the app (dead-end). Bounce to the list instead
 // of stranding the admin on a blank screen.
 onMounted((): void => {
-  if (!w.value) router.replace('/admin/withdrawals')
+  if (!w.value) {
+    void router.replace('/admin/withdrawals')
+  }
 })
 
 const showReject = ref(false)
 const rejectReason = ref('')
 const rejectError = ref('')
 const showConfirm = ref(false)
-const showTwoFa = ref(false)
 const approving = ref(false)
 const rejecting = ref(false)
 
@@ -140,9 +135,7 @@ const isPending = computed<boolean>(() => w.value?.status === 'pending')
 function str(v: unknown): string {
   return typeof v === 'string' ? v : ''
 }
-const payoutDetails = computed<Record<string, unknown>>(
-  () => (w.value?.payout_details.details ?? {}) as Record<string, unknown>,
-)
+const payoutDetails = computed<Record<string, unknown>>(() => w.value?.payout_details.details ?? {})
 
 // No master name on the payload → fall back to the bank account holder, else «—».
 const masterName = computed<string>(() => str(payoutDetails.value.account_holder) || '—')
@@ -185,18 +178,13 @@ function openReject(): void {
   showReject.value = true
 }
 
-function onConfirm(): void {
-  showConfirm.value = false
-  showTwoFa.value = true
-}
-
 async function onApprove(): Promise<void> {
   if (!w.value || approving.value) return
   approving.value = true
   try {
     await approveWithdrawal(w.value.id)
     toast.success('Выплата одобрена')
-    showTwoFa.value = false
+    showConfirm.value = false
     router.back()
   } catch (e) {
     toast.error(extractApiError(e, 'Ошибка одобрения выплаты'))

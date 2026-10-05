@@ -226,6 +226,7 @@ function booking(
     updated_at: null,
     has_feedback: false,
     has_checkin: false,
+    has_reflection: false,
     ...overrides,
     practice: {
       id: 'p1',
@@ -272,7 +273,7 @@ function text(): string {
 function button(label: string): HTMLButtonElement | undefined {
   return Array.from(host?.querySelectorAll('button') ?? []).find((b) =>
     b.textContent?.includes(label),
-  ) as HTMLButtonElement | undefined
+  )
 }
 
 /** The primary submit. Only rendered on the FORM half of FormShell's v-if. */
@@ -752,9 +753,9 @@ describe('CheckinView', () => {
   // ===========================================================================
   describe('submitting the check-in', () => {
     it('sends the DEFAULT mood and a null comment, and shows the success screen', async () => {
-      // moodScore defaults to 6 -- the middle "Нормально" zone (.vue:108) -- so
-      // a user who taps Отправить without touching anything sends a neutral
-      // score, not a 1 or an empty body the backend would reject.
+      // moodScore defaults to the EXACT 5 «Нормально» (tz-mood-scale §2.4): a
+      // user who taps Отправить without touching the scale sends 5 -- not a
+      // card's click value (6) and not an empty body the backend would reject.
       mount()
       await flush()
 
@@ -762,7 +763,7 @@ describe('CheckinView', () => {
       await flush()
 
       expect(upsertCheckinMock).toHaveBeenCalledTimes(1)
-      expect(upsertCheckinMock).toHaveBeenCalledWith('p1', { mood: 6, comment: null })
+      expect(upsertCheckinMock).toHaveBeenCalledWith('p1', { mood: 5, comment: null })
       expect(successTitle()).toBe('Check-in отправлен')
       expect(text()).toContain('Ваше состояние записано, хорошей практики!')
     })
@@ -771,9 +772,10 @@ describe('CheckinView', () => {
       mount()
       await flush()
 
-      // Tap the third mood card -> ZONE_CENTRE[2] = 9 (MoodSlider.vue:100-103).
+      // Tap the third card («Нормально») -> its click value 6 (MoodSlider
+      // radios select the pair's TOP score, not a zone centre).
       const cards = host?.querySelectorAll('.mood-slider__card')
-      expect(cards?.length).toBe(3)
+      expect(cards?.length).toBe(5)
       ;(cards?.[2] as HTMLElement).click()
       typeComment('   Хорошо спал   ')
       await flush()
@@ -781,7 +783,7 @@ describe('CheckinView', () => {
       submitBtn()?.click()
       await flush()
 
-      expect(upsertCheckinMock).toHaveBeenCalledWith('p1', { mood: 9, comment: 'Хорошо спал' })
+      expect(upsertCheckinMock).toHaveBeenCalledWith('p1', { mood: 6, comment: 'Хорошо спал' })
     })
 
     it('a whitespace-only comment is sent as null, not as blanks', async () => {
@@ -794,7 +796,7 @@ describe('CheckinView', () => {
       submitBtn()?.click()
       await flush()
 
-      expect(upsertCheckinMock).toHaveBeenCalledWith('p1', { mood: 6, comment: null })
+      expect(upsertCheckinMock).toHaveBeenCalledWith('p1', { mood: 5, comment: null })
     })
 
     it('sends the check-in for the practice in the ROUTE, not the one in the store', async () => {
@@ -810,7 +812,7 @@ describe('CheckinView', () => {
       submitBtn()?.click()
       await flush()
 
-      expect(upsertCheckinMock).toHaveBeenCalledWith('p42', { mood: 6, comment: null })
+      expect(upsertCheckinMock).toHaveBeenCalledWith('p42', { mood: 5, comment: null })
     })
 
     it('refreshes the bookings after a successful submit -- at the NETWORK, not just a spy', async () => {
@@ -898,6 +900,34 @@ describe('CheckinView', () => {
 
       expect(toastError).toHaveBeenCalledWith('Не удалось отправить check-in')
       expect(successTitle()).toBe('')
+    })
+
+    // BE-92: the backend's check-in refusals carry their own codes now --
+    // each reaches the screen as its own phrase from ERROR_MESSAGES, none of
+    // them as the generic «Запрошенный ресурс не найден» / «Некорректный
+    // запрос» they used to fall back to.
+    describe('honest check-in codes (BE-92)', () => {
+      it.each([
+        [404, 'no_active_booking', 'У вас нет подтверждённой брони на эту практику'],
+        [400, 'checkin_window_closed', 'Check-in закрыт — практика уже началась'],
+        [
+          400,
+          'checkin_window_not_open',
+          'Check-in ещё не открыт — он откроется ближе к началу практики',
+        ],
+      ])('%s %s shows its own phrase', async (status, code, phrase) => {
+        upsertCheckinMock.mockRejectedValue(new ApiResponseError(status, 'English detail', code))
+        mount()
+        await flush()
+
+        submitBtn()?.click()
+        await flush()
+
+        expect(toastError).toHaveBeenCalledWith(phrase)
+        expect(toastError).not.toHaveBeenCalledWith('Запрошенный ресурс не найден')
+        expect(toastError).not.toHaveBeenCalledWith('Некорректный запрос')
+        expect(successTitle()).toBe('')
+      })
     })
 
     // P5 (PROMPT №594): the audience/block gate on POST .../checkin

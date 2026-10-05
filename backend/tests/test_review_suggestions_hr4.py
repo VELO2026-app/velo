@@ -503,10 +503,18 @@ class TestPendingDoesNotUnlockDetail:
 
 
 class TestPropagationSkipsTerminalChildren:
-    """Tested at the SERVICE level, not through PATCH: the filter lives in
-    propagate_audience_to_children, and driving it through the HTTP layer
-    would add the whole update pipeline (and its FOR UPDATE locks) to a test
-    about which rows a single UPDATE touches."""
+    """Tested at the SERVICE level, not through PATCH: driving it through
+    the HTTP layer would add the whole update pipeline to a test about
+    which rows the propagation touches.
+
+    Until BE-103 W4 the filter lived in propagate_audience_to_children's
+    own unlocked SELECT of the children, and these tests called it alone
+    -- right for that code. W4 moved the filter into the lock statement
+    (practices/service.py::_lock_practice_and_children, PRACTICE ROW
+    ORDER): the propagation now writes exactly the rows its caller holds.
+    So the tests drive the two together, the way update_practice does --
+    lock, then propagate -- and assert the same property: a terminal child
+    is neither locked nor rewritten."""
 
     @pytest.mark.parametrize(
         "terminal_status",
@@ -527,6 +535,9 @@ class TestPropagationSkipsTerminalChildren:
         a state no read path expects."""
         from app.modules.practices.series_service import (
             propagate_audience_to_children,
+        )
+        from app.modules.practices.service import (
+            _lock_practice_and_children,
         )
 
         master = await _master(client, db_session, _TID_MIN + 16)
@@ -563,8 +574,11 @@ class TestPropagationSkipsTerminalChildren:
 
         factory = get_session_factory()
         async with factory() as s:
-            fresh_root = await s.get(Practice, root_id)
-            await propagate_audience_to_children(fresh_root, s)
+            fresh_root, children = await _lock_practice_and_children(
+                root_id, True, s,
+            )
+            assert [c.id for c in children] == [live_id]
+            await propagate_audience_to_children(fresh_root, children, s)
             await s.commit()
 
         # The finished session keeps the audience it actually ran with.
@@ -581,6 +595,9 @@ class TestPropagationSkipsTerminalChildren:
     ) -> None:
         from app.modules.practices.series_service import (
             propagate_audience_to_children,
+        )
+        from app.modules.practices.service import (
+            _lock_practice_and_children,
         )
 
         master = await _master(client, db_session, _TID_MIN + 18)
@@ -604,9 +621,11 @@ class TestPropagationSkipsTerminalChildren:
 
         factory = get_session_factory()
         async with factory() as s:
-            await propagate_audience_to_children(
-                await s.get(Practice, root_id), s,
+            fresh_root, children = await _lock_practice_and_children(
+                root_id, True, s,
             )
+            assert [c.id for c in children] == [live_id]
+            await propagate_audience_to_children(fresh_root, children, s)
             await s.commit()
 
         assert (await _reread(done_id)).audience_kind == (

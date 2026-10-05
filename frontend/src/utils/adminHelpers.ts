@@ -132,5 +132,9 @@ export function formatRelative(iso: string): string {
   if (diffH < 24) return `${diffH} ч назад`
   const yesterdayKey = dayKeyOf(new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), 'UTC')
   if (dayKeyOf(iso, 'UTC') === yesterdayKey) return 'Вчера'
-  return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+  return new Date(iso).toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  })
 }

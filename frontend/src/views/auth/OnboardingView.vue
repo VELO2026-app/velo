@@ -1,7 +1,7 @@
 <!--
-  VELO Frontend -- Onboarding View (onboarding 05-08)
+  VELO Frontend -- Onboarding View (onboarding 05-07)
 
-  Four-step welcome carousel, shown once to new users (those whose
+  Three-step welcome carousel, shown once to new users (those whose
   onboarding_completed flag is false) right after they tap "Войти" on
   WelcomeView. App.vue mounts this only for new users.
 
@@ -9,14 +9,17 @@
     0  "Найдите свою практику"      (intro)
     1  "Ведите дневник"             (intro)
     2  "Карта себя"                 (intro)
-    3  "Часовой пояс" -- VSelect of IANA zones, default from auto-detect
+
+  The former timezone step is gone: the timezone is taken automatically from
+  the user's DEVICE (Intl auto-detect, IANA-validated, UTC fallback) and
+  persisted together with the onboarding flag on finish. It stays editable
+  after onboarding: Профиль -> Часовой пояс (TimezoneSettingsView).
 
   Navigation:
-    - "Далее" advances; on the last intro step it goes to the timezone step.
-    - "Пропустить" jumps straight to the timezone step (step 3) -- the zone
-      still has to be confirmed, so we never skip it entirely.
-    - "Готово" on step 3 persists { timezone, onboarding_completed: true }
-      via authStore.updateProfile, then emits `done`.
+    - "Далее" advances; on the last slide it turns into "Готово".
+    - "Пропустить" finishes onboarding outright (same persistence as Готово).
+    - "Готово" on the last slide persists { timezone, onboarding_completed:
+      true } via authStore.updateProfile, then emits `done`.
 
   Single outward event: `done`. App.vue switches to the dashboard on it.
   Persistence happens here so App.vue stays a simple state machine.
@@ -29,38 +32,22 @@
 
 <template>
   <div class="onboarding">
-    <!-- Skip: visible on intro steps only (not on the timezone step).
-         FE-36: on the timezone step the row collapses to zero -- it reserved
-         24px for a button that never renders there, dead height the search
-         results badly need above the keyboard. The reserve still stands
-         BETWEEN intro steps (no layout jump 0↔1↔2). -->
-    <div class="onboarding__skip-row" :class="{ 'onboarding__skip-row--tz': isTimezoneStep }">
-      <button
-        v-if="!isTimezoneStep"
-        type="button"
-        class="onboarding__skip"
-        @click="goToTimezoneStep"
-      >
+    <!-- Skip: visible on every step but the last (where «Готово» already IS
+         the finish action). On the last step the row collapses to zero -- it
+         reserved 24px for a button that never renders there, dead height the
+         slide does not need. The reserve still stands BETWEEN earlier steps
+         (no layout jump 0↔1). -->
+    <div class="onboarding__skip-row" :class="{ 'onboarding__skip-row--last': isFinalStep }">
+      <button v-if="!isFinalStep" type="button" class="onboarding__skip" @click="onSkip">
         Пропустить
       </button>
     </div>
 
     <!-- ================= INTRO STEPS (0-2) ================= -->
-    <div v-if="!isTimezoneStep" class="onboarding__body velo-kbd-scroll">
+    <div class="onboarding__body velo-kbd-scroll">
       <img :src="currentSlide.image" :alt="currentSlide.title" class="onboarding__illustration" />
       <h2 class="onboarding__title">{{ currentSlide.title }}</h2>
       <p class="onboarding__text">{{ currentSlide.text }}</p>
-    </div>
-
-    <!-- ================= TIMEZONE STEP (3) ================= -->
-    <div v-else class="onboarding__body onboarding__body--form velo-kbd-scroll">
-      <h2 class="onboarding__title">Часовой пояс</h2>
-      <p class="onboarding__text">
-        Укажите ваш часовой пояс, чтобы мы правильно показывали время практик
-      </p>
-      <div class="onboarding__field">
-        <TimezoneCityPicker :model-value="selectedTimezone" @update:modelValue="onPickTimezone" />
-      </div>
     </div>
 
     <!-- ================= FOOTER: dots + action ================= -->
@@ -70,10 +57,10 @@
       <button
         type="button"
         class="onboarding__button"
-        :disabled="submitting || (isTimezoneStep && !timezoneChosen)"
+        :disabled="submitting"
         @click="onPrimaryAction"
       >
-        {{ isTimezoneStep ? 'Готово' : 'Далее' }}
+        {{ isFinalStep ? 'Готово' : 'Далее' }}
       </button>
     </div>
   </div>
@@ -81,7 +68,6 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import TimezoneCityPicker from '@/components/shared/TimezoneCityPicker.vue'
 import { VPaginationDots } from '@/components/ui'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
@@ -95,29 +81,29 @@ const emit = defineEmits<{
 const authStore = useAuthStore()
 const toast = useToast()
 
-// Total steps: 3 intro + 1 timezone. Last index (3) is the timezone step.
-const TOTAL_STEPS = 4
-const TIMEZONE_STEP_INDEX = TOTAL_STEPS - 1
+// Total steps: 3 intro slides. The last one is also the finish step.
+const TOTAL_STEPS = 3
+const FINAL_STEP_INDEX = TOTAL_STEPS - 1
 
 const step = ref(0)
 const submitting = ref(false)
-// Guards against a fast multi-click slipping past the timezone screen.
+// Guards against a fast multi-click slipping past the last intro slide.
 //
-// The naive "step += 1" lets click 1 land on the timezone index (isTimezoneStep
+// The naive "step += 1" lets click 1 land on the final index (isFinalStep
 // turns true synchronously) and click 2 immediately hit finish() -- the user
-// never sees the timezone picker and it saves with the default zone.
+// never sees the last slide and a stray double-tap ends onboarding.
 //
 // Two flags fix it deterministically:
-//   advancing   -- blocks re-entrant intro->intro/->timezone advances.
-//   finishArmed -- finish() only fires once the timezone step has been
+//   advancing   -- blocks re-entrant slide->slide advances.
+//   finishArmed -- finish() only fires once the final step has been
 //                  ENTERED and settled (armed on the next microtask). A click
-//                  that races the transition into the timezone step finds
+//                  that races the transition onto the final step finds
 //                  finishArmed=false and is ignored; a deliberate later tap
 //                  finds it true and proceeds.
 const advancing = ref(false)
 const finishArmed = ref(false)
 
-const isTimezoneStep = computed(() => step.value === TIMEZONE_STEP_INDEX)
+const isFinalStep = computed(() => step.value === FINAL_STEP_INDEX)
 
 // -- Intro slides (0-2). Illustrations served from public/onboarding/. --
 const SLIDES = [
@@ -138,16 +124,18 @@ const SLIDES = [
   },
 ] as const
 
-// Only read on intro steps (v-if="!isTimezoneStep" -> step in 0..2), and
-// step is capped at TIMEZONE_STEP_INDEX, so SLIDES[step] is always defined
-// here. The ?? SLIDES[0] is a defensive fallback for an impossible state,
-// not normal flow.
+// step is capped at FINAL_STEP_INDEX, so SLIDES[step] is always defined here.
+// The ?? SLIDES[0] is a defensive fallback for an impossible state, not a
+// normal-flow branch.
 const currentSlide = computed(() => SLIDES[step.value] ?? SLIDES[0])
 
-// -- Timezone default: auto-detect, fall back to UTC. -------------------------
-// We do NOT clamp to the curated TIMEZONE_OPTIONS set: any valid IANA zone is
-// kept as-is (the picker injects it as an extra option below). Only a missing /
-// invalid detection falls back, and the fallback is UTC (not Moscow).
+// -- Timezone: taken from the DEVICE, there is no manual step. ---------------
+// We do NOT clamp to the curated TIMEZONE_OPTIONS set and do NOT prefer the
+// profile zone: everyone reaching this screen is a NEW user whose profile
+// zone is just the server default ('UTC') -- preferring it would shadow the
+// real device zone. The backend accepts any valid IANA id (users/schemas.py
+// validate_timezone), so the detected zone is sent as-is. Only a missing /
+// invalid detection falls back, and the fallback is UTC.
 const FALLBACK_TIMEZONE = 'UTC'
 
 /**
@@ -164,64 +152,46 @@ function isValidIana(zone: string): boolean {
   }
 }
 
-function detectDefaultTimezone(): string {
-  // 1. Prefer the user's existing profile zone if it is a valid IANA id.
-  const profileTz = authStore.user?.timezone
-  if (profileTz && isValidIana(profileTz)) {
-    return profileTz
-  }
-  // 2. Otherwise the auto-detected zone, kept as-is if it is valid IANA.
+function detectDeviceTimezone(): string {
   let detected = ''
   try {
     detected = Intl.DateTimeFormat().resolvedOptions().timeZone || ''
   } catch {
     detected = ''
   }
-  if (isValidIana(detected)) {
-    return detected
-  }
-  // 3. Nothing usable -> UTC.
-  return FALLBACK_TIMEZONE
+  return isValidIana(detected) ? detected : FALLBACK_TIMEZONE
 }
 
-const selectedTimezone = ref(detectDefaultTimezone())
-
-// Explicit-selection gate: the onboarding "Готово" button stays disabled until
-// the user actually taps a city (operator 2026-06-09), even though a default
-// zone is auto-detected above for persistence.
-const timezoneChosen = ref(false)
-function onPickTimezone(iana: string): void {
-  selectedTimezone.value = iana
-  timezoneChosen.value = true
-}
+// Detected once per mount; finish() persists it as-is.
+const deviceTimezone = detectDeviceTimezone()
 
 // -- Navigation --------------------------------------------------------------
 
 /**
- * Enter the timezone step and arm finish() only after the change settles.
+ * Enter the final step and arm finish() only after the change settles.
  * Arming on the next microtask is what prevents a click that raced the
  * transition from immediately triggering finish().
  */
-async function enterTimezoneStep(): Promise<void> {
-  step.value = TIMEZONE_STEP_INDEX
+async function enterFinalStep(): Promise<void> {
+  step.value = FINAL_STEP_INDEX
   finishArmed.value = false
   await Promise.resolve()
   finishArmed.value = true
 }
 
-function goToTimezoneStep(): void {
-  // "Пропустить" -- same destination, also armed after settle.
-  void enterTimezoneStep()
+/** "Пропустить" -- finish onboarding outright with the device timezone. */
+function onSkip(): void {
+  void finish()
 }
 
 async function onPrimaryAction(): Promise<void> {
-  if (isTimezoneStep.value) {
-    // Ignore clicks that raced the transition into the timezone step.
+  if (isFinalStep.value) {
+    // Ignore clicks that raced the transition onto the final step.
     if (!finishArmed.value) return
     await finish()
     return
   }
-  // Intro steps: block re-entrant advances; cap at the timezone index.
+  // Intro steps: block re-entrant advances; cap at the final index.
   if (advancing.value) return
   advancing.value = true
   // try/finally so advancing is always released. Nothing here throws today
@@ -229,9 +199,9 @@ async function onPrimaryAction(): Promise<void> {
   // future change introducing a throw and leaving the button permanently
   // locked (every click would hit the `if (advancing.value) return` above).
   try {
-    const next = Math.min(step.value + 1, TIMEZONE_STEP_INDEX)
-    if (next === TIMEZONE_STEP_INDEX) {
-      await enterTimezoneStep()
+    const next = Math.min(step.value + 1, FINAL_STEP_INDEX)
+    if (next === FINAL_STEP_INDEX) {
+      await enterFinalStep()
     } else {
       step.value = next
     }
@@ -240,14 +210,14 @@ async function onPrimaryAction(): Promise<void> {
   }
 }
 
-// -- Finish: persist timezone + onboarding flag, then emit done. -------------
+// -- Finish: persist device timezone + onboarding flag, then emit done. ------
 
 async function finish(): Promise<void> {
   if (submitting.value) return
   submitting.value = true
   try {
     await authStore.updateProfile({
-      timezone: selectedTimezone.value,
+      timezone: deviceTimezone,
       onboarding_completed: true,
     })
     emit('done')
@@ -277,7 +247,7 @@ async function finish(): Promise<void> {
   min-height: 24px;
 }
 
-.onboarding__skip-row--tz {
+.onboarding__skip-row--last {
   min-height: 0;
 }
 
@@ -294,8 +264,7 @@ async function finish(): Promise<void> {
 .onboarding__body {
   flex: 1;
   /* ROOT-LOCK: own the scroll so the skip-row/footer stay pinned while long
-     slide text or the timezone picker scrolls (html/body/#app no longer
-     absorb overflow). */
+     slide text scrolls (html/body/#app no longer absorb overflow). */
   min-height: 0;
   overflow-y: auto;
   display: flex;
@@ -304,14 +273,6 @@ async function finish(): Promise<void> {
   justify-content: center;
   text-align: center;
   gap: var(--space-4);
-}
-
-.onboarding__body--form {
-  justify-content: center;
-  /* FE-36: tighter than the intro slides -- the timezone step must fit its
-     field + first search results above an open keyboard, and every gap here
-     is height the results lose. */
-  gap: var(--space-3);
 }
 
 .onboarding__illustration {
@@ -336,12 +297,6 @@ async function finish(): Promise<void> {
   margin: 0;
   max-width: var(--velo-content-width-narrow);
   line-height: 1.5;
-}
-
-.onboarding__field {
-  width: 100%;
-  max-width: var(--velo-content-width);
-  text-align: left;
 }
 
 .onboarding__footer {
@@ -386,23 +341,16 @@ async function finish(): Promise<void> {
   outline-offset: 2px;
 }
 
-/* === FE-36: keyboard-open compaction for the timezone step ===
+/* === FE-36: keyboard-open compaction ===
    When the keyboard opens, global.css shrinks .app-frame to --velo-vvh, so
-   the whole column (footer included) must fit the VISIBLE area. A centered
-   column taller than that overflows both ways -- the search results below
-   the field land under the keyboard and scrollIntoView can't rescue them.
-   While typing: top-align the form body (nothing to center around anymore),
-   halve the gaps, slim the frame paddings. The button and dots stay put --
-   only their breathing room shrinks. Inert at rest: html.is-keyboard-open
-   exists only while the keyboard is open (useViewportGeometry). */
+   the whole column (footer included) must fit the VISIBLE area. While typing
+   anywhere: halve the gaps, slim the frame paddings. The button and dots stay
+   put -- only their breathing room shrinks. Inert at rest:
+   html.is-keyboard-open exists only while the keyboard is open
+   (useViewportGeometry). */
 :global(html.is-keyboard-open) .onboarding {
   padding-top: var(--space-3);
   padding-bottom: var(--space-3);
-}
-
-:global(html.is-keyboard-open) .onboarding__body--form {
-  justify-content: flex-start;
-  gap: var(--space-2);
 }
 
 :global(html.is-keyboard-open) .onboarding__footer {

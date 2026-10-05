@@ -35,7 +35,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import PracticeDetailView from '@/views/user/PracticeDetailView.vue'
-import type { BookingWithPracticeResponse, PracticeResponse } from '@/api/types'
+import type {
+  BookingWithPracticeResponse,
+  CuratorGroupMineItem,
+  PracticeResponse,
+} from '@/api/types'
 
 const push = vi.fn()
 const back = vi.fn()
@@ -98,12 +102,32 @@ vi.mock('@/stores/bookings', () => ({
   }),
 }))
 
-// -- auth store (dependency): only user.id matters, for the isMaster check --
-const authState: { user: { id: string } | null } = { user: { id: 'user_1' } }
+// -- auth store (dependency): user.id drives isMaster; role gates the manage
+//    kebab (the /master shell's roleGuard would bounce any other role, so the
+//    kebab must not show outside the master role) --
+const authState: {
+  user: { id: string } | null
+  role: 'user' | 'master' | 'admin' | null
+} = { user: { id: 'user_1' }, role: 'user' }
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({
     get user() {
       return authState.user
+    },
+    get role() {
+      return authState.role
+    },
+  }),
+}))
+
+// -- schools hub store (dependency): the BE-63 curator check reads my schools
+//    (relation + id are all the screen consumes; items are cast per fixture
+//    like the PracticeResponse one) --
+const schoolsHubState: { mine: CuratorGroupMineItem[] } = { mine: [] }
+vi.mock('@/stores/schoolsHub', () => ({
+  useSchoolsHubStore: () => ({
+    get mine() {
+      return schoolsHubState.mine
     },
   }),
 }))
@@ -111,7 +135,8 @@ vi.mock('@/stores/auth', () => ({
 // -- REC-1 (PROMPT №620): recording link fetch + external-open, both mocked --
 const getBookingRecording = vi.fn()
 vi.mock('@/api/bookings', () => ({
-  getBookingRecording: (...args: unknown[]) => getBookingRecording(...args),
+  getBookingRecording: (...args: Parameters<typeof getBookingRecording>) =>
+    getBookingRecording(...args),
 }))
 
 const openLink = vi.fn()
@@ -176,6 +201,7 @@ function booking(
     updated_at: null,
     has_feedback: false,
     has_checkin: false,
+    has_reflection: false,
     ...overrides,
     practice: {
       id: 'p1',
@@ -229,7 +255,26 @@ function text(): string {
 function button(label: string): HTMLButtonElement | undefined {
   return Array.from(host?.querySelectorAll('button') ?? []).find((b) =>
     b.textContent?.includes(label),
-  ) as HTMLButtonElement | undefined
+  )
+}
+
+// Icon-only controls (VMenu trigger, VMenuItem) carry no text -- match by
+// their aria-label, same as the master-zone detail tests.
+function byAria(label: string): HTMLButtonElement | null {
+  return host?.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`) ?? null
+}
+
+/** One row of GET /curator-groups/mine, narrowed to what the screen reads. */
+function school(id: string, relation: CuratorGroupMineItem['relation']): CuratorGroupMineItem {
+  return {
+    id,
+    name: 'Школа',
+    description: null,
+    curator: { user_id: 'u1', display_name: 'Куратор', avatar_url: null },
+    masters_count: 1,
+    students_count: 1,
+    relation,
+  } as CuratorGroupMineItem
 }
 
 beforeEach(() => {
@@ -242,6 +287,8 @@ beforeEach(() => {
   practicesState.selectedError = null
   bookingsState.bookings = []
   authState.user = { id: 'user_1' }
+  authState.role = 'user'
+  schoolsHubState.mine = []
   fetchPractice.mockReset()
   clearSelected.mockReset()
   fetchMyBookings.mockReset()
@@ -808,7 +855,7 @@ describe('PracticeDetailView', () => {
 
     it('a CONFIRMED booking past its practice (attendance still pending) still qualifies', async () => {
       // Owner ruling: entitlement is the booking, not the attendance
-      // verdict -- confirmed-and-ended (the "Подсчитывается" state) must not
+      // verdict -- confirmed-and-ended (the "Подсчет" state) must not
       // be treated as ineligible just because attended/no_show isn't decided.
       getBookingRecording.mockResolvedValue({ status: 'available', url: 'https://zoom.us/rec/x' })
       practicesState.selected = practice({ scheduled_at: ended, duration_minutes: 60 })
@@ -833,6 +880,219 @@ describe('PracticeDetailView', () => {
 
       expect(getBookingRecording).not.toHaveBeenCalled()
       expect(button('Посмотреть запись')).toBeUndefined()
+    })
+  })
+
+  describe('manage kebab (BE-63: the master or the school curator)', () => {
+    async function openAndEdit(): Promise<void> {
+      byAria('Меню')?.click()
+      await flush()
+      byAria('Редактировать')?.click()
+      await flush()
+    }
+
+    it('the practice OWNER in the master role gets «Редактировать» -> the master edit screen', async () => {
+      authState.user = { id: 'master_1' }
+      authState.role = 'master'
+      practicesState.selected = practice({ master_id: 'master_1' })
+      mount()
+      await flush()
+
+      await openAndEdit()
+
+      expect(push).toHaveBeenCalledWith({
+        name: 'master-practice-edit',
+        params: { id: 'p1' },
+      })
+    })
+
+    it("the CURATOR of the practice's school gets it too (BE-63)", async () => {
+      // A curator-created practice (master_id is the school's master, the
+      // school rides curator_group_id) seen by its curator: the manager rule
+      // is master OR curator-of-school, so the kebab shows for both.
+      practicesState.selected = practice({ curator_group_id: 'sc1' })
+      authState.user = { id: 'curator_1' }
+      authState.role = 'master'
+      schoolsHubState.mine = [school('sc1', 'curator')]
+      mount()
+      await flush()
+
+      await openAndEdit()
+
+      expect(push).toHaveBeenCalledWith({
+        name: 'master-practice-edit',
+        params: { id: 'p1' },
+      })
+    })
+
+    it('a MASTER MEMBER of the school is not its curator -- no kebab', async () => {
+      practicesState.selected = practice({ curator_group_id: 'sc1' })
+      authState.user = { id: 'member_1' }
+      authState.role = 'master'
+      schoolsHubState.mine = [school('sc1', 'master')]
+      mount()
+      await flush()
+
+      expect(byAria('Меню')).toBeNull()
+      expect(push).not.toHaveBeenCalled()
+    })
+
+    it('a curator of ANOTHER school gets no kebab', async () => {
+      practicesState.selected = practice({ curator_group_id: 'sc1' })
+      authState.user = { id: 'curator_1' }
+      authState.role = 'master'
+      schoolsHubState.mine = [school('sc2', 'curator')]
+      mount()
+      await flush()
+
+      expect(byAria('Меню')).toBeNull()
+    })
+
+    it('no kebab on a finished practice (editable statuses only)', async () => {
+      authState.user = { id: 'master_1' }
+      authState.role = 'master'
+      practicesState.selected = practice({ master_id: 'master_1', status: 'completed' })
+      mount()
+      await flush()
+
+      expect(byAria('Меню')).toBeNull()
+    })
+
+    it('no kebab outside the master role (roleGuard would bounce silently)', async () => {
+      // The owner IS this practice's master, but the session browses in the
+      // user role: pushing to a /master route answers with a redirect to
+      // /user/dashboard, so the entry must not dangle.
+      authState.user = { id: 'master_1' }
+      practicesState.selected = practice({ master_id: 'master_1' })
+      mount()
+      await flush()
+
+      expect(byAria('Меню')).toBeNull()
+    })
+
+    it('a stranger on a school practice: no kebab, the booking ladder intact', async () => {
+      practicesState.selected = practice({ curator_group_id: 'sc1' })
+      schoolsHubState.mine = [school('sc1', 'student')]
+      mount()
+      await flush()
+
+      expect(byAria('Меню')).toBeNull()
+      expect(button('Забронировать')).toBeDefined()
+    })
+  })
+
+  describe('no-show reflection (BE-108)', () => {
+    const ended = new Date(NOW_MS - 3 * HOUR).toISOString()
+    const LABEL = 'Поделиться, как вы'
+
+    function endedPractice(): void {
+      practicesState.selected = practice({ scheduled_at: ended, duration_minutes: 60 })
+    }
+
+    function allLabels(): string[] {
+      return Array.from(host?.querySelectorAll('button') ?? []).map(
+        (b) => b.textContent?.trim() ?? '',
+      )
+    }
+
+    it('a no_show booking without a reflection is offered «Поделиться, как вы»', async () => {
+      endedPractice()
+      bookingsState.bookings = [
+        booking({ status: 'no_show', has_reflection: false }, { scheduled_at: ended }),
+      ]
+      mount()
+      await flush()
+
+      expect(button(LABEL)).toBeDefined()
+      expect(button(LABEL)?.className).toContain('secondary')
+    })
+
+    it('the server flag hides it -- has_reflection drops the button', async () => {
+      // Positive half first (SC-15): the same booking IS a no_show and the screen
+      // rendered -- the status row says so.
+      endedPractice()
+      bookingsState.bookings = [
+        booking({ status: 'no_show', has_reflection: true }, { scheduled_at: ended }),
+      ]
+      mount()
+      await flush()
+
+      expect(text()).toContain('Вы не пришли')
+      expect(button(LABEL)).toBeUndefined()
+    })
+
+    it.each(['confirmed', 'pending', 'attended', 'cancelled'] as const)(
+      'a %s booking is never offered a reflection',
+      async (status) => {
+        endedPractice()
+        bookingsState.bookings = [
+          booking({ status, has_reflection: false }, { scheduled_at: ended }),
+        ]
+        mount()
+        await flush()
+
+        expect(button(LABEL)).toBeUndefined()
+      },
+    )
+
+    it('no booking at all -- no reflection', async () => {
+      endedPractice()
+      bookingsState.bookings = []
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.detail')).not.toBeNull()
+      expect(button(LABEL)).toBeUndefined()
+    })
+
+    it('reads the no_show booking, not a cancelled earlier one of the same practice', async () => {
+      // `myBooking` is the first in list order -- here the cancelled one. The
+      // button reads `myAnyBooking`, which falls back to the latest.
+      endedPractice()
+      bookingsState.bookings = [
+        booking(
+          { id: 'b0', status: 'cancelled', created_at: '2026-06-01T00:00:00Z' },
+          { scheduled_at: ended },
+        ),
+        booking(
+          { id: 'b1', status: 'no_show', created_at: '2026-07-01T00:00:00Z' },
+          { scheduled_at: ended },
+        ),
+      ]
+      mount()
+      await flush()
+
+      expect(button(LABEL)).toBeDefined()
+    })
+
+    it('with a recording, BOTH buttons show -- the recording first', async () => {
+      getBookingRecording.mockResolvedValue({ status: 'available', url: 'https://zoom.us/rec/x' })
+      endedPractice()
+      bookingsState.bookings = [
+        booking({ id: 'b1', status: 'no_show', has_reflection: false }, { scheduled_at: ended }),
+      ]
+      mount()
+      await flush()
+
+      const labels = allLabels()
+      const rec = labels.indexOf('Посмотреть запись')
+      const refl = labels.indexOf(LABEL)
+      expect(rec).toBeGreaterThanOrEqual(0)
+      expect(refl).toBeGreaterThan(rec)
+    })
+
+    it('navigates to the reflection screen for THIS practice', async () => {
+      practicesState.selected = practice({ id: 'p42', scheduled_at: ended, duration_minutes: 60 })
+      bookingsState.bookings = [
+        booking({ practice_id: 'p42', status: 'no_show' }, { id: 'p42', scheduled_at: ended }),
+      ]
+      mount()
+      await flush()
+
+      button(LABEL)?.click()
+      await flush()
+
+      expect(push).toHaveBeenCalledWith({ name: 'user-reflection', params: { practiceId: 'p42' } })
     })
   })
 

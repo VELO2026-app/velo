@@ -10,36 +10,177 @@
 # a 403 on the former would confirm that the id is real.
 #
 # P-01: nothing here commits. The router flushes; get_db_session commits.
+#
+# LOCK ORDER (BE-95). THE ONE PLACE IT IS WRITTEN; everything below that
+# depends on it points here. The isolation level is READ COMMITTED. The
+# module's own rows are locked by the writes themselves and by the one FOR
+# SHARE named below; the one SELECT ... FOR UPDATE here is the school
+# block's, on practices and the rows under them (BE-79, below). Every
+# writer takes its locks in ONE order:
+#
+#     member -> master profile -> transfer -> master offer -> invite
+#            -> practice -> group
+#
+# THE SCHOOL BLOCK ROW (BE-79) sits with the member row it replaces: block
+# takes member then block, unblock takes block then member. The two are
+# never held in opposite orders on ONE person, because that person has one
+# of the two rows, never both (CuratorGroupBlock).
+#
+# THE SCHOOL BLOCK REACHES BELOW THE PRACTICE (BE-79 (1b),
+# _close_school_practices_to): after the offer it takes the practices it
+# touches in one statement by id, then the person's bookings and queue
+# entries on them, and the refunds then lock each booked practice's
+# MASTER PROFILE FOR UPDATE (payments/service.py::record_master_ledger) --
+# master profile AFTER practice, the one writer here that takes it on that
+# side. It closes no cycle with the writers that take the profile before a
+# practice (FOR SHARE: a curator publishing a master's draft, creating for
+# a master, offering mastership): to wait on such a writer while holding a
+# practice it wants, the block would have to hold that writer's practice
+# -- a draft or a new practice of the master whose profile it refunds into
+# -- and the block holds only practices with this person's booking or
+# queue entry, which a draft never has, plus this person's own practices,
+# whose master is this person: a publication for HIM takes his member row
+# first and meets the block's DELETE there. Measured, both start orders,
+# block x publication of another draft of the same master
+# (tests/test_be79_school_block_access.py). The bookers' side is K2: a
+# booking or a queue entry in a school takes the viewer's member row FOR
+# KEY SHARE before the practice (member -> practice), so it serialises
+# with the block's DELETE.
+#
+# THE PRACTICE (BE-74) IS THE SECOND ROW HERE THIS MODULE DOES NOT OWN.
+# practices.curator_group_id names the school a practice belongs to, and
+# the writers that meet both rows take the practice first: update_practice
+# and cancel_practice (practices/) hold it FOR UPDATE and then write a
+# journal row -- KEY SHARE on the group -- or, cancelling as the curator,
+# lock the group as its owner (_lock_group_as_owner) before writing
+# anything. A writer of SEVERAL practices takes them all before the group,
+# in the one order recorded in practices/service.py (PRACTICE ROW ORDER):
+# the series cancellation, update_practice changing a series root's
+# audience (the root and its children, before the school) and this
+# module's delete_curator_group follow it. delete_curator_group clears
+# its practices' owner (an UPDATE of practices) before it deletes the
+# group, so it waits for those writers
+# instead of holding the group they are waiting for. It replaced the
+# "practice audience" table at the same place in the order, for the same
+# reason. Of the module's own rows TWO practice writers take one, and
+# both before any practice row: create_practice for another master
+# (BE-102, _effective_master_id_or_4xx) and a curator publishing a master's
+# draft (BE-63, update_practice) read that master's member row and then
+# their master profile FOR SHARE (_lock_school_master_or_400); the first
+# then, for a series child, takes the parent practice FOR SHARE (its
+# INSERT will wait on the parent's holder: BE-103 N1), locks the group as
+# its owner and INSERTs the practice; the second takes the practice FOR
+# UPDATE and then the group as its owner -- member -> master profile ->
+# practice -> group, the order above. A
+# curator's edit and delete (BE-63/BE-64, update_practice, delete_practice)
+# take the practice and then the group as its owner, before any journal
+# row (_relock_school_or_404 in practices/service.py). Every other practice
+# writer takes none of member .. invite, so the position before the group
+# closes no cycle with them.
+#
+# THE MASTER PROFILE (BE-59) IS THE ONE ROW HERE THIS MODULE DOES NOT OWN,
+# and the one lock THIS MODULE takes by a read: offer_curator_group_master
+# reads the candidate's master_profiles row FOR SHARE (_lock_master_profile).
+# The offer decides between "ask them to answer" and "ask them to get
+# verified" by that row, and the admin paths that move it -- verify_master,
+# reject_master, make_master, self-provision, set_role -- hold it FOR UPDATE
+# (or by their UPDATE) while they read this person's offers
+# (announce_pending_master_offers, close_pending_master_offers). Without the
+# shared lock an offer and a verification landing together each read the
+# other as not-yet-there, and the "become a master of this school?" prompt
+# went to nobody. A FOR SHARE and not a no-op UPDATE: that idiom rewrites a
+# column, and this module does not write rows of masters/. The admin side
+# never takes a member row, so the position after member closes no cycle
+# it could open. ONE WINDOW REMAINS, where there is no profile row to lock
+# at all -- see the KNOWN CEILING on _lock_master_profile.
+#
+# THE GROUP ROW COMES AFTER THE CHILD ROWS A FUNCTION LOCKS OR DELETES, AND
+# EACH FUNCTION TAKES IT ONCE, AT THE STRENGTH IT ENDS UP NEEDING. Inserting
+# a child row or a journal event locks the group too -- the FK check takes
+# KEY SHARE -- so "once" counts that lock as well: a function that will also
+# lock the group harder (_lock_group_as_owner, an UPDATE of the group) does
+# so BEFORE it inserts, never after. A KEY SHARE taken by an insert and
+# upgraded later deadlocks against anybody who took the group in between --
+# measured, an appointment against a rename, in the first form of this
+# order. Inserting a NEW child row after the group lock is safe: a fresh key
+# waits for nobody, and the FK check is covered by the lock already held.
+#
+# ONE FUNCTION UPGRADES, and it is the only one allowed to.
+# update_curator_group locks the group to read what it is about to change,
+# and a rename then needs the stronger lock (name is in a UNIQUE index).
+# It holds no other row, and every other writer, once it has the group,
+# waits for nothing further -- so the upgrade may wait for them, and they
+# never wait for it in return.
+#
+# WHY CHILDREN FIRST AND NOT THE GROUP FIRST. The takers -- remove, leave,
+# revoke, cancel, both declines -- already take their child row first and
+# write the journal last. Group-first would have to lock every one of them
+# on the group before its claim, which serialises every writer of a school.
+# The functions that were out of order were delete_curator_group (group,
+# then the cascade) and the two accepts (claim, then the member row), and
+# each was a deadlock against a taker -- a 500 to one side, measured in both
+# start orders before this was written (BE-95 F2, BE-97).
+#
+# WHERE THERE IS NOTHING TO CLAIM, THE LOCK IS A NO-OP UPDATE ... RETURNING
+# that rewrites a column with its own value (_lock_member, _lock_group_as_owner).
+# It IS a row lock, of FOR NO KEY UPDATE strength; it is spelled as an UPDATE
+# rather than as SELECT ... FOR UPDATE by decision, and it obeys the order
+# above like any other lock.
+#
+# OWNERSHIP IS RE-CHECKED UNDER THE GROUP LOCK (_lock_group_as_owner), in
+# the place the order gives it: after the child rows the function locks,
+# before the rows it inserts. A refusal there can arrive after the function
+# has already written, and those writes are undone only because
+# get_db_session rolls the request back on an exception (P-01). That is a
+# dependency of the functions that use it, not a property of them.
+#
 # =============================================================================
 
 import secrets
 from datetime import UTC, datetime
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from sqlalchemy import ColumnElement, Select, and_, case, delete, func, select
+from sqlalchemy import (
+    ColumnElement,
+    Select,
+    and_,
+    case,
+    delete,
+    func,
+    null,
+    or_,
+    select,
+    update,
+)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.events.notify import emit_notification  # BE-25
 from app.core.exceptions import (
     ConflictError,
     ForbiddenError,
     NotFoundError,
     VeloError,
 )
+from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.curator_groups.models import (
     EVENT_DATA_ACTOR_NAME,
     EVENT_DATA_KIND,
     EVENT_DATA_TARGET_NAME,
     EVENT_DATA_TARGET_USER_ID,
     CuratorGroup,
+    CuratorGroupBlock,
     CuratorGroupEvent,
     CuratorGroupEventKind,
     CuratorGroupInvite,
+    CuratorGroupMasterOffer,
     CuratorGroupMember,
     CuratorGroupTransfer,
+    CuratorMasterOfferState,
     CuratorMemberKind,
+    curator_group_name_key,
 )
 
 # Read, not written: MasterStudent carries the curator's block (I-9), and
@@ -53,13 +194,16 @@ from app.modules.masters.models import MasterProfile
 # master. Reading from masters/service.py does not modify it -- six other
 # modules already import from there, and there is no cycle.
 from app.modules.masters.service import _NON_COUNTABLE_PRACTICE_STATUSES
+from app.modules.practices.audience_service import (
+    master_broadcasts_to_group_clause,
+)
 from app.modules.practices.models import (
     Practice,
-    PracticeAudienceCuratorGroup,
     PracticeStatus,
 )
 from app.modules.users.helpers import display_name
 from app.modules.users.models import User
+from app.modules.waitlist.models import ACTIVE_STATUSES, Waitlist, WaitlistStatus
 
 _NAME_TAKEN_CODE = "curator_group_name_taken"
 _NO_CREATE_RIGHT_CODE = "group_creation_not_allowed"
@@ -187,6 +331,73 @@ async def _get_group_or_404(
     return group
 
 
+async def _lock_group_as_owner(
+    curator_user_id: UUID, group_id: UUID, session: AsyncSession,
+) -> bool:
+    """Lock the group row IF it is still this curator's; True if it was.
+
+    The group's place in the module's order (see the header): after the
+    child rows the writer locks, before any row it inserts -- so that the
+    group is taken once, at this strength, and never upgraded.
+    _get_group_or_404 at the top of the same function is the fast path that
+    produces the 404 for a stranger; this is the check that still holds when
+    a transfer committed in between and the school changed hands.
+
+    A NO-OP UPDATE, and the column it rewrites is chosen: updated_at, with
+    its own value. An UPDATE needs a SET clause, and naming updated_at
+    explicitly is also what keeps the mixin's onupdate from stamping it with
+    now() -- which would record an edit nobody made every time a writer
+    merely confirmed it still owned the school.
+    """
+    row = (
+        await session.execute(
+            update(CuratorGroup)
+            .where(
+                CuratorGroup.id == group_id,
+                CuratorGroup.curator_user_id == curator_user_id,
+            )
+            .values(updated_at=CuratorGroup.updated_at)
+            .returning(CuratorGroup.id)
+            .execution_options(synchronize_session=False)
+        )
+    ).first()
+    return row is not None
+
+
+async def _lock_member(
+    group_id: UUID,
+    user_id: UUID,
+    session: AsyncSession,
+    *,
+    kind: str | None = None,
+) -> bool:
+    """Lock this member row (of this kind, if given); True if there was one.
+
+    The first lock of the module's order (see the header). A row that is
+    gone, or whose kind has changed, answers False -- after waiting for
+    whoever held it, because a concurrent writer's lock is waited out and
+    the predicate is re-evaluated against what that writer committed. That
+    re-evaluation is the whole point: a plain SELECT would have answered
+    from the row as it was before the competitor's commit.
+    """
+    conditions = [
+        CuratorGroupMember.group_id == group_id,
+        CuratorGroupMember.user_id == user_id,
+    ]
+    if kind is not None:
+        conditions.append(CuratorGroupMember.kind == kind)
+    row = (
+        await session.execute(
+            update(CuratorGroupMember)
+            .where(*conditions)
+            .values(kind=CuratorGroupMember.kind)
+            .returning(CuratorGroupMember.id)
+            .execution_options(synchronize_session=False)
+        )
+    ).first()
+    return row is not None
+
+
 async def _counts_for_groups(
     group_ids: list[UUID], session: AsyncSession,
 ) -> dict[UUID, tuple[int, int]]:
@@ -271,7 +482,7 @@ def _record_group_event(
     session: AsyncSession,
     *,
     data: dict[str, Any] | None = None,
-) -> None:
+) -> CuratorGroupEvent:
     """Append one event to a school's journal, in the caller's transaction.
 
     SYNCHRONOUS AND IN THE SAME TRANSACTION as the action it records, not
@@ -320,13 +531,131 @@ def _record_group_event(
     if data:
         payload.update(data)
 
-    session.add(
-        CuratorGroupEvent(
-            group_id=group_id,
-            actor_id=actor.id,
-            event=event.value,
-            data=payload,
-        )
+    # The id is minted HERE, not left to the column default: the default
+    # only fires at flush, and a caller that notifies about this event
+    # names the notification by the journal row (see _notify_group_event)
+    # before anything is flushed. Returned so it can.
+    row = CuratorGroupEvent(
+        id=uuid4(),
+        group_id=group_id,
+        actor_id=actor.id,
+        event=event.value,
+        data=payload,
+    )
+    session.add(row)
+    return row
+
+
+async def _notify_group_event(
+    session: AsyncSession,
+    *,
+    type: str,
+    journal_event_id: UUID,
+    recipient_id: UUID,
+    title: str,
+    body: str,
+    group_id: UUID,
+    group_name: str,
+    actor_name: str,
+    action: str | None = None,
+) -> None:
+    """Queue one school notification, in the caller's transaction (BE-25).
+
+    journal_event_id: the _record_group_event row of the same action. It
+    is the fact's identity and so the notification's idempotency key --
+    every one of these events has exactly one addressee, so the event is
+    the whole key.
+
+    THE COMPANION OF _record_group_event, and deliberately shaped like it:
+    same transaction, same call sites, no background task. A notification
+    that outlived a rollback would tell somebody their school changed hands
+    when it did not -- the same failure the journal avoids, with a worse
+    audience, because a journal line is read on purpose and a notification
+    arrives uninvited.
+
+    ADDRESSED TO ONE PERSON, always: target_type="user" with a real user id,
+    never a group key. Every BE-25 recipient is a party to the event itself
+    -- the addressee of an offer, the curator who lost the school, the
+    curator whose school gained a member, the member who was removed -- so
+    nobody learns that a school exists from one of these. That is what makes
+    it safe not to gate these on the school being ACTIVE (I-6): the fact has
+    already happened to a person who already knew the school.
+
+    NO ACTIVITY CHECK, per the above, and no branch for one. A school whose
+    curator lost verification goes dark for reads, but an accept that landed
+    before that must still reach the previous owner: silence there is not
+    privacy, it is losing the only signal that your school is gone.
+
+    open_curator_group is a NEW action verb, and the inbox does not know it
+    yet. That is safe by the inbox's own contract: "an unmapped action or a
+    missing/malformed id falls back to mark-read-only -- honest, never a
+    broken route" (UserInboxView.vue). Naming the intent now is what lets
+    the frontend card map it later without touching velo again.
+    """
+    await _notify_school(
+        session,
+        idempotency_key=f"curator-group-event:{journal_event_id}",
+        type=type,
+        recipient_id=recipient_id,
+        title=title,
+        body=body,
+        group_id=group_id,
+        variables={"group_name": group_name, "actor_name": actor_name},
+        # None -> the shared school verb (defined below this function).
+        action=action or _OPEN_CURATOR_GROUP,
+    )
+
+
+_OPEN_CURATOR_GROUP = "open_curator_group"
+# BE-59: a NEW action verb, on the same contract as open_curator_group was
+# when it arrived: an unmapped action falls back to mark-read-only in the
+# inbox, so naming the intent now lets the frontend map it to
+# /master/apply later without touching velo again.
+_OPEN_MASTER_APPLICATION = "open_master_application"
+# curator_group.master_offered (Links, 3 October): the front maps it to the
+# consent screen, curator-group-master-offer, with group_id.
+_OPEN_MASTER_OFFER = "open_master_offer"
+
+
+async def _notify_school(
+    session: AsyncSession,
+    *,
+    idempotency_key: str,
+    type: str,
+    recipient_id: UUID,
+    title: str,
+    body: str,
+    group_id: UUID,
+    variables: dict[str, str],
+    action: str = _OPEN_CURATOR_GROUP,
+) -> None:
+    """Queue one notification about a school to one person, in-transaction.
+
+    The body of _notify_group_event, with the key and the action named by
+    the caller. BE-59 needs both: the admin side of an appointment
+    (announce_pending_master_offers, close_pending_master_offers) writes NO
+    journal row -- the actor there is an admin, and _record_group_event
+    would stamp an admin's name into a school's journal -- so it has no
+    journal id to key on and keys on the offer instead; and the prompt to
+    get verified points at the master application, not at the school.
+
+    Everything _notify_group_event's docstring says about the transaction,
+    the single addressee and the absent activity check holds here
+    unchanged: it is the same call.
+    """
+    await emit_notification(
+        session,
+        idempotency_key=idempotency_key,
+        type=type,
+        target_type="user",
+        target_value=str(recipient_id),
+        title=title,
+        body=body,
+        action_data={
+            "action": action,
+            "params": {"group_id": str(group_id)},
+            **variables,
+        },
     )
 
 
@@ -538,11 +867,14 @@ async def create_curator_group(
             code=_NO_CREATE_RIGHT_CODE,
         )
 
+    # BE-48: the same name means the same name KEY (curator_group_name_key)
+    # -- case and whitespace do not make a new school name.
     existing = (
         await session.execute(
             select(CuratorGroup).where(
                 CuratorGroup.curator_user_id == curator_user_id,
-                CuratorGroup.name == name,
+                curator_group_name_key(CuratorGroup.name)
+                == curator_group_name_key(name),
             )
         )
     ).scalar_one_or_none()
@@ -632,17 +964,43 @@ async def update_curator_group(
     seq exists (see the model docstring). That order carries no meaning
     between them -- the three changes are independent.
     """
-    group = await _get_group_or_404(curator_user_id, group_id, session)
+    # BE-95: LOCKED FIRST, READ SECOND. The old_* values below are what the
+    # journal says the field changed FROM; read before the lock, two tabs of
+    # the same curator each recorded "from" the value they had loaded, and
+    # the second rename said "old -> N2" about a school that was called N1.
+    # The group is the only row this function locks, so taking it first
+    # keeps the module's order (header). The same lock is why a concurrent
+    # delete now waits for this edit instead of meeting a vanished row
+    # mid-flush (StaleDataError, a 500), and why a curator who handed the
+    # school over cannot edit it after the new owner took it.
+    #
+    # THE MODULE'S ONE LOCK UPGRADE (header): a rename below needs a
+    # stronger lock than this one, because name is in a UNIQUE index. It is
+    # safe only because this function holds no other row -- keep it so.
+    if not await _lock_group_as_owner(curator_user_id, group_id, session):
+        raise NotFoundError("Curator group not found")
+    group = (
+        await session.execute(
+            select(CuratorGroup)
+            .where(CuratorGroup.id == group_id)
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one()
     old_name = group.name
     old_description = group.description
     old_avatar_url = group.avatar_url
 
     if group.name != name:
+        # BE-48: clashes by name KEY with ANOTHER school of this curator; the
+        # school itself is excluded, so renaming «Школа йоги» to «школа  ЙОГИ»
+        # is allowed and stores the new spelling (BE-49).
         dup = (
             await session.execute(
                 select(CuratorGroup).where(
                     CuratorGroup.curator_user_id == curator_user_id,
-                    CuratorGroup.name == name,
+                    CuratorGroup.id != group.id,
+                    curator_group_name_key(CuratorGroup.name)
+                    == curator_group_name_key(name),
                 )
             )
         ).scalar_one_or_none()
@@ -709,17 +1067,93 @@ async def update_curator_group(
 async def delete_curator_group(
     curator_user_id: UUID, group_id: UUID, session: AsyncSession,
 ) -> None:
-    """Delete a group. Members, invites and any pending transfer cascade.
+    """Delete a group: its children explicitly, in the module's order, then it.
 
     NEVER blocked (I-11) -- explicitly unlike delete_group() in
     masters/groups_service.py, which raises 409 group_in_use when the group
     is the sole audience of a practice. That ruling (2026-07-25) stands for
     student groups and is deliberately NOT carried over here: it would hand
     a member's practice a veto over the curator's own group.
+
+    BE-95: THE CHILDREN ARE DELETED BY HAND, NOT LEFT TO ondelete=CASCADE.
+    The cascade runs after the group row is already locked, so it took the
+    group first and the children second -- the reverse of every taker in the
+    module (header). A remove, a decline or an accept holding one child row
+    and about to write its journal event (KEY SHARE on the group) met this
+    function holding the group and waiting for that child: a deadlock, and
+    a 500 to one of them. Deleting the children first, in the header's
+    order, makes this function wait for the taker instead. The FK cascade
+    still stands behind it, for rows a concurrent join or event inserted
+    after the explicit deletes ran; those writers lock the group last, so
+    nothing they hold is something this function is waiting for.
+
+    BE-74: THE SCHOOL'S PRACTICES LOSE THEIR OWNER, BY HAND, BEFORE THE
+    GROUP. They are not the school's children to delete -- a practice is its
+    master's -- but practices.curator_group_id points here, and leaving it
+    to ondelete="SET NULL" would lock those rows after the group: the order
+    the BE-95 paragraph above removed for the child tables, now against
+    update_practice and cancel_practice, which hold a practice and then
+    write a journal row (KEY SHARE on the group). So they are cleared here,
+    in the header's place for `practice`, and the FK action stays behind it
+    for a practice created after this UPDATE ran and committed before the
+    DELETE below. What losing the school means for them (owner ruling,
+    2026-10-01): every one becomes or stays an ordinary public practice of
+    its master. That rule is NOT written here -- this UPDATE sets only the
+    column, and the trigger of migration be74a1b2c3d4 turns a practice for
+    the school's students public in the same statement, on this path and on
+    the FK's alike. Nobody is notified of that change: the school it was
+    announced to is the thing being deleted.
+
+    No Practice object is read after this UPDATE in this session, so the
+    audience_kind the trigger rewrote behind the ORM's back is never seen
+    stale: nothing above loads a practice, and the router answers 204.
+
+    THE GROUP ITSELF IS TAKEN BY OWNER, NOT BY id. A delete by id alone let
+    a curator who had just handed the school over delete it from under its
+    new owner -- the accept had answered 200 and its notification had gone
+    out. If the school changed hands in between, nothing matches, the
+    children deleted above are restored by the rollback (P-01), and the
+    answer is the same 404 a stranger gets.
     """
     group = await _get_group_or_404(curator_user_id, group_id, session)
-    await session.delete(group)
-    await session.flush()
+    for child in (
+        CuratorGroupMember,
+        CuratorGroupTransfer,
+        CuratorGroupMasterOffer,
+        CuratorGroupInvite,
+    ):
+        await session.execute(delete(child).where(child.group_id == group.id))
+    # The school's practices are LOCKED FIRST, in one statement by id
+    # (PRACTICE ROW ORDER, practices/service.py), and only then cleared.
+    # The UPDATE alone locks them in scan order, and against a writer that
+    # takes practices by id that is a 40P01: each holds a row the other
+    # needs next (BE-64 follow-up, O1/G7).
+    await session.execute(
+        select(Practice.id)
+        .where(Practice.curator_group_id == group.id)
+        .order_by(Practice.id)
+        .with_for_update()
+    )
+    await session.execute(
+        update(Practice)
+        .where(Practice.curator_group_id == group.id)
+        .values(curator_group_id=None)
+        .execution_options(synchronize_session=False)
+    )
+    deleted = (
+        await session.execute(
+            delete(CuratorGroup)
+            .where(
+                CuratorGroup.id == group.id,
+                CuratorGroup.curator_user_id == curator_user_id,
+            )
+            .returning(CuratorGroup.id)
+            .execution_options(synchronize_session=False)
+        )
+    ).first()
+    if deleted is None:
+        raise NotFoundError("Curator group not found")
+    session.expunge(group)
 
 
 # ===========================================================================
@@ -740,6 +1174,11 @@ def _member_base_query(group_id: UUID) -> Select:
     on it either -- read from its body, not assumed. Adding one here would
     be inventing a rule the codebase does not have, and inventing it in the
     place least likely to be noticed.
+
+    master_offer (BE-59) is the state of a pending appointment of this
+    member, computed the same way, in SQL (_master_offer_state_expr). This
+    is the CURATOR's query (_get_group_or_404 in front of it); the school's
+    masters read _roster_base_query, which carries neither column.
     """
     return (
         select(
@@ -753,32 +1192,31 @@ def _member_base_query(group_id: UUID) -> Select:
                 ),
                 else_=_verified_profile_exists(CuratorGroupMember.user_id),
             ).label("is_visible"),
+            _master_offer_state_expr(
+                CuratorGroupMember.group_id, CuratorGroupMember.user_id,
+            ).label("master_offer"),
         )
         .join(CuratorGroupMember, CuratorGroupMember.user_id == User.id)
         .where(CuratorGroupMember.group_id == group_id)
     )
 
 
-async def list_curator_group_members(
-    curator_user_id: UUID,
-    group_id: UUID,
+async def _roster_page(
+    base: Select,
     session: AsyncSession,
     *,
-    kind: str | None = None,
-    search: str | None = None,
-    limit: int = 20,
-    offset: int = 0,
-) -> tuple[list[dict], int]:
-    """Paginated roster of one of my groups.
+    kind: str | None,
+    search: str | None,
+    limit: int,
+    offset: int,
+) -> tuple[list, int]:
+    """Filter, count and page a roster query -- ONE copy for both viewers.
 
-    A suspended master is a row with is_visible=false, NOT an omission: the
-    curator needs to see that the person is still in the school but
-    currently in the shadow, and re-verification brings them back without
-    anyone touching a row (I-4).
+    `base` selects FROM curator_group_member joined to users (either
+    _member_base_query or _roster_base_query). kind is an exact match,
+    search an ilike over "first last", order newest membership first with
+    User.id as the tiebreak, total counted over the same filtered query.
     """
-    group = await _get_group_or_404(curator_user_id, group_id, session)
-
-    base = _member_base_query(group.id)
     if kind is not None:
         base = base.where(CuratorGroupMember.kind == kind)
     if search:
@@ -802,7 +1240,35 @@ async def list_curator_group_members(
             .offset(offset)
         )
     ).all()
+    return rows, total
 
+
+async def list_curator_group_members(
+    curator_user_id: UUID,
+    group_id: UUID,
+    session: AsyncSession,
+    *,
+    kind: str | None = None,
+    search: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[dict], int]:
+    """Paginated roster of one of my groups.
+
+    A suspended master is a row with is_visible=false, NOT an omission: the
+    curator needs to see that the person is still in the school but
+    currently in the shadow, and re-verification brings them back without
+    anyone touching a row (I-4).
+    """
+    group = await _get_group_or_404(curator_user_id, group_id, session)
+    rows, total = await _roster_page(
+        _member_base_query(group.id),
+        session,
+        kind=kind,
+        search=search,
+        limit=limit,
+        offset=offset,
+    )
     items = [
         {
             "user_id": user.id,
@@ -811,8 +1277,88 @@ async def list_curator_group_members(
             "kind": kind_value,
             "joined_at": joined_at,
             "is_visible": bool(is_visible),
+            "master_offer": master_offer,
         }
-        for user, kind_value, joined_at, is_visible in rows
+        for user, kind_value, joined_at, is_visible, master_offer in rows
+    ]
+    return items, total
+
+
+def _roster_base_query(group_id: UUID) -> Select:
+    """The school's roster as its MASTERS see it (BE-76).
+
+    The same rows as _member_base_query minus the masters who are not
+    verified right now -- the predicate _visible_master_ids and the page's
+    master list use (_verified_profile_exists), so the roster, the school
+    page and the counters cannot disagree about who is in the shadow
+    (owner decision 2). No is_visible, no master_offer: both are the
+    curator's working fields.
+    """
+    return (
+        select(User, CuratorGroupMember.kind, CuratorGroupMember.joined_at)
+        .join(CuratorGroupMember, CuratorGroupMember.user_id == User.id)
+        .where(
+            CuratorGroupMember.group_id == group_id,
+            or_(
+                CuratorGroupMember.kind == CuratorMemberKind.STUDENT.value,
+                _verified_profile_exists(CuratorGroupMember.user_id),
+            ),
+        )
+    )
+
+
+async def list_school_roster(
+    viewer_id: UUID,
+    group_id: UUID,
+    session: AsyncSession,
+    *,
+    kind: str | None = None,
+    search: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[dict], int]:
+    """Paginated roster of a school, for a MASTER OF THAT SCHOOL (BE-76).
+
+    Who may read it (owner decision 1): the school is active
+    (_active_group_clause -- its curator is verified now) AND the viewer
+    belongs to it as a master -- master_broadcasts_to_group_clause, the
+    public form of the audience rule (curator, or a kind='master' member
+    with a verified profile). Everything else is the same NotFoundError
+    (P-08): a master outside the school, another school's curator, a
+    verified master who is a STUDENT here, a school whose curator was
+    suspended. The verified-master gate itself is the endpoint's
+    dependency (get_current_master: a suspended master, a student and a
+    plain user are a 403 before this runs).
+    """
+    group = (
+        await session.execute(
+            select(CuratorGroup).where(
+                CuratorGroup.id == group_id,
+                _active_group_clause(),
+                master_broadcasts_to_group_clause(viewer_id),
+            )
+        )
+    ).scalar_one_or_none()
+    if group is None:
+        raise NotFoundError("Curator group not found")
+
+    rows, total = await _roster_page(
+        _roster_base_query(group.id),
+        session,
+        kind=kind,
+        search=search,
+        limit=limit,
+        offset=offset,
+    )
+    items = [
+        {
+            "user_id": user.id,
+            "name": display_name(user.first_name, user.last_name),
+            "avatar_url": user.avatar_url,
+            "kind": kind_value,
+            "joined_at": joined_at,
+        }
+        for user, kind_value, joined_at in rows
     ]
     return items, total
 
@@ -876,9 +1422,606 @@ async def remove_curator_group_member(
     }
     if transfer_cancelled:
         data["transfer_cancelled"] = True
-    _record_group_event(
+    # GT-27: a pending appointment dies with the membership it was going to
+    # change. Left behind it would be an orphan the appointee cannot act on
+    # (consent goes through _relation_or_404 and they have no relation any
+    # more) and which would spring back to life if they ever re-joined --
+    # an appointment from before they were removed, granted by a decision
+    # nobody made twice.
+    await session.execute(
+        delete(CuratorGroupMasterOffer).where(
+            CuratorGroupMasterOffer.group_id == group.id,
+            CuratorGroupMasterOffer.to_user_id == user_id,
+        )
+    )
+    # OWNERSHIP RE-CHECKED UNDER THE GROUP LOCK, once, after the child rows
+    # this function took and before the journal row's INSERT (header). The
+    # school can change hands between _get_group_or_404 above and here, and
+    # until this check a former curator removed people from the NEW owner's
+    # school: the journal INSERT did wait on the group (its FK check's KEY
+    # SHARE meets the handover's key update of curator_user_id), but waiting
+    # re-reads nothing (test_curator_lock_order.py, the BE-59 B1 finding).
+    # The refusal arrives after the member, the transfer and the offer were
+    # deleted; they come back only because get_db_session rolls the request
+    # back on the exception (P-01) -- a dependency, not a property of this
+    # function. A miss above never gets here: nothing was taken, nothing is
+    # written, and the idempotent 204 needs no lock.
+    if not await _lock_group_as_owner(curator_user_id, group.id, session):
+        raise NotFoundError("Curator group not found")
+    journal = _record_group_event(
         group.id, actor, CuratorGroupEventKind.MEMBER_REMOVED, session,
         data=data,
+    )
+    # BE-25: to the person removed. Only this branch notifies -- leaving on
+    # your own (member_left) does not, because you were the one who did it.
+    # The recipient was a member until a moment ago, so the school is not
+    # news to him; what is news is that its practices have stopped being
+    # visible, and nothing else would tell him.
+    await _notify_group_event(
+        session,
+        journal_event_id=journal.id,
+        type="curator_group.member_removed",
+        recipient_id=user_id,
+        title="Вы больше не в школе",
+        body=(
+            f"Вас удалили из школы «{group.name}». Её практики больше не "
+            f"отображаются."
+        ),
+        group_id=group.id,
+        group_name=group.name,
+        actor_name=display_name(actor.first_name, actor.last_name),
+    )
+
+
+async def _blocked_in_group(
+    group_id: UUID, user_id: UUID, session: AsyncSession,
+) -> bool:
+    """True iff this person is blocked in this school (BE-79).
+
+    NOT _blocked_by_curator: that one reads MasterStudent.blocked_at -- the
+    curator blocking somebody as a MASTER, in their own practice, which
+    happens to be checked at the same door. This is the school's own block,
+    written by block_curator_group_member.
+    """
+    return (
+        await session.execute(
+            select(
+                select(CuratorGroupBlock.id)
+                .where(
+                    CuratorGroupBlock.group_id == group_id,
+                    CuratorGroupBlock.user_id == user_id,
+                )
+                .exists()
+            )
+        )
+    ).scalar_one()
+
+
+def _blocked_in_group_error() -> ForbiddenError:
+    """The one refusal for a person blocked in this school (BE-79)."""
+    return ForbiddenError(
+        "You are blocked in this school", code="blocked_in_group",
+    )
+
+
+# Live bookings the block cancels (gate ruling B3). PENDING is in the set
+# as the ruling has it; no path creates a PENDING booking today
+# (create_booking and confirm_waitlist both write CONFIRMED), so nothing
+# here is built or tested for it.
+_SCHOOL_BLOCK_CANCELLED_STATUSES = (
+    BookingStatus.CONFIRMED.value,
+    BookingStatus.PENDING.value,
+)
+
+
+async def _close_school_practices_to(
+    group_id: UUID, user_id: UUID, session: AsyncSession,
+) -> None:
+    """The practice side of a school block (BE-79, gate rulings 2 and K3).
+
+    Follows masters/groups_service.py::block_student step for step -- the
+    refund (refund_booking, cancelled_by_master=True: an unconditional
+    100%), the reminders, the Zoom registrant, the participant count, the
+    waitlist entry set to REMOVED and the queue moved on for a held spot --
+    with three differences, each a gate ruling:
+
+      - the scope is the SCHOOL's practices (practices.curator_group_id),
+        not one master's; only FUTURE bookings, the past stays history
+        (B6); CONFIRMED and PENDING (B3);
+      - THE PRACTICES OF THE QUEUE ARE TAKEN TOO (R1). block_student locks
+        waitlist rows on practices it does not hold; every other writer of
+        a waitlist row (join, confirm, leave, process_waitlist under a
+        cancellation) holds the row's practice first. Here the queue's
+        practices go into the one statement with the bookings' ones;
+      - THE BLOCKED PERSON'S OWN PRACTICES IN THE SCHOOL ARE TAKEN TOO (K3)
+        and left untouched: every one he could still write -- anything but
+        'deleted', which is what update_practice refuses. update_practice
+        and the series-child path of create_practice read the block on
+        their own lock of the same row, so an edit either commits before
+        this block or sees it. Cancelling and deleting them stays his
+        (B2); those writers wait here and proceed.
+
+    LOCK ORDER. All practices in ONE statement, ORDER BY id (PRACTICE ROW
+    ORDER, practices/service.py), then bookings, then queue entries, then
+    -- inside refund_booking -- the purchase, the student's users row (FOR
+    NO KEY UPDATE, record_user_ledger) and the MASTER'S PROFILE FOR UPDATE
+    (record_master_ledger), then (the caller) the group. The profile after
+    the practice is the one place this module takes master_profiles later
+    than the header's "member -> master profile -> practice" line; the
+    header says why it closes no cycle, and the race test measures it.
+
+    Peek-then-lock, as block_student: ids read unlocked, the rows
+    re-selected under the lock with the same filters -- a booking cancelled
+    meanwhile, or a practice that lost its school (delete_curator_group),
+    drops out.
+
+    No notification of its own for a cancelled booking (gate ruling R6):
+    block_student sends none either; the block's own notification tells
+    the person the school's practices are closed to them.
+    """
+    now = datetime.now(UTC)
+    booking_filters = (
+        Practice.curator_group_id == group_id,
+        Practice.scheduled_at > now,
+        Booking.user_id == user_id,
+        Booking.status.in_(_SCHOOL_BLOCK_CANCELLED_STATUSES),
+    )
+    waitlist_filters = (
+        Practice.curator_group_id == group_id,
+        Waitlist.user_id == user_id,
+        Waitlist.status.in_(ACTIVE_STATUSES),
+    )
+    own_filters = (
+        Practice.curator_group_id == group_id,
+        Practice.master_id == user_id,
+        Practice.status != PracticeStatus.DELETED.value,
+    )
+    practice_ids = sorted(
+        set(
+            (
+                await session.execute(
+                    select(Booking.practice_id)
+                    .join(Practice, Booking.practice_id == Practice.id)
+                    .where(*booking_filters)
+                )
+            ).scalars().all()
+        )
+        | set(
+            (
+                await session.execute(
+                    select(Waitlist.practice_id)
+                    .join(Practice, Waitlist.practice_id == Practice.id)
+                    .where(*waitlist_filters)
+                )
+            ).scalars().all()
+        )
+        | set(
+            (
+                await session.execute(select(Practice.id).where(*own_filters))
+            ).scalars().all()
+        )
+    )
+    if not practice_ids:
+        return
+
+    await session.execute(
+        select(Practice.id)
+        .where(Practice.id.in_(practice_ids))
+        .order_by(Practice.id)
+        .with_for_update()
+    )
+    booking_rows = (
+        await session.execute(
+            select(Booking, Practice)
+            .join(Practice, Booking.practice_id == Practice.id)
+            .where(Practice.id.in_(practice_ids), *booking_filters)
+            .order_by(Practice.id, Booking.id)
+            .with_for_update(of=Booking)
+            .execution_options(populate_existing=True)
+        )
+    ).all()
+    waitlist_rows = (
+        await session.execute(
+            select(Waitlist)
+            .join(Practice, Waitlist.practice_id == Practice.id)
+            .where(Practice.id.in_(practice_ids), *waitlist_filters)
+            .order_by(Waitlist.id)
+            .with_for_update(of=Waitlist)
+            .execution_options(populate_existing=True)
+        )
+    ).scalars().all()
+
+    # Lazy imports, the shape block_student and cancel_booking use: these
+    # services import back into modules that import this one.
+    from app.core.events.reminders import cancel_booking_reminders
+    from app.modules.bookings.service import recalculate_participants
+    from app.modules.payments.refund import refund_booking
+    from app.modules.zoom.service import cancel_registrant_for_booking
+
+    touched_practice_ids: set[UUID] = set()
+    for booking, practice in booking_rows:
+        booking.status = BookingStatus.CANCELLED.value
+        booking.cancelled_at = now
+        booking.cancellation_reason = "Blocked in school"
+        await refund_booking(
+            booking=booking,
+            practice=practice,
+            session=session,
+            cancelled_by_master=True,
+        )
+        await cancel_booking_reminders(
+            session, booking_id=str(booking.id), user_id=str(user_id),
+        )
+        await cancel_registrant_for_booking(booking, session)
+        touched_practice_ids.add(practice.id)
+    # Id order, as the practices were locked; the rows are already held.
+    for practice_id in sorted(touched_practice_ids):
+        await recalculate_participants(practice_id, session)
+
+    notified_practice_ids = sorted(
+        {
+            row.practice_id
+            for row in waitlist_rows
+            if row.status == WaitlistStatus.NOTIFIED.value
+        }
+    )
+    for row in waitlist_rows:
+        row.status = WaitlistStatus.REMOVED.value
+    await session.flush()
+    # A removed NOTIFIED entry held a spot for this person: the next one in
+    # the queue gets it now, as block_student does.
+    if notified_practice_ids:
+        from app.modules.waitlist.service import process_waitlist
+
+        for practice_id in notified_practice_ids:
+            await process_waitlist(practice_id, session)
+
+
+async def block_curator_group_member(
+    curator_user_id: UUID,
+    group_id: UUID,
+    user_id: UUID,
+    session: AsyncSession,
+    *,
+    actor: User,
+) -> None:
+    """Block a member of either kind in my school (BE-79).
+
+    THE MEMBERSHIP ROW IS SWAPPED FOR A BLOCK ROW (CuratorGroupBlock says
+    why), in this transaction: DELETE ... RETURNING kind, joined_at, then
+    INSERT the block carrying both. Everything else follows remove_curator_
+    group_member step for step and for the same reasons -- the transfer
+    offered to this person and their pending appointment die with the
+    membership, ownership is re-checked under the group lock before the
+    journal row, the person is notified.
+
+    Outcomes (owner ruling via the gate, 3 October):
+      - the curator himself            -> 409 cannot_block_curator;
+      - a member                       -> blocked, journal, notification;
+      - already blocked                -> 204, nothing written: a second
+                                          block is the state the caller
+                                          asked for, and a second message
+                                          would announce nothing new;
+      - neither a member nor blocked   -> 404 -- unlike removal, which is
+                                          idempotent on a miss: a block of
+                                          nobody would answer "done" about
+                                          a person this school never had.
+
+    Two blocks of the same member at once: the second DELETE waits on the
+    first's row lock and then finds nothing; its next statement already sees
+    the first's block row (READ COMMITTED), so it ends in the idempotent 204
+    rather than in a 404.
+
+    The school's practices close to this person in the same transaction
+    (_close_school_practices_to, BE-79 (1b)): future bookings cancelled and
+    refunded, queue places removed, his own practices here held against
+    an edit racing the block.
+
+    LOCK ORDER (module header): member (the DELETE) -> transfer -> master
+    offer -> practices (one statement, by id) -> bookings -> queue entries
+    -> master profiles (the refunds) -> group (the owner re-check, then the
+    journal's KEY SHARE). A booking or a queue entry racing this block
+    took the member row FOR KEY SHARE first (K2,
+    practices/audience_service.py::lock_school_member_key_share), so the
+    DELETE here and that creation serialise. The
+    block row is new; nothing else writes it but unblock, which takes it
+    first and the member row after -- the two never wait on each other's
+    rows in opposite orders, because a block row and a member row of one
+    person never both exist.
+    """
+    group = await _get_group_or_404(curator_user_id, group_id, session)
+    if group.curator_user_id == user_id:
+        raise ConflictError(
+            "The curator cannot be blocked in his own school",
+            code="cannot_block_curator",
+        )
+
+    removed = (
+        await session.execute(
+            delete(CuratorGroupMember)
+            .where(
+                CuratorGroupMember.group_id == group.id,
+                CuratorGroupMember.user_id == user_id,
+            )
+            .returning(CuratorGroupMember.kind, CuratorGroupMember.joined_at)
+        )
+    ).first()
+    if removed is None:
+        if await _blocked_in_group(group.id, user_id, session):
+            return
+        raise NotFoundError("Member not found")
+
+    session.add(
+        CuratorGroupBlock(
+            group_id=group.id,
+            user_id=user_id,
+            kind=removed.kind,
+            joined_at=removed.joined_at,
+            blocked_by_user_id=actor.id,
+        )
+    )
+    await session.flush()
+
+    transfer_cancelled = await _drop_pending_transfer_for(
+        group.id, user_id, session,
+    )
+    await session.execute(
+        delete(CuratorGroupMasterOffer).where(
+            CuratorGroupMasterOffer.group_id == group.id,
+            CuratorGroupMasterOffer.to_user_id == user_id,
+        )
+    )
+
+    # The school's practices close to this person (gate ruling 2): future
+    # bookings cancelled and refunded, queue places removed, and -- for a
+    # master -- his practices here held until this commits (K3). After the
+    # offer, before the group: the order of the module header.
+    await _close_school_practices_to(group.id, user_id, session)
+
+    data = {
+        EVENT_DATA_KIND: removed.kind,
+        **_target_data(user_id, await _frozen_name(user_id, session)),
+    }
+    if transfer_cancelled:
+        data["transfer_cancelled"] = True
+    # The same re-check, at the same place, for the same reason as in
+    # remove_curator_group_member; the rollback of the swap on refusal is
+    # get_db_session's, as there.
+    if not await _lock_group_as_owner(curator_user_id, group.id, session):
+        raise NotFoundError("Curator group not found")
+    journal = _record_group_event(
+        group.id, actor, CuratorGroupEventKind.MEMBER_BLOCKED, session,
+        data=data,
+    )
+    # DRAFT TEXT (owner, 3 October): to be reworded by the owner later.
+    await _notify_group_event(
+        session,
+        journal_event_id=journal.id,
+        type="curator_group.member_blocked",
+        recipient_id=user_id,
+        title="Вас заблокировали в школе",
+        body=(
+            f"Куратор заблокировал вас в школе «{group.name}». Её практики "
+            f"вам больше недоступны."
+        ),
+        group_id=group.id,
+        group_name=group.name,
+        actor_name=display_name(actor.first_name, actor.last_name),
+    )
+
+
+async def unblock_curator_group_member(
+    curator_user_id: UUID,
+    group_id: UUID,
+    user_id: UUID,
+    session: AsyncSession,
+    *,
+    actor: User,
+) -> None:
+    """Lift a block: the membership comes back as it was (BE-79).
+
+    DELETE the block ... RETURNING kind, joined_at, then INSERT the member
+    row with both -- the same relation from the same day, no second join,
+    no second verification (owner, 3 October). A master whose profile was
+    revoked while blocked comes back as kind='master' all the same; whether
+    they are visible is the existing verified rule's business, as for any
+    member.
+
+    404 for somebody who is not blocked here (gate ruling) -- including the
+    loser of two simultaneous unblocks, whose DELETE waits for the winner
+    and then finds nothing.
+
+    Nobody else can have put a member row in between: joining by the link
+    refuses a blocked person and re-reads the block after its INSERT (K1),
+    and the other two writers of member rows -- accepting a transfer and an
+    appointment -- act on offers the block deleted.
+    """
+    group = await _get_group_or_404(curator_user_id, group_id, session)
+    lifted = (
+        await session.execute(
+            delete(CuratorGroupBlock)
+            .where(
+                CuratorGroupBlock.group_id == group.id,
+                CuratorGroupBlock.user_id == user_id,
+            )
+            .returning(CuratorGroupBlock.kind, CuratorGroupBlock.joined_at)
+        )
+    ).first()
+    if lifted is None:
+        raise NotFoundError("Blocked member not found")
+
+    session.add(
+        CuratorGroupMember(
+            group_id=group.id,
+            user_id=user_id,
+            kind=lifted.kind,
+            joined_at=lifted.joined_at,
+        )
+    )
+    await session.flush()
+
+    if not await _lock_group_as_owner(curator_user_id, group.id, session):
+        raise NotFoundError("Curator group not found")
+    journal = _record_group_event(
+        group.id, actor, CuratorGroupEventKind.MEMBER_UNBLOCKED, session,
+        data={
+            EVENT_DATA_KIND: lifted.kind,
+            **_target_data(user_id, await _frozen_name(user_id, session)),
+        },
+    )
+    # DRAFT TEXT (owner, 3 October): to be reworded by the owner later.
+    await _notify_group_event(
+        session,
+        journal_event_id=journal.id,
+        type="curator_group.member_unblocked",
+        recipient_id=user_id,
+        title="Вас разблокировали в школе",
+        body=(
+            f"Куратор снял блокировку в школе «{group.name}». Вы снова "
+            f"участник, её практики вам доступны."
+        ),
+        group_id=group.id,
+        group_name=group.name,
+        actor_name=display_name(actor.first_name, actor.last_name),
+    )
+
+
+async def list_curator_group_blocks(
+    curator_user_id: UUID,
+    group_id: UUID,
+    session: AsyncSession,
+    *,
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[dict], int]:
+    """The curator's "Блок" tab: who is blocked in my school (BE-79).
+
+    Newest block first, User.id as the tiebreak -- the roster's order with
+    blocked_at in place of joined_at. Curator only (_get_group_or_404).
+    """
+    group = await _get_group_or_404(curator_user_id, group_id, session)
+    base = (
+        select(User, CuratorGroupBlock)
+        .join(CuratorGroupBlock, CuratorGroupBlock.user_id == User.id)
+        .where(CuratorGroupBlock.group_id == group.id)
+    )
+    total = (
+        await session.execute(
+            select(func.count()).select_from(base.subquery())
+        )
+    ).scalar_one()
+    rows = (
+        await session.execute(
+            base.order_by(CuratorGroupBlock.blocked_at.desc(), User.id)
+            .limit(limit)
+            .offset(offset)
+        )
+    ).all()
+    items = [
+        {
+            "user_id": user.id,
+            "name": display_name(user.first_name, user.last_name),
+            "avatar_url": user.avatar_url,
+            "kind": block.kind,
+            "joined_at": block.joined_at,
+            "blocked_at": block.blocked_at,
+        }
+        for user, block in rows
+    ]
+    return items, total
+
+
+async def demote_curator_group_master(
+    curator_user_id: UUID,
+    group_id: UUID,
+    user_id: UUID,
+    session: AsyncSession,
+    *,
+    actor: User,
+) -> None:
+    """Make a master of this school a student of it again (BE-59 B1).
+
+    THE CURATOR'S DECISION ALONE, no consent: owner ruling. The person
+    STAYS in the school -- they may have been invited to sessions as a
+    student -- and is told. Their platform verification is untouched: this
+    is a role inside one school, not a judgement about the teacher.
+
+    IDEMPOTENT 204 WITH NOTHING WRITTEN when there is no master of this
+    school by that id -- already a student (owner ruling: a second demotion
+    is a 204 without journal or notification), or not a member at all. The
+    shape of remove_curator_group_member: the caller asserts "this person
+    is not a master of my school", and that is the state afterwards either
+    way. A stranger's school is the only 404 (P-08).
+
+    THE MEMBER ROW IS TAKEN, NOT READ, first in the module's order
+    (header): a no-op UPDATE ... RETURNING whose predicate is kind='master'
+    is the check, and the kind is written only on a row it took. A plain
+    read first would answer from the row as it was before a concurrent
+    removal, leave or promotion committed; the predicate is re-evaluated
+    against what they committed.
+
+    THE PRACTICES ARE NOT TOUCHED HERE (B1). They stop reaching the school
+    by themselves the moment kind is 'student': the school's audience is
+    lent to its masters only while they are masters of it
+    (practices/audience_service.py::master_broadcasts_to_group_clause).
+    Handing the future ones to the curator is BE-59 B2.
+    """
+    group = await _get_group_or_404(curator_user_id, group_id, session)
+
+    if not await _lock_member(
+        group.id, user_id, session, kind=CuratorMemberKind.MASTER.value,
+    ):
+        # No master row to take: a student, a non-member, or somebody a
+        # concurrent removal / leave / handover just took away. Nothing to
+        # demote, nothing to record.
+        return
+    await session.execute(
+        update(CuratorGroupMember)
+        .where(
+            CuratorGroupMember.group_id == group.id,
+            CuratorGroupMember.user_id == user_id,
+        )
+        .values(kind=CuratorMemberKind.STUDENT.value)
+        .execution_options(synchronize_session=False)
+    )
+
+    # A school is handed only to one of its visible masters
+    # (offer_curator_group_transfer); a pending handover to the person who
+    # just stopped being one would be an offer its own rule refuses. The
+    # same helper and the same journal flag as remove and leave.
+    transfer_cancelled = await _drop_pending_transfer_for(
+        group.id, user_id, session,
+    )
+
+    # OWNERSHIP RE-CHECKED UNDER THE GROUP LOCK, once, before the journal
+    # row's INSERT (header): the school can change hands between
+    # _get_group_or_404 and here, and a former curator must not demote
+    # anybody in the new owner's school. The rollback (P-01) puts the kind
+    # and the transfer back.
+    if not await _lock_group_as_owner(curator_user_id, group.id, session):
+        raise NotFoundError("Curator group not found")
+
+    data = _target_data(user_id, await _frozen_name(user_id, session))
+    if transfer_cancelled:
+        data["transfer_cancelled"] = True
+    journal = _record_group_event(
+        group.id, actor, CuratorGroupEventKind.MEMBER_DEMOTED, session,
+        data=data,
+    )
+    actor_name = display_name(actor.first_name, actor.last_name)
+    await _notify_group_event(
+        session,
+        journal_event_id=journal.id,
+        type="curator_group.member_demoted",
+        recipient_id=user_id,
+        title="Вы больше не мастер школы",
+        body=(
+            f"{actor_name} перевёл вас в ученики школы «{group.name}». "
+            f"Вы остаётесь в школе, но больше не ведёте в ней практики."
+        ),
+        group_id=group.id,
+        group_name=group.name,
+        actor_name=actor_name,
     )
 
 
@@ -920,6 +2063,59 @@ def _active_group_clause() -> ColumnElement[bool]:
     again would be a second answer to a settled question.
     """
     return _verified_profile_exists(CuratorGroup.curator_user_id)
+
+
+async def curated_group_id_for_practice(
+    practice: Practice,
+    user_id: UUID,
+    session: AsyncSession,
+) -> UUID | None:
+    """The practice's school, if THIS user curates it right now (BE-21).
+
+    The entitlement behind "a curator may cancel a practice of their own
+    school": the id of the school the practice BELONGS TO (BE-74), when its
+    curator is this user and is verified NOW; None otherwise, and the
+    caller turns None into the same 404 a stranger gets -- never a distinct
+    code (P-08: the answer must not reveal that the practice exists, that
+    it is a school practice, or that the school is somebody else's).
+
+    ONE id, not a list: a practice belongs to exactly one school (owner
+    ruling, 2026-10-01). The answer covers every practice of the school,
+    public ones included (BE-64): the curator may cancel any of them.
+
+    A READ, AND THEREFORE NOT THE LAST WORD. The school can change hands
+    between this answer and the cancellation's writes; cancel_practice
+    re-checks ownership under the group lock (_lock_group_as_owner) before
+    it writes anything. This function is the fast path to the 404.
+
+    Verification is _active_group_clause, not a hand-written check: the
+    JSONB path to the account status stays spelled out once (I-6). A
+    curator whose verification was revoked has no school and therefore no
+    lever -- although in practice they are stopped earlier, by
+    get_current_master on the endpoint.
+
+    THE KILLSWITCH IS READ HERE, NOT ONLY ON THE ROUTER (BE-43). This is
+    the entitlement itself, and cancel_service.py asks it directly -- so
+    with schools switched off a curator kept the right to cancel another
+    master's practice, because the flag was only ever checked by the
+    dependency on the two school routers. A killswitch on the routers
+    guards the surface, not the mechanism.
+
+    Reads only. No commit, no flush (P-01).
+    """
+    if not settings.curator_groups_enabled:
+        return None
+    if practice.curator_group_id is None:
+        return None
+    return (
+        await session.execute(
+            select(CuratorGroup.id).where(
+                CuratorGroup.id == practice.curator_group_id,
+                CuratorGroup.curator_user_id == user_id,
+                _active_group_clause(),
+            )
+        )
+    ).scalar_one_or_none()
 
 
 # The relation value for someone who OWNS the group. A literal, because it
@@ -1332,6 +2528,15 @@ async def leave_curator_group(
     if left is None:
         return
 
+    # GT-27: same as removal -- walking out takes your pending appointment
+    # with you. See remove_curator_group_member for why it is deleted at the
+    # source rather than found dangling at consent.
+    await session.execute(
+        delete(CuratorGroupMasterOffer).where(
+            CuratorGroupMasterOffer.group_id == group.id,
+            CuratorGroupMasterOffer.to_user_id == user_id,
+        )
+    )
     data: dict[str, Any] = {EVENT_DATA_KIND: left.kind}
     if transfer_cancelled:
         data["transfer_cancelled"] = True
@@ -1351,7 +2556,11 @@ async def leave_curator_group(
 # ===========================================================================
 
 
-_INVITE_DEEPLINK_KIND = "curator_group_invite__"
+# The startapp kind of a school link (owner, 3 October): Telegram allows 64
+# characters of [A-Za-z0-9_-] in startapp, and token_urlsafe(32) is 43 of
+# them -- "school__" + 43 = 51. The former "curator_group_invite__" made 65
+# and the link did not open. Pinned by tests/test_deeplink_limits.py.
+_INVITE_DEEPLINK_KIND = "school__"
 
 
 async def _has_master_capability(user_id: UUID, session: AsyncSession) -> bool:
@@ -1374,6 +2583,57 @@ async def _has_master_capability(user_id: UUID, session: AsyncSession) -> bool:
         (
             await session.execute(select(_verified_profile_exists(user_id)))
         ).scalar()
+    )
+
+
+async def _lock_master_profile(user_id: UUID, session: AsyncSession) -> None:
+    """Hold this person's master_profiles row FOR SHARE, if there is one.
+
+    The "master profile" position of the module's order (header). Taken by
+    offer_curator_group_master after the candidate's member row and before
+    it reads their verification, so that the read and every admin path that
+    moves the status are serialised on one row: a verification either
+    committed before this lock (the offer then sees "verified" and asks the
+    candidate to answer) or waits for this transaction (and then finds the
+    offer and announces it). A rejection is serialised the same way and
+    then closes the offer it finds.
+
+    Returns nothing on purpose. The status is then read by
+    _has_master_capability, so the JSONB path to it is still written down
+    once in this module (_verified_profile_exists), and under this lock that
+    plain read sees the last committed state of a row nobody can be
+    changing.
+
+    KNOWN CEILING -- a profile that does not exist yet cannot be locked.
+      1. Mechanics: with no master_profiles row FOR SHARE locks nothing.
+         make_master and apply_for_master's self-provision CREATE a
+         verified profile by INSERT; one that commits between this lock and
+         the offer's commit has already run announce_pending_master_offers
+         over a set that did not include this offer, and the offer itself
+         read "not verified". The candidate is then verified, the curator
+         sees "awaiting answer", and nobody was asked.
+      2. Status: acknowledged by design.
+      3. Task: none -- the window needs an admin creating a master out of a
+         profile-less member of a school at the same instant that school's
+         curator appoints them, and no product line is open on it.
+      4. Trigger to reopen: a school member whose offer reads
+         awaiting_answer with no curator_group.master_offered notification
+         keyed on that offer in the outbox.
+      5. Agreed fix shape: lock a row that always exists -- the users row,
+         FOR SHARE here and by the profile-creating writers before their
+         INSERT -- which puts "user" into this order ahead of member for
+         every writer of a role.
+      6. Rejected: announcing from offer_curator_group_master again after
+         its own commit (no such hook: P-01, the request commits after the
+         function returns), and re-reading the status after the offer's
+         INSERT -- it narrows the window and does not close it: a profile
+         committed after the re-read and before this commit is missed the
+         same way.
+    """
+    await session.execute(
+        select(MasterProfile.user_id)
+        .where(MasterProfile.user_id == user_id)
+        .with_for_update(read=True)
     )
 
 
@@ -1414,12 +2674,16 @@ async def _membership_row(
 async def get_or_create_curator_group_invite(
     curator_user_id: UUID,
     group_id: UUID,
-    kind: str,
     session: AsyncSession,
     *,
     actor: User,
 ) -> dict:
-    """Create-or-return the group's link for ONE kind.
+    """Create-or-return the group's ONE link. Everyone joins as a student.
+
+    IT USED TO TAKE A `kind` and there used to be two links per school, the
+    master one promoting a student on join. Cancelled by owner ruling
+    (GT-27): school masters are appointed with confirmation, so the second
+    link and the parameter naming it are gone rather than defaulted.
 
     Idempotent by design, not by accident: the curator taps «Пригласить»
     again expecting the link they already pasted into a channel to keep
@@ -1448,14 +2712,17 @@ async def get_or_create_curator_group_invite(
         await session.execute(
             select(CuratorGroupInvite).where(
                 CuratorGroupInvite.group_id == group.id,
-                CuratorGroupInvite.kind == kind,
             )
         )
     ).scalar_one_or_none()
 
     if existing is None:
+        # BE-95: ownership re-checked under the group lock, before the
+        # INSERT (header) -- only where something is about to be written.
+        if not await _lock_group_as_owner(curator_user_id, group.id, session):
+            raise NotFoundError("Curator group not found")
         token = secrets.token_urlsafe(32)
-        invite = CuratorGroupInvite(group_id=group.id, kind=kind, token=token)
+        invite = CuratorGroupInvite(group_id=group.id, token=token)
         try:
             async with session.begin_nested():
                 session.add(invite)
@@ -1465,34 +2732,41 @@ async def get_or_create_curator_group_invite(
             # returns the same token and must not add a line to the feed.
             #
             # THE TOKEN IS NOT RECORDED, HERE OR ANYWHERE. It is a raw
-            # secret and the journal is a readable, paginated list; only the
-            # link's KIND goes in. Do not add the token for debugging -- see
-            # the model docstring.
+            # secret and the journal is a readable, paginated list. GT-27:
+            # the link's kind used to be the one thing that DID go in --
+            # with one link there is nothing left to record but the fact,
+            # so the event carries no data at all. Do not add the token for
+            # debugging -- see the model docstring.
             _record_group_event(
                 group.id,
                 actor,
                 CuratorGroupEventKind.INVITE_CREATED,
                 session,
-                data={EVENT_DATA_KIND: kind},
             )
         except IntegrityError:
-            # Lost a concurrent create race for this (group, kind). The
-            # winner's row is the answer -- returning a second token would
-            # mean two live links where the constraint allows one.
+            # Lost a concurrent create race for this group. The winner's row
+            # is the answer -- returning a second token would mean two live
+            # links where the constraint allows one.
             existing = (
                 await session.execute(
                     select(CuratorGroupInvite).where(
                         CuratorGroupInvite.group_id == group.id,
-                        CuratorGroupInvite.kind == kind,
                     )
                 )
-            ).scalar_one()
+            ).scalar_one_or_none()
+            if existing is None:
+                # BE-95 F4: NO WINNER -- the winner's link was revoked
+                # between its commit and this read. scalar_one() answered
+                # that with NoResultFound, a 500. (The other way to get
+                # here, an FK failure because the school was deleted, no
+                # longer reaches this line: the group lock above makes a
+                # delete wait for this request instead.)
+                raise NotFoundError("Curator group not found") from None
             token = existing.token
     else:
         token = existing.token
 
     return {
-        "kind": kind,
         "invite_url": (
             f"{settings.telegram_bot_url}"
             f"?startapp={_INVITE_DEEPLINK_KIND}{token}"
@@ -1503,12 +2777,16 @@ async def get_or_create_curator_group_invite(
 async def revoke_curator_group_invite(
     curator_user_id: UUID,
     group_id: UUID,
-    kind: str,
     session: AsyncSession,
     *,
     actor: User,
 ) -> None:
-    """Drop the link of ONE kind. Idempotent; the other kind is untouched.
+    """Drop the group's link. Idempotent.
+
+    IT USED TO TAKE A `kind` and drop one of two links, leaving the other
+    working -- the endpoint was DELETE /invites/{kind}. GT-27 removed the
+    second link, so there is one thing to revoke and no path parameter to
+    choose it with.
 
     After this the next create mints a NEW token, and the old link stops
     resolving everywhere -- preview and join alike, since both go through
@@ -1524,20 +2802,23 @@ async def revoke_curator_group_invite(
     revoked = (
         await session.execute(
             delete(CuratorGroupInvite)
-            .where(
-                CuratorGroupInvite.group_id == group.id,
-                CuratorGroupInvite.kind == kind,
-            )
-            .returning(CuratorGroupInvite.kind)
+            .where(CuratorGroupInvite.group_id == group.id)
+            .returning(CuratorGroupInvite.id)
         )
     ).first()
     if revoked is not None:
+        # OWNERSHIP RE-CHECKED UNDER THE GROUP LOCK, after the take and before
+        # the journal row (header), for the reason remove_curator_group_member
+        # gives: a former curator mid-handover would otherwise revoke the new
+        # owner's link. The link comes back on the refusal only because
+        # get_db_session rolls the request back (P-01).
+        if not await _lock_group_as_owner(curator_user_id, group.id, session):
+            raise NotFoundError("Curator group not found")
         _record_group_event(
             group.id,
             actor,
             CuratorGroupEventKind.INVITE_REVOKED,
             session,
-            data={EVENT_DATA_KIND: revoked.kind},
         )
 
 
@@ -1583,7 +2864,7 @@ async def preview_curator_group_invite(
     for why it is that order); the only difference is that this function
     returns the reason and that one raises it.
     """
-    invite, group = await _resolve_invite_or_404(token, session)
+    _invite, group = await _resolve_invite_or_404(token, session)
     masters_count, students_count = await get_group_counts(group.id, session)
     refs = await _curator_refs([group.curator_user_id], session)
 
@@ -1595,14 +2876,16 @@ async def preview_curator_group_invite(
         reason = "own_group"
     elif await _blocked_by_curator(group.curator_user_id, user_id, session):
         reason = "blocked_by_curator"
-    elif invite.kind == CuratorMemberKind.MASTER.value and not (
-        await _has_master_capability(user_id, session)
-    ):
-        reason = "master_required"
-    elif member is not None and not _is_upgrade(invite.kind, member.kind):
-        # Already inside and this link would change nothing. The upgrade
-        # case deliberately falls through with reason=None: the link still
-        # does something for a student holding a master invite.
+    elif await _blocked_in_group(group.id, user_id, session):
+        # BE-79: blocked in THIS school by its curator. A member row and a
+        # block row never coexist (CuratorGroupBlock), so this branch and
+        # already_member below cannot both be true.
+        reason = "blocked_in_group"
+    elif member is not None:
+        # Already inside, and with one link there is nothing left for it to
+        # do. Until GT-27 a student holding a MASTER link fell through with
+        # reason=None, because opening it would still promote them; that
+        # link is gone, so being a member is now the whole answer.
         reason = "already_member"
 
     return {
@@ -1623,24 +2906,10 @@ async def preview_curator_group_invite(
             "masters_count": masters_count,
             "students_count": students_count,
         },
-        "kind": invite.kind,
         "can_join": reason is None,
         "reason": reason,
         "relation": relation,
     }
-
-
-def _is_upgrade(invite_kind: str, member_kind: str) -> bool:
-    """Would this link promote an existing member?
-
-    Only one direction exists: student -> master. There is no demotion --
-    a master member opening a student link keeps their kind (TZ 3.4), so
-    holding a master relation is never something a link can take away.
-    """
-    return (
-        invite_kind == CuratorMemberKind.MASTER.value
-        and member_kind == CuratorMemberKind.STUDENT.value
-    )
 
 
 async def join_curator_group_by_token(
@@ -1660,12 +2929,17 @@ async def join_curator_group_by_token(
       2. own_group (409)  -- BEFORE the block check, so a curator's answer
          cannot depend on whether a stale master_student row happens to
          exist for them
-      3. blocked (403)    -- BEFORE capability, because a block is about
-         THIS school while master_required is a property of the account:
-         a blocked person must not be told "you merely need verification",
-         which reads as an invitation to go get verified and come back
-      4. capability (403) -- only for a master link
-      5. membership       -- last: it decides what to write, not whether to
+      3. blocked (403)    -- a block is about THIS school: first the
+         curator's block as a master (blocked_by_curator, MasterStudent),
+         then the block in this school (blocked_in_group, BE-79)
+      4. membership       -- last: it decides what to write, not whether to
+
+    THERE USED TO BE A CAPABILITY STEP between 3 and 4, refusing a master
+    link to an unverified account with master_required, and the ordering
+    note above used to explain why a block had to be answered before it.
+    Both went with the master link (GT-27). Master capability is still
+    checked -- twice -- but on the appointment path, not here: a link makes
+    students, and a student needs no verification.
 
     Idempotent. Joining twice returns the same row, and the second call
     reports already_member=true without touching joined_at.
@@ -1678,25 +2952,25 @@ async def join_curator_group_by_token(
     its docstring in the schema says it means, and no caller does anything
     destructive with it.
 
-    GT-16: TWO of the thirteen event kinds are written here, and WHICH ONE
-    follows the same branch that decides `relation`, never the link's kind:
+    GT-16 / GT-27: ONE event kind is written here now -- member_joined, on a
+    first join, carrying kind='student' because that is the only thing a
+    link can make anybody.
 
-      - a first join writes member_joined ONCE, carrying the kind the row
-        was created with. A master link used by a newcomer is one
-        member_joined with kind='master', NOT a member_joined followed by
-        a member_promoted -- nobody was promoted, they arrived as a
-        master.
-      - a master link used by an existing student writes member_promoted
-        and nothing else. They did not join; they were already here.
-      - a master link used by an existing MASTER writes nothing at all.
-        Idempotent above means idempotent in the journal too, or pressing
-        the same link twice would fill the feed.
-      - the lost-race branch writes member_promoted only if the upgrade
-        actually applied. The row the winner created is the winner's news
-        and the winner recorded it; this request writes only what IT
-        changed, which is the promotion or nothing.
+    THIS FUNCTION USED TO PROMOTE. A second, master-flavoured link existed,
+    and opening it either created a master row outright or upgraded an
+    existing student, writing member_promoted. Cancelled by owner ruling
+    (GT-27): a school master is appointed by the curator and the appointment
+    takes effect only on the appointee's consent, so member_promoted is now
+    written by accept_curator_group_master_offer and by nothing else. The
+    upgrade branches, the master_required refusal and the _is_upgrade
+    predicate went with the link rather than staying as unreachable code.
+
+    THE LOST-RACE BRANCH STAYS -- the race did not go anywhere. What left it
+    is the promotion it used to apply: the loser of a race now has nothing
+    to add, because the winner's row already says everything true about this
+    person's membership.
     """
-    invite, group = await _resolve_invite_or_404(token, session)
+    _invite, group = await _resolve_invite_or_404(token, session)
 
     if group.curator_user_id == user_id:
         raise ConflictError(
@@ -1709,68 +2983,84 @@ async def join_curator_group_by_token(
             code="blocked_by_curator",
         )
 
-    if invite.kind == CuratorMemberKind.MASTER.value and not (
-        await _has_master_capability(user_id, session)
-    ):
-        raise ForbiddenError(
-            "This link is for verified masters",
-            code="master_required",
-        )
+    if await _blocked_in_group(group.id, user_id, session):
+        raise _blocked_in_group_error()
 
     member = await _membership_row(group.id, user_id, session)
 
     if member is None:
         row = CuratorGroupMember(
-            group_id=group.id, user_id=user_id, kind=invite.kind,
+            group_id=group.id,
+            user_id=user_id,
+            kind=CuratorMemberKind.STUDENT.value,
         )
         try:
             async with session.begin_nested():
                 session.add(row)
                 await session.flush()
-            relation = invite.kind
-            _record_group_event(
+                # BE-79, K1: THE BLOCK IS READ AGAIN, AFTER THE INSERT. The
+                # check above ran on an earlier statement's snapshot; a
+                # block that committed between it and _membership_row made
+                # the row vanish and left no block visible to that check, so
+                # this INSERT would put a blocked person back in. Under READ
+                # COMMITTED this statement sees every block committed before
+                # it -- and the INSERT could only succeed once that block's
+                # DELETE of the old row had committed. Raising inside the
+                # savepoint rolls the row back with it.
+                if await _blocked_in_group(group.id, user_id, session):
+                    raise _blocked_in_group_error()
+            relation = CuratorMemberKind.STUDENT.value
+            journal = _record_group_event(
                 group.id,
                 actor,
                 CuratorGroupEventKind.MEMBER_JOINED,
                 session,
-                data={EVENT_DATA_KIND: invite.kind},
+                data={EVENT_DATA_KIND: CuratorMemberKind.STUDENT.value},
+            )
+            # BE-25: to the curator. This is the ONE school notification
+            # that scales with the size of a school, which is why its type
+            # carries the curator_groups category and the other four carry
+            # none -- see comms-profile/types.yaml.
+            #
+            # No "did the curator join his own school" guard, because he
+            # cannot: own_group above (and in the invite preview, and in
+            # leave) keeps a curator out of his own roster, so actor and
+            # recipient are never the same person here. A branch for it
+            # would document a state no caller can reach.
+            await _notify_group_event(
+                session,
+                journal_event_id=journal.id,
+                type="curator_group.member_joined",
+                recipient_id=group.curator_user_id,
+                title="Новый участник школы",
+                body=(
+                    f"{display_name(actor.first_name, actor.last_name)} "
+                    f"вступил в школу «{group.name}»."
+                ),
+                group_id=group.id,
+                group_name=group.name,
+                actor_name=display_name(actor.first_name, actor.last_name),
             )
         except IntegrityError:
-            # Lost a concurrent join. The winner's row is the answer; if it
-            # is a student row and this was a master link, the upgrade still
-            # applies -- otherwise the loser of the race would silently be
-            # denied the promotion the link grants.
+            # Lost a concurrent join. The winner's row is the answer and
+            # this request writes nothing: it changed nothing. Before GT-27
+            # this branch also re-applied the promotion a master link
+            # granted, so that the loser of a race was not silently denied
+            # it; with one link there is no promotion for a link to grant.
             winner = await _membership_row(group.id, user_id, session)
-            promoted = winner is not None and _is_upgrade(
-                invite.kind, winner.kind,
-            )
-            if promoted:
-                winner.kind = CuratorMemberKind.MASTER.value
-                await session.flush()
-            relation = winner.kind if winner is not None else invite.kind
-            if promoted:
-                _record_group_event(
-                    group.id,
-                    actor,
-                    CuratorGroupEventKind.MEMBER_PROMOTED,
-                    session,
-                )
+            if winner is None:
+                # BE-95: NOT A LOST RACE, A VANISHED SCHOOL. IntegrityError
+                # covers the FK as well as the UNIQUE; a winner exists only
+                # in the second case. With no row there is nothing this
+                # person joined, and answering 200 "student" here told them
+                # they were in a school that had just been deleted.
+                raise NotFoundError(
+                    "Invite not found", code="invite_not_found",
+                ) from None
+            relation = winner.kind
         already_member = False
     else:
         already_member = True
-        if _is_upgrade(invite.kind, member.kind):
-            # The ONLY mutation of an existing membership row in this
-            # module. joined_at is deliberately NOT refreshed: the person
-            # has been in this school since the day they walked in, and
-            # kind describes their role, not their arrival.
-            member.kind = CuratorMemberKind.MASTER.value
-            await session.flush()
-            _record_group_event(
-                group.id,
-                actor,
-                CuratorGroupEventKind.MEMBER_PROMOTED,
-                session,
-            )
         relation = member.kind
 
     return {
@@ -1873,10 +3163,12 @@ async def _drop_pending_transfer_for(
 ) -> bool:
     """Drop the offer if it was addressed to this person leaving the group.
 
-    TZ 3.4 names EXACTLY TWO points where an offer disappears because its
-    addressee is gone -- leave and remove_member -- and this helper is why
-    there are two call sites and not two copies. A third copy would be the
-    one that gets forgotten when the rule changes.
+    TZ 3.4 named two points where an offer disappears because its addressee
+    is gone -- leave and remove_member. BE-59 B1 adds the third: demotion
+    (demote_curator_group_master), because a school is handed only to one
+    of its masters and the addressee just stopped being one. This helper is
+    why there are three call sites and not three copies; a copy would be
+    the one that gets forgotten when the rule changes.
 
     Scoped to (group, addressee): somebody else walking out of the same
     group must not cancel a pending offer they have nothing to do with.
@@ -1939,6 +3231,28 @@ async def offer_curator_group_transfer(
             code="transfer_target_not_member",
         )
 
+    # BE-95: THE ADDRESSEE'S MEMBER ROW IS LOCKED BEFORE THE OFFER IS
+    # WRITTEN, for the reason offer_curator_group_master gives: a leave or a
+    # remove landing between the read above and the INSERT found no offer to
+    # retract, and the group was left with a pending transfer to a
+    # non-member -- blocking every new transfer with 409 and acceptable the
+    # day they re-join. First lock of the module's order (header).
+    if not await _lock_member(
+        group.id, to_user_id, session, kind=CuratorMemberKind.MASTER.value,
+    ):
+        raise NotFoundError(
+            "Transfer target is not a member of this group",
+            code="transfer_target_not_member",
+        )
+
+    # BE-95: OWNERSHIP RE-CHECKED UNDER THE GROUP LOCK, before the INSERT
+    # (header). Between _get_group_or_404 and the pending check above, a
+    # previous transfer could be accepted and committed: the pending check
+    # then saw nothing, and a curator who no longer owned the school offered
+    # it to a third person.
+    if not await _lock_group_as_owner(curator_user_id, group.id, session):
+        raise NotFoundError("Curator group not found")
+
     transfer = CuratorGroupTransfer(group_id=group.id, to_user_id=to_user_id)
     try:
         async with session.begin_nested():
@@ -1961,12 +3275,32 @@ async def offer_curator_group_transfer(
     # above already computed it for the reply, by the same
     # display_name(first, last) rule the journal uses. This is the one
     # target of four that costs no extra query.
-    _record_group_event(
+    journal = _record_group_event(
         group.id,
         actor,
         CuratorGroupEventKind.TRANSFER_OFFERED,
         session,
         data=_target_data(to_user_id, refs[group.id]["to_display_name"]),
+    )
+    # BE-25: the addressee could previously sit on an offer for weeks
+    # without knowing it existed -- the banner only appears if you open the
+    # app. The recipient is the offer's target, who is a master OF THIS
+    # SCHOOL by _visible_master_ids above, so this tells nobody about a
+    # school they did not already belong to.
+    await _notify_group_event(
+        session,
+        journal_event_id=journal.id,
+        type="curator_group.transfer_offered",
+        recipient_id=to_user_id,
+        title="Вам предлагают школу",
+        body=(
+            f"{display_name(actor.first_name, actor.last_name)} предлагает "
+            f"вам стать куратором школы «{group.name}». Откройте приложение, "
+            f"чтобы принять или отклонить."
+        ),
+        group_id=group.id,
+        group_name=group.name,
+        actor_name=display_name(actor.first_name, actor.last_name),
     )
     return refs[group.id]
 
@@ -1998,6 +3332,12 @@ async def cancel_curator_group_transfer(
         )
     ).first()
     if cancelled is not None:
+        # BE-95: OWNERSHIP RE-CHECKED AFTER THE TAKE, last in the module's
+        # order (header). The DELETE matches by group alone; if the school
+        # changed hands since _get_group_or_404, it would have withdrawn the
+        # NEW owner's offer. The rollback (P-01) puts that offer back.
+        if not await _lock_group_as_owner(curator_user_id, group.id, session):
+            raise NotFoundError("Curator group not found")
         _record_group_event(
             group.id,
             actor,
@@ -2037,41 +3377,58 @@ async def accept_curator_group_transfer(
 ) -> dict:
     """Become the curator of this group. One transaction, seven steps.
 
-    THE ORDER IS THE CONTRACT (TZ 3.5), and every check happens BEFORE the
-    first mutation:
+    THE STEPS. TZ 3.5 describes their RESULT -- one transaction, all or
+    nothing -- and that has not changed. Their ORDER is this module's lock
+    order (see the header), and it has changed twice: BE-42 moved the claim
+    of the offer first, BE-95 put the caller's own member row ahead of it.
 
-      1. the offer exists and is addressed to the caller; the group is
-         active; the caller is a verified master right now; the caller has
-         no group of their own by this name
-      2. curator_user_id := caller
-      3. the caller's own member row is deleted (I-2: a curator is not a
-         member of their own group)
-      4. the previous curator gets a member row, kind='master', joined_at
-         = now()
-      5. the offer row is deleted
-      6. invite links and every other membership are left alone -- the
+      1. the group is active and the caller has a relation to it (a read)
+      2. THE CALLER'S OWN MEMBER ROW IS TAKEN -- deleted and returned. I-2
+         says a curator is not a member of their own group, so the row goes
+         anyway; taking it first is what lets a concurrent removal or leave
+         of the same person meet this transaction on the same row instead
+         of deadlocking against it (BE-97, see the body)
+      3. THE OFFER IS CLAIMED -- deleted and returned, the check and the
+         mutation in one statement (BE-42, see the body)
+      4. the caller is a verified master right now; the caller has no group
+         of their own by this name
+      5. curator_user_id := caller -- the group row, taken once (header)
+      6. the previous curator gets a member row, kind='master', joined_at
+         = now() -- a new key, after the group row
+      7. invite links and every other membership are left alone -- the
          tokens already in people's chats keep working
-      7. the reply is the group page as the NEW curator sees it
+      8. the reply is the group page as the NEW curator sees it
 
-    THE NAME COLLISION IS CHECKED IN STEP 1, NOT CAUGHT IN STEP 2. UNIQUE
-    (curator_user_id, name) would raise on the rename-by-ownership at step
-    2 -- after which three more mutations would already be queued behind a
-    broken transaction. Asking first turns a rollback into a clean 409.
+    EVERY REFUSAL FROM STEP 3 ON ARRIVES AFTER A WRITE and leaves nothing
+    behind only because get_db_session rolls the request back on an
+    exception (P-01). Until BE-42 this docstring said "every check happens
+    BEFORE the first mutation". One check -- "is this offer still mine to
+    take" -- can only be answered by taking it, and since BE-95 the member
+    row is taken before even that.
 
-    STEP 4 CREATES A kind='master' ROW WITHOUT A CAPABILITY GATE, unlike
+    THE NAME COLLISION IS CHECKED, AND CAUGHT AS WELL. The check at step 4
+    turns the ordinary clash into a clean 409. It is a read, though, taken
+    before the group row is locked: a rename of the school committing in
+    between can still make step 5 collide on UNIQUE (curator_user_id,
+    name). That used to escape as a 500; step 5 now runs in a savepoint and
+    answers the same 409 (BE-95 F6). On either refusal the claim rolls back
+    with everything else, and the offer is still there afterwards.
+
+    STEP 6 CREATES A kind='master' ROW WITHOUT A CAPABILITY GATE, unlike
     join, which insists on it (I-3). That is deliberate and not an
     oversight: the previous curator's verified status was the precondition
-    for the group being ACTIVE, and an inactive group never reaches step 1 --
-    so by the time step 4 runs, their capability has just been proven by the
-    call itself. I-3 governs joining by link; a transfer is not a join.
+    for the group being ACTIVE, and an inactive group never gets past
+    step 1 -- so by the time step 6 runs, their capability has just been
+    proven by the call itself. I-3 governs joining by link; a transfer is
+    not a join.
 
     404 covers "no offer", "not addressed to you" and "group inactive"
     alike: accept changes who owns a school, so it must not confirm that an
     offer exists to somebody probing group ids.
 
     GT-16: the event's target is THE PREVIOUS CURATOR, and it is read from
-    previous_curator_id -- the local captured at step 2, BEFORE the
-    assignment. This is the one place in the module where that matters
+    previous_curator_id -- the local captured BEFORE the assignment at
+    step 5. This is the one place in the module where that matters
     enough to say out loud: after `group.curator_user_id = user_id` the
     previous owner exists nowhere in this function's reach, so taking "the
     group's curator" at record time would write the ACTOR as the target
@@ -2081,8 +3438,59 @@ async def accept_curator_group_transfer(
     """
     group, _relation = await _relation_or_404(group_id, user_id, session)
 
-    transfer = await _pending_transfer(group.id, session)
-    if transfer is None or transfer.to_user_id != user_id:
+    # BE-97: THE CALLER'S OWN MEMBER ROW FIRST -- the first lock of the
+    # module's order (header). Until BE-95 the claim below came first and
+    # the member row near the end, while remove and leave take the member
+    # row first and the transfer second. A removal of the heir landing
+    # between the two held the member row and waited for the transfer; this
+    # function then asked for the member row -- a deadlock, a 500 to one of
+    # the two, measured in both start orders. The BE-42 race tests could
+    # not see it: their competitor ran to completion inside a pause of this
+    # function, so the two never waited at the same time.
+    #
+    # Nothing to take means the caller is no member here. Past
+    # _relation_or_404 that is a removal or a leave that committed in
+    # between, and the answer is the same 404 as "no offer".
+    taken = (
+        await session.execute(
+            delete(CuratorGroupMember)
+            .where(
+                CuratorGroupMember.group_id == group.id,
+                CuratorGroupMember.user_id == user_id,
+            )
+            .returning(CuratorGroupMember.id)
+        )
+    ).first()
+    if taken is None:
+        raise NotFoundError("Transfer not found", code="transfer_not_found")
+
+    # BE-42: THE OFFER IS CLAIMED, NOT READ -- deleted and returned in one
+    # statement, which is both the check and the mutation. A plain SELECT
+    # here left a window between reading the offer and deleting it at the
+    # end: cancel_curator_group_transfer, remove_curator_group_member and
+    # leave_curator_group all drop the same row, and any of them landing
+    # inside that window used to leave accept finishing anyway -- the
+    # school changed hands after its offer had been withdrawn. Two
+    # simultaneous accepts by one heir were worse: both read the offer, both
+    # inserted the previous curator's member row, and the second died on
+    # uq_curator_group_member_group_user -- a 500 where a 404 belongs. Since
+    # BE-95 the second of those blocks already on the member row above, and
+    # finds nothing there.
+    #
+    # THE WHERE CHECKS TWO THINGS, as the read it replaced did: an offer
+    # for this group, addressed to this caller. Both answer the same 404
+    # with the same code.
+    claimed = (
+        await session.execute(
+            delete(CuratorGroupTransfer)
+            .where(
+                CuratorGroupTransfer.group_id == group.id,
+                CuratorGroupTransfer.to_user_id == user_id,
+            )
+            .returning(CuratorGroupTransfer.id)
+        )
+    ).first()
+    if claimed is None:
         raise NotFoundError("Transfer not found", code="transfer_not_found")
 
     if not await _has_master_capability(user_id, session):
@@ -2091,31 +3499,41 @@ async def accept_curator_group_transfer(
             code="master_required",
         )
 
+    group_name = group.name
     clash = (
         await session.execute(
+            # BE-48: by name KEY, the rule the unique index enforces.
             select(CuratorGroup.id).where(
                 CuratorGroup.curator_user_id == user_id,
-                CuratorGroup.name == group.name,
+                curator_group_name_key(CuratorGroup.name)
+                == curator_group_name_key(group_name),
             )
         )
     ).scalar_one_or_none()
     if clash is not None:
         raise ConflictError(
-            f"You already curate a group named '{group.name}'",
+            f"You already curate a group named '{group_name}'",
             code=_NAME_TAKEN_CODE,
         )
 
     previous_curator_id = group.curator_user_id
 
-    group.curator_user_id = user_id
+    # BE-95 F6: THE GROUP ROW, taken once (header). See the docstring's
+    # name-collision paragraph for why a clash can still arrive here and
+    # why it is caught.
+    try:
+        async with session.begin_nested():
+            group.curator_user_id = user_id
+            await session.flush()
+    except IntegrityError:
+        raise ConflictError(
+            f"You already curate a group named '{group_name}'",
+            code=_NAME_TAKEN_CODE,
+        ) from None
 
-    await session.execute(
-        delete(CuratorGroupMember).where(
-            CuratorGroupMember.group_id == group.id,
-            CuratorGroupMember.user_id == user_id,
-        )
-    )
-
+    # The previous curator's member row: a NEW key, written after the group
+    # row, which the header allows -- (this group, the previous curator) has
+    # no row (I-2), so the INSERT waits for nobody.
     session.add(
         CuratorGroupMember(
             group_id=group.id,
@@ -2124,13 +3542,7 @@ async def accept_curator_group_transfer(
         )
     )
 
-    await session.execute(
-        delete(CuratorGroupTransfer).where(
-            CuratorGroupTransfer.group_id == group.id
-        )
-    )
-
-    _record_group_event(
+    journal = _record_group_event(
         group.id,
         actor,
         CuratorGroupEventKind.TRANSFER_ACCEPTED,
@@ -2139,6 +3551,26 @@ async def accept_curator_group_transfer(
             previous_curator_id,
             await _frozen_name(previous_curator_id, session),
         ),
+    )
+    # BE-25: to the PREVIOUS curator, from previous_curator_id captured
+    # before the assignment above -- the same local the journal target uses,
+    # and for the same reason: after `group.curator_user_id = user_id` the
+    # former owner is unreachable from the group row, and reading "the
+    # group's curator" here would notify the acceptor about his own click.
+    # The acceptor gets nothing: he is the actor.
+    await _notify_group_event(
+        session,
+        journal_event_id=journal.id,
+        type="curator_group.transfer_accepted",
+        recipient_id=previous_curator_id,
+        title="Школа передана",
+        body=(
+            f"{display_name(actor.first_name, actor.last_name)} принял школу "
+            f"«{group.name}». Вы больше не её куратор."
+        ),
+        group_id=group.id,
+        group_name=group.name,
+        actor_name=display_name(actor.first_name, actor.last_name),
     )
 
     await session.flush()
@@ -2192,19 +3624,24 @@ async def decline_curator_group_transfer(
     if declined is None:
         return
 
-    offered_by = (
+    # BE-25: the school's name comes back in the SAME row as the curator
+    # id -- the notification body needs it and a second SELECT for a string
+    # already on the way would be pure waste.
+    offer_row = (
         await session.execute(
-            select(CuratorGroup.curator_user_id).where(
+            select(CuratorGroup.curator_user_id, CuratorGroup.name).where(
                 CuratorGroup.id == declined.group_id
             )
         )
-    ).scalar_one_or_none()
+    ).first()
+    offered_by = offer_row[0] if offer_row is not None else None
+    declined_group_name = offer_row[1] if offer_row is not None else ""
     if offered_by is None:
         # The group vanished under us -- the FK would refuse the event
         # anyway, and there is no school left to hold a journal.
         return
 
-    _record_group_event(
+    journal = _record_group_event(
         declined.group_id,
         actor,
         CuratorGroupEventKind.TRANSFER_DECLINED,
@@ -2212,6 +3649,24 @@ async def decline_curator_group_transfer(
         data=_target_data(
             offered_by, await _frozen_name(offered_by, session),
         ),
+    )
+    # BE-25: to the curator who made the offer. Unlike accept, decline does
+    # not change ownership, so `offered_by` -- already read above for the
+    # journal -- is still the current curator and needs no second query.
+    # The decliner gets nothing: he is the actor.
+    await _notify_group_event(
+        session,
+        journal_event_id=journal.id,
+        type="curator_group.transfer_declined",
+        recipient_id=offered_by,
+        title="Передача отклонена",
+        body=(
+            f"{display_name(actor.first_name, actor.last_name)} отклонил "
+            f"передачу школы «{declined_group_name}». Школа осталась за вами."
+        ),
+        group_id=declined.group_id,
+        group_name=declined_group_name,
+        actor_name=display_name(actor.first_name, actor.last_name),
     )
 
 
@@ -2251,8 +3706,12 @@ async def _upcoming_practices_targeting_group(
     first place.
 
     Each occurrence of a series counts on its own -- every child carries its
-    own audience rows and its own date, so "how many sessions go dark" is a
-    count of sessions, not of series.
+    own owner and its own date, so the number is a count of sessions, not
+    of series.
+
+    BE-74: "TARGETING THIS SCHOOL" IS "BELONGING TO IT", and public ones
+    count (owner ruling, 2026-10-01, Q4): a practice of the school leaves
+    the school's page when its master leaves, whichever audience it has.
 
     An empty master list yields 0 without a query: the school has nobody who
     could be pointing a practice at it.
@@ -2262,12 +3721,8 @@ async def _upcoming_practices_targeting_group(
     return (
         await session.execute(
             select(func.count(Practice.id))
-            .join(
-                PracticeAudienceCuratorGroup,
-                PracticeAudienceCuratorGroup.practice_id == Practice.id,
-            )
             .where(
-                PracticeAudienceCuratorGroup.group_id == group_id,
+                Practice.curator_group_id == group_id,
                 Practice.master_id.in_(master_ids),
                 Practice.status.in_(_UPCOMING_PRACTICE_STATUSES),
                 Practice.scheduled_at > datetime.now(UTC),
@@ -2352,3 +3807,836 @@ async def delete_group_preview(
         "students_count": students_count,
         "upcoming_practices_targeting_group": count,
     }
+
+
+# ===========================================================================
+# Appointing a school master (GT-27, items 3-4)
+#
+# THE PATH THE SECOND INVITE LINK USED TO BE. A link could make somebody a
+# school master by itself; now a curator offers and the appointee confirms.
+# Two consequences worth stating once here rather than three times below:
+#
+#   * member.kind changes on CONSENT, never on the offer. An appointment
+#     nobody answered leaves the roster exactly as it was, which is why
+#     member_promoted is written by accept and by nothing else.
+#   * master capability GATES ONLY CONSENT (BE-59). Until BE-59 it was
+#     checked at the offer too and an unverified candidate was refused
+#     there; the owner's model makes that offer the first step of the flow
+#     instead -- the candidate is asked to get verified, the admin's
+#     decision carries it on. Consent still re-checks, because
+#     verification can be revoked between the offer and the answer, and
+#     a revocation leaves the offer where it is (owner ruling, BE-59).
+#
+# THE STATE OF AN OFFER IS NOT STORED. A row is the offer; whether it is
+# awaiting the candidate's verification or their answer is the live
+# verification of the candidate, computed where it is shown
+# (_master_offer_state_expr). Verification and revocation therefore move
+# every offer of the person without a write in this module.
+# ===========================================================================
+
+
+_MASTER_OFFERED_TYPE = "curator_group.master_offered"
+_MASTER_OFFERED_TITLE = "Вас приглашают вести школу"
+
+
+def _master_offered_body(curator_name: str, group_name: str) -> str:
+    """The "become a master of this school? yes / no" text, written once.
+
+    Two senders: the offer to a verified candidate, and the verification
+    that turns a waiting offer into a question (announce_pending_master_
+    offers). One prompt, one wording, whichever of them sent it.
+    """
+    return (
+        f"{curator_name} предлагает вам стать мастером школы "
+        f"«{group_name}». Откройте приложение, чтобы принять или отклонить."
+    )
+
+
+def _master_offer_state_expr(
+    group_id_col: ColumnElement | UUID,
+    user_id_col: ColumnElement | UUID,
+) -> ColumnElement:
+    """SQL CASE: the state of this person's offer in this school, or NULL.
+
+    NULL when there is no offer; otherwise awaiting_answer when the
+    candidate is a verified master right now, awaiting_verification when
+    not -- through _verified_profile_exists, so the JSONB path to the
+    status is still written once. One bounded EXISTS per statement, as
+    with is_visible.
+    """
+    has_offer = (
+        select(CuratorGroupMasterOffer.id)
+        .where(
+            CuratorGroupMasterOffer.group_id == group_id_col,
+            CuratorGroupMasterOffer.to_user_id == user_id_col,
+        )
+        .exists()
+    )
+    return case(
+        (~has_offer, null()),
+        (
+            _verified_profile_exists(user_id_col),
+            CuratorMasterOfferState.AWAITING_ANSWER.value,
+        ),
+        else_=CuratorMasterOfferState.AWAITING_VERIFICATION.value,
+    )
+
+
+async def _master_offer_row(
+    group_id: UUID, user_id: UUID, session: AsyncSession,
+) -> CuratorGroupMasterOffer | None:
+    """The pending appointment for (group, user), or None."""
+    return (
+        await session.execute(
+            select(CuratorGroupMasterOffer).where(
+                CuratorGroupMasterOffer.group_id == group_id,
+                CuratorGroupMasterOffer.to_user_id == user_id,
+            )
+        )
+    ).scalar_one_or_none()
+
+
+async def offer_curator_group_master(
+    curator_user_id: UUID,
+    group_id: UUID,
+    to_user_id: UUID,
+    session: AsyncSession,
+    *,
+    actor: User,
+) -> None:
+    """Offer a member of this school the role of its master.
+
+    THE CANDIDATE MUST BE A MEMBER OF THIS SCHOOL; BEING A VERIFIED MASTER
+    OF THE PLATFORM DECIDES WHAT HAPPENS NEXT, NOT WHETHER (BE-59). The two
+    are separate facts and neither implies the other -- a verified master
+    who never joined is a stranger to this school, and a student who is not
+    a master yet is somebody the curator may still want to teach in it.
+    So the offer is kept either way, and the candidate hears one of two
+    things:
+
+      * verified -> curator_group.master_offered, "become a master of this
+        school? yes / no" -- the offer is awaiting their answer;
+      * not verified -> curator_group.master_verification_required, a
+        prompt to get verified as a master through the application -- the
+        offer is awaiting their verification. One text for every status
+        that is not "verified" (no application, pending, rejected,
+        withdrawn, suspended): each of them can reach verification from
+        where it stands, and the prompt says "apply, or wait for the
+        decision on the one you made" (owner ruling, BE-59 gate).
+
+    The second branch is carried forward by the admin, not by this school:
+    verifying the person announces every offer waiting for them
+    (announce_pending_master_offers), rejecting their application closes
+    every one and tells each curator (close_pending_master_offers).
+    can_create_groups is NOT consulted: that right is about founding
+    schools, not about teaching in someone else's.
+
+    A NON-CURATOR GETS 404, not 403, and so does a request naming a
+    stranger: "no such school", "not your school", "school is dark" and
+    "that person is not in it" are one answer (P-08). The one refusal that
+    DOES speak -- already a master -- is only reached by the curator of the
+    school, who already knows that fact about their own roster.
+
+    REPEATING THE OFFER TO THE SAME PERSON IS A NO-OP, not a 409. The
+    constraint is (group_id, to_user_id), so several appointments may be
+    outstanding at once; pressing the button twice on one person is the
+    curator re-sending, not a conflict to report. This is the one place
+    this differs from transfer, which is UNIQUE (group_id) and answers 409.
+
+    Raises:
+        NotFoundError: not this curator's school, or the candidate is not
+            a member of it.
+        ConflictError already_master: the candidate is already a master
+            here -- there is nothing to appoint.
+    """
+    group = await _get_group_or_404(curator_user_id, group_id, session)
+
+    member = await _membership_row(group.id, to_user_id, session)
+    if member is None:
+        raise NotFoundError(
+            "Curator group not found",
+        )
+    if member.kind == CuratorMemberKind.MASTER.value:
+        raise ConflictError(
+            "This member is already a master of the school",
+            code="already_master",
+        )
+    # BE-95: THE CANDIDATE'S MEMBER ROW IS LOCKED BEFORE THE OFFER IS
+    # WRITTEN -- the first lock of the module's order (header). The reads
+    # above answered from the row as it was; between them and the INSERT a
+    # remove or a leave could delete the membership, find no offer yet to
+    # take with it, and commit -- leaving an appointment addressed to a
+    # non-member, which springs back to life if they ever re-join (GT-27
+    # deletes it at the source precisely so that cannot happen). Measured.
+    # Holding the row makes the departure wait for this offer and then take
+    # it, and makes this offer wait for a departure and then find nothing.
+    # The same lock closes the other half: an accept that has just made them
+    # a master leaves kind='master', the predicate fails, and the curator
+    # gets the honest 409 instead of a second appointment of a master.
+    if not await _lock_member(
+        group.id, to_user_id, session, kind=CuratorMemberKind.STUDENT.value,
+    ):
+        if await _membership_row(group.id, to_user_id, session) is None:
+            raise NotFoundError("Curator group not found")
+        raise ConflictError(
+            "This member is already a master of the school",
+            code="already_master",
+        )
+
+    # BE-59: THE CANDIDATE'S MASTER PROFILE, FOR SHARE, AND ONLY THEN THEIR
+    # VERIFICATION -- the second position of the module's order (header).
+    # Read before this lock, the status could be the one a verification was
+    # replacing at that moment, and the verification would then announce
+    # an offer set that did not include this one yet.
+    await _lock_master_profile(to_user_id, session)
+    verified = await _has_master_capability(to_user_id, session)
+
+    if await _master_offer_row(group.id, to_user_id, session) is not None:
+        # Already offered. Nothing to write and nothing to send: a second
+        # notification about the same pending offer is noise, and a second
+        # journal line would say the curator acted twice when they decided
+        # once.
+        return
+
+    # BE-95: OWNERSHIP RE-CHECKED UNDER THE GROUP LOCK, before the INSERT
+    # (header): the school can change hands between _get_group_or_404 above
+    # and here, and the INSERT's own FK lock on the group must not come
+    # first and be upgraded by this one.
+    if not await _lock_group_as_owner(curator_user_id, group.id, session):
+        raise NotFoundError("Curator group not found")
+
+    offer = CuratorGroupMasterOffer(group_id=group.id, to_user_id=to_user_id)
+    try:
+        async with session.begin_nested():
+            session.add(offer)
+            await session.flush()
+    except IntegrityError:
+        # Lost a race with the curator's own double tap. The winner's row is
+        # the offer; this request has nothing to add.
+        #
+        # BE-95: THE OTHER IntegrityError -- the FK, a school deleted under
+        # the request -- used to land here too and answer 204 "offered"
+        # about a school that was gone. It cannot any more, and that is why
+        # there is no branch for it: this function holds the candidate's
+        # member row (above), and delete_curator_group deletes members
+        # before the group, so a delete waits for this transaction instead
+        # of committing in the middle of it.
+        return
+
+    target_name = await _frozen_name(to_user_id, session)
+    journal = _record_group_event(
+        group.id,
+        actor,
+        CuratorGroupEventKind.MASTER_OFFERED,
+        session,
+        data=_target_data(to_user_id, target_name),
+    )
+    actor_name = display_name(actor.first_name, actor.last_name)
+    if verified:
+        await _notify_group_event(
+            session,
+            journal_event_id=journal.id,
+            type=_MASTER_OFFERED_TYPE,
+            recipient_id=to_user_id,
+            title=_MASTER_OFFERED_TITLE,
+            body=_master_offered_body(actor_name, group.name),
+            group_id=group.id,
+            group_name=group.name,
+            actor_name=actor_name,
+            # Links (3 October): its OWN verb. The Telegram button carries no
+            # notification type, so the shared open_curator_group could only
+            # ever open the school page -- this one opens the offer screen.
+            action=_OPEN_MASTER_OFFER,
+        )
+        return
+    await _notify_school(
+        session,
+        idempotency_key=f"curator-group-event:{journal.id}",
+        type="curator_group.master_verification_required",
+        recipient_id=to_user_id,
+        title="Нужна верификация мастера",
+        body=(
+            f"{actor_name} предлагает вам стать мастером школы "
+            f"«{group.name}». Для этого нужна верификация мастера: подайте "
+            f"заявку или дождитесь решения по уже поданной. Приглашение "
+            f"придёт после верификации."
+        ),
+        group_id=group.id,
+        variables={"group_name": group.name, "actor_name": actor_name},
+        action=_OPEN_MASTER_APPLICATION,
+    )
+
+
+async def accept_curator_group_master_offer(
+    group_id: UUID,
+    user_id: UUID,
+    session: AsyncSession,
+    *,
+    actor: User,
+) -> None:
+    """Consent to becoming a master of this school.
+
+    THE INVARIANT "NOTHING IS WRITTEN INTO A DARK SCHOOL" HOLDS HERE NOT
+    BECAUSE THE GATE IS EVERYWHERE, BUT BECAUSE THIS PATH GOES THROUGH
+    _relation_or_404, WHICH CARRIES IT. The curator-side write helpers do
+    not: _get_group_or_404 filters on id and owner only. Move consent onto a
+    curator-side path and the invariant disappears silently -- the code will
+    keep working and will start writing into schools that are dark.
+
+    A dark school therefore refuses with the same 404 as everything else
+    about it, AND THE OFFER IS NOT DELETED. The condition is temporary: the
+    curator's verification can come back, and with it the ability to accept
+    something that was genuinely offered. Deleting it would punish the
+    appointee for somebody else's status.
+
+    THE CAPABILITY CHECK RUNS AGAIN HERE, and for the same shape of reason:
+    an appointee whose verification lapsed between the offer and this call
+    is refused, the offer survives, and re-verifying restores the ability to
+    accept. Checking only at the offer would let the gate be walked around
+    by waiting a week.
+
+    member_promoted IS WRITTEN HERE, by the fact of consent. Until GT-27 it
+    was written by the join path, when a master link upgraded a student.
+
+    Raises:
+        NotFoundError: no offer for you in this school, or the school is
+            not visible to you (dark, deleted, or never yours).
+        ForbiddenError master_required: your master verification is not
+            current.
+    """
+    group, _relation = await _relation_or_404(group_id, user_id, session)
+
+    # BE-97: THE APPOINTEE'S MEMBER ROW IS LOCKED FIRST, the offer claimed
+    # second -- the module's order (header). Until BE-95 the claim came
+    # first and the membership write last, while remove and leave take the
+    # member row first and the offer second. A removal landing between the
+    # two held the member row and waited for the offer; this function then
+    # asked for the member row -- a deadlock, a 500 to one of the two,
+    # measured in both start orders. BE-81's race tests could not see it:
+    # their competitor ran to completion inside a pause of this function,
+    # so the two transactions never waited at the same time.
+    #
+    # The competitors BE-81 named, and what decides each now -- a statement,
+    # never a read:
+    #   remove_curator_group_member, leave_curator_group -- they take the
+    #     member row first too, so one of the two waits for the other at the
+    #     very first lock. Committed before this: no row, 404 here.
+    #   decline_curator_group_master_offer -- touches only the offer, so it
+    #     is the CLAIM below that meets it, as in BE-81: the refusal and the
+    #     promotion cannot both commit.
+    if not await _lock_member(group.id, user_id, session):
+        raise NotFoundError("Offer not found", code="master_offer_not_found")
+
+    # BE-81: THE OFFER IS CLAIMED, NOT READ -- DELETE ... RETURNING is "took
+    # it and confirmed it was mine to take" in one statement, the idiom of
+    # decline_curator_group_master_offer one screen below.
+    #
+    # THE DOCSTRING'S PROMISE THAT A REFUSED OFFER SURVIVES DEPENDS ON THE
+    # TRANSACTION, NOT ON THIS ORDER: the offer is deleted before the
+    # capability check and survives a 403 only because get_db_session rolls
+    # the request back on an exception (P-01). This function does not hold
+    # that invariant by itself; test_curator_master_offer_race.py pins it.
+    #
+    # A dark school is refused earlier still, by _relation_or_404, before
+    # either statement runs at all.
+    claimed = (
+        await session.execute(
+            delete(CuratorGroupMasterOffer)
+            .where(
+                CuratorGroupMasterOffer.group_id == group.id,
+                CuratorGroupMasterOffer.to_user_id == user_id,
+            )
+            .returning(CuratorGroupMasterOffer.id)
+        )
+    ).first()
+    if claimed is None:
+        raise NotFoundError("Offer not found", code="master_offer_not_found")
+
+    if not await _has_master_capability(user_id, session):
+        raise ForbiddenError(
+            "Only a verified master can accept",
+            code="master_required",
+        )
+
+    # NO "removed while the offer was pending" BRANCH: the member row is
+    # held from the first statement, so it cannot vanish under this write.
+    await session.execute(
+        update(CuratorGroupMember)
+        .where(
+            CuratorGroupMember.group_id == group.id,
+            CuratorGroupMember.user_id == user_id,
+        )
+        .values(kind=CuratorMemberKind.MASTER.value)
+        .execution_options(synchronize_session=False)
+    )
+
+    journal = _record_group_event(
+        group.id,
+        actor,
+        CuratorGroupEventKind.MEMBER_PROMOTED,
+        session,
+    )
+    await _notify_group_event(
+        session,
+        journal_event_id=journal.id,
+        type="curator_group.master_offer_accepted",
+        recipient_id=group.curator_user_id,
+        title="Назначение принято",
+        body=(
+            f"{display_name(actor.first_name, actor.last_name)} принял "
+            f"назначение мастером школы «{group.name}»."
+        ),
+        group_id=group.id,
+        group_name=group.name,
+        actor_name=display_name(actor.first_name, actor.last_name),
+    )
+
+
+async def decline_curator_group_master_offer(
+    group_id: UUID,
+    user_id: UUID,
+    session: AsyncSession,
+    *,
+    actor: User,
+) -> None:
+    """Refuse the appointment. Idempotent, and silent about offers not yours.
+
+    204 WHERE ACCEPT ANSWERS 404, the same asymmetry transfer already uses:
+    accept changes the roster and so must not tell "no offer" apart from
+    "not your offer"; declining something never offered leaves the world in
+    the state you asked for, so success is honest and reveals nothing.
+
+    Not gated on the school being active, for the same reason leaving is
+    not: an answer the appointee is entitled to give must not depend on
+    somebody else's verification status. Note the asymmetry with accept --
+    that one IS gated, because it WRITES into the school.
+    """
+    declined = (
+        await session.execute(
+            delete(CuratorGroupMasterOffer)
+            .where(
+                CuratorGroupMasterOffer.group_id == group_id,
+                CuratorGroupMasterOffer.to_user_id == user_id,
+            )
+            .returning(CuratorGroupMasterOffer.group_id)
+        )
+    ).first()
+    if declined is None:
+        return
+
+    row = (
+        await session.execute(
+            select(CuratorGroup.curator_user_id, CuratorGroup.name).where(
+                CuratorGroup.id == group_id
+            )
+        )
+    ).first()
+    if row is None:
+        # The school vanished under us; the FK would have taken the offer
+        # with it and there is no journal left to write into.
+        return
+    curator_id, group_name = row
+
+    journal = _record_group_event(
+        group_id,
+        actor,
+        CuratorGroupEventKind.MASTER_OFFER_DECLINED,
+        session,
+        data=_target_data(curator_id, await _frozen_name(curator_id, session)),
+    )
+    await _notify_group_event(
+        session,
+        journal_event_id=journal.id,
+        type="curator_group.master_offer_declined",
+        recipient_id=curator_id,
+        title="Назначение отклонено",
+        body=(
+            f"{display_name(actor.first_name, actor.last_name)} отклонил "
+            f"назначение мастером школы «{group_name}»."
+        ),
+        group_id=group_id,
+        group_name=group_name,
+        actor_name=display_name(actor.first_name, actor.last_name),
+    )
+
+
+async def cancel_curator_group_master_offer(
+    curator_user_id: UUID,
+    group_id: UUID,
+    to_user_id: UUID,
+    session: AsyncSession,
+    *,
+    actor: User,
+) -> None:
+    """Withdraw an appointment. Idempotent: no such offer -> still 204.
+
+    THE ONLY END OF AN OFFER NOBODY ANSWERED (BE-59). An offer has no
+    expiry -- owner: it waits until the curator takes it back -- and this
+    is the taking back, in either state, awaiting verification or awaiting
+    an answer. Shaped on cancel_curator_group_transfer: the DELETE is both
+    the check and the take, and cancelling nothing writes nothing.
+
+    THE CANDIDATE IS NOT NOTIFIED, by decision: an appointment withdrawn is
+    the absence of a role nobody had yet, and the accept they might still
+    press answers the honest 404 master_offer_not_found. The journal does
+    record it, with the person as its target: the curator changed their
+    mind, which is an act in the school.
+
+    A stranger to the school gets the same 404 as everywhere else (P-08);
+    a request naming somebody with no offer here -- never offered, already
+    answered, left -- is the idempotent 204, which says nothing about them
+    that the curator's own roster does not.
+    """
+    group = await _get_group_or_404(curator_user_id, group_id, session)
+    cancelled = (
+        await session.execute(
+            delete(CuratorGroupMasterOffer)
+            .where(
+                CuratorGroupMasterOffer.group_id == group.id,
+                CuratorGroupMasterOffer.to_user_id == to_user_id,
+            )
+            .returning(CuratorGroupMasterOffer.to_user_id)
+        )
+    ).first()
+    if cancelled is None:
+        return
+    # OWNERSHIP RE-CHECKED AFTER THE TAKE, last in the module's order
+    # (header) -- as in cancel_curator_group_transfer: if the school changed
+    # hands since _get_group_or_404, this would have withdrawn the NEW
+    # owner's appointment. The rollback (P-01) puts it back.
+    if not await _lock_group_as_owner(curator_user_id, group.id, session):
+        raise NotFoundError("Curator group not found")
+    _record_group_event(
+        group.id,
+        actor,
+        CuratorGroupEventKind.MASTER_OFFER_CANCELLED,
+        session,
+        data=_target_data(
+            cancelled.to_user_id,
+            await _frozen_name(cancelled.to_user_id, session),
+        ),
+    )
+
+
+async def _offer_schools(
+    group_ids: list[UUID], session: AsyncSession,
+) -> dict[UUID, tuple[UUID, str, str]]:
+    """{group_id: (curator_user_id, school name, curator's name)} -- now.
+
+    The CURRENT curator, read at the moment of the admin's decision, not
+    the one who made the offer: the offer does not record its author, and
+    a school handed over since belongs, with its pending appointments, to
+    whoever holds it now. They are who the candidate will be teaching
+    under, and who the outcome is news to.
+    """
+    rows = (
+        await session.execute(
+            select(
+                CuratorGroup.id,
+                CuratorGroup.curator_user_id,
+                CuratorGroup.name,
+                User.first_name,
+                User.last_name,
+            )
+            .join(User, User.id == CuratorGroup.curator_user_id)
+            .where(CuratorGroup.id.in_(group_ids))
+        )
+    ).all()
+    return {
+        gid: (curator_id, name, display_name(first, last))
+        for gid, curator_id, name, first, last in rows
+    }
+
+
+async def announce_pending_master_offers(
+    user_id: UUID, session: AsyncSession,
+) -> int:
+    """This person just became a verified master: ask every waiting school.
+
+    CALLED BY EVERY PATH THAT GRANTS MASTER CAPABILITY, and only on the
+    transition -- verify_master (pending -> verified), make_master and
+    set_role to_master when the profile was not verified before, and
+    apply_for_master's self-provision (no profile -> verified). seed does
+    not call it: a seeded database has no pending appointments. Each offer
+    of the person gets curator_group.master_offered, "become a master of
+    this school? yes / no", named after the school's CURRENT curator
+    (_offer_schools). Returns how many were announced.
+
+    NOT INSIDE sync_membership_delta, though every caller makes that call
+    a line away: core/events would then import the school module, and the
+    contact book would start deciding who gets asked to teach.
+
+    THE OFFERS ARE LOCKED, NOT READ -- a no-op UPDATE ... RETURNING, the
+    module's idiom, in the "master offer" position of the order (header),
+    after the profile row the caller already holds. A decline or a
+    withdrawal landing at the same instant either commits first (the row
+    is gone, nothing is announced) or waits for this transaction (and
+    removes an offer that was, honestly, announced). The callers hold the
+    profile by a FOR UPDATE or by their own UPDATE of it; for the latter
+    that UPDATE is flushed by the autoflush in front of this statement, so
+    the profile is still taken before the offers.
+
+    THE IDEMPOTENCY KEY CARRIES A transition_id MINTED HERE, one uuid4 per
+    call, shared by every offer of the call. NOT verified_at: the key has to
+    name the TRANSITION, and a uuid4 per call does that by construction,
+    while a data stamp does it only for as long as every caller keeps
+    writing a fresh one. (Until BE-104 delivery 2 and BE-106, make_master
+    and set_role re-verified with setdefault and kept an EARLIER block --
+    a key built from the stamp would then repeat across two verifications,
+    and comms would silently drop the second prompt, the case the key
+    exists to tell apart.) A uuid4 per call is a new
+    key exactly per transition, and it does not send twice: a request
+    that rolls back takes its outbox rows with it (same transaction), and
+    a request repeated after a commit meets the profile already verified
+    -- 409 on every caller, before this is reached.
+    """
+    taken = (
+        await session.execute(
+            update(CuratorGroupMasterOffer)
+            .where(CuratorGroupMasterOffer.to_user_id == user_id)
+            .values(offered_at=CuratorGroupMasterOffer.offered_at)
+            .returning(
+                CuratorGroupMasterOffer.id,
+                CuratorGroupMasterOffer.group_id,
+                CuratorGroupMasterOffer.offered_at,
+            )
+            .execution_options(synchronize_session=False)
+        )
+    ).all()
+    if not taken:
+        return 0
+
+    schools = await _offer_schools([row.group_id for row in taken], session)
+    transition_id = uuid4()
+    for offer_id, group_id, _offered_at in sorted(
+        taken, key=lambda row: (row.offered_at, row.id),
+    ):
+        _curator_id, group_name, curator_name = schools[group_id]
+        await _notify_school(
+            session,
+            idempotency_key=(
+                f"curator-master-offer-ready:{offer_id}:{transition_id}"
+            ),
+            type=_MASTER_OFFERED_TYPE,
+            recipient_id=user_id,
+            title=_MASTER_OFFERED_TITLE,
+            body=_master_offered_body(curator_name, group_name),
+            group_id=group_id,
+            variables={"group_name": group_name, "actor_name": curator_name},
+            action=_OPEN_MASTER_OFFER,  # Links: the offer screen, not the school
+        )
+    return len(taken)
+
+
+async def close_pending_master_offers(
+    user_id: UUID, session: AsyncSession,
+) -> int:
+    """This person's master application was rejected: close their offers.
+
+    CALLED BY reject_master, after it has written the rejection, while it
+    holds the profile FOR UPDATE -- the "master profile" position, so the
+    DELETE below is the "master offer" one (header). Every offer waiting
+    for this person's verification is deleted, and each school's CURRENT
+    curator (_offer_schools) is told the appointment is closed and why.
+    Returns how many.
+
+    ONLY OFFERS AWAITING VERIFICATION CAN BE HERE. reject_master acts on a
+    pending profile only, so the person is not verified, and an offer of
+    theirs is by definition waiting for that -- there is no
+    awaiting_answer offer for this to close by mistake.
+
+    THE PERSON MAY APPLY AGAIN (apply_for_master accepts a rejected
+    profile), and that does not revive anything: the flow the owner
+    described closes here, and a new appointment is the curator's new
+    decision. NO JOURNAL ROW, for the reason the event vocabulary gives
+    (models.py, MASTER_OFFER_CANCELLED): the decision is an admin's, about a
+    person. The key is the offer itself -- one offer is closed once.
+    """
+    closed = (
+        await session.execute(
+            delete(CuratorGroupMasterOffer)
+            .where(CuratorGroupMasterOffer.to_user_id == user_id)
+            .returning(
+                CuratorGroupMasterOffer.id,
+                CuratorGroupMasterOffer.group_id,
+                CuratorGroupMasterOffer.offered_at,
+            )
+        )
+    ).all()
+    if not closed:
+        return 0
+
+    schools = await _offer_schools([row.group_id for row in closed], session)
+    candidate_name = await _frozen_name(user_id, session)
+    for offer_id, group_id, _offered_at in sorted(
+        closed, key=lambda row: (row.offered_at, row.id),
+    ):
+        curator_id, group_name, _curator_name = schools[group_id]
+        await _notify_school(
+            session,
+            idempotency_key=f"curator-master-offer-closed:{offer_id}",
+            type="curator_group.master_offer_closed",
+            recipient_id=curator_id,
+            title="Назначение закрыто",
+            body=(
+                f"{candidate_name} не прошёл верификацию мастера. "
+                f"Приглашение мастером школы «{group_name}» закрыто."
+            ),
+            group_id=group_id,
+            variables={
+                "group_name": group_name,
+                "target_name": candidate_name,
+            },
+        )
+    return len(closed)
+
+
+# ===========================================================================
+# BE-30 -- the school learns about a new practice
+# ===========================================================================
+
+
+async def announce_published_practice(
+    practice: Practice,
+    actor: User,
+    session: AsyncSession,
+) -> tuple[int, int]:
+    """Journal + notify the school this practice belongs to, on publication.
+
+    BE-74: THE TRIGGER IS OWNERSHIP, NOT AUDIENCE. A practice created in a
+    school is announced to it whether it is for the school's students or
+    for everyone -- a public practice of a school is shown on its page,
+    and its people hear about it like about any other. A practice without
+    a school announces nothing. ONE school, never several: a practice
+    belongs to exactly one (owner ruling, 2026-10-01).
+
+    THE PAIR IS COUNTED BY SCHOOL, NOT BY PERSON: a school with no members
+    gets its journal line and nobody gets a notification. Either half
+    happens or neither does, and a rollback of the publication takes both
+    -- everything here rides the caller's transaction, the journal
+    synchronously and the notifications through the outbox.
+
+    ONE ANNOUNCEMENT PER PUBLICATION, NOT PER OCCURRENCE. The caller hooks
+    the draft -> scheduled branch, which a series ROOT passes once and its
+    generated children never pass at all (they are born scheduled inside
+    generate_series_occurrences). GT-30's master reminder deliberately
+    hooks both, because forty sessions are forty things to be reminded of;
+    this is one decision to open a course, and hooking both here would
+    turn two hundred members and forty occurrences into eight thousand
+    messages from one button.
+
+    THE SCHOOL IS FILTERED BY master_broadcasts_to_group_clause -- the same
+    predicate the audience and the school page use. A master who left the
+    school since the draft was written keeps the practice's owner (it never
+    changes), but the school can no longer see his practices, so announcing
+    one would be an arrival nobody can open.
+
+    NO "SCHOOL VANISHED" BRANCH, and none is missing. The caller,
+    update_practice, holds the practice row FOR UPDATE, and
+    delete_curator_group clears its practices' owner BEFORE it deletes the
+    school (header: practice before group). A deletion that started first
+    has already cleared this row's owner (and turned it public, BE-74
+    migration trigger); update_practice reads that after waiting on it --
+    the row is that session's first load of the practice, so it is read
+    fresh, not from an identity map -- and does not call this function at
+    all, because it calls only for a practice that has a school. One that
+    starts later waits on this row. Either way the school
+    read below still exists when its journal row is inserted -- the BE-95
+    savepoint that used to catch a deleted school here guarded a state the
+    lock order now excludes. The one other way a school goes, the CASCADE
+    from its curator's users row, takes the school before the practice and
+    meets this function as a lock wait, not as a missing row -- a savepoint
+    would not catch it either (BE-74 report, observations).
+
+    NO ACTIVITY CHECK ON THE SCHOOL, and none is missing: a school whose
+    curator lost verification goes dark for reads, but publishing into one
+    still succeeds, and verification coming back makes both the school and
+    the practice visible again. The notification is early, not wrong. A
+    member of a dark school can receive it and find a 404 behind it today
+    -- named, not fixed here.
+
+    THE AUDIENCE IS EVERY MEMBERSHIP ROW plus the curator, minus the
+    person who pressed the button. Membership, NOT the roster: a suspended
+    master is hidden from the roster (I-4) but still sees the school's
+    practices (_viewer_in_curator_group_clause says so in as many words),
+    so hiding this from him would contradict the screen he can open. The
+    curator holds no membership row at all (I-2) and is added explicitly.
+
+    Args:
+        practice: The freshly published practice.
+        actor: The master who published it -- excluded from the fan-out.
+        session: The caller's write session; no commit here (P-01).
+
+    Returns:
+        (schools_announced, people_notified) -- schools_announced is 0 or
+        1. Returned rather than logged alone so the caller and the tests can
+        assert the counts that the pair invariant is stated in.
+    """
+    # BE-43: schools off means there is nobody to tell. Without this the
+    # fan-out ran on a path no router guards: a journal line in the school
+    # and a notification to every member, about a practice the school page
+    # and the audience predicate then hide from all of them.
+    if not settings.curator_groups_enabled:
+        return (0, 0)
+
+    group = (
+        await session.execute(
+            select(CuratorGroup).where(
+                CuratorGroup.id == practice.curator_group_id,
+                master_broadcasts_to_group_clause(actor.id),
+            )
+        )
+    ).scalar_one_or_none()
+    if group is None:
+        return (0, 0)
+
+    _record_group_event(
+        group.id,
+        actor,
+        CuratorGroupEventKind.PRACTICE_PUBLISHED,
+        session,
+        data={
+            "practice_id": str(practice.id),
+            "practice_title": practice.title,
+        },
+    )
+
+    member_ids = set(
+        (
+            await session.execute(
+                select(CuratorGroupMember.user_id).where(
+                    CuratorGroupMember.group_id == group.id,
+                )
+            )
+        ).scalars().all()
+    )
+    recipients = member_ids | {group.curator_user_id}
+    recipients.discard(actor.id)
+
+    actor_name = display_name(actor.first_name, actor.last_name)
+    for recipient_id in sorted(recipients, key=str):
+        await emit_notification(
+            session,
+            idempotency_key=f"curator-practice-published:{practice.id}:{recipient_id}",
+            type="curator_group.practice_published",
+            target_type="user",
+            target_value=str(recipient_id),
+            title="Новая практика в школе",
+            body=(
+                f"{actor_name} опубликовал практику «{practice.title}» "
+                f"в школе «{group.name}»."
+            ),
+            action_data={
+                # open_practice, not open_curator_group: the message is
+                # about a practice, and a link to the school page would
+                # leave the person hunting for it. Same choice, same
+                # reason, as practice.cancelled_by_curator (BE-21).
+                "action": "open_practice",
+                "params": {"practice_id": str(practice.id)},
+                "practice_title": practice.title,
+                "group_name": group.name,
+                "actor_name": actor_name,
+            },
+        )
+
+    return (1, len(recipients))

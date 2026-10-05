@@ -27,7 +27,31 @@
          on mount: null" crash that blanked the heading + broke the screen. -->
     <Teleport defer to=".mobile-layout__island" :disabled="!floating">
       <div class="calendar__island" :class="{ 'calendar__island--floating': floating }">
-        <h1 class="calendar__heading">Календарь</h1>
+        <!-- Master mode (owner 2026-09-30): a back control rides the island --
+             this stacked screen is NOT the tab hub, so the viewer must have a
+             way out; it returns to the master's profile deterministically. -->
+        <div class="calendar__heading-row">
+          <button
+            v-if="masterMode || schoolMode"
+            type="button"
+            class="calendar__back"
+            :aria-label="masterMode ? 'Назад к профилю мастера' : 'Назад к школе'"
+            @click="goBack"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M15 6l-6 6 6 6"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+          <h1 class="calendar__heading">
+            {{ masterMode ? 'Практики мастера' : schoolMode ? 'Практики школы' : 'Календарь' }}
+          </h1>
+        </div>
 
         <!-- Week selector -->
         <WeekStrip
@@ -42,8 +66,10 @@
       </div>
     </Teleport>
 
-    <!-- "Выбрать практики" control -->
-    <div class="calendar__selector">
+    <!-- "Выбрать практики" control: the viewer's OWN practice filters. In
+         master mode the feed is the master's scheduled practices -- the
+         facet modal has nothing to filter, so the control sits out. -->
+    <div v-if="!masterMode && !schoolMode" class="calendar__selector">
       <!-- Collapsed: pill + funnel -->
       <button v-if="!expanded" type="button" class="calendar__select-pill" @click="expanded = true">
         <span class="calendar__select-label">Выбрать практики</span>
@@ -127,8 +153,14 @@
     <!-- Empty: no practices on the selected day -->
     <VEmptyState
       v-else-if="dayPractices.length === 0"
-      title="Нет практик"
-      description="На этот день практик нет. Выберите другой день или измените фильтры."
+      :title="masterMode || schoolMode ? 'Практик нет' : 'Нет практик'"
+      :description="
+        masterMode
+          ? 'У мастера пока нет практик на этот день. Выберите другой день.'
+          : schoolMode
+            ? 'У школы пока нет практик на этот день. Выберите другой день.'
+            : 'На этот день практик нет. Выберите другой день или измените фильтры.'
+      "
     >
       <template #icon><IconClock :size="48" /></template>
     </VEmptyState>
@@ -155,12 +187,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useCalendarStore } from '@/stores/calendar'
 import { VLoader, VEmptyState, VButton, VCard } from '@/components/ui'
 import WeekStrip from '@/components/shared/WeekStrip.vue'
 import { useFloatingHeader } from '@/components/layout/useFloatingHeader'
+import { historyHasBack } from '@/platform'
 import CalendarPracticeCard from '@/components/shared/CalendarPracticeCard.vue'
 import CalendarFilterModal from '@/components/shared/CalendarFilterModal.vue'
 import { IconCheck, IconClock } from '@/components/icons'
@@ -178,8 +211,64 @@ import type { PracticeResponse } from '@/api/types'
 import type { CalendarFacetFilters } from '@/stores/calendar'
 
 const router = useRouter()
+const route = useRoute()
 const store = useCalendarStore()
 const viewerTz = useViewerTimezone()
+
+// -- Stacked scopes: master mode (owner 2026-09-30) / school mode (owner
+//    2026-10-01) --------------------------------------------------------------
+// Stacked routes user-calendar-master/:masterId and user-calendar-school/
+// :groupId: the week feed switches to one master's scheduled practices
+// (store.setMasterScope folds master_id + status=scheduled into loadWeek) or
+// to one school's upcoming ones (store.setSchoolScope -- loadWeek feeds from
+// the school endpoint's full upcoming list, see the store), and the viewer's
+// facet UI sits out. The scopes MUST reset on unmount -- the store is a
+// singleton the tab calendar shares; a leaked scope would poison the
+// viewer's own week.
+// Owner 2026-10-03: the master route may carry ?groupId (the curator's school
+// context off the profile) -- the feed then keeps only the master's practices
+// in THAT school (the store's client-side filter, see setMasterScope).
+const masterMode = computed(() => String(route.params.masterId ?? '') !== '')
+const schoolMode = computed(() => String(route.params.groupId ?? '') !== '')
+
+onMounted(() => {
+  if (masterMode.value) {
+    store.setMasterScope(String(route.params.masterId), String(route.query.groupId ?? '') || null)
+  } else if (schoolMode.value) {
+    store.setSchoolScope(String(route.params.groupId))
+  }
+})
+
+onUnmounted(() => {
+  if (masterMode.value) {
+    store.setMasterScope(null)
+  }
+  if (schoolMode.value) {
+    store.setSchoolScope(null)
+  }
+})
+
+function goBack(): void {
+  // RETURN semantics, not a push (owner bug 2026-09-30): the only in-app entry
+  // to a stacked calendar is the row that opened it, so history-back restores
+  // it WITH its query -- ?groupId keeps the curator context (analytics, CTA,
+  // the curator menu) alive. A pushed clone stripped the query (the page's own
+  // router.back() then looped straight back into the calendar). A deep link
+  // has no in-app history to return to -- land on the origin page.
+  if (historyHasBack()) {
+    router.back()
+  } else if (masterMode.value) {
+    void router.push({
+      name: 'user-master-public',
+      params: { id: String(route.params.masterId) },
+    })
+  } else {
+    void router.push({
+      name: 'user-curator-group',
+      params: { id: String(route.params.groupId) },
+    })
+  }
+}
 
 // Title + week strip float as an island (G-1): the date nav stays in place while
 // the practice list scrolls under it.
@@ -208,12 +297,7 @@ const dayLabel = computed<string>(() => {
 
 // -- Active filter chips (display + removal) --
 type ChipKind =
-  | 'direction'
-  | 'difficulty'
-  | 'practice_type'
-  | 'duration_bucket'
-  | 'time_of_day'
-  | 'style'
+  'direction' | 'difficulty' | 'practice_type' | 'duration_bucket' | 'time_of_day' | 'style'
 interface ActiveChip {
   key: string
   kind: ChipKind
@@ -308,15 +392,15 @@ function removeChip(chip: ActiveChip): void {
       break
   }
 
-  store.applyFilters(next)
+  void store.applyFilters(next)
 }
 
 function goToDetail(id: string): void {
-  router.push({ name: 'practice-detail', params: { id } })
+  void router.push({ name: 'practice-detail', params: { id } })
 }
 
 onMounted(() => {
-  store.init()
+  void store.init()
 })
 </script>
 
@@ -325,6 +409,29 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+
+/* Master mode: back control + title share the island's heading row. */
+.calendar__heading-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.calendar__back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: var(--velo-glass-blue-15);
+  color: var(--velo-text-primary);
+  padding: 0;
+  border: none;
+  cursor: pointer;
 }
 
 .calendar__heading {

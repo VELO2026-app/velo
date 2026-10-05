@@ -3,10 +3,10 @@
 # =============================================================================
 #
 # MULTI-STAGE BUILD:
-#   Stage 1 ("source"):  npm ci + source copied -- dependencies ready, NOTHING
-#                        executed. Exists so `velo test` can build up to here
-#                        and run the suite ONCE, with live output.
-#   Stage 2 ("builder"): npm run test + npm run build -> produces dist/
+#   Stage 1 ("source"):  pnpm install --frozen-lockfile + source copied -- deps
+#                        ready, NOTHING executed. Exists so `velo test` can
+#                        build up to here and run the suite ONCE, with live output.
+#   Stage 2 ("builder"): pnpm run test + pnpm run build -> produces dist/
 #   Stage 3 ("runtime"): nginx serves dist/ as static files
 #
 # Tests run BEFORE build — if tests fail, image is not built.
@@ -30,13 +30,26 @@
 # ---------------------------------------------------------------------------
 # Stage 1: Source -- deps installed, nothing run
 # ---------------------------------------------------------------------------
-FROM node:22-alpine AS source
+FROM node:24-alpine AS source
 
 WORKDIR /app
 
-# Install dependencies first (cached unless package*.json change).
-COPY package.json package-lock.json* ./
-RUN npm ci
+# Install dependencies first (cached unless package.json / pnpm-lock.yaml /
+# pnpm-workspace.yaml change). pnpm-workspace.yaml is required: without it
+# pnpm errors out on the allowed-build-scripts check (esbuild, vue-demi).
+# The pnpm version here mirrors the packageManager pin in package.json.
+#
+# --trust-lockfile skips pnpm's supply-chain verification of the lockfile,
+# and that is deliberate: the check is time-based (it rejects entries newer
+# than minimumReleaseAge counted from NOW), so running it here makes the
+# image build non-reproducible -- the same commit builds or fails depending
+# on the hour. It also guards the wrong end: a freshly published package can
+# only enter at `pnpm install` on a developer machine, where the lockfile is
+# written. By the time we get here the lockfile is committed and reviewed.
+# The policy therefore stays ON by default where lockfiles are produced and
+# OFF where they are consumed. --frozen-lockfile still pins every version.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN npm install -g pnpm@12.4.2 && pnpm install --frozen-lockfile --trust-lockfile
 
 # Copy source. This stage deliberately ENDS here: it is what `velo test`
 # builds, so building it must not execute the suite that `velo test` is
@@ -49,13 +62,13 @@ COPY . .
 FROM source AS builder
 
 # Test gate: unit tests must pass before we build.
-RUN npm run test
+RUN pnpm run test
 
-# Type-check + bundle (npm run build = vue-tsc --noEmit && vite build).
+# Type-check + bundle (pnpm run build = vue-tsc --noEmit && vite build).
 # ARGs are injected by docker-compose build.args from vite.env.
 ARG VITE_API_BASE_URL
 ARG VITE_TELEGRAM_BOT_URL
-RUN npm run build
+RUN pnpm run build
 
 # ---------------------------------------------------------------------------
 # Stage 3: Serve with Nginx

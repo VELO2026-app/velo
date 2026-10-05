@@ -29,8 +29,18 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, ref, type App, type Ref } from 'vue'
+import { createPinia, type Pinia } from 'pinia'
 import { createRouter, createMemoryHistory, type Router } from 'vue-router'
 import UserShell from '@/views/shells/UserShell.vue'
+import { useAuthStore } from '@/stores/auth'
+
+// The schools tab probe (tz-curator.md §1.2) is the one network seam the
+// shell touches; both branches below drive it through this mock.
+const curatorGroupsMock = vi.hoisted(() => ({
+  getCuratorGroups: vi.fn(),
+  getMyCuratorGroups: vi.fn(),
+}))
+vi.mock('@/api/curatorGroups', () => curatorGroupsMock)
 
 const keyboardOpenRef: Ref<boolean> = ref(false)
 vi.mock('@/composables/useKeyboardOpen', () => ({
@@ -42,13 +52,14 @@ function buildRouter(): Router {
   return createRouter({
     history: createMemoryHistory(),
     routes: [
-      // Same meta as router/index.ts: headerless is declared on the ROUTE
-      // ([FE-3] follow-up -- the greeting removal left the dashboard without
-      // any floating header, so it joins the headerless contract).
+      // Mirrors router/index.ts: user-dashboard's headerless meta is RETIRED
+      // (the VHeader «Главная» + bell floats again, 2026-09-08), so the route
+      // carries no meta -- and StubChild teleports nothing into the island,
+      // which is exactly the pre-measurement frame the headered contract
+      // below pins (HEADER_FALLBACK + gap).
       {
         path: '/user/dashboard',
         name: 'user-dashboard',
-        meta: { headerless: true },
         component: StubChild,
       },
       // [FE-3] profile hub: same contract (retires its margin-top hack);
@@ -60,6 +71,15 @@ function buildRouter(): Router {
         component: StubChild,
       },
       { path: '/user/calendar', name: 'user-calendar', component: StubChild },
+      {
+        // The «Предстоящие практики» target on the school page (owner
+        // 2026-10-01): the school-scoped week grid. Owner 2026-10-05: a
+        // DETAIL screen -- dock hidden (DETAIL_ROUTES) + fogged (FOG_ROUTES).
+        path: '/user/calendar/school/:groupId',
+        name: 'user-calendar-school',
+        component: StubChild,
+      },
+      { path: '/user/schools', name: 'user-schools', component: StubChild },
       {
         path: '/user/booking-confirmed/:practiceId',
         name: 'user-booking-confirmed',
@@ -75,8 +95,19 @@ function buildRouter(): Router {
         component: StubChild,
       },
       { path: '/user/profile/messages/:id', name: 'user-chat', component: StubChild },
+      // FE-11: the bell feed -- reached from the dashboard header's bell
+      // (UserDashboardView.onBell); hides the dock (INBOX_ROUTES).
+      { path: '/user/notifications', name: 'user-inbox', component: StubChild },
       { path: '/user/checkin/:practiceId', name: 'user-checkin', component: StubChild },
       { path: '/user/practice/:id', name: 'practice-detail', component: StubChild },
+      // FE-93 (owner 2026-10-03): the participants / analytics / student
+      // profile screens exist ONLY in the master zone -- their user-zone
+      // routes and stubs are gone from here and from router/index.ts.
+      {
+        path: '/user/masters/:id',
+        name: 'user-master-public',
+        component: StubChild,
+      },
       // Absent from every FOG_ROUTES / DIARY_ROUTES / FORM_ROUTES list --
       // the default-branch baseline.
       { path: '/user/somewhere-unlisted', name: 'user-unlisted', component: StubChild },
@@ -88,12 +119,20 @@ let app: App | null = null
 let host: HTMLElement | null = null
 let router: Router
 
-async function mount(routeName: string, params: Record<string, string> = {}): Promise<HTMLElement> {
+async function mount(
+  routeName: string,
+  params: Record<string, string> = {},
+  seed?: (pinia: Pinia) => void,
+): Promise<HTMLElement> {
   router = buildRouter()
   await router.push({ name: routeName, params })
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(UserShell)
+  const pinia = createPinia()
+  app.use(pinia)
+  // Seed BEFORE mount so onMounted's probe sees the seeded account.
+  seed?.(pinia)
   app.use(router)
   app.mount(host)
   return host
@@ -123,6 +162,9 @@ function activeTabLabel(): string | undefined {
 
 beforeEach(() => {
   keyboardOpenRef.value = false
+  // FE-88: the hub probes /curator-groups/mine for EVERY account; a plain
+  // visitor with no schools is the default fixture.
+  curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({ items: [] })
 })
 
 afterEach(() => {
@@ -182,6 +224,10 @@ describe('UserShell', () => {
       ['user-diary', {}],
       ['user-chat', { id: 't1' }],
       ['user-checkin', { practiceId: 'p1' }],
+      // Owner 2026-10-05: the stacked school calendar + the practice detail
+      // are detail screens (back control / own footer instead of the dock).
+      ['user-calendar-school', { groupId: 'g1' }],
+      ['practice-detail', { id: 'p1' }],
     ] as const)('%s hides the tab bar', async (name, params) => {
       await mount(name, params as Record<string, string>)
       await flush()
@@ -205,6 +251,190 @@ describe('UserShell', () => {
       await flush()
 
       expect(host?.querySelector('.v-tabbar')).toBeNull()
+    })
+
+    // Owner 2026-09-30: the master's page in the CURATOR context (?groupId=)
+    // hides the dock -- the hanging «Создать практику» CTA takes its place.
+    // Without the marker the visitor keeps the dock.
+    it('user-master-public hides the tab bar only in the curator context', async () => {
+      await mount('user-master-public', { id: 'm1' })
+      await flush()
+      expect(host?.querySelector('.v-tabbar')).not.toBeNull()
+
+      await router.push({
+        name: 'user-master-public',
+        params: { id: 'm1' },
+        query: { groupId: 'g1' },
+      })
+      await flush()
+
+      expect(host?.querySelector('.v-tabbar')).toBeNull()
+    })
+
+    it('the dock carries exactly the four unconditional tabs for a plain visitor', async () => {
+      // tz-curator.md §1.2: USER_TABS now holds five items, but the
+      // conditional «Школы» tab is filtered out unless the account belongs
+      // to at least one school. No schools in this fixture -> four.
+      await mount('user-dashboard')
+      await flush()
+
+      const items = Array.from(host?.querySelectorAll('.v-tabbar__item') ?? [])
+      expect(items).toHaveLength(4)
+      expect(items.some((b) => b.getAttribute('aria-label') === 'Уведомления')).toBe(false)
+    })
+  })
+
+  describe('the conditional «Школы» tab (tz-curator.md §1.2, owner 2026-09-22)', () => {
+    function seedAccount(roles: string[]): (pinia: Pinia) => void {
+      return (pinia) => {
+        const auth = useAuthStore(pinia)
+        auth.user = {
+          id: 'u1',
+          role: roles.includes('master') ? 'master' : 'user',
+          role_switch: { allowed_roles: roles },
+        } as never
+      }
+    }
+
+    function tabLabels(): Array<string | null> {
+      return Array.from(host?.querySelectorAll('.v-tabbar__item') ?? []).map((b) =>
+        b.getAttribute('aria-label'),
+      )
+    }
+
+    it('a member of at least one school (any relation) sees five tabs in the mockup order', async () => {
+      curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({
+        items: [{ id: 'g1', name: 'Тихая школа', relation: 'student' }],
+      })
+      await mount('user-dashboard', {}, seedAccount(['user']))
+      await flush()
+      await flush()
+
+      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Дневник', 'Школы', 'Я'])
+    })
+
+    it('a founding-right holder loses «Дневник» in the user zone; with no schools, no «Школы» either', async () => {
+      // Owner 2026-10-04 (restores 2026-10-01): a can_create_groups holder IS
+      // a curator account -- no personal-diary tab. The dock's first paint is
+      // held while the probes run, so the answer lands without a flash.
+      curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({ items: [] })
+      curatorGroupsMock.getCuratorGroups.mockResolvedValue({
+        items: [],
+        can_create_groups: true,
+      })
+      await mount('user-dashboard', {}, seedAccount(['user', 'master']))
+      await flush()
+      await flush()
+
+      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Я'])
+    })
+
+    it('a school CURATOR (relation=curator) never gets «Дневник» (owner 2026-10-04)', async () => {
+      // Curatorship also rides the membership: a transfer hands a school to a
+      // master who need not hold the founding right -- still a curator.
+      curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({
+        items: [{ id: 'g1', name: 'Тихая школа', relation: 'curator' }],
+      })
+      await mount('user-dashboard', {}, seedAccount(['user']))
+      await flush()
+      await flush()
+
+      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Школы', 'Я'])
+    })
+
+    it('the reported repro surface: the school-scoped calendar hides the dock entirely (owner 2026-10-05)', async () => {
+      // The exact surface the curator diary report named now carries NO dock
+      // at all (DETAIL_ROUTES) -- the account-level answer (a curator keeps
+      // no «Дневник») stays pinned by the test above on the dashboard.
+      curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({
+        items: [{ id: 'g1', name: 'Тихая школа', relation: 'curator' }],
+      })
+      await mount('user-calendar-school', { groupId: 'g1' }, seedAccount(['user']))
+      await flush()
+      await flush()
+
+      expect(host?.querySelector('.v-tabbar')).toBeNull()
+    })
+
+    it('the dock HOLDS its first paint while the curator answer is in flight', async () => {
+      // The 2026-10-02 regression (icon painted, then vanished) is dead the
+      // other way now: nothing tab-shaped is visible until the answer is in,
+      // so whatever appears is final. The held bar is invisible + inert
+      // (v-tabbar--pending); the fail-closed diary never reaches the DOM.
+      curatorGroupsMock.getMyCuratorGroups.mockReturnValue(new Promise(() => {}))
+      curatorGroupsMock.getCuratorGroups.mockReturnValue(new Promise(() => {}))
+      await mount('user-dashboard', {}, seedAccount(['user', 'master']))
+      await flush()
+      await flush()
+
+      expect(host?.querySelector('.v-tabbar')?.classList.contains('v-tabbar--pending')).toBe(true)
+      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Я'])
+    })
+
+    it('a plain user waits for the mine probe with the dock held, then gets «Дневник»', async () => {
+      // Curatorship can ride the membership (a transferred school), so even
+      // an account without master capability holds the dock until /mine
+      // answers -- one round-trip, then the complete dock paints at once.
+      let resolveMine: (value: { items: unknown[] }) => void = () => {}
+      curatorGroupsMock.getMyCuratorGroups.mockReturnValue(
+        new Promise((resolve) => {
+          resolveMine = resolve
+        }),
+      )
+      await mount('user-dashboard', {}, seedAccount(['user']))
+      await flush()
+      await flush()
+
+      expect(host?.querySelector('.v-tabbar')?.classList.contains('v-tabbar--pending')).toBe(true)
+      expect(tabLabels()).not.toContain('Дневник')
+
+      resolveMine({ items: [] })
+      await flush()
+      await flush()
+
+      expect(host?.querySelector('.v-tabbar')?.classList.contains('v-tabbar--pending')).toBe(false)
+      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Дневник', 'Я'])
+    })
+
+    it("a master of somebody else's school (no right) sees the tab too", async () => {
+      curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({
+        items: [{ id: 'g2', name: 'Чужая школа', relation: 'master' }],
+      })
+      curatorGroupsMock.getCuratorGroups.mockResolvedValue({
+        items: [],
+        can_create_groups: false,
+      })
+      await mount('user-dashboard', {}, seedAccount(['user', 'master']))
+      await flush()
+      await flush()
+
+      expect(tabLabels()).toContain('Школы')
+    })
+
+    it('an account with no schools anywhere does not see it', async () => {
+      curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({ items: [] })
+      curatorGroupsMock.getCuratorGroups.mockResolvedValue({
+        items: [],
+        can_create_groups: false,
+      })
+      await mount('user-dashboard', {}, seedAccount(['user', 'master']))
+      await flush()
+      await flush()
+
+      expect(tabLabels()).not.toContain('Школы')
+    })
+
+    it('a plain user is probed through /mine but never touches the master surface', async () => {
+      curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({
+        items: [{ id: 'g1', name: 'Тихая школа', relation: 'student' }],
+      })
+      await mount('user-dashboard', {}, seedAccount(['user']))
+      await flush()
+      await flush()
+
+      expect(curatorGroupsMock.getCuratorGroups).not.toHaveBeenCalled()
+      expect(curatorGroupsMock.getMyCuratorGroups).toHaveBeenCalledTimes(1)
+      expect(tabLabels()).toContain('Школы')
     })
   })
 
@@ -230,6 +460,16 @@ describe('UserShell', () => {
       expect(mainEl().classList.contains('mobile-layout__main--fog')).toBe(true)
     })
 
+    it('the school-scoped calendar gets the fog as well (stacked list feed, owner 2026-10-05)', async () => {
+      await mount('user-calendar-school', { groupId: 'g1' })
+      await flush()
+
+      expect(mainEl().classList.contains('mobile-layout__main--fog')).toBe(true)
+    })
+
+    // FE-93: the participants / analytics screens left the user zone -- their
+    // fog behavior (if any) belongs to the master shell now.
+
     it('the diary (fill mode, owns its own fog) renders with NO shared fog mask', async () => {
       await mount('user-diary')
       await flush()
@@ -251,15 +491,17 @@ describe('UserShell', () => {
       expect(mainEl().style.paddingTop).toBe('34px')
     })
 
-    // [FE-3] follow-up: the dashboard's greeting was removed 2026-06-04 and
-    // nothing has teleported into the island since -- the 104px it kept
-    // reserving was a phantom band above «Ближайшие практики» (operator
-    // 2026-08-24). Now pinned to the headerless contract.
-    it('user-dashboard (greeting long gone) pads by the token too', async () => {
+    // [2026-09-08] The dashboard's floating header is BACK (VHeader «Главная»
+    // + the bell in its action slot), so its headerless meta is dropped per
+    // the [FE-3] contract. With StubChild teleporting nothing, this frame is
+    // the pre-measurement one: the HEADER_FALLBACK (68) + z1 gap (8)
+    // reservation -- same contract as any headered route; the real screen's
+    // VHeader then measures in and MobileLayout re-pads to its exact height.
+    it('user-dashboard (header back, meta dropped) pads by the unmeasured-island contract', async () => {
       await mount('user-dashboard')
       await flush()
 
-      expect(mainEl().style.paddingTop).toBe('34px')
+      expect(mainEl().style.paddingTop).toBe('76px')
     })
 
     // [FE-3] the profile hub's own margin-top compensation is retired; the
@@ -271,11 +513,11 @@ describe('UserShell', () => {
       expect(mainEl().style.paddingTop).toBe('34px')
     })
 
-    it('a route without the meta keeps the clearance contract (unmeasured island: 88 + 16)', async () => {
+    it('a route without the meta keeps the clearance contract (unmeasured island: 68 + 8)', async () => {
       await mount('user-unlisted')
       await flush()
 
-      expect(mainEl().style.paddingTop).toBe('104px')
+      expect(mainEl().style.paddingTop).toBe('76px')
     })
   })
 })

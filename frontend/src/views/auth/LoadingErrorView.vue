@@ -29,6 +29,7 @@
 </template>
 
 <script setup lang="ts">
+import { host } from '@/platform/host'
 import { VButton } from '@/components/ui'
 
 /**
@@ -37,7 +38,7 @@ import { VButton } from '@/components/ui'
  * because the platform SDK state may be partially initialized.
  */
 function onRetry(): void {
-  window.location.reload()
+  host.location.reload()
 }
 </script>
 

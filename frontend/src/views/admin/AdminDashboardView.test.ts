@@ -139,7 +139,7 @@ function checkinResult(rate_pct: number) {
   return { rate_pct, total_records: 0, checked_in: 0, series: [], low_practices: [] }
 }
 function feedbackResult(rate_pct: number) {
-  return { rate_pct, visited: 0, left_review: 0, distribution: { fire: 0, good: 0, confused: 0 } }
+  return { rate_pct, visited: 0, left_review: 0, distribution: { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 } }
 }
 function returnResult(rate_pct: number) {
   return { rate_pct, total_users: 0, returning: 0, top_users: [] }
@@ -335,9 +335,9 @@ describe('AdminDashboardView', () => {
       const masters = statCard('Мастеров')!
       expect(masters.querySelector('.v-stat__value')?.textContent).toBe('3')
       expect(masters.querySelector('.v-stat__delta')?.textContent).toBe('-2%')
-      expect(masters.querySelector('.v-stat__delta')?.classList.contains('v-stat__delta--down')).toBe(
-        true,
-      )
+      expect(
+        masters.querySelector('.v-stat__delta')?.classList.contains('v-stat__delta--down'),
+      ).toBe(true)
 
       const participants = statCard('Участников')!
       expect(participants.querySelector('.v-stat__value')?.textContent).toBe('12')
@@ -373,12 +373,12 @@ describe('AdminDashboardView', () => {
       mount()
       await flush()
 
-      expect(progressRow('Check-in rate')?.querySelector('.v-progress-row__value')?.textContent).toBe(
-        '80%',
-      )
-      expect(progressRow('Feedback rate')?.querySelector('.v-progress-row__value')?.textContent).toBe(
-        '—',
-      )
+      expect(
+        progressRow('Check-in rate')?.querySelector('.v-progress-row__value')?.textContent,
+      ).toBe('80%')
+      expect(
+        progressRow('Feedback rate')?.querySelector('.v-progress-row__value')?.textContent,
+      ).toBe('—')
       expect(progressRow('Return rate')?.querySelector('.v-progress-row__value')?.textContent).toBe(
         '—',
       )
@@ -398,9 +398,9 @@ describe('AdminDashboardView', () => {
       expect(() => mount()).not.toThrow()
       await flush()
 
-      expect(progressRow('Check-in rate')?.querySelector('.v-progress-row__value')?.textContent).toBe(
-        '—',
-      )
+      expect(
+        progressRow('Check-in rate')?.querySelector('.v-progress-row__value')?.textContent,
+      ).toBe('—')
       expect(host?.querySelector('.admin-dashboard__revenue-amount')?.textContent).toBe('—')
     })
   })

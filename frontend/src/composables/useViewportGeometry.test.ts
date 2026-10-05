@@ -54,6 +54,21 @@ describe('isKeyboardOpenFrom', () => {
   it('a native delta of exactly the threshold is NOT open (strictly greater, matches the existing >)', () => {
     expect(isKeyboardOpenFrom(150, 800, 798, 150)).toBe(false)
   })
+
+  // [VV-PAN] Scale guard: a zoomed visual viewport mimics the keyboard's
+  // height shrink -- a zoom must never read as "keyboard".
+  it('[VV-PAN] a zoomed-IN viewport (auto-zoom on a small field, or a pinch) is NOT a keyboard', () => {
+    expect(isKeyboardOpenFrom(null, 800, 500, 150, 1.25)).toBe(false)
+  })
+
+  it('[VV-PAN] a zoomed-OUT viewport is NOT a keyboard either', () => {
+    expect(isKeyboardOpenFrom(null, 800, 500, 150, 0.8)).toBe(false)
+  })
+
+  it('[VV-PAN] scale within 1% leaves the height decision unchanged (and the default stays 1)', () => {
+    expect(isKeyboardOpenFrom(null, 800, 500, 150, 1.005)).toBe(true)
+    expect(isKeyboardOpenFrom(null, 800, 500, 150)).toBe(true)
+  })
 })
 
 describe('restBaselineDelta (PROMPT №663)', () => {
@@ -217,6 +232,38 @@ describe('useViewportGeometry() integration', () => {
     await flush()
 
     expect(viewportOffsetTop.value).toBe(120)
+  })
+
+  it('[VV-PAN] publishes --velo-vv-offset/--velo-vv-scale that the global.css compensation consumes', async () => {
+    setBrowserViewport(800, 400, 96)
+    mount()
+    await flush()
+
+    const root = document.documentElement
+    expect(root.style.getPropertyValue('--velo-vv-offset')).toBe('96px')
+    // The mock vv exposes no scale -- the defensive read falls back to 1.
+    expect(root.style.getPropertyValue('--velo-vv-scale')).toBe('1')
+  })
+
+  it('[VV-PAN] a stale/phantom pan is clamped to the keyboard height while open', async () => {
+    setBrowserViewport(800, 800, 0)
+    mount()
+    await flush()
+
+    // Keyboard opens with a small REAL pan -- passes through untouched.
+    setBrowserViewport(800, 500, 60)
+    vvListeners.resize?.()
+    await flush()
+    expect(viewportOffsetTop.value).toBe(60)
+
+    // A phantom 999 (a pan surviving a previous keyboard session) cannot
+    // exceed the physically-covered height: rest 800 - visible 500 = 300.
+    setBrowserViewport(800, 500, 999)
+    vvListeners.resize?.()
+    await flush()
+
+    expect(viewportOffsetTop.value).toBe(300)
+    expect(document.documentElement.style.getPropertyValue('--velo-vv-offset')).toBe('300px')
   })
 
   it('reflects the SAME ref through the useKeyboardOpen() wrapper (single source, not a second copy)', async () => {

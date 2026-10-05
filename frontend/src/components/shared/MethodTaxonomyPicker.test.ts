@@ -112,6 +112,7 @@ describe('MethodTaxonomyPicker (bug 5 leak 1 -- shared cache warmed on mount)', 
       styles: { custom_abcxyz01: ['custom_l40lb6fj'] },
       customEnabled: false,
       customText: '',
+      custom: [],
     })
 
     expect(flattened).toEqual(['Йога тест — Продвинутый'])

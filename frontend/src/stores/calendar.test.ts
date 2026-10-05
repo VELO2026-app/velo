@@ -109,6 +109,45 @@ describe('useCalendarStore', () => {
       expect(store.error).toBeNull()
     })
 
+    it('master scope with a school filter keeps only THAT school practices of the master (owner 2026-10-03)', async () => {
+      const items = [
+        fakePractice({ id: 'school', curator_group_id: 'g1' }),
+        fakePractice({ id: 'personal', curator_group_id: null }),
+        fakePractice({ id: 'foreign', curator_group_id: 'g2' }),
+      ]
+      vi.mocked(practicesApi.getPractices).mockResolvedValue({
+        items,
+        total: 3,
+        limit: 100,
+        offset: 0,
+      })
+      const store = useCalendarStore()
+      store.setMasterScope('master_1', 'g1')
+
+      await store.loadWeek()
+
+      expect(store.weekPractices.map((p) => p.id)).toEqual(['school'])
+    })
+
+    it('master scope WITHOUT a school filter keeps the whole master feed (owner 2026-10-03)', async () => {
+      const items = [
+        fakePractice({ id: 'school', curator_group_id: 'g1' }),
+        fakePractice({ id: 'personal', curator_group_id: null }),
+      ]
+      vi.mocked(practicesApi.getPractices).mockResolvedValue({
+        items,
+        total: 2,
+        limit: 100,
+        offset: 0,
+      })
+      const store = useCalendarStore()
+      store.setMasterScope('master_1')
+
+      await store.loadWeek()
+
+      expect(store.weekPractices.map((p) => p.id)).toEqual(['school', 'personal'])
+    })
+
     it('on failure: records the error and clears any previously loaded practices', async () => {
       vi.mocked(practicesApi.getPractices).mockRejectedValue(new Error('network down'))
       const store = useCalendarStore()

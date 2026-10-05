@@ -88,6 +88,7 @@
 </template>
 
 <script setup lang="ts">
+import { toHistoryState } from '@/utils/historySnapshot'
 import { ref, computed, onMounted, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 import { VBackButton, VButton, VLoader, VEmptyState, VCard } from '@/components/ui'
@@ -147,7 +148,7 @@ function str(v: unknown): string {
   return typeof v === 'string' ? v : ''
 }
 function methodLabel(p: PayoutDetails): string {
-  const d = (p.details ?? {}) as Record<string, unknown>
+  const d = p.details ?? {}
   if (p.method === 'bank_transfer') {
     const bank = str(d.bank_name) || 'Банк'
     const acc = (str(d.iban) || str(d.account)).replace(/\s+/g, '')
@@ -162,10 +163,10 @@ function methodLabel(p: PayoutDetails): string {
 // -- Tap a row -> hand the withdrawal to the detail via router state (no GET-by-id;
 //    the detail reads window.history.state.withdrawal). Closes the orphan. --
 function openDetail(w: AdminWithdrawalResponse): void {
-  router.push({
+  void router.push({
     name: 'admin-withdrawal-detail',
     params: { id: w.id },
-    state: { withdrawal: JSON.parse(JSON.stringify(w)) },
+    state: { withdrawal: toHistoryState(w) },
   })
 }
 

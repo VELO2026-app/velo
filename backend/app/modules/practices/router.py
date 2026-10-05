@@ -11,14 +11,15 @@
 #   GET    /api/v1/practices/{id}/zoom/resolve    -- how THIS user enters (T-35)
 #   GET    /api/v1/practices/zoom/start           -- redeem ticket, redirect to Zoom (556)
 #   GET    /api/v1/practices/{id}                 -- get by id (any auth user)
-#   PATCH  /api/v1/practices/{id}                 -- update (owner master only)
-#   DELETE /api/v1/practices/{id}                 -- soft delete draft (owner only)
+#   PATCH  /api/v1/practices/{id}                 -- update (master or school curator)
+#   DELETE /api/v1/practices/{id}                 -- soft delete draft (master|curator)
 #   POST   /api/v1/practices/{id}/cancel          -- cancel + refund all (6.5)
 #
 # MASTER_NAME (Frontend F3 prep):
 #   - list/get endpoints: service returns master_name via JOIN.
-#   - create/update/delete/cancel: user object already available from
-#     get_current_master dependency, so practice_to_response(p, user.first_name).
+#   - create/update/delete/cancel: the caller's first_name when the caller
+#     is the practice's master, else the master's (a school curator may call
+#     all four -- BE-21, BE-102, BE-63).
 #
 # AUTH:
 #   GET list uses get_current_user (any authenticated user).
@@ -55,12 +56,12 @@
 
 import html
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import structlog
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, Form, Query, Response, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import AfterValidator
 from sqlalchemy import select
@@ -94,7 +95,7 @@ from app.modules.practices.schemas import (
 )
 from app.modules.practices.service import (
     create_practice,
-    curator_group_names_for_practice,
+    curator_group_name_for_practice,
     delete_practice,
     get_practice_detail,
     group_names_for_practice,
@@ -103,7 +104,11 @@ from app.modules.practices.service import (
     update_practice,
 )
 from app.modules.users.models import User
-from app.modules.zoom.models import ZoomMeeting, ZoomMeetingStatus
+from app.modules.zoom.models import ZoomGuestName, ZoomMeeting, ZoomMeetingStatus
+
+if TYPE_CHECKING:
+    # Annotation only: the zoom service is imported lazily in this router.
+    from app.modules.zoom.service import GuestEntry
 
 logger = structlog.get_logger()
 
@@ -244,7 +249,11 @@ async def create_practice_endpoint(
     ),
     session: AsyncSession = Depends(get_db_session),
 ) -> PracticeResponse:
-    """Create a new practice (verified master only)."""
+    """Create a new practice (verified master only).
+
+    BE-102: a school curator may create it for a master of the school
+    (body.master_id) -- see create_practice.
+    """
     user, _profile = master_tuple
     # A4 V6 (PROMPT №572): deduplicated is True when create_practice returned
     # an EXISTING practice (the window-scoped dedup check, or the TOCTOU
@@ -253,18 +262,27 @@ async def create_practice_endpoint(
     practice, deduplicated = await create_practice(user, body, session)
     await session.flush()
     await session.refresh(practice)
-    # F1 (№263): this endpoint is owner-only (master guard + ownership check),
-    # so the response carries the caller's OWN owner-only Zoom fields —
+    # F1 (№263): the owner-only Zoom fields go to the practice's OWNER --
     # consistent with the owner-always-sees rule on the detail and the
     # master list (Z-6).
     # T21-1: same owner-only posture for the host's own join_url. A freshly
     # created practice has no ZoomMeeting yet (that happens on publish, not
     # here) -- get_host_join_url returns None until then, which is correct.
+    # BE-102: the caller is no longer always the owner -- a curator creating
+    # a practice for a master of their school is not. Same answer as the
+    # cancel endpoint gives a curator (BE-21): no host link (it is the
+    # master's host control of the meeting), no public link, and the
+    # OWNER's name as master_name. Decided by the returned practice's
+    # master_id, which also covers a dedup return of the master's existing,
+    # possibly published, practice -- the case where the host link exists.
+    is_owner = practice.master_id == user.id
     from app.modules.zoom.service import (
         get_host_join_url,
         get_zoom_meeting_status,
     )
-    host_join_url = await get_host_join_url(practice.id, session)
+    host_join_url = (
+        await get_host_join_url(practice.id, session) if is_owner else None
+    )
     # A4 V2 (PROMPT №572): None here too, same reasoning as host_join_url --
     # fetched anyway for consistency with the other three owner-only sites
     # (this is also the endpoint V6's deduplicated-practice response flows
@@ -272,20 +290,26 @@ async def create_practice_endpoint(
     # have a real status).
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
     audience_group_names = await group_names_for_practice(practice, session)
-    audience_curator_group_names = await curator_group_names_for_practice(
+    curator_group_name = await curator_group_name_for_practice(
         practice, session,
     )
     audience_unavailable = await curator_group_audience_is_dark(
         practice, session,
     )
+    # The master's row exists: practices.master_id is a FK, read in the
+    # transaction that just wrote or matched the practice.
+    master_first_name = (
+        user.first_name if is_owner
+        else (await session.get(User, practice.master_id)).first_name
+    )
     return practice_to_response(
-        practice, user.first_name,
+        practice, master_first_name,
         zoom_host_join_url=host_join_url,
-        zoom_public_link_visible=True,
+        zoom_public_link_visible=is_owner,
         zoom_meeting_status=zoom_meeting_status,
         deduplicated=deduplicated,
         audience_group_names=audience_group_names,
-        audience_curator_group_names=audience_curator_group_names,
+        curator_group_name=curator_group_name,
         audience_unavailable=audience_unavailable,
     )
 
@@ -580,6 +604,27 @@ async def get_practice_endpoint(
     return await get_practice_detail(practice_id, user, session)
 
 
+async def _owner_view(
+    practice: Practice, user: User, session: AsyncSession,
+) -> tuple[bool, str | None, str | None]:
+    """(is_owner, master_first_name, host_join_url) for a response (BE-63).
+
+    PATCH and DELETE stopped being owner-only: the curator of the
+    practice's school may call them. The owner-only Zoom fields are the
+    MASTER's private property -- the host link is host control of their
+    meeting -- so a curator gets what a non-owner gets (as on cancel,
+    BE-21), and master_name names the practice's master, not the caller.
+    The master's row exists: practices.master_id is a FK.
+    """
+    from app.modules.zoom.service import get_host_join_url
+
+    is_owner = practice.master_id == user.id
+    if is_owner:
+        return True, user.first_name, await get_host_join_url(practice.id, session)
+    master = await session.get(User, practice.master_id)
+    return False, master.first_name, None
+
+
 # ------------------------------------------------------------------
 # PATCH /api/v1/practices/{id} -- update (Phase 4.2)
 # ------------------------------------------------------------------
@@ -595,43 +640,40 @@ async def update_practice_endpoint(
     ),
     session: AsyncSession = Depends(get_db_session),
 ) -> PracticeResponse:
-    """Update a practice (owner master only)."""
+    """Update a practice (its master, or the curator of its school, BE-63)."""
     user, _profile = master_tuple
     practice = await update_practice(
         practice_id, user, body, session,
     )
     await session.flush()
     await session.refresh(practice)
-    # F1 (№263): this endpoint is owner-only (master guard + ownership check),
-    # so the response carries the caller's OWN owner-only Zoom fields —
-    # consistent with the owner-always-sees rule on the detail and the
-    # master list (Z-6).
+    # F1 (№263) / BE-63: the owner-only Zoom fields go to the practice's
+    # master only (_owner_view).
     # T21-1: same owner-only posture for the host's own join_url (may become
     # non-None here if this update is the draft->scheduled publish).
-    from app.modules.zoom.service import (
-        get_host_join_url,
-        get_zoom_meeting_status,
+    from app.modules.zoom.service import get_zoom_meeting_status
+    is_owner, master_first_name, host_join_url = await _owner_view(
+        practice, user, session,
     )
-    host_join_url = await get_host_join_url(practice.id, session)
     # T24-38 (PROMPT №642): same reasoning as host_join_url -- becomes
     # non-None here too if this update is the draft->scheduled publish.
     # A4 V2 (PROMPT №572): so a master publishing a draft (creating the Zoom
     # meeting) sees "готовится" immediately instead of a stale None.
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
     audience_group_names = await group_names_for_practice(practice, session)
-    audience_curator_group_names = await curator_group_names_for_practice(
+    curator_group_name = await curator_group_name_for_practice(
         practice, session,
     )
     audience_unavailable = await curator_group_audience_is_dark(
         practice, session,
     )
     return practice_to_response(
-        practice, user.first_name,
+        practice, master_first_name,
         zoom_host_join_url=host_join_url,
-        zoom_public_link_visible=True,
+        zoom_public_link_visible=is_owner,
         zoom_meeting_status=zoom_meeting_status,
         audience_group_names=audience_group_names,
-        audience_curator_group_names=audience_curator_group_names,
+        curator_group_name=curator_group_name,
         audience_unavailable=audience_unavailable,
     )
 
@@ -663,7 +705,6 @@ async def preview_audience_change_endpoint(
         body.audience_kind.value,
         body.group_ids,
         session,
-        curator_group_ids=body.curator_group_ids,
     )
     return AudiencePreviewResponse(stranded_count=stranded_count)
 
@@ -682,7 +723,7 @@ async def delete_practice_endpoint(
     ),
     session: AsyncSession = Depends(get_db_session),
 ) -> PracticeResponse:
-    """Soft-delete a draft practice (owner master only).
+    """Soft-delete a draft practice (its master or school curator, BE-64).
 
     Sets status=deleted. Only works on drafts. Published practices
     must be cancelled via POST /{id}/cancel (Phase 6.5).
@@ -691,25 +732,20 @@ async def delete_practice_endpoint(
     practice = await delete_practice(practice_id, user, session)
     await session.flush()
     await session.refresh(practice)
-    # F1 (№263): this endpoint is owner-only (master guard + ownership check),
-    # so the response carries the caller's OWN owner-only Zoom fields —
-    # consistent with the owner-always-sees rule on the detail and the
-    # master list (Z-6).
-    # T21-1: soft-deleted drafts never had a meeting created (E21 fires on
-    # publish only), so this is always None here -- fetched anyway for
-    # consistency with the other three owner-only sites.
-    from app.modules.zoom.service import (
-        get_host_join_url,
-        get_zoom_meeting_status,
+    # F1 (№263) / BE-63: owner-only Zoom fields to the master only
+    # (_owner_view). T21-1: soft-deleted drafts never had a meeting created
+    # (E21 fires on publish only), so the host link is None here anyway.
+    from app.modules.zoom.service import get_zoom_meeting_status
+    is_owner, master_first_name, host_join_url = await _owner_view(
+        practice, user, session,
     )
-    host_join_url = await get_host_join_url(practice.id, session)
     # T24-38 (PROMPT №642): soft-deleted drafts never had a meeting created
     # either -- always None here, fetched anyway for consistency.
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
     return practice_to_response(
-        practice, user.first_name,
+        practice, master_first_name,
         zoom_host_join_url=host_join_url,
-        zoom_public_link_visible=True,
+        zoom_public_link_visible=is_owner,
         zoom_meeting_status=zoom_meeting_status,
     )
 
@@ -729,14 +765,21 @@ async def cancel_practice_endpoint(
     ),
     session: AsyncSession = Depends(get_db_session),
 ) -> PracticeResponse:
-    """Cancel a practice and refund all participants (owner master only).
+    """Cancel a practice and refund all participants.
 
     100% refund to every active booking. Waitlist entries cleared. Only works
     on scheduled/live practices. This is the only way to reach cancelled status.
 
+    Two actors (BE-21): the practice's MASTER, and the CURATOR of the school
+    the practice belongs to (any practice of the school, public included,
+    BE-64). Everyone else -- including a master who is neither -- gets 404
+    with the code `not_found`, the same answer a nonexistent practice gives
+    (P-08).
+
     Optional body {scope}: "this" (the default, or no body) cancels only this
     occurrence; "this_and_future" also cancels every later occurrence of the
-    same series (a non-series practice behaves like "this").
+    same series (a non-series practice behaves like "this"), for either actor
+    (BE-64).
     """
     user, _profile = master_tuple
     scope = (body or CancelPracticeRequest()).scope
@@ -745,27 +788,44 @@ async def cancel_practice_endpoint(
     )
     await session.flush()
     await session.refresh(practice)
-    # F1 (№263): this endpoint is owner-only (master guard + ownership check),
-    # so the response carries the caller's OWN owner-only Zoom fields —
-    # consistent with the owner-always-sees rule on the detail and the
-    # master list (Z-6).
-    # T21-1: cancel_practice deletes the Zoom meeting (zoom/service.py
-    # delete_meeting_for_practice) -- get_host_join_url returns None once that
-    # row's status flips, which is correct (nothing to join anymore).
+    # BE-21: this endpoint STOPPED being owner-only, and the owner-only Zoom
+    # fields below have to stop being unconditional with it. Before BE-21 the
+    # master guard plus the ownership check made "the caller" and "the owner"
+    # the same person, so F1 (№263) could hand the response the caller's OWN
+    # fields. A curator is now a legitimate caller who is NOT the owner, and
+    # both of those fields are the master's private property:
+    #   zoom_host_join_url is the master's personal HOST link (role='host',
+    #     zoom/service.py) -- handing it over would give a curator host
+    #     control of another master's meeting. It is usually None here
+    #     because cancel marks an active meeting deleted, but only
+    #     USUALLY: delete_meeting_for_practice skips the meeting outright
+    #     when it already has attendance segments. On that path the row
+    #     stays active and the link resolves.
+    #   master_name is the practice's OWNER's name. Passing the caller's
+    #     first_name was correct while they were the same person; for a
+    #     curator it would name the wrong human as the practice's master.
+    is_owner = practice.master_id == user.id
     from app.modules.zoom.service import (
         get_host_join_url,
         get_zoom_meeting_status,
     )
-    host_join_url = await get_host_join_url(practice.id, session)
+    host_join_url = (
+        await get_host_join_url(practice.id, session) if is_owner else None
+    )
     # T24-38 (PROMPT №642): cancel_practice deletes the Zoom meeting too --
     # None once that row's status flips, same as host_join_url.
     # A4 V2 (PROMPT №572): will read 'deleted' after the cancel above --
     # correctly distinct from create_failed/pending_creation.
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
+    if is_owner:
+        master_first_name = user.first_name
+    else:
+        master_user = await session.get(User, practice.master_id)
+        master_first_name = master_user.first_name if master_user else None
     return practice_to_response(
-        practice, user.first_name,
+        practice, master_first_name,
         zoom_host_join_url=host_join_url,
-        zoom_public_link_visible=True,
+        zoom_public_link_visible=is_owner,
         zoom_meeting_status=zoom_meeting_status,
     )
 
@@ -878,8 +938,19 @@ def _public_page(
     primary: tuple[str, str] | None = None,
     secondary: tuple[str, str] | None = None,
     hint: str | None = None,
+    form_html: str = "",
+    form_action: str = "'none'",
+    no_store: bool = False,
 ) -> HTMLResponse:
     """The ONE page this router serves, in every state it has.
+
+    form_html is markup the caller has ALREADY escaped (_guest_name_form is
+    the only caller); it lands between the message and the buttons.
+    form_action is the CSP source list for form submissions: 'none' for
+    every page but the guest name page, which is the only one with forms.
+    no_store marks a page that is not safe to serve twice -- the guest name
+    page claims a name per view, and a cache replaying one view to two
+    people would hand both of them the same name.
 
     og tags are emitted only when a caller passes them: a code naming nothing
     has nothing to describe, and inventing a description there would be a
@@ -947,21 +1018,32 @@ def _public_page(
             "border:1px solid rgba(76,101,137,.25);box-shadow:none}"
             ".hint{font-size:15px;color:rgba(76,101,137,.5);margin:16px 0 0;"
             "max-width:280px;line-height:1.4}"
+            "form{width:100%;max-width:336px;margin:0 0 12px}"
+            "button.btn{font-family:inherit;cursor:pointer}"
+            ".guest-name{font-size:22px;margin:0 0 16px}"
+            ".field{display:block;width:100%;height:50px;padding:0 20px;"
+            "margin:0 0 8px;font-family:inherit;font-size:18px;color:#4c6589;"
+            "border:1px solid rgba(76,101,137,.25);border-radius:9999px}"
+            ".field-note{font-size:14px;color:rgba(76,101,137,.5);"
+            "margin:0 0 16px;line-height:1.4}"
             "</style></head><body>"
             "<svg class='mark' viewBox='134 232 130 42' fill='#4c6589' "
             "xmlns='http://www.w3.org/2000/svg' aria-hidden='true'>"
             f"<path d='{_VELO_WORDMARK_PATH}'/></svg>"
             "<h1 class='title'>VEL\u0398</h1>"
             f"<p class='msg'>{html.escape(message)}</p>"
-            f"{buttons}{hint_html}"
+            f"{form_html}{buttons}{hint_html}"
             "</body></html>"
         ),
         # A narrow CSP for the ONLY HTML this backend serves. Everything the
         # page needs is enumerated, and nothing else is allowed: no scripts
         # at all (there are none), styles inline plus Google Fonts, fonts
-        # from gstatic. `form-action 'none'` and `base-uri 'none'` cost
-        # nothing here and remove two classes of injection outright, should
-        # a future edit ever put unescaped text into this markup.
+        # from gstatic. `base-uri 'none'` costs nothing and removes a class
+        # of injection outright. `form-action` is 'none' on every page but
+        # the guest name page (GT-21 step B), which opens it to itself and to
+        # Zoom: its "Войти" form is answered with a 303 to zoom.us, and
+        # form-action may be enforced on that redirect too. script-src stays
+        # closed there as well -- the page works on plain forms.
         #
         # Scoped to this response rather than set in nginx on purpose: the
         # SPA needs a different policy, and one policy loose enough for both
@@ -972,9 +1054,10 @@ def _public_page(
                 "style-src 'unsafe-inline' https://fonts.googleapis.com; "
                 "font-src https://fonts.gstatic.com; "
                 "img-src 'self' data:; "
-                "form-action 'none'; base-uri 'none'"
+                f"form-action {form_action}; base-uri 'none'"
             ),
             "X-Content-Type-Options": "nosniff",
+            **({"Cache-Control": "no-store"} if no_store else {}),
         },
     )
 
@@ -1033,7 +1116,12 @@ async def public_practice_landing_endpoint(
     real, here is its state". Telegram only renders a preview card for 200,
     which is why an honest state page still returns 200.
     """
-    from app.modules.zoom.service import ZoomEntryKind, resolve_zoom_entry
+    from app.modules.zoom.service import (
+        GuestEntryKind,
+        ZoomEntryKind,
+        guest_entry,
+        resolve_zoom_entry,
+    )
 
     practice = await _load_public_practice(code, session)
     if practice is None:
@@ -1060,13 +1148,16 @@ async def public_practice_landing_endpoint(
 
     og_description = f"{when}. Мастер: {master_name}."
 
-    # GUEST with no url is the minting miss (ensure_shared_registrant is
-    # best-effort and the retry poller does not cover it -- fixing that is
-    # explicitly out of scope). It is NOT 'failed': the meeting exists, only
-    # the guest seat in it does not. Either way the honest answer is the same
-    # sentence, and the app button still works.
+    # The guest button is shown exactly when /z/{code}/guest has an entry to
+    # give: both ask zoom/service.py's guest_entry(), the ONE copy of that
+    # rule (BE-66). Inside the naming window the guest page mints a PERSONAL
+    # registrant and needs no shared one (GT-21 step B). Outside it the page
+    # falls back to the shared registrant, and there a missing one is still
+    # the minting miss (ensure_shared_registrant is best-effort): no seat,
+    # so no button -- the honest sentence below, and the app button still
+    # works.
     guest_available = (
-        resolution.kind == ZoomEntryKind.GUEST and resolution.url is not None
+        guest_entry(practice, resolution).kind != GuestEntryKind.NONE
     )
     if guest_available:
         return _public_page(
@@ -1093,58 +1184,291 @@ async def public_practice_landing_endpoint(
     )
 
 
+# GT-21 step B: the guest name page may submit to itself and to Zoom. Both
+# zoom.us and *.zoom.us: the wildcard does not cover the bare host, and a
+# guest join_url lives on a subdomain (us06web.zoom.us observed).
+_GUEST_FORM_ACTION = "'self' https://zoom.us https://*.zoom.us"
+
+_GUEST_ENTRY_HINT = (
+    "Если вы записаны на практику, откройте её в приложении — "
+    "так посещение будет засчитано."
+)
+
+
+def _guest_unavailable_page(practice: Practice, code: str) -> HTMLResponse:
+    """The honest answer when no guest entry exists in this state. The
+    landing would not have shown its guest button here; a hand-typed or
+    stale URL can still arrive."""
+    return _public_page(
+        title=practice.title,
+        message="Гостевой вход сейчас недоступен.",
+        status_code=status.HTTP_200_OK,
+        og_title=practice.title,
+        og_description=f"{_format_practice_when(practice)}.",
+        primary=(
+            f"{settings.telegram_bot_url}?startapp=zoom__{code}",
+            "Открыть VELO",
+        ),
+    )
+
+
+def _to_zoom(url: str, status_code: int) -> RedirectResponse:
+    """The one hop into Zoom. Referrer-Policy mirrors
+    zoom_start_redirect_endpoint so zoom.us is not handed our route."""
+    return RedirectResponse(
+        url=url,
+        status_code=status_code,
+        headers={"Referrer-Policy": "no-referrer"},
+    )
+
+
+def _guest_name_form(code: str, guest_name: ZoomGuestName | None) -> str:
+    """Markup for the guest name page, every value escaped here.
+
+    Two forms, no script. "Другое" is a plain GET of this same page: every
+    view claims a fresh name, so asking for another IS reloading. "Войти"
+    POSTs the shown name's row id in a hidden field -- carried by the form,
+    not a cookie (cookies are ruled out) -- and a typed name, which wins.
+    """
+    from app.modules.zoom.service import (
+        GUEST_LAST_NAME_STUB,
+        GUEST_NAME_MAX_LENGTH,
+    )
+
+    action = html.escape(f"/z/{code}/guest")
+    if guest_name is not None:
+        shown = (
+            "<p class='guest-name'>Вы войдёте как "
+            f"<b>{html.escape(guest_name.display_name)}</b></p>"
+        )
+        hidden = (
+            "<input type='hidden' name='guest_name_id' "
+            f"value='{html.escape(str(guest_name.id))}'>"
+        )
+        placeholder = "Или введите своё имя"
+    else:
+        shown = (
+            "<p class='guest-name'>Не получилось предложить имя — "
+            "введите своё.</p>"
+        )
+        hidden = ""
+        placeholder = "Ваше имя"
+    return (
+        f"{shown}"
+        f"<form method='post' action='{action}'>{hidden}"
+        "<input class='field' type='text' name='name' "
+        f"maxlength='{GUEST_NAME_MAX_LENGTH}' autocomplete='name' "
+        f"placeholder='{html.escape(placeholder)}'>"
+        "<p class='field-note'>Если введёте одно слово, в Zoom к нему "
+        f"добавится «{html.escape(GUEST_LAST_NAME_STUB)}».</p>"
+        "<button class='btn btn--primary' type='submit'>Войти</button>"
+        "</form>"
+        f"<form method='get' action='{action}'>"
+        "<button class='btn btn--secondary' type='submit'>Другое</button>"
+        "</form>"
+    )
+
+
+async def _guest_meeting(
+    practice: Practice, code: str, session: AsyncSession,
+) -> tuple["GuestEntry", ZoomMeeting | None, HTMLResponse | None]:
+    """(entry, meeting, page) for the two guest endpoints.
+
+    entry is zoom/service.py's guest_entry() -- the same answer the landing
+    uses for its button, so the two cannot disagree. page is set exactly
+    when entry is NONE; meeting exactly when entry is NAMED. resolve_zoom_entry
+    with user=None stays the gate -- anonymity is structural there.
+    """
+    from app.modules.zoom.service import (
+        GuestEntryKind,
+        guest_entry,
+        resolve_zoom_entry,
+    )
+
+    resolution = await resolve_zoom_entry(practice, None, session)
+    entry = guest_entry(practice, resolution)
+    if entry.kind == GuestEntryKind.NONE:
+        return entry, None, _guest_unavailable_page(practice, code)
+    if entry.kind == GuestEntryKind.SHARED:
+        return entry, None, None
+    # NAMED implies GUEST, and GUEST an ACTIVE meeting row
+    # (resolve_zoom_entry step 3).
+    meeting = (
+        await session.execute(
+            select(ZoomMeeting).where(ZoomMeeting.practice_id == practice.id)
+        )
+    ).scalar_one()
+    return entry, meeting, None
+
+
+async def _guest_over_limit(which: str, practice: Practice) -> bool:
+    """Per-source limit on one of the two guest endpoints (BE-66).
+
+    which is "view" (GET) or "enter" (POST). Over the limit the caller
+    DEGRADES rather than refuses -- a public address may be a whole NAT --
+    and this logs every such event, so a limit biting real people shows up
+    in the logs before anyone complains.
+
+    FAILS OPEN when Redis is unreachable: the request is served unlimited
+    and a warning is logged. Safe here and only here: the growth this
+    limiter slows is also bounded by zoom_guest_names_max_per_practice, a
+    ceiling in the database that does not depend on Redis, and a burned
+    Zoom quota degrades to the shared registrant, which is the normal path.
+    Failing closed would make every guest nameless, or entry-less, for the
+    length of a Redis outage. Auth decides the other way (see
+    check_source_rate_limit). RuntimeError from get_redis() -- the client
+    was never initialized -- is a programming error, not an outage, and is
+    not caught.
+
+    The source is the one core/middleware.py resolved: X-Real-IP from our
+    own proxy, never X-Forwarded-For (BE-40), so a caller cannot escape
+    this limit by varying a header. See core/ratelimit.py.
+    """
+    from redis.exceptions import RedisError
+
+    from app.core.ratelimit import over_source_limit
+
+    source = structlog.contextvars.get_contextvars().get("ip_address")
+    limit = (
+        settings.guest_view_rate_limit
+        if which == "view"
+        else settings.guest_enter_rate_limit
+    )
+    try:
+        over, count = await over_source_limit(
+            f"guest_{which}_src",
+            source,
+            limit=limit,
+            window_seconds=settings.guest_rate_limit_window_seconds,
+        )
+    except (RedisError, OSError) as exc:
+        logger.warning(
+            "guest_rate_limit_unavailable",
+            limit=which,
+            practice_id=str(practice.id),
+            error=type(exc).__name__,
+        )
+        return False
+    if over:
+        logger.warning(
+            "guest_rate_limited",
+            limit=which,
+            source=source,
+            practice_id=str(practice.id),
+            count=count,
+        )
+    return over
+
+
 @public_router.get("/z/{code}/guest")
 async def public_practice_guest_endpoint(
     code: str,
-    session: AsyncSession = Depends(get_db_reader),
+    session: AsyncSession = Depends(get_db_session),
 ) -> Response:
-    """The guest button's target: 307 straight into Zoom.
+    """The guest button's target: the page that names the guest (GT-21 B).
 
-    The raw Zoom URL exists here ONLY as the Location header of one response
-    -- it is in no page body and in no JSON anywhere in this system. The hop
-    itself is unavoidable; the browser has to reach zoom.us somehow. Same
-    shape as zoom_start_redirect_endpoint above, Referrer-Policy included so
-    zoom.us is not handed the shape of our route.
+    Every view claims a generated name (a ZoomGuestName row) and shows it
+    with a field for the guest's own name, "Войти" and "Другое". The name is
+    claimed on DISPLAY so the one shown is the one he gets; the Zoom
+    registrant is minted only on "Войти" -- see the POST twin below.
+
+    get_db_session, not get_db_reader: the reader always rolls back, and the
+    claimed row would vanish with it.
+
+    A practice past the naming window (not scheduled/live) keeps the
+    pre-step-B behaviour: 307 to the shared registrant, nothing written.
 
     Anonymous, like the landing: resolve_zoom_entry is called with user=None,
     so this endpoint cannot return a personal link even by mistake.
     """
-    from app.modules.zoom.service import ZoomEntryKind, resolve_zoom_entry
-
     practice = await _load_public_practice(code, session)
     if practice is None:
         return _not_a_link_page()
 
-    resolution = await resolve_zoom_entry(practice, None, session)
-    # The https:// guard matches the two siblings in zoom/service.py that
-    # hand out Zoom URLs (get_host_start_url, get_meeting_recording_link):
-    # a stored value that is not an https URL is treated as absent rather
-    # than redirected to. The value comes from Zoom, so this is
-    # defence-in-depth -- but an inconsistency inside one feature is worse
-    # than no guard at all, because the next reader has to work out which
-    # of the three places is right.
-    usable = (
-        resolution.kind == ZoomEntryKind.GUEST
-        and isinstance(resolution.url, str)
-        and resolution.url.startswith("https://")
-    )
-    if not usable:
-        # The landing would not have shown this button in these states; a
-        # hand-typed or stale URL can still arrive here.
-        return _public_page(
-            title=practice.title,
-            message="Гостевой вход сейчас недоступен.",
-            status_code=status.HTTP_200_OK,
-            og_title=practice.title,
-            og_description=f"{_format_practice_when(practice)}.",
-            primary=(
-                f"{settings.telegram_bot_url}?startapp=zoom__{code}",
-                "Открыть VELO",
-            ),
-        )
+    entry, meeting, page = await _guest_meeting(practice, code, session)
+    if page is not None:
+        return page
+    if meeting is None:
+        return _to_zoom(entry.shared_url, status.HTTP_307_TEMPORARY_REDIRECT)
 
-    return RedirectResponse(
-        url=resolution.url,
-        status_code=status.HTTP_307_TEMPORARY_REDIRECT,
-        headers={"Referrer-Policy": "no-referrer"},
+    from app.modules.zoom.service import claim_guest_name
+
+    guest_name = None
+    if not await _guest_over_limit("view", practice):
+        guest_name = await claim_guest_name(practice, meeting, session)
+    # Commit BEFORE the page is drawn (BE-66): get_db_session commits when
+    # the endpoint returns (BE-83), i.e. after _public_page below has already
+    # drawn the name. Without this, a failed commit would turn into a 500, but
+    # the drawn page would still have held a name the commit never reserved,
+    # and the request would keep its connection through the drawing.
+    await session.commit()
+    return _public_page(
+        title=practice.title,
+        message=f"{practice.title}\n{_format_practice_when(practice)}",
+        status_code=status.HTTP_200_OK,
+        og_title=practice.title,
+        og_description=f"{_format_practice_when(practice)}.",
+        primary=(
+            f"{settings.telegram_bot_url}?startapp=zoom__{code}",
+            "Открыть в VELO",
+        ),
+        hint=_GUEST_ENTRY_HINT,
+        form_html=_guest_name_form(code, guest_name),
+        form_action=_GUEST_FORM_ACTION,
+        no_store=True,
     )
+
+
+@public_router.post("/z/{code}/guest")
+async def public_practice_guest_enter_endpoint(
+    code: str,
+    name: Annotated[str | None, Form()] = None,
+    guest_name_id: Annotated[str | None, Form()] = None,
+    session: AsyncSession = Depends(get_db_session),
+) -> Response:
+    """"Войти": mint the guest's registrant, 303 into Zoom.
+
+    303, not 307: a 307 keeps the method and body, and the browser would
+    POST this form to the join_url.
+
+    The raw Zoom URL still exists ONLY as the Location header of one
+    response -- in no page body and in no JSON anywhere in this system. The
+    page's CSP now lets a form submit towards zoom.us, but that permits the
+    browser to follow this redirect; it puts no Zoom URL into any markup.
+
+    Precedence and fallbacks are enter_as_guest's (zoom/service.py): a
+    typed name wins and is written nowhere; otherwise the shown name's row;
+    a refusal from Zoom hands out the shared registrant.
+    """
+    practice = await _load_public_practice(code, session)
+    if practice is None:
+        return _not_a_link_page()
+
+    entry, meeting, page = await _guest_meeting(practice, code, session)
+    if page is not None:
+        return page
+    if meeting is None:
+        return _to_zoom(entry.shared_url, status.HTTP_303_SEE_OTHER)
+    if await _guest_over_limit("enter", practice):
+        # Degrade, do not refuse: the shared registrant, no Zoom call -- a
+        # typed name is lost on this path, the entry is not.
+        if entry.shared_url is None:
+            return _guest_unavailable_page(practice, code)
+        return _to_zoom(entry.shared_url, status.HTTP_303_SEE_OTHER)
+
+    from app.modules.zoom.service import enter_as_guest, normalize_typed_guest_name
+
+    try:
+        shown_id = UUID(guest_name_id) if guest_name_id else None
+    except ValueError:
+        shown_id = None
+    url = await enter_as_guest(
+        practice,
+        meeting,
+        session,
+        typed_name=normalize_typed_guest_name(name),
+        guest_name_id=shown_id,
+    )
+    if url is None:
+        return _guest_unavailable_page(practice, code)
+    return _to_zoom(url, status.HTTP_303_SEE_OTHER)

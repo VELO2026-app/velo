@@ -7,7 +7,7 @@
 
 <template>
   <MobileLayout
-    :tabs="MASTER_TABS"
+    :tabs="visibleTabs"
     :active-tab="activeTab"
     :fill="isFillRoute"
     :fog="isFogRoute"
@@ -20,14 +20,31 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { rootComputedStyle } from '@/platform/dom'
+import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { MobileLayout } from '@/components/layout'
-import { MASTER_TABS } from '@/router/tabs'
+import { MASTER_TABS, type TabItem } from '@/router/tabs'
 import { useKeyboardOpen } from '@/composables/useKeyboardOpen'
+import { useSchoolsHubStore } from '@/stores/schoolsHub'
 
 const route = useRoute()
 const router = useRouter()
+
+// tz-curator.md §1.2 (owner 2026-09-22): the SAME conditional tab contract
+// as UserShell -- membership in at least one school (any relation) -- widened
+// for this zone by the admin-issued founding right: a can_create_groups
+// holder with zero schools keeps their entrance (the empty hub's «Создать
+// школу» is their only path to a first school). Fail-closed: the tab is
+// absent until a probe settles.
+const schoolsHub = useSchoolsHubStore()
+onMounted(() => {
+  void schoolsHub.ensureCurator()
+})
+
+const visibleTabs = computed<TabItem[]>(() =>
+  MASTER_TABS.filter((tab) => !tab.requires || schoolsHub.hasSchools || schoolsHub.canCreate),
+)
 
 // Hide the floating tab bar while the soft keyboard is open, so it does not ride
 // up over a focused input (parity with UserShell — e.g. the «Мои ученики» search).
@@ -103,13 +120,28 @@ const FOG_ROUTES = [
   // legend/first fields. Fog brings the keyboard-safe mask; the pixel tuning
   // comes from FORM_FOG_ROUTES below (the taller form top-hard).
   'master-group-create',
+  // tz-curator.md §1.2-1.6 (owner 2026-09-19): the schools surfaces are fog
+  // screens like their user-zone twins -- the sectioned list and the school
+  // PAGE are scrolling feeds under the floating header, and the create form
+  // is a keyboard form (FORM_FOG_ROUTES tuning below, same as
+  // master-group-create's FE-45 rationale).
+  'master-curator-groups',
+  'master-curator-group',
+  // tz-curator.md §1.11 (owner 2026-09-22): the participants screen is the
+  // school's roster feed, same treatment as the school PAGE above.
+  'master-curator-group-members',
+  // tz-curator.md §6 (owner 2026-10-02): the school's analytics screen --
+  // the same scrolling feed under the floating header as the school PAGE
+  // above (without this entry the header floats over raw content).
+  'master-curator-group-analytics',
+  'master-curator-group-create',
   'master-profile',
   // Edit-profile + language/timezone: fog so content doesn't smudge under the
   // floating header on scroll (operator FOG-1, 2026-06-30). Both are keyboard
   // screens — keyboard-safe via the e95e05a viewport mask (ships in this batch),
   // so this follows the same de-solid → fog, keyboard-safe rationale as the forms.
   'master-edit-profile',
-  'master-language-timezone',
+  'master-timezone',
   // Support (SP-2, 2026-07-01): RE-FOGGED after being un-fogged in #8/#9 (5d74c8c,
   // where the pre-keyboard-aware fog clipped the form into a band). Safe now: the
   // «убрать туман при вводе» rule (global.css) drops the mask while typing, and the
@@ -142,7 +174,7 @@ let pdFogCache: {
 } | null = null
 function ctaSafeFog() {
   if (pdFogCache) return pdFogCache
-  const cs = getComputedStyle(document.documentElement)
+  const cs = rootComputedStyle()
   pdFogCache = {
     topGap: fogPx(cs, '--velo-fog-pd-top-gap', 25),
     fogTopHard: fogPx(cs, '--velo-fog-pd-top-hard', 60),
@@ -169,7 +201,7 @@ let compactBottomFogCache: {
 } | null = null
 function compactBottomFog() {
   if (compactBottomFogCache) return compactBottomFogCache
-  const cs = getComputedStyle(document.documentElement)
+  const cs = rootComputedStyle()
   compactBottomFogCache = {
     topGap: fogPx(cs, '--velo-fog-pd-top-gap', 25),
     fogTopHard: fogPx(cs, '--velo-fog-pd-top-hard', 60),
@@ -197,8 +229,11 @@ const COMPACT_BOTTOM_FOG_ROUTES = ['master-practice-detail']
 // practice-detail's non-VHeader hero header). practice-detail stays on
 // compactBottomFog. Reuses the fogPx reader; the header stays transparent (no
 // solid plate).
+// Owner 2026-10-01: master-practice-new LEFT the form grade -- its header
+// must read like the master page's (default fog: z1 top gap, z2 hard, the
+// visible ~31px fade under the plate). The keyboard-era form grade remains
+// for the other form screens.
 const FORM_FOG_ROUTES = [
-  'master-practice-new',
   'master-practice-edit',
   'master-promocode-new',
   'master-finance',
@@ -206,7 +241,10 @@ const FORM_FOG_ROUTES = [
   // (`<VHeader title="Новая группа" show-back />`) -- without the form-grade
   // top-hard its legend/fields ghosted under the header's lower half on
   // scroll. Same treatment, no view-side margin hacks.
+  // tz-curator.md §1.5: the school-create form is the same shape (floating
+  // «Новая школа» header over a required-fields legend), so it joins here too.
   'master-group-create',
+  'master-curator-group-create',
 ]
 let formFogCache: {
   topGap: number
@@ -216,9 +254,13 @@ let formFogCache: {
 } | null = null
 function formFog() {
   if (formFogCache) return formFogCache
-  const cs = getComputedStyle(document.documentElement)
+  const cs = rootComputedStyle()
   formFogCache = {
-    topGap: fogPx(cs, '--velo-fog-pd-top-gap', 25),
+    // Owner 2026-10-01: the form screens' header band read ~17px taller than
+    // every other screen (pd-top-gap 25 vs the shared z1 8). The keyboard
+    // protection stays in the fog grade (top-hard-form 88, clamped to the
+    // clearance); only the dead air above the header normalizes to z1.
+    topGap: fogPx(cs, '--velo-fog-z1', 8),
     fogTopHard: fogPx(cs, '--velo-fog-pd-top-hard-form', 88),
     fogBotFade: fogPx(cs, '--velo-fog-list-z3', 48),
     fogBotHard: fogPx(cs, '--velo-fog-list-z4', 0),

@@ -9,6 +9,13 @@
                   cards with inline rating badges.
     2. Платежи -- period income + transactions list + link to full Finance.
 
+  Owner 2026-10-01: payments are not live yet, so the tab slider is PARKED
+  (PAYMENTS_TAB_ENABLED below) and the screen renders the Отзывы tab only --
+  a single-option slider would be meaningless. The Платежи pane and its E2
+  wiring stay intact for the flip-back. The period toggle moved up into the
+  header's action slot (owner 2026-10-01): title left, Неделя/Месяц right --
+  one line, no second control row.
+
   Controls are the track+thumb pattern (single glass track, active fill pill) --
   the same shape as the master-dashboard period toggle, NOT the two-pill VSegment
   (operator design; VSegment<->track+thumb unification is a SHELL task).
@@ -32,21 +39,29 @@
 <template>
   <div class="analytics">
     <!-- Header (DS VHeader — uniform with the rest of the master zone, rides
-         MobileLayout's floating island; PROMPT №162). -->
-    <VHeader title="Аналитика" />
+         MobileLayout's floating island; PROMPT №162). The period toggle shares
+         the header line (owner 2026-10-01): title left, Неделя/Месяц right --
+         with the tab slider parked there is no second control row to reserve.
+         Visual-only until a period-scoped analytics API exists. -->
+    <VHeader title="Аналитика">
+      <template #action>
+        <VSegmentTrack
+          v-model="period"
+          :options="PERIOD_OPTIONS"
+          variant="toggle"
+          aria-label="Период статистики"
+        />
+      </template>
+    </VHeader>
 
-    <!-- Tab segment (track+thumb, DS primitive) -->
-    <VSegmentTrack v-model="activeTab" :options="TAB_OPTIONS" variant="tabs" />
-
-    <!-- Period toggle -- visual-only until a period-scoped analytics API exists. -->
-    <div class="analytics__period-row">
-      <VSegmentTrack
-        v-model="period"
-        :options="PERIOD_OPTIONS"
-        variant="toggle"
-        aria-label="Период статистики"
-      />
-    </div>
+    <!-- Tab segment (track+thumb, DS primitive). Parked while payments are
+         not live (owner 2026-10-01) -- a single-option slider is meaningless. -->
+    <VSegmentTrack
+      v-if="PAYMENTS_TAB_ENABLED"
+      v-model="activeTab"
+      :options="TAB_OPTIONS"
+      variant="tabs"
+    />
 
     <!-- ================================================================
          TAB: ОТЗЫВЫ
@@ -62,15 +77,11 @@
       <!-- Общая статистика -->
       <section class="analytics__section">
         <h2 class="velo-section-title">Общая статистика</h2>
-        <VRatingDistribution
-          :fire="ratingTotals.fire"
-          :good="ratingTotals.good"
-          :confused="ratingTotals.confused"
-        />
+        <VRatingDistribution :counts="ratingTotals" />
       </section>
 
-      <!-- Требуют внимания: ученики, оставившие в фидбэке «Есть вопросы» (confused)
-           за период. Секция (вместе с заголовком) НЕ показывается, если таких нет.
+      <!-- Требуют внимания: ученики, чей отзыв за период сервер отнёс к вниманию
+           (attention=true: оценки 1-4, зоны «Плохо» и «Не очень», BE-77). Секция (вместе с заголовком) НЕ показывается, если таких нет.
            Тап по карточке → профиль ученика (E1: user_id на MasterReviewItem);
            кнопка сообщения — @click.stop, шлёт сообщение, не навигируя (PROMPT №229). -->
       <section v-if="attentionItems.length > 0" class="analytics__section">
@@ -85,11 +96,7 @@
           @keydown.enter.space.prevent="goStudent(item)"
         >
           <span class="analytics__attention-ident">
-            <component
-              :is="RATING_ICON[item.rating as FeedbackRating]"
-              :size="36"
-              :style="{ color: RATING_ICON_COLOR[item.rating as FeedbackRating] }"
-            />
+            <component :is="MOOD_SCALE_ICON[item.rating]" :size="36" />
           </span>
           <div class="analytics__attention-body">
             <div class="analytics__attention-name">{{ item.reviewer_name }}</div>
@@ -99,7 +106,7 @@
           <button
             class="analytics__attention-msg"
             aria-label="Написать сообщение"
-            @click.stop="openMessage(item.reviewer_name)"
+            @click.stop="openMessage(item.user_id, item.reviewer_name)"
           >
             <IconMessages :size="22" />
           </button>
@@ -148,9 +155,7 @@
             <VRatingBadges
               v-if="insightsCache.has(p.id) && totalFeedbacks(p.id) > 0"
               class="analytics__pcard-badges"
-              :fire="ratingPct(p.id, 'fire')"
-              :good="ratingPct(p.id, 'good')"
-              :confused="ratingPct(p.id, 'confused')"
+              :pcts="ratingPcts(p.id)"
             />
           </button>
 
@@ -177,7 +182,7 @@
     <!-- ================================================================
          TAB: ПЛАТЕЖИ
          ================================================================ -->
-    <div v-show="activeTab === 'payments'" class="analytics__body">
+    <div v-if="PAYMENTS_TAB_ENABLED" v-show="activeTab === 'payments'" class="analytics__body">
       <div v-if="paymentsLoading" class="analytics__loader"><VLoader /></div>
 
       <VCard v-else-if="paymentsError" class="analytics__pay-error">
@@ -229,8 +234,13 @@
       </template>
     </div>
 
-    <!-- «Требуют внимания» tap → message the student (stub modal, E4). -->
-    <SendMessageModal :open="msgOpen" :name="msgName" @close="msgOpen = false" />
+    <!-- «Требуют внимания» tap → message the student (posts into the DM). -->
+    <SendMessageModal
+      :open="msgOpen"
+      :student-id="msgId"
+      :name="msgName"
+      @close="msgOpen = false"
+    />
   </div>
 </template>
 
@@ -253,8 +263,9 @@ import VRatingDistribution from '@/components/shared/VRatingDistribution.vue'
 import VShowMore from '@/components/shared/VShowMore.vue'
 import SendMessageModal from '@/components/shared/SendMessageModal.vue'
 import { IconMessages } from '@/components/icons'
-import { practiceIconFor, RATING_ICON_COLOR } from '@/utils/displayHelpers'
-import { RATING_ICON } from '@/utils/ratingIcons'
+import { practiceIconFor } from '@/utils/displayHelpers'
+import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
+import { MOOD_SCALE_KEYS, zonePercents, zoneTotal, type MoodScaleKey } from '@/utils/moodScale'
 import { formatMoney, formatShortDate } from '@/utils/format'
 import { getIncome, getTransactions, getMasterReviews } from '@/api/masters'
 import { extractApiError } from '@/composables/useApiError'
@@ -262,7 +273,7 @@ import type {
   IncomeResponse,
   MasterTransactionItem,
   MasterReviewItem,
-  FeedbackRating,
+  ScoreZoneCounts,
 } from '@/api/types'
 
 const router = useRouter()
@@ -275,6 +286,13 @@ const insightsCache = diaryStore.insightsCache
 // =========================================================================
 // Tabs (track+thumb segment) + period toggle (visual-only)
 // =========================================================================
+
+// Owner 2026-10-01: payments are not live yet -- the Отзывы/Платежи slider is
+// parked and the screen renders the Отзывы tab only. Flip to true to restore
+// the slider, the Платежи pane and its data loads (everything below is kept).
+// Annotation is deliberate: a literal-false const would let TS narrow every
+// `if (PAYMENTS_TAB_ENABLED)` into provably-dead code.
+const PAYMENTS_TAB_ENABLED: boolean = false
 
 const activeTab = ref<'reviews' | 'payments'>('reviews')
 const TAB_OPTIONS: Array<{ value: 'reviews' | 'payments'; label: string }> = [
@@ -325,14 +343,14 @@ const hiddenPastCount = computed(() => Math.max(0, periodPractices.value.length 
 
 const aggregateTotalFeedbacks = computed((): number =>
   periodInsights.value.reduce(
-    (t, ins) => t + ins.feedbacks.fire + ins.feedbacks.good + ins.feedbacks.confused,
+    (t, ins) => t + zoneTotal(ins.feedbacks),
     0,
   ),
 )
 
 const aggregateTotalCheckins = computed((): number =>
   periodInsights.value.reduce(
-    (t, ins) => t + ins.checkins.high + ins.checkins.mid + ins.checkins.low,
+    (t, ins) => t + zoneTotal(ins.checkins),
     0,
   ),
 )
@@ -358,12 +376,10 @@ const aggregateFeedbackPct = computed((): string => {
 // bar config/palettes/markup; we just feed it the period's summed feedback counts.
 // =========================================================================
 
-const ratingTotals = computed((): { fire: number; good: number; confused: number } => {
-  const totals = { fire: 0, good: 0, confused: 0 }
+const ratingTotals = computed((): ScoreZoneCounts => {
+  const totals: ScoreZoneCounts = { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 }
   periodInsights.value.forEach((ins) => {
-    totals.fire += ins.feedbacks.fire
-    totals.good += ins.feedbacks.good
-    totals.confused += ins.feedbacks.confused
+    for (const key of MOOD_SCALE_KEYS) totals[key] += ins.feedbacks[key]
   })
   return totals
 })
@@ -375,13 +391,12 @@ const ratingTotals = computed((): { fire: number; good: number; confused: number
 function totalFeedbacks(practiceId: string): number {
   const ins = insightsCache.get(practiceId)
   if (!ins) return 0
-  return ins.feedbacks.fire + ins.feedbacks.good + ins.feedbacks.confused
+  return zoneTotal(ins.feedbacks)
 }
 
-function ratingPct(practiceId: string, rating: 'fire' | 'good' | 'confused'): number {
-  const total = totalFeedbacks(practiceId)
-  if (total === 0) return 0
-  return Math.round((insightsCache.get(practiceId)!.feedbacks[rating] / total) * 100)
+// Rendered only under insightsCache.has(p.id), so the insights are cached.
+function ratingPcts(practiceId: string): Record<MoodScaleKey, number> {
+  return zonePercents(insightsCache.get(practiceId)!.feedbacks)
 }
 
 // =========================================================================
@@ -393,10 +408,11 @@ const reviews = ref<MasterReviewItem[]>([])
 
 async function loadReviews(): Promise<void> {
   try {
-    // E1: fetch the negative (confused) bucket server-side — the «Требуют
-    // внимания» block is the only consumer, so a full page of low-rated
-    // reviews beats a mixed page where negatives may be sparse. The period
-    // cutoff still narrows client-side (no period param on the endpoint).
+    // E1: fetch the attention reviews server-side (attention=true: ratings
+    // 1-4, BE-77) — the «Требуют внимания» block is the only consumer, so a
+    // full page of them beats a mixed page where they may be sparse. The
+    // server owns the threshold; the period cutoff still narrows client-side
+    // (no period param on the endpoint).
     const res = await getMasterReviews(REVIEWS_PAGE, 0, true)
     reviews.value = res.items
   } catch {
@@ -404,30 +420,32 @@ async function loadReviews(): Promise<void> {
   }
 }
 
-// Требуют внимания: «Есть вопросы» (confused) reviews within the active period
-// (client-side, mirroring the past list). Empty ⇒ the section + title are hidden.
+// Требуют внимания: the server already narrowed the page to the attention
+// reviews (attention=true) -- no zone check here, a second copy of the
+// threshold would drift. Only the active period's cutoff is applied
+// client-side (mirroring the past list). Empty ⇒ the section + title are hidden.
 const attentionItems = computed((): MasterReviewItem[] => {
   const cutoff = Date.now() - PERIOD_DAYS[period.value] * 86_400_000
-  return reviews.value.filter(
-    (r) => r.rating === 'confused' && new Date(r.created_at).getTime() >= cutoff,
-  )
+  return reviews.value.filter((r) => new Date(r.created_at).getTime() >= cutoff)
 })
 
 // E1 (PROMPT №229): tap an attention card → the reviewer's student profile
 // (user_id now on MasterReviewItem). Mirrors PracticeReviewsView.goStudent.
 function goStudent(item: MasterReviewItem): void {
-  router.push({
+  void router.push({
     name: 'master-student-profile',
     params: { id: item.user_id },
     query: { name: item.reviewer_name },
   })
 }
 
-// The message button (@click.stop) → open the (stub, E4) send-message modal by
-// name, as a distinct action that does not trigger the card's profile-nav.
+// The message button (@click.stop) → open the send-message modal (which posts
+// into the DM), as a distinct action that does not trigger the card's profile-nav.
 const msgOpen = ref(false)
+const msgId = ref('')
 const msgName = ref('')
-function openMessage(name: string): void {
+function openMessage(id: string, name: string): void {
+  msgId.value = id
   msgName.value = name
   msgOpen.value = true
 }
@@ -501,9 +519,11 @@ async function loadMoreTx(): Promise<void> {
 watch(period, () => {
   // Collapse the past list back to the preview when the period changes (#5).
   pastExpanded.value = false
-  void loadIncome().catch(() => {
-    /* keep the previous income value on a transient refetch error */
-  })
+  if (PAYMENTS_TAB_ENABLED) {
+    void loadIncome().catch(() => {
+      /* keep the previous income value on a transient refetch error */
+    })
+  }
 })
 
 // =========================================================================
@@ -524,7 +544,7 @@ async function onLoadMore(): Promise<void> {
 
 /** Open the per-practice reviews detail (Г2: closes the card-tap from Г4). */
 function openReviews(practiceId: string): void {
-  router.push({ name: 'master-practice-reviews', params: { id: practiceId } })
+  void router.push({ name: 'master-practice-reviews', params: { id: practiceId } })
 }
 
 // =========================================================================
@@ -532,7 +552,7 @@ function openReviews(practiceId: string): void {
 // =========================================================================
 
 onMounted(async () => {
-  void loadPayments()
+  if (PAYMENTS_TAB_ENABLED) void loadPayments()
   void loadReviews()
   // T22-5 (PROMPT №561): this tab only ever needs "Прошедшие" -- fetching the
   // combined bucket here would warm "Предстоящие" for no reason.
@@ -546,14 +566,6 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   min-height: 100%;
-}
-
-/* ===== Controls: period-toggle row (the track+thumb control itself is now the
-   shared VSegmentTrack DS primitive). ===== */
-.analytics__period-row {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: var(--space-3);
 }
 
 /* ===== Body ===== */

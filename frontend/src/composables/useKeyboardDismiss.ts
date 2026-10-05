@@ -24,6 +24,7 @@
 // behave like any field: a blank tap dismisses, tapping the field keeps focus.
 // =============================================================================
 
+import { onDocumentEvent, offDocumentEvent, activeHTMLElement } from '@/platform/dom'
 import { onBeforeUnmount, onMounted } from 'vue'
 
 /** Elements a tap may land on without dismissing the keyboard (the field, other
@@ -34,7 +35,7 @@ const INTERACTIVE_SELECTOR =
 
 export function useKeyboardDismiss(): void {
   function onDocumentClick(e: MouseEvent): void {
-    const active = document.activeElement as HTMLElement | null
+    const active = activeHTMLElement()
     if (!active) return
 
     // Only a keyboard-bearing focus is dismissible.
@@ -50,6 +51,6 @@ export function useKeyboardDismiss(): void {
     active.blur()
   }
 
-  onMounted(() => document.addEventListener('click', onDocumentClick, true))
-  onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick, true))
+  onMounted(() => onDocumentEvent('click', onDocumentClick, true))
+  onBeforeUnmount(() => offDocumentEvent('click', onDocumentClick, true))
 }

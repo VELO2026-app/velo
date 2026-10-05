@@ -8,7 +8,7 @@
   PaginatedStudentsResponse { items: StudentListItem[], total, limit, offset };
   each item = { id, name, avatar_url, practices_count, needs_attention }.
   Search filters the loaded page client-side. The message action opens the
-  shared send-message sheet, which is still a STUB (E4 messaging pending backend).
+  shared send-message sheet, which posts into the eternal DM (T3 chat).
 -->
 
 <template>
@@ -68,7 +68,7 @@
           <button
             class="students__msg"
             aria-label="Написать сообщение"
-            @click.stop="openMessage(student.name)"
+            @click.stop="openMessage(student.id, student.name)"
           >
             <IconMessages :size="22" />
           </button>
@@ -98,7 +98,12 @@
       </template>
     </div>
 
-    <SendMessageModal :open="msgOpen" :name="msgName" @close="msgOpen = false" />
+    <SendMessageModal
+      :open="msgOpen"
+      :student-id="msgId"
+      :name="msgName"
+      @close="msgOpen = false"
+    />
   </div>
 </template>
 
@@ -158,17 +163,19 @@ const hiddenCount = computed((): number => Math.max(0, filtered.value.length - S
 
 // The detail endpoint carries no name → pass it forward from the list row.
 function openProfile(student: StudentListItem): void {
-  router.push({
+  void router.push({
     name: 'master-student-profile',
     params: { id: student.id },
     query: { name: student.name },
   })
 }
 
-// -- Send-message sheet (stub — E4 messaging not delivered) --
+// -- Send-message sheet (REAL: posts into the eternal DM with the student) --
 const msgOpen = ref(false)
+const msgId = ref('')
 const msgName = ref('')
-function openMessage(name: string): void {
+function openMessage(id: string, name: string): void {
+  msgId.value = id
   msgName.value = name
   msgOpen.value = true
 }

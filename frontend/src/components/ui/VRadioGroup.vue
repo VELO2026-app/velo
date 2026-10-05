@@ -11,6 +11,7 @@
       { label: 'Каждую неделю',  value: 'weekly' },
       { label: 'Раз в две недели', value: 'biweekly' },
     ]" />
+    <VRadioGroup v-model="role" :options="..." disabled />
 -->
 
 <template>
@@ -22,7 +23,8 @@
       role="radio"
       :aria-checked="modelValue === opt.value"
       class="v-radio"
-      @click="$emit('update:modelValue', opt.value)"
+      :disabled="disabled"
+      @click="onPick(opt.value)"
     >
       <span class="v-radio__mark" :class="{ 'v-radio__mark--on': modelValue === opt.value }">
         <IconCheck v-if="modelValue === opt.value" class="v-radio__check" :size="12" />
@@ -40,14 +42,23 @@ export interface RadioOption {
   label: string
 }
 
-defineProps<{
+const props = defineProps<{
   modelValue: string
   options: RadioOption[]
+  /** FE-87 (§1.12.3): whole-group lock while the popup is busy or the
+   *  current role is still being resolved. Additive -- every existing
+   *  call site omits it and behaves exactly as before. */
+  disabled?: boolean
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   'update:modelValue': [value: string]
 }>()
+
+function onPick(value: string): void {
+  if (props.disabled) return
+  emit('update:modelValue', value)
+}
 </script>
 
 <style scoped>
@@ -67,6 +78,11 @@ defineEmits<{
   font-family: var(--font-body);
   text-align: left;
   cursor: pointer;
+}
+
+.v-radio:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 
 .v-radio__mark {

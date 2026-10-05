@@ -22,13 +22,26 @@
   composer's send disc (--velo-size-44 + --radius-full). Same size, same
   rounding as the right button; taller than the retired pill's 40.
 
+  [2026-09-07, diary header] variant prop: 'solid' (default -- the opaque
+  white circle every other screen uses, unchanged) | 'glass' -- the
+  composer's Liquid Glass frost (blur(18) saturate(180%) + a white rim, and
+  a white 20% fill -- bumped from the composer's 12% by the owner the same
+  day: "чуть менее прозрачным"), for the diary's floating header button over
+  the scrolling feed.
+
   Usage:
     <VBackButton @click="router.back()" />
-    <VBackButton aria-label="Выйти из дневника" @click="exitDiary" />
+    <VBackButton variant="glass" aria-label="Выйти из дневника" @click="exitDiary" />
 -->
 
 <template>
-  <button type="button" class="v-back" :aria-label="ariaLabel" @click="$emit('click')">
+  <button
+    type="button"
+    class="v-back"
+    :class="{ 'v-back--glass': variant === 'glass' }"
+    :aria-label="ariaLabel"
+    @click="$emit('click')"
+  >
     <IconArrowRight :size="18" class="v-back__arrow" />
   </button>
 </template>
@@ -40,8 +53,10 @@ withDefaults(
   defineProps<{
     /** Accessible label; navigation is the caller's, this is just the control. */
     ariaLabel?: string
+    /** 'solid' = opaque white (DS default); 'glass' = frosted, for floating over scrolling content. */
+    variant?: 'solid' | 'glass'
   }>(),
-  { ariaLabel: 'Назад' },
+  { ariaLabel: 'Назад', variant: 'solid' },
 )
 
 defineEmits<{ click: [] }>()
@@ -82,6 +97,18 @@ defineEmits<{ click: [] }>()
 .v-back:hover,
 .v-back:active {
   opacity: 0.85;
+}
+
+/* [2026-09-07, diary header] Glass variant: the composer's Liquid Glass frost
+   recipe -- white 20% surface (owner-bumped from the composer's 12% the same
+   day: "чуть менее прозрачным") over blur(18) saturate(180) with a white rim
+   -- the feed scrolling beneath the floating button still reads through it,
+   just denser. The solid variant stays the DS default everywhere else. */
+.v-back--glass {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
 }
 
 /* The only arrow glyph is a right arrow -- mirror it to point back. */

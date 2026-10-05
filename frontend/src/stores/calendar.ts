@@ -35,7 +35,9 @@
 // =============================================================================
 
 import { defineStore } from 'pinia'
+import { DateTime } from 'luxon'
 import { ref, reactive, computed } from 'vue'
+import { getCuratorGroupPractices } from '@/api/curatorGroups'
 import { getPractices } from '@/api/practices'
 import { extractApiError } from '@/composables/useApiError'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
@@ -52,6 +54,12 @@ export interface CalendarFacetFilters {
   duration_bucket?: PracticeFilters['duration_bucket']
   time_of_day?: PracticeFilters['time_of_day']
 }
+
+// School feed pagination (owner 2026-10-01): the endpoint caps a page at 100;
+// two pages (200 rows) mirror the school page's own all-pages honesty stop
+// and are beyond any real school.
+const SCHOOL_FEED_PAGE = 100
+const SCHOOL_FEED_MAX_PAGES = 2
 
 // ---------------------------------------------------------------------------
 // Date helpers (local, dependency-free)
@@ -90,14 +98,12 @@ function weekDays(anchor: Date): Date[] {
 /** Parse a YYYY-MM-DD local-day key back to a Date at local midnight. */
 function parseLocalDateKey(key: string): Date {
   const [y, m, d] = key.split('-').map(Number)
-  return new Date(y!, (m ?? 1) - 1, d ?? 1)
+  return DateTime.fromObject({ year: y!, month: m ?? 1, day: d ?? 1 }).toJSDate()
 }
 
 /** Today at local midnight. */
 function todayMidnight(): Date {
-  const t = new Date()
-  t.setHours(0, 0, 0, 0)
-  return t
+  return DateTime.now().startOf('day').toJSDate()
 }
 
 export const useCalendarStore = defineStore('calendar', () => {
@@ -111,6 +117,39 @@ export const useCalendarStore = defineStore('calendar', () => {
   const weekPractices = ref<PracticeResponse[]>([])
   // Active facet filters (server-applied on load).
   const filters = reactive<CalendarFacetFilters>({})
+
+  // MASTER scope (owner 2026-09-30): when set, the week feed is THIS master's
+  // scheduled practices (the public feed, master_id + status=scheduled) instead
+  // of the viewer's own -- the stacked user-calendar-master route. Pinia state
+  // is a singleton shared with the tab calendar, so the view resets it to null
+  // on unmount; loadWeek folds it into the query.
+  // Owner 2026-10-03: in the curator's school context the route carries
+  // ?groupId and the feed drops the master's practices OUTSIDE that school.
+  // The public endpoint has no school param, so loadWeek filters the response
+  // client-side by the practices' own curator_group_id (null on personal
+  // practices, a foreign school's id otherwise). Cleared with the scope.
+  const masterScope = ref<string | null>(null)
+  const masterGroupFilter = ref<string | null>(null)
+  function setMasterScope(masterId: string | null, groupFilter: string | null = null): void {
+    masterScope.value = masterId
+    masterGroupFilter.value = groupFilter
+  }
+
+  // SCHOOL scope (owner 2026-10-01): «Предстоящие практики» on the school page
+  // opens the calendar scoped to ONE school's upcoming practices. The school
+  // feed endpoint (GET /curator-groups/{id}/practices) has no date params, so
+  // its full upcoming list is fetched once (in loadWeek, when the feed is
+  // empty) and every weekly window is derived from it client-side; the strip
+  // can only reach future weeks and the feed is all-future by definition.
+  // schoolFeed null = not fetched yet (or the fetch failed -- the error
+  // state's retry loadWeek re-fetches). Same singleton-reset contract as
+  // masterScope: the view clears both on unmount.
+  const schoolScope = ref<string | null>(null)
+  const schoolFeed = ref<PracticeResponse[] | null>(null)
+  function setSchoolScope(groupId: string | null): void {
+    schoolScope.value = groupId
+    schoolFeed.value = null
+  }
 
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -229,8 +268,67 @@ export const useCalendarStore = defineStore('calendar', () => {
     if (selFrom < from) from.setTime(selFrom.getTime())
     if (selTo > to) to.setTime(selTo.getTime())
 
+    // School scope: no per-week request -- the full upcoming school feed is
+    // fetched once (below, only when not loaded yet) and each window is
+    // sliced from it client-side.
+    if (schoolScope.value != null) {
+      try {
+        const firstFetch = schoolFeed.value === null
+        if (firstFetch) {
+          const first = await getCuratorGroupPractices(schoolScope.value, SCHOOL_FEED_PAGE, 0)
+          const items = [...first.items]
+          const pages = Math.ceil(first.total / SCHOOL_FEED_PAGE)
+          for (let p = 1; p < Math.min(pages, SCHOOL_FEED_MAX_PAGES); p++) {
+            const res = await getCuratorGroupPractices(
+              schoolScope.value,
+              SCHOOL_FEED_PAGE,
+              p * SCHOOL_FEED_PAGE,
+            )
+            if (!res.items.length) break
+            items.push(...res.items)
+          }
+          schoolFeed.value = items
+          // Open ON the practices: the default window is today's week, and a
+          // school whose nearest practice sits further out would read as an
+          // empty calendar. Snap the window and the selection to the nearest
+          // upcoming practice's day (bucketed in the viewer's tz, the same
+          // rule the day list uses). Every mode entry re-fetches (the scope
+          // resets on unmount) and re-snaps; in-mode week navigation never
+          // re-snaps.
+          const nearest = items
+            .filter((p) => new Date(p.scheduled_at).getTime() > Date.now())
+            .sort(
+              (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime(),
+            )[0]
+          if (nearest) {
+            const dayKey = calendarDateInTz(nearest.scheduled_at, viewerTz.value ?? 'UTC')
+            const day = parseLocalDateKey(dayKey)
+            weekAnchor.value = day
+            selectedDate.value = dayKey
+          }
+        }
+        const fromMs = from.getTime()
+        const toMs = to.getTime()
+        weekPractices.value = (schoolFeed.value ?? []).filter((p) => {
+          const t = new Date(p.scheduled_at).getTime()
+          return t >= fromMs && t <= toMs
+        })
+      } catch (e) {
+        if (token !== loadToken) return // superseded -- keep the newer truth
+        error.value = extractApiError(e, 'Не удалось загрузить практики школы')
+        weekPractices.value = []
+      } finally {
+        if (token === loadToken) loading.value = false
+      }
+      return
+    }
+
     const query: PracticeFilters = {
       ...filters,
+      // Master scope (owner 2026-09-30): the stacked master calendar reads the
+      // PUBLIC feed for one master, scheduled only -- never the viewer's own
+      // practices, never drafts/past ones.
+      ...(masterScope.value ? { master_id: masterScope.value, status: 'scheduled' } : {}),
       date_from: from.toISOString(),
       date_to: to.toISOString(),
       sort_by: 'scheduled_at',
@@ -241,7 +339,13 @@ export const useCalendarStore = defineStore('calendar', () => {
       // A week (+- 1 day buffer) of practices is small; one page covers it.
       const res = await getPractices(query, 100, 0)
       if (token !== loadToken) return // superseded by a newer load
-      weekPractices.value = res.items
+      // School-context master scope (owner 2026-10-03): keep only the master's
+      // practices in THAT school; personal ones (curator_group_id null) and
+      // other schools' ones are not the curator's business here.
+      weekPractices.value =
+        masterScope.value && masterGroupFilter.value
+          ? res.items.filter((p) => p.curator_group_id === masterGroupFilter.value)
+          : res.items
     } catch (e) {
       if (token !== loadToken) return // superseded -- keep the newer truth
       error.value = extractApiError(e, 'Не удалось загрузить календарь')
@@ -342,6 +446,10 @@ export const useCalendarStore = defineStore('calendar', () => {
     selectedDate,
     weekPractices,
     filters,
+    masterScope,
+    masterGroupFilter,
+    schoolScope,
+    schoolFeed,
     loading,
     error,
     // derived
@@ -357,6 +465,8 @@ export const useCalendarStore = defineStore('calendar', () => {
     nextWeek,
     shiftDays,
     applyFilters,
+    setMasterScope,
+    setSchoolScope,
     init,
     // helpers (exported for the view: local day key of a Date)
     localDateKey,

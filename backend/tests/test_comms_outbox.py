@@ -40,6 +40,7 @@ from redis.exceptions import TimeoutError as RedisTimeoutError
 from sqlalchemy import delete, or_, select, update
 
 from app.core.config import settings
+from app.core.database import get_session_factory
 from app.core.events import (
     EVENT_GROUP_CHANGED,
     EVENT_USER_UPSERTED,
@@ -782,9 +783,15 @@ class TestIdentitySync:
             language = "en"
             timezone = "UTC"
             is_active = True
+            # comms 3.0.0: the snapshot carries its version. The duck used
+            # to stop at is_active -- complete for the unversioned
+            # snapshot; the SyncedUser protocol now has one field more.
+            snapshot_version = 1
 
         snap = user_snapshot(Duck())
         assert snap["email"] is None
+        assert snap["version"] == 1
+        assert snap["locale"] == "en"
 
 
 # ===========================================================================
@@ -994,3 +1001,83 @@ class TestBackfill:
         events_a2 = await _events_for(db_session, a["user"]["id"])
         assert len(events_a2) == base_a + 2
         assert events_a2[-1].payload == events_a2[-2].payload
+
+
+class TestOneActiveRelay:
+    """BE-47: one relay ships at a time -- every uvicorn worker runs the loop,
+    the advisory lock in the tick's transaction lets one of them through.
+
+    The defect it closes, built literally: batch size 1, two pending rows.
+    Relay A ships row 1 and has NOT committed (it holds the lock and row 1).
+    Relay B ticks meanwhile. Under the former arrangement (FOR UPDATE SKIP
+    LOCKED only) B would ship row 2 BEFORE row 1 is committed -- the batch-
+    boundary inversion that lost memberships in comms. Now B ships nothing.
+
+    The rows must be COMMITTED for B to see them, so they live outside the
+    usual one-transaction pattern of this suite; each relay parks the
+    foreign pending rows in ITS OWN transaction (and rolls back), and the
+    suite's autouse cleanup removes our SYNTH rows.
+    """
+
+    async def _committed_pair(self) -> None:
+        async with get_session_factory()() as session, session.begin():
+            for n in range(2):
+                await emit_event(
+                    session, EVENT_GROUP_CHANGED,
+                    {"group_key": "masters",
+                     "recipient_id": f"{SYNTH}one{n}", "member": True},
+                )
+
+    async def _park_foreign(self, session) -> None:
+        """Foreign pending rows out of the way, in this transaction only
+        (an UPDATE -- it also holds them, so the other relay's SKIP LOCKED
+        skips them too)."""
+        recipient = OutboxEvent.payload["recipient_id"].astext
+        await session.execute(
+            update(OutboxEvent)
+            .where(
+                OutboxEvent.published_at.is_(None),
+                or_(recipient.is_(None), recipient.not_like(f"{SYNTH}%")),
+            )
+            .values(published_at=datetime.now(UTC))
+        )
+
+    async def test_a_second_relay_ships_nothing_while_the_first_ticks(
+        self, relay_redis, monkeypatch
+    ):
+        redis, stream = relay_redis
+        monkeypatch.setattr(settings, "comms_relay_batch_size", 1)
+        await self._committed_pair()
+
+        factory = get_session_factory()
+        a = factory()
+        b = factory()
+        try:
+            await a.begin()
+            await self._park_foreign(a)
+            assert await relay_pending_batch(redis, session=a) == (1, 0)
+
+            await b.begin()
+            assert await relay_pending_batch(redis, session=b) == (0, 0)
+            entries = await redis.xrange(stream)
+            assert [
+                json.loads(f[b"data"])["recipient_id"] for _, f in entries
+            ] == [f"{SYNTH}one0"]
+        finally:
+            await b.rollback()
+            await a.rollback()
+            await b.close()
+            await a.close()
+
+        # THE PAIR: with the lock free the same relay works -- and in id
+        # order (row 1 first, the inversion's victim). Without the pair the
+        # test would pass in a world where the relay is broken altogether.
+        async with factory() as c:
+            await c.begin()
+            await self._park_foreign(c)
+            assert await relay_pending_batch(redis, session=c) == (1, 0)
+            entries = await redis.xrange(stream)
+            assert json.loads(entries[-1][1][b"data"])["recipient_id"] == (
+                f"{SYNTH}one0"
+            )
+            await c.rollback()

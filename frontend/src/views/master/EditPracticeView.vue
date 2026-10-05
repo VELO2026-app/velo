@@ -154,37 +154,47 @@
           />
 
           <!-- ================================================================
-               Для кого практика (P5 port, PROMPT №606): mirrors
-               CreatePracticeView's audience block, adapted to Edit's FLAT
-               layout (Реш. В, above -- no velo-section-title sections here,
-               so no section wrapper is dragged in with it; a plain
-               edit-practice__field-label instead, matching the Дата/Время
-               fields above).
+               Для кого практика (P5 port, PROMPT №606; FE-24: the shared
+               PracticeAudiencePicker, the same component Create uses --
+               the local copy of the chips block is gone). Edit's FLAT
+               layout keeps its own field label (no velo-section-title
+               sections here, Реш. В above).
                ================================================================ -->
           <div class="edit-practice__field edit-practice__audience">
             <label class="edit-practice__field-label">Для кого практика</label>
-            <VRadioGroup v-model="form.audience_kind" :options="AUDIENCE_OPTIONS" />
-
-            <template v-if="form.audience_kind === 'groups'">
-              <div v-if="customGroups.length" class="edit-practice__audience-chips">
-                <VChip
-                  v-for="g in customGroups"
-                  :key="g.id"
-                  size="md"
-                  clickable
-                  :active="form.audience_group_ids.includes(g.id)"
-                  @click="onAudienceGroupChipClick(g.id)"
-                >
-                  {{ g.name }}
-                </VChip>
-              </div>
-              <p v-else class="edit-practice__audience-empty">
-                Пока нет ни одной группы. Создайте группу на экране «Мои группы».
-              </p>
-              <span v-if="errors.audience_group_ids" class="edit-practice__field-error">{{
-                errors.audience_group_ids
-              }}</span>
+            <!-- BE-74: a practice of a school keeps its school for good
+                 (practice_school_immutable), and the backend allows such a
+                 practice only the 'public'/'curator_groups' pair
+                 (check_school_audience). FE-92 put that pair into the create
+                 UI (curator-on-behalf), so Edit offers the same two radios:
+                 the KIND is editable, the SCHOOL is not -- schoolLocked
+                 suppresses the chips; the owning school is not shown at all
+                 (owner 2026-10-05). -->
+            <template v-if="practice?.curator_group_id">
+              <PracticeAudiencePicker
+                v-model:kind="form.audience_kind"
+                v-model:group-ids="form.audience_group_ids"
+                :curator-group-id="practice.curator_group_id"
+                :groups="customGroups"
+                :schools="practiceSchool"
+                :allowed-kinds="SCHOOL_AUDIENCE_KINDS"
+                school-locked
+                :error="errors.audience_group_ids"
+              />
             </template>
+            <!-- A practice without a school: the classic three kinds. No
+                 schools are offered -- a school cannot be given to an
+                 existing practice -- so the picker's school model is a
+                 constant null that never changes. -->
+            <PracticeAudiencePicker
+              v-else
+              v-model:kind="form.audience_kind"
+              v-model:group-ids="form.audience_group_ids"
+              :curator-group-id="null"
+              :groups="customGroups"
+              :schools="[]"
+              :error="errors.audience_group_ids"
+            />
           </div>
 
           <VTextarea v-model="form.description" label="Описание" :rows="4" autogrow />
@@ -318,6 +328,7 @@
 </template>
 
 <script setup lang="ts">
+import { historyHasBack } from '@/platform/history'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { DateTime } from 'luxon'
 import { useRoute, useRouter } from 'vue-router'
@@ -331,8 +342,6 @@ import {
   VLoader,
   VEmptyState,
   VConfirmDialog,
-  VRadioGroup,
-  VChip,
 } from '@/components/ui'
 import DatePickerSheet from '@/components/shared/DatePickerSheet.vue'
 import TimePickerSheet from '@/components/shared/TimePickerSheet.vue'
@@ -354,7 +363,6 @@ import { ApiResponseError } from '@/api/client'
 import { errorMessage, extractApiError } from '@/composables/useApiError'
 import {
   DURATION_OPTIONS,
-  AUDIENCE_OPTIONS,
   catalogDirectionOptions,
   catalogStylesForDirection,
 } from '@/utils/practiceOptions'
@@ -363,6 +371,8 @@ import { eurStringToCents, centsToEurString } from '@/utils/currency'
 import type { TaxonomyListResponse } from '@/api/taxonomy'
 import type { PracticeAudienceKind, PracticeResponse } from '@/api/types'
 import type { GroupListItem } from '@/api/groups'
+import type { AudienceSchoolOption } from '@/components/shared/practiceAudience'
+import PracticeAudiencePicker from '@/components/shared/PracticeAudiencePicker.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -375,8 +385,8 @@ const practiceId = route.params.id as string
 // detail entry that pushed us here (avoids the edit<->detail back-loop); else
 // (cold deep-link) push the detail route. Mirror of CreatePracticeView.onBack.
 function onBack(): void {
-  if (window.history.state?.back) router.back()
-  else router.push({ name: 'master-practice-detail', params: { id: practiceId } })
+  if (historyHasBack()) router.back()
+  else void router.push({ name: 'master-practice-detail', params: { id: practiceId } })
 }
 
 // -- Practice data --
@@ -453,6 +463,9 @@ const form = reactive({
   // `vue-tsc` failed the whole build on a file nobody had touched. Widening
   // it by hand would only move the same break to the fifth value; taking the
   // type from the generated contract removes the copy that can drift.
+  // Load-bearing assertion: widens the literal for the typed consumers
+  // below (payload/guards); without it reactive infers plain string.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
   audience_kind: 'public' as PracticeAudienceKind,
   audience_group_ids: [] as string[],
 })
@@ -462,15 +475,20 @@ const form = reactive({
 // CreatePracticeView.
 const customGroups = ref<GroupListItem[]>([])
 
-// Named wrapper (same B7-hook reasoning as CreatePracticeView.
-// onAudienceGroupChipClick -- an inline multi-statement @click handler can
-// be reformatted by the pre-commit hook's prettier pass and lose its
-// semicolon, breaking the Vue template compiler).
-function onAudienceGroupChipClick(groupId: string): void {
-  const idx = form.audience_group_ids.indexOf(groupId)
-  if (idx === -1) form.audience_group_ids.push(groupId)
-  else form.audience_group_ids.splice(idx, 1)
-}
+// BE-74 + FE-92: a school practice's KIND is editable, but only within the
+// pair the backend accepts (check_school_audience's SCHOOL_PRACTICE_AUDIENCES)
+// -- the same pair the curator-on-behalf create flow offers. The SCHOOL
+// itself never changes, so the picker gets exactly the practice's own school
+// (which makes audienceOptions() offer the pair) with schoolLocked on: no
+// chips. Exact mirror of CreatePracticeView's SCHOOL_AUDIENCE_KINDS; both
+// must track the backend pair.
+const SCHOOL_AUDIENCE_KINDS: PracticeAudienceKind[] = ['public', 'curator_groups']
+
+const practiceSchool = computed<AudienceSchoolOption[]>(() => {
+  const p = practice.value
+  if (!p?.curator_group_id) return []
+  return [{ id: p.curator_group_id, name: p.curator_group_name ?? '' }]
+})
 
 const errors = reactive({
   title: '',
@@ -499,8 +517,21 @@ const priceCents = computed((): number => eurStringToCents(form.price_eur_raw))
 // masterStore.profile?.methods, never method_change_request.proposed_
 // methods -- a pending, unapproved request must not unlock a direction
 // early.
+//
+// BE-63: the OTHER manager the backend accepts on PATCH is the school's
+// curator, and for a foreign practice it validates direction/style against
+// the OWNER's confirmed methods (_assert_master_confirmed_taxonomy) -- so
+// the pickers must offer the owner's set, not the editor's. The detail
+// response carries it directly (practice.master_methods, get_practice()'s
+// outer join). The practices-list cache rows carry master_methods [] by
+// contract ("list endpoints pass []"), and a cache hit is always the
+// CALLER's own practice (GET /masters/me/practices) -- for those the
+// profile fallback reads the same set. A curator therefore never reaches
+// this filter without the owner's methods on the practice.
 const confirmedMethods = computed(() => {
-  const methods = masterStore.profile?.methods
+  const methods = practice.value?.master_methods?.length
+    ? practice.value.master_methods
+    : masterStore.profile?.methods
   if (!methods) return null
   return parseMethods(methods)
 })
@@ -524,7 +555,7 @@ const styleOptionsForForm = computed(() => {
   const confirmed = confirmedMethods.value
   if (!confirmed) return []
   const all = catalogStylesForDirection(catalog.value, form.direction)
-  const confirmedStyleValues = confirmed.styles[form.direction as string] ?? []
+  const confirmedStyleValues = confirmed.styles[form.direction] ?? []
   return all.filter((opt) => confirmedStyleValues.includes(opt.value))
 })
 
@@ -662,6 +693,9 @@ function audienceChanged(): boolean {
   if (!practice.value) return false
   const savedKind = practice.value.audience_kind ?? 'public'
   if (form.audience_kind !== savedKind) return true
+  // A school practice's kind is editable within the public/'curator_groups'
+  // pair (see the template); either way, with the kind unchanged only a
+  // change of groups is left to detect.
   if (form.audience_kind !== 'groups') return false
 
   // Same name -> id resolution resolveAudienceGroupIds() already uses --
@@ -720,7 +754,9 @@ async function save(): Promise<void> {
             'Их запись останется, но войти они не смогут. Сохранить?'
       confirmDialog.confirmLabel = 'Сохранить всё равно'
       confirmDialog.danger = false
-      confirmDialog.onConfirm = commitSave
+      confirmDialog.onConfirm = () => {
+        void commitSave()
+      }
       confirmDialog.visible = true
       return
     }
@@ -763,8 +799,10 @@ async function commitSave(): Promise<void> {
       max_participants: form.max_participants_raw ? parseInt(form.max_participants_raw, 10) : null,
       is_free: form.is_free,
       price_cents: form.is_free ? 0 : priceCents.value,
-      // P5 port (PROMPT №606): mirrors CreatePracticeView -- group_ids is
-      // only meaningful (and only sent) for audience_kind='groups'.
+      // P5 port (PROMPT №606): group_ids is only meaningful (and only sent
+      // non-empty) for audience_kind='groups'. BE-74: curator_group_id is
+      // NOT sent -- the school is fixed at creation, and an absent field
+      // leaves it as it is (any other value would be a 400).
       audience_kind: form.audience_kind,
       group_ids: form.audience_kind === 'groups' ? form.audience_group_ids : [],
     })
@@ -800,7 +838,7 @@ async function publish(): Promise<void> {
     practice.value = updated
     toast.success('Практика опубликована!')
     await masterStore.refreshMyPractices()
-    router.push({ name: 'master-practices' })
+    void router.push({ name: 'master-practices' })
   } catch (e) {
     toast.error(extractApiError(e, 'Не удалось опубликовать'))
   } finally {
@@ -824,7 +862,7 @@ async function cancel(scope: 'this' | 'this_and_future'): Promise<void> {
     cancelModalOpen.value = false
     toast.success('Практика отменена, возвраты выполнены')
     await masterStore.refreshMyPractices()
-    router.push({ name: 'master-practices' })
+    void router.push({ name: 'master-practices' })
   } catch (e) {
     toast.error(extractApiError(e, 'Не удалось отменить'))
   } finally {
@@ -838,7 +876,9 @@ function confirmDelete(): void {
   confirmDialog.confirmLabel = 'Удалить'
   confirmDialog.danger = true
   confirmDialog.visible = true
-  confirmDialog.onConfirm = remove
+  confirmDialog.onConfirm = () => {
+    void remove()
+  }
 }
 
 // -- Delete: draft -> deleted (soft) --
@@ -850,7 +890,7 @@ async function remove(): Promise<void> {
     confirmDialog.visible = false
     toast.success('Черновик удалён')
     await masterStore.refreshMyPractices()
-    router.push({ name: 'master-practices' })
+    void router.push({ name: 'master-practices' })
   } catch (e) {
     toast.error(extractApiError(e, 'Не удалось удалить'))
   } finally {

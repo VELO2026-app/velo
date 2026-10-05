@@ -27,7 +27,7 @@
 </template>
 
 <script setup lang="ts">
-import VeloLogo from '@/components/ui/VeloLogo.vue'
+import { VeloLogo } from '@/components/ui'
 </script>
 
 <style scoped>

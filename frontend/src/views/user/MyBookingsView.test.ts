@@ -79,6 +79,7 @@ function booking(
     updated_at: null,
     has_feedback: false,
     has_checkin: false,
+    has_reflection: false,
     ...overrides,
     practice: {
       id: `practice_${id}`,
@@ -182,9 +183,7 @@ describe('MyBookingsView', () => {
     it('initial load: shows the loader while the first page is in flight', async () => {
       // Never resolves -> store.loading stays true with an empty list, which is
       // exactly the v-if guard at MyBookingsView.vue:22.
-      vi.mocked(bookingsApi.getMyBookings).mockReturnValue(
-        new Promise(() => {}) as Promise<ReturnType<typeof page>>,
-      )
+      vi.mocked(bookingsApi.getMyBookings).mockReturnValue(new Promise(() => {}))
       mount()
       await flush()
 
@@ -324,7 +323,7 @@ describe('MyBookingsView', () => {
       expect(text()).toContain('Завершена')
     })
 
-    it('a confirmed booking whose practice already ended is past and badged «Подсчитывается», not an upcoming badge', async () => {
+    it('a confirmed booking whose practice already ended is past and badged «Подсчет», not an upcoming badge', async () => {
       // MyBookingsView.vue:198-201: the backend keeps confirmed until finalize
       // (settlement grace window), so status alone would mis-file it as upcoming
       // and paint a misleading «Сегодня» on a practice that is over.
@@ -347,10 +346,10 @@ describe('MyBookingsView', () => {
       expect(text()).not.toContain('Предстоящие')
       expect(text()).not.toContain('Сегодня')
       expect(text()).not.toContain('В эфире')
-      expect(text()).toContain('Подсчитывается')
+      expect(text()).toContain('Подсчет')
     })
 
-    it('B30: a re-visit refetches instead of reusing a stale list -- the badge advances past «Подсчитывается»', async () => {
+    it('B30: a re-visit refetches instead of reusing a stale list -- the badge advances past «Подсчет»', async () => {
       // First visit: the practice just ended, the Zoom report hasn't ripened
       // yet -- confirmed + ended reads as "still being decided".
       vi.mocked(bookingsApi.getMyBookings).mockResolvedValueOnce(
@@ -364,12 +363,12 @@ describe('MyBookingsView', () => {
       )
       mount()
       await flush()
-      expect(text()).toContain('Подсчитывается')
+      expect(text()).toContain('Подсчет')
 
       // Leave and come back once the report has ripened: same booking, now
       // decided. The pre-B30 fetchMyBookings() would have skipped this fetch
       // entirely because the list was already non-empty, leaving the stale
-      // "Подсчитывается" badge showing forever.
+      // "Подсчет" badge showing forever.
       vi.mocked(bookingsApi.getMyBookings).mockResolvedValueOnce(
         page([
           booking(
@@ -385,7 +384,7 @@ describe('MyBookingsView', () => {
       await flush()
 
       expect(text()).toContain('Завершена')
-      expect(text()).not.toContain('Подсчитывается')
+      expect(text()).not.toContain('Подсчет')
     })
 
     it('a practice in progress is upcoming and badged «В эфире»', async () => {

@@ -57,11 +57,7 @@
           @click="goStudentFromReview(item)"
           @keydown.enter.space.prevent="goStudentFromReview(item)"
         >
-          <component
-            :is="RATING_ICON[item.rating as FeedbackRating]"
-            :size="36"
-            :style="{ color: RATING_ICON_COLOR[item.rating as FeedbackRating] }"
-          />
+          <component :is="MOOD_SCALE_ICON[item.rating]" :size="36" />
           <div class="summary__feedback-body">
             <div class="summary__feedback-name">{{ item.reviewer_name }}</div>
             <div class="summary__feedback-practice">{{ item.practice_title }}</div>
@@ -109,7 +105,7 @@
           <button
             class="summary__msg"
             aria-label="Написать сообщение"
-            @click.stop="openMessage(student.name)"
+            @click.stop="openMessage(student.id, student.name)"
           >
             <IconMessages :size="22" />
           </button>
@@ -123,7 +119,12 @@
       </template>
     </div>
 
-    <SendMessageModal :open="msgOpen" :name="msgName" @close="msgOpen = false" />
+    <SendMessageModal
+      :open="msgOpen"
+      :student-id="msgId"
+      :name="msgName"
+      @close="msgOpen = false"
+    />
   </div>
 </template>
 
@@ -135,9 +136,8 @@ import { VCard, VAvatar, VLoader, VEmptyState, VButton } from '@/components/ui'
 import { IconMessages, IconWarning } from '@/components/icons'
 import SendMessageModal from '@/components/shared/SendMessageModal.vue'
 import { getStudents, getMasterReviews } from '@/api/masters'
-import { RATING_ICON_COLOR } from '@/utils/displayHelpers'
-import { RATING_ICON } from '@/utils/ratingIcons'
-import type { StudentListItem, MasterReviewItem, FeedbackRating } from '@/api/types'
+import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
+import type { StudentListItem, MasterReviewItem } from '@/api/types'
 
 const router = useRouter()
 
@@ -149,8 +149,8 @@ const insight = ref('Сводка появится, когда подключи�
 // -- Key feedbacks — REAL (E6, PROMPT №420): GET /masters/me/reviews, same
 //    cross-practice named feed AnalyticsView's «Требуют внимания» uses, but
 //    WITHOUT the attention=true filter -- this section is a highlight reel
-//    (positive included), not only the negative bucket. Rating icon + color
-//    via the shared utils/ratingIcons + RATING_ICON_COLOR. --
+//    (positive included), not only the attention zones. The zone's face
+//    via the shared utils/ratingIcons MOOD_SCALE_ICON (BE-77). --
 const FEEDBACKS_PAGE = 3
 const keyFeedbacks = ref<MasterReviewItem[]>([])
 const feedbacksLoading = ref(true)
@@ -172,7 +172,7 @@ async function loadFeedbacks(): Promise<void> {
 // user_id is real on MasterReviewItem (E1 remainder, already shipped) --
 // mirrors AnalyticsView.goStudent.
 function goStudentFromReview(item: MasterReviewItem): void {
-  router.push({
+  void router.push({
     name: 'master-student-profile',
     params: { id: item.user_id },
     query: { name: item.reviewer_name },
@@ -208,7 +208,7 @@ const needsAttention = computed((): StudentListItem[] =>
 
 // The detail endpoint carries no name → pass it forward (mirror MasterStudentsView).
 function openProfile(student: StudentListItem): void {
-  router.push({
+  void router.push({
     name: 'master-student-profile',
     params: { id: student.id },
     query: { name: student.name },
@@ -216,8 +216,10 @@ function openProfile(student: StudentListItem): void {
 }
 
 const msgOpen = ref(false)
+const msgId = ref('')
 const msgName = ref('')
-function openMessage(name: string): void {
+function openMessage(id: string, name: string): void {
+  msgId.value = id
   msgName.value = name
   msgOpen.value = true
 }

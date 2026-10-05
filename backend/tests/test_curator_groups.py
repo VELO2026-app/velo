@@ -516,21 +516,33 @@ async def test_list_shows_only_my_groups_with_counts(
 
 
 @pytest.mark.asyncio
-async def test_patch_to_its_own_current_name_is_a_no_op_200(
+async def test_patch_to_its_own_name_by_the_rule_is_200_and_keeps_the_new_spelling(
     client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """POVTOR: a group's own name is not a competitor to itself."""
-    master = await _make_verified_master(client, db_session, _TID_CURATOR)
-    group = await _create_group(client, master, name="Школа")
+    """POVTOR: a group's own name is not a competitor to itself -- under the
+    BE-49 rule as well.
 
-    resp = await client.patch(
-        GROUP_URL.format(group_id=group["id"]),
-        json={"name": "Школа"},
-        headers=auth_headers(master["session_token"]),
-    )
-    assert resp.status_code == 200
-    assert resp.json()["name"] == "Школа"
+    This was test_patch_to_its_own_current_name_is_a_no_op_200: renaming
+    «Школа» to «Школа» returned 200 with the name unchanged. That stays true
+    (first request below), but since BE-49 the names «Школа йоги» and
+    «школа  ЙОГИ» are ONE name, so the old test no longer covers the case
+    that matters: renaming a school into another spelling of its own name.
+    That is allowed and STORES the new spelling (owner decision 3: stored as
+    typed, only the comparison is normalised).
+    """
+    master = await _make_verified_master(client, db_session, _TID_CURATOR)
+    group = await _create_group(client, master, name="Школа йоги")
+    url = GROUP_URL.format(group_id=group["id"])
+    headers = auth_headers(master["session_token"])
+
+    same = await client.patch(url, json={"name": "Школа йоги"}, headers=headers)
+    assert same.status_code == 200
+    assert same.json()["name"] == "Школа йоги"
+
+    respelled = await client.patch(url, json={"name": "школа  ЙОГИ"}, headers=headers)
+    assert respelled.status_code == 200, respelled.text
+    assert respelled.json()["name"] == "школа  ЙОГИ"
 
 
 @pytest.mark.asyncio

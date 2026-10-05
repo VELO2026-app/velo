@@ -98,7 +98,7 @@ function cards(): HTMLElement[] {
 function button(label: string): HTMLButtonElement | undefined {
   return Array.from(host?.querySelectorAll('button') ?? []).find((b) =>
     b.textContent?.includes(label),
-  ) as HTMLButtonElement | undefined
+  )
 }
 
 function tab(label: string): HTMLButtonElement | undefined {
@@ -147,9 +147,7 @@ afterEach(() => {
 describe('AdminPromosView', () => {
   describe('state ladder', () => {
     it('shows the loader while the first page is in flight', async () => {
-      vi.mocked(adminApi.getAdminPromos).mockReturnValue(
-        new Promise(() => {}) as Promise<ReturnType<typeof page>>,
-      )
+      vi.mocked(adminApi.getAdminPromos).mockReturnValue(new Promise(() => {}))
       mount()
       await flush()
 
@@ -408,9 +406,7 @@ describe('AdminPromosView', () => {
       await flush()
       expect(text()).toContain('FIRST')
 
-      vi.mocked(adminApi.getAdminPromos).mockReturnValue(
-        new Promise(() => {}) as Promise<ReturnType<typeof page>>,
-      )
+      vi.mocked(adminApi.getAdminPromos).mockReturnValue(new Promise(() => {}))
       tab('Компании')?.click()
       await flush()
 

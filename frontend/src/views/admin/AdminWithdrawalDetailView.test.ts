@@ -22,11 +22,11 @@
 // so their DOM is queried from document.body, not the mount root (SC-07) -- and
 // both leak past unmount, so afterEach reaps them (see the note there).
 //
-// STUB SCOPE, stated honestly (AdminWithdrawalDetailView.vue:12-15): the 2FA code
-// has NO backend. approve() takes only an optional note; the OTP is a pure UI
-// gate. The tests below therefore assert that the gate is a GATE (approve does
-// not fire until six digits are in) and explicitly do NOT claim the code is
-// verified anywhere -- it is not.
+// THE GATE IS ONE STEP (owner 2026-10-02): «Подтвердить» -> ConfirmPaymentModal
+// (the recap the admin checks) -> «Одобрить выплату» -> approve. The 2FA window
+// that used to follow the recap was removed: the approve endpoint never took a
+// code, so it gated nothing. Its tests went with it; the double-pay guard it
+// carried (its `loading`) now lives on the confirm button and is asserted below.
 //
 // No time pinning needed -- this screen reads no clock.
 // =============================================================================
@@ -101,25 +101,23 @@ function text(): string {
 function button(label: string): HTMLButtonElement | undefined {
   return Array.from(host?.querySelectorAll('button') ?? []).find((b) =>
     b.textContent?.includes(label),
-  ) as HTMLButtonElement | undefined
+  )
 }
 
 /** Teleported to body (VModal.vue:20 / VBottomSheet.vue:18) -- NOT under host. */
 function bodyButton(label: string): HTMLButtonElement | undefined {
   return Array.from(document.body.querySelectorAll('button')).find((b) =>
     b.textContent?.includes(label),
-  ) as HTMLButtonElement | undefined
+  )
 }
 
-// SCOPED to the 2FA modal on purpose. A bare search for «Подтвердить» across
-// document.body also matches ConfirmPaymentModal's «Подтвердить 2FA», which is
-// still parked in the DOM behind it -- the test would click the confirm button
-// again and silently never approve.
-function tfaSubmit(): HTMLButtonElement | undefined {
-  const tfa = document.body.querySelector('.tfa')
-  return Array.from(tfa?.querySelectorAll('button') ?? []).find(
-    (b) => b.textContent?.trim() === 'Подтвердить',
-  ) as HTMLButtonElement | undefined
+// SCOPED to the confirm modal (.cpm): the screen behind it has its own
+// «Подтвердить», and a bare body search could click the wrong one.
+function cpmApprove(): HTMLButtonElement | undefined {
+  const cpm = document.body.querySelector('.cpm')
+  return Array.from(cpm?.querySelectorAll('button') ?? []).find((b) =>
+    b.textContent?.includes('Одобрить выплату'),
+  )
 }
 
 function rowValue(key: string): string {
@@ -128,24 +126,9 @@ function rowValue(key: string): string {
   return row?.querySelector('.wd__v')?.textContent?.trim() ?? ''
 }
 
-/** Type a full 6-digit OTP into the teleported TwoFactorModal. */
-async function type2fa(code = '123456'): Promise<void> {
-  const boxes = Array.from(document.body.querySelectorAll<HTMLInputElement>('.tfa__box'))
-  if (boxes.length !== 6) throw new Error(`expected 6 OTP boxes, found ${boxes.length}`)
-  for (const [i, digit] of [...code].entries()) {
-    const box = boxes[i]
-    if (!box) throw new Error(`no OTP box at index ${i}`)
-    box.value = digit
-    box.dispatchEvent(new Event('input'))
-  }
-  await flush()
-}
-
-/** Walk the real gate: Подтвердить -> ConfirmPaymentModal -> TwoFactorModal. */
-async function openTwoFa(): Promise<void> {
+/** Walk the real gate: Подтвердить -> ConfirmPaymentModal. */
+async function openConfirm(): Promise<void> {
   button('Подтвердить')?.click()
-  await flush()
-  bodyButton('Подтвердить 2FA')?.click()
   await flush()
 }
 
@@ -300,7 +283,7 @@ describe('AdminWithdrawalDetailView', () => {
       await flush()
 
       expect(adminApi.approveWithdrawal).not.toHaveBeenCalled()
-      expect(bodyButton('Подтвердить 2FA')).toBeDefined()
+      expect(cpmApprove()).toBeDefined()
     })
 
     it('the confirm modal shows the SAME numbers as the screen behind it', async () => {
@@ -321,38 +304,12 @@ describe('AdminWithdrawalDetailView', () => {
       expect(modal).toContain('Анна П.')
     })
 
-    it('confirming does NOT approve either -- it only opens the 2FA modal', async () => {
-      mountWith(wd('w1'))
-      await flush()
-
-      await openTwoFa()
-
-      expect(adminApi.approveWithdrawal).not.toHaveBeenCalled()
-      expect(document.body.querySelectorAll('.tfa__box')).toHaveLength(6)
-    })
-
-    it('an INCOMPLETE 2FA code cannot approve', async () => {
-      // TwoFactorModal gates submit on all six digits (TwoFactorModal.vue:76,88).
-      // NOTE: this is a UI gate ONLY -- the code is never verified against
-      // anything (see the banner). This asserts the gate holds, not that 2FA works.
-      mountWith(wd('w1'))
-      await flush()
-      await openTwoFa()
-      await type2fa('123')
-
-      tfaSubmit()?.click()
-      await flush()
-
-      expect(adminApi.approveWithdrawal).not.toHaveBeenCalled()
-    })
-
-    it('a COMPLETE 2FA code approves THAT withdrawal by id', async () => {
+    it('«Одобрить выплату» in the recap approves THAT withdrawal by id', async () => {
       mountWith(wd('w7', { amount_cents: 10000 }))
       await flush()
-      await openTwoFa()
-      await type2fa('123456')
+      await openConfirm()
 
-      tfaSubmit()?.click()
+      cpmApprove()?.click()
       await flush()
 
       expect(adminApi.approveWithdrawal).toHaveBeenCalledTimes(1)
@@ -377,10 +334,9 @@ describe('AdminWithdrawalDetailView', () => {
       )
       mountWith(wd('w1'))
       await flush()
-      await openTwoFa()
-      await type2fa()
+      await openConfirm()
 
-      tfaSubmit()?.click()
+      cpmApprove()?.click()
       await flush()
 
       expect(toastError).toHaveBeenCalledWith('Ошибка одобрения выплаты')
@@ -392,18 +348,18 @@ describe('AdminWithdrawalDetailView', () => {
       vi.mocked(adminApi.approveWithdrawal).mockRejectedValue(new TypeError('boom'))
       mountWith(wd('w1'))
       await flush()
-      await openTwoFa()
-      await type2fa()
+      await openConfirm()
 
-      tfaSubmit()?.click()
+      cpmApprove()?.click()
       await flush()
 
       expect(toastError).toHaveBeenCalledWith('Ошибка одобрения выплаты')
     })
 
-    it('does NOT double-pay when submit is hit twice while the approve is in flight', async () => {
-      // The `approving` re-entry guard (AdminWithdrawalDetailView.vue:194). A
-      // second POST here is a literal double payout.
+    it('does NOT double-pay when «Одобрить выплату» is hit twice while the approve is in flight', async () => {
+      // Two guards, both asserted: the `approving` re-entry guard in onApprove
+      // and the confirm button's `loading` (disabled while in flight -- the
+      // guard TwoFactorModal used to carry). A second POST is a double payout.
       let resolve!: (v: AdminWithdrawalResponse) => void
       vi.mocked(adminApi.approveWithdrawal).mockReturnValue(
         new Promise((r) => {
@@ -412,12 +368,12 @@ describe('AdminWithdrawalDetailView', () => {
       )
       mountWith(wd('w1'))
       await flush()
-      await openTwoFa()
-      await type2fa()
+      await openConfirm()
 
-      tfaSubmit()?.click()
+      cpmApprove()?.click()
       await nextTick()
-      tfaSubmit()?.click()
+      expect(cpmApprove()?.disabled).toBe(true)
+      cpmApprove()?.click()
       await nextTick()
 
       expect(adminApi.approveWithdrawal).toHaveBeenCalledTimes(1)

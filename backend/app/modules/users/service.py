@@ -21,7 +21,53 @@
 #   JSONB sandbox. update_user routes it there via set_jsonb() (JSONBMixin),
 #   which flag_modified()s the column so SQLAlchemy emits the UPDATE.
 #   Plain setattr would target a non-existent column and silently no-op.
+#
+# ROW LOCK ON users (BE-85). THE ONE PLACE IT IS WRITTEN; every writer of
+# the users row that points here follows it.
+#
+#   Every function that writes User.credentials -- or User.role, which is
+#   decided from credentials (the switched-away-admin marker) -- takes the
+#   row with lock_user_row() BEFORE it reads either. They all rewrite the
+#   whole credentials dict from the copy in memory, so under READ COMMITTED
+#   a writer that read the row before another one committed would put the
+#   old blob back: a lost update, and for credentials['email'] a silent
+#   divergence from the snapshot already sent to comms (update_user emits
+#   the new address; a stale writer restores the old one, the trigger
+#   raises the version, nobody emits). The writers: update_user,
+#   switch_user_role, reset_user_to_onboarding (here), make_master
+#   (admin/users), revoke_master (admin/masters), scripts/set_role and
+#   scripts/seed. The login upsert (auth/service.py) merges in SQL
+#   (`credentials || fresh` under the row lock ON CONFLICT takes) and needs
+#   nothing from here.
+#
+#   STRENGTH: FOR NO KEY UPDATE, not FOR UPDATE. The writers change no key
+#   column, and that is the lock their UPDATE takes anyway. FOR UPDATE
+#   would also conflict with KEY SHARE -- the lock every insert of a child
+#   row (booking, ledger, diary, ...) takes on this row through its FK --
+#   so every such insert for this person would queue behind a profile
+#   edit. (It does NOT deadlock against record_user_ledger's KEY SHARE ->
+#   FOR UPDATE upgrade: measured in BE-85, Postgres lets the holder of the
+#   KEY SHARE upgrade past a queued FOR UPDATE.) Against the balance
+#   writers' FOR UPDATE it still excludes both ways.
+#
+#   REFRESH: the row is usually in the session already (the auth
+#   dependency loaded it, unlocked). A locking SELECT does not overwrite
+#   the attributes of an instance the identity map holds, so without
+#   populate_existing the writer would hold the lock and still write the
+#   stale copy. Hence lock first, mutate after: populate_existing would
+#   also overwrite a change made before it.
+#
+#   ORDER: users -> master_profiles, for the rows of one person. A
+#   function that locks both takes users first. Payments already takes
+#   them so for a master's sale (the master_ledger insert takes KEY SHARE
+#   on users before record_master_ledger locks master_profiles FOR UPDATE);
+#   make_master takes users and then writes the profile; revoke_master was
+#   the one taking master_profiles first, and it is turned. The KEY SHARE
+#   of a child insert does not conflict with FOR NO KEY UPDATE, so it does
+#   not count as a position in this order.
 # =============================================================================
+
+from uuid import UUID
 
 import structlog
 from sqlalchemy import select
@@ -36,6 +82,29 @@ from app.modules.users.schemas import (
     derive_allowed_roles,
     has_admin_home,
 )
+
+
+async def lock_user_row(session: AsyncSession, user_id: UUID) -> User | None:
+    """Take the users row FOR NO KEY UPDATE and load its current values.
+
+    The lock, its strength, the refresh and the order are in the module
+    header (ROW LOCK ON users). populate_existing makes an instance this
+    session already holds take the values the row has once the lock is
+    granted -- the committed state after any writer this one waited for.
+    The instance is the one in the identity map, so a caller holding the
+    user object sees it refreshed in place.
+
+    Returns None when there is no such row.
+    """
+    return (
+        await session.execute(
+            select(User)
+            .where(User.id == user_id)
+            .with_for_update(key_share=True)
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+
 
 logger = structlog.get_logger()
 
@@ -88,6 +157,10 @@ async def update_user(
     if not updates:
         return user
 
+    # BE-85: lock and refresh the row before reading credentials (module
+    # header, ROW LOCK ON users). Refreshes `user` in place.
+    await lock_user_row(session, user.id)
+
     # Split the flat JSONB-backed fields from plain column fields.
     #
     # None is dropped for JSONB fields, empty string is kept:
@@ -133,11 +206,13 @@ async def update_user(
     await session.flush()
 
     # Phase 6 / T0: re-sync the comms identity projection when a field
-    # of the user_upserted snapshot changed. `language` / `timezone`
+    # of the user_upserted snapshot was SENT. `language` / `timezone`
     # are columns, `email` lives in credentials -- all three arrive
-    # through this PATCH. The event is a full snapshot (idempotent),
-    # emitted in THIS transaction (ID-2); name/bio edits do not touch
-    # the projection and stay silent.
+    # through this PATCH. This filter only spares needless sends; whether
+    # the snapshot CHANGED is the database's answer (the snapshot_version
+    # trigger compares content): the same value sent again leaves the
+    # version and reaches comms as a replay. Emitted in THIS transaction
+    # (ID-2); name/bio edits do not touch the projection and stay silent.
     if {"language", "timezone", "email"} & updates.keys():
         await emit_user_upserted(session, user)
 
@@ -181,7 +256,14 @@ async def switch_user_role(
 
     The user object must already be bound to the provided write session
     (ensured by get_current_user_write in the router).
+
+    BE-85: the row is locked first, whatever the branch -- the decision
+    reads credentials and the role is written in every case (module
+    header, ROW LOCK ON users). A refusal after the lock is rolled back by
+    get_db_session (P-01), which releases it.
     """
+    await lock_user_row(session, user.id)
+
     is_admin_home = has_admin_home(user.credentials)
     allowed = derive_allowed_roles(
         user.role,
@@ -241,8 +323,11 @@ async def reset_user_to_onboarding(
     the DELETE /users/me contract stays the same so the frontend does not move.
 
     Mechanism mirrors update_user's JSONB path: copy credentials, drop the
-    flag, set_jsonb() so SQLAlchemy emits the UPDATE.
+    flag, set_jsonb() so SQLAlchemy emits the UPDATE. The row is locked
+    and refreshed first (BE-85, module header).
     """
+    await lock_user_row(session, user.id)
+
     new_credentials = dict(user.credentials or {})
     new_credentials["onboarding_completed"] = False
     user.set_jsonb("credentials", new_credentials)

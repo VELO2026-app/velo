@@ -7,6 +7,7 @@
 #   GET   /api/v1/users/me/checkins         -- list my check-ins
 #   POST  /api/v1/practices/{id}/feedback   -- upsert feedback
 #   GET   /api/v1/users/me/feedbacks        -- list my feedbacks
+#   POST  /api/v1/practices/{id}/reflection -- create no-show reflection
 #   POST  /api/v1/diary                     -- create diary entry
 #   GET   /api/v1/diary                     -- list my diary entries
 #   GET   /api/v1/diary/{id}                -- get single entry
@@ -37,30 +38,50 @@ from app.modules.diary.checkins_service import (
     list_user_checkins,
     upsert_checkin,
 )
+from app.modules.diary.external_activity_service import (
+    create_external_activity,
+    list_custom_activity_names,
+)
 from app.modules.diary.feed_service import list_diary_feed
 from app.modules.diary.insights_service import (
     get_practice_insights,
     list_practice_reviews,
 )
+from app.modules.diary.practice_analytics_service import (
+    get_practice_analytics,
+    list_practice_analytics_pairs,
+    list_practice_analytics_reviews,
+)
 from app.modules.diary.schemas import (
     CheckinRequest,
     CheckinResponse,
     CreateDiaryEntryRequest,
+    CreateExternalActivityRequest,
+    CustomActivityNamesResponse,
     DiaryEntryResponse,
     DiaryFeedItem,
     DiaryFeedResponse,
+    ExternalActivityResponse,
     FeedbackRequest,
     FeedbackResponse,
     PaginatedCheckinsResponse,
     PaginatedDiaryEntriesResponse,
     PaginatedFeedbacksResponse,
+    PaginatedPracticeAnalyticsPairs,
+    PaginatedPracticeAnalyticsReviews,
     PaginatedReviewsResponse,
+    PracticeAnalyticsPair,
+    PracticeAnalyticsResponse,
+    PracticeAnalyticsReview,
     PracticeInsightsResponse,
+    ReflectionRequest,
+    ReflectionResponse,
     ReviewItem,
     UpdateDiaryEntryRequest,
 )
 from app.modules.diary.service import (
     create_diary_entry,
+    create_reflection,
     delete_diary_entry,
     get_diary_entry,
     get_feedback,
@@ -216,6 +237,31 @@ async def upsert_feedback_endpoint(
     return FeedbackResponse.model_validate(feedback)
 
 
+@practices_feedback_router.post(
+    "/{practice_id}/reflection",
+    response_model=ReflectionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_reflection_endpoint(
+    practice_id: UUID,
+    body: ReflectionRequest,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> ReflectionResponse:
+    """Record a no-show reflection (BE-108, immutable, once only).
+
+    404 reflection_not_available without a no_show booking for this
+    practice; 409 reflection_already_submitted on a repeat.
+    """
+    reflection = await create_reflection(
+        user,
+        practice_id,
+        session,
+        comment=body.comment,
+    )
+    return ReflectionResponse.model_validate(reflection)
+
+
 @feedbacks_router.get(
     "/feedbacks",
     response_model=PaginatedFeedbacksResponse,
@@ -294,6 +340,63 @@ async def create_diary_entry_endpoint(
     )
 
     return DiaryEntryResponse.model_validate(entry)
+
+
+@diary_router.post(
+    "/external-activities",
+    response_model=ExternalActivityResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_external_activity_endpoint(
+    body: CreateExternalActivityRequest,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
+) -> ExternalActivityResponse:
+    """Record something the person did outside velo.
+
+    DECLARED BEFORE /{entry_id} in this module's diary_router: FastAPI
+    matches in declaration order, and a static path losing to a dynamic
+    sibling is how "external-activities" would be parsed as an entry id and
+    answered with a 422. The GET/PATCH/DELETE on /{entry_id} are further
+    down for that reason.
+
+    The activity and its diary event are written in one transaction, so the
+    row exists exactly when the timeline entry does; the next
+    GET /api/v1/diary/feed already returns it.
+    """
+    activity = await create_external_activity(
+        user,
+        session,
+        occurred_at=body.occurred_at,
+        activity_type=body.activity_type.value,
+        mood=body.mood,
+        custom_activity_name=body.custom_activity_name,
+        thoughts=body.thoughts,
+    )
+    return ExternalActivityResponse.model_validate(activity)
+
+
+@diary_router.get(
+    "/external-activities/custom-names",
+    response_model=CustomActivityNamesResponse,
+)
+async def list_custom_activity_names_endpoint(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_reader),
+) -> CustomActivityNamesResponse:
+    """The person's own custom activity names, for the composer to offer.
+
+    Declared beside its sibling POST rather than at the end of the module:
+    two segments, so it cannot be swallowed by /{entry_id} at any position,
+    but a reader looking for the external-activity routes should find them
+    together.
+
+    No parameters at all -- not even a limit. The scope is the caller and
+    the count is a product decision (owner, 16 September), and neither is
+    something a query string should be able to move.
+    """
+    items = await list_custom_activity_names(user, session)
+    return CustomActivityNamesResponse(items=items)
 
 
 @diary_router.get(
@@ -532,8 +635,9 @@ async def list_practice_reviews_endpoint(
     attention: bool = Query(
         default=False,
         description=(
-            "When true, return only negative reviews (rating 1-3, the "
-            "'confused' bucket) -- the dashboard 'needs attention' feed."
+            "When true, return only reviews that need attention (rating "
+            "1-4, zones 'bad' and 'low') -- the dashboard 'needs "
+            "attention' feed."
         ),
     ),
 ) -> PaginatedReviewsResponse:
@@ -558,6 +662,82 @@ async def list_practice_reviews_endpoint(
 
     return PaginatedReviewsResponse(
         items=[ReviewItem(**row) for row in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+# ===================================================================
+# Practice analytics (BE-78): the «Аналитика по практике» screen
+# ===================================================================
+#
+# get_current_user, not get_current_master: a school's curator may hold
+# role='user'. So a reader who is not entitled gets the masked 404 (P-08),
+# never the 403 /insights gives a non-master. Who is entitled, the one
+# population and the zones-only rule: practice_analytics_service.py header.
+
+
+@practices_insights_router.get(
+    "/{practice_id}/analytics",
+    response_model=PracticeAnalyticsResponse,
+)
+async def get_practice_analytics_endpoint(
+    practice_id: UUID,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_reader),
+) -> PracticeAnalyticsResponse:
+    """Header + PRE / review zone distributions over the ATTENDED bookings.
+
+    Readers: the leading master; for a school's practice also its curator and
+    its verified masters. Anyone else -> 404; entitled but not completed ->
+    400.
+    """
+    return PracticeAnalyticsResponse(
+        **await get_practice_analytics(user, practice_id, session)
+    )
+
+
+@practices_insights_router.get(
+    "/{practice_id}/analytics/pairs",
+    response_model=PaginatedPracticeAnalyticsPairs,
+)
+async def list_practice_analytics_pairs_endpoint(
+    practice_id: UUID,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_reader),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> PaginatedPracticeAnalyticsPairs:
+    """«Пришёл -> ушёл»: attendees with a PRE check-in AND a review, as zones."""
+    items, total = await list_practice_analytics_pairs(
+        user, practice_id, session, limit=limit, offset=offset,
+    )
+    return PaginatedPracticeAnalyticsPairs(
+        items=[PracticeAnalyticsPair(**row) for row in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@practices_insights_router.get(
+    "/{practice_id}/analytics/reviews",
+    response_model=PaginatedPracticeAnalyticsReviews,
+)
+async def list_practice_analytics_reviews_endpoint(
+    practice_id: UUID,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_reader),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> PaginatedPracticeAnalyticsReviews:
+    """Reviews with text from attendees, newest first."""
+    items, total = await list_practice_analytics_reviews(
+        user, practice_id, session, limit=limit, offset=offset,
+    )
+    return PaginatedPracticeAnalyticsReviews(
+        items=[PracticeAnalyticsReview(**row) for row in items],
         total=total,
         limit=limit,
         offset=offset,

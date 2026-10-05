@@ -29,21 +29,26 @@ import { ref, reactive } from 'vue'
 import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
 import { useCursorPagination } from '@/composables/useCursorPagination'
+import { mergeJumpWindow } from '@/utils/diaryJumpWindow'
 import {
   upsertCheckin,
   upsertFeedback,
+  createReflection,
   createDiaryEntry,
   getDiaryEntry,
   updateDiaryEntry,
   deleteDiaryEntry,
   restoreDiaryEntry,
+  createExternalActivity,
   listDiaryFeed,
   getPracticeInsights,
 } from '@/api/diary'
 import type {
   CheckinRequest,
   FeedbackRequest,
+  ReflectionRequest,
   CreateDiaryEntryRequest,
+  CreateExternalActivityRequest,
   UpdateDiaryEntryRequest,
   DiaryEntryResponse,
   DiaryFeedItem,
@@ -60,6 +65,23 @@ export interface SubmitResult {
    *  non-ApiResponseError failure. */
   code?: string
 }
+
+/** The request fields POST /diary/external-activities can attach a 422 to. */
+const EXTERNAL_ACTIVITY_FIELDS = [
+  'occurred_at',
+  'activity_type',
+  'custom_activity_name',
+  'mood',
+  'thoughts',
+] as const
+
+/** Field-attributed 422 errors: the backend's `loc` (minus the "body" prefix)
+ *  -> that entry's msg. FE-70: the endpoint deliberately answers with SEVERAL
+ *  field errors at once, so the form must be able to highlight two controls
+ *  simultaneously instead of walking them one at a time. */
+export type ExternalActivityFieldErrors = Partial<
+  Record<(typeof EXTERNAL_ACTIVITY_FIELDS)[number], string>
+>
 
 export const useDiaryStore = defineStore('diary', () => {
   // ===========================================================================
@@ -118,36 +140,87 @@ export const useDiaryStore = defineStore('diary', () => {
   }
 
   // ===========================================================================
-  // Reflection submit (ReflectionView, no-show) -- STUB (TD-REFLECTION)
+  // Reflection submit (ReflectionView, no-show, BE-108)
   // ===========================================================================
 
   const reflectionSubmitting = ref(false)
 
   /**
    * Submit a no-show reflection for a practice.
+   * Returns { ok, error } so the view can show a toast on failure.
    *
-   * STUB (TD-REFLECTION, PROMPT №269): the backend endpoint
-   * `POST /api/v1/practices/{id}/reflection` does not exist yet (see
-   * VELO-Backend-Tasks.md). This resolves ok WITHOUT any network call so the UI
-   * flow completes honestly — nothing is persisted server-side and no "saved"
-   * claim is made. When the endpoint lands, swap the no-op body for an
-   * `upsertReflection(practiceId, body)` call + refreshAfterDiaryMutation(),
-   * exactly like submitFeedback.
+   * The reflection projects nothing into the diary feed, so there is no feed
+   * to refresh here. The booking's has_reflection flag is refreshed by the
+   * view (bookingsStore.refreshBookings), as FeedbackView does for
+   * has_feedback.
    */
   async function submitReflection(
     practiceId: string,
-    body: { comment: string | null },
+    body: ReflectionRequest,
   ): Promise<SubmitResult> {
     if (reflectionSubmitting.value) return { ok: false, error: '' }
     reflectionSubmitting.value = true
     try {
-      // No API yet — intentionally a no-op. `practiceId` / `body` are the shape
-      // the real persist call will take (TD-REFLECTION).
-      void practiceId
-      void body
+      await createReflection(practiceId, body)
       return { ok: true, error: '' }
+    } catch (e) {
+      const message = extractApiError(e, 'Не удалось отправить')
+      return { ok: false, error: message }
     } finally {
       reflectionSubmitting.value = false
+    }
+  }
+
+  // ===========================================================================
+  // External activity submit (ExternalActivityCreateView, FE-70 / BE-27)
+  // ===========================================================================
+
+  const externalActivitySubmitting = ref(false)
+
+  /**
+   * Record a hand-entered activity that happened outside velo, then refresh
+   * the feed (the backend writes the activity AND its diary event in one
+   * transaction, so the refresh already sees it -- nothing is inserted
+   * optimistically).
+   *
+   * On a 422, `fieldErrors` carries the backend's per-loc messages so the form
+   * can highlight several controls at once (see ExternalActivityFieldErrors).
+   * The view owns URL/transport-free toasts and navigation.
+   */
+  async function submitExternalActivity(
+    body: CreateExternalActivityRequest,
+  ): Promise<SubmitResult & { fieldErrors?: ExternalActivityFieldErrors }> {
+    if (externalActivitySubmitting.value) return { ok: false, error: '' }
+    externalActivitySubmitting.value = true
+    try {
+      await createExternalActivity(body)
+      await refreshAfterDiaryMutation()
+      return { ok: true, error: '' }
+    } catch (e) {
+      const message = extractApiError(e, 'Не удалось сохранить событие')
+      const code = e instanceof ApiResponseError ? e.code : undefined
+      const fieldErrors: ExternalActivityFieldErrors = {}
+      if (e instanceof ApiResponseError && e.validation) {
+        for (const entry of e.validation) {
+          // FastAPI locs arrive prefixed: ["body", "<field>"].
+          const raw = entry.loc[entry.loc[0] === 'body' ? 1 : 0]
+          if (
+            typeof raw === 'string' &&
+            (EXTERNAL_ACTIVITY_FIELDS as readonly string[]).includes(raw)
+          ) {
+            const field = raw as (typeof EXTERNAL_ACTIVITY_FIELDS)[number]
+            if (!fieldErrors[field]) fieldErrors[field] = entry.msg
+          }
+        }
+      }
+      return {
+        ok: false,
+        error: message,
+        code,
+        fieldErrors: Object.keys(fieldErrors).length > 0 ? fieldErrors : undefined,
+      }
+    } finally {
+      externalActivitySubmitting.value = false
     }
   }
 
@@ -166,15 +239,22 @@ export const useDiaryStore = defineStore('diary', () => {
     search: undefined,
   })
 
-  const feed = useCursorPagination<DiaryFeedItem>((cursor, limit) =>
-    listDiaryFeed({
-      categories: feedFilters.categories,
-      date_from: feedFilters.date_from,
-      date_to: feedFilters.date_to,
-      search: feedFilters.search,
-      cursor: cursor ?? undefined,
-      limit,
-    }),
+  // Page size 40 (was the composable's default 20): a 20-event page is only
+  // ~2-3 screens of thread, so the first scroll up hit the seam before any
+  // prefetch could land. 40 gives ~4-5 screens per request (the backend caps
+  // at 100, diary_feed_max_page_size) and fewer seams overall -- the initial
+  // load alone covers a whole typical diary (owner: seamless scroll).
+  const feed = useCursorPagination<DiaryFeedItem>(
+    (cursor, limit) =>
+      listDiaryFeed({
+        categories: feedFilters.categories,
+        date_from: feedFilters.date_from,
+        date_to: feedFilters.date_to,
+        search: feedFilters.search,
+        cursor: cursor ?? undefined,
+        limit,
+      }),
+    40,
   )
 
   // Saved feed scroll offset, so returning from an entry/detail restores the
@@ -194,6 +274,7 @@ export const useDiaryStore = defineStore('diary', () => {
    * Pass a fresh categories array / dates / search; omitted keys are kept.
    */
   async function setFeedFilters(patch: Partial<DiaryFeedFilters>): Promise<void> {
+    exitJump()
     Object.assign(feedFilters, patch)
     await feed.refresh()
   }
@@ -202,6 +283,7 @@ export const useDiaryStore = defineStore('diary', () => {
    * Clear all filters (back to "Все", no date range, no search) and reload.
    */
   async function clearFeedFilters(): Promise<void> {
+    exitJump()
     feedFilters.categories = []
     feedFilters.date_from = undefined
     feedFilters.date_to = undefined
@@ -213,9 +295,100 @@ export const useDiaryStore = defineStore('diary', () => {
    * Run a text search (empty string clears it) and reload from the first page.
    */
   async function runFeedSearch(query: string): Promise<void> {
+    // Typing again is a new search: any open jump window is left behind (the
+    // view swaps back to the results list).
+    exitJump()
     const trimmed = query.trim()
     feedFilters.search = trimmed.length > 0 ? trimmed : undefined
     await feed.refresh()
+  }
+
+  // ===========================================================================
+  // Search jump (Telegram-style "scroll to the found entry")
+  //
+  // A tap on a search result loads a WINDOW around the target event, not a
+  // filtered feed: two parallel GETs bounded by the target's occurred_at (the
+  // API's date bounds are inclusive, so the target is inside BOTH responses --
+  // mergeJumpWindow dedupes). The window renders in the same DiaryTimeline;
+  // scrolling UP keeps loading older through jumpCursor. The newer side is
+  // capped at what the window fetched -- the feed cursor paginates into the
+  // past only; the search bar's outer x is the way back to the live feed.
+  // ===========================================================================
+
+  const JUMP_CONTEXT_LIMIT = 20
+
+  const jumpTargetId = ref<string | null>(null)
+  const jumpItems = ref<DiaryFeedItem[]>([])
+  const jumpCursor = ref<string | null>(null)
+  /** Initial two-window fetch (full-screen loader rung). */
+  const jumpLoading = ref(false)
+  /** Older-page fetches inside an open window (inline loader). */
+  const jumpMoreLoading = ref(false)
+  const jumpError = ref<string | null>(null)
+
+  /**
+   * Leave the jump window. Called by every search/filter reset (the query
+   * change owns it -- the view swaps back to whatever the new filter shows)
+   * and by $reset on logout.
+   */
+  function exitJump(): void {
+    jumpTargetId.value = null
+    jumpItems.value = []
+    jumpCursor.value = null
+    jumpLoading.value = false
+    jumpMoreLoading.value = false
+    jumpError.value = null
+  }
+
+  /**
+   * Load the context window around one search result and make it the active
+   * timeline view. Returns false on failure (jumpTargetId stays unset, so the
+   * results list remains on screen; jumpError carries the message).
+   */
+  async function jumpToEntry(item: DiaryFeedItem): Promise<boolean> {
+    if (jumpLoading.value) return false
+    jumpTargetId.value = item.id
+    jumpItems.value = []
+    jumpCursor.value = null
+    jumpError.value = null
+    jumpLoading.value = true
+    try {
+      const at = item.occurred_at
+      const [older, newer] = await Promise.all([
+        listDiaryFeed({ date_to: at, limit: JUMP_CONTEXT_LIMIT }),
+        listDiaryFeed({ date_from: at, limit: JUMP_CONTEXT_LIMIT }),
+      ])
+      jumpItems.value = mergeJumpWindow(older.items, newer.items)
+      jumpCursor.value = older.next_cursor
+      return true
+    } catch (e) {
+      jumpTargetId.value = null
+      jumpError.value = extractApiError(e, 'Не удалось открыть запись')
+      return false
+    } finally {
+      jumpLoading.value = false
+    }
+  }
+
+  /**
+   * Load one more OLDER page into an open jump window (top sentinel).
+   * The cursor is strictly older than everything loaded, so it appends.
+   */
+  async function loadMoreJump(): Promise<void> {
+    if (jumpMoreLoading.value || jumpCursor.value === null) return
+    jumpMoreLoading.value = true
+    try {
+      const result = await listDiaryFeed({
+        cursor: jumpCursor.value,
+        limit: JUMP_CONTEXT_LIMIT,
+      })
+      jumpItems.value = [...jumpItems.value, ...result.items]
+      jumpCursor.value = result.next_cursor
+    } catch (e) {
+      jumpError.value = extractApiError(e, 'Не удалось загрузить записи')
+    } finally {
+      jumpMoreLoading.value = false
+    }
   }
 
   /**
@@ -394,6 +567,8 @@ export const useDiaryStore = defineStore('diary', () => {
     checkinSubmitting.value = false
     feedbackSubmitting.value = false
     reflectionSubmitting.value = false
+    externalActivitySubmitting.value = false
+    exitJump()
     feed.reset()
     feedFilters.categories = []
     feedFilters.date_from = undefined
@@ -415,6 +590,8 @@ export const useDiaryStore = defineStore('diary', () => {
     submitFeedback,
     reflectionSubmitting,
     submitReflection,
+    externalActivitySubmitting,
+    submitExternalActivity,
 
     // Unified feed
     feedItems: feed.items,
@@ -430,6 +607,17 @@ export const useDiaryStore = defineStore('diary', () => {
     setFeedFilters,
     clearFeedFilters,
     runFeedSearch,
+
+    // Search jump
+    jumpItems,
+    jumpTargetId,
+    jumpCursor,
+    jumpLoading,
+    jumpMoreLoading,
+    jumpError,
+    jumpToEntry,
+    loadMoreJump,
+    exitJump,
 
     // Single entry
     selectedEntry,

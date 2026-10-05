@@ -10,10 +10,9 @@
       diaryStore.fetchEntry(id) -> GET /diary/{id};
     - the optional practice header (screen 56) is built from a separate
       GET /practices/{practice_id} when the entry is linked to one; entries
-      with no practice link render without the header (screen 57). The
-      verified badge is intentionally omitted here -- it lives on the feed's
-      own practice cards (snapshot-sourced), and PracticeResponse carries no
-      verified flag.
+      with no practice link render without the header (screen 57). No
+      verification checkmark anywhere: it is hidden product-wide (owner
+      2026-10-03), and PracticeResponse carries no verified flag.
 
   Modes:
     view  -- header "<- Запись ⋯", optional practice header, date, title,
@@ -91,7 +90,6 @@
           :when="practiceTime"
           :duration="practiceDuration"
           :clickable="false"
-          :show-verified="false"
         />
 
         <!-- The entry card -->
@@ -164,7 +162,7 @@ import PracticeListCard from '@/components/shared/PracticeListCard.vue'
 import { IconPen } from '@/components/icons'
 // IconTrash is not re-exported from the icons barrel; import the component
 // file directly (same pattern as other ad-hoc icon imports in the project).
-import IconTrash from '@/components/icons/IconTrash.vue'
+import { IconTrash } from '@/components/icons'
 import { useDiaryStore } from '@/stores/diary'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
@@ -304,7 +302,7 @@ async function onDelete(): Promise<void> {
   }
   // Hand the undo affordance to the feed: it shows the "Запись удалена /
   // Отменить" bar and calls diaryStore.restoreEntry on tap.
-  router.replace({ name: 'user-diary', query: { deleted: id } })
+  void router.replace({ name: 'user-diary', query: { deleted: id } })
 }
 
 // -- navigation --------------------------------------------------------------
@@ -314,7 +312,7 @@ function goBack(): void {
     mode.value = 'view'
     return
   }
-  router.push({ name: 'user-diary' })
+  void router.push({ name: 'user-diary' })
 }
 </script>
 
@@ -437,7 +435,11 @@ function goBack(): void {
   background: transparent;
   resize: none;
   font-family: var(--font-body);
-  font-size: var(--text-sm);
+  /* [VV-PAN 2026-09-07] 16px, not the 15px --text-sm: iOS auto-zooms into
+     any focused field below 16px, and that zoom reads as a viewport shrink
+     (the keyboard detector now guards on scale, but the zoom itself is
+     still disorienting). The title field above is already --text-16. */
+  font-size: var(--text-16);
   line-height: 1.5;
   color: var(--velo-text-primary);
   outline: none;

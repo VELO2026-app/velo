@@ -9,8 +9,9 @@
   LIVE (E5): getStudent(id) → GET /api/v1/masters/me/students/{id} →
   StudentDetailResponse { name, avatar_url, practices_count, hours,
   satisfaction_pct, recent_checkins[], feedbacks[], blocked }. Reuses the real
-  MoodAvatar (diary mood faces) for check-ins. The "Написать сообщение" action
-  is still a STUB (E4 messaging pending backend).
+  MoodAvatar (diary mood faces) for check-ins. The "Написать сообщение"
+  action posts into the eternal DM with THIS student (SendMessageModal --
+  REAL since the T3 chat backend: POST /chats/students).
 
   P3 additions:
     - Group chips (VTag): GET /masters/me/students/{id}/groups (this
@@ -75,6 +76,18 @@
               danger
               @click="onRemoveFromGroupClick(close)"
             />
+            <!-- Menu scope (owner 2026-09-30): custom groups are the MASTER
+                 zone's own CRM -- a school has none. A curator who is also a
+                 master prunes HIS groups here for his outside-school clients;
+                 school membership is handled by the school screens. -->
+            <!-- The lock is the owner's own artwork (2026-09-30): blocking
+                 earned its own menu entry instead of borrowing the trash. -->
+            <VMenuItem
+              :icon="IconLock"
+              ariaLabel="Заблокировать"
+              danger
+              @click="onBlockMenuClick(close)"
+            />
           </template>
         </VMenu>
       </template>
@@ -134,7 +147,7 @@
         <h2 class="velo-section-title">Feedbacks</h2>
         <div v-if="feedbackRows.length === 0" class="profile__empty">Пока нет отзывов</div>
         <div v-for="(fb, i) in visibleFeedbacks" :key="`fb-${i}`" class="profile__fb">
-          <span class="profile__fb-ic" :style="{ color: fb.color }">
+          <span class="profile__fb-ic">
             <component :is="fb.icon" :size="30" />
           </span>
           <div class="profile__fb-body">
@@ -151,7 +164,7 @@
           @click="fbExpanded = true"
         />
 
-        <!-- Action (stub — E4 messaging not delivered) -->
+        <!-- Action: posts into the eternal DM with THIS student (T3). -->
         <VButton variant="primary" block class="profile__cta" @click="msgOpen = true">
           Написать сообщение
         </VButton>
@@ -165,7 +178,12 @@
       </template>
     </div>
 
-    <SendMessageModal :open="msgOpen" :name="name" @close="msgOpen = false" />
+    <SendMessageModal
+      :open="msgOpen"
+      :student-id="String(route.params.id)"
+      :name="name"
+      @close="msgOpen = false"
+    />
 
     <!-- Block confirm (destructive). TargetUserCard (owner Q9, PROMPT №610)
          via the default slot + warning-panel for the consequences text
@@ -301,17 +319,12 @@ import VShowMore from '@/components/shared/VShowMore.vue'
 import AddTagSheet from '@/components/shared/AddTagSheet.vue'
 import AddToGroupSheet from '@/components/shared/AddToGroupSheet.vue'
 import RemoveFromGroupSheet from '@/components/shared/RemoveFromGroupSheet.vue'
-import { IconTag, IconPen } from '@/components/icons'
+import { IconLock, IconTag, IconPen } from '@/components/icons'
 // IconTrash is not re-exported from the icons barrel (same pattern as
 // EntryView.vue's delete action / MasterGroupDetailView.vue's header menu).
-import IconTrash from '@/components/icons/IconTrash.vue'
-import {
-  moodLabelFromScore,
-  ratingLabelFromScore,
-  ratingZoneFromScore,
-  RATING_ICON_COLOR,
-} from '@/utils/displayHelpers'
-import { RATING_ICON } from '@/utils/ratingIcons'
+import { IconTrash } from '@/components/icons'
+import { moodKeyFromScore, moodLabelFromScore } from '@/utils/moodScale'
+import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
 import { formatShortDate } from '@/utils/format'
 import { getStudent, type StudentDetailResponseWithBlocked } from '@/api/masters'
 import { getStudentGroups, getGroups, blockStudent, unblockStudent } from '@/api/groups'
@@ -412,16 +425,14 @@ const checkinRows = computed(() =>
 )
 
 const feedbackRows = computed(() =>
-  (detail.value?.feedbacks ?? []).map((fb) => {
-    const zone = ratingZoneFromScore(fb.rating)
-    return {
-      label: ratingLabelFromScore(fb.rating),
-      icon: RATING_ICON[zone],
-      color: RATING_ICON_COLOR[zone],
-      comment: fb.comment ?? '',
-      date: formatShortDate(fb.created_at),
-    }
-  }),
+  (detail.value?.feedbacks ?? []).map((fb) => ({
+    // The unified scale: a saved rating reads as the emotion it was picked as
+    // (tz-mood-scale §1) -- the same labels/faces the student saw on submit.
+    label: moodLabelFromScore(fb.rating),
+    icon: MOOD_SCALE_ICON[moodKeyFromScore(fb.rating)],
+    comment: fb.comment ?? '',
+    date: formatShortDate(fb.created_at),
+  })),
 )
 
 // Show the 3 most recent of each; the rest hide behind a «посмотреть еще» pill
@@ -439,7 +450,7 @@ const visibleFeedbacks = computed(() =>
 const hiddenCheckins = computed((): number => Math.max(0, checkinRows.value.length - PREVIEW_CAP))
 const hiddenFeedbacks = computed((): number => Math.max(0, feedbackRows.value.length - PREVIEW_CAP))
 
-// "Написать сообщение" — stub (E4 messaging not delivered).
+// "Написать сообщение" — posts into the eternal DM with THIS student (T3).
 const msgOpen = ref(false)
 
 // -- Block -> report-offer -> report form (P3, PROMPT №592) --
@@ -483,6 +494,14 @@ const blockActionLabel = computed((): string =>
 function onBlockActionClick(): void {
   if (detail.value?.blocked) unblockConfirmOpen.value = true
   else blockConfirmOpen.value = true
+}
+
+// The menu's lock item opens the SAME destructive confirm the bottom CTA
+// opens -- one block flow, two entries. The menu is hidden while blocked
+// (T24-20), so this always lands on the block path.
+function onBlockMenuClick(close: () => void): void {
+  close()
+  onBlockActionClick()
 }
 
 const unblockConfirmOpen = ref(false)

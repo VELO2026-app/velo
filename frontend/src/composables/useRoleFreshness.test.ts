@@ -22,8 +22,14 @@ import {
 } from '@/composables/useRoleFreshness'
 
 function setVisibility(state: 'visible' | 'hidden'): void {
+  // A real browser keeps these two in sync -- the stub must too (the
+  // production code reads `hidden` via the platform seam).
   Object.defineProperty(document, 'visibilityState', {
     value: state,
+    configurable: true,
+  })
+  Object.defineProperty(document, 'hidden', {
+    value: state === 'hidden',
     configurable: true,
   })
 }

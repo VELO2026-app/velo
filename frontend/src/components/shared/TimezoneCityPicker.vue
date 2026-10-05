@@ -58,7 +58,7 @@ import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 // composable) so the field isn't left under the keyboard on focus (K3).
 const { onFieldFocus } = useKeyboardFieldScroll()
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     /** Selected IANA zone id (what the backend stores). */
     modelValue?: string
@@ -78,10 +78,19 @@ const query = ref('')
  * see the watch below). */
 const listEl = ref<HTMLElement | null>(null)
 
+// Owner ruling: the SELECTED zone leads the list -- the current choice (and
+// its IconCheck) must be visible without scrolling. Rows sharing the zone
+// float together (the check is per-iana: Москва + Санкт-Петербург, London's
+// cities); everything else keeps the curated/generated order, and search
+// matches obey the same rule.
 const filtered = computed(() => {
   const t = query.value.trim().toLowerCase()
-  if (!t) return TIMEZONE_CITIES
-  return TIMEZONE_CITIES.filter((c) => c.city.toLowerCase().includes(t) || c.q.includes(t))
+  const base = t
+    ? TIMEZONE_CITIES.filter((c) => c.city.toLowerCase().includes(t) || c.q.includes(t))
+    : TIMEZONE_CITIES
+  const sel = props.modelValue
+  if (!sel) return base
+  return [...base.filter((c) => c.iana === sel), ...base.filter((c) => c.iana !== sel)]
 })
 
 // FE-36 follow-up: with the keyboard open the list is pinned to exactly one
@@ -90,7 +99,10 @@ const filtered = computed(() => {
 // clamps it once content is shorter than the scroll offset, which is exactly
 // the visible "скролл скачет". Resetting to top on every input change keeps
 // the FIRST match (or the only one) in view, deterministically.
-watch(query, () => {
+// A selection re-orders the list (the selected zone moves to the top), so the
+// reset fires on it too: the freshly picked row -- now the first one -- is in
+// view instead of a mid-list scroll position.
+watch([query, () => props.modelValue], () => {
   if (listEl.value) listEl.value.scrollTop = 0
 })
 

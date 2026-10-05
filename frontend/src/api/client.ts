@@ -30,6 +30,14 @@ export class ApiResponseError extends Error {
     public detail: string,
     /** Machine-readable error code from backend (e.g. "insufficient_balance"). */
     public code: string = 'unknown',
+    /**
+     * Raw Pydantic 422 entries ({loc, msg, type}) when the failure is a
+     * validation error, else undefined. FE-70: the external-activity form
+     * binds each 422 to its control (the backend deliberately returns
+     * SEVERAL field errors at once), which a joined string cannot express.
+     * `detail` stays the single toast line; this is the per-field structure.
+     */
+    public validation?: Array<{ loc: (string | number)[]; msg: string; type: string }>,
   ) {
     super(detail)
     this.name = 'ApiResponseError'
@@ -193,6 +201,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     response.status,
     suffixWithTraceId(detail, traceId),
     'validation_error',
+    Array.isArray(rawDetail) ? rawDetail : undefined,
   )
 }
 

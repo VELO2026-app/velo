@@ -60,8 +60,15 @@ ENV PYTHONPATH="/app"
 USER velo
 EXPOSE 8000
 
+# --no-proxy-headers (BE-40): uvicorn's own X-Forwarded-For handling is OFF.
+# It is on by default, trusts 127.0.0.1/::1 unless FORWARDED_ALLOW_IPS says
+# otherwise, and when it trusts the peer it rewrites scope["client"] from the
+# header without validating it. The application reads the client address
+# itself -- X-Real-IP from nginx, see _extract_client_ip in
+# app/core/middleware.py -- and needs scope["client"] to stay the TCP peer
+# the OS reported. Off, no environment variable can turn the header back on.
 CMD ["uvicorn", "app.main:app", \
      "--host", "0.0.0.0", \
      "--port", "8000", \
      "--workers", "2", \
-     "--proxy-headers"]
+     "--no-proxy-headers"]

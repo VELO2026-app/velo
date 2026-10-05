@@ -29,7 +29,7 @@ describe('formatDateTime', () => {
   // SW10: no explicit timeZone meant this rendered in whichever machine's OS
   // timezone happened to run the code -- two admins (or the same admin on two
   // devices) could see different absolute times for the identical event.
-  it('SW10: is unaffected by the DEVICE\'s own timezone', () => {
+  it("SW10: is unaffected by the DEVICE's own timezone", () => {
     const iso = '2026-06-15T23:30:00Z'
     vi.stubEnv('TZ', 'Pacific/Kiritimati') // UTC+14
     const resultA = formatDateTime(iso)
@@ -94,7 +94,7 @@ describe('formatRelative', () => {
   // (safely past "yesterday" under any timezone) so both stubbed devices
   // reach the SAME branch (the date fallback) -- the divergence being tested
   // is only in how that date is formatted, not which branch is taken.
-  it('SW10: the absolute-date fallback is unaffected by the DEVICE\'s own timezone', () => {
+  it("SW10: the absolute-date fallback is unaffected by the DEVICE's own timezone", () => {
     const iso = '2026-06-10T23:30:00.000Z'
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-06-16T05:00:00Z'))

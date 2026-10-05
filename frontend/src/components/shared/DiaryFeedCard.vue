@@ -48,7 +48,6 @@
         <img v-if="masterAvatarUrl" :src="masterAvatarUrl" alt="" class="feed-card__avatar-img" />
       </span>
       <span class="feed-card__master-name">{{ masterName }}</span>
-      <IconCheck v-if="masterVerified" :size="14" class="feed-card__verified" />
     </div>
 
     <div class="feed-card__practice-bottom">
@@ -119,7 +118,6 @@ const {
   practiceTitle,
   masterName,
   masterAvatarUrl,
-  masterVerified,
   practiceTime,
   practiceDuration,
   outcomeStatus,
@@ -252,10 +250,6 @@ function onTap(): void {
   color: var(--velo-text-secondary);
 }
 
-.feed-card__verified {
-  color: var(--velo-teal-400);
-}
-
 /* Bottom meta — unified with PracticeListCard: time centred UNDER the icon (its
    own 46px column), duration + outcome in the rest, aligned under the title. */
 .feed-card__practice-bottom {
@@ -365,12 +359,6 @@ function onTap(): void {
 .feed-card__icon--note,
 .feed-card__icon--dream {
   color: var(--velo-text-primary);
-}
-
-/* Feedback rating glyph is the "fire" icon, painted the brand fire/peach color
-   (Figma 5 Feedbacks list: #d4863c), NOT teal. */
-.feed-card__icon--feedback {
-  color: var(--velo-rating-fire);
 }
 
 .feed-card__text {

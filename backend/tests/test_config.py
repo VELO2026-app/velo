@@ -258,3 +258,37 @@ def test_env_example_placeholders_match_config() -> None:
         "_PLACEHOLDER_URL_FRAGMENT -- update whichever one drifted."
     )
 
+
+
+# ---------------------------------------------------------------------------
+# BE-44: the application's Redis client carries socket timeouts
+# ---------------------------------------------------------------------------
+
+
+async def test_app_redis_client_carries_socket_timeouts() -> None:
+    """Asserted on the client init_redis() really builds, down to the
+    connection object its pool makes -- not on the kwargs passed to a
+    factory. Without the timeouts a hung Redis held every authenticated
+    request for ever. Pair: the values are set (not None) and are the
+    settings, so a default of "no timeout" cannot pass."""
+    from app.core import redis as core_redis
+
+    previous = core_redis._redis_client
+    try:
+        await core_redis.init_redis()
+        client = core_redis.get_redis()
+        assert client is not previous
+        conn = client.connection_pool.make_connection()
+        assert conn.socket_connect_timeout is not None
+        assert conn.socket_timeout is not None
+        assert conn.socket_connect_timeout == (
+            settings.redis_socket_connect_timeout_seconds
+        )
+        assert conn.socket_timeout == settings.redis_socket_timeout_seconds
+    finally:
+        # Close the probe client and put the suite's own client back. Not
+        # monkeypatch: it would restore, at teardown, the value seen at the
+        # time of setattr -- None, after close_redis -- and leave the rest
+        # of the session without Redis.
+        await core_redis.close_redis()
+        core_redis._redis_client = previous

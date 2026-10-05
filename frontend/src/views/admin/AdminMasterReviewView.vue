@@ -91,7 +91,7 @@
               aria-label="Изменить имя-визитку"
               @click="startField('display_name')"
             >
-              <IconEdit :size="22" />
+              <IconPen :size="22" />
             </button>
           </template>
         </div>
@@ -122,7 +122,7 @@
               aria-label="Изменить имя аккаунта"
               @click="startField('account_name')"
             >
-              <IconEdit :size="22" />
+              <IconPen :size="22" />
             </button>
           </template>
         </div>
@@ -152,7 +152,7 @@
               aria-label="Изменить о себе"
               @click="startField('bio')"
             >
-              <IconEdit :size="22" />
+              <IconPen :size="22" />
             </button>
           </template>
         </div>
@@ -186,7 +186,7 @@
               aria-label="Изменить email"
               @click="startField('email')"
             >
-              <IconEdit :size="22" />
+              <IconPen :size="22" />
             </button>
           </template>
         </div>
@@ -215,7 +215,7 @@
               aria-label="Изменить телефон"
               @click="startField('phone')"
             >
-              <IconEdit :size="22" />
+              <IconPen :size="22" />
             </button>
           </template>
         </div>
@@ -249,7 +249,7 @@
               aria-label="Изменить опыт"
               @click="startField('experience_years')"
             >
-              <IconEdit :size="22" />
+              <IconPen :size="22" />
             </button>
           </template>
         </div>
@@ -293,7 +293,7 @@
               aria-label="Изменить языки"
               @click="startField('languages')"
             >
-              <IconEdit :size="22" />
+              <IconPen :size="22" />
             </button>
           </template>
         </div>
@@ -336,7 +336,7 @@
               aria-label="Изменить направления"
               @click="startMethods"
             >
-              <IconEdit :size="22" />
+              <IconPen :size="22" />
             </button>
           </template>
         </div>
@@ -393,7 +393,7 @@
               aria-label="Изменить сертификаты"
               @click="startField('certifications')"
             >
-              <IconEdit :size="22" />
+              <IconPen :size="22" />
             </button>
           </template>
         </div>
@@ -461,6 +461,16 @@
 
       <!-- Actions -->
       <div v-if="isPending" class="mreview__foot">
+        <!-- BE-18: verification and the school-founding right are TWO
+             decisions in one dialog -- the checkbox defaults to no, and an
+             absent/false tick writes nothing at all. The right can be granted
+             or taken back later on the verified screen, without a second
+             verification. -->
+        <VCheckbox
+          v-model="grantSchools"
+          class="mreview__grant-check"
+          label="Разрешить создавать школы (кураторские группы)"
+        />
         <VButton variant="ghost" :disabled="anyLoading" @click="openReject">Отклонить</VButton>
         <VButton variant="primary" :loading="verifying" :disabled="anyLoading" @click="onVerify">
           Одобрить
@@ -472,6 +482,32 @@
         </VCard>
         <!-- A1: revoke a verified master (soft-freeze, data preserved) -->
         <div v-if="isVerified" class="mreview__foot">
+          <!-- BE-18: the right toggle for an ALREADY-verified master --
+               verify only admits pending applications, so this is the only
+               lever for the master verified yesterday. Idempotent both ways;
+               revoking closes NEW schools only, everything already owned
+               keeps living (that lever is «Отозвать мастера» below). -->
+          <div class="mreview__right">
+            <div>
+              <div class="mreview__k">Право создавать школы</div>
+              <div class="mreview__v">
+                {{ master.can_create_groups ? 'Выдано' : 'Не выдано' }}
+              </div>
+            </div>
+            <VButton
+              variant="outline"
+              size="sm"
+              :loading="togglingRight"
+              :disabled="anyLoading"
+              @click="onToggleRight"
+            >
+              {{ master.can_create_groups ? 'Отозвать право' : 'Выдать право' }}
+            </VButton>
+          </div>
+          <p class="mreview__grant-note">
+            Отзыв верификации замораживает все школы этого куратора — участники перестанут их
+            видеть; данные сохранятся и оживут при повторной верификации.
+          </p>
           <VButton variant="danger" :loading="revoking" :disabled="anyLoading" @click="openRevoke">
             Отозвать мастера
           </VButton>
@@ -519,7 +555,7 @@
          same never-blocks contract). -->
     <VConfirmDialog
       :open="showPromote"
-      :message="`Метода «${promoteLabel}» нет в каталоге — добавить для всех мастеров?`"
+      :message="promoteMessage"
       confirm-label="Добавить в каталог"
       cancel-label="Только этому мастеру"
       :loading="verifying"
@@ -530,12 +566,14 @@
 </template>
 
 <script setup lang="ts">
+import { host } from '@/platform/host'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   VBackButton,
   VCard,
   VChip,
+  VCheckbox,
   VInput,
   VTextarea,
   VButton,
@@ -545,7 +583,7 @@ import {
   VConfirmDialog,
   VAccordion,
 } from '@/components/ui'
-import { IconIdCard, IconEdit, IconView, IconClock } from '@/components/icons'
+import { IconIdCard, IconPen, IconView, IconClock } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import {
   getMasterById,
@@ -555,6 +593,7 @@ import {
   editMasterProfile,
   getRevokePreview,
   revokeMaster,
+  setMasterGroupRight,
 } from '@/api/admin'
 import type {
   AdminMasterListItem,
@@ -691,7 +730,7 @@ async function loadMaster(): Promise<void> {
   // instant paint (our `history` ref shadows the global History, so reach it
   // through window.history.state). Always fetch the detail afterwards to fill
   // the real methods / experience / bio (T3).
-  const handed = (window.history.state as { master?: AdminMasterListItem }).master
+  const handed = (host.history.state as { master?: AdminMasterListItem }).master
   if (handed && handed.id === masterId) master.value = handed
   if (!master.value) loading.value = true
   error.value = null
@@ -920,13 +959,50 @@ function closeReject(): void {
 // dismiss can never fail to verify, by construction, not by a separate
 // guard. No custom text -> straight to doVerify(), unchanged from before.
 const showPromote = ref(false)
-const promoteLabel = ref('')
+/** FE-89: one entry per unmatched method -- promoted/scoped separately, so
+ *  an application with several own methods never becomes one glued label. */
+const promoteLabels = ref<string[]>([])
+const promoteMessage = computed((): string => {
+  const labels = promoteLabels.value
+  if (labels.length <= 1) {
+    return `Метода «${labels[0] ?? ''}» нет в каталоге — добавить для всех мастеров?`
+  }
+  return `Методов ${labels.map((l) => `«${l}»`).join(', ')} нет в каталоге — добавить для всех мастеров?`
+})
+
+/** BE-18: the verify-dialog tick for the school-founding right.
+ *  Defaults to NO -- absent/false writes nothing on the backend, and the
+ *  right stays grantable later on the verified screen. */
+const grantSchools = ref(false)
+/** The verified screen's right toggle (PATCH can-create-groups). */
+const togglingRight = ref(false)
+
+/** BE-18: flip the right and merge the answer into the local master row --
+ *  the response carries the flag as written, so an idempotent second call
+ *  reads exactly like the first. */
+async function onToggleRight(): Promise<void> {
+  if (!master.value || togglingRight.value) return
+  togglingRight.value = true
+  try {
+    const res = await setMasterGroupRight(masterId, !master.value.can_create_groups)
+    master.value = { ...master.value, can_create_groups: res.can_create_groups }
+    toast.success(
+      res.can_create_groups ? 'Право создавать школы выдано' : 'Право создавать школы отозвано',
+    )
+  } catch (e) {
+    toast.error(extractApiError(e, 'Не удалось изменить право'))
+  } finally {
+    togglingRight.value = false
+  }
+}
 
 function onVerify(): void {
   if (anyLoading.value) return
   const parsed = parseMethods(methods.value)
-  if (parsed.customEnabled && parsed.customText) {
-    promoteLabel.value = parsed.customText
+  if (parsed.customEnabled && parsed.custom.length) {
+    // FE-89: each unmatched method travels as its own label -- the old
+    // joined customText scoped ONE direction named «A, B».
+    promoteLabels.value = parsed.custom
     showPromote.value = true
     return
   }
@@ -936,10 +1012,10 @@ function onVerify(): void {
 async function doVerify(promote?: string[], masterOnly?: string[]): Promise<void> {
   verifying.value = true
   try {
-    await verifyMaster(masterId, promote, masterOnly)
+    await verifyMaster(masterId, promote, masterOnly, grantSchools.value)
     toast.success('Мастер верифицирован')
     // S-1/S-2: push to the list (fresh mount) instead of back().
-    router.push({ name: 'admin-masters' })
+    void router.push({ name: 'admin-masters' })
   } catch (e) {
     toast.error(extractApiError(e, 'Ошибка верификации'))
   } finally {
@@ -948,16 +1024,17 @@ async function doVerify(promote?: string[], masterOnly?: string[]): Promise<void
   }
 }
 
-/** «Добавить в каталог» -- verify AND promote the custom label. */
+/** «Добавить в каталог» -- verify AND promote the custom labels (each its
+ *  own catalog row). */
 function onPromoteConfirm(): void {
-  void doVerify([promoteLabel.value])
+  void doVerify([...promoteLabels.value])
 }
 
 /** «Только этому мастеру» (or the dialog dismissed) -- verify, scoped to this
- *  master only (T22-6, PROMPT №561): a real taxonomy row, just not a shared
- *  one -- was silently nothing before this. */
+ *  master only (T22-6, PROMPT №561): a real taxonomy row per label, just not
+ *  a shared one -- was silently nothing before this. FE-89: per-label. */
 function onPromoteCancel(): void {
-  void doVerify(undefined, [promoteLabel.value])
+  void doVerify(undefined, [...promoteLabels.value])
 }
 
 async function onReject(): Promise<void> {
@@ -973,7 +1050,7 @@ async function onReject(): Promise<void> {
     toast.success('Заявка отклонена')
     showReject.value = false
     // S-1/S-2: push to the list (fresh mount) instead of back().
-    router.push({ name: 'admin-masters' })
+    void router.push({ name: 'admin-masters' })
   } catch (e) {
     toast.error(extractApiError(e, 'Ошибка при отклонении'))
   } finally {
@@ -1307,6 +1384,8 @@ onMounted(loadMaster)
   bottom: 0;
   z-index: var(--z-sticky);
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: var(--velo-gap-15);
   margin-top: var(--space-1);
   padding: var(--space-3) 0;
@@ -1316,6 +1395,30 @@ onMounted(loadMaster)
 
 .mreview__foot :deep(.v-btn) {
   flex: 1;
+}
+
+/* Q-GRANT=Б note: full-width line above the buttons (they keep their row). */
+.mreview__grant-note {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--velo-text-muted);
+}
+
+/* BE-18: the verify-dialog checkbox -- full width, above the
+   Отклонить/Одобрить row, same slot the old grant note occupied. */
+.mreview__grant-check {
+  flex-basis: 100%;
+}
+
+/* BE-18: the verified screen's right row -- label left, toggle right. */
+.mreview__right {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
 }
 
 /* -- Processed (non-pending) note -- */

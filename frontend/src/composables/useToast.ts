@@ -43,28 +43,32 @@ function _push(message: string, variant: ToastVariant) {
 }
 
 export function useToast() {
+  /** Show a success toast */
+  const success = (message: string): void => {
+    _push(message, 'success')
+  }
+
+  /** Show an error toast */
+  const error = (message: string): void => {
+    _push(message, 'error')
+  }
+
+  /** Show an info toast */
+  const info = (message: string): void => {
+    _push(message, 'info')
+  }
+
+  /** Dismiss a toast by id */
+  const dismiss = (id: number): void => {
+    _toasts.value = _toasts.value.filter((t) => t.id !== id)
+  }
+
   return {
     /** Reactive list of active toasts (for VToast component) */
     toasts: readonly(_toasts),
-
-    /** Show a success toast */
-    success(message: string) {
-      _push(message, 'success')
-    },
-
-    /** Show an error toast */
-    error(message: string) {
-      _push(message, 'error')
-    },
-
-    /** Show an info toast */
-    info(message: string) {
-      _push(message, 'info')
-    },
-
-    /** Dismiss a toast by id */
-    dismiss(id: number) {
-      _toasts.value = _toasts.value.filter((t) => t.id !== id)
-    },
+    success,
+    error,
+    info,
+    dismiss,
   }
 }

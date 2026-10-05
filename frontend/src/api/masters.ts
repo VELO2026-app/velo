@@ -233,7 +233,9 @@ export function getTransactions(limit = 20, offset = 0): Promise<PaginatedTransa
 
 // =============================================================================
 // E7: Period-scoped dashboard stats
-//   GET /api/v1/masters/me/stats?period=week|month
+//   GET /api/v1/masters/me/stats?period=week|month|quarter
+//   (`quarter` went live with BE-28's third calendar period; the dashboard
+//   toggle offers all three -- see MasterDashboardView PERIOD_OPTIONS)
 // =============================================================================
 
 /**
@@ -243,7 +245,9 @@ export function getTransactions(limit = 20, offset = 0): Promise<PaginatedTransa
  * non-positive). income_cents is also returned but rendered on Finance /
  * Analytics, not the dashboard.
  */
-export function getMasterStats(period: 'week' | 'month' = 'week'): Promise<MasterStatsResponse> {
+export function getMasterStats(
+  period: 'week' | 'month' | 'quarter' = 'week',
+): Promise<MasterStatsResponse> {
   const query = buildQuery({ period })
   return api.get<MasterStatsResponse>(`/api/v1/masters/me/stats${query}`)
 }
@@ -263,9 +267,9 @@ export function getMasterReviews(
   offset = 0,
   attention = false,
 ): Promise<PaginatedMasterReviewsResponse> {
-  // attention=true narrows the feed to the negative (confused) bucket
-  // server-side (E1) so the «Требуют внимания» block sees a full page of
-  // low-rated reviews, not only those that fall in the first mixed page.
+  // attention=true narrows the feed to ratings 1-4 (zones bad and low,
+  // BE-77) server-side (E1) so the «Требуют внимания» block sees a full page
+  // of them, not only those that fall in the first mixed page.
   const query = buildQuery({ limit, offset, attention: attention || undefined })
   return api.get<PaginatedMasterReviewsResponse>(`/api/v1/masters/me/reviews${query}`)
 }

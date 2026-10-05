@@ -7,7 +7,13 @@
 # there today (verified with `git check-ignore -v`). This line is here
 # for local explicitness -- the rule sits next to the files it protects,
 # and it survives someone rewriting the root file.
-.env.*
+../tmp/GT-41-fix-env-example/backend/.env.example
+# Same exception as the root .gitignore, repeated here for the same reason the
+# line above is: the rule should sit next to the files it protects. NOTE for
+# anyone verifying this with `git check-ignore -v backend/.env.example`: that
+# command answers "not ignored" for a TRACKED file whatever the patterns say.
+# Use --no-index to see the rule that actually matches.
+!.env.example
 
 # Python Virtual Environment
 .venv/

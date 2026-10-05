@@ -37,18 +37,18 @@ export const MIN_WITHDRAWAL_EUROS = 50
 export const WITHDRAWAL_FEE_EUROS = 2
 
 // ---------------------------------------------------------------------------
-// Composer voice-message stub (owner pass, 2026-08-27)
+// Composer voice input (transcription via our own backend) -- kill-switch
 // Used by: DiaryComposer, ChatThreadScreen (both pass it to the shared Composer)
 // ---------------------------------------------------------------------------
 
 /**
- * VISUAL STUB ONLY -- no voice-message functionality exists yet. Shows the
- * mic disc in the composer row, OUTSIDE the field (narrowing the input from
- * the right, Telegram-style). EMPTY FIELD ONLY: the first real character
- * unmounts the disc and the input springs back to full width -- as if it
- * never existed. Flip to false and the disc never renders at all.
+ * Real composer voice recording (tap mic -> record -> transcribe -> text in
+ * the field). FALSE is the kill-switch: the mic disc never renders and both
+ * composers behave exactly as before the feature -- no call-site changes
+ * needed. Transcription goes through POST /api/v1/ai/transcribe (GT-41); the
+ * browser holds no provider key and talks to no third party.
  */
-export const COMPOSER_VOICE_STUB = true
+export const COMPOSER_VOICE_INPUT = true
 
 // ---------------------------------------------------------------------------
 // Master onboarding (WS-1, item 2)
@@ -111,3 +111,49 @@ export function masterRejectionSeenKey(userId: string): string {
  * shrink the visual viewport well past this.
  */
 export const KEYBOARD_VIEWPORT_THRESHOLD = 150
+
+// ---------------------------------------------------------------------------
+// External activity (FE-70)
+// ---------------------------------------------------------------------------
+
+/**
+ * The «Мое состояние» mood picker on the external-activity form is HIDDEN
+ * for now (owner 2026-09-10) until its Figma pressed states land. The
+ * backend still requires mood 1..10, so while this is true the form submits
+ * the neutral zone centre (6) without asking, AND the feed card suppresses
+ * the «· N/10» suffix -- a fabricated score must not read as the person's
+ * answer. Flip to false when the block returns: the picker comes back and
+ * the suffix reappears on every card. ONE flag drives both surfaces so the
+ * form and the card can never disagree.
+ */
+export const EXTERNAL_ACTIVITY_MOOD_HIDDEN: boolean = true
+
+// ---------------------------------------------------------------------------
+// School media upload (tz-curator.md §1.5, захоронка §7.1 №4) -- kill-switch
+// ---------------------------------------------------------------------------
+
+/**
+ * The school's own media: avatar circle + banner on the create form
+ * (SchoolAvatarPicker / SchoolBannerPicker). FALSE is the kill-switch: there
+ * is NO upload backend yet (no endpoint, no storage, no limits -- the BE task
+ * sits in tz-curator.md §7.1 №4), so the blocks do not render at all and
+ * the create form is exactly the name+description flow of phase 1. The
+ * pickers only hold a LOCAL object-URL preview -- flipping this to true alone
+ * would show a picker that cannot persist anything; flip it together with the
+ * BE contract landing.
+ */
+export const SCHOOL_MEDIA_UPLOAD_ENABLED: boolean = false
+
+// ---------------------------------------------------------------------------
+// School analytics card (tz-curator.md §1.6, step 3 of the TZ) -- kill-switch
+// ---------------------------------------------------------------------------
+
+/**
+ * The school page's «Аналитика» card. FALSE is the kill-switch: the metrics
+ * specification is PM-blocked (tz-curator.md §6, blocker PM-2) and no
+ * BE contract exists, so the card does not render at all -- a disabled card
+ * on every school page would only teach people to ignore it. Flip together
+ * with the §6 slice landing (BE + screen); until then the page simply ends
+ * after the journal.
+ */
+export const SCHOOL_ANALYTICS_ENABLED: boolean = false

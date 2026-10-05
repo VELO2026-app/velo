@@ -113,7 +113,7 @@ export const useMasterStore = defineStore('master', () => {
    */
   async function fetchUpcomingPractices(): Promise<void> {
     if (upcomingLoaded.value) return
-    await paginationUpcoming.refresh()
+    await paginationUpcoming.refreshInPlace()
     upcomingLoaded.value = true
   }
 
@@ -145,9 +145,32 @@ export const useMasterStore = defineStore('master', () => {
    * "Предстоящие" and it never appears in "Прошедшие" either).
    */
   async function refreshMyPractices(): Promise<void> {
-    await Promise.all([paginationUpcoming.refresh(), paginationPast.refresh()])
+    await Promise.all([paginationUpcoming.refreshInPlace(), paginationPast.refresh()])
     upcomingLoaded.value = true
     pastLoaded.value = true
+  }
+
+  /**
+   * Force-reload the "Предстоящие" bucket ONLY (FE-53). The dashboard card's
+   * figures -- current_participants / checkin_count -- move by ANOTHER actor's
+   * hand (a student's booking, a student's PRE check-in), and with no push
+   * mechanism the lazy guard above froze them at whatever the session's first
+   * load saw. The dashboard calls this on every mount, the same per-mount
+   * contract its stats row and bell badge already follow. Past stays lazy:
+   * the dashboard reads only its total, and its own staleness is out of scope.
+   *
+   * refreshInPlace, not refresh (review pass): refresh() reset()s the list
+   * synchronously, so every remount would flash the loader over cards already
+   * on screen, and a transient failure on a remount would wipe them into the
+   * zero state. In-place keeps the cards up, swaps the fresh page in when it
+   * lands, and on a populated list swallows the failure keeping the stale
+   * figures -- the same disposition the screen already gives loadStats(). An
+   * empty (first-ever) load still sets loading/error like a normal initial
+   * load. Same pattern as bookings.ts's B1 nearest-set refresh.
+   */
+  async function refreshUpcomingPractices(): Promise<void> {
+    await paginationUpcoming.refreshInPlace()
+    upcomingLoaded.value = true
   }
 
   // =========================================================================
@@ -193,6 +216,7 @@ export const useMasterStore = defineStore('master', () => {
     practicesUpcomingLoadMoreError: paginationUpcoming.loadMoreError,
     practicesUpcomingHasMore: paginationUpcoming.hasMore,
     fetchUpcomingPractices,
+    refreshUpcomingPractices,
     loadMoreUpcomingPractices: paginationUpcoming.loadMore,
 
     // Practices -- "Прошедшие" (most recent first)

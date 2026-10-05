@@ -104,7 +104,7 @@ watch(
 )
 
 onMounted(() => {
-  nextTick(() => scrollToIndex(indexOfValue(props.modelValue)))
+  void nextTick(() => scrollToIndex(indexOfValue(props.modelValue)))
 })
 </script>
 
