@@ -1562,21 +1562,23 @@ describe('EditPracticeView', () => {
   // LIVE flags are each proven by the re-entry tests above.
 })
 
-// -- «Школы» audience (FE-24 / GT P5; BE-74) -------------------------------------
+// -- «Школы» audience (FE-24 / GT P5; BE-74, FE-92) --------------------------------
 //
-// Before BE-74 this block asserted that Edit resolves a school practice's
-// chips from NAMES (PracticeResponse carried no ids) and saves the ids, and
-// that two same-named schools are never both auto-selected. Both were right
-// while a practice could target several schools and its schools could be
-// edited. BE-74 made the practice belong to exactly ONE school, fixed at
-// creation (practice_school_immutable), and put its id on the wire; with no
-// "public practice of a school" in the UI (owner Q2) a school practice's
-// audience is shown, not edited. The precise statements now: the school is
-// shown by its saved name, no school picker exists on this screen, the PATCH
-// never carries a school -- so a second school can never be added, by name
-// or otherwise.
+// The rulings here evolved. Before BE-74 this block asserted that Edit
+// resolves a school practice's chips from NAMES (PracticeResponse carried no
+// ids) and saves the ids. BE-74 made the practice belong to exactly ONE
+// school, fixed at creation (practice_school_immutable), and put its id on
+// the wire. While no public practice of a school existed in this UI (owner
+// Q2), its audience was therefore shown as read-only text. FE-92 then put
+// the school pair into the CREATE UI (curator-on-behalf), and the PATCH and
+// the audience-preview have always accepted exactly that pair
+// (check_school_audience's SCHOOL_PRACTICE_AUDIENCES) -- so the KIND of a
+// school practice is now EDITABLE here too. What stays fixed: the SCHOOL.
+// The picker receives the practice's own school with schoolLocked (no chips),
+// the school is shown as text, and the PATCH never carries a school -- a
+// second school can never be added, by name or otherwise.
 
-describe('EditPracticeView -- «Школы» audience (FE-24 / GT P5; BE-74)', () => {
+describe('EditPracticeView -- «Школы» audience (FE-24 / GT P5; BE-74, FE-92)', () => {
   const school = (id: string, name: string, curatorId: string) => ({
     id,
     name,
@@ -1587,7 +1589,7 @@ describe('EditPracticeView -- «Школы» audience (FE-24 / GT P5; BE-74)', (
     relation: 'master' as const,
   })
 
-  it('a practice of a school shows its audience and school read-only, and the PATCH carries no school', async () => {
+  it('a school practice offers the pair of radios, preselected to the saved kind, school shown read-only', async () => {
     mountCached(
       practice({
         audience_kind: 'curator_groups',
@@ -1597,23 +1599,48 @@ describe('EditPracticeView -- «Школы» audience (FE-24 / GT P5; BE-74)', (
     )
     await flush()
 
-    expect(text()).toContain('Школы — школа «Тихая школа»')
-    // Nothing to pick: neither the kinds radio nor school chips.
-    expect(button('Публичная')).toBeUndefined()
+    expect(button('Публичная')).toBeTruthy()
+    expect(button('Школы')?.getAttribute('aria-checked')).toBe('true')
+    // The school is a fact, not a choice: text, and nothing to pick.
+    expect(text()).toContain('Школа «Тихая школа»')
     expect(host?.querySelectorAll('.v-chip').length).toBe(0)
 
+    // Kind unchanged -> no stranded-bookers preview (owner Q15 runs on change).
     button('Сохранить')?.click()
     await flush()
 
     expect(practicesApi.previewAudienceChange).not.toHaveBeenCalled()
-    const call = vi.mocked(practicesApi.updatePractice).mock.calls[0]
-    expect(call?.[1]?.audience_kind).toBe('curator_groups')
-    expect(call?.[1]?.group_ids).toEqual([])
-    expect(call?.[1]).not.toHaveProperty('curator_group_id')
-    expect(call?.[1]).not.toHaveProperty('curator_group_ids')
+    expect(sentBody().audience_kind).toBe('curator_groups')
+    expect(sentBody().group_ids).toEqual([])
+    expect(sentBody()).not.toHaveProperty('curator_group_id')
+    expect(sentBody()).not.toHaveProperty('curator_group_ids')
   })
 
-  it('a PUBLIC practice of a school (made outside this UI) is read-only too and stays public', async () => {
+  it('switching a school practice to «Публичная» previews the change and PATCHes public', async () => {
+    mountCached(
+      practice({
+        audience_kind: 'curator_groups',
+        curator_group_id: 'sc1',
+        curator_group_name: 'Тихая школа',
+      }),
+    )
+    await flush()
+
+    button('Публичная')?.click()
+    await flush()
+    button('Сохранить')?.click()
+    await flush()
+
+    expect(practicesApi.previewAudienceChange).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(practicesApi.previewAudienceChange).mock.calls[0]?.[1]).toEqual({
+      audience_kind: 'public',
+      group_ids: [],
+    })
+    expect(sentBody().audience_kind).toBe('public')
+    expect(sentBody()).not.toHaveProperty('curator_group_id')
+  })
+
+  it('a PUBLIC practice of a school preselects «Публичная» and stays public when saved untouched', async () => {
     mountCached(
       practice({
         audience_kind: 'public',
@@ -1623,15 +1650,15 @@ describe('EditPracticeView -- «Школы» audience (FE-24 / GT P5; BE-74)', (
     )
     await flush()
 
-    expect(text()).toContain('Публичная — школа «Тихая школа»')
-    expect(button('Все ученики')).toBeUndefined()
+    expect(button('Публичная')?.getAttribute('aria-checked')).toBe('true')
+    expect(text()).toContain('Школа «Тихая школа»')
 
     button('Сохранить')?.click()
     await flush()
 
-    const call = vi.mocked(practicesApi.updatePractice).mock.calls[0]
-    expect(call?.[1]?.audience_kind).toBe('public')
-    expect(call?.[1]).not.toHaveProperty('curator_group_id')
+    expect(practicesApi.previewAudienceChange).not.toHaveBeenCalled()
+    expect(sentBody().audience_kind).toBe('public')
+    expect(sentBody()).not.toHaveProperty('curator_group_id')
   })
 
   it('same-named schools of the master cannot widen a school practice: Edit never asks for schools', async () => {

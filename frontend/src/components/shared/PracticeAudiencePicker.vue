@@ -19,6 +19,11 @@
   -- this component owns only the audience MECHANICS: kind, the group ids,
   the school id, their empty states, and the single validation-error line.
 
+  BE-74 edit seam: `schoolLocked` suppresses the school chips -- the school
+  of an EXISTING practice can never change (practice_school_immutable), so
+  Edit passes the practice's own school plus this flag and shows the fixed
+  school itself; only the KIND stays selectable there (the FE-92 pair).
+
   v-model:kind / v-model:groupIds / v-model:curatorGroupId -- the group array
   is replaced immutably (a fresh array per toggle), never mutated in place, so
   the caller's reactivity and its own change-detection stay honest; the school
@@ -47,7 +52,7 @@
       </p>
     </template>
 
-    <template v-else-if="kindModel === 'curator_groups'">
+    <template v-else-if="kindModel === 'curator_groups' && !schoolLocked">
       <div v-if="schools.length" class="pap__chips">
         <VChip
           v-for="s in schools"
@@ -62,7 +67,8 @@
       </div>
       <!-- Defensive: the option is only offered when schools exist, so this
            is reachable only if the list emptied AFTER the kind was chosen
-           (left the school in another tab). Honest text, no invented targets. -->
+           (left the school in another tab). Honest text, no invented targets.
+           (schoolLocked never reaches this branch -- see the props below.) -->
       <p v-else class="pap__empty">Нет школ, доступных для выбора.</p>
     </template>
 
@@ -102,6 +108,12 @@ const props = defineProps<{
    *  (check_school_audience) -- so that flow passes ['public',
    *  'curator_groups']. Absent -> every kind, as before. */
   allowedKinds?: PracticeAudienceKind[]
+  /** BE-74 edit seam: the school of an EXISTING practice never changes
+   *  (practice_school_immutable). Edit passes the practice's own school in
+   *  `schools` -- so the school pair of kinds is offered -- plus this flag,
+   *  and the school chips (a select) are suppressed: the caller shows the
+   *  fixed school itself. */
+  schoolLocked?: boolean
 }>()
 
 const kindModel = defineModel<PracticeAudienceKind>('kind', { required: true })
@@ -110,9 +122,7 @@ const curatorGroupId = defineModel<string | null>('curatorGroupId', { required: 
 
 const options = computed(() => {
   const all = audienceOptions(props.schools.length > 0)
-  const base = props.allowedKinds
-    ? all.filter((o) => props.allowedKinds!.includes(o.value))
-    : all
+  const base = props.allowedKinds ? all.filter((o) => props.allowedKinds!.includes(o.value)) : all
   if (!props.studentsLabel) return base
   return base.map((o) => (o.value === 'students' ? { ...o, label: props.studentsLabel! } : o))
 })

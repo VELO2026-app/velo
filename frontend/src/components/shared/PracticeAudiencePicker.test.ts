@@ -44,6 +44,7 @@ interface MountOpts {
   schools?: AudienceSchoolOption[]
   error?: string
   studentsLabel?: string
+  schoolLocked?: boolean
 }
 
 function mount(opts: MountOpts = {}): HTMLElement {
@@ -72,6 +73,7 @@ function mount(opts: MountOpts = {}): HTMLElement {
           schools: opts.schools ?? [],
           error: opts.error,
           studentsLabel: opts.studentsLabel,
+          schoolLocked: opts.schoolLocked,
         })
     },
   })
@@ -192,6 +194,20 @@ describe('PracticeAudiencePicker', () => {
     await flush()
 
     expect(text()).toContain('Нет школ, доступных для выбора')
+  })
+
+  it('schoolLocked: the school chips and the empty state are suppressed, the radios are not', async () => {
+    // BE-74 edit seam: Edit passes the practice's own school (so the pair of
+    // school kinds is offered) with schoolLocked -- the school is a fact
+    // there, not a choice, so neither chips nor the empty state may appear.
+    mount({ schools: [{ id: 'sc1', name: 'Тихая школа' }], schoolLocked: true })
+    kind.value = 'curator_groups'
+    await flush()
+
+    expect(optionWith('Публичная')).toBeTruthy()
+    expect(optionWith('Школы')).toBeTruthy()
+    expect(chipWith('Тихая школа')).toBeFalsy()
+    expect(text()).not.toContain('Нет школ, доступных для выбора')
   })
 
   it('review fix: the error line belongs to the targeted kinds only -- switching to «Публичная» clears it', async () => {

@@ -164,12 +164,26 @@
             <label class="edit-practice__field-label">Для кого практика</label>
             <!-- BE-74: a practice of a school keeps its school for good
                  (practice_school_immutable), and the backend allows such a
-                 practice no 'students'/'groups' audience. With no "public
-                 practice of a school" in this UI (owner Q2), nothing about
-                 its audience is editable here: it is shown, not offered. -->
-            <p v-if="practice?.curator_group_id" class="edit-practice__audience-school">
-              {{ savedAudienceLabel }} — школа «{{ practice.curator_group_name }}»
-            </p>
+                 practice only the 'public'/'curator_groups' pair
+                 (check_school_audience). FE-92 put that pair into the create
+                 UI (curator-on-behalf), so Edit offers the same two radios:
+                 the KIND is editable, the SCHOOL is not -- schoolLocked
+                 suppresses the chips and the owning school is shown as text. -->
+            <template v-if="practice?.curator_group_id">
+              <p class="edit-practice__audience-school">
+                Школа «{{ practice.curator_group_name }}»
+              </p>
+              <PracticeAudiencePicker
+                v-model:kind="form.audience_kind"
+                v-model:group-ids="form.audience_group_ids"
+                :curator-group-id="practice.curator_group_id"
+                :groups="customGroups"
+                :schools="practiceSchool"
+                :allowed-kinds="SCHOOL_AUDIENCE_KINDS"
+                school-locked
+                :error="errors.audience_group_ids"
+              />
+            </template>
             <!-- A practice without a school: the classic three kinds. No
                  schools are offered -- a school cannot be given to an
                  existing practice -- so the picker's school model is a
@@ -351,7 +365,6 @@ import { ApiResponseError } from '@/api/client'
 import { errorMessage, extractApiError } from '@/composables/useApiError'
 import {
   DURATION_OPTIONS,
-  audienceOptions,
   catalogDirectionOptions,
   catalogStylesForDirection,
 } from '@/utils/practiceOptions'
@@ -360,6 +373,7 @@ import { eurStringToCents, centsToEurString } from '@/utils/currency'
 import type { TaxonomyListResponse } from '@/api/taxonomy'
 import type { PracticeAudienceKind, PracticeResponse } from '@/api/types'
 import type { GroupListItem } from '@/api/groups'
+import type { AudienceSchoolOption } from '@/components/shared/practiceAudience'
 import PracticeAudiencePicker from '@/components/shared/PracticeAudiencePicker.vue'
 
 const route = useRoute()
@@ -463,14 +477,20 @@ const form = reactive({
 // CreatePracticeView.
 const customGroups = ref<GroupListItem[]>([])
 
-// BE-74: the saved audience's label for a practice of a school (shown, not
-// edited -- see the template). The four-option list, because the saved
-// kind may be 'curator_groups'.
-const savedAudienceLabel = computed(
-  () =>
-    audienceOptions(true).find((o) => o.value === (practice.value?.audience_kind ?? 'public'))
-      ?.label ?? '',
-)
+// BE-74 + FE-92: a school practice's KIND is editable, but only within the
+// pair the backend accepts (check_school_audience's SCHOOL_PRACTICE_AUDIENCES)
+// -- the same pair the curator-on-behalf create flow offers. The SCHOOL
+// itself never changes, so the picker gets exactly the practice's own school
+// (which makes audienceOptions() offer the pair) with schoolLocked on: no
+// chips. Exact mirror of CreatePracticeView's FOREIGN_AUDIENCE_KINDS; both
+// must track the backend pair.
+const SCHOOL_AUDIENCE_KINDS: PracticeAudienceKind[] = ['public', 'curator_groups']
+
+const practiceSchool = computed<AudienceSchoolOption[]>(() => {
+  const p = practice.value
+  if (!p?.curator_group_id) return []
+  return [{ id: p.curator_group_id, name: p.curator_group_name ?? '' }]
+})
 
 const errors = reactive({
   title: '',
@@ -675,8 +695,9 @@ function audienceChanged(): boolean {
   if (!practice.value) return false
   const savedKind = practice.value.audience_kind ?? 'public'
   if (form.audience_kind !== savedKind) return true
-  // BE-74: the school's audience is never edited here (see the template),
-  // so with the kind unchanged only a change of groups is left to detect.
+  // A school practice's kind is editable within the public/'curator_groups'
+  // pair (see the template); either way, with the kind unchanged only a
+  // change of groups is left to detect.
   if (form.audience_kind !== 'groups') return false
 
   // Same name -> id resolution resolveAudienceGroupIds() already uses --
@@ -967,12 +988,14 @@ async function remove(): Promise<void> {
   margin: var(--space-3) 0 0;
 }
 
-/* BE-74: the read-only audience of a practice of a school. */
+/* BE-74: the owning school of a school practice -- a fact, not a choice. */
 .edit-practice__audience-school {
   font-size: var(--text-sm);
   color: var(--velo-text-secondary);
   line-height: 1.5;
-  margin: 0;
+  /* Sits between the field label and the picker radios, both spaced by
+     --space-2; the picker brings its own internal gap. */
+  margin: 0 0 var(--space-2);
 }
 
 .edit-practice__field-error {
