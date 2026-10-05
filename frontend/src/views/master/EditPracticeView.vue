@@ -168,11 +168,9 @@
                  (check_school_audience). FE-92 put that pair into the create
                  UI (curator-on-behalf), so Edit offers the same two radios:
                  the KIND is editable, the SCHOOL is not -- schoolLocked
-                 suppresses the chips and the owning school is shown as text. -->
+                 suppresses the chips; the owning school is not shown at all
+                 (owner 2026-10-05). -->
             <template v-if="practice?.curator_group_id">
-              <p class="edit-practice__audience-school">
-                Школа «{{ practice.curator_group_name }}»
-              </p>
               <PracticeAudiencePicker
                 v-model:kind="form.audience_kind"
                 v-model:group-ids="form.audience_group_ids"
@@ -986,16 +984,6 @@ async function remove(): Promise<void> {
   font-size: var(--text-sm);
   color: var(--velo-text-muted);
   margin: var(--space-3) 0 0;
-}
-
-/* BE-74: the owning school of a school practice -- a fact, not a choice. */
-.edit-practice__audience-school {
-  font-size: var(--text-sm);
-  color: var(--velo-text-secondary);
-  line-height: 1.5;
-  /* Sits between the field label and the picker radios, both spaced by
-     --space-2; the picker brings its own internal gap. */
-  margin: 0 0 var(--space-2);
 }
 
 .edit-practice__field-error {

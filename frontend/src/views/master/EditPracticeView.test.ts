@@ -1589,7 +1589,7 @@ describe('EditPracticeView -- «Школы» audience (FE-24 / GT P5; BE-74, FE-
     relation: 'master' as const,
   })
 
-  it('a school practice offers the pair of radios, preselected to the saved kind, school shown read-only', async () => {
+  it('a school practice offers the pair of radios, preselected to the saved kind; the school itself is not shown', async () => {
     mountCached(
       practice({
         audience_kind: 'curator_groups',
@@ -1601,8 +1601,10 @@ describe('EditPracticeView -- «Школы» audience (FE-24 / GT P5; BE-74, FE-
 
     expect(button('Публичная')).toBeTruthy()
     expect(button('Школы')?.getAttribute('aria-checked')).toBe('true')
-    // The school is a fact, not a choice: text, and nothing to pick.
-    expect(text()).toContain('Школа «Тихая школа»')
+    // Owner 2026-10-05: no read-only school line in the block at all -- the
+    // name renders nowhere, the chips stay suppressed.
+    expect(text()).not.toContain('Тихая школа')
+    expect(text()).not.toContain('Школа «')
     expect(host?.querySelectorAll('.v-chip').length).toBe(0)
 
     // Kind unchanged -> no stranded-bookers preview (owner Q15 runs on change).
@@ -1651,7 +1653,7 @@ describe('EditPracticeView -- «Школы» audience (FE-24 / GT P5; BE-74, FE-
     await flush()
 
     expect(button('Публичная')?.getAttribute('aria-checked')).toBe('true')
-    expect(text()).toContain('Школа «Тихая школа»')
+    expect(text()).not.toContain('Тихая школа')
 
     button('Сохранить')?.click()
     await flush()
