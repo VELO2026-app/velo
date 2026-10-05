@@ -499,8 +499,21 @@ const priceCents = computed((): number => eurStringToCents(form.price_eur_raw))
 // masterStore.profile?.methods, never method_change_request.proposed_
 // methods -- a pending, unapproved request must not unlock a direction
 // early.
+//
+// BE-63: the OTHER manager the backend accepts on PATCH is the school's
+// curator, and for a foreign practice it validates direction/style against
+// the OWNER's confirmed methods (_assert_master_confirmed_taxonomy) -- so
+// the pickers must offer the owner's set, not the editor's. The detail
+// response carries it directly (practice.master_methods, get_practice()'s
+// outer join). The practices-list cache rows carry master_methods [] by
+// contract ("list endpoints pass []"), and a cache hit is always the
+// CALLER's own practice (GET /masters/me/practices) -- for those the
+// profile fallback reads the same set. A curator therefore never reaches
+// this filter without the owner's methods on the practice.
 const confirmedMethods = computed(() => {
-  const methods = masterStore.profile?.methods
+  const methods = practice.value?.master_methods?.length
+    ? practice.value.master_methods
+    : masterStore.profile?.methods
   if (!methods) return null
   return parseMethods(methods)
 })

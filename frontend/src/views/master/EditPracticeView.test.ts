@@ -546,6 +546,38 @@ describe('EditPracticeView', () => {
       expect(sentBody().direction).toBe('meditation')
       expect(sentBody().style).toBeNull()
     })
+
+    it("a curator editing a school practice is filtered by the OWNER's methods (practice.master_methods), not his own", async () => {
+      // BE-63: the curator is the backend's other PATCH manager, and it
+      // validates direction/style against the practice's OWNER. The detail
+      // response carries the owner's confirmed set (master_methods), so the
+      // picker must read it -- filtering by the editor's own profile was
+      // exactly CreatePracticeView's late-400 bug, on this screen too.
+      // Cache miss (a foreign practice is never in /masters/me/practices),
+      // so the screen fetches the detail response below.
+      masterState.profile = { methods: ['Йога', 'Йога — Хатха-йога'] } as MasterProfileResponse
+      vi.mocked(practicesApi.getPractice).mockResolvedValue(
+        practice({
+          master_id: 'm2',
+          master_name: 'Пётр Романов',
+          master_methods: ['Медитация', 'Медитация — Медитация молчания'],
+        }),
+      )
+      mount()
+      await flush()
+
+      const opts = Array.from(selectByLabel('Направление')?.options ?? []).map((o) =>
+        o.textContent?.trim(),
+      )
+      expect(opts).toContain('Медитация')
+      // The editor's own confirmed direction is NOT offered: the backend
+      // would refuse it on save (it is not the owner's).
+      expect(opts).not.toContain('Йога')
+      // The saved direction (the practice fixture's 'yoga') is not the
+      // owner's either, so the dependent style select offers nothing and
+      // stays hidden -- the same posture a narrowed own profile produces.
+      expect(selectByLabel('Вид практики')).toBeUndefined()
+    })
   })
 
   describe('what each status is allowed to do', () => {

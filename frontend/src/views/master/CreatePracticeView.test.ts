@@ -1791,8 +1791,11 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
   it('masterId + groupId: the master is fixed; submit sends master_id AND the school, no second request', async () => {
     routeQuery.masterId = 'm_pub'
     routeQuery.groupId = 'g1'
+    // The target master confirms «Йога» — fillMinimalForm picks exactly that;
+    // the master-vs-caller divergence is exercised by the picker tests below.
     vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
       display_name: 'Анна Ли',
+      methods: ['Йога', 'Йога — Хатха-йога'],
     } as MasterPublicResponse)
     vi.mocked(practicesApi.createPractice).mockResolvedValue(created())
     mount()
@@ -1834,6 +1837,11 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
   it('a dedup for the master: «Такая практика уже есть у мастера», back to the school', async () => {
     routeQuery.masterId = 'm_pub'
     routeQuery.groupId = 'g1'
+    // fillMinimalForm needs the master's confirmed set to offer «Йога».
+    vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
+      display_name: 'Анна Ли',
+      methods: ['Йога', 'Йога — Хатха-йога'],
+    } as MasterPublicResponse)
     vi.mocked(practicesApi.createPractice).mockResolvedValue({
       ...created(),
       deduplicated: true,
@@ -1860,6 +1868,11 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
   ] as const)('refusal %i %s -> its toast; the form keeps its input', async (status, code, msg) => {
     routeQuery.masterId = 'm_pub'
     routeQuery.groupId = 'g1'
+    // fillMinimalForm needs the master's confirmed set to offer «Йога».
+    vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
+      display_name: 'Анна Ли',
+      methods: ['Йога', 'Йога — Хатха-йога'],
+    } as MasterPublicResponse)
     vi.mocked(practicesApi.createPractice)
       .mockRejectedValueOnce(new ApiResponseError(status, 'refused', code))
       .mockResolvedValueOnce(created())
@@ -1947,6 +1960,11 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
       limit: 50,
       offset: 0,
     })
+    // The picked master confirms «Йога» — fillMinimalForm picks exactly that.
+    vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
+      display_name: 'Пётр Романов',
+      methods: ['Йога', 'Йога — Хатха-йога'],
+    } as MasterPublicResponse)
     vi.mocked(practicesApi.createPractice).mockResolvedValue(created())
     mount()
     await flush()
@@ -2011,6 +2029,159 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
       .click()
     await flush()
     expect(templateSection()).toBe(false)
+  })
+
+  // -- The pickers offer the TARGET master's confirmed methods (BE-102): the
+  //    backend validates direction/style against the practice's master, so a
+  //    picker fed with the caller's own methods produced the submit-time
+  //    direction_not_confirmed / style_not_confirmed this suite now
+  //    prevents at the source. --
+
+  function directionOptions(): string[] {
+    return Array.from(selectByPlaceholder('Направление практики')?.options ?? []).map(
+      (o) => o.textContent?.trim() ?? '',
+    )
+  }
+
+  it("masterId + groupId: the pickers offer the MASTER's methods — a direction only he holds is creatable", async () => {
+    routeQuery.masterId = 'm_pub'
+    routeQuery.groupId = 'g1'
+    // The caller (beforeEach) is confirmed for Йога but NOT Медитация; the
+    // target master is the reverse. Exactly the asymmetry that used to 400
+    // on submit.
+    vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
+      display_name: 'Анна Ли',
+      methods: ['Медитация'],
+    } as MasterPublicResponse)
+    vi.mocked(practicesApi.createPractice).mockResolvedValue(created())
+    mount()
+    await flush()
+
+    const opts = directionOptions()
+    expect(opts).toContain('Медитация')
+    expect(opts).not.toContain('Йога')
+
+    typeInto(inputByPlaceholder('Название'), 'Утренняя практика')
+    choose(selectByPlaceholder('Направление практики'), 'meditation')
+    await flush()
+    choose(selectByPlaceholder('Уровень сложности'), 'beginner')
+    choose(selectByPlaceholder('Длительность'), '60')
+    await flush()
+    await pickDate(25)
+    await pickDefaultTime()
+    submitForm()
+    await flush()
+
+    const body = vi.mocked(practicesApi.createPractice).mock.calls[0]![0]
+    expect(body.direction).toBe('meditation')
+    expect(body.master_id).toBe('m_pub')
+  })
+
+  it("groupId query: picking a school master swaps the direction filter to HIS methods; «Я» restores the caller's", async () => {
+    routeQuery.groupId = 'g1'
+    vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue({
+      items: [
+        {
+          user_id: 'm2',
+          name: 'Пётр Романов',
+          kind: 'master',
+          avatar_url: null,
+          joined_at: '2026-09-01T00:00:00Z',
+          is_visible: true,
+        },
+      ],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    })
+    // Per-id: the caller confirms Йога, the school master Медитация.
+    vi.mocked(mastersApi.getPublicMaster).mockImplementation(async (id: string) =>
+      id === 'm2'
+        ? ({ methods: ['Медитация'] } as MasterPublicResponse)
+        : ({ methods: ['Йога'] } as MasterPublicResponse),
+    )
+    mount()
+    await flush()
+
+    // «Я» by default: the caller's own set, no master lookup yet.
+    let opts = directionOptions()
+    expect(opts).toContain('Йога')
+    expect(opts).not.toContain('Медитация')
+    expect(mastersApi.getPublicMaster).not.toHaveBeenCalled()
+
+    Array.from(host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? [])
+      .find((b) => b.textContent?.includes('Пётр Романов'))!
+      .click()
+    await flush()
+    expect(mastersApi.getPublicMaster).toHaveBeenCalledWith('m2')
+    opts = directionOptions()
+    expect(opts).toContain('Медитация')
+    expect(opts).not.toContain('Йога')
+
+    Array.from(host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? [])
+      .find((b) => b.textContent?.includes('Я'))!
+      .click()
+    await flush()
+    opts = directionOptions()
+    expect(opts).toContain('Йога')
+    expect(opts).not.toContain('Медитация')
+  })
+
+  it('groupId query: a direction the newly picked master does not confirm is cleared from the form', async () => {
+    routeQuery.groupId = 'g1'
+    vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue({
+      items: [
+        {
+          user_id: 'm2',
+          name: 'Пётр Романов',
+          kind: 'master',
+          avatar_url: null,
+          joined_at: '2026-09-01T00:00:00Z',
+          is_visible: true,
+        },
+      ],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    })
+    vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
+      methods: ['Медитация'],
+    } as MasterPublicResponse)
+    mount()
+    await flush()
+
+    // Picked while «Я» (the caller confirms Йога).
+    choose(selectByPlaceholder('Направление практики'), 'yoga')
+    await flush()
+
+    Array.from(host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? [])
+      .find((b) => b.textContent?.includes('Пётр Романов'))!
+      .click()
+    await flush()
+
+    // The stale pick is gone: the select is back on its placeholder -- the
+    // value the backend would have refused on submit cannot ride along.
+    expect(selectByPlaceholder('Направление практики')?.value).toBe('')
+  })
+
+  it("masterId + groupId: the master's methods failing to load keeps the pickers empty and says why", async () => {
+    routeQuery.masterId = 'm_pub'
+    routeQuery.groupId = 'g1'
+    vi.mocked(mastersApi.getPublicMaster).mockRejectedValue(new Error('offline'))
+    mount()
+    await flush()
+
+    // Fail-CLOSED: only the placeholder option, never the full catalogue.
+    expect(directionOptions()).toEqual(['Направление практики'])
+    expect(toastError).toHaveBeenCalledWith('Не удалось загрузить методы мастера')
+
+    // And no direction can ride along to the API: the title is filled, so
+    // «Выберите направление» is what blocks the submit.
+    typeInto(inputByPlaceholder('Название'), 'Утренняя практика')
+    submitForm()
+    await flush()
+    expect(vi.mocked(practicesApi.createPractice)).not.toHaveBeenCalled()
+    expect(text()).toContain('Выберите направление')
   })
 
   it('no context: no master section at all', async () => {

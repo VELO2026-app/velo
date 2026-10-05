@@ -508,6 +508,19 @@ const delegatedMaster = ref<{ id: string; name: string } | null>(null)
 const schoolMasterOptions = ref<{ label: string; value: string }[]>([])
 const selectedMasterId = ref('')
 
+// The TARGET master's confirmed methods (BE-102): the direction/style pickers
+// must offer what the MASTER holds, not the caller's -- the backend validates
+// direction/style against the practice's master (_assert_master_confirmed_
+// taxonomy, own=False), so offering a method the caller holds but the master
+// does not is exactly the late 400 (direction_not_confirmed) this delegation
+// used to produce. Source: GET /masters/{id}'s public methods. The fixed
+// delegation (?masterId) rides the name lookup this screen already makes; the
+// school-picker flow fetches on selection. null = not loaded (or the load
+// failed) -- confirmedMethods then fails CLOSED (no options), never the full
+// catalogue: the same posture as a not-yet-loaded own profile.
+const delegatedMethods = ref<string[] | null>(null)
+const delegatedMethodsLoadId = ref(0)
+
 const FOREIGN_AUDIENCE_KINDS: PracticeAudienceKind[] = ['public', 'curator_groups']
 
 const targetMasterId = computed(() => delegatedMaster.value?.id ?? (selectedMasterId.value || null))
@@ -550,10 +563,16 @@ async function loadPracticeMasterContext(): Promise<void> {
         id: masterId,
         name: profile.display_name ?? 'Мастер',
       }
+      // The same lookup feeds the pickers: without it they would filter by
+      // the CALLER's confirmed set while the backend validates the master's.
+      delegatedMethods.value = profile.methods ?? null
     } catch {
       // Keep the id: the backend re-validates the delegation on submit, so
       // a cosmetic name lookup failure must not silently drop the target.
       delegatedMaster.value = { id: masterId, name: 'Мастер' }
+      // The methods half is not cosmetic: without it the direction picker
+      // stays empty (fail-closed), so say why instead of a silent dead form.
+      toast.error('Не удалось загрузить методы мастера')
     }
     return
   }
@@ -572,6 +591,31 @@ async function loadPracticeMasterContext(): Promise<void> {
     }
   }
 }
+
+// The school-picker flow: a foreign master's methods arrive when he is
+// picked, drop when the caller returns to «Я». The loadId makes an
+// out-of-order pair of replies land only if they belong to the CURRENTLY
+// selected master (the same race discipline as the screen's list fetches).
+async function loadDelegatedMethods(masterId: string): Promise<void> {
+  const loadId = ++delegatedMethodsLoadId.value
+  try {
+    const profile = await getPublicMaster(masterId)
+    if (loadId === delegatedMethodsLoadId.value) delegatedMethods.value = profile.methods ?? null
+  } catch {
+    if (loadId === delegatedMethodsLoadId.value) {
+      delegatedMethods.value = null
+      // Fail-closed: the direction picker stays empty until a re-pick
+      // reloads it.
+      toast.error('Не удалось загрузить методы мастера')
+    }
+  }
+}
+
+watch(selectedMasterId, (id) => {
+  delegatedMethods.value = null
+  if (id) void loadDelegatedMethods(id)
+  else delegatedMethodsLoadId.value += 1 // drop any in-flight reply
+})
 
 // T24-24 (PROMPT №639): "Все ученики" -> "Все мои ученики", on THIS screen
 // ONLY -- passed to the shared PracticeAudiencePicker as `students-label`.
@@ -812,8 +856,19 @@ const templatePractices = computed((): PracticeResponse[] => {
 // method_change_request.proposed_methods -- a pending, unapproved request
 // must not unlock a direction before the "up to 3 working days" review the
 // profile screen itself advertises. null while the profile hasn't loaded.
+//
+// FE-92/BE-102 delegation: while a foreign master is targeted the practice
+// is HIS -- the backend validates direction/style against the TARGET
+// master's confirmed set (_assert_master_confirmed_taxonomy, own=False), so
+// the pickers must offer HIS methods, not the caller's: offering a method
+// the caller holds but the master does not is exactly the submit-time 400
+// (direction_not_confirmed / style_not_confirmed) this filter exists to
+// prevent, and hiding a direction the master himself holds would block a
+// create the backend would accept. delegatedMethods null until loaded ->
+// confirmedMethods null -> the options below fail CLOSED, never open into
+// the full catalogue.
 const confirmedMethods = computed(() => {
-  const methods = masterStore.profile?.methods
+  const methods = targetsForeignMaster.value ? delegatedMethods.value : masterStore.profile?.methods
   if (!methods) return null
   return parseMethods(methods)
 })
@@ -852,6 +907,23 @@ const styleOptionsForForm = computed(() => {
   const all = catalogStylesForDirection(catalog.value, form.direction)
   const confirmedStyleValues = confirmed.styles[form.direction] ?? []
   return all.filter((opt) => confirmedStyleValues.includes(opt.value))
+})
+
+// A change of whose methods the pickers offer must not silently keep a pick
+// the new set refuses -- the backend would reject exactly that on submit
+// (the refusal the filter exists to prevent). Same rule as applyTemplate's
+// template copy (PROMPT №556): a still-confirmed pick survives, anything
+// else is cleared so the caller re-picks from the live, filtered list. The
+// watcher also fires on the curator's own profile load, where the form is
+// still empty and this is a no-op.
+watch(confirmedMethods, (confirmed) => {
+  if (!confirmed) return
+  if (form.direction && !confirmed.directions.includes(form.direction as PracticeDirection)) {
+    form.direction = ''
+    form.style = ''
+  } else if (form.style && !(confirmed.styles[form.direction] ?? []).includes(form.style)) {
+    form.style = ''
+  }
 })
 
 /** Reset style when direction changes — the previous value is likely
