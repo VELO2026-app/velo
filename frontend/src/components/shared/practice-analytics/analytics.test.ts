@@ -123,6 +123,8 @@ describe('practice screen', () => {
     expect(pairs).toHaveLength(4)
     expect(pairs[0]!.text()).toContain('Плохо')
     expect(pairs[0]!.text()).toContain('Огонь')
+    // Owner (FE-96): the pair row is faces + name + transition, no avatar.
+    expect(pairs[0]!.find('.v-avatar').exists()).toBe(false)
     const rv = wrapper.get('.practice-analytics__review')
     expect(rv.text()).toContain('«Спасибо!»')
     expect(rv.find('time').attributes('datetime')).toBe('2026-08-14T20:00:00Z')
@@ -139,6 +141,58 @@ describe('practice screen', () => {
     })
     await wrapper.get('.practice-analytics__pairs button').trigger('click')
     expect(wrapper.emitted('morePairs')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  // Owner (FE-96): pairs collapse to five; the pill reveals/collapses the
+  // loaded rest; the server pager stays one level deeper (visible only when
+  // everything loaded is already on screen).
+  it('pairs: five rows collapsed, the pill reveals the rest and collapses back', async () => {
+    const wrapper = mount(Analytics, {
+      props: {
+        summary: summary({ pairs_total: 7 }),
+        pairs: Array.from({ length: 7 }, (_, i) => pair(i)),
+      },
+    })
+    expect(wrapper.findAll('.practice-analytics__pair')).toHaveLength(5)
+    const pill = wrapper.get('.practice-analytics__pairs button')
+    expect(pill.text()).toBe('+ ещё 2 пары')
+    await pill.trigger('click')
+    expect(wrapper.findAll('.practice-analytics__pair')).toHaveLength(7)
+    // everything loaded is on screen: «Скрыть» alone, no server pager beside it
+    const buttons = wrapper.findAll('.practice-analytics__pairs button')
+    expect(buttons).toHaveLength(1)
+    expect(buttons[0]!.text()).toBe('Скрыть')
+    await buttons[0]!.trigger('click')
+    expect(wrapper.findAll('.practice-analytics__pair')).toHaveLength(5)
+    // a practice switch resets the reveal (the mockup's collapse-on-change)
+    await wrapper.setProps({ summary: summary({ pairs_total: 7, practice_id: 'p2' }) })
+    expect(wrapper.findAll('.practice-analytics__pair')).toHaveLength(5)
+    wrapper.unmount()
+  })
+  it('pairs: a short page with more on the server keeps the pager; loading hands over to the pill', async () => {
+    const wrapper = mount(Analytics, {
+      props: {
+        summary: summary({ pairs_total: 25 }),
+        pairs: Array.from({ length: 5 }, (_, i) => pair(i)),
+      },
+    })
+    expect(wrapper.findAll('.practice-analytics__pair')).toHaveLength(5)
+    const pager = wrapper.get('.practice-analytics__pairs button')
+    expect(pager.text()).toBe('Показать ещё')
+    await pager.trigger('click')
+    expect(wrapper.emitted('morePairs')).toHaveLength(1)
+    // the container appends the page: 25 loaded of 25 -> the pill takes over
+    await wrapper.setProps({
+      summary: summary({ pairs_total: 25 }),
+      pairs: Array.from({ length: 25 }, (_, i) => pair(i)),
+    })
+    expect(wrapper.findAll('.practice-analytics__pair')).toHaveLength(5)
+    const buttons = wrapper.findAll('.practice-analytics__pairs button')
+    expect(buttons).toHaveLength(1)
+    expect(buttons[0]!.text()).toBe('+ ещё 20 пар')
+    await buttons[0]!.trigger('click')
+    expect(wrapper.findAll('.practice-analytics__pair')).toHaveLength(25)
     wrapper.unmount()
   })
   it('renders loading and recoverable error without fabricating empty statistics', async () => {

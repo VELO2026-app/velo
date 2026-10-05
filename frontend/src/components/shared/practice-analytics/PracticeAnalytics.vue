@@ -3,7 +3,7 @@
 // requests and the paging; every number here is the server's -- zones
 // included (ScoreZone, BE-24: never a raw 1..10). Every "X из N" uses
 // N = summary.attended.
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { VAvatar, VButton, VCard, VEmptyState, VLoader } from '@/components/ui'
 import { VHeader } from '@/components/layout'
 import { IconCalendar, IconCheckin, IconGroup } from '@/components/icons'
@@ -64,6 +64,38 @@ const hasMorePairs = computed(
 )
 const hasMoreReviews = computed(
   () => !!props.summary && props.reviews.length < props.summary.reviews_total,
+)
+
+// Owner (FE-96): collapsed by default to the first PAIRS_VISIBLE rows; the
+// pill reveals the rest of the loaded page and collapses back. The server
+// pager stays one level deeper and shows only when everything loaded is
+// already on screen (nothing left to reveal).
+const PAIRS_VISIBLE = 5
+const pairsExpanded = ref(false)
+watch(
+  () => props.summary?.practice_id,
+  () => {
+    pairsExpanded.value = false
+  },
+)
+const visiblePairs = computed(() =>
+  pairsExpanded.value ? props.pairs : props.pairs.slice(0, PAIRS_VISIBLE),
+)
+const hiddenPairs = computed(() => Math.max(0, props.pairs.length - PAIRS_VISIBLE))
+const hiddenPairsLabel = computed(() => {
+  const n = hiddenPairs.value
+  const noun =
+    n % 100 >= 11 && n % 100 <= 14
+      ? 'пар'
+      : n % 10 === 1
+        ? 'пару'
+        : n % 10 >= 2 && n % 10 <= 4
+          ? 'пары'
+          : 'пар'
+  return `+ ещё ${n} ${noun}`
+})
+const showPairsPager = computed(
+  () => hasMorePairs.value && (pairsExpanded.value || hiddenPairs.value === 0),
 )
 </script>
 
@@ -131,7 +163,7 @@ const hasMoreReviews = computed(
         <p v-if="!pairs.length" class="practice-analytics__empty">Пока нет пар для сравнения</p>
         <ul v-else class="practice-analytics__pair-list">
           <li
-            v-for="pair in pairs"
+            v-for="pair in visiblePairs"
             :key="pair.user_id"
             class="practice-analytics__pair"
             :class="{ 'practice-analytics__person--opens': opens(pair) }"
@@ -140,13 +172,12 @@ const hasMoreReviews = computed(
             @click="onPerson(pair)"
             @keydown.enter="onPerson(pair)"
           >
-            <VAvatar :name="pair.name" :url="pair.avatar_url ?? undefined" size="sm" />
-            <span class="practice-analytics__name">{{ pair.name }}</span>
             <span class="practice-analytics__faces" aria-hidden="true">
               <component :is="MOOD_SCALE_ICON[pair.before_zone]" :size="22" />
               <span>→</span>
               <component :is="MOOD_SCALE_ICON[pair.after_zone]" :size="22" />
             </span>
+            <span class="practice-analytics__name">{{ pair.name }}</span>
             <span class="practice-analytics__transition">
               {{ MOOD_SCALE_LABELS[pair.before_zone] }} →
               {{ MOOD_SCALE_LABELS[pair.after_zone] }}
@@ -154,7 +185,13 @@ const hasMoreReviews = computed(
           </li>
         </ul>
         <VShowMore
-          v-if="hasMorePairs"
+          v-if="hiddenPairs > 0 && !pairsExpanded"
+          :label="hiddenPairsLabel"
+          @click="pairsExpanded = true"
+        />
+        <VShowMore v-else-if="pairsExpanded" label="Скрыть" @click="pairsExpanded = false" />
+        <VShowMore
+          v-if="showPairsPager"
           :label="loadingMorePairs ? 'Загружаем…' : 'Показать ещё'"
           @click="!loadingMorePairs && $emit('morePairs')"
         />
@@ -289,7 +326,9 @@ const hasMoreReviews = computed(
 }
 .practice-analytics__pair {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
+  /* Owner (FE-96): no avatar in the pair -- faces, name, transition label,
+     ONE grid row at every width; the auto label column hugs the right edge. */
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-4) 0;
@@ -305,11 +344,17 @@ const hasMoreReviews = computed(
 }
 .practice-analytics__name {
   font-size: var(--text-sm);
+  /* Owner (FE-96): the row is ONE line at every width -- a long name never
+     wraps; it truncates with an ellipsis inside the minmax(0, 1fr) column. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .practice-analytics__transition {
   text-align: right;
   color: var(--velo-text-secondary);
   font-size: var(--text-12);
+  white-space: nowrap;
 }
 .practice-analytics__reviews {
   margin-top: var(--space-3);
@@ -354,14 +399,5 @@ const hasMoreReviews = computed(
 .practice-analytics :deep(button:focus-visible) {
   outline: 2px solid var(--velo-primary);
   outline-offset: 3px;
-}
-@media (max-width: 380px) {
-  .practice-analytics__pair {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-  .practice-analytics__transition {
-    grid-column: 2;
-    text-align: left;
-  }
 }
 </style>
