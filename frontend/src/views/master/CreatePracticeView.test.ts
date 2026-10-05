@@ -1943,6 +1943,22 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     expect('master_id' in sentBody()).toBe(false)
   })
 
+  it("groupId query: «Я» alone already sees only the school's two audience kinds (owner 2026-10-05)", async () => {
+    routeQuery.groupId = 'g1'
+    mount()
+    await flush()
+
+    // The restriction rides the SCHOOL ENTRY, not the master pick: with the
+    // default «Я» the audience radio still renders («Публичная» is on) but
+    // neither personal kind is offered.
+    const radios = (): HTMLButtonElement[] =>
+      Array.from(host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? [])
+    const labels = radios().map((b) => b.textContent ?? '')
+    expect(labels.some((l) => l.includes('Публичная'))).toBe(true)
+    expect(labels.some((l) => l.includes('Все мои ученики'))).toBe(false)
+    expect(labels.some((l) => l.includes('Конкретные группы'))).toBe(false)
+  })
+
   it("groupId query: picking a school master limits the audience to the school's two and sends the school with «public» too", async () => {
     routeQuery.groupId = 'g1'
     vi.mocked(cgApi.getCuratorGroupMembers).mockResolvedValue({

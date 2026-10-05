@@ -138,6 +138,12 @@
              (Q4=А: без явного «Без вида», не выбрано = null, необязательное). -->
         <div v-if="styleOptionsForForm.length > 0">
           <VSelect v-model="form.style" placeholder="Вид практики" :options="styleOptionsForForm" />
+          <!-- Rhythm reserve (owner 2026-10-05): style never errors (optional),
+               but every other plate in a section is followed by the constant
+               17px error slot — without it «Вид практики» sat 2px off
+               «Уровень сложности» while all other input-to-input gaps were
+               slot + 2px. -->
+          <span class="create-practice__field-error" aria-hidden="true"></span>
         </div>
 
         <!-- Уровень сложности = difficulty (локальные мужские лейблы, Q1=Б). -->
@@ -344,7 +350,7 @@
               v-model:curator-group-id="form.audience_curator_group_id"
               :groups="customGroups"
               :schools="audienceSchools"
-              :allowed-kinds="targetsForeignMaster ? FOREIGN_AUDIENCE_KINDS : undefined"
+              :allowed-kinds="contextGroupId ? SCHOOL_AUDIENCE_KINDS : undefined"
               :error="errors.audience_group_ids"
               students-label="Все мои ученики"
             />
@@ -500,9 +506,10 @@ const toast = useToast()
 // «created and published» notice to the master, no second publish step.
 // Without the school in the context (?groupId=) another master is
 // never offered: the request would be refused (master_id_requires_school).
-// While a foreign master is targeted the audience is the school's two
-// (public / curator_groups -- check_school_audience) and the school is sent
-// with either of them. «Я» and no-context flows behave exactly as before.
+// The audience kinds are the school's two (public / curator_groups --
+// check_school_audience) for the WHOLE school entry, «Я» included (owner
+// 2026-10-05) — the personal kinds («Все мои ученики» / «Конкретные
+// группы») are offered only by a no-context create.
 const contextGroupId = computed(() => queryParam('groupId'))
 const delegatedMaster = ref<{ id: string; name: string } | null>(null)
 const schoolMasterOptions = ref<{ label: string; value: string }[]>([])
@@ -521,7 +528,9 @@ const selectedMasterId = ref('')
 const delegatedMethods = ref<string[] | null>(null)
 const delegatedMethodsLoadId = ref(0)
 
-const FOREIGN_AUDIENCE_KINDS: PracticeAudienceKind[] = ['public', 'curator_groups']
+// Owner 2026-10-05 (renamed from FOREIGN_AUDIENCE_KINDS): the set is the
+// SCHOOL's, offered on the school entry regardless of the master picked.
+const SCHOOL_AUDIENCE_KINDS: PracticeAudienceKind[] = ['public', 'curator_groups']
 
 const targetMasterId = computed(() => delegatedMaster.value?.id ?? (selectedMasterId.value || null))
 const targetsForeignMaster = computed(
@@ -538,7 +547,7 @@ const audienceSchools = computed((): AudienceSchoolOption[] => {
 
 watch(targetsForeignMaster, (foreign) => {
   if (!foreign) return
-  if (!FOREIGN_AUDIENCE_KINDS.includes(form.audience_kind)) form.audience_kind = 'public'
+  if (!SCHOOL_AUDIENCE_KINDS.includes(form.audience_kind)) form.audience_kind = 'public'
   if (form.audience_kind === 'curator_groups') {
     form.audience_curator_group_id = contextGroupId.value
   }

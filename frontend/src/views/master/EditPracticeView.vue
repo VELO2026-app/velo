@@ -482,7 +482,7 @@ const customGroups = ref<GroupListItem[]>([])
 // -- the same pair the curator-on-behalf create flow offers. The SCHOOL
 // itself never changes, so the picker gets exactly the practice's own school
 // (which makes audienceOptions() offer the pair) with schoolLocked on: no
-// chips. Exact mirror of CreatePracticeView's FOREIGN_AUDIENCE_KINDS; both
+// chips. Exact mirror of CreatePracticeView's SCHOOL_AUDIENCE_KINDS; both
 // must track the backend pair.
 const SCHOOL_AUDIENCE_KINDS: PracticeAudienceKind[] = ['public', 'curator_groups']
 

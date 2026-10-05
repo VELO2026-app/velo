@@ -299,8 +299,9 @@ const canOpenRoster = computed(
   () => isCurator.value || (relation.value === 'master' && inMasterZone.value),
 )
 
-// §1.6/§1.10: the header reads «Школа «{name}»», per the mockup.
-const pageTitle = computed(() => (page.value ? `Школа «${page.value.name}»` : 'Школа'))
+// Owner 2026-10-05: the header carries ONLY the school's name (was
+// «Школа «{name}»», §1.6/§1.10 mockup). 'Школа' is the pre-load fallback.
+const pageTitle = computed(() => page.value?.name ?? 'Школа')
 
 // §5.2: the payload carries no branding_hash yet -- variant A, the client
 // derives it from the name. When the server field lands, this watch is the

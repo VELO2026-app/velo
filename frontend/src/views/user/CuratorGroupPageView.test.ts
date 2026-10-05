@@ -194,6 +194,17 @@ afterEach(() => {
 // -- The relation matrix ------------------------------------------------------
 
 describe('CuratorGroupPageView -- relation matrix', () => {
+  it('the header reads ONLY the school name (owner 2026-10-05, was «Школа «{name}»»)', async () => {
+    mockHappyLoad('student')
+    mount()
+    await flush()
+
+    expect(text()).toContain('Тихая школа')
+    // The «Школа» designation prefix is gone from the header; the name
+    // appears bare. No other surface on this page emits «Школа «'.
+    expect(text()).not.toContain('Школа «')
+  })
+
   it('STUDENT: header offers «Покинуть школу», no management rows, no student roster', async () => {
     mockHappyLoad('student')
     mount()

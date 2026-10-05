@@ -253,11 +253,6 @@ html.is-keyboard-open .ncg {
   margin-bottom: 0;
 }
 
-/* T24-8 equivalent: equalize the two visible plates (required seal reserve). */
-.ncg__content :deep(.v-textarea__field) {
-  margin-right: 30px;
-}
-
 /* §1.5 media sections (kill-switched OFF today): the mockup's two-line hint
    under each section title. */
 .ncg__media-hint {

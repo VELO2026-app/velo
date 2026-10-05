@@ -17,6 +17,7 @@
       isFormRoute ||
       isChatRoute ||
       isInboxRoute ||
+      isDetailRoute ||
       isMasterCuratorRoute ||
       keyboardOpen
     "
@@ -135,6 +136,14 @@ const isMasterCuratorRoute = computed(
   () => route.name === 'user-master-public' && String(route.query.groupId ?? '') !== '',
 )
 
+// Owner 2026-10-05: the stacked school calendar and the practice detail are
+// DETAIL screens — a back control / own footer replaces the dock, exactly the
+// contract master-practice-detail already has via meta.hideTabBar in
+// MasterShell. The shell lists route names explicitly (see FE-11 above), so
+// these join a list here instead of route meta.
+const DETAIL_ROUTES = ['user-calendar-school', 'practice-detail']
+const isDetailRoute = computed(() => DETAIL_ROUTES.includes(route.name as string))
+
 // Edge-to-edge fog mask: the long scrolling lists/feeds + the practice-detail
 // screen (operator 2026-06-09: dissolve its hero under the header and its CTA
 // over the tabbar instead of a hard collision). Forms and the profile still
@@ -146,6 +155,10 @@ const isMasterCuratorRoute = computed(
 const FOG_ROUTES = [
   'user-dashboard',
   'user-calendar',
+  // Owner 2026-10-05: the stacked school calendar («Практики школы») is the
+  // same scrolling week feed as the tab one — content dissolves under the
+  // floating island instead of scrolling sharply through it.
+  'user-calendar-school',
   'user-bookings',
   // tz-curator.md §1.4: the schools hub is a scrolling list feed like
   // bookings -- dissolves under the floating header, CTA stays above the fade.

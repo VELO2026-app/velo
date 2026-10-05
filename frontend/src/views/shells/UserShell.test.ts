@@ -73,9 +73,8 @@ function buildRouter(): Router {
       { path: '/user/calendar', name: 'user-calendar', component: StubChild },
       {
         // The «Предстоящие практики» target on the school page (owner
-        // 2026-10-01): the school-scoped week grid, stacked but dock-visible
-        // (no hideTabBar meta) -- the exact surface the curator diary report
-        // named.
+        // 2026-10-01): the school-scoped week grid. Owner 2026-10-05: a
+        // DETAIL screen -- dock hidden (DETAIL_ROUTES) + fogged (FOG_ROUTES).
         path: '/user/calendar/school/:groupId',
         name: 'user-calendar-school',
         component: StubChild,
@@ -225,6 +224,10 @@ describe('UserShell', () => {
       ['user-diary', {}],
       ['user-chat', { id: 't1' }],
       ['user-checkin', { practiceId: 'p1' }],
+      // Owner 2026-10-05: the stacked school calendar + the practice detail
+      // are detail screens (back control / own footer instead of the dock).
+      ['user-calendar-school', { groupId: 'g1' }],
+      ['practice-detail', { id: 'p1' }],
     ] as const)('%s hides the tab bar', async (name, params) => {
       await mount(name, params as Record<string, string>)
       await flush()
@@ -339,11 +342,10 @@ describe('UserShell', () => {
       expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Школы', 'Я'])
     })
 
-    it('the reported repro: curator -> Школы -> a school -> «Предстоящие практики» has no «Дневник»', async () => {
-      // The exact surface the report named: the school-scoped calendar
-      // (user-calendar-school, the «Предстоящие практики» row's target). The
-      // dock is the SHELL's -- one answer for the whole zone -- so the diary
-      // follows the account (a curator), not the screen.
+    it('the reported repro surface: the school-scoped calendar hides the dock entirely (owner 2026-10-05)', async () => {
+      // The exact surface the curator diary report named now carries NO dock
+      // at all (DETAIL_ROUTES) -- the account-level answer (a curator keeps
+      // no «Дневник») stays pinned by the test above on the dashboard.
       curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({
         items: [{ id: 'g1', name: 'Тихая школа', relation: 'curator' }],
       })
@@ -351,7 +353,7 @@ describe('UserShell', () => {
       await flush()
       await flush()
 
-      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Школы', 'Я'])
+      expect(host?.querySelector('.v-tabbar')).toBeNull()
     })
 
     it('the dock HOLDS its first paint while the curator answer is in flight', async () => {
@@ -453,6 +455,13 @@ describe('UserShell', () => {
 
     it('practice-detail is fogged too (its own tuned entry, .vue:95 + :139)', async () => {
       await mount('practice-detail', { id: 'p1' })
+      await flush()
+
+      expect(mainEl().classList.contains('mobile-layout__main--fog')).toBe(true)
+    })
+
+    it('the school-scoped calendar gets the fog as well (stacked list feed, owner 2026-10-05)', async () => {
+      await mount('user-calendar-school', { groupId: 'g1' })
       await flush()
 
       expect(mainEl().classList.contains('mobile-layout__main--fog')).toBe(true)
