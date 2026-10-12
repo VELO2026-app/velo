@@ -371,8 +371,13 @@ async def test_four_read_tools_carry_their_annotations_and_no_session_is_kept(
     assert resp.status_code == 200
     assert "mcp-session-id" not in {k.lower() for k in resp.headers}
     tools = {t["name"]: t for t in resp.json()["result"]["tools"]}
-    assert set(tools) == READ_TOOLS
-    for name, tool in tools.items():
+    # Was `set(tools) == READ_TOOLS`: true for phase 1, which had only the
+    # four. BE-140 added the write tools (their own test, test_mcp_actions);
+    # what this test owns is that the four READ tools are there and marked
+    # read-only.
+    assert set(tools) >= READ_TOOLS
+    for name in READ_TOOLS:
+        tool = tools[name]
         ann = tool["annotations"]
         assert ann["readOnlyHint"] is True and ann["idempotentHint"] is True, name
         assert not ann.get("destructiveHint"), name

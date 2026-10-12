@@ -736,6 +736,11 @@ class Settings(BaseSettings):
     # A master's free text (description, what to prepare, contraindications)
     # is cut to this many characters in get_practice, with truncated: true.
     mcp_master_text_max_chars: int = 2000
+    # -- MCP phase 2 (BE-140): write tools, per token per fixed hour --
+    # book_practice + cancel_my_booking share one budget; save_to_diary has
+    # its own; reads keep theirs. Every call counts, refusals included.
+    mcp_action_calls_per_hour: int = 10
+    mcp_diary_writes_per_hour: int = 30
 
     # -- Admin (Phase 2.3 / 6.6 / 3.3) --
     # Max length of admin notes on master verify/reject actions
