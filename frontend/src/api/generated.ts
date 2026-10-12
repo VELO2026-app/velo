@@ -18,6 +18,9 @@ export type BookingStatus = 'pending' | 'confirmed' | 'attended' | 'no_show' | '
 /** What the person did outside velo. A CLOSED ENUM AND NOT A CONFIG LIST, unlike DiaryEntryType and PracticePhase next door (config.py:476 -- "Validated via @field_validator -- no Literal in schemas"). The divergence is deliberate and buys something those two do not need. A config list exists so a value can change without touching code. Here that is a false promise: a type the frontend cannot draw is useless, so a new activity always ships with a frontend change anyway. Adding one through env would produce a feed card with no icon and no caption -- not flexibility, a quiet break. Typed as an enum, the closed set crosses into generated.ts as a union, and adding a value without the frontend breaks the build instead of the card. */
 export type ExternalActivityType = 'vocal' | 'nail_standing' | 'meditation' | 'massage' | 'yoga' | 'dance' | 'custom'
 
+/** What a token may do through /mcp. READ: calendar, practice search, the student's own diary. DIARY_WRITE: save into the diary. BOOKINGS_WRITE: book, cancel own booking, check in. A StrEnum rather than a Literal so the OpenAPI schema carries a named type for the frontend. The table's ck_mcp_tokens_scopes_known spells the same three values; a fourth scope changes both. */
+export type McpScope = 'read' | 'diary:write' | 'bookings:write'
+
 /** How the reader of /analytics relates to the practice (BE-78 (2)). Decided by the server's one rights check; the screen maps it to what a tap on a person opens (leader -> the student dossier, curator -> the school student profile, school_master -> a direct message). One person holding several: leader > curator > school_master. */
 export type PracticeAnalyticsViewerRole = 'leader' | 'curator' | 'school_master'
 
@@ -1194,6 +1197,34 @@ export interface MasterTransactionItem {
   created_at: string
   counterparty_name: string | null
   amount_cents: number
+}
+
+/** Body of POST /api/v1/users/me/mcp-tokens. scopes omitted -> all three (owner ruling). An explicit list must be non-empty and must not repeat a scope: an empty list would mint a token that can do nothing, and a repeat means the client built the list wrong -- both are refused rather than silently "fixed". */
+export interface McpTokenCreate {
+  name: string
+  scopes?: McpScope[] | null
+}
+
+/** Response of the create call: the token, shown this once, and its row. */
+export interface McpTokenCreated {
+  token: string
+  item: McpTokenItem
+}
+
+/** One token as the student sees it in the list -- never the secret. */
+export interface McpTokenItem {
+  id: string
+  name: string
+  prefix: string
+  scopes: McpScope[]
+  created_at: string
+  last_used_at: string | null
+  revoked_at: string | null
+}
+
+/** All of the student's tokens, revoked ones included, newest first. */
+export interface McpTokenListResponse {
+  items: McpTokenItem[]
 }
 
 export interface MessageCreate {
