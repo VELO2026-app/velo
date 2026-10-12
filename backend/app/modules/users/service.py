@@ -311,7 +311,7 @@ async def reset_user_to_onboarding(
     """MVP "delete account": send the user back through onboarding.
 
     PRODUCT DECISION (MVP): "Удалить аккаунт" does NOT erase data or
-    deactivate the account. It only clears the onboarding_completed flag in
+    deactivate the account. It clears the onboarding_completed flag in
     the credentials JSONB. On the next Telegram login the user is treated as
     if new (App.vue shows the welcome/onboarding flow again), while their old
     data (name, phone, bio, bookings) stays in place and resurfaces.
@@ -325,7 +325,18 @@ async def reset_user_to_onboarding(
     Mechanism mirrors update_user's JSONB path: copy credentials, drop the
     flag, set_jsonb() so SQLAlchemy emits the UPDATE. The row is locked
     and refreshed first (BE-85, module header).
+
+    MCP TOKENS ARE REVOKED (owner ruling, BE-138): the student's AI clients
+    lose access with the account reset -- every live token, through the same
+    path as a manual revocation, one audit row per token. It happens BEFORE
+    lock_user_row: mcp_tokens rows are taken before the users row (ROW
+    ORDER in app/modules/mcp/service.py -- an /mcp request writes its token
+    row first and may lock this users row after). Imported here, not at the
+    top: mcp/service.py imports lock_user_row from this module.
     """
+    from app.modules.mcp.service import revoke_all_mcp_tokens
+
+    await revoke_all_mcp_tokens(user, session)
     await lock_user_row(session, user.id)
 
     new_credentials = dict(user.credentials or {})

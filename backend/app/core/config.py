@@ -715,6 +715,20 @@ class Settings(BaseSettings):
     # it was pulled lives in the deployment, not in a school's history).
     curator_groups_enabled: bool = True
 
+    # -- MCP (BE-138, phase 0: personal access tokens) --
+    # Killswitch. False -> every endpoint of the token router answers 404,
+    # unauthenticated callers included (a router-level dependency in
+    # app/modules/mcp/router.py, the same shape as curator_groups_enabled and
+    # for the same reasons: no 503, no machine code). Token verification
+    # does not read it -- the /mcp router of phase 1 will, in one place.
+    mcp_enabled: bool = True
+    # Live (not revoked) tokens one student may hold. Revoked tokens do not
+    # count. The 11th create answers 409 mcp_token_limit_reached.
+    mcp_tokens_max_active_per_user: int = 10
+    # Verification refreshes mcp_tokens.last_used_at at most once per this
+    # many seconds per token, so /mcp traffic is not a write per request.
+    mcp_token_last_used_interval_seconds: int = 60
+
     # -- Admin (Phase 2.3 / 6.6 / 3.3) --
     # Max length of admin notes on master verify/reject actions
     # and withdrawal approve/reject notes.

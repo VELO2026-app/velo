@@ -84,6 +84,11 @@
           <VMenuRow label="Часовой пояс" @click="onTimezoneSettings">
             <template #icon><IconGlobe :size="20" /></template>
           </VMenuRow>
+          <!-- BE-138: tokens for the user's AI (MCP) clients. Always shown:
+               with MCP switched off the screen itself says "unavailable". -->
+          <VMenuRow label="Подключения ИИ" @click="onAiConnections">
+            <template #icon><IconBrain :size="20" /></template>
+          </VMenuRow>
         </div>
       </div>
 
@@ -150,6 +155,7 @@ import {
   IconShare,
   IconLogout,
   IconGroup,
+  IconBrain,
 } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { getMyStats } from '@/api/bookings'
@@ -203,6 +209,10 @@ function onNotifications(): void {
 
 function onTimezoneSettings(): void {
   void router.push({ name: 'user-timezone' })
+}
+
+function onAiConnections(): void {
+  void router.push({ name: 'user-ai-connections' })
 }
 
 function onSupport(): void {

@@ -43,7 +43,8 @@ export function updateMe(body: UserUpdate): Promise<UserResponse> {
  *
  * MVP semantics (backend): this resets the onboarding flag rather than
  * erasing data or deactivating the account, so the next login sends the user
- * back through the welcome flow with their old data intact. The caller should
+ * back through the welcome flow with their old data intact. It also revokes
+ * every live MCP token of the user (BE-138). The caller should
  * log the user out afterwards. Returns 204 (no body).
  */
 export function deleteMe(): Promise<void> {
