@@ -165,12 +165,11 @@
          One-tap entry into writing: the external-activity form. Present
          regardless of the nearest-practice state above -- it is its own
          section, never part of a practice card.
-         Owner 2026-10-04 (restores 2026-10-01, supersedes 2026-10-02): a
-         CURATOR account gets no personal-diary surfaces. Fail-closed like
-         the «Школы» tab: while the curator answer is in flight the section
-         is absent, then appears for everyone who keeps the diary.
+         Owner 2026-10-12 (restores 2026-10-02, supersedes 2026-10-04): the
+         user zone's surfaces follow the ACTIVE ROLE -- every account in
+         user mode keeps the quick access, curator capability or not.
          ================================================================ -->
-    <section v-if="schoolsHub.diaryVisible" class="dashboard__section">
+    <section class="dashboard__section">
       <h3 class="dashboard__section-title">Быстрый доступ</h3>
       <div class="dashboard__quick">
         <button
@@ -208,7 +207,6 @@ import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useBookingsStore } from '@/stores/bookings'
 import { useNotificationsStore } from '@/stores/notifications'
-import { useSchoolsHubStore } from '@/stores/schoolsHub'
 import { getMyStats } from '@/api/bookings'
 import { useToast } from '@/composables/useToast'
 import { VHeader } from '@/components/layout'
@@ -237,9 +235,6 @@ const toast = useToast()
 // Header bell's unread presence -- store-shared with the inbox screen,
 // which writes server-confirmed badges after its mark-read calls.
 const notifications = useNotificationsStore()
-// The diary quick access follows the diary tab's curator answer (owner
-// 2026-10-04); the probes themselves are the shells' job (ensureCurator).
-const schoolsHub = useSchoolsHubStore()
 
 // -- Reactive clock: updated every 60s so alert computeds re-evaluate --
 const now = ref(Date.now())

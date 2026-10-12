@@ -313,10 +313,10 @@ describe('UserShell', () => {
       expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Дневник', 'Школы', 'Я'])
     })
 
-    it('a founding-right holder loses «Дневник» in the user zone; with no schools, no «Школы» either', async () => {
-      // Owner 2026-10-04 (restores 2026-10-01): a can_create_groups holder IS
-      // a curator account -- no personal-diary tab. The dock's first paint is
-      // held while the probes run, so the answer lands without a flash.
+    it('a founding-right holder keeps the full user dock in user mode (owner 2026-10-12)', async () => {
+      // Restores 2026-10-02: the surface set follows the ACTIVE ROLE -- a
+      // curator-capable account in user mode keeps «Дневник» too. With no
+      // schools, «Школы» still stays hidden (membership, FE-88).
       curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({ items: [] })
       curatorGroupsMock.getCuratorGroups.mockResolvedValue({
         items: [],
@@ -326,12 +326,12 @@ describe('UserShell', () => {
       await flush()
       await flush()
 
-      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Я'])
+      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Дневник', 'Я'])
     })
 
-    it('a school CURATOR (relation=curator) never gets «Дневник» (owner 2026-10-04)', async () => {
-      // Curatorship also rides the membership: a transfer hands a school to a
-      // master who need not hold the founding right -- still a curator.
+    it('a school CURATOR (relation=curator) keeps «Дневник» too (owner 2026-10-12)', async () => {
+      // Curatorship rides the membership, not the surface set: in user mode
+      // the account keeps the plain-user dock, «Школы» included (a member).
       curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({
         items: [{ id: 'g1', name: 'Тихая школа', relation: 'curator' }],
       })
@@ -339,13 +339,13 @@ describe('UserShell', () => {
       await flush()
       await flush()
 
-      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Школы', 'Я'])
+      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Дневник', 'Школы', 'Я'])
     })
 
     it('the reported repro surface: the school-scoped calendar hides the dock entirely (owner 2026-10-05)', async () => {
-      // The exact surface the curator diary report named now carries NO dock
-      // at all (DETAIL_ROUTES) -- the account-level answer (a curator keeps
-      // no «Дневник») stays pinned by the test above on the dashboard.
+      // The exact surface the curator diary report named still carries NO
+      // dock at all (DETAIL_ROUTES) -- a route-level rule, independent of
+      // the account's surfaces.
       curatorGroupsMock.getMyCuratorGroups.mockResolvedValue({
         items: [{ id: 'g1', name: 'Тихая школа', relation: 'curator' }],
       })
@@ -356,43 +356,15 @@ describe('UserShell', () => {
       expect(host?.querySelector('.v-tabbar')).toBeNull()
     })
 
-    it('the dock HOLDS its first paint while the curator answer is in flight', async () => {
-      // The 2026-10-02 regression (icon painted, then vanished) is dead the
-      // other way now: nothing tab-shaped is visible until the answer is in,
-      // so whatever appears is final. The held bar is invisible + inert
-      // (v-tabbar--pending); the fail-closed diary never reaches the DOM.
+    it('a plain member of no school sees the unconditional dock paint at once', async () => {
+      // Owner 2026-10-12: nothing gates «Дневник», so there is no hold to
+      // wait out -- the dock is complete from the first paint. The Школы
+      // tab still follows membership (fail-closed, FE-88).
       curatorGroupsMock.getMyCuratorGroups.mockReturnValue(new Promise(() => {}))
-      curatorGroupsMock.getCuratorGroups.mockReturnValue(new Promise(() => {}))
-      await mount('user-dashboard', {}, seedAccount(['user', 'master']))
-      await flush()
-      await flush()
-
-      expect(host?.querySelector('.v-tabbar')?.classList.contains('v-tabbar--pending')).toBe(true)
-      expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Я'])
-    })
-
-    it('a plain user waits for the mine probe with the dock held, then gets «Дневник»', async () => {
-      // Curatorship can ride the membership (a transferred school), so even
-      // an account without master capability holds the dock until /mine
-      // answers -- one round-trip, then the complete dock paints at once.
-      let resolveMine: (value: { items: unknown[] }) => void = () => {}
-      curatorGroupsMock.getMyCuratorGroups.mockReturnValue(
-        new Promise((resolve) => {
-          resolveMine = resolve
-        }),
-      )
       await mount('user-dashboard', {}, seedAccount(['user']))
       await flush()
       await flush()
 
-      expect(host?.querySelector('.v-tabbar')?.classList.contains('v-tabbar--pending')).toBe(true)
-      expect(tabLabels()).not.toContain('Дневник')
-
-      resolveMine({ items: [] })
-      await flush()
-      await flush()
-
-      expect(host?.querySelector('.v-tabbar')?.classList.contains('v-tabbar--pending')).toBe(false)
       expect(tabLabels()).toEqual(['Дашборд', 'Календарь', 'Дневник', 'Я'])
     })
 
