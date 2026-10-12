@@ -14,6 +14,11 @@
                                          roleRedirect picks the role dashboard)
          onboarding_completed === false -> 'welcome' (new user: Welcome ->
                                          onboarding carousel -> app)
+         FE-81 exception: a new user arriving via a school invite deep link
+         (school__ startapp) goes straight to 'app' too -- the RouterView then
+         renders the invitation screen, and the join view runs the onboarding
+         carousel itself after the join (FE-83), landing in the joined school
+         on finish or skip (FE-84).
 
   Flow transitions:
     - Initial: after initAuth() resolves (decideInitialStage).
@@ -56,7 +61,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { useAuth } from '@/composables/useAuth'
+import { useAuth, isSchoolInviteStartParam } from '@/composables/useAuth'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 import { useBackgroundStabilizer } from '@/composables/useBackgroundStabilizer'
@@ -104,9 +109,17 @@ const stage = ref<EntryStage | null>(null)
  * them to their role dashboard (or consumes a pending deep link). New users
  * still land on Welcome first; a missing flag falls back to 'welcome',
  * never to the dashboard.
+ *
+ * FE-81: the one exception is a school invite deep link. The router has
+ * already navigated to the standalone invitation screen, so the gate opens
+ * the app around it: the user sees «Вас пригласили в школу» BEFORE any
+ * onboarding, and the join view runs the carousel after the join (FE-83),
+ * landing in the joined school on finish or skip (FE-84).
  */
 function decideInitialStage(): EntryStage {
-  return authStore.user?.onboarding_completed ? 'app' : 'welcome'
+  if (authStore.user?.onboarding_completed) return 'app'
+  if (isSchoolInviteStartParam()) return 'app'
+  return 'welcome'
 }
 
 /**

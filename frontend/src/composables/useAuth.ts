@@ -114,6 +114,15 @@ export function decodePracticeCode(code: string): string | null {
 }
 
 /**
+ * The school invite token pattern (FE-18): ONE copy shared by parseStartParam
+ * (route resolution) and isSchoolInviteStartParam (FE-81 entry-gate deferral),
+ * so a startapp that counts as an invite for one counts for the other -- a
+ * malformed token degrades to the plain new-user flow, never opens the app
+ * around the gate.
+ */
+const SCHOOL_INVITE_PARAM = /^school__([A-Za-z0-9_-]{16,128})$/
+
+/**
  * Parse the Telegram startapp parameter into a router location.
  * Returns null if the parameter is absent or unrecognized.
  *
@@ -189,7 +198,7 @@ export function parseStartParam(
   // here. Links (3 October): the kind is `school__` (owner) -- 8 + 43 = 51
   // characters; the former curator_group_invite__ made 65 against
   // Telegram's 64 and the link did not open.
-  const curatorInviteMatch = startParam.match(/^school__([A-Za-z0-9_-]{16,128})$/)
+  const curatorInviteMatch = startParam.match(SCHOOL_INVITE_PARAM)
   if (curatorInviteMatch?.[1]) {
     return { name: 'curator-group-join', params: { token: curatorInviteMatch[1] } }
   }
@@ -231,6 +240,22 @@ export function parseStartParam(
       // app opens as usual. Anything else is not a route.
       return null
   }
+}
+
+/**
+ * FE-81: did the app open via a school invite deep link (`school__<token>`)?
+ *
+ * The entry gate (App.vue) defers the new-user Welcome for exactly this one
+ * startapp kind: the router has already resolved the link to the standalone
+ * invitation screen, so the gate opens the RouterView around it, and the join
+ * view runs the onboarding carousel after a successful join (FE-83).
+ *
+ * Reads the platform live instead of pendingStartParam: roleRedirect may
+ * already have consumed and cleared the pending copy by the time the gate
+ * decides its initial stage -- both run right after initAuth() resolves.
+ */
+export function isSchoolInviteStartParam(): boolean {
+  return SCHOOL_INVITE_PARAM.test(platform.getStartParam() ?? '')
 }
 
 /**

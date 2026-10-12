@@ -20,6 +20,10 @@ State machine (each renders honestly, none fakes data):
   can_join=false     -> per-reason refusal; own_group / already_member add an
                         «Открыть» button into the school page
   can_join=true      -> school card + «Вступить» / «Отказаться»
+  joined (new user)  -> post-join onboarding overlay (FE-83): an account whose
+                        onboarding flag is still false meets the carousel
+                        AFTER the join; finishing or skipping it opens the
+                        joined school (FE-84)
 
 GT-27: there used to be an upgrade nuance here — a STUDENT opening a MASTER
 link got can_join=true with relation="student", because joining would promote
@@ -28,6 +32,10 @@ it only ever makes students: a member always gets can_join=false,
 reason=already_member. School masters are appointed by the curator with the
 appointee's confirmation, on a screen of its own. «Отказаться» is a pure
 router.replace — no server state, the link keeps working.
+
+FE-81: for an account's FIRST session this screen is the app's entry — the
+App.vue gate defers the new-user Welcome/onboarding for a school__ deep link,
+so the order is invitation -> join -> onboarding (skippable) -> school.
 -->
 
 <template>
@@ -89,6 +97,21 @@ router.replace — no server state, the link keeps working.
       </template>
     </div>
   </div>
+
+  <!-- FE-83/FE-84: the post-join onboarding carousel, full-screen above the
+       invitation screen. Teleported to body exactly like the master
+       dashboard's carousel: position:absolute against body's frozen box (see
+       that overlay's note), and the AppFrame safe-area offset does not cover
+       a body-level box, so the top inset is applied here. -->
+  <Teleport to="body">
+    <div
+      v-if="joinedSchoolId"
+      class="cg-join__onboarding"
+      :style="{ paddingTop: contentSafeTop + 'px' }"
+    >
+      <OnboardingView @done="finishOnboarding" />
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -99,10 +122,12 @@ import { ApiResponseError } from '@/api/client'
 import type { CuratorGroupInvitePreviewResponse } from '@/api/types'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
+import { useSafeArea } from '@/composables/useSafeArea'
 import { useAuthStore } from '@/stores/auth'
 import { useSchoolsHubStore } from '@/stores/schoolsHub'
 import { VButton, VLoader } from '@/components/ui'
 import SchoolInviteCard from '@/components/shared/SchoolInviteCard.vue'
+import OnboardingView from '@/views/auth/OnboardingView.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -115,6 +140,17 @@ const transientError = ref(false)
 const notFound = ref(false)
 const preview = ref<CuratorGroupInvitePreviewResponse | null>(null)
 const joining = ref(false)
+
+const { contentSafeTop } = useSafeArea()
+
+/**
+ * FE-83: the school the account just joined while its onboarding flag is
+ * still false. Non-null shows the carousel overlay instead of navigating;
+ * FE-84 consumes it when the carousel emits done (finish OR skip -- the flag
+ * is already persisted by then). Kept local on purpose: the overlay, the
+ * target and the navigation live in this one component instance.
+ */
+const joinedSchoolId = ref<string | null>(null)
 
 interface RefusalView {
   title: string
@@ -197,6 +233,13 @@ async function join(): Promise<void> {
     // reload (FE-88). ensureCurator swallows its own probe failures -- the
     // navigation never waits on, nor fails with, the retry.
     await schoolsHub.refreshCurator()
+    // FE-83: a first-session user meets the onboarding carousel AFTER the
+    // join, not before the invitation -- the gate let them straight in. The
+    // joined school is remembered locally; the overlay consumes it on done.
+    if (!authStore.user?.onboarding_completed) {
+      joinedSchoolId.value = res.group_id
+      return
+    }
     void router.replace(schoolRoute(res.group_id))
   } catch (e) {
     if (e instanceof ApiResponseError) {
@@ -227,6 +270,14 @@ function decline(): void {
 
 function openSchool(): void {
   const id = preview.value?.group.id
+  if (id) void router.replace(schoolRoute(id))
+}
+
+/** FE-84: «Готово» and «Пропустить» both emit done (the carousel persists the
+ *  flag either way) -- the main screen of the school just joined opens. */
+function finishOnboarding(): void {
+  const id = joinedSchoolId.value
+  joinedSchoolId.value = null
   if (id) void router.replace(schoolRoute(id))
 }
 
@@ -296,5 +347,18 @@ onMounted(loadPreview)
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+}
+
+/* The post-join onboarding overlay -- same recipe as the master dashboard's
+   carousel overlay (MasterDashboardView): body-level absolute box (body is
+   position:relative with a frozen height, ROOT-LOCK), its own opaque paint of
+   the photo background (it must sit ABOVE #app to obscure the invitation, so
+   #app-bg behind #app cannot show through), and below the toast layer. */
+.cg-join__onboarding {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-popup);
+  background: url('/bg/background.png') center / cover no-repeat;
+  box-sizing: border-box;
 }
 </style>

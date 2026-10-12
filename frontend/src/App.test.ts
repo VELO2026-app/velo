@@ -39,6 +39,10 @@ const ready = ref(false)
 const standalone = ref(false)
 const loggingOut = ref(false)
 const initAuth = vi.fn()
+// FE-81: whether the gate sees a school invite startapp. A plain let, not a
+// ref: isSchoolInviteStartParam is a plain function, and the mock closure
+// dereferences it at call time, like mockRole in the join-screen tests.
+let schoolInviteStartParam = false
 
 vi.mock('@/composables/useAuth', async () => {
   const { computed } = await import('vue')
@@ -51,6 +55,7 @@ vi.mock('@/composables/useAuth', async () => {
       isAuthenticated: computed(() => useAuthStore().isAuthenticated),
       initAuth,
     }),
+    isSchoolInviteStartParam: () => schoolInviteStartParam,
   }
 })
 
@@ -122,6 +127,7 @@ beforeEach(() => {
   standalone.value = false
   loggingOut.value = false
   initAuth.mockReset()
+  schoolInviteStartParam = false
   // Default: a clean auth init -- the promise resolves AFTER flipping
   // readiness, mirroring initAuth()'s own ordering.
   initAuth.mockImplementation(async () => {
@@ -162,6 +168,18 @@ describe('App entry gate (FE-39)', () => {
 
     expect(w.find('.welcome').exists()).toBe(true)
     expect(w.find('.route-stub').exists()).toBe(false)
+  })
+
+  it('FE-81: a new user behind a school invite skips Welcome -- the invitation route renders', async () => {
+    setAuthUser({ onboarding_completed: false })
+    schoolInviteStartParam = true
+    const w = await mountGate()
+    await flushPromises()
+
+    // The gate opens the app around the deeplink: the join view (here, the
+    // stub route) paints FIRST, and its own flow runs onboarding after join.
+    expect(w.find('.welcome').exists()).toBe(false)
+    expect(w.find('.route-stub').exists()).toBe(true)
   })
 
   it('new user path still works end to end: «Войти» -> onboarding -> done -> app', async () => {
