@@ -37,6 +37,12 @@ dependencies = [
     # the guest name page's POST (GT-21 step B). Without it the router
     # raises RuntimeError at startup, so it belongs here, not in dev-only.
     "python-multipart>=0.0.32,<1.0",
+    # BE-139: the official MCP SDK, EXACT version on purpose (owner ruling),
+    # unlike the ranges above. 2.2.0 was published 2026-09-07 -- at least 14
+    # days before it was chosen (2.3.0, 2026-10-02, was too young). Its
+    # transitive dependencies stay ranges: there is no Python lock file
+    # (BE-122 p.4).
+    "mcp==2.2.0",
 ]
 
 [project.optional-dependencies]

@@ -80,6 +80,8 @@ function buildRouter(): Router {
         component: StubChild,
       },
       { path: '/user/schools', name: 'user-schools', component: StubChild },
+      // BE-139 item 12: the AI connections screen scrolls -- a fog route.
+      { path: '/user/profile/ai-connections', name: 'user-ai-connections', component: StubChild },
       {
         path: '/user/booking-confirmed/:practiceId',
         name: 'user-booking-confirmed',
@@ -441,6 +443,13 @@ describe('UserShell', () => {
   describe('isFogRoute', () => {
     it('a FOG_ROUTES member (user-dashboard) gets the fog mask', async () => {
       await mount('user-dashboard')
+      await flush()
+
+      expect(mainEl().classList.contains('mobile-layout__main--fog')).toBe(true)
+    })
+
+    it('the AI connections screen is fogged -- its list no longer shows through the header (BE-139)', async () => {
+      await mount('user-ai-connections')
       await flush()
 
       expect(mainEl().classList.contains('mobile-layout__main--fog')).toBe(true)

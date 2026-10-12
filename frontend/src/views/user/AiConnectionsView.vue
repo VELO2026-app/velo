@@ -31,7 +31,7 @@
     <div class="ai-conn__content">
       <p class="ai-conn__intro">
         Личный токен даёт вашей нейросети (Claude, Cursor и другим клиентам MCP) доступ к вашему
-        Дневнику и практикам. Не передавайте токен другим людям; ненужный -- отзовите.
+        Дневнику и практикам. Не передавайте токен другим людям; ненужный — отзовите.
       </p>
 
       <VLoader v-if="state === 'loading'" />
@@ -116,7 +116,7 @@
 
       <div v-else class="ai-conn__once" data-test="token-once">
         <h2 class="ai-conn__title">Токен создан</h2>
-        <p class="ai-conn__warning">Скопируйте токен сейчас -- больше мы его не покажем.</p>
+        <p class="ai-conn__warning">Скопируйте токен сейчас — больше мы его не покажем.</p>
         <code class="ai-conn__token" data-test="token-text">{{ createdToken }}</code>
         <VButton block variant="secondary" data-test="copy" @click="onCopy">
           <IconCopy :size="18" /> Скопировать
@@ -239,7 +239,7 @@ async function onCopy(): Promise<void> {
     await navigator.clipboard.writeText(createdToken.value)
     toast.success('Токен скопирован')
   } catch {
-    toast.error('Не удалось скопировать -- выделите токен и скопируйте вручную')
+    toast.error('Не удалось скопировать — выделите токен и скопируйте вручную')
   }
 }
 

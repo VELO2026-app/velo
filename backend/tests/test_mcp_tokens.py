@@ -11,6 +11,8 @@
 #
 # Coverage:
 #   - the schema, read from pg_constraint / pg_indexes, and the CASCADE;
+#   - the name is unique among live tokens, case-insensitive (BE-139), and
+#     its race;
 #   - create: the token once, only its hash stored (every table scanned for
 #     the secret), canonical scopes, the refused bodies, the limit on live
 #     tokens and its race (curator_race_harness);
@@ -356,12 +358,29 @@ async def test_bad_bodies_are_422_and_create_nothing(client: AsyncClient) -> Non
     assert longest["item"]["name"] == "x" * 100
 
 
-async def test_the_same_name_twice_gives_two_distinct_tokens(
+async def test_a_live_name_cannot_be_repeated_but_a_revoked_one_can(
     client: AsyncClient,
 ) -> None:
+    """Was test_the_same_name_twice_gives_two_distinct_tokens. It asserted
+    BE-138's gate ruling R8 -- repeats allowed, tokens told apart by prefix --
+    and was right about it then. The owner's ruling of BE-139 (item 10)
+    revoked R8: two "TEST" rows in the list could not be told apart on the
+    screen. The name is now unique among LIVE tokens, case-insensitive after
+    strip; a revoked token's name is free. Two tokens still never share a
+    prefix or a secret -- asserted on the pair that is allowed."""
     _, headers = await _user(client, 89038)
     a = await _mint(client, headers, name="Claude")
-    b = await _mint(client, headers, name="Claude")
+
+    for repeat in ("Claude", "  claude  ", "CLAUDE"):
+        resp = await client.post(TOKENS_URL, json={"name": repeat}, headers=headers)
+        assert resp.status_code == 409, (repeat, resp.text)
+        assert resp.json()["error"] == "mcp_token_name_taken"
+
+    revoked = await client.post(
+        REVOKE_URL.format(token_id=a["item"]["id"]), headers=headers
+    )
+    assert revoked.status_code == 200
+    b = await _mint(client, headers, name="claude")
     assert a["token"] != b["token"]
     assert a["item"]["prefix"] != b["item"]["prefix"]
     assert a["item"]["id"] != b["item"]["id"]
@@ -1004,3 +1023,47 @@ async def test_a_revocation_during_a_call_is_not_stamped_as_use(
     assert await _last_used(str(token_id)) is None
     rows = await _sql(select(McpToken.revoked_at).where(McpToken.id == token_id))
     assert rows[0][0] is not None
+
+
+async def test_two_creates_with_one_name_mint_exactly_one(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """BE-139 item 10, the race: the name check runs under the same users-row
+    lock as the limit. The holder is paused after its insert, before its
+    audit row; the rival -- the same name in another case -- must wait on
+    the lock and then see the holder's row: 409 mcp_token_name_taken."""
+    user_id, _ = await _user(client, 89064)
+
+    async def create(name: str):
+        async def go(session: AsyncSession):
+            user = await session.get(User, user_id)
+            return await mcp_service.create_mcp_token(
+                user,
+                McpTokenCreate(name=name),
+                session,
+            )
+
+        return go
+
+    result = await race(
+        monkeypatch,
+        holder=await create("Claude"),
+        pause_in=(mcp_service, "record_audit"),
+        rival=await create("CLAUDE"),
+    )
+
+    assert_no_deadlock(result)
+    assert result.rival_waited, "the rival never met the holder's lock"
+    assert result.holder.committed, result.holder.error
+    assert isinstance(result.rival.error, ConflictError), repr(result.rival.error)
+    assert result.rival.error.code == "mcp_token_name_taken"
+    live = (
+        select(func.count())
+        .select_from(McpToken)
+        .where(
+            McpToken.user_id == user_id,
+            McpToken.revoked_at.is_(None),
+        )
+    )
+    assert (await _sql(live))[0][0] == 1
