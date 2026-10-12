@@ -17,10 +17,10 @@
 // 90 s of its own data, and the run stops inside the first level that
 // breaks. The break point is the last level that passed.
 //
-// Test 6 ("headroom") is the server side of this run: start the server
-// sampling (README, step 6) before this test and stop it after.
+// Test 6 ("headroom") is the server side of this run: run.py keeps
+// `velo loadtest-probe` sampling CPU, memory and connections throughout.
 //
-// Run (from loadtest/): see README step 4.
+// Run by loadtest/run.py (both modes).
 // =============================================================================
 
 import exec from 'k6/execution';
@@ -106,7 +106,7 @@ export const options = {
 };
 
 export function setup() {
-  return mixSetup(sessions);
+  return mixSetup();
 }
 
 export default function (ctx) {

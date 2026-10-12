@@ -1830,6 +1830,266 @@ svc_report() {
     echo ""
 }
 
+# -- Load-test probe (BE-147) --------------------------------------------------
+# `velo loadtest-probe check | start | stop | race-check <practice-uuid>` --
+# the server half of loadtest/run.py, which the CUSTOMER runs on his own Mac
+# and which reaches this box only as `ssh <host> velo loadtest-probe ...`.
+# Zero trust: everything the report says about the server comes from here,
+# and nothing here is anything but `velo`.
+#
+# READ-ONLY. It reads `docker ps` / `docker stats`, git metadata of the
+# checkouts, /proc, and the product database through one psql session per
+# query that is put in read-only mode before the query runs
+# (default_transaction_read_only). The only thing it writes is its own
+# scratch directory, LP_DIR, which `stop` removes -- nothing is left behind.
+# Test role only: on prod it refuses before touching anything.
+#
+# OUTPUT CONTRACT. stdout carries exactly one JSON object marked
+# {"probe": "velo-loadtest-probe", "format": 1, ...}; every refusal goes to
+# stderr with a non-zero exit. run.py accepts nothing else -- `velo` with an
+# unknown command prints its help and exits 0, so on a server without this
+# command the marker is what tells "old server" from "probe answered".
+#
+# SAMPLING. `start` takes a "before" snapshot and leaves a sampler running,
+# detached from the ssh session (setsid, every stream on /dev/null -- else
+# ssh would wait for it). Every LP_INTERVAL seconds it appends `docker stats`
+# of the containers present at start and a pg_stat_activity count. `stop`
+# kills it BY PID (checked to be our sampler -- never `pkill -f`, which
+# matches the caller's own command line), takes the "after" snapshot and
+# prints everything. A sampler nobody stopped exits by itself after
+# LP_MAX_SECONDS; the next `start` or `stop` clears what it left.
+LP_DIR="/tmp/velo-loadtest-probe"
+LP_INTERVAL=5
+LP_MAX_SECONDS=$((4 * 3600))
+LP_CONTAINERS=(velo-app velo-postgres velo-redis comms-app comms-worker comms-consumer comms-postgres comms-redis)
+LP_SELF="${BASH_SOURCE[0]}"
+LP_MARK='"probe":"velo-loadtest-probe","format":1'
+
+lp_fail() {
+    echo "✗ velo loadtest-probe: $*" >&2
+    exit 1
+}
+
+# A JSON string literal (quotes included) for an arbitrary shell value.
+lp_json_str() {
+    local s="$1"
+    s=${s//\\/\\\\}
+    s=${s//\"/\\\"}
+    s=${s//$'\n'/\\n}
+    s=${s//$'\r'/\\r}
+    s=${s//$'\t'/\\t}
+    printf '"%s"' "$s"
+}
+
+# One query in the product DB, in a read-only session; prints the single
+# unaligned value (the queries below all return one json_build_object).
+lp_psql() {
+    (cd "$COMPOSE_DIR" && $COMPOSE_CMD exec -T postgres psql -U velo velo \
+        -X -q -t -A -v ON_ERROR_STOP=1 \
+        -c "SET default_transaction_read_only = on" -c "$1")
+}
+
+lp_snapshot_sql="SELECT json_build_object(
+    't', extract(epoch FROM now())::bigint,
+    'deadlocks', (SELECT deadlocks FROM pg_stat_database WHERE datname = current_database()),
+    'outbox_pending', (SELECT count(*) FROM outbox_events WHERE published_at IS NULL AND dead_lettered_at IS NULL),
+    'outbox_dead', (SELECT count(*) FROM outbox_events WHERE dead_lettered_at IS NOT NULL),
+    'outbox_total', (SELECT count(*) FROM outbox_events),
+    'connections', (SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()),
+    'max_connections', current_setting('max_connections')::int)"
+
+lp_connections_sql="SELECT json_build_object(
+    'total', count(*),
+    'active', count(*) FILTER (WHERE state = 'active'),
+    'idle_in_transaction', count(*) FILTER (WHERE state LIKE 'idle in transaction%'))
+  FROM pg_stat_activity WHERE datname = current_database()"
+
+# {"commit":...,"branch":...,"date":...} of a checkout, or null.
+lp_git_json() {
+    local dir="$1" commit branch date
+    commit=$(git -C "$dir" rev-parse HEAD 2>/dev/null) || { printf 'null'; return; }
+    branch=$(git -C "$dir" branch --show-current 2>/dev/null)
+    date=$(git -C "$dir" --no-pager log -1 --format=%cI 2>/dev/null)
+    printf '{"commit":%s,"branch":%s,"date":%s}' \
+        "$(lp_json_str "$commit")" "$(lp_json_str "$branch")" "$(lp_json_str "$date")"
+}
+
+# The static part: role, hardware, code versions, containers.
+lp_static_json() {
+    local cpus mem_kb docker_version present="" missing="" name svc_json="" record svc_name svc_dir
+    cpus=$(nproc 2>/dev/null || echo 0)
+    mem_kb=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null)
+    docker_version=$(docker version --format '{{.Server.Version}}' 2>/dev/null)
+    local running
+    running=$(docker ps --format '{{.Names}}' 2>/dev/null)
+    for name in "${LP_CONTAINERS[@]}"; do
+        if printf '%s\n' "$running" | grep -qx "$name"; then
+            present="$present${present:+,}$(lp_json_str "$name")"
+        else
+            missing="$missing${missing:+,}$(lp_json_str "$name")"
+        fi
+    done
+    for record in "${VELO_SERVICES[@]}"; do
+        svc_name=$(svc_field "$record" 1)
+        svc_dir=$(svc_field "$record" 3)
+        svc_json="$svc_json${svc_json:+,}$(lp_json_str "$svc_name"):$(lp_git_json "$svc_dir")"
+    done
+    printf '"role":%s,"server":{"hostname":%s,"cpus":%s,"mem_total_kb":%s,"docker":%s},"code":{%s},"containers":{"present":[%s],"missing":[%s]},"interval_seconds":%s' \
+        "$(lp_json_str "$VELO_ROLE")" "$(lp_json_str "$(hostname)")" "${cpus:-0}" "${mem_kb:-0}" \
+        "$(lp_json_str "$docker_version")" "$svc_json" "$present" "$missing" "$LP_INTERVAL"
+}
+
+# Is $1 the pid of a live sampler of ours?
+lp_is_sampler() {
+    local pid="$1"
+    [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+    [ -r "/proc/$pid/cmdline" ] || return 1
+    tr '\0' ' ' < "/proc/$pid/cmdline" | grep -q "loadtest-probe __sample"
+}
+
+lp_sampler() {
+    # Runs detached (see start). Writes its own pid first: `$!` of the
+    # spawning shell would be setsid's, which may or may not be ours.
+    echo $$ > "$LP_DIR/pid"
+    trap 'exit 0' TERM INT
+    local started containers=() name t
+    started=$(date +%s)
+    while IFS= read -r name; do
+        [ -n "$name" ] && containers+=("$name")
+    done < "$LP_DIR/containers"
+    while [ -d "$LP_DIR" ] && [ $(( $(date +%s) - started )) -lt "$LP_MAX_SECONDS" ]; do
+        t=$(date +%s)
+        if [ "${#containers[@]}" -gt 0 ]; then
+            docker stats --no-stream --format '{{json .}}' "${containers[@]}" 2>/dev/null \
+                | while IFS= read -r line; do printf '{"t":%s,"c":%s}\n' "$t" "$line"; done \
+                >> "$LP_DIR/stats.jsonl"
+        fi
+        local pg
+        if pg=$(lp_psql "$lp_connections_sql" 2>/dev/null) && [ -n "$pg" ]; then
+            printf '{"t":%s,"pg":%s}\n' "$t" "$pg" >> "$LP_DIR/pg.jsonl"
+        fi
+        sleep "$LP_INTERVAL" &
+        wait $!
+    done
+    exit 0
+}
+
+# Remove what a dead sampler left, refuse if a live one owns the directory.
+lp_clear_stale_or_refuse() {
+    [ -d "$LP_DIR" ] || return 0
+    local pid=""
+    [ -f "$LP_DIR/pid" ] && pid=$(cat "$LP_DIR/pid")
+    if [ -n "$pid" ] && lp_is_sampler "$pid"; then
+        local since=""
+        [ -f "$LP_DIR/started_at" ] && since=$(cat "$LP_DIR/started_at")
+        lp_fail "a probe is already running (since ${since:-unknown}). Stop it first: velo loadtest-probe stop"
+    fi
+    rm -rf "$LP_DIR"
+}
+
+lp_array_of() {
+    # A JSON array of the objects in a .jsonl file (empty file -> []).
+    printf '['
+    [ -s "$1" ] && paste -sd, "$1" | tr -d '\n'
+    printf ']'
+}
+
+loadtest_probe() {
+    local action="${1:-}"
+    if [ "$VELO_ROLE" != "test" ]; then
+        lp_fail "test role only; refusing on role '$VELO_ROLE'"
+    fi
+    case "$action" in
+        check)
+            printf '{%s,"action":"check",%s}\n' "$LP_MARK" "$(lp_static_json)"
+            ;;
+        start)
+            lp_clear_stale_or_refuse
+            local old_umask before running name
+            old_umask=$(umask)
+            umask 077
+            mkdir "$LP_DIR" || { umask "$old_umask"; lp_fail "cannot create $LP_DIR"; }
+            umask "$old_umask"
+            date -u +%Y-%m-%dT%H:%M:%SZ > "$LP_DIR/started_at"
+            running=$(docker ps --format '{{.Names}}' 2>/dev/null)
+            for name in "${LP_CONTAINERS[@]}"; do
+                printf '%s\n' "$running" | grep -qx "$name" && echo "$name"
+            done > "$LP_DIR/containers"
+            if ! before=$(lp_psql "$lp_snapshot_sql") || [ -z "$before" ]; then
+                rm -rf "$LP_DIR"
+                lp_fail "the database snapshot failed -- is the stand up? (velo status)"
+            fi
+            echo "$before" > "$LP_DIR/before.json"
+            setsid bash "$LP_SELF" loadtest-probe __sample </dev/null >/dev/null 2>&1 &
+            local waited=0
+            while [ ! -s "$LP_DIR/pid" ] && [ "$waited" -lt 50 ]; do
+                sleep 0.2
+                waited=$((waited + 1))
+            done
+            if [ ! -s "$LP_DIR/pid" ] || ! lp_is_sampler "$(cat "$LP_DIR/pid")"; then
+                rm -rf "$LP_DIR"
+                lp_fail "the sampler did not start"
+            fi
+            printf '{%s,"action":"start","started_at":%s,"before":%s,%s}\n' \
+                "$LP_MARK" "$(lp_json_str "$(cat "$LP_DIR/started_at")")" "$before" "$(lp_static_json)"
+            ;;
+        stop)
+            [ -d "$LP_DIR" ] || lp_fail "no probe is running (start it with: velo loadtest-probe start)"
+            local pid="" waited=0 after errors="" started_at=""
+            [ -f "$LP_DIR/pid" ] && pid=$(cat "$LP_DIR/pid")
+            if [ -n "$pid" ] && lp_is_sampler "$pid"; then
+                kill -TERM "$pid" 2>/dev/null
+                while lp_is_sampler "$pid" && [ "$waited" -lt 50 ]; do
+                    sleep 0.2
+                    waited=$((waited + 1))
+                done
+                lp_is_sampler "$pid" && kill -KILL "$pid" 2>/dev/null
+            else
+                errors="$(lp_json_str "the sampler was not running at stop (exited early or never started)")"
+            fi
+            if ! after=$(lp_psql "$lp_snapshot_sql") || [ -z "$after" ]; then
+                after="null"
+                errors="$errors${errors:+,}$(lp_json_str "the closing database snapshot failed")"
+            fi
+            [ -f "$LP_DIR/started_at" ] && started_at=$(cat "$LP_DIR/started_at")
+            local before="null"
+            [ -s "$LP_DIR/before.json" ] && before=$(cat "$LP_DIR/before.json")
+            local out
+            out=$(printf '{%s,"action":"stop","started_at":%s,"stopped_at":%s,"before":%s,"after":%s,"stats":%s,"pg":%s,"errors":[%s],%s}' \
+                "$LP_MARK" "$(lp_json_str "$started_at")" "$(lp_json_str "$(date -u +%Y-%m-%dT%H:%M:%SZ)")" \
+                "$before" "$after" "$(lp_array_of "$LP_DIR/stats.jsonl")" "$(lp_array_of "$LP_DIR/pg.jsonl")" \
+                "$errors" "$(lp_static_json)")
+            rm -rf "$LP_DIR"
+            [ -d "$LP_DIR" ] && lp_fail "could not remove $LP_DIR"
+            printf '%s\n' "$out"
+            ;;
+        race-check)
+            local id="${2:-}" row
+            [[ "$id" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] \
+                || lp_fail "race-check needs a practice id (uuid), got '$id'"
+            row=$(lp_psql "SELECT json_build_object(
+                'practice_id', p.id, 'status', p.status,
+                'max_participants', p.max_participants,
+                'current_participants', p.current_participants,
+                'active_bookings', (SELECT count(*) FROM bookings b WHERE b.practice_id = p.id AND b.status IN ('pending', 'confirmed')),
+                'distinct_students', (SELECT count(DISTINCT b.user_id) FROM bookings b WHERE b.practice_id = p.id AND b.status IN ('pending', 'confirmed')),
+                'all_booking_rows', (SELECT count(*) FROM bookings b WHERE b.practice_id = p.id),
+                'purchases', (SELECT count(*) FROM purchases pu WHERE pu.practice_id = p.id),
+                'deadlocks', (SELECT deadlocks FROM pg_stat_database WHERE datname = current_database()))
+              FROM practices p WHERE p.id = '$id'") || lp_fail "the race query failed"
+            [ -n "$row" ] || lp_fail "no practice $id"
+            printf '{%s,"action":"race-check","race":%s}\n' "$LP_MARK" "$row"
+            ;;
+        __sample)
+            lp_sampler
+            ;;
+        *)
+            echo "Usage: velo loadtest-probe check | start | stop | race-check <practice-uuid>" >&2
+            exit 64
+            ;;
+    esac
+}
+
 case "${1:-}" in
 
     # === Service Management ===
@@ -2736,6 +2996,12 @@ case "${1:-}" in
 
     # === Help ===
 
+    # === Load-test probe (BE-147) ===
+
+    loadtest-probe)
+        loadtest_probe "${2:-}" "${3:-}"
+        ;;
+
     *)
         echo -e "${CYAN}VELO Management Script${NC}"
         echo "Usage: velo {command} [options]"
@@ -2803,6 +3069,10 @@ case "${1:-}" in
         echo "Roles:"
         echo "  setrole <tg> <A|M|U>  — Set a user's role (admin/master/user)"
         echo "  setrole               — List current admins & masters"
+        echo ""
+        echo "Load testing (test only; run by loadtest/run.py over ssh):"
+        echo "  loadtest-probe check|start|stop|race-check <id>"
+        echo "                      — Read-only server figures as JSON"
         echo ""
         echo "Maintenance:"
         echo "  backup              — Backup DB (gzipped dump)"

@@ -121,6 +121,12 @@ const router = createRouter({
           component: () => import('@/views/user/TimezoneSettingsView.vue'),
         },
         {
+          // BE-138: personal tokens for the user's MCP clients.
+          path: 'profile/ai-connections',
+          name: 'user-ai-connections',
+          component: () => import('@/views/user/AiConnectionsView.vue'),
+        },
+        {
           path: 'profile/edit',
           name: 'user-edit-profile',
           component: () => import('@/views/user/EditProfileView.vue'),

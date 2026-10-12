@@ -19,7 +19,7 @@
 // Every request is tagged with a 10-second bucket (b00..b06) for the
 // time-resolved chart; each bucket's numbers are in the summary.
 //
-// Run (from loadtest/): see README step 7, right after 03a.
+// Run by loadtest/run.py, right after 03a.
 // =============================================================================
 
 import { sleep } from 'k6';
@@ -28,7 +28,7 @@ import { Counter } from 'k6/metrics';
 
 import { START_COHORT, intEnv } from './lib/config.js';
 import { call, measureFloor, timedAction } from './lib/api.js';
-import { chooseStartPractice, secondsToStart } from './lib/start.js';
+import { namedPractice } from './lib/practices.js';
 import { loadSessions } from './lib/state.js';
 import {
   ALWAYS_PASS_RATE, SUMMARY_TREND_STATS, metricLines, submetricThresholds, writeSummary,
@@ -72,24 +72,32 @@ export const options = {
   ),
 };
 
+const START = namedPractice('start');
+
 export function setup() {
   measureFloor();
-  const { practice, prepared } = chooseStartPractice(sessions);
-  if (!prepared || practice.current_participants < START_COHORT.size) {
+  const res = call('GET', `/api/v1/practices/${START.id}`, {
+    token: sessions[START_COHORT.offset].token, action: 'setup', ep: 'setup_practice_get',
+  });
+  if (res.status !== 200) {
+    throw new Error(`REFUSED: the start practice answered ${res.status}.`);
+  }
+  const practice = res.json();
+  if (practice.current_participants < START_COHORT.size) {
     throw new Error(
-      `REFUSED: "${practice.title}" has ${practice.current_participants} participants, ` +
-        `the burst needs ${START_COHORT.size}. Run 03a-start-prepare.js first.`,
+      `REFUSED: "${START.title}" has ${practice.current_participants} participants, ` +
+        `the burst needs ${START_COHORT.size}. 03a-start-prepare.js did not finish.`,
     );
   }
-  const left = secondsToStart(practice);
+  const left = (Date.parse(START.scheduled_at) - Date.now()) / 1000;
   if (left < WINDOW_S + 120) {
     throw new Error(
-      `REFUSED: "${practice.title}" starts in ${Math.round(left)} s; the check-in ` +
+      `REFUSED: "${START.title}" starts in ${Math.round(left)} s; the check-in ` +
         'window closes at the start, the burst would run into it.',
     );
   }
-  console.log(`start: burst on "${practice.title}", starts in ${Math.round(left / 60)} min`);
-  return { practice };
+  console.log(`start: burst on "${START.title}", starts in ${Math.round(left / 60)} min`);
+  return { practice: { id: START.id, title: START.title } };
 }
 
 function bucketTag(t0) {

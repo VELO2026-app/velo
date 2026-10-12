@@ -1,72 +1,51 @@
 // =============================================================================
-// VELO load tests -- finding the seeded practices (setup() only)
+// VELO load tests -- this run's practices (from run.py)
 // =============================================================================
 //
-// GET /api/v1/practices has no text search (practices/router.py,
-// list_practices_endpoint: master_id / direction / style / difficulty /
-// dates / status / paging only), so the profile's practices are found by
-// TITLE, paging the default feed. The default feed is "upcoming bookable":
-// scheduled/live with scheduled_at in the future -- a started practice drops
-// out of it, which is exactly when it stops being usable here.
+// run.py creates the practices of every run through the API -- the feed for
+// the mix, the race practice (test 4), the "start" practice (test 3) -- and
+// cancels them after the run (BE-147). It hands their ids over in one JSON
+// file, PRACTICES_FILE:
 //
-// Everything is refused loudly rather than guessed: two practices with one
-// title, a title that is missing, a feed too short to hold the profile.
+//   { "format": 1, "run_id": "...",
+//     "feed":  [ { "id": "...", "title": "..." }, ... ],
+//     "race":  { "id": "...", "title": "...", "max_participants": 20 },
+//     "start": { "id": "...", "title": "...", "scheduled_at": "..." } }
+//
+// Read in the init context (open() exists only there). A missing or foreign
+// file stops the run before the first request -- a scenario never guesses
+// which practice to load.
 // =============================================================================
 
-import { call } from './api.js';
-import { FEED_TITLE_PREFIX, TITLE_PREFIX } from './config.js';
+const PRACTICES_FORMAT = 1;
 
-const PAGE = 100;
-const MAX_PAGES = 50;
-
-/** Every feed practice whose title starts with the profile prefix. */
-export function listLoadPractices(token) {
-  const found = [];
-  for (let page = 0; page < MAX_PAGES; page += 1) {
-    const res = call('GET', `/api/v1/practices?limit=${PAGE}&offset=${page * PAGE}`, {
-      token,
-      action: 'setup',
-      ep: 'setup_list_practices',
-    });
-    if (res.status !== 200) {
-      throw new Error(`REFUSED: practice feed answered ${res.status} during setup.`);
-    }
-    const body = res.json();
-    for (const p of body.items) {
-      if (typeof p.title === 'string' && p.title.startsWith(`${TITLE_PREFIX} `)) {
-        found.push({
-          id: p.id,
-          title: p.title,
-          scheduled_at: p.scheduled_at,
-          max_participants: p.max_participants,
-          current_participants: p.current_participants,
-        });
-      }
-    }
-    if ((page + 1) * PAGE >= body.total || body.items.length === 0) {
-      return found;
-    }
+function readPractices() {
+  const path = (__ENV.PRACTICES_FILE || '').trim();
+  if (path === '') {
+    throw new Error('REFUSED: PRACTICES_FILE is empty. Scenarios run from loadtest/run.py.');
   }
-  throw new Error(`REFUSED: the feed is longer than ${MAX_PAGES * PAGE} practices.`);
+  const data = JSON.parse(open(path));
+  if (!data || data.format !== PRACTICES_FORMAT || !Array.isArray(data.feed)) {
+    throw new Error(`REFUSED: ${path} is not a practices file (format ${PRACTICES_FORMAT}).`);
+  }
+  return data;
 }
 
-/** The feed practices of the mix (never the race / start ones). */
-export function feedPractices(all) {
-  const feed = all.filter((p) => p.title.startsWith(FEED_TITLE_PREFIX));
-  if (feed.length === 0) {
-    throw new Error(
-      'REFUSED: no "[load] feed" practices in the feed. Seed the profile ' +
-        '11102026-loadtest on dev (README, step 2).',
-    );
+export const PRACTICES = readPractices();
+
+/** The feed practices of the mix: [{ id, title }]. */
+export function feedPractices() {
+  if (PRACTICES.feed.length === 0) {
+    throw new Error('REFUSED: the practices file has no feed practices.');
   }
-  return feed;
+  return PRACTICES.feed.map((p) => ({ id: p.id, title: p.title }));
 }
 
-/** Exactly-one lookup by full title; null when the title is not in the feed. */
-export function byTitle(all, title) {
-  const matches = all.filter((p) => p.title === title);
-  if (matches.length > 1) {
-    throw new Error(`REFUSED: ${matches.length} practices are titled "${title}".`);
+/** One named practice ("race" / "start"), refused when absent. */
+export function namedPractice(kind) {
+  const p = PRACTICES[kind];
+  if (!p || typeof p.id !== 'string') {
+    throw new Error(`REFUSED: the practices file has no "${kind}" practice.`);
   }
-  return matches.length === 1 ? matches[0] : null;
+  return p;
 }

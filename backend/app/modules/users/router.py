@@ -148,6 +148,7 @@ async def delete_me(
     MVP SEMANTICS (see reset_user_to_onboarding): this does NOT erase data or
     deactivate the account. It resets the onboarding flag so the next login
     sends the user through the welcome flow again, with their old data intact.
+    It also revokes every live MCP token of the user (BE-138).
     The endpoint contract ("DELETE my account") is kept so that real deletion
     can later be implemented by changing only the service body.
 

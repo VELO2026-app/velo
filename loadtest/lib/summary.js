@@ -4,12 +4,12 @@
 //
 // <name>-summary.json : k6's end-of-test data (all metrics, all tagged
 //                       sub-metrics, threshold verdicts) WITHOUT setup_data.
-//                       setup_data can hold session tokens (the warmup) and
+//                       setup_data never holds secrets here, and still
 //                       never goes into a results file.
 // stdout              : a short table of the headline numbers.
 //
-// The web dashboard export (K6_WEB_DASHBOARD_EXPORT) and the raw CSV
-// (--out csv=...) are set on the command line, see README.
+// The raw time series (--out csv=<RESULTS_DIR>/<name>.csv.gz) is set by
+// run.py on the k6 command line; render.py reads both.
 // =============================================================================
 
 import { resultPath } from './state.js';

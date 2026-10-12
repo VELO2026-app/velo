@@ -92,7 +92,7 @@ export function classify(res, tags, expect) {
   if (status === 401) {
     exec.test.abort(
       `401 on "${tags.name}": the sessions file no longer matches the ` +
-        'server (Redis flushed or the stand reinstalled). Re-run 00-warmup.js.',
+        'server (Redis flushed or the stand reinstalled). Delete .state/sessions.json and run run.py again.',
     );
   }
   if (status >= 400 && status < 500) {

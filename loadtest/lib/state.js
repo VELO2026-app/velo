@@ -2,16 +2,16 @@
 // VELO load tests -- the sessions file and the results directory
 // =============================================================================
 //
-// WHY ABSOLUTE PATHS. open() resolves relative to the script, handleSummary
-// writes relative to the shell's working directory, and k6 creates no
-// directories when it writes. A relative path would therefore read one file
-// and write another as soon as k6 is started from anywhere but loadtest/ --
-// and the warmup's logins (rate-limited, ~23 minutes for 2000) would be lost.
-// import.meta.resolve() pins both sides to this module's own directory.
+// WHY ABSOLUTE PATHS. open() resolves relative to the script and
+// handleSummary writes relative to the shell's working directory. The
+// sessions file is pinned to this module's directory (import.meta.resolve),
+// the results to RESULTS_DIR -- neither depends on where k6 was started.
+// run.py writes the sessions file (its warmup logs the students in) and
+// creates RESULTS_DIR; k6 only reads the one and writes into the other.
 //
 // THE SESSIONS FILE IS A SECRET: 30-day bearer tokens for every load
 // student. It is git-ignored (loadtest/.gitignore), never printed, and the
-// README's last step deletes it.
+// It never leaves the Mac it was made on.
 //
 // Format: { "format": 1, "base_url": "...", "sessions": [
 //            { "telegram_id": 710001, "token": "...", "user_id": "uuid" }, ... ] }
@@ -30,9 +30,17 @@ function toPath(fileUrl) {
 export const SESSIONS_URL = import.meta.resolve('../.state/sessions.json');
 export const SESSIONS_PATH = toPath(SESSIONS_URL);
 
-/** Absolute path of a file in loadtest/results/. */
+// Every result file of a run goes to RESULTS_DIR, an absolute directory
+// run.py creates per run (results/<date-time>/). Required: a scenario run by
+// hand would otherwise scatter files that no report ever reads.
+const RESULTS_DIR = (__ENV.RESULTS_DIR || '').trim();
+if (RESULTS_DIR === '' || !RESULTS_DIR.startsWith('/')) {
+  throw new Error('REFUSED: RESULTS_DIR must be an absolute directory. Scenarios run from loadtest/run.py.');
+}
+
+/** Absolute path of a file in this run's results directory. */
 export function resultPath(name) {
-  return toPath(import.meta.resolve(`../results/${name}`));
+  return `${RESULTS_DIR}/${name}`;
 }
 
 /**
@@ -56,7 +64,7 @@ export function readSessionsFile() {
   if (data.base_url !== BASE_URL) {
     throw new Error(
       `REFUSED: ${SESSIONS_PATH} holds sessions for ${data.base_url}, ` +
-        `not ${BASE_URL}. Re-run 00-warmup.js.`,
+        `not ${BASE_URL}. Delete it; run.py logs the students in again.`,
     );
   }
   return data;
@@ -75,19 +83,15 @@ export function loadSessions(needed) {
   });
   if (sessions.length === 0) {
     throw new Error(
-      `REFUSED: no sessions in ${SESSIONS_PATH}. Run 00-warmup.js first.`,
+      `REFUSED: no sessions in ${SESSIONS_PATH}. Scenarios run from loadtest/run.py.`,
     );
   }
   if (sessions.length < needed) {
     throw new Error(
       `REFUSED: this scenario needs ${needed} sessions, the file has ` +
-        `${sessions.length}. Re-run 00-warmup.js until it reports "missing: 0".`,
+        `${sessions.length}. run.py logs the missing ones in before the tests.`,
     );
   }
   return sessions;
 }
 
-/** Serialize the sessions file content (used by the warmup's handleSummary). */
-export function sessionsFileContent(sessions) {
-  return JSON.stringify({ format: SESSIONS_FORMAT, base_url: BASE_URL, sessions });
-}

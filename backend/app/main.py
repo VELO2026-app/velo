@@ -89,6 +89,7 @@ from app.modules.ai.transcription_router import (                  # GT-41
 from app.modules.chats.router import router as chats_router  # Phase 6 / T2
 from app.modules.comms_proxy.router import router as notifications_router  # Phase 6 / T1
 from app.modules.support.router import router as support_router  # B34 / T-38
+from app.modules.mcp.router import router as mcp_tokens_router  # BE-138
 
 # Model imports for Alembic and relationship resolution.
 from app.modules.promos.models import Promo  # noqa: F401  # Phase 6.7
@@ -355,6 +356,7 @@ app.include_router(transcription_router)          # GT-41
 app.include_router(notifications_router)          # Phase 6 / T1 (comms proxy)
 app.include_router(chats_router)                   # Phase 6 / T2 (chat proxy)
 app.include_router(support_router)                 # B34 / T-38 (support proxy)
+app.include_router(mcp_tokens_router)              # BE-138 (MCP tokens)
 
 
 # ---------------------------------------------------------------------------

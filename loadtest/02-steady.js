@@ -2,11 +2,12 @@
 // VELO load tests -- 02 working load: how fast, per action
 // =============================================================================
 //
-// The live-student mix at STEADY_VUS (60 % of the break point from
-// 01-break.js) for 15 minutes. The chart: med / p95 per action --
-// action_duration{action:*} in results/02-steady-summary.json.
+// The live-student mix at STEADY_VUS (60 % of this run's break point):
+// a 60 s ramp, then 15 minutes steady. The chart: med / p95 per action --
+// action_duration{action:*} in 02-steady-summary.json (steady phase:
+// the first minute is a ramp, see lib/steady.js).
 //
-// Run (from loadtest/): see README step 5.
+// Run by loadtest/run.py (--full).
 // =============================================================================
 
 import { steadyScenario } from './lib/steady.js';

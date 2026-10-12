@@ -42,21 +42,18 @@ export const BASE_URL = rawBaseUrl;
 export const LOAD_TID_MIN = 710001;
 export const LOAD_TID_MAX = 712000;
 
-// -- Practices of the seed profile 11102026-loadtest ------------------------
-// The titles are a contract with backend/scripts/seed_profiles/
-// 11102026-loadtest.json: seed.py writes "<title_prefix> <title>". Change
-// both together.
-export const TITLE_PREFIX = '[load]';
-export const FEED_TITLE_PREFIX = `${TITLE_PREFIX} feed `;
-export const RACE_TITLES = [1, 2, 3].map((n) => `${TITLE_PREFIX} race ${n}`);
-export const START_TITLES = [1, 2, 3].map((n) => `${TITLE_PREFIX} start ${n}`);
+// -- Practices --------------------------------------------------------------
+// Created by run.py for every run and cancelled after it (BE-147): the
+// scenarios get their ids from PRACTICES_FILE (lib/practices.js), never by
+// title, so nothing here depends on when the stand was seeded.
 export const RACE_SEATS = 20;
 
 // -- Cohorts inside the sessions file (by position) -------------------------
 // Test 3 and test 4 need students in a known state, so each gets its own
 // slice. The mix (tests 1, 2, 5) uses the file from the start: its bookings
-// only ever target feed practices, so sharing students with the cohorts
-// changes nothing for them.
+// only ever target this run's feed practices, so sharing students with the
+// cohorts changes nothing for them. run.py reads these two lines to know
+// how many sessions a run needs -- keep them one object literal per line.
 export const START_COHORT = { offset: 0, size: 300 };
 export const RACE_COHORT = { offset: 300, size: 500 };
 
