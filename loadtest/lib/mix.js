@@ -13,7 +13,7 @@
 //              sessionStorage, which a relaunched Mini App loses). Logins are
 //              rate-limited per source address, so the mix does NOT log in --
 //              an assumption the report states, with the login cost measured
-//              separately by the warmup.
+//              separately by run.py's warmup.
 //   BACKGROUND useRoleFreshness: GET /users/me every 30 s while foregrounded;
 //              dashboard bell: GET /notifications every 60 s (a proxy into
 //              comms -- this is the comms share of the load).
@@ -23,16 +23,17 @@
 //   diary_write 3
 // A "session" lasts 5-15 actions, then the app is opened again.
 //
-// The mix books ONLY "[load] feed" practices: the race and start practices
-// are single-use, and a mix student taking a seat would spoil test 3 or 4.
+// The mix books ONLY this run's feed practices (PRACTICES_FILE): a mix
+// student taking a seat in the race or start practice would spoil test 3
+// or 4.
 // =============================================================================
 
 import http from 'k6/http';
 import { sleep } from 'k6';
 
-import { BASE_URL, FEED_TITLE_PREFIX, REQUEST_TIMEOUT } from './config.js';
+import { BASE_URL, REQUEST_TIMEOUT } from './config.js';
 import { call, classify, measureFloor, timedAction } from './api.js';
-import { feedPractices, listLoadPractices } from './practices.js';
+import { feedPractices } from './practices.js';
 
 export const MIX_ACTIONS = [
   ['feed', 35],
@@ -171,10 +172,7 @@ const ACTIONS = {
       token, action: 'cancel', ep: 'bookings_me', tags,
     });
     if (res.status !== 200) return;
-    const own = res.json().items.filter(
-      (b) => b.practice && typeof b.practice.title === 'string' &&
-        b.practice.title.startsWith(FEED_TITLE_PREFIX),
-    );
+    const own = res.json().items.filter((b) => ctx.feedIds.includes(b.practice_id));
     if (own.length === 0) return;
     // 400/404/409: the booking changed state between the list and the
     // cancel (only this student touches it, so this is not expected to fire;
@@ -211,14 +209,12 @@ export function mixIteration(token, ctx, tags) {
 }
 
 /**
- * setup() of a mix scenario: the network floor, then the feed practices the
- * mix may book. Returned as setup data ({ feed }), copied to every VU.
+ * setup() of a mix scenario: the network floor, then this run's feed
+ * practices. Returned as setup data ({ feed, feedIds }), copied to every VU.
  */
-export function mixSetup(sessions) {
+export function mixSetup() {
   measureFloor();
-  const feed = feedPractices(listLoadPractices(sessions[0].token)).map(
-    (p) => ({ id: p.id, title: p.title }),
-  );
+  const feed = feedPractices();
   console.log(`mix: ${feed.length} feed practices`);
-  return { feed };
+  return { feed, feedIds: feed.map((p) => p.id) };
 }

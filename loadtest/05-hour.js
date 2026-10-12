@@ -2,13 +2,12 @@
 // VELO load tests -- 05 one hour: stable over time
 // =============================================================================
 //
-// The live-student mix at STEADY_VUS (60 % of the break point from
-// 01-break.js) for 60 minutes. The chart: p95 and errors per minute --
+// The live-student mix at STEADY_VUS (60 % of this run's break point):
+// a 60 s ramp, then 60 minutes steady. The chart: p95 and errors per minute --
 // http_req_duration{minute:*} and sys_errors{minute:*} in
-// results/05-hour-summary.json; memory over the hour comes from the server
-// sampling (README step 6), which runs for the whole hour.
+// 05-hour-summary.json; memory over the hour comes from the server probe.
 //
-// Run (from loadtest/): see README step 9.
+// Run by loadtest/run.py (--full).
 // =============================================================================
 
 import { steadyScenario } from './lib/steady.js';

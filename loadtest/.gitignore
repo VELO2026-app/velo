@@ -1,8 +1,13 @@
 # SECRETS: .state/sessions.json holds 30-day session tokens of every load
-# student. Never committed; README's last step deletes it.
+# student. Never committed; it never leaves the Mac it was made on.
 .state/*
 !.state/.gitkeep
 
-# Run output (dashboards, CSV, summaries) goes to the Dispatcher, not to git.
+# Run output (report, summaries, CSV, server probe) stays with whoever ran it.
 results/*
 !results/.gitkeep
+
+# k6 binary run.py downloads and checks against the official checksums.
+.bin/
+
+__pycache__/

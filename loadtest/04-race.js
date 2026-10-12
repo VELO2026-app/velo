@@ -15,23 +15,24 @@
 // requests actually left.
 //
 // Expected: exactly 20 x 201, 480 x 400 practice_full, no 5xx, no other
-// code. The practice copy is single-use: setup takes the first
-// "[load] race N" with 0 participants.
+// code. The practice is this run's own (PRACTICES_FILE), created by run.py
+// with 20 seats and refused here unless it is still empty.
 //
 // What this run CANNOT prove alone: "no duplicates" and "exactly 20 rows"
-// are database facts -- the owner's SQL after the run (README step 8) is the
-// proof; race_participants_after is the API's view of the same thing.
+// are database facts -- run.py asks the server for them right after this
+// test (`velo loadtest-probe race-check <id>`, before the practice is
+// cancelled); race_participants_after is the API's view of the same thing.
 //
-// Run (from loadtest/): see README step 8.
+// Run by loadtest/run.py.
 // =============================================================================
 
 import { sleep } from 'k6';
 import exec from 'k6/execution';
 import { Counter, Gauge, Trend } from 'k6/metrics';
 
-import { RACE_COHORT, RACE_SEATS, RACE_TITLES, intEnv } from './lib/config.js';
+import { RACE_COHORT, RACE_SEATS, intEnv } from './lib/config.js';
 import { call, errorCode, measureFloor } from './lib/api.js';
-import { byTitle, listLoadPractices } from './lib/practices.js';
+import { namedPractice } from './lib/practices.js';
 import { loadSessions } from './lib/state.js';
 import { SUMMARY_TREND_STATS, metricLines, submetricThresholds, writeSummary } from './lib/summary.js';
 
@@ -70,26 +71,26 @@ export const options = {
   ),
 };
 
+const RACE = namedPractice('race');
+
 export function setup() {
   measureFloor();
-  const probe = sessions[RACE_COHORT.offset];
-  const all = listLoadPractices(probe.token);
-  for (const title of RACE_TITLES) {
-    const p = byTitle(all, title);
-    if (p === null) continue;
-    if (p.max_participants !== RACE_SEATS) {
-      throw new Error(`REFUSED: "${title}" has max_participants ${p.max_participants}, expected ${RACE_SEATS}.`);
-    }
-    if (p.current_participants === 0) {
-      const barrier = Date.now() + BARRIER_S * 1000;
-      console.log(`race: "${title}", barrier in ${BARRIER_S} s`);
-      return { practice: p, barrier };
-    }
+  const res = call('GET', `/api/v1/practices/${RACE.id}`, {
+    token: sessions[RACE_COHORT.offset].token, action: 'setup', ep: 'setup_practice_get',
+  });
+  if (res.status !== 200) {
+    throw new Error(`REFUSED: the race practice answered ${res.status}.`);
   }
-  throw new Error(
-    'REFUSED: no unused "[load] race N" practice (all three copies already have ' +
-      'participants, or none is in the feed). Test 4 cannot run again without a reinstall.',
-  );
+  const p = res.json();
+  if (p.max_participants !== RACE_SEATS || p.current_participants !== 0) {
+    throw new Error(
+      `REFUSED: "${RACE.title}" has ${p.current_participants}/${p.max_participants} ` +
+        `seats taken; the race needs an empty practice with ${RACE_SEATS}.`,
+    );
+  }
+  const barrier = Date.now() + BARRIER_S * 1000;
+  console.log(`race: "${RACE.title}", barrier in ${BARRIER_S} s`);
+  return { practice: { id: RACE.id, title: RACE.title }, barrier };
 }
 
 export default function (ctx) {
@@ -122,7 +123,6 @@ export function teardown(ctx) {
   if (res.status === 200) {
     participantsAfter.add(res.json().current_participants);
   }
-  console.log(`race: practice id for the owner's SQL check: ${ctx.practice.id}`);
 }
 
 export function handleSummary(data) {
