@@ -1,12 +1,14 @@
 <!--
   VELO Frontend -- MoodSlider (FE-85 unified scale, tz-mood-scale.md)
 
-  The ONE 1..10 scale shared by CheckinView (mood) and FeedbackView (rating).
+  The ONE 1..10 scale shared by CheckinView (mood), FeedbackView (rating)
+  and the external-activity form (mood -- PM-9 branch 1, owner 2026-10-12).
   Five approved faces, two scores each: 1-2 Плохо / 3-4 Не очень / 5-6
   Нормально / 7-8 Хорошо / 9-10 Огонь. The numeric contract + labels live in
   utils/moodScale.ts, the key -> face binding in utils/ratingIcons.ts; this
-  component owns only the INTERACTION. CheckinView sends the score as `mood`,
-  FeedbackView as `rating` -- emotion keys never reach the server (tz §5).
+  component owns only the INTERACTION. CheckinView and the external-activity
+  form send the score as `mood`, FeedbackView as `rating` -- emotion keys
+  never reach the server (tz §5).
 
   Three equal ways to answer (tz §2):
     - drag / tap the native range  -> the EXACT number (1/3/5/7/9 stay exact);
@@ -292,7 +294,11 @@ function cardStyle(index: number): Record<string, string | number> {
 /** Tier look (sharp / blurred / palest) from the fractional distance. */
 function cardTierClass(index: number): string {
   const t = Math.min(2, Math.round(Math.abs(index - dragPos.value)))
-  return t === 0 ? 'mood-slider__card--active' : t === 1 ? 'mood-slider__card--near' : 'mood-slider__card--far'
+  return t === 0
+    ? 'mood-slider__card--active'
+    : t === 1
+      ? 'mood-slider__card--near'
+      : 'mood-slider__card--far'
 }
 
 function onPointerDown(event: PointerEvent): void {

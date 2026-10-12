@@ -117,16 +117,16 @@ export const KEYBOARD_VIEWPORT_THRESHOLD = 150
 // ---------------------------------------------------------------------------
 
 /**
- * The «Мое состояние» mood picker on the external-activity form is HIDDEN
- * for now (owner 2026-09-10) until its Figma pressed states land. The
- * backend still requires mood 1..10, so while this is true the form submits
- * the neutral zone centre (6) without asking, AND the feed card suppresses
- * the «· N/10» suffix -- a fabricated score must not read as the person's
- * answer. Flip to false when the block returns: the picker comes back and
- * the suffix reappears on every card. ONE flag drives both surfaces so the
- * form and the card can never disagree.
+ * The «Мое состояние» block on the external-activity form. FALSE (PM-9
+ * branch 1, owner 2026-10-12): the FE-85 unified MoodSlider (1..10, five
+ * faces) renders on the form, standing on the visible DEFAULT_SCORE like
+ * Check-in/Feedback, and the feed card shows the exact «· N/10» suffix.
+ * ONE flag drives BOTH surfaces so the form and the card can never
+ * disagree. TRUE is the 2026-09-10..2026-10-12 interim (picker hidden,
+ * the neutral centre 6 silently submitted, suffix suppressed) and stays
+ * reachable as the kill-switch for that exact emergency re-hide.
  */
-export const EXTERNAL_ACTIVITY_MOOD_HIDDEN: boolean = true
+export const EXTERNAL_ACTIVITY_MOOD_HIDDEN: boolean = false
 
 // ---------------------------------------------------------------------------
 // School media upload (tz-curator.md §1.5, захоронка §7.1 №4) -- kill-switch
