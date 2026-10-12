@@ -14,26 +14,61 @@
 #   declares Depends(get_db_session), both receive the SAME session
 #   instance — one connection total, no merge needed.
 #
+# BE-146: ONE POOLED CONNECTION AT A TIME PER REQUEST.
+#   get_current_user / get_optional_user / get_current_master used to load
+#   through Depends(get_db_reader). That reader is a request-scoped yield
+#   dependency: its connection stayed checked out until AFTER the response
+#   was sent. On an endpoint that also takes get_db_session the request
+#   therefore held the reader's connection while acquiring the writer's --
+#   and with every pool slot (30 per worker) held by such a first
+#   connection, all of them waited for a second one that nobody could
+#   return: the pool stood still until pool_timeout (30 s) answered 500.
+#   84 endpoints were in that class (measured over the dependency tree).
+#
+#   Now these dependencies load through _auth_session(): a session of their
+#   own, opened only after the token passed the Redis check, closed before
+#   the dependency returns. The connection is back in the pool before the
+#   endpoint body runs; the endpoint's own session (reader or writer) is the
+#   only one it holds. The returned User / MasterProfile is DETACHED with
+#   its columns loaded (close() expunges, it does not expire). Neither model
+#   is lazily loaded anywhere it comes from here (User has no
+#   relationships; MasterProfile.user is never read off an auth object).
+#
+#   WHY NOT get_current_user_write EVERYWHERE (rejected at the BE-146 gate).
+#   An object already in a session's identity map is NOT refreshed by a
+#   later locking read of the same row without populate_existing -- the lock
+#   is taken, the attributes stay as first loaded. Loading the caller into
+#   the write session up front would make every such lock re-check a stale
+#   value: purchase.py's balance check and withdrawals' available_cents
+#   check among them. A detached auth object keeps every locking read in
+#   the write session a fresh load, exactly as it was with the reader.
+#   tests/test_be146_one_connection_per_request.py pins both halves: no
+#   route combines the reader with the writer, and no auth dependency
+#   returns with a connection still checked out.
+#
 # DEPENDENCY OVERVIEW:
-#   get_current_user       — any authenticated user, read session
+#   get_current_user       — any authenticated user, own short session
 #   get_current_user_write — any authenticated user, write session (TD-029)
-#   get_optional_user      — optional auth, read session
+#   get_optional_user      — optional auth, own short session
 #   get_current_admin      — admin role required (wraps get_current_user)
-#   get_current_master     — verified master required (wraps get_current_user)
+#   get_current_master     — verified master required (wraps
+#                            get_current_user; profile in its own short
+#                            session)
 # =============================================================================
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from uuid import UUID
 
 from fastapi import Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db_reader, get_db_session
+from app.core.database import get_db_session, get_session_factory
 from app.core.exceptions import ForbiddenError, UnauthorizedError
 from app.modules.auth.service import get_session
 from app.modules.masters.models import MasterProfile
 from app.modules.users.models import User, UserRole
-
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -71,14 +106,10 @@ def _parse_user_id(session_data: dict) -> UUID:
 # ---------------------------------------------------------------------------
 
 
-async def _load_user_from_request(
-    request: Request,
-    session: AsyncSession,
-) -> User:
-    """Shared auth logic: token → Redis → DB.
+async def _authenticated_user_id(request: Request) -> UUID:
+    """Token -> Redis -> user id. Raises UnauthorizedError.
 
-    Raises UnauthorizedError or ForbiddenError on failure.
-    Used by both get_current_user and get_current_user_write.
+    Touches no database: every refusal here costs no pooled connection.
     """
     token = _extract_token(request)
     if not token:
@@ -88,7 +119,11 @@ async def _load_user_from_request(
     if not session_data:
         raise UnauthorizedError("Invalid or expired session")
 
-    user_id = _parse_user_id(session_data)
+    return _parse_user_id(session_data)
+
+
+async def _active_user(user_id: UUID, session: AsyncSession) -> User:
+    """Load the session's user; 401 if gone, 403 if deactivated."""
     stmt = select(User).where(User.id == user_id)
     result = await session.execute(stmt)
     user = result.scalar_one_or_none()
@@ -104,23 +139,52 @@ async def _load_user_from_request(
     return user
 
 
+@asynccontextmanager
+async def _auth_session() -> AsyncIterator[AsyncSession]:
+    """A session of the auth dependency's own, closed before it returns.
+
+    READ-ONLY BY CONSTRUCTION: the auth path writes nothing -- no flush, no
+    commit; the users row is only SELECTed (the Redis session is not touched
+    either: get_session is a plain GET). Closing therefore discards nothing
+    and returns the connection to the pool, on success and on every raise
+    alike (BE-146, see the module header).
+    """
+    async with get_session_factory()() as session:
+        yield session
+
+
+async def _load_user_from_request(
+    request: Request,
+    session: AsyncSession,
+) -> User:
+    """Shared auth logic for a caller-supplied session: token → Redis → DB.
+
+    Raises UnauthorizedError or ForbiddenError on failure.
+    Used by get_current_user_write (the write session).
+    """
+    user_id = await _authenticated_user_id(request)
+    return await _active_user(user_id, session)
+
+
 # ---------------------------------------------------------------------------
 # Public dependencies
 # ---------------------------------------------------------------------------
 
 
-async def get_current_user(
-    request: Request,
-    session: AsyncSession = Depends(get_db_reader),
-) -> User:
+async def get_current_user(request: Request) -> User:
     """Require authenticated user. Returns User or raises 401.
 
-    Loads the user via read-only session (get_db_reader).
-    Use for read-only endpoints or as a base for role checks.
+    Loads the user in its own short session, closed before this returns
+    (BE-146): the User is detached, its columns loaded. Use for any
+    endpoint that does not write the users row itself, and as the base for
+    role checks; an endpoint that mutates the caller's own row takes
+    get_current_user_write.
 
     Use as: user: User = Depends(get_current_user)
     """
-    return await _load_user_from_request(request, session)
+    user_id = await _authenticated_user_id(request)
+    async with _auth_session() as session:
+        return await _active_user(user_id, session)
 
 
 async def get_current_user_write(
@@ -141,13 +205,12 @@ async def get_current_user_write(
     return await _load_user_from_request(request, session)
 
 
-async def get_optional_user(
-    request: Request,
-    session: AsyncSession = Depends(get_db_reader),
-) -> User | None:
+async def get_optional_user(request: Request) -> User | None:
     """Optional authentication. Returns User or None.
 
     Use for endpoints that work for both anonymous and logged-in users.
+    The user is loaded in its own short session (BE-146), opened only when
+    a token resolved to a user id.
     """
     token = _extract_token(request)
     if not token:
@@ -158,9 +221,10 @@ async def get_optional_user(
         return None
 
     user_id = _parse_user_id(session_data)
-    stmt = select(User).where(User.id == user_id)
-    result = await session.execute(stmt)
-    user = result.scalar_one_or_none()
+    async with _auth_session() as session:
+        stmt = select(User).where(User.id == user_id)
+        result = await session.execute(stmt)
+        user = result.scalar_one_or_none()
 
     if not user or not user.is_active:
         return None
@@ -182,7 +246,6 @@ async def get_current_admin(
 
 async def get_current_master(
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_db_reader),
 ) -> tuple[User, MasterProfile]:
     """Require verified master. Returns (User, MasterProfile) or raises 403.
 
@@ -191,6 +254,10 @@ async def get_current_master(
       2. MasterProfile exists
       3. MasterProfile status is "verified"
 
+    The profile is loaded in its own short session, closed before this
+    returns (BE-146): detached, columns loaded. An endpoint that writes the
+    profile re-reads it in its write session (masters/router.py does).
+
     Use as:
         master_tuple: tuple[User, MasterProfile] = Depends(get_current_master)
         user, profile = master_tuple
@@ -198,11 +265,12 @@ async def get_current_master(
     if user.role != UserRole.MASTER:
         raise ForbiddenError("Master access required")
 
-    stmt = select(MasterProfile).where(
-        MasterProfile.user_id == user.id
-    )
-    result = await session.execute(stmt)
-    profile = result.scalar_one_or_none()
+    async with _auth_session() as session:
+        stmt = select(MasterProfile).where(
+            MasterProfile.user_id == user.id
+        )
+        result = await session.execute(stmt)
+        profile = result.scalar_one_or_none()
 
     # Distinct machine-readable codes (№257): the frontend master-zone entry
     # must tell "no application at all" (-> lead to /master/apply) apart from

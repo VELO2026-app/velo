@@ -195,10 +195,11 @@ async def _make_verified_master(
             data={"account": {"status": "verified"}, "profile": {"bio": "m"}},
         )
     )
-    # The role + profile are read back by get_current_master() through the
-    # request's OWN session (get_db_reader() -> a separate connection from
-    # this fixture's db_session) -- a flush alone is invisible across
-    # sessions under READ COMMITTED. Must commit for the API call to see it.
+    # The role + profile are read back by get_current_master() through a
+    # session of its own (a short auth session since BE-146 -> a separate
+    # connection from this fixture's db_session) -- a flush alone is
+    # invisible across sessions under READ COMMITTED. Must commit for the
+    # API call to see it.
     await db_session.commit()
     return auth
 

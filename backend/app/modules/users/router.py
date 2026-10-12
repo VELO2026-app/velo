@@ -82,10 +82,11 @@ async def get_me(
 ) -> UserResponse:
     """Return the authenticated user's profile.
 
-    The user is loaded by get_current_user (read-only session). The same
-    get_db_reader session is reused here (FastAPI caches Depends within a
-    request, so this is one DB connection, not two) to check master capability,
-    which the role_switch block is derived from (see
+    The user is loaded by get_current_user in its own short session, which
+    is closed -- its connection back in the pool -- before this body runs
+    (BE-146). The get_db_reader session here is therefore the only
+    connection the request holds while it checks master capability, which
+    the role_switch block is derived from (see
     _user_response_with_capability).
     """
     return await _user_response_with_capability(user, session)

@@ -198,9 +198,9 @@ async def list_curator_groups_endpoint(
     """Groups I curate, newest first. Empty list when I curate none.
 
     GT-15: also answers whether I may found a NEW one. Read off the profile
-    get_current_master already loaded -- that dependency and this endpoint
-    both take get_db_reader, so it is the same session and the same object,
-    and the answer costs no query at all. This is the one place a curator
+    get_current_master already loaded (in its own short session, closed
+    before this body runs -- BE-146; the profile's columns are loaded, so
+    reading profile.data costs no query). This is the one place a curator
     endpoint reads the flag; the gate itself is in the service, and the
     other nine endpoints do not consult it (see create_curator_group).
     """

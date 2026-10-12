@@ -6,12 +6,12 @@
 #   POST /api/v1/payments/topup -- create Stripe Checkout Session for topup
 #
 # AUTH: get_current_user_write on mutating endpoints (TD-029 / Fix 2.2).
-#   Using get_current_user (reader session) + get_db_session (write session)
-#   on the same endpoint creates two separate sessions. The user object is
-#   bound to the reader session -- any access to stale fields like
-#   balance_cents would return outdated data. get_current_user_write loads
-#   the user via the same get_db_session instance (FastAPI caches Depends
-#   within a request), so both user and session share one connection.
+#   get_current_user loads the user in a short session of its own, closed
+#   before the endpoint runs (BE-146): the object is detached, a snapshot
+#   from before this transaction -- any access to fields like balance_cents
+#   would read that snapshot. get_current_user_write loads the user via the
+#   same get_db_session instance (FastAPI caches Depends within a request),
+#   so both user and session share one connection and one transaction.
 # SESSION: get_db_session (write) -- creates Payment + audit records.
 # =============================================================================
 
