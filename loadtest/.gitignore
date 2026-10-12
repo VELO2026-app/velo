@@ -1,0 +1,8 @@
+# SECRETS: .state/sessions.json holds 30-day session tokens of every load
+# student. Never committed; README's last step deletes it.
+.state/*
+!.state/.gitkeep
+
+# Run output (dashboards, CSV, summaries) goes to the Dispatcher, not to git.
+results/*
+!results/.gitkeep
