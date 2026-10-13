@@ -20,7 +20,8 @@ interface ImportMeta {
 // =============================================================================
 // Telegram WebApp SDK (Phase F1.1, updated TD-F01)
 // =============================================================================
-// Minimal type declarations for the SDK loaded via CDN in index.html.
+// Minimal type declarations for the SDK that platform/launch.ts loads from
+// the CDN when Telegram launched the app (absent everywhere else).
 // Only methods actually used by src/platform/telegram.ts are typed.
 // Full SDK docs: https://core.telegram.org/bots/webapps
 // =============================================================================

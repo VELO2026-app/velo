@@ -10,13 +10,20 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Marmelad&display=swap" rel="stylesheet" />
 
-    <!-- Telegram WebApp SDK: official CDN, always the current version. -->
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Telegram WebApp SDK: NOT here. src/platform/launch.ts loads it, and
+         only when Telegram launched the app (BE-149); a browser or the
+         installed app never requests the Telegram CDN. -->
 
-    <!-- PWA support (Phase F0.4) -->
-    <link rel="manifest" href="/manifest.json" />
-    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <!-- PWA (BE-149). The manifest link tag is injected by VitePWA from
+         src/pwa/manifest.ts -- do not add one here. viewport-fit=cover is
+         appended at runtime OUTSIDE Telegram only (src/platform/launch.ts),
+         so the Telegram webview keeps this viewport tag byte-for-byte. -->
+    <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml" />
+    <!-- iOS home-screen icon: opaque 180x180 (iOS paints transparency black). -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon-180.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <!-- Status bar drawn OVER the app in the installed iOS app; the top
+         clearance comes from env(safe-area-inset-top) (useSafeArea.ts). -->
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
     <title>VELO</title>

@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- Vite Configuration (updated Phase F0.4: PWA)
+// VELO Frontend -- Vite Configuration (updated BE-149: PWA shell)
 // =============================================================================
 //
 // Vite is the build tool (like Docker build for frontend).
@@ -9,13 +9,15 @@
 //   - resolve.alias: @/ -> src/ (short imports)
 //   - server.proxy: /api requests -> backend during local dev
 //   - build.outDir: dist/ (what Nginx serves)
-//   - VitePWA: generates service worker for precaching static assets
+//   - VitePWA: generates the service worker (precache of the whole build) and
+//     the ONE web app manifest (src/pwa/manifest.ts) plus its <link>
 // =============================================================================
 
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 import { fileURLToPath, URL } from 'node:url'
+import { pwaManifest } from './src/pwa/manifest'
 
 export default defineConfig({
   plugins: [
@@ -23,18 +25,27 @@ export default defineConfig({
     VitePWA({
       // Generate SW automatically from build output.
       strategies: 'generateSW',
-      // Auto-register the service worker (no manual code needed).
-      registerType: 'autoUpdate',
+      // The single manifest (BE-149). The plugin writes manifest.webmanifest
+      // and injects the only <link rel="manifest">; index.html carries none.
+      manifest: pwaManifest,
+      // 'prompt' WITHOUT a prompt UI: a new service worker installs and then
+      // WAITS until every window of the app is closed, so a new build takes
+      // over at the next open, never mid-session (TZ decision 16). While it
+      // waits, the old worker keeps serving the old build from its precache,
+      // including every lazy chunk the open page may still ask for -- which is
+      // what keeps an open app working across a deploy. Nothing in the app
+      // posts SKIP_WAITING, so the generated worker never skips the wait.
+      // Deliberately NO skipWaiting / clientsClaim: they swapped the worker
+      // under an open page, the swap purged the old precache, and the page's
+      // next lazy route 404'd. Pages without a worker (first visit, webviews
+      // without service workers) are covered by platform/chunk-reload.ts.
+      // The registration script is still auto-injected (registerSW.js).
+      registerType: 'prompt',
       // Include these file types in precache.
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         // Don't precache source maps.
         globIgnores: ['**/*.map'],
-        // The stand (vite preview + tunnel) must show a fresh build on the
-        // NEXT reload, not one reload later: without these flags the new SW
-        // waits for every client to close first (autoUpdate's default dance).
-        skipWaiting: true,
-        clientsClaim: true,
         // Runtime caching gives the service worker a valid strategy even when
         // the precache manifest is empty. Without this, workbox-build aborts
         // with "Couldn't find configuration for either precaching or runtime
