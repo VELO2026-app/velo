@@ -12,7 +12,7 @@ import { createApp, nextTick, type App } from 'vue'
 import AiConnectionsView from '@/views/user/AiConnectionsView.vue'
 import * as mcpApi from '@/api/mcpTokens'
 import { ApiResponseError } from '@/api/client'
-import type { McpTokenItem } from '@/api/types'
+import type { McpScopeLabel, McpTokenItem, McpTokenListResponse } from '@/api/types'
 
 vi.mock('@/api/mcpTokens')
 
@@ -36,6 +36,7 @@ const TOKEN = 'velo_pat_0123456789abcdef_' + 'S'.repeat(43)
 function item(id: string, overrides: Partial<McpTokenItem> = {}): McpTokenItem {
   return {
     id,
+    kind: 'personal',
     name: `token ${id}`,
     prefix: '0123456789abcdef',
     scopes: ['read', 'diary:write', 'bookings:write'],
@@ -44,6 +45,22 @@ function item(id: string, overrides: Partial<McpTokenItem> = {}): McpTokenItem {
     revoked_at: null,
     ...overrides,
   }
+}
+
+// The scope descriptions as the backend sends them (BE-148: SCOPE_ACTIONS is
+// the one place they are written; the screen keeps no copy).
+const LABELS: McpScopeLabel[] = [
+  { scope: 'read', label: 'Видеть ваш календарь, практики и Дневник' },
+  { scope: 'diary:write', label: 'Сохранять записи в ваш Дневник' },
+  { scope: 'bookings:write', label: 'Записывать вас на практики и отменять ваши записи' },
+]
+
+/** A list response: the items, plus the screen's fields (BE-150). */
+function list(
+  items: McpTokenItem[],
+  overrides: Partial<McpTokenListResponse> = {},
+): McpTokenListResponse {
+  return { items, oauth_connect_available: true, scope_labels: LABELS, ...overrides }
 }
 
 let app: App | null = null
@@ -87,7 +104,15 @@ function bodyButton(label: string, within = '.v-modal__container'): HTMLButtonEl
   )
 }
 
+/** Unfold «Для разработчиков: личный токен» (collapsed by default, BE-150). */
+async function openDev(): Promise<void> {
+  if (host!.querySelector('[data-test="dev-body"]')) return
+  host!.querySelector<HTMLButtonElement>('[data-test="dev-block"] .v-accordion__header')!.click()
+  await flush()
+}
+
 async function openAndFill(name: string): Promise<void> {
+  await openDev()
   el<HTMLButtonElement>('[data-test="open-create"]')!.click()
   await flush()
   const input = el<HTMLInputElement>('.v-modal__container input')!
@@ -97,7 +122,7 @@ async function openAndFill(name: string): Promise<void> {
 }
 
 beforeEach(() => {
-  vi.mocked(mcpApi.listMcpTokens).mockReset().mockResolvedValue({ items: [] })
+  vi.mocked(mcpApi.listMcpTokens).mockReset().mockResolvedValue(list([]))
   vi.mocked(mcpApi.createMcpToken).mockReset()
   vi.mocked(mcpApi.revokeMcpToken).mockReset()
   toastError.mockReset()
@@ -123,9 +148,9 @@ afterEach(() => {
 describe('AiConnectionsView', () => {
   describe('states', () => {
     it('lists the tokens: prefix shown, revoked ones without a revoke button', async () => {
-      vi.mocked(mcpApi.listMcpTokens).mockResolvedValue({
-        items: [item('a'), item('b', { revoked_at: '2026-10-11T11:00:00Z' })],
-      })
+      vi.mocked(mcpApi.listMcpTokens).mockResolvedValue(
+        list([item('a'), item('b', { revoked_at: '2026-10-11T11:00:00Z' })]),
+        )
       mount()
       await flush()
       const rows = host!.querySelectorAll('[data-test="token-row"]')
@@ -135,6 +160,21 @@ describe('AiConnectionsView', () => {
       expect(rows[0]!.querySelector('[data-test="revoke"]')).not.toBeNull()
       expect(rows[1]!.querySelector('[data-test="revoke"]')).toBeNull()
       expect(rows[1]!.textContent).toContain('Отозван')
+    })
+
+    it('an OAuth connection shows what it is, never its rotating prefix (BE-141)', async () => {
+      vi.mocked(mcpApi.listMcpTokens).mockResolvedValue(
+        list([item('o', { kind: 'oauth', name: 'Claude', prefix: 'fedcba9876543210' })]),
+        )
+      mount()
+      await flush()
+      const row = host!.querySelector('[data-test="token-row"]')!
+      expect(row.textContent).toContain('Claude')
+      expect(row.querySelector('[data-test="oauth-kind"]')).not.toBeNull()
+      expect(row.textContent).not.toContain('velo_pat_')
+      expect(row.textContent).not.toContain('fedcba9876543210')
+      // Revocable like any token: that is where the student cuts it off.
+      expect(row.querySelector('[data-test="revoke"]')).not.toBeNull()
     })
 
     it('says so when there are no tokens', async () => {
@@ -150,7 +190,12 @@ describe('AiConnectionsView', () => {
       mount()
       await flush()
       expect(host!.querySelector('[data-test="unavailable"]')).not.toBeNull()
-      expect(host!.querySelector('[data-test="open-create"]')).toBeNull()
+      // Was: no "open-create". Since BE-150 that button sits in a collapsed
+      // section and is absent in the ready state too, so the check proved
+      // nothing; the precise claim is that none of the three blocks exists.
+      for (const block of ['connect-block', 'connections-block', 'dev-block']) {
+        expect(host!.querySelector(`[data-test="${block}"]`), block).toBeNull()
+      }
     })
 
     it('any other failure is a load error', async () => {
@@ -284,7 +329,7 @@ describe('AiConnectionsView', () => {
     }
 
     it('no "--" in the list, the form or the shown token; "—" present', async () => {
-      vi.mocked(mcpApi.listMcpTokens).mockResolvedValue({ items: [item('a')] })
+      vi.mocked(mcpApi.listMcpTokens).mockResolvedValue(list([item('a')]))
       vi.mocked(mcpApi.createMcpToken).mockResolvedValue({ token: TOKEN, item: item('n') })
       mount()
       await flush()
@@ -359,7 +404,7 @@ describe('AiConnectionsView', () => {
 
   describe('revoke', () => {
     it('asks first, then marks the row revoked', async () => {
-      vi.mocked(mcpApi.listMcpTokens).mockResolvedValue({ items: [item('a')] })
+      vi.mocked(mcpApi.listMcpTokens).mockResolvedValue(list([item('a')]))
       vi.mocked(mcpApi.revokeMcpToken).mockResolvedValue(
         item('a', { revoked_at: '2026-10-11T12:00:00Z' }),
       )
@@ -379,7 +424,7 @@ describe('AiConnectionsView', () => {
     })
 
     it('cancel revokes nothing', async () => {
-      vi.mocked(mcpApi.listMcpTokens).mockResolvedValue({ items: [item('a')] })
+      vi.mocked(mcpApi.listMcpTokens).mockResolvedValue(list([item('a')]))
       mount()
       await flush()
       host!.querySelector<HTMLButtonElement>('[data-test="revoke"]')!.click()
@@ -389,5 +434,142 @@ describe('AiConnectionsView', () => {
       expect(mcpApi.revokeMcpToken).not.toHaveBeenCalled()
       expect(host!.querySelector('[data-test="revoke"]')).not.toBeNull()
     })
+  })
+})
+
+describe('BE-150 layout', () => {
+  const BASE = 'https://api.velo.test'
+  const HOWTO =
+    'В claude.ai: Настройки → Коннекторы → Добавить свой коннектор → вставьте адрес → ' +
+    'Подключить, затем войдите через Telegram.'
+
+  beforeEach(() => {
+    vi.stubEnv('VITE_API_BASE_URL', `${BASE}/`)
+  })
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  function text(sel: string): string {
+    return (host!.querySelector(sel)?.textContent ?? '').replace(/\s+/g, ' ').trim()
+  }
+
+  it('three blocks in order: how to connect, the connections, developers', async () => {
+    mount()
+    await flush()
+    const order = Array.from(host!.querySelectorAll('section[data-test]')).map((s) =>
+      s.getAttribute('data-test'),
+    )
+    expect(order).toEqual(['connect-block', 'connections-block', 'dev-block'])
+  })
+
+  it('the developers section is folded by default and unfolds on a tap', async () => {
+    mount()
+    await flush()
+    expect(host!.querySelector('[data-test="dev-body"]')).toBeNull()
+    expect(host!.querySelector('[data-test="open-create"]')).toBeNull()
+    expect(text('[data-test="dev-block"]')).toContain('Для разработчиков: личный токен')
+    await openDev()
+    expect(text('[data-test="dev-body"]')).toContain(
+      'Для Claude Code, скриптов и клиентов без входа кнопкой',
+    )
+    expect(host!.querySelector('[data-test="open-create"]')).not.toBeNull()
+  })
+
+  it('the address is the API base + /mcp, copied as is, with the claude.ai steps', async () => {
+    mount()
+    await flush()
+    expect(text('[data-test="mcp-url"]')).toBe(`${BASE}/mcp`)
+    expect(text('[data-test="connect-howto"]')).toBe(HOWTO)
+    expect(text('[data-test="connect-block"]')).not.toContain('ChatGPT')
+    host!.querySelector<HTMLButtonElement>('[data-test="copy-url"]')!.click()
+    await flush()
+    expect(writeText).toHaveBeenCalledWith(`${BASE}/mcp`)
+    expect(toastSuccess).toHaveBeenCalledWith('Адрес скопирован')
+  })
+
+  it('no API base: no address at all -- never the frontend origin', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '')
+    mount()
+    await flush()
+    expect(host!.querySelector('[data-test="mcp-url"]')).toBeNull()
+    expect(host!.querySelector('[data-test="copy-url"]')).toBeNull()
+    expect(host!.querySelector('[data-test="connect-howto"]')).toBeNull()
+    expect(text('[data-test="no-base-url"]')).toBe(
+      'Адрес сервера не настроен — подключение недоступно.',
+    )
+    expect(host!.innerHTML).not.toContain(window.location.origin + '/mcp')
+  })
+
+  it('no button sign-in on this server: the steps are not promised, the token is', async () => {
+    vi.mocked(mcpApi.listMcpTokens).mockResolvedValue(
+      list([], { oauth_connect_available: false }),
+    )
+    mount()
+    await flush()
+    expect(text('[data-test="mcp-url"]')).toBe(`${BASE}/mcp`)
+    expect(host!.querySelector('[data-test="connect-howto"]')).toBeNull()
+    expect(text('[data-test="no-button-connect"]')).toContain('используйте личный токен')
+  })
+
+  it('a refused clipboard for the address says so; the address stays to copy by hand', async () => {
+    writeText.mockRejectedValue(new Error('denied'))
+    mount()
+    await flush()
+    host!.querySelector<HTMLButtonElement>('[data-test="copy-url"]')!.click()
+    await flush()
+    expect(toastError).toHaveBeenCalledWith(
+      'Не удалось скопировать — выделите адрес и скопируйте вручную',
+    )
+    expect(text('[data-test="mcp-url"]')).toBe(`${BASE}/mcp`)
+  })
+
+  it('"copy as a header" gives exactly one "Bearer " before the token', async () => {
+    vi.mocked(mcpApi.createMcpToken).mockResolvedValue({ token: TOKEN, item: item('n') })
+    mount()
+    await flush()
+    await openAndFill('Claude Code')
+    el<HTMLButtonElement>('[data-test="create"]')!.click()
+    await flush()
+    el<HTMLButtonElement>('[data-test="copy-header"]')!.click()
+    await flush()
+    expect(writeText).toHaveBeenCalledTimes(1)
+    const copied = writeText.mock.calls[0]?.[0] as string
+    expect(copied).toBe(`Bearer ${TOKEN}`)
+    expect(copied.match(/Bearer /g)).toHaveLength(1)
+    expect(toastSuccess).toHaveBeenCalledWith('Скопировано как заголовок')
+  })
+
+  it('scope descriptions are the ones the server sends -- no copy on the screen', async () => {
+    const custom = [
+      { scope: 'read' as const, label: 'Описание А' },
+      { scope: 'diary:write' as const, label: 'Описание Б' },
+      { scope: 'bookings:write' as const, label: 'Описание В' },
+    ]
+    vi.mocked(mcpApi.listMcpTokens).mockResolvedValue(
+      list([item('a', { scopes: ['read', 'bookings:write'] })], { scope_labels: custom }),
+    )
+    mount()
+    await flush()
+    expect(text('[data-test="token-row"]')).toContain('Описание А; Описание В')
+    await openAndFill('x')
+    const labels = Array.from(
+      document.body.querySelectorAll('.v-modal__container [data-test^="scope-"]'),
+    ).map((n) => (n.textContent ?? '').trim())
+    expect(labels).toEqual(['Описание А', 'Описание Б', 'Описание В'])
+    expect(document.body.innerHTML).not.toContain('чек-ин')
+  })
+
+  it('the new texts are in the product type: "—" and "→", never "--" or "->"', async () => {
+    vi.mocked(mcpApi.listMcpTokens).mockResolvedValue(
+      list([], { oauth_connect_available: false }),
+    )
+    mount()
+    await flush()
+    await openDev()
+    const all = host!.textContent ?? ''
+    expect(all).not.toContain('--')
+    expect(all).not.toContain('->')
+    expect(all).toContain('—')
   })
 })

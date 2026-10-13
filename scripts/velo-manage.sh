@@ -69,6 +69,65 @@ compose_progress_note() {
     echo -e "${CYAN} containers report healthy -- that is normal, not a hang)${NC}"
 }
 
+# ---------------------------------------------------------------------------
+# PURE HELPERS shared with the installer (BE-141 FIX). One implementation:
+# install_velo.sh calls them through the internal subcommands below from the
+# freshly cloned repo, BEFORE velo.conf exists (the installer writes it last)
+# -- which is why they live, and are dispatched, above the velo.conf check.
+# They need no configuration: a value, a file, a key.
+# ---------------------------------------------------------------------------
+
+# The characters a backend/.env value may carry. An allowlist rather than a
+# list of bad characters: the file is read by docker compose (env_file) AND
+# by pydantic-settings, and a quote, a space, a '#' or a '$' would be parsed
+# differently by the two.
+env_value_ok() {
+    local allowed='^[A-Za-z0-9._:/@%+=,~_-]*$'
+    [[ "$1" =~ $allowed ]]
+}
+
+# The refusal, worded once for `velo env set` and the installer. Colours are
+# optional: the internal subcommand runs before they are defined.
+env_value_refusal() {
+    echo -e "${RED:-}✗ The value has a character this file cannot carry safely${NC:-}" >&2
+    echo "  Allowed: letters, digits and . _ : / @ % + = , ~ -" >&2
+}
+
+# The value of KEY in an env FILE as everything that reads the file sees
+# it: a repeated key resolves to its LAST assignment (`tail -n 1`, not
+# `grep -m1` -- first-match would hand back a stale value nothing else on
+# the box agrees with; audit H-R4). Exit 1 when the file is missing. KEY is
+# checked before it reaches the pattern.
+read_env_value() {
+    local file="$1" key="$2"
+    [[ "$key" =~ ^[A-Z][A-Z0-9_]*$ ]] || return 1
+    [ -f "$file" ] || return 1
+    grep -E "^${key}=" "$file" 2>/dev/null | tail -n 1 | cut -d= -f2-
+}
+
+# Internal subcommands for install_velo.sh -- not in the usage text.
+#   __env-value-ok   reads the value from STDIN (a secret on the command
+#                    line would show in `ps`), exit 0 if it may go into the
+#                    file, else prints the refusal and exits 1;
+#   __env-get FILE KEY   prints read_env_value.
+case "${1:-}" in
+    __env-value-ok)
+        # read -d '': the whole input, newlines included -- a value with a
+        # newline must fail the check, not be cut at the first line.
+        __value=""
+        IFS= read -r -d '' __value || true
+        if env_value_ok "$__value"; then
+            exit 0
+        fi
+        env_value_refusal
+        exit 1
+        ;;
+    __env-get)
+        read_env_value "${2:-}" "${3:-}"
+        exit $?
+        ;;
+esac
+
 CONF_FILE="$INSTALL_BASE/velo.conf"
 if [ ! -f "$CONF_FILE" ]; then
     echo "FATAL: $CONF_FILE not found." >&2
@@ -1701,6 +1760,51 @@ Triggered by velo update on commit $NEW_COMMIT" || {
 # that goes permanently red over yesterday's data stops being read, and then
 # it stops catching config drift either. The exit code stays with the checks
 # above.
+# MCP OAuth for claude.ai (BE-141): on, off, or what is missing -- read from
+# backend/.env, so it says what the app WILL see after `velo restart`.
+# Informational: OAuth off is a legitimate state (keys skipped at install),
+# not drift -- it never changes the doctor's exit code. Values are not
+# printed, except the issuer and the client id, which are public anyway.
+check_oauth_env() {
+    local env_file="$1"
+    if [ ! -f "$env_file" ]; then
+        echo -e "${YELLOW}⊘ MCP OAuth: $env_file not found, skipped${NC}"
+        return 0
+    fi
+
+    local mcp_enabled
+    mcp_enabled=$(read_env_value "$env_file" "MCP_ENABLED" | tr '[:upper:]' '[:lower:]')
+    case "$mcp_enabled" in
+        0|f|false|n|no|off)
+            echo -e "${YELLOW}⊘ MCP OAuth: off -- MCP itself is switched off (MCP_ENABLED=${mcp_enabled})${NC}"
+            return 0
+            ;;
+    esac
+
+    local key missing=()
+    for key in MCP_OAUTH_ISSUER_URL TELEGRAM_LOGIN_CLIENT_ID TELEGRAM_LOGIN_CLIENT_SECRET; do
+        if [ -z "$(read_env_value "$env_file" "$key")" ]; then
+            missing+=("$key")
+        fi
+    done
+
+    if [ "${#missing[@]}" -eq 0 ]; then
+        echo -e "${GREEN}✓ MCP OAuth: on in backend/.env${NC}"
+        echo "  issuer:    $(read_env_value "$env_file" MCP_OAUTH_ISSUER_URL)"
+        echo "  client id: $(read_env_value "$env_file" TELEGRAM_LOGIN_CLIENT_ID)"
+        echo "  secret:    set"
+        echo "  (a change in backend/.env takes effect after: velo restart)"
+        return 0
+    fi
+
+    echo -e "${YELLOW}⊘ MCP OAuth: off -- missing in backend/.env: ${missing[*]}${NC}"
+    echo "  To switch it on, run each command below, then: velo restart"
+    for key in "${missing[@]}"; do
+        echo "    velo env set $key"
+    done
+    return 0
+}
+
 check_attendance_deadends() {
     if ! $COMPOSE_CMD ps 2>/dev/null | grep -q postgres; then
         echo -e "${YELLOW}⊘ Attendance dead-ends: database not running, skipped${NC}"
@@ -2817,6 +2921,89 @@ case "${1:-}" in
         echo "  half is already gone from this machine."
         ;;
 
+    env)
+        # BE-141: write ONE key of backend/.env on this box, so nobody edits
+        # the file by hand (owner ruling: the server is touched through
+        # `velo` only). Only a key that backend/.env.example declares --
+        # as `KEY=` or as `# (optional) KEY=` -- is accepted: a typo must not
+        # become a key the app's Settings (extra='forbid') refuses at start.
+        #
+        # The value is read with echo off and lives in one shell variable:
+        # it is never printed, never put on a command line (printf is a
+        # builtin, so it does not show up in `ps`), and neither is the old
+        # value. Every existing line of the key is dropped and one is
+        # appended -- a repeated key resolves to its LAST assignment, so
+        # editing the first one would leave the old value in force. The new
+        # file is built next to the old one and renamed over it: a reader
+        # sees the old file or the new one, never half of one.
+        env_verb="${2:-}"
+        env_key="${3:-}"
+        env_example="$COMPOSE_DIR/backend/.env.example"
+        env_file="$COMPOSE_DIR/backend/.env"
+        if [ "$env_verb" != "set" ] || [ -z "$env_key" ] || [ -n "${4:-}" ]; then
+            echo "Usage: velo env set <KEY>"
+            echo "  Writes one key of backend/.env; the value is asked for, hidden."
+            exit 1
+        fi
+        if ! [[ "$env_key" =~ ^[A-Z][A-Z0-9_]*$ ]]; then
+            echo -e "${RED}✗ '$env_key' is not a key name (A-Z, 0-9, _)${NC}"
+            exit 1
+        fi
+        if ! grep -qE "^(# \(optional\) )?${env_key}=" "$env_example"; then
+            echo -e "${RED}✗ $env_key is not declared in backend/.env.example${NC}"
+            echo "  Only declared keys can be set -- check the spelling."
+            exit 1
+        fi
+        if [ ! -f "$env_file" ]; then
+            echo -e "${RED}✗ $env_file not found${NC}"
+            exit 1
+        fi
+
+        env_value=""
+        read -r -s -p "Value for $env_key (input hidden, empty clears it): " env_value
+        echo ""
+        # The allowlist and its refusal are shared with the installer
+        # (env_value_ok / env_value_refusal, top of this file).
+        if ! env_value_ok "$env_value"; then
+            env_value_refusal
+            echo "  Nothing was changed." >&2
+            exit 1
+        fi
+
+        if grep -q "^${env_key}=" "$env_file"; then
+            env_action="replaced"
+        else
+            env_action="added"
+        fi
+        env_tmp=$(mktemp "$(dirname "$env_file")/.env.velo-set.XXXXXX") || {
+            echo -e "${RED}✗ Could not create a temporary file next to $env_file${NC}"
+            exit 1
+        }
+        velo_cleanup_register "$env_tmp"
+        if ! chmod --reference="$env_file" "$env_tmp" \
+            || ! chown --reference="$env_file" "$env_tmp"; then
+            echo -e "${RED}✗ Could not copy the owner and mode of $env_file -- nothing changed${NC}"
+            exit 1
+        fi
+        # grep -v exits 1 when it prints nothing (a file holding only this
+        # key) -- that is fine; 2 is a real error.
+        grep -v "^${env_key}=" "$env_file" > "$env_tmp"
+        if [ $? -gt 1 ]; then
+            echo -e "${RED}✗ Could not read $env_file -- nothing changed${NC}"
+            exit 1
+        fi
+        if ! printf '%s=%s\n' "$env_key" "$env_value" >> "$env_tmp" \
+            || ! mv -f "$env_tmp" "$env_file"; then
+            echo -e "${RED}✗ Could not write $env_file -- the old file is untouched${NC}"
+            exit 1
+        fi
+        env_value=""
+        echo -e "${GREEN}✓ $env_key $env_action in backend/.env (value not shown)${NC}"
+        echo "  It takes effect after a full restart:  velo restart"
+        echo "  ('velo restart app' keeps the old environment -- it does not"
+        echo "   re-read backend/.env.)"
+        ;;
+
     doctor)
         echo -e "${CYAN}VELO Doctor -- drift watchman${NC}"
         echo "Checks artifacts written once at install time and never"
@@ -2836,9 +3023,12 @@ case "${1:-}" in
 
         check_attendance_deadends
         echo ""
+        check_oauth_env "$COMPOSE_DIR/backend/.env"
+        echo ""
 
         echo "Checked: vite.env keys, backend/.env keys, nginx config (rendered vs"
-        echo "live), attendance dead-ends (data -- warns only, never fails)."
+        echo "live), attendance dead-ends (data -- warns only, never fails), MCP"
+        echo "OAuth state (informs only, never fails)."
         if [ "$VITE_DRIFT" -eq 0 ] && [ "$BACKEND_DRIFT" -eq 0 ] && [ "$NGINX_DRIFT" -eq 0 ]; then
             echo -e "${GREEN}✓ 0 drift found${NC}"
             exit 0
@@ -3031,6 +3221,12 @@ case "${1:-}" in
         echo "                        Generates the new key alongside the old one and"
         echo "                        swaps only after verifying it. Web instructions"
         echo "                        for GitHub -- no command-line access needed."
+        echo ""
+        echo "Configuration:"
+        echo "  env set <KEY>       — Write one key of backend/.env, declared in"
+        echo "                        backend/.env.example. The value is asked for"
+        echo "                        with input hidden and never printed. Then:"
+        echo "                        velo restart"
         echo ""
         echo "Testing:"
         echo "  test                — Run all tests (backend + frontend)"

@@ -91,6 +91,7 @@ from app.modules.comms_proxy.router import router as notifications_router  # Pha
 from app.modules.support.router import router as support_router  # B34 / T-38
 from app.modules.mcp.router import router as mcp_tokens_router  # BE-138
 from app.modules.mcp.server import MCP_PATH, build_mcp_app  # BE-139
+from app.modules.mcp.oauth import OAUTH_PATHS, OAuthDoor  # BE-141
 
 # Model imports for Alembic and relationship resolution.
 from app.modules.promos.models import Promo  # noqa: F401  # Phase 6.7
@@ -373,6 +374,13 @@ app.include_router(mcp_tokens_router)              # BE-138 (MCP tokens)
 # client's POST may not follow one). An ASGI app as the endpoint, so the
 # gate sees the raw scope; not in the OpenAPI schema.
 app.router.add_route(MCP_PATH, mcp_app.asgi, include_in_schema=False)
+# BE-141: the OAuth paths of /mcp (discovery, registration, authorize, token,
+# Telegram sign-in, consent) -- one ASGI door in front of them all, which
+# answers the plain 404 while MCP is off or OAuth is not configured. Exact
+# paths, every method (the door's own router answers 405); not in OpenAPI.
+_oauth_door = OAuthDoor()
+for _path in OAUTH_PATHS:
+    app.router.add_route(_path, _oauth_door, include_in_schema=False)
 
 
 # ---------------------------------------------------------------------------

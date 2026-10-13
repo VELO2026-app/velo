@@ -913,6 +913,61 @@ generate_env() {
     success "Bot: @${TELEGRAM_BOT_USERNAME}"
     echo ""
 
+    # MCP OAuth for claude.ai (BE-141 FIX: a feature's keys ship with the
+    # feature -- .env.example, this installer, `velo env set`).
+    # MCP_OAUTH_ISSUER_URL is not asked: it is this API's https origin, known
+    # from the domain answered above. The two Telegram login keys are asked,
+    # both or neither (owner ruling): Enter on the client id skips OAuth (it
+    # stays off, as without the keys) and the secret is then not asked; a
+    # client id given makes the secret required. No half-configured pair is
+    # ever written. Each value passes the same check `velo env set` uses --
+    # ONE implementation, in the freshly cloned velo-manage.sh (internal
+    # subcommand __env-value-ok, value on stdin so a secret never shows in
+    # `ps`); a refusal asks again rather than ending the install.
+    local VELO_MANAGE="$INSTALL_BASE/repo/scripts/velo-manage.sh"
+    local TELEGRAM_LOGIN_CLIENT_ID="" TELEGRAM_LOGIN_CLIENT_SECRET=""
+    echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}  Connect to claude.ai -- Telegram login (optional)${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "${YELLOW}Lets students connect VELO to claude.ai with a button.${NC}"
+    echo -e "${YELLOW}Where to get the keys -- @BotFather -> Open -> this bot ->${NC}"
+    echo -e "${YELLOW}Login Widget:${NC}"
+    echo -e "${YELLOW}  1. If there is a 'Switch to OpenID Connect Login' button, press it.${NC}"
+    echo -e "${YELLOW}  2. Redirect URIs -> Add a Redirect URI, exactly:${NC}"
+    echo -e "${YELLOW}       https://${DOMAIN_API}/oauth/telegram/callback${NC}"
+    echo -e "${YELLOW}  3. Copy Client ID and Client Secret from the same screen.${NC}"
+    echo -e "${YELLOW}Press Enter to skip -- claude.ai connection stays off; switch it${NC}"
+    echo -e "${YELLOW}on later with 'velo env set' (velo doctor shows the commands).${NC}"
+    echo ""
+    while true; do
+        read -r -p "TELEGRAM_LOGIN_CLIENT_ID [Enter = skip]: " TELEGRAM_LOGIN_CLIENT_ID
+        [ -z "$TELEGRAM_LOGIN_CLIENT_ID" ] && break
+        printf '%s' "$TELEGRAM_LOGIN_CLIENT_ID" | bash "$VELO_MANAGE" __env-value-ok && break
+    done
+    if [ -n "$TELEGRAM_LOGIN_CLIENT_ID" ]; then
+        while true; do
+            # End of input (Ctrl-D) is not an answer: without this guard the
+            # "required" loop below would never end.
+            if ! read -r -s -p "TELEGRAM_LOGIN_CLIENT_SECRET (input hidden): " TELEGRAM_LOGIN_CLIENT_SECRET; then
+                echo ""
+                error "Input ended before the Client Secret was given."
+                error "Re-run the installer; or press Enter at the Client ID to skip."
+                exit 1
+            fi
+            echo ""
+            if [ -z "$TELEGRAM_LOGIN_CLIENT_SECRET" ]; then
+                echo -e "${RED}✗ The secret is required once a Client ID is given.${NC}"
+                continue
+            fi
+            printf '%s' "$TELEGRAM_LOGIN_CLIENT_SECRET" | bash "$VELO_MANAGE" __env-value-ok && break
+        done
+        success "claude.ai connection: keys recorded"
+    else
+        warn "claude.ai connection: skipped -- off until both keys are set"
+    fi
+    echo ""
+
     # Ask for the transcription key -- server-side, never in the bundle.
     echo -e "${CYAN}═══════════════════════════════════════════════${NC}"
     echo -e "${CYAN}  Voice transcription (optional)${NC}"
@@ -1123,6 +1178,14 @@ OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
 # Optional. Empty falls back to openai/gpt-audio-mini (config.py). Kept
 # overridable because the provider renamed its audio models once already.
 OPENROUTER_TRANSCRIBE_MODEL=
+
+# --- MCP OAuth for claude.ai (BE-141) ---
+# The issuer is this API's https origin, derived from the domain. The two
+# Telegram login keys come both or neither: both empty = connection off.
+# Change later with `velo env set <KEY>`, then `velo restart`.
+MCP_OAUTH_ISSUER_URL=https://${DOMAIN_API}
+TELEGRAM_LOGIN_CLIENT_ID=${TELEGRAM_LOGIN_CLIENT_ID}
+TELEGRAM_LOGIN_CLIENT_SECRET=${TELEGRAM_LOGIN_CLIENT_SECRET}
 
 # --- Stripe ---
 STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
@@ -1415,13 +1478,10 @@ registry_branch_for() {
 # `source`: these files carry secrets and operator input, and sourcing
 # executes whatever a value happens to look like.
 read_env_value() {
-    local file="$1" key="$2"
-    [ -f "$file" ] || return 1
-    # `tail -n 1`, not `grep -m1`: an env file resolves a repeated key
-    # to the LAST assignment, exactly as a shell would. First-match
-    # would hand the caller a stale value that nothing else on the box
-    # agrees with. Same class as the env-render.sh fix (audit H-R4).
-    grep -E "^${key}=" "$file" 2>/dev/null | tail -n 1 | cut -d= -f2-
+    # ONE implementation (BE-141 FIX): velo-manage.sh's read_env_value --
+    # the last assignment of a repeated key wins (audit H-R4) -- through its
+    # internal subcommand, from the cloned repo. Callers run after clone_repo.
+    bash "$INSTALL_BASE/repo/scripts/velo-manage.sh" __env-get "$1" "$2"
 }
 
 # Gate on every value we push into another stack's env file.

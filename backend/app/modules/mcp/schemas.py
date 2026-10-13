@@ -14,7 +14,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
-from app.modules.mcp.models import McpScope
+from app.modules.mcp.models import McpScope, McpTokenKind
 
 # Stripped BEFORE min_length (the CuratorGroupNameStr reasoning): a name of
 # spaces is a 422, not a token labelled " ".
@@ -44,11 +44,18 @@ class McpTokenCreate(BaseModel):
 
 
 class McpTokenItem(BaseModel):
-    """One token as the student sees it in the list -- never the secret."""
+    """One token as the student sees it in the list -- never the secret.
+
+    kind (BE-141): a personal token, or a connection an AI client obtained
+    through OAuth. For an OAuth connection `prefix` is that of its current
+    refresh token -- it changes on every refresh and means nothing to the
+    student, so the screen shows it for personal tokens only.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    kind: McpTokenKind
     name: str
     prefix: str
     scopes: list[McpScope]
@@ -64,7 +71,25 @@ class McpTokenCreated(BaseModel):
     item: McpTokenItem
 
 
+class McpScopeLabel(BaseModel):
+    """A scope and its description (BE-148), from SCOPE_ACTIONS -- the one
+    place it is written; the screen keeps no copy."""
+
+    scope: McpScope
+    label: str
+
+
 class McpTokenListResponse(BaseModel):
-    """All of the student's tokens, revoked ones included, newest first."""
+    """All of the student's tokens, revoked ones included, newest first --
+    plus what the "AI connections" screen needs around them (BE-150).
+
+    oauth_connect_available: this server lets an AI client connect with the
+        button (OAuth configured). When false the screen does not promise
+        that way and points at a personal token.
+    scope_labels: every scope with its description, in the canonical order
+        -- the screen's checkboxes and each row's summary.
+    """
 
     items: list[McpTokenItem]
+    oauth_connect_available: bool
+    scope_labels: list[McpScopeLabel]

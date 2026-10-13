@@ -248,6 +248,10 @@ async def test_deleting_the_user_deletes_their_tokens(client: AsyncClient) -> No
 async def test_create_returns_the_token_once_and_stores_only_its_hash(
     client: AsyncClient,
 ) -> None:
+    """The item's key set was exactly seven fields, and rightly: an exact
+    set is what catches a stray field -- a secret above all. BE-141 added
+    `kind` (a personal token vs a connection obtained through OAuth), so the
+    set is eight; it stays exact, and a token minted here is personal."""
     _, headers = await _user(client, 89035)
     body = await _mint(client, headers)
 
@@ -259,8 +263,10 @@ async def test_create_returns_the_token_once_and_stores_only_its_hash(
     assert item["prefix"] == prefix
     assert item["scopes"] == _ALL_SCOPES  # omitted -> all three
     assert item["last_used_at"] is None and item["revoked_at"] is None
+    assert item["kind"] == "personal"
     assert set(item) == {
         "id",
+        "kind",
         "name",
         "prefix",
         "scopes",
@@ -459,6 +465,18 @@ async def test_two_creates_at_the_limit_minus_one_mint_exactly_one(
 # ---------------------------------------------------------------------------
 
 
+_LIST_KEYS = {"items", "oauth_connect_available", "scope_labels"}
+
+
+def _empty_list(body: dict) -> bool:
+    """An empty list response: no items, and exactly the response's keys.
+    Until BE-150 the whole body was asserted equal to {"items": []}; the
+    list now also carries the screen's oauth_connect_available and
+    scope_labels, so the emptiness is asserted on `items` and the key set
+    stays exact -- a stray field still fails."""
+    return body["items"] == [] and set(body) == _LIST_KEYS
+
+
 async def test_the_list_is_own_only_newest_first_revoked_included(
     client: AsyncClient,
 ) -> None:
@@ -477,7 +495,7 @@ async def test_the_list_is_own_only_newest_first_revoked_included(
     assert items[1]["revoked_at"] is not None and items[0]["revoked_at"] is None
     assert other["item"]["id"] not in {t["id"] for t in items}
 
-    assert (await client.get(TOKENS_URL, headers=headers_c)).json() == {"items": []}
+    assert _empty_list((await client.get(TOKENS_URL, headers=headers_c)).json())
 
 
 # ---------------------------------------------------------------------------
@@ -518,7 +536,7 @@ async def test_someone_elses_token_and_no_token_are_the_same_404(
     # Untouched: still live, and nobody's list shows it to B.
     listed = (await client.get(TOKENS_URL, headers=headers_a)).json()["items"]
     assert listed[0]["revoked_at"] is None
-    assert (await client.get(TOKENS_URL, headers=headers_b)).json() == {"items": []}
+    assert _empty_list((await client.get(TOKENS_URL, headers=headers_b)).json())
     assert await _audit_rows(item["id"], "mcp_token_revoked") == []
 
 

@@ -12,6 +12,9 @@
 # THE STACK, outside in:
 #   McpGate (this module)    killswitch, public-host refusal, Bearer -> 401,
 #                            token verification in its own short session.
+#                            Two kinds of token open it: a personal token and
+#                            an OAuth access token (BE-141, oauth.py) -- same
+#                            scopes, limits, connection rule and audit.
 #   StreamableHTTPASGIApp    the official SDK (mcp==2.2.0), STATELESS: a fresh
 #                            transport per request, no MCP session kept, so
 #                            two workers and a restart between calls are fine.
@@ -77,7 +80,7 @@ from app.core.database import get_session_factory
 from app.core.exceptions import ConflictError, UnauthorizedError, VeloError
 from app.core.ratelimit import count_in_window
 from app.core.redis import get_redis
-from app.modules.mcp.models import McpScope
+from app.modules.mcp.models import McpScope, McpTokenKind
 from app.modules.mcp.service import verify_mcp_token
 from app.modules.users.models import User
 
@@ -108,6 +111,9 @@ class McpCaller:
     user: User
     token_id: UUID
     scopes: frozenset[McpScope]
+    # A personal token or access obtained with the button (BE-141): the way
+    # to a missing scope differs (_scope_missing).
+    kind: McpTokenKind
 
 
 _STATE_KEY = "mcp_caller"
@@ -139,7 +145,7 @@ async def _send_json(
     await send({"type": "http.response.body", "body": payload})
 
 
-async def _not_found(send) -> None:
+async def send_not_found(send) -> None:
     # The body of every other 404 of the app (velo_error_handler), so a
     # switched-off /mcp is indistinguishable from one that never existed.
     await _send_json(send, 404, {"error": "not_found", "message": "Not found"})
@@ -148,13 +154,34 @@ async def _not_found(send) -> None:
 async def _unauthorized(send) -> None:
     # One answer for every reason -- no oracle (the same rule as
     # verify_mcp_token). WWW-Authenticate tells an MCP client to ask the
-    # user for credentials (tz-mcp §3).
+    # user for credentials (tz-mcp §3); when OAuth is configured (BE-141) it
+    # also points at the protected resource metadata, which is how
+    # claude.ai finds where to sign in (RFC 9728 §5.1).
+    from app.modules.mcp.oauth import oauth_configured, resource_metadata_url
+
+    challenge = 'Bearer realm="velo-mcp"'
+    if oauth_configured():
+        challenge += f', resource_metadata="{resource_metadata_url()}"'
     await _send_json(
         send,
         401,
         {"error": "unauthorized", "message": "Invalid or missing token"},
-        headers=[(b"www-authenticate", b'Bearer realm="velo-mcp"')],
+        headers=[(b"www-authenticate", challenge.encode("latin-1"))],
     )
+
+
+def door_closed(scope) -> bool:
+    """True when this request must get the plain 404: MCP switched off, or
+    the request came in on the public short-link host (tz-mcp §3). Shared by
+    McpGate and the OAuth door (BE-141), so the two can never disagree."""
+    if not settings.mcp_enabled:
+        return True
+    host = next(
+        (v.decode("latin-1") for k, v in scope["headers"] if k == b"host"),
+        "",
+    )
+    public = _public_host()
+    return bool(public) and host.split(":", 1)[0].lower() == public.lower()
 
 
 class McpGate:
@@ -164,19 +191,8 @@ class McpGate:
         self.inner = inner
 
     async def __call__(self, scope, receive, send) -> None:
-        if scope["type"] != "http":
-            await _not_found(send)
-            return
-        if not settings.mcp_enabled:
-            await _not_found(send)
-            return
-        host = next(
-            (v.decode("latin-1") for k, v in scope["headers"] if k == b"host"),
-            "",
-        )
-        public = _public_host()
-        if public and host.split(":", 1)[0].lower() == public.lower():
-            await _not_found(send)
+        if scope["type"] != "http" or door_closed(scope):
+            await send_not_found(send)
             return
 
         auth_values = [v for k, v in scope["headers"] if k == b"authorization"]
@@ -204,7 +220,10 @@ class McpGate:
         ]
         state = dict(scope.get("state") or {})
         state[_STATE_KEY] = McpCaller(
-            user=auth.user, token_id=auth.token.id, scopes=auth.scopes
+            user=auth.user,
+            token_id=auth.token.id,
+            scopes=auth.scopes,
+            kind=auth.token.kind,
         )
         inner_scope["state"] = state
         await self.inner(inner_scope, receive, send)
@@ -327,7 +346,7 @@ async def _run_read_tool(
     """
     caller = _caller(ctx)
     if McpScope.READ not in caller.scopes:
-        return _scope_missing(McpScope.READ)
+        return _scope_missing(caller, McpScope.READ)
     refused = await _limit(caller.token_id, READ_BUDGET)
     if refused is not None:
         return refused
@@ -340,12 +359,22 @@ async def _run_read_tool(
     return _result(payload)
 
 
-def _scope_missing(scope: McpScope) -> CallToolResult:
-    return tool_error(
-        "scope_missing",
-        f"This token has no '{scope.value}' scope. Create a token with it in "
-        "the VELO app: Profile -> AI connections.",
-    )
+def _scope_missing(caller: McpCaller, scope: McpScope) -> CallToolResult:
+    """The way to a missing scope depends on the kind of access (owner
+    ruling, BE-148): a personal token cannot gain a scope -- a new token is
+    made with it; access given with the button is given again, with the
+    scope allowed on the consent page."""
+    if caller.kind is McpTokenKind.OAUTH:
+        message = (
+            f"This connection has no '{scope.value}' scope. Reconnect VELO in "
+            "your AI client and allow this scope on the VELO consent page."
+        )
+    else:
+        message = (
+            f"This token has no '{scope.value}' scope. Create a token with it "
+            "in the VELO app: Profile → AI connections."
+        )
+    return tool_error("scope_missing", message)
 
 
 async def _run_write_tool(
@@ -373,7 +402,7 @@ async def _run_write_tool(
     """
     caller = _caller(ctx)
     if scope not in caller.scopes:
-        return _scope_missing(scope)
+        return _scope_missing(caller, scope)
     refused = await _limit(caller.token_id, budget)
     if refused is not None:
         return refused
