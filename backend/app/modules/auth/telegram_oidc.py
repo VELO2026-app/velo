@@ -51,6 +51,7 @@
 
 import base64
 import hashlib
+import re
 import secrets
 from dataclasses import dataclass
 from urllib.parse import urlencode
@@ -236,13 +237,17 @@ def verify_id_token(
         logger.info("telegram_login_id_token_rejected", error=type(exc).__name__)
         raise TelegramLoginError("bad_id_token") from None
 
-    telegram_id = claims.get("id")
-    # bool is an int in Python; a JSON true is not a user id.
-    if (
-        not isinstance(telegram_id, int)
-        or isinstance(telegram_id, bool)
-        or telegram_id <= 0
-    ):
+    telegram_id = _telegram_id(claims.get("id"))
+    if telegram_id is None:
+        # The live check (BE-141 FIX) met an `id` this code refused without
+        # saying why. Say what was there -- presence, type and the claim
+        # NAMES -- never a value, so the next surprise reads off one line.
+        logger.warning(
+            "telegram_login_id_rejected",
+            has_id="id" in claims,
+            id_type=type(claims.get("id")).__name__,
+            claims=sorted(claims),
+        )
         raise TelegramLoginError("no_telegram_id")
     return TelegramUser(
         telegram_id=telegram_id,
@@ -252,6 +257,38 @@ def verify_id_token(
         photo_url=_https(claims.get("picture")),
         bot_access_granted=bot_access_granted,
     )
+
+
+# users.telegram_id is BIGINT.
+_BIGINT_MAX = 2**63 - 1
+_ASCII_DIGITS = re.compile(r"[0-9]+")
+
+
+def _telegram_id(value: object) -> int | None:
+    """The Telegram user id from the `id` claim, or None.
+
+    Telegram's example shows a JSON number, but the live token carried
+    something else (BE-141 FIX) -- `aud`, the bot id, is a string there. So:
+    a JSON integer, or a string of ASCII digits only (owner ruling: leading
+    zeros allowed; no sign, no space, no underscore, no other script's
+    digits -- int() and str.isdigit() would take some of those, hence the
+    pattern first), in 1..BIGINT. A JSON true/false is not an id, though
+    bool is an int to Python.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        number = value
+    elif isinstance(value, str) and _ASCII_DIGITS.fullmatch(value):
+        digits = value.lstrip("0")
+        # Length first: int() refuses strings past 4300 digits with an
+        # exception, and nothing past 19 digits fits BIGINT anyway.
+        if len(digits) > len(str(_BIGINT_MAX)):
+            return None
+        number = int(digits or "0")
+    else:
+        return None
+    return number if 1 <= number <= _BIGINT_MAX else None
 
 
 def _text(value: object) -> str | None:

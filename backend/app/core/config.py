@@ -750,7 +750,9 @@ class Settings(BaseSettings):
     # and /mcp keeps working with personal tokens only. They are declared in
     # .env.example as "# (optional) KEY=" lines -- the drift gate of
     # `velo update` reads only uncommented keys, so their absence never
-    # blocks an update -- and set with `velo env set <KEY>`.
+    # blocks an update. A fresh install writes them (issuer derived from the
+    # API domain, the two Telegram keys asked, both or neither); a live
+    # server sets them with `velo env set <KEY>`; `velo doctor` reports.
     #
     # Public origin of THIS API, e.g. https://api.velotony.com: the OAuth
     # issuer, and with /mcp appended the protected resource. Nothing else

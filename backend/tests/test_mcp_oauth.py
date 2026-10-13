@@ -718,7 +718,7 @@ async def test_the_telegram_leg_carries_our_verifier_and_secret(
         "no_exp",
         "no_id",
         "id_bool",
-        "id_str",
+        "id_letters",
         "id_zero",
         "hs256",
         "kid",
@@ -727,6 +727,11 @@ async def test_the_telegram_leg_carries_our_verifier_and_secret(
 async def test_every_way_the_telegram_login_fails_is_one_page(
     client: AsyncClient, telegram: FakeTelegram, bend: str
 ) -> None:
+    """Every refused login ends on the same page. The `id` bend was a digit
+    string ("73412") and rightly refused while Telegram's example showed a
+    JSON number; the live token (BE-141 FIX) carried a string, and digit
+    strings are now accepted (owner ruling), so the bend is a string with a
+    letter -- still refused. Accepted forms: test_the_id_claim_forms."""
     await _student(client, 73412)
     if bend == "status":
         telegram.token_status = 400
@@ -746,8 +751,8 @@ async def test_every_way_the_telegram_login_fails_is_one_page(
         telegram.claims = {"id": _DROP}
     elif bend == "id_bool":
         telegram.claims = {"id": True}
-    elif bend == "id_str":
-        telegram.claims = {"id": "73412"}
+    elif bend == "id_letters":
+        telegram.claims = {"id": "7341a2"}
     elif bend == "id_zero":
         telegram.claims = {"id": 0}
     elif bend == "hs256":
@@ -1828,3 +1833,102 @@ async def test_the_allowed_hosts_are_a_setting(
             text("DELETE FROM mcp_oauth_clients WHERE client_id = :u"), {"u": url}
         )
         await s.commit()
+
+
+# ---------------------------------------------------------------------------
+# BE-141 FIX: the `id` claim -- a number or a string of digits
+# ---------------------------------------------------------------------------
+
+_BIGINT_MAX = 2**63 - 1
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (73450, 73450),
+        ("73450", 73450),  # the live token's shape
+        ("0073450", 73450),  # leading zeros: owner ruling
+        (str(_BIGINT_MAX), _BIGINT_MAX),
+        ("0" * 30 + "5", 5),  # zeros past 19 digits are still zeros
+    ],
+)
+def test_the_id_claim_forms_accepted(telegram: FakeTelegram, value, expected) -> None:
+    telegram.claims = {"id": value}
+    user = telegram_oidc.verify_id_token(telegram.id_token(1), telegram.jwks())
+    assert user.telegram_id == expected and isinstance(user.telegram_id, int)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "7345a0",
+        "+73450",
+        "-73450",
+        " 73450",
+        "73450 ",
+        "73450\n",
+        "",
+        "1_000",  # int() would take it
+        "\uff17\uff13\uff14",  # fullwidth digits: str.isdigit() would take them
+        "\u0667\u0663\u0664",  # Arabic-Indic digits: likewise
+        "0",
+        "000",
+        str(_BIGINT_MAX + 1),
+        "9" * 5000,  # int() would raise past 4300 digits
+        0,
+        -1,
+        _BIGINT_MAX + 1,
+        True,
+        False,
+        73450.0,
+        None,
+        [73450],
+        {"id": 73450},
+    ],
+)
+def test_the_id_claim_forms_refused_with_a_diagnostic_line(
+    telegram: FakeTelegram, capsys: pytest.CaptureFixture, value
+) -> None:
+    telegram.claims = {"id": value}
+    with pytest.raises(telegram_oidc.TelegramLoginError) as exc:
+        telegram_oidc.verify_id_token(telegram.id_token(1), telegram.jwks())
+    assert exc.value.reason == "no_telegram_id"
+    line = next(
+        ln
+        for ln in capsys.readouterr().out.splitlines()
+        if "telegram_login_id_rejected" in ln
+    )
+    assert "has_id=True" in line
+    assert f"id_type={type(value).__name__}" in line
+    assert "'aud'" in line and "'id'" in line and "'iss'" in line  # the names
+    # Never the value: a distinctive one must not appear.
+    if isinstance(value, str) and len(value) > 3 and value.strip():
+        assert value.strip() not in line
+
+
+def test_a_missing_id_claim_names_what_was_there(
+    telegram: FakeTelegram, capsys: pytest.CaptureFixture
+) -> None:
+    telegram.claims = {"id": _DROP, "given_name": "Секретное Имя"}
+    with pytest.raises(telegram_oidc.TelegramLoginError):
+        telegram_oidc.verify_id_token(telegram.id_token(1), telegram.jwks())
+    line = next(
+        ln
+        for ln in capsys.readouterr().out.splitlines()
+        if "telegram_login_id_rejected" in ln
+    )
+    assert "has_id=False" in line and "id_type=NoneType" in line
+    assert "'given_name'" in line and "'sub'" in line and "'id'" not in line
+    assert "Секретное Имя" not in line  # names of claims, never values
+
+
+async def test_a_login_whose_id_is_a_string_reaches_the_consent_page(
+    client: AsyncClient, telegram: FakeTelegram
+) -> None:
+    """The live failure, end to end: the same flow that refused with
+    no_telegram_id now reaches the consent page."""
+    await _student(client, 73447)
+    telegram.claims = {"id": "73447"}
+    cid = await _client_id(client)
+    page = await _to_consent(client, 73447, cid, _pkce()[1])
+    assert page.status_code == 200 and "name='consent'" in page.text
