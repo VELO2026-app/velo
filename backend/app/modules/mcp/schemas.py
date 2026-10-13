@@ -71,7 +71,25 @@ class McpTokenCreated(BaseModel):
     item: McpTokenItem
 
 
+class McpScopeLabel(BaseModel):
+    """A scope and its description (BE-148), from SCOPE_ACTIONS -- the one
+    place it is written; the screen keeps no copy."""
+
+    scope: McpScope
+    label: str
+
+
 class McpTokenListResponse(BaseModel):
-    """All of the student's tokens, revoked ones included, newest first."""
+    """All of the student's tokens, revoked ones included, newest first --
+    plus what the "AI connections" screen needs around them (BE-150).
+
+    oauth_connect_available: this server lets an AI client connect with the
+        button (OAuth configured). When false the screen does not promise
+        that way and points at a personal token.
+    scope_labels: every scope with its description, in the canonical order
+        -- the screen's checkboxes and each row's summary.
+    """
 
     items: list[McpTokenItem]
+    oauth_connect_available: bool
+    scope_labels: list[McpScopeLabel]

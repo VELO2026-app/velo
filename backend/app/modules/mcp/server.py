@@ -80,7 +80,7 @@ from app.core.database import get_session_factory
 from app.core.exceptions import ConflictError, UnauthorizedError, VeloError
 from app.core.ratelimit import count_in_window
 from app.core.redis import get_redis
-from app.modules.mcp.models import McpScope
+from app.modules.mcp.models import McpScope, McpTokenKind
 from app.modules.mcp.service import verify_mcp_token
 from app.modules.users.models import User
 
@@ -111,6 +111,9 @@ class McpCaller:
     user: User
     token_id: UUID
     scopes: frozenset[McpScope]
+    # A personal token or access obtained with the button (BE-141): the way
+    # to a missing scope differs (_scope_missing).
+    kind: McpTokenKind
 
 
 _STATE_KEY = "mcp_caller"
@@ -217,7 +220,10 @@ class McpGate:
         ]
         state = dict(scope.get("state") or {})
         state[_STATE_KEY] = McpCaller(
-            user=auth.user, token_id=auth.token.id, scopes=auth.scopes
+            user=auth.user,
+            token_id=auth.token.id,
+            scopes=auth.scopes,
+            kind=auth.token.kind,
         )
         inner_scope["state"] = state
         await self.inner(inner_scope, receive, send)
@@ -340,7 +346,7 @@ async def _run_read_tool(
     """
     caller = _caller(ctx)
     if McpScope.READ not in caller.scopes:
-        return _scope_missing(McpScope.READ)
+        return _scope_missing(caller, McpScope.READ)
     refused = await _limit(caller.token_id, READ_BUDGET)
     if refused is not None:
         return refused
@@ -353,12 +359,22 @@ async def _run_read_tool(
     return _result(payload)
 
 
-def _scope_missing(scope: McpScope) -> CallToolResult:
-    return tool_error(
-        "scope_missing",
-        f"This token has no '{scope.value}' scope. Create a token with it in "
-        "the VELO app: Profile -> AI connections.",
-    )
+def _scope_missing(caller: McpCaller, scope: McpScope) -> CallToolResult:
+    """The way to a missing scope depends on the kind of access (owner
+    ruling, BE-148): a personal token cannot gain a scope -- a new token is
+    made with it; access given with the button is given again, with the
+    scope allowed on the consent page."""
+    if caller.kind is McpTokenKind.OAUTH:
+        message = (
+            f"This connection has no '{scope.value}' scope. Reconnect VELO in "
+            "your AI client and allow this scope on the VELO consent page."
+        )
+    else:
+        message = (
+            f"This token has no '{scope.value}' scope. Create a token with it "
+            "in the VELO app: Profile → AI connections."
+        )
+    return tool_error("scope_missing", message)
 
 
 async def _run_write_tool(
@@ -386,7 +402,7 @@ async def _run_write_tool(
     """
     caller = _caller(ctx)
     if scope not in caller.scopes:
-        return _scope_missing(scope)
+        return _scope_missing(caller, scope)
     refused = await _limit(caller.token_id, budget)
     if refused is not None:
         return refused

@@ -1932,3 +1932,53 @@ async def test_a_login_whose_id_is_a_string_reaches_the_consent_page(
     cid = await _client_id(client)
     page = await _to_consent(client, 73447, cid, _pkce()[1])
     assert page.status_code == 200 and "name='consent'" in page.text
+
+
+# ---------------------------------------------------------------------------
+# BE-148: the consent page promises what the tools do, in the product's type
+# ---------------------------------------------------------------------------
+
+
+async def test_the_consent_page_describes_scopes_from_the_one_table(
+    client: AsyncClient, telegram: FakeTelegram
+) -> None:
+    from app.modules.mcp.models import McpScope, scope_label
+
+    await _student(client, 73448)
+    cid = await _client_id(client)
+    page = await _to_consent(client, 73448, cid, _pkce()[1])
+    assert page.status_code == 200
+    for scope in McpScope:
+        assert html.escape(scope_label(scope)) in page.text, scope
+    assert "чек" not in page.text.lower()
+
+
+def _phrases() -> dict[str, str]:
+    return {
+        name: value
+        for name, value in vars(mcp_oauth).items()
+        if name.startswith("PHRASE_") and isinstance(value, str)
+    }
+
+
+def test_every_consent_phrase_is_in_the_products_type() -> None:
+    """Dashes and arrows as the product writes them: "—" and "→", never the
+    "--" / "->" of code and chat (owner ruling, BE-148)."""
+    phrases = _phrases()
+    assert len(phrases) >= 9  # the page's whole vocabulary, not a sample
+    for name, phrase in phrases.items():
+        assert "--" not in phrase and "->" not in phrase, name
+    assert "—" in phrases["PHRASE_UNKNOWN_USER"]
+    assert "→" in phrases["PHRASE_LIMIT"]
+
+
+async def test_the_rendered_consent_page_has_no_ascii_dashes_or_arrows(
+    client: AsyncClient, telegram: FakeTelegram
+) -> None:
+    await _student(client, 73449)
+    cid = await _client_id(client)
+    page = await _to_consent(client, 73449, cid, _pkce()[1])
+    assert page.status_code == 200
+    body = page.text
+    assert "--" not in body and "-&gt;" not in body and "->" not in body
+    assert "→" in body  # the revoke hint: VELO → Профиль → Подключения ИИ

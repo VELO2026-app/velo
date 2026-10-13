@@ -179,6 +179,7 @@ export type {
   UpdateReportRequest,
   MasterApplicationInfo,
   McpScope,
+  McpScopeLabel,
   McpTokenCreate,
   McpTokenCreated,
   McpTokenItem,

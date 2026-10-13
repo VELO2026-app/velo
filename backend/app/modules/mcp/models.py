@@ -52,6 +52,7 @@
 # =============================================================================
 
 import enum
+from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
@@ -75,9 +76,8 @@ from app.core.mixins import UUIDMixin
 class McpScope(enum.StrEnum):
     """What a token may do through /mcp.
 
-    READ:           calendar, practice search, the student's own diary.
-    DIARY_WRITE:    save into the diary.
-    BOOKINGS_WRITE: book, cancel own booking, check in.
+    What each one allows, phrased for people, is SCOPE_ACTIONS below -- the
+    one description (BE-148); the tools are the truth it is checked against.
 
     A StrEnum rather than a Literal so the OpenAPI schema carries a named
     type for the frontend. The table's ck_mcp_tokens_scopes_known spells the
@@ -87,6 +87,50 @@ class McpScope(enum.StrEnum):
     READ = "read"
     DIARY_WRITE = "diary:write"
     BOOKINGS_WRITE = "bookings:write"
+
+
+@dataclass(frozen=True)
+class ScopeAction:
+    """One thing a scope lets the AI client do, as a person reads it, and the
+    MCP tools that do it."""
+
+    phrase: str
+    tools: tuple[str, ...]
+
+
+# THE description of every scope (BE-148), the one place it is written: the
+# consent page, the "AI connections" screen (its checkboxes and each row's
+# summary, through the list endpoint's scope_labels) all read it. A scope
+# names exactly what its tools do -- nothing a tool does not (the consent
+# page once promised a check-in that no tool performs). test_mcp_scopes.py
+# holds it to that: the tools here are exactly the registered ones, each
+# refused without its scope.
+SCOPE_ACTIONS: dict[McpScope, tuple[ScopeAction, ...]] = {
+    McpScope.READ: (
+        ScopeAction("видеть ваш календарь", ("get_my_calendar",)),
+        ScopeAction("практики", ("search_practices", "get_practice")),
+        ScopeAction("Дневник", ("read_my_diary",)),
+    ),
+    McpScope.DIARY_WRITE: (
+        ScopeAction("сохранять записи в ваш Дневник", ("save_to_diary",)),
+    ),
+    McpScope.BOOKINGS_WRITE: (
+        ScopeAction("записывать вас на практики", ("book_practice",)),
+        ScopeAction("отменять ваши записи", ("cancel_my_booking",)),
+    ),
+}
+
+
+def scope_label(scope: McpScope) -> str:
+    """The scope's description: its action phrases, "a", "a и b" or
+    "a, b и c", the first letter capitalised."""
+    phrases = [a.phrase for a in SCOPE_ACTIONS[scope]]
+    text = (
+        phrases[0]
+        if len(phrases) == 1
+        else ", ".join(phrases[:-1]) + " и " + phrases[-1]
+    )
+    return text[:1].upper() + text[1:]
 
 
 # Literal SQL list for the CHECK, derived from the enum so the two cannot

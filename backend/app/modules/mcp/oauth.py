@@ -122,7 +122,7 @@ from app.core.database import get_session_factory
 from app.core.ratelimit import over_source_limit
 from app.core.redis import get_redis
 from app.modules.auth import telegram_oidc
-from app.modules.mcp.models import McpOAuthClient, McpScope
+from app.modules.mcp.models import McpOAuthClient, McpScope, scope_label
 from app.modules.mcp.server import MCP_PATH, door_closed, send_not_found
 from app.modules.mcp.service import (
     OAuthGrantRefusedError,
@@ -159,13 +159,6 @@ SCOPES = [s.value for s in McpScope]
 # S256 output: 32 bytes, base64url without padding -- exactly 43 characters.
 _S256_CHALLENGE_RE = re.compile(r"[A-Za-z0-9_-]{43}")
 
-SCOPE_LABELS = {
-    McpScope.READ.value: "видеть ваш календарь, практики и Дневник",
-    McpScope.DIARY_WRITE.value: "сохранять записи в ваш Дневник",
-    McpScope.BOOKINGS_WRITE.value: (
-        "записывать вас на практики, отменять ваши записи и делать чек-ин"
-    ),
-}
 
 
 # ---------------------------------------------------------------------------
@@ -631,16 +624,16 @@ PHRASE_TELEGRAM_FAILED = (
     "Не удалось подтвердить вход через Telegram. Попробуйте подключиться заново."
 )
 PHRASE_UNKNOWN_USER = (
-    "Сначала откройте VELO в Telegram -- после этого подключение заработает."
+    "Сначала откройте VELO в Telegram — после этого подключение заработает."
 )
-PHRASE_INACTIVE = "Ваш аккаунт VELO отключён -- подключение невозможно."
+PHRASE_INACTIVE = "Ваш аккаунт VELO отключён — подключение невозможно."
 PHRASE_LIMIT = (
     "Слишком много подключений. Отзовите лишнее в VELO: "
-    "Профиль -> Подключения ИИ, и подключитесь заново."
+    "Профиль → Подключения ИИ, и подключитесь заново."
 )
 PHRASE_NAME_TAKEN = (
     "Имя этого подключения занято вашим токеном в VELO. Отзовите токен в "
-    "VELO: Профиль -> Подключения ИИ, и подключитесь заново."
+    "VELO: Профиль → Подключения ИИ, и подключитесь заново."
 )
 PHRASE_NO_SCOPE = "Выберите хотя бы одну область доступа."
 PHRASE_BAD_REQUEST = "Некорректный запрос. Начните подключение заново."
@@ -671,7 +664,7 @@ def _consent_page(
     who = html.escape(data["first_name"] or "ученик VELO")
     boxes = "".join(
         f"<label><input type='checkbox' name='scope' value='{html.escape(s)}' "
-        f"checked> {html.escape(SCOPE_LABELS[s])}</label>"
+        f"checked> {html.escape(scope_label(McpScope(s)))}</label>"
         for s in data["scopes"]
     )
     warn = f"<p><b>{html.escape(error)}</b></p>" if error else ""
@@ -688,7 +681,7 @@ def _consent_page(
         "<button type='submit' name='decision' value='deny'>Отказать</button>"
         "</form>"
         "<p class='hint'>Доступ можно отозвать в любой момент: "
-        "VELO -> Профиль -> Подключения ИИ.</p>",
+        "VELO → Профиль → Подключения ИИ.</p>",
         400 if error else 200,
     )
 
