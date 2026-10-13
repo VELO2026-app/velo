@@ -21,6 +21,9 @@ export type ExternalActivityType = 'vocal' | 'nail_standing' | 'meditation' | 'm
 /** What a token may do through /mcp. READ: calendar, practice search, the student's own diary. DIARY_WRITE: save into the diary. BOOKINGS_WRITE: book, cancel own booking, check in. A StrEnum rather than a Literal so the OpenAPI schema carries a named type for the frontend. The table's ck_mcp_tokens_scopes_known spells the same three values; a fourth scope changes both. */
 export type McpScope = 'read' | 'diary:write' | 'bookings:write'
 
+/** What a row of the list is (BE-141): a personal token the student minted in the app, or a connection an AI client obtained through OAuth. Derived from oauth_client_id, not stored. A StrEnum so the OpenAPI schema carries a named type for the frontend. */
+export type McpTokenKind = 'personal' | 'oauth'
+
 /** How the reader of /analytics relates to the practice (BE-78 (2)). Decided by the server's one rights check; the screen maps it to what a tap on a person opens (leader -> the student dossier, curator -> the school student profile, school_master -> a direct message). One person holding several: leader > curator > school_master. */
 export type PracticeAnalyticsViewerRole = 'leader' | 'curator' | 'school_master'
 
@@ -1212,9 +1215,10 @@ export interface McpTokenCreated {
   item: McpTokenItem
 }
 
-/** One token as the student sees it in the list -- never the secret. */
+/** One token as the student sees it in the list -- never the secret. kind (BE-141): a personal token, or a connection an AI client obtained through OAuth. For an OAuth connection `prefix` is that of its current refresh token -- it changes on every refresh and means nothing to the student, so the screen shows it for personal tokens only. */
 export interface McpTokenItem {
   id: string
+  kind: McpTokenKind
   name: string
   prefix: string
   scopes: McpScope[]
