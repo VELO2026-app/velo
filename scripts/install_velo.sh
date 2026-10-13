@@ -388,6 +388,11 @@ if [ -d "$INSTALL_BASE/repo" ] || [ -d "$COMMS_REPO_DIR" ]; then
         cd "$INSTALL_BASE" 2>/dev/null || cd /
         log "Removing existing installation..."
         rm -rf "$INSTALL_BASE/repo"
+        # Deployed-commit markers (velo-manage.sh, BE-154) describe the
+        # stack just torn down. Kept, they would let the first `velo update`
+        # after a reinstall that died half-way report "already up to date".
+        # Gone, the first update runs one full cycle and records it.
+        rm -rf "$INSTALL_BASE/deployed"
         # Reinstall = clean server (owner ruling): the WHOLE comms state
         # goes -- checkout, master .env (secrets re-minted on install),
         # profile (smoke profile re-seeded), backups. Backing up before a

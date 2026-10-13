@@ -1020,7 +1020,161 @@ svc_sync_checkout() {
     if [ "$(git rev-parse HEAD)" != "$(git rev-parse "origin/$want")" ]; then
         SVC_CHANGED=1
     fi
+    # BE-154: HEAD == origin is not "deployed" -- the service's own updater
+    # pulls first, so a run that died after its pull leaves HEAD current over
+    # a deploy that never finished. What decides is the last COMPLETED deploy.
+    if [ "$(deployed_commit_get "$name")" != "$(git rev-parse "origin/$want")" ]; then
+        SVC_CHANGED=1
+    fi
     return 0
+}
+
+# ---------------------------------------------------------------------------
+# DEPLOYED-COMMIT MARKERS (BE-154).
+#
+# "Is there anything to deploy?" used to be answered by git alone: HEAD vs
+# origin. But the pull is the FIRST step of a deploy, not the last -- a run
+# that pulled and then died (a red gate, a failed build) left HEAD == origin,
+# and every later `velo update` reported "already up to date" over a deploy
+# that never finished. Found live on 2026-10-14 (dev, 2197b16f -> 408d6f51):
+# the run stopped at the container freshness gate, and a re-run would have
+# deployed nothing.
+#
+# So the answer now comes from what was DEPLOYED: one file per registry name
+# under $DEPLOYED_DIR holding the full sha of the last run that finished
+# successfully. Written only at the very end of a successful run; any failure
+# leaves the previous value, so the next run redoes the work. No file (a box
+# that predates this, or a fresh install) means "unknown" and is treated as
+# "not deployed": one full run settles it.
+# ---------------------------------------------------------------------------
+DEPLOYED_DIR="$INSTALL_BASE/deployed"
+
+# The sha recorded for NAME, or exit 1 when there is none. A file that does
+# not hold exactly one full sha on its first line counts as none.
+deployed_commit_get() {
+    local file="$DEPLOYED_DIR/$1" sha
+    [ -f "$file" ] || return 1
+    sha=$(head -n 1 "$file" 2>/dev/null)
+    [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || return 1
+    echo "$sha"
+}
+
+# Record SHA as the last completed deploy of NAME (write + rename, so a crash
+# mid-write cannot leave a half-written marker that reads as a sha).
+deployed_commit_set() {
+    local name="$1" sha="$2"
+    [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || return 1
+    mkdir -p "$DEPLOYED_DIR" 2>/dev/null || return 1
+    printf '%s\n' "$sha" > "$DEPLOYED_DIR/$name.tmp" 2>/dev/null || return 1
+    mv -f "$DEPLOYED_DIR/$name.tmp" "$DEPLOYED_DIR/$name" 2>/dev/null
+}
+
+# Same, but a failure to write is a warning, not a failed deploy: the deploy
+# itself succeeded, and a missing marker only costs one repeated run.
+record_deployed() {
+    local name="$1" sha="$2"
+    if deployed_commit_set "$name" "$sha"; then
+        echo -e "${GREEN}✓ $name: recorded as deployed at ${sha:0:8}${NC}"
+    else
+        echo -e "${YELLOW}⚠ $name: deployed, but could not record it in $DEPLOYED_DIR/$name${NC}"
+        echo "  The next 'velo update' will run this cycle once more."
+    fi
+}
+
+# Is there anything for the PRODUCT to deploy on BRANCH? Returns 1 ("up to
+# date") only when origin/BRANCH is both checked out AND the last completed
+# deploy; 0 otherwise. Sets LAST_DEPLOYED to the recorded sha ("" if none) --
+# update_product prints it and the --frontend-only guard diffs against it.
+product_needs_deploy() {
+    local branch="$1" target
+    LAST_DEPLOYED=$(deployed_commit_get velo) || LAST_DEPLOYED=""
+    target=$(git rev-parse "origin/$branch" 2>/dev/null) || return 0
+    if [ "$LAST_DEPLOYED" = "$target" ] && [ "$(git rev-parse HEAD)" = "$target" ]; then
+        return 1
+    fi
+    return 0
+}
+
+# May --frontend-only deploy NEW_COMMIT? Only when backend/ is unchanged
+# since the last COMPLETED deploy -- not since HEAD before this pull, which
+# after an interrupted run is already past backend changes nobody deployed.
+# No record -> refuse: nothing says which backend is running.
+frontend_only_allowed() {
+    local new="$1"
+    if [ -z "$LAST_DEPLOYED" ]; then
+        echo -e "${RED}✗ No completed deploy is recorded on this box -- refusing --frontend-only${NC}"
+        echo "  --frontend-only skips the backend, so it needs to know which backend"
+        echo "  is running; $DEPLOYED_DIR/velo is where that is recorded."
+        echo ""
+        echo "Run once: velo update            (full cycle, records the deploy)"
+        return 1
+    fi
+    if ! git diff --quiet "$LAST_DEPLOYED" "$new" -- backend/ 2>/dev/null; then
+        echo -e "${RED}✗ backend/ changed since the last completed deploy (${LAST_DEPLOYED:0:8} -> ${new:0:8})${NC}"
+        echo -e "${RED}  Refusing to run with --frontend-only.${NC}"
+        echo ""
+        echo "Changed backend files:"
+        git diff --name-only "$LAST_DEPLOYED" "$new" -- backend/ 2>/dev/null | sed 's/^/  /'
+        echo ""
+        echo "Run: velo update            (full cycle)"
+        echo "  or velo update --skip-tests  (full cycle without tests)"
+        return 1
+    fi
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# CONTAINER FRESHNESS (BE-154).
+#
+# After `up -d <svc>` the container must run the image the build just tagged:
+# everything after it (migrations, tests, the OpenAPI snapshot, the site)
+# trusts that. Compose recreates a service only when IT sees a different
+# image, and with the containerd image store it can disagree with the tag: a
+# fully cached build still exports a NEW manifest list (new image ID, same
+# config; most likely the build's provenance attestation -- not verified),
+# compose sees the same image and keeps the container, the tag points
+# elsewhere. Measured on dev 2026-10-14:
+# container on sha256:383b3a90..., tag on sha256:e8897b6f..., whose config
+# was created hours before that run; `docker info` = containerd snapshotter.
+#
+# So a mismatch is first answered by ONE forced recreate, and only a mismatch
+# that survives it stops the run -- that one is a real silent non-recreate,
+# which is what this gate exists for (three incidents, see the build gates).
+# --no-deps: --force-recreate applies to every service `up` starts, and
+# postgres/redis (app's dependencies) or app (frontend's) are not ours to
+# bounce here.
+# The old image is NOT compared by config digest: after the tag moves, the
+# containerd store may no longer hold the container's image at all
+# ("No such image", same measurement).
+# ---------------------------------------------------------------------------
+
+# 0 when SERVICE's container runs the image its image name is tagged to now.
+service_runs_tagged_image() {
+    local svc="$1" cid running expected
+    cid=$($COMPOSE_CMD ps -q "$svc" 2>/dev/null)
+    [ -n "$cid" ] || return 1
+    running=$(docker inspect --format '{{.Image}}' "$cid" 2>/dev/null)
+    expected=$(docker image inspect --format '{{.Id}}' \
+        "$(docker inspect --format '{{.Config.Image}}' "$cid" 2>/dev/null)" 2>/dev/null)
+    [ -n "$running" ] && [ -n "$expected" ] && [ "$running" = "$expected" ]
+}
+
+# Make SERVICE run its freshly tagged image: check, at most one forced
+# recreate, check again. Returns 1 only when the mismatch survives.
+ensure_service_fresh() {
+    local svc="$1"
+    service_runs_tagged_image "$svc" && return 0
+    echo -e "${YELLOW}↻ $svc: container is not on the image its tag points to -- recreating once${NC}"
+    if ! $COMPOSE_CMD up -d --no-deps --force-recreate "$svc"; then
+        echo -e "${RED}✗ $svc: forced recreate failed${NC}"
+        return 1
+    fi
+    if service_runs_tagged_image "$svc"; then
+        echo -e "${GREEN}✓ $svc: now on the freshly built image${NC}"
+        return 0
+    fi
+    echo -e "${RED}✗ Running $svc container does not match the freshly built image, even after a forced recreate${NC}"
+    return 1
 }
 
 # Update ONE registry record. Returns non-zero to stop the whole cycle.
@@ -1064,6 +1218,9 @@ update_service() {
         echo -e "${RED}✗ $name: update failed${NC}"
         return 1
     fi
+    # Only now is it deployed (BE-154): the service's updater pulled, built
+    # and restarted, so HEAD is what runs.
+    record_deployed "$name" "$(git -C "$dir" rev-parse HEAD)"
     echo ""
     return 0
 }
@@ -1334,14 +1491,20 @@ update_product() {
             git reset --hard HEAD
         fi
 
-        # Fetch and check
+        # Fetch and check -- against the last COMPLETED deploy, not against
+        # HEAD (BE-154; see DEPLOYED-COMMIT MARKERS above): a run that pulled
+        # and then died leaves HEAD == origin, and the re-run must finish it.
         git fetch origin
-        if git diff --quiet HEAD "origin/$BRANCH" 2>/dev/null; then
+        if ! product_needs_deploy "$BRANCH"; then
             echo -e "${GREEN}✓ velo: already up to date${NC}"
             # return, NOT exit: this is one service in a cycle now, and
             # the product is the LAST of them -- but an exit here would
             # also swallow the cycle's own epilogue.
             return 0
+        fi
+        echo "Last completed deploy: ${LAST_DEPLOYED:+${LAST_DEPLOYED:0:8}}${LAST_DEPLOYED:-none recorded}"
+        if [ "$(git rev-parse HEAD)" = "$(git rev-parse "origin/$BRANCH")" ]; then
+            echo -e "${CYAN}↻ $CURRENT_COMMIT is checked out but its deploy never completed -- resuming${NC}"
         fi
 
         # Pull
@@ -1450,21 +1613,14 @@ update_product() {
             echo ""
         fi
 
-        # Fool-proof guard for --frontend-only:
-        # if backend/ changed between CURRENT_COMMIT and NEW_COMMIT, refuse hard.
+        # Fool-proof guard for --frontend-only: refuse hard if backend/
+        # changed since the last COMPLETED deploy (BE-154: not since HEAD
+        # before this pull -- see frontend_only_allowed).
         if [ $FRONTEND_ONLY -eq 1 ]; then
-            if ! git diff --quiet "$CURRENT_COMMIT" "$NEW_COMMIT" -- backend/; then
-                echo -e "${RED}✗ Detected changes in backend/ between $CURRENT_COMMIT and $NEW_COMMIT${NC}"
-                echo -e "${RED}  Refusing to run with --frontend-only.${NC}"
-                echo ""
-                echo "Changed backend files:"
-                git diff --name-only "$CURRENT_COMMIT" "$NEW_COMMIT" -- backend/ | sed 's/^/  /'
-                echo ""
-                echo "Run: velo update            (full cycle)"
-                echo "  or velo update --skip-tests  (full cycle without tests)"
+            if ! frontend_only_allowed "$(git rev-parse HEAD)"; then
                 exit 1
             fi
-            echo -e "${GREEN}✓ No backend/ changes -- proceeding frontend-only${NC}"
+            echo -e "${GREEN}✓ No backend/ changes since the last completed deploy -- proceeding frontend-only${NC}"
             echo ""
         fi
 
@@ -1539,15 +1695,12 @@ update_product() {
             # serve migrations, tests and the OpenAPI snapshot actually
             # runs the image the build above just produced. The exit code
             # above catches a dead recreate; this catches a silent
-            # non-recreate, whatever its future cause.
-            APP_CID=$($COMPOSE_CMD ps -q app)
-            RUNNING_IMG=$(docker inspect --format '{{.Image}}' "$APP_CID" 2>/dev/null)
-            EXPECTED_IMG=$(docker image inspect --format '{{.Id}}' \
-                "$(docker inspect --format '{{.Config.Image}}' "$APP_CID" 2>/dev/null)" 2>/dev/null)
-            if [ -z "$APP_CID" ] || [ -z "$RUNNING_IMG" ] || [ "$RUNNING_IMG" != "$EXPECTED_IMG" ]; then
-                echo -e "${RED}✗ Running app container does not match the freshly built image${NC}"
+            # non-recreate, whatever its future cause -- after ONE forced
+            # recreate, because with the containerd image store a cached
+            # build alone already moves the tag (CONTAINER FRESHNESS above).
+            if ! ensure_service_fresh app; then
                 echo "Refusing to run migrations/tests/type-regen against a stale backend."
-                echo "Check: velo status && docker compose up -d app"
+                echo "Check: velo status; velo logs app"
                 exit 1
             fi
 
@@ -1708,7 +1861,20 @@ Triggered by velo update on commit $NEW_COMMIT" || {
             exit 1
         fi
         compose_progress_note
-        $COMPOSE_CMD up -d frontend
+        # Same two gates as the backend's (BE-154): the exit code, and the
+        # container actually on the image just built. Unchecked, a failed or
+        # silently skipped recreate here fell through to "Update complete"
+        # with the previous build still serving the site.
+        if ! $COMPOSE_CMD up -d frontend; then
+            echo -e "${RED}✗ FRONTEND RESTART FAILED${NC}"
+            echo "The new frontend image is built but not running. Fix and run: velo update"
+            exit 1
+        fi
+        if ! ensure_service_fresh frontend; then
+            echo "The previous frontend build may still be serving the site."
+            echo "Check: velo status; velo logs frontend"
+            exit 1
+        fi
 
         # Health check
         echo ""
@@ -1719,9 +1885,19 @@ Triggered by velo update on commit $NEW_COMMIT" || {
             echo ""
             echo -e "${GREEN}✓ Update complete. API is healthy.${NC}"
             echo "$HEALTH" | python3 -m json.tool 2>/dev/null || echo "$HEALTH"
+            # The deploy is complete only here (BE-154). HEAD, not
+            # NEW_COMMIT: a velo-bot types commit above moved it, and origin
+            # with it. A --frontend-only run skipped the backend cycle, so it
+            # is NOT a completed deploy of this commit and records nothing.
+            if [ $FRONTEND_ONLY -eq 0 ]; then
+                record_deployed velo "$(git -C "$COMPOSE_DIR" rev-parse HEAD)"
+            else
+                echo -e "${CYAN}ℹ --frontend-only: not recorded as a completed deploy (backend cycle skipped)${NC}"
+            fi
         else
             echo -e "${RED}⚠ API health check failed after update${NC}"
             echo "Check logs: velo logs app"
+            echo "Not recorded as deployed: the next 'velo update' runs this cycle again."
         fi
 
         # -- 5. Lightweight cleanup --
