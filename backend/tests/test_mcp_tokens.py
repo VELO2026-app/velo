@@ -248,6 +248,10 @@ async def test_deleting_the_user_deletes_their_tokens(client: AsyncClient) -> No
 async def test_create_returns_the_token_once_and_stores_only_its_hash(
     client: AsyncClient,
 ) -> None:
+    """The item's key set was exactly seven fields, and rightly: an exact
+    set is what catches a stray field -- a secret above all. BE-141 added
+    `kind` (a personal token vs a connection obtained through OAuth), so the
+    set is eight; it stays exact, and a token minted here is personal."""
     _, headers = await _user(client, 89035)
     body = await _mint(client, headers)
 
@@ -259,8 +263,10 @@ async def test_create_returns_the_token_once_and_stores_only_its_hash(
     assert item["prefix"] == prefix
     assert item["scopes"] == _ALL_SCOPES  # omitted -> all three
     assert item["last_used_at"] is None and item["revoked_at"] is None
+    assert item["kind"] == "personal"
     assert set(item) == {
         "id",
+        "kind",
         "name",
         "prefix",
         "scopes",

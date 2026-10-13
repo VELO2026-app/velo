@@ -2817,6 +2817,92 @@ case "${1:-}" in
         echo "  half is already gone from this machine."
         ;;
 
+    env)
+        # BE-141: write ONE key of backend/.env on this box, so nobody edits
+        # the file by hand (owner ruling: the server is touched through
+        # `velo` only). Only a key that backend/.env.example declares --
+        # as `KEY=` or as `# (optional) KEY=` -- is accepted: a typo must not
+        # become a key the app's Settings (extra='forbid') refuses at start.
+        #
+        # The value is read with echo off and lives in one shell variable:
+        # it is never printed, never put on a command line (printf is a
+        # builtin, so it does not show up in `ps`), and neither is the old
+        # value. Every existing line of the key is dropped and one is
+        # appended -- a repeated key resolves to its LAST assignment, so
+        # editing the first one would leave the old value in force. The new
+        # file is built next to the old one and renamed over it: a reader
+        # sees the old file or the new one, never half of one.
+        env_verb="${2:-}"
+        env_key="${3:-}"
+        env_example="$COMPOSE_DIR/backend/.env.example"
+        env_file="$COMPOSE_DIR/backend/.env"
+        if [ "$env_verb" != "set" ] || [ -z "$env_key" ] || [ -n "${4:-}" ]; then
+            echo "Usage: velo env set <KEY>"
+            echo "  Writes one key of backend/.env; the value is asked for, hidden."
+            exit 1
+        fi
+        if ! [[ "$env_key" =~ ^[A-Z][A-Z0-9_]*$ ]]; then
+            echo -e "${RED}✗ '$env_key' is not a key name (A-Z, 0-9, _)${NC}"
+            exit 1
+        fi
+        if ! grep -qE "^(# \(optional\) )?${env_key}=" "$env_example"; then
+            echo -e "${RED}✗ $env_key is not declared in backend/.env.example${NC}"
+            echo "  Only declared keys can be set -- check the spelling."
+            exit 1
+        fi
+        if [ ! -f "$env_file" ]; then
+            echo -e "${RED}✗ $env_file not found${NC}"
+            exit 1
+        fi
+
+        env_value=""
+        read -r -s -p "Value for $env_key (input hidden, empty clears it): " env_value
+        echo ""
+        # An allowlist rather than a list of bad characters: the file is read
+        # by docker compose (env_file) AND by pydantic-settings, and a quote,
+        # a space, a '#' or a '$' would be parsed differently by the two.
+        env_allowed='^[A-Za-z0-9._:/@%+=,~_-]*$'
+        if ! [[ "$env_value" =~ $env_allowed ]]; then
+            echo -e "${RED}✗ The value has a character this file cannot carry safely${NC}"
+            echo "  Allowed: letters, digits and . _ : / @ % + = , ~ -"
+            echo "  Nothing was changed."
+            exit 1
+        fi
+
+        if grep -q "^${env_key}=" "$env_file"; then
+            env_action="replaced"
+        else
+            env_action="added"
+        fi
+        env_tmp=$(mktemp "$(dirname "$env_file")/.env.velo-set.XXXXXX") || {
+            echo -e "${RED}✗ Could not create a temporary file next to $env_file${NC}"
+            exit 1
+        }
+        velo_cleanup_register "$env_tmp"
+        if ! chmod --reference="$env_file" "$env_tmp" \
+            || ! chown --reference="$env_file" "$env_tmp"; then
+            echo -e "${RED}✗ Could not copy the owner and mode of $env_file -- nothing changed${NC}"
+            exit 1
+        fi
+        # grep -v exits 1 when it prints nothing (a file holding only this
+        # key) -- that is fine; 2 is a real error.
+        grep -v "^${env_key}=" "$env_file" > "$env_tmp"
+        if [ $? -gt 1 ]; then
+            echo -e "${RED}✗ Could not read $env_file -- nothing changed${NC}"
+            exit 1
+        fi
+        if ! printf '%s=%s\n' "$env_key" "$env_value" >> "$env_tmp" \
+            || ! mv -f "$env_tmp" "$env_file"; then
+            echo -e "${RED}✗ Could not write $env_file -- the old file is untouched${NC}"
+            exit 1
+        fi
+        env_value=""
+        echo -e "${GREEN}✓ $env_key $env_action in backend/.env (value not shown)${NC}"
+        echo "  It takes effect after a full restart:  velo restart"
+        echo "  ('velo restart app' keeps the old environment -- it does not"
+        echo "   re-read backend/.env.)"
+        ;;
+
     doctor)
         echo -e "${CYAN}VELO Doctor -- drift watchman${NC}"
         echo "Checks artifacts written once at install time and never"
@@ -3031,6 +3117,12 @@ case "${1:-}" in
         echo "                        Generates the new key alongside the old one and"
         echo "                        swaps only after verifying it. Web instructions"
         echo "                        for GitHub -- no command-line access needed."
+        echo ""
+        echo "Configuration:"
+        echo "  env set <KEY>       — Write one key of backend/.env, declared in"
+        echo "                        backend/.env.example. The value is asked for"
+        echo "                        with input hidden and never printed. Then:"
+        echo "                        velo restart"
         echo ""
         echo "Testing:"
         echo "  test                — Run all tests (backend + frontend)"

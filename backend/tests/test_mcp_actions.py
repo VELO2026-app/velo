@@ -50,9 +50,9 @@ from app.modules.mcp.server import PROMPTS
 from app.modules.payments.models import Purchase
 from app.modules.practices.models import PracticeStatus
 from app.modules.users.models import User
-from tests.helpers import full_cleanup_range
+from tests.helpers import delete_oauth_test_clients, full_cleanup_range
 from tests.test_be146_one_connection_per_request import _watch_pool
-from tests.test_mcp_server import (  # noqa: F401 -- `mcp` is a fixture
+from tests.test_mcp_server import (  # noqa: F401 -- `mcp`, `credential`: fixtures
     TOKENS_URL,
     _book,
     _call,
@@ -60,12 +60,18 @@ from tests.test_mcp_server import (  # noqa: F401 -- `mcp` is a fixture
     _practice,
     _rpc,
     _student,
+    credential,
     mcp,
 )
 
 _TID_MIN = 88600
 _TID_MAX = 88659
 
+# BE-141: `credential` (imported, autouse) runs every test twice -- with a
+# personal token and with an OAuth access token: the access an AI client got
+# through OAuth writes through the same budgets and audit, and the audit's
+# token_id is the id of that access's own row in mcp_tokens.
+#
 # Every test here talks to /mcp: the fixture is on for the whole module.
 pytestmark = pytest.mark.usefixtures("mcp")
 
@@ -85,6 +91,7 @@ async def cleanup(db_session: AsyncSession):
     yield
     await full_cleanup_range(db_session, _TID_MIN, _TID_MAX, delete_users=True)
     await db_session.commit()
+    await delete_oauth_test_clients()
 
 
 async def _token_id(client: AsyncClient, headers: dict) -> str:

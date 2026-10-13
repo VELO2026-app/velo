@@ -36,6 +36,7 @@ const TOKEN = 'velo_pat_0123456789abcdef_' + 'S'.repeat(43)
 function item(id: string, overrides: Partial<McpTokenItem> = {}): McpTokenItem {
   return {
     id,
+    kind: 'personal',
     name: `token ${id}`,
     prefix: '0123456789abcdef',
     scopes: ['read', 'diary:write', 'bookings:write'],
@@ -135,6 +136,21 @@ describe('AiConnectionsView', () => {
       expect(rows[0]!.querySelector('[data-test="revoke"]')).not.toBeNull()
       expect(rows[1]!.querySelector('[data-test="revoke"]')).toBeNull()
       expect(rows[1]!.textContent).toContain('Отозван')
+    })
+
+    it('an OAuth connection shows what it is, never its rotating prefix (BE-141)', async () => {
+      vi.mocked(mcpApi.listMcpTokens).mockResolvedValue({
+        items: [item('o', { kind: 'oauth', name: 'Claude', prefix: 'fedcba9876543210' })],
+      })
+      mount()
+      await flush()
+      const row = host!.querySelector('[data-test="token-row"]')!
+      expect(row.textContent).toContain('Claude')
+      expect(row.querySelector('[data-test="oauth-kind"]')).not.toBeNull()
+      expect(row.textContent).not.toContain('velo_pat_')
+      expect(row.textContent).not.toContain('fedcba9876543210')
+      // Revocable like any token: that is where the student cuts it off.
+      expect(row.querySelector('[data-test="revoke"]')).not.toBeNull()
     })
 
     it('says so when there are no tokens', async () => {

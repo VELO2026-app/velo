@@ -31,6 +31,8 @@
 #   See allow_stripe_stub / is_stripe_stub_blocked below for the real gate.
 # =============================================================================
 
+from urllib.parse import urlsplit
+
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -720,7 +722,8 @@ class Settings(BaseSettings):
     # unauthenticated callers included (a router-level dependency in
     # app/modules/mcp/router.py, the same shape as curator_groups_enabled and
     # for the same reasons: no 503, no machine code). Token verification
-    # does not read it -- the /mcp router of phase 1 will, in one place.
+    # does not read it; the /mcp gate and the OAuth door (BE-141) do, in one
+    # place: door_closed in app/modules/mcp/server.py.
     mcp_enabled: bool = True
     # Live (not revoked) tokens one student may hold. Revoked tokens do not
     # count. The 11th create answers 409 mcp_token_limit_reached.
@@ -741,6 +744,49 @@ class Settings(BaseSettings):
     # its own; reads keep theirs. Every call counts, refusals included.
     mcp_action_calls_per_hour: int = 10
     mcp_diary_writes_per_hour: int = 30
+    # -- MCP phase 3 (BE-141): OAuth for claude.ai, sign-in through Telegram --
+    # The three keys below are OPTIONAL (owner ruling): all three set -> the
+    # OAuth door is open; any of them empty -> every OAuth route answers 404
+    # and /mcp keeps working with personal tokens only. They are declared in
+    # .env.example as "# (optional) KEY=" lines -- the drift gate of
+    # `velo update` reads only uncommented keys, so their absence never
+    # blocks an update -- and set with `velo env set <KEY>`.
+    #
+    # Public origin of THIS API, e.g. https://api.velotony.com: the OAuth
+    # issuer, and with /mcp appended the protected resource. Nothing else
+    # tells the backend its own address (CORS_ORIGINS is the frontend,
+    # PUBLIC_LINK_BASE may be the short domain). https, no path, no query --
+    # checked at startup, normalized without a trailing slash.
+    mcp_oauth_issuer_url: str = ""
+    # "Log In With Telegram" (OpenID Connect) credentials from BotFather's
+    # Login Widget section. The client id is the bot's id; the secret is
+    # read by the server only, for the code exchange with oauth.telegram.org.
+    telegram_login_client_id: str = ""
+    telegram_login_client_secret: str = ""
+    # Lifetimes: the access token (the refresh token lives until the student
+    # revokes the connection), the one-time authorization code, and an
+    # authorization in progress (from /authorize to the consent decision).
+    mcp_oauth_access_ttl_seconds: int = 3600
+    mcp_oauth_code_ttl_seconds: int = 60
+    mcp_oauth_request_ttl_seconds: int = 600
+    # Anonymous client registrations per source address per window; the
+    # next one answers 429.
+    mcp_oauth_register_per_source: int = 20
+    mcp_oauth_register_window_seconds: int = 3600
+    # Code exchange and key fetch at oauth.telegram.org.
+    telegram_login_http_timeout_seconds: float = 10.0
+    # Client ID Metadata Documents (CIMD, owner ruling): a client whose
+    # client_id is an https URL on one of these hosts (comma-separated,
+    # exact host match, case-insensitive) is known by fetching that URL --
+    # claude.ai's "Recommended" way. Any other host: refused (the server
+    # would otherwise fetch a URL a stranger names). The document is kept
+    # this long, then fetched again; it may be at most this many bytes and
+    # must arrive within this many seconds -- claude.ai gives the whole
+    # token request 10.
+    mcp_oauth_cimd_allowed_hosts: str = "claude.ai"
+    mcp_oauth_cimd_cache_seconds: int = 86400
+    mcp_oauth_cimd_max_bytes: int = 16384
+    mcp_oauth_cimd_timeout_seconds: float = 5.0
 
     # -- Admin (Phase 2.3 / 6.6 / 3.3) --
     # Max length of admin notes on master verify/reject actions
@@ -857,6 +903,29 @@ class Settings(BaseSettings):
                 "Set to the public origin serving this API, e.g. "
                 "'https://api.example.com'."
             )
+
+        # MCP_OAUTH_ISSUER_URL (BE-141): optional, but when set it must be
+        # an https origin -- it becomes the OAuth issuer that claude.ai
+        # compares and the base of every URL in the discovery documents. A
+        # typo is loud here, at startup, not a connector that silently never
+        # connects. Empty stays empty: OAuth is then simply off.
+        if self.mcp_oauth_issuer_url:
+            parts = urlsplit(self.mcp_oauth_issuer_url)
+            if (
+                parts.scheme != "https"
+                or not parts.hostname
+                or parts.path not in ("", "/")
+                or parts.query
+                or parts.fragment
+                or parts.username
+                or parts.password
+            ):
+                raise ValueError(
+                    "MCP_OAUTH_ISSUER_URL must be the https origin of this "
+                    "API, e.g. 'https://api.example.com' (no path, no "
+                    "query)."
+                )
+            self.mcp_oauth_issuer_url = self.mcp_oauth_issuer_url.rstrip("/")
 
         # CQ-02: commission_percent must be within valid range.
         # Prevents misconfiguration: negative commission or > 100%

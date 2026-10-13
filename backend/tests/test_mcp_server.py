@@ -26,6 +26,11 @@
 #   - the calendar window of list_user_bookings, and REST unchanged without;
 #   - input value sets derived from REST's OpenAPI and compared.
 #
+# BE-141 (item 6): every test runs twice -- with a personal token and with an
+# OAuth access token (the `credential` fixture below): the access an AI client
+# obtains through OAuth goes through the same gate, scopes, limits,
+# connection rule and audit as a personal token.
+#
 # NOT BUILT: a live MCP client (owner's check after deploy, README in the
 # report); a worker restart between calls -- the transport is stateless by
 # construction (no session id is issued or required, asserted below).
@@ -55,7 +60,13 @@ from app.modules.mcp import server as mcp_server
 from app.modules.mcp.server import MCP_PATH, McpGate, build_mcp_app
 from app.modules.practices.models import Practice, PracticeStatus, PracticeType
 from app.modules.users.models import User, UserRole
-from tests.helpers import auth_headers, full_cleanup_range, login_user
+from tests.helpers import (
+    auth_headers,
+    delete_oauth_test_clients,
+    full_cleanup_range,
+    login_user,
+    mint_oauth_access,
+)
 from tests.test_be146_one_connection_per_request import _watch_pool
 
 _TID_MIN = 89068
@@ -82,6 +93,19 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
     yield
     await full_cleanup_range(db_session, _TID_MIN, _TID_MAX, delete_users=True)
     await db_session.commit()
+    await delete_oauth_test_clients()
+
+
+_CREDENTIAL = {"kind": "personal"}
+
+
+@pytest.fixture(autouse=True, params=["personal", "oauth"])
+def credential(request: pytest.FixtureRequest):
+    """Which credential _student hands out: a personal token, or the access
+    token of an OAuth grant (BE-141 item 6)."""
+    _CREDENTIAL["kind"] = request.param
+    yield request.param
+    _CREDENTIAL["kind"] = "personal"
 
 
 @pytest.fixture
@@ -115,9 +139,15 @@ async def mcp(monkeypatch: pytest.MonkeyPatch):
 async def _student(
     client: AsyncClient, tid: int, *, scopes: list[str] | None = None
 ) -> tuple[UUID, dict, str]:
-    """A signed-in user with one MCP token: (user id, session headers, token)."""
+    """A signed-in user with one MCP credential: (user id, session headers,
+    token). The credential is a personal token or an OAuth access token, as
+    the `credential` fixture says -- one row in the student's list either
+    way."""
     auth = await login_user(client, telegram_id=tid, first_name="Ученик")
     headers = auth_headers(auth["session_token"])
+    if _CREDENTIAL["kind"] == "oauth":
+        access, _, _ = await mint_oauth_access(UUID(auth["user"]["id"]), scopes=scopes)
+        return UUID(auth["user"]["id"]), headers, access
     body = {"name": f"t{tid}"} | ({"scopes": scopes} if scopes else {})
     resp = await client.post(TOKENS_URL, json=body, headers=headers)
     assert resp.status_code == 201, resp.text

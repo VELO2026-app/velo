@@ -14,7 +14,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
-from app.modules.mcp.models import McpScope
+from app.modules.mcp.models import McpScope, McpTokenKind
 
 # Stripped BEFORE min_length (the CuratorGroupNameStr reasoning): a name of
 # spaces is a 422, not a token labelled " ".
@@ -44,11 +44,18 @@ class McpTokenCreate(BaseModel):
 
 
 class McpTokenItem(BaseModel):
-    """One token as the student sees it in the list -- never the secret."""
+    """One token as the student sees it in the list -- never the secret.
+
+    kind (BE-141): a personal token, or a connection an AI client obtained
+    through OAuth. For an OAuth connection `prefix` is that of its current
+    refresh token -- it changes on every refresh and means nothing to the
+    student, so the screen shows it for personal tokens only.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    kind: McpTokenKind
     name: str
     prefix: str
     scopes: list[McpScope]

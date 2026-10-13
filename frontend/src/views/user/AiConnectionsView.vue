@@ -59,7 +59,14 @@
           >
             <div class="ai-conn__item-main">
               <div class="ai-conn__item-name">{{ t.name }}</div>
-              <div class="ai-conn__item-prefix">velo_pat_{{ t.prefix }}…</div>
+              <!-- BE-141: an OAuth connection's prefix is its refresh token's,
+                   rotating and meaningless here -- say what it is instead. -->
+              <div v-if="t.kind === 'personal'" class="ai-conn__item-prefix">
+                velo_pat_{{ t.prefix }}…
+              </div>
+              <div v-else class="ai-conn__item-prefix" data-test="oauth-kind">
+                Подключено кнопкой в ИИ-клиенте
+              </div>
               <div class="ai-conn__item-meta">{{ scopeSummary(t.scopes) }}</div>
               <div class="ai-conn__item-meta">
                 Создан {{ fmt(t.created_at) }} ·
