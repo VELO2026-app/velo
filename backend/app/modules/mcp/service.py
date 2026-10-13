@@ -152,7 +152,10 @@ async def create_mcp_token(
 
     Raises:
         ConflictError 409 (mcp_token_limit_reached): the student already
-            holds settings.mcp_tokens_max_active_per_user live tokens.
+            holds settings.mcp_tokens_max_active_per_user live tokens --
+            checked first.
+        ConflictError 409 (mcp_token_name_taken): a live token of the
+            student already has this name, ignoring case.
     """
     # The per-student mutex for the limit -- see LIMIT ON LIVE TOKENS above.
     await lock_user_row(session, user.id)
@@ -166,6 +169,29 @@ async def create_mcp_token(
         raise ConflictError(
             "Too many active tokens",
             code="mcp_token_limit_reached",
+        )
+
+    # The name is unique among the student's LIVE tokens (owner ruling,
+    # BE-139 item 10 -- it replaces the gate ruling of BE-138 that allowed
+    # repeats: two "TEST" rows could not be told apart in the list).
+    # Case-insensitive, compared AFTER the schema's strip; a revoked token's
+    # name is free again. Read under the same users-row lock as the limit,
+    # so two creates with one name serialise and the second sees the first.
+    # lower() runs in SQL on BOTH sides: Python's and Postgres' case folding
+    # differ for some characters, and one engine deciding both is the point.
+    taken = await session.scalar(
+        select(func.count())
+        .select_from(McpToken)
+        .where(
+            McpToken.user_id == user.id,
+            McpToken.revoked_at.is_(None),
+            func.lower(McpToken.name) == func.lower(body.name),
+        )
+    )
+    if taken:
+        raise ConflictError(
+            "A live token with this name already exists",
+            code="mcp_token_name_taken",
         )
 
     prefix = secrets.token_hex(_PREFIX_BYTES)

@@ -100,6 +100,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -148,6 +149,17 @@ class DiaryEntryType(enum.StrEnum):
 
     NOTE = "note"
     DREAM = "dream"
+
+
+class DiaryEntrySource(enum.StrEnum):
+    """Where a diary entry was written (BE-140, tz-mcp §5).
+
+    APP: the VELO app.
+    MCP: the student's AI client through /mcp (save_to_diary).
+    """
+
+    APP = "app"
+    MCP = "mcp"
 
 
 class PracticePhase(enum.StrEnum):
@@ -479,10 +491,46 @@ class DiaryEntry(UUIDMixin, TimestampMixin, Base):
         index=True,
     )
 
+    # -- Where it was written (BE-140) --
+    # app: the VELO app (every entry before BE-140 too -- the migration
+    # backfilled the feed snapshots to say so); mcp: the student's AI client
+    # through /mcp. The API returns it (DiaryEntryResponse, the feed
+    # snapshot); the app does not show it yet (owner ruling).
+    created_via: Mapped[str] = mapped_column(
+        String(10),
+        default=DiaryEntrySource.APP.value,
+        server_default=DiaryEntrySource.APP.value,
+    )
+    # -- Client retry key (BE-140, save_to_diary) --
+    # NULL: no key, every call is a new entry. A value: the same student
+    # with the same key gets the SAME entry back -- unique per student in
+    # the schema (uq_diary_entries_user_request, partial: NULLs excluded,
+    # and NULL is distinct from NULL anyway). The empty string is refused
+    # before it gets here: inside the index it would be a value, not "no
+    # key" (BE-140 gate R2).
+    request_id: Mapped[str | None] = mapped_column(
+        String(128), default=None,
+    )
+
     __table_args__ = (
         CheckConstraint(
             "mood IS NULL OR mood BETWEEN 1 AND 10",
             name="ck_diary_entry_mood",
+        ),
+        CheckConstraint(
+            "created_via IN ('app', 'mcp')",
+            name="ck_diary_entry_created_via",
+        ),
+        CheckConstraint(
+            "request_id IS NULL OR length(request_id) > 0",
+            name="ck_diary_entry_request_id_not_empty",
+        ),
+        Index(
+            "uq_diary_entries_user_request",
+            "user_id",
+            "request_id",
+            unique=True,
+            postgresql_where=text("request_id IS NOT NULL"),
         ),
         CheckConstraint(
             "entry_type IN ('note', 'dream')",

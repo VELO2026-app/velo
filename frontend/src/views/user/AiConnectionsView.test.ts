@@ -275,6 +275,60 @@ describe('AiConnectionsView', () => {
     })
   })
 
+  describe('typography (BE-139 item 11)', () => {
+    // Every text a person reads on this screen, in every state: the product
+    // dash «—», never the code/docs convention '--'. Pair: the dash IS there.
+    function assertDashes(where: string): void {
+      const text = document.body.textContent ?? ''
+      expect(text, where).not.toMatch(/(^|[^-])--([^-]|$)/)
+    }
+
+    it('no "--" in the list, the form or the shown token; "—" present', async () => {
+      vi.mocked(mcpApi.listMcpTokens).mockResolvedValue({ items: [item('a')] })
+      vi.mocked(mcpApi.createMcpToken).mockResolvedValue({ token: TOKEN, item: item('n') })
+      mount()
+      await flush()
+      assertDashes('list')
+      expect(host!.textContent).toContain('—')
+      await openAndFill('x')
+      assertDashes('form')
+      el<HTMLButtonElement>('[data-test="create"]')!.click()
+      await flush()
+      assertDashes('token shown')
+      expect(el('[data-test="token-once"]')!.textContent).toContain('—')
+    })
+
+    it('the copy refusal toast uses the dash', async () => {
+      writeText.mockRejectedValue(new Error('NotAllowedError'))
+      vi.mocked(mcpApi.createMcpToken).mockResolvedValue({ token: TOKEN, item: item('n') })
+      mount()
+      await flush()
+      await openAndFill('c')
+      el<HTMLButtonElement>('[data-test="create"]')!.click()
+      await flush()
+      el<HTMLButtonElement>('[data-test="copy"]')!.click()
+      await flush()
+      const phrase = String(toastError.mock.calls[0]?.[0])
+      expect(phrase).toContain('—')
+      expect(phrase).not.toContain('--')
+    })
+
+    it('a taken name is refused in words (mcp_token_name_taken)', async () => {
+      vi.mocked(mcpApi.createMcpToken).mockRejectedValue(
+        new ApiResponseError(409, 'taken', 'mcp_token_name_taken'),
+      )
+      mount()
+      await flush()
+      await openAndFill('TEST')
+      el<HTMLButtonElement>('[data-test="create"]')!.click()
+      await flush()
+      expect(toastError).toHaveBeenCalledWith(
+        expect.stringContaining('Токен с таким названием уже есть'),
+      )
+      expect(el('[data-test="token-once"]')).toBeNull()
+    })
+  })
+
   describe('copy', () => {
     async function created(): Promise<void> {
       vi.mocked(mcpApi.createMcpToken).mockResolvedValue({ token: TOKEN, item: item('n') })

@@ -175,6 +175,8 @@ function entry(overrides: Partial<DiaryEntryResponse> = {}): DiaryEntryResponse 
     content: 'Сегодня было спокойно и ясно.',
     mood: null,
     is_deleted: false,
+    // BE-140: every entry carries its source (app | mcp).
+    created_via: 'app',
     created_at: '2026-07-16T10:00:00Z',
     updated_at: null,
     ...overrides,

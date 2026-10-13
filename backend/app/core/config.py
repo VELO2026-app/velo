@@ -728,6 +728,19 @@ class Settings(BaseSettings):
     # Verification refreshes mcp_tokens.last_used_at at most once per this
     # many seconds per token, so /mcp traffic is not a write per request.
     mcp_token_last_used_interval_seconds: int = 60
+    # -- MCP phase 1 (BE-139): /mcp and the read tools --
+    # Read-tool calls per token per fixed 60-second window (owner ruling).
+    # Counted per tools/call, not per HTTP request; the 61st call answers
+    # the tool error rate_limited with the seconds left in the window.
+    mcp_read_calls_per_minute: int = 60
+    # A master's free text (description, what to prepare, contraindications)
+    # is cut to this many characters in get_practice, with truncated: true.
+    mcp_master_text_max_chars: int = 2000
+    # -- MCP phase 2 (BE-140): write tools, per token per fixed hour --
+    # book_practice + cancel_my_booking share one budget; save_to_diary has
+    # its own; reads keep theirs. Every call counts, refusals included.
+    mcp_action_calls_per_hour: int = 10
+    mcp_diary_writes_per_hour: int = 30
 
     # -- Admin (Phase 2.3 / 6.6 / 3.3) --
     # Max length of admin notes on master verify/reject actions

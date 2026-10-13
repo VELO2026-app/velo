@@ -48,6 +48,7 @@ from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
 from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.diary.models import (
     DiaryEntry,
+    DiaryEntrySource,
     DiaryEntryType,
     Feedback,
     Reflection,
@@ -400,8 +401,17 @@ async def create_diary_entry(
     practice_id: UUID | None = None,
     entry_type: str = DiaryEntryType.NOTE.value,
     practice_phase: str | None = None,
+    created_via: str = DiaryEntrySource.APP.value,
+    request_id: str | None = None,
 ) -> DiaryEntry:
     """Create a personal diary entry.
+
+    created_via / request_id (BE-140): the source of the entry and the
+    client's retry key; only /mcp passes them (save_to_diary), the app's
+    POST leaves the defaults -- app, no key. The key's uniqueness per
+    student is the schema's (uq_diary_entries_user_request); a duplicate
+    raises IntegrityError at the flush below, which the MCP caller catches
+    under its own savepoint.
 
     Args:
         user: Authenticated user.
@@ -432,6 +442,8 @@ async def create_diary_entry(
         practice_id=practice_id,
         entry_type=entry_type,
         practice_phase=practice_phase,
+        created_via=created_via,
+        request_id=request_id,
     )
     session.add(entry)
     await session.flush()

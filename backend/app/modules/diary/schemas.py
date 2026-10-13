@@ -315,6 +315,8 @@ class DiaryEntryResponse(BaseModel):
     content: str
     mood: int | None
     is_deleted: bool
+    # BE-140: where the entry was written -- app | mcp.
+    created_via: str
     created_at: datetime
     updated_at: datetime | None
 

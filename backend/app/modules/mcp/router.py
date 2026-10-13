@@ -71,6 +71,8 @@ async def create_mcp_token_endpoint(
 
     409 mcp_token_limit_reached: the student already holds the maximum of
     live tokens (settings.mcp_tokens_max_active_per_user).
+    409 mcp_token_name_taken: a live token of the student already has this
+    name, ignoring case (BE-139).
     """
     token, row = await create_mcp_token(user, body, session)
     return McpTokenCreated(token=token, item=McpTokenItem.model_validate(row))

@@ -553,6 +553,8 @@ async def upsert_entry_event(
         "mood": entry.mood,
         "practice_id": str(entry.practice_id) if entry.practice_id else None,
         "practice_phase": entry.practice_phase,
+        # BE-140: app | mcp -- the API returns it, the app does not show it yet.
+        "created_via": entry.created_via,
     }
 
     existing = await _find_object_event(

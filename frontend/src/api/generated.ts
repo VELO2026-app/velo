@@ -902,6 +902,7 @@ export interface DiaryEntryResponse {
   content: string
   mood: number | null
   is_deleted: boolean
+  created_via: string
   created_at: string
   updated_at: string | null
 }

@@ -701,7 +701,10 @@ describe('ReflectionView', () => {
       submitBtn()?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Вы уже поделились -- спасибо')
+      // The phrase now carries the product's dash (BE-139 item 11: user-facing
+      // text uses «—»; the '--' it was written with is the code/docs
+      // convention). Still asserted verbatim -- the mapping is the point.
+      expect(toastError).toHaveBeenCalledWith('Вы уже поделились — спасибо')
       expect(successTitle()).toBe('')
       expect(submitBtn()).toBeDefined()
       // A refused submit changed nothing on the server -- no refresh either.

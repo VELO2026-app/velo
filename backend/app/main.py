@@ -90,6 +90,7 @@ from app.modules.chats.router import router as chats_router  # Phase 6 / T2
 from app.modules.comms_proxy.router import router as notifications_router  # Phase 6 / T1
 from app.modules.support.router import router as support_router  # B34 / T-38
 from app.modules.mcp.router import router as mcp_tokens_router  # BE-138
+from app.modules.mcp.server import MCP_PATH, build_mcp_app  # BE-139
 
 # Model imports for Alembic and relationship resolution.
 from app.modules.promos.models import Promo  # noqa: F401  # Phase 6.7
@@ -129,6 +130,12 @@ logger = structlog.get_logger()
 # ---------------------------------------------------------------------------
 # Lifespan
 # ---------------------------------------------------------------------------
+
+# BE-139: the /mcp door. One instance per process; its session manager runs
+# inside the lifespan below (Starlette would not run a mounted app's own).
+mcp_app = build_mcp_app()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Manage application lifecycle: startup and shutdown."""
@@ -262,7 +269,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             env=settings.app_env,
             log_level=settings.log_level,
         )
-        yield
+        # BE-139: the MCP SDK's session manager -- stateless, it keeps no MCP
+        # session, but it owns the task group each /mcp request runs in. It
+        # wraps only the yield: the relay and pollers above start and stop
+        # exactly as before.
+        async with mcp_app.session_manager.run():
+            yield
     finally:
         # Stop comms outbox relay (Phase 6 / T0). suppress() instead of
         # the try/except-pass of the older blocks -- lint-clean (SIM105)
@@ -357,6 +369,10 @@ app.include_router(notifications_router)          # Phase 6 / T1 (comms proxy)
 app.include_router(chats_router)                   # Phase 6 / T2 (chat proxy)
 app.include_router(support_router)                 # B34 / T-38 (support proxy)
 app.include_router(mcp_tokens_router)              # BE-138 (MCP tokens)
+# BE-139: exactly /mcp, every method, no trailing-slash redirect (an MCP
+# client's POST may not follow one). An ASGI app as the endpoint, so the
+# gate sees the raw scope; not in the OpenAPI schema.
+app.router.add_route(MCP_PATH, mcp_app.asgi, include_in_schema=False)
 
 
 # ---------------------------------------------------------------------------
