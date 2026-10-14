@@ -107,7 +107,7 @@ so the order is invitation -> join -> onboarding (skippable) -> school.
     <div
       v-if="joinedSchoolId"
       class="cg-join__onboarding"
-      :style="{ paddingTop: contentSafeTop + 'px' }"
+      :style="{ paddingTop: contentSafeTopCss }"
     >
       <OnboardingView @done="finishOnboarding" />
     </div>
@@ -141,7 +141,7 @@ const notFound = ref(false)
 const preview = ref<CuratorGroupInvitePreviewResponse | null>(null)
 const joining = ref(false)
 
-const { contentSafeTop } = useSafeArea()
+const { contentSafeTopCss } = useSafeArea()
 
 /**
  * FE-83: the school the account just joined while its onboarding flag is
