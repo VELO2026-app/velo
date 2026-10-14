@@ -300,12 +300,12 @@ describe('ExternalActivityCreateView', () => {
       const titles = Array.from(host?.querySelectorAll('.velo-section-title') ?? []).map((t) =>
         t.textContent?.trim(),
       )
-      // «Мое состояние» is the unified scale's section (no star: the mood
+      // «Мое состояние после» is the unified scale's section (no star: the mood
       // never blocks -- the visible default always carries).
       expect(titles).toEqual([
         'Когда произошло событие *',
         'Выбор активности *',
-        'Мое состояние',
+        'Мое состояние после',
         'Мысли',
       ])
       expect(thoughtTextarea().getAttribute('placeholder')).toBe(
@@ -466,7 +466,7 @@ describe('ExternalActivityCreateView', () => {
     })
   })
 
-  describe('Мое состояние (the FE-85 unified scale)', () => {
+  describe('Мое состояние после (the FE-85 unified scale)', () => {
     it('renders the five-face deck, the active face «Нормально», the range on the default 5', () => {
       mount()
 

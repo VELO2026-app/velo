@@ -16,8 +16,9 @@
       gap into the 33px layout padding, clear of the screen edge; fields
       keep the full rail;
     - the header carries no right-hand "..." placeholder;
-    - the «Мое состояние» block is the FE-85 unified MoodSlider (PM-9 branch
-      1, owner 2026-10-12): the same 1..10 deck as Check-in/Feedback, gated
+    - the «Мое состояние после» block is the FE-85 unified MoodSlider (PM-9
+      branch 1, owner 2026-10-12): the same 1..10 deck as Check-in/Feedback,
+      gated
       by EXTERNAL_ACTIVITY_MOOD_HIDDEN in utils/constants.ts -- ONE flag
       also drives the feed card's «· N/10» suffix.
 
@@ -166,7 +167,7 @@
         }}</span>
       </section>
 
-      <!-- ================= Мое состояние =================
+      <!-- ================= Мое состояние после =================
            The FE-85 unified 1..10 scale -- the same MoodSlider deck as
            Check-in/Feedback (PM-9 branch 1 + the owner's unification
            ruling, 2026-10-12; the three-button 2/6/9 picker is gone).
@@ -176,7 +177,7 @@
            backend mood 422 (contract drift), which no interaction on this
            screen can otherwise produce. -->
       <section v-if="!EXTERNAL_ACTIVITY_MOOD_HIDDEN" class="ea__section">
-        <h2 class="velo-section-title">Мое состояние</h2>
+        <h2 class="velo-section-title">Мое состояние после</h2>
 
         <div class="ea__state-block" data-field="state">
           <MoodSlider
