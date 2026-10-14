@@ -178,6 +178,8 @@ export type {
   UpdateDiaryEntryRequest,
   UpdateReportRequest,
   MasterApplicationInfo,
+  TimezoneCatalogResponse,
+  TimezoneLabel,
   UserResponse,
   UserRole,
   UserStatsResponse,

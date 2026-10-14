@@ -15,9 +15,17 @@
 # =============================================================================
 
 # ---------------------------------------------------------------------------
+# Base image (BE-157): pinned by the INDEX digest of the multi-arch manifest
+# list -- the pull picks the platform (servers are amd64). The tag only names
+# what is inside (Python 3.12.15 on Debian 13 trixie); the digest decides.
+# The same string is in BOTH stages below and in scripts/velo-manage.sh
+# (run_codec_vector_diff): moving the base means changing all three at once.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
 # Stage 1: Builder — install all dependencies
 # ---------------------------------------------------------------------------
-FROM python:3.12-slim AS builder
+FROM python:3.12.15-slim-trixie@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1 AS builder
 
 WORKDIR /build
 
@@ -30,7 +38,7 @@ RUN python -m venv /opt/venv && \
 # ---------------------------------------------------------------------------
 # Stage 2: Runtime
 # ---------------------------------------------------------------------------
-FROM python:3.12-slim AS runtime
+FROM python:3.12.15-slim-trixie@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1 AS runtime
 
 WORKDIR /app
 

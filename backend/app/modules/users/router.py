@@ -5,6 +5,7 @@
 # ENDPOINTS:
 #   GET   /api/v1/users/me  — Get current user profile
 #   PATCH /api/v1/users/me  — Update current user profile
+#   GET   /api/v1/users/timezones -- time zone catalog for the picker (BE-157)
 #
 # TD-029 fix: PATCH /users/me now uses get_current_user_write instead of
 #   get_current_user. Both the dependency and the router declare
@@ -28,11 +29,13 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_reader, get_db_session
+from app.core.timezone_catalog import timezone_catalog
 from app.modules.auth.dependencies import get_current_user, get_current_user_write
 from app.modules.users.models import User
 from app.modules.users.schemas import (
     MasterApplicationInfo,
     RoleSwitchRequest,
+    TimezoneCatalogResponse,
     UserResponse,
     UserUpdate,
 )
@@ -89,6 +92,20 @@ async def get_me(
     _user_response_with_capability).
     """
     return await _user_response_with_capability(user, session)
+
+
+@router.get(
+    "/timezones",
+    response_model=TimezoneCatalogResponse,
+    dependencies=[Depends(get_current_user)],
+)
+async def get_timezone_catalog() -> dict:
+    """Every time zone name the profile accepts, for the timezone picker.
+
+    Built from the same data as the validators (app/core/timezone_catalog.py),
+    so the picker never depends on how the browser engine spells a zone.
+    """
+    return timezone_catalog()
 
 
 @router.patch("/me", response_model=UserResponse)
