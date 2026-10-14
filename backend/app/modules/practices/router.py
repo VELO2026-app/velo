@@ -7,9 +7,11 @@
 #   GET    /api/v1/practices                     -- public feed (4.3)
 #   POST   /api/v1/practices                     -- create (master only)
 #   POST   /api/v1/practices/{id}/zoom/start-ticket -- one-time Zoom start ticket (556)
-#   POST   /api/v1/practices/{id}/zoom/retry      -- retry a failed Zoom meeting (A4 V2, 572)
+#   POST   /api/v1/practices/{id}/zoom/retry      -- retry a failed Zoom meeting
+#                                                    (A4 V2, 572)
 #   GET    /api/v1/practices/{id}/zoom/resolve    -- how THIS user enters (T-35)
-#   GET    /api/v1/practices/zoom/start           -- redeem ticket, redirect to Zoom (556)
+#   GET    /api/v1/practices/zoom/start           -- redeem ticket, redirect to
+#                                                    Zoom (556)
 #   GET    /api/v1/practices/{id}                 -- get by id (any auth user)
 #   PATCH  /api/v1/practices/{id}                 -- update (master or school curator)
 #   DELETE /api/v1/practices/{id}                 -- soft delete draft (master|curator)

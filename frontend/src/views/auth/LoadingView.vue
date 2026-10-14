@@ -4,7 +4,7 @@
   Displayed while auth initialization is in progress.
   Uses the SAME white mandala as WelcomeView (logo-white.svg, large) so the
   loading -> welcome transition is seamless: no blue-mandala flash before the
-  white one (the default `logo.svg` is the colored/blue variant). The white
+  white one (VeloLogo's default variant is the colored/blue one). The white
   logo already contains the VELΘ wordmark, so there is no separate title.
   Spinner stays as the loading cue.
 -->

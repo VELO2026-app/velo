@@ -415,12 +415,27 @@ async function initAuth(): Promise<void> {
     return
   }
 
-  // Telegram -- unchanged by Standalone phase 3. Step 1: restore this run's
-  // session (a page reload inside the Mini App).
+  // Telegram. Step 1: restore this run's session (a page reload inside the
+  // Mini App -- initData older than the backend's 300 s window would be
+  // refused, so a reload cannot simply sign in again).
+  //
+  // The restored session is used ONLY if it belongs to the person who opened
+  // the app: its telegram_id must equal the user id in THIS initData.
+  // Telegram Web keeps the iframe's sessionStorage across an account switch
+  // in the same tab, so without this check account B would open account A.
+  // The id is read from the unsigned initData string -- enough, because the
+  // check can only DROP a session or keep one this tab already holds; every
+  // new session still comes from the server, which verifies the signature.
   const restored = await authStore.restoreSession()
   if (restored === 'restored') {
-    isReady.value = true
-    return
+    const ownerId = authStore.user?.telegram_id ?? null
+    if (ownerId !== null && ownerId === initDataUserId(platform.getInitData())) {
+      isReady.value = true
+      return
+    }
+    // Someone else's session (or initData naming nobody): revoke it and
+    // let initData decide.
+    await authStore.discardSession()
   }
 
   // Step 2: sign in with initData. A failure leaves the session cleared and
@@ -430,6 +445,24 @@ async function initAuth(): Promise<void> {
     await authStore.loginViaTelegram(initData)
   }
   isReady.value = true
+}
+
+/**
+ * The Telegram user id in an initData string, or null when there is none:
+ * no string, no `user` field, not JSON, or no integer `id`. Unsigned -- see
+ * initAuth for why that is enough for the one decision it feeds.
+ */
+export function initDataUserId(initData: string | null): number | null {
+  if (!initData) return null
+  const raw = new URLSearchParams(initData).get('user')
+  if (!raw) return null
+  try {
+    const user: unknown = JSON.parse(raw)
+    const id = user !== null && typeof user === 'object' ? (user as { id?: unknown }).id : undefined
+    return typeof id === 'number' && Number.isSafeInteger(id) ? id : null
+  } catch {
+    return null
+  }
 }
 
 /**

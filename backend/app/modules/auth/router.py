@@ -69,6 +69,7 @@ async def auth_telegram(
       1. Validate initData signature (HMAC-SHA256) + auth_date freshness
       2. CRITICAL-4: Rate limit per telegram_id (5 req / 60s)
       3. Find or create User by telegram_id
+      3a. Refuse a deactivated account -- no session for it (403)
       4. Flush DB (get user.id) -- commit deferred to get_db_session
       5. Create session in Redis (token, TTL 30 days)
       6. Return user + session_token
@@ -116,6 +117,17 @@ async def auth_telegram(
 
     # Step 3: Create or update user.
     user = await upsert_user_on_login(telegram_user, session)
+
+    # Step 3a: a deactivated account gets no session. Before this check a
+    # session was created and every request then answered 403 from
+    # get_current_user; now the door itself refuses, the same refusal the
+    # browser sign-in gives (browser_login_complete). The upsert above is
+    # undone by get_db_session, which rolls the request's transaction back
+    # when the endpoint raises (par0 §8) -- a dependency, not a property of
+    # this function.
+    if not user.is_active:
+        logger.warning("telegram_auth_deactivated", user_id=str(user.id))
+        raise ForbiddenError("Account is deactivated", code="account_deactivated")
 
     # Step 4: M-02 fix: flush (not commit) to get user.id for Redis.
     # get_db_session will commit after return. If Redis fails,

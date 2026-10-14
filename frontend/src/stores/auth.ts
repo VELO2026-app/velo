@@ -145,6 +145,38 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
+   * Close `staleToken`'s session on the server, best-effort. The ONE place a
+   * session this page is abandoning gets revoked (completeBrowserLogin,
+   * discardSession): left alone it would stay live in Redis for the rest of
+   * its 30 days with nobody holding it. A 401 (already gone) or no answer is
+   * fine -- either way it is not this page's session any more. A 401 here
+   * also fires the client's onUnauthorized -> _clearSession; the callers set
+   * or clear the session themselves right after.
+   */
+  async function _revokeOnServer(staleToken: string): Promise<void> {
+    setAuthToken(staleToken)
+    try {
+      await api.post('/api/v1/auth/logout')
+    } catch {
+      // Already gone (401) or unreachable -- it expires on its own.
+    }
+  }
+
+  /**
+   * Drop the session this page holds -- revoked on the server, forgotten
+   * here -- WITHOUT logout()'s side effects (logout() closes the Mini App in
+   * Telegram). Used when a restored session turns out not to belong to the
+   * person who opened the app (useAuth.ts, initAuth).
+   */
+  async function discardSession(): Promise<void> {
+    const current = token.value
+    if (current) {
+      await _revokeOnServer(current)
+    }
+    _clearSession()
+  }
+
+  /**
    * Browser sign-in, step 1: ask the backend for Telegram's URL, remember
    * { state, mark } in this browser (platform/browser-login.ts) and leave
    * for Telegram. Throws the API error for the login screen to word.
@@ -178,12 +210,7 @@ export const useAuthStore = defineStore('auth', () => {
       )
       const previous = platform.readSessionToken()
       if (previous && previous !== response.session_token) {
-        setAuthToken(previous)
-        try {
-          await api.post('/api/v1/auth/logout')
-        } catch {
-          // Already gone (401) or unreachable -- it expires on its own.
-        }
+        await _revokeOnServer(previous)
       }
       _setToken(response.session_token)
       _setUser(response.user)
@@ -333,6 +360,7 @@ export const useAuthStore = defineStore('auth', () => {
     restoreSession,
     startBrowserLogin,
     completeBrowserLogin,
+    discardSession,
     fetchMe,
     updateProfile,
     switchRole,
