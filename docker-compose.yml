@@ -115,7 +115,12 @@ services:
     # nothing and makes this file promise what the database does not do.
     # If the cluster is ever recreated, re-check: the guard that catches a
     # locale change is test_three_spellings_are_one_name_in_its_freshest_form.
-    image: postgres:16
+    # BE-157: pinned by the INDEX digest; the tag names what is inside
+    # (PostgreSQL 16.15, Debian 13 trixie, glibc 2.41, system tzdata 2026c).
+    # The image's glibc is the collation provider of the live volume: moving
+    # to an image on another glibc needs datcollversion compared with
+    # pg_database_collation_actual_version() before the rollout.
+    image: postgres:16.15-trixie@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
     container_name: velo-postgres
     # NARROW env (T-32 item 9): the four keys this container actually
     # consumes, projected out of backend/.env by scripts/env-render.sh
@@ -139,7 +144,8 @@ services:
     logging: *default-logging
 
   redis:
-    image: redis:7-alpine
+    # BE-157: pinned by the INDEX digest (Redis 7.4.11, Alpine 3.21).
+    image: redis:7.4.11-alpine3.21@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
     container_name: velo-redis
     # NARROW env (T-32 item 9), same file as postgres above. redis needs
     # exactly REDIS_PASSWORD -- for `command` and for the healthcheck --

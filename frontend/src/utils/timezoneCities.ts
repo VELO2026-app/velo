@@ -10,6 +10,11 @@
 //
 //   city -> RU display name
 //   iana -> IANA zone id (must be a real, Intl-resolvable zone)
+//
+// ONE zone, TWO spellings (BE-157): the backend stores the canonical IANA name
+// ("Asia/Kathmandu", backend/app/core/timezones.py), while V8 lists and
+// resolves the old one ("Asia/Katmandu"); Safari may do the opposite. Rows and
+// the saved value are therefore compared with sameZone(), never with ===.
 //   q    -> lowercase search haystack (RU + EN/translit synonyms); the picker
 //           matches the typed query against `city` (lowercased) OR `q`.
 //
@@ -169,6 +174,36 @@ const ALIASES: TimezoneCity[] = [
   { city: 'Рио-де-Жанейро', iana: 'America/Sao_Paulo', q: 'rio de janeiro rio-de-janeiro rio' },
 ]
 
+const engineIds = new Map<string, string | null>()
+
+/** The engine's own id for a zone (V8: "Asia/Kathmandu" -> "Asia/Katmandu"),
+ * or null when the engine does not know the zone (an older webview may lack a
+ * zone the backend already knows). Cached: the picker asks for every row. */
+function engineZoneId(iana: string): string | null {
+  let id = engineIds.get(iana)
+  if (id === undefined) {
+    try {
+      id = new Intl.DateTimeFormat('en', { timeZone: iana }).resolvedOptions().timeZone
+    } catch {
+      id = null
+    }
+    engineIds.set(iana, id)
+  }
+  return id
+}
+
+function zoneKey(iana: string): string {
+  return engineZoneId(iana) ?? iana
+}
+
+/** True when both names are the same zone for this engine, whichever spelling
+ * each one uses. A zone the engine does not know matches only itself. */
+export function sameZone(a: string, b: string): boolean {
+  if (a === b) return true
+  const id = engineZoneId(a)
+  return id !== null && id === engineZoneId(b)
+}
+
 // Full IANA coverage: every remaining zone the runtime knows about, so the search
 // is complete (operator 2026-06-19 — the curated list missed cities like Rio). The
 // display name is derived from the zone id's last segment (English); the curated
@@ -178,11 +213,14 @@ function generatedZones(): TimezoneCity[] {
   const supportedValuesOf = (Intl as unknown as { supportedValuesOf?: (key: string) => string[] })
     .supportedValuesOf
   if (typeof supportedValuesOf !== 'function') return []
-  const covered = new Set([...CURATED, ...ALIASES].map((c) => c.iana))
+  // Keyed by the engine's own id, so a curated canonical name (Europe/Kyiv)
+  // also covers the engine's old spelling of the same zone (Europe/Kiev).
+  const covered = new Set([...CURATED, ...ALIASES].map((c) => zoneKey(c.iana)))
   const out: TimezoneCity[] = []
   for (const iana of supportedValuesOf('timeZone')) {
-    if (covered.has(iana) || iana.startsWith('Etc/')) continue
-    covered.add(iana)
+    const key = zoneKey(iana)
+    if (covered.has(key) || iana.startsWith('Etc/')) continue
+    covered.add(key)
     const segment = iana.split('/').pop() ?? iana
     const city = segment.replace(/_/g, ' ')
     out.push({ city, iana, q: `${city} ${iana}`.toLowerCase() })

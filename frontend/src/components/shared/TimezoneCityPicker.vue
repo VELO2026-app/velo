@@ -26,7 +26,7 @@
         :key="c.iana + c.city"
         type="button"
         class="tz-picker__row"
-        :class="{ 'tz-picker__row--active': c.iana === modelValue }"
+        :class="{ 'tz-picker__row--active': isSelected(c.iana) }"
         @click="select(c.iana)"
       >
         <span class="tz-picker__main">
@@ -37,7 +37,7 @@
           <span class="tz-picker__time">{{ timeAt(c.iana) }}</span>
           <span class="tz-picker__off">{{ formatUtcOffset(c.iana) }}</span>
         </span>
-        <span v-if="c.iana === modelValue" class="tz-picker__check">
+        <span v-if="isSelected(c.iana)" class="tz-picker__check">
           <IconCheck :size="18" />
         </span>
       </button>
@@ -50,7 +50,7 @@
 import { computed, ref, watch } from 'vue'
 import { VInput } from '@/components/ui'
 import { IconSearch, IconCheck } from '@/components/icons'
-import { TIMEZONE_CITIES } from '@/utils/timezoneCities'
+import { TIMEZONE_CITIES, sameZone } from '@/utils/timezoneCities'
 import { formatUtcOffset } from '@/utils/practiceOptions'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 
@@ -80,18 +80,23 @@ const listEl = ref<HTMLElement | null>(null)
 
 // Owner ruling: the SELECTED zone leads the list -- the current choice (and
 // its IconCheck) must be visible without scrolling. Rows sharing the zone
-// float together (the check is per-iana: Москва + Санкт-Петербург, London's
-// cities); everything else keeps the curated/generated order, and search
-// matches obey the same rule.
+// float together (the check is per-zone: Москва + Санкт-Петербург, London's
+// cities; a zone matches in either spelling, see sameZone); everything else
+// keeps the curated/generated order, and search matches obey the same rule.
 const filtered = computed(() => {
   const t = query.value.trim().toLowerCase()
   const base = t
     ? TIMEZONE_CITIES.filter((c) => c.city.toLowerCase().includes(t) || c.q.includes(t))
     : TIMEZONE_CITIES
-  const sel = props.modelValue
-  if (!sel) return base
-  return [...base.filter((c) => c.iana === sel), ...base.filter((c) => c.iana !== sel)]
+  if (!props.modelValue) return base
+  return [...base.filter((c) => isSelected(c.iana)), ...base.filter((c) => !isSelected(c.iana))]
 })
+
+/** The row's zone is the saved one, in either spelling (BE-157: the backend
+ * stores "Asia/Kathmandu", V8 lists "Asia/Katmandu"). */
+function isSelected(iana: string): boolean {
+  return sameZone(iana, props.modelValue)
+}
 
 // FE-36 follow-up: with the keyboard open the list is pinned to exactly one
 // row (see the keyboard-open styles). A stale scrollTop would leave a MIDDLE

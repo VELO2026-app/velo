@@ -584,18 +584,20 @@ run_frontend_tests() {
 # there), the frontend suite inside an image built from frontend/ alone (no
 # backend/ there). So: a throwaway container with the whole checkout mounted.
 #
-# python:3.12-slim, not repo-app: it is already on any box that has ever
-# built the backend (its Dockerfile's FROM) and `docker image prune -f`
-# leaves tagged images alone, so this pulls nothing in practice -- while not
-# depending on how compose happened to name the project's own image. The
-# mount is read-only; this step can only ever report.
+# The backend's base image, not repo-app: the SAME pinned reference as both
+# FROM lines of backend/Dockerfile (BE-157 -- change all three together), so
+# the box needs no image beyond the one the backend is built on, and this does
+# not depend on how compose happened to name the project's own image. If the
+# box does not hold it (a prune, a fresh box), `docker run` pulls exactly that
+# digest. The mount is read-only; this step can only ever report.
 #
 # NOT skipped when docker is missing -- a red is correct there. `velo test`
 # and `velo update` cannot reach this line without a working docker anyway,
 # and a skip is exactly how this check would rot into decoration.
 run_codec_vector_diff() {
     echo "Checking the shared codec vector (T-44)..."
-    docker run --rm -v "$COMPOSE_DIR:/repo:ro" python:3.12-slim python -c '
+    docker run --rm -v "$COMPOSE_DIR:/repo:ro" \
+        python:3.12.15-slim-trixie@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1 python -c '
 import json, sys
 
 START = "T-44 CODEC VECTOR START"

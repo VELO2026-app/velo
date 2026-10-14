@@ -134,9 +134,10 @@ const currentSlide = computed(() => SLIDES[step.value] ?? SLIDES[0])
 // We do NOT clamp to the curated TIMEZONE_OPTIONS set and do NOT prefer the
 // profile zone: everyone reaching this screen is a NEW user whose profile
 // zone is just the server default ('UTC') -- preferring it would shadow the
-// real device zone. The backend accepts any valid IANA id (users/schemas.py
-// validate_timezone), so the detected zone is sent as-is. Only a missing /
-// invalid detection falls back, and the fallback is UTC.
+// real device zone. The backend accepts any known IANA id in either spelling
+// and stores it canonical ("Asia/Katmandu" -> "Asia/Kathmandu", users/schemas.py
+// validate_timezone -> app/core/timezones.py), so the detected zone is sent
+// as-is. Only a missing / invalid detection falls back, and the fallback is UTC.
 const FALLBACK_TIMEZONE = 'UTC'
 
 /**
