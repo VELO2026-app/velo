@@ -81,21 +81,48 @@ def return_url() -> str | None:
          of the fact the installer already wrote into CORS_ORIGINS; two
          copies drift apart.
     """
+    origin, _reason = _frontend_origin()
+    return f"{origin}{RETURN_PATH}" if origin is not None else None
+
+
+def _frontend_origin() -> tuple[str | None, str]:
+    """The frontend origin from CORS_ORIGINS, or None and why not.
+
+    The ONE implementation of the rule return_url() states; state() (velo
+    doctor) reads the same reason instead of re-deriving it. Reasons:
+    "ok", "empty", "several", "wildcard", "not_https" (another scheme),
+    "not_origin" (a path, query, fragment, credentials or no host).
+    """
     origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
-    if len(origins) != 1:
-        return None
+    if not origins:
+        return None, "empty"
+    if len(origins) > 1:
+        return None, "several"
+    if origins[0] == "*":
+        return None, "wildcard"
     parts = urlsplit(origins[0])
+    if parts.scheme != "https":
+        return None, "not_https"
     if (
-        parts.scheme != "https"
-        or not parts.hostname
+        not parts.hostname
         or parts.path
         or parts.query
         or parts.fragment
         or parts.username
         or parts.password
     ):
-        return None
-    return f"https://{parts.netloc}{RETURN_PATH}"
+        return None, "not_origin"
+    return f"https://{parts.netloc}", "ok"
+
+
+def state() -> tuple[list[str], str]:
+    """Why browser sign-in is or is not configured, for velo doctor:
+    (missing Telegram login key NAMES, CORS_ORIGINS reason). Configured
+    exactly when the list is empty and the reason is "ok" -- the same two
+    facts the endpoints check (telegram_oidc.configured, return_url). No
+    value of any key is returned."""
+    _origin, reason = _frontend_origin()
+    return telegram_oidc.missing_keys(), reason
 
 
 def _key(state: str) -> str:

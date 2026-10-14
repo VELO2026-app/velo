@@ -1983,6 +1983,69 @@ check_oauth_env() {
     return 0
 }
 
+# Browser sign-in (Standalone phase 3): is it configured in the RUNNING app?
+# The rule lives once, in the backend (app/modules/auth/browser_login.py):
+# this asks the app container through app/modules/auth/doctor_probe.py and
+# only words its one-line answer -- it does not re-derive the rule here.
+# NO VALUE of any key is printed or passed on a command line: the probe
+# answers with key NAMES and a reason word (`missing=A,B cors=<reason>`, or
+# `error=<ExceptionClass>`), parsed with bash builtins.
+# What it checks is the container's environment, i.e. backend/.env as of the
+# last `velo restart` / `velo update`. The Redirect URI in BotFather is NOT
+# checked -- nothing on this server can see it.
+check_browser_login() {
+    if ! $COMPOSE_CMD ps --services --status running 2>/dev/null | grep -qx app; then
+        echo -e "${YELLOW}⊘ Browser sign-in: not checked -- the app container is not running${NC}"
+        return 0
+    fi
+
+    local probe
+    probe=$($COMPOSE_CMD exec -T app python -m app.modules.auth.doctor_probe 2>/dev/null)
+
+    if [[ "$probe" =~ ^error=([A-Za-z_][A-Za-z0-9_]*)$ ]]; then
+        echo -e "${YELLOW}⊘ Browser sign-in: not checked -- the check failed inside the app (${BASH_REMATCH[1]})${NC}"
+        return 0
+    fi
+    if ! [[ "$probe" =~ ^missing=([A-Z0-9_,]*)\ cors=([a-z_]+)$ ]]; then
+        echo -e "${YELLOW}⊘ Browser sign-in: not checked -- no answer from the app${NC}"
+        return 0
+    fi
+
+    local missing_csv="${BASH_REMATCH[1]}" cors="${BASH_REMATCH[2]}"
+    local cors_problem=""
+    case "$cors" in
+        ok)         ;;
+        empty)      cors_problem="CORS_ORIGINS is empty" ;;
+        several)    cors_problem="CORS_ORIGINS lists more than one address" ;;
+        wildcard)   cors_problem="CORS_ORIGINS is the wildcard *" ;;
+        not_https)  cors_problem="CORS_ORIGINS is not an https:// address" ;;
+        not_origin) cors_problem="CORS_ORIGINS has a path, query or credentials -- not a bare https://host" ;;
+        *)          cors_problem="CORS_ORIGINS: unknown answer '$cors'" ;;
+    esac
+
+    if [ -z "$missing_csv" ] && [ -z "$cors_problem" ]; then
+        echo -e "${GREEN}✓ Browser sign-in: configured${NC}"
+    else
+        echo -e "${YELLOW}⊘ Browser sign-in: off${NC}"
+        local key
+        if [ -n "$missing_csv" ]; then
+            echo "  missing in the app's environment: ${missing_csv//,/ }"
+            echo "  to set each one:"
+            for key in ${missing_csv//,/ }; do
+                echo "    velo env set $key"
+            done
+        fi
+        if [ -n "$cors_problem" ]; then
+            echo "  $cors_problem; it must be exactly one https:// address -- the frontend's"
+            echo "    velo env set CORS_ORIGINS"
+        fi
+    fi
+    echo "  (a change in backend/.env takes effect after: velo restart)"
+    echo "  not checked here: the bot's Redirect URI in BotFather (Login Widget ->"
+    echo "  Redirect URIs) must list the frontend address + /auth/telegram/return"
+    return 0
+}
+
 check_attendance_deadends() {
     if ! $COMPOSE_CMD ps 2>/dev/null | grep -q postgres; then
         echo -e "${YELLOW}⊘ Attendance dead-ends: database not running, skipped${NC}"
@@ -3203,10 +3266,12 @@ case "${1:-}" in
         echo ""
         check_oauth_env "$COMPOSE_DIR/backend/.env"
         echo ""
+        check_browser_login
+        echo ""
 
         echo "Checked: vite.env keys, backend/.env keys, nginx config (rendered vs"
         echo "live), attendance dead-ends (data -- warns only, never fails), MCP"
-        echo "OAuth state (informs only, never fails)."
+        echo "OAuth state and browser sign-in (both inform only, never fail)."
         if [ "$VITE_DRIFT" -eq 0 ] && [ "$BACKEND_DRIFT" -eq 0 ] && [ "$NGINX_DRIFT" -eq 0 ]; then
             echo -e "${GREEN}✓ 0 drift found${NC}"
             exit 0

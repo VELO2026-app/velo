@@ -108,10 +108,19 @@ class TelegramUser:
     bot_access_granted: bool
 
 
+def missing_keys() -> list[str]:
+    """The Telegram login keys that are unset or empty, by NAME -- never by
+    value (velo doctor prints this list)."""
+    missing = []
+    if not settings.telegram_login_client_id:
+        missing.append("TELEGRAM_LOGIN_CLIENT_ID")
+    if not settings.telegram_login_client_secret:
+        missing.append("TELEGRAM_LOGIN_CLIENT_SECRET")
+    return missing
+
+
 def configured() -> bool:
-    return bool(
-        settings.telegram_login_client_id and settings.telegram_login_client_secret
-    )
+    return not missing_keys()
 
 
 def _pkce_challenge(verifier: str) -> str:
