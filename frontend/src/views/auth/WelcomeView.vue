@@ -6,15 +6,13 @@
   stage once auth resolves and sends anyone with the flag set straight to
   the app, so the LoadingView splash transitions directly into the dashboard.
 
-  In Telegram the user is already authenticated via initData, so:
-    - "Войти" is effectively a "begin onboarding" button -> emits `enter`.
-      App.vue routes new users into the onboarding carousel (the completed-
-      flag branch to the dashboard remains as a defensive fallback).
-    - "Создать аккаунт" is meaningless inside Telegram (the account already
-      exists) -- it is only relevant for the standalone/browser build (F10),
-      so it is hidden unless isStandalone is true.
+  The person is already signed in when this screen shows (initData in
+  Telegram, "Log In With Telegram" in a browser), so "Войти" is effectively a
+  "begin onboarding" button -> emits `enter`. App.vue routes new users into
+  the onboarding carousel (the completed-flag branch to the dashboard remains
+  as a defensive fallback).
 
-  Style mirrors StandaloneStubView (glass pill buttons, slogan). Logo uses the
+  Style mirrors TelegramStubView (glass pill buttons, slogan). Logo uses the
   white mandala variant at a large size to match Figma 01_Welcome; the wordmark
   is part of the logo, so there is no separate text heading.
 
@@ -52,16 +50,6 @@
         >
           Войти
         </button>
-
-        <!-- Standalone/browser only: account creation has no meaning in Telegram. -->
-        <button
-          v-if="isStandalone"
-          type="button"
-          class="welcome__button welcome__button--glass"
-          @click="$emit('create-account')"
-        >
-          Создать аккаунт
-        </button>
       </div>
     </div>
   </div>
@@ -69,16 +57,11 @@
 
 <script setup lang="ts">
 import { VeloLogo } from '@/components/ui'
-import { useAuth } from '@/composables/useAuth'
 
 defineEmits<{
   /** "Войти" tapped -- continue into the app (carousel or dashboard). */
   enter: []
-  /** "Создать аккаунт" tapped -- standalone build only (F10). */
-  'create-account': []
 }>()
-
-const { isStandalone } = useAuth()
 </script>
 
 <style scoped>
@@ -115,9 +98,7 @@ const { isStandalone } = useAuth()
      so the vertically-centered logo lands at the same Y on both -> no jump on the
      loading -> welcome transition. 137px = message (2 lines @ line-height 1.5 = 54)
      + margin-bottom (33) + primary button (50); all CSS-fixed values, so the height
-     is font-independent as long as the message stays two lines.
-     The optional standalone "Создать аккаунт" button can exceed this; min-height
-     lets it grow there (standalone has no LoadingView jump to worry about). */
+     is font-independent as long as the message stays two lines. */
   min-height: 137px;
   display: flex;
   flex-direction: column;
@@ -171,11 +152,5 @@ const { isStandalone } = useAuth()
 .welcome__button--primary {
   background: var(--velo-primary);
   color: var(--velo-white);
-}
-
-/* Glass variant: transparent fill, primary-colored label (matches mockup). */
-.welcome__button--glass {
-  background: var(--velo-glass-white-01);
-  color: var(--velo-text-primary);
 }
 </style>

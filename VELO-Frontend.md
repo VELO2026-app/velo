@@ -45,7 +45,9 @@
 | ------------------------ | ------------------------------------------------------------------ |
 | `platform/types.ts`      | Интерфейс `Platform` (общий контракт)                              |
 | `platform/telegram.ts`   | Реализация для Telegram WebApp SDK                                 |
-| `platform/standalone.ts` | Заглушки для браузера (Phase F10)                                  |
+| `platform/standalone.ts` | Браузер и рабочий стол: токен в localStorage, вход через Telegram  |
+| `platform/browser-login.ts` | Вход в браузере: метка браузера, разбор возврата из Telegram    |
+| `platform/session-token.ts` | Носитель токена: localStorage вне Telegram, sessionStorage в нём |
 | `platform/index.ts`      | Автодетект: `window.Telegram?.WebApp` → telegram, иначе standalone |
 
 Интерфейс `Platform`:
@@ -64,7 +66,8 @@ interface Platform {
 }
 ```
 
-MVP работает только в Telegram. Standalone — Phase F10.
+Вне Telegram (браузер, приложение с рабочего стола) вход — «Войти через Telegram»
+(OpenID Connect, Стендалон Ф3): `platform/browser-login.ts`, `stores/auth.ts`, `views/auth/TelegramLoginView.vue`.
 
 `openLink` добавлен для экрана Practice-Live (кнопка "Войти" в Zoom). В Telegram —
 `WebApp.openLink(url)`, в standalone — `window.open(url, '_blank', 'noopener')`.
@@ -131,7 +134,7 @@ frontend/
 │   │   └── practiceOptions.ts -- DURATION_OPTIONS, TIMEZONE_OPTIONS, DIRECTION_OPTIONS, DIFFICULTY_OPTIONS
 │   │
 │   └── views/
-│       ├── auth/              -- LoadingView, StandaloneStubView, WelcomeView, OnboardingView
+│       ├── auth/              -- LoadingView, LoadingErrorView, TelegramStubView, TelegramLoginView, BotAccessHint, WelcomeView, OnboardingView
 │       ├── shells/            -- UserShell, MasterShell, AdminShell
 │       ├── user/              -- Dashboard, Calendar, Diary, Profile...
 │       ├── master/            -- Dashboard, Practices, Analytics, Profile...
@@ -218,11 +221,7 @@ frontend/
 /admin/practices[/:id]      → AdminPracticesView / AdminPracticeDetailView
 /admin/withdrawals[/:id]    → AdminWithdrawalsView / AdminWithdrawalDetailView
 
--- Parked Phase A web-auth (DORMANT + UNLINKED; недостижимы в Telegram, ждут Zod E17) --
-/auth/landing               → LandingView
-/auth/login                 → LoginView
-/auth/recover               → RecoverPasswordRequestView
-/auth/recover/reset         → RecoverPasswordSetView
+/auth/telegram/return       → redirect '/' (возврат со страницы входа Telegram; разбирает useAuth.ts)
 
 /auth-error                 → LoadingErrorView
 /404                        → NotFoundView
@@ -259,12 +258,14 @@ frontend/
 **Шлюз входа в `App.vue` (splash -> welcome/onboarding/app).** После успешной авторизации
 `App.vue` не сразу рендерит `RouterView`, а проходит через локальную машину
 состояний `stage: 'welcome' | 'onboarding' | 'app' | null` (обычный `ref`, вне роутера —
-консистентно с тем, как LoadingView/StandaloneStubView гейтят доступ). `null` — стартовое
+консистентно с тем, как LoadingView и экраны входа гейтят доступ). `null` — стартовое
 «ещё решаем»: пока `initAuth()` не завершился, показывается LoadingView (splash).
 
 ```
 !isReady || isLoggingOut || stage === null -> LoadingView (splash)
-isStandalone || !isAuthenticated           -> StandaloneStubView
+restoreUnreachable                         -> LoadingErrorView (вне Telegram: сервер не ответил, токен сохранён)
+!isAuthenticated, в Telegram               -> TelegramStubView
+!isAuthenticated, вне Telegram             -> TelegramLoginView («Войти через Telegram»)
 иначе по stage:
   'welcome'    -> WelcomeView      (только новым: onboarding_completed === false)
   'onboarding' -> OnboardingView   (новым, после «Войти»)
@@ -284,8 +285,8 @@ isStandalone || !isAuthenticated           -> StandaloneStubView
 - Таймзона онбординга берётся с устройства (`Intl`-автодетект, валидный IANA,
   фолбэк `UTC`) — ручного шага в карусели больше нет; сменить пояс —
   Профиль → Часовой пояс (`TimezoneSettingsView`).
-- WelcomeView `@create-account`: только standalone/браузерная сборка (F10); в Telegram
-  кнопка скрыта (`v-if="isStandalone"`).
+- Вход в браузере всегда завершается на свежей загрузке страницы возврата (`initAuth()`),
+  поэтому стартовый stage решается уже с известным пользователем.
 
 **Продуктовое решение (FE-39, отмена прежнего):** раньше Welcome показывался при
 каждом открытии, для всех. Теперь повторный запуск зарегистрированным юзером
@@ -331,7 +332,7 @@ isStandalone || !isAuthenticated           -> StandaloneStubView
 | `VSegment` / `VSegmentTrack`                 | сегмент 2-pill · сегмент track+thumb (variant `tabs`/`toggle`)                                                                                                                                                                |
 | `VMenu` / `VMenuItem` / `VMenuRow`           | «…»-меню (popover) + его строки                                                                                                                                                                                               |
 | `VAccordion`                                 | `title` — раскрывающаяся строка                                                                                                                                                                                               |
-| `VeloLogo`                                   | `size`, `variant` (default/white/**lockup**) — `<img>` из `public/icons/` (lockup = знак+слово, Phase A Landing)                                                                                                                                                                |
+| `VeloLogo`                                   | `size`, `variant` (default/white) — `<img>` из `public/icons/`                                                                                                                                                                |
 
 **Новое (v1.8):** `VPaginationDots` — DS-точки пагинации для онбординг-каруселей (юзер +
 мастер) и визарда заявки. Пропы `total` / `active`: активная точка 13×13, неактивные 7×7.
@@ -515,7 +516,7 @@ hero — `VAvatar xl`. Единый паттерн вызова `:url="avatarUrl
 
 ### 3.8. Флоу МАСТЕР-ПРОГРАММА (DS-rebuild, v1.8)
 
-Путь «стать мастером → онбординг» + Phase A web-auth. DS-first; контролы без бэка =
+Путь «стать мастером → онбординг». DS-first; контролы без бэка =
 honest-стабы (тост «недоступно» + запись для Zod), НЕ фейк.
 
 **Онбординг мастера (пост-апрув).** `views/master/MasterOnboardingView.vue` — карусель,
@@ -544,12 +545,9 @@ Per-session гард — `master.onboardingShownThisSession` (быстрый п�
 (rejected; **generic-причина** до Zod **E14** + 2 CTA: «Написать в поддержку» / «Подать
 новую заявку»). Иллюстрации — `public/onboarding/master-verdict-*.svg`.
 
-**Phase A parked web-auth.** `views/auth/{LandingView,LoginView,RecoverPasswordRequestView,
-RecoverPasswordSetView}.vue` + спящие `/auth/*` маршруты (§2.1). Построены 100% из DS над
-классическим app-фоном; web-auth-бэкенд = Zod **E17**. **Недостижимы в Telegram-флоу:**
-`App.vue` рендерит `StandaloneStubView` для браузерной сессии, role-redirect никогда не ведёт
-на `/auth/*`, и ничто не линкует туда. `LandingView` «Подать заявку» / `LoginView` — инертные
-стабы (тост) до E17.
+**Веб-вход по e-mail и паролю удалён целиком** (решение владельца 14.10.2026, Стендалон Ф3):
+экраны Landing/Login/восстановление×2, их маршруты `/auth/*`, кнопка «Создать аккаунт»
+на Welcome. Единственный вход в браузере — «Войти через Telegram» (`TelegramLoginView`).
 
 **5-экранное превью заявки (`ffca7a0`) — УДАЛЕНО (№260 Batch-STRIP).** Вся превью-механика
 (`ui.previewApplyFlow`, кнопка, превью-ветки Landing/Apply/Pending/гардов, `beforeEach`-сброс)
@@ -723,10 +721,14 @@ try {
 }
 ```
 
-### FP-08: sessionStorage для token, не localStorage
+### FP-08: носитель токена выбирает платформа, а не прикладной код
 
-Telegram WebApp закрывает вкладку — `sessionStorage` очищается автоматически.
-`localStorage` оставлял бы протухший токен навсегда.
+Токен читается и пишется только через `platform.readSessionToken()` /
+`platform.writeSessionToken()` (`platform/session-token.ts`). В Telegram — `sessionStorage`:
+один запуск Mini App, при каждом открытии решает `initData` (свежий профиль, и сохранённый
+токен другого аккаунта Telegram не всплывёт). Вне Telegram — `localStorage`: установленное
+приложение держит вход между запусками (Стендалон §1 п.14). Восстановление стирает токен
+только на 401/403; без ответа сервера токен остаётся.
 
 ### FP-09: API-типы генерируются из OpenAPI, не пишутся вручную
 
@@ -810,8 +812,7 @@ script-эмуляцию. Контр-тест (убрать фикс → ошиб
 
 ---
 
-**Новое (v1.8):** типографские токены `--text-28` / `--text-46` (заголовки онбординга
-мастера и Phase A Landing). `VPaginationDots` — геометрия точек 13×13 (активная) / 7×7
+**Новое (v1.8):** `VPaginationDots` — геометрия точек 13×13 (активная) / 7×7
 (неактивные) через DS-токены.
 
 ---
@@ -826,7 +827,7 @@ script-эмуляцию. Контр-тест (убрать фикс → ошиб
 
 | Задача                 | Описание                                                                                           | Зависимость                   |
 | ---------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------- |
-| Standalone-авторизация | `platform/standalone.ts` — полноценная реализация. Новый бэкенд-эндпоинт `POST /api/v1/auth/email` | Новый бэкенд                  |
+| Standalone-авторизация | ✅ Стендалон Ф3: «Войти через Telegram» (OIDC), `POST /api/v1/auth/telegram/browser/{start,complete}` | —                             |
 | Push-уведомления       | Service Worker + Web Push channel в notification formatters                                        | Бэкенд Phase 7 частично готов |
 | Skeleton-загрузки      | Заменить спиннеры на skeleton placeholders                                                         | —                             |
 | Тёмная тема            | CSS-переменные позволяют, нужен toggle + сохранение                                                | —                             |
@@ -985,7 +986,7 @@ if (role === 'master' || role === 'admin') && to === /user/dashboard:
 > - `cursor:default` при одном языке, авто-снимается при добавлении второго).
 >   W-1/W-4/S-5 — на бэке (Бэковый Кодекс §9). W-3/S-3 — осознанно не код.
 
-### Мастер-программа — honest-стабы (Zod E13–E17, v1.8)
+### Мастер-программа — honest-стабы (Zod E13–E16, v1.8)
 
 | ID | Среда | Файл | Описание | Решение |
 | --- | --- | --- | --- | --- |
@@ -993,7 +994,6 @@ if (role === 'master' || role === 'admin') && to === /user/dashboard:
 | TD-FE-E14-REJECT-REASON | 🧪 | `MasterPendingView.vue` | Экран отказа — generic-причина; реальная `rejection_reason` не на `MasterProfileResponse` | Zod E14: отдать причину отказа |
 | TD-FE-E15-ONBOARDING-FLAG | ✅ | `utils/masterOnboarding.ts`, `MasterDashboardView.vue` | **ЗАКРЫТ (v1.11, №256/257):** `master_onboarding_completed` персистится бэком + типизирован в `generated.ts`; пере-показа на новой сессии нет | закрыт (E15 сделан своими силами) |
 | TD-FE-E16-APPLY-LANGS | 🧪 | `MasterApplyView.vue` | Тоггл языка практик — локальный, не уходит с заявкой | Zod E16: поле языков в заявке |
-| TD-FE-E17-WEB-AUTH | 🧪 | `views/auth/*`, `/auth/*` | Phase A экраны (Landing/Login/восстановление×2) — спящие/незалинкованные, инертные стабы | Zod E17: web-auth-бэкенд (email/OAuth) |
 
 > **TEST-аффордансы — УДАЛЕНЫ (№260 Batch-STRIP, «тест==прод»).** Повтор онбординга
 > (`ui.forceOnboarding`) и 5-экранное превью заявки (`ui.previewApplyFlow`) вынуты из кода.
@@ -1005,7 +1005,7 @@ if (role === 'master' || role === 'admin') && to === /user/dashboard:
 | Решение                                                                  | Обоснование                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | API-типы генерируются из OpenAPI (CR-01)                                 | Единый источник правды — Pydantic-схемы бэкенда. `generated.ts` создаётся автоматически при `velo update`. Drift невозможен конструктивно                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `sessionStorage` для token (не `localStorage`)                           | Telegram WebApp закрывает вкладку — sessionStorage очищается автоматически                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Носитель токена выбирает платформа (`platform/session-token.ts`) | Telegram — `sessionStorage` (решает `initData`); вне Telegram — `localStorage` (вход живёт между запусками) |
 | Свой CSS вместо Tailwind                                                 | Дизайн-система VELΘ готова в мокапах, перенос 1:1 проще                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Внутренний Nginx в Docker фронтенда                                      | SPA fallback + кеширование без усложнения хост-конфига                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Telegram SDK через локальную копию (не npm)                              | CDN Telegram заблокирован ТСПУ; локальная копия гарантирует загрузку                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |

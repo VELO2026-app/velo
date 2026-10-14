@@ -10,6 +10,11 @@
 // =============================================================================
 
 import type { Platform } from './types'
+import { host } from './host'
+import { sessionTokenStore } from './session-token'
+
+/** Session token carrier: sessionStorage (session-token.ts). */
+const _tokens = sessionTokenStore(() => host.sessionStorage)
 
 /** Lazy accessor -- avoids crash if SDK didn't load. */
 function getWebApp(): TelegramWebApp {
@@ -66,6 +71,10 @@ export const telegramPlatform: Platform = {
     // Example: https://t.me/bot?startapp=open_practice__<uuid>
     return getWebApp().initDataUnsafe?.start_param ?? null
   },
+
+  // One run of the Mini App (session-token.ts): initData decides on every open.
+  readSessionToken: () => _tokens.read(),
+  writeSessionToken: (token: string | null) => _tokens.write(token),
 
   getTheme(): 'light' | 'dark' {
     return getWebApp().colorScheme || 'light'

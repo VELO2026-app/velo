@@ -30,6 +30,17 @@ export interface Platform {
   getInitData(): string | null
 
   /**
+   * The saved session token, or null. Where it is kept is the platform's
+   * call (session-token.ts): standalone -- localStorage, so the installed
+   * app keeps the sign-in between launches; telegram -- sessionStorage, one
+   * run of the Mini App, so initData decides on every open.
+   */
+  readSessionToken(): string | null
+
+  /** Save the session token, or remove it (null). */
+  writeSessionToken(token: string | null): void
+
+  /**
    * Get the startapp parameter from the deep link.
    * Telegram: WebApp.initDataUnsafe.start_param (set when bot link has startapp=...).
    * Standalone: null.

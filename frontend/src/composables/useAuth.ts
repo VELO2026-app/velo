@@ -2,7 +2,7 @@
 // VELO Frontend -- useAuth Composable (Phase F1.3, fixed 10.4, BUG-role-redirect, TD-F01)
 // =============================================================================
 //
-// FIX 10.4: isReady/isStandalone are reactive refs inside composable scope,
+// FIX 10.4: isReady and the other flags are reactive refs inside composable scope,
 // but shared via module-level refs (Vue pattern for singleton composables).
 // Testable: reset by calling initAuth() in test setup.
 //
@@ -21,18 +21,87 @@
 // Store the RAW start parameter in pendingStartParam; roleRedirect parses it
 // once auth knows the role (Links: a notification button carries no viewer)
 // and clears it after first use to prevent stale redirects.
+//
+// Standalone phase 3 -- outside Telegram the person signs in with "Log In
+// With Telegram". The sign-in always ENDS on a fresh page load: Telegram
+// sends the browser back to RETURN_PATH, and initAuth() completes it here,
+// before isReady -- so the router's first navigation and the App.vue stage
+// already see the signed-in user. A failed or refused return leaves a
+// LoginNotice for the login screen to word.
 // =============================================================================
 
 import { ref, computed, watch } from 'vue'
 import { platform } from '@/platform'
+import { takeLoginMark, takeLoginReturn } from '@/platform/browser-login'
 import { useAuthStore } from '@/stores/auth'
+import { ApiNetworkError, ApiResponseError, ApiTimeoutError } from '@/api/client'
 import type { UserRole } from '@/api/types'
 
 /** Whether auth initialization has completed. */
 const isReady = ref(false)
 
-/** Whether we're in standalone mode (no Telegram initData). */
-const isStandalone = ref(false)
+/**
+ * Why the login screen is up (outside Telegram), worded by TelegramLoginView:
+ *   cancelled       -- the person declined on Telegram's page;
+ *   foreign         -- the return came to a browser that did not start this
+ *                      sign-in (no mark, or a mark for another state);
+ *   expired         -- the backend no longer holds the state (taken, late);
+ *   telegram_failed -- Telegram did not prove a user;
+ *   not_configured  -- browser sign-in is not set up on this server;
+ *   deactivated     -- the account is switched off;
+ *   rate_limited    -- too many attempts;
+ *   unavailable     -- the server answered that it cannot right now;
+ *   network         -- no answer at all.
+ */
+export type LoginNotice =
+  | 'cancelled'
+  | 'foreign'
+  | 'expired'
+  | 'telegram_failed'
+  | 'not_configured'
+  | 'deactivated'
+  | 'rate_limited'
+  | 'unavailable'
+  | 'network'
+
+/** The notice for the login screen, or null. */
+export const loginNotice = ref<LoginNotice | null>(null)
+
+/**
+ * The sign-in that just finished did NOT give the bot the right to write to
+ * the person. Shown once after this sign-in (BotAccessHint) and kept nowhere
+ * else -- the next launch does not show it again.
+ */
+export const botAccessHint = ref(false)
+
+/**
+ * The saved session could not be checked (no answer from the server). The
+ * token is still saved; App.vue shows the "try again" screen instead of the
+ * login screen.
+ */
+export const restoreUnreachable = ref(false)
+
+/** Word an error of the browser sign-in endpoints as a LoginNotice. */
+export function loginNoticeFor(error: unknown): LoginNotice {
+  if (error instanceof ApiNetworkError || error instanceof ApiTimeoutError) return 'network'
+  if (!(error instanceof ApiResponseError)) return 'telegram_failed'
+  switch (error.status) {
+    case 404:
+      return 'not_configured'
+    case 403:
+      return 'deactivated'
+    case 429:
+      return 'rate_limited'
+    case 400:
+      if (error.code === 'login_expired') return 'expired'
+      if (error.code === 'login_foreign') return 'foreign'
+      return 'telegram_failed'
+    case 422:
+      return 'telegram_failed'
+    default:
+      return 'unavailable'
+  }
+}
 
 /**
  * Whether a logout is in progress (Telegram only).
@@ -40,7 +109,7 @@ const isStandalone = ref(false)
  * Set the instant logout() starts clearing the session and kept true until
  * the Mini App actually closes. The App.vue gate shows LoadingView while this
  * is true, so the brief window between _clearSession() (isAuthenticated -> false)
- * and platform.close() never falls through to StandaloneStubView. Without it,
+ * and platform.close() never falls through to TelegramStubView. Without it,
  * a reactive tick could flash the "Open via Telegram" stub before the app closes.
  */
 const isLoggingOut = ref(false)
@@ -263,9 +332,11 @@ export function isSchoolInviteStartParam(): boolean {
  */
 export function resetAuthState(): void {
   isReady.value = false
-  isStandalone.value = false
   isLoggingOut.value = false
   pendingStartParam.value = null
+  loginNotice.value = null
+  botAccessHint.value = false
+  restoreUnreachable.value = false
 }
 
 /**
@@ -338,25 +409,81 @@ async function initAuth(): Promise<void> {
   const startParam = platform.getStartParam()
   pendingStartParam.value = startParam
 
-  // Step 1: try to restore existing session (page reload).
-  const restored = await authStore.restoreSession()
-  if (restored) {
+  if (platform.name === 'standalone') {
+    await initStandalone(authStore)
     isReady.value = true
     return
   }
 
-  // Step 2: try platform-specific login.
-  const initData = platform.getInitData()
+  // Telegram -- unchanged by Standalone phase 3. Step 1: restore this run's
+  // session (a page reload inside the Mini App).
+  const restored = await authStore.restoreSession()
+  if (restored === 'restored') {
+    isReady.value = true
+    return
+  }
 
+  // Step 2: sign in with initData. A failure leaves the session cleared and
+  // App.vue shows TelegramStubView.
+  const initData = platform.getInitData()
   if (initData) {
     await authStore.loginViaTelegram(initData)
-    isReady.value = true
+  }
+  isReady.value = true
+}
+
+/**
+ * Outside Telegram: finish a sign-in this page is the return of, else
+ * restore the saved session, else leave the login screen to App.vue.
+ */
+async function initStandalone(authStore: ReturnType<typeof useAuthStore>): Promise<void> {
+  if (await completeFromReturn(authStore)) return
+
+  const outcome = await authStore.restoreSession()
+  if (outcome === 'restored') {
+    // Signed in already: a refused return (someone else's link) has nothing
+    // to show on a screen this person will not see.
+    loginNotice.value = null
     return
   }
+  restoreUnreachable.value = outcome === 'unreachable'
+}
 
-  // Standalone: no auto-login possible.
-  isStandalone.value = true
-  isReady.value = true
+/**
+ * The return from Telegram, if this page is one. The address is wiped and
+ * the mark taken FIRST, whatever happens next: a reload must not replay the
+ * same state, and a mark serves one return only.
+ *
+ * Refused WITHOUT a request: an error from Telegram, a return without code
+ * and state, and a return this browser holds no mark for (another browser's
+ * link -- platform/browser-login.ts, WHY THE MARK).
+ */
+async function completeFromReturn(authStore: ReturnType<typeof useAuthStore>): Promise<boolean> {
+  const back = takeLoginReturn()
+  if (!back) return false
+  const started = takeLoginMark()
+
+  if (back.error) {
+    loginNotice.value = 'cancelled'
+    return false
+  }
+  if (!back.code || !back.state) {
+    loginNotice.value = 'telegram_failed'
+    return false
+  }
+  if (!started || started.state !== back.state) {
+    loginNotice.value = 'foreign'
+    return false
+  }
+
+  try {
+    const granted = await authStore.completeBrowserLogin(back.code, back.state, started.mark)
+    botAccessHint.value = !granted
+    return true
+  } catch (error) {
+    loginNotice.value = loginNoticeFor(error)
+    return false
+  }
 }
 
 export function useAuth() {
@@ -365,7 +492,9 @@ export function useAuth() {
   return {
     isReady,
     isAuthenticated: computed(() => authStore.isAuthenticated),
-    isStandalone,
+    restoreUnreachable,
+    loginNotice,
+    botAccessHint,
     isLoggingOut,
     initAuth,
     /** Exposed for testing (10.4). */

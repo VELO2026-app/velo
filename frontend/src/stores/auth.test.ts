@@ -6,7 +6,13 @@
 // sequenced after stores/bookings.ts since this store carries the most
 // incidental complexity relative to its money-criticality: a dynamic
 // @/composables/useAuth import inside logout(), a dynamic @/stores/master
-// import, and sessionStorage side effects.
+// import, and storage side effects.
+//
+// Standalone phase 3: the token's carrier is the PLATFORM's call
+// (platform/session-token.ts) -- sessionStorage in Telegram, localStorage
+// outside. The @/platform mock below wires the REAL sessionTokenStore to
+// each carrier by platformName, so these tests assert the actual storage a
+// platform writes, not a stand-in.
 //
 // @/composables/useAuth is mocked WHOLESALE (not partially) specifically so
 // the real module -- which imports useAuthStore from @/stores/auth at module
@@ -23,7 +29,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
-import { api } from '@/api/client'
+import { api, ApiNetworkError, ApiResponseError } from '@/api/client'
 import * as usersApi from '@/api/users'
 import type { AuthResponse, UserResponse } from '@/api/types'
 
@@ -52,11 +58,23 @@ vi.mock('@/composables/useAuth', () => ({ beginLogout }))
 
 const platformClose = vi.fn()
 let platformName: 'telegram' | 'standalone' = 'standalone'
-vi.mock('@/platform', () => ({
-  get platform() {
-    return { name: platformName, close: platformClose }
-  },
-}))
+vi.mock('@/platform', async () => {
+  const { sessionTokenStore } = await import('@/platform/session-token')
+  const carriers = {
+    telegram: sessionTokenStore(() => sessionStorage),
+    standalone: sessionTokenStore(() => localStorage),
+  }
+  return {
+    get platform() {
+      return {
+        name: platformName,
+        close: platformClose,
+        readSessionToken: () => carriers[platformName].read(),
+        writeSessionToken: (token: string | null) => carriers[platformName].write(token),
+      }
+    },
+  }
+})
 
 function fakeUser(overrides: Partial<UserResponse> = {}): UserResponse {
   return {
@@ -73,6 +91,7 @@ describe('useAuthStore', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     sessionStorage.clear()
+    localStorage.clear()
     vi.mocked(api.post).mockReset()
     vi.mocked(usersApi.getMe).mockReset()
     masterReset.mockReset()
@@ -81,7 +100,15 @@ describe('useAuthStore', () => {
     platformName = 'standalone'
   })
 
+  // initData sign-in runs only inside Telegram, so these run on the telegram
+  // platform. They ran on the default (standalone) before Standalone phase 3,
+  // when one carrier (sessionStorage) served both platforms; the assertions
+  // on sessionStorage were right then and are right now for Telegram.
   describe('loginViaTelegram', () => {
+    beforeEach(() => {
+      platformName = 'telegram'
+    })
+
     it('on success: sets token + user, persists the token, returns true', async () => {
       const response: AuthResponse = { session_token: 'tok_1', user: fakeUser() }
       vi.mocked(api.post).mockResolvedValue(response)
@@ -96,6 +123,8 @@ describe('useAuthStore', () => {
       expect(store.token).toBe('tok_1')
       expect(store.user).toEqual(fakeUser())
       expect(sessionStorage.getItem('velo_token')).toBe('tok_1')
+      // Telegram never writes the persistent carrier (session-token.ts).
+      expect(localStorage.getItem('velo_token')).toBeNull()
       expect(store.isAuthenticated).toBe(true)
     })
 
@@ -112,38 +141,84 @@ describe('useAuthStore', () => {
     })
   })
 
+  // Standalone phase 3 (gate R6): restoreSession reports HOW it ended instead
+  // of a boolean. The old "getMe fails -> clears session, false" was right
+  // for any failure when a token lived one Mini App run; with a 30-day token
+  // in localStorage it would throw the sign-in away on a network blip. It is
+  // now split: 401/403 still clear (rejected), no answer keeps the token
+  // (unreachable).
   describe('restoreSession', () => {
-    it('no saved token: returns false without calling getMe', async () => {
+    it('no saved token: none, without calling getMe', async () => {
       const store = useAuthStore()
 
       const result = await store.restoreSession()
 
-      expect(result).toBe(false)
+      expect(result).toBe('none')
       expect(usersApi.getMe).not.toHaveBeenCalled()
     })
 
-    it('saved token + getMe succeeds: restores token + user, returns true', async () => {
-      sessionStorage.setItem('velo_token', 'saved_tok')
+    it('saved token + getMe succeeds: restores token + user', async () => {
+      localStorage.setItem('velo_token', 'saved_tok')
       vi.mocked(usersApi.getMe).mockResolvedValue(fakeUser({ id: 'user_2' }))
       const store = useAuthStore()
 
       const result = await store.restoreSession()
 
-      expect(result).toBe(true)
+      expect(result).toBe('restored')
       expect(store.token).toBe('saved_tok')
       expect(store.user).toEqual(fakeUser({ id: 'user_2' }))
     })
 
-    it('saved token + getMe fails: clears session, returns false', async () => {
-      sessionStorage.setItem('velo_token', 'stale_tok')
-      vi.mocked(usersApi.getMe).mockRejectedValue(new Error('401'))
+    it('saved token + 401: rejected, session cleared, token removed from storage', async () => {
+      localStorage.setItem('velo_token', 'stale_tok')
+      vi.mocked(usersApi.getMe).mockRejectedValue(new ApiResponseError(401, 'Session expired', 'unauthorized'))
       const store = useAuthStore()
 
       const result = await store.restoreSession()
 
-      expect(result).toBe(false)
+      expect(result).toBe('rejected')
       expect(store.token).toBeNull()
-      expect(sessionStorage.getItem('velo_token')).toBeNull()
+      expect(localStorage.getItem('velo_token')).toBeNull()
+    })
+
+    it('saved token + 403 (deactivated account): rejected, token removed', async () => {
+      localStorage.setItem('velo_token', 'tok_of_disabled')
+      vi.mocked(usersApi.getMe).mockRejectedValue(new ApiResponseError(403, 'Account is deactivated', 'account_deactivated'))
+      const store = useAuthStore()
+
+      expect(await store.restoreSession()).toBe('rejected')
+      expect(localStorage.getItem('velo_token')).toBeNull()
+    })
+
+    it('saved token + no answer: unreachable, NOT signed in, token KEPT for the next launch', async () => {
+      localStorage.setItem('velo_token', 'good_tok')
+      vi.mocked(usersApi.getMe).mockRejectedValue(new ApiNetworkError())
+      const store = useAuthStore()
+
+      const result = await store.restoreSession()
+
+      expect(result).toBe('unreachable')
+      expect(store.isAuthenticated).toBe(false)
+      expect(store.token).toBeNull()
+      expect(localStorage.getItem('velo_token')).toBe('good_tok')
+    })
+
+    it('saved token + 5xx: unreachable, token kept', async () => {
+      localStorage.setItem('velo_token', 'good_tok')
+      vi.mocked(usersApi.getMe).mockRejectedValue(new ApiResponseError(502, 'Bad gateway', 'bad_gateway'))
+      const store = useAuthStore()
+
+      expect(await store.restoreSession()).toBe('unreachable')
+      expect(localStorage.getItem('velo_token')).toBe('good_tok')
+    })
+
+    it('Telegram reads its own carrier, never the persistent one', async () => {
+      platformName = 'telegram'
+      localStorage.setItem('velo_token', 'browser_tok')
+      const store = useAuthStore()
+
+      expect(await store.restoreSession()).toBe('none')
+      expect(usersApi.getMe).not.toHaveBeenCalled()
     })
   })
 
@@ -151,6 +226,7 @@ describe('useAuthStore', () => {
     it('standalone: resets master store, posts logout, clears session, does NOT touch the Telegram gate', async () => {
       platformName = 'standalone'
       vi.mocked(api.post).mockResolvedValue(undefined)
+      localStorage.setItem('velo_token', 'tok')
       const store = useAuthStore()
       store.token = 'tok'
       store.user = fakeUser()
@@ -161,6 +237,8 @@ describe('useAuthStore', () => {
       expect(api.post).toHaveBeenCalledWith('/api/v1/auth/logout')
       expect(store.token).toBeNull()
       expect(store.user).toBeNull()
+      // Standalone phase 3, item 6: the persistent token is gone too.
+      expect(localStorage.getItem('velo_token')).toBeNull()
       expect(beginLogout).not.toHaveBeenCalled()
       expect(platformClose).not.toHaveBeenCalled()
     })

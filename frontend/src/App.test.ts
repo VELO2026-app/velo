@@ -18,8 +18,11 @@
 // The router is a REAL memory-history router (the same navigation state
 // machine the shipped createWebHistory build uses -- see UserShell.test.ts),
 // so "stage === 'app'" is observable as RouterView rendering the matched
-// stub route. WelcomeView/LoadingView/StandaloneStubView stay real: they are
-// cheap markup, and their root classes are the gate's observable output.
+// stub route. WelcomeView/LoadingView/LoadingErrorView and the two sign-in
+// screens (TelegramStubView inside Telegram, TelegramLoginView outside --
+// Standalone phase 3) stay real: they are cheap markup, and their root
+// classes are the gate's observable output. @/platform is mocked only for
+// its NAME, which picks the sign-in screen.
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -36,26 +39,43 @@ import type { UserResponse } from '@/api/types'
 // factory itself must not touch them (factories run before module bodies,
 // closures run during component setup).
 const ready = ref(false)
-const standalone = ref(false)
 const loggingOut = ref(false)
+const restoreUnreachable = ref(false)
+const botAccessHint = ref(false)
 const initAuth = vi.fn()
 // FE-81: whether the gate sees a school invite startapp. A plain let, not a
 // ref: isSchoolInviteStartParam is a plain function, and the mock closure
 // dereferences it at call time, like mockRole in the join-screen tests.
 let schoolInviteStartParam = false
+let platformName: 'telegram' | 'standalone' = 'standalone'
+
+vi.mock('@/platform', () => ({
+  get platform() {
+    return {
+      name: platformName,
+      readSessionToken: () => null,
+      writeSessionToken: () => {},
+    }
+  },
+}))
 
 vi.mock('@/composables/useAuth', async () => {
   const { computed } = await import('vue')
   const { useAuthStore } = await import('@/stores/auth')
+  const { ref: vueRef } = await import('vue')
   return {
     useAuth: () => ({
       isReady: ready,
-      isStandalone: standalone,
       isLoggingOut: loggingOut,
+      restoreUnreachable,
+      botAccessHint,
       isAuthenticated: computed(() => useAuthStore().isAuthenticated),
       initAuth,
     }),
     isSchoolInviteStartParam: () => schoolInviteStartParam,
+    // TelegramLoginView's own imports.
+    loginNotice: vueRef(null),
+    loginNoticeFor: () => 'telegram_failed',
   }
 })
 
@@ -124,8 +144,10 @@ beforeEach(() => {
   pinia = createPinia()
   setActivePinia(pinia)
   ready.value = false
-  standalone.value = false
   loggingOut.value = false
+  restoreUnreachable.value = false
+  botAccessHint.value = false
+  platformName = 'standalone'
   initAuth.mockReset()
   schoolInviteStartParam = false
   // Default: a clean auth init -- the promise resolves AFTER flipping
@@ -200,7 +222,24 @@ describe('App entry gate (FE-39)', () => {
     expect(w.find('.route-stub').exists()).toBe(true)
   })
 
-  it('no session (user null) still shows the standalone stub, never the app', async () => {
+  // Standalone phase 3 replaced "no session -> the standalone stub" (right
+  // while no sign-in existed outside Telegram) with a split by platform: the
+  // stub stays for Telegram, the browser gets the login screen.
+  it('no session outside Telegram: the login screen -- «Войти через Telegram» -- never the app', async () => {
+    const store = useAuthStore()
+    store.token = null
+    store.user = null
+    const w = await mountGate()
+    await flushPromises()
+
+    expect(w.find('.login').exists()).toBe(true)
+    expect(w.findAll('button').some((b) => b.text() === 'Войти через Telegram')).toBe(true)
+    expect(w.find('.stub').exists()).toBe(false)
+    expect(w.find('.route-stub').exists()).toBe(false)
+  })
+
+  it('no session inside Telegram: the Telegram stub, as before -- never the login screen', async () => {
+    platformName = 'telegram'
     const store = useAuthStore()
     store.token = null
     store.user = null
@@ -208,6 +247,59 @@ describe('App entry gate (FE-39)', () => {
     await flushPromises()
 
     expect(w.find('.stub').exists()).toBe(true)
+    expect(w.find('.login').exists()).toBe(false)
     expect(w.find('.route-stub').exists()).toBe(false)
+  })
+
+  it('saved session unreachable: the "try again" screen, not the login screen', async () => {
+    initAuth.mockImplementation(async () => {
+      restoreUnreachable.value = true
+      ready.value = true
+    })
+    const w = await mountGate()
+    await flushPromises()
+
+    expect(w.find('.auth-error').exists()).toBe(true)
+    expect(w.find('.login').exists()).toBe(false)
+  })
+
+  it('signed in from the browser (isStandalone gone): the app, not the login screen', async () => {
+    setAuthUser({ onboarding_completed: true })
+    const w = await mountGate()
+    await flushPromises()
+
+    expect(w.find('.route-stub').exists()).toBe(true)
+    expect(w.find('.login').exists()).toBe(false)
+  })
+
+  it('Welcome has a single way on -- «Войти»; no «Создать аккаунт» on any platform', async () => {
+    setAuthUser({ onboarding_completed: false })
+    const w = await mountGate()
+    await flushPromises()
+
+    const labels = w.findAll('.welcome button').map((b) => b.text())
+    expect(labels).toEqual(['Войти'])
+  })
+
+  it('bot access not granted: the hint shows once and «Понятно» closes it', async () => {
+    setAuthUser({ onboarding_completed: true })
+    botAccessHint.value = true
+    const w = await mountGate()
+    await flushPromises()
+
+    expect(w.find('.bot-hint').exists()).toBe(true)
+    const close = w.findAll('.bot-hint button').find((b) => b.text() === 'Понятно')
+    await close!.trigger('click')
+    await flushPromises()
+    expect(w.find('.bot-hint').exists()).toBe(false)
+    expect(botAccessHint.value).toBe(false)
+  })
+
+  it('bot hint never shows without a session', async () => {
+    botAccessHint.value = true
+    const w = await mountGate()
+    await flushPromises()
+
+    expect(w.find('.bot-hint').exists()).toBe(false)
   })
 })

@@ -6,8 +6,17 @@
        undecided (stage === null), or while a Telegram logout is in progress
        (isLoggingOut) -- the latter keeps the stub from flashing between
        session clear and the Mini App closing.
-    2. If standalone (no Telegram) / not authenticated -> StandaloneStubView
-    3. Authenticated -> a small entry state machine (stage). FE-39: the INITIAL
+    2. The saved session could not be checked (no answer, outside Telegram:
+       restoreUnreachable) -> LoadingErrorView ("try again"); the token stays
+       saved for that attempt.
+    3. Not authenticated:
+         in Telegram  -> TelegramStubView (initData sign-in failed or the
+                         session ended -- unchanged by Standalone phase 3);
+         outside      -> TelegramLoginView, the ONLY way in from a browser
+                         ("Войти через Telegram"). The sign-in ends on a
+                         fresh page load (useAuth.ts), so the stage below is
+                         decided with the user already known.
+    4. Authenticated -> a small entry state machine (stage). FE-39: the INITIAL
        stage is decided once initAuth() resolves, not hardcoded:
          onboarding_completed === true  -> 'app'   (returning user: the splash
                                          goes straight to RouterView, where
@@ -27,43 +36,44 @@
         onboarding_completed === false -> stage 'onboarding' (new user)
     - OnboardingView @done (completed or skipped; flag already persisted)
         -> stage 'app'
-    - WelcomeView @create-account: standalone/browser build only (F10).
-      Inside Telegram the button is hidden, so this is a harmless stub.
 
   The stage lives in component state (not the router), matching how
-  LoadingView/StandaloneStubView already gate access outside the router.
+  LoadingView and the sign-in screens already gate access outside the router.
   A page reload re-runs auth and re-decides the stage -- a returning user
   lands directly in the app again. FE-39 supersedes the old "Welcome on
   every open" decision: Welcome is now the new-user entry screen only.
 
   VToast is mounted once here -- renders all toast notifications
-  triggered via useToast() composable from any component.
+  triggered via useToast() composable from any component. BotAccessHint is
+  mounted next to it: shown once after a browser sign-in that did not give
+  the bot the right to write.
 -->
 
 <template>
   <!-- Single safe-area frame around every gated screen (see AppFrame). -->
   <AppFrame>
     <LoadingView v-if="!isReady || isLoggingOut || stage === null" />
-    <StandaloneStubView v-else-if="isStandalone || !isAuthenticated" />
+    <LoadingErrorView v-else-if="restoreUnreachable" />
+    <template v-else-if="!isAuthenticated">
+      <TelegramStubView v-if="inTelegram" />
+      <TelegramLoginView v-else />
+    </template>
     <template v-else>
-      <WelcomeView
-        v-if="stage === 'welcome'"
-        @enter="onWelcomeEnter"
-        @create-account="onCreateAccount"
-      />
+      <WelcomeView v-if="stage === 'welcome'" @enter="onWelcomeEnter" />
       <OnboardingView v-else-if="stage === 'onboarding'" @done="stage = 'app'" />
       <RouterView v-else />
     </template>
   </AppFrame>
   <!-- VToast teleports to body (overlay); kept outside the frame. -->
   <VToast />
+  <BotAccessHint v-if="isAuthenticated && botAccessHint" @close="botAccessHint = false" />
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useAuth, isSchoolInviteStartParam } from '@/composables/useAuth'
 import { useAuthStore } from '@/stores/auth'
-import { useToast } from '@/composables/useToast'
+import { platform } from '@/platform'
 import { useBackgroundStabilizer } from '@/composables/useBackgroundStabilizer'
 import { useViewportGeometry } from '@/composables/useViewportGeometry'
 import { useKeyboardDismiss } from '@/composables/useKeyboardDismiss'
@@ -71,13 +81,23 @@ import { startRoleFreshnessPoll } from '@/composables/useRoleFreshness'
 import { VToast } from '@/components/ui'
 import AppFrame from '@/components/layout/AppFrame.vue'
 import LoadingView from '@/views/auth/LoadingView.vue'
-import StandaloneStubView from '@/views/auth/StandaloneStubView.vue'
+import LoadingErrorView from '@/views/auth/LoadingErrorView.vue'
+import TelegramStubView from '@/views/auth/TelegramStubView.vue'
+import TelegramLoginView from '@/views/auth/TelegramLoginView.vue'
+import BotAccessHint from '@/views/auth/BotAccessHint.vue'
 import WelcomeView from '@/views/auth/WelcomeView.vue'
 import OnboardingView from '@/views/auth/OnboardingView.vue'
 
-const { isReady, isAuthenticated, isStandalone, isLoggingOut, initAuth } = useAuth()
+const {
+  isReady,
+  isAuthenticated,
+  isLoggingOut,
+  restoreUnreachable,
+  botAccessHint,
+  initAuth,
+} = useAuth()
 const authStore = useAuthStore()
-const toast = useToast()
+const inTelegram = platform.name === 'telegram'
 
 // Pin the fixed photo-background against the iOS/Telegram keyboard viewport
 // shift (the "dancing background"). Mounted once here, on the app root.
@@ -131,14 +151,6 @@ function decideInitialStage(): EntryStage {
 function onWelcomeEnter(): void {
   const completed = authStore.user?.onboarding_completed ?? false
   stage.value = completed ? 'app' : 'onboarding'
-}
-
-/**
- * "Создать аккаунт" -- standalone/browser build only (F10). The button is
- * hidden inside Telegram, so this stub only fires in the browser build.
- */
-function onCreateAccount(): void {
-  toast.info('Регистрация будет доступна в браузерной версии')
 }
 
 onMounted(() => {

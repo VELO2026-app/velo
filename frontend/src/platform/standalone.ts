@@ -2,19 +2,25 @@
 // VELO Frontend -- Standalone Platform (Phase F1.1, updated TD-F01)
 // =============================================================================
 //
-// Stub implementation for when the app is opened outside Telegram:
-// direct browser visit, PWA from Home Screen, etc.
+// The app opened outside Telegram: a browser tab, or the app installed on
+// the home screen.
 //
-// All methods are safe no-ops. getInitData() returns null, which
-// signals to the auth flow that Telegram login is not available.
-//
-// Phase F10 will replace the stubs with real standalone auth
-// (email / magic link).
+// There is no initData here (getInitData() -> null): the person signs in on
+// the login screen with "Log In With Telegram" (platform/browser-login.ts,
+// stores/auth.ts). The session token is kept in localStorage, so the
+// installed app stays signed in between launches (session-token.ts).
+// Haptics, the native back button and close() have nothing to drive and
+// are no-ops.
 //
 // TD-F01: added getStartParam() stub -- always null outside Telegram.
 // =============================================================================
 
 import type { Platform } from './types'
+import { host } from './host'
+import { sessionTokenStore } from './session-token'
+
+/** Session token carrier: localStorage (session-token.ts). */
+const _tokens = sessionTokenStore(() => host.localStorage)
 
 export const standalonePlatform: Platform = {
   name: 'standalone',
@@ -24,10 +30,13 @@ export const standalonePlatform: Platform = {
   },
 
   getInitData(): string | null {
-    // No Telegram initData available -- auth flow will show
-    // "Open via Telegram" stub screen.
+    // No Telegram initData outside Telegram -- the login screen signs in.
     return null
   },
+
+  // Kept between launches of the installed app (session-token.ts).
+  readSessionToken: () => _tokens.read(),
+  writeSessionToken: (token: string | null) => _tokens.write(token),
 
   getStartParam(): string | null {
     // No deep link support outside Telegram.

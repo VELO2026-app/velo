@@ -847,11 +847,12 @@ async def cancel_practice_endpoint(
 # further URL shortening. The page is also instant, with no bundle to load,
 # which matters for someone clicking a minute before the practice starts.
 #
-# The markup below is lifted from frontend/src/views/auth/StandaloneStubView.
-# vue. TWO COPIES EXIST AND THAT IS ACCEPTED (owner ruling): this page changes
-# about once a year, and polishing the landing belongs to the frontend team,
-# who will reconcile them. Note what "lifted" really means, though -- the stub
-# is not self-contained: its design tokens come from
+# The markup below is lifted from frontend/src/views/auth/TelegramStubView.vue
+# (StandaloneStubView when it was lifted). TWO COPIES EXIST AND THAT IS
+# ACCEPTED (owner ruling): this page changes about once a year, and
+# polishing the landing belongs to the frontend team, who will reconcile
+# them. Note what "lifted" really means, though -- the stub is not
+# self-contained: its design tokens come from
 # frontend/src/styles/variables.css and CANNOT be referenced from this host,
 # so they are RESOLVED TO LITERALS here (--velo-primary #627a9c,
 # --velo-text-primary #4c6589, --velo-text-secondary rgba(76,101,137,.7),

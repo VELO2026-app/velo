@@ -45,7 +45,7 @@
 
 ### 1.3. Вне scope MVP (Frontend)
 
-- Standalone-авторизация (email/OAuth) — только Telegram WebApp. **Экраны Phase A построены, но припаркованы:** спящие незалинкованные `/auth/*` (Landing/Login/восстановление×2), живут лишь с web-auth-бэком Zod E17 — см. F13
+- Вход по e-mail и паролю — не будет: вне Telegram единственный вход — «Войти через Telegram» (OpenID Connect, Стендалон Ф3)
 - Офлайн-режим (кроме заглушки "Нет подключения")
 - Push-уведомления через Service Worker
 - Тёмная тема (пока только светлая)
@@ -130,7 +130,7 @@ velo/                              ← GitHub repo root (уже существу
 │   │   │   └── shared/            ← PracticeCard, BookingCard, BookingPopup, CancelBookingPopup...
 │   │   │
 │   │   ├── views/                 ← Экраны (по ролям)
-│   │   │   ├── auth/              ← LoginView, LoadingView
+│   │   │   ├── auth/              ← LoadingView, TelegramLoginView, TelegramStubView, Welcome/Onboarding
 │   │   │   ├── user/              ← Dashboard, Calendar, Practice, Bookings...
 │   │   │   ├── master/            ← Dashboard, Practices, Analytics, Apply...
 │   │   │   └── admin/             ← Dashboard, Masters, Reports... (Consistency REMOVED 2026-07-07 `9ca5619`)
@@ -574,26 +574,26 @@ export const api = {
   - `isAuthenticated: boolean` (computed: `!!token && !!user`)
   - `role: UserRole | null` (computed из `user.role ?? null`, QW-4: null для неавторизованных)
   - `loginViaTelegram(initData)` — POST /auth/telegram → set token + user
-  - `restoreSession()` — sessionStorage → set token → GET /users/me → set user
+  - `restoreSession()` — сохранённый токен (носитель — платформа) → set token → GET /users/me → set user; исход `restored | none | rejected | unreachable`, токен стирается только на 401/403 (Стендалон Ф3)
   - `fetchMe()` — GET /users/me (обновление профиля)
   - `logout()` — POST /auth/logout + очистка store
-  - Персистенция token в `sessionStorage` под ключом `velo_token`
+  - Персистенция token под ключом `velo_token` через `platform.read/writeSessionToken()`: Telegram — `sessionStorage`, вне Telegram — `localStorage` (Стендалон Ф3)
   - Регистрация `_onUnauthorized` callback в API client (FIX 10.2)
 - [x] src/composables/useAuth.ts — объединяет platform + auth store:
   - `initAuth()` — вызывается один раз из App.vue `onMounted`:
     1. `platform.init()`
     2. `authStore.restoreSession()` — если сохранённый токен валиден → готово
     3. `platform.getInitData()` → если есть → `authStore.loginViaTelegram(initData)`
-    4. Если нет → `isStandalone = true`
-  - Module-level refs `isReady`, `isStandalone` (singleton composable pattern)
+    4. (Стендалон Ф3) вне Telegram порядок другой: сначала возврат из Telegram (`completeFromReturn`), затем `restoreSession()`; флаг `isStandalone` удалён — решает `platform.name`
+  - Module-level refs `isReady` и др. (singleton composable pattern)
   - `waitUntilReady()` — Promise.race(isReady watcher, 10s timeout) для router guards (BUG-role-redirect fix)
   - `resetAuthState()` — для тестов (FIX 10.4)
 - [x] src/views/auth/LoadingView.vue — экран загрузки (VeloLogo + заголовок "VELO" + CSS spinner)
-- [x] src/views/auth/StandaloneStubView.vue — "Для входа откройте приложение через Telegram-бот" + кнопка "Открыть в Telegram"
+- [x] src/views/auth/StandaloneStubView.vue — "Для входа откройте приложение через Telegram-бот" + кнопка "Открыть в Telegram" (Стендалон Ф3: переименован в `TelegramStubView.vue`, показывается только внутри Telegram)
 - [x] src/components/ui/VeloLogo.vue — SVG лого как shared компонент (FIX 10.8: DRY)
 - [x] src/App.vue — auth-шлюз на уровне корневого компонента:
   - `!isReady` → LoadingView
-  - `isStandalone || !isAuthenticated` → StandaloneStubView
+  - `!isAuthenticated` → в Telegram `TelegramStubView`, вне Telegram `TelegramLoginView` (Стендалон Ф3; прежде `isStandalone || !isAuthenticated` → StandaloneStubView)
   - иначе → `<RouterView />`
   - **(расширено в F11.2):** между авторизацией и RouterView добавлена машина состояний `stage: welcome|onboarding|app` (WelcomeView / OnboardingView вне роутера). См. Phase F11.2
 
@@ -601,8 +601,8 @@ export const api = {
 
 - Auth guard на уровне App.vue, а не router `beforeEach`: App.vue выступает внешним шлюзом. Router guards добавляются в F2.2 для ролевого доступа
 - `role` computed возвращает `null` для неавторизованных (QW-4), не `'user'` — предотвращает false positives
-- `sessionStorage` (не `localStorage`) для токена: Telegram WebApp закрывает вкладку при выходе → sessionStorage очищается автоматически
-- StandaloneStubView: URL бота из `VITE_TELEGRAM_BOT_URL` env variable (FIX 10.3)
+- Носитель токена выбирает платформа (Стендалон Ф3): в Telegram `sessionStorage` — один запуск Mini App, решает `initData`; вне Telegram `localStorage` — вход живёт между запусками установленного приложения
+- TelegramStubView (бывш. StandaloneStubView): URL бота из `VITE_TELEGRAM_BOT_URL` env variable (FIX 10.3)
 - VeloLogo.vue: SVG с CSS fallback `var(--velo-primary, #334D6E)` (QW-5)
 - Google Fonts перенесены из `@import` в `<link>` в index.html (FIX 10.6) — устраняет FOIT
 
@@ -618,8 +618,8 @@ export const api = {
 | -------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ------ |
 | FIX 10.1 | WebApp accessed lazily via getter, not at module level — prevents crash if CDN blocked                                           | `platform/telegram.ts`              | ✅     |
 | FIX 10.2 | 401 handler delegates cleanup to auth store via `onUnauthorized` callback — no direct token/sessionStorage mutation in client.ts | `api/client.ts`, `stores/auth.ts`   | ✅     |
-| FIX 10.3 | Bot URL from `VITE_TELEGRAM_BOT_URL` env variable, not hardcoded                                                                 | `views/auth/StandaloneStubView.vue` | ✅     |
-| FIX 10.4 | `isReady`/`isStandalone` as module-level refs (singleton composable pattern), `resetAuthState()` exposed for tests               | `composables/useAuth.ts`            | ✅     |
+| FIX 10.3 | Bot URL from `VITE_TELEGRAM_BOT_URL` env variable, not hardcoded                                                                 | `views/auth/TelegramStubView.vue`   | ✅     |
+| FIX 10.4 | `isReady` (+ flags) as module-level refs   (singleton composable pattern), `resetAuthState()` exposed for tests               | `composables/useAuth.ts`            | ✅     |
 | FIX 10.6 | Google Fonts via `<link>` in index.html instead of `@import` in CSS — eliminates FOIT                                            | `index.html`, `styles/global.css`   | ✅     |
 | FIX 10.8 | VeloLogo extracted to shared component (was copy-pasted in 3 views)                                                              | `components/ui/VeloLogo.vue`        | ✅     |
 | QW-4     | `role` computed returns `null` (not `'user'`) for unauthenticated users                                                          | `stores/auth.ts`                    | ✅     |
@@ -1255,13 +1255,9 @@ Phase 3.3 ✅). Consistency/Phase 6.8 dependency no longer applies — feature r
 
 **Задачи:**
 
-- [ ] src/views/auth/LoginView.vue:
-  - Email + magic link (или email + пароль — решить с заказчиком)
-  - Или: "Войти через Telegram" → deep link в Telegram бот
-- [ ] Бэкенд: **новый эндпоинт** — POST /api/v1/auth/email (или /auth/magic-link)
-- [ ] platform/standalone.ts — полноценная реализация вместо заглушек
-
-**Зависимость от бэкенда:** **НОВЫЙ ЭНДПОИНТ — нужна реализация на бэкенде.**
+- [x] Стендалон Ф3: `views/auth/TelegramLoginView.vue` — «Войти через Telegram» (OpenID Connect); e-mail и пароль не будет (решение владельца 14.10.2026)
+- [x] Бэкенд: `POST /api/v1/auth/telegram/browser/start` и `/complete` (`modules/auth/browser_login.py`)
+- [x] platform/standalone.ts — токен в `localStorage`, возврат из Telegram (`platform/browser-login.ts`)
 
 ---
 
@@ -1323,13 +1319,13 @@ Phase 3.3 ✅). Consistency/Phase 6.8 dependency no longer applies — feature r
 
 **Scope (Telegram MVP):** экраны 01 (Welcome) + 05-08 (карусель: 3 интро + таймзона).
 Экраны 02_Login / 03_Register / 04_OAuth ПРОПУЩЕНЫ (Telegram авто-авторизует через
-initData; они для standalone/F10).
+initData; вне Telegram вход — «Войти через Telegram», Стендалон Ф3; регистрации по e-mail нет).
 
 **Задачи:**
 
 - [x] `api/users.ts` (новый) — `getMe()`, `updateMe(body)` обёртки над `/api/v1/users/me`
 - [x] `stores/auth.ts` — refactor: `restoreSession`/`fetchMe` через `getMe()`; добавлен `updateProfile(body)` (через `updateMe` + `_setUser`, бросает ошибку наверх)
-- [x] `views/auth/WelcomeView.vue` (экран 01) — лого VELΘ + слоган + "Войти" (`@enter`). "Создать аккаунт" скрыта в Telegram (`v-if="isStandalone"`), видна только в браузере (F10)
+- [x] `views/auth/WelcomeView.vue` (экран 01) — лого VELΘ + слоган + "Войти" (`@enter`). "Создать аккаунт" (только браузер) удалена 14.10.2026, Стендалон Ф3
 - [x] `views/auth/OnboardingView.vue` (экраны 05-08) — карусель: 3 интро-слайда + шаг таймзоны (VSelect из TIMEZONE_OPTIONS, дефолт — автодетект `Intl`, фоллбэк `Europe/Moscow`). "Пропустить" -> сразу к таймзоне. "Готово" -> `updateProfile({ timezone, onboarding_completed: true })` -> `@done`
 - [x] `App.vue` — машина состояний `stage: welcome|onboarding|app` (вне роутера, как Loading/Stub)
 - [x] Иллюстрации: `public/onboarding/onboarding-{practice,diary,masters}.svg` (фон+иконка; текст — живой HTML)
@@ -1413,21 +1409,21 @@ DS-first, honest-stub (контрол без бэка = тост «недост�
 - [x] `views/master/MasterOnboardingView.vue` — пост-апрув карусель (overlay на дашборде через `Teleport`); гейт `utils/masterOnboarding.ts` + per-session `master.onboardingShownThisSession`; флаг `master_onboarding_completed` = Zod **E15** (defensive-read, до E15 не персистится → пере-показ на новой сессии)
 - [x] `views/master/MasterApplyView.vue` — рестайл заявки в 3 шага (Профиль/Опыт/Документы); honest-стабы загрузки файлов (**E13**) и языка практик (**E16**)
 - [x] `views/master/MasterPendingView.vue` — вердикт-экраны отправлена/одобрено/отказ (generic-причина до **E14**)
-- [x] `components/ui/VPaginationDots.vue` — DS-точки (13×13/7×7), ретрофит обеих каруселей; токены `--text-28`/`--text-46`; `VeloLogo` вариант `lockup`
+- [x] `components/ui/VPaginationDots.vue` — DS-точки (13×13/7×7), ретрофит обеих каруселей; токены `--text-28`/`--text-46` и `VeloLogo` вариант `lockup` — **удалено 14.10.2026** (Стендалон Ф3, решение владельца: класс веб-входа по e-mail и паролю убран целиком)
 - [x] TEST-only повтор онбординга на role-switch — `ui.forceOnboarding` + хук в `RoleSwitchSection` + `App.vue` watch (user) / dashboard overlay (master)
-- [x] Phase A parked web-auth — `views/auth/{LandingView,LoginView,RecoverPasswordRequestView,RecoverPasswordSetView}.vue` + спящие `/auth/*` маршруты (= Zod **E17**)
+- [x] Phase A parked web-auth — `views/auth/{LandingView,LoginView,RecoverPasswordRequestView,RecoverPasswordSetView}.vue` + спящие `/auth/*` маршруты (= Zod **E17**) — **удалено 14.10.2026** (Стендалон Ф3, решение владельца: класс веб-входа по e-mail и паролю убран целиком)
 - [x] TEST-only 5-экранное превью заявки (`ffca7a0`) — `ui.previewApplyFlow`: `RoleSwitchSection` → Landing → MasterApply 1/2/3 → MasterPending «отправлено», без реального POST/маркера; гарды и `MasterPending` пропускают/форсят по сигналу; `beforeEach` чистит сигнал при уходе из флоу
 - [x] Фикс клиент-валидации условий окончания серии в `CreatePracticeView` (until_date/after_count/weekday) — аддендум к F6
 
 **Ключевые решения:**
 
 - Все TEST-only инструменты (role-switch, повтор онбординга, превью заявки) — **прод-недостижимы**: единственная точка входа `RoleSwitchSection` рендерится лишь при непустом `allowedRoles` (= `ROLE_SWITCH_ENABLED` на TEST). Сигналы session-only, не персистятся. *(Историческая заметка F13; с v2.4/F16 `allowedRoles` выводится из capability и флага нет; №260 Batch-STRIP удалил replay/превью из кода целиком, свитч остался прод-фичей «Переключение роли».)*
-- Phase A экраны — **из DS, не из растра**; недостижимы в Telegram (`App.vue` → StandaloneStubView для браузера, role-redirect не ведёт на `/auth/*`).
-- Honest-stub: каждый контрол без бэка — тост «недоступно» + запись для Zod (E13–E17), без фейк-данных.
+- Phase A экраны — **из DS, не из растра**; недостижимы в Telegram (`App.vue` → StandaloneStubView для браузера, role-redirect не ведёт на `/auth/*`) — **удалено 14.10.2026** (Стендалон Ф3, решение владельца: класс веб-входа по e-mail и паролю убран целиком).
+- Honest-stub: каждый контрол без бэка — тост «недоступно» + запись для Zod (E13–E16; E17 снят 14.10.2026 вместе с web-auth), без фейк-данных.
 
-**Зависимость от бэкенда (Zod):** E7 период-статы мастера (`GET /masters/me/stats`) — доставлено, подключено в дашборде. E8 уведомления — контракт+capability-gate частично (лента/push-воркер открыты → `MasterNotificationsView` = стаб). Открытые: E13 (файлы заявки), E14 (причина отказа), E15 (флаг онбординга), E16 (языки заявки), E17 (web-auth).
+**Зависимость от бэкенда (Zod):** E7 период-статы мастера (`GET /masters/me/stats`) — доставлено, подключено в дашборде. E8 уведомления — контракт+capability-gate частично (лента/push-воркер открыты → `MasterNotificationsView` = стаб). Открытые: E13 (файлы заявки), E14 (причина отказа), E15 (флаг онбординга), E16 (языки заявки). E17 (web-auth) снят 14.10.2026: веб-входа по e-mail и паролю не будет.
 
-**Открытый фронт-техдолг:** TD-FE-E13…E17 (Фронтовый Кодекс §10).
+**Открытый фронт-техдолг:** TD-FE-E13…E16 (Фронтовый Кодекс §10).
 
 **Критерий готовности:** Мастер-программа построена, DS-first, honest-stub, задеплоена на TEST (`00bb5f2`); TEST-инструменты прод-недостижимы. ✅
 
@@ -1508,7 +1504,7 @@ DS-first, honest-stub (контрол без бэка = тост «недост�
 
 - [x] **Batch-STRIP (№260)** — весь тестер-скаффолдинг удалён: `ui.forceOnboarding` (сигнал + `App.vue`-watcher + `forced`-параметр `shouldShowMasterOnboarding`) и `ui.previewApplyFlow` (сигнал + `PREVIEW_ROUTE_NAMES` + ветки `applyGuard`/`masterPendingGuard`/`beforeEach`/Landing/Apply/Pending + кнопка «Просмотреть экраны заявки»); `ui`-store ужат до `uiMode`; Vitest-спеки forced-гейта сняты. Гарды №257 (honest entry) и роут №258 (invite) поведенчески байт-идентичны.
 
-**Зависимость от бэкенда (Zod):** нет новых; E15 закрыт своими силами (backend-exception). Открытые прежние: E4, E13, E16, E17, E19.
+**Зависимость от бэкенда (Zod):** нет новых; E15 закрыт своими силами (backend-exception). Открытые прежние: E4, E13, E16, E19.
 
 **Критерий готовности:** py_compile + vue-tsc + vite build + Vitest 83/83 зелёные локально; pytest — на деплое; батч HELD до nav-LEAN + operator push-go; device-verify (диплинк из Telegram, admin-экран, no-profile вход) — операторская петля. ✅ (код), деплой pending.
 
@@ -1531,7 +1527,7 @@ DS-first, honest-stub (контрол без бэка = тост «недост�
 | F10: PWA                    | 7.3 + новый auth            | **Частично** | **Частично**             |
 | F11: TabBar + Onboarding ✅ | 1.2, 1.4 (+onboarding flag) | ✅           | Нет                      |
 | F12: Diary redesign ✅      | 8.4 (+/diary/feed)          | ✅           | Нет                      |
-| F13: Мастер-программа ✅    | E7 ✅ / E8 частично / E13–E17 | **Частично** | Нет (honest-стабы)       |
+| F13: Мастер-программа ✅    | E7 ✅ / E8 частично / E13–E16 | **Частично** | Нет (honest-стабы)       |
 | F14: Polish + kbd-viewport + User Сообщения ✅ | E4 messaging (открыт)       | **Частично** | Нет (honest-стабы)       |
 | F15: kbd/туман polish + чат fill + focus-freeze ✅ | E19 methods-workflow (нов., открыт) / E4 | **Частично** | Нет (honest-стабы)       |
 
@@ -1549,7 +1545,7 @@ DS-first, honest-stub (контрол без бэка = тост «недост�
 | Решение                                                     | Причина                                                                                                                 |
 | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Типы API: codegen из OpenAPI (CR-01) + `types.ts` поверх | Бэкенд-типы автогенерируются в `generated.ts` (единый источник, drift невозможен конструктивно); `types.ts` реэкспортит их и добавляет только фронт-онли типы. Прежняя «ручная типизация» снята с введением CR-01 — см. Фронтовый Кодекс FP-09 |
-| sessionStorage вместо localStorage для token                | Telegram WebApp закрывает вкладку — sessionStorage очищается, localStorage нет                                          |
+| Носитель токена выбирает платформа (Стендалон Ф3)           | Telegram — `sessionStorage` (решает `initData`); вне Telegram — `localStorage` (вход живёт между запусками)            |
 | Свой CSS вместо Tailwind                                    | Дизайн-система уже готова в мокапах, переносить проще 1:1                                                               |
 | Внутренний Nginx в Docker фронтенда                         | SPA fallback + кеширование без усложнения хост-конфига                                                                  |
 | Telegram SDK через локальную копию script (не npm)          | CDN Telegram заблокирован ТСПУ; локальная копия гарантирует загрузку. Миграция на npm `@telegram-apps/sdk` — см. TD-SDK |
@@ -1739,7 +1735,7 @@ node `4715-3463`). Детали и паттерны — **Фронтовый К�
 
 ---
 
-### Мастер-программа — honest-стабы (F13, Zod E13–E17)
+### Мастер-программа — honest-стабы (F13, Zod E13–E16)
 
 | ID | Среда | Описание | Статус |
 | --- | --- | --- | --- |
@@ -1747,7 +1743,6 @@ node `4715-3463`). Детали и паттерны — **Фронтовый К�
 | TD-FE-E14-REJECT-REASON | 🧪 | Причина отказа — generic до E14 | ⬜ |
 | TD-FE-E15-ONBOARDING-FLAG | ✅ | ЗАКРЫТ (v2.4/F16): `master_onboarding_completed` персистится + типизирован | ✅ |
 | TD-FE-E16-APPLY-LANGS | ✅ | ЗАКРЫТ (v2.5): языки уходят с заявкой (`experience.languages`) + свободно редактируемы на профиле (`PATCH /masters/me/languages`) | ✅ |
-| TD-FE-E17-WEB-AUTH | 🧪 | Phase A `/auth/*` — спящие, ждут web-auth-бэк | ⬜ |
 
 TEST-only инструменты (повтор онбординга / превью заявки) — УДАЛЕНЫ из кода (№260
 Batch-STRIP, «тест==прод»); роль-свитч — прод-фича «Переключение роли» с capability-политикой

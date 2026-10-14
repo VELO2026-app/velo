@@ -38,6 +38,8 @@ export type {
   BookingDetailResponse,
   BookingRecordingResponse,
   BookingResponse,
+  BrowserLoginResponse,
+  BrowserLoginStartResponse,
   CancelBookingRequest,
   CheckinMetricResponse,
   CheckinRequest,

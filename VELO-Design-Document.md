@@ -317,12 +317,11 @@ velo/                              -- GitHub repo root
 
 ### 6.1. Standalone PWA (F10)
 
-Сейчас приложение работает только через Telegram WebApp. После MVP:
+Вне Telegram (браузер, приложение с рабочего стола) вход -- «Войти через Telegram»
+(OpenID Connect, Стендалон Ф3); входа по e-mail и паролю нет и не будет (решение
+владельца 14.10.2026). Дальше:
 
-- Standalone-авторизация (email + magic link или email + пароль)
-- Полноценная реализация `platform/standalone.ts` (сейчас -- заглушки)
 - Push-уведомления через Service Worker
-- Новый бэкенд-эндпоинт: `POST /api/v1/auth/email`
 
 Платформенная абстракция (`src/platform/`) уже готова к этому: Telegram и Standalone реализуют единый интерфейс `Platform`.
 
@@ -401,9 +400,11 @@ class Subscription:
 
 ### 7.5. Standalone-авторизация
 
-`src/platform/standalone.ts` -- safe no-op заглушки.
-`src/views/auth/StandaloneStubView.vue` -- экран "Откройте через Telegram".
-Полноценная реализация -- в F10.
+Стендалон Ф3: `src/views/auth/TelegramLoginView.vue` -- «Войти через Telegram»
+(OpenID Connect), единственный вход вне Telegram. Бэк -- `modules/auth/browser_login.py`
+(`POST /api/v1/auth/telegram/browser/start`, `/complete`); токен вне Telegram --
+в `localStorage` (`src/platform/session-token.ts`). Внутри Telegram без сессии --
+`src/views/auth/TelegramStubView.vue` («Открыть в Telegram»).
 
 ---
 

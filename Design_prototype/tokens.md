@@ -168,7 +168,7 @@
 |---------|-----------|---------|--------|------------|--------|---------------|------------------|
 | Primary (solid) | #627a9c | 100% | 1px solid #ffffff | #ffffff | radius-full (200px) | blur(2px) | CTA: «Войти», «Check-in», «Забронировать» |
 | Secondary (glass) | rgba(171,191,218,0.60) | — | 1px solid #ffffff | #4c6589 | radius-full (200px) | blur(2px) | «Войти через Google» |
-| Ghost | rgba(255,255,255,0.01) | — | 1px solid #ffffff | #4c6589 | radius-full (200px) | blur(2px) | «Войти через Apple», «Zoom», «Создать аккаунт» |
+| Ghost | rgba(255,255,255,0.01) | — | 1px solid #ffffff | #4c6589 | radius-full (200px) | blur(2px) | «Войти через Apple», «Zoom» |
 | Danger (solid) | #f795a2 | 100% | 1px solid #ffffff | #ffffff | radius-full (200px) | blur(2px) | «Отменить бронирование» |
 
 ### Примечания
