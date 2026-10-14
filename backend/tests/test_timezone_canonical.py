@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session_factory
 from app.core.timezones import (
+    _SYSTEM_V_TARGETS,
     UnknownTimezoneError,
     canonical_timezone,
     canonical_timezone_names,
@@ -70,8 +71,18 @@ KEPT = (
     "UTC",
 )
 
+# System V zone names: zones in the pinned package, absent from the
+# postgres image (Debian 13 tzdata-legacy). Stored as their place.
+SYSTEM_V = {
+    "CST6CDT": "America/Chicago",
+    "EST5EDT": "America/New_York",
+    "MST7MDT": "America/Denver",
+    "PST8PDT": "America/Los_Angeles",
+}
+
 UNKNOWN = (
     "Mars/Base",
+    "Factory",  # a zone of the package without a "/": not a place
     "Asia",  # a directory of the zoneinfo tree: ZoneInfo raised OSError -> 500
     "asia/kathmandu",
     " UTC",
@@ -166,6 +177,11 @@ def test_old_spelling_is_rewritten(legacy: str, canonical: str) -> None:
     assert canonical_timezone(legacy) == canonical
 
 
+@pytest.mark.parametrize(("name", "target"), sorted(SYSTEM_V.items()))
+def test_system_v_zone_is_rewritten_to_its_place(name: str, target: str) -> None:
+    assert canonical_timezone(name) == target
+
+
 @pytest.mark.parametrize("name", KEPT)
 def test_country_links_and_utc_are_kept(name: str) -> None:
     assert canonical_timezone(name) == name
@@ -187,19 +203,64 @@ def test_old_spellings_never_come_out_and_the_new_ones_do() -> None:
 
 
 def test_every_name_of_the_package_lands_on_an_output_in_one_step() -> None:
-    """Every zone stays itself; every link resolves to an output, and the
-    output resolves to itself (no chains, idempotent) -- across the WHOLE
-    pinned tzdata, not five samples. A future tzdata with link chains or
-    with a link pointing at a rewritten name fails here, by name."""
+    """Every zone with a "/" stays itself; every link resolves to an output,
+    and the output resolves to itself (no chains, idempotent) -- across the
+    WHOLE pinned tzdata, not five samples. A future tzdata with link chains
+    or with a link pointing at a rewritten name fails here, by name.
+
+    This used to say "every zone stays itself", and it was right for the
+    package: CST6CDT, EST5EDT, MST7MDT, PST8PDT and Factory are zones there.
+    The stand's Postgres (Debian 13, tzdata-legacy not installed) does not
+    know the first four, and Factory is no place -- the BE-157 fix rewrites
+    the four and refuses the fifth, which made the old statement false. The
+    zones without a "/" are covered by the two tests below."""
     zones, links = _tzdata_zi()
     assert zones and links
     names = canonical_timezone_names()
     for zone in zones:
-        assert canonical_timezone(zone) == zone
+        if "/" in zone:
+            assert canonical_timezone(zone) == zone
     for alias in links:
         out = canonical_timezone(alias)
         assert out in names, alias
         assert canonical_timezone(out) == out, alias
+
+
+def test_zones_without_a_slash_are_rewritten_or_refused() -> None:
+    """Computed from the package, not listed: every zone without a "/" is
+    either in the System V table (rewritten) or refused. Today the refused
+    set is exactly {"Factory"}; a future zone of that kind is refused too."""
+    zones, _ = _tzdata_zi()
+    slashless = {zone for zone in zones if "/" not in zone}
+    assert slashless, "the package has no zone without a slash any more"
+    refused = slashless - set(_SYSTEM_V_TARGETS)
+    for zone in refused:
+        with pytest.raises(UnknownTimezoneError):
+            canonical_timezone(zone)
+    for zone in slashless & set(_SYSTEM_V_TARGETS):
+        assert canonical_timezone(zone) == _SYSTEM_V_TARGETS[zone]
+    assert not slashless & canonical_timezone_names()
+
+
+def test_system_v_table_is_still_needed() -> None:
+    """Guard of the KNOWN CEILING in app/core/timezones.py: every name of
+    the table is still a ZONE of the pinned package (no L line for it). When
+    a tzdata update writes them as links, or drops them, this fails -- delete
+    the table, the general link rule takes over."""
+    zones, links = _tzdata_zi()
+    assert set(_SYSTEM_V_TARGETS) == set(SYSTEM_V)
+    for name in _SYSTEM_V_TARGETS:
+        assert name in zones, f"{name} is no longer a zone of the package"
+        assert name not in links, f"{name} is a link now: drop the table"
+
+
+def test_system_v_targets_are_storable_names() -> None:
+    """The pair of the guard: every target of the table is itself a name we
+    store (so it is also covered by the Postgres check below)."""
+    names = canonical_timezone_names()
+    for target in _SYSTEM_V_TARGETS.values():
+        assert target in names
+        assert canonical_timezone(target) == target
 
 
 def test_every_storable_name_loads_in_this_image() -> None:
@@ -218,7 +279,9 @@ def test_every_storable_name_loads_in_this_image() -> None:
 # ===========================================================================
 
 
-@pytest.mark.parametrize(("legacy", "canonical"), sorted(LEGACY.items()))
+@pytest.mark.parametrize(
+    ("legacy", "canonical"), sorted({**LEGACY, **SYSTEM_V}.items()),
+)
 async def test_profile_stores_and_returns_the_canonical_name(
     client: AsyncClient, legacy: str, canonical: str,
 ) -> None:
