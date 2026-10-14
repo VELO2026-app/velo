@@ -298,7 +298,7 @@ velo/                              -- GitHub repo root
 │   │   ├── styles/                -- variables.css (дизайн-токены), global.css
 │   │   ├── utils/                 -- format.ts, displayHelpers.ts, adminHelpers.ts
 │   │   └── views/                 -- user/, master/, admin/, auth/, shells/
-│   ├── public/                    -- manifest.json, иконки, telegram-web-app.js
+│   ├── public/                    -- иконки, фон, картинки онбординга (манифест -- src/pwa/manifest.ts)
 │   ├── Dockerfile
 │   └── package.json
 ├── docker-compose.yml             -- Весь стек: app + frontend + postgres + redis

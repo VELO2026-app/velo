@@ -464,7 +464,8 @@ html.is-keyboard-open .velo-kbd-scroll {
      sticky composer sits just above the keyboard and the focused field is
      reachable; the fog fade follows the new bottom instead of clipping a band.
      PROMPT №666: subtracts `--velo-content-safe-top` (AppFrame.vue,
-     0 in-chat / ~70px Telegram fullscreen) -- the SAME defect class the diary
+     0 in-chat / ~70px Telegram fullscreen / env(safe-area-inset-top) outside
+     Telegram) -- the SAME defect class the diary
      was returned for at №664: `--velo-vvh` is the RAW visual-viewport height,
      unaware of AppFrame's safe-area padding-top, so capping straight to it
      would overshoot the actually-visible bottom by the safe-area amount in

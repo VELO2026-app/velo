@@ -252,9 +252,9 @@ async def update_payout_details(
     user, _profile = master_tuple
 
     # Re-load profile in the writer session.
-    # get_current_master loads the object in its own session context
-    # (reader); we need the profile bound to THIS session for
-    # flush() + refresh() to work.
+    # get_current_master loads the object in its own short session, closed
+    # before the endpoint runs (BE-146): it arrives detached; we need the
+    # profile bound to THIS session for flush() + refresh() to work.
     profile = await session.get(MasterProfile, user.id)
     if not profile:
         raise BadRequestError("Master profile not found")
@@ -386,8 +386,9 @@ async def submit_method_change(
     user, _profile = master_tuple
 
     # Re-load in the writer session (mirrors update_payout_details): the
-    # dependency loaded the profile via the reader, but flush()/refresh()
-    # need the object bound to THIS write session.
+    # dependency's profile arrives detached from its own short session
+    # (BE-146), but flush()/refresh() need the object bound to THIS write
+    # session.
     profile = await session.get(MasterProfile, user.id)
     if not profile:
         raise BadRequestError("Master profile not found")

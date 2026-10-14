@@ -3,7 +3,8 @@
 // =============================================================================
 //
 // Single source of truth for the top safe-area offset the app content must
-// leave clear in fullscreen, backed by the official SDK viewport signals.
+// leave clear: in Telegram fullscreen, backed by the official SDK viewport
+// signals; outside Telegram, the system inset (see below).
 //
 // FORMULA (device-tuned):
 //   offset = safeAreaInset.top + contentSafeAreaInset.top - OVERLAP
@@ -28,12 +29,30 @@
 // signal into a Vue ref, so an inline style bound to the value re-renders when
 // the inset arrives -- which is what moves the content.
 //
-// GUARDED: outside Telegram (standalone, unit tests) the viewport is never
-// mounted; we fall back to 0 to keep the standalone build and test gate green.
+// INSIDE TELEGRAM a viewport that never mounted (older client) gives 0, as it
+// always did.
+//
+// OUTSIDE TELEGRAM (BE-149: browser, app installed on the home screen) the
+// offset is the system's own inset, env(safe-area-inset-top): the installed
+// iOS app draws under a translucent status bar (index.html,
+// black-translucent), and platform/launch.ts sets viewport-fit=cover there so
+// env() carries the real value. In a plain browser tab it is 0.
+//
+// The branch is chosen by PLATFORM, not by "viewport mounted": a Telegram
+// client whose viewport never mounted must stay at 0, not pick up env() --
+// the Telegram webview keeps its old viewport tag, so env() there is not the
+// value this layout was tuned against.
+//
+// The value is therefore a CSS LENGTH STRING ('70px' or 'env(...)'), bound
+// as-is into inline styles.
 // =============================================================================
 
 import { computed, type ComputedRef } from 'vue'
 import { viewport, useSignal } from '@tma.js/sdk-vue'
+import { platform } from '@/platform'
+
+/** Top clearance outside Telegram: the system inset (0 where there is none). */
+export const STANDALONE_SAFE_TOP = 'env(safe-area-inset-top, 0px)'
 
 /** Overlap (px) between the status-bar area and Telegram's controls strip. */
 const OVERLAP_PX = 20
@@ -43,18 +62,19 @@ function toNum(v: unknown): number {
 }
 
 /**
- * Reactive top safe-area offset, in pixels: the clearance the content needs
- * below Telegram's controls in fullscreen, with the overlap trimmed.
+ * Reactive top safe-area offset as a CSS length: in Telegram, the clearance
+ * the content needs below Telegram's controls in fullscreen, with the overlap
+ * trimmed ('70px', '0px'); outside Telegram, STANDALONE_SAFE_TOP.
  *
  * Bind to an inline style so the padding re-renders reactively:
- *   :style="{ paddingTop: contentSafeTop + 'px' }"
+ *   :style="{ paddingTop: contentSafeTopCss }"
  */
-export function useSafeArea(): { contentSafeTop: ComputedRef<number> } {
+export function useSafeArea(): { contentSafeTopCss: ComputedRef<string> } {
   const isMounted = useSignal(viewport.isMounted)
   const safeTop = useSignal(viewport.safeAreaInsetTop)
   const contentTop = useSignal(viewport.contentSafeAreaInsetTop)
 
-  const contentSafeTop = computed<number>(() => {
+  const telegramSafeTop = computed<number>(() => {
     if (!isMounted.value) return 0
     const sum = toNum(safeTop.value) + toNum(contentTop.value)
     // Only trim the overlap when there's a real inset (fullscreen). Out of
@@ -62,5 +82,9 @@ export function useSafeArea(): { contentSafeTop: ComputedRef<number> } {
     return sum > 0 ? Math.max(sum - OVERLAP_PX, 0) : 0
   })
 
-  return { contentSafeTop }
+  const contentSafeTopCss = computed<string>(() =>
+    platform.name === 'telegram' ? `${telegramSafeTop.value}px` : STANDALONE_SAFE_TOP,
+  )
+
+  return { contentSafeTopCss }
 }

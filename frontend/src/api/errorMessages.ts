@@ -152,7 +152,12 @@ export const ERROR_MESSAGES: Record<string, string> = {
   // BE-108, raised through constants in diary/service.py -- the same blind
   // spot of the literal-count command named above.
   reflection_not_available: 'Поделиться можно только по пропущенной практике',
-  reflection_already_submitted: 'Вы уже поделились -- спасибо',
+  reflection_already_submitted: 'Вы уже поделились — спасибо',
+  // BE-138, mcp/service.py.
+  mcp_token_limit_reached: 'Активных токенов уже 10 — отзовите ненужный, чтобы создать новый',
+  mcp_token_not_found: 'Токен не найден — обновите список',
+  // BE-139, mcp/service.py.
+  mcp_token_name_taken: 'Токен с таким названием уже есть — выберите другое',
 
   // VeloError base-class defaults (no module-specific code set).
   unauthorized: 'Сессия истекла — войдите заново',

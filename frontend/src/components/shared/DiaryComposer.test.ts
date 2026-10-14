@@ -73,6 +73,8 @@ function entryFixture(content: string): DiaryEntryResponse {
     content,
     mood: null,
     is_deleted: false,
+    // BE-140: every entry carries its source; the composer writes in the app.
+    created_via: 'app',
     created_at: '2026-07-29T10:00:00Z',
     updated_at: null,
   }

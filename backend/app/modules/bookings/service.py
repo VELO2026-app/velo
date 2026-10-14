@@ -1215,8 +1215,17 @@ async def list_user_bookings(
     status_filter: str | None = None,
     limit: int = 20,
     offset: int = 0,
+    scheduled_from: datetime | None = None,
+    scheduled_to: datetime | None = None,
 ) -> tuple[list[tuple[Booking, Practice, bool, bool, str | None, bool, bool]], int]:
     """List bookings for a user with practice details (paginated).
+
+    WINDOW (BE-139, the MCP calendar): scheduled_from / scheduled_to bound
+    Practice.scheduled_at (inclusive, either may be given alone), and when
+    either is given the page is ordered by the practice's time, earliest
+    first -- a calendar reads forward in time. Neither given -- which is what
+    GET /bookings/me passes -- leaves the query exactly as it was: no bound,
+    newest booking first.
 
     B-05: count derived from base query subquery instead of maintaining
     a parallel count_base with duplicated filter clauses. Same pattern
@@ -1253,6 +1262,11 @@ async def list_user_bookings(
 
     if status_filter:
         base = base.where(Booking.status == status_filter)
+    if scheduled_from is not None:
+        base = base.where(Practice.scheduled_at >= scheduled_from)
+    if scheduled_to is not None:
+        base = base.where(Practice.scheduled_at <= scheduled_to)
+    windowed = scheduled_from is not None or scheduled_to is not None
 
     # Count via subquery -- filters applied exactly once, no duplication.
     total = (
@@ -1263,7 +1277,13 @@ async def list_user_bookings(
 
     items_stmt = (
         base
-        .order_by(Booking.created_at.desc())
+        .order_by(
+            *(
+                (Practice.scheduled_at.asc(), Booking.id.asc())
+                if windowed
+                else (Booking.created_at.desc(),)
+            )
+        )
         .limit(limit)
         .offset(offset)
     )

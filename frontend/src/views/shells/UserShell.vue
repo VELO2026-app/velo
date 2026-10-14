@@ -178,6 +178,13 @@ const FOG_ROUTES = [
   // overlaps on scroll. Default form-safe tuning: the submit button + inputs sit
   // above the bottom fade (the tab-bar clearance), so they stay crisp.
   'user-support',
+  // AI connections (BE-139 item 12, owner's check on the stand): the token
+  // list scrolls, and without the fog its intro and «Создать токен» showed
+  // through the transparent floating header. Same fix and same default
+  // tuning as user-support above. The timezone screen it sits next to is
+  // not listed because it does not scroll as a page, not because the two
+  // differ in kind.
+  'user-ai-connections',
 ]
 const isFogRoute = computed(() => FOG_ROUTES.includes(route.name as string))
 

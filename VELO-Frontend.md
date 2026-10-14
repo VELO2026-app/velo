@@ -140,8 +140,7 @@ frontend/
 ├── public/
 │   ├── js/telegram-web-app.js -- Локальная копия Telegram SDK (CDN заблокирован ТСПУ)
 │   ├── bg/                    -- Фоновое изображение VELΘ (background.png)
-│   ├── icons/                 -- PWA иконки + логотипы VELΘ (logo.svg, logo-white.svg)
-│   └── manifest.json          -- PWA manifest
+│   └── icons/                 -- PWA иконки (в т.ч. maskable 512, apple-touch 180) + логотипы VELΘ (logo.svg, logo-white.svg)
 ├── Dockerfile
 └── package.json
 ```

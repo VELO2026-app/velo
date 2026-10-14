@@ -1,21 +1,23 @@
 <!--
   VELO Frontend -- AppFrame
 
-  Single app-wide frame that applies the Telegram top safe-area offset in ONE
-  place, so individual screens never deal with insets. Wraps everything the
-  user sees (loading, stub, welcome, onboarding, the router) in App.vue.
+  Single app-wide frame that applies the top safe-area offset in ONE place, so
+  individual screens never deal with insets. Wraps everything the user sees
+  (loading, stub, welcome, onboarding, the router) in App.vue.
 
-  The offset comes from useSafeArea() (sum of Telegram's top insets minus the
-  overlap; reactive via the @tma.js/sdk viewport signal) and is applied as an
-  inline padding-top so it re-renders when the inset arrives. Out of fullscreen
-  the offset is 0 and the frame is a transparent passthrough.
+  The offset comes from useSafeArea() as a CSS length: in Telegram, the sum of
+  Telegram's top insets minus the overlap (reactive via the @tma.js/sdk
+  viewport signal; 0px out of fullscreen, where the frame is a transparent
+  passthrough); outside Telegram (BE-149), env(safe-area-inset-top) -- the
+  status bar of the installed app, 0 in a plain browser tab. It is applied as
+  an inline padding-top so it re-renders when the inset arrives.
 
   box-sizing:border-box keeps the padding inside the frame's height so a child
   using height:100% fills the area BELOW the safe-area padding rather than
   overflowing past the bottom edge -- true for a PERCENTAGE child; an
   absolute-px child (a live `--velo-vvh` binding, e.g. the diary) does NOT get
   this for free, since a raw px number knows nothing about an ancestor's
-  padding. PROMPT №664: also publish `contentSafeTop` as `--velo-content-safe-top`
+  padding. PROMPT №664: also publish the offset as `--velo-content-safe-top`
   on this SAME inline `:style` object -- a plain Vue-reactive binding, the same
   mechanism the existing `paddingTop` already uses successfully, NOT the raw
   `element.style.setProperty()` path useSafeArea.ts's own header documents as
@@ -29,7 +31,7 @@
 <template>
   <div
     class="app-frame"
-    :style="{ paddingTop: contentSafeTop + 'px', '--velo-content-safe-top': contentSafeTop + 'px' }"
+    :style="{ paddingTop: contentSafeTopCss, '--velo-content-safe-top': contentSafeTopCss }"
   >
     <slot />
   </div>
@@ -38,7 +40,7 @@
 <script setup lang="ts">
 import { useSafeArea } from '@/composables/useSafeArea'
 
-const { contentSafeTop } = useSafeArea()
+const { contentSafeTopCss } = useSafeArea()
 </script>
 
 <style scoped>

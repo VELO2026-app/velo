@@ -1,0 +1,13 @@
+# SECRETS: .state/sessions.json holds 30-day session tokens of every load
+# student. Never committed; it never leaves the Mac it was made on.
+.state/*
+!.state/.gitkeep
+
+# Run output (report, summaries, CSV, server probe) stays with whoever ran it.
+results/*
+!results/.gitkeep
+
+# k6 binary run.py downloads and checks against the official checksums.
+.bin/
+
+__pycache__/

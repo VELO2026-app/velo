@@ -1581,11 +1581,12 @@ describe('MasterDashboardView', () => {
   // - Keyboard activation of the practice card (@keydown.enter.space, .vue:137):
   //   the handler is the same openPractice already covered through the click
   //   path; a second test would assert Vue's modifier, not this screen.
-  // - `contentSafeTop` on the onboarding overlay (.vue:207): useSafeArea reads
-  //   Telegram viewport signals that are never mounted outside Telegram and
-  //   return a constant 0 by design (useSafeArea.ts:57-63). Asserting
-  //   `paddingTop: 0px` would assert the guard, not the formula. It is
-  //   Telegram-runtime behaviour, out of reach of happy-dom.
+  // - `contentSafeTopCss` on the onboarding overlay: this screen only binds
+  //   the value; which value (Telegram formula vs env(safe-area-inset-top)
+  //   outside Telegram, BE-149) is useSafeArea's own contract, pinned in
+  //   composables/useSafeArea.test.ts. The Telegram formula itself reads
+  //   viewport signals that never mount in happy-dom -- Telegram-runtime
+  //   behaviour, out of reach here.
   // - VStatCard / VSegmentTrack / VMenuRow / VCard internals: DS primitives with
   //   their own homes. Asserted here only through the values this screen feeds
   //   them and the classes it reads back.

@@ -69,6 +69,65 @@ compose_progress_note() {
     echo -e "${CYAN} containers report healthy -- that is normal, not a hang)${NC}"
 }
 
+# ---------------------------------------------------------------------------
+# PURE HELPERS shared with the installer (BE-141 FIX). One implementation:
+# install_velo.sh calls them through the internal subcommands below from the
+# freshly cloned repo, BEFORE velo.conf exists (the installer writes it last)
+# -- which is why they live, and are dispatched, above the velo.conf check.
+# They need no configuration: a value, a file, a key.
+# ---------------------------------------------------------------------------
+
+# The characters a backend/.env value may carry. An allowlist rather than a
+# list of bad characters: the file is read by docker compose (env_file) AND
+# by pydantic-settings, and a quote, a space, a '#' or a '$' would be parsed
+# differently by the two.
+env_value_ok() {
+    local allowed='^[A-Za-z0-9._:/@%+=,~_-]*$'
+    [[ "$1" =~ $allowed ]]
+}
+
+# The refusal, worded once for `velo env set` and the installer. Colours are
+# optional: the internal subcommand runs before they are defined.
+env_value_refusal() {
+    echo -e "${RED:-}✗ The value has a character this file cannot carry safely${NC:-}" >&2
+    echo "  Allowed: letters, digits and . _ : / @ % + = , ~ -" >&2
+}
+
+# The value of KEY in an env FILE as everything that reads the file sees
+# it: a repeated key resolves to its LAST assignment (`tail -n 1`, not
+# `grep -m1` -- first-match would hand back a stale value nothing else on
+# the box agrees with; audit H-R4). Exit 1 when the file is missing. KEY is
+# checked before it reaches the pattern.
+read_env_value() {
+    local file="$1" key="$2"
+    [[ "$key" =~ ^[A-Z][A-Z0-9_]*$ ]] || return 1
+    [ -f "$file" ] || return 1
+    grep -E "^${key}=" "$file" 2>/dev/null | tail -n 1 | cut -d= -f2-
+}
+
+# Internal subcommands for install_velo.sh -- not in the usage text.
+#   __env-value-ok   reads the value from STDIN (a secret on the command
+#                    line would show in `ps`), exit 0 if it may go into the
+#                    file, else prints the refusal and exits 1;
+#   __env-get FILE KEY   prints read_env_value.
+case "${1:-}" in
+    __env-value-ok)
+        # read -d '': the whole input, newlines included -- a value with a
+        # newline must fail the check, not be cut at the first line.
+        __value=""
+        IFS= read -r -d '' __value || true
+        if env_value_ok "$__value"; then
+            exit 0
+        fi
+        env_value_refusal
+        exit 1
+        ;;
+    __env-get)
+        read_env_value "${2:-}" "${3:-}"
+        exit $?
+        ;;
+esac
+
 CONF_FILE="$INSTALL_BASE/velo.conf"
 if [ ! -f "$CONF_FILE" ]; then
     echo "FATAL: $CONF_FILE not found." >&2
@@ -961,7 +1020,161 @@ svc_sync_checkout() {
     if [ "$(git rev-parse HEAD)" != "$(git rev-parse "origin/$want")" ]; then
         SVC_CHANGED=1
     fi
+    # BE-154: HEAD == origin is not "deployed" -- the service's own updater
+    # pulls first, so a run that died after its pull leaves HEAD current over
+    # a deploy that never finished. What decides is the last COMPLETED deploy.
+    if [ "$(deployed_commit_get "$name")" != "$(git rev-parse "origin/$want")" ]; then
+        SVC_CHANGED=1
+    fi
     return 0
+}
+
+# ---------------------------------------------------------------------------
+# DEPLOYED-COMMIT MARKERS (BE-154).
+#
+# "Is there anything to deploy?" used to be answered by git alone: HEAD vs
+# origin. But the pull is the FIRST step of a deploy, not the last -- a run
+# that pulled and then died (a red gate, a failed build) left HEAD == origin,
+# and every later `velo update` reported "already up to date" over a deploy
+# that never finished. Found live on 2026-10-14 (dev, 2197b16f -> 408d6f51):
+# the run stopped at the container freshness gate, and a re-run would have
+# deployed nothing.
+#
+# So the answer now comes from what was DEPLOYED: one file per registry name
+# under $DEPLOYED_DIR holding the full sha of the last run that finished
+# successfully. Written only at the very end of a successful run; any failure
+# leaves the previous value, so the next run redoes the work. No file (a box
+# that predates this, or a fresh install) means "unknown" and is treated as
+# "not deployed": one full run settles it.
+# ---------------------------------------------------------------------------
+DEPLOYED_DIR="$INSTALL_BASE/deployed"
+
+# The sha recorded for NAME, or exit 1 when there is none. A file that does
+# not hold exactly one full sha on its first line counts as none.
+deployed_commit_get() {
+    local file="$DEPLOYED_DIR/$1" sha
+    [ -f "$file" ] || return 1
+    sha=$(head -n 1 "$file" 2>/dev/null)
+    [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || return 1
+    echo "$sha"
+}
+
+# Record SHA as the last completed deploy of NAME (write + rename, so a crash
+# mid-write cannot leave a half-written marker that reads as a sha).
+deployed_commit_set() {
+    local name="$1" sha="$2"
+    [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || return 1
+    mkdir -p "$DEPLOYED_DIR" 2>/dev/null || return 1
+    printf '%s\n' "$sha" > "$DEPLOYED_DIR/$name.tmp" 2>/dev/null || return 1
+    mv -f "$DEPLOYED_DIR/$name.tmp" "$DEPLOYED_DIR/$name" 2>/dev/null
+}
+
+# Same, but a failure to write is a warning, not a failed deploy: the deploy
+# itself succeeded, and a missing marker only costs one repeated run.
+record_deployed() {
+    local name="$1" sha="$2"
+    if deployed_commit_set "$name" "$sha"; then
+        echo -e "${GREEN}✓ $name: recorded as deployed at ${sha:0:8}${NC}"
+    else
+        echo -e "${YELLOW}⚠ $name: deployed, but could not record it in $DEPLOYED_DIR/$name${NC}"
+        echo "  The next 'velo update' will run this cycle once more."
+    fi
+}
+
+# Is there anything for the PRODUCT to deploy on BRANCH? Returns 1 ("up to
+# date") only when origin/BRANCH is both checked out AND the last completed
+# deploy; 0 otherwise. Sets LAST_DEPLOYED to the recorded sha ("" if none) --
+# update_product prints it and the --frontend-only guard diffs against it.
+product_needs_deploy() {
+    local branch="$1" target
+    LAST_DEPLOYED=$(deployed_commit_get velo) || LAST_DEPLOYED=""
+    target=$(git rev-parse "origin/$branch" 2>/dev/null) || return 0
+    if [ "$LAST_DEPLOYED" = "$target" ] && [ "$(git rev-parse HEAD)" = "$target" ]; then
+        return 1
+    fi
+    return 0
+}
+
+# May --frontend-only deploy NEW_COMMIT? Only when backend/ is unchanged
+# since the last COMPLETED deploy -- not since HEAD before this pull, which
+# after an interrupted run is already past backend changes nobody deployed.
+# No record -> refuse: nothing says which backend is running.
+frontend_only_allowed() {
+    local new="$1"
+    if [ -z "$LAST_DEPLOYED" ]; then
+        echo -e "${RED}✗ No completed deploy is recorded on this box -- refusing --frontend-only${NC}"
+        echo "  --frontend-only skips the backend, so it needs to know which backend"
+        echo "  is running; $DEPLOYED_DIR/velo is where that is recorded."
+        echo ""
+        echo "Run once: velo update            (full cycle, records the deploy)"
+        return 1
+    fi
+    if ! git diff --quiet "$LAST_DEPLOYED" "$new" -- backend/ 2>/dev/null; then
+        echo -e "${RED}✗ backend/ changed since the last completed deploy (${LAST_DEPLOYED:0:8} -> ${new:0:8})${NC}"
+        echo -e "${RED}  Refusing to run with --frontend-only.${NC}"
+        echo ""
+        echo "Changed backend files:"
+        git diff --name-only "$LAST_DEPLOYED" "$new" -- backend/ 2>/dev/null | sed 's/^/  /'
+        echo ""
+        echo "Run: velo update            (full cycle)"
+        echo "  or velo update --skip-tests  (full cycle without tests)"
+        return 1
+    fi
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# CONTAINER FRESHNESS (BE-154).
+#
+# After `up -d <svc>` the container must run the image the build just tagged:
+# everything after it (migrations, tests, the OpenAPI snapshot, the site)
+# trusts that. Compose recreates a service only when IT sees a different
+# image, and with the containerd image store it can disagree with the tag: a
+# fully cached build still exports a NEW manifest list (new image ID, same
+# config; most likely the build's provenance attestation -- not verified),
+# compose sees the same image and keeps the container, the tag points
+# elsewhere. Measured on dev 2026-10-14:
+# container on sha256:383b3a90..., tag on sha256:e8897b6f..., whose config
+# was created hours before that run; `docker info` = containerd snapshotter.
+#
+# So a mismatch is first answered by ONE forced recreate, and only a mismatch
+# that survives it stops the run -- that one is a real silent non-recreate,
+# which is what this gate exists for (three incidents, see the build gates).
+# --no-deps: --force-recreate applies to every service `up` starts, and
+# postgres/redis (app's dependencies) or app (frontend's) are not ours to
+# bounce here.
+# The old image is NOT compared by config digest: after the tag moves, the
+# containerd store may no longer hold the container's image at all
+# ("No such image", same measurement).
+# ---------------------------------------------------------------------------
+
+# 0 when SERVICE's container runs the image its image name is tagged to now.
+service_runs_tagged_image() {
+    local svc="$1" cid running expected
+    cid=$($COMPOSE_CMD ps -q "$svc" 2>/dev/null)
+    [ -n "$cid" ] || return 1
+    running=$(docker inspect --format '{{.Image}}' "$cid" 2>/dev/null)
+    expected=$(docker image inspect --format '{{.Id}}' \
+        "$(docker inspect --format '{{.Config.Image}}' "$cid" 2>/dev/null)" 2>/dev/null)
+    [ -n "$running" ] && [ -n "$expected" ] && [ "$running" = "$expected" ]
+}
+
+# Make SERVICE run its freshly tagged image: check, at most one forced
+# recreate, check again. Returns 1 only when the mismatch survives.
+ensure_service_fresh() {
+    local svc="$1"
+    service_runs_tagged_image "$svc" && return 0
+    echo -e "${YELLOW}↻ $svc: container is not on the image its tag points to -- recreating once${NC}"
+    if ! $COMPOSE_CMD up -d --no-deps --force-recreate "$svc"; then
+        echo -e "${RED}✗ $svc: forced recreate failed${NC}"
+        return 1
+    fi
+    if service_runs_tagged_image "$svc"; then
+        echo -e "${GREEN}✓ $svc: now on the freshly built image${NC}"
+        return 0
+    fi
+    echo -e "${RED}✗ Running $svc container does not match the freshly built image, even after a forced recreate${NC}"
+    return 1
 }
 
 # Update ONE registry record. Returns non-zero to stop the whole cycle.
@@ -1005,6 +1218,9 @@ update_service() {
         echo -e "${RED}✗ $name: update failed${NC}"
         return 1
     fi
+    # Only now is it deployed (BE-154): the service's updater pulled, built
+    # and restarted, so HEAD is what runs.
+    record_deployed "$name" "$(git -C "$dir" rev-parse HEAD)"
     echo ""
     return 0
 }
@@ -1275,14 +1491,20 @@ update_product() {
             git reset --hard HEAD
         fi
 
-        # Fetch and check
+        # Fetch and check -- against the last COMPLETED deploy, not against
+        # HEAD (BE-154; see DEPLOYED-COMMIT MARKERS above): a run that pulled
+        # and then died leaves HEAD == origin, and the re-run must finish it.
         git fetch origin
-        if git diff --quiet HEAD "origin/$BRANCH" 2>/dev/null; then
+        if ! product_needs_deploy "$BRANCH"; then
             echo -e "${GREEN}✓ velo: already up to date${NC}"
             # return, NOT exit: this is one service in a cycle now, and
             # the product is the LAST of them -- but an exit here would
             # also swallow the cycle's own epilogue.
             return 0
+        fi
+        echo "Last completed deploy: ${LAST_DEPLOYED:+${LAST_DEPLOYED:0:8}}${LAST_DEPLOYED:-none recorded}"
+        if [ "$(git rev-parse HEAD)" = "$(git rev-parse "origin/$BRANCH")" ]; then
+            echo -e "${CYAN}↻ $CURRENT_COMMIT is checked out but its deploy never completed -- resuming${NC}"
         fi
 
         # Pull
@@ -1391,21 +1613,14 @@ update_product() {
             echo ""
         fi
 
-        # Fool-proof guard for --frontend-only:
-        # if backend/ changed between CURRENT_COMMIT and NEW_COMMIT, refuse hard.
+        # Fool-proof guard for --frontend-only: refuse hard if backend/
+        # changed since the last COMPLETED deploy (BE-154: not since HEAD
+        # before this pull -- see frontend_only_allowed).
         if [ $FRONTEND_ONLY -eq 1 ]; then
-            if ! git diff --quiet "$CURRENT_COMMIT" "$NEW_COMMIT" -- backend/; then
-                echo -e "${RED}✗ Detected changes in backend/ between $CURRENT_COMMIT and $NEW_COMMIT${NC}"
-                echo -e "${RED}  Refusing to run with --frontend-only.${NC}"
-                echo ""
-                echo "Changed backend files:"
-                git diff --name-only "$CURRENT_COMMIT" "$NEW_COMMIT" -- backend/ | sed 's/^/  /'
-                echo ""
-                echo "Run: velo update            (full cycle)"
-                echo "  or velo update --skip-tests  (full cycle without tests)"
+            if ! frontend_only_allowed "$(git rev-parse HEAD)"; then
                 exit 1
             fi
-            echo -e "${GREEN}✓ No backend/ changes -- proceeding frontend-only${NC}"
+            echo -e "${GREEN}✓ No backend/ changes since the last completed deploy -- proceeding frontend-only${NC}"
             echo ""
         fi
 
@@ -1480,15 +1695,12 @@ update_product() {
             # serve migrations, tests and the OpenAPI snapshot actually
             # runs the image the build above just produced. The exit code
             # above catches a dead recreate; this catches a silent
-            # non-recreate, whatever its future cause.
-            APP_CID=$($COMPOSE_CMD ps -q app)
-            RUNNING_IMG=$(docker inspect --format '{{.Image}}' "$APP_CID" 2>/dev/null)
-            EXPECTED_IMG=$(docker image inspect --format '{{.Id}}' \
-                "$(docker inspect --format '{{.Config.Image}}' "$APP_CID" 2>/dev/null)" 2>/dev/null)
-            if [ -z "$APP_CID" ] || [ -z "$RUNNING_IMG" ] || [ "$RUNNING_IMG" != "$EXPECTED_IMG" ]; then
-                echo -e "${RED}✗ Running app container does not match the freshly built image${NC}"
+            # non-recreate, whatever its future cause -- after ONE forced
+            # recreate, because with the containerd image store a cached
+            # build alone already moves the tag (CONTAINER FRESHNESS above).
+            if ! ensure_service_fresh app; then
                 echo "Refusing to run migrations/tests/type-regen against a stale backend."
-                echo "Check: velo status && docker compose up -d app"
+                echo "Check: velo status; velo logs app"
                 exit 1
             fi
 
@@ -1649,7 +1861,20 @@ Triggered by velo update on commit $NEW_COMMIT" || {
             exit 1
         fi
         compose_progress_note
-        $COMPOSE_CMD up -d frontend
+        # Same two gates as the backend's (BE-154): the exit code, and the
+        # container actually on the image just built. Unchecked, a failed or
+        # silently skipped recreate here fell through to "Update complete"
+        # with the previous build still serving the site.
+        if ! $COMPOSE_CMD up -d frontend; then
+            echo -e "${RED}✗ FRONTEND RESTART FAILED${NC}"
+            echo "The new frontend image is built but not running. Fix and run: velo update"
+            exit 1
+        fi
+        if ! ensure_service_fresh frontend; then
+            echo "The previous frontend build may still be serving the site."
+            echo "Check: velo status; velo logs frontend"
+            exit 1
+        fi
 
         # Health check
         echo ""
@@ -1660,9 +1885,19 @@ Triggered by velo update on commit $NEW_COMMIT" || {
             echo ""
             echo -e "${GREEN}✓ Update complete. API is healthy.${NC}"
             echo "$HEALTH" | python3 -m json.tool 2>/dev/null || echo "$HEALTH"
+            # The deploy is complete only here (BE-154). HEAD, not
+            # NEW_COMMIT: a velo-bot types commit above moved it, and origin
+            # with it. A --frontend-only run skipped the backend cycle, so it
+            # is NOT a completed deploy of this commit and records nothing.
+            if [ $FRONTEND_ONLY -eq 0 ]; then
+                record_deployed velo "$(git -C "$COMPOSE_DIR" rev-parse HEAD)"
+            else
+                echo -e "${CYAN}ℹ --frontend-only: not recorded as a completed deploy (backend cycle skipped)${NC}"
+            fi
         else
             echo -e "${RED}⚠ API health check failed after update${NC}"
             echo "Check logs: velo logs app"
+            echo "Not recorded as deployed: the next 'velo update' runs this cycle again."
         fi
 
         # -- 5. Lightweight cleanup --
@@ -1701,6 +1936,51 @@ Triggered by velo update on commit $NEW_COMMIT" || {
 # that goes permanently red over yesterday's data stops being read, and then
 # it stops catching config drift either. The exit code stays with the checks
 # above.
+# MCP OAuth for claude.ai (BE-141): on, off, or what is missing -- read from
+# backend/.env, so it says what the app WILL see after `velo restart`.
+# Informational: OAuth off is a legitimate state (keys skipped at install),
+# not drift -- it never changes the doctor's exit code. Values are not
+# printed, except the issuer and the client id, which are public anyway.
+check_oauth_env() {
+    local env_file="$1"
+    if [ ! -f "$env_file" ]; then
+        echo -e "${YELLOW}⊘ MCP OAuth: $env_file not found, skipped${NC}"
+        return 0
+    fi
+
+    local mcp_enabled
+    mcp_enabled=$(read_env_value "$env_file" "MCP_ENABLED" | tr '[:upper:]' '[:lower:]')
+    case "$mcp_enabled" in
+        0|f|false|n|no|off)
+            echo -e "${YELLOW}⊘ MCP OAuth: off -- MCP itself is switched off (MCP_ENABLED=${mcp_enabled})${NC}"
+            return 0
+            ;;
+    esac
+
+    local key missing=()
+    for key in MCP_OAUTH_ISSUER_URL TELEGRAM_LOGIN_CLIENT_ID TELEGRAM_LOGIN_CLIENT_SECRET; do
+        if [ -z "$(read_env_value "$env_file" "$key")" ]; then
+            missing+=("$key")
+        fi
+    done
+
+    if [ "${#missing[@]}" -eq 0 ]; then
+        echo -e "${GREEN}✓ MCP OAuth: on in backend/.env${NC}"
+        echo "  issuer:    $(read_env_value "$env_file" MCP_OAUTH_ISSUER_URL)"
+        echo "  client id: $(read_env_value "$env_file" TELEGRAM_LOGIN_CLIENT_ID)"
+        echo "  secret:    set"
+        echo "  (a change in backend/.env takes effect after: velo restart)"
+        return 0
+    fi
+
+    echo -e "${YELLOW}⊘ MCP OAuth: off -- missing in backend/.env: ${missing[*]}${NC}"
+    echo "  To switch it on, run each command below, then: velo restart"
+    for key in "${missing[@]}"; do
+        echo "    velo env set $key"
+    done
+    return 0
+}
+
 check_attendance_deadends() {
     if ! $COMPOSE_CMD ps 2>/dev/null | grep -q postgres; then
         echo -e "${YELLOW}⊘ Attendance dead-ends: database not running, skipped${NC}"
@@ -1828,6 +2108,266 @@ svc_report() {
         fi
     fi
     echo ""
+}
+
+# -- Load-test probe (BE-147) --------------------------------------------------
+# `velo loadtest-probe check | start | stop | race-check <practice-uuid>` --
+# the server half of loadtest/run.py, which the CUSTOMER runs on his own Mac
+# and which reaches this box only as `ssh <host> velo loadtest-probe ...`.
+# Zero trust: everything the report says about the server comes from here,
+# and nothing here is anything but `velo`.
+#
+# READ-ONLY. It reads `docker ps` / `docker stats`, git metadata of the
+# checkouts, /proc, and the product database through one psql session per
+# query that is put in read-only mode before the query runs
+# (default_transaction_read_only). The only thing it writes is its own
+# scratch directory, LP_DIR, which `stop` removes -- nothing is left behind.
+# Test role only: on prod it refuses before touching anything.
+#
+# OUTPUT CONTRACT. stdout carries exactly one JSON object marked
+# {"probe": "velo-loadtest-probe", "format": 1, ...}; every refusal goes to
+# stderr with a non-zero exit. run.py accepts nothing else -- `velo` with an
+# unknown command prints its help and exits 0, so on a server without this
+# command the marker is what tells "old server" from "probe answered".
+#
+# SAMPLING. `start` takes a "before" snapshot and leaves a sampler running,
+# detached from the ssh session (setsid, every stream on /dev/null -- else
+# ssh would wait for it). Every LP_INTERVAL seconds it appends `docker stats`
+# of the containers present at start and a pg_stat_activity count. `stop`
+# kills it BY PID (checked to be our sampler -- never `pkill -f`, which
+# matches the caller's own command line), takes the "after" snapshot and
+# prints everything. A sampler nobody stopped exits by itself after
+# LP_MAX_SECONDS; the next `start` or `stop` clears what it left.
+LP_DIR="/tmp/velo-loadtest-probe"
+LP_INTERVAL=5
+LP_MAX_SECONDS=$((4 * 3600))
+LP_CONTAINERS=(velo-app velo-postgres velo-redis comms-app comms-worker comms-consumer comms-postgres comms-redis)
+LP_SELF="${BASH_SOURCE[0]}"
+LP_MARK='"probe":"velo-loadtest-probe","format":1'
+
+lp_fail() {
+    echo "✗ velo loadtest-probe: $*" >&2
+    exit 1
+}
+
+# A JSON string literal (quotes included) for an arbitrary shell value.
+lp_json_str() {
+    local s="$1"
+    s=${s//\\/\\\\}
+    s=${s//\"/\\\"}
+    s=${s//$'\n'/\\n}
+    s=${s//$'\r'/\\r}
+    s=${s//$'\t'/\\t}
+    printf '"%s"' "$s"
+}
+
+# One query in the product DB, in a read-only session; prints the single
+# unaligned value (the queries below all return one json_build_object).
+lp_psql() {
+    (cd "$COMPOSE_DIR" && $COMPOSE_CMD exec -T postgres psql -U velo velo \
+        -X -q -t -A -v ON_ERROR_STOP=1 \
+        -c "SET default_transaction_read_only = on" -c "$1")
+}
+
+lp_snapshot_sql="SELECT json_build_object(
+    't', extract(epoch FROM now())::bigint,
+    'deadlocks', (SELECT deadlocks FROM pg_stat_database WHERE datname = current_database()),
+    'outbox_pending', (SELECT count(*) FROM outbox_events WHERE published_at IS NULL AND dead_lettered_at IS NULL),
+    'outbox_dead', (SELECT count(*) FROM outbox_events WHERE dead_lettered_at IS NOT NULL),
+    'outbox_total', (SELECT count(*) FROM outbox_events),
+    'connections', (SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()),
+    'max_connections', current_setting('max_connections')::int)"
+
+lp_connections_sql="SELECT json_build_object(
+    'total', count(*),
+    'active', count(*) FILTER (WHERE state = 'active'),
+    'idle_in_transaction', count(*) FILTER (WHERE state LIKE 'idle in transaction%'))
+  FROM pg_stat_activity WHERE datname = current_database()"
+
+# {"commit":...,"branch":...,"date":...} of a checkout, or null.
+lp_git_json() {
+    local dir="$1" commit branch date
+    commit=$(git -C "$dir" rev-parse HEAD 2>/dev/null) || { printf 'null'; return; }
+    branch=$(git -C "$dir" branch --show-current 2>/dev/null)
+    date=$(git -C "$dir" --no-pager log -1 --format=%cI 2>/dev/null)
+    printf '{"commit":%s,"branch":%s,"date":%s}' \
+        "$(lp_json_str "$commit")" "$(lp_json_str "$branch")" "$(lp_json_str "$date")"
+}
+
+# The static part: role, hardware, code versions, containers.
+lp_static_json() {
+    local cpus mem_kb docker_version present="" missing="" name svc_json="" record svc_name svc_dir
+    cpus=$(nproc 2>/dev/null || echo 0)
+    mem_kb=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null)
+    docker_version=$(docker version --format '{{.Server.Version}}' 2>/dev/null)
+    local running
+    running=$(docker ps --format '{{.Names}}' 2>/dev/null)
+    for name in "${LP_CONTAINERS[@]}"; do
+        if printf '%s\n' "$running" | grep -qx "$name"; then
+            present="$present${present:+,}$(lp_json_str "$name")"
+        else
+            missing="$missing${missing:+,}$(lp_json_str "$name")"
+        fi
+    done
+    for record in "${VELO_SERVICES[@]}"; do
+        svc_name=$(svc_field "$record" 1)
+        svc_dir=$(svc_field "$record" 3)
+        svc_json="$svc_json${svc_json:+,}$(lp_json_str "$svc_name"):$(lp_git_json "$svc_dir")"
+    done
+    printf '"role":%s,"server":{"hostname":%s,"cpus":%s,"mem_total_kb":%s,"docker":%s},"code":{%s},"containers":{"present":[%s],"missing":[%s]},"interval_seconds":%s' \
+        "$(lp_json_str "$VELO_ROLE")" "$(lp_json_str "$(hostname)")" "${cpus:-0}" "${mem_kb:-0}" \
+        "$(lp_json_str "$docker_version")" "$svc_json" "$present" "$missing" "$LP_INTERVAL"
+}
+
+# Is $1 the pid of a live sampler of ours?
+lp_is_sampler() {
+    local pid="$1"
+    [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+    [ -r "/proc/$pid/cmdline" ] || return 1
+    tr '\0' ' ' < "/proc/$pid/cmdline" | grep -q "loadtest-probe __sample"
+}
+
+lp_sampler() {
+    # Runs detached (see start). Writes its own pid first: `$!` of the
+    # spawning shell would be setsid's, which may or may not be ours.
+    echo $$ > "$LP_DIR/pid"
+    trap 'exit 0' TERM INT
+    local started containers=() name t
+    started=$(date +%s)
+    while IFS= read -r name; do
+        [ -n "$name" ] && containers+=("$name")
+    done < "$LP_DIR/containers"
+    while [ -d "$LP_DIR" ] && [ $(( $(date +%s) - started )) -lt "$LP_MAX_SECONDS" ]; do
+        t=$(date +%s)
+        if [ "${#containers[@]}" -gt 0 ]; then
+            docker stats --no-stream --format '{{json .}}' "${containers[@]}" 2>/dev/null \
+                | while IFS= read -r line; do printf '{"t":%s,"c":%s}\n' "$t" "$line"; done \
+                >> "$LP_DIR/stats.jsonl"
+        fi
+        local pg
+        if pg=$(lp_psql "$lp_connections_sql" 2>/dev/null) && [ -n "$pg" ]; then
+            printf '{"t":%s,"pg":%s}\n' "$t" "$pg" >> "$LP_DIR/pg.jsonl"
+        fi
+        sleep "$LP_INTERVAL" &
+        wait $!
+    done
+    exit 0
+}
+
+# Remove what a dead sampler left, refuse if a live one owns the directory.
+lp_clear_stale_or_refuse() {
+    [ -d "$LP_DIR" ] || return 0
+    local pid=""
+    [ -f "$LP_DIR/pid" ] && pid=$(cat "$LP_DIR/pid")
+    if [ -n "$pid" ] && lp_is_sampler "$pid"; then
+        local since=""
+        [ -f "$LP_DIR/started_at" ] && since=$(cat "$LP_DIR/started_at")
+        lp_fail "a probe is already running (since ${since:-unknown}). Stop it first: velo loadtest-probe stop"
+    fi
+    rm -rf "$LP_DIR"
+}
+
+lp_array_of() {
+    # A JSON array of the objects in a .jsonl file (empty file -> []).
+    printf '['
+    [ -s "$1" ] && paste -sd, "$1" | tr -d '\n'
+    printf ']'
+}
+
+loadtest_probe() {
+    local action="${1:-}"
+    if [ "$VELO_ROLE" != "test" ]; then
+        lp_fail "test role only; refusing on role '$VELO_ROLE'"
+    fi
+    case "$action" in
+        check)
+            printf '{%s,"action":"check",%s}\n' "$LP_MARK" "$(lp_static_json)"
+            ;;
+        start)
+            lp_clear_stale_or_refuse
+            local old_umask before running name
+            old_umask=$(umask)
+            umask 077
+            mkdir "$LP_DIR" || { umask "$old_umask"; lp_fail "cannot create $LP_DIR"; }
+            umask "$old_umask"
+            date -u +%Y-%m-%dT%H:%M:%SZ > "$LP_DIR/started_at"
+            running=$(docker ps --format '{{.Names}}' 2>/dev/null)
+            for name in "${LP_CONTAINERS[@]}"; do
+                printf '%s\n' "$running" | grep -qx "$name" && echo "$name"
+            done > "$LP_DIR/containers"
+            if ! before=$(lp_psql "$lp_snapshot_sql") || [ -z "$before" ]; then
+                rm -rf "$LP_DIR"
+                lp_fail "the database snapshot failed -- is the stand up? (velo status)"
+            fi
+            echo "$before" > "$LP_DIR/before.json"
+            setsid bash "$LP_SELF" loadtest-probe __sample </dev/null >/dev/null 2>&1 &
+            local waited=0
+            while [ ! -s "$LP_DIR/pid" ] && [ "$waited" -lt 50 ]; do
+                sleep 0.2
+                waited=$((waited + 1))
+            done
+            if [ ! -s "$LP_DIR/pid" ] || ! lp_is_sampler "$(cat "$LP_DIR/pid")"; then
+                rm -rf "$LP_DIR"
+                lp_fail "the sampler did not start"
+            fi
+            printf '{%s,"action":"start","started_at":%s,"before":%s,%s}\n' \
+                "$LP_MARK" "$(lp_json_str "$(cat "$LP_DIR/started_at")")" "$before" "$(lp_static_json)"
+            ;;
+        stop)
+            [ -d "$LP_DIR" ] || lp_fail "no probe is running (start it with: velo loadtest-probe start)"
+            local pid="" waited=0 after errors="" started_at=""
+            [ -f "$LP_DIR/pid" ] && pid=$(cat "$LP_DIR/pid")
+            if [ -n "$pid" ] && lp_is_sampler "$pid"; then
+                kill -TERM "$pid" 2>/dev/null
+                while lp_is_sampler "$pid" && [ "$waited" -lt 50 ]; do
+                    sleep 0.2
+                    waited=$((waited + 1))
+                done
+                lp_is_sampler "$pid" && kill -KILL "$pid" 2>/dev/null
+            else
+                errors="$(lp_json_str "the sampler was not running at stop (exited early or never started)")"
+            fi
+            if ! after=$(lp_psql "$lp_snapshot_sql") || [ -z "$after" ]; then
+                after="null"
+                errors="$errors${errors:+,}$(lp_json_str "the closing database snapshot failed")"
+            fi
+            [ -f "$LP_DIR/started_at" ] && started_at=$(cat "$LP_DIR/started_at")
+            local before="null"
+            [ -s "$LP_DIR/before.json" ] && before=$(cat "$LP_DIR/before.json")
+            local out
+            out=$(printf '{%s,"action":"stop","started_at":%s,"stopped_at":%s,"before":%s,"after":%s,"stats":%s,"pg":%s,"errors":[%s],%s}' \
+                "$LP_MARK" "$(lp_json_str "$started_at")" "$(lp_json_str "$(date -u +%Y-%m-%dT%H:%M:%SZ)")" \
+                "$before" "$after" "$(lp_array_of "$LP_DIR/stats.jsonl")" "$(lp_array_of "$LP_DIR/pg.jsonl")" \
+                "$errors" "$(lp_static_json)")
+            rm -rf "$LP_DIR"
+            [ -d "$LP_DIR" ] && lp_fail "could not remove $LP_DIR"
+            printf '%s\n' "$out"
+            ;;
+        race-check)
+            local id="${2:-}" row
+            [[ "$id" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] \
+                || lp_fail "race-check needs a practice id (uuid), got '$id'"
+            row=$(lp_psql "SELECT json_build_object(
+                'practice_id', p.id, 'status', p.status,
+                'max_participants', p.max_participants,
+                'current_participants', p.current_participants,
+                'active_bookings', (SELECT count(*) FROM bookings b WHERE b.practice_id = p.id AND b.status IN ('pending', 'confirmed')),
+                'distinct_students', (SELECT count(DISTINCT b.user_id) FROM bookings b WHERE b.practice_id = p.id AND b.status IN ('pending', 'confirmed')),
+                'all_booking_rows', (SELECT count(*) FROM bookings b WHERE b.practice_id = p.id),
+                'purchases', (SELECT count(*) FROM purchases pu WHERE pu.practice_id = p.id),
+                'deadlocks', (SELECT deadlocks FROM pg_stat_database WHERE datname = current_database()))
+              FROM practices p WHERE p.id = '$id'") || lp_fail "the race query failed"
+            [ -n "$row" ] || lp_fail "no practice $id"
+            printf '{%s,"action":"race-check","race":%s}\n' "$LP_MARK" "$row"
+            ;;
+        __sample)
+            lp_sampler
+            ;;
+        *)
+            echo "Usage: velo loadtest-probe check | start | stop | race-check <practice-uuid>" >&2
+            exit 64
+            ;;
+    esac
 }
 
 case "${1:-}" in
@@ -2557,6 +3097,89 @@ case "${1:-}" in
         echo "  half is already gone from this machine."
         ;;
 
+    env)
+        # BE-141: write ONE key of backend/.env on this box, so nobody edits
+        # the file by hand (owner ruling: the server is touched through
+        # `velo` only). Only a key that backend/.env.example declares --
+        # as `KEY=` or as `# (optional) KEY=` -- is accepted: a typo must not
+        # become a key the app's Settings (extra='forbid') refuses at start.
+        #
+        # The value is read with echo off and lives in one shell variable:
+        # it is never printed, never put on a command line (printf is a
+        # builtin, so it does not show up in `ps`), and neither is the old
+        # value. Every existing line of the key is dropped and one is
+        # appended -- a repeated key resolves to its LAST assignment, so
+        # editing the first one would leave the old value in force. The new
+        # file is built next to the old one and renamed over it: a reader
+        # sees the old file or the new one, never half of one.
+        env_verb="${2:-}"
+        env_key="${3:-}"
+        env_example="$COMPOSE_DIR/backend/.env.example"
+        env_file="$COMPOSE_DIR/backend/.env"
+        if [ "$env_verb" != "set" ] || [ -z "$env_key" ] || [ -n "${4:-}" ]; then
+            echo "Usage: velo env set <KEY>"
+            echo "  Writes one key of backend/.env; the value is asked for, hidden."
+            exit 1
+        fi
+        if ! [[ "$env_key" =~ ^[A-Z][A-Z0-9_]*$ ]]; then
+            echo -e "${RED}✗ '$env_key' is not a key name (A-Z, 0-9, _)${NC}"
+            exit 1
+        fi
+        if ! grep -qE "^(# \(optional\) )?${env_key}=" "$env_example"; then
+            echo -e "${RED}✗ $env_key is not declared in backend/.env.example${NC}"
+            echo "  Only declared keys can be set -- check the spelling."
+            exit 1
+        fi
+        if [ ! -f "$env_file" ]; then
+            echo -e "${RED}✗ $env_file not found${NC}"
+            exit 1
+        fi
+
+        env_value=""
+        read -r -s -p "Value for $env_key (input hidden, empty clears it): " env_value
+        echo ""
+        # The allowlist and its refusal are shared with the installer
+        # (env_value_ok / env_value_refusal, top of this file).
+        if ! env_value_ok "$env_value"; then
+            env_value_refusal
+            echo "  Nothing was changed." >&2
+            exit 1
+        fi
+
+        if grep -q "^${env_key}=" "$env_file"; then
+            env_action="replaced"
+        else
+            env_action="added"
+        fi
+        env_tmp=$(mktemp "$(dirname "$env_file")/.env.velo-set.XXXXXX") || {
+            echo -e "${RED}✗ Could not create a temporary file next to $env_file${NC}"
+            exit 1
+        }
+        velo_cleanup_register "$env_tmp"
+        if ! chmod --reference="$env_file" "$env_tmp" \
+            || ! chown --reference="$env_file" "$env_tmp"; then
+            echo -e "${RED}✗ Could not copy the owner and mode of $env_file -- nothing changed${NC}"
+            exit 1
+        fi
+        # grep -v exits 1 when it prints nothing (a file holding only this
+        # key) -- that is fine; 2 is a real error.
+        grep -v "^${env_key}=" "$env_file" > "$env_tmp"
+        if [ $? -gt 1 ]; then
+            echo -e "${RED}✗ Could not read $env_file -- nothing changed${NC}"
+            exit 1
+        fi
+        if ! printf '%s=%s\n' "$env_key" "$env_value" >> "$env_tmp" \
+            || ! mv -f "$env_tmp" "$env_file"; then
+            echo -e "${RED}✗ Could not write $env_file -- the old file is untouched${NC}"
+            exit 1
+        fi
+        env_value=""
+        echo -e "${GREEN}✓ $env_key $env_action in backend/.env (value not shown)${NC}"
+        echo "  It takes effect after a full restart:  velo restart"
+        echo "  ('velo restart app' keeps the old environment -- it does not"
+        echo "   re-read backend/.env.)"
+        ;;
+
     doctor)
         echo -e "${CYAN}VELO Doctor -- drift watchman${NC}"
         echo "Checks artifacts written once at install time and never"
@@ -2576,9 +3199,12 @@ case "${1:-}" in
 
         check_attendance_deadends
         echo ""
+        check_oauth_env "$COMPOSE_DIR/backend/.env"
+        echo ""
 
         echo "Checked: vite.env keys, backend/.env keys, nginx config (rendered vs"
-        echo "live), attendance dead-ends (data -- warns only, never fails)."
+        echo "live), attendance dead-ends (data -- warns only, never fails), MCP"
+        echo "OAuth state (informs only, never fails)."
         if [ "$VITE_DRIFT" -eq 0 ] && [ "$BACKEND_DRIFT" -eq 0 ] && [ "$NGINX_DRIFT" -eq 0 ]; then
             echo -e "${GREEN}✓ 0 drift found${NC}"
             exit 0
@@ -2736,6 +3362,12 @@ case "${1:-}" in
 
     # === Help ===
 
+    # === Load-test probe (BE-147) ===
+
+    loadtest-probe)
+        loadtest_probe "${2:-}" "${3:-}"
+        ;;
+
     *)
         echo -e "${CYAN}VELO Management Script${NC}"
         echo "Usage: velo {command} [options]"
@@ -2765,6 +3397,12 @@ case "${1:-}" in
         echo "                        Generates the new key alongside the old one and"
         echo "                        swaps only after verifying it. Web instructions"
         echo "                        for GitHub -- no command-line access needed."
+        echo ""
+        echo "Configuration:"
+        echo "  env set <KEY>       — Write one key of backend/.env, declared in"
+        echo "                        backend/.env.example. The value is asked for"
+        echo "                        with input hidden and never printed. Then:"
+        echo "                        velo restart"
         echo ""
         echo "Testing:"
         echo "  test                — Run all tests (backend + frontend)"
@@ -2803,6 +3441,10 @@ case "${1:-}" in
         echo "Roles:"
         echo "  setrole <tg> <A|M|U>  — Set a user's role (admin/master/user)"
         echo "  setrole               — List current admins & masters"
+        echo ""
+        echo "Load testing (test only; run by loadtest/run.py over ssh):"
+        echo "  loadtest-probe check|start|stop|race-check <id>"
+        echo "                      — Read-only server figures as JSON"
         echo ""
         echo "Maintenance:"
         echo "  backup              — Backup DB (gzipped dump)"

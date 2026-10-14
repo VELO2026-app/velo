@@ -499,3 +499,78 @@ async def fresh_execute(stmt, params=None):
     factory = get_session_factory()
     async with factory() as s:
         return await s.execute(stmt, params)
+
+
+# ---------------------------------------------------------------------------
+# BE-141: OAuth grants for tests that need "the access an AI client got"
+# ---------------------------------------------------------------------------
+
+OAUTH_TEST_CLIENT_PREFIX = "test-oauth-"
+
+
+async def mint_oauth_access(
+    user_id,
+    *,
+    scopes: list[str] | None = None,
+    client_name: str | None = "Claude",
+    client_id: str | None = None,
+) -> tuple[str, str, str]:
+    """A grant exactly as the token endpoint creates it -- issue_oauth_grant,
+    the function /token calls after the code -- for a test client registered
+    here. Returns (access token, refresh token, client id).
+
+    The sign-in in front of it (Telegram, consent) is not replayed: tests of
+    that flow live in test_mcp_oauth.py; this is for tests that need the
+    resulting access. Clean the clients up with delete_oauth_test_clients
+    after the users (and with them the grants) are gone.
+    """
+    from uuid import uuid4
+
+    from app.modules.mcp.models import McpOAuthClient, McpScope
+    from app.modules.mcp.service import issue_oauth_grant
+
+    cid = client_id or f"{OAUTH_TEST_CLIENT_PREFIX}{uuid4()}"
+    async with get_session_factory()() as s:
+        if await s.get(McpOAuthClient, cid) is None:
+            s.add(
+                McpOAuthClient(
+                    client_id=cid,
+                    client_info={
+                        "client_id": cid,
+                        "client_name": client_name,
+                        "redirect_uris": ["https://claude.ai/api/mcp/auth_callback"],
+                        "token_endpoint_auth_method": "none",
+                        "grant_types": ["authorization_code", "refresh_token"],
+                        "response_types": ["code"],
+                    },
+                )
+            )
+            await s.flush()
+        tokens = await issue_oauth_grant(
+            s,
+            user_id=user_id,
+            client_id=cid,
+            client_name=client_name,
+            redirect_host="claude.ai",
+            scopes=scopes or [m.value for m in McpScope],
+        )
+        await s.commit()
+    return tokens.access_token, tokens.refresh_token, cid
+
+
+async def delete_oauth_test_clients() -> None:
+    """Drop the test clients no grant refers to any more (the FK is
+    RESTRICT: a client with a grant left -- another file's user not yet
+    cleaned -- stays)."""
+    from sqlalchemy import text
+
+    async with get_session_factory()() as s:
+        await s.execute(
+            text(
+                "DELETE FROM mcp_oauth_clients c WHERE c.client_id LIKE :p "
+                "AND NOT EXISTS (SELECT 1 FROM mcp_tokens t "
+                "WHERE t.oauth_client_id = c.client_id)"
+            ),
+            {"p": OAUTH_TEST_CLIENT_PREFIX + "%"},
+        )
+        await s.commit()

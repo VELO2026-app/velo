@@ -250,7 +250,7 @@
     <div
       v-if="showMasterOnboarding"
       class="master-onboarding-overlay"
-      :style="{ paddingTop: contentSafeTop + 'px' }"
+      :style="{ paddingTop: contentSafeTopCss }"
     >
       <MasterOnboardingView @done="onMasterOnboardingDone" />
     </div>
@@ -298,7 +298,7 @@ import type { PracticeResponse, MasterStatsResponse } from '@/api/types'
 const router = useRouter()
 const masterStore = useMasterStore()
 const authStore = useAuthStore()
-const { contentSafeTop } = useSafeArea()
+const { contentSafeTopCss } = useSafeArea()
 const toast = useToast()
 
 // -- Period toggle. Drives the period-scoped stats row (E7). `quarter` went

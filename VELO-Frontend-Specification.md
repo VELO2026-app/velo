@@ -174,14 +174,14 @@ velo/                              ← GitHub repo root (уже существу
 │   │   │   └── adminHelpers.ts    ← Общие хелперы для admin-вью (F8)
 │   │   │
 │   │   ├── App.vue                ← Корневой компонент
-│   │   └── main.ts                ← Точка входа: createApp, router, pinia
+│   │   ├── main.ts                ← Точка входа: подготовка хоста (platform/launch.ts), затем import('./app')
+│   │   └── app.ts                 ← createApp, router, pinia (импортируется только из main.ts)
 │   │
 │   ├── public/
-│   │   ├── manifest.json          ← PWA-манифест
 │   │   ├── sw.js                  ← Service Worker (через vite-plugin-pwa)
 │   │   ├── js/
 │   │   │   └── telegram-web-app.js ← Локальная копия Telegram SDK (3331 строка)
-│   │   └── icons/                 ← Иконки приложения (192, 512)
+│   │   └── icons/                 ← Иконки приложения (192, 512, maskable 512, apple-touch 180)
 │   │
 │   ├── index.html                 ← SPA entry point
 │   ├── vite.config.ts             ← Vite + PWA plugin config
@@ -458,6 +458,14 @@ https://api.talentir.info/*         → velo-frontend:3000
 - Google Fonts загружаются через `<link>` в index.html (FIX 10.6: заменяет `@import` в global.css — устраняет FOIT)
 
 **Критерий готовности:** iPhone Safari → "Добавить на экран" → приложение открывается в standalone-режиме (без адресной строки). ✅
+
+**Пересмотрено в BE-149 (Стендалон Ф2, 2026-10).** Список выше -- история F0.4; действует сейчас:
+
+- Манифест один, источник -- `src/pwa/manifest.ts`, отдаётся опцией `manifest` VitePWA (`manifest.webmanifest`, ссылку вставляет плагин); `public/manifest.json` удалён. `name`/`short_name` VELO, `id`/`start_url`/`scope` `/`, `lang: ru`, `background_color: #ffffff` (фон body).
+- Иконки: `any` 192 и 512 и отдельной записью `maskable` 512 (`icon-maskable-512.png`, знак на сплошном `#334D6E`); `apple-touch-icon` -- непрозрачная 180×180 (`apple-touch-icon-180.png`); favicon `icons/favicon.svg` подключён.
+- `registerType: 'prompt'` без подсказки, без `skipWaiting`/`clientsClaim`: новая версия -- при следующем открытии после закрытия всех окон; ошибка загрузки куска -> один тихий перезапуск за сессию (`src/platform/chunk-reload.ts`).
+- Скрипт Telegram грузится только при запуске из Telegram (`src/platform/launch.ts`); вне Telegram загрузчик дописывает `viewport-fit=cover`, верхняя зона -- `env(safe-area-inset-top)` (`useSafeArea.ts`).
+- `frontend/nginx.conf`: `index.html`, `sw.js`, `manifest.webmanifest` -- `Cache-Control: no-cache`.
 
 ---
 
