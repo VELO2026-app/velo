@@ -21,6 +21,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import pytest
+from babel import Locale
 from httpx import AsyncClient
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +32,7 @@ from app.core.timezones import (
     UnknownTimezoneError,
     canonical_timezone,
     canonical_timezone_names,
+    timezone_aliases,
 )
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import AudienceKind, Practice, PracticeType
@@ -48,6 +50,7 @@ _TID_USER = 71301
 _TID_MASTER = 71302
 
 ME_URL = "/api/v1/users/me"
+CATALOG_URL = "/api/v1/users/timezones"
 PRACTICES_URL = "/api/v1/practices"
 DETAIL_URL = "/api/v1/practices/{practice_id}"
 
@@ -484,3 +487,51 @@ async def test_time_of_day_filter_for_a_viewer_who_came_with_an_old_name(
 
     assert practice_id in await ids("morning")
     assert practice_id not in await ids("night")
+
+
+# ===========================================================================
+# 5. The catalog the timezone picker is built from
+# ===========================================================================
+
+
+async def test_catalog_needs_a_session(client: AsyncClient) -> None:
+    resp = await client.get(CATALOG_URL)
+    assert resp.status_code == 401, resp.text
+
+
+async def test_catalog_is_the_validator_data(client: AsyncClient) -> None:
+    """names are exactly what can be stored, aliases exactly what is
+    rewritten -- the picker's rows and the validator cannot drift apart."""
+    auth = await login_user(client, telegram_id=_TID_USER)
+    resp = await client.get(CATALOG_URL, headers=auth_headers(auth["session_token"]))
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    names = set(body["names"])
+    assert names == canonical_timezone_names()
+    assert body["aliases"] == timezone_aliases()
+    assert body["aliases"], "no aliases"
+    assert set(body["aliases"].values()) <= names
+    for spelling, stored in {**LEGACY, **SYSTEM_V}.items():
+        assert body["aliases"][spelling] == stored
+
+
+async def test_catalog_labels_are_russian_cldr_names(client: AsyncClient) -> None:
+    auth = await login_user(client, telegram_id=_TID_USER)
+    body = (
+        await client.get(CATALOG_URL, headers=auth_headers(auth["session_token"]))
+    ).json()
+    labels = body["labels"]
+    assert labels, "no labels"
+    assert set(labels) <= set(body["names"])
+    # The pair: Kathmandu has a non-empty Russian caption and country.
+    assert labels["Asia/Kathmandu"] == {"city_ru": "Катманду", "country_ru": "Непал"}
+    assert labels["Europe/Kyiv"]["city_ru"] == "Киев"
+    # CLDR pseudo-territories ("001" the world, "ZZ" unknown region) are not
+    # countries: Etc/* get no label, and no caption names them.
+    pseudo = {Locale("ru").territories["001"], Locale("ru").territories["ZZ"]}
+    assert not {label["country_ru"] for label in labels.values()} & pseudo
+    assert "Etc/GMT+5" not in labels
+    # Coverage of what the picker shows (Etc/* and UTC are not rows).
+    visible = [n for n in body["names"] if not n.startswith("Etc/") and n != "UTC"]
+    with_city = [n for n in visible if (labels.get(n) or {}).get("city_ru")]
+    assert len(with_city) >= len(visible) - 5, sorted(set(visible) - set(with_city))

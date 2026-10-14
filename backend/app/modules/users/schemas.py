@@ -425,6 +425,26 @@ class UserUpdate(BaseModel):
             ) from None
 
 
+class TimezoneLabel(BaseModel):
+    """Russian names of a zone from CLDR (app/core/timezone_catalog.py)."""
+
+    city_ru: str | None
+    country_ru: str | None
+
+
+class TimezoneCatalogResponse(BaseModel):
+    """GET /api/v1/users/timezones -- what the timezone picker is built from.
+
+    names: every name PATCH /users/me stores unchanged; aliases: every other
+    accepted spelling -> the name stored for it; labels: Russian city/country
+    per name, where CLDR has one. See app/core/timezone_catalog.py.
+    """
+
+    names: list[str]
+    aliases: dict[str, str]
+    labels: dict[str, TimezoneLabel]
+
+
 class RoleSwitchRequest(BaseModel):
     """POST /api/v1/users/me/role — target role to switch into.
 

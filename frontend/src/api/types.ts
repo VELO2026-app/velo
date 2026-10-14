@@ -186,6 +186,8 @@ export type {
   McpTokenCreated,
   McpTokenItem,
   McpTokenListResponse,
+  TimezoneCatalogResponse,
+  TimezoneLabel,
   UserResponse,
   UserRole,
   UserStatsResponse,

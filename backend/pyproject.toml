@@ -50,6 +50,12 @@ dependencies = [
     # 2026.4 was published 2026-09-12 -- at least 14 days before it was
     # chosen (2026.5, 2026-10-03, was too young).
     "tzdata==2026.4",
+    # BE-157: CLDR data for the Russian city / country names of time zones
+    # (app/core/timezone_catalog.py), EXACT version: it fixes the CLDR release
+    # (47) the picker's captions and Russian search come from. 2.18.0 was
+    # published 2026-02-01 -- at least 14 days before it was chosen. No runtime
+    # dependencies on Python 3.12; ~33 MB of locale data, of which one is used.
+    "babel==2.18.0",
 ]
 
 [project.optional-dependencies]

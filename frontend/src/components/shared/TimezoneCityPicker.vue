@@ -7,7 +7,12 @@
       and the UTC offset (computed live via Intl, DST-aware) and an IconCheck on
       the selected one. Tapping a row selects its IANA zone.
     - Search AND manual browse in one (empty query = full list).
-    - No match -> a plain "не найдено" hint (operator: keep it simple).
+    - No match -> a plain "не найден" hint (operator: keep it simple).
+
+  The rows are the curated cities plus the backend's time zone catalog
+  (useTimezoneCatalog, BE-157) -- never the browser engine's zone list -- so a
+  row's IANA id is spelled exactly as the backend stores it and the saved zone
+  is found with ===. The saved zone is always a row, catalog loaded or not.
 
   v-model is the IANA zone id (what the backend stores). The master create/edit
   forms keep the compact VSelect (utils/practiceOptions TIMEZONE_OPTIONS); this
@@ -26,7 +31,7 @@
         :key="c.iana + c.city"
         type="button"
         class="tz-picker__row"
-        :class="{ 'tz-picker__row--active': isSelected(c.iana) }"
+        :class="{ 'tz-picker__row--active': c.iana === modelValue }"
         @click="select(c.iana)"
       >
         <span class="tz-picker__main">
@@ -37,12 +42,12 @@
           <span class="tz-picker__time">{{ timeAt(c.iana) }}</span>
           <span class="tz-picker__off">{{ formatUtcOffset(c.iana) }}</span>
         </span>
-        <span v-if="isSelected(c.iana)" class="tz-picker__check">
+        <span v-if="c.iana === modelValue" class="tz-picker__check">
           <IconCheck :size="18" />
         </span>
       </button>
     </div>
-    <p v-else class="tz-picker__empty">Город не найдено, уточните написание.</p>
+    <p v-else class="tz-picker__empty">Город не найден, уточните написание.</p>
   </div>
 </template>
 
@@ -50,7 +55,8 @@
 import { computed, ref, watch } from 'vue'
 import { VInput } from '@/components/ui'
 import { IconSearch, IconCheck } from '@/components/icons'
-import { TIMEZONE_CITIES, sameZone } from '@/utils/timezoneCities'
+import { timezoneRows } from '@/utils/timezoneCities'
+import { useTimezoneCatalog } from '@/composables/useTimezoneCatalog'
 import { formatUtcOffset } from '@/utils/practiceOptions'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 
@@ -80,23 +86,21 @@ const listEl = ref<HTMLElement | null>(null)
 
 // Owner ruling: the SELECTED zone leads the list -- the current choice (and
 // its IconCheck) must be visible without scrolling. Rows sharing the zone
-// float together (the check is per-zone: Москва + Санкт-Петербург, London's
-// cities; a zone matches in either spelling, see sameZone); everything else
-// keeps the curated/generated order, and search matches obey the same rule.
+// float together (the check is per-iana: Москва + Санкт-Петербург, London's
+// cities); everything else keeps the curated/catalog order, and search
+// matches obey the same rule.
+const catalog = useTimezoneCatalog()
+const rows = computed(() => timezoneRows(catalog.value, props.modelValue))
+
 const filtered = computed(() => {
   const t = query.value.trim().toLowerCase()
   const base = t
-    ? TIMEZONE_CITIES.filter((c) => c.city.toLowerCase().includes(t) || c.q.includes(t))
-    : TIMEZONE_CITIES
-  if (!props.modelValue) return base
-  return [...base.filter((c) => isSelected(c.iana)), ...base.filter((c) => !isSelected(c.iana))]
+    ? rows.value.filter((c) => c.city.toLowerCase().includes(t) || c.q.includes(t))
+    : rows.value
+  const sel = props.modelValue
+  if (!sel) return base
+  return [...base.filter((c) => c.iana === sel), ...base.filter((c) => c.iana !== sel)]
 })
-
-/** The row's zone is the saved one, in either spelling (BE-157: the backend
- * stores "Asia/Kathmandu", V8 lists "Asia/Katmandu"). */
-function isSelected(iana: string): boolean {
-  return sameZone(iana, props.modelValue)
-}
 
 // FE-36 follow-up: with the keyboard open the list is pinned to exactly one
 // row (see the keyboard-open styles). A stale scrollTop would leave a MIDDLE

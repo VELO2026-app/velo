@@ -147,3 +147,8 @@ def canonical_timezone(name: str) -> str:
 def canonical_timezone_names() -> frozenset[str]:
     """Every name canonical_timezone() can return."""
     return _STORED_AS_IS
+
+
+def timezone_aliases() -> dict[str, str]:
+    """Every other spelling canonical_timezone() accepts -> what it returns."""
+    return dict(_REWRITTEN)
