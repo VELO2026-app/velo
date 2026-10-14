@@ -2027,6 +2027,19 @@ export interface TelegramAuthRequest {
   init_data: string
 }
 
+/** GET /api/v1/users/timezones -- what the timezone picker is built from. names: every name PATCH /users/me stores unchanged; aliases: every other accepted spelling -> the name stored for it; labels: Russian city/country per name, where CLDR has one. See app/core/timezone_catalog.py. */
+export interface TimezoneCatalogResponse {
+  names: string[]
+  aliases: Record<string, unknown>
+  labels: Record<string, unknown>
+}
+
+/** Russian names of a zone from CLDR (app/core/timezone_catalog.py). */
+export interface TimezoneLabel {
+  city_ru: string | null
+  country_ru: string | null
+}
+
 /** A loyal user, ranked by all-time attended practices. */
 export interface TopUser {
   id: string
