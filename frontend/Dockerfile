@@ -30,7 +30,10 @@
 # ---------------------------------------------------------------------------
 # Stage 1: Source -- deps installed, nothing run
 # ---------------------------------------------------------------------------
-FROM node:24-alpine AS source
+# Base images (BE-157): pinned by the INDEX digest of the multi-arch manifest
+# list -- the pull picks the platform. The tag only names what is inside
+# (Node 24.21.0 / nginx 1.31.6 on Alpine 3.24); the digest decides.
+FROM node:24.21.0-alpine3.24@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS source
 
 WORKDIR /app
 
@@ -73,7 +76,7 @@ RUN pnpm run build
 # ---------------------------------------------------------------------------
 # Stage 3: Serve with Nginx
 # ---------------------------------------------------------------------------
-FROM nginx:alpine AS runtime
+FROM nginx:1.31.6-alpine3.24@sha256:df221db836e1754089190208cee7eeda94f233197056426eda74a43ab1abeac2 AS runtime
 
 # Remove default nginx site.
 RUN rm -f /etc/nginx/conf.d/default.conf

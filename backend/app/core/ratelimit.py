@@ -94,7 +94,7 @@ async def count_in_window(
     # leave it alone, so the window is never slid forward. A key left with
     # no TTL by the old two-command form also has none, so it gets one on
     # its next hit instead of staying eternal. NX needs Redis 7.0+
-    # (docker-compose pins redis:7-alpine; the stand reports 7.4.9).
+    # (docker-compose pins Redis 7.4.11 by digest, BE-157).
     pipe = redis.pipeline(transaction=True)
     pipe.incr(key)
     pipe.expire(key, window_seconds, nx=True)

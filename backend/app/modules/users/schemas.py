@@ -42,11 +42,11 @@
 
 from datetime import datetime
 from uuid import UUID
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from email_validator import EmailNotValidError, validate_email
 from pydantic import BaseModel, Field, computed_field, field_validator
 
+from app.core.timezones import UnknownTimezoneError, canonical_timezone
 from app.modules.users.models import UserRole
 
 
@@ -407,21 +407,42 @@ class UserUpdate(BaseModel):
     @field_validator("timezone")
     @classmethod
     def validate_timezone(cls, v: str | None) -> str | None:
-        """Validate timezone is a valid IANA timezone identifier.
+        """Accept a known IANA name and return the name to store.
 
+        Old spellings are stored canonical ("Asia/Katmandu" ->
+        "Asia/Kathmandu"); the rules live in app/core/timezones.py.
         Runs after _reject_null_for_required_fields (mode="before"),
         so v is guaranteed to be a non-None string here.
         """
         if v is None:
             return v
         try:
-            ZoneInfo(v)
-        except (ZoneInfoNotFoundError, KeyError):
+            return canonical_timezone(v)
+        except UnknownTimezoneError:
             raise ValueError(
                 f"Invalid IANA timezone: '{v}'. "
                 "Examples: 'UTC', 'Europe/Moscow', 'America/New_York'"
             ) from None
-        return v
+
+
+class TimezoneLabel(BaseModel):
+    """Russian names of a zone from CLDR (app/core/timezone_catalog.py)."""
+
+    city_ru: str | None
+    country_ru: str | None
+
+
+class TimezoneCatalogResponse(BaseModel):
+    """GET /api/v1/users/timezones -- what the timezone picker is built from.
+
+    names: every name PATCH /users/me stores unchanged; aliases: every other
+    accepted spelling -> the name stored for it; labels: Russian city/country
+    per name, where CLDR has one. See app/core/timezone_catalog.py.
+    """
+
+    names: list[str]
+    aliases: dict[str, str]
+    labels: dict[str, TimezoneLabel]
 
 
 class RoleSwitchRequest(BaseModel):

@@ -10,14 +10,17 @@
 // result. The REAL useAuthStore is used; @/api/users is mocked. Error branching
 // is ApiResponseError from @/api/client (auth.ts import chain, .vue:80).
 //
-// CHILD SEAM CHECKED, NOT ASSUMED, AND CORRECTED: the real (unstubbed)
-// TimezoneCityPicker was suspected of its own fetch seam (EditProfileView's
-// MethodTaxonomyPicker precedent, per the operator recon). Read it end to end
-// (TimezoneCityPicker.vue) -- it has NONE. Its city list is a static import
-// (TIMEZONE_CITIES, @/utils/timezoneCities), no onMounted, no API call. It is
-// driven for real throughout below: clicking a city row is what fires
-// `@update:modelValue` on the child (TimezoneCityPicker.vue:97), exercising
-// the real wiring instead of calling the handler off a fixture.
+// CHILD SEAM: since BE-157 the real (unstubbed) TimezoneCityPicker HAS a fetch
+// seam -- its rows beyond the curated ones come from the backend catalog
+// (getTimezoneCatalog in @/api/users, via composables/useTimezoneCatalog.ts).
+// The whole @/api/users module is auto-mocked here, so that call returns
+// undefined, which the composable treats as a failed load: the picker shows
+// the curated rows (CURATED_CITIES) plus the SAVED zone, which is always a
+// row. Catalog behaviour itself is covered by
+// TimezoneCityPicker.spelling.test.ts. The picker is driven for real
+// throughout below: clicking a city row is what fires `@update:modelValue` on
+// the child, exercising the real wiring instead of calling the handler off a
+// fixture.
 //
 // ============================================================================
 // A REAL BUG, FOUND BY THIS FILE, MUTATION-CONFIRMED, AND NOW FIXED (this same
@@ -63,19 +66,12 @@
 // Both re-verified live, then restored -- not left in the tree.
 // ============================================================================
 //
-// TIMEZONE_CITIES ITSELF DOES DOUBLE DUTY as the isValidIana probe. Its
-// `generatedZones()` (timezoneCities.ts:177-192) walks the REAL
-// `Intl.supportedValuesOf('timeZone')` and renders one row per zone this Node's
-// ICU actually supports, keyed by iana. That is used directly (no Intl mock,
-// per the operator recon) to observe .vue:129-142's two branches from the
-// OUTSIDE: a valid-but-uncurated zone ('Pacific/Kiritimati', confirmed present
-// via `Intl.supportedValuesOf('timeZone').includes(...)` in this repo's node)
-// renders its generated row as active; a genuinely invalid string ('Not/AZone',
-// confirmed to throw in `Intl.DateTimeFormat` in this repo's node) renders NO
-// active row at all, because the FALLBACK_TIMEZONE 'UTC' constant is itself
-// absent from TIMEZONE_CITIES (not in CURATED/ALIASES, and 'UTC' is excluded
-// from Node's supportedValuesOf('timeZone') list) -- "no row is active" is the
-// honest, network-free way to observe a fallback to a value nothing renders.
+// THE SELECTED ZONE IS ALWAYS A ROW (BE-157), which makes the isValidIana
+// branches of the screen observable from the OUTSIDE (no Intl mock): a
+// valid-but-uncurated zone ('Pacific/Kiritimati') is kept and renders as the
+// active row; a genuinely invalid string ('Not/AZone', which throws in
+// `Intl.DateTimeFormat`) falls back to FALLBACK_TIMEZONE 'UTC', and 'UTC' --
+// no curated row, no catalog row -- renders as its own active row.
 //
 // LANGUAGE SECTION -- REMOVED (operator 2026-09-17): the one-option «Русский»
 // stub advertised a switch that cannot happen (no i18n, none planned yet), so
@@ -327,15 +323,20 @@ describe('TimezoneSettingsView', () => {
       expect(row?.classList.contains('tz-picker__row--active')).toBe(true)
     })
 
-    it('a genuinely invalid zone string falls back to UTC, which renders NO active row', async () => {
+    it('a genuinely invalid zone string falls back to UTC, which renders as the one active row', async () => {
+      // This used to assert NO active row: 'UTC' had no row (not curated, not
+      // in the engine's zone list), so "nothing active" was the only outside
+      // trace of the fallback -- right at the time. BE-157 made the selected
+      // zone always a row of the picker (a user must see their own setting
+      // even when the catalog does not load), so the fallback is now visible
+      // directly: exactly one active row, and it is UTC.
       useAuthStore().user = user({ timezone: 'Not/AZone' })
       mount()
       await flush()
 
-      // 'UTC' is absent from TIMEZONE_CITIES (not curated, and excluded from
-      // this Node's Intl.supportedValuesOf('timeZone')) -- no row can be
-      // active for it. This is the honest observation of the fallback.
-      expect(activeCityRows()).toHaveLength(0)
+      const active = activeCityRows()
+      expect(active).toHaveLength(1)
+      expect(active[0]?.textContent).toContain('UTC')
     })
   })
 })

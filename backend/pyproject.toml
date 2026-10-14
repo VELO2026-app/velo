@@ -43,6 +43,19 @@ dependencies = [
     # transitive dependencies stay ranges: there is no Python lock file
     # (BE-122 p.4).
     "mcp==2.2.0",
+    # BE-157: IANA time zone data, EXACT version on purpose. It is the source
+    # of app/core/timezones.py (which names are stored, and in what spelling)
+    # and the ZoneInfo fallback for names the image's system tzdata lacks
+    # (Debian 13 ships old link names only in the optional tzdata-legacy).
+    # 2026.4 was published 2026-09-12 -- at least 14 days before it was
+    # chosen (2026.5, 2026-10-03, was too young).
+    "tzdata==2026.4",
+    # BE-157: CLDR data for the Russian city / country names of time zones
+    # (app/core/timezone_catalog.py), EXACT version: it fixes the CLDR release
+    # (47) the picker's captions and Russian search come from. 2.18.0 was
+    # published 2026-02-01 -- at least 14 days before it was chosen. No runtime
+    # dependencies on Python 3.12; ~33 MB of locale data, of which one is used.
+    "babel==2.18.0",
 ]
 
 [project.optional-dependencies]

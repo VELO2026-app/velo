@@ -5,7 +5,7 @@
 #
 # VALIDATION:
 #   - scheduled_at must be in the future
-#   - timezone must be a valid IANA timezone
+#   - timezone must be a known IANA name; stored canonical (core/timezones.py)
 #   - duration_minutes must be within config bounds
 #   - practice_type validated via @field_validator against settings.practice_allowed_types
 #   - difficulty validated via @field_validator against settings.practice_allowed_difficulties
@@ -70,11 +70,11 @@
 from datetime import date, datetime, timezone
 from typing import Literal
 from uuid import UUID
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.core.config import settings
+from app.core.timezones import UnknownTimezoneError, canonical_timezone
 from app.modules.practices.models import (
     AudienceKind,
     Practice,
@@ -375,14 +375,16 @@ class CreatePracticeRequest(BaseModel):
     @field_validator("timezone")
     @classmethod
     def timezone_must_be_iana(cls, v: str) -> str:
-        """Validate timezone is a real IANA timezone."""
+        """Accept a known IANA name and return the name to store.
+
+        Canonical spelling, see app/core/timezones.py.
+        """
         try:
-            ZoneInfo(v)
-        except (ZoneInfoNotFoundError, KeyError):
+            return canonical_timezone(v)
+        except UnknownTimezoneError:
             raise ValueError(
                 f"Invalid IANA timezone: {v}"
             ) from None
-        return v
 
     @field_validator("duration_minutes")
     @classmethod
@@ -603,16 +605,18 @@ class UpdatePracticeRequest(BaseModel):
     def timezone_must_be_iana(
         cls, v: str | None,
     ) -> str | None:
-        """Validate timezone is a real IANA timezone."""
+        """Accept a known IANA name and return the name to store.
+
+        Canonical spelling, see app/core/timezones.py.
+        """
         if v is None:
             return v
         try:
-            ZoneInfo(v)
-        except (ZoneInfoNotFoundError, KeyError):
+            return canonical_timezone(v)
+        except UnknownTimezoneError:
             raise ValueError(
                 f"Invalid IANA timezone: {v}"
             ) from None
-        return v
 
     @field_validator("duration_minutes")
     @classmethod

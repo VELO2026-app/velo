@@ -8,6 +8,7 @@
 //   GET    /api/v1/users/me  -- current user profile
 //   PATCH  /api/v1/users/me  -- partial profile update
 //   DELETE /api/v1/users/me  -- delete account (MVP: resets onboarding)
+//   GET    /api/v1/users/timezones -- time zone catalog for the picker (BE-157)
 //
 // UserResponse / UserUpdate are generated from the backend OpenAPI schema
 // (see api/generated.ts, refreshed on `velo update` / `velo gen-types`).
@@ -18,13 +19,22 @@
 // =============================================================================
 
 import { api } from '@/api/client'
-import type { UserResponse, UserUpdate, UserRole } from '@/api/types'
+import type { TimezoneCatalogResponse, UserResponse, UserUpdate, UserRole } from '@/api/types'
 
 /**
  * Fetch the authenticated user's profile.
  */
 export function getMe(): Promise<UserResponse> {
   return api.get<UserResponse>('/api/v1/users/me')
+}
+
+/**
+ * Every time zone name the profile accepts, with the other spellings it
+ * accepts and Russian CLDR captions -- what the timezone picker is built from
+ * (composables/useTimezoneCatalog.ts).
+ */
+export function getTimezoneCatalog(): Promise<TimezoneCatalogResponse> {
+  return api.get<TimezoneCatalogResponse>('/api/v1/users/timezones')
 }
 
 /**
