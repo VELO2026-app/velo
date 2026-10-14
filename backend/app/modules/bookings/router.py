@@ -172,7 +172,7 @@ async def list_my_bookings_endpoint(
     # Fill it here with the same helper the single-booking/detail responses use.
     # Dedup by master_id so a master repeated across the page is looked up once.
     from app.modules.masters.service import get_master_display_name
-    # M-3 gate: expose this user's own PERSONAL registrant link only for a
+    # M-3 gate: expose this user's own PERSONAL registrant entry only for a
     # confirmed/attended booking (T-35: the manual zoom_link this gate also
     # used to cover no longer exists). Imported locally to match this file's
     # cross-service import style (get_master_display_name above) and sidestep
@@ -180,7 +180,7 @@ async def list_my_bookings_endpoint(
     from app.modules.practices.service import ZOOM_VISIBLE_BOOKING_STATUSES
     # A4 V2 (PROMPT №572): batched Zoom meeting status for this page's
     # practices -- NOT gated by ZOOM_VISIBLE_BOOKING_STATUSES (that gate is
-    # for the personal join_url below, M-3); the meeting STATUS carries no
+    # for the personal entry flag below, M-3); the meeting STATUS carries no
     # secret material, same posture as PracticeResponse.zoom_meeting_status.
     from app.modules.zoom.service import get_zoom_meeting_statuses
 
@@ -212,8 +212,9 @@ async def list_my_bookings_endpoint(
                 has_checkin=has_checkin,
                 has_reflection=has_reflection,
                 # T-35: the summary carries no Zoom URL at all any more --
-                # the zoom_link column and its fail-closed gate are gone. The
-                # only link on this response is the personal one below.
+                # the zoom_link column and its fail-closed gate are gone, and
+                # since Standalone F4 nothing on this response is a URL: the
+                # personal entry below is a flag.
                 practice=PracticeSummary.from_practice(
                     practice,
                     master_name=master_names[practice.master_id],
@@ -222,19 +223,18 @@ async def list_my_bookings_endpoint(
                 # T21-1: the M-3 gate, now the only one on this response --
                 # this booking is already this user's own (query is scoped to
                 # Booking.user_id).
-                zoom_registrant_join_url=(
-                    zoom_join_url
-                    if booking.status in ZOOM_VISIBLE_BOOKING_STATUSES
-                    else None
+                zoom_registrant_ready=(
+                    entry_ready
+                    and booking.status in ZOOM_VISIBLE_BOOKING_STATUSES
                 ),
-                # BE-72: behind the same M-3 gate as the link it explains.
+                # BE-72: behind the same M-3 gate as the entry it explains.
                 zoom_registrant_link_unavailable=(
                     link_unavailable
                     and booking.status in ZOOM_VISIBLE_BOOKING_STATUSES
                 ),
             )
             for (
-                booking, practice, has_feedback, has_checkin, zoom_join_url,
+                booking, practice, has_feedback, has_checkin, entry_ready,
                 link_unavailable, has_reflection,
             ) in items
         ],
@@ -304,10 +304,9 @@ async def list_my_upcoming_bookings_endpoint(
                 master_name=master_names[practice.master_id],
                 zoom_meeting_status=zoom_meeting_statuses.get(practice.id),
             ),
-            zoom_registrant_join_url=(
-                zoom_join_url
-                if booking.status in ZOOM_VISIBLE_BOOKING_STATUSES
-                else None
+            zoom_registrant_ready=(
+                entry_ready
+                and booking.status in ZOOM_VISIBLE_BOOKING_STATUSES
             ),
             zoom_registrant_link_unavailable=(
                 link_unavailable
@@ -315,7 +314,7 @@ async def list_my_upcoming_bookings_endpoint(
             ),
         )
         for (
-            booking, practice, has_feedback, has_checkin, zoom_join_url,
+            booking, practice, has_feedback, has_checkin, entry_ready,
             link_unavailable, has_reflection,
         ) in items
     ]

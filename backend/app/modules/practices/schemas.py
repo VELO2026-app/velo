@@ -812,19 +812,11 @@ class PracticeResponse(BaseModel):
     created_at: datetime
     updated_at: datetime | None
 
-    # T21-1: the practice OWNER's own Zoom host-registrant join_url (role=
-    # 'host' on ZoomRegistrant) -- never a student's. Populated by the
-    # service only on owner-facing responses (create/update/delete/cancel,
-    # the owner's own detail view, the master's own list); every other
-    # caller leaves it at the default None, same posture as checkin_count/
-    # attended/no_show above.
-    zoom_host_join_url: str | None = None
-
     # T-35: OUR public link for this practice -- {PUBLIC_LINK_BASE}/z/{code}.
     # Replaces zoom_shared_join_url, which used to carry the RAW Zoom guest
     # URL here; no raw Zoom URL leaves the API on any path any more, so the
     # master's "Копировать" button cannot hand anyone a link that bypasses
-    # attendance. Same owner-only posture as zoom_host_join_url above.
+    # attendance. Owner-only: populated on the owner's responses alone.
     #
     # That gate is NOT a security boundary, and nothing may be built as if
     # it were: the code is base64url(practice.id.bytes) -- a deterministic
@@ -837,13 +829,15 @@ class PracticeResponse(BaseModel):
 
     # A4 V2 (PROMPT №572): this practice's ZoomMeeting.status verbatim
     # ('active' | 'pending_creation' | 'create_failed' | 'deleted'), or None
-    # if no ZoomMeeting row exists at all. UNLIKE zoom_host_join_url above,
+    # if no ZoomMeeting row exists at all. UNLIKE zoom_public_link above,
     # this is NOT owner-gated -- the value carries no secret material (same
     # zero-masking posture as the admin zoom-attendance endpoint's identical
     # field). Lets the frontend Zoom-link ladder (utils/zoomLink.ts) tell a
     # meeting that is still being created apart from one that permanently
     # failed, for BOTH the master and a booked participant -- previously
-    # both rendered the identical "готовится" spinner in both cases.
+    # both rendered the identical "готовится" spinner in both cases. Since
+    # Standalone F4 it is also the master's whole readiness signal: his
+    # "Zoom" button needs an ACTIVE meeting and nothing else.
     zoom_meeting_status: str | None = None
 
     # A4 V6 (PROMPT №572): True when create_practice returned an EXISTING
@@ -937,10 +931,10 @@ class PracticeSummary(BaseModel):
         point for all list-view consumers (bookings / waitlist / purchases).
 
         T-35: the zoom_link field and its fail-closed zoom_link_visible gate
-        are gone with the column itself. There is no longer any Zoom URL on
-        this schema at all -- a list-view "Войти" button reads the personal
-        registrant link (BookingWithPracticeResponse.zoom_registrant_join_url,
-        which keeps its own M-3 gate) or nothing. master_name is filled here
+        are gone with the column itself. There is no Zoom URL on this schema
+        at all -- a list-view "Войти" button reads whether the person has an
+        entry (BookingWithPracticeResponse.zoom_registrant_ready, which keeps
+        its own M-3 gate) and opens the practice screen. master_name is filled here
         -- it has no ORM source on the practice row (it lives on the joined
         user).
         """
@@ -950,36 +944,47 @@ class PracticeSummary(BaseModel):
         return summary
 
 
-class ZoomStartTicketResponse(BaseModel):
-    """POST /api/v1/practices/{id}/zoom/start-ticket (PROMPT №556, OWNER-1).
-
-    Deliberately carries a one-time ticket, never a start_url -- see
-    zoom/service.py's ticket-issuance docstring for why."""
-
-    ticket: str
-
-
 class ZoomEntryResolveResponse(BaseModel):
     """GET /api/v1/practices/{id}/zoom/resolve (T-35) -- the SERVER's answer
     to "how does this person enter this practice right now".
 
     The choice itself lives on the server (zoom/service.py's
     resolve_zoom_entry) and this schema only transports it: the client
-    renders `kind` and never decides between two links. That is the point of
-    the endpoint -- the old ladder lived in frontend/src/utils/zoomLink.ts,
-    where it was a rule every entry point had to remember, and a rule cannot
-    be enforced by construction.
+    renders `kind` and never decides. That is the point of the endpoint --
+    the old ladder lived in frontend/src/utils/zoomLink.ts, where it was a
+    rule every entry point had to remember, and a rule cannot be enforced by
+    construction.
 
-    url is deliberately nullable on TWO kinds, and a caller must handle
-    both without collapsing either into 'failed':
-      - 'host'  -- by design; the master starts his own meeting through the
-                   existing start-ticket flow, never through a stored URL.
-      - 'guest' -- when ensure_shared_registrant never succeeded. The
-                   meeting exists; only the guest seat in it does not.
+    No URL (Standalone F4): nobody is sent to a Zoom link any more. 'personal'
+    and 'host' enter through the Meeting SDK -- the screen asks
+    POST .../zoom/sdk-join for the parameters at the moment of entering;
+    'guest' means "not booked -- book first" inside the app.
     """
 
     kind: Literal[
         "personal", "host", "guest", "pending", "failed", "cancelled",
         "unavailable",
     ]
-    url: str | None = None
+
+
+class ZoomSdkJoinResponse(BaseModel):
+    """POST /api/v1/practices/{id}/zoom/sdk-join (Standalone F4) -- what the
+    Meeting SDK's ZoomMtg.join() needs for THIS person, minted per request
+    and never stored (zoom/sdk.py).
+
+    role 0 joins (tk set: the registrant's token, so attendance keeps
+    matching by registrant_id; user_email: the address that registrant was
+    registered under); role 1 starts as host (zak set). Never both kinds.
+    signature is the Meeting SDK JWT, valid about half an hour; zak lives
+    five minutes. Sent with Cache-Control: no-store.
+    """
+
+    sdk_key: str
+    signature: str
+    meeting_number: str
+    password: str
+    user_name: str
+    role: int
+    tk: str | None = None
+    user_email: str | None = None
+    zak: str | None = None

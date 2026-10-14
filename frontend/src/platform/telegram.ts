@@ -115,6 +115,11 @@ export const telegramPlatform: Platform = {
     }
   },
 
+  cameraBlockedByHost(): boolean {
+    // Owner decision 11: Telegram for iOS gives a black camera stream.
+    return getWebApp().platform === 'ios'
+  },
+
   openLink(url: string): void {
     // Telegram opens external links in the system browser.
     getWebApp().openLink(url)

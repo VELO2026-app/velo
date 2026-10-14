@@ -5,8 +5,8 @@
 // <API base>/mcp -- the same base the app's own API client talks to
 // (VITE_API_BASE_URL), so the address is the one this app is served by.
 //
-// FAILS CLOSED, like zoomStartRedirectUrl (api/practices.ts): no base, no
-// address. Falling back to window.location.origin would hand the student
+// FAILS CLOSED (the PROMPT №557 posture of the former Zoom start redirect):
+// no base, no address. Falling back to window.location.origin would hand the student
 // the FRONTEND's address, which serves no /mcp at all -- a connector that
 // looks configured and never connects.
 // =============================================================================

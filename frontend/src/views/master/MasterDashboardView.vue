@@ -176,26 +176,18 @@
           <!-- Like the user dashboard: left = Zoom, right = Check-ins.
                Edit/delete moved to the practice screen, reached by tapping
                the card (openPractice).
-               PROMPT №565 (T23-1): there used to be a SEPARATE "Начать"
-               button next to "Zoom" for kind==='personal' -- pressing "Zoom"
-               itself opened zoom_host_join_url (a plain Zoom REGISTRANT
-               join_url, see zoomLinkFor below) and landed the master on
-               Zoom's "waiting for the host" screen, because a registrant
-               join_url carries no host authority in Zoom's own system
-               regardless of our own DB labelling the row role='host'
-               (zoom/service.py's ensure_host_registrant creates it via the
-               exact same create_registrant() call used for a participant).
-               Only start_url actually starts a meeting as host, and that is
-               exactly what "Начать" already redeemed via the ticket flow
-               (PROMPT №556/557). Owner decision: no second button -- "Zoom"
-               itself now does what "Начать" did, for kind==='personal'. -->
+               PROMPT №565 (T23-1), owner decision: ONE «Zoom» button, and
+               for the master's own practice it STARTS the meeting as host.
+               Standalone F4: it does so inside VELO -- it opens the master's
+               practice screen, which starts the Meeting SDK as host (a ZAK
+               from the server, sdk-join). No Zoom link is opened anywhere. -->
           <div class="master-dashboard__practice-actions">
             <!-- A4 V2 (PROMPT №572): create_failed replaces "Zoom" with
                  "Повторить" -- before this, a permanently-failed meeting
                  showed the SAME disabled "Zoom" button as one still being
                  created, with no way for the master to act on it. -->
             <VButton
-              v-if="zoomLinkFor(practice).kind === 'failed'"
+              v-if="zoomStateFor(practice) === 'failed'"
               variant="danger"
               block
               :loading="retryingId === practice.id"
@@ -208,7 +200,7 @@
               v-else
               variant="secondary"
               block
-              :disabled="zoomLinkFor(practice).kind === 'pending' || startingId === practice.id"
+              :disabled="zoomStateFor(practice) !== 'ready'"
               @click="onZoom(practice)"
             >
               Zoom
@@ -222,7 +214,7 @@
             </VButton>
           </div>
           <VBadge
-            v-if="zoomLinkFor(practice).kind === 'failed'"
+            v-if="zoomStateFor(practice) === 'failed'"
             variant="error"
             class="master-dashboard__zoom-note"
           >
@@ -283,16 +275,14 @@ import MasterOnboardingView from '@/views/master/MasterOnboardingView.vue'
 import { isMasterOnboardingCompleted, shouldShowMasterOnboarding } from '@/utils/masterOnboarding'
 import { useToast } from '@/composables/useToast'
 import { formatDateShort, formatTime, formatDuration, formatParticipants } from '@/utils/format'
-import { platform } from '@/platform'
 import { practiceIconFor } from '@/utils/displayHelpers'
 import { checkinLabel, recurrenceLabel, remainingSessionsLabel } from '@/utils/practiceCardMeta'
 import { practiceHasEnded } from '@/utils/practiceStatus'
-import { resolveZoomLink, type ZoomLinkResolution } from '@/utils/zoomLink'
+import { zoomEntryState, type ZoomEntryStateKind } from '@/utils/zoomEntryState'
 import { getMasterStats } from '@/api/masters'
 import { listNotifications } from '@/api/notifications'
-import { createZoomStartTicket, zoomStartRedirectUrl, retryZoomMeeting } from '@/api/practices'
+import { retryZoomMeeting } from '@/api/practices'
 import { ApiResponseError } from '@/api/client'
-import { errorMessage } from '@/composables/useApiError'
 import type { PracticeResponse, MasterStatsResponse } from '@/api/types'
 
 const router = useRouter()
@@ -431,57 +421,24 @@ function onGroups(): void {
 function openPractice(p: PracticeResponse): void {
   void router.push({ name: 'master-practice-detail', params: { id: p.id } })
 }
-// Zoom state for one card. T-35: the manual rung is gone (Practice.zoom_link
-// no longer exists), so this no longer CHOOSES between links -- it names the
-// state: the master's own host registrant row exists ('personal', which on
-// this screen means "startable"), the meeting is permanently failed
-// ('failed', A4 V2 / PROMPT №572), or it is still being prepared ('pending').
-function zoomLinkFor(p: PracticeResponse): ZoomLinkResolution {
-  return resolveZoomLink(p.zoom_host_join_url, p.zoom_meeting_status)
+// Zoom state for one card. Every card here is the current master's OWN
+// practice (masterStore.practicesUpcoming is scoped server-side), so "can he
+// start it" is "is the meeting ACTIVE" -- the same condition the server's
+// ladder puts before its HOST rung. 'failed' (A4 V2 / PROMPT №572) and
+// 'pending' as for every list row (utils/zoomEntryState.ts).
+function zoomStateFor(p: PracticeResponse): ZoomEntryStateKind {
+  return zoomEntryState(p.zoom_meeting_status === 'active', p.zoom_meeting_status)
 }
 
-// PROMPT №565 (T23-1): "Zoom" for the master's OWN practice (every card on
-// this dashboard is the current master's own -- masterStore.practicesUpcoming
-// is already scoped server-side to this master) means START the meeting as
-// host, not join via the host-role registrant's join_url -- see the template
-// comment above zoomLinkFor's kind==='personal' branch for why that link
-// never actually granted host authority. start_url itself never reaches this
-// frontend -- we ask the backend for a one-time ticket, then open a plain
-// link to the backend's redirect endpoint (platform.openLink), which
-// redeems the ticket and 302s the browser straight to Zoom. Never fetch()
-// that URL.
-const startingId = ref<string | null>(null)
-
-async function onZoom(p: PracticeResponse): Promise<void> {
-  const resolved = zoomLinkFor(p)
-  if (resolved.kind === 'pending') {
-    toast.info('Ссылка на Zoom ещё готовится')
+// Standalone F4: «Zoom» opens the master's practice screen, where the
+// meeting starts inside VELO (Meeting SDK, as host). The server decides
+// there whether he may start it; this button only stays honest.
+function onZoom(p: PracticeResponse): void {
+  if (zoomStateFor(p) !== 'ready') {
+    toast.info('Встреча Zoom ещё готовится')
     return
   }
-  // kind === 'personal' -- start as host via the ticket flow.
-  if (startingId.value) return
-  startingId.value = p.id
-  try {
-    const { ticket } = await createZoomStartTicket(p.id)
-    // PROMPT №557: FAILS CLOSED -- zoomStartRedirectUrl returns null when
-    // VITE_API_BASE_URL is not configured (no foreign-domain fallback). A
-    // one-time start-ticket must never be navigated to some other server.
-    const url = zoomStartRedirectUrl(ticket)
-    if (!url) {
-      toast.error('Функция временно недоступна')
-      return
-    }
-    platform.openLink(url)
-  } catch (e) {
-    // B8 (PROMPT №746): phrase now lives in errorMessages.ts.
-    if (e instanceof ApiResponseError && e.code === 'zoom_meeting_not_active') {
-      toast.error(errorMessage('zoom_meeting_not_active'))
-    } else {
-      toast.error('Не удалось начать встречу. Попробуйте ещё раз')
-    }
-  } finally {
-    startingId.value = null
-  }
+  void router.push({ name: 'master-practice-live', params: { practiceId: p.id } })
 }
 
 // A4 V2 (PROMPT №572): "Повторить" on a create_failed meeting. The endpoint

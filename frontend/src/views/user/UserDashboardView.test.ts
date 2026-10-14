@@ -499,13 +499,14 @@ describe('UserDashboardView', () => {
 
   // ===========================================================================
   describe('nearest-practice actions', () => {
-    it('Zoom: opens the real https link through the platform, not window.open', async () => {
-      // T-35: the link under test is now the PERSONAL registrant link. This
-      // fixture used to rely on the practice's manual zoom_link, which no
-      // longer exists -- the platform boundary being pinned here is unchanged.
+    it('Zoom: opens the practice screen, where Zoom runs inside VELO -- never a link', async () => {
+      // Standalone F4: this pinned openLink(the personal https link) -- right
+      // while «Zoom» left the app. Zoom now runs on the practice screen
+      // (Meeting SDK), the row carries a ready flag instead of a URL, and the
+      // button routes there; nothing is opened outside at all.
       const withPersonal = booking(
         'up_live_personal',
-        { status: 'confirmed', zoom_registrant_join_url: 'https://zoom.us/w/live1?tk=abc' },
+        { status: 'confirmed', zoom_registrant_ready: true },
         {
           title: 'Утренняя практика (эфир)',
           scheduled_at: '2026-07-20T11:50:00Z',
@@ -520,10 +521,14 @@ describe('UserDashboardView', () => {
       actionIn(nearestBlocks()[0]!, 'Zoom')?.click()
       await flush()
 
-      expect(platformState.openLink).toHaveBeenCalledWith('https://zoom.us/w/live1?tk=abc')
+      expect(push).toHaveBeenCalledWith({
+        name: 'practice-live',
+        params: { practiceId: withPersonal.practice_id },
+      })
+      expect(platformState.openLink).not.toHaveBeenCalled()
     })
 
-    it('Zoom: disabled (not just unlinked) when the practice has no valid link', async () => {
+    it('Zoom: disabled (not just inert) when the row cannot be entered yet', async () => {
       vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([UP_SOON])
       mount()
       await flush()
@@ -536,13 +541,16 @@ describe('UserDashboardView', () => {
       zoomBtn?.click()
       await flush()
       expect(platformState.openLink).not.toHaveBeenCalled()
+      expect(push).not.toHaveBeenCalledWith(expect.objectContaining({ name: 'practice-live' }))
     })
 
-    // -- T-35: one link or none; the manual rung is gone with its column --
-    it('Zoom: the personal registrant link is what opens', async () => {
+    // -- T-35: one entry or none; the manual rung is gone with its column --
+    // Standalone F4: "the personal registrant link is what opens" -- no link
+    // opens any more; the ready flag is what enables the button.
+    it('Zoom: the ready flag is what enables the button', async () => {
       const withPersonal = booking(
         'up_personal',
-        { status: 'confirmed', zoom_registrant_join_url: 'https://zoom.us/w/personal?tk=abc' },
+        { status: 'confirmed', zoom_registrant_ready: true },
         {
           scheduled_at: '2026-07-20T11:50:00Z',
           duration_minutes: 60,
@@ -552,20 +560,17 @@ describe('UserDashboardView', () => {
       mount()
       await flush()
 
-      actionIn(nearestBlocks()[0]!, 'Zoom')?.click()
-      await flush()
-
-      expect(platformState.openLink).toHaveBeenCalledWith('https://zoom.us/w/personal?tk=abc')
+      expect(actionIn(nearestBlocks()[0]!, 'Zoom')?.disabled).toBe(false)
     })
 
-    it('T-35: no personal link -- the button is DISABLED, and no "не засчитается" fallback is offered', async () => {
+    it('T-35: no personal entry -- the button is DISABLED, and no "не засчитается" fallback is offered', async () => {
       // The inverse of what this test used to assert. With a manual
       // Practice.zoom_link the button was ENABLED and merely marked as not
       // counting attendance -- which is precisely the state that produced a
       // NO_SHOW for someone who attended. There is nothing to fall back to
       // now: either this person's own registrant link exists or the honest
       // answer is "not yet".
-      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([UP_LIVE]) // no zoom_registrant_join_url
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([UP_LIVE]) // no zoom_registrant_ready
       mount()
       await flush()
 
@@ -573,10 +578,10 @@ describe('UserDashboardView', () => {
       expect(host?.textContent).not.toContain('посещение не засчитается')
     })
 
-    it('Zoom: a personal link present -- no "не засчитается" mark anywhere', async () => {
+    it('Zoom: a personal entry present -- no "не засчитается" mark anywhere', async () => {
       const withPersonal = booking(
         'up_personal2',
-        { status: 'confirmed', zoom_registrant_join_url: 'https://zoom.us/w/personal?tk=abc' },
+        { status: 'confirmed', zoom_registrant_ready: true },
         {
           scheduled_at: '2026-07-20T11:50:00Z',
           duration_minutes: 60,
@@ -596,7 +601,7 @@ describe('UserDashboardView', () => {
     it('Zoom: create_failed -- disabled AND the honest failure badge shows, distinct from a plain unlinked practice', async () => {
       const failedMeeting = booking(
         'up_failed',
-        { status: 'confirmed', zoom_registrant_join_url: null },
+        { status: 'confirmed', zoom_registrant_ready: false },
         {
           scheduled_at: '2026-07-20T11:50:00Z',
           duration_minutes: 60,
@@ -614,7 +619,7 @@ describe('UserDashboardView', () => {
     it('Zoom: pending_creation stays a plain disabled button -- no failure badge', async () => {
       const pending = booking(
         'up_pending',
-        { status: 'confirmed', zoom_registrant_join_url: null },
+        { status: 'confirmed', zoom_registrant_ready: false },
         {
           scheduled_at: '2026-07-20T11:50:00Z',
           duration_minutes: 60,

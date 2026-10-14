@@ -3,8 +3,10 @@
 
   Full-screen confirmation shown AFTER a successful booking. Figma 541:2120:
     - Success card: celebration icon (IconSuccess) in a teal circle,
-      "Практика забронирована!", "Ссылка на Zoom появится за 10 минут до
-      начала." (static line).
+      "Практика забронирована!", "Войти в Zoom можно будет прямо в VELO — на
+      экране практики." (static line; Standalone F4 replaced "Ссылка на Zoom
+      появится за 10 минут до начала." -- no link is sent any more, Zoom runs
+      inside the app).
     - "Ваш запрос мастеру (по желанию)" textarea + teal info banner.
       REAL since the chat landed (TD-ASK-MASTER retired): "Отправить запрос"
       opens-or-gets the eternal DM with THIS practice's master
@@ -49,7 +51,9 @@
           <IconSuccess :size="56" />
         </span>
         <h1 class="booking-confirmed__title">Практика забронирована!</h1>
-        <p class="booking-confirmed__text">Ссылка на Zoom появится за 10 минут до начала.</p>
+        <p class="booking-confirmed__text">
+          Войти в Zoom можно будет прямо в VELO — на экране практики.
+        </p>
       </VCard>
 
       <!-- Ask-master request — REAL: the text becomes the first message of the

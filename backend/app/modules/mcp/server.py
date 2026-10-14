@@ -587,7 +587,7 @@ def _register_tools(server: MCPServer) -> None:
             )
             names: dict[UUID, str] = {}
             items = []
-            for booking, practice, has_fb, has_ci, _url, _gone, has_refl in rows:
+            for booking, practice, has_fb, has_ci, _ready, _gone, has_refl in rows:
                 if practice.master_id not in names:
                     names[practice.master_id] = await get_master_display_name(
                         practice.master_id, session

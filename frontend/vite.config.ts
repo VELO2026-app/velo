@@ -19,6 +19,11 @@ import { VitePWA } from 'vite-plugin-pwa'
 import { fileURLToPath, URL } from 'node:url'
 import { pwaManifest } from './src/pwa/manifest'
 
+/** Modules of the Zoom Meeting SDK chunk: the SDK and its peer stack (its
+ * package.json peerDependencies, pinned in ours), plus what those pull in. */
+const ZOOM_SDK_MODULE =
+  /[\\/]node_modules[\\/](@zoom[\\/]meetingsdk|react|react-dom|react-redux|redux|redux-thunk|lodash|scheduler|use-sync-external-store|hoist-non-react-statics|react-is)[\\/]/
+
 export default defineConfig({
   plugins: [
     vue(),
@@ -44,21 +49,32 @@ export default defineConfig({
       // Include these file types in precache.
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        // Don't precache source maps.
-        globIgnores: ['**/*.map'],
+        // Don't precache source maps -- nor the Zoom Meeting SDK chunk
+        // (Standalone F4, manualChunks below): about 5 MB that only the
+        // practice screen loads, on «Войти»/«Начать». Precached, every
+        // install and every update would download it for everyone.
+        globIgnores: ['**/*.map', '**/zoom-sdk-*.js'],
         // Runtime caching gives the service worker a valid strategy even when
         // the precache manifest is empty. Without this, workbox-build aborts
         // with "Couldn't find configuration for either precaching or runtime
         // caching" (reproduced on workbox 7.3.0 AND 7.4.0 -- not a version
         // issue). network-first: try network, fall back to cache offline.
+        //
+        // SAME ORIGIN ONLY (Standalone F4): the Zoom Meeting SDK pulls its
+        // scripts, styles and images from Zoom's CDN (source.zoom.us). Without
+        // this check they matched by destination and were cached here --
+        // opaque cross-origin responses, which the browser books against the
+        // storage quota far above their size, and a stale copy of Zoom's own
+        // files served back to Zoom's SDK. Zoom's files are Zoom's to cache.
         runtimeCaching: [
           {
-            urlPattern: ({ request }) =>
-              request.destination === 'document' ||
-              request.destination === 'script' ||
-              request.destination === 'style' ||
-              request.destination === 'image' ||
-              request.destination === 'font',
+            urlPattern: ({ request, sameOrigin }) =>
+              sameOrigin &&
+              (request.destination === 'document' ||
+                request.destination === 'script' ||
+                request.destination === 'style' ||
+                request.destination === 'image' ||
+                request.destination === 'font'),
             handler: 'NetworkFirst',
             options: {
               cacheName: 'velo-runtime',
@@ -105,5 +121,17 @@ export default defineConfig({
     sourcemap: false,
     // Target modern browsers (Telegram WebApp uses recent Chromium).
     target: 'es2022',
+    rollupOptions: {
+      output: {
+        // Standalone F4: the Zoom Meeting SDK and the React/redux stack it
+        // runs on go into ONE named chunk, 'zoom-sdk', loaded only by the
+        // practice screen's dynamic import (platform/zoom-sdk.ts). The fixed
+        // name is what lets the service worker keep it out of the precache
+        // (workbox globIgnores above). Nothing else in this app uses React.
+        manualChunks(id: string): string | undefined {
+          return ZOOM_SDK_MODULE.test(id) ? 'zoom-sdk' : undefined
+        },
+      },
+    },
   },
 })

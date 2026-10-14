@@ -65,6 +65,11 @@ export const standalonePlatform: Platform = {
     // Browser has no haptic API.
   },
 
+  cameraBlockedByHost(): boolean {
+    // A browser or the installed app: the camera is the browser's to give.
+    return false
+  },
+
   openLink(url: string): void {
     // Open in a new tab. noopener prevents the opened page from
     // accessing window.opener.

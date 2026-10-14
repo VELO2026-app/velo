@@ -7,6 +7,8 @@
 #   2. Meeting CRUD: create / patch / delete
 #   3. Registrant CRUD: create / list / status-update (Zoom has no DELETE)
 #   4. Post-meeting participants report
+#   5. The meeting host's ZAK, for starting the meeting in the Meeting SDK
+#      (Standalone F4; scope user:read:token:admin on the S2S app)
 #
 # CREDENTIALS: ZOOM_ACCOUNT_ID / ZOOM_CLIENT_ID / ZOOM_CLIENT_SECRET, env vars
 #   only (core/config.py). Never logged, never persisted, never returned in
@@ -252,6 +254,10 @@ def _stub_response(method: str, path: str, json_body: dict | None) -> Any:
         return {}
     if method == "GET" and "/report/meetings/" in path:
         return {"participants": []}
+    # Standalone F4: the host's ZAK. "/users/{id}/token" shares no substring
+    # with any /meetings path, so its place in this chain is free.
+    if method == "GET" and path.startswith("/users/") and path.endswith("/token"):
+        return {"token": "stub-zak"}
     # REC-1 (PROMPT №618): must come AFTER report/meetings and BEFORE the
     # generic /meetings/ GET check below -- "/meetings/{id}/recordings"
     # contains "/meetings/" as a substring too, same trap as the comment
@@ -275,10 +281,12 @@ def _stub_response(method: str, path: str, json_body: dict | None) -> Any:
     # Must come AFTER both /registrants and /report/meetings/ GET checks
     # above -- both of those paths also contain "/meetings/" as a substring.
     if method == "GET" and "/meetings/" in path:
+        # Standalone F4: what zoom/sdk.py reads -- the passcode and the host.
         stub_id = path.rsplit("/", 1)[-1]
         return {
             "id": int(stub_id) if stub_id.isdigit() else 0,
-            "start_url": f"https://zoom.us/s/{stub_id}?pwd=stub&zak=stubzak",
+            "host_id": "stub-host-id",
+            "password": "stubpass",
         }
 
     raise ZoomAPIError(f"No stub response defined for {method} {path}")
@@ -364,15 +372,32 @@ async def patch_meeting(*, zoom_meeting_id: str, start_time_iso: str) -> None:
 
 
 async def get_meeting(*, zoom_meeting_id: str) -> dict:
-    """Fetch a meeting's current details from Zoom, including start_url.
+    """Fetch a meeting's current details from Zoom.
 
-    PROMPT №556 (OWNER-1, option В): this is the ONLY place start_url is ever
-    read. create_meeting's response has one too, but that one is deliberately
-    discarded (see this module's FAILURE SHAPE note + zoom/service.py) so the
-    credential is fetched fresh, on demand, and never stored -- callers must
-    not persist or log the field this returns.
+    Standalone F4: zoom/sdk.py reads `password` (the meeting passcode, plain
+    text; "" or absent for a meeting without one) and `host_id` from it, at
+    the moment somebody enters -- nothing of it is stored. The response is a
+    bag of credentials (passcode, and a start_url that makes its holder the
+    host): callers must not persist or log it, nor any field of it.
     """
     return await _request("GET", f"/meetings/{zoom_meeting_id}")
+
+
+async def get_user_zak(*, zoom_user_id: str, ttl_seconds: int) -> dict:
+    """Fetch a Zoom user's ZAK (Zoom Access Key) -- the credential the
+    Meeting SDK starts that user's meeting with.
+
+    GET /users/{userId}/token?type=zak, scope user:read:token:admin on the
+    Server-to-Server app. `ttl_seconds` is Zoom's own lifetime for the
+    token (documented default 7200); zoom/sdk.py asks for the shortest it
+    needs. A ZAK makes its holder the host of EVERY meeting of that Zoom
+    user while it lives -- callers must not persist or log the response.
+    """
+    return await _request(
+        "GET",
+        f"/users/{zoom_user_id}/token",
+        params={"type": "zak", "ttl": ttl_seconds},
+    )
 
 
 async def delete_meeting(*, zoom_meeting_id: str) -> None:

@@ -119,14 +119,15 @@
 
           <!-- Action buttons (outside the card, per Figma) -->
           <div class="dashboard__practice-actions">
-            <!-- R1 (№263): honest state — a null link disables the button
-                 rather than reading as broken. T-35: there is nothing left to
-                 choose between here -- the manual fallback is gone, so this is
-                 the person's OWN registrant link or an honest wait. -->
+            <!-- R1 (№263): honest state — a row that cannot be entered yet
+                 disables the button rather than reading as broken.
+                 Standalone F4: the button opens no link any more -- it takes
+                 the person to the practice screen, where Zoom runs inside
+                 VELO (Meeting SDK). -->
             <VButton
               variant="secondary"
               block
-              :disabled="zoomLinkFor(b).kind === 'pending' || zoomLinkFor(b).kind === 'failed'"
+              :disabled="zoomStateFor(b) !== 'ready'"
               @click="onZoomClick(b)"
             >
               Zoom
@@ -149,11 +150,7 @@
           <!-- A4 V2 (PROMPT №572): honest permanent-failure state, distinct
                from "still preparing" -- see PracticeLiveView's identical
                badge for the full rationale. -->
-          <VBadge
-            v-if="zoomLinkFor(b).kind === 'failed'"
-            variant="error"
-            class="dashboard__zoom-note"
-          >
+          <VBadge v-if="zoomStateFor(b) === 'failed'" variant="error" class="dashboard__zoom-note">
             Не удалось создать встречу — обратитесь к мастеру
           </VBadge>
         </div>
@@ -215,13 +212,12 @@ import { IconClock, IconCheck, IconBellPlain, IconMeditation } from '@/component
 import PracticeListCard from '@/components/shared/PracticeListCard.vue'
 import Banner from '@/components/shared/Banner.vue'
 import { formatDateShort, formatTime, formatDuration } from '@/utils/format'
-import { platform } from '@/platform'
 import { isInCheckinWindow } from '@/composables/usePracticeWindows'
 import { isLiveNow, isFree } from '@/utils/bookingStatus'
 import { selectNearestBookings } from '@/utils/nearestBookings'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import { CHECKIN_WINDOW_H } from '@/utils/constants'
-import { resolveZoomLink, type ZoomLinkResolution } from '@/utils/zoomLink'
+import { zoomEntryState, type ZoomEntryStateKind } from '@/utils/zoomEntryState'
 import type { BookingWithPracticeResponse, UserStatsResponse } from '@/api/types'
 
 // CHECKIN_WINDOW_H is imported but only used implicitly via isInCheckinWindow.
@@ -336,28 +332,30 @@ function practiceTitle(b: BookingWithPracticeResponse): string {
 }
 
 /**
- * Zoom button — the booking's own registrant link, or an honest disabled
- * state. No per-click round trip: the link already arrives with the booking
- * from GET /bookings/me(/upcoming).
+ * Zoom button state — whether the booking's own registrant can be entered,
+ * or an honest disabled state. No per-click round trip: the flag arrives with
+ * the booking from GET /bookings/me(/upcoming).
  *
  * T-35: this list does NOT call the resolve endpoint. It does not need to --
- * every row here belongs to a live booking of this very user, so the only
- * answer the server could give is the personal link this payload already
- * carries. The resolve endpoint exists for the single-practice screen, where
- * the caller may hold no booking at all.
+ * every row here belongs to a live booking of this very user. The resolve
+ * endpoint exists for the single-practice screen, where the caller may hold
+ * no booking at all -- and that screen is where «Zoom» takes him.
  */
-function zoomLinkFor(b: BookingWithPracticeResponse): ZoomLinkResolution {
-  return resolveZoomLink(b.zoom_registrant_join_url, b.practice.zoom_meeting_status)
+function zoomStateFor(b: BookingWithPracticeResponse): ZoomEntryStateKind {
+  return zoomEntryState(b.zoom_registrant_ready, b.practice.zoom_meeting_status)
 }
 
+/**
+ * Standalone F4: «Zoom» opens the practice screen, never a Zoom link -- Zoom
+ * runs there, inside VELO. The screen asks the server for the entry itself.
+ */
 function onZoomClick(b: BookingWithPracticeResponse): void {
-  const resolved = zoomLinkFor(b)
-  if (resolved.url) {
-    platform.openLink(resolved.url)
-  } else {
+  if (zoomStateFor(b) !== 'ready') {
     // Backstop only — the button is disabled in this state (R1).
-    toast.info('Ссылка ещё готовится')
+    toast.info('Вход в Zoom ещё готовится')
+    return
   }
+  void router.push({ name: 'practice-live', params: { practiceId: b.practice_id } })
 }
 
 /**

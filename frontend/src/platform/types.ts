@@ -86,13 +86,25 @@ export interface Platform {
   hapticNotification(type: 'error' | 'success' | 'warning'): void
 
   /**
-   * Open an external URL (e.g. a Zoom meeting link).
+   * Open an external URL (e.g. a meeting's recording link). Not used to
+   * enter Zoom: since Standalone F4 Zoom runs inside VELO (Meeting SDK).
    * Telegram: WebApp.openLink(url) -- opens in the external browser.
    * Standalone: window.open(url) in a new tab.
    *
    * Callers must validate the URL (https only) before calling.
    */
   openLink(url: string): void
+
+  /**
+   * True where the host app is known to give the page a black camera
+   * stream, so a camera-needing screen should say so up front.
+   * Telegram: true on Telegram for iOS -- its webview delivers no video from
+   * getUserMedia (Telegram's bug, owner decision 11, Standalone F4). The
+   * person can still see and hear; the camera works when VELO is opened
+   * from the home screen.
+   * Standalone: false.
+   */
+  cameraBlockedByHost(): boolean
 
   /**
    * Show the native back button (top-left in Telegram).

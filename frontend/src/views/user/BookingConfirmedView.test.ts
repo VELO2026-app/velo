@@ -270,7 +270,12 @@ describe('BookingConfirmedView', () => {
       expect(emptyState()).toBeNull()
       expect(content()).not.toBeNull()
       expect(content()?.textContent).toContain('Практика забронирована!')
-      expect(content()?.textContent).toContain('Ссылка на Zoom появится за 10 минут до начала.')
+      // Standalone F4: was «Ссылка на Zoom появится за 10 минут до начала.» --
+      // right while a link was sent; Zoom now runs inside the app, no link comes.
+      expect(content()?.textContent).toContain(
+        'Войти в Zoom можно будет прямо в VELO — на экране практики.',
+      )
+      expect(content()?.textContent).not.toContain('Ссылка на Zoom')
     })
 
     it('proves absence: content shows the SAME static text regardless of which practice was fetched -- no title/master/time is ever rendered', async () => {

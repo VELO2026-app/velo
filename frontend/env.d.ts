@@ -47,6 +47,9 @@ interface TelegramWebApp {
   }
   /** Current color scheme: 'light' or 'dark'. */
   colorScheme: 'light' | 'dark'
+  /** The Telegram client this Mini App runs in: 'ios', 'android',
+   * 'tdesktop', 'macos', 'web', ... ('unknown' when Telegram cannot tell). */
+  platform: string
   /** Tell Telegram the app is ready to be shown. */
   ready(): void
   /** Expand the WebApp to full viewport height. */

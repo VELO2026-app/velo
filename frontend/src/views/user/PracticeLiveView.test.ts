@@ -31,7 +31,8 @@
 //
 // VEmptyState is used for three T-35 states (host / cancelled / resolve-404),
 // not as a general loading/error ladder; Check-in and "Покинуть практику"
-// stay rendered regardless.
+// stay rendered regardless -- except (F4) for the practice's own master and in
+// the master zone, where they are not his actions.
 //
 // Because both stores are mocked getters (not reactive refs), state must be
 // set BEFORE mount() -- mutating bookingsState/practicesState mid-test does
@@ -54,6 +55,15 @@
 // NOTE: a real failure still opens Zoom afterwards -- the ticket scoped the fix
 // to the toast gate only; if that is wrong too, it is a separate decision.
 //
+// STANDALONE F4 SUPERSEDES THE LINK. Zoom now runs INSIDE VELO (Meeting SDK,
+// client view): «Войти»/«Начать» ask the server for SDK parameters
+// (joinZoomSdk) and hand them to platform/zoom-sdk.ts (enterZoomMeeting). Every
+// assertion that used to read `openLink(<zoom url>)` now reads those two
+// calls, and `openLink` is asserted NEVER called. The guest branch inverted
+// (owner decision 12: no guest entry from the app -- «Вы не записаны» and the
+// way to the practice), and the host branch no longer sends the owner away:
+// he starts right here. One view, two zones: routeName decides.
+//
 // vue-router: mocked, never built. `platform`: mocked via the
 // `get platform()` trick (stores/auth.test.ts:52-55) -- required because
 // @/stores/auth (pulled in transitively by other screens' precedent) imports
@@ -67,18 +77,36 @@ import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import PracticeLiveView from '@/views/user/PracticeLiveView.vue'
 import type { BookingWithPracticeResponse, PracticeResponse } from '@/api/types'
+import { ApiResponseError } from '@/api/client'
 
 const push = vi.fn()
 const back = vi.fn()
 const routeParams: { practiceId: string } = { practiceId: 'p1' }
+const routeState: { name: string } = { name: 'practice-live' }
+/** The guard the screen registers with onBeforeRouteLeave (F4). */
+let leaveGuard: (() => boolean) | null = null
+/** What router.resolve() would give for the two leaveUrl targets. */
+function hrefFor(to: { name: string; params?: { practiceId?: string } }): string {
+  if (to.name === 'user-feedback') return `/user/feedback/${to.params?.practiceId}`
+  if (to.name === 'master-dashboard') return '/master/dashboard'
+  throw new Error(`unexpected resolve target ${to.name}`)
+}
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push, back }),
-  useRoute: () => ({ params: routeParams }),
+  useRouter: () => ({
+    push,
+    back,
+    resolve: (to: { name: string; params?: { practiceId?: string } }) => ({ href: hrefFor(to) }),
+  }),
+  useRoute: () => ({ params: routeParams, name: routeState.name }),
+  onBeforeRouteLeave: (fn: () => boolean) => {
+    leaveGuard = fn
+  },
 }))
 
 const toastError = vi.fn()
+const toastInfo = vi.fn()
 vi.mock('@/composables/useToast', () => ({
-  useToast: () => ({ error: toastError, success: vi.fn(), info: vi.fn() }),
+  useToast: () => ({ error: toastError, success: vi.fn(), info: toastInfo }),
 }))
 
 // T-35: the screen asks the server how THIS user enters. Mocked at the API
@@ -86,17 +114,53 @@ vi.mock('@/composables/useToast', () => ({
 // for each kind, not how the ladder is computed (that lives in the backend's
 // resolve_zoom_entry and is proved by its own doubles).
 const resolveZoomEntry = vi.fn()
+const joinZoomSdk = vi.fn()
 vi.mock('@/api/practices', () => ({
   resolveZoomEntry: (...args: Parameters<typeof resolveZoomEntry>) => resolveZoomEntry(...args),
+  joinZoomSdk: (...args: Parameters<typeof joinZoomSdk>) => joinZoomSdk(...args),
 }))
 
 const openLink = vi.fn()
 const hapticFeedback = vi.fn()
+const platformFlags = { cameraBlocked: false }
 vi.mock('@/platform', () => ({
   get platform() {
-    return { name: 'standalone' as const, openLink, hapticFeedback }
+    return {
+      name: 'standalone' as const,
+      openLink,
+      hapticFeedback,
+      cameraBlockedByHost: () => platformFlags.cameraBlocked,
+    }
   },
 }))
+
+// F4: the SDK boundary. Mocked as a module -- loading the real SDK in
+// happy-dom would be both slow and meaningless; what this screen owns is
+// WHAT it hands over and WHERE leaving goes, not Zoom's own client.
+const enterZoomMeeting = vi.fn()
+const leaveZoomMeeting = vi.fn()
+const sdkState = { loaded: false }
+vi.mock('@/platform/zoom-sdk', () => ({
+  enterZoomMeeting: (...args: unknown[]) => enterZoomMeeting(...args),
+  leaveZoomMeeting: () => leaveZoomMeeting(),
+  zoomSdkLoaded: () => sdkState.loaded,
+  appUrl: (path: string) => `https://app.test${path}`,
+}))
+
+/** The server's SDK parameters for an attendee (role 0). */
+const ATTENDEE_JOIN = {
+  sdk_key: 'sdk-key',
+  signature: 'sig',
+  meeting_number: '123456',
+  password: 'pw',
+  user_name: 'Ученик User',
+  role: 0,
+  tk: 'tk-abc',
+  user_email: 'user-1@users.velo.invalid',
+  zak: null,
+}
+/** The server's SDK parameters for the host (role 1). */
+const HOST_JOIN = { ...ATTENDEE_JOIN, role: 1, tk: null, user_email: null, zak: 'zak-xyz' }
 
 // -- practices store (dependency) --
 const practicesState: { selected: PracticeResponse | null } = { selected: null }
@@ -230,6 +294,13 @@ function backBtn(): HTMLButtonElement | null {
 function emptyState(): HTMLElement | null {
   return host?.querySelector('.v-empty') ?? null
 }
+/** A button by its visible text -- the guest state's own button is primary
+ * too, so «the entry button» is found by what it says. */
+function buttonByText(label: string): HTMLButtonElement | undefined {
+  return Array.from(host?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(
+    (b) => b.textContent?.trim() === label,
+  )
+}
 
 beforeEach(() => {
   pinia = createPinia()
@@ -242,10 +313,20 @@ beforeEach(() => {
   joinBooking.mockReset()
   leaveBooking.mockReset()
   openLink.mockReset()
-  // Default: a booked user with a working personal link -- the ordinary case
-  // every non-Zoom test in this file assumes.
+  // Default: a booked user with a personal entry -- the ordinary case every
+  // non-Zoom test in this file assumes. F4: the body carries `kind` only.
   resolveZoomEntry.mockReset()
-  resolveZoomEntry.mockResolvedValue({ kind: 'personal', url: 'https://zoom.us/j/123456' })
+  resolveZoomEntry.mockResolvedValue({ kind: 'personal' })
+  joinZoomSdk.mockReset()
+  joinZoomSdk.mockResolvedValue(ATTENDEE_JOIN)
+  enterZoomMeeting.mockReset()
+  enterZoomMeeting.mockResolvedValue(undefined)
+  leaveZoomMeeting.mockReset()
+  sdkState.loaded = false
+  platformFlags.cameraBlocked = false
+  routeState.name = 'practice-live'
+  leaveGuard = null
+  toastInfo.mockReset()
   hapticFeedback.mockReset()
   toastError.mockReset()
   push.mockReset()
@@ -314,93 +395,93 @@ describe('PracticeLiveView', () => {
   // What IS asserted here is that each kind renders honestly and that the
   // button cannot open something that does not exist.
   describe('T-35: rendering the server resolution', () => {
-    it('personal: Войти is enabled and opens the personal link -- the outcome the whole feature exists for', async () => {
+    it('personal: Войти enters THROUGH THE SDK with the server parameters, leaving to feedback -- no link is opened', async () => {
+      // F4: this opened the personal link (openLink) -- right while Zoom was
+      // outside. The same outcome now: the person whose attendance can be
+      // recorded enters with HIS entry, inside VELO.
       practicesState.selected = practice()
       bookingsState.bookings = [booking({ joined_at: '2026-07-20T10:00:00Z' })]
-      resolveZoomEntry.mockResolvedValue({
-        kind: 'personal',
-        url: 'https://zoom.us/j/personal?tk=x',
-      })
+      resolveZoomEntry.mockResolvedValue({ kind: 'personal' })
       mount()
       await flush()
 
       expect(enterBtn()?.disabled).toBe(false)
       enterBtn()?.click()
       await flush()
-      expect(openLink).toHaveBeenCalledWith('https://zoom.us/j/personal?tk=x')
-    })
-
-    it('guest: the honest "не засчитается" mark is shown AND the button works -- a person without a booking is let in, not stonewalled', async () => {
-      practicesState.selected = practice()
-      bookingsState.bookings = []
-      resolveZoomEntry.mockResolvedValue({ kind: 'guest', url: 'https://zoom.us/j/shared' })
-      mount()
-      await flush()
-
-      expect(text()).toContain('Вы не записаны')
-      expect(enterBtn()?.disabled).toBe(false)
-      enterBtn()?.click()
-      await flush()
-      expect(openLink).toHaveBeenCalledWith('https://zoom.us/j/shared')
-    })
-
-    it('guest with NO url (the minting miss): honest line, button disabled, and it is NOT reported as a failed meeting', async () => {
-      practicesState.selected = practice()
-      bookingsState.bookings = []
-      resolveZoomEntry.mockResolvedValue({ kind: 'guest', url: null })
-      mount()
-      await flush()
-
-      expect(text()).toContain('Гостевой вход сейчас недоступен')
-      expect(text()).not.toContain('Не удалось создать встречу')
-      expect(enterBtn()?.disabled).toBe(true)
-      enterBtn()?.click()
-      await flush()
+      expect(joinZoomSdk).toHaveBeenCalledWith('p1')
+      expect(enterZoomMeeting).toHaveBeenCalledWith(
+        ATTENDEE_JOIN,
+        'https://app.test/user/feedback/p1',
+      )
       expect(openLink).not.toHaveBeenCalled()
     })
 
-    it('pending: honest wait, button disabled, nothing opened -- a confirmed booking is NEVER downgraded to a guest link (that is what produced the false NO_SHOW)', async () => {
+    it('guest: «Вы не записаны» and the way to the practice -- NO entry inside the app (owner decision 12)', async () => {
+      // F4 inverts what this asserted (a guest let in by the shared link):
+      // the app offers no guest entry; booking is where the entry comes from.
+      practicesState.selected = practice()
+      bookingsState.bookings = []
+      resolveZoomEntry.mockResolvedValue({ kind: 'guest' })
+      mount()
+      await flush()
+
+      expect(emptyState()?.textContent).toContain('Вы не записаны')
+      expect(buttonByText('Войти')).toBeUndefined()
+      buttonByText('К практике')?.click()
+      await flush()
+      expect(push).toHaveBeenCalledWith({ name: 'practice-detail', params: { id: 'p1' } })
+      expect(joinZoomSdk).not.toHaveBeenCalled()
+      expect(openLink).not.toHaveBeenCalled()
+    })
+
+    it('pending: honest wait, button disabled, nothing entered -- a confirmed booking is NEVER downgraded to a guest entry (that is what produced the false NO_SHOW)', async () => {
       practicesState.selected = practice()
       bookingsState.bookings = [booking()]
-      resolveZoomEntry.mockResolvedValue({ kind: 'pending', url: null })
+      resolveZoomEntry.mockResolvedValue({ kind: 'pending' })
       mount()
       await flush()
 
-      expect(text()).toContain('Ссылка готовится')
+      expect(text()).toContain('Вход готовится')
       expect(enterBtn()?.disabled).toBe(true)
       enterBtn()?.click()
       await flush()
-      expect(openLink).not.toHaveBeenCalled()
+      expect(joinZoomSdk).not.toHaveBeenCalled()
     })
 
     it('failed: distinct from pending -- the permanent-failure copy, not the spinner copy', async () => {
       practicesState.selected = practice()
       bookingsState.bookings = [booking()]
-      resolveZoomEntry.mockResolvedValue({ kind: 'failed', url: null })
+      resolveZoomEntry.mockResolvedValue({ kind: 'failed' })
       mount()
       await flush()
 
       expect(text()).toContain('Не удалось создать встречу')
-      expect(text()).not.toContain('Ссылка готовится')
+      expect(text()).not.toContain('Вход готовится')
       expect(enterBtn()?.disabled).toBe(true)
     })
 
-    it('host: the owner arriving by his own public link is told to start from the master screen, and is NOT handed a guest seat in his own meeting', async () => {
+    it('host: the owner starts his meeting HERE, as host, leaving to his dashboard -- and is never handed a guest seat or the student actions', async () => {
+      // F4: this told the owner to go and start from the master screen (the
+      // start-ticket flow lived there). He now starts right here, inside VELO.
       practicesState.selected = practice()
       bookingsState.bookings = []
-      resolveZoomEntry.mockResolvedValue({ kind: 'host', url: null })
+      resolveZoomEntry.mockResolvedValue({ kind: 'host' })
+      joinZoomSdk.mockResolvedValue(HOST_JOIN)
       mount()
       await flush()
 
-      expect(emptyState()?.textContent).toContain('Это ваша практика')
-      expect(enterBtn()).toBeNull()
+      expect(checkinBtn()).toBeNull()
+      expect(leaveBtn()).toBeNull()
+      buttonByText('Начать')?.click()
+      await flush()
+      expect(enterZoomMeeting).toHaveBeenCalledWith(HOST_JOIN, 'https://app.test/master/dashboard')
       expect(openLink).not.toHaveBeenCalled()
     })
 
     it('cancelled: honest state, no entry offered', async () => {
       practicesState.selected = practice()
       bookingsState.bookings = [booking()]
-      resolveZoomEntry.mockResolvedValue({ kind: 'cancelled', url: null })
+      resolveZoomEntry.mockResolvedValue({ kind: 'cancelled' })
       mount()
       await flush()
 
@@ -409,14 +490,14 @@ describe('PracticeLiveView', () => {
     })
 
     // Links (Д4): 'unavailable' fell into the generic «Войти» branch.
-    it('unavailable: honest state, no «Войти» (a live booking whose link will not come)', async () => {
+    it('unavailable: honest state, no «Войти» (a live booking whose entry will not come)', async () => {
       practicesState.selected = practice()
       bookingsState.bookings = [booking()]
-      resolveZoomEntry.mockResolvedValue({ kind: 'unavailable', url: null })
+      resolveZoomEntry.mockResolvedValue({ kind: 'unavailable' })
       mount()
       await flush()
 
-      expect(emptyState()?.textContent).toContain('Ссылка на встречу недоступна')
+      expect(emptyState()?.textContent).toContain('Вход в Zoom недоступен')
       expect(emptyState()?.textContent).toContain('поддержку')
       expect(enterBtn()).toBeNull()
     })
@@ -443,14 +524,14 @@ describe('PracticeLiveView', () => {
 
   // ===========================================================================
   describe('join flow', () => {
-    it('a fresh booking (never joined): calls joinBooking, then haptic + openLink on success', async () => {
+    it('a fresh booking (never joined): calls joinBooking, then haptic + the SDK entry (F4: was openLink)', async () => {
       practicesState.selected = practice()
       bookingsState.bookings = [booking({ id: 'b1', joined_at: null })]
       joinBooking.mockResolvedValue({ ok: true, error: '' })
       mount()
       // T-35: the button is disabled until the server's resolution arrives --
       // it can no longer be pressed on a screen that has not been told what
-      // link (if any) this person gets.
+      // entry (if any) this person gets.
       await flush()
 
       enterBtn()?.click()
@@ -459,7 +540,11 @@ describe('PracticeLiveView', () => {
       expect(joinBooking).toHaveBeenCalledWith('b1')
       expect(toastError).not.toHaveBeenCalled()
       expect(hapticFeedback).toHaveBeenCalledWith('medium')
-      expect(openLink).toHaveBeenCalledWith('https://zoom.us/j/123456')
+      expect(joinBooking.mock.invocationCallOrder[0]).toBeLessThan(
+        joinZoomSdk.mock.invocationCallOrder[0]!,
+      )
+      expect(enterZoomMeeting).toHaveBeenCalledTimes(1)
+      expect(openLink).not.toHaveBeenCalled()
     })
 
     it('shows the loading state on Войти while the join call is pending', async () => {
@@ -469,7 +554,7 @@ describe('PracticeLiveView', () => {
       mount()
       // T-35: the button is disabled until the server's resolution arrives --
       // it can no longer be pressed on a screen that has not been told what
-      // link (if any) this person gets.
+      // entry (if any) this person gets.
       await flush()
 
       enterBtn()?.click()
@@ -479,54 +564,54 @@ describe('PracticeLiveView', () => {
       expect(enterBtn()?.disabled).toBe(true)
     })
 
-    it('an ALREADY-joined booking (joined_at already set): skips calling joinBooking and opens Zoom directly', async () => {
+    it('an ALREADY-joined booking (joined_at already set): skips calling joinBooking and enters Zoom directly', async () => {
       practicesState.selected = practice()
       bookingsState.bookings = [booking({ id: 'b1', joined_at: '2026-07-20T09:00:00Z' })]
       mount()
       // T-35: the button is disabled until the server's resolution arrives --
       // it can no longer be pressed on a screen that has not been told what
-      // link (if any) this person gets.
+      // entry (if any) this person gets.
       await flush()
 
       enterBtn()?.click()
       await flush()
 
       expect(joinBooking).not.toHaveBeenCalled()
-      expect(openLink).toHaveBeenCalledWith('https://zoom.us/j/123456')
+      expect(enterZoomMeeting).toHaveBeenCalledTimes(1)
     })
 
-    it('the documented 409 "already joined" case (keyed on the machine status, FE-78.2): toast is suppressed, Zoom still opens', async () => {
+    it('the documented 409 "already joined" case (keyed on the machine status, FE-78.2): toast is suppressed, Zoom is still entered', async () => {
       practicesState.selected = practice()
       bookingsState.bookings = [booking({ id: 'b1', joined_at: null })]
       joinBooking.mockResolvedValue({ ok: false, error: 'Вы уже записаны', status: 409 })
       mount()
       // T-35: the button is disabled until the server's resolution arrives --
       // it can no longer be pressed on a screen that has not been told what
-      // link (if any) this person gets.
+      // entry (if any) this person gets.
       await flush()
 
       enterBtn()?.click()
       await flush()
 
       expect(toastError).not.toHaveBeenCalled()
-      expect(openLink).toHaveBeenCalledWith('https://zoom.us/j/123456')
+      expect(enterZoomMeeting).toHaveBeenCalledTimes(1)
     })
 
-    it('a REAL join failure (non-409) still toasts; Zoom still opens -- FE-78.2 scoped the fix to the toast gate only', async () => {
+    it('a REAL join failure (non-409) still toasts; Zoom is still entered -- FE-78.2 scoped the fix to the toast gate only', async () => {
       practicesState.selected = practice()
       bookingsState.bookings = [booking({ id: 'b1', joined_at: null })]
       joinBooking.mockResolvedValue({ ok: false, error: 'Practice is full', status: 400 })
       mount()
       // T-35: the button is disabled until the server's resolution arrives --
       // it can no longer be pressed on a screen that has not been told what
-      // link (if any) this person gets.
+      // entry (if any) this person gets.
       await flush()
 
       enterBtn()?.click()
       await flush()
 
       expect(toastError).toHaveBeenCalledWith('Practice is full')
-      expect(openLink).toHaveBeenCalledWith('https://zoom.us/j/123456')
+      expect(enterZoomMeeting).toHaveBeenCalledTimes(1)
     })
   })
 
@@ -606,6 +691,169 @@ describe('PracticeLiveView', () => {
       backBtn()?.click()
 
       expect(push).toHaveBeenCalledWith({ name: 'user-dashboard' })
+    })
+  })
+  // ===========================================================================
+  // Standalone F4: entering through the Meeting SDK -- the refusals, the SDK
+  // failing, the camera hint, the master zone, leaving while inside.
+  describe('F4: Zoom inside the app', () => {
+    it('zoom_sdk_not_configured: the screen SAYS so instead of a button that cannot work', async () => {
+      practicesState.selected = practice()
+      bookingsState.bookings = [booking({ joined_at: '2026-07-20T10:00:00Z' })]
+      joinZoomSdk.mockRejectedValue(
+        new ApiResponseError(409, 'not configured', 'zoom_sdk_not_configured'),
+      )
+      mount()
+      await flush()
+
+      enterBtn()?.click()
+      await flush()
+      await flush()
+
+      expect(emptyState()?.textContent).toContain('Zoom внутри приложения не настроен')
+      expect(buttonByText('Войти')).toBeUndefined()
+      expect(enterZoomMeeting).not.toHaveBeenCalled()
+    })
+
+    it('zoom_entry_not_joinable: the state changed under us -- re-resolve and show the new one', async () => {
+      practicesState.selected = practice()
+      bookingsState.bookings = [booking({ joined_at: '2026-07-20T10:00:00Z' })]
+      joinZoomSdk.mockRejectedValue(
+        new ApiResponseError(409, 'not joinable', 'zoom_entry_not_joinable'),
+      )
+      mount()
+      await flush()
+      resolveZoomEntry.mockResolvedValue({ kind: 'cancelled' })
+
+      enterBtn()?.click()
+      await flush()
+      await flush()
+
+      expect(resolveZoomEntry).toHaveBeenCalledTimes(2)
+      expect(toastInfo).toHaveBeenCalledWith('Состояние практики изменилось')
+      expect(emptyState()?.textContent).toContain('Практика отменена')
+      expect(enterZoomMeeting).not.toHaveBeenCalled()
+    })
+
+    it('Zoom did not answer (502 zoom_unavailable): its phrase, the button is usable again', async () => {
+      practicesState.selected = practice()
+      bookingsState.bookings = [booking({ joined_at: '2026-07-20T10:00:00Z' })]
+      joinZoomSdk.mockRejectedValue(new ApiResponseError(502, 'zoom down', 'zoom_unavailable'))
+      mount()
+      await flush()
+
+      enterBtn()?.click()
+      await flush()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Zoom не ответил. Попробуйте ещё раз через минуту')
+      expect(enterBtn()?.disabled).toBe(false)
+      expect(enterZoomMeeting).not.toHaveBeenCalled()
+    })
+
+    it('the SDK itself fails to load or join: an honest toast, never a silent stall', async () => {
+      practicesState.selected = practice()
+      bookingsState.bookings = [booking({ joined_at: '2026-07-20T10:00:00Z' })]
+      enterZoomMeeting.mockRejectedValue(new Error('Zoom SDK load failed'))
+      mount()
+      await flush()
+
+      enterBtn()?.click()
+      await flush()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Не удалось открыть Zoom. Попробуйте ещё раз')
+      expect(enterBtn()?.disabled).toBe(false)
+    })
+
+    it('REPEAT: a second press while the first is in flight asks the server once', async () => {
+      practicesState.selected = practice()
+      bookingsState.bookings = [booking({ joined_at: '2026-07-20T10:00:00Z' })]
+      joinZoomSdk.mockReturnValue(new Promise(() => {}))
+      mount()
+      await flush()
+
+      enterBtn()?.click()
+      enterBtn()?.click()
+      await flush()
+
+      expect(joinZoomSdk).toHaveBeenCalledTimes(1)
+    })
+
+    it('camera hint: shown where the host app blocks the camera and an entry is on screen', async () => {
+      platformFlags.cameraBlocked = true
+      practicesState.selected = practice()
+      resolveZoomEntry.mockResolvedValue({ kind: 'personal' })
+      mount()
+      await flush()
+
+      expect(text()).toContain('Чтобы включить камеру, откройте VELO с рабочего стола')
+    })
+
+    it('camera hint: the host too -- the master needs the camera most', async () => {
+      platformFlags.cameraBlocked = true
+      practicesState.selected = practice()
+      resolveZoomEntry.mockResolvedValue({ kind: 'host' })
+      mount()
+      await flush()
+
+      expect(text()).toContain('Чтобы включить камеру, откройте VELO с рабочего стола')
+    })
+
+    it('camera hint: NOT shown where the camera works, nor where there is no entry at all', async () => {
+      platformFlags.cameraBlocked = false
+      resolveZoomEntry.mockResolvedValue({ kind: 'personal' })
+      mount()
+      await flush()
+      expect(text()).not.toContain('Чтобы включить камеру')
+      app?.unmount()
+      host?.remove()
+
+      platformFlags.cameraBlocked = true
+      resolveZoomEntry.mockResolvedValue({ kind: 'cancelled' })
+      mount()
+      await flush()
+      expect(text()).not.toContain('Чтобы включить камеру')
+    })
+
+    it('master zone: back goes to the master dashboard, and no student actions are shown', async () => {
+      routeState.name = 'master-practice-live'
+      practicesState.selected = practice()
+      resolveZoomEntry.mockResolvedValue({ kind: 'host' })
+      mount()
+      await flush()
+
+      expect(checkinBtn()).toBeNull()
+      expect(leaveBtn()).toBeNull()
+      backBtn()?.click()
+      expect(push).toHaveBeenCalledWith({ name: 'master-dashboard' })
+    })
+
+    it("master zone hides the student actions for ANY answer, not only host (a master booked into another master's practice)", async () => {
+      routeState.name = 'master-practice-live'
+      practicesState.selected = practice()
+      bookingsState.bookings = [booking()]
+      resolveZoomEntry.mockResolvedValue({ kind: 'personal' })
+      mount()
+      await flush()
+
+      expect(buttonByText('Войти')).toBeDefined()
+      expect(checkinBtn()).toBeNull()
+      expect(leaveBtn()).toBeNull()
+    })
+
+    it('leaving the screen while INSIDE the meeting leaves the meeting instead (its leaveUrl reloads the app)', async () => {
+      mount()
+      await flush()
+      expect(leaveGuard).not.toBeNull()
+
+      sdkState.loaded = false
+      expect(leaveGuard!()).toBe(true)
+      expect(leaveZoomMeeting).not.toHaveBeenCalled()
+
+      sdkState.loaded = true
+      expect(leaveGuard!()).toBe(false)
+      expect(leaveZoomMeeting).toHaveBeenCalledTimes(1)
     })
   })
 })

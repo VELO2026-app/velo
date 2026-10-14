@@ -6,12 +6,11 @@
 # ENDPOINTS:
 #   GET    /api/v1/practices                     -- public feed (4.3)
 #   POST   /api/v1/practices                     -- create (master only)
-#   POST   /api/v1/practices/{id}/zoom/start-ticket -- one-time Zoom start ticket (556)
 #   POST   /api/v1/practices/{id}/zoom/retry      -- retry a failed Zoom meeting
 #                                                    (A4 V2, 572)
 #   GET    /api/v1/practices/{id}/zoom/resolve    -- how THIS user enters (T-35)
-#   GET    /api/v1/practices/zoom/start           -- redeem ticket, redirect to
-#                                                    Zoom (556)
+#   POST   /api/v1/practices/{id}/zoom/sdk-join   -- Meeting SDK join parameters
+#                                                    (Standalone F4)
 #   GET    /api/v1/practices/{id}                 -- get by id (any auth user)
 #   PATCH  /api/v1/practices/{id}                 -- update (master or school curator)
 #   DELETE /api/v1/practices/{id}                 -- soft delete draft (master|curator)
@@ -27,10 +26,10 @@
 #   GET list uses get_current_user (any authenticated user).
 #   POST/PATCH/DELETE/CANCEL use get_current_master (verified master).
 #   GET by id uses get_current_user (any authenticated user).
-#   GET /zoom/start uses NEITHER -- the one-time ticket IS the auth (556).
-#   GET /{id}/zoom/resolve uses get_current_user: it is the AUTHENTICATED
-#     half of the T-35 wrapper, and knowing who is asking is the entire
-#     reason it can answer with a personal link at all.
+#   GET /{id}/zoom/resolve and POST /{id}/zoom/sdk-join use
+#     get_current_user: they are the AUTHENTICATED half of the T-35 wrapper,
+#     and knowing who is asking is the entire reason they can answer with a
+#     personal entry at all.
 #
 # PUBLIC ROUTER (T-35): this file also declares `public_router`, mounted at
 #   the ROOT (no /api/v1 prefix) -- see its own block at the bottom.
@@ -41,19 +40,14 @@
 #
 # ROUTE ORDER (PROMPT №557): every LITERAL-segment route in this router must
 #   be declared before any PARAMETERISED route it shares a path prefix with,
-#   even when (as verified here, see the "/zoom/start" block below) the two
-#   don't actually collide -- a reader should never have to reason about
-#   Starlette's per-segment match order to know a literal path is reachable.
-#   Checked every pair below: GET ""/POST "" (0 segments) vs GET/PATCH/DELETE
-#   "/{practice_id}" (1 segment) -- different segment counts, no collision,
-#   pre-existing convention. GET "/{practice_id}" (1 segment) vs GET
-#   "/zoom/start" (2 literal segments) -- different segment counts, no
-#   collision, reordered anyway (556 postmortem). "/{practice_id}/cancel"
-#   and "/{practice_id}/zoom/start-ticket" (2-3 segments, dynamic-then-
-#   literal) vs "/zoom/start" (2 literal) -- share a segment count with
-#   "/cancel" only, but differ in the literal suffix ("cancel"/"start-
-#   ticket" vs "start") and, for start-ticket, in HTTP method (POST vs GET)
-#   too, so neither can ever match the other's request.
+#   even when the two don't actually collide -- a reader should never have
+#   to reason about Starlette's per-segment match order to know a literal
+#   path is reachable. Since Standalone F4 removed GET "/zoom/start" no
+#   literal multi-segment route is left: GET ""/POST "" (0 segments) vs
+#   GET/PATCH/DELETE "/{practice_id}" (1 segment) differ in segment count,
+#   and every "/{practice_id}/..." route (cancel, zoom/retry, zoom/resolve,
+#   zoom/sdk-join) starts with the same parameter, so their literal tails
+#   alone tell them apart.
 # =============================================================================
 
 import html
@@ -93,7 +87,7 @@ from app.modules.practices.schemas import (
     PracticeResponse,
     UpdatePracticeRequest,
     ZoomEntryResolveResponse,
-    ZoomStartTicketResponse,
+    ZoomSdkJoinResponse,
 )
 from app.modules.practices.service import (
     create_practice,
@@ -264,32 +258,21 @@ async def create_practice_endpoint(
     practice, deduplicated = await create_practice(user, body, session)
     await session.flush()
     await session.refresh(practice)
-    # F1 (№263): the owner-only Zoom fields go to the practice's OWNER --
-    # consistent with the owner-always-sees rule on the detail and the
-    # master list (Z-6).
-    # T21-1: same owner-only posture for the host's own join_url. A freshly
-    # created practice has no ZoomMeeting yet (that happens on publish, not
-    # here) -- get_host_join_url returns None until then, which is correct.
+    # F1 (№263): the owner-only Zoom field (the public link) goes to the
+    # practice's OWNER -- consistent with the owner-always-sees rule on the
+    # detail and the master list (Z-6).
     # BE-102: the caller is no longer always the owner -- a curator creating
     # a practice for a master of their school is not. Same answer as the
-    # cancel endpoint gives a curator (BE-21): no host link (it is the
-    # master's host control of the meeting), no public link, and the
+    # cancel endpoint gives a curator (BE-21): no public link, and the
     # OWNER's name as master_name. Decided by the returned practice's
     # master_id, which also covers a dedup return of the master's existing,
-    # possibly published, practice -- the case where the host link exists.
+    # possibly published, practice.
     is_owner = practice.master_id == user.id
-    from app.modules.zoom.service import (
-        get_host_join_url,
-        get_zoom_meeting_status,
-    )
-    host_join_url = (
-        await get_host_join_url(practice.id, session) if is_owner else None
-    )
-    # A4 V2 (PROMPT №572): None here too, same reasoning as host_join_url --
-    # fetched anyway for consistency with the other three owner-only sites
-    # (this is also the endpoint V6's deduplicated-practice response flows
-    # through, where the returned practice IS already published and DOES
-    # have a real status).
+    from app.modules.zoom.service import get_zoom_meeting_status
+    # A4 V2 (PROMPT №572): a freshly created practice has no ZoomMeeting yet
+    # (that happens on publish) -- fetched anyway, because this is also the
+    # endpoint V6's deduplicated-practice response flows through, where the
+    # returned practice IS already published and DOES have a real status.
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
     audience_group_names = await group_names_for_practice(practice, session)
     curator_group_name = await curator_group_name_for_practice(
@@ -306,7 +289,6 @@ async def create_practice_endpoint(
     )
     return practice_to_response(
         practice, master_first_name,
-        zoom_host_join_url=host_join_url,
         zoom_public_link_visible=is_owner,
         zoom_meeting_status=zoom_meeting_status,
         deduplicated=deduplicated,
@@ -314,66 +296,6 @@ async def create_practice_endpoint(
         curator_group_name=curator_group_name,
         audience_unavailable=audience_unavailable,
     )
-
-
-# ------------------------------------------------------------------
-# Zoom "Начать" (PROMPT №556, OWNER-1 option В) -- the master starts their
-# own meeting as host. See zoom/service.py's ticket-issuance docstring for
-# the full rationale (start_url never stored, never in a JSON body).
-#
-# PROMPT №557: GET "/zoom/start" is declared here, BEFORE GET "/{practice_id}"
-# below, on the SAME convention already documented at the top of this file
-# for GET "" vs GET "/{practice_id}" -- a literal-segment route must be
-# declared ahead of any parameterised route it could be confused with, so a
-# reader never has to reason about match order to know a literal path is
-# reachable. (Measured with Starlette's own Route.matches() against the
-# real, imported app.router: a 1-segment "/{practice_id}" pattern does NOT
-# in fact match a 2-segment path like "/zoom/start" -- its regex is
-# per-segment-anchored, so this reordering does not change behavior. It is
-# moved anyway, for the same zero-cost, doubt-removing reason the pre-
-# existing GET ""-before-GET "/{practice_id}" convention exists.)
-# ------------------------------------------------------------------
-@router.post(
-    "/{practice_id}/zoom/start-ticket",
-    response_model=ZoomStartTicketResponse,
-)
-async def create_zoom_start_ticket_endpoint(
-    practice_id: UUID,
-    master_tuple: tuple[User, MasterProfile] = Depends(
-        get_current_master,
-    ),
-    session: AsyncSession = Depends(get_db_reader),
-) -> ZoomStartTicketResponse:
-    """Issue a one-time, 30s ticket authorizing a single start_url fetch.
-
-    Ownership check is the SAME P-08 pattern (404, not 403) as
-    update/delete/cancel_practice above -- deliberately not a new notion of
-    "owns this practice". No admin carve-out: none of those three
-    owner-only Zoom call sites has one either, and start_url is a strictly
-    more sensitive credential than the join_url they gate, so this endpoint
-    does not introduce a wider audience than the existing pattern already
-    allows.
-    """
-    user, _profile = master_tuple
-    stmt = select(Practice).where(Practice.id == practice_id)
-    result = await session.execute(stmt)
-    practice = result.scalar_one_or_none()
-    if not practice or practice.master_id != user.id:
-        raise NotFoundError("Practice not found")
-
-    from app.modules.zoom.service import (
-        create_start_ticket,
-        get_active_meeting_for_practice,
-    )
-    meeting = await get_active_meeting_for_practice(practice_id, session)
-    if meeting is None:
-        raise BadRequestError(
-            "No active Zoom meeting for this practice",
-            code="zoom_meeting_not_active",
-        )
-
-    ticket = await create_start_ticket(meeting.id)
-    return ZoomStartTicketResponse(ticket=ticket)
 
 
 # ------------------------------------------------------------------
@@ -403,8 +325,8 @@ async def retry_zoom_meeting_endpoint(
 ) -> PracticeResponse:
     """The "Повторить" button on a create_failed Zoom meeting.
 
-    Ownership check is the SAME P-08 pattern (404, not 403) as the other
-    owner-only Zoom endpoints above.
+    Ownership check is the SAME P-08 pattern (404, not 403) as
+    update/delete/cancel_practice above.
 
     404 if there is no ZoomMeeting row at all for this practice (nothing to
     retry -- publish never ran, or this is pre-E21 data). 400
@@ -443,16 +365,13 @@ async def retry_zoom_meeting_endpoint(
         )
 
     from app.modules.zoom.retry_poller import attempt_zoom_meeting_create
-    from app.modules.zoom.service import get_host_join_url
 
     await attempt_zoom_meeting_create(meeting, practice, session)
     await session.flush()
     await session.refresh(meeting)
 
-    host_join_url = await get_host_join_url(practice.id, session)
     return practice_to_response(
         practice, user.first_name,
-        zoom_host_join_url=host_join_url,
         zoom_public_link_visible=True,
         zoom_meeting_status=meeting.status,
     )
@@ -501,89 +420,83 @@ async def resolve_zoom_entry_endpoint(
         raise NotFoundError("Practice not found")
 
     resolution = await resolve_zoom_entry(practice, user, session)
-    return ZoomEntryResolveResponse(
-        kind=resolution.kind.value, url=resolution.url,
-    )
+    return ZoomEntryResolveResponse(kind=resolution.kind.value)
 
 
-@router.get("/zoom/start")
-async def zoom_start_redirect_endpoint(
-    ticket: str,
+# ------------------------------------------------------------------
+# Standalone F4: Zoom inside the app. The practice screen asks this at the
+# moment somebody presses «Войти» / «Начать» and hands the answer to the
+# Meeting SDK's join(). Who may enter is still resolve_zoom_entry's ladder;
+# zoom/sdk.py turns its two entering answers into SDK parameters and
+# refuses everything else.
+#
+# OWNER RULING №556 IS LIFTED HERE, out loud. It said: start_url is a bearer
+# credential that makes its holder the host, so it is never stored and never
+# put in a JSON body -- only in a 302 Location header. The Meeting SDK takes
+# the host's credential (a ZAK) as an argument of join() in the page's own
+# JavaScript; there is no redirect path into an SDK, so owner decision 9
+# ("the master leads the practice inside the app") cannot be met without
+# the ZAK reaching the browser. What stands in place of the redirect:
+#   - only the practice's owner ever gets a ZAK (the ladder's HOST rung);
+#   - the ZAK is fetched from Zoom on every press and never stored;
+#   - it lives ZAK_TTL_SECONDS (zoom/sdk.py), the least the SDK needs;
+#   - the response is Cache-Control: no-store;
+#   - neither the ZAK nor the SDK secret is written to any log;
+#   - a per-user rate limit bounds how often anyone can ask.
+# What it does NOT narrow (said plainly, not hidden): every meeting is
+# created under ONE Zoom user (zoom_client.create_meeting -> /users/me), so a
+# ZAK is that user's key, and while it lives it makes its holder host of ALL
+# of that user's meetings -- not only this practice's. That was equally true
+# of the ZAK inside start_url before; the fix is a Zoom user per master, and
+# it is out of this delivery.
+# ------------------------------------------------------------------
+@router.post(
+    "/{practice_id}/zoom/sdk-join",
+    response_model=ZoomSdkJoinResponse,
+)
+async def zoom_sdk_join_endpoint(
+    practice_id: UUID,
+    response: Response,
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_reader),
-) -> Response:
-    """Redeem a start-ticket and 302 the browser straight to Zoom's
-    start_url. Reached by a PLAIN browser navigation (Telegram
-    WebApp.openLink), never by our authenticated fetch client -- there is no
-    Authorization header here, the ticket IS the authentication (see
-    create_zoom_start_ticket_endpoint above and zoom/service.py).
+) -> ZoomSdkJoinResponse:
+    """Meeting SDK join parameters for THIS caller entering THIS practice.
 
-    Every failure path returns a small Russian-language HTML page, never a
-    raw exception body -- a plain navigation has no toast/error-handling
-    layer to catch a JSON error the way an authenticated fetch call does.
-    start_url itself is never logged on any path below.
+    429 over the per-user limit (checked first: it is what bounds the Zoom
+    calls below). 404 for a practice that does not exist or is draft/
+    deleted -- the same P-08 shape as resolve. 409 zoom_entry_not_joinable
+    when the ladder gives anything but personal/host (the screen re-resolves
+    and shows the new state); 409 zoom_sdk_not_configured on a server
+    without SDK keys or on the Zoom stub; 502 zoom_unavailable /
+    zoom_host_token_unavailable when Zoom does not give what entering needs.
+
+    Reader session, no locks, no writes: the Zoom calls inside are therefore
+    not "HTTP inside a locking transaction" (par0 sec 8).
     """
-    from app.modules.zoom.service import (
-        get_meeting_start_url,
-        redeem_start_ticket,
-    )
-    from app.modules.zoom.zoom_client import ZoomAPIError
+    from app.modules.zoom.sdk import build_sdk_join, check_sdk_join_rate_limit
+    from app.modules.zoom.service import is_publicly_resolvable
 
-    zoom_meeting_id = await redeem_start_ticket(ticket)
-    if zoom_meeting_id is None:
-        return _zoom_start_error_page(
-            "Ссылка устарела. Вернитесь в приложение и нажмите «Начать» ещё раз.",
-        )
+    await check_sdk_join_rate_limit(user)
+    practice = (
+        await session.execute(select(Practice).where(Practice.id == practice_id))
+    ).scalar_one_or_none()
+    if practice is None or not is_publicly_resolvable(practice):
+        raise NotFoundError("Practice not found")
 
-    meeting = await session.get(ZoomMeeting, zoom_meeting_id)
-    if meeting is None or meeting.status != ZoomMeetingStatus.ACTIVE.value:
-        return _zoom_start_error_page(
-            "Встреча Zoom для этой практики недоступна.",
-        )
-
-    try:
-        start_url = await get_meeting_start_url(meeting.zoom_meeting_id)
-    except ZoomAPIError:
-        logger.warning(
-            "zoom_start_url_fetch_failed", practice_id=str(meeting.practice_id),
-        )
-        return _zoom_start_error_page(
-            "Не удалось связаться с Zoom. Попробуйте ещё раз через минуту.",
-        )
-
-    if start_url is None:
-        logger.warning(
-            "zoom_start_url_missing", practice_id=str(meeting.practice_id),
-        )
-        return _zoom_start_error_page(
-            "Zoom не вернул ссылку для начала встречи. Попробуйте ещё раз.",
-        )
-
-    return RedirectResponse(
-        url=start_url,
-        status_code=status.HTTP_307_TEMPORARY_REDIRECT,
-        # A4 V10: without this, the browser's Referer header on the hop to
-        # Zoom carries this endpoint's full URL (including the now-consumed
-        # ticket query param) to zoom.us. The ticket is already dead by this
-        # point (redeem_start_ticket already GETDEL'd it above), so this is
-        # not a replay risk -- but there is no reason to hand a third party
-        # our internal route shape either.
-        headers={"Referrer-Policy": "no-referrer"},
-    )
-
-
-def _zoom_start_error_page(message: str) -> HTMLResponse:
-    """Honest, Russian-facing failure page for zoom_start_redirect_endpoint
-    -- a plain navigation has no frontend toast to route a JSON error into,
-    so this IS the error UI. Never includes any Zoom-provided text
-    (status/body) -- those are English and API-shaped, exactly the failure
-    mode this must not repeat."""
-    return HTMLResponse(
-        content=(
-            "<!doctype html><html lang='ru'><meta charset='utf-8'>"
-            "<body style='font-family:sans-serif;text-align:center;padding:40px 20px'>"
-            f"<p>{message}</p></body></html>"
-        ),
-        status_code=status.HTTP_400_BAD_REQUEST,
+    join = await build_sdk_join(practice, user, session)
+    # A credential-bearing body: no cache anywhere between here and the
+    # SDK -- not the browser's, not the service worker's, not a proxy's.
+    response.headers["Cache-Control"] = "no-store"
+    return ZoomSdkJoinResponse(
+        sdk_key=join.sdk_key,
+        signature=join.signature,
+        meeting_number=join.meeting_number,
+        password=join.password,
+        user_name=join.user_name,
+        role=int(join.role),
+        tk=join.tk,
+        user_email=join.user_email,
+        zak=join.zak,
     )
 
 
@@ -608,23 +521,20 @@ async def get_practice_endpoint(
 
 async def _owner_view(
     practice: Practice, user: User, session: AsyncSession,
-) -> tuple[bool, str | None, str | None]:
-    """(is_owner, master_first_name, host_join_url) for a response (BE-63).
+) -> tuple[bool, str | None]:
+    """(is_owner, master_first_name) for a response (BE-63).
 
     PATCH and DELETE stopped being owner-only: the curator of the
-    practice's school may call them. The owner-only Zoom fields are the
-    MASTER's private property -- the host link is host control of their
-    meeting -- so a curator gets what a non-owner gets (as on cancel,
-    BE-21), and master_name names the practice's master, not the caller.
-    The master's row exists: practices.master_id is a FK.
+    practice's school may call them. The owner-only Zoom field (the public
+    link) is the MASTER's, so a curator gets what a non-owner gets (as on
+    cancel, BE-21), and master_name names the practice's master, not the
+    caller. The master's row exists: practices.master_id is a FK.
     """
-    from app.modules.zoom.service import get_host_join_url
-
     is_owner = practice.master_id == user.id
     if is_owner:
-        return True, user.first_name, await get_host_join_url(practice.id, session)
+        return True, user.first_name
     master = await session.get(User, practice.master_id)
-    return False, master.first_name, None
+    return False, master.first_name
 
 
 # ------------------------------------------------------------------
@@ -649,16 +559,10 @@ async def update_practice_endpoint(
     )
     await session.flush()
     await session.refresh(practice)
-    # F1 (№263) / BE-63: the owner-only Zoom fields go to the practice's
+    # F1 (№263) / BE-63: the owner-only Zoom field goes to the practice's
     # master only (_owner_view).
-    # T21-1: same owner-only posture for the host's own join_url (may become
-    # non-None here if this update is the draft->scheduled publish).
     from app.modules.zoom.service import get_zoom_meeting_status
-    is_owner, master_first_name, host_join_url = await _owner_view(
-        practice, user, session,
-    )
-    # T24-38 (PROMPT №642): same reasoning as host_join_url -- becomes
-    # non-None here too if this update is the draft->scheduled publish.
+    is_owner, master_first_name = await _owner_view(practice, user, session)
     # A4 V2 (PROMPT №572): so a master publishing a draft (creating the Zoom
     # meeting) sees "готовится" immediately instead of a stale None.
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
@@ -671,7 +575,6 @@ async def update_practice_endpoint(
     )
     return practice_to_response(
         practice, master_first_name,
-        zoom_host_join_url=host_join_url,
         zoom_public_link_visible=is_owner,
         zoom_meeting_status=zoom_meeting_status,
         audience_group_names=audience_group_names,
@@ -734,19 +637,16 @@ async def delete_practice_endpoint(
     practice = await delete_practice(practice_id, user, session)
     await session.flush()
     await session.refresh(practice)
-    # F1 (№263) / BE-63: owner-only Zoom fields to the master only
-    # (_owner_view). T21-1: soft-deleted drafts never had a meeting created
-    # (E21 fires on publish only), so the host link is None here anyway.
+    # F1 (№263) / BE-63: the owner-only Zoom field to the master only
+    # (_owner_view).
     from app.modules.zoom.service import get_zoom_meeting_status
-    is_owner, master_first_name, host_join_url = await _owner_view(
-        practice, user, session,
-    )
+    is_owner, master_first_name = await _owner_view(practice, user, session)
     # T24-38 (PROMPT №642): soft-deleted drafts never had a meeting created
-    # either -- always None here, fetched anyway for consistency.
+    # (E21 fires on publish only) -- always None here, fetched anyway for
+    # consistency.
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
     return practice_to_response(
         practice, master_first_name,
-        zoom_host_join_url=host_join_url,
         zoom_public_link_visible=is_owner,
         zoom_meeting_status=zoom_meeting_status,
     )
@@ -795,27 +695,14 @@ async def cancel_practice_endpoint(
     # master guard plus the ownership check made "the caller" and "the owner"
     # the same person, so F1 (№263) could hand the response the caller's OWN
     # fields. A curator is now a legitimate caller who is NOT the owner, and
-    # both of those fields are the master's private property:
-    #   zoom_host_join_url is the master's personal HOST link (role='host',
-    #     zoom/service.py) -- handing it over would give a curator host
-    #     control of another master's meeting. It is usually None here
-    #     because cancel marks an active meeting deleted, but only
-    #     USUALLY: delete_meeting_for_practice skips the meeting outright
-    #     when it already has attendance segments. On that path the row
-    #     stays active and the link resolves.
+    # these are the master's:
+    #   zoom_public_link (zoom_public_link_visible) -- owner-only, see the
+    #     schema field.
     #   master_name is the practice's OWNER's name. Passing the caller's
     #     first_name was correct while they were the same person; for a
     #     curator it would name the wrong human as the practice's master.
     is_owner = practice.master_id == user.id
-    from app.modules.zoom.service import (
-        get_host_join_url,
-        get_zoom_meeting_status,
-    )
-    host_join_url = (
-        await get_host_join_url(practice.id, session) if is_owner else None
-    )
-    # T24-38 (PROMPT №642): cancel_practice deletes the Zoom meeting too --
-    # None once that row's status flips, same as host_join_url.
+    from app.modules.zoom.service import get_zoom_meeting_status
     # A4 V2 (PROMPT №572): will read 'deleted' after the cancel above --
     # correctly distinct from create_failed/pending_creation.
     zoom_meeting_status = await get_zoom_meeting_status(practice.id, session)
@@ -826,7 +713,6 @@ async def cancel_practice_endpoint(
         master_first_name = master_user.first_name if master_user else None
     return practice_to_response(
         practice, master_first_name,
-        zoom_host_join_url=host_join_url,
         zoom_public_link_visible=is_owner,
         zoom_meeting_status=zoom_meeting_status,
     )

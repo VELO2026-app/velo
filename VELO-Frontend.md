@@ -48,6 +48,7 @@
 | `platform/standalone.ts` | Браузер и рабочий стол: токен в localStorage, вход через Telegram  |
 | `platform/browser-login.ts` | Вход в браузере: метка браузера, разбор возврата из Telegram    |
 | `platform/session-token.ts` | Носитель токена: localStorage вне Telegram, sessionStorage в нём |
+| `platform/zoom-sdk.ts`   | Zoom внутри приложения (Meeting SDK, client view, Стендалон Ф4): ленивая загрузка, `init`/`join`, выход через `leaveUrl` |
 | `platform/index.ts`      | Автодетект: `window.Telegram?.WebApp` → telegram, иначе standalone |
 
 Интерфейс `Platform`:
@@ -62,6 +63,7 @@ interface Platform {
   showBackButton(cb: () => void): void;
   hideBackButton(): void;
   openLink(url: string): void; // external link: Telegram WebApp.openLink / window.open(noopener)
+  cameraBlockedByHost(): boolean; // Telegram iOS: чёрный поток камеры (решение 11)
   close(): void;
 }
 ```
@@ -69,8 +71,12 @@ interface Platform {
 Вне Telegram (браузер, приложение с рабочего стола) вход — «Войти через Telegram»
 (OpenID Connect, Стендалон Ф3): `platform/browser-login.ts`, `stores/auth.ts`, `views/auth/TelegramLoginView.vue`.
 
-`openLink` добавлен для экрана Practice-Live (кнопка "Войти" в Zoom). В Telegram —
+`openLink` открывает внешнюю ссылку (например, запись практики). В Telegram --
 `WebApp.openLink(url)`, в standalone — `window.open(url, '_blank', 'noopener')`.
+Вход в Zoom ссылкой больше не открывается (Стендалон Ф4): Zoom работает внутри
+VELO -- экран практики берёт у сервера параметры `POST /practices/{id}/zoom/sdk-join`
+и передаёт их Meeting SDK (`platform/zoom-sdk.ts`). `cameraBlockedByHost()` --
+подсказка «Чтобы включить камеру, откройте VELO с рабочего стола» в Telegram на iOS.
 
 ### 1.3. Структура проекта
 
@@ -187,6 +193,7 @@ frontend/
 /master/practices/new       → CreatePracticeView           [masterStatusGuard, hideTabBar]
 /master/practices/:id       → EditPracticeView             [masterStatusGuard, hideTabBar]
 /master/practices/:id/attendance → AttendanceView          [masterStatusGuard, hideTabBar]
+/master/practice-live/:practiceId -> PracticeLiveView      (name: master-practice-live -- тот же экран 14 в зоне мастера, «Начать» ведущим) [masterStatusGuard, headerless, hideTabBar]
 /master/practices/:id/detail → MasterPracticeDetailView    [masterStatusGuard, hideTabBar]
 /master/practices/:id/roster → AttendanceRosterView        [masterStatusGuard, hideTabBar]
 /master/analytics           → AnalyticsView
@@ -403,7 +410,7 @@ user/master; admin → все три; обычный юзер → пусто/н�
 | ------------------------ | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 10/11 Dashboard          | `views/user/UserDashboardView.vue`                           | белые карточки `--velo-bg-card-solid`, алерты, карточка ближайшей практики, AI-блок (тоггл Неделя/Месяц + mood). `nearestIsLive` + `openNearest()`: live → practice-live, иначе practice-detail. `[FE-11]` колокольчик уведомлений — 5-й кнопкой в таб-доке user-зоны (`UserShell.tabs`; `TabItem.badge` → точка-присутствие 10px с белым кольцом 1px в `VTabBar`, эксперимент владельца): точка только при `unread > 0` из `stores/notifications.ts` (refresh на mount шелла; инбокс применяет серверный бейдж после load/mark-read/mark-all; цифры-счётчика нет по решению владельца), тап → `user-inbox` (`UserInboxView`); на самом дашборде колокольчика нет. `[FE-12]` диплинки живут в `UserInboxView`: тап = отметить прочитанным + переход (`open_thread` → `user-chat` прямо в диалог, `open_practice`/`confirm_waitlist` → `practice-detail`, `open_feedback`/`open_wallet` → свои экраны, `msg.*` без action → список сообщений); слайдер Все/Сообщения/Мероприятия/Другое — скроллящийся (`VSegmentTrack scrollable`)                                                                                                                                                                                                                                                                                                                                                                              |
 | 12/13 Check-in + Success | `views/user/CheckinView.vue` (+ `shared/FormShell.vue`)      | mood-лица `IconMood*`, success `IconCheck`. `onBack()` → `router.back()` (фикс петли 12↔15)                                                                                                                                                                                                                                                                                                                                                    |
-| 14 Practice-Live         | `views/user/PracticeLiveView.vue`                            | видео-плейсхолдер, бейдж "● В эфире", "Войти" (`platform.openLink`, дизейбл без `https`-zoom), "Check-in", "Покинуть". Достижим из дашборда при live                                                                                                                                                                                                                                                                                           |
+| 14 Practice-Live         | `views/user/PracticeLiveView.vue`                            | Zoom внутри VELO (Meeting SDK, Ф4): по ответу `zoom/resolve` -- «Войти» (ученик, `sdk-join` -> SDK), «Начать» (мастер-владелец), «Вы не записаны» + «К практике» (гость), честные состояния; «Check-in», «Покинуть» -- только ученику; подсказка про камеру в Telegram iOS. Выход -- `leaveUrl`: ученик -> отзыв, мастер -> его главная. Достижим из дашбордов ученика и мастера |
 | 15 Practice Detail       | `views/user/PracticeDetailView.vue`                          | каталог + booked + бронь (после Батча 6 — единый экран). Hero/master в `PracticeHeroCard`/`MasterCard`. Поглотил бывший «Бронирование» (экран 18): строка «Статус» (`VBadge` по `myAnyBooking` — любой статус, вкл. cancelled/no_show) и секция ZOOM (только при активной брони). Заголовок «Моя практика» при любой брони; «Забронировать» скрыт для attended/no_show. `myBooking`/`booked` (активные статусы) и check-in/feedback не тронуты |
 | 16 AI-summary            | `views/user/AiSummaryView.vue`                               | честная заглушка "в разработке" (`IconBrain`). Персонального AI-саммари юзера на бэке НЕТ                                                                                                                                                                                                                                                                                                                                                      |
 | 17 My reservations       | `views/user/MyBookingsView.vue` (+ `shared/BookingCard.vue`) | две секции Предстоящие/Прошедшие. Деление по правилу B (24ч-потолок + статус completed/cancelled, как дашборд), реактивный clock 60с. Бейдж "В эфире" приоритетнее today/tomorrow; live сортируются вверх (`upcomingRank`). Даты в TZ зрителя (`calendarDate(d, tz)` ← `useViewerTimezone`). Тап ведёт на `practice-detail` по `practice_id` (Батч 6)                                                                                          |

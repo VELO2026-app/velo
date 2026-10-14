@@ -1029,12 +1029,51 @@ generate_env() {
     read -p "Do you have REAL Zoom credentials for this server? (y/n): " -n 1 -r
     echo
     local ZOOM_ACCOUNT_ID ZOOM_CLIENT_ID ZOOM_CLIENT_SECRET ALLOW_ZOOM_STUB
+    local ZOOM_SDK_CLIENT_ID="" ZOOM_SDK_CLIENT_SECRET=""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         read -p "ZOOM_ACCOUNT_ID: " ZOOM_ACCOUNT_ID
         read -p "ZOOM_CLIENT_ID: " ZOOM_CLIENT_ID
         read -p "ZOOM_CLIENT_SECRET: " ZOOM_CLIENT_SECRET
         ALLOW_ZOOM_STUB=false
         success "Real Zoom credentials recorded — meetings will be REAL."
+        echo ""
+        # Standalone F4: Zoom inside the app needs a SECOND Zoom app (the
+        # Meeting SDK cannot live on a Server-to-Server app). Same both-or-
+        # neither shape and the same value check as the Telegram login pair
+        # above: Enter on the Client ID skips it, a Client ID makes the
+        # secret required, no half pair is ever written.
+        echo -e "${YELLOW}Zoom inside the app (Meeting SDK) -- in the SAME Zoom account:${NC}"
+        echo -e "${YELLOW}  1. App Marketplace -> Develop -> Build App -> General App.${NC}"
+        echo -e "${YELLOW}  2. Features -> Embed -> switch Meeting SDK on.${NC}"
+        echo -e "${YELLOW}  3. App Credentials, Development column: Client ID, Client Secret.${NC}"
+        echo -e "${YELLOW}The Server-to-Server app above also needs the scope${NC}"
+        echo -e "${YELLOW}user:read:token:admin, or masters cannot start their meetings.${NC}"
+        echo -e "${YELLOW}Press Enter to skip -- the practice screen then says Zoom inside${NC}"
+        echo -e "${YELLOW}the app is not configured; set later with 'velo env set'.${NC}"
+        while true; do
+            read -r -p "ZOOM_SDK_CLIENT_ID [Enter = skip]: " ZOOM_SDK_CLIENT_ID
+            [ -z "$ZOOM_SDK_CLIENT_ID" ] && break
+            printf '%s' "$ZOOM_SDK_CLIENT_ID" | bash "$VELO_MANAGE" __env-value-ok && break
+        done
+        if [ -n "$ZOOM_SDK_CLIENT_ID" ]; then
+            while true; do
+                if ! read -r -s -p "ZOOM_SDK_CLIENT_SECRET (input hidden): " ZOOM_SDK_CLIENT_SECRET; then
+                    echo ""
+                    error "Input ended before the Client Secret was given."
+                    error "Re-run the installer; or press Enter at the Client ID to skip."
+                    exit 1
+                fi
+                echo ""
+                if [ -z "$ZOOM_SDK_CLIENT_SECRET" ]; then
+                    echo -e "${RED}✗ The secret is required once a Client ID is given.${NC}"
+                    continue
+                fi
+                printf '%s' "$ZOOM_SDK_CLIENT_SECRET" | bash "$VELO_MANAGE" __env-value-ok && break
+            done
+            success "Zoom inside the app: keys recorded"
+        else
+            warn "Zoom inside the app: skipped -- off until both keys are set"
+        fi
     else
         ZOOM_ACCOUNT_ID=""
         ZOOM_CLIENT_ID=""
@@ -1172,6 +1211,12 @@ ZOOM_CLIENT_SECRET=${ZOOM_CLIENT_SECRET}
 # in production -- deliberately: a server whose meetings are fabricated must
 # not look identical to a working one.
 ALLOW_ZOOM_STUB=${ALLOW_ZOOM_STUB}
+# Zoom inside the app (Meeting SDK, Standalone F4): the General App's
+# Development Client ID / Secret, both or neither. Both empty = the practice
+# screen says Zoom inside the app is not configured. Change later with
+# `velo env set <KEY>`, then `velo restart`.
+ZOOM_SDK_CLIENT_ID=${ZOOM_SDK_CLIENT_ID}
+ZOOM_SDK_CLIENT_SECRET=${ZOOM_SDK_CLIENT_SECRET}
 
 # --- Voice transcription (GT-41) ---
 # Read by the SERVER. It is never a VITE_ variable and never reaches the

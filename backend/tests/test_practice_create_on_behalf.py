@@ -309,6 +309,11 @@ async def test_curator_creates_a_published_practice_led_by_a_master_of_the_schoo
     gives (the shared _after_publish) is checked here too: the Zoom meeting
     (stubbed), the school's announcement, the school's practice list. Each
     write is checked present AND non-empty, not just "no error".
+
+    Standalone F4: the curator's response was checked for
+    zoom_host_join_url None (no host control of the master's meeting). The
+    field is gone with the start-ticket flow; the precise form is that the
+    curator's response carries no Zoom URL at all.
     """
     from unittest.mock import AsyncMock
 
@@ -328,7 +333,8 @@ async def test_curator_creates_a_published_practice_led_by_a_master_of_the_schoo
     assert data["curator_group_id"] == str(s.school)
     assert data["status"] == PracticeStatus.SCHEDULED.value
     assert data["deduplicated"] is False
-    assert data["zoom_host_join_url"] is None
+    assert "zoom_host_join_url" not in data
+    assert "zoom.us" not in resp.text
     assert await _practices_of(s.id("curator")) == []
 
     # Publication's effects, through the same function update_practice uses.
@@ -548,7 +554,9 @@ async def test_dedup_is_by_the_master_and_announces_nothing_new(
 ) -> None:
     """The target already holds this slot in the school: the curator's
     request returns THAT practice (the slot is the master's), writes no
-    audit and no notification -- nothing new was created."""
+    audit and no notification -- nothing new was created. Standalone F4:
+    zoom_host_join_url None became "no such field, no Zoom URL in the body"
+    -- the field went with the start-ticket flow."""
     existing = await _seed_practice(s.id("target"), s.school)
     resp = await _post(
         client, s.token("curator"),
@@ -559,7 +567,8 @@ async def test_dedup_is_by_the_master_and_announces_nothing_new(
     assert data["id"] == str(existing)
     assert data["deduplicated"] is True
     assert data["master_name"] == "Тимур"
-    assert data["zoom_host_join_url"] is None
+    assert "zoom_host_join_url" not in data
+    assert "zoom.us" not in resp.text
     assert await _audit_rows(data["id"]) == []
     assert await _notifications_to(s.id("target")) == []
     assert len(await _practices_of(s.id("target"))) == 1

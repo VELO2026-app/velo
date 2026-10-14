@@ -36,10 +36,16 @@
 #     'guest'. Handing that person the guest link recreates the exact NO_SHOW
 #     this feature exists to kill.
 #   - the owner must lose to 'failed' and to 'pending', because a 'host'
-#     answer sends him to a "Начать" button that would then fail with
-#     zoom_meeting_not_active.
+#     answer sends him to a "Начать" button that would then fail (since
+#     Standalone F4: an SDK start for a meeting Zoom cannot start).
 #   - a guest with no minted link is 'guest' with url=None, NOT 'failed':
 #     the meeting exists, only the guest seat in it does not.
+#
+# Standalone F4: the authenticated resolve endpoint returns `kind` ONLY -- no
+# Zoom URL reaches the app. Each ladder test therefore asserts the exact body
+# ({"kind": ...}, so no url can creep back) and, where the ladder carries more
+# (the PERSONAL token, the GUEST link the anonymous page reads), asserts that
+# one level down with _resolve_in_service.
 #
 # ⚠ BACKEND-ONLY, NOT RUN LOCALLY -- no docker/postgres in this environment
 # (same standing caveat as test_zoom_start.py). Written to be read and
@@ -71,8 +77,10 @@ from app.modules.zoom.models import (
 )
 from app.modules.zoom.service import (
     PUBLIC_CODE_LENGTH,
+    ZoomEntryResolution,
     decode_practice_code,
     encode_practice_code,
+    resolve_zoom_entry,
 )
 from tests.helpers import auth_headers, full_cleanup_range, login_user
 
@@ -210,6 +218,19 @@ async def _resolve(client: AsyncClient, practice_id: str, token: str) -> dict:
     )
     assert resp.status_code == 200, resp.text
     return resp.json()
+
+
+async def _resolve_in_service(
+    db_session: AsyncSession, practice_id: str, user_id: str | None,
+) -> ZoomEntryResolution:
+    """The ladder's answer measured BELOW the endpoint (Standalone F4): the
+    authenticated endpoint returns `kind` only, so what the ladder carries
+    besides it -- the PERSONAL entry token, the GUEST shared link the
+    anonymous /z/ page reads -- is asserted here. user_id None is the
+    anonymous half, exactly as the public page calls it."""
+    practice = await db_session.get(Practice, UUID(practice_id))
+    user = await db_session.get(User, UUID(user_id)) if user_id else None
+    return await resolve_zoom_entry(practice, user, db_session)
 
 
 # ===========================================================================
@@ -755,7 +776,13 @@ async def test_booked_student_gets_their_own_personal_link(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     """THE OUTCOME THE FEATURE EXISTS FOR: the person whose attendance can be
-    recorded is handed the only link that records it."""
+    recorded is handed the only entry that records it.
+
+    Standalone F4: this asserted body["url"] == the personal join_url -- right
+    while the screen opened that URL. The screen now enters through the
+    Meeting SDK with the registrant's token, and the endpoint must not carry
+    any URL; so: the body is exactly {"kind": "personal"}, and the ladder
+    below it carries the token parsed from that same personal URL."""
     master = await _make_verified_master(client, db_session, telegram_id=89850)
     student = await login_user(client, telegram_id=89851, first_name="Ученик")
     practice_id = await _create_and_publish_practice(client, master)
@@ -770,8 +797,12 @@ async def test_booked_student_gets_their_own_personal_link(
 
     body = await _resolve(client, practice_id, student["session_token"])
 
-    assert body["kind"] == "personal"
-    assert body["url"] == personal
+    assert body == {"kind": "personal"}
+    resolution = await _resolve_in_service(
+        db_session, practice_id, student["user"]["id"],
+    )
+    assert resolution.entry_token == "abc"
+    assert resolution.url is None
 
 
 @pytest.mark.asyncio
@@ -792,6 +823,9 @@ async def test_confirmed_booking_without_a_join_url_is_unavailable_not_guest(
     claims only pending and create_failed rows and never revisits a
     registered one, so "being prepared" promised a link nothing was going to
     produce. The state is now named for what it is.
+
+    Standalone F4: `url is None` became the exact body {"kind":
+    "unavailable"} -- the endpoint carries no url field at all now.
     """
     master = await _make_verified_master(client, db_session, telegram_id=89852)
     student = await login_user(client, telegram_id=89853, first_name="Ученик")
@@ -809,8 +843,7 @@ async def test_confirmed_booking_without_a_join_url_is_unavailable_not_guest(
 
     body = await _resolve(client, practice_id, student["session_token"])
 
-    assert body["kind"] == "unavailable"
-    assert body["url"] is None
+    assert body == {"kind": "unavailable"}
 
 
 @pytest.mark.asyncio
@@ -842,8 +875,12 @@ async def test_cancelled_booking_gets_the_guest_link(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     """The other side of the same rule: attendance will never write anything
-    for a cancelled booking, so there is nothing to lose by letting this
-    person in as a guest."""
+    for a cancelled booking, so this person is a guest, not a booker.
+
+    Standalone F4: the endpoint used to hand him the shared link (body url).
+    Inside the app a guest now means "book first" (owner decision 12), so
+    the body is exactly {"kind": "guest"}; the shared link is still what the
+    ladder carries for the anonymous /z/ page, asserted below the endpoint."""
     master = await _make_verified_master(client, db_session, telegram_id=89856)
     student = await login_user(client, telegram_id=89857, first_name="Ученик")
     practice_id = await _create_and_publish_practice(client, master)
@@ -856,15 +893,22 @@ async def test_cancelled_booking_gets_the_guest_link(
 
     body = await _resolve(client, practice_id, student["session_token"])
 
-    assert body["kind"] == "guest"
-    assert body["url"] == "https://zoom.us/w/shared?tk=guest"
+    assert body == {"kind": "guest"}
+    resolution = await _resolve_in_service(
+        db_session, practice_id, student["user"]["id"],
+    )
+    assert resolution.url == "https://zoom.us/w/shared?tk=guest"
+    assert resolution.entry_token is None
 
 
 @pytest.mark.asyncio
 async def test_user_with_no_booking_at_all_gets_the_guest_link(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """The twin of the personal case in task 3's own wording."""
+    """The twin of the personal case in task 3's own wording. Standalone F4:
+    body url (the shared link) became the exact body {"kind": "guest"} --
+    no guest entry from inside the app; the ladder still carries the link
+    for the anonymous page."""
     master = await _make_verified_master(client, db_session, telegram_id=89858)
     stranger = await login_user(client, telegram_id=89859, first_name="Гость")
     practice_id = await _create_and_publish_practice(client, master)
@@ -874,8 +918,11 @@ async def test_user_with_no_booking_at_all_gets_the_guest_link(
 
     body = await _resolve(client, practice_id, stranger["session_token"])
 
-    assert body["kind"] == "guest"
-    assert body["url"] == "https://zoom.us/w/shared?tk=guest"
+    assert body == {"kind": "guest"}
+    resolution = await _resolve_in_service(
+        db_session, practice_id, stranger["user"]["id"],
+    )
+    assert resolution.url == "https://zoom.us/w/shared?tk=guest"
 
 
 @pytest.mark.asyncio
@@ -884,7 +931,8 @@ async def test_guest_without_a_minted_link_is_guest_with_null_url_not_failed(
 ) -> None:
     """Two different facts, never collapsed: 'failed' means there is no
     meeting, while this means the meeting exists and only the guest seat in
-    it does not."""
+    it does not. Standalone F4: body url None became the exact body plus the
+    ladder's own url None, one level down."""
     master = await _make_verified_master(client, db_session, telegram_id=89840)
     stranger = await login_user(client, telegram_id=89841, first_name="Гость")
     practice_id = await _create_and_publish_practice(client, master)
@@ -894,8 +942,11 @@ async def test_guest_without_a_minted_link_is_guest_with_null_url_not_failed(
 
     body = await _resolve(client, practice_id, stranger["session_token"])
 
-    assert body["kind"] == "guest"
-    assert body["url"] is None
+    assert body == {"kind": "guest"}
+    resolution = await _resolve_in_service(
+        db_session, practice_id, stranger["user"]["id"],
+    )
+    assert resolution.url is None
 
 
 @pytest.mark.asyncio
@@ -904,7 +955,8 @@ async def test_owner_gets_host_when_the_meeting_is_active(
 ) -> None:
     """A master clicking his own published link must not be seated in his own
     meeting as a guest -- the meeting would wait for a host who is standing
-    inside it. url is None by design: he starts through the ticket flow."""
+    inside it. Standalone F4: he starts through the Meeting SDK (sdk-join);
+    `url is None` became the exact body {"kind": "host"}."""
     master = await _make_verified_master(client, db_session, telegram_id=89842)
     practice_id = await _create_and_publish_practice(client, master)
     meeting = await _meeting(db_session, practice_id)
@@ -913,8 +965,7 @@ async def test_owner_gets_host_when_the_meeting_is_active(
 
     body = await _resolve(client, practice_id, master["session_token"])
 
-    assert body["kind"] == "host"
-    assert body["url"] is None
+    assert body == {"kind": "host"}
 
 
 @pytest.mark.asyncio
@@ -922,9 +973,10 @@ async def test_owner_on_a_create_failed_meeting_is_failed_not_host(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
     """OVERLAP: 'failed' sits ABOVE 'host' in the ladder. Answering 'host'
-    here would put the master in front of a "Начать" button whose ticket
-    endpoint then refuses with zoom_meeting_not_active -- and he is the one
-    person who can actually fix this, via the owner-only retry."""
+    here would put the master in front of a "Начать" button that cannot
+    start anything (since Standalone F4: sdk-join refuses a non-ACTIVE
+    meeting by the same ladder) -- and he is the one person who can actually
+    fix this, via the owner-only retry."""
     master = await _make_verified_master(client, db_session, telegram_id=89843)
     practice_id = await _create_and_publish_practice(client, master)
     meeting = await _meeting(db_session, practice_id)
@@ -980,7 +1032,8 @@ async def test_owner_on_a_cancelled_practice_is_cancelled_not_host(
 ) -> None:
     """OVERLAP: 'cancelled' is older than everything, INCLUDING the owner. A
     cancelled practice is not started -- offering him "Начать" would be
-    offering to do the thing that was cancelled."""
+    offering to do the thing that was cancelled. Standalone F4: `url is
+    None` became the exact body."""
     master = await _make_verified_master(client, db_session, telegram_id=89846)
     practice_id = await _create_and_publish_practice(client, master)
     practice = (
@@ -993,8 +1046,7 @@ async def test_owner_on_a_cancelled_practice_is_cancelled_not_host(
 
     body = await _resolve(client, practice_id, master["session_token"])
 
-    assert body["kind"] == "cancelled"
-    assert body["url"] is None
+    assert body == {"kind": "cancelled"}
 
 
 @pytest.mark.asyncio
@@ -1004,7 +1056,8 @@ async def test_booked_student_on_a_create_failed_meeting_is_failed_not_pending(
     """OVERLAP: step 3 sits above the booking steps, and the distinction it
     preserves is exactly the one A4 V2 introduced -- 'still preparing' vs
     'will never appear unless somebody acts'. Collapsing this into 'pending'
-    would re-stitch the seam that made a student wait forever."""
+    would re-stitch the seam that made a student wait forever. Standalone F4:
+    `url is None` became the exact body."""
     master = await _make_verified_master(client, db_session, telegram_id=89847)
     student = await login_user(client, telegram_id=89848, first_name="Ученик")
     practice_id = await _create_and_publish_practice(client, master)
@@ -1017,8 +1070,7 @@ async def test_booked_student_on_a_create_failed_meeting_is_failed_not_pending(
 
     body = await _resolve(client, practice_id, student["session_token"])
 
-    assert body["kind"] == "failed"
-    assert body["url"] is None
+    assert body == {"kind": "failed"}
 
 
 @pytest.mark.asyncio
@@ -1111,16 +1163,19 @@ async def test_the_link_survives_a_reschedule_and_follows_the_new_meeting(
     """WHY THE CODE NAMES THE PRACTICE AND NOT THE MEETING. A link posted two
     weeks ago must lead wherever the practice actually is now -- meetings are
     deleted and recreated, practices are stable. Same code before and after,
-    resolving to whatever the CURRENT meeting is."""
+    resolving to whatever the CURRENT meeting is.
+
+    Standalone F4: measured on the anonymous half of the ladder (what the
+    /z/{code} page reads), since the authenticated endpoint no longer
+    carries a URL. Before, this read body["url"] from that endpoint."""
     master = await _make_verified_master(client, db_session, telegram_id=89854)
-    stranger = await login_user(client, telegram_id=89855, first_name="Гость")
     practice_id = await _create_and_publish_practice(client, master)
     code = encode_practice_code(UUID(practice_id))
 
     meeting = await _meeting(db_session, practice_id)
     meeting.shared_join_url = "https://zoom.us/w/OLD"
     await db_session.commit()
-    before = await _resolve(client, practice_id, stranger["session_token"])
+    before = await _resolve_in_service(db_session, practice_id, None)
 
     await client.patch(
         f"{PRACTICES_URL}/{practice_id}",
@@ -1134,11 +1189,12 @@ async def test_the_link_survives_a_reschedule_and_follows_the_new_meeting(
     meeting = await _meeting(db_session, practice_id)
     meeting.shared_join_url = "https://zoom.us/w/NEW"
     await db_session.commit()
-    after = await _resolve(client, practice_id, stranger["session_token"])
+    db_session.expire_all()
+    after = await _resolve_in_service(db_session, practice_id, None)
 
     assert code == encode_practice_code(UUID(practice_id))
-    assert before["url"] == "https://zoom.us/w/OLD"
-    assert after["url"] == "https://zoom.us/w/NEW"
+    assert before.url == "https://zoom.us/w/OLD"
+    assert after.url == "https://zoom.us/w/NEW"
 
 
 @pytest.mark.asyncio

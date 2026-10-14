@@ -114,21 +114,20 @@ class BookingWithPracticeResponse(BaseModel):
     # hides the reflection button on the practice screen.
     has_reflection: bool
     practice: PracticeSummary
-    # T21-1: this booking's OWN Zoom registrant link (the personal ?tk= URL),
-    # never anyone else's -- these two endpoints (GET /me, GET /me/upcoming)
-    # are already hard-scoped to Booking.user_id == the requesting user, so
-    # "this booking" and "this user's own booking" are the same thing here.
-    # None when the M-3 gate does not open (booking not confirmed/attended
-    # yet), or when create_registrant_for_booking hasn't succeeded yet
-    # (best-effort, create_failed -- bookings/service.py:311-312). T-35: this
-    # is now the ONLY Zoom URL on this response -- the manual zoom_link the
-    # same gate used to cover no longer exists.
-    zoom_registrant_join_url: str | None = None
-    # BE-72: True when this booking's own registrant will not get a link --
+    # T21-1 / Standalone F4: True when this booking's OWN Zoom registrant
+    # has an entry token -- the person can enter through the practice
+    # screen's Meeting SDK. No URL any more: nobody is sent to a Zoom link
+    # (zoom/service.py's registrant_entry_token is the predicate). These two
+    # endpoints (GET /me, GET /me/upcoming) are hard-scoped to
+    # Booking.user_id == the requesting user. False when the M-3 gate does
+    # not open (booking not confirmed/attended yet), or when
+    # create_registrant_for_booking hasn't succeeded yet (best-effort).
+    zoom_registrant_ready: bool = False
+    # BE-72: True when this booking's own registrant will not get an entry --
     # zoom/service.py's link_unavailable_reason, the same predicate the
     # practice screen's resolver answers kind='unavailable' from, so the list
     # and the screen agree. Distinct from a null link alone, which also
-    # means "still being prepared". Behind the same M-3 gate as the link;
+    # means "still being prepared". Behind the same M-3 gate as ready;
     # False when the meeting is not active (PracticeSummary.
     # zoom_meeting_status already says why).
     zoom_registrant_link_unavailable: bool = False

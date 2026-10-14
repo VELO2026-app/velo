@@ -121,13 +121,7 @@ async def list_master_practices(
     # unconditionally here -- the owner-only gate lives on the shared public
     # detail endpoint (get_practice_detail) instead.
     attendance = await attendance_counts_for_practices(page_practices, session)
-    # T21-1: host join_url for this page (one batched query, owner-only --
-    # every row here is the requester's own).
-    from app.modules.zoom.service import (
-        get_host_join_urls,
-        get_zoom_meeting_statuses,
-    )
-    host_join_urls = await get_host_join_urls([p.id for p in page_practices], session)
+    from app.modules.zoom.service import get_zoom_meeting_statuses
     # A4 V2 (PROMPT №572): batched Zoom meeting status for this page --
     # MasterDashboardView's "nearest practices" and MasterPracticesView both
     # read practicesUpcoming (this endpoint), and their Zoom button needs to
@@ -144,7 +138,6 @@ async def list_master_practices(
                 # Z-6: the master's OWN list (get_current_master) -- every row
                 # is owned by the requester, so the owner-only fields are
                 # exposed here by the same rule get_practice_detail applies.
-                zoom_host_join_url=host_join_urls.get(p.id),
                 zoom_public_link_visible=True,
                 zoom_meeting_status=zoom_meeting_statuses.get(p.id),
                 **series_meta_kwargs(series_meta.get(p.id)),
@@ -212,12 +205,7 @@ async def list_school_practices_for_curator(
     ).all()
     page_practices = [p for p, _first, _last in rows]
     series_meta = await series_meta_for_practices(page_practices, session)
-    from app.modules.zoom.service import (
-        get_host_join_urls,
-        get_zoom_meeting_statuses,
-    )
-    own_ids = [p.id for p in page_practices if p.master_id == user.id]
-    host_join_urls = await get_host_join_urls(own_ids, session)
+    from app.modules.zoom.service import get_zoom_meeting_statuses
     zoom_meeting_statuses = await get_zoom_meeting_statuses(
         [p.id for p in page_practices], session,
     )
@@ -226,7 +214,6 @@ async def list_school_practices_for_curator(
             practice_to_response(
                 p,
                 master_full_name(first, last),
-                zoom_host_join_url=host_join_urls.get(p.id),
                 zoom_public_link_visible=p.master_id == user.id,
                 zoom_meeting_status=zoom_meeting_statuses.get(p.id),
                 **series_meta_kwargs(series_meta.get(p.id)),

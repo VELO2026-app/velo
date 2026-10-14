@@ -113,12 +113,12 @@ vi.mock('@/api/notifications')
 
 // PROMPT №565: "Zoom", for kind==='personal', now goes through the same
 // ticket flow "Начать" used before the two buttons merged -- only
-// createZoomStartTicket is a network call worth mocking. zoomStartRedirectUrl
-// is left REAL (a pure function over import.meta.env.VITE_API_BASE_URL,
-// stubbed per-test via vi.stubEnv where the exact url matters).
+// retryZoomMeeting is a network call worth mocking; the rest of the module
+// stays real. (Standalone F4: the start-ticket pair that sat here is gone
+// with its flow -- «Zoom» routes to the practice screen.)
 vi.mock('@/api/practices', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api/practices')>()
-  return { ...actual, createZoomStartTicket: vi.fn(), retryZoomMeeting: vi.fn() }
+  return { ...actual, retryZoomMeeting: vi.fn() }
 })
 
 const push = vi.fn()
@@ -556,7 +556,6 @@ beforeEach(() => {
   toastError.mockReset()
   toastSuccess.mockReset()
   platformState.openLink.mockReset()
-  vi.mocked(practicesApi.createZoomStartTicket).mockReset()
   vi.mocked(practicesApi.retryZoomMeeting).mockReset()
 })
 
@@ -1197,97 +1196,48 @@ describe('MasterDashboardView', () => {
       expect(platformState.openLink).not.toHaveBeenCalled()
     })
 
-    it('T21-1/PROMPT №565: a host registrant link (kind===personal) starts the meeting as host via the ticket flow -- NOT by opening the raw registrant link', async () => {
-      // zoom_host_join_url is a plain Zoom REGISTRANT join_url (see
-      // MasterDashboardView.vue's onZoom comment) -- opening it directly, as
-      // this test used to assert, lands the master on Zoom's "waiting for
-      // the host" screen. kind==='personal' must now go through
-      // createZoomStartTicket + zoomStartRedirectUrl instead.
-      vi.stubEnv('VITE_API_BASE_URL', 'https://velo-backend.test')
+    // Standalone F4: these four tests pinned the start-ticket flow -- ticket
+    // request, the backend redirect URL, its fail-closed env check, and the
+    // in-flight lock. That flow is removed: «Zoom» now opens the master's
+    // practice screen, where the meeting starts INSIDE VELO (Meeting SDK, as
+    // host); the server decides there. What stays true and is pinned here:
+    // the button is enabled exactly when the meeting is ACTIVE, it goes to
+    // the master zone's practice screen, and it never opens a link.
+    it('F4: an ACTIVE meeting -- «Zoom» opens the master practice screen, never a link', async () => {
       vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
-        page([
-          practice('withHost', {
-            title: 'С хост-ссылкой',
-            zoom_host_join_url: 'https://zoom.us/w/host?tk=xyz',
-          }),
-        ]),
-      )
-      vi.mocked(practicesApi.createZoomStartTicket).mockResolvedValue({ ticket: 'tkt_abc' })
-      mount()
-      await flush()
-
-      actionIn(blocks()[0]!, 'Zoom')?.click()
-      await flush()
-
-      expect(practicesApi.createZoomStartTicket).toHaveBeenCalledWith('withHost')
-      expect(platformState.openLink).not.toHaveBeenCalledWith('https://zoom.us/w/host?tk=xyz')
-      expect(platformState.openLink).toHaveBeenCalledWith(
-        'https://velo-backend.test/api/v1/practices/zoom/start?ticket=tkt_abc',
-      )
-    })
-
-    it('PROMPT №565: kind===personal, but no active meeting anymore (zoom_meeting_not_active) -- honest error, no crash', async () => {
-      vi.stubEnv('VITE_API_BASE_URL', 'https://velo-backend.test')
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
-        page([practice('withHost', { zoom_host_join_url: 'https://zoom.us/w/host?tk=xyz' })]),
-      )
-      vi.mocked(practicesApi.createZoomStartTicket).mockRejectedValue(
-        new ApiResponseError(
-          400,
-          'No active Zoom meeting for this practice',
-          'zoom_meeting_not_active',
-        ),
-      )
-      mount()
-      await flush()
-
-      actionIn(blocks()[0]!, 'Zoom')?.click()
-      await flush()
-
-      expect(toastError).toHaveBeenCalledWith('Встреча Zoom для этой практики недоступна')
-      expect(platformState.openLink).not.toHaveBeenCalled()
-    })
-
-    it('PROMPT №565/№557: kind===personal, VITE_API_BASE_URL not configured -- fails closed, no foreign redirect', async () => {
-      vi.stubEnv('VITE_API_BASE_URL', '')
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
-        page([practice('withHost', { zoom_host_join_url: 'https://zoom.us/w/host?tk=xyz' })]),
-      )
-      vi.mocked(practicesApi.createZoomStartTicket).mockResolvedValue({ ticket: 'tkt_abc' })
-      mount()
-      await flush()
-
-      actionIn(blocks()[0]!, 'Zoom')?.click()
-      await flush()
-
-      expect(toastError).toHaveBeenCalledWith('Функция временно недоступна')
-      expect(platformState.openLink).not.toHaveBeenCalled()
-    })
-
-    it('PROMPT №565: the Zoom button is disabled while a start-ticket request is in flight', async () => {
-      vi.stubEnv('VITE_API_BASE_URL', 'https://velo-backend.test')
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
-        page([practice('withHost', { zoom_host_join_url: 'https://zoom.us/w/host?tk=xyz' })]),
-      )
-      let resolveTicket!: (v: { ticket: string }) => void
-      vi.mocked(practicesApi.createZoomStartTicket).mockReturnValue(
-        new Promise((resolve) => {
-          resolveTicket = resolve
-        }),
+        page([practice('active1', { title: 'Активная', zoom_meeting_status: 'active' })]),
       )
       mount()
       await flush()
 
       const zoomBtn = actionIn(blocks()[0]!, 'Zoom')
+      expect(zoomBtn?.disabled).toBe(false)
       zoomBtn?.click()
       await flush()
 
-      expect(actionIn(blocks()[0]!, 'Zoom')?.disabled).toBe(true)
+      expect(push).toHaveBeenCalledWith({
+        name: 'master-practice-live',
+        params: { practiceId: 'active1' },
+      })
+      expect(platformState.openLink).not.toHaveBeenCalled()
+    })
 
-      resolveTicket({ ticket: 'tkt_abc' })
+    it('F4: a meeting that is not ACTIVE -- «Zoom» disabled, nothing opened', async () => {
+      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
+        page([practice('deleted1', { zoom_meeting_status: 'deleted' })]),
+      )
+      mount()
       await flush()
 
-      expect(actionIn(blocks()[0]!, 'Zoom')?.disabled).toBe(false)
+      const zoomBtn = actionIn(blocks()[0]!, 'Zoom')
+      expect(zoomBtn?.disabled).toBe(true)
+      zoomBtn?.click() // a disabled <button> fires no click handler in happy-dom
+      await flush()
+
+      expect(push).not.toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'master-practice-live' }),
+      )
+      expect(platformState.openLink).not.toHaveBeenCalled()
     })
 
     it('T-35: no host link -- the button is DISABLED and no "не засчитается" fallback is offered any more', async () => {
@@ -1408,19 +1358,14 @@ describe('MasterDashboardView', () => {
       })
     })
 
-    it('refuses a non-https link rather than handing it to the platform', async () => {
-      // resolveZoomLink's https guard (utils/zoomLink.ts). T-35: there is only
-      // ONE rung left to guard -- the host registrant link, which comes from
-      // our own database rather than from a field a master typed. The guard is
-      // kept anyway: it costs nothing and it is the reason a malformed value
-      // degrades to an honest disabled button instead of a broken navigation.
+    // Standalone F4: this test fed a non-https zoom_host_join_url and pinned
+    // that resolveZoomLink's https guard disabled the button -- right while a
+    // master's link was opened. The field and the guard are gone (no link is
+    // opened anywhere); the button now follows the meeting's own state, and
+    // an unknown status degrades the same honest way.
+    it('an unknown meeting status degrades to a disabled button, nothing opened', async () => {
       vi.mocked(mastersApi.getMyPractices).mockResolvedValue(
-        page([
-          practice('bad', {
-            title: 'Плохая ссылка',
-            zoom_host_join_url: 'http://zoom.us/j/222',
-          }),
-        ]),
+        page([practice('odd', { title: 'Странный статус', zoom_meeting_status: 'something_new' })]),
       )
       mount()
       await flush()

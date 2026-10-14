@@ -1153,29 +1153,32 @@ async def get_attendance(
 async def _registrant_link_states(
     booking_ids: list[UUID],
     session: AsyncSession,
-) -> dict[UUID, tuple[str | None, bool]]:
-    """Per booking: (its own registrant's join_url or None, True when no link
+) -> dict[UUID, tuple[bool, bool]]:
+    """Per booking: (its own registrant has an entry token, True when none
     will come). One query for the page -- the no-N+1 pattern of the diary
     flags in list_user_bookings. Shared by list_user_bookings and
     list_upcoming_bookings so the two dashboard lists cannot disagree.
 
+    Standalone F4: no URL leaves this function any more. The person enters
+    through the practice screen's Meeting SDK, and all a list needs is
+    whether he CAN -- zoom/service.py's registrant_entry_token, the same
+    predicate the resolver's PERSONAL rung and the attendance verdict use.
+
     role='student' is implicit -- booking_id is NULL for the master's own
     host row (see ZoomRegistrant model docstring).
 
-    PROMPT №563: joined to ZoomMeeting.status == ACTIVE, same posture as the
-    host path (zoom/service.py's get_host_join_url[s]). Without this, a
-    registrant row whose join_url was set while the meeting was active keeps
-    being handed out after the meeting is deleted outside the normal cancel
-    flow (get_host_join_url's own docstring: the registrant row is not
-    touched on delete, only the meeting -- status must be checked here). A
-    booking whose meeting is not active is absent from the result and reads
-    (None, False): the meeting's own state is on PracticeSummary.
-    zoom_meeting_status, and that is what tells the participant why.
+    PROMPT №563: joined to ZoomMeeting.status == ACTIVE. Without this, a
+    registrant row whose token was set while the meeting was active keeps
+    reading "ready" after the meeting is deleted outside the normal cancel
+    flow (the registrant row is not touched on delete, only the meeting --
+    status must be checked here). A booking whose meeting is not active is
+    absent from the result and reads (False, False): the meeting's own state
+    is on PracticeSummary.zoom_meeting_status, and that is what tells the
+    participant why.
 
     BE-72: the flag is zoom/service.py's link_unavailable_reason, the same
     predicate resolve_zoom_entry answers UNAVAILABLE from, so a list row and
-    the practice screen say the same thing about the same registrant. A
-    falsy join_url is no link: an empty string comes back as None.
+    the practice screen say the same thing about the same registrant.
     """
     # Runtime-local imports keep the bookings -> zoom dependency one-way.
     from app.modules.zoom.models import (
@@ -1184,7 +1187,10 @@ async def _registrant_link_states(
         ZoomRegistrant,
         ZoomRegistrantStatus,
     )
-    from app.modules.zoom.service import link_unavailable_reason
+    from app.modules.zoom.service import (
+        link_unavailable_reason,
+        registrant_entry_token,
+    )
 
     if not booking_ids:
         return {}
@@ -1201,7 +1207,7 @@ async def _registrant_link_states(
     ).scalars().all()
     return {
         r.booking_id: (
-            r.join_url or None,
+            registrant_entry_token(r) is not None,
             link_unavailable_reason(r) is not None,
         )
         for r in registrants
@@ -1217,7 +1223,7 @@ async def list_user_bookings(
     offset: int = 0,
     scheduled_from: datetime | None = None,
     scheduled_to: datetime | None = None,
-) -> tuple[list[tuple[Booking, Practice, bool, bool, str | None, bool, bool]], int]:
+) -> tuple[list[tuple[Booking, Practice, bool, bool, bool, bool, bool]], int]:
     """List bookings for a user with practice details (paginated).
 
     WINDOW (BE-139, the MCP calendar): scheduled_from / scheduled_to bound
@@ -1243,7 +1249,7 @@ async def list_user_bookings(
 
     Returns:
         Tuple of (list of (Booking, Practice, has_feedback, has_checkin,
-        zoom_registrant_join_url, zoom_registrant_link_unavailable,
+        zoom_registrant_ready, zoom_registrant_link_unavailable,
         has_reflection) tuples, total count).
     """
     # Local import keeps the bookings -> diary dependency one-way and avoids
@@ -1337,10 +1343,10 @@ async def list_user_bookings(
             ).scalars().all()
         )
 
-    # T21-1: this user's own registrant link state per booking (set
+    # T21-1: this user's own registrant entry state per booking (set
     # membership, same no-N+1 pattern as the diary flags above). See
     # _registrant_link_states for the meeting-state join (PROMPT №563) and
-    # the BE-72 "no link will come" flag.
+    # the BE-72 "nothing to enter with will come" flag.
     link_states = await _registrant_link_states(booking_ids, session)
 
     items = [
@@ -1349,7 +1355,7 @@ async def list_user_bookings(
             practice,
             booking.practice_id in feedback_practice_ids,
             booking.id in checkin_booking_ids,
-            *link_states.get(booking.id, (None, False)),
+            *link_states.get(booking.id, (False, False)),
             booking.id in reflection_booking_ids,
         )
         for booking, practice in page
@@ -1363,7 +1369,7 @@ async def list_upcoming_bookings(
     session: AsyncSession,
     *,
     limit: int = 10,
-) -> list[tuple[Booking, Practice, bool, bool, str | None, bool, bool]]:
+) -> list[tuple[Booking, Practice, bool, bool, bool, bool, bool]]:
     """Confirmed bookings that are live-or-upcoming, soonest first.
 
     Feeds the dashboard «Ближайшая практика» widget. Unlike list_user_bookings
@@ -1378,7 +1384,7 @@ async def list_upcoming_bookings(
     per-row ``scheduled_at + duration_minutes`` ceiling (nearestBookings.ts).
 
     Returns the same (Booking, Practice, has_feedback, has_checkin,
-    zoom_registrant_join_url, zoom_registrant_link_unavailable,
+    zoom_registrant_ready, zoom_registrant_link_unavailable,
     has_reflection) row shape as list_user_bookings so the router reuses one
     response builder.
     """
@@ -1442,7 +1448,7 @@ async def list_upcoming_bookings(
             practice,
             booking.practice_id in feedback_practice_ids,
             booking.id in checkin_booking_ids,
-            *link_states.get(booking.id, (None, False)),
+            *link_states.get(booking.id, (False, False)),
             # has_reflection: this list is CONFIRMED only, and a reflection
             # needs a no_show booking, which never returns to CONFIRMED.
             False,

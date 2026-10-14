@@ -28,6 +28,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { telegramPlatform } from '@/platform/telegram'
+import { standalonePlatform } from '@/platform/standalone'
 
 // The fallback literals telegram.ts ships. They MUST mirror --velo-tg-header /
 // --velo-tg-bg / --velo-tg-bg-kbd in variables.css. See the honesty note in the
@@ -149,5 +150,43 @@ describe('setKeyboardSurface -- [TG-SURFACE]', () => {
 
     telegramPlatform.setKeyboardSurface(false)
     expect(setBackgroundColor).toHaveBeenLastCalledWith(FALLBACK_BG)
+  })
+})
+
+// Standalone F4, owner decision 11: Telegram for iOS gives the page a black
+// camera stream -- the practice screen says so up front. Every other Telegram
+// client (Android, desktop, web) and an unknown one are not flagged.
+describe('cameraBlockedByHost -- Telegram for iOS only', () => {
+  function onPlatform(name: string | undefined): void {
+    ;(
+      window as unknown as { Telegram: { WebApp: Record<string, unknown> } }
+    ).Telegram.WebApp.platform = name
+  }
+
+  it('is true on Telegram for iOS', () => {
+    onPlatform('ios')
+    expect(telegramPlatform.cameraBlockedByHost()).toBe(true)
+  })
+
+  it('is false on every other Telegram client, and when Telegram cannot tell', () => {
+    for (const name of [
+      'android',
+      'android_x',
+      'tdesktop',
+      'macos',
+      'web',
+      'weba',
+      'unknown',
+      undefined,
+    ]) {
+      onPlatform(name)
+      expect(telegramPlatform.cameraBlockedByHost()).toBe(false)
+    }
+  })
+
+  // Pair: outside Telegram the camera is the browser's to give -- the hint
+  // never shows in the installed app, which is where it sends people.
+  it('standalone (browser / home-screen app): never', () => {
+    expect(standalonePlatform.cameraBlockedByHost()).toBe(false)
   })
 })

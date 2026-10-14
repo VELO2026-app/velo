@@ -276,13 +276,19 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
 async def test_a_schools_draft_is_seen_by_its_master_and_curator_only(
     client, s: _S, who: str, code: int,
 ) -> None:
+    """Standalone F4: this used to assert zoom_host_join_url is None -- right
+    then (a draft has no meeting, so no host link could be handed to
+    anyone). The field is gone with the start-ticket flow, so the precise
+    form of the same property is now: no Zoom URL in the body at all, and
+    the field does not come back."""
     resp = await client.get(
         DETAIL_URL.format(practice_id=s.draft), headers=auth_headers(s.token(who)),
     )
     assert resp.status_code == code, resp.text
     if code == 200:
         assert resp.json()["status"] == "draft"
-        assert resp.json()["zoom_host_join_url"] is None
+        assert "zoom_host_join_url" not in resp.json()
+        assert "zoom.us" not in resp.text
 
 
 @pytest.mark.asyncio
@@ -305,7 +311,10 @@ async def test_the_manage_list_holds_every_practice_of_the_school(
 ) -> None:
     """Drafts included, the general section's and another school's not,
     a master who is not (or no longer) in the school included, deleted not,
-    ascending by time; status filters."""
+    ascending by time; status filters. Standalone F4: the curator's list
+    used to be checked for zoom_host_join_url None on every row (no host
+    control of another master's meeting); the field is gone, so the check
+    is now that no row carries it and no Zoom URL is in the body."""
     gone = await _seed(
         s.id("outsider"), s.school, status="draft", title="Ушедший", hours=3,
     )
@@ -326,7 +335,9 @@ async def test_the_manage_list_holds_every_practice_of_the_school(
     ]
     assert data["total"] == 3
     assert str(deleted) not in resp.text
-    assert all(p["zoom_host_join_url"] is None for p in data["items"])
+    assert data["items"]
+    assert all("zoom_host_join_url" not in p for p in data["items"])
+    assert "zoom.us" not in resp.text
 
     drafts = await client.get(
         MANAGE_URL.format(group_id=s.school) + "?status=draft",
@@ -353,7 +364,10 @@ async def test_the_manage_list_is_the_curators_only(client, s: _S, who: str) -> 
 async def test_the_curator_publishes_the_masters_draft(client, s: _S) -> None:
     """ONE "published" to the master even with a field edited in the same
     PATCH; the school's fan-out is authored by the master, so it skips the
-    master and reaches the curator; the act is audited."""
+    master and reaches the curator; the act is audited. Standalone F4: the
+    curator was checked to get no host link (zoom_host_join_url None) from
+    the publish that creates the meeting -- the field is gone; the precise
+    form is that no Zoom URL reaches the curator's response at all."""
     resp = await _patch(
         client, s.token("curator"), s.draft, status="scheduled", title="Новая",
     )
@@ -361,7 +375,8 @@ async def test_the_curator_publishes_the_masters_draft(client, s: _S) -> None:
     data = resp.json()
     assert data["status"] == "scheduled"
     assert data["master_name"] == "Тимур"
-    assert data["zoom_host_join_url"] is None
+    assert "zoom_host_join_url" not in data
+    assert "zoom.us" not in resp.text
 
     published = await _notes(_PUBLISHED, s.id("master"))
     assert len(published) == 1

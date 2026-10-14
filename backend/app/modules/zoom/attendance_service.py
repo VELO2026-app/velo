@@ -52,6 +52,7 @@ from app.modules.zoom.models import (
     ZoomRegistrant,
     ZoomRegistrantRole,
 )
+from app.modules.zoom.service import registrant_entry_token
 from app.modules.zoom.zoom_client import ZoomAPIError, get_participants_report
 
 logger = structlog.get_logger()
@@ -187,7 +188,8 @@ async def ingest_report_for_meeting(
     Two kinds of decision, in this order:
       1. Via Zoom: every CONFIRMED booking a STUDENT registrant of this
          meeting points at, when that registrant has both a
-         zoom_registrant_id and a join_url -- including ones with zero
+         zoom_registrant_id and an entry token (registrant_entry_token, the
+         `tk` the Meeting SDK enters with) -- including ones with zero
          matched segments, a genuine no-show decided as authoritatively as
          an attended one.
       2. Via the legacy proxy: every CONFIRMED booking still left -- the
@@ -314,7 +316,9 @@ async def ingest_report_for_meeting(
 
         # BE-72 (owner ruling): no Zoom verdict for a registrant Zoom could
         # not have seen. Without zoom_registrant_id the report cannot be
-        # attributed to him; without join_url he had nothing to enter with.
+        # attributed to him; without an entry token (registrant_entry_token
+        # -- the same predicate the practice screen enters by, Standalone
+        # F4) he had nothing to enter with.
         # Either way zero seconds here is not evidence of absence, and a
         # zoom_report no_show would state something the report cannot back.
         # The booking stays CONFIRMED -- locked above, so nothing changes it
@@ -322,8 +326,8 @@ async def ingest_report_for_meeting(
         # as a booking no registrant points at (BE-41), with no new outcome.
         #
         # KNOWN CEILING -- a person who could not enter is recorded no_show.
-        # Mechanics: such a person has no join_url, so PracticeLiveView never
-        #   calls /join and joined_at stays NULL; the proxy then rests on the
+        # Mechanics: such a person has no entry token, so PracticeLiveView
+        #   never calls /join and joined_at stays NULL; the proxy then rests on the
         #   PRE check-in alone, and without one writes no_show (legacy_proxy).
         # Status: acknowledged by design.
         # Task: none -- the owner chose no new booking outcome for BE-72.
@@ -334,7 +338,7 @@ async def ingest_report_for_meeting(
         #   deciding how to show it.
         # Rejected: ATTENDED without any presence evidence -- the same
         #   "verdict nothing backs" this branch removes, from the other side.
-        if not r.zoom_registrant_id or not r.join_url:
+        if not r.zoom_registrant_id or registrant_entry_token(r) is None:
             without_link_booking_ids.append(booking.id)
             continue
 
