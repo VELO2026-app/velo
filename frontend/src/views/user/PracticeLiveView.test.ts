@@ -73,7 +73,7 @@
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { createApp, nextTick, type App } from 'vue'
+import { createApp, nextTick, ref, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import PracticeLiveView from '@/views/user/PracticeLiveView.vue'
 import type { BookingWithPracticeResponse, PracticeResponse } from '@/api/types'
@@ -139,12 +139,21 @@ vi.mock('@/platform', () => ({
 // WHAT it hands over and WHERE leaving goes, not Zoom's own client.
 const enterZoomMeeting = vi.fn()
 const leaveZoomMeeting = vi.fn()
+const setZoomInsetTop = vi.fn()
 const sdkState = { loaded: false }
 vi.mock('@/platform/zoom-sdk', () => ({
   enterZoomMeeting: (...args: unknown[]) => enterZoomMeeting(...args),
   leaveZoomMeeting: () => leaveZoomMeeting(),
+  setZoomInsetTop: (v: string) => setZoomInsetTop(v),
   zoomSdkLoaded: () => sdkState.loaded,
   appUrl: (path: string) => `https://app.test${path}`,
+}))
+
+// F4 fix: the top safe area comes from useSafeArea() -- the app's single
+// source. A real ref so a change can be observed by the screen's watch.
+const safeTop = ref('59px')
+vi.mock('@/composables/useSafeArea', () => ({
+  useSafeArea: () => ({ contentSafeTopCss: safeTop }),
 }))
 
 /** The server's SDK parameters for an attendee (role 0). */
@@ -326,6 +335,8 @@ beforeEach(() => {
   platformFlags.cameraBlocked = false
   routeState.name = 'practice-live'
   leaveGuard = null
+  safeTop.value = '59px'
+  setZoomInsetTop.mockReset()
   toastInfo.mockReset()
   hapticFeedback.mockReset()
   toastError.mockReset()
@@ -412,6 +423,8 @@ describe('PracticeLiveView', () => {
       expect(enterZoomMeeting).toHaveBeenCalledWith(
         ATTENDEE_JOIN,
         'https://app.test/user/feedback/p1',
+        // F4 fix: + the top safe area for the meeting's root (useSafeArea).
+        { insetTop: '59px' },
       )
       expect(openLink).not.toHaveBeenCalled()
     })
@@ -474,7 +487,14 @@ describe('PracticeLiveView', () => {
       expect(leaveBtn()).toBeNull()
       buttonByText('Начать')?.click()
       await flush()
-      expect(enterZoomMeeting).toHaveBeenCalledWith(HOST_JOIN, 'https://app.test/master/dashboard')
+      // F4 fix: + the top safe area for the meeting's root (useSafeArea).
+      expect(enterZoomMeeting).toHaveBeenCalledWith(
+        HOST_JOIN,
+        'https://app.test/master/dashboard',
+        {
+          insetTop: '59px',
+        },
+      )
       expect(openLink).not.toHaveBeenCalled()
     })
 
@@ -840,6 +860,43 @@ describe('PracticeLiveView', () => {
       expect(buttonByText('Войти')).toBeDefined()
       expect(checkinBtn()).toBeNull()
       expect(leaveBtn()).toBeNull()
+    })
+
+    // F4 fix (iPhone): the meeting's root keeps the SAME top safe area as our
+    // screens (useSafeArea) and follows it while the meeting is on.
+    it('a changed top inset follows into the meeting -- and only while there is one', async () => {
+      practicesState.selected = practice()
+      bookingsState.bookings = [booking({ joined_at: '2026-07-20T10:00:00Z' })]
+      mount()
+      await flush()
+
+      safeTop.value = '61px' // before entering: nothing to follow
+      await flush()
+      expect(setZoomInsetTop).not.toHaveBeenCalled()
+
+      enterBtn()?.click()
+      await flush()
+      await flush()
+      safeTop.value = '70px'
+      await flush()
+
+      expect(setZoomInsetTop).toHaveBeenCalledWith('70px')
+    })
+
+    it('after a failed entry the inset is no longer followed', async () => {
+      practicesState.selected = practice()
+      bookingsState.bookings = [booking({ joined_at: '2026-07-20T10:00:00Z' })]
+      enterZoomMeeting.mockRejectedValue(new Error('Zoom SDK init failed'))
+      mount()
+      await flush()
+
+      enterBtn()?.click()
+      await flush()
+      await flush()
+      safeTop.value = '70px'
+      await flush()
+
+      expect(setZoomInsetTop).not.toHaveBeenCalled()
     })
 
     it('leaving the screen while INSIDE the meeting leaves the meeting instead (its leaveUrl reloads the app)', async () => {

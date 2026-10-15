@@ -23,6 +23,24 @@
 // one way out is the SDK's own: leaveUrl, a FULL page load. Leaving the
 // meeting (or the host ending it) navigates there, which also reloads VELO
 // into a clean page -- the session survives in persistent storage (F3).
+//
+// SAFE AREAS (F4 fix, iPhone). The SDK's root is
+//   #zmmtg-root{width:100%;height:100%;position:fixed;top:0;left:0;background:#000}
+// (dist/ui/zoom-meetingsdk.css, 6.5.0), and both panels hang off its edges:
+// .meeting-header (End / Leave) is position:absolute at the top, .footer is
+// position:absolute;bottom:0. The SDK declares --sat/--sab/--sal/--sar from
+// env(safe-area-inset-*) and reads them nowhere. In the installed iOS app
+// (index.html black-translucent + launch.ts viewport-fit=cover) the root
+// therefore starts under the clock and the island and ends on the home bar:
+// End could not be pressed. For the meeting only, MEETING_STYLE below moves
+// the root's own EDGES into the safe area -- edges, not padding: an absolute
+// child whose containing block is the root itself measures top:0 from the
+// root's PADDING box, so padding would not move it; a smaller root box moves
+// everything that hangs off it. And the canvas goes black: the SDK's
+// bootstrap paints body #fff, which showed as a white band below the root.
+// Only for the meeting: the class and the <style> are put on before init()
+// and taken off on any failure; after a successful join the only way out is
+// leaveUrl's full reload, which leaves neither behind.
 // =============================================================================
 
 import type { ZoomSdkJoinResponse } from '@/api/types'
@@ -43,6 +61,64 @@ export class ZoomSdkError extends Error {
 type ZoomMtgModule = typeof import('@zoom/meetingsdk')
 type ZoomMtg = ZoomMtgModule['ZoomMtg']
 
+/** On <html> for the duration of a meeting; every rule of MEETING_STYLE is
+ * scoped under it, so none can reach a screen of ours. */
+export const MEETING_CLASS = 'velo-zoom-meeting'
+/** id of the one <style> element the meeting adds to <head>. */
+export const MEETING_STYLE_ID = 'velo-zoom-safe-area'
+/** The top inset, set from useSafeArea() (the app's single source: Telegram
+ * fullscreen controls, or env(safe-area-inset-top) outside Telegram). */
+export const MEETING_INSET_TOP_VAR = '--velo-zoom-inset-top'
+
+/** The meeting's stylesheet. Specificity (1,1,1) beats the SDK's
+ * #zmmtg-root (1,0,0) whatever order the CDN CSS arrives in -- no
+ * !important. Bottom and sides come from env() exactly as our tab bars
+ * read theirs; the top falls back to env() if the variable was never set. */
+export const MEETING_STYLE = `
+html.${MEETING_CLASS},
+html.${MEETING_CLASS} body {
+  background: #000;
+}
+html.${MEETING_CLASS} #zmmtg-root {
+  top: var(${MEETING_INSET_TOP_VAR}, env(safe-area-inset-top, 0px));
+  right: env(safe-area-inset-right, 0px);
+  bottom: env(safe-area-inset-bottom, 0px);
+  left: env(safe-area-inset-left, 0px);
+  width: auto;
+  height: auto;
+}
+`
+
+/** Put the meeting's safe-area style on (idempotent: one <style>, ever). */
+function applyMeetingStyle(insetTop: string): void {
+  const doc = host.document
+  doc.documentElement.classList.add(MEETING_CLASS)
+  setZoomInsetTop(insetTop)
+  if (!doc.getElementById(MEETING_STYLE_ID)) {
+    const style = doc.createElement('style')
+    style.id = MEETING_STYLE_ID
+    style.textContent = MEETING_STYLE
+    doc.head.appendChild(style)
+  }
+}
+
+/** Take the meeting's safe-area style off -- nothing of it stays behind. */
+function removeMeetingStyle(): void {
+  const doc = host.document
+  doc.documentElement.classList.remove(MEETING_CLASS)
+  doc.documentElement.style.removeProperty(MEETING_INSET_TOP_VAR)
+  doc.getElementById(MEETING_STYLE_ID)?.remove()
+}
+
+/** Update the meeting's top inset (the practice screen watches
+ * useSafeArea() -- Telegram's insets arrive and change asynchronously). An
+ * empty value removes the variable, so the env() fallback applies. */
+export function setZoomInsetTop(insetTop: string): void {
+  const root = host.document.documentElement
+  if (insetTop) root.style.setProperty(MEETING_INSET_TOP_VAR, insetTop)
+  else root.style.removeProperty(MEETING_INSET_TOP_VAR)
+}
+
 /** Set once the SDK has been loaded on this page -- a page enters Zoom once
  * (leaving reloads it), so there is never a second instance to track. */
 let loaded: ZoomMtg | null = null
@@ -62,8 +138,27 @@ function errorCodeOf(payload: unknown): number | null {
  * owns the page until leaveUrl reloads it. Rejects with ZoomSdkError.
  *
  * `leaveUrl` must be an absolute URL of THIS app (the SDK navigates to it).
+ * `insetTop` is the top safe-area length (useSafeArea().contentSafeTopCss).
+ *
+ * The meeting's safe-area style goes on before the SDK draws anything and
+ * comes off again on every failure, so a failed entry leaves the practice
+ * screen exactly as it was.
  */
-export async function enterZoomMeeting(join: ZoomSdkJoinResponse, leaveUrl: string): Promise<void> {
+export async function enterZoomMeeting(
+  join: ZoomSdkJoinResponse,
+  leaveUrl: string,
+  options: { insetTop: string },
+): Promise<void> {
+  applyMeetingStyle(options.insetTop)
+  try {
+    await loadAndJoin(join, leaveUrl)
+  } catch (e) {
+    removeMeetingStyle()
+    throw e
+  }
+}
+
+async function loadAndJoin(join: ZoomSdkJoinResponse, leaveUrl: string): Promise<void> {
   let mtg: ZoomMtg
   try {
     mtg = loaded ?? (await import('@zoom/meetingsdk')).ZoomMtg
@@ -122,7 +217,8 @@ export function appUrl(path: string): string {
   return new URL(path, host.location.origin).toString()
 }
 
-/** Test seam: forget the loaded SDK. */
+/** Test seam: forget the loaded SDK and the meeting style. */
 export function _resetZoomSdkForTest(): void {
   loaded = null
+  removeMeetingStyle()
 }

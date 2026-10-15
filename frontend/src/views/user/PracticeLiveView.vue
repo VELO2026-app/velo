@@ -176,14 +176,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'
 import { useBookingsStore } from '@/stores/bookings'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
 import { platform } from '@/platform'
-import { appUrl, enterZoomMeeting, leaveZoomMeeting, zoomSdkLoaded } from '@/platform/zoom-sdk'
+import {
+  appUrl,
+  enterZoomMeeting,
+  leaveZoomMeeting,
+  setZoomInsetTop,
+  zoomSdkLoaded,
+} from '@/platform/zoom-sdk'
+import { useSafeArea } from '@/composables/useSafeArea'
 import { VButton, VBackButton, VCard, VBadge, VEmptyState } from '@/components/ui'
 import PracticePlaceholder from '@/components/shared/PracticePlaceholder.vue'
 import { joinZoomSdk, resolveZoomEntry } from '@/api/practices'
@@ -205,6 +212,17 @@ const isMasterZone = route.name === 'master-practice-live'
 
 const entering = ref(false)
 const leaving = ref(false)
+
+/** F4 fix: the top safe area the meeting's root keeps clear -- the SAME
+ * source as every screen of ours (Telegram fullscreen controls, or
+ * env(safe-area-inset-top) in the installed app). */
+const { contentSafeTopCss } = useSafeArea()
+/** True from the moment the SDK is handed the page until a failure takes
+ * it back -- while true, a changed inset follows into the meeting. */
+let inMeeting = false
+watch(contentSafeTopCss, (value) => {
+  if (inMeeting) setZoomInsetTop(value)
+})
 
 const practice = computed(() => practicesStore.selected)
 
@@ -278,9 +296,14 @@ async function enterThroughSdk(): Promise<void> {
     params.role === 1
       ? router.resolve({ name: 'master-dashboard' })
       : router.resolve({ name: 'user-feedback', params: { practiceId } })
+  inMeeting = true
   try {
-    await enterZoomMeeting(params, appUrl(leaveTo.href))
+    await enterZoomMeeting(params, appUrl(leaveTo.href), {
+      insetTop: contentSafeTopCss.value,
+    })
   } catch {
+    // enterZoomMeeting has already taken its style off again.
+    inMeeting = false
     toast.error('Не удалось открыть Zoom. Попробуйте ещё раз')
   }
 }
