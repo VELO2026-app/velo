@@ -56,6 +56,21 @@ dependencies = [
     # published 2026-02-01 -- at least 14 days before it was chosen. No runtime
     # dependencies on Python 3.12; ~33 MB of locale data, of which one is used.
     "babel==2.18.0",
+    # BE-133: S3 client for velo-storage (app/core/storage.py), EXACT version.
+    # 3.9.2 was published 2026-10-01 -- at least 14 days before it was chosen
+    # (the same client aivis uses, as a range there). Of what it brings into
+    # the tree, botocore is held by it to 1.43.101..1.43.106 (all published by
+    # 2026-09-30) and the rest resolves to releases at least 14 days old --
+    # except wrapt, pinned below. aiohttp is not brought by it: aiogram had it
+    # in the tree before BE-133.
+    "aiobotocore==3.9.2",
+    # BE-133: a TRANSITIVE dependency pinned, on purpose. aiobotocore 3.9.2
+    # brings wrapt into the tree (wrapt<3,>=1.10.10); unpinned, it resolved to
+    # 2.5.1, published 2026-10-14 -- a day before it was measured. 2.5.0 was
+    # published 2026-09-27, at least 14 days before it was chosen. Without a
+    # lock file (BE-122 p.4) every other range still resolves to the newest
+    # release at build time; this pin closes only what BE-133 itself brought.
+    "wrapt==2.5.0",
 ]
 
 [project.optional-dependencies]
