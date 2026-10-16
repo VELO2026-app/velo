@@ -105,12 +105,167 @@ read_env_value() {
     grep -E "^${key}=" "$file" 2>/dev/null | tail -n 1 | cut -d= -f2-
 }
 
+# =============================================================================
+# Object storage (BE-133) -- the velo-storage compose project
+# =============================================================================
+#
+# storage_step is the ONE implementation of "make the storage what the
+# repository says". It runs on EVERY `velo update` -- on the deploy path
+# right after the db projection, before `up -d app`, and on the "already up
+# to date" path too -- and from the installer (`__storage-step`, below)
+# before the stack starts. Everything in it is idempotent.
+#
+# Defined HERE, above the early dispatch, because the installer calls it
+# before /opt/velo/velo.conf exists; it needs nothing that file sets.
+# Colours may not be defined yet at that point: ${RED:-} and friends.
+
+STORAGE_ROOT_FILE="$INSTALL_BASE/storage.env"
+STORAGE_COMPOSE_FILE="$COMPOSE_DIR/storage/docker-compose.yml"
+STORAGE_ENV_PROJECTION="$COMPOSE_DIR/storage/.env.storage"
+STORAGE_VOLUME="velo_storage_data"
+
+storage_compose() {
+    # The project name comes from the file's own `name: velo-storage`.
+    docker compose -f "$STORAGE_COMPOSE_FILE" "$@"
+}
+
+# Letters and digits only, exactly N of them.
+storage_mint() {
+    python3 -c "import secrets, string, sys
+alphabet = string.ascii_letters + string.digits
+print(''.join(secrets.choice(alphabet) for _ in range(int(sys.argv[1]))))" "$1"
+}
+
+# The root keys of the storage. Minted ONCE, when neither the file nor the
+# volume exists; after that the file is only read. It lives outside the
+# repository (a reinstall removes repo/, not this) and outside backend/.env
+# (the app container never sees it).
+#
+# KNOWN CEILING -- the root key of velo-storage is never rotated.
+#   1. Mechanics: the root pair is minted only when there is neither this
+#      file nor the volume, and nothing writes it again. RustFS keeps the
+#      service keys under the root user that created them; what a different
+#      root pair does to an existing volume's IAM state was not measured,
+#      so no path here changes the pair over a live volume.
+#   2. Status: acknowledged by design.
+#   3. Task: none -- no one needs a new root key today; the backend works
+#      through its own service key, which IS rotated (velo env set
+#      STORAGE_SECRET_KEY, then velo update).
+#   4. Unfreeze when: the root pair has to change -- a leak of
+#      /opt/velo/storage.env, or an owner ruling to rotate it.
+#   5. Fix: measure RustFS 1.0.1 with a changed RUSTFS_ACCESS_KEY /
+#      RUSTFS_SECRET_KEY over the live volume (the service keys' parent,
+#      IAM decryption), then a `velo` command that rotates both sides
+#      together.
+#   6. Rejected: keeping the root pair in backend/.env, so that `velo env
+#      set` could rotate it -- the app would then hold root access to every
+#      bucket, documents of masters included.
+storage_root_ensure() {
+    if [ -f "$STORAGE_ROOT_FILE" ]; then
+        chmod 600 "$STORAGE_ROOT_FILE" 2>/dev/null || true
+        return 0
+    fi
+    if docker volume inspect "$STORAGE_VOLUME" > /dev/null 2>&1; then
+        echo -e "${RED:-}✗ The storage volume $STORAGE_VOLUME exists, but $STORAGE_ROOT_FILE does not${NC:-}"
+        echo "  The files in the volume are keyed to a root key this box no longer has."
+        echo "  Nothing was changed. Restore the file from where it was kept, or erase"
+        echo "  the files through the installer's DELETE question (reinstall)."
+        return 1
+    fi
+    local access secret tmp old_umask
+    access=$(storage_mint 20) && secret=$(storage_mint 40) || {
+        echo -e "${RED:-}✗ Could not mint the storage root key${NC:-}"; return 1; }
+    if [ "${#access}" -ne 20 ] || [ "${#secret}" -ne 40 ]; then
+        echo -e "${RED:-}✗ Could not mint the storage root key${NC:-}"; return 1
+    fi
+    tmp="${STORAGE_ROOT_FILE}.tmp.$$"
+    old_umask=$(umask)
+    umask 077
+    if ! printf '%s\n' \
+        "# velo-storage ROOT key (BE-133). Written once, never regenerated:" \
+        "# the files in volume $STORAGE_VOLUME are keyed to it. Do not edit." \
+        "RUSTFS_ACCESS_KEY=$access" "RUSTFS_SECRET_KEY=$secret" > "$tmp" \
+        || ! chmod 600 "$tmp" || ! mv -f "$tmp" "$STORAGE_ROOT_FILE"; then
+        umask "$old_umask"; rm -f "$tmp"
+        echo -e "${RED:-}✗ Could not write $STORAGE_ROOT_FILE${NC:-}"; return 1
+    fi
+    umask "$old_umask"
+    chmod 600 "$STORAGE_ROOT_FILE" 2>/dev/null || true
+    access=""; secret=""
+    echo -e "${GREEN:-}✓ Storage root key created in $STORAGE_ROOT_FILE (value not shown)${NC:-}"
+}
+
+# The backend key's secret, in backend/.env. Absent or empty -> minted (no
+# one types secrets). Present -> left as it is: the init sets the storage
+# to it, which is how a reinstall and `velo env set` rotate it.
+storage_app_secret_ensure() {
+    local env_file="$COMPOSE_DIR/backend/.env" secret tmp
+    if [ ! -f "$env_file" ]; then
+        echo -e "${RED:-}✗ $env_file not found${NC:-}"; return 1
+    fi
+    if [ -n "$(read_env_value "$env_file" STORAGE_SECRET_KEY)" ]; then
+        return 0
+    fi
+    secret=$(storage_mint 40) || secret=""
+    if [ "${#secret}" -ne 40 ]; then
+        echo -e "${RED:-}✗ Could not mint STORAGE_SECRET_KEY${NC:-}"; return 1
+    fi
+    # Same write as `velo env set`: every line of the key dropped, one
+    # appended, the new file renamed over the old one with its owner/mode.
+    tmp=$(mktemp "$(dirname "$env_file")/.env.storage-key.XXXXXX") || {
+        echo -e "${RED:-}✗ Could not create a temporary file next to $env_file${NC:-}"; return 1; }
+    if ! chmod --reference="$env_file" "$tmp" || ! chown --reference="$env_file" "$tmp"; then
+        rm -f "$tmp"; echo -e "${RED:-}✗ Could not copy the owner and mode of $env_file${NC:-}"; return 1
+    fi
+    grep -v "^STORAGE_SECRET_KEY=" "$env_file" > "$tmp"
+    if [ $? -gt 1 ] || ! printf 'STORAGE_SECRET_KEY=%s\n' "$secret" >> "$tmp" \
+        || ! mv -f "$tmp" "$env_file"; then
+        rm -f "$tmp"; echo -e "${RED:-}✗ Could not write $env_file -- the old file is untouched${NC:-}"; return 1
+    fi
+    secret=""
+    echo -e "${GREEN:-}✓ STORAGE_SECRET_KEY created in backend/.env (value not shown)${NC:-}"
+    echo "  The app container reads it when it is next recreated (the next deploy"
+    echo "  of the backend, or 'velo restart')."
+}
+
+storage_step() {
+    echo "Object storage (velo-storage)..."
+    if [ ! -f "$STORAGE_COMPOSE_FILE" ]; then
+        echo -e "${RED:-}✗ $STORAGE_COMPOSE_FILE not found${NC:-}"; return 1
+    fi
+    if ! docker network inspect aivis-shared > /dev/null 2>&1; then
+        echo -e "${RED:-}✗ docker network aivis-shared does not exist${NC:-}"; return 1
+    fi
+    storage_root_ensure || return 1
+    storage_app_secret_ensure || return 1
+    # shellcheck source=/dev/null
+    source "$COMPOSE_DIR/scripts/env-render.sh" || return 1
+    if ! write_storage_env "$STORAGE_ROOT_FILE" "$COMPOSE_DIR/backend/.env" "$STORAGE_ENV_PROJECTION"; then
+        echo -e "${RED:-}✗ Could not write storage/.env.storage -- the storage was not touched${NC:-}"
+        return 1
+    fi
+    if ! storage_compose up -d velo-storage; then
+        echo -e "${RED:-}✗ velo-storage did not start${NC:-}"; return 1
+    fi
+    # `run` starts nothing new (velo-storage is up), waits for it to be
+    # healthy (depends_on) and returns the init's own exit code.
+    if ! storage_compose run --rm -T velo-storage-init; then
+        echo -e "${RED:-}✗ velo-storage-init failed -- see its lines above${NC:-}"; return 1
+    fi
+    echo -e "${GREEN:-}✓ Object storage matches the registry${NC:-}"
+}
+
 # Internal subcommands for install_velo.sh -- not in the usage text.
 #   __env-value-ok   reads the value from STDIN (a secret on the command
 #                    line would show in `ps`), exit 0 if it may go into the
 #                    file, else prints the refusal and exits 1;
 #   __env-get FILE KEY   prints read_env_value.
+#   __storage-step   storage_step above (the installer, before the stack).
 case "${1:-}" in
+    __storage-step)
+        storage_step
+        exit $?
+        ;;
     __env-value-ok)
         # read -d '': the whole input, newlines included -- a value with a
         # newline must fail the check, not be cut at the first line.
@@ -917,6 +1072,63 @@ check_nginx() {
     fi
 }
 
+# BE-133: object storage, for `velo doctor`. One line per fact, no values.
+# The registry part is the init container itself in read-only mode
+# (STORAGE_INIT_MODE=check): the same builders that set the storage up are
+# the ones that check it, so the two cannot disagree about what "right" is.
+check_storage() {
+    echo "--- object storage (velo-storage) ---"
+    local fail=0 mode state answering
+    if [ -f "$STORAGE_ROOT_FILE" ]; then
+        mode=$(stat -c '%a' "$STORAGE_ROOT_FILE" 2>/dev/null)
+        if [ "$mode" = "600" ]; then
+            echo -e "${GREEN}✓${NC} root key file present, mode 600 (value not shown)"
+        else
+            echo -e "${RED}✗ $STORAGE_ROOT_FILE has mode ${mode:-?}, not 600${NC}"; fail=1
+        fi
+    else
+        echo -e "${RED}✗ $STORAGE_ROOT_FILE not found -- run: velo update${NC}"; fail=1
+    fi
+
+    state=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+        velo-storage 2>/dev/null)
+    if [ "$state" != "healthy" ]; then
+        echo -e "${RED}✗ velo-storage is not running healthy (state: ${state:-no container})${NC}"
+        echo -e "${YELLOW}⊘ buckets, lifecycle rules, service keys: not checked${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}✓${NC} velo-storage is alive (healthy)"
+
+    # Docker accepts the same name on two containers of one network, and its
+    # DNS then answers with both: a link signed for velo-storage:9000 could
+    # be fetched from somebody else's store. Exactly one may answer. Name
+    # and Aliases only: .DNSNames would be more complete but does not exist
+    # before Docker API 1.45, and a template error there would count 0.
+    answering=$(docker network inspect aivis-shared \
+            -f '{{range $id, $c := .Containers}}{{$id}} {{end}}' 2>/dev/null \
+        | xargs -r docker inspect -f \
+            '{{.Name}}|{{with index .NetworkSettings.Networks "aivis-shared"}}{{range .Aliases}}{{.}},{{end}}{{end}}' \
+            2>/dev/null \
+        | grep -c -E '^/velo-storage\||[|,]velo-storage,')
+    if [ "$answering" = "1" ]; then
+        echo -e "${GREEN}✓${NC} exactly one container answers to velo-storage on aivis-shared"
+    else
+        echo -e "${RED}✗ ${answering:-0} containers answer to velo-storage on aivis-shared -- must be 1${NC}"
+        fail=1
+    fi
+
+    if [ ! -f "$STORAGE_ENV_PROJECTION" ]; then
+        echo -e "${RED}✗ storage/.env.storage not found -- run: velo update${NC}"
+        echo -e "${YELLOW}⊘ buckets, lifecycle rules, service keys: not checked${NC}"
+        return 1
+    fi
+    if ! storage_compose run --rm -T --no-deps -e STORAGE_INIT_MODE=check velo-storage-init 2>&1 \
+            | sed 's/^/  /'; then
+        fail=1
+    fi
+    return $fail
+}
+
 # =============================================================================
 # UPDATE CYCLE -- every service on this box, one command (H-D1, 2026-08-04)
 # =============================================================================
@@ -1499,6 +1711,11 @@ update_product() {
         git fetch origin
         if ! product_needs_deploy "$BRANCH"; then
             echo -e "${GREEN}✓ velo: already up to date${NC}"
+            # BE-133: the storage step runs on EVERY update, this path
+            # included -- the first update after the delivery runs the OLD
+            # script, and the next one lands here with nothing to pull.
+            ensure_shared_network || return 1
+            storage_step || return 1
             # return, NOT exit: this is one service in a cycle now, and
             # the product is the LAST of them -- but an exit here would
             # also swallow the cycle's own epilogue.
@@ -1610,6 +1827,17 @@ update_product() {
                 echo -e "${RED}✗ Could not write backend/.env.db${NC}"
                 echo "  postgres/redis read it as their env_file -- the stack"
                 echo "  would come up without database credentials."
+                exit 1
+            fi
+            # BE-133: object storage, before `up -d app` below -- the suite
+            # this deploy runs reads and writes it.
+            ensure_shared_network || {
+                echo -e "${RED}✗ Cannot create docker network aivis-shared${NC}"
+                exit 1
+            }
+            if ! storage_step; then
+                echo "  Nothing past this point was touched -- the containers still"
+                echo "  running are the ones from before this update."
                 exit 1
             fi
             echo ""
@@ -3271,6 +3499,9 @@ case "${1:-}" in
         echo ""
         check_nginx "$COMPOSE_DIR/scripts/nginx-render.sh" "/etc/nginx/sites-available/velo" "${DOMAIN_FRONTEND:-}" "${DOMAIN_API:-}" "${DOMAIN_PUBLIC:-}" || NGINX_DRIFT=1
         echo ""
+        STORAGE_FAIL=0
+        check_storage || STORAGE_FAIL=1
+        echo ""
 
         check_attendance_deadends
         echo ""
@@ -3282,7 +3513,7 @@ case "${1:-}" in
         echo "Checked: vite.env keys, backend/.env keys, nginx config (rendered vs"
         echo "live), attendance dead-ends (data -- warns only, never fails), MCP"
         echo "OAuth state and browser sign-in (both inform only, never fail)."
-        if [ "$VITE_DRIFT" -eq 0 ] && [ "$BACKEND_DRIFT" -eq 0 ] && [ "$NGINX_DRIFT" -eq 0 ]; then
+        if [ "$VITE_DRIFT" -eq 0 ] && [ "$BACKEND_DRIFT" -eq 0 ] && [ "$NGINX_DRIFT" -eq 0 ] && [ "$STORAGE_FAIL" -eq 0 ]; then
             echo -e "${GREEN}✓ 0 drift found${NC}"
             exit 0
         else

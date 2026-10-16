@@ -418,6 +418,18 @@ class Settings(BaseSettings):
     # the bell, never crash velo (T1 handoff constraint).
     comms_http_timeout_seconds: float = 5.0
 
+    # -- Object storage (BE-133) --
+    # The secret of the backend's own key to velo-storage. The key's NAME is
+    # fixed in app/core/storage_registry.yaml; only the secret lives in the
+    # environment. Nobody types it: `velo update` (and the installer) write
+    # it into backend/.env when it is absent, and the storage init sets the
+    # storage to it on every run -- so `velo env set STORAGE_SECRET_KEY`
+    # followed by `velo update` is a rotation. Empty by default, with no
+    # validator, on purpose: the first deploy of BE-133 runs the OLD update
+    # script, which writes no key, and the app must still start. The
+    # storage module refuses on an empty secret when it is called.
+    storage_secret_key: str = ""
+
     # -- Voice transcription (GT-41) --
     # The key lives HERE, on the server, and nowhere else. Voice input used
     # to call OpenRouter straight from the browser with a VITE_ key compiled

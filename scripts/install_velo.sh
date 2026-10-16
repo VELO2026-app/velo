@@ -360,6 +360,49 @@ echo ""
 read -p "Press ENTER when DNS records are configured..."
 echo ""
 
+# BE-133: the object storage volume is the ONE store a reinstall must not
+# take by default (§0 §4: people's files are not disposable). Its compose
+# project (storage/docker-compose.yml, project velo-storage) is never named
+# by the `down -v` below; the only way its files go is THIS question,
+# answered with the word DELETE. The root key file lives outside repo/ for
+# the same reason: it survives `rm -rf repo` together with the volume it
+# protects. Asked AFTER "start fresh? y", so that answering n to that
+# leaves the storage exactly as it was.
+STORAGE_VOLUME="velo_storage_data"
+STORAGE_ROOT_FILE="$INSTALL_BASE/storage.env"
+STORAGE_GUARD_DONE=0
+storage_reinstall_guard() {
+    STORAGE_GUARD_DONE=1
+    command -v docker > /dev/null 2>&1 || return 0
+    docker volume inspect "$STORAGE_VOLUME" > /dev/null 2>&1 || return 0
+    echo ""
+    warn "Object storage volume $STORAGE_VOLUME exists -- uploaded files of people."
+    echo "  Press ENTER to KEEP the files (the default)."
+    echo "  Type DELETE (capital letters) to ERASE them for good."
+    local answer=""
+    read -r -p "Storage files [keep]: " answer
+    if [ "$answer" = "DELETE" ]; then
+        log "Erasing object storage..."
+        docker ps -aq --filter "label=com.docker.compose.project=velo-storage" \
+            | xargs -r docker rm -f > /dev/null 2>&1 || true
+        if ! docker volume rm "$STORAGE_VOLUME" > /dev/null; then
+            error "Could not remove volume $STORAGE_VOLUME -- nothing else was removed"
+            exit 1
+        fi
+        rm -f "$STORAGE_ROOT_FILE"
+        success "Object storage erased (volume and root key file)"
+        return 0
+    fi
+    [ -n "$answer" ] && info "'$answer' is not DELETE -- keeping the files"
+    if [ ! -f "$STORAGE_ROOT_FILE" ]; then
+        error "The files are kept, but $STORAGE_ROOT_FILE is missing:"
+        error "the storage could not be opened with them. Nothing was removed."
+        error "Restore the file, or re-run this installer and type DELETE."
+        exit 1
+    fi
+    success "Object storage kept (volume and root key file stay)"
+}
+
 # Check for previous installation. "Previous installation" now means EITHER
 # stack: velo (this checkout) or comms (orchestrated below) -- an orphaned
 # comms stack surviving a "fresh" reinstall would silently carry old secrets
@@ -370,6 +413,7 @@ if [ -d "$INSTALL_BASE/repo" ] || [ -d "$COMMS_REPO_DIR" ]; then
     read -p "Remove existing installation and start fresh? (y/n): " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
+        storage_reinstall_guard
         log "Stopping existing services and removing volumes..."
         cd "$INSTALL_BASE/repo" 2>/dev/null && docker compose down -v 2>/dev/null || true
         # Tear down the comms stack the same way (containers + volumes).
@@ -405,6 +449,9 @@ if [ -d "$INSTALL_BASE/repo" ] || [ -d "$COMMS_REPO_DIR" ]; then
         exit 1
     fi
 fi
+# No previous installation, but a storage volume left behind: the same
+# question, before anything is created.
+[ "$STORAGE_GUARD_DONE" -eq 1 ] || storage_reinstall_guard
 
 # ==============================================================================
 # FIX LOCALE
@@ -1928,6 +1975,15 @@ start_stack() {
     curl -s "$HEALTH_URL" | python3 -m json.tool 2>/dev/null || curl -s "$HEALTH_URL"
     echo ""
 }
+
+# BE-133: object storage BEFORE the stack -- the step also writes the
+# backend's storage secret into backend/.env, which the app reads at start.
+# ONE implementation, the one `velo update` runs (velo-manage.sh).
+log "Starting object storage (velo-storage)..."
+if ! bash "$INSTALL_BASE/repo/scripts/velo-manage.sh" __storage-step; then
+    error "Object storage did not come up -- see the lines above."
+    exit 1
+fi
 
 start_stack
 
